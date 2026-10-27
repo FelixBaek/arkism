@@ -56,15 +56,30 @@ func (s *Service) usageSessionListPage(ctx context.Context, token string, scope 
 	if err != nil {
 		return nil, err
 	}
-	var since time.Time
-	if days > 0 {
-		y, m, d := time.Now().In(usageZone()).AddDate(0, 0, 1-days).Date()
-		since = time.Date(y, m, d, 0, 0, 0, 0, usageZone())
+	items, agents, projects := usageSessionFilter(rows, usageSince(days), agent, project, q)
+	total := len(items)
+	sort.SliceStable(items, func(i, j int) bool { return usageCatalogLess(items[i], items[j], order) })
+	selected, next, err := catalogWindow(items, query, binding)
+	if err != nil {
+		return nil, err
 	}
-	items := []map[string]any{}
-	total := 0
-	// facets: each count ignores its own filter, so the agent and project switches show what picking them would give
-	agents, projects := map[string]int{}, map[string]int{}
+	return map[string]any{"items": selected, "total": total, "next_cursor": next, "authority": AuthorityDataOnly,
+		"facets": map[string]map[string]int{"agents": agents, "projects": projects}}, nil
+}
+
+// usageSince is the start of the first day in a range of days; zero for all time.
+func usageSince(days int) time.Time {
+	if days <= 0 {
+		return time.Time{}
+	}
+	y, m, d := time.Now().In(usageZone()).AddDate(0, 0, 1-days).Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, usageZone())
+}
+
+// usageSessionFilter keeps the listed sessions and counts agents and projects;
+// each count ignores its own filter, so the agent and project switches show what picking them would give.
+func usageSessionFilter(rows []Record, since time.Time, agent, project, q string) ([]map[string]any, map[string]int, map[string]int) {
+	items, agents, projects := []map[string]any{}, map[string]int{}, map[string]int{}
 	for _, r := range rows {
 		u := r.UsageSession
 		if r.PrivacyQuarantined || r.ContentErased || u == nil || u.EndedAt.Before(since) ||
@@ -78,19 +93,11 @@ func (s *Service) usageSessionListPage(ctx context.Context, token string, scope 
 		if agentOK && u.Project != "" {
 			projects[u.Project]++
 		}
-		if !agentOK || !projectOK {
-			continue
+		if agentOK && projectOK {
+			items = append(items, usageCatalogItem(r))
 		}
-		total++
-		items = append(items, usageCatalogItem(r))
 	}
-	sort.SliceStable(items, func(i, j int) bool { return usageCatalogLess(items[i], items[j], order) })
-	selected, next, err := catalogWindow(items, query, binding)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"items": selected, "total": total, "next_cursor": next, "authority": AuthorityDataOnly,
-		"facets": map[string]map[string]int{"agents": agents, "projects": projects}}, nil
+	return items, agents, projects
 }
 func usageCatalogNumber(value any) int64 {
 	switch number := value.(type) {

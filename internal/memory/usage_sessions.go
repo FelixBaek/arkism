@@ -81,11 +81,7 @@ var (
 )
 
 func validUsageSession(u UsageSession) bool {
-	ok := usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
-		len(u.Title) <= 300 && len(u.Project) <= 200 && usagePath(u.Folder) && usagePath(u.File) && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
-		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
-		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
-	if !ok {
+	if !validUsageSessionHead(u) {
 		return false
 	}
 	for day, models := range u.Days {
@@ -99,6 +95,14 @@ func validUsageSession(u UsageSession) bool {
 		}
 	}
 	return true
+}
+
+// validUsageSessionHead checks the session's own fields and the sizes of its tables.
+func validUsageSessionHead(u UsageSession) bool {
+	return usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
+		len(u.Title) <= 300 && len(u.Project) <= 200 && usagePath(u.Folder) && usagePath(u.File) && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
+		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
+		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
 }
 
 // usagePath is an optional absolute-looking path: no control characters, at most 1 KiB.
