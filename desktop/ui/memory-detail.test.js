@@ -106,7 +106,7 @@ test("memory detail stops when the selection changed while reading", async () =>
 test("an unconfirmed memory can be kept or forgotten", async () => {
   const h = await setup({overlapReview: () => true, keptMemories: () => ["old"]});
   await h.ctx.memoryDetail(memory);
-  assert.match(texts(h.shell), /3번 전달됐고/);
+  assert.match(texts(h.shell), /3번 건넸는데/);
   find(h.shell, "맞아요, 유지").onClick();
   assert.deepEqual(JSON.parse(h.stored.keep), ["old", "m1"]);
   assert.equal(h.notices.at(-1), "유지할게요. 이 기억은 다시 묻지 않아요.");

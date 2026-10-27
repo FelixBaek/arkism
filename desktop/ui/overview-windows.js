@@ -192,8 +192,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     review: ["사람이 승인해야 쓰는 기억이 돼요", "분류 · 드리밍", "언제든", "사람만"],
     recall: ["질문과 관련 있는 기억을 찾아 답에 넣어요", "쓰는 중인 기억", "에이전트가 질문할 때마다", "자동 (검색)"],
     trace: ["어떤 기억이 어느 세션에 들어갔는지 남겨요", "불러오기", "불러올 때마다", "자동"],
-    judge: ["넣은 기억이 실제 답에 쓰였는지 판정해요", "사용 기록", "세션이 끝난 뒤", "AI 판정 + 사람 확인"],
-    dream: ["겹치거나 낡은 기억을 찾아 정리를 제안해요", "쓰는 중인 기억 · 검증 결과", "주기적으로", "AI 제안 → 사람 승인"],
+    judge: ["에이전트에게 건넨 기억이 실제 답에 쓰였는지 확인해요", "사용 기록", "세션이 끝난 뒤", "자동 집계 + 사람 확인"],
+    dream: ["겹치거나 낡은 기억을 찾아 정리를 제안해요", "쓰는 중인 기억 · 쓰임 확인 결과", "주기적으로", "AI 제안 → 사람 승인"],
     active: ["승인된 기억이에요. 불러오기가 여기서 찾아요", "승인 대기", "승인되면 바로 추가", "사람이 승인한 것만"]
   };
   const LABEL = { active: "쓰는 중인 기억" };
@@ -211,11 +211,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       review: () => waiting().slice(0, cap).map((m) => reviewRow(m)),
       recall: () => [...(state.usage?.entries() || [])].filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, cap).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`)),
       trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, u.estimated ? `쓰임 ${num(u.used)}번 · 추정 ${num(u.estimated)}번` : `쓰임 ${num(u.used)}번`)),
-      judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => idle(u)).slice(0, cap).map(([m, u]) => {
-        const r = row("안 쓰임", clip(m.text), u.unused ? `사용 기록 없이 ${num(u.unreceipted)}번 넣었어요` : `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, ""), err = el("small", "ov-win-err", "");
-        r.lastChild.append(button("고치기", "small", null, () => editMemory(m, m.id)), button("지우기", "small", null, () => askConfirm("이 기억을 지울까요?", "지운 기억은 이력에 남지만 더는 쓰이지 않아요.", async () => {
-          try { await deleteMemory(m); r.remove(); await reload(); } catch (e) { err.textContent = `지우지 못했어요: ${e.message}`; }
-        }))); r.firstChild.append(err);
+      judge: () => toCheck().slice(0, cap).map(([m, u]) => {
+        const r = row("안 쓰임", clip(m.text), u.unused ? `쓰였다는 보고 없이 ${num(u.unreceipted)}번 건넸어요` : `${w.days}일 동안 ${num(u.injected)}번 건넸는데 답에 쓰였다는 표시가 없어요`, ""), err = el("small", "ov-win-err", "");
+        r.lastChild.append(button("맞아요, 유지", "small", null, () => { ctx.keepMemory?.(m.id); r.remove(); }),
+          button("고치기", "small", null, () => editMemory(m, m.id)), button("잊기", "small", null, () => askConfirm("이 기억을 잊을까요?", "에이전트에게 더는 건네지 않아요. 바뀐 이력에는 남아요.", async () => {
+            try { await deleteMemory(m); r.remove(); await reload(); } catch (e) { err.textContent = `잊지 못했어요: ${e.message}`; }
+          }, "잊기"))); r.firstChild.append(err);
         return r;
       }),
       dream: () => dreamItems().slice(0, cap).map((c) => {
@@ -302,7 +303,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금")); body.append(chart);
     }
     if (key === "extract" && s.badge?.[1] === "r") body.append(note("r", `${s.badge[0]}이에요`, "세션은 계속 들어오는데 새 후보가 만들어지지 않았어요. 서버의 분석 로그인·연결을 확인해 주세요."));
-    if (key === "judge") body.append(note("a", "AI가 “실제로 쓰였는지” 판정했어요", "판정이 맞는지 확인하고, 틀림이 쌓이면 그 기억을 다시 봐요."));
+    if (key === "judge") body.append(note("a", "여러 번 건넸는데 답에 쓰였다는 표시가 없는 기억이에요", "에이전트가 썼다고 알려 온 적도, 답변에 그 문구가 보인 적도 없어요. 말없이 따른 경우는 셀 수 없어서, 틀렸는지·이제 필요 없는지는 직접 봐 주세요.",
+      "맞아요, 유지: 그대로 두고 다시 묻지 않아요 · 고치기: 고친 문장을 승인 대기에 넣어요 · 잊기: 에이전트에게 더는 건네지 않아요")); // nothing changes on its own
     if (key === "dream") body.append(note("n", "드리밍 제안은 여기서 바로 골라요", "바로 바뀌지 않아요. 사람이 고르면 반영되고, 지우는 일은 없어요. 승인 대기에도 [정리]로 같이 떠요."));
     if (key === "recall") body.append(recallBox());
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
@@ -329,15 +331,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
   // Figma 펼침 580:63994 분석 · 580:66175 분류 · 580:68368 불러오기 · 580:70537 검증 · 580:72743 드리밍; other stages open a wide window instead
   function expandTotal(key) {
-    const w = D().tools?.memory_use;
     return { extract: waiting().length + D().memories.length,
-      recall: [...(state.usage?.values() || [])].filter((u) => u.last).length, judge: D().memories.filter((m) => idle(w?.items?.find((x) => x.id === m.id))).length,
+      recall: [...(state.usage?.values() || [])].filter((u) => u.last).length, judge: toCheck().length,
       dream: dreamItems().length }[key] || 0;
   }
   // 안 쓰임: returned unused_after times since its last record_memory_usage receipt (host memory_use), or injected 3+ times
   // with neither a receipt nor an answer restating it (the estimate). A person decides; nothing is demoted on its own.
   const idle = (u) => !!u && (u.unused || (u.injected >= 3 && !u.used && !u.estimated));
-  const note = (tone, a, b) => { const n = el("div", `ov-win-note ov-win-note-${tone}`); n.append(el("strong", "", a), el("span", "", b)); return n; };
+  // 쓰임 확인's list: idle memories the person has not already kept (맞아요, 유지)
+  const toCheck = () => { const w = D().tools?.memory_use, kept = ctx.kept?.() || []; return D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([m, u]) => idle(u) && !kept.includes(m.id)); };
+  const note = (tone, a, b, c) => { const n = el("div", `ov-win-note ov-win-note-${tone}`); n.append(el("strong", "", a), el("span", "", b)); if (c) n.append(el("small", "", c)); return n; };
   function activeStage() {
     const mems = D().memories, week = mems.filter((m) => time(m.created_at) > Date.now() - 7 * 24 * HOUR).length;
     return { key: "active", label: "쓰는 중인 기억", badge: [`${num(mems.length)}개`, "n"], tiles: [[`${num(mems.length)}개`, "쓰는 중"], [state.usageDone ? `${num([...(state.usage?.values() || [])].filter((u) => u.d30 > 0 || u.d7 > 0).length)}개` : "—", "최근 쓰임"], [`${num(week)}개`, "이번 주 새로"]] };
@@ -632,9 +635,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
   async function deleteMemory(m) {
     await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id);
   }
-  function askConfirm(title, text, onOk) {
+  function askConfirm(title, text, onOk, ok = "지우기") {
     const d = el("dialog", "crew-dialog ov-ask"), body = el("div", "dialog-body"), foot = el("div", "ov-win-foot");
-    foot.append(button("취소", "ghost small", null, () => d.close()), button("지우기", "primary small", null, () => { d.close(); onOk(); }));
+    foot.append(button("취소", "ghost small", null, () => d.close()), button(ok, "primary small", null, () => { d.close(); onOk(); }));
     body.append(el("h2", "", title), el("p", "meta", text)); d.append(body, foot); d.addEventListener("close", () => d.remove()); document.body.append(d); d.showModal();
   }
 
@@ -773,7 +776,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (items.length) sec("에이전트별 (7일 세션)", agentBox);
     const top = recalls.filter(([, u]) => u.d7 > 0).sort((a, b) => b[1].d7 - a[1].d7).slice(0, 3); if (top.length) { const b = el("div", "ov-detail-list"); top.forEach(([id, u]) => b.append(row("", clip(memText(id), 40), "", `${num(u.d7)}번`))); sec("많이 쓰인 기억", b); }
     const idles = (w?.items || []).filter(idle).slice(0, 3); if (idles.length) { const b = el("div", "ov-detail-list"); idles.forEach((u) => b.append(row("", clip(memText(u.id), 40), "", `${num(u.injected)}번 중 ${num(u.used)}번`))); sec("넣었는데 안 쓰인 기억", b); }
-    const act = el("div", "ov-detail-actions"); act.append(button("검증 보기", "primary small", null, () => open("judge")), button("사용량 화면으로", "small", null, () => { dlg.close(); go("usage"); })); right.append(act);
+    const act = el("div", "ov-detail-actions"); act.append(button("쓰임 확인 보기", "primary small", null, () => open("judge")), button("사용량 화면으로", "small", null, () => { dlg.close(); go("usage"); })); right.append(act);
     body.append(left, right); d.append(body);
   }
 
@@ -782,11 +785,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
   const EDGE = { supports: "지지", supersedes: "대체", conflicts: "충돌", human_link: "연결", same_session: "관련", similar: "비슷" };
   const REACH_COLOR = { personal: "#7fc79c", general: "#6aa3ff", project: "#f5b955" }; // same colours as the 칸 chips (v4-overview.css .ov-map-personal …)
-  // opens that memory in the memory list (its detail on the right), reading it first when the map has only its label
+  // 고치기: the edit popup over this window (it stays open), reading the memory first when the map has only its label
   async function editMemory(m, id) {
     m = m || await request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).catch(() => null);
-    dlg?.close();
-    if (m?.status === "active" && ctx.openRecord) ctx.openRecord(m); else go("memories", "active");
+    if (m && (m.status ?? "active") === "active" && ctx.fixMemory) { ctx.fixMemory(m); return; }
+    dlg?.close(); go("memories", "active");
   }
   async function wideMap() {
     const d = modal("ov-wide-win ov-map-win", true);

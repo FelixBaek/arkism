@@ -11,7 +11,7 @@ export function createMemoryDetail(deps) {
     if (modelPanel) body.append(modelPanel);
     const fix = () => deps.button("고치기", "small", null, () => openMemoryFix(m));
     if (deps.overlapReview(m)) {
-      body.append(deps.actionCard(`최근 ${deps.memUse().days}일 동안 ${s.injected}번 전달됐고 답변 문구 겹침은 0번이에요. 실제 활용 여부는 미확인이에요. 아직 맞는 내용인가요?`,
+      body.append(deps.actionCard(`최근 ${deps.memUse().days}일 동안 에이전트에게 ${s.injected}번 건넸는데 답변에 이 문구가 보인 적이 없어요. 말없이 따른 경우는 셀 수 없어서 실제로 쓰였는지는 몰라요. 아직 맞는 내용인가요?`,
         deps.button("맞아요, 유지", "primary small", null, () => {
           try { localStorage.setItem(deps.KEEP_KEY, JSON.stringify([...deps.keptMemories(), m.id])); } catch (_) { /* private window */ }
           deps.notice("유지할게요. 이 기억은 다시 묻지 않아요.");
