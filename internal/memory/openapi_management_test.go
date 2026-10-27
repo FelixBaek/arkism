@@ -196,6 +196,7 @@ func contractHostAndSessions(c *contractHTTP) {
 	c.call("POST /v1/usage/sessions/transcript", "", SessionTranscriptInput{Scope: scopeA, ID: id}, nil)
 	c.call("POST /v1/usage/sessions/search", "", UsageSessionSearchInput{Scope: scopeA, Query: "Fixture"}, nil)
 	c.call("POST /v1/usage/sessions/handoff", "", UsageSessionHandoffInput{Scope: scopeA, ID: id}, nil)
+	c.call("POST /v1/usage/sessions/archives", "", SessionArchiveStatusInput{Scope: scopeA, IDs: []string{id}}, nil)
 	c.call("POST /v1/usage/sessions/export", "", SessionExportInput{Scope: scopeA, IDs: []string{id}, Format: "json"}, nil)
 	c.call("POST /v1/usage/sessions/delete", "", SessionDeleteInput{Scope: scopeA, IDs: []string{id}}, nil)
 	contractMessengers(c)
