@@ -15631,7 +15631,7 @@
     "/v1/memory-signals/recompute": {
       "post": {
         "summary": "Recompute trust signals for one page of active memories",
-        "description": "Rebuilds derived memory_signal rows (jobs collection) from memory_outcome evaluations and context_usage receipts for up to limit (1..100, default 100) active memories in id order; follow next_cursor. Unchanged signals are not rewritten, so a repeat run is a no-op. Role human, service or pipeline with write:memory_signals plus read:memories, read:evaluations and read:usage for the same principal. Run daily by `arkism memory-signals --execute`; never changes memory state.",
+        "description": "Rebuilds derived memory_signal rows (jobs collection) from memory_outcome evaluations, context_usage receipts and the work results in session trace behavior events for up to limit (1..100, default 100) active memories in id order; follow next_cursor. Unchanged signals are not rewritten, so a repeat run is a no-op. Role human, service or pipeline with write:memory_signals plus read:memories, read:evaluations and read:usage for the same principal. Run daily by `arkism memory-signals --execute`; never changes memory state.",
         "requestBody": {
           "required": true,
           "content": {
@@ -42464,6 +42464,45 @@
             ],
             "format": "date-time"
           },
+          "work": {
+            "type": "object",
+            "description": "Host-observed work of the agent sessions this memory was delivered to, one session counted once by its last test and CI result. Absent until such a session exists. Recall ranking multiplies the memory's score by 1 + 0.15*(G-B)/(G+B+2), G = diff + tests_passed + ci_passed, B = tests_failed + ci_failed (bounded to (0.85, 1.15)).",
+            "additionalProperties": false,
+            "required": [
+              "sessions",
+              "diff",
+              "tests_passed",
+              "tests_failed",
+              "ci_passed",
+              "ci_failed"
+            ],
+            "properties": {
+              "sessions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "diff": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tests_passed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "tests_failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ci_passed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ci_failed": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
           "computed_at": {
             "type": "string",
             "format": "date-time"
@@ -46576,6 +46615,9 @@
           "computed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "work": {
+            "$ref": "#/components/schemas/WireResponseMemoryWorkCounts"
           }
         },
         "additionalProperties": false,
@@ -57634,6 +57676,41 @@
         "x-go-type": "memory.SessionArchiveStatusInput",
         "x-go-source": "internal/memory/session_manage.go",
         "description": "SessionArchiveStatusInput asks, for up to 50 usage sessions, whether their dialogue is still kept."
+      },
+      "WireResponseMemoryWorkCounts": {
+        "type": "object",
+        "properties": {
+          "sessions": {
+            "type": "integer"
+          },
+          "diff": {
+            "type": "integer"
+          },
+          "tests_passed": {
+            "type": "integer"
+          },
+          "tests_failed": {
+            "type": "integer"
+          },
+          "ci_passed": {
+            "type": "integer"
+          },
+          "ci_failed": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "sessions",
+          "diff",
+          "tests_passed",
+          "tests_failed",
+          "ci_passed",
+          "ci_failed"
+        ],
+        "x-go-type": "memory.MemoryWorkCounts",
+        "x-go-source": "internal/memory/memory_signal.go",
+        "description": "MemoryWorkCounts are the host-observed work results of the sessions a memory\nwas delivered to: one session counts once, by the last test and CI result the\nhost saw in it (#356). Counts only, never commands or output."
       }
     },
     "headers": {
