@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -154,7 +153,11 @@ var (
 )
 
 // opticksPath is the large text file the standard library keeps in GOROOT/src/testdata (stdlib: ../../testdata).
-var opticksPath = filepath.Join(runtime.GOROOT(), "src", "testdata", "Isaac.Newton-Opticks.txt")
+// runtime.GOROOT is deprecated; "go env GOROOT" names the toolchain that runs the tests.
+var opticksPath = func() string {
+	out, _ := exec.Command("go", "env", "GOROOT").Output()
+	return filepath.Join(strings.TrimSpace(string(out)), "src", "testdata", "Isaac.Newton-Opticks.txt")
+}()
 
 // bigData returns the contents of our large test file repeated multiple times.
 func bigData(t testing.TB) []byte {
