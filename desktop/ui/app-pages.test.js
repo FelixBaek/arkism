@@ -15,6 +15,7 @@ function agentTools() {
   const d = fixture("agent_tools.json"), t = d.agent_tools;
   t.agents.push({ id: "opencode", name: "OpenCode", enabled: true, found: true }, { id: "cursor", name: "Cursor", enabled: true, found: true }, { id: "aider", name: "Aider", enabled: false, found: true, skills_dirs: ["~/.aider/skills"] }, { id: "cline", name: "Cline", enabled: false });
   t.shared_dirs = ["~/.agents/skills", "~/team/skills"];
+  t.pc_links = [{ agent: "claude_code", last_seen: new Date().toISOString() }]; // Claude Code's hooks report in; Codex's never did
   t.requests.push({ id: "r2", kind: "agent", agent: "orbit", enabled: true, status: "pending" });
   return d;
 }
@@ -111,6 +112,7 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
   input.value = "C:\\work";
   app.dom.key(input, "Enter"); await app.settle();
   assert.match(notice(), /수집하지 않아요/);
+  assert.doesNotMatch(text(app.$("#table")), /이 폴더와 그 안의 폴더/); // Figma: an excluded folder row is the path alone
   await press("삭제");
   assert.match(notice(), /다시 수집해요/);
   assert.match(text(app.$("#table")), /대화 원문 보관.*7일/);
@@ -173,6 +175,14 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
   assert.ok(app.$(".ag-row.on"));
   assert.match(text(app.$(".ag-link")), /Arkism 연결/);
+  // Figma 1300:5254: the row line reads 기억 · 스킬 N · 훅 · MCP, and the link card opens with 훅 before MCP
+  const rowSub = (name) => text(app.$$(".ag-row-main").find((b) => text(b).startsWith(name)).querySelector("small"));
+  assert.match(rowSub("Claude Code"), /^기억 · 스킬 \d+ · 훅 · MCP$/);
+  assert.doesNotMatch(rowSub("Codex"), /훅/);
+  assert.match(text(app.$(".ag-link")), /훅.*연결됨 · 대화 저장·기억 넣기.*MCP/);
+  assert.ok(app.$$(".v4-side input").some((i) => i.placeholder === "모델 검색" || /모델 \d+개에서 찾기/.test(i.placeholder)));
+  app.$$(".ag-row-main").find((b) => text(b).startsWith("Codex")).click(); await app.settle();
+  assert.match(text(app.$(".ag-link")), /훅연결 안 됨|훅 ?연결 안 됨/);
   for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = find(`${name} 켜기`); if (b) { b.click(); await app.settle(); } }
   await press("Claude Code 켜기");
   assert.match(notice(), /하나는 켜져 있어야/);

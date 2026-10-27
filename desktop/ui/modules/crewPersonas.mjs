@@ -11,8 +11,8 @@ export function createCrewPersonas(deps) {
  // the AI talk per open draft (ai-chat.js state), gone with the draft
   const personaUses = (id) => deps.workflows().filter((r) => (r.crew.graph?.nodes || []).some((n) => n.config?.persona === id));
 
-  function personaTab({ group }) {
-    const g = group("페르소나", "AI 노드의 ‘페르소나’에서 골라 써요. 지시는 그 노드가 일할 때 역할·말투로 들어가요.");
+  function personaTab() {
+    const g = deps.el("section", "pg-group v4-plain"); // Figma 198:6134: the list alone, no title or hint above it
     const list = deps.el("div", "pg-card");
     const rows = [...deps.personas(), ...(personaOpen === "new" ? [{ id: "new", crew: personaDraft }] : [])];
     if (!rows.length) list.append(deps.el("p", "pg-hint", "아직 저장한 페르소나가 없어요."));
