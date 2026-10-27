@@ -228,7 +228,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if e = s.cleanSearchLanes(ctx, token, in, d, collection, anchor, run, relationLane, queryVector, querySpace, historyRecords, &out, lists); e != nil {
 		return ContextBundle{}, Decision{}, e
 	}
-	scored := fuseRecallHits(lists, collection, in.IncludeInactive, in.Limit)
+	scored := s.fuseRecallHits(ctx, lists, collection, in)
 	out.Items = make([]Hit, len(scored))
 	for i, r := range scored {
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"math"
 	"sort"
 	"time"
@@ -37,18 +38,23 @@ func recencyFactor(h Hit, now time.Time) float64 {
 	return 0.5 + 0.5*math.Exp2(-float64(now.Sub(at))/float64(half))
 }
 
-// decayByRecency rescales fused scores by age and keeps the best limit rows.
-func decayByRecency(rows []ScoredHit, now time.Time, limit int) []ScoredHit {
+// decayByRecency rescales fused scores by age and by each hit's outcome
+// weight (1 when absent), and keeps the best limit rows.
+func decayByRecency(rows []ScoredHit, now time.Time, weights map[string]float64, limit int) []ScoredHit {
 	for i := range rows {
 		rows[i].Score *= recencyFactor(rows[i].Hit, now)
+		if w, ok := weights[rows[i].ID]; ok {
+			rows[i].Score *= w
+		}
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Score > rows[j].Score })
 	return rows[:min(limit, len(rows))]
 }
 
-func fuseRecallHits(lists [][]Hit, collection string, includeInactive bool, limit int) []ScoredHit {
-	if collection == colMemories && !includeInactive {
-		return decayByRecency(FuseScored(lists, limit*3), time.Now(), limit)
+func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection string, in SearchInput) []ScoredHit {
+	if collection == colMemories && !in.IncludeInactive {
+		rows := FuseScored(lists, in.Limit*3)
+		return decayByRecency(rows, time.Now(), s.outcomeWeights(ctx, in.Scope, rows), in.Limit)
 	}
-	return FuseScored(lists, limit)
+	return FuseScored(lists, in.Limit)
 }

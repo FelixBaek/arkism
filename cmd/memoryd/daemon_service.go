@@ -119,6 +119,7 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 			svc.Wiki = &memory.ChatWikiLLM{Config: config}
 		}
 	}
+	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes
 	if cfg.Recovery {
 		return nil
 	}
