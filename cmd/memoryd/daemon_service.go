@@ -21,6 +21,14 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 			return nil, memory.ErrInvalid
 		}
 	}
+	mergeSimilarity := 0.0
+	if raw := os.Getenv("MEMORY_CAPTURE_MERGE_SIMILARITY"); raw != "" {
+		var e error
+		mergeSimilarity, e = strconv.ParseFloat(raw, 64)
+		if e != nil || mergeSimilarity <= 0 || mergeSimilarity > 1 {
+			return nil, memory.ErrInvalid
+		}
+	}
 	costRates, e := costRatesFromEnv()
 	if e != nil {
 		return nil, e
@@ -29,7 +37,7 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err != nil {
 		return nil, err
 	}
-	svc := &memory.Service{GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CostRates: costRates}
+	svc := &memory.Service{GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CostRates: costRates}
 
 	if !cfg.Recovery {
 		if path := os.Getenv("MEMORY_REVIEW_CLASSIFIER"); path != "" {

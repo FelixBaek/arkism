@@ -128,6 +128,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_LOCAL_STANDALONE` | `true` for single-owner mode. The API then listens on loopback only |
 | `MEMORY_WORKER_TOKEN` | Service token for the worker and readiness checks |
 | `MEMORY_CANDIDATE_DAILY_LIMIT` | Daily cap (1–100000) for AI-written memory candidates. Unset means none are accepted |
+| `MEMORY_CAPTURE_MERGE_SIMILARITY` | Cosine similarity (0–1, default 0.92) at which a captured claim gets a merge proposal toward the closest approved memory instead of a plain review entry. Needs an embedder; a person still decides |
 | `MEMORY_BLOB_DIRECTORY` | Folder for attached files |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 

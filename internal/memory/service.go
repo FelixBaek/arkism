@@ -44,9 +44,13 @@ type Service struct {
 	SyntheticHandoff    bool
 	BlobDirectory       string
 	CandidateDailyLimit int
-	Analyzer            SkillAnalyzer
-	Drafter             SkillDrafter
-	Router              SkillJudge
+	// CaptureMergeSimilarity is the cosine similarity at or above which a captured
+	// claim gets a merge proposal toward the closest approved memory instead of a
+	// plain review entry; 0 means defaultCaptureMergeSimilarity.
+	CaptureMergeSimilarity float64
+	Analyzer               SkillAnalyzer
+	Drafter                SkillDrafter
+	Router                 SkillJudge
 	// ModelPicker picks a model for 라우팅 (Clef-flash); nil sends every task to the fixed or first model.
 	ModelPicker   ModelPicker
 	searchCommits searchCommitGate
