@@ -421,8 +421,10 @@ test("a popup drags by its head, stays on screen, moves into its own window outs
   assert.deepEqual(invokes.at(-1), ["plugin:window|start_dragging", { label }]);
   fire(pd.querySelector(".dialog-head"), "mousedown", { button: 0, detail: 2 });
   assert.deepEqual(invokes.at(-1), ["plugin:window|toggle_maximize", { label }]);
-  fire(pd.querySelector("#hb"), "mousedown", { button: 0, detail: 1 });
-  assert.deepEqual(invokes.at(-1), ["plugin:window|toggle_maximize", { label }]);
+  const before = invokes.length;
+  const down = fire(pd.querySelector("#hb"), "mousedown", { button: 0, detail: 1 });
+  assert.equal(invokes.length, before);
+  assert.equal(down.defaultPrevented, false);
   // the popup closing closes its window
   pd.close();
   await timers.tick(1); await flush();
