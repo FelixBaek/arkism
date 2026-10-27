@@ -39783,6 +39783,16 @@
           },
           "reject_score": {
             "type": "number"
+          },
+          "stale_mark": {
+            "$ref": "#/components/schemas/WireResponseStaleMark"
+          },
+          "proof_count": {
+            "type": "integer"
+          },
+          "last_confirmed_at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false,
@@ -46187,6 +46197,10 @@
             "items": {
               "type": "string"
             }
+          },
+          "watermark": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false,
@@ -47594,6 +47608,16 @@
           },
           "authority": {
             "type": "string"
+          },
+          "stale": {
+            "type": "boolean"
+          },
+          "watermark": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stale_mark": {
+            "$ref": "#/components/schemas/WireResponseStaleMark"
           }
         },
         "additionalProperties": false,
@@ -50583,6 +50607,30 @@
         "x-go-type": "memory.ProviderModelsRefresh",
         "x-go-source": "internal/memory/model_settings.go",
         "description": "ProviderModelsRefresh asks the runner to reread every provider's model list now (모델 새로고침)."
+      },
+      "WireResponseStaleMark": {
+        "type": "object",
+        "properties": {
+          "memory": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "replaced_by": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "memory",
+          "replaced_by",
+          "at"
+        ],
+        "x-go-type": "memory.StaleMark",
+        "x-go-source": "internal/memory/stale_cascade.go",
+        "description": "StaleMark says a record was written from a memory a person has since replaced."
       }
     },
     "headers": {
