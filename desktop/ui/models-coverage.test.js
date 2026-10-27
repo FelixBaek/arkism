@@ -157,14 +157,8 @@ test("models: test a connection, switch, add, remove, rename and filter", async 
   v.fail["/v1/providers/models"] = "odd"; label(main(), "gpt-5 켜기").click(); await settle();
   assert.equal(v.notes.at(-1), "처리하지 못했어요 (odd).");
   delete v.fail["/v1/providers/models"];
-  // add a model: bad name, Enter while composing, then a good one
-  click(main(), "모델 추가");
-  const mi = main().all((x) => x.placeholder === "모델 이름 (예: glm-5.3)")[0];
-  mi.value = "  "; click(main(), "넣기"); await settle();
-  assert.match(v.notes.at(-1), /글자·숫자/);
-  mi.value = "glm-5.3"; mi.fire("keydown", { key: "Enter", isComposing: true }); mi.fire("keydown", { key: "a" });
-  mi.fire("keydown", { key: "Enter" }); await settle();
-  assert.equal(v.notes.at(-1), "glm-5.3를 넣었어요. 워크플로우 모델 목록에 보여요.");
+  // models come from 새로고침 only: no hand-typed 모델 추가
+  assert.equal(main().all((x) => x.tagName === "BUTTON" && x.textContent === "모델 추가").length, 0);
   // remove a hand-added model, asked first
   globalThis.ask = async () => false; label(main(), "hand 빼기").click(); await settle();
   globalThis.ask = async () => true; label(main(), "hand 빼기").click(); await settle();
@@ -279,7 +273,7 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.equal(srv.notes.at(-1), "모델 목록을 새로 받지 못했어요: 알 수 없음", "the waiting refresh's outcome is shown");
   // A conflict with nothing pending (full list, write clash) does not follow an old finished refresh.
   const settled = srv.notes.length; btn().click(); await settle();
-  assert.deepEqual(srv.notes.slice(settled), ["새로고침을 넣지 못했어요. 잠시 뒤 다시 눌러 주세요."]);
+  assert.deepEqual(srv.notes.slice(settled), ["서버가 새로고침 요청을 받지 않았어요. 잠시 뒤 다시 눌러 주세요."]);
   assert.ok(srv.notes.length > before);
 });
 

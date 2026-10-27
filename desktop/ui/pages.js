@@ -1253,6 +1253,46 @@ window.ArkismPages = (ctx) => {
     side.append(...sideParts);
     $("#detail").replaceChildren(side);
     $("#head-actions").replaceChildren(...headParts);
+    if (tab === "agents") agentsResizer();
+  }
+  // 설정 › 에이전트: model names need a wider right column, and its left border drags (or arrow keys) to resize it.
+  // The width is this viewer's convenience only; CSS shows the handle on this tab alone and keeps the list at least 40%.
+  const AG_KEY = "arkism.agentsDetailWidth", AG_MIN = 360, AG_MAX = 760, AG_DEFAULT = 480;
+  function agentsResizer() {
+    const detail = $("#detail"), panel = detail.parentElement;
+    if (!panel || panel.querySelector(".ag-resize")) return;
+    const h = el("div", "ag-resize");
+    h.tabIndex = 0;
+    h.setAttribute("role", "separator");
+    h.setAttribute("aria-orientation", "vertical");
+    h.setAttribute("aria-label", "오른쪽 칸 너비");
+    h.setAttribute("aria-valuemin", String(AG_MIN));
+    h.setAttribute("aria-valuemax", String(AG_MAX));
+    h.title = "끌어서 너비 바꾸기";
+    let w = AG_DEFAULT;
+    const set = (v, save) => {
+      w = Math.round(Math.min(AG_MAX, Math.max(AG_MIN, Number(v) || AG_DEFAULT)));
+      panel.style.setProperty("--ag-detail-w", `${w}px`);
+      h.setAttribute("aria-valuenow", String(w));
+      if (save) try { localStorage.setItem(AG_KEY, String(w)); } catch (_) { /* storage off: this session only */ }
+    };
+    let saved = null;
+    try { saved = localStorage.getItem(AG_KEY); } catch (_) { /* storage off: the default */ }
+    set(saved ?? AG_DEFAULT, false);
+    let start = null;
+    h.addEventListener("pointerdown", (e) => { start = { x: e.clientX, w: detail.getBoundingClientRect().width || w }; h.setPointerCapture(e.pointerId); h.classList.add("on"); e.preventDefault(); });
+    h.addEventListener("pointermove", (e) => { if (start) set(start.w + start.x - e.clientX, false); }); // dragging left widens the column
+    const end = () => { if (!start) return; start = null; h.classList.remove("on"); set(w, true); };
+    h.addEventListener("pointerup", end);
+    h.addEventListener("pointercancel", end);
+    h.addEventListener("keydown", (e) => {
+      const step = e.shiftKey ? 64 : 16;
+      const next = { ArrowLeft: w + step, ArrowRight: w - step, Home: AG_MAX, End: AG_MIN }[e.key];
+      if (next === undefined) return;
+      e.preventDefault();
+      set(next, true);
+    });
+    detail.before(h);
   }
 
   // ---------------------------------------------------------------- Arkism 디자인 시스템 (reads the live tokens, so it never drifts from tokens.css)

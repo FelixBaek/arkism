@@ -502,8 +502,6 @@ textarea.code { font: 12px/1.5 var(--mono); }
 
 .mp-top-actions { display: flex; gap: 8px; align-items: center; }
 .mp-head .btn { margin-left: auto; }
-.model-add { display: flex; gap: 8px; margin: 0 0 8px; }
-.model-add input { flex: 1; height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-window); color: var(--text-1); font: 12.5px var(--mono); }
 .mp-model .icon-btn { margin-left: 4px; }
 .login-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; background: var(--bg-muted); margin-bottom: 8px; }
 .login-row code { font: 12.5px var(--mono); }

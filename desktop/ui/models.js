@@ -47,7 +47,7 @@ window.ArkismModels = (ctx) => {
     const out = KNOWN.map(([id, name]) => reported.find((p) => p.id === id) || { id, name, kind: "api", accounts: [], keys: [], models: [] });
     return [...out, ...reported.filter((p) => !known(p.id))];
   }
-  // Reported models plus the ones the owner added by hand (모델 추가).
+  // Reported models plus the ones the owner added by hand (earlier 모델 추가, or a 직접 추가 provider's switch).
   const extraOf = (pid) => (doc().extra || []).filter((k) => k.startsWith(`${pid}/`)).map((k) => k.slice(pid.length + 1));
   // 직접 추가 providers (one per key: custom-…) can offer hundreds of models: only the ones the owner turned on count.
   const isCustom = (pid) => pid.startsWith("custom-");
@@ -206,7 +206,7 @@ window.ArkismModels = (ctx) => {
         // A conflict usually means one already waits: follow it. It is also sent for a full request list or a write clash,
         // when nothing was queued, so only a still-pending refresh is followed; an older finished one would mislead.
         const id = rec?.providers ? last(rec).id : (await load())?.requests?.findLast((x) => x.kind === "models_refresh" && x.status === "pending")?.id;
-        if (!id) notice("새로고침을 넣지 못했어요. 잠시 뒤 다시 눌러 주세요.");
+        if (!id) notice("서버가 새로고침 요청을 받지 않았어요. 잠시 뒤 다시 눌러 주세요.");
         const q = id ? await waitFor(id, 60000) : null;
         if (q?.status === "failed" || q?.status === "expired") notice(`모델 목록을 새로 받지 못했어요: ${q.error || "알 수 없음"}`);
         else if (id && !q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요.");
@@ -350,22 +350,9 @@ window.ArkismModels = (ctx) => {
     if (!p.custom) s.append(actionsRow(button("키 추가", "", null, () => openKeyDialog(p))));
     return s;
   }
-  // compact (an agent's detail): no title or count; 모델 추가 stays for names the runner does not report.
+  // compact (an agent's detail): no title or count. Models come from 새로고침 only; ones added by hand earlier stay removable.
   function modelsCard(p, compact) {
     const c = compact ? el("section", "mp-card ag-models") : card("모델", "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.");
-    const addRow = el("div", "model-add");
-    addRow.hidden = true;
-    const mi = el("input");
-    mi.className = "mono";
-    mi.placeholder = "모델 이름 (예: glm-5.3)";
-    const addIt = async () => {
-      const m = mi.value.trim();
-      if (!/^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,79}$/.test(m)) { notice("모델 이름은 글자·숫자·.-_:/ 만 써요."); return; }
-      await switchModel(p.id, m, true, { add: true });
-      notice(`${m}를 넣었어요. 워크플로우 모델 목록에 보여요.`);
-    };
-    mi.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) void addIt(); });
-    addRow.append(mi, button("넣기", "primary small", null, addIt));
     // A 직접 추가 provider may list hundreds: the ones turned on come first.
     const all = isCustom(p.id) ? modelsOf(p).sort((a, b) => Number(enabled(p.id, b)) - Number(enabled(p.id, a))) : modelsOf(p);
     const extra = extraOf(p.id);
@@ -382,11 +369,10 @@ window.ArkismModels = (ctx) => {
     if (typing === p.id) requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } });
     const re = button(compact ? "목록 새로고침" : "새로고침", compact ? "" : "ghost", null, () => reload(re));
     tools.append(f, re);
-    tools.append(button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
-    c.append(tools, addRow);
+    c.append(tools);
     const ml = el("div", "mp-models");
     f.addEventListener("input", () => { filters[p.id] = f.value; ml.querySelectorAll(".mp-model-row").forEach((r) => { r.hidden = !!q() && !r.dataset.model.toLowerCase().includes(q()); }); });
-    if (!all.length) ml.append(el("p", "mp-empty", "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요."));
+    if (!all.length) ml.append(el("p", "mp-empty", "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요."));
     let onCount = 0;
     for (const m of all) {
       const on = enabled(p.id, m);
