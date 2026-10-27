@@ -81,6 +81,21 @@ func normalizeCatalog(in CatalogQueryInput, domain string) (CatalogQueryInput, e
 	if in.Limit == 0 {
 		in.Limit = 50
 	}
+	in, err := normalizeCatalogChoice(in, domain)
+	if err != nil {
+		return in, err
+	}
+	if err := validateCatalogFilters(in, domain); err != nil {
+		return in, err
+	}
+	if err := validateCatalogPreferences(in); err != nil {
+		return in, err
+	}
+	return in, nil
+}
+
+// normalizeCatalogChoice fills and checks the domain's sort and state.
+func normalizeCatalogChoice(in CatalogQueryInput, domain string) (CatalogQueryInput, error) {
 	sorts := map[string][]string{"memories": {"recent", "old", "used"}, "candidates": {"risk", "recent", "old"}, "skills": {"used", "recent", "name", "updated", "quality", "security", "agents"}, "knowledge": {"recent", "name", "chunks"}}
 	states := map[string][]string{"memories": {"active", "idle", "provenance"}, "candidates": {"candidate", "conflicted", "all"}, "skills": {"all", "trash", "unused", "plugin", "update", "missing", "caution"}, "knowledge": {"all", "검토 대기", "사용 중", "실패"}}
 	if len(sorts[domain]) == 0 || len(states[domain]) == 0 {
@@ -95,26 +110,28 @@ func normalizeCatalog(in CatalogQueryInput, domain string) (CatalogQueryInput, e
 	if !slices.Contains(sorts[domain], in.Sort) || !slices.Contains(states[domain], in.State) {
 		return in, ErrInvalid
 	}
+	return in, nil
+}
+
+// validateCatalogFilters checks the free-text filters, kind and id list.
+func validateCatalogFilters(in CatalogQueryInput, domain string) error {
 	for _, value := range []string{in.Repository, in.Model, in.Category, in.Format} {
 		if !catalogText(value, 256) {
-			return in, ErrInvalid
+			return ErrInvalid
 		}
 	}
 	if in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) {
-		return in, ErrInvalid
+		return ErrInvalid
 	}
 	if len(in.IDs) > 0 && domain != "memories" && domain != "candidates" || len(in.IDs) > 100 {
-		return in, ErrInvalid
+		return ErrInvalid
 	}
 	for _, id := range in.IDs {
 		if !validRunLabel(id, 256) || containsSecret(id) {
-			return in, ErrInvalid
+			return ErrInvalid
 		}
 	}
-	if err := validateCatalogPreferences(in); err != nil {
-		return in, err
-	}
-	return in, nil
+	return nil
 }
 func validateCatalogPreferences(in CatalogQueryInput) error {
 	if len(in.Categories) > 100 || len(in.Agents) > 32 || len(in.KeptIDs) > 2048 {
