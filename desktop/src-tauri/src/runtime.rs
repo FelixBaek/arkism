@@ -994,6 +994,10 @@ impl Runtime {
         if tick % 60 == 15 {
             let _ = self.auto_backup();
         }
+        // Audit rows older than MEMORY_AUDIT_RETENTION_DAYS (30 unless set), once a day.
+        if tick % 1440 == 150 {
+            let _ = self.expire_audit_events();
+        }
         let Some(home) = &self.home else { return };
         // Gemini CLI, Grok and DeepSeek CLI have no hooks connected: their chat logs are read instead.
         for (origin, folder) in [("gemini", home.join(".gemini").join("tmp")), ("grok", home.join(".grok").join("sessions")), ("deepseek", home.join(".dsh").join("sessions"))] {
@@ -1014,6 +1018,15 @@ impl Runtime {
 
     /// What the server's expiry timers do (hourly here): archived transcripts past their keeping
     /// time, and memory candidates nobody reviewed for 14 days.
+    /// Deletes audit events past retention as the schema owner, the only role that sees them all.
+    fn expire_audit_events(&self) -> Result<(), String> {
+        let secrets = self.secrets()?;
+        let init_url = self.url("arkism_init", &secrets.init, secrets.pg_port);
+        let mut memoryd = Command::new(self.programs()?.join(exe("memoryd")));
+        memoryd.args(["-audit-expiry", "execute"]).env("MEMORY_STORE", "postgres").env("MEMORY_DATABASE_URL", init_url);
+        run(quiet(&mut memoryd), "local_audit_expiry_failed")
+    }
+
     pub fn expire(&self) -> Result<(), String> {
         let _activity = self.activity()?;
         let secrets = self.secrets()?;
@@ -1509,12 +1522,22 @@ impl Runtime {
     /// Once a day: a backup when the newest one is a day old, keeping the last seven automatic
     /// ones (backups the user made are never removed).
     pub fn auto_backup(&self) -> Result<(), String> {
+        self.automatic_backup(true)
+    }
+
+    /// Right before an update replaces the built-in programs: a backup now, whatever the newest
+    /// one's age, kept and pruned with the automatic ones. The update stops when it fails.
+    pub fn backup_before_update(&self) -> Result<(), String> {
+        self.automatic_backup(false)
+    }
+
+    fn automatic_backup(&self, only_when_stale: bool) -> Result<(), String> {
         let _activity = self.activity()?;
         const KEEP: usize = 7;
         let dir = Self::backup_dir()?;
         let newest = Self::backups()?.into_iter().next();
         let stale = newest.map_or(true, |b| b.created < utc_stamp(std::time::SystemTime::now() - Duration::from_secs(86_400)));
-        if !stale {
+        if only_when_stale && !stale {
             return Ok(());
         }
         {

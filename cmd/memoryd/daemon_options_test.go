@@ -12,7 +12,7 @@ func TestDaemonModesAreExplicitAndMutuallyExclusive(t *testing.T) {
 		{"HTTP", daemonOptions{}}, {"Worker", daemonOptions{Worker: true}}, {"InitDB", daemonOptions{InitDB: true}},
 		{"WriteGate", daemonOptions{WriteGate: "status"}}, {"ExportSnapshot", daemonOptions{ExportSnapshot: true}}, {"InspectRestore", daemonOptions{InspectRestore: true}},
 		{"RecallBaseline", daemonOptions{RecallBaseline: "self"}}, {"TrainReview", daemonOptions{TrainReview: "model.json"}}, {"SemanticIndex", daemonOptions{SemanticIndex: "create"}}, {"CheckIndexes", daemonOptions{CheckIndexes: true}},
-		{"MemoryReach", daemonOptions{MemoryReach: "apply"}}, {"BackupExpiry", daemonOptions{BackupExpiry: "2026-10-21T00:00:00Z"}},
+		{"MemoryReach", daemonOptions{MemoryReach: "apply"}}, {"BackupExpiry", daemonOptions{BackupExpiry: "2026-10-21T00:00:00Z"}}, {"AuditExpiry", daemonOptions{AuditExpiry: "preview"}},
 		{"CollectBlobs", daemonOptions{CollectBlobs: true}}, {"AdoptBlobs", daemonOptions{AdoptBlobs: true}}, {"Reindex", daemonOptions{Reindex: true}},
 	}
 	for _, tc := range modes {

@@ -21,6 +21,8 @@ A server backup is a nightly job you schedule yourself (a systemd timer or cron)
 
 `arkism-backup-retention.timer` removes old archives, then, with `--privacy-worker <worker container>`, tells the memory worker the oldest archive it kept so privacy deletions finished before that time can complete.
 
+Before an upgrade, `tools/pre_upgrade_backup.sh` runs that backup once more and exits non-zero when no new archive appeared (the backup unit exits 0 without one while another backup holds its lock), so the upgrade stops; it then keeps only the newest `ARKISM_BACKUP_KEEP` archives (10 by default) with `arkism backup-retention --keep`, so repeated upgrades cannot fill the disk. The desktop app takes a backup into `Documents/Arkism Backups` right before it installs an update and keeps the last seven automatic ones.
+
 ### Restore
 
 If the old server still runs, save its deletion list first: `POST /v1/deletions/export` with `{"scope": ...}` returns every deletion for that scope.

@@ -264,7 +264,12 @@ func TestArchiveInspectionFailuresNeverReachTransport(t *testing.T) {
 			}
 			client := newFakeArchive(t)
 			c := newCollector(client, nil, true)
-			if err := c.upload(path, "server", "synthetic", "s", "s", timeNow(), format, nil); err == nil {
+			err := c.upload(path, "server", "synthetic", "s", "s", timeNow(), format, nil)
+			// A record above the inspection limit is counted as skipped, not failed; it is still never sent.
+			if mode == "oversized_metadata" && (err != nil || c.counts.n["inspection_skipped"] != 1) {
+				t.Fatal("oversized record not skipped", err, c.counts.n)
+			}
+			if mode != "oversized_metadata" && err == nil {
 				t.Fatal("inspection failure accepted")
 			}
 			if len(client.chunks) != 0 || len(client.commits) != 0 {

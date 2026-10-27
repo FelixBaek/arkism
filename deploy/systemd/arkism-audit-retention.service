@@ -1,0 +1,10 @@
+[Unit]
+Description=Delete Arkism audit events older than MEMORY_AUDIT_RETENTION_DAYS (default 30)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+EnvironmentFile=-/srv/arkism/config/arkism.env
+Type=oneshot
+ExecStart=/srv/arkism/tools/audit_retention.sh execute
+TimeoutStartSec=20min

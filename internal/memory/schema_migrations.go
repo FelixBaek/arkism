@@ -139,11 +139,7 @@ func (p *Postgres) migrateSchema(ctx context.Context, migrations []schemaMigrati
 }
 
 func lockSchemaMigration(ctx context.Context, tx pgx.Tx) error {
-	var allowed bool
-	err := tx.QueryRow(ctx, `SELECT rolsuper OR rolbypassrls OR rolname='arkism_init'
-OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='arkism' AND nspowner=r.oid)
-OR EXISTS(SELECT 1 FROM pg_database WHERE datname=current_database() AND datdba=r.oid)
-FROM pg_roles r WHERE rolname=current_user`).Scan(&allowed)
+	allowed, err := schemaOwner(ctx, tx)
 	if err != nil || !allowed {
 		return ErrDenied
 	}

@@ -195,8 +195,8 @@ OS 키링이 가용하면 기존 키 로더가 저장·읽기 검증 후 파일�
 - 검색은 마지막 현재성 검사·사용/감사 기록 단계만 scope별로 순서를 정해 작은 표의 Serializable 재시도 충돌을 줄인다. 검색·제공자 호출과 다른 scope는 병렬이며, 기다리는 요청은 context 취소를 따른다. DB 격리 수준과 재검사는 유지한다. 이 조정은 한 서비스 인스턴스 안에서만 적용된다.
 - embedding·삭제 잡은 DB 리스/CAS로 여러 worker가 처리할 수 있다. crewrun 예약 실행은 같은 호스트·상태 경로의 singleton이다. 호스트 간 cron 다중 실행, API의 모든 유료 생성 동작의 전역 exactly-once, 수평 확장 전체를 보장하지 않는다.
 - `MEMORY_CANDIDATE_EXPIRY_DAYS=30`과 `MEMORY_CANDIDATE_EXPIRY_SCOPE=workspace/project/user/agent`를 **둘 다** 설정하면 정상 worker가 시작 시와 매시간 최대 100개의 기한 지난 비충돌 후보를 만료한다. worker에 해당 scope의 `expire:memory_candidates` 권한이 필요하다. 기본 비활성, 복구 모드 비활성이다. approved 기억을 자동 삭제하지 않는다.
-- `audit`는 append-only이고 source_events·provider_usage는 삭제·비용·근거 추적에 참여한다. 날짜만 보고 자동 삭제하는 범용 TTL을 넣지 않는다. 운영자는 DB/블롭 크기·증가량을 매주 기록하고 30일 성장량과 최소 2배 백업/복원 공간을 확보한다. 저장소 여유 20% 미만이면 수집 규모를 줄이고 보존 정책 검토를 시작한다. 이 수치는 운영 경보 기준이지 측정된 수용량이 아니다.
-- 용량 회수는 암호화 백업·복원 검증 → 사용하지 않는 승인 기억의 사람 검토 → 기존 삭제 API·삭제 영수증 → 백업 보존 기한 경과 후 정리 순서다. 감사·삭제 원장을 임의 SQL로 지우지 않는다. 조직별 보존 기한·법적 보존은 해당 운영자가 정한다. 자동 보존 purge 구현은 제공하지 않는다.
+- `audit_events`(허용·거부 기록)만 보존 기간이 있다. `MEMORY_AUDIT_RETENTION_DAYS`(기본 30, 0이면 끔)보다 오래된 행을 `memoryd -audit-expiry preview|execute`가 지운다. 스키마 소유자(`arkism_init`) 연결로만 돌고, 지우기 전 건수를 로그에 남기며, `preview`는 세기만 한다. 서버는 `tools/audit_retention.sh execute`를 타이머(`deploy/systemd/arkism-audit-retention.*`)로 매일 돌리고, 데스크톱은 하루 한 번 스스로 돌린다. source_events·provider_usage·삭제 원장은 삭제·비용·근거 추적에 참여하므로 날짜만 보고 지우는 TTL을 넣지 않는다. 운영자는 DB/블롭 크기·증가량을 매주 기록하고 30일 성장량과 최소 2배 백업/복원 공간을 확보한다. 저장소 여유 20% 미만이면 수집 규모를 줄이고 보존 정책 검토를 시작한다. 이 수치는 운영 경보 기준이지 측정된 수용량이 아니다.
+- 용량 회수는 암호화 백업·복원 검증 → 사용하지 않는 승인 기억의 사람 검토 → 기존 삭제 API·삭제 영수증 → 백업 보존 기한 경과 후 정리 순서다. 감사·삭제 원장을 임의 SQL로 지우지 않는다. 조직별 보존 기한·법적 보존은 해당 운영자가 정한다. 자동 보존 purge는 `audit_events` 보존 기간 하나뿐이다.
 - 손상된 큐 payload는 같은 트랜잭션에서 컬럼 상태를 failed로 격리하고 원래 payload/doc를 그대로 남긴다. 이후 잡은 계속 진행한다. 관리자가 원본을 안전하게 복구하거나 공식 삭제 절차로 정리한다. 일반 record API로 손상 payload를 읽을 수 있다고 가정하지 않는다. 패닉은 원문 없이 오류가 되고, 정상 재시도 한도를 소비한다.
 - 알림은 transient HTTP(429/5xx/통신 실패)·SMTP(4xx/네트워크 실패)만 최대 3회 재시도한다. 실패는 워크플로 노드 오류로 남는다. 응답 유실 후 중복 알림이 가능하며 exactly-once 전송은 아니다.
 
