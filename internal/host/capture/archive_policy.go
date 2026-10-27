@@ -13,6 +13,10 @@ import (
 
 var errArchivePolicySkipped = errors.New("archive_capture_skipped")
 
+// errArchiveInspectionLimit: a record the policy cannot inspect whole (above
+// archiveMetadataRecordBytes, archiveMetadataPaths or archiveMetadataDepth).
+const errArchiveInspectionLimit = valueErr("archive_metadata_inspection_limit")
+
 const (
 	archiveMetadataRecordBytes = 8 << 20
 	archiveMetadataPaths       = 4096
@@ -104,7 +108,7 @@ func nextArchiveMetadata(r *bufio.Reader) (record any, done bool, err error) {
 	structured := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 	if len(line) > archiveMetadataRecordBytes {
 		if structured {
-			return nil, false, valueErr("archive_metadata_inspection_limit")
+			return nil, false, errArchiveInspectionLimit
 		}
 		if err := skipArchiveUnstructuredLine(r, line); err != nil {
 			return nil, false, err
@@ -162,14 +166,14 @@ func (p *archivePolicy) addPath(value any, file bool) error {
 	}
 	p.paths[s] = struct{}{}
 	if len(p.paths) > archiveMetadataPaths {
-		return valueErr("archive_metadata_inspection_limit")
+		return errArchiveInspectionLimit
 	}
 	return nil
 }
 
 func (p *archivePolicy) walk(value any, depth int) error {
 	if depth > archiveMetadataDepth {
-		return valueErr("archive_metadata_inspection_limit")
+		return errArchiveInspectionLimit
 	}
 	switch v := value.(type) {
 	case map[string]any:
@@ -208,7 +212,7 @@ func (p *archivePolicy) walkJSONText(value string, depth int) error {
 		return nil
 	}
 	if len(text) > archiveMetadataRecordBytes {
-		return valueErr("archive_metadata_inspection_limit")
+		return errArchiveInspectionLimit
 	}
 	var child any
 	if json.Unmarshal([]byte(text), &child) == nil {
@@ -250,7 +254,7 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 			return nil, valueErr("archive_metadata_inspection_failed")
 		}
 		if len(record) >= archiveMetadataRecordBytes {
-			return nil, valueErr("archive_metadata_inspection_limit")
+			return nil, errArchiveInspectionLimit
 		}
 		line, readErr := readLine(r, archiveMetadataRecordBytes-len(record)+1)
 		if readErr != nil {
@@ -260,7 +264,7 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 			return nil, valueErr("archive_metadata_inspection_failed")
 		}
 		if len(record)+len(line)+1 > archiveMetadataRecordBytes {
-			return nil, valueErr("archive_metadata_inspection_limit")
+			return nil, errArchiveInspectionLimit
 		}
 		record = append(record, '\n')
 		record = append(record, line...)

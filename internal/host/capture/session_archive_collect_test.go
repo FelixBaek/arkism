@@ -244,7 +244,7 @@ func TestArchiveCommitRejectedForASecretIsRetriedWithoutText(t *testing.T) {
 		return nil, &APIError{Status: 413, Code: "too_large"}
 	})
 	c := newCollector(poster, nil, true)
-	c.attempt(func() error { return c.upload(path, "server", "claude_code", "sid2", "s", -1, "jsonl", nil) })
+	c.attempt(path, func() error { return c.upload(path, "server", "claude_code", "sid2", "s", -1, "jsonl", nil) })
 	if c.counts.n["failed"] != 1 || c.counts.n["http_413"] != 1 {
 		t.Fatal(c.counts.n)
 	}
@@ -428,5 +428,30 @@ func TestArchiveAndUsageShareConfiguredTranscriptRoots(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestArchiveRecordAboveTheInspectionLimitIsSkippedAndNamedNotFailed(t *testing.T) {
+	archiveTestSettings(t)
+	home, _ := archiveHome(t)
+	huge := put(t, filepath.Join(home, ".codex/sessions/2026/10/18/r.jsonl"),
+		`{"type": "session_meta", "payload": {"id": "codex-sid"}}`+"\n"+`{"payload": "`+strings.Repeat("x", archiveMetadataRecordBytes)+`"}`+"\n")
+	put(t, filepath.Join(home, ".codex/sessions/2026/10/19/s.jsonl"), `{"type": "session_meta", "payload": {"id": "codex-sid-2"}}`+"\n")
+	var errOut bytes.Buffer
+	c := newCollector(nil, nil, false)
+	c.stderr = &errOut
+	c.collect()
+	if n := c.counts.n; n["inspection_skipped"] != 1 || n["planned"] != 1 || n["failed"] != 0 {
+		t.Fatal(n)
+	}
+	if !strings.Contains(errOut.String(), "inspection_skipped: "+huge) {
+		t.Fatal(errOut.String())
+	}
+	errOut.Reset()
+	broken := newCollector(nil, nil, false)
+	broken.stderr = &errOut
+	broken.attempt("what", func() error { return valueErr("boom") })
+	if broken.counts.n["failed"] != 1 || strings.TrimSpace(errOut.String()) != "ValueError: what: boom" {
+		t.Fatal(broken.counts.n, errOut.String())
 	}
 }

@@ -138,6 +138,8 @@ func runDaemonMaintenance(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 		return true, runDaemonMemoryReach(ctx, pg, cfg, standalone)
 	case "BackupExpiry":
 		return true, runDaemonBackupExpiry(ctx, pg, cfg, standalone)
+	case "AuditExpiry":
+		return true, runDaemonAuditExpiry(ctx, pg, cfg, standalone)
 	case "ExportSnapshot", "InspectRestore":
 		return true, runDaemonSnapshot(ctx, pg, cfg, standalone)
 	case "CollectBlobs", "AdoptBlobs":

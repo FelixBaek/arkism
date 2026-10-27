@@ -1,0 +1,10 @@
+[Unit]
+Description=Expire Arkism audit events daily at 04:10 KST, after the backup
+
+[Timer]
+OnCalendar=*-*-* 04:10:00
+Persistent=true
+Unit=arkism-audit-retention.service
+
+[Install]
+WantedBy=timers.target

@@ -23,6 +23,10 @@ source changes only; they do not claim that a signed installer is available.
 - Add per-release compression, hook latency and token evaluation metrics.
 - Fail a routed group call over to its fallback on a 5xx (529 included) or a
   timeout before any response, and return the pick's own error when none answers.
+- Delete audit events past `MEMORY_AUDIT_RETENTION_DAYS` (30 by default) once
+  a day; let `session-archive` name the file it cannot inspect and skip it
+  instead of failing; prove migration files and numbers agree; back the
+  database up right before an update and cap the backup count.
 
 ## [0.1.3](https://github.com/FelixBaek/arkism/releases/tag/v0.1.3) — 2026-10-22
 

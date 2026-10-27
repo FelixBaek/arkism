@@ -87,7 +87,7 @@ func TestExactBoundaryAndRestoreMtimeDoNotExtendLife(t *testing.T) {
 	}
 	// An old mtime must not expire a recent backup either.
 	os.Chtimes(filepath.Join(root, fresh), time.Unix(1, 0), time.Unix(1, 0))
-	preview, err := expire(root, false, now)
+	preview, err := expire(root, false, now, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,14 +103,14 @@ func TestExactBoundaryAndRestoreMtimeDoNotExtendLife(t *testing.T) {
 	if len(listNames(t, root)) != 3 {
 		t.Fatal("preview removed files")
 	}
-	executed, err := expire(root, true, now)
+	executed, err := expire(root, true, now, 0)
 	if err != nil || field(executed, "removed") != 2 {
 		t.Fatal(executed, err)
 	}
 	if names := listNames(t, root); !reflect.DeepEqual(names, []string{fresh}) {
 		t.Fatal(names)
 	}
-	if again, _ := expire(root, true, now); field(again, "removed") != 0 {
+	if again, _ := expire(root, true, now, 0); field(again, "removed") != 0 {
 		t.Fatal(again)
 	}
 }
@@ -132,7 +132,7 @@ func TestUnknownIrregularLinksAndOtherLocationsUntouched(t *testing.T) {
 	child := filepath.Join(managed, bundleFile(3, false))
 	os.Mkdir(child, 0o755)
 	write(t, filepath.Join(child, "original"), "keep")
-	result, err := expire(managed, true, float64(time.Now().Unix()))
+	result, err := expire(managed, true, float64(time.Now().Unix()), 0)
 	if err != nil || field(result, "removed") != 0 || field(result, "excluded") != 6 {
 		t.Fatal(result, err)
 	}
@@ -151,19 +151,19 @@ func TestDirectoryAliasAndNonPrivateRootAreRejected(t *testing.T) {
 	write(t, path, "keep")
 	alias := filepath.Join(root, "alias")
 	os.Symlink(managed, alias)
-	if _, err := expire(alias, true, 2e9); err == nil {
+	if _, err := expire(alias, true, 2e9, 0); err == nil {
 		t.Fatal("alias accepted")
 	}
 	// Python's Path.absolute keeps "..", so a dotted path is an alias too.
-	if _, err := expire(managed+"/../managed", true, 2e9); err == nil {
+	if _, err := expire(managed+"/../managed", true, 2e9, 0); err == nil {
 		t.Fatal("dotted alias accepted")
 	}
 	os.Chmod(managed, 0o755)
-	if _, err := expire(managed, true, 2e9); err == nil {
+	if _, err := expire(managed, true, 2e9, 0); err == nil {
 		t.Fatal("non-private root accepted")
 	}
 	unix.Chmod(managed, 0o2700)
-	if _, err := expire(managed, true, 2e9); err == nil {
+	if _, err := expire(managed, true, 2e9, 0); err == nil {
 		t.Fatal("setgid root accepted")
 	}
 	if _, err := os.Stat(path); err != nil {
@@ -304,14 +304,14 @@ func TestOldestRetainedIsToldToThePrivacyWorker(t *testing.T) {
 	}
 	defer func() { docker = runDocker }()
 	// No backup at all: nothing proves expiry, so the worker is not told.
-	empty, err := expire(managed, true, now)
+	empty, err := expire(managed, true, now, 0)
 	if err != nil || field(empty, "oldest_retained") != nil || notifyPrivacy("worker-1", empty) != nil || len(calls) != 0 {
 		t.Fatal(empty, err, calls)
 	}
 	for _, at := range []int64{now - TTL, now - 3600, now - 60} {
 		write(t, filepath.Join(managed, bundleFile(at, false)), "encrypted fixture")
 	}
-	result, err := expire(managed, true, now)
+	result, err := expire(managed, true, now, 0)
 	want := time.Unix(now-3600, 0).UTC().Format(time.RFC3339)
 	if err != nil || field(result, "oldest_retained") != want {
 		t.Fatal(result, err)
@@ -321,7 +321,43 @@ func TestOldestRetainedIsToldToThePrivacyWorker(t *testing.T) {
 	}
 	// An unknown file could be an older copy, so the oldest time is withheld.
 	write(t, filepath.Join(managed, "copy.cms"), "unknown")
-	if hidden, _ := expire(managed, true, now); field(hidden, "oldest_retained") != nil {
+	if hidden, _ := expire(managed, true, now, 0); field(hidden, "oldest_retained") != nil {
 		t.Fatal(hidden)
+	}
+}
+
+func TestKeepExpiresTheOldestFreshBundlesBeyondTheCount(t *testing.T) {
+	const now = 1791158400
+	root := privateDir(t, filepath.Join(t.TempDir(), "managed"))
+	var fresh []string
+	for i := 1; i <= 4; i++ {
+		fresh = append(fresh, bundleFile(int64(now-i*3600), false))
+		write(t, filepath.Join(root, fresh[len(fresh)-1]), "encrypted fixture")
+	}
+	write(t, filepath.Join(root, "unrelated.txt"), "not a bundle")
+	unlimited, err := expire(root, false, now, 0)
+	if err != nil || len(field(unlimited, "expired").([]any)) != 0 || field(unlimited, "retained") != 4 {
+		t.Fatal(unlimited, err)
+	}
+	preview, err := expire(root, false, now, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, name := range field(preview, "expired").([]any) {
+		got = append(got, name.(string))
+	}
+	if !reflect.DeepEqual(got, []string{fresh[3], fresh[2]}) || field(preview, "retained") != 2 || field(preview, "removed") != 0 {
+		t.Fatalf("preview %v", preview)
+	}
+	executed, err := expire(root, true, now, 2)
+	if err != nil || field(executed, "removed") != 2 {
+		t.Fatal(executed, err)
+	}
+	if names := listNames(t, root); !reflect.DeepEqual(names, []string{fresh[1], fresh[0], "unrelated.txt"}) {
+		t.Fatal(names)
+	}
+	if code, _, errOut := run(t, []string{"backup-retention", "--directory", root, "--keep", "-1"}); code != 2 || !strings.Contains(errOut, "--keep") {
+		t.Fatal(code, errOut)
 	}
 }

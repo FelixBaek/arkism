@@ -36,8 +36,10 @@ func createdAt(name string) (float64, bool) {
 }
 
 // expire removes bundles older than TTL from a private directory, or only lists
-// them in preview. The caller must hold arkism-backup.lock throughout execute.
-func expire(directory string, execute bool, now float64) (host.Obj, error) {
+// them in preview. With keep > 0 it also removes the oldest fresh bundles beyond
+// that count, so repeated manual backups cannot fill the disk. The caller must
+// hold arkism-backup.lock throughout execute.
+func expire(directory string, execute bool, now float64, keep int) (host.Obj, error) {
 	root, err := absolute(directory)
 	if err != nil {
 		return nil, err
@@ -58,34 +60,20 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Strings(names)
 	mode := "preview"
 	if execute {
 		mode = "execute"
 	}
-	expired := []any{}
-	removed, retained, excluded := 0, 0, 0
-	oldest := 0.0
-	for _, name := range names {
-		at, ok, err := bundleTime(fd, name)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			excluded++
-			continue
-		}
-		if at+TTL > now {
-			retained++
-			if oldest == 0 || at < oldest {
-				oldest = at
-			}
-			continue
-		}
-		expired = append(expired, name)
+	expired, fresh, excluded, err := sortBundles(fd, names, now, keep)
+	if err != nil {
+		return nil, err
+	}
+	expiredNames, removed := []any{}, 0
+	for _, b := range expired {
+		expiredNames = append(expiredNames, b.name)
 		if execute {
-			if err := unix.Unlinkat(fd, name, 0); err != nil {
-				return nil, &os.PathError{Op: "unlink", Path: name, Err: err}
+			if err := unix.Unlinkat(fd, b.name, 0); err != nil {
+				return nil, &os.PathError{Op: "unlink", Path: b.name, Err: err}
 			}
 			removed++
 		}
@@ -95,8 +83,43 @@ func expire(directory string, execute bool, now float64) (host.Obj, error) {
 			return nil, err
 		}
 	}
-	return host.Obj{{Key: "mode", Value: mode}, {Key: "expired", Value: expired}, {Key: "removed", Value: removed},
-		{Key: "retained", Value: retained}, {Key: "excluded", Value: excluded}, {Key: "oldest_retained", Value: oldestRetained(oldest, excluded)}}, nil
+	oldest := 0.0
+	if len(fresh) > 0 {
+		oldest = fresh[0].at
+	}
+	return host.Obj{{Key: "mode", Value: mode}, {Key: "expired", Value: expiredNames}, {Key: "removed", Value: removed},
+		{Key: "retained", Value: len(fresh)}, {Key: "excluded", Value: excluded}, {Key: "oldest_retained", Value: oldestRetained(oldest, excluded)}}, nil
+}
+
+type bundle struct {
+	name string
+	at   float64
+}
+
+// sortBundles splits names into expired and fresh bundles (fresh oldest first)
+// and counts the files that are not managed bundles. With keep > 0 the oldest
+// fresh bundles beyond that count join the expired ones.
+func sortBundles(fd int, names []string, now float64, keep int) (expired, fresh []bundle, excluded int, err error) {
+	sort.Strings(names)
+	for _, name := range names {
+		at, ok, err := bundleTime(fd, name)
+		if err != nil {
+			return nil, nil, 0, err
+		}
+		if !ok {
+			excluded++
+		} else if at+TTL > now {
+			fresh = append(fresh, bundle{name, at})
+		} else {
+			expired = append(expired, bundle{name, at})
+		}
+	}
+	sort.Slice(fresh, func(i, j int) bool { return fresh[i].at < fresh[j].at })
+	if keep > 0 && len(fresh) > keep {
+		expired = append(expired, fresh[:len(fresh)-keep]...)
+		fresh = fresh[len(fresh)-keep:]
+	}
+	return expired, fresh, excluded, nil
 }
 
 // oldestRetained formats the oldest retained time. An unknown file may be an
@@ -148,10 +171,15 @@ func retentionMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	directory := fs.String("directory", "", "managed backup directory")
 	execute := fs.Bool("execute", false, "delete expired bundles instead of previewing")
 	worker := fs.String("privacy-worker", "", "memory worker container told the oldest retained backup after execute")
+	keep := fs.Int("keep", 0, "also expire the oldest fresh bundles beyond this count (0: time limit only)")
 	if code := parse(fs, args, "directory"); code >= 0 {
 		return code
 	}
-	result, err := expire(*directory, *execute, float64(time.Now().UnixNano())/1e9)
+	if *keep < 0 {
+		fmt.Fprintln(stderr, "backup retention: --keep must be 0 or more")
+		return 2
+	}
+	result, err := expire(*directory, *execute, float64(time.Now().UnixNano())/1e9, *keep)
 	if err != nil {
 		fmt.Fprintln(stderr, "backup retention failed; inspect managed directory before retry")
 		return 1

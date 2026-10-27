@@ -752,6 +752,8 @@ async fn update_install(app: tauri::AppHandle) -> Result<(), String> {
                 .into_reader();
             download_update_core(reader, &latest.sha256, UPDATE_DOWNLOAD_MAX_BYTES, |bytes| {
                 latest.verify_installer(&bytes, update_manifest::PUBLIC_KEY)?;
+                // The installer replaces the database programs: a backup first, or no update.
+                rt.backup_before_update().map_err(|e| format!("update_backup_failed: {e}"))?;
                 let mut prepared = Some(update_installer::Installer::prepare(&bytes, &latest.sha256, &latest.file)
                     .map_err(|error| error.to_string())?);
                 // The installer replaces the built-in programs, so they must not be running.

@@ -378,3 +378,37 @@ func schemaRolePostgres(t *testing.T, p *Postgres, role string) *Postgres {
 	t.Cleanup(pool.Close)
 	return &Postgres{pool: pool}
 }
+
+// Two branches can each add the next migration number. The embedded list and
+// the files on disk must agree, one file per version, numbered without a gap.
+func TestSchemaMigrationFilesMatchTheEmbeddedListWithoutGapsOrDoubles(t *testing.T) {
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[int]string{}
+	for _, e := range entries {
+		var version int
+		var name string
+		if n, _ := fmt.Sscanf(e.Name(), "%04d_%s", &version, &name); n != 2 || !strings.HasSuffix(name, ".sql") || fmt.Sprintf("%04d_%s", version, name) != e.Name() {
+			t.Fatalf("migration file %q is not NNNN_name.sql", e.Name())
+		}
+		if other, dup := files[version]; dup {
+			t.Fatalf("migration %d is both %q and %q; renumber the one that is not on main", version, other, e.Name())
+		}
+		files[version] = strings.TrimSuffix(name, ".sql")
+	}
+	migrations := schemaMigrations()
+	if len(files) != len(migrations) {
+		t.Fatalf("%d migration files but %d embedded migrations", len(files), len(migrations))
+	}
+	for i, m := range migrations {
+		if m.version != i+1 || files[m.version] != m.name {
+			t.Fatalf("migration %d: embedded %q, file %q", m.version, m.name, files[m.version])
+		}
+		raw, err := os.ReadFile(fmt.Sprintf("migrations/%04d_%s.sql", m.version, m.name))
+		if err != nil || string(raw) != m.sql {
+			t.Fatalf("migration %d: embedded SQL is not the file on disk", m.version)
+		}
+	}
+}

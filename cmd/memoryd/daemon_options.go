@@ -17,6 +17,7 @@ type daemonOptions struct {
 	ExportSnapshot     bool
 	AdoptBlobs         bool
 	BackupExpiry       string
+	AuditExpiry        string
 	CollectBlobs       bool
 	InitDB             bool
 	SemanticIndex      string
@@ -44,6 +45,7 @@ func daemonFlags() daemonOptions {
 	flag.BoolVar(&cfg.ExportSnapshot, "export-recovery-snapshot", false, "offline administrator: export all-scope recovery ledger from one read-only database snapshot")
 	flag.BoolVar(&cfg.AdoptBlobs, "adopt-restored-blobs", false, "verify quarantined restored files and bind to the restored DB; stopped writers required")
 	flag.StringVar(&cfg.BackupExpiry, "privacy-backup-expiry", "", "RFC3339 time of the oldest retained backup; finish privacy deletions parked before it, then exit")
+	flag.StringVar(&cfg.AuditExpiry, "audit-expiry", "", "schema owner: preview|execute deleting audit events older than MEMORY_AUDIT_RETENTION_DAYS (default 30), then exit")
 	flag.BoolVar(&cfg.CollectBlobs, "collect-blobs", false, "collect unreferenced blob files and abandoned temporary files; service maintenance authorization required")
 	flag.BoolVar(&cfg.InitDB, "init-db", false, "create Memory collections and ordinary indexes")
 	flag.StringVar(&cfg.SemanticIndex, "semantic-index", "", "create or drop the opt-in pgvector knowledge index: create|drop")
@@ -156,6 +158,7 @@ func daemonMode(cfg daemonOptions) (string, error) {
 		{"CheckIndexes", cfg.CheckIndexes},
 		{"MemoryReach", cfg.MemoryReach != ""},
 		{"BackupExpiry", cfg.BackupExpiry != ""},
+		{"AuditExpiry", cfg.AuditExpiry != ""},
 		{"CollectBlobs", cfg.CollectBlobs},
 		{"AdoptBlobs", cfg.AdoptBlobs},
 		{"Reindex", cfg.Reindex},

@@ -517,6 +517,7 @@ type collector struct {
 	state   *host.Obj
 	execute bool
 	counts  *counter
+	stderr  io.Writer // where a skipped or failed file is named; nil says nothing
 }
 
 func newCollector(client archivePoster, state *host.Obj, execute bool) *collector {
@@ -536,6 +537,12 @@ func (c *collector) upload(path, device, origin, sid, logical string, observed f
 			err = nil
 		case errors.Is(err, errArchivePrivate):
 			c.counts.inc("private_skipped")
+			err = nil
+		case errors.Is(err, errArchiveInspectionLimit):
+			// A record too large or too deep to inspect for project paths is never
+			// uploaded. One such transcript must not fail every run of the collector.
+			c.counts.inc("inspection_skipped")
+			c.say("inspection_skipped: " + path)
 			err = nil
 		}
 	}()
@@ -785,8 +792,14 @@ func (c *collector) file(path, device, origin, logical, sid string, observed flo
 	return c.upload(path, device, origin, sid, logical, observed, "jsonl", nil)
 }
 
-// attempt counts a failure instead of stopping the collection.
-func (c *collector) attempt(fn func() error) {
+func (c *collector) say(line string) {
+	if c.stderr != nil {
+		fmt.Fprintln(c.stderr, line)
+	}
+}
+
+// attempt counts a failure instead of stopping the collection; label names what failed.
+func (c *collector) attempt(label string, fn func() error) {
 	err := func() (err error) {
 		defer recovered(&err)
 		return fn()
@@ -795,6 +808,7 @@ func (c *collector) attempt(fn func() error) {
 		return
 	}
 	c.counts.inc("failed")
+	c.say(fmt.Sprintf("%s: %s: %v", pyType(err), label, err))
 	var api *APIError
 	if errors.As(err, &api) {
 		c.counts.inc(fmt.Sprintf("http_%d", api.Status))
@@ -847,18 +861,18 @@ func (c *collector) collect() {
 				continue
 			}
 			rel, _ := filepath.Rel(r.root, path)
-			c.attempt(func() error { return c.file(path, r.device, r.origin, rel, "", -1) })
+			c.attempt(path, func() error { return c.file(path, r.device, r.origin, rel, "", -1) })
 		}
 	}
 	if zcode := filepath.Join(host.Home, ".zcode/cli/db/db.sqlite"); exists(zcode) {
-		c.attempt(func() error { return c.zcode(zcode) })
+		c.attempt(zcode, func() error { return c.zcode(zcode) })
 	}
 	pcZcode := filepath.Join(archivePC, "zcode-sessions")
 	if exists(pcZcode) {
 		paths, _ := filepath.Glob(filepath.Join(globEscape(pcZcode), "*.jsonl"))
 		sortPaths(paths)
 		for _, path := range paths {
-			c.attempt(func() error { return c.zcodeExport(path) })
+			c.attempt(path, func() error { return c.zcodeExport(path) })
 		}
 	}
 }
@@ -901,7 +915,7 @@ func (c *collector) zcode(path string) error {
 			c.counts.inc("planned")
 			continue
 		}
-		c.attempt(func() error {
+		c.attempt(path+" "+sid, func() error {
 			return zcodeSnapshot(path, sid, func(target string, observed float64, revision any) error {
 				return c.upload(target, "server", "zcode", sid, "db-session", observed, "reconstructed_zcode", revision, path)
 			})
@@ -963,7 +977,7 @@ func (c *collector) migrate(path string) error {
 			c.counts.inc("planned")
 			continue
 		}
-		c.attempt(func() error {
+		c.attempt(path, func() error {
 			agent, id := str(get("agent")), str(get("id"))
 			origin := agent
 			if agent == "claude" {
@@ -1119,6 +1133,7 @@ func runSessionArchive(usage, command, database string, execute bool, stdout, st
 		client = archiveClient{}
 	}
 	c := newCollector(client, &state, execute)
+	c.stderr = stderr
 	switch command {
 	case "expire":
 		if execute {
