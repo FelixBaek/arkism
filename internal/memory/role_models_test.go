@@ -101,7 +101,7 @@ func TestRouteSkillsUsesPickedJudgeAndCount(t *testing.T) {
 		}
 	}
 	set("skill_judge", "jev")
-	set("skill_candidates", "3") // more than the server's 1: searched again
+	set("skill_candidates", "3") // more than the server's 1: the one search already holds them
 	route("jev", 3)
 	set("skill_candidates", "2")
 	route("jev", 2)

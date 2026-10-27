@@ -576,8 +576,19 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	scope := map[string]any{"workspace_id": *workspace, "project_id": *project, "user_id": *user, "agent_id": ""}
-	pick, _ := host.RolePick(func(path string, timeout time.Duration) (map[string]any, error) {
-		return host.GetWith(*tokenFile, path, timeout)
+	pick, _ := host.RolePick(func(path string, timeout time.Duration) (map[string]any, error) { // the --url server the sync goes to
+		token, err := readToken(*tokenFile)
+		if err != nil {
+			return nil, err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(*url, "/")+path, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		return host.DoJSON(http.DefaultClient, req)
 	}, scope, "skill_summary")
 	summaryBasic, summaryModel = pick == "basic", host.CLIRoleModel(pick, "")
 	summary, err := syncRun(*url, *tokenFile, scope, *limit, *execute)
