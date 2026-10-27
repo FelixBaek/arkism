@@ -409,7 +409,7 @@ window.ArkismRouting = (ctx) => {
   function modelList(items) {
     const box = el("section", "rt-set-card");
     const h = el("div", "rt-ctl-head"); h.append(el("h3", "", "라우팅에 쓰는 모델"), el("small", "", "1번이 첫 모델")); box.append(h);
-    box.append(el("p", "rt-set-hint", "모델 설정에서 켠 모델이에요. 누르면 오른쪽에서 설명·순서·한도를 고쳐요."));
+    box.append(el("p", "rt-set-hint", "설정 › 에이전트에서 켠 모델이에요. 누르면 오른쪽에서 설명·순서·한도를 고쳐요."));
     const list = el("div", "rt-mlist");
     const sorted = [...items].sort((x, y) => (cur(x).enabled === false) - (cur(y).enabled === false) || (cur(x).order ?? 99) - (cur(y).order ?? 99));
     const firstOn = sorted.find((m) => cur(m).enabled !== false);
@@ -449,9 +449,9 @@ window.ArkismRouting = (ctx) => {
     const foot = el("div", "rt-foot");
     foot.append(button("저장", "primary", null, () => saveModel(raw)));
     const note = el("div", "rt-note-card");
-    const link = el("button", "link-btn v4-link", "모델 설정 열기 ›"); link.type = "button";
-    link.addEventListener("click", () => { state.settingsTab = "models"; render(false); });
-    note.append(el("p", "", "여기는 \"어떤 모델을 어떤 순서로\"만 정해요. 모델 켜고 끄기·키·단가는 모델 설정에서 해요."), link);
+    const link = el("button", "link-btn v4-link", "에이전트 설정 열기 ›"); link.type = "button";
+    link.addEventListener("click", () => { state.settingsTab = "agents"; render(false); });
+    note.append(el("p", "", "여기는 \"어떤 모델을 어떤 순서로\"만 정해요. 모델 켜고 끄기·키·단가는 설정 › 에이전트에서 해요."), link);
     box.append(top, when, mix, lim, con, foot, note);
     return box;
   }
@@ -615,14 +615,14 @@ window.ArkismRouting = (ctx) => {
       box.append(foot);
     }
     const note = el("div", "rt-note-card");
-    const link = el("button", "link-btn v4-link", "모델 설정 열기 ›"); link.type = "button";
-    link.addEventListener("click", () => { state.settingsTab = "models"; render(false); });
-    note.append(el("p", "", "여기는 \"이 그룹에 어떤 모델을 어떤 순서로\"만 정해요. 모델 켜고 끄기·키·단가는 모델 설정에서 해요."), link);
+    const link = el("button", "link-btn v4-link", "에이전트 설정 열기 ›"); link.type = "button";
+    link.addEventListener("click", () => { state.settingsTab = "agents"; render(false); });
+    note.append(el("p", "", "여기는 \"이 그룹에 어떤 모델을 어떤 순서로\"만 정해요. 모델 켜고 끄기·키·단가는 설정 › 에이전트에서 해요."), link);
     box.append(note);
     return box;
   }
   // 에이전트 연결 (built-in Arkism only): Claude Code, Codex and Gemini CLI send their model requests to the
-  // gateway on this computer and use the 자동 group, every model turned on in 모델 설정. Their logins stay theirs.
+  // gateway on this computer and use the 자동 group, every model turned on in 설정 › 에이전트. Their logins stay theirs.
   const AGENT_LINKS = [["claude_code", "img:claude.svg", "Claude Code", "기본 모델이 ‘자동’이 돼요. /model에서 다른 모델도 고를 수 있어요."],
     ["codex", "sym:a-codex", "Codex", "~/.codex/config.toml에 Arkism 공급자를 넣고 모델을 ‘자동’으로 바꿔요."],
     ["gemini", "sym:a-gemini", "Gemini CLI", "API 키로 로그인한 Gemini CLI만 돼요. Google 로그인은 주소 설정을 무시해요."]];
@@ -640,7 +640,7 @@ window.ArkismRouting = (ctx) => {
     const c = el("div", "rt-card pad rt-links");
     const head = el("div", "rt-card-head");
     head.append(el("strong", "", "에이전트 연결"), el("span", "", S.links.url ? `중계기 ${S.links.url.replace("http://", "")} · 켜짐` : "중계기 꺼짐"));
-    c.append(head, el("p", "dim", "연결한 에이전트는 이 PC의 Arkism 중계기로 요청을 보내고, 모델 설정에 켠 모델 중에서 자동으로 골라 답해요. 각자 로그인은 그대로 써요."));
+    c.append(head, el("p", "dim", "연결한 에이전트는 이 PC의 Arkism 중계기로 요청을 보내고, 설정 › 에이전트에서 켠 모델 중에서 자동으로 골라 답해요. 각자 로그인은 그대로 써요."));
     for (const [id, logo, name, hint] of AGENT_LINKS) {
       const a = S.links.agents?.[id] || {};
       const row = el("div", "rt-link-row");
@@ -655,7 +655,7 @@ window.ArkismRouting = (ctx) => {
     return c;
   }
   function tab(kit) {
-    kit.head(button("새로고침", "ghost", null, loadSettings)); // models come from 모델 설정; this reads them again
+    kit.head(button("새로고침", "ghost", null, loadSettings)); // models come from 설정 › 에이전트; this reads them again
     if (S.settingsState === "idle") queueMicrotask(loadSettings);
     if (S.settingsState !== "ready") {
       kit.side(kit.sideNote("모델을 고르면 여기서 설명·순서·한도를 고쳐요."));
@@ -675,7 +675,7 @@ window.ArkismRouting = (ctx) => {
     render: renderView, detail, tab, load, loadSettings, count: () => S.doc?.models?.length || "",
     reset: () => { epoch++; Object.assign(S, { doc: null, state: "idle", settings: null, settingsState: "idle", draft: {} }); },
     leave: () => { if (S.state !== "idle") { epoch++; Object.assign(S, { doc: null, state: "idle" }); } }, // read again next time the screen opens
-    // 라우팅 설정 lists the models turned on in 모델 설정: read them again every time the tab opens.
+    // 라우팅 설정 lists the models turned on in 설정 › 에이전트: read them again every time the tab opens.
     leaveSettings: () => { if (S.settingsState !== "idle") { settingsEpoch++; Object.assign(S, { settings: null, settingsState: "idle", draft: {}, failoverDraft: null }); } },
     views: { routing: { title: "라우팅 현황", render: renderView, keepDetail: true,
       sub: () => (S.state === "ready" && S.at ? `실시간 · 10초마다 갱신 · 마지막 ${S.at.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour12: false })}` : "Clef가 요청을 나누고, 막히면 다음 모델로 넘겨요"),

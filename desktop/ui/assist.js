@@ -36,7 +36,7 @@ window.ArkismAssist = (ctx) => {
     return { status: "failed", error: "너무 오래 걸려요. 잠시 뒤 다시 해 주세요." };
   }
   const assistError = (a) => (a.error || "").startsWith("expired")
-    ? "서버의 모델 설정 실행기가 꺼져 있어요. arkism-providers 서비스를 켜 주세요."
+    ? "서버의 모델 실행기가 꺼져 있어요. arkism-providers 서비스를 켜 주세요."
     : `AI가 답하지 못했어요 (${(a.error || "실패").slice(0, 120)}).`;
 
   return { assist, assistError, personas, parseJSON };

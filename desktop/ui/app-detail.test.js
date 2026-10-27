@@ -150,7 +150,7 @@ test("새 스킬 제안: a bad name is refused, 스킬 만들기 installs it and
   app.window.localStorage.setItem("arkism.skillSuggest", JSON.stringify(suggest));
   hook = (a) => (a.path.startsWith("/v1/crew/assists/") ? json(200, { crew_assist: { status: "failed", error: "expired lease" } }) : null);
   await openTodo(/주간 보고/);
-  if (byText("#detail button", /스킬 만들기/)) { await press(/스킬 만들기/, 300); await waitNotice(/모델 설정 실행기/); assert.match(t(app.$("#notice")), /모델 설정 실행기/); } // waits for the poll, not a fixed 3s that a loaded runner can miss
+  if (byText("#detail button", /스킬 만들기/)) { await press(/스킬 만들기/, 300); await waitNotice(/모델 실행기/); assert.match(t(app.$("#notice")), /모델 실행기/); } // waits for the poll, not a fixed 3s that a loaded runner can miss
   hook = () => null;
   await openTodo(/주간 보고/);
   await press(/스킬이 아니에요/, 200);

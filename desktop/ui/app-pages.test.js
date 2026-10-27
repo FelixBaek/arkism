@@ -183,6 +183,18 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.ok(app.$$(".v4-side input").some((i) => i.placeholder === "모델 검색" || /모델 \d+개에서 찾기/.test(i.placeholder)));
   app.$$(".ag-row-main").find((b) => text(b).startsWith("Codex")).click(); await app.settle();
   assert.match(text(app.$(".ag-link")), /훅연결 안 됨|훅 ?연결 안 됨/);
+  // what the old ROUTER › 모델 설정 tab held lives here now: account names, typed-in models, providers with no agent
+  assert.ok(app.$$(".ag-account button").some((x) => /이름 고치기$/.test(x.getAttribute("aria-label") || "")));
+  assert.ok(app.$$(".v4-side button").some((x) => text(x) === "모델 추가"));
+  assert.match(rowSub("DeepSeek"), /^키 1 · 모델 \d+개 켜짐$/);
+  app.$$(".ag-row-main").find((b) => text(b).startsWith("DeepSeek")).click(); await app.settle();
+  assert.match(text(app.$(".v4-side")), /직접 추가한 제공자는 키로만 연결해요.*API 키.*모델/);
+  assert.equal(app.$(".v4-side .ag-link"), null);
+  assert.ok(app.$$("#area-tabs button").every((x) => text(x) !== "모델 설정"));
+  await press("공급자 추가");
+  const keyDlg = app.$("dialog.key-dialog");
+  assert.match(text(keyDlg), /직접 추가한 제공자 API 키 추가/);
+  keyDlg.close(); await app.settle();
   for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = find(`${name} 켜기`); if (b) { b.click(); await app.settle(); } }
   await press("Claude Code 켜기");
   assert.match(notice(), /하나는 켜져 있어야/);
@@ -275,7 +287,7 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   const saved = app.fake.model_roles;
   app.fake.model_roles = new Error("x");
   await settings("info"); await settings("roles");
-  assert.match(text(app.$(".ag-roles")), /모델 설정을 읽지 못했어요/);
+  assert.match(text(app.$(".ag-roles")), /역할별 모델을 읽지 못했어요/);
   app.fake.model_roles = saved;
 });
 

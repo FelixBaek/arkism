@@ -120,7 +120,7 @@ test("visible sync reads skills, tools, settings and simple lists for their own 
   for (const [view, extra, key, want] of [
     ["skills", {}, "skillUse", (v) => v instanceof Map && v.get("s")],
     ["tools", {}, "tools", (v) => v.fresh],
-    ["settings", { settingsTab: "models" }, "providers", (v) => v[0].id === "p"],
+    ["settings", { settingsTab: "agents" }, "providers", (v) => v[0].id === "p"],
     ["crew", {}, "crew", (v) => v[0].id === "/v1/crew?"],
     ["images", {}, "prompts", (v) => v[0].id === "/v1/prompts?"],
     ["design", {}, "designSystems", (v) => v[0].id === "/v1/design_systems?"]

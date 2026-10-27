@@ -195,7 +195,7 @@ test("라우팅 설정: policy cards, model list, model detail and saves", async
   assert.ok(v.calls.some(([p, b]) => p === "/v1/routing/models" && b.when === "새 설명" && b.order === 3));
   click(side(), "저장"); // nothing staged: no request
   side().all((n) => n.getAttribute("aria-label") === "라우팅에 쓰기")[0].click(); await settle();
-  click(side(), "모델 설정 열기 ›"); assert.equal(v.state.settingsTab, "models");
+  click(side(), "에이전트 설정 열기 ›"); assert.equal(v.state.settingsTab, "agents");
   v.state.settingsTab = "routing"; v.draw();
   // agent links
   click(main(), "끊기"); await settle();
@@ -293,7 +293,7 @@ test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered grou
   v.r.leaveSettings(); v.draw(); await settle();
   click(main(), "E"); assert.match(text(side()), /모델이 없어요/);
   click(main(), "F"); assert.match(text(side()), /넣을 수 있는 모델이 없어요/);
-  click(side(), "모델 설정 열기 ›");
+  click(side(), "에이전트 설정 열기 ›");
 });
 
 test("라우팅 설정 without groups, with a bad reply, an old server, an error, and a stale load", async () => {

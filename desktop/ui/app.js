@@ -1153,7 +1153,7 @@ export function startApp() {
     virtualList.clear();
     if (state.view !== "todo") state.start = 0; // 시작 2·3단계 lives on 홈 only
     if (state.view !== "routing") routing.leave();
-    if (state.view !== "settings" || state.settingsTab !== "routing") routing.leaveSettings(); // 모델 설정 changes show up next time
+    if (state.view !== "settings" || state.settingsTab !== "routing") routing.leaveSettings(); // model changes from 설정 › 에이전트 show up next time
     if (state.view !== "memories" || state.memTab !== "originals") originals.reset();
     if (state.view !== "knowledge") knowledge.reset();
     if (state.view !== "memories" || state.memTab !== "past") memoryTime.reset();

@@ -446,7 +446,7 @@ window.ArkismHome = function (ctx) {
     const ready = state.ready === null ? ["", "확인 중"] : state.ready ? ["ok", "응답 확인"] : ["warn", "응답 없음"];
     line("서버", ctx.sshLabel(state.ssh) || state.server, [el("output", `start-badge ${ready[0]}`, ready[1])]).classList.add("mono");
     line("에이전트", "최근에 보고된 연결 상태를 확인해요.", [button("연결 상태 보기", "small", null, () => { const t = $("#status-toggle"); if ($("#status-card").hidden) t.click(); })]);
-    line("모델", "사용할 계정과 모델을 골라 연결을 시험해요.", [button("모델 연결 시험", "small", null, () => { state.start = 0; ctx.openSettings("models"); })]);
+    line("모델", "사용할 계정과 모델을 골라 연결을 시험해요.", [button("모델 연결 시험", "small", null, () => { state.start = 0; ctx.openSettings("agents"); })]);
     const act = el("div", "actions");
     act.append(button("홈으로 시작하기", "primary", null, () => { state.start = 0; state.selected = null; render(); }), button("이전", "", null, () => { state.start = 2; render(); }));
     wrap.append(ok, list, act);

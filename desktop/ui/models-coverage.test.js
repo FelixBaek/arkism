@@ -1,4 +1,4 @@
-// 설정 › 모델 설정 (models.js): providers, accounts, keys, models and the key dialog against a stand-in server.
+// 설정 › 에이전트's provider parts (models.js): accounts, keys, models and the key dialog against a stand-in server.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
@@ -49,7 +49,8 @@ function serverDoc() {
 function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
   const server = serverDoc();
   const state = { data: {}, scope: { project_id: "p" }, mode };
-  const nodes = { main: dom.el("div"), side: dom.el("div") };
+  const main = dom.el("div");
+  const nodes = { main, side: main }; // keys sit in the same column as accounts and models now
   const notes = [], calls = [], went = [];
   let n = 0;
   const v = { state, nodes, notes, calls, went, server, outcome, fail };
@@ -71,8 +72,10 @@ function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
     },
     render: () => draw(),
   };
-  const kit = { head() {}, side: (...x) => nodes.side.replaceChildren(...x), sideSec: (t, ...kids) => { const s = dom.el("section"); s.append(dom.el("h4", "", t), ...kids); return s; } };
-  const draw = () => nodes.main.replaceChildren(...v.m.tab(kit));
+  // pages.js draws one provider's parts in 설정 › 에이전트; v.pick stands in for choosing its row.
+  v.sel = "openai";
+  const draw = () => { const list = v.m.providers(); const p = list.find((x) => x.id === v.sel) || list[0]; nodes.main.replaceChildren(...v.m.notices(), ...(state.data.providers === null ? [] : v.m.providerDetail(p))); };
+  v.pick = (id) => { v.sel = id; draw(); };
   v.m = window.ArkismModels(ctx);
   v.draw = draw; v.ctx = ctx;
   return v;
@@ -105,12 +108,12 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   // each provider heading carries its 모델 설정 chip logo: the brand tile, or the stack fallback for xAI and custom ones
   const heads = pick.children.filter((c) => c.tagName === "OPTGROUP");
   assert.deepEqual(heads.map((g) => g.logo.className), ["agent-tile", "agent-tile", "agent-tile mono-logo", "agent-tile mono-logo"]);
-  // every chip draws its provider
-  for (const name of ["Anthropic", "Google", "Z.ai", "xAI", "Custom"]) { click(v.nodes.main, name); assert.match(text(v.nodes.main), /계정/); }
+  // every provider draws its parts
+  for (const id of ["anthropic", "google", "zai", "xai", "custom-abc"]) { v.pick(id); assert.match(text(v.nodes.main), /계정/); }
   assert.match(text(v.nodes.main), /직접 추가한 제공자는 키로만 연결해요/);
-  click(v.nodes.main, "xAI");
+  v.pick("xai");
   assert.match(text(v.nodes.side), /저장된 키가 없어요\./);
-  click(v.nodes.main, "Anthropic");
+  v.pick("anthropic");
   assert.match(text(v.nodes.side), /구독 로그인만 쓰면/);
   assert.match(text(v.nodes.main), /Claude Code 3 · 자체 업데이트/);
 });
@@ -121,7 +124,7 @@ test("an old server says the tab is unsupported; a missing report says the runne
   v.ctx.request = async () => { throw new Error("HTTP 404"); };
   assert.equal(await v.m.load(), null);
   v.draw();
-  assert.match(text(v.nodes.main), /아직 모델 설정을 지원하지 않아요/);
+  assert.match(text(v.nodes.main), /아직 계정·모델 정보를 보내지 않아요/);
   const w = mk();
   w.state.data.providers = { providers: [{ id: "zz", name: "ZZ" }] };
   w.draw();
@@ -145,7 +148,7 @@ test("models: test a connection, switch, add, remove, rename and filter", async 
   assert.match(v.notes.at(-1), /아직 답하지 않았어요/);
   v.outcome = "done";
   v.fail["/v1/providers/test"] = "access_denied"; label(main(), "gpt-5 연결 시험").click(); await settle();
-  assert.equal(v.notes.at(-1), "이 계정은 모델 설정을 바꿀 수 없어요.");
+  assert.equal(v.notes.at(-1), "이 계정은 모델·키 설정을 바꿀 수 없어요.");
   delete v.fail["/v1/providers/test"];
   click(main(), "연결 시험"); await settle(); // the account's own test button
   // switches
@@ -193,7 +196,7 @@ test("models: test a connection, switch, add, remove, rename and filter", async 
 test("직접 추가 providers list the turned-on models first and toggle by adding or removing", async () => {
   const v = mk();
   await v.m.load(); v.draw();
-  click(v.nodes.main, "Custom");
+  v.pick("custom-abc");
   const rows = v.nodes.main.all((x) => x.classList.contains("mp-model-row")).map((r) => r.dataset.model);
   assert.deepEqual(rows, ["m1", "m2"]);
   label(v.nodes.main, "m1 켜기").click(); await settle();
@@ -202,7 +205,7 @@ test("직접 추가 providers list the turned-on models first and toggle by addi
   assert.equal(v.calls.at(-1)[1].add, true);
   const many = mk();
   many.state.data.providers = { ...serverDoc(), providers: [{ id: "custom-zz", name: "Many", models: Array.from({ length: 25 }, (_, i) => `x${i}`) }] };
-  many.draw(); click(many.nodes.main, "Many");
+  many.pick("custom-zz");
   assert.equal(label(many.nodes.main, "모델 찾기").placeholder, "모델 25개에서 찾기");
 });
 
@@ -241,11 +244,11 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   click(dialog(), "키 넣기");
   assert.match(text(dialog()), /OpenAI API 키 추가/);
   dialog().close();
-  click(main(), "xAI"); click(main(), "계정 추가");
+  v.pick("xai"); click(main(), "계정 추가");
   assert.match(text(dialog()), /xAI는 API 키로 연결해요/);
   dialog().close();
   // key removal: asked, done, failed, error
-  click(main(), "OpenAI");
+  v.pick("openai");
   globalThis.ask = async () => false; label(v.nodes.side, "업무 키 지우기").click(); await settle();
   globalThis.ask = async () => true;
   label(v.nodes.side, "업무 키 지우기").click(); await settle();
@@ -280,14 +283,14 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.ok(srv.notes.length > before);
 });
 
-test("chips and AI 도구 headings show the LobeHub mark by id, name or key base URL, else the generic logo", async () => {
+test("provider rows and AI 도구 headings show the LobeHub mark by id, name or key base URL, else the generic logo", async () => {
   window.ArkismBrand = { kindLabel: () => "", mark: (n) => (/^(anthropic|xai|deepseek)/.test(String(n).toLowerCase()) ? dom.el("i", `mark-${n}`) : null) };
   try {
     const v = mk();
     v.server.providers.find((p) => p.id === "custom-abc").keys[0].base_url = "https://api.deepseek.com/v1";
     await v.m.load(); v.draw();
-    const marks = (root) => root.all((x) => /^mark-/.test(x.className)).map((x) => x.className);
-    assert.deepEqual(marks(v.nodes.main), ["mark-anthropic", "mark-xai", "mark-deepseek.com"]); // OpenAI and Google: no mark here, their KNOWN logo
+    const marks = v.m.providers().map((p) => v.m.logo(p).children[0]?.className).filter((c) => /^mark-/.test(c || ""));
+    assert.deepEqual(marks, ["mark-anthropic", "mark-xai", "mark-deepseek.com"]); // OpenAI and Google: no mark here, their KNOWN logo
     const heads = v.m.assistPicker().children.filter((c) => c.tagName === "OPTGROUP");
     assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "mark-xai", "mark-deepseek.com"]);
   } finally { delete window.ArkismBrand; }
@@ -353,7 +356,7 @@ test("key dialog: peek, test, pick found models and save", async () => {
 test("key dialog for Z.ai checks the https address; a new provider needs an address and starts with the picked models", async () => {
   const v = mk();
   await v.m.load(); v.draw();
-  click(v.nodes.main, "Z.ai"); click(v.nodes.side, "키 추가");
+  v.pick("zai"); click(v.nodes.side, "키 추가");
   let d = dialog();
   const field = (dd, p) => dd.all((x) => x.placeholder === p)[0];
   const err = (dd) => dd.all((x) => x.classList.contains("form-error"))[0].textContent;
@@ -361,8 +364,9 @@ test("key dialog for Z.ai checks the https address; a new provider needs an addr
   click(d, "연결 테스트"); assert.match(err(d), /https:\/\/로 시작/);
   d.all((x) => x.tagName === "FORM")[0].fire("submit", { submitter: { value: "save" } }); assert.match(err(d), /https:\/\/로 시작/);
   d.close();
-  // 공급자 추가 → a custom provider
-  v.m.openKeyDialog({ id: "custom", name: "직접 추가한 제공자", custom: true });
+  // 공급자 추가 → a custom provider, and 설정 › 에이전트 is told which row to open
+  let picked = null;
+  v.m.addProvider((pid) => { picked = pid; });
   d = dialog();
   assert.equal(field(d, "https://…/v1").focused, true);
   assert.equal(d.all((x) => x.tagName === "DETAILS")[0].open, true);
@@ -376,6 +380,7 @@ test("key dialog for Z.ai checks the https address; a new provider needs an addr
   form.fire("submit", { submitter: { value: "save" } }); await settle();
   assert.ok(v.calls.some(([p, b]) => p === "/v1/providers/models" && b.provider === "custom-abcdef123456" && b.model === "m-a" && b.add));
   assert.ok(!v.calls.some(([, b]) => b?.model === "m-b" && b?.provider === "custom-abcdef123456"));
+  assert.equal(picked, "custom-abcdef123456");
   // a custom key reply without a key id still names a provider
   v.server.requests.push({ id: "q-last", status: "done" });
   v.m.openKeyDialog({ id: "custom", name: "C", custom: true });

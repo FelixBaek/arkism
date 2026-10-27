@@ -121,7 +121,6 @@ window.ArkismPages = (ctx) => {
     categories: ["카테고리", "스킬을 규칙에 따라 묶어요. 위에 있는 카테고리가 먼저 맞춰져요."],
     advanced: ["고급", "백업·진단·데이터 지우기처럼 자주 바꾸지 않는 설정이에요."],
     info: ["정보", "앱 버전과 Arkism이 기억을 다루는 규칙이에요."],
-    models: ["모델 설정", "공급자 → 계정 → 모델 순서로 설정해요."],
     routing: ["라우팅 설정", "질문마다 어떤 모델로 보낼지, 실패하면 어디로 넘길지 정해요."]
   };
   // The right column and the area-bar buttons of the settings page being drawn (renderSettings fills them in).
@@ -284,6 +283,9 @@ window.ArkismPages = (ctx) => {
       if (!src || src.accounts.length || !src.keys.length) entries.push({ key: a.id, a, src, api: false });
       if (src?.keys.length) entries.push({ key: `${a.id}:api`, a, src, api: true });
     }
+    // Providers with no agent (직접 추가 ones and the like) get their own rows: their keys, accounts and models live here too.
+    const covered = new Set(entries.map((e) => e.src?.p.id).filter(Boolean));
+    for (const p of state.data.providers ? models.looseProviders(covered) : []) entries.push({ key: `provider:${p.id}`, p });
     const cur = entries.find((e) => e.key === selAgent) || entries[0] || null;
     selAgent = cur?.key || null;
     const isOn = (a) => {
@@ -310,6 +312,7 @@ window.ArkismPages = (ctx) => {
 
     const list = el("section", "ag-list");
     for (const e of entries) {
+      if (e.p) { list.append(providerRow(e, e === cur)); continue; }
       const { a, src } = e;
       const on = isOn(a);
       const row = el("div", `ag-row${e === cur ? " on" : ""}${on ? "" : " off"}`);
@@ -337,8 +340,13 @@ window.ArkismPages = (ctx) => {
     add.type = "button";
     add.append(icon("plus"), el("span", "", "에이전트 추가"));
     add.addEventListener("click", () => openAddAgent());
-    list.append(add);
-    const out = [list];
+    const addP = el("button", "ag-add-agent");
+    addP.type = "button";
+    addP.append(icon("plus"), el("span", "", "공급자 추가"));
+    addP.title = "주소와 키로 쓰는 다른 공급자(OpenAI 호환)를 넣어요";
+    addP.addEventListener("click", () => models.addProvider((pid) => { selAgent = `provider:${pid}`; }));
+    list.append(add, addP);
+    const out = [...models.notices(), list];
     if (!tools?.agents) out.push(el("p", "pg-hint", "서버가 아직 에이전트 목록을 보내지 않았어요. 잠시 뒤 다시 열어 보세요."));
 
     // 함께 읽는 공용 폴더
@@ -386,8 +394,34 @@ window.ArkismPages = (ctx) => {
     if (foundBar) shared.append(foundBar);
     out.push(shared);
 
-    if (cur) toSide(...agentDetail(cur, { isOn, toggle, arkismOn, hook, tools }));
+    if (cur?.p) toSide(...providerDetail(cur.p));
+    else if (cur) toSide(...agentDetail(cur, { isOn, toggle, arkismOn, hook, tools }));
     return out;
+  }
+  // A provider row: logo, name, how many keys and models are on; no switch (its models are turned on one by one).
+  function providerRow(e, on) {
+    const { p } = e;
+    const row = el("div", `ag-row${on ? " on" : ""}`);
+    const info = el("button", "ag-row-main");
+    info.type = "button";
+    const top = el("div", "ag-row-top");
+    top.append(el("strong", "", p.name || p.id), el("span", "tag", p.custom || p.id.startsWith("custom-") ? "직접 추가" : "공급자"));
+    const live = models.enabledByProvider().find((x) => x.id === p.id)?.models.length || 0;
+    info.append(top, el("small", "", [`키 ${(p.keys || []).length}`, `모델 ${live}개 켜짐`].join(" · ")));
+    const pick = () => { selAgent = e.key; render(false); };
+    info.addEventListener("click", pick);
+    const go = el("button", "icon-btn plain ag-chev");
+    go.type = "button";
+    go.setAttribute("aria-label", `${p.name || p.id} 자세히`);
+    go.append(icon("caret-right"));
+    go.addEventListener("click", pick);
+    row.append(models.logo(p), info, go);
+    return row;
+  }
+  function providerDetail(p) {
+    const head = el("div", "ag-detail-head");
+    head.append(models.logo(p), el("strong", "", p.name || p.id));
+    return [head, ...models.providerDetail(p)];
   }
   // The right column for the chosen row: who it is, its accounts or keys, its models, and how it is linked to Arkism.
   function agentDetail(e, { isOn, toggle, arkismOn, hook, tools }) {
@@ -809,7 +843,7 @@ window.ArkismPages = (ctx) => {
     roles.classList.add("ag-roles");
     const kit = group("스킬·MCP·플러그인", "에이전트가 함께 쓰는 스킬·MCP·플러그인 폴더예요.");
     kitCard = [roles, kit];
-    // AI 도구 saves on its own (모델 설정); servers without 모델 설정 have nothing to pick.
+    // AI 도구 saves on its own (the providers report); servers without one have nothing to pick.
     if (state.data.providers != null) roles.append(roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker())));
     const ROWS = [["라우팅 판정", "요청마다 맞는 모델을 골라요."],
       ["기억 추출", "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요."],
@@ -859,7 +893,7 @@ window.ArkismPages = (ctx) => {
       }));
       kitBody.replaceChildren(folders, actions);
     };
-    const load = () => tauri.invoke("model_roles").then(draw, () => roleBody.replaceChildren(el("p", "pg-hint", "모델 설정을 읽지 못했어요.")));
+    const load = () => tauri.invoke("model_roles").then(draw, () => roleBody.replaceChildren(el("p", "pg-hint", "역할별 모델을 읽지 못했어요.")));
     load();
     return kitCard;
   }
@@ -1207,7 +1241,7 @@ window.ArkismPages = (ctx) => {
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
-    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards, models: () => models.tab(kit), routing: () => routing.tab(kit),
+    const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards, routing: () => routing.tab(kit),
       workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
