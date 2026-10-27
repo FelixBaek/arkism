@@ -727,7 +727,11 @@ func carryOut(item map[string]any, testKeys keysTester, testModels modelTester) 
 			err = crewErr("지원하지 않는 CLI예요.")
 			break
 		}
-		return executeUpdate(q, binOf(row), host.AgentsState)
+		res, err := executeUpdate(q, binOf(row), host.AgentsState)
+		if err == nil && res["status"] == "done" {
+			refreshCLINow(row.Name, binOf(row), host.AgentsState) // the report that follows carries the new version
+		}
+		return res, err
 	default:
 		err = crewErr("모르는 요청이에요")
 	}
@@ -812,7 +816,14 @@ func modelTestJob(item map[string]any) {
 		testsDone[qid] = res
 		poolMu.Unlock()
 	}
-	if _, err := runnerCall("/v1/providers", host.Obj{{Key: "scope", Value: scope()}, {Key: "results", Value: []any{ordered(res, resultRowOrder...)}}}, 15*time.Second); err != nil {
+	body := host.Obj{{Key: "scope", Value: scope()}, {Key: "results", Value: []any{ordered(res, resultRowOrder...)}}}
+	// A finished CLI update sends the inventory too, or the app keeps the old version until the next hourly report.
+	if obj(item["request"])["kind"] == "cli_update" && res["status"] == "done" {
+		if inv, err := inventory("", nil, true); err == nil {
+			body = append(body, host.KV{Key: "providers", Value: inv})
+		}
+	}
+	if _, err := runnerCall("/v1/providers", body, 15*time.Second); err != nil {
 		fmt.Fprintf(os.Stderr, "모델 시험 보고 실패: %s\n", errName(err))
 		return
 	}

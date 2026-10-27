@@ -92,3 +92,15 @@ func TestCLIInfoCachesAndRefreshesInBackground(t *testing.T) {
 		t.Fatal("unsupported cli")
 	}
 }
+
+func TestRefreshCLINowCachesTheNewBinaryBeforeReturning(t *testing.T) {
+	f := newCLIFixture(t)
+	path := f.installed("codex", "self", false)
+	state := t.TempDir()
+	f.http(`{"version":"1.0.0"}`, 200)
+	f.reply(runReply{"", "1.0.0"})
+	refreshCLINow("codex", path, state)
+	if got := cliInfo("codex", path, state, false); got["version"] != "1.0.0" {
+		t.Fatal(got)
+	}
+}
