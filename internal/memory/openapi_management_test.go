@@ -119,8 +119,8 @@ func managementHTTPResponses(t *testing.T) []apiContractCase {
 	contractHostAndSessions(c)
 	contractWikiAndKnowledge(c)
 	contractCatalogQueries(c)
-	if len(c.seen) != 66 {
-		t.Fatalf("management contract coverage: %d/66", len(c.seen))
+	if len(c.seen) != 68 {
+		t.Fatalf("management contract coverage: %d/68", len(c.seen))
 	}
 	t.Logf("all %d management operations exercised successfully and anonymously", len(c.seen))
 	return c.cases
@@ -193,6 +193,8 @@ func contractHostAndSessions(c *contractHTTP) {
 	c.call("POST /v1/providers/models_refresh", "", ProviderModelsRefresh{Scope: scopeA}, nil)
 	id := sessionManageUsage(c.t, c.f, time.Now().UTC(), "contract-session")
 	c.call("POST /v1/usage/sessions/transcript", "", SessionTranscriptInput{Scope: scopeA, ID: id}, nil)
+	c.call("POST /v1/usage/sessions/search", "", UsageSessionSearchInput{Scope: scopeA, Query: "Fixture"}, nil)
+	c.call("POST /v1/usage/sessions/handoff", "", UsageSessionHandoffInput{Scope: scopeA, ID: id}, nil)
 	c.call("POST /v1/usage/sessions/export", "", SessionExportInput{Scope: scopeA, IDs: []string{id}, Format: "json"}, nil)
 	c.call("POST /v1/usage/sessions/delete", "", SessionDeleteInput{Scope: scopeA, IDs: []string{id}}, nil)
 	contractMessengers(c)

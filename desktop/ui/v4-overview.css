@@ -148,6 +148,9 @@
 .ov-win-crumb { color: var(--text-2); font-size: 12px; }
 .ov-win .ov-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); display: inline-block; }
 .ov-win-step { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
+.ov-win-title { min-width: 0; } .ov-win-title h2, .ov-win-badge, .ov-win-title .btn { white-space: nowrap; flex: none; }
+/* a narrow window: the title row keeps one line, the hint gives way */
+@media (max-width: 640px) { .ov-win-head { padding: 12px 14px; gap: 8px; } .ov-win-step > span { display: none; } }
 .ov-win-body { display: flex; flex-direction: column; gap: 14px; padding-top: 16px; }
 .ov-win-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .ov-win-tile { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }

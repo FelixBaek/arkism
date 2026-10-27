@@ -59,30 +59,39 @@ func (s *Service) SearchUsageSessions(ctx context.Context, token string, in Usag
 	if s.Repo == nil {
 		return out, ErrUnavailable
 	}
-	if !validScope(in.Scope) || q == "" || q != in.Query || len(q) > 256 || !utf8.ValidString(q) || in.Agent != "" && !usageNameRe.MatchString(in.Agent) ||
-		len(in.Project) > 200 || in.Limit < 1 || in.Limit > 50 {
+	if !validUsageSessionSearch(in, q) {
 		return out, ErrInvalid
 	}
 	if _, err := s.authorize(ctx, token, "read:"+colRouting, in.Scope, routingID(in.Scope), ""); err != nil {
 		return out, err
+	}
+	if _, ok := s.Repo.(SessionArchiveStore); !ok {
+		return out, nil // a store without archives has no dialogue to search
 	}
 	page, err := s.SearchSessionArchiveMessages(ctx, token, ArchiveSearchInput{Scope: in.Scope, Query: q, After: in.After, Limit: in.Limit})
 	if err != nil {
 		return out, err
 	}
 	out.Next, out.ScannedBytes, out.Secrets = page.Next, page.ScannedBytes, page.Secrets
+	s.groupUsageSearchHits(ctx, in, q, page.Items, &out)
+	return out, nil
+}
+
+func validUsageSessionSearch(in UsageSessionSearchInput, q string) bool {
+	return validScope(in.Scope) && q != "" && q == in.Query && len(q) <= 256 && utf8.ValidString(q) && (in.Agent == "" || usageNameRe.MatchString(in.Agent)) &&
+		len(in.Project) <= 200 && in.Limit >= 1 && in.Limit <= 50
+}
+
+// groupUsageSearchHits keeps the hits whose session is still listed and matches the filters, grouped by session.
+func (s *Service) groupUsageSearchHits(ctx context.Context, in UsageSessionSearchInput, q string, hits []ArchiveMessageView, out *UsageSessionSearchOutput) {
 	sessions, groups := map[string]*Record{}, map[string]int{}
-	for _, it := range page.Items {
+	for _, it := range hits {
 		row, ok := sessions[it.Ref.ArchiveID]
 		if !ok {
 			row = s.usageRowForArchive(ctx, in.Scope, it.Ref.ArchiveID)
 			sessions[it.Ref.ArchiveID] = row
 		}
-		if row == nil {
-			continue
-		}
-		u := row.UsageSession
-		if in.Agent != "" && u.Agent != in.Agent || in.Project != "" && u.Project != in.Project {
+		if row == nil || in.Agent != "" && row.UsageSession.Agent != in.Agent || in.Project != "" && row.UsageSession.Project != in.Project {
 			continue
 		}
 		hit, ok := usageSearchSnippet(it.Role, it.Text, q)
@@ -98,7 +107,6 @@ func (s *Service) SearchUsageSessions(ctx context.Context, token string, in Usag
 		}
 		out.Items[g].Hits = append(out.Items[g].Hits, hit)
 	}
-	return out, nil
 }
 
 // usageRowForArchive is the listed usage session an archive belongs to (same device, agent and
