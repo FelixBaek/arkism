@@ -87,7 +87,13 @@ var (
 	// CrewHookContext is the text to inject for the $handles in prompt ("" when none is live).
 	CrewHookContext = func(prompt, callerModel string, timeout time.Duration) (string, error) { return "", nil }
 	// ListCrew lists workflows callable by $handle.
-	ListCrew = func(timeout time.Duration) ([]map[string]any, error) { return nil, errNotPorted }
+	ListCrew             = func(timeout time.Duration) ([]map[string]any, error) { return nil, errNotPorted }
+	StartWorkflowRequest = func(handle, task string, wait time.Duration, cwd, requestID string) (map[string]any, error) {
+		return nil, errNotPorted
+	}
+	GetWorkflow    = func(runID, kind string) (map[string]any, error) { return nil, errNotPorted }
+	WaitWorkflow   = func(runID, kind string, wait time.Duration) (map[string]any, error) { return nil, errNotPorted }
+	CancelWorkflow = func(runID, kind string) (map[string]any, error) { return nil, errNotPorted }
 	// StartWorkflow starts $handle with input {"request": task} (+ cwd) and waits up to wait.
 	StartWorkflow = func(handle, task string, wait time.Duration, cwd string) (map[string]any, error) {
 		return nil, errNotPorted

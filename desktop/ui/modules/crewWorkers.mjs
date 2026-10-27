@@ -45,7 +45,8 @@ export function createCrewWorkers(deps) {
 
   // over: open on top of the page the user is on (사용량), without going to the expert list.
   window.addEventListener("arkism:open-expert", (e) => {
-    const { id, tab = "edit", over } = e.detail || {};
+    const { id, tab = "edit", over, create } = e.detail || {};
+    if (create && !wk.pop) { openExpertPopup(null); return; }
     if (!id) return;
     if (over && deps.byId(id) && !wk.pop) { workerPick(id); wk.openTab = tab; openExpertPopup(deps.byId(id));
       // loadAgentInfo repaints only the expert list, so swap in the numbers it fetched here
@@ -53,12 +54,22 @@ export function createCrewWorkers(deps) {
   });
 
   function openWorkers(id, isNew = false, tab = "edit") {
-    if (wk.pop) return;
+    if (wk.pop || (!isNew && !deps.byId(id))) return;
     deps.state.workerNew = isNew;
     wk.openTab = tab;
     wk.open = true;
     if (isNew) { wk.id = null; wk.draft = blankAgent(); wk.dirty = false; wk.teamsPick = new Set(); } else workerPick(id);
-    if (deps.state.view === "workers") deps.render(false); else deps.ctx.go("workers");
+    if (deps.state.view !== "crew") deps.ctx.go("crew");
+    wk.open = false;
+    openExpertPopup(isNew ? null : deps.byId(id));
+    if (!isNew) loadAgentInfo().catch(console.error);
+  }
+  function resumeWorker(rec) {
+    deps.state.workerNew = false;
+    if (wk.id !== rec.id) workerPick(rec.id);
+    deps.state.view = "crew";
+    deps.render();
+    openExpertPopup(rec);
   }
 
   // working·idle·off per agent, and this month's estimated spend; both refresh at most every 20 s.
@@ -154,7 +165,7 @@ export function createCrewWorkers(deps) {
     if (w) {
       // Nodes on the same level run together, so they share one number (as in workflowDetail).
       const lvls = deps.levels(w.crew.graph).map((lv) => lv.filter(deps.WORK)).filter((lv) => lv.length);
-      head.append(deps.button("단계 고치기", "small", "pencil-simple", () => deps.openGraph(w)));
+      head.append(deps.button("단계 고치기", "small", "pencil-simple", () => { wk.pop?.dialog.close(); deps.openGraph(w); }));
       const lim = w.crew.limits || {};
       box.append(flowChart(w, lvls));
       if (lim.max_minutes || lim.max_steps) {
@@ -1369,6 +1380,7 @@ export function createCrewWorkers(deps) {
     get agents() { return agents; },
     get blankAgent() { return blankAgent; },
     get openWorkers() { return openWorkers; },
+    get resumeWorker() { return resumeWorker; },
     get renderWorkers() { return renderWorkers; },
     get teams() { return teams; },
     get wk() { return wk; },

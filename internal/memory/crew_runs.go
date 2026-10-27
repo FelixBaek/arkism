@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"slices"
@@ -62,15 +63,19 @@ type CrewRunDecision struct {
 }
 
 type CrewRun struct {
-	CrewID       string                     `json:"crew_id" bson:"crew_id"`
-	CrewRevision int64                      `json:"crew_revision" bson:"crew_revision"`
-	Trigger      string                     `json:"trigger" bson:"trigger"`
-	Status       string                     `json:"status" bson:"status"`
-	Input        string                     `json:"input,omitempty" bson:"input,omitempty"`
-	Nodes        map[string]CrewRunNode     `json:"nodes" bson:"nodes"`
-	Waiting      *CrewRunWaiting            `json:"waiting,omitempty" bson:"waiting,omitempty"`
-	Decisions    map[string]CrewRunDecision `json:"decisions,omitempty" bson:"decisions,omitempty"`
-	Summary      string                     `json:"summary,omitempty" bson:"summary,omitempty"`
+	ResearchMode    string                     `json:"research_mode,omitempty" bson:"research_mode,omitempty"`
+	CancelRequested bool                       `json:"cancel_requested,omitempty" bson:"cancel_requested,omitempty"`
+	InvocationMode  string                     `json:"invocation_mode,omitempty" bson:"invocation_mode,omitempty"`
+	Definition      *Crew                      `json:"definition,omitempty" bson:"definition,omitempty"`
+	CrewID          string                     `json:"crew_id" bson:"crew_id"`
+	CrewRevision    int64                      `json:"crew_revision" bson:"crew_revision"`
+	Trigger         string                     `json:"trigger" bson:"trigger"`
+	Status          string                     `json:"status" bson:"status"`
+	Input           string                     `json:"input,omitempty" bson:"input,omitempty"`
+	Nodes           map[string]CrewRunNode     `json:"nodes" bson:"nodes"`
+	Waiting         *CrewRunWaiting            `json:"waiting,omitempty" bson:"waiting,omitempty"`
+	Decisions       map[string]CrewRunDecision `json:"decisions,omitempty" bson:"decisions,omitempty"`
+	Summary         string                     `json:"summary,omitempty" bson:"summary,omitempty"`
 	// Only runs one node (이 노드만 실행): every other node is skipped and the node gets Input.
 	Only string `json:"only,omitempty" bson:"only,omitempty"`
 	// Loops counts how often each back edge was followed, keyed "from>to:port".
@@ -82,20 +87,38 @@ type CrewRun struct {
 }
 
 type CrewRunOrigin struct {
-	BotID    string `json:"bot_id,omitempty" bson:"bot_id,omitempty"`
-	ThreadID string `json:"thread_id,omitempty" bson:"thread_id,omitempty"`
+	Connector string `json:"connector,omitempty" bson:"connector,omitempty"`
+	GuildID   string `json:"guild_id,omitempty" bson:"guild_id,omitempty"`
+	ChannelID string `json:"channel_id,omitempty" bson:"channel_id,omitempty"`
+	UserID    string `json:"user_id,omitempty" bson:"user_id,omitempty"`
+	EventID   string `json:"event_id,omitempty" bson:"event_id,omitempty"`
+	BotID     string `json:"bot_id,omitempty" bson:"bot_id,omitempty"`
+	ThreadID  string `json:"thread_id,omitempty" bson:"thread_id,omitempty"`
 }
 
 func validCrewRunOrigin(o *CrewRunOrigin, trigger string) bool {
-	return o == nil || trigger == "discord" && (o.BotID == "" || validRunLabel(o.BotID, 128)) && (o.ThreadID == "" || discordIDRe.MatchString(o.ThreadID))
+	if o == nil {
+		return true
+	}
+	if trigger != "discord" || (o.Connector != "" && o.Connector != "discord") || (o.BotID != "" && !validRunLabel(o.BotID, 128)) {
+		return false
+	}
+	for _, id := range []string{o.ThreadID, o.GuildID, o.ChannelID, o.UserID, o.EventID} {
+		if id != "" && !discordIDRe.MatchString(id) {
+			return false
+		}
+	}
+	return true
 }
 
 type CrewRunInput struct {
-	Scope Scope   `json:"scope"`
-	Run   CrewRun `json:"run"`
+	RequestID string  `json:"request_id,omitempty"`
+	Scope     Scope   `json:"scope"`
+	Run       CrewRun `json:"run"`
 }
 
 type CrewRunUpdate struct {
+	LeaseToken       string  `json:"lease_token,omitempty"`
 	Scope            Scope   `json:"scope"`
 	ExpectedRevision int64   `json:"expected_revision"`
 	Run              CrewRun `json:"run"`
@@ -146,6 +169,9 @@ func validCrewRunWaiting(w *CrewRunWaiting, nodes map[string]CrewRunNode) bool {
 // validCrewRun checks shape and size; decisions are not checked here because
 // only the decision endpoint writes them.
 func validCrewRun(c CrewRun) bool {
+	if !slices.Contains([]string{"", "auto", "deep"}, c.ResearchMode) || !slices.Contains([]string{"", "flow"}, c.InvocationMode) {
+		return false
+	}
 	if !validRunLabel(c.CrewID, 256) || c.CrewRevision < 1 || !slices.Contains(crewRunTriggers, c.Trigger) ||
 		!slices.Contains(crewRunStatuses, c.Status) || runes(c.Input) > 20000 || runes(c.Summary) > 4000 || len(c.Nodes) > 100 ||
 		!validCrewRunLoops(c.Loops) || !validCrewRunOrigin(c.Origin, c.Trigger) {
@@ -191,7 +217,7 @@ func (s *Service) ListCrewRuns(ctx context.Context, token string, scope Scope, c
 	}
 	out := CrewRunPage{Items: []Record{}}
 	for _, r := range rows {
-		if r.CrewRun == nil || crewID != "" && r.CrewRun.CrewID != crewID || status != "" && r.CrewRun.Status != status {
+		if !readableCrewRun(r) || crewID != "" && r.CrewRun.CrewID != crewID || status != "" && r.CrewRun.Status != status {
 			continue
 		}
 		out.Items = append(out.Items, r)
@@ -217,10 +243,14 @@ func (s *Service) GetCrewRun(ctx context.Context, token string, scope Scope, id 
 	if err != nil {
 		return Record{}, err
 	}
-	if r.CrewRun == nil {
+	if !readableCrewRun(r) {
 		return Record{}, ErrNotFound
 	}
 	return r, nil
+}
+
+func readableCrewRun(r Record) bool {
+	return r.Status == statusActive && !r.ContentErased && !r.PrivacyQuarantined && r.CrewRun != nil
 }
 
 // crewRunWriter allows people and the host engine (service or agent token);
@@ -234,18 +264,9 @@ func crewRunWriter(role string) bool {
 // nodes of a failed run); only a person may ask for that, and an approval node
 // copied as done carries that person's decision.
 func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInput) (Record, error) {
-	if !validScope(in.Scope) || !validCrewRun(in.Run) || in.Run.Status != "running" || in.Run.Waiting != nil || len(in.Run.Decisions) > 0 {
-		return Record{}, ErrInvalid
-	}
-	resumed := false
-	for _, n := range in.Run.Nodes {
-		switch n.Status {
-		case "pending":
-		case "done", "skipped":
-			resumed = true
-		default:
-			return Record{}, ErrInvalid
-		}
+	resumed, err := validateCrewRunStart(in)
+	if err != nil {
+		return Record{}, err
 	}
 	if err := noSecrets(in.Run); err != nil {
 		return Record{}, err
@@ -265,17 +286,35 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 	}
 	r := Record{ID: ID(), Scope: in.Scope, Kind: colCrewRuns, Status: statusActive, Revision: 1, Text: run.Trigger, CrewRun: &run,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
+	if in.RequestID != "" {
+		r.ID = flowRequestID(in.Scope, d.PrincipalID, in.RequestID)
+		r.RequestHash = flowRequestHash(in.Run)
+	}
 	owners, err := s.workflowOwners(ctx, in.Scope)
 	if err != nil {
 		return Record{}, err
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if in.RequestID != "" {
+			if old, e := tx.Get(ctx, colCrewRuns, in.Scope, r.ID); e == nil {
+				if !readableCrewRun(old) || old.RequestHash != r.RequestHash {
+					return ErrConflict
+				}
+				r = old
+				return nil
+			} else if !errors.Is(e, ErrNotFound) {
+				return e
+			}
+		}
 		crew, err := tx.Get(ctx, colCrew, in.Scope, run.CrewID)
 		if err != nil {
 			return err
 		}
-		if crew.Status != statusActive || crew.Crew == nil || crew.Crew.Type != "workflow" {
+		if !liveWorkflow(crew) {
 			return ErrInvalid
+		}
+		if err := prepareFlowRun(&run, crew, in.RequestID, resumed); err != nil {
+			return err
 		}
 		// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook; a 시험 실행 (test) is the one exception.
 		if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" && run.Trigger != "test" {
@@ -294,8 +333,16 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		if err := tx.Insert(ctx, colCrewRuns, r); err != nil {
 			return err
 		}
+		if err := enqueueFlowDelivery(ctx, tx, r); err != nil {
+			return err
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "create:"+colCrewRuns, r.ID)
 	})
+	if errors.Is(err, ErrConflict) && in.RequestID != "" {
+		if old, e := s.Repo.Get(ctx, colCrewRuns, in.Scope, flowRequestID(in.Scope, d.PrincipalID, in.RequestID)); e == nil && readableCrewRun(old) && old.RequestHash == flowRequestHash(in.Run) {
+			return old, nil
+		}
+	}
 	return r, err
 }
 
@@ -322,25 +369,29 @@ func (s *Service) UpdateCrewRun(ctx context.Context, token, id string, in CrewRu
 		if err != nil {
 			return err
 		}
-		if r.CrewRun == nil {
-			return ErrNotFound
-		}
-		if r.Revision != in.ExpectedRevision || terminalCrewRun(r.CrewRun.Status) {
-			return ErrConflict
+		if err := checkCrewRunProgress(r, in); err != nil {
+			return err
 		}
 		old := r.CrewRun
-		if in.Run.CrewID != old.CrewID || in.Run.CrewRevision != old.CrewRevision || in.Run.Trigger != old.Trigger || in.Run.Only != old.Only ||
-			structuredText(in.Run.Origin) != structuredText(old.Origin) {
-			return ErrInvalid
-		}
-		approvals, err := s.approvalNodes(ctx, tx, in.Scope, old.CrewID)
-		if err != nil {
-			return err
+		approvals := map[string]bool{}
+		if old.InvocationMode == "flow" && old.Definition != nil {
+			addApprovals(approvals, old.Definition)
+		} else {
+			var err error
+			approvals, err = s.approvalNodes(ctx, tx, in.Scope, old.CrewID)
+			if err != nil {
+				return err
+			}
 		}
 		if !keepsApprovals(old, in.Run, approvals) {
 			return ErrInvalid
 		}
 		run := in.Run
+		run.CancelRequested = old.CancelRequested
+		run.Definition = old.Definition
+		if run.InvocationMode != old.InvocationMode {
+			return ErrInvalid
+		}
 		// A back edge that sends an approval node to pending again needs a new decision.
 		run.Decisions = nil
 		for id, dec := range old.Decisions {
@@ -361,10 +412,52 @@ func (s *Service) UpdateCrewRun(ctx context.Context, token, id string, in CrewRu
 		if err := tx.Replace(ctx, colCrewRuns, r, prev); err != nil {
 			return err
 		}
+		if err := readyFlowDelivery(ctx, tx, r); err != nil {
+			return err
+		}
 		out = r
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "update:"+colCrewRuns, id)
 	})
 	return out, err
+}
+
+func validateCrewRunStart(in CrewRunInput) (bool, error) {
+	if !validScope(in.Scope) || !validCrewRun(in.Run) || in.Run.CancelRequested || in.Run.Definition != nil || in.Run.Status != "running" || in.Run.Waiting != nil || len(in.Run.Decisions) > 0 || in.RequestID != "" && !validRunLabel(in.RequestID, 200) {
+		return false, ErrInvalid
+	}
+	resumed := false
+	for _, n := range in.Run.Nodes {
+		switch n.Status {
+		case "pending":
+		case "done", "skipped":
+			resumed = true
+		default:
+			return false, ErrInvalid
+		}
+	}
+	return resumed, nil
+}
+
+func checkCrewRunProgress(r Record, in CrewRunUpdate) error {
+	if !readableCrewRun(r) {
+		return ErrNotFound
+	}
+	old := r.CrewRun
+	if r.Revision != in.ExpectedRevision || terminalCrewRun(old.Status) || old.CancelRequested && in.Run.Status != "stopped" {
+		return ErrConflict
+	}
+	if in.Run.CrewID != old.CrewID || in.Run.CrewRevision != old.CrewRevision || in.Run.Trigger != old.Trigger || in.Run.Only != old.Only || in.Run.ResearchMode != old.ResearchMode || structuredText(in.Run.Origin) != structuredText(old.Origin) {
+		return ErrInvalid
+	}
+	if old.InvocationMode == "flow" {
+		if in.Run.Input != old.Input {
+			return ErrInvalid
+		}
+		if in.LeaseToken == "" || r.LeaseToken != in.LeaseToken || !r.LeaseUntil.After(time.Now()) {
+			return ErrConflict
+		}
+	}
+	return nil
 }
 
 // approvalNodes are the approval node IDs of a crew item's graph.
@@ -466,7 +559,7 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 		if err != nil {
 			return err
 		}
-		if r.CrewRun == nil {
+		if !readableCrewRun(r) {
 			return ErrNotFound
 		}
 		run := *r.CrewRun
@@ -502,6 +595,7 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 }
 
 func crewRunRoutes(mux routeRegistrar, s *Service) {
+	flowRoutes(mux, s)
 	mux.HandleFunc("GET /v1/crew/runs", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit := 0
@@ -520,6 +614,7 @@ func crewRunRoutes(mux routeRegistrar, s *Service) {
 			for i, rec := range out.Items {
 				run := *rec.CrewRun
 				run.Input, run.Summary = "", ""
+				run.Definition = nil
 				nodes := make(map[string]CrewRunNode, len(run.Nodes))
 				for id, n := range run.Nodes {
 					n.Output, n.Error = "", ""

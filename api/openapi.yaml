@@ -3,7 +3,7 @@
   "info": {
     "title": "Arkism — 기억·스킬 통합 관리",
     "version": "0.1.0",
-    "description": "Supabase PostgreSQL is the canonical source, trace, memory, relationship and permission store. Organization/project access is enforced with FORCE RLS. LangGraph executes agents; LangSmith observes runs and is not canonical. TEI/pgvector indexes ordinary text; existing Gemini/Qdrant design retrieval stays separate. Atlas remains migration-compatible. AI-extracted memories and lessons start as candidates and require explicit verification; facts evolve through supersession. Recovery mode exposes only legacy single-record deletion routes, privacy deletion submit/status/runtime claim/runtime receipt/advance, and session archive expiry. Existing authorization applies; general search, writes, archive reads/use and readiness remain unavailable. Adopted file restores persist a database publication-review marker. While it remains, ordinary API requests except healthz return 503, and normal API/worker/reindex startup is refused; recovery-only deletion and expiry continue. No review-release API is currently provided. Offline administrator write-gate commands can pause canonical, authorization and quota writes at the database trigger layer. Ordinary publication checks refuse a paused, missing or malformed write gate; healthz remains process liveness. Recovery mode has no write-gate bypass. Resuming writes does not release restoration publication review. No HTTP or MCP write-gate mutation endpoint is provided. Offline recovery exports optionally include body-free receipt origins in v5/v6. Global replay requires signed source and restored inventories with reconciled request and receipt origins; older v3/v4 remain readable but do not satisfy this execution gate."
+    "description": "Supabase PostgreSQL is the canonical source, trace, memory, relationship and permission store. Organization/project access is enforced with FORCE RLS. The existing Go workflow engine executes FLOW runs; LangGraph and LangSmith are optional integrations, not canonical stores. TEI/pgvector indexes ordinary text; existing Gemini/Qdrant design retrieval stays separate. Atlas remains migration-compatible. AI-extracted memories and lessons start as candidates and require explicit verification; facts evolve through supersession. Recovery mode exposes only legacy single-record deletion routes, privacy deletion submit/status/runtime claim/runtime receipt/advance, and session archive expiry. Existing authorization applies; general search, writes, archive reads/use and readiness remain unavailable. Adopted file restores persist a database publication-review marker. While it remains, ordinary API requests except healthz return 503, and normal API/worker/reindex startup is refused; recovery-only deletion and expiry continue. No review-release API is currently provided. Offline administrator write-gate commands can pause canonical, authorization and quota writes at the database trigger layer. Ordinary publication checks refuse a paused, missing or malformed write gate; healthz remains process liveness. Recovery mode has no write-gate bypass. Resuming writes does not release restoration publication review. No HTTP or MCP write-gate mutation endpoint is provided. Offline recovery exports optionally include body-free receipt origins in v5/v6. Global replay requires signed source and restored inventories with reconciled request and receipt origins; older v3/v4 remain readable but do not satisfy this execution gate."
   },
   "x-local-gateway": {
     "windows_connection": "App-owned SSH loopback forwarding to the verified host gateway. Owner-SSH status includes gateway.pid (systemd MainPID); forwarded healthz must match service and PID. Session/role/principal loss or unhealthy process closes the child and hides its URL. No automatic restart or agent settings writes.",
@@ -5130,6 +5130,726 @@
               }
             }
           }}}},
+    "/v1/crew/templates/research": {
+      "get": {
+        "summary": "Preview an upgrade of the existing research workflow (read:crew)",
+        "description": "Reads the saved 리서치 definition and proposes evidence-based routing in the same graph, models, limits and approval. No write. The user explicitly saves the proposal with existing_id and expected_revision. Free deep_alias defaults to 딥리서치, with a numeric suffix on collision. Missing saved research returns a standalone read-only research template without automatic deep escalation or a deep alias.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowResearchProposal"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/crew/templates/deep-research": {
+      "get": {
+        "summary": "Read the standalone deep research template (read:crew)",
+        "description": "Preview only; creates no record and starts no run. This standalone template is distinct from the same-definition upgrade returned by /templates/research.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "crew": {
+                      "$ref": "#/components/schemas/WireResponseCrew"
+                    }
+                  },
+                  "required": [
+                    "crew"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/v1/crew/runs/{id}/lease": {
+      "post": {
+        "summary": "Acquire, renew or release FLOW execution (write:crew_runs)",
+        "description": "Human, service or agent only. A client-generated lease_token of 16–128 characters fences progress; a 90-second live lease blocks other executors. Renewal checks the unexpired token. Lease metadata does not change the run content revision. Current authorization is checked on every call. Only invocation_mode=flow runs use this route.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowLeaseView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "acquire",
+                      "renew",
+                      "release"
+                    ]
+                  },
+                  "lease_token": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "scope",
+                  "action",
+                  "lease_token"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/stop": {
+      "post": {
+        "summary": "Request FLOW cancellation (write:crew_runs)",
+        "description": "Human or the original creator only. Retains progress and sets cancel_requested. This receipt does not mean the child has stopped: wait for a terminal run. The engine cancels the child context and records stopped after it returns. Finished or already requested runs return their current record. Legacy runs cannot use this route.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "expected_revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                },
+                "required": [
+                  "scope",
+                  "expected_revision"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/deliveries": {
+      "get": {
+        "summary": "List durable Discord result deliveries (read:crew)",
+        "description": "Scope, connector, bot and status filters apply before keyset pagination. Follow next_cursor as after. Omitted status lists pending, sending and retry_wait; unknown and failed require explicit status. Jobs contain run references and message receipts, not result bodies or lease tokens.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowDeliveryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "connector",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "discord"
+              ]
+            }
+          },
+          {
+            "name": "bot_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "waiting_run",
+                "pending",
+                "sending",
+                "retry_wait",
+                "unknown",
+                "failed",
+                "delivered"
+              ]
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200,
+              "default": 200
+            }
+          }
+        ]
+      }
+    },
+    "/v1/crew/deliveries/{id}/change": {
+      "post": {
+        "summary": "Claim or acknowledge a Discord result part (write:crew_runs)",
+        "description": "Human/service only; agent/pipeline refused. Revision CAS and a private 16–128 character lease token protect delivery. Claim checks current read:crew on the pinned terminal run and its result revision, and pins a SHA-256 result_hash for the exact formatted part sequence. Sending expires to unknown, never blind retry. ack_part saves the receipt then returns pending for the next claim; repeated matching receipts and completion are idempotent. complete requires at least one acknowledged part. Delivered, unknown and failed outcomes are terminal for automatic delivery.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlowDeliveryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "access_denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "revision_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "expected_revision": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "claim",
+                      "ack_part",
+                      "complete",
+                      "retry",
+                      "unknown",
+                      "failed"
+                    ]
+                  },
+                  "lease_token": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 128
+                  },
+                  "result_hash": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "part": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "message_id": {
+                    "type": "string"
+                  },
+                  "error_code": {
+                    "type": "string",
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "scope",
+                  "expected_revision",
+                  "action",
+                  "lease_token"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/crew": {
       "get": {"summary": "Live workflows, templates and personas of the scope (one page of 1000)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "items (records with a crew field)"},
           "401": {
@@ -5177,7 +5897,51 @@
           }}}
     },
     "/v1/crew/resolve": {
-      "get": {"summary": "Resolve a $handle to the live workflow", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "handle", "in": "query", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{item, members (always empty), leader_models (always empty)}"}, "400": {"description": "invalid_request"}, "404": {"description": "No such handle"},
+      "get": {
+        "summary": "Resolve a $handle to the live workflow",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "handle",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{item, members (always empty), leader_models (always empty)}"
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "404": {
+            "description": "No such handle"
+          },
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5198,7 +5962,10 @@
                 }
               }
             }
-          }}}
+          }
+        },
+        "description": " Existing @expert/team handles keep priority. Unowned workflows are also callable by @handle. A free research.deep_alias resolves to that same workflow with mode=deep; it does not create a second workflow. Owned workflows remain callable through their owner."
+      }
     },
     "/v1/crew/{id}": {
       "post": {"summary": "Replace an item's definition, or archive it (expected_revision required; the type never changes; human principals only)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict, or handle_taken when the handle is already used"}, "422": {"description": "secret_detected"},
@@ -5391,7 +6158,71 @@
           }}}
     },
     "/v1/crew/runs": {
-      "get": {"summary": "Graph runs of the scope, newest first (read:crew)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "crew_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["running", "waiting", "succeeded", "failed", "stopped"]}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 0, "maximum": 200, "default": 50}}], "responses": {"200": {"description": "items (records with a crew_run field)"}, "400": {"description": "invalid_request"},
+      "get": {
+        "summary": "Graph runs of the scope, newest first (read:crew)",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "crew_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "running",
+                "waiting",
+                "succeeded",
+                "failed",
+                "stopped"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 200,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "items (records with a crew_run field)"
+          },
+          "400": {
+            "description": "invalid_request"
+          },
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5412,8 +6243,28 @@
                 }
               }
             }
-          }}},
-      "post": {"summary": "Start a run of a live workflow (write:crew_runs; human, service or agent principals)", "description": "Body {scope, run}. run{crew_id, crew_revision, trigger manual|schedule|webhook|call, status running, input (<=20000 chars), nodes{node_id: {status pending|done|skipped, port, started_at, finished_at, output (<=20000 chars), error (<=500), runs}}, only, loops{\"from>to:port\": n}, deadline, summary}. Nodes start pending; only a person may start a run with nodes already done or skipped (restarting where a failed run stopped) or a one-node run (only), and an approval node copied as done must carry port and output {approved, note} that agree, recorded as that person's decision. At most 100 nodes and 2 MiB. Credentials are refused.", "responses": {"200": {"description": "Created record"}, "400": {"description": "invalid_request (bad shape, or not a workflow)"}, "403": {"description": "pipeline principal"}, "404": {"description": "No such crew item"}, "422": {"description": "secret_detected"},
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a run of a live workflow (write:crew_runs; human, service or agent principals)",
+        "description": "Body {scope, run}. run{crew_id, crew_revision, trigger manual|schedule|webhook|call, status running, input (<=20000 chars), nodes{node_id: {status pending|done|skipped, port, started_at, finished_at, output (<=20000 chars), error (<=500), runs}}, only, loops{\"from>to:port\": n}, deadline, summary}. Nodes start pending; only a person may start a run with nodes already done or skipped (restarting where a failed run stopped) or a one-node run (only), and an approval node copied as done must carry port and output {approved, note} that agree, recorded as that person's decision. At most 100 nodes and 2 MiB. Credentials are refused. Optional request_id (<=200 characters) deduplicates within scope and principal: identical input returns the existing run, changed input conflicts. invocation_mode=flow validates a bounded read-only graph (or reviewed research helper policy), pins its definition revision, forbids partial/resumed starts, and requires the execution lease on progress. research_mode defaults to auto; deep enters the same saved research definition at its deep planner while retaining approval and later evidence-gap rounds. Evidence routing depends on sources and gaps, never elapsed time. A Discord FLOW origin requires connector=discord, bot_id, guild_id, channel_id, thread_id, user_id, event_id and request_id. The delivery job is created atomically with the run.",
+        "responses": {
+          "200": {
+            "description": "Created record"
+          },
+          "400": {
+            "description": "invalid_request (bad shape, or not a workflow)"
+          },
+          "403": {
+            "description": "pipeline principal"
+          },
+          "404": {
+            "description": "No such crew item"
+          },
+          "422": {
+            "description": "secret_detected"
+          },
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5434,7 +6285,19 @@
                 }
               }
             }
-          }}}
+          },
+          "409": {
+            "description": "request_id payload or definition revision conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "/v1/crew/runs/{id}": {
       "get": {"summary": "One graph run (read:crew)", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with crew_run"}, "404": {"description": "not_found"},
@@ -5461,7 +6324,35 @@
           }}}
     },
     "/v1/crew/runs/{id}/progress": {
-      "post": {"summary": "Replace a run's progress (expected_revision required; write:crew_runs; human, service or agent principals)", "description": "Body {scope, expected_revision, run}. crew_id, crew_revision, trigger and only never change; an approval node waits only as an approval and finishes only on the port and output {approved, note} of its recorded decision (else 400); a succeeded, failed or stopped run never changes; decisions are kept from the stored run whatever is sent, except that a node sent back to pending (a back edge) loses its decision and asks again. nodes[].runs (0..10000) counts a node's starts; loops (<=200 keys of <=200 chars, values 0..10000) counts back edge uses; deadline is when the engine fails the run with time_limit. waiting{node_id, kind approval|wait|callback, resume_at, question, callback_hash (SHA-256 hex of a one-time token)} is present exactly when status is waiting. A person stops a run with status stopped.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "pipeline principal"}, "409": {"description": "revision_conflict or run finished"}, "422": {"description": "secret_detected"},
+      "post": {
+        "summary": "Replace a run's progress (expected_revision required; write:crew_runs; human, service or agent principals)",
+        "description": "Body {scope, expected_revision, run}. crew_id, crew_revision, trigger and only never change; an approval node waits only as an approval and finishes only on the port and output {approved, note} of its recorded decision (else 400); a succeeded, failed or stopped run never changes; decisions are kept from the stored run whatever is sent, except that a node sent back to pending (a back edge) loses its decision and asks again. nodes[].runs (0..10000) counts a node's starts; loops (<=200 keys of <=200 chars, values 0..10000) counts back edge uses; deadline is when the engine fails the run with time_limit. waiting{node_id, kind approval|wait|callback, resume_at, question, callback_hash (SHA-256 hex of a one-time token)} is present exactly when status is waiting. A person stops a run with status stopped. FLOW requires lease_token and an unexpired matching lease. Input, origin, research mode, pinned definition and cancel_requested are server-controlled. Once cancellation is requested, late success cannot overwrite it. The pinned approval graph governs decisions. Terminal progress and the result-delivery job becoming pending commit atomically.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updated record"
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "pipeline principal"
+          },
+          "409": {
+            "description": "revision_conflict or run finished"
+          },
+          "422": {
+            "description": "secret_detected"
+          },
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5482,7 +6373,9 @@
                 }
               }
             }
-          }}}
+          }
+        }
+      }
     },
     "/v1/crew/runs/{id}/decision": {
       "post": {"summary": "Decide the approval node a run waits on (human principals only)", "description": "Body {scope, expected_revision, node_id, approve, note (<=500)}. Only while the run waits on that approval node, once per round of that node. The host engine then follows the approve or reject port.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Updated record with decisions"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "Not waiting on that node, already decided, or revision_conflict"}, "422": {"description": "secret_detected"},
@@ -40552,6 +41445,9 @@
           },
           "skill_route": {
             "$ref": "#/components/schemas/WireResponseSkillRoute"
+          },
+          "flow_delivery": {
+            "$ref": "#/components/schemas/WireResponseFlowDelivery"
           }
         },
         "additionalProperties": false,
@@ -44505,6 +45401,189 @@
         "x-go-type": "memory.ImagePrompt",
         "x-go-source": "internal/memory/prompts.go"
       },
+      "WireResponseCrewResearch": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "quick_node": {
+            "type": "string"
+          },
+          "deep_node": {
+            "type": "string"
+          },
+          "deep_alias": {
+            "type": "string"
+          },
+          "evidence_strategy": {
+            "type": "string",
+            "enum": [
+              "sources-and-gaps-v1"
+            ]
+          },
+          "helper_origin": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quick_node",
+          "deep_node",
+          "deep_alias",
+          "evidence_strategy",
+          "helper_origin"
+        ]
+      },
+      "WireResponseFlowDelivery": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "result_revision": {
+            "type": "integer"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting_run",
+              "pending",
+              "sending",
+              "retry_wait",
+              "unknown",
+              "failed",
+              "delivered"
+            ]
+          },
+          "part": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "message_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "result_hash": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "lease_until": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "run_id",
+          "result_revision",
+          "origin",
+          "status",
+          "part",
+          "message_ids"
+        ]
+      },
+      "FlowDeliveryView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/WireResponseFlowDelivery"
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "delivery"
+        ]
+      },
+      "FlowDeliveryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FlowDeliveryView"
+            }
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "FlowLeaseView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lease_until": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cancel_requested": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "lease_until",
+          "cancel_requested"
+        ]
+      },
+      "FlowResearchProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "crew": {
+            "$ref": "#/components/schemas/WireResponseCrew"
+          },
+          "existing_id": {
+            "type": "string"
+          },
+          "expected_revision": {
+            "type": "integer"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "aliases": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "standard": {
+                "type": "string"
+              },
+              "deep": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "standard",
+              "deep"
+            ]
+          }
+        },
+        "required": [
+          "crew",
+          "changes",
+          "aliases"
+        ]
+      },
       "WireResponseCrew": {
         "type": "object",
         "properties": {
@@ -44681,6 +45760,9 @@
           },
           "backend": {
             "type": "string"
+          },
+          "research": {
+            "$ref": "#/components/schemas/WireResponseCrewResearch"
           }
         },
         "additionalProperties": false,
@@ -45207,6 +46289,25 @@
           },
           "origin": {
             "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
+          },
+          "invocation_mode": {
+            "type": "string",
+            "enum": [
+              "flow"
+            ]
+          },
+          "definition": {
+            "$ref": "#/components/schemas/WireResponseCrew"
+          },
+          "research_mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "deep"
+            ]
+          },
+          "cancel_requested": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -45321,6 +46422,21 @@
             "type": "string"
           },
           "thread_id": {
+            "type": "string"
+          },
+          "connector": {
+            "type": "string"
+          },
+          "guild_id": {
+            "type": "string"
+          },
+          "channel_id": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "event_id": {
             "type": "string"
           }
         },

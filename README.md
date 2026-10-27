@@ -71,7 +71,7 @@ The [roadmap](ROADMAP.md) describes the order of improvements and the conditions
 | Area | What you can do |
 |---|---|
 | **MEMORY** | Review candidates; search, edit, merge and delete memories; view and export sessions; check usage. |
-| **CREW** | Configure agents and teams, hold team meetings, and manage canvas workflows and automations. |
+| **FLOW** | Manage individual work, collaboration, meetings, and automations together, retaining role/persona settings, graphs, and history. |
 | **ROUTER** | Register model providers and accounts, set routing rules and fallback order, and inspect call records. |
 | **TOOLS** | Manage skill versions and validation records, see the success or failure results agents report after using a skill (self-reported, not independently checked), connect MCP servers and plugins per agent, and manage knowledge sources. |
 
@@ -147,3 +147,9 @@ See the [development guide](https://github.com/FelixBaek/arkism/blob/main/guide/
 ## License
 
 [MIT](https://github.com/FelixBaek/arkism/blob/main/LICENSE)
+
+### FLOW calls and research
+
+`@리서치` starts normal research; the configured `@딥리서치` alias enters deep research in the same definition. Review and save the existing research upgrade in FLOW to enable source/gap checks while preserving models, search services, approvals, and budgets. Elapsed time alone never escalates research. Existing `$handle` calls remain available.
+
+Connected agents use `run_workflow` and repeat `wait_workflow` on the same run until completion. Closed conversations are not automatically awakened; reconnect and retrieve the same run. Discord persists final-delivery receipts and resumes acknowledged message parts after restarts. Unknown send outcomes are not blindly retried. [Call and support contract](guide/flow.md)

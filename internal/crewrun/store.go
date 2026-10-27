@@ -53,6 +53,7 @@ type Trigger struct {
 // Crew is the part of a crew item the engine needs: a workflow, or a persona
 // whose instructions an AI node may take.
 type Crew struct {
+	Research *CrewResearch `json:"research,omitempty"`
 	Type         string      `json:"type"`
 	Name         string      `json:"name"`
 	Handle       string      `json:"handle,omitempty"`
@@ -115,24 +116,30 @@ type Decision struct {
 
 // RunState is the crew_run body of a runs API record.
 type RunState struct {
-	CrewID       string                `json:"crew_id"`
-	CrewRevision int64                 `json:"crew_revision"`
-	Trigger      string                `json:"trigger"`
-	Status       string                `json:"status"`
-	Input        string                `json:"input,omitempty"`
-	Nodes        map[string]*NodeState `json:"nodes"`
-	Waiting      *Waiting              `json:"waiting,omitempty"`
-	Decisions    map[string]Decision   `json:"decisions,omitempty"`
-	Summary      string                `json:"summary,omitempty"`
-	Only         string                `json:"only,omitempty"`  // run this one node, skip the rest
-	Loops        map[string]int        `json:"loops,omitempty"` // back edge uses, keyed "from>to:port"
-	Deadline     *time.Time            `json:"deadline,omitempty"`
+	ResearchMode string `json:"research_mode,omitempty"`
+	InvocationMode  string                `json:"invocation_mode,omitempty"`
+	Definition      *Crew                 `json:"definition,omitempty"`
+	Origin          map[string]string     `json:"origin,omitempty"`
+	CancelRequested bool                  `json:"cancel_requested,omitempty"`
+	CrewID          string                `json:"crew_id"`
+	CrewRevision    int64                 `json:"crew_revision"`
+	Trigger         string                `json:"trigger"`
+	Status          string                `json:"status"`
+	Input           string                `json:"input,omitempty"`
+	Nodes           map[string]*NodeState `json:"nodes"`
+	Waiting         *Waiting              `json:"waiting,omitempty"`
+	Decisions       map[string]Decision   `json:"decisions,omitempty"`
+	Summary         string                `json:"summary,omitempty"`
+	Only            string                `json:"only,omitempty"`  // run this one node, skip the rest
+	Loops           map[string]int        `json:"loops,omitempty"` // back edge uses, keyed "from>to:port"
+	Deadline        *time.Time            `json:"deadline,omitempty"`
 }
 
 type Run struct {
-	ID       string   `json:"id"`
-	Revision int64    `json:"revision"`
-	State    RunState `json:"crew_run"`
+	LeaseToken string   `json:"-"`
+	ID         string   `json:"id"`
+	Revision   int64    `json:"revision"`
+	State      RunState `json:"crew_run"`
 	// CreatedByType tells a run a person started from the desktop (시험 실행·지금 실행) apart from the engine's own.
 	CreatedByType string `json:"created_by_type,omitempty"`
 }
@@ -271,7 +278,20 @@ func (c *Client) UpdateRun(ctx context.Context, run Run) (Run, error) {
 	var r Run
 	st := run.State
 	st.Decisions = nil // only the decision API writes them
-	err := c.do(ctx, "POST", "/v1/crew/runs/"+url.PathEscape(run.ID)+"/progress",
-		map[string]any{"scope": c.Scope, "expected_revision": run.Revision, "run": st}, &r)
+	body := map[string]any{"scope": c.Scope, "expected_revision": run.Revision, "run": st}
+	if run.State.InvocationMode == "flow" {
+		if run.LeaseToken == "" {
+			return Run{}, errors.New("flow progress requires an execution lease")
+		}
+		body["lease_token"] = run.LeaseToken
+	}
+	err := c.do(ctx, "POST", "/v1/crew/runs/"+url.PathEscape(run.ID)+"/progress", body, &r)
 	return r, err
+}
+
+func (c *Client) LeaseRun(ctx context.Context, id, action, token string) (FlowLease, error) {
+	var lease FlowLease
+	err := c.do(ctx, "POST", "/v1/crew/runs/"+url.PathEscape(id)+"/lease",
+		map[string]any{"scope": c.Scope, "action": action, "lease_token": token}, &lease)
+	return lease, err
 }

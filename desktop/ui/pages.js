@@ -241,7 +241,7 @@ window.ArkismPages = (ctx) => {
     if (!a) return g;
     const row = (key, title, hint) => line(title, hint, sw(a[key], title, (on) => { window.ArkismAlerts.set({ [key]: on }); render(false); }));
     g.append(row("review", "검토할 기억 알림", "승인이 필요한 기억이 생기면 알려줘요."),
-      row("done", "작업 완료 알림", "크루 작업이 끝나면 알려줘요."),
+      row("done", "작업 완료 알림", "FLOW 작업이 끝나면 알려줘요."),
       row("error", "연결·수집 오류 알림", "연결이 끊기거나 대화를 저장하지 못하면 알려줘요."),
       row("sound", "알림 소리", "데스크톱 알림이 올 때 소리를 내요."));
     return g;

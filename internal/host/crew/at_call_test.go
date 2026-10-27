@@ -25,7 +25,7 @@ func TestAtContextNamesTheExpertAndTeamAndHowToCallThem(t *testing.T) {
 	data := map[string]map[string]any{
 		"@리뷰어":  atFixture("agent", "리뷰어", nil),
 		"@백엔드팀": atFixture("team", "백엔드팀", nil),
-		"@리서치":  atFixture("workflow", "리서치", nil), // a workflow is never an @ call
+		"@리서치":  atFixture("workflow", "리서치", nil), // workflows also have unambiguous @ aliases
 	}
 	lister := func() ([]map[string]any, error) {
 		return []map[string]any{{"handle": "@리뷰어"}, {"handle": "@백엔드팀"}, {"handle": "@리서치"}}, nil
@@ -40,7 +40,7 @@ func TestAtContextNamesTheExpertAndTeamAndHowToCallThem(t *testing.T) {
 			t.Fatalf("%q not in %s", want, text)
 		}
 	}
-	if strings.Contains(text, "[@리서치") {
+	if !strings.Contains(text, "[@리서치 — 워크플로우]") {
 		t.Fatal(text)
 	}
 }
@@ -66,7 +66,7 @@ func TestAtExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "assist-1", "status": "succeeded", "summary": "검토 끝", "waiting": nil})
+	eq(t, view, map[string]any{"run_id": "assist-1", "run_kind":"assist","terminal":true,"idempotency_supported":false, "status": "succeeded", "summary": "검토 끝", "waiting": nil})
 	a := obj(plain(t, posts[0].body).(map[string]any)["assist"])
 	if posts[0].path != "/v1/crew/assists" || a["kind"] != "try" || a["expert"] != "@리뷰어" || a["prompt"] != "PR 봐 줘\n\n작업 폴더: /w" {
 		t.Fatal(posts)
@@ -93,7 +93,7 @@ func TestAtTeamHoldsAMeetingAndReportsItsConclusion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "meet-1", "status": "succeeded", "summary": "A로 가요\n결정: A 채택\n할 일: 문서 고치기", "waiting": nil})
+	eq(t, view, map[string]any{"run_id": "meet-1", "run_kind":"meeting","terminal":true,"idempotency_supported":false, "status": "succeeded", "summary": "A로 가요\n결정: A 채택\n할 일: 문서 고치기", "waiting": nil})
 	m := obj(plain(t, posts[0].body).(map[string]any)["meeting"])
 	eq(t, []any{posts[0].path, m["team_id"], m["title"], m["trigger"]}, []any{"/v1/crew/meetings", "id-백엔드팀", "캐시를 어떻게 할까", "call"})
 	_, err = startWorkflow("@없음", "x", 0, "", func(string) (map[string]any, error) { return nil, nil })

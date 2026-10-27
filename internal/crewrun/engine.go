@@ -70,6 +70,9 @@ type Engine struct {
 	fired  map[string]time.Time
 	crons  map[string]*Cron
 	wg     sync.WaitGroup
+	// Tests may shorten these intervals; production uses 3 s polls and 20 s renewals.
+	flowPollInterval  time.Duration
+	flowRenewInterval time.Duration
 }
 
 var errStopped = errors.New("run stopped elsewhere")
@@ -214,7 +217,7 @@ func (e *Engine) Go(ctx context.Context, id string) {
 func (e *Engine) Wait() { e.wg.Wait() }
 
 // Drive advances one run until it finishes, waits or the context ends.
-func (e *Engine) Drive(ctx context.Context, id string) error {
+func (e *Engine) Drive(ctx context.Context, id string) (err error) {
 	if !e.claim(id) {
 		return nil
 	}
@@ -226,8 +229,37 @@ func (e *Engine) Drive(ctx context.Context, id string) error {
 	if terminal(run.State.Status) {
 		return nil
 	}
-	x := &runExec{e: e, run: run}
+	var flow *flowExecution
+	if run.State.InvocationMode == "flow" {
+		run, flow, err = e.beginFlow(ctx, run)
+		if err != nil {
+			if apiCode(err) == "revision_conflict" { // another engine owns the lease
+				return nil
+			}
+			return err
+		}
+		defer flow.close()
+		ctx = flow.ctx
+		if terminal(run.State.Status) {
+			return nil
+		}
+	}
+	x := &runExec{e: e, run: run, flow: flow}
+	if flow != nil {
+		defer func() { err = flow.finish(x, err) }()
+	}
+	return x.advance(ctx)
+}
+
+func (x *runExec) advance(ctx context.Context) error {
+	e, run, flow := x.e, x.run, x.flow
 	it, ok := e.item(run.State.CrewID)
+	if flow != nil && run.State.Definition == nil {
+		return x.finish(ctx, "failed", "flow_definition_missing: the pinned definition is unavailable", "")
+	}
+	if run.State.InvocationMode == "flow" && run.State.Definition != nil {
+		it, ok = CrewItem{ID: run.State.CrewID, Revision: run.State.CrewRevision, Crew: *run.State.Definition}, true
+	}
 	if !ok || it.Revision != run.State.CrewRevision {
 		return x.finish(ctx, "failed", "crew_changed: the definition changed or was archived after the run started", "")
 	}
@@ -256,6 +288,7 @@ func terminal(s string) bool { return s == "succeeded" || s == "failed" || s == 
 // runExec is one run being driven.
 type runExec struct {
 	e     *Engine
+	flow  *flowExecution
 	mu    sync.Mutex
 	run   Run
 	item  CrewItem
@@ -324,7 +357,8 @@ func (x *runExec) settleInterrupted(ctx context.Context) error {
 			continue
 		}
 		changed = true
-		if x.nodes[id].Config["access"] == "read" {
+		n := x.nodes[id]
+		if n.Config["access"] == "read" || x.flow != nil && slices.Contains([]string{"start", "end", "condition", "merge", "wait"}, n.Type) {
 			st.Status, st.StartedAt = "pending", nil
 			if x.e.stepBackend(x.nodes[id]) != "" && st.Runs > 0 {
 				st.Runs-- // the resumed start asks the runner about the same task (same key) instead of starting another
@@ -391,9 +425,13 @@ func (x *runExec) finish(ctx context.Context, status, errMsg, summary string) er
 func (x *runExec) saveLocked(ctx context.Context, node string) error {
 	wait := time.Second
 	for attempt := 0; attempt < 8; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		r, err := x.e.Store.UpdateRun(ctx, x.run)
 		if err == nil {
 			x.run.Revision, x.run.State.Decisions = r.Revision, r.State.Decisions
+			x.run.State.CancelRequested = r.State.CancelRequested
 			if terminal(x.run.State.Status) && !x.traced {
 				x.traced = true
 				x.e.recordFinished(ctx, x.run, x.nodes)
@@ -410,7 +448,12 @@ func (x *runExec) saveLocked(ctx context.Context, node string) error {
 			if terminal(fresh.State.Status) {
 				return errStopped
 			}
+			if x.flow != nil && fresh.State.CancelRequested && x.run.State.Status != "stopped" {
+				x.flow.cancel(errFlowCancelled)
+				return errFlowCancelled
+			}
 			x.run.Revision, x.run.State.Decisions = fresh.Revision, fresh.State.Decisions
+			x.run.State.CancelRequested = fresh.State.CancelRequested
 		case "secret_detected":
 			// The credential may sit in any node's output or error, or in the
 			// summary copied from one, so none of them is kept.

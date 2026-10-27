@@ -24,6 +24,14 @@ func init() {
 		return hookContext(prompt, callerModel, timeout, nil, nil)
 	}
 	host.ListCrew = listCrew
+	host.StartWorkflowRequest = func(handle, task string, wait time.Duration, cwd, requestID string) (map[string]any, error) {
+		return startWorkflowRequest(handle, task, wait.Seconds(), cwd, requestID, nil)
+	}
+	host.GetWorkflow = func(id, kind string) (map[string]any, error) { return waitWorkflow(id, kind, 0) }
+	host.WaitWorkflow = func(id, kind string, wait time.Duration) (map[string]any, error) {
+		return waitWorkflow(id, kind, wait.Seconds())
+	}
+	host.CancelWorkflow = cancelWorkflow
 	host.StartWorkflow = func(handle, task string, wait time.Duration, cwd string) (map[string]any, error) {
 		return startWorkflow(handle, task, wait.Seconds(), cwd, nil)
 	}

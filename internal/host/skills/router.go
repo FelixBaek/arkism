@@ -1040,7 +1040,7 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		}, host.Scope())
 	case "route_skills", "enable_tool", "load_skill", "read_skill_file", "record_skill_usage":
 		value, err = callToolSkills(n, args)
-	case "run_workflow", "decide_workflow":
+	case "run_workflow", "decide_workflow", "get_workflow", "wait_workflow", "cancel_workflow":
 		return callWorkflow(n, args)
 	case "list_crew":
 		var rows []map[string]any
@@ -1137,30 +1137,15 @@ func callToolRemember(args map[string]any) (host.Obj, error) {
 }
 
 func callWorkflow(name string, args map[string]any) (host.Obj, error) {
-	wait := 600.0
-	if w := args["wait_seconds"]; w != nil {
-		var err error
-		if wait, err = pyFloat(w); err != nil {
-			return nil, err
-		}
+	wait, err := workflowWait(args)
+	if err != nil {
+		return nil, err
 	}
-	wait = math.Min(math.Max(wait, 0), 3600)
-	d := time.Duration(wait * float64(time.Second))
-	var value map[string]any
-	var err error
-	if name == "run_workflow" {
-		cwd := arg(args, "cwd", nil)
-		if !truthy(cwd) {
-			cwd = ""
-		}
-		value, err = host.StartWorkflow(argStr(args, "handle", ""), argStr(args, "task", ""), d, pyStr(cwd))
-	} else {
-		note := arg(args, "note", nil)
-		if !truthy(note) {
-			note = ""
-		}
-		value, err = host.DecideRun(argStr(args, "run_id", ""), truthy(args["approve"]), pyStr(note), d)
+	runID, kind, err := workflowIdentity(name, args)
+	if err != nil {
+		return nil, err
 	}
+	value, err := dispatchWorkflow(name, args, runID, kind, wait)
 	var crewErr *host.CrewError
 	if errors.As(err, &crewErr) {
 		return host.Obj{{Key: "content", Value: []any{host.Obj{{Key: "type", Value: "text"}, {Key: "text", Value: "실행 실패: " + crewErr.Msg}}}}, {Key: "isError", Value: true}}, nil
@@ -1168,6 +1153,84 @@ func callWorkflow(name string, args map[string]any) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
+	return workflowToolResult(value, kind)
+}
+
+func workflowWait(args map[string]any) (time.Duration, error) {
+	// A tool response is a bounded observation, not the lifetime of the run.
+	// Keep the stdio router available between waits so the caller can cancel.
+	wait := 30.0
+	if w := args["wait_seconds"]; w != nil {
+		var err error
+		if wait, err = pyFloat(w); err != nil {
+			return 0, err
+		}
+	}
+	if math.IsNaN(wait) || math.IsInf(wait, 0) {
+		return 0, errors.New("wait_seconds must be finite")
+	}
+	wait = math.Min(math.Max(wait, 0), 60)
+	return time.Duration(wait * float64(time.Second)), nil
+}
+
+func workflowIdentity(name string, args map[string]any) (runID, kind string, err error) {
+	for _, key := range []string{"run_id", "run_kind", "request_id"} {
+		if v, present := args[key]; present {
+			if _, ok := v.(string); !ok {
+				return "", "", fmt.Errorf("%s must be a string", key)
+			}
+		}
+	}
+	runID = argStr(args, "run_id", "")
+	kind = argStr(args, "run_kind", "workflow")
+	if kind != "workflow" && kind != "assist" && kind != "meeting" {
+		return "", "", errors.New("run_kind must be workflow, assist, or meeting")
+	}
+	if name != "run_workflow" && strings.TrimSpace(runID) == "" {
+		return "", "", errors.New("run_id is required")
+	}
+	return runID, kind, nil
+}
+
+func dispatchWorkflow(name string, args map[string]any, runID, kind string, wait time.Duration) (map[string]any, error) {
+	var value map[string]any
+	var err error
+	switch name {
+	case "run_workflow":
+		cwd := arg(args, "cwd", nil)
+		if !truthy(cwd) {
+			cwd = ""
+		}
+		requestID := argStr(args, "request_id", "")
+		if requestID != "" {
+			value, err = host.StartWorkflowRequest(argStr(args, "handle", ""), argStr(args, "task", ""), wait, pyStr(cwd), requestID)
+		} else {
+			value, err = host.StartWorkflow(argStr(args, "handle", ""), argStr(args, "task", ""), wait, pyStr(cwd))
+		}
+	case "get_workflow":
+		value, err = host.GetWorkflow(runID, kind)
+	case "wait_workflow":
+		value, err = host.WaitWorkflow(runID, kind, wait)
+	case "cancel_workflow":
+		value, err = host.CancelWorkflow(runID, kind)
+	case "decide_workflow":
+		if kind != "workflow" {
+			return nil, errors.New("decide_workflow supports workflow approvals only; use the Arkism app for team approvals")
+		}
+		approve, ok := args["approve"].(bool)
+		if !ok {
+			return nil, errors.New("approve must be a boolean human decision")
+		}
+		note := arg(args, "note", nil)
+		if !truthy(note) {
+			note = ""
+		}
+		value, err = host.DecideRun(runID, approve, pyStr(note), wait)
+	}
+	return value, err
+}
+
+func workflowToolResult(value map[string]any, kind string) (host.Obj, error) {
 	if value == nil {
 		value = map[string]any{}
 	}
@@ -1176,11 +1239,30 @@ func callWorkflow(name string, args map[string]any) (host.Obj, error) {
 	if !ok {
 		return nil, keyErr("status")
 	}
+	// Older host responses may omit the lifecycle metadata. Never infer success
+	// from an elapsed wait or a cancellation request that is still in flight.
+	if _, ok := value["terminal"]; !ok {
+		value["terminal"] = status == "succeeded" || status == "failed" || status == "stopped" || status == "cancelled" || status == "partial"
+	}
+	if _, ok := value["run_kind"]; !ok {
+		value["run_kind"] = kind
+	}
+	value["delivery_mode"] = "caller_wait"
+	waitKind := field(value["waiting"], "kind")
+	requiresDecision := status == "waiting" && (value["run_kind"] == "meeting" || truthy(value["waiting"]) && (waitKind == nil || waitKind == "approval" || waitKind == "budget"))
+	value["requires_decision"] = requiresDecision
+	if value["terminal"] != true {
+		if requiresDecision {
+			value["next_action"] = map[string]any{"type": "approval_required", "instruction": "Read waiting; obtain the required human decision before resuming. Team budget approvals are handled in the Arkism app."}
+		} else {
+			value["next_action"] = map[string]any{"tool": "wait_workflow", "arguments": map[string]any{"run_id": value["run_id"], "run_kind": value["run_kind"], "wait_seconds": 30}, "instruction": "Continue waiting on this same run until terminal is true or a human decision is required. A timed out wait is not completion. No push to a closed conversation is supported."}
+		}
+	}
 	out, err := toolText(value)
 	if err != nil {
 		return nil, err
 	}
-	return append(out, host.KV{Key: "isError", Value: status == "failed" || status == "stopped"}), nil
+	return append(out, host.KV{Key: "isError", Value: status == "failed" || status == "stopped" || status == "cancelled"}), nil
 }
 
 // loadsStrict is json.loads: one value and nothing but whitespace after it.

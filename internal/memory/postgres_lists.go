@@ -14,6 +14,17 @@ const pgUpdated = `((doc->'updated_at'->>'$date')::timestamptz)`
 const pgTrust = `COALESCE((doc->>'trust')::double precision,0)`
 const pgEvidence = `(SELECT count(DISTINCT source->>'source_id') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(doc->'sources')='array' THEN doc->'sources' ELSE '[]'::jsonb END) source WHERE COALESCE(source->>'source_id','')<>'')`
 
+func (p *Postgres) ListFlowDeliveries(ctx context.Context, scope Scope, connector, botID, status, after string, limit int) ([]Record, error) {
+	if limit < 1 || limit > 201 {
+		return nil, ErrInvalid
+	}
+	statuses := []string{"pending", "sending", "retry_wait"}
+	if status != "" {
+		statuses = []string{status}
+	}
+	return p.selectRecords(ctx, colJobs, scope, `kind=$6 AND doc->'delivery'->'origin'->>'connector'=$7 AND doc->'delivery'->'origin'->>'bot_id'=$8 AND status=ANY($9) AND id>$10`, []any{flowDeliveryKind, connector, botID, statuses, after}, "id ASC", limit)
+}
+
 func (p *Postgres) ListRecords(ctx context.Context, scope Scope, collection string, limit int) ([]Record, error) {
 	if !knownCollection(collection) || limit < 1 || limit > 1000 {
 		return nil, ErrInvalid

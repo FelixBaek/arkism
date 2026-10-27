@@ -58,7 +58,7 @@ func askExpert(handle, task string, wait float64) (map[string]any, error) {
 		} else if status == "" {
 			status = "running"
 		}
-		return map[string]any{"run_id": id, "status": status, "summary": summary, "waiting": nil}
+		return map[string]any{"run_id": id,"run_kind":"assist", "terminal":status!="running", "status": status, "summary": summary, "waiting": nil}
 	})
 }
 
@@ -103,7 +103,7 @@ func meetingView(id string, m map[string]any) map[string]any {
 	if status == "failed" || status == "stopped" {
 		lines = append(lines, "끝난 이유: "+pyStr(getOr(m, "ended_reason", "")))
 	}
-	return map[string]any{"run_id": id, "status": status, "summary": strings.Join(lines, "\n"), "waiting": nil}
+	return map[string]any{"run_id": id,"run_kind":"meeting","terminal":in([]string{"succeeded","failed","stopped"},status), "status": status, "summary": strings.Join(lines, "\n"), "waiting": nil}
 }
 
 // pollView reads the record until its view leaves running or wait seconds pass, like waitRun.

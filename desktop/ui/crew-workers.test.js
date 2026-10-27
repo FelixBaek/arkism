@@ -33,7 +33,7 @@ test("the workers page sweep and the open-expert event", async () => {
     h.state.view = "crew"; h.render();
     window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: "ag1", tab } }));
     await h.settle();
-    assert.equal(h.state.view, "workers");
+    assert.equal(h.state.view, "crew");
   }
   window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: {} }));
   assert.deepEqual(clean(), []);

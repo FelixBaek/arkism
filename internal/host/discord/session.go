@@ -1,9 +1,13 @@
 package discord
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
@@ -22,6 +26,8 @@ type Session interface {
 	Permissions(channelID string) (int64, error)
 	// Channel looks one channel (or thread) up.
 	Channel(channelID string) (Channel, error)
+	// MemberRoles fetches current guild membership for delivery authorization.
+	MemberRoles(guildID, userID string) ([]string, error)
 	Send(channelID string, msg Out) (messageID string, err error)
 	// StartThread opens a public thread on messageID (or a bare thread when messageID is "").
 	StartThread(channelID, messageID, name string) (threadID string, err error)
@@ -50,6 +56,11 @@ type Channel struct {
 type Out struct {
 	Content string
 	Buttons []Button
+	// Nonce is a stable delivery-part identity. Discord only deduplicates it
+	// for a few minutes; persisted ambiguous sends must not rely on it forever.
+	Nonce string
+	// Deadline prevents a rate-limit wait from posting after the lease expires.
+	Deadline time.Time
 }
 
 // Button is a clickable button; ID comes back in a Press.
@@ -121,9 +132,9 @@ func commands() []*discordgo.ApplicationCommand {
 		return &m
 	}
 	return []*discordgo.ApplicationCommand{
-		{Name: cmdAsk, NameLocalizations: en("ask"), Description: "작업 에이전트 한 명에게 읽기 전용으로 물어봐요",
+		{Name: cmdAsk, NameLocalizations: en("ask"), Description: "워크플로·전문가·팀에 작업을 요청해요",
 			Options: []*discordgo.ApplicationCommandOption{
-				{Type: discordgo.ApplicationCommandOptionString, Name: optName, Description: "에이전트 이름 (@ 없이)", Required: true},
+				{Type: discordgo.ApplicationCommandOptionString, Name: optName, Description: "워크플로·전문가·팀 이름 (@ 없이)", Required: true},
 				{Type: discordgo.ApplicationCommandOptionString, Name: optQuestion, Description: "물어볼 내용", Required: true},
 			}},
 		{Name: cmdMeeting, NameLocalizations: en("meeting"), Description: "이 스레드의 팀 회의",
@@ -162,6 +173,10 @@ func newDiscordgo(token string) (Session, error) {
 }
 
 func restCode(err error) int {
+	var rate *discordgo.RateLimitError
+	if errors.As(err, &rate) {
+		return 429
+	}
 	var re *discordgo.RESTError
 	if errors.As(err, &re) && re.Response != nil {
 		return re.Response.StatusCode
@@ -307,6 +322,14 @@ func (d *dgSession) Channel(channelID string) (Channel, error) {
 	return Channel{ID: c.ID, GuildID: c.GuildID, Name: c.Name, ParentID: c.ParentID, Thread: isThread(c.Type)}, nil
 }
 
+func (d *dgSession) MemberRoles(guildID, userID string) ([]string, error) {
+	member, err := d.s.GuildMember(guildID, userID)
+	if err != nil {
+		return nil, err
+	}
+	return member.Roles, nil
+}
+
 func components(buttons []Button) []discordgo.MessageComponent {
 	if len(buttons) == 0 {
 		return nil
@@ -323,6 +346,33 @@ func components(buttons []Button) []discordgo.MessageComponent {
 }
 
 func (d *dgSession) Send(channelID string, msg Out) (string, error) {
+	if msg.Nonce != "" {
+		if len(msg.Nonce) > 25 {
+			return "", errors.New("discord: delivery nonce too long")
+		}
+		endpoint := discordgo.EndpointChannelMessages(channelID)
+		ctx := context.Background()
+		cancel := func() {}
+		if !msg.Deadline.IsZero() {
+			ctx, cancel = context.WithDeadline(ctx, msg.Deadline)
+		}
+		defer cancel()
+		raw, err := d.s.RequestWithBucketID(http.MethodPost, endpoint, map[string]any{
+			"content": msg.Content, "components": components(msg.Buttons),
+			"allowed_mentions": &discordgo.MessageAllowedMentions{},
+			"nonce":            msg.Nonce, "enforce_nonce": true,
+		}, endpoint, discordgo.WithRestRetries(0), discordgo.WithRetryOnRatelimit(false), discordgo.WithContext(ctx))
+		if err != nil {
+			return "", err
+		}
+		var reply struct {
+			ID string `json:"id"`
+		}
+		if json.Unmarshal(raw, &reply) != nil || reply.ID == "" {
+			return "", errors.New("discord: delivery receipt missing")
+		}
+		return reply.ID, nil
+	}
 	m, err := d.s.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{Content: msg.Content, Components: components(msg.Buttons),
 		AllowedMentions: &discordgo.MessageAllowedMentions{}}) // never ping anyone
 	if err != nil {
@@ -340,6 +390,15 @@ func (d *dgSession) StartThread(channelID, messageID, name string) (string, erro
 		c, err = d.s.ThreadStart(channelID, name, discordgo.ChannelTypeGuildPublicThread, 1440)
 	}
 	if err != nil {
+		// Discord uses the source message ID as its thread ID. A repeated
+		// gateway event can safely recover the already-created reply thread.
+		var rest *discordgo.RESTError
+		if messageID != "" && errors.As(err, &rest) && rest.Message != nil && rest.Message.Code == 160004 {
+			existing, getErr := d.s.Channel(messageID)
+			if getErr == nil && isThread(existing.Type) && existing.ParentID == channelID {
+				return existing.ID, nil
+			}
+		}
 		return "", err
 	}
 	return c.ID, nil

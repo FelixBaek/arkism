@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/FelixBaek/arkism/internal/flowresult"
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
 	"io"
 	"maps"
@@ -74,7 +75,15 @@ import (
 // Shared state: any template (not code, expr or control keys) may also read {{trigger}} / {{trigger.a.b}} (the run's
 // input) and {{nodes.<id>}} / {{nodes.<id>.a.b}} (a finished node's output), not
 // only what the incoming edges hand over. A node not done yet reads as empty.
-func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (result, error) {
+func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (res result, err error) {
+	defer func() {
+		if err == nil && x.item.Crew.Research != nil {
+			err = researchOutputSize(res.out)
+		}
+	}()
+	if err := x.researchApproval(n); err != nil {
+		return result{}, err
+	}
 	c := x.shared(n.Config)
 	if out, ok := x.fake(n, input); ok {
 		return result{out: out}, nil
@@ -333,7 +342,8 @@ type aiSpec struct {
 	Access       string   `json:"access,omitempty"`
 	TimeoutS     int      `json:"timeout_s"`
 	Once         bool     `json:"once"`
-	Skills       []string `json:"skills,omitempty"` // hub skill ids the runner puts into the instructions
+	Research     bool     `json:"research,omitempty"` // compact fallback only; saved multi-model research keeps its own calls
+	Skills       []string `json:"skills,omitempty"`   // hub skill ids the runner puts into the instructions
 	// Origin tags the runner's routing call (meetings: kind, meeting_id, team_id, agent_id, trigger).
 	Origin map[string]string `json:"origin,omitempty"`
 	// Backend sends the step to that agent-runner connection instead of a local CLI; Run then names the step
@@ -519,7 +529,7 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 		return result{}, err
 	}
 	s := aiSpec{Model: cmp.Or(c["model"], x.item.Crew.Model, e.DefaultModel), Effort: cmp.Or(c["effort"], "medium"), Instructions: instr,
-		CWD: expandHome(render(c["cwd"], input)), Access: c["access"], Once: n.Type == "ai_once", Skills: skillList(c["skills"])}
+		CWD: expandHome(render(c["cwd"], input)), Access: c["access"], Once: n.Type == "ai_once", Research: c["validator"] == "research-v1", Skills: skillList(c["skills"])}
 	limit := durationOr(c["timeout"], 20*time.Minute)
 	s.Task = taskText(c["goal"], input)
 	if s.Once {
@@ -548,9 +558,27 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 		return result{trace: res.Backend}, err
 	}
 	text, port := routePick(res.Output, ports, def)
+	if c["validator"] == "research-v1" {
+		if _, err := flowresult.ValidateResearch(text); err != nil {
+			return result{}, failf("research_validation", "조사 결과의 본문과 실제 출처가 필요해요. 검색 도구 연결과 결과를 확인해 주세요")
+		}
+	}
 	out := map[string]any{"output": text, "model": res.Model, "effort": res.Effort, "cli": res.CLI, "duration_ms": res.Ms}
+	if c["validator"] == "research-report-v1" {
+		var verdict researchVerdict
+		port, verdict, err = researchRoute(text, c, ports)
+		if err != nil {
+			return result{}, err
+		}
+		out["research_verdict"] = verdict
+	}
 	if res.Rules != "" {
 		out["rules"] = res.Rules
+	}
+	if c["validator"] == "research-v1" || c["validator"] == "research-report-v1" {
+		if err := researchOutputSize(out); err != nil {
+			return result{}, err
+		}
 	}
 	return result{out: out, port: port, tokens: res.tokens(), trace: res.Backend}, nil
 }

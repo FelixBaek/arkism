@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -24,9 +25,6 @@ var (
 	pollEvery  = 10 * time.Second
 	checkEvery = 5 * time.Minute
 	crewTTL    = time.Minute
-	jobTTL     = 2 * time.Hour
-	// acceptedTTL: an external runner accepted the assist; the server gives its answer a day from the last report.
-	acceptedTTL = 26 * time.Hour
 )
 
 var stateFile = host.Env("ARKISM_DISCORD_STATE", filepath.Join(host.AgentsState, "discord-state.json"))
@@ -89,7 +87,7 @@ type meetingMark struct {
 
 // job is a run or an assist whose answer goes back to a thread.
 type job struct {
-	Kind      string    `json:"kind"` // "run" | "assist"
+	Kind      string    `json:"kind"` // "run" | "assist" | "flow_wait" (notice marker only)
 	ID        string    `json:"id"`
 	BotID     string    `json:"bot_id"`
 	ChannelID string    `json:"channel_id"`
@@ -98,13 +96,6 @@ type job struct {
 	Since     time.Time `json:"since"`
 	Accepted  bool      `json:"accepted,omitempty"` // an external runner took it; the thread was told once
 	Sent      int       `json:"sent,omitempty"`     // answer parts already posted, so a retry sends only the rest
-}
-
-func (j job) ttl() time.Duration {
-	if j.Accepted {
-		return acceptedTTL
-	}
-	return jobTTL
 }
 
 type persisted struct {
@@ -119,6 +110,9 @@ type pendingStart struct {
 	kind, targetID, template            string
 	title, topic                        string
 	at                                  time.Time
+	requestID, userID, eventID          string
+	researchMode                        string
+	flow                                bool
 }
 
 // Manager runs every bot of the workspace.
@@ -225,6 +219,7 @@ func (m *Manager) Tick() {
 	}
 	m.mirrorMeetings()
 	m.followJobs()
+	m.followDeliveries()
 	m.save()
 }
 
@@ -539,7 +534,7 @@ func (m *Manager) onMessage(botID string, msg Message) {
 	}
 	if mt := atPrefix.FindStringSubmatch(text); mt != nil {
 		target := m.replyTarget(b, ch, msg.ID, mt[2])
-		m.ask(b, msg.GuildID, ch, target, mt[1], fenced(msg.AuthorName, cfg.Name, mt[2]))
+		m.ask(b, msg.GuildID, ch, target, mt[1], fenced(msg.AuthorName, cfg.Name, mt[2]), msg.ID, msg.AuthorID)
 		return
 	}
 	if ch.Thread {
@@ -558,7 +553,8 @@ func (m *Manager) onMessage(botID string, msg Message) {
 	}
 	m.st.Threads[thread] = threadLink{BotID: botID}
 	m.start(b, pendingStart{botID: botID, guildID: msg.GuildID, channelID: ch.ID, threadID: thread, kind: cfg.Kind, targetID: cfg.TargetID,
-		template: cfg.TemplateKey, title: threadName(text), topic: fenced(msg.AuthorName, cfg.Name, text)})
+		template: cfg.TemplateKey, title: threadName(text), topic: fenced(msg.AuthorName, cfg.Name, text),
+		requestID: discordRequestID(botID, msg.GuildID, ch.ID, msg.ID), eventID: msg.ID, userID: msg.AuthorID})
 }
 
 // replyTarget is where an answer goes: the thread it was asked in, a new thread on the message (reply_to
@@ -569,7 +565,8 @@ func (m *Manager) replyTarget(b *bot, ch Channel, messageID, text string) string
 	}
 	thread, err := b.sess.StartThread(ch.ID, messageID, threadName(text))
 	if err != nil {
-		return ch.ID
+		m.logf("bot %s: reply thread unavailable: %s", b.cfg.ID, errText(err))
+		return "" // Never widen a thread reply to the parent channel after a failed thread creation.
 	}
 	m.st.Threads[thread] = threadLink{BotID: b.cfg.ID}
 	return thread
@@ -597,8 +594,11 @@ func (m *Manager) onCommand(botID string, c Command) {
 			return
 		}
 		_ = b.sess.Respond(c.InteractionID, fmt.Sprintf("@%s 에게 물어볼게요.", name), false)
-		target := m.replyTarget(b, ch, "", q)
-		m.ask(b, c.GuildID, ch, target, name, fenced(c.UserName, cfg.Name, q))
+		target := ch.ID
+		if rec := m.findCrew(name); rec == nil || str(body(rec, "crew")["type"]) != "workflow" {
+			target = m.replyTarget(b, ch, "", q)
+		}
+		m.ask(b, c.GuildID, ch, target, name, fenced(c.UserName, cfg.Name, q), c.InteractionID, c.UserID)
 	case c.Name == cmdMeeting && c.Sub == subStop:
 		link, ok := m.st.Threads[ch.ID]
 		if !ch.Thread || !ok || link.Meeting == "" {
@@ -620,7 +620,7 @@ func (m *Manager) onPress(botID string, p Press) {
 	if b == nil || b.sess == nil || !strings.HasPrefix(p.CustomID, "ark:") {
 		return
 	}
-	if !m.allowed(b, p.GuildID, p.UserID, p.RoleIDs) {
+	if !m.inGuild(p.GuildID) || !m.allowed(b, p.GuildID, p.UserID, p.RoleIDs) {
 		_ = b.sess.Respond(p.InteractionID, "이 봇을 쓸 권한이 없어요.", true)
 		return
 	}
@@ -633,17 +633,20 @@ func (m *Manager) onPress(botID string, p Press) {
 	var err error
 	switch {
 	case len(parts) == 4 && parts[1] == "s":
-		ps, ok := m.pending[parts[2]]
-		delete(m.pending, parts[2])
-		if !ok {
-			answer = "이미 처리했거나 오래된 요청이에요."
-		} else if approve {
-			m.doStart(b, ps)
+		var respond bool
+		answer, respond = m.pressStart(b, p, parts[2], approve, answer)
+		if !respond {
+			return
 		}
 	case len(parts) == 4 && parts[1] == "m":
-		err = m.decideMeeting(parts[2], approve)
+		link := m.st.Threads[p.ChannelID]
+		if link.BotID != botID || link.Meeting != parts[2] {
+			err = errors.New("meeting origin mismatch")
+		} else {
+			err = m.decideMeeting(parts[2], approve)
+		}
 	case len(parts) == 5 && parts[1] == "r":
-		err = m.decideRun(parts[2], parts[3], approve)
+		err = m.pressRun(botID, p.ChannelID, parts[2], parts[3], approve)
 	default:
 		return
 	}
@@ -651,6 +654,31 @@ func (m *Manager) onPress(botID string, p Press) {
 		answer = "처리하지 못했어요 (" + errText(err) + ")."
 	}
 	_ = b.sess.Respond(p.InteractionID, fmt.Sprintf("%s — %s", p.UserName, answer), false)
+}
+
+func (m *Manager) pressStart(b *bot, p Press, key string, approve bool, answer string) (string, bool) {
+	ps, ok := m.pending[key]
+	if ok && (ps.botID != b.cfg.ID || ps.guildID != p.GuildID || ps.threadID != p.ChannelID) {
+		_ = b.sess.Respond(p.InteractionID, "이 대화의 요청이 아니에요.", true)
+		return "", false
+	}
+	delete(m.pending, key)
+	if !ok {
+		return "이미 처리했거나 오래된 요청이에요.", true
+	}
+	if approve {
+		m.doStart(b, ps)
+	}
+	return answer, true
+}
+
+func (m *Manager) pressRun(botID, channelID, runID, node string, approve bool) error {
+	for _, j := range m.st.Jobs {
+		if (j.Kind == "run" || j.Kind == "flow_wait") && j.ID == runID && j.BotID == botID && j.ChannelID == channelID {
+			return m.decideRun(runID, node, approve)
+		}
+	}
+	return errors.New("run origin mismatch")
 }
 
 // ---- starting work ----
@@ -674,7 +702,8 @@ func (m *Manager) crewItems() []map[string]any {
 
 func handleKey(h string) string { return strings.ToLower(strings.TrimLeft(strings.TrimSpace(h), "@$")) }
 
-// findCrew finds an agent or team by @handle (or name); byID finds any crew item by id.
+// findCrew preserves the existing agent/team namespace before considering a
+// free workflow. An expert-owned workflow remains callable through its expert.
 func (m *Manager) findCrew(handle string) map[string]any {
 	key := handleKey(handle)
 	for _, rec := range m.crewItems() {
@@ -686,7 +715,55 @@ func (m *Manager) findCrew(handle string) map[string]any {
 			return rec
 		}
 	}
-	return nil
+	for _, rec := range m.crewItems() {
+		c := body(rec, "crew")
+		if str(c["type"]) != "workflow" || m.workflowOwned(str(c["handle"])) {
+			continue
+		}
+		if handleKey(str(c["handle"])) == key || strings.ToLower(str(c["name"])) == key {
+			return rec
+		}
+	}
+	// Aliases cannot replace a real saved handle, including an owned workflow
+	// that is intentionally hidden from direct calls.
+	for _, rec := range m.crewItems() {
+		c := body(rec, "crew")
+		if handleKey(str(c["handle"])) == key || strings.ToLower(str(c["name"])) == key {
+			return nil
+		}
+	}
+	var found map[string]any
+	for _, rec := range m.crewItems() {
+		c := body(rec, "crew")
+		if str(c["type"]) != "workflow" || m.workflowOwned(str(c["handle"])) || researchAliasMode(c, key) != "deep" {
+			continue
+		}
+		if found != nil {
+			return nil
+		} // Ambiguous legacy aliases are hidden.
+		found = rec
+	}
+	return found
+}
+
+func researchAliasMode(crew map[string]any, key string) string {
+	if key == "" || key == handleKey(str(crew["handle"])) || key == strings.ToLower(str(crew["name"])) {
+		return ""
+	}
+	if handleKey(str(obj(crew["research"])["deep_alias"])) == key {
+		return "deep"
+	}
+	return ""
+}
+
+func (m *Manager) workflowOwned(handle string) bool {
+	for _, rec := range m.crewItems() {
+		c := body(rec, "crew")
+		if str(c["type"]) == "agent" && str(c["workflow"]) != "" && handleKey(str(c["workflow"])) == handleKey(handle) {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) byID(id string) map[string]any {
@@ -699,10 +776,13 @@ func (m *Manager) byID(id string) map[string]any {
 }
 
 // ask: @이름 or /물어보기 — an agent answers once (read-only), a team holds a meeting in the thread.
-func (m *Manager) ask(b *bot, guildID string, ch Channel, target, handle, topic string) {
+func (m *Manager) ask(b *bot, guildID string, ch Channel, target, handle, topic, eventID, userID string) {
+	if target == "" {
+		return
+	}
 	rec := m.findCrew(handle)
 	if rec == nil {
-		m.send(b, target, Out{Content: fmt.Sprintf("@%s 라는 작업 에이전트나 팀을 찾지 못했어요.", handle)})
+		m.send(b, target, Out{Content: fmt.Sprintf("@%s 라는 호출 가능한 워크플로·전문가·팀을 찾지 못했어요.", handle)})
 		return
 	}
 	c := body(rec, "crew")
@@ -711,13 +791,28 @@ func (m *Manager) ask(b *bot, guildID string, ch Channel, target, handle, topic 
 		base = ch.ParentID
 	}
 	ps := pendingStart{botID: b.cfg.ID, guildID: guildID, channelID: base, threadID: target, targetID: str(rec["id"]),
-		title: threadName(str(c["name"]) + ": " + topicLine(topic)), topic: topic}
-	if str(c["type"]) == "team" {
+		title: threadName(str(c["name"]) + ": " + topicLine(topic)), topic: topic,
+		requestID: discordRequestID(b.cfg.ID, guildID, ch.ID, eventID), eventID: eventID, userID: userID}
+	switch str(c["type"]) {
+	case "team":
 		ps.kind = "meeting"
-	} else {
+	case "workflow":
+		ps.kind = "workflow"
+		ps.flow = true
+		ps.researchMode = researchAliasMode(c, handleKey(handle))
+	default:
 		ps.kind = "agent"
 	}
 	m.start(b, ps)
+}
+
+func discordRequestID(botID, guildID, channelID, eventID string) string {
+	if eventID == "" {
+		return ""
+	}
+	raw, _ := json.Marshal([]any{host.Scope(), botID, guildID, channelID, eventID})
+	sum := sha256.Sum256(raw)
+	return "discord-" + hex.EncodeToString(sum[:])
 }
 
 // start holds a start back when the daily Discord budget is reached and asks in the thread first.
@@ -791,13 +886,34 @@ func (m *Manager) startRun(b *bot, ps pendingStart) error {
 	}
 	run := map[string]any{"crew_id": ps.targetID, "crew_revision": int64(num(rec["revision"])), "trigger": "discord", "status": "running",
 		"input": ps.topic, "nodes": map[string]any{}, "origin": map[string]any{"bot_id": b.cfg.ID, "thread_id": ps.threadID}}
-	out, err := m.api.Post("/v1/crew/runs", map[string]any{"scope": host.Scope(), "run": run})
+	if ps.flow {
+		if ps.requestID == "" || ps.userID == "" || ps.eventID == "" {
+			return errors.New("workflow event identity missing")
+		}
+		run["invocation_mode"] = "flow"
+		if ps.researchMode == "deep" {
+			run["research_mode"] = "deep"
+		}
+		run["origin"] = map[string]any{"connector": "discord", "bot_id": b.cfg.ID, "guild_id": ps.guildID,
+			"channel_id": ps.channelID, "thread_id": ps.threadID, "user_id": ps.userID, "event_id": ps.eventID}
+	}
+	payload := map[string]any{"scope": host.Scope(), "run": run}
+	if ps.requestID != "" {
+		payload["request_id"] = ps.requestID
+	}
+	out, err := m.api.Post("/v1/crew/runs", payload)
 	if err != nil {
 		return err
 	}
 	name := str(body(rec, "crew")["name"])
-	m.st.Jobs = append(m.st.Jobs, job{Kind: "run", ID: str(out["id"]), BotID: b.cfg.ID, ChannelID: ps.threadID, Who: name, Since: m.now()})
-	m.send(b, ps.threadID, Out{Content: fmt.Sprintf("워크플로 **%s** 를 시작했어요 (읽기 전용).", name)})
+	if !ps.flow {
+		m.st.Jobs = append(m.st.Jobs, job{Kind: "run", ID: str(out["id"]), BotID: b.cfg.ID, ChannelID: ps.threadID, Who: name, Since: m.now()})
+	}
+	message := fmt.Sprintf("워크플로 **%s** 를 시작했어요. 끝나면 이 대화에 결과를 올릴게요.", name)
+	if ps.flow {
+		message += "\n실행 ID: `" + str(out["id"]) + "`\n승인이 필요한 단계에서는 기다립니다. Arkism 앱의 FLOW에서 진행 상태와 승인 요청을 확인할 수 있어요."
+	}
+	m.send(b, ps.threadID, Out{Content: message})
 	return nil
 }
 
@@ -843,6 +959,11 @@ func (m *Manager) decideRun(id, node string, approve bool) error {
 	rec, err := m.api.Get("/v1/crew/runs/" + id + "?" + scopeQuery())
 	if err != nil {
 		return err
+	}
+	run := body(rec, "crew_run")
+	waiting := obj(run["waiting"])
+	if str(run["status"]) != "waiting" || str(waiting["kind"]) != "budget" || str(waiting["node_id"]) != node {
+		return errors.New("일반 작업 승인은 Arkism 앱에서 확인해 주세요")
 	}
 	_, err = m.api.Post("/v1/crew/runs/"+id+"/decision", map[string]any{"scope": host.Scope(),
 		"expected_revision": int64(num(rec["revision"])), "node_id": node, "approve": approve})
@@ -1027,13 +1148,9 @@ func (m *Manager) followJobs() {
 	keep := m.st.Jobs[:0]
 	for _, j := range m.st.Jobs {
 		b := m.bots[j.BotID]
-		if b == nil {
-			continue
-		}
-		if b.sess == nil || m.now().Sub(j.Since) > j.ttl() {
-			if m.now().Sub(j.Since) <= j.ttl() {
-				keep = append(keep, j)
-			}
+		if b == nil || b.sess == nil {
+			// A delivery timeout must not silently discard an unfinished run.
+			keep = append(keep, j)
 			continue
 		}
 		done := false
@@ -1094,8 +1211,13 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 				q = "승인이 필요해요."
 			}
 			node := str(w["node_id"])
-			if m.send(b, j.ChannelID, Out{Content: "**" + j.Who + "** · " + q,
-				Buttons: []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}}) {
+			out := Out{Content: "**" + j.Who + "** · " + q}
+			if k == "budget" {
+				out.Buttons = []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}
+			} else {
+				out.Content += "\nArkism 앱에서 해당 실행을 열어 승인해 주세요."
+			}
+			if m.send(b, j.ChannelID, out) {
 				j.Asked = node
 			}
 		}

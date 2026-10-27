@@ -323,7 +323,7 @@ func TestStartPostsTheDesktopRunShapeAndWaitsForAnApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "run-1", "status": "waiting", "summary": "", "waiting": map[string]any{"node_id": "a", "question": "보낼까요?"}})
+	eq(t, view, map[string]any{"run_id": "run-1", "run_kind":"workflow", "terminal":false,"result":"","cancel_requested":false,"status": "waiting", "summary": "", "waiting": map[string]any{"node_id": "a", "question": "보낼까요?"}})
 	if posts[0].path != "/v1/crew/runs" {
 		t.Fatal(posts[0].path)
 	}

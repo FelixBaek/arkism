@@ -212,6 +212,7 @@ type Record struct {
 	ImagePrompt        *ImagePrompt         `json:"image_prompt,omitempty" bson:"image_prompt,omitempty"`
 	Crew               *Crew                `json:"crew,omitempty" bson:"crew,omitempty"`
 	CrewRun            *CrewRun             `json:"crew_run,omitempty" bson:"crew_run,omitempty"`
+	FlowDelivery       *FlowDelivery        `json:"delivery,omitempty" bson:"delivery,omitempty"`
 	CrewAssist         *CrewAssist          `json:"crew_assist,omitempty" bson:"crew_assist,omitempty"`
 	CrewMeeting        *CrewMeeting         `json:"crew_meeting,omitempty" bson:"crew_meeting,omitempty"`
 	DiscordBot         *DiscordBot          `json:"discord_bot,omitempty" bson:"discord_bot,omitempty"`
@@ -278,6 +279,7 @@ type Tx interface {
 }
 
 type Repository interface {
+	ListFlowDeliveries(context.Context, Scope, string, string, string, string, int) ([]Record, error)
 	ListSkillTrialRecords(context.Context, Scope, string, string, int, string) ([]Record, error)
 	// ListRecords returns up to limit live-or-not rows of one collection in a scope, newest first.
 	ListRecords(context.Context, Scope, string, int) ([]Record, error)

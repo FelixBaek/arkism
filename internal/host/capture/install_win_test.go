@@ -35,7 +35,7 @@ func instNoSSHHost(t *testing.T) {
 	os.Unsetenv("ARKISM_SSH_HOST")
 }
 
-// Golden: the TOML, guidance, DeepSeek and hook edits match Python byte for byte.
+// Golden: preserve installation contracts and the managed client guidance.
 func TestInstGolden(t *testing.T) {
 	instNoSSHHost(t)
 	var g instGoldenFile
@@ -139,7 +139,7 @@ func TestInstDeepseekProfilesPreserveOverlaysAndReinstallWithoutDuplicates(t *te
 }
 
 func TestInstGuidancePreservesSameLevelAndParentSections(t *testing.T) {
-	for _, title := range []string{"스킬 사용", "지속 메모리"} {
+	for _, title := range []string{"스킬 사용", "지속 메모리", "워크플로우 실행"} {
 		for _, heading := range []string{"# 보안 지침", "## Other", "##\tOther", "  # Parent", "##"} {
 			preserved := heading + "\nKeep this rule.\n"
 			before := "# Keep\n\n## " + title + "\nOld rule.\n### Old subsection\nOld details.\n\n" + preserved

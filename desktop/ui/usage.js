@@ -185,7 +185,7 @@ window.ArkismUsage = (ctx) => {
     act.append(button("라우팅 설정 열기", "primary small", null, () => ctx.openSettings?.("routing")), link("라우팅 현황 보기 ›", () => ctx.go?.("routing")));
     c.append(el("h3", "", "아직 라우터를 거친 요청이 없어요"),
       el("p", "v4u-hint", "여기에는 Arkism 라우터가 모델을 골라 보낸 요청만 쌓여요. 라우팅을 켜고 워크플로우·하위 작업이 라우터로 모델을 고르면 요청 수·토큰·비용이 보여요."),
-      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 MEMORY·CREW의 사용량에서 봐요."), act);
+      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 MEMORY·FLOW의 사용량에서 봐요."), act);
     return c;
   }
   function routerOverview(d) {
@@ -507,7 +507,7 @@ window.ArkismUsage = (ctx) => {
     if (S.loadedFor && S.loadedFor !== loadKey()) queueMicrotask(() => load(true));
     const d = S.doc;
     const at = d.updated_at || d.collected_at;
-    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·CREW 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
+    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·FLOW 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
     table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab }[S.tab])(d));
     if (S.tab === "overview") window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
     if (S.tab === "requests") side("요청", requestsSide(d));

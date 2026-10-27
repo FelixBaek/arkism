@@ -78,7 +78,7 @@ window.ArkismMessenger = (ctx) => {
     if (!b) {
       return card("디스코드", ["연결 안 됨", ""], null,
         tokenRow("discord", "", "디스코드 봇 토큰을 붙여 넣으세요", (t) => act(() => request("/v1/discord/bots", { method: "POST", body: body({ bot: { name: "Arkism", token: t } }) }), "토큰을 넘겼어요. 서버가 디스코드에 붙는 중이에요."), "저장하고 연결"),
-        el("p", "mg-note", "토큰은 서버에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 Message Content Intent를 켜 주세요. 봇 만드는 법은 CREW › 디스코드에 있어요."));
+        el("p", "mg-note", "토큰은 서버에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 봇을 만들고 Message Content Intent를 켠 뒤 토큰을 넣어 주세요."));
     }
     const st = STATE[b.state] || [b.state, ""];
     const parts = [b.guild_name && `서버 ${b.guild_name}`, b.channels?.length ? `채널 ${b.channels.length}개` : "", ago(b.last_seen_at)].filter(Boolean);

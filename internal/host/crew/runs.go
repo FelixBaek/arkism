@@ -54,21 +54,34 @@ func listCrew(timeout time.Duration) ([]map[string]any, error) {
 		return nil, err
 	}
 	out := []map[string]any{}
-	owned := map[string]bool{} // workflows an agent works by are called through that agent, not by $
-	for _, r := range list(getOr(page, "items", []any{})) {
-		if c := obj(obj(r)["crew"]); c["type"] == "agent" && truthy(c["workflow"]) {
-			owned[strings.TrimPrefix(pyStr(c["workflow"]), "$")] = true
-		}
-	}
-	for _, r := range list(getOr(page, "items", []any{})) {
+	items := list(getOr(page, "items", []any{}))
+	owned, atNames := crewCallNames(items)
+	for _, r := range items {
 		c := obj(obj(r)["crew"])
 		if c["type"] == "workflow" && truthy(c["handle"]) && !owned[pyStr(c["handle"])] {
 			out = append(out, map[string]any{"handle": c["handle"], "type": "workflow", "name": getOr(c, "name", ""),
 				"role": getOr(c, "role", ""), "category": getOr(c, "category", ""), "trigger": getOr(obj(c["trigger"]), "kind", ""),
 				"enabled": truthy(c["enabled"]), "steps": len(list(obj(c["graph"])["nodes"]))})
+			if !atNames[pyStr(c["handle"])] {
+				alias := map[string]any{}
+				for k, v := range out[len(out)-1] {
+					alias[k] = v
+				}
+				alias["handle"] = "@" + pyStr(c["handle"])
+				out = append(out, alias)
+			}
+			if deep := pyStr(getOr(obj(c["research"]), "deep_alias", "")); deep != "" && !atNames[deep] && !atNames["workflow:"+deep] {
+				alias := map[string]any{}
+				for k, v := range out[len(out)-1] {
+					alias[k] = v
+				}
+				alias["handle"] = "@" + deep
+				alias["mode"] = "deep"
+				out = append(out, alias)
+			}
 		}
 	}
-	for _, r := range list(getOr(page, "items", []any{})) {
+	for _, r := range items {
 		c := obj(obj(r)["crew"])
 		if (c["type"] == "agent" || c["type"] == "team") && truthy(c["handle"]) {
 			out = append(out, map[string]any{"handle": "@" + pyStr(c["handle"]), "type": c["type"], "name": getOr(c, "name", ""),
@@ -76,6 +89,25 @@ func listCrew(timeout time.Duration) ([]map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// crewCallNames reserves real handles before exposing workflow aliases.
+func crewCallNames(items []any) (map[string]bool, map[string]bool) {
+	owned := map[string]bool{} // workflows an agent works by are called through that agent, not by $
+	atNames := map[string]bool{}
+	for _, r := range items {
+		c := obj(obj(r)["crew"])
+		if c["type"] == "agent" || c["type"] == "team" {
+			atNames[pyStr(c["handle"])] = true
+		}
+		if c["type"] == "workflow" {
+			atNames["workflow:"+pyStr(c["handle"])] = true
+		}
+		if c := obj(obj(r)["crew"]); c["type"] == "agent" && truthy(c["workflow"]) {
+			owned[strings.TrimPrefix(pyStr(c["workflow"]), "$")] = true
+		}
+	}
+	return owned, atNames
 }
 
 var crewOrder = []string{"handle", "type", "name", "role", "category", "trigger", "enabled", "steps"}
@@ -104,15 +136,16 @@ func runView(rec map[string]any) map[string]any {
 	if _, isStr := w["node_id"].(string); !isStr {
 		decided = false
 	}
-	asks := st["status"] == "waiting" && w["kind"] == "approval" && !decided
+	asks := st["status"] == "waiting" && (w["kind"] == "approval" || w["kind"] == "budget") && !decided
 	var waiting any
 	if asks {
 		waiting = host.Obj{{Key: "node_id", Value: getOr(w, "node_id", "")}, {Key: "question", Value: getOr(w, "question", "")}}
 	}
-	return map[string]any{"run_id": getOr(rec, "id", ""), "status": getOr(st, "status", ""), "summary": getOr(st, "summary", ""), "waiting": waiting}
+	status := pyStr(st["status"])
+	return map[string]any{"run_id": getOr(rec, "id", ""), "run_kind": "workflow", "terminal": in([]string{"succeeded", "failed", "stopped"}, status), "status": getOr(st, "status", ""), "summary": getOr(st, "summary", ""), "result": workflowResult(st), "waiting": waiting, "cancel_requested": truthy(st["cancel_requested"])}
 }
 
-var viewOrder = []string{"run_id", "status", "summary", "waiting"}
+var viewOrder = []string{"run_id", "run_kind", "terminal", "status", "summary", "result", "waiting"}
 
 var runIDRe = regexp.MustCompile(`^[\p{L}\p{N}_.:-]{1,256}$`)
 
@@ -149,14 +182,36 @@ func waitRun(runID string, wait float64, rec map[string]any) (map[string]any, er
 // startWorkflow starts the workflow $handle with input {"request": task} (and "cwd" when given) and waits up to wait seconds.
 // An @handle calls an expert (one answer from its own model) or a team (a meeting) the same way.
 func startWorkflow(handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
+	return startWorkflowRequest(handle, task, wait, cwd, "", resolver)
+}
+
+func startWorkflowRequest(handle, task string, wait float64, cwd, requestID string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
 	if strings.HasPrefix(strings.TrimSpace(handle), "@") {
-		return callAt(handle, task, wait, cwd, resolver)
+		if resolver == nil {
+			resolver = resolveDefault
+		}
+		resolved, err := resolver(handle)
+		if err != nil {
+			return nil, apiErr(err)
+		}
+		if obj(obj(resolved["item"])["crew"])["type"] == "workflow" {
+			return startWorkflowAsRequest("call", handle, task, wait, cwd, requestID, true, func(string) (map[string]any, error) { return resolved, nil })
+		}
+		view, err := callAt(handle, task, wait, cwd, func(string) (map[string]any, error) { return resolved, nil })
+		if err == nil {
+			view["idempotency_supported"] = false
+		}
+		return view, err
 	}
-	return startWorkflowAs("call", handle, task, wait, cwd, resolver)
+	return startWorkflowAsRequest("call", handle, task, wait, cwd, requestID, false, resolver)
 }
 
 // startWorkflowAs is startWorkflow with the run's trigger: "agent" when the agent that owns the workflow starts it.
 func startWorkflowAs(trigger, handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
+	return startWorkflowAsRequest(trigger, handle, task, wait, cwd, "", false, resolver)
+}
+
+func startWorkflowAsRequest(trigger, handle, task string, wait float64, cwd, requestID string, flow bool, resolver func(string) (map[string]any, error)) (map[string]any, error) {
 	if strings.TrimSpace(task) == "" {
 		return nil, crewErr("할 일(task)이 비었어요")
 	}
@@ -187,7 +242,17 @@ func startWorkflowAs(trigger, handle, task string, wait float64, cwd string, res
 	}
 	run := host.Obj{{Key: "crew_id", Value: item["id"]}, {Key: "crew_revision", Value: item["revision"]}, {Key: "trigger", Value: trigger},
 		{Key: "status", Value: "running"}, {Key: "input", Value: dumpLine(input)}, {Key: "nodes", Value: nodes}}
-	rec, err := apiPost("/v1/crew/runs", host.Obj{{Key: "scope", Value: scope()}, {Key: "run", Value: run}}, 15*time.Second)
+	if flow {
+		run = append(run, host.KV{Key: "invocation_mode", Value: "flow"})
+		if mode := pyStr(getOr(res, "mode", "")); mode != "" {
+			run = append(run, host.KV{Key: "research_mode", Value: mode})
+		}
+	}
+	body := host.Obj{{Key: "scope", Value: scope()}, {Key: "run", Value: run}}
+	if requestID != "" {
+		body = append(body, host.KV{Key: "request_id", Value: requestID})
+	}
+	rec, err := apiPost("/v1/crew/runs", body, 15*time.Second)
 	if err != nil {
 		return nil, apiErr(err)
 	}
