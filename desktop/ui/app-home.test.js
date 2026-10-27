@@ -42,12 +42,17 @@ async function reviewOf(start) {
 test("overview: stage windows step through every stage and their lists", async () => {
   await openWindow({ key: "collect" });
   await app.settle(100);
-  let d = await openWindow({ key: "collect" });
-  assert.match(text(d), /대화 저장/);
-  assert.match(text(d), /codex · arkism/, "the session list fills once /v1/usage/sessions answered");
-  // ‹ › walk the stages in order and wrap around
-  await press("다음 단계", d); assert.match(text(win()), /2 \/ 8 단계/);
-  await press("이전 단계", win()); await press("이전 단계", win()); assert.match(text(win()), /8 \/ 8 단계/);
+  // 대화 저장 opens wide: the saved sessions with what each produced and whether its transcript is kept
+  await openWindow({ key: "collect" }); await app.settle(50); let d = win();
+  assert.ok(d.classList.contains("ov-wide-win"));
+  assert.match(text(d.querySelector(".ov-win-title")), /대화 저장/);
+  assert.ok(d.querySelectorAll(".ov-wide-row").length > 1, "the session list fills once /v1/usage/sessions answered");
+  assert.match(text(d), /원문 보관/);
+  assert.equal(btn("‹ 작게 보기", d), undefined, "no compact step first");
+  // ‹ › walk the compact stages in order and wrap around into the wide ones
+  d = await openWindow({ key: "dream" }); assert.match(text(d), /7 \/ 8 단계/);
+  await press("다음 단계", d); assert.match(text(win()), /8 \/ 8 단계/);
+  await press("다음 단계", win(), 30); assert.match(text(win().querySelector(".ov-win-title")), /대화 저장/);
   // 승인 is its own group after 드리밍, in the top bar and the 기억 처리 grid; 승인 대기 is the last step
   assert.deepEqual([...app.document.querySelectorAll(".ov-group-head span")].map(text), ["저장", "사용", "드리밍", "승인"]);
   assert.deepEqual([...app.document.querySelectorAll(".ov-grid-sec")].map(text), ["저장", "사용", "드리밍", "승인"]);
@@ -62,21 +67,18 @@ test("overview: stage windows step through every stage and their lists", async (
     assert.ok(d.querySelector(".ov-win-list"), key);
     assert.equal(!!d.querySelector(".ov-win-foot button"), ["extract", "active"].includes(key), `${key} footer`);
   }
-  // 사용 기록 opens wide; ‹ 작게 보기 gives the stage window, whose footer widens it again
+  // 사용 기록 opens wide, with no compact step first
   d = await openWindow({ key: "trace" });
   assert.ok(d.classList.contains("ov-wide-win"), "trace opens wide");
   assert.ok(d.querySelector(".ov-wide-row"), "a row per memory");
   assert.ok(d.querySelector("select.ov-wide-sort"), "sortable");
-  await press("‹ 작게 보기", d, 20);
-  assert.ok(win().querySelector(".ov-win-list") && !win().classList.contains("ov-wide-win"));
-  await press("넓게 보기 ›", win(), 20);
-  assert.ok(win().classList.contains("ov-wide-win"));
-  // collect's 열기 opens that session's dialogue in the 세션 기록 window (there is no separate 세션 screen)
-  d = await openWindow({ key: "collect" });
+  assert.equal(btn("‹ 작게 보기", d), undefined);
+  // 대화 저장 reads a session's dialogue in place (there is no separate 세션 screen)
+  await openWindow({ key: "collect" }); await app.settle(50);
   const talks = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length;
-  await press("열기", d, 80);
-  assert.match(text(win()), /세션 기록/);
-  assert.ok(app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length > talks, "열기 reads the dialogue");
+  win().querySelector(".ov-wide-row").click(); await app.settle();
+  await press("대화 보기", win(), 80);
+  assert.ok(app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length > talks, "it reads the dialogue");
   assert.ok(win().querySelector(".ss-msg"), "the dialogue shows in the window");
   await press("닫기", await openWindow({ key: "trace" }));
   assert.equal(win(), null);
@@ -180,17 +182,21 @@ test("overview: review rows approve and reject in place, with the reason asked f
 });
 
 test("overview: 불러오기 shows receipts, an empty history and a failed read", async () => {
-  let d = await openWindow({ key: "recall" });
-  await app.settle(50);
-  assert.match(text(d), /한 번에 평균/);
+  await openWindow({ key: "recall" });
+  await app.settle(50); let d = win();
+  assert.ok(d.classList.contains("ov-wide-win"), "불러오기 opens wide");
+  assert.match(text(d), /번 불러올 때 평균/);
+  assert.ok(d.querySelectorAll(".ov-wide-row").length > 1, "one row per recall");
+  d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle(); d = win();
+  assert.ok(d.querySelectorAll(".ov-wide-row")[1].classList.contains("on"), "the picked recall shows on the right");
   assert.match(text(d), /에서 기억 \d+개를 받았어요/, "who asked, in words");
-  assert.ok(!/m1|m7/.test(text(d.querySelector(".ov-recall-row"))), "a memory shows as its text, not its id");
+  assert.ok(d.querySelector(".ov-recall-item") && !/^m\d/.test(text(d.querySelector(".ov-recall-item p"))), "a memory shows as its text, not its id");
   assert.ok(d.querySelector("details.ov-recall-more"), "scores sit behind a toggle");
   let off = route("GET", "/v1/recalls", () => ok({ items: [] }));
-  d = await openWindow({ key: "recall" }); await app.settle(50);
+  await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /아직 불러온 기록이 없어요/);
   off(); off = route("GET", "/v1/recalls", () => fail(500, "boom"));
-  d = await openWindow({ key: "recall" }); await app.settle(50);
+  await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /불러오기 기록을 읽지 못했어요/);
   off();
   assert.equal(d.querySelector(".ov-win-foot button"), null, "no jump to 사용량 from here");
@@ -526,8 +532,6 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   assert.match(text(win()), /불러오지 못했어요/);
   offBad();
   await press("다시 시도", win(), 50);
-  await press("‹ 작게 보기", win());
-  assert.match(text(win()), /대화 저장/);
   await closeAll();
 });
 

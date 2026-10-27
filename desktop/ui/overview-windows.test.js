@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
 const h = dom.helpers(document);
+require("./session-list.js");
 require("./overview-windows.js");
 
 function windows(memories, memoryUse, read) {
@@ -83,10 +84,11 @@ test("분석 and 대화 저장 summarize what went in and what came out, each re
   const request = async (path, opts) => {
     calls.push(path);
     if (path.startsWith("/v1/memory_candidates?")) return { items: [{ id: "r1", kind: "fact", review: { reason: "작업과 관계없음" } }, { id: "r2", kind: "fact", review: { reason: "작업과 관계없음" } }] };
-    if (path === "/v1/usage/sessions/archives") { assert.deepEqual(JSON.parse(opts.body).ids, ["ss-1", "ss-2", "ss-3"]); return { items: [{ id: "ss-1", state: "active", archives: [{ expires_at: new Date(Date.now() + 2.5 * 86400000).toISOString() }] }, { id: "ss-2", state: "expired", archives: [] }], missing: ["ss-3"] }; }
+    if (path === "/v1/usage/sessions/archives") { assert.deepEqual(JSON.parse(opts.body).ids, ["ss-1", "ss-2", "ss-3"]); return { items: [{ id: "ss-1", state: "active", archives: [{ state: "active", expires_at: new Date(Date.now() + 2.5 * 86400000).toISOString() }] }, { id: "ss-2", state: "expired", archives: [] }], missing: ["ss-3"] }; }
     return {};
   };
-  const ctx = { state, ...h, query: (o = {}) => h.query(o), request, ago: () => "방금", go() {}, render() {} };
+  const ctx = { state, ...h, query: (o = {}) => h.query(o), request, ago: () => "방금", go() {}, render() {},
+    remoteCollection: () => ({ load: async () => {}, reset() {}, snapshot: () => ({ items: sessions, total: sessions.length, loading: false }) }) };
   const sessions = [{ id: "ss-1", session_id: "s1", messages: 10, tokens: 100, ended_at: now }, { id: "ss-2", session_id: "s2", messages: 5, tokens: 50, ended_at: old }, { id: "ss-3", session_id: "s3", messages: 1, tokens: 0, ended_at: old }];
   const env = { stages: () => [{ key: "extract", label: "분석", tiles: [] }, { key: "collect", label: "대화 저장", tiles: [] }], sessions: () => sessions };
   const win = window.ArkismOverviewWindows(ctx, env), body = () => document.body.textContent;
@@ -101,7 +103,8 @@ test("분석 and 대화 저장 summarize what went in and what came out, each re
   assert.ok(body().includes("토큰 150개를 저장했어요"));
   assert.ok(/보관 중1개/.test(body()) && /만료됨1개/.test(body()) && /원문 없음1개/.test(body()));
   assert.ok(body().includes("가장 먼저 지워지는 원문은 3일 남았어요."));
-  assert.ok(body().includes("후보 1") && body().includes("기억 1"), "each saved conversation says what it produced");
+  assert.ok(document.querySelector("dialog.ov-wide-win"), "대화 저장 opens wide");
+  assert.ok(body().includes("분석 끝") && body().includes("원문 D-3") && body().includes("원문 만료") && body().includes("원문 없음"), "each saved conversation says what it produced and whether its text is kept");
   assert.equal(calls.filter((c) => c === "/v1/usage/sessions/archives").length, 1);
   win.reset();
 });
