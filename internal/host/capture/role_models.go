@@ -43,3 +43,10 @@ func claudeName(model string) string {
 
 // ReflectModel is the 반성·검토 model this host runs with nothing picked.
 func ReflectModel() string { return reflectModel }
+
+// useRoleModelsFor reads the picks for the commands that run a model.
+func useRoleModelsFor(cmd string) {
+	if cmd == "drain" || cmd == "reflect" || cmd == "review" {
+		useRoleModels()
+	}
+}

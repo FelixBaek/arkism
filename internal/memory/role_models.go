@@ -47,18 +47,25 @@ func validRoleModel(in ProviderRoleModel) bool {
 		return false
 	}
 	if in.Role == "skill_scan" {
-		seen := map[string]bool{}
-		for _, k := range in.Off {
-			if seen[k] || !slices.Contains(scanEngines, k) {
-				return false
-			}
-			seen[k] = true
+		return validScanOff(in.Off) && in.Model == "" && in.Provider == ""
+	}
+	return len(in.Off) == 0 && validRolePick(in)
+}
+
+// validScanOff: known engines, each once.
+func validScanOff(off []string) bool {
+	seen := map[string]bool{}
+	for _, k := range off {
+		if seen[k] || !slices.Contains(scanEngines, k) {
+			return false
 		}
-		return in.Model == "" && in.Provider == ""
+		seen[k] = true
 	}
-	if len(in.Off) > 0 {
-		return false
-	}
+	return true
+}
+
+// validRolePick checks the model (and provider) picked for a role other than skill_scan.
+func validRolePick(in ProviderRoleModel) bool {
 	switch {
 	case roleEngines[in.Role] != nil:
 		return in.Provider == "" && (in.Model == "" || slices.Contains(roleEngines[in.Role], in.Model))

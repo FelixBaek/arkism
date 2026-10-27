@@ -470,9 +470,7 @@ func captureCommand(cmd string, args []string, stdin io.Reader, stdout, stderr i
 		return false
 	}
 	var err error
-	if cmd == "drain" || cmd == "reflect" || cmd == "review" {
-		useRoleModels()
-	}
+	useRoleModelsFor(cmd)
 	switch {
 	case cmd == "hook":
 		return hookMain(stdin, stdout), nil
