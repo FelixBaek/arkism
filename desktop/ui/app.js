@@ -1000,7 +1000,7 @@ export function startApp() {
     });
     const foot = el("div", "actions");
     if (!merge) foot.append(button("둘 다 지우기", "ghost danger tidy-forget", null, async () => { // both wrong: both go to history, not deleted
-      if (await ask("두 기억을 다 지울까요?\n\n둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", "둘 다 지우기")) decide("forget_both", "둘 다 지웠어요. 기억 이력에는 남아요.");
+      if (await ask("두 기억을 다 지울까요?\n\n둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", "둘 다 지우기")) await decide("forget_both", "둘 다 지웠어요. 기억 이력에는 남아요.");
     }));
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
       button("반대로 남기기", "", null, () => decide("swap", "반대쪽 기억을 남겼어요. 다른 하나는 이력에 남아요.")),
