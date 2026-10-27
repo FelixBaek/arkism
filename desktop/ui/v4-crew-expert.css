@@ -95,6 +95,17 @@ p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-ai-pop .ex-chat { flex: 1 1 auto; min-height: 0; max-height: 260px; overflow: auto; padding: 2px; }
 .ex-ai-pop > :not(.ex-chat) { flex: none; } /* ai-chat.js caps the bubble to the viewport; only the chat list shrinks */
 .ex-ai-pop .ex-chat-ai { border-color: color-mix(in srgb, var(--nc-ai) 40%, transparent); background: var(--nc-ai-bg); }
+/* AI 말 앞의 보라 점 (Figma 1389:5526 아바타) */
+.ex-ai-pop .ex-chat-ai { position: relative; margin-left: 32px; }
+.ex-ai-pop .ex-chat-ai::before { content: ""; position: absolute; top: 0; left: -32px; width: 24px; height: 24px; border-radius: 50%; background: radial-gradient(circle, var(--nc-ai) 0 3px, var(--nc-ai-bg) 3.5px); }
+/* 말풍선 맨 아래 보라 줄 (footer): 선 아래 끝까지 채운다 */
+.ex-ai-foot { display: flex; align-items: center; gap: 12px; margin: 2px -14px -14px; padding: 12px 16px; border: 0; border-top: 1px solid var(--nc-line); border-radius: 0 0 13px 13px; background: var(--nc-ai-bg); color: var(--nc-ai); text-align: left; cursor: pointer; }
+.ex-ai-foot > span:first-child { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ex-ai-foot strong { font: 500 calc(13px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-ai); }
+.ex-ai-foot small { font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); color: var(--text-3); }
+.ex-ai-foot .arrow { font-size: calc(15px * var(--fs, 1)); }
+.ex-ai-foot:hover strong { text-decoration: underline; }
+.ex-ai-foot:focus-visible { outline: 2px solid var(--nc-ai); outline-offset: -2px; }
 .ex-ai-quick { display: flex; flex-wrap: wrap; gap: 6px; }
 .ex-ai-chip { height: 26px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--text-2); font: 400 calc(12px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .ex-ai-chip:hover:not(:disabled) { border-color: var(--nc-ai); color: var(--nc-ai); }

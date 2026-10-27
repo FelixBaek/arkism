@@ -132,12 +132,24 @@ div.install-way { border-style: dashed; }
 .v4s-facts dd { margin: 0; color: var(--nc-text); overflow-wrap: anywhere; }
 .v4s-facts dd.mono { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); }
 .v4s-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.v4s-history { align-self: stretch; border: 0; background: none; padding: 0; text-align: left; font: 400 13px/1.5 var(--sans); color: var(--nc-muted); cursor: pointer; }
-.v4s-history:hover { color: var(--nc-text); }
-.v4s-more { border-top: 1px solid var(--nc-line); padding-top: 14px; display: flex; flex-direction: column; gap: 14px; }
-.v4s-more > summary { cursor: pointer; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
-.v4s-more[open] > summary { margin-bottom: 12px; }
-.v4s-more > .section + .section, .v4s-more > .meta { margin-top: 14px; }
+.v4s-link { border: 0; background: none; padding: 0; text-align: left; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); cursor: pointer; }
+.v4s-link:hover { color: var(--nc-text); }
+.v4s-ver { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+.v4s-ver > .mono { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); }
+.v4s-rec .v4s-facts { grid-template-columns: 68px minmax(0, 1fr); }
+.v4s-more { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--nc-line); display: flex; flex-direction: column; gap: 14px; }
+.v4s-more[hidden] { display: none; }
+/* 이름 줄: 이름 왼쪽, AI 알약 오른쪽; 말풍선은 이 줄 아래 오른쪽 끝에서 열린다 (Figma 1385:5245) */
+.v4s-namebar { position: relative; align-self: stretch; display: flex; align-items: center; gap: 12px; }
+.v4s-namebar > h2 { flex: 1; min-width: 0; }
+.v4s-namebar > .ex-ai { position: static; align-self: center; flex: none; gap: 0; }
+.v4s-namebar .ex-ai-btn { height: 24px; padding: 0 10px; font-size: calc(12px * var(--fs, 1)); }
+.v4s-namebar .ex-ai-pop { top: 34px; left: auto; right: 0; width: min(400px, 100%); transform-origin: calc(100% - 16px) -8px; }
+.v4s-namebar .ex-ai-pop::before { left: auto; right: 18px; }
+/* 휴지통으로: 맨 아래 따로, 오른쪽 끝, 빨간 글자 (테두리 없음) */
+.v4s-foot { display: flex; justify-content: flex-end; padding-top: 14px; border-top: 1px solid var(--nc-line); }
+.v4s-foot .btn.danger, dialog.item-pop .v4s-foot .btn.ghost.danger { min-height: 0; border: 0; background: none; padding: 7px 0; color: var(--status-danger); }
+.v4s-foot .btn:hover { background: none; text-decoration: underline; }
 .v4s-attn.small { padding: 10px 10px 10px 14px; }
 
 /* ---------------------------------------------------------------- 개선하기: stepper and step card */

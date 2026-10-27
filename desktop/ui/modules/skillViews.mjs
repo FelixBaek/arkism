@@ -453,67 +453,81 @@ export function createSkillViews(deps) {
     card.append(t);
     return card;
   }
-  const skillTalk = new Map();
- // AI 설명 talks per skill, kept while the app is open
+  const skillTalk = new Map(); // AI talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
     const cat = deps.pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = deps.detailShell(cat);
     const top = deps.el("div", "v4s-head");
-    top.append(deps.raw(deps.el("h2", "v4s-name", sk.name)));
+    const titleRow = deps.el("div", "v4s-namebar");
+    titleRow.append(deps.raw(deps.el("h2", "v4s-name", sk.name)));
+    top.append(titleRow);
     if (sk.description) top.append(deps.raw(deps.el("p", "v4s-lead", sk.description)));
-    // AI 설명 (ai-chat.js): the same bubble as AI 제안; it only answers, nothing to apply.
-    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI 설명", title: "AI 설명",
-      greeting: "이 스킬의 무엇이 궁금하세요? 무엇을 하는지, 언제 쓰는지 쉬운 말로 알려 드려요.",
-      placeholder: "예: 내 작업에서는 언제 쓰면 돼?", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
+    // One AI button (ai-chat.js, Figma 1385:5245): it explains in the bubble, and its footer opens 개선하기 for a live skill.
+    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI", title: "AI", sub: sk.name,
+      greeting: "무엇이 궁금하세요?\n쉽게 설명하거나, 바로 고쳐 볼 수 있어요.",
+      placeholder: "궁금한 것을 물어보세요", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
+      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: () => openSkillPage({ kind: "improve", id: sk.id, step: 0 }) },
       ask: async (q, history) => ({ say: await deps.crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
+    titleRow.append(aiBtn);
     const c = skillChecks(sk), u = useOf(sk);
     const chips = deps.el("div", "v4s-chips");
     if (c) chips.append(deps.el("span", `v4s-pill${c.quality.cls === "ok" ? "" : " amber"}`, `품질 ${c.quality.grade}${c.quality.score === null ? "" : ` · ${c.quality.score}`}`), deps.el("span", `v4s-pill${c.security.cls === "ok" ? "" : " amber"}`, `보안 ${c.security.label}`));
     if (deps.state.data.skillUse) chips.append(deps.el("span", "v4s-pill muted", u ? `${u.count}번 사용 · ${deps.ago(u.last_used_at)}` : "최근 60일 안 씀"));
-    top.append(chips, aiBtn);
+    top.append(chips);
     const parts = [top];
+    if (c && ["warn", "bad"].includes(c.security.cls)) parts.push(securityCard(c));
     if (sk.status === "deprecated") {
       const card = deps.el("div", "v4s-attn small");
       const t = deps.el("div", "v4s-attn-text"); t.append(deps.el("strong", "", "휴지통에 있어요"), deps.el("p", "", "에이전트가 읽지 않아요. 되돌리면 바로 다시 받아요."));
       card.append(t, deps.button("되돌리기", "primary", null, () => restoreSkill(sk)));
       parts.push(card);
-    } else parts.push(skillAgentsSection(sk));
-    if (c && ["warn", "bad"].includes(c.security.cls)) parts.splice(1, 0, securityCard(c));
+    }
+    // Section order follows the user's layout (Figma 1281:76816): 언제 쓰나요, then 쓰는 에이전트.
     const when = skSection("언제 쓰나요");
     const whenRows = deps.el("div", ""); when.append(whenRows, deps.el("p", "meta", "불러오는 중…"));
     parts.push(when);
+    if (sk.status !== "deprecated") parts.push(skillAgentsSection(sk));
     const crewSec = deps.crew.skillExperts(sk);
     if (crewSec) parts.push(crewSec);
+    // 버전과 기록: source, version (+ its update action), place, history, and the folded checks/usage.
     const r = deps.repoOf(sk), ups = updatesOf(sk);
     const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
-    const src = skSection("출처와 업데이트");
+    const rec = skSection("버전과 기록");
+    rec.classList.add("v4s-rec");
     const version = sk.version ? `${ver(sk.version)}${ups.length ? ` → ${ver(ups[0].to)} 있음` : r ? (r.behind ? ` · 새 커밋 ${r.behind}개` : " · 최신") : ""}` : "";
-    src.append(skFacts([["출처", r ? (r.remote || r.repo) : "", "mono"], ["버전", version, "mono"], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"], ["업데이트", r ? `마지막 확인 ${deps.ago(r.checked_at)}` : ""]]));
-    parts.push(src);
-    const act = deps.el("div", "v4s-actions");
+    const verCell = deps.el("span", "v4s-ver");
+    if (version) verCell.append(deps.el("span", "mono", version));
+    const link = (label, onClick) => { const b = deps.el("button", "v4s-link", label); b.type = "button"; b.addEventListener("click", onClick); return b; };
+    let history = null;
     if (sk.status !== "deprecated") {
-      act.append(deps.button("AI로 개선", "", null, () => openSkillPage({ kind: "improve", id: sk.id, step: 0 })));
-      if (ups.length) act.append(deps.button("업데이트 받기", "", null, () => deps.updateSkills(ups)));
+      if (ups.length) verCell.append(deps.button("업데이트 받기", "small", null, () => deps.updateSkills(ups)));
       else if (r) {
         const checking = (deps.state.data.tools?.requests || []).some((q) => q.kind === "skill_check" && q.name === r.repo && q.status === "pending");
-        const b = deps.button(checking ? "확인 중…" : "업데이트 확인", "", null, () => deps.checkSkillRepo(r)); b.disabled = checking; act.append(b);
+        const b = deps.button(checking ? "확인 중…" : "업데이트 확인", "small", null, () => deps.checkSkillRepo(r)); b.disabled = checking; verCell.append(b);
       }
-      act.append(deps.button("휴지통으로", "ghost", null, () => deps.confirmBatch([sk], () => deps.trashSkills([sk]))));
-      parts.push(act);
-      const hist = deps.el("button", "v4s-history", `버전 이력${sk.version_history?.length ? ` ${sk.version_history.length}건` : ""} ›`); hist.type = "button";
-      hist.addEventListener("click", () => openSkillPage({ kind: "improve", id: sk.id, step: 2 }));
-      parts.push(hist);
+      const n = sk.version_history?.length || 0;
+      history = link(n ? `지난 버전 ${n}개 ›` : "지난 버전 보기 ›", () => openSkillPage({ kind: "improve", id: sk.id, step: 2 }));
     }
-    // 품질·보안 검사와 에이전트별 사용 기록은 접어 둔다.
-    const more = deps.el("details", "v4s-more");
-    more.append(deps.el("summary", "", "검사·사용 자세히"), deps.checksSection(sk));
+    if (r) verCell.append(deps.el("small", "meta", `마지막 확인 ${deps.ago(r.checked_at)}`));
+    // 품질·보안 검사와 에이전트별 사용 기록은 접어 두고, 검사·사용 줄을 누르면 연다.
+    const more = deps.el("div", "v4s-more");
+    more.hidden = true;
+    more.append(deps.checksSection(sk));
     if (u) { const s = deps.section("최근 60일 사용", `마지막 ${deps.ago(u.last_used_at)}`); s.append(deps.facts(Object.entries(u.by_runtime || {}).sort((a, b) => b[1] - a[1]).map(([rt, n]) => [deps.agentName(rt) || rt, `${n}번`]))); more.append(s); }
     const pcs = skSection("에이전트 PC 연결");
     const pcRow = deps.el("div", "v4s-chips");
     for (const [k, n] of deps.shownAgents()) { const t = deps.el("span", "v4s-pc"); t.append(deps.pcLink(k), n); pcRow.append(t); }
     pcs.append(pcRow, deps.pcLegend());
     more.append(pcs);
-    parts.push(more);
+    const checks = link("품질·보안 검사, 에이전트별 사용 기록 ›", () => { more.hidden = !more.hidden; checks.setAttribute("aria-expanded", String(!more.hidden)); });
+    checks.setAttribute("aria-expanded", "false");
+    rec.append(skFacts([["출처", r ? (r.remote || r.repo) : "", "mono"], ["버전", verCell.childNodes.length ? verCell : ""], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"], ["이력", history], ["검사·사용", checks]]), more);
+    parts.push(rec);
+    if (sk.status !== "deprecated") {
+      const foot = deps.el("div", "v4s-foot");
+      foot.append(deps.button("휴지통으로", "ghost danger", null, () => deps.confirmBatch([sk], () => deps.trashSkills([sk]))));
+      parts.push(foot);
+    }
     body.append(...parts);
     const g = deps.generation;
     const v = await deps.request(`/v1/skill_versions/${encodeURIComponent(sk.version_id)}?${deps.query()}`).catch(() => null);

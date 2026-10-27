@@ -2,9 +2,10 @@
 // 적용은 화면의 초안만 바꾸고, 저장은 각 화면의 저장 버튼이 해요. 화면들이 같은 모양·같은 동작을 쓰도록 여기 하나만 둔다.
 //   ArkismAIChat.button(opts) → 알약 + 말풍선 + 제안 목록
 //   ArkismAIChat.field(input, opts) → 칸 오른쪽 끝의 반짝이 아이콘; 누르면 대화 없이 그 칸의 글(비었으면 주변 맥락)로 바로 채우거나 다듬는다
-// opts: { label, title, sub, greeting, placeholder, quick, ask, state, onDrop } · field(): { title, preset, context, state, kit }
+// opts: { label, title, sub, greeting, placeholder, quick, ask, state, onDrop, footer } · field(): { title, preset, context, state, kit }
 //   ask(text, history) → { say, props: [{ label, from, to, apply, undo? }] }; apply가 false를 돌려주면 적용 안 한 것으로 둔다
 //   from이 null이면 비교 없이 제안 글만 보여 준다
+//   footer: { label, hint, onClick } → 말풍선 맨 아래 보라 줄 (예: 이 스킬 개선하기); 누르면 말풍선을 닫고 onClick
 //   state: 화면이 다시 그려져도 대화가 남게 화면이 들고 있는 빈 객체 (없으면 이 요소 안에만 남음)
 window.ArkismAIChat = (() => {
   "use strict";
@@ -150,6 +151,16 @@ window.ArkismAIChat = (() => {
       pop.append(head, log);
       if ((opts.quick || []).length) pop.append(quick);
       pop.append(row);
+      if (opts.footer) {
+        const f = opts.footer;
+        const foot = el("button", "ex-ai-foot");
+        foot.type = "button";
+        const txt = el("span", "");
+        txt.append(el("strong", "", f.label), ...(f.hint ? [el("small", "", f.hint)] : []));
+        foot.append(txt, el("span", "arrow", "→"));
+        foot.addEventListener("click", () => { toggle(false); f.onClick?.(); });
+        pop.append(foot);
+      }
       pop.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); toggle(false); } });
       requestAnimationFrame(() => {
         // Keep the bubble on screen: docked it opens upward, so it may reach the top edge; below a button, the bottom edge.

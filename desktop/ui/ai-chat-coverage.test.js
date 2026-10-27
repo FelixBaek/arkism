@@ -110,6 +110,27 @@ test("bubble: typing, Enter, IME, Escape, close, busy guard, errors and empty an
   assert.equal(elsewhere.defaultPrevented, true);
 });
 
+test("bubble footer: a purple row under the input closes the bubble and runs its action; no footer by default", async () => {
+  const st = {}, hits = [];
+  const root = AI.button({ state: st, ask: async () => ({ say: "네" }), footer: { label: "이 스킬 개선하기", hint: "새 버전을 만들어요", onClick: () => hits.push("improve") } });
+  mountIn(root);
+  root.querySelector(".ex-ai-btn").click(); await flush();
+  const foot = root.querySelector(".ex-ai-pop .ex-ai-foot");
+  assert.ok(foot.textContent.includes("이 스킬 개선하기") && foot.textContent.includes("새 버전을 만들어요") && foot.textContent.includes("→"));
+  foot.click();
+  assert.deepEqual(hits, ["improve"]);
+  assert.equal(st.open, false);
+  const bare = AI.button({ state: {}, ask: async () => ({}), footer: { label: "힌트 없음" } });
+  mountIn(bare);
+  bare.querySelector(".ex-ai-btn").click(); await flush();
+  assert.equal(bare.querySelector(".ex-ai-foot small"), null);
+  bare.querySelector(".ex-ai-foot").click(); // no onClick: just closes
+  const plain = AI.button({ state: {}, ask: async () => ({}) });
+  mountIn(plain);
+  plain.querySelector(".ex-ai-btn").click(); await flush();
+  assert.equal(plain.querySelector(".ex-ai-foot"), null);
+});
+
 test("docked button, a newer copy of the box, scroll to the list", async () => {
   const st = {};
   let scrolled = 0;
