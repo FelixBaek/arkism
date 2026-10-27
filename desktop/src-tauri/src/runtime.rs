@@ -36,16 +36,24 @@ struct Secrets {
     app: String,
     owner: String,
     worker: String,
+    /// The agents' own token (role `agent`); empty in settings files from before it existed.
+    #[serde(default)]
+    agent: String,
     // Persist intent before changing the database, so a crash can replay the
     // exact rotation instead of losing the only current credential.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending_owner: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending_worker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_agent: Option<String>,
     pg_port: u16,
     api_port: u16,
     /// Set once the owner and worker tokens are registered.
     registered: bool,
+    /// Set once the agent token is registered (older installs get it on their next start).
+    #[serde(default)]
+    agent_registered: bool,
     /// Encrypts the archived agent transcripts that memories point back to (32 bytes, hex).
     /// Added after the first release, so older settings files get one on the next start.
     #[serde(default)]
@@ -830,17 +838,21 @@ impl Runtime {
     }
 
     /// What the PC agent client (`arkism windows hook|mcp`) reads to talk to this Arkism instead
-    /// of a server: `agents.json` and the owner token beside it, both readable by this user only.
+    /// of a server: `agents.json` and the agent token beside it, both readable by this user only.
+    /// The owner token beside them is for the app's own jobs (`host_command`), never the agents.
     /// `server: None` hands the agents back to the server connection (mode "server").
     fn write_agent_connection(&self, server: Option<&str>, secrets: Option<&Secrets>, ssh: Option<(&str, Option<u16>, Option<&str>, &crate::ssh_identity::Pin)>) -> Result<(), String> {
         let token_file = self.data_dir().join("owner.token");
+        let agent_file = self.data_dir().join("agent.token");
         let conn = match (server, secrets) {
             (Some(url), Some(secrets)) => {
                 write_private(&token_file, secrets.owner.as_bytes()).map_err(|e| format!("local_agent_file: {e}"))?;
-                serde_json::json!({ "mode": "local", "url": url, "token_file": token_file })
+                write_private(&agent_file, secrets.agent.as_bytes()).map_err(|e| format!("local_agent_file: {e}"))?;
+                serde_json::json!({ "mode": "local", "url": url, "token_file": agent_file })
             }
             _ => {
                 let _ = fs::remove_file(&token_file);
+                let _ = fs::remove_file(&agent_file);
                 // The agents reach the server over the same SSH address the app connected with.
                 match ssh {
                     Some((host, port, key, pin)) => serde_json::json!({ "mode": "server", "ssh_host": host, "ssh_port": port, "ssh_key": key, "ssh_known_hosts": pin.file, "ssh_host_alias": pin.alias, "ssh_host_algorithms": pin.algorithms }),
@@ -1145,6 +1157,10 @@ impl Runtime {
                 secrets.archive_key = secret()?;
                 self.save(&secrets)?;
             }
+            if secrets.agent.is_empty() {
+                secrets.agent = secret()?;
+                self.save(&secrets)?;
+            }
             return Ok(secrets);
         }
         let secrets = Secrets {
@@ -1153,11 +1169,14 @@ impl Runtime {
             app: secret()?,
             owner: secret()?,
             worker: secret()?,
+            agent: secret()?,
             pending_owner: None,
             pending_worker: None,
+            pending_agent: None,
             pg_port: free_port(PG_PORT)?,
             api_port: free_port(API_PORT)?,
             registered: false,
+            agent_registered: false,
             archive_key: secret()?,
             embedder: String::new(),
             gateway_port: 0,
@@ -1256,16 +1275,24 @@ impl Runtime {
             .arg("--init-db")
             .env("MEMORY_STORE", "postgres")
             .env("MEMORY_DATABASE_URL", &init_url)), "local_schema_failed")?;
-        if !secrets.registered {
-            for (token, principal, role) in [(&secrets.owner, "management:owner", "human"), (&secrets.worker, "worker", "service")] {
-                run(quiet(Command::new(self.programs()?.join(exe("memory-principal")))
-                    .args(["--principal", principal, "--role", role])
-                    .args(SCOPE)
-                    .args(["--actions", "*"])
-                    .env("MEMORY_DATABASE_URL", &init_url)
-                    .env("MEMORY_PRINCIPAL_TOKEN", token)), "local_token_failed")?;
-            }
+        // The agent principal came after the first release: installs that already have the owner
+        // and worker register it alone.
+        let missing: &[ManagedPrincipal] = match (secrets.registered, secrets.agent_registered) {
+            (false, _) => &[ManagedPrincipal::Owner, ManagedPrincipal::Worker, ManagedPrincipal::Agent],
+            (true, false) => &[ManagedPrincipal::Agent],
+            (true, true) => &[],
+        };
+        for principal in missing {
+            run(quiet(Command::new(self.programs()?.join(exe("memory-principal")))
+                .args(["--principal", principal.id(), "--role", principal.role()])
+                .args(SCOPE)
+                .args(["--actions", "*"])
+                .env("MEMORY_DATABASE_URL", &init_url)
+                .env("MEMORY_PRINCIPAL_TOKEN", principal.current(secrets))), "local_token_failed")?;
+        }
+        if !missing.is_empty() {
             secrets.registered = true;
+            secrets.agent_registered = true;
             self.save(secrets)?;
         }
         self.rotate_managed_tokens(secrets, &init_url)?;
@@ -1274,7 +1301,7 @@ impl Runtime {
 
     fn rotate_managed_tokens(&self, secrets: &mut Secrets, init_url: &str) -> Result<(), String> {
         let program = self.programs()?.join(exe("memory-principal"));
-        for principal in [ManagedPrincipal::Owner, ManagedPrincipal::Worker] {
+        for principal in [ManagedPrincipal::Owner, ManagedPrincipal::Worker, ManagedPrincipal::Agent] {
             let mut status = |id: &str, token: &str| {
                 let mut cmd = Command::new(&program);
                 quiet(&mut cmd).args(["--token-status", "--principal", id])
@@ -1467,8 +1494,10 @@ impl Runtime {
             created: name.trim_start_matches("arkism-").to_string(),
             owner: secrets.owner.clone(),
             worker: secrets.worker.clone(),
+            agent: secrets.agent.clone(),
             pending_owner: secrets.pending_owner.clone(),
             pending_worker: secrets.pending_worker.clone(),
+            pending_agent: secrets.pending_agent.clone(),
             archive_key: secrets.archive_key.clone(),
             auto,
         };
@@ -1561,10 +1590,14 @@ impl Runtime {
         }
         secrets.owner = info.owner;
         secrets.worker = info.worker;
+        secrets.agent = info.agent;
         secrets.pending_owner = info.pending_owner;
         secrets.pending_worker = info.pending_worker;
+        secrets.pending_agent = info.pending_agent;
         secrets.archive_key = info.archive_key;
         secrets.registered = true;
+        // A backup from before the agent principal restores a database without it: made on this start.
+        secrets.agent_registered = !secrets.agent.is_empty();
         secrets.embedder.clear(); // the restored records are indexed again for this computer's embedder
         self.save(&secrets)?;
         let started = self.start_locked()?;
@@ -1585,7 +1618,7 @@ impl Runtime {
                 fs::remove_dir_all(&path).map_err(|e| format!("local_erase_failed: {e}"))?;
             }
         }
-        for name in ["runtime.json", "owner.token", "initdb.pw"] {
+        for name in ["runtime.json", "owner.token", "agent.token", "initdb.pw"] {
             let _ = fs::remove_file(self.data_dir().join(name));
         }
         if let Some(home) = &self.home {
@@ -1745,10 +1778,14 @@ struct BackupInfo {
     created: String,
     owner: String,
     worker: String,
+    #[serde(default)]
+    agent: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending_owner: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pending_worker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pending_agent: Option<String>,
     archive_key: String,
     /// Made by the daily automatic backup (only those are pruned).
     #[serde(default)]
@@ -1900,16 +1937,19 @@ fn free_port(preferred: u16) -> Result<u16, String> {
 }
 
 #[derive(Clone, Copy)]
-enum ManagedPrincipal { Owner, Worker }
+enum ManagedPrincipal { Owner, Worker, Agent }
 
 impl ManagedPrincipal {
-    fn id(self) -> &'static str { match self { Self::Owner => "management:owner", Self::Worker => "worker" } }
-    fn current(self, s: &Secrets) -> &str { match self { Self::Owner => &s.owner, Self::Worker => &s.worker } }
-    fn pending(self, s: &Secrets) -> Option<&str> { match self { Self::Owner => s.pending_owner.as_deref(), Self::Worker => s.pending_worker.as_deref() } }
-    fn stage(self, s: &mut Secrets, token: String) { match self { Self::Owner => s.pending_owner = Some(token), Self::Worker => s.pending_worker = Some(token) } }
+    fn id(self) -> &'static str { match self { Self::Owner => "management:owner", Self::Worker => "worker", Self::Agent => "agent" } }
+    /// The server role each token is issued with. The agents' token is never the owner's (human).
+    fn role(self) -> &'static str { match self { Self::Owner => "human", Self::Worker => "service", Self::Agent => "agent" } }
+    fn current(self, s: &Secrets) -> &str { match self { Self::Owner => &s.owner, Self::Worker => &s.worker, Self::Agent => &s.agent } }
+    fn pending(self, s: &Secrets) -> Option<&str> { match self { Self::Owner => s.pending_owner.as_deref(), Self::Worker => s.pending_worker.as_deref(), Self::Agent => s.pending_agent.as_deref() } }
+    fn stage(self, s: &mut Secrets, token: String) { match self { Self::Owner => s.pending_owner = Some(token), Self::Worker => s.pending_worker = Some(token), Self::Agent => s.pending_agent = Some(token) } }
     fn complete(self, s: &mut Secrets, token: String) { match self {
         Self::Owner => { s.owner = token; s.pending_owner = None; }
         Self::Worker => { s.worker = token; s.pending_worker = None; }
+        Self::Agent => { s.agent = token; s.pending_agent = None; }
     } }
 }
 
@@ -2760,6 +2800,44 @@ mod tests {
         assert!(rotate_managed_token(&mut persisted, ManagedPrincipal::Worker, &mut |_,_| panic!("unexpected status"), &|s| rt.save(s), &mut replay).unwrap());
         assert_eq!(rt.secrets().unwrap().worker, *database.borrow());
         assert!(rt.secrets().unwrap().pending_worker.is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn managed_principals_are_issued_with_their_own_roles() {
+        for (principal, id, role) in [(ManagedPrincipal::Owner, "management:owner", "human"), (ManagedPrincipal::Worker, "worker", "service"), (ManagedPrincipal::Agent, "agent", "agent")] {
+            assert_eq!((principal.id(), principal.role()), (id, role));
+        }
+    }
+
+    #[test]
+    fn agents_get_the_agent_token_not_the_owner_token() {
+        let dir = std::env::temp_dir().join(format!("arkism-agent-token-test-{}", secret().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        let rt = Runtime::new(None, dir.clone());
+        let secrets = rt.secrets().unwrap();
+        assert_ne!(secrets.agent, secrets.owner);
+        rt.write_agent_connection(Some("http://127.0.0.1:1"), Some(&secrets), None).unwrap();
+        let conn: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.join("agents.json")).unwrap()).unwrap();
+        let token_file = PathBuf::from(conn["token_file"].as_str().unwrap());
+        assert_eq!(token_file, dir.join("agent.token"));
+        assert_eq!(fs::read_to_string(&token_file).unwrap(), secrets.agent);
+        assert_eq!(fs::read_to_string(dir.join("owner.token")).unwrap(), secrets.owner, "the app's own jobs keep the owner token");
+        rt.write_agent_connection(None, None, None).unwrap();
+        assert!(!token_file.exists() && !dir.join("owner.token").exists());
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn settings_from_before_the_agent_principal_get_one_to_register() {
+        let dir = std::env::temp_dir().join(format!("arkism-agent-upgrade-test-{}", secret().unwrap()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("runtime.json"), br#"{"admin":"a","init":"i","app":"p","owner":"o","worker":"w","pg_port":1,"api_port":2,"registered":true,"archive_key":"k"}"#).unwrap();
+        let rt = Runtime::new(None, dir.clone());
+        let secrets = rt.secrets().unwrap();
+        assert_eq!(secrets.agent.len(), 64);
+        assert!(secrets.registered && !secrets.agent_registered, "the owner and worker stay registered; the agent is still to register");
+        assert_eq!(rt.secrets().unwrap().agent, secrets.agent, "the new token is saved before anything registers it");
         fs::remove_dir_all(dir).unwrap();
     }
 

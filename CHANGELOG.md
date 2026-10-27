@@ -5,6 +5,9 @@ source changes only; they do not claim that a signed installer is available.
 
 ## Unreleased
 
+- Give the agents of the built-in desktop Arkism their own `agent` token in
+  place of the owner token, so approvals, deletions and other owner-only calls
+  stay with the person; existing installs get it on their next start.
 - Name every memory-map point, keep line and label size steady when zoomed,
   show loading and error states, and read memories past the first page.
 - Hide the window buttons while a popup is open; fix expert creation and
