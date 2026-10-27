@@ -585,6 +585,18 @@
     },
     {
       "method": "post",
+      "path": "/v1/usage/sessions/archives",
+      "request": "SessionArchiveStatusInput",
+      "response": "SessionArchiveStatusOutput",
+      "summary": "Sessions: archive status",
+      "description": "Read-only. For up to 50 usage session ids (unique), whether the archived dialogue is still kept: state active | unsupported | expired | none, each archive header's observed_at, expires_at and last_used_at while active. No text. Unknown or deleted ids are listed in missing. Same permission as the session list (read:routing).",
+      "required_body": [
+        "scope",
+        "ids"
+      ]
+    },
+    {
+      "method": "post",
       "path": "/v1/usage/sessions/export",
       "request": "SessionExportInput",
       "response": "SessionExportOutput",

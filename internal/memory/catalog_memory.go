@@ -139,6 +139,9 @@ func (s *Service) memoryCatalogMetadata(ctx context.Context, token string, in Ca
 func filterMemoryCatalog(rows []Record, in CatalogQueryInput, candidates bool, usage map[string]int, tools *AgentTools, facets *CatalogFacets) []Record {
 	items := []Record{}
 	for _, row := range rows {
+		if len(in.IDs) > 0 && !slices.Contains(in.IDs, row.ID) {
+			continue
+		}
 		if !strings.Contains(strings.ToLower(row.Text+" "+row.Summary), strings.ToLower(in.Query)) || !memoryCatalogState(row, in, usage, tools) {
 			continue
 		}

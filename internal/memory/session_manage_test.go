@@ -81,6 +81,27 @@ func testSessionManage(t *testing.T, repo Repository) {
 		}
 	}
 
+	// 대화 저장: one call says which sessions still keep their dialogue and until when; no text.
+	st, err := f.svc.SessionArchiveStatuses(testCtx, f.human, SessionArchiveStatusInput{Scope: scopeA, IDs: []string{withArchive, without, ContentHash("missing")}})
+	if err != nil || len(st.Items) != 2 || len(st.Missing) != 1 || st.Items[0].State != "active" || len(st.Items[0].Archives) != 1 ||
+		st.Items[0].Archives[0].ExpiresAt == nil || st.Items[1].State != "none" || st.Authority != AuthorityDataOnly {
+		t.Fatalf("archive statuses: %+v %v", st, err)
+	}
+	for _, bad := range []SessionArchiveStatusInput{{Scope: scopeA}, {Scope: scopeA, IDs: []string{"x"}}, {Scope: scopeA, IDs: []string{withArchive, withArchive}}} {
+		if _, err := f.svc.SessionArchiveStatuses(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("accepted %+v: %v", bad, err)
+		}
+	}
+	if _, err := f.svc.SessionArchiveStatuses(testCtx, "", SessionArchiveStatusInput{Scope: scopeA, IDs: []string{withArchive}}); err == nil {
+		t.Fatal("anonymous read archive statuses")
+	}
+	if got := archiveSummaryState([]SessionTranscriptArchive{{State: "expired"}, {State: "active", Supported: false}}); got != "unsupported" {
+		t.Fatal(got)
+	}
+	if got := archiveSummaryState([]SessionTranscriptArchive{{State: "deleted"}}); got != "expired" {
+		t.Fatal(got)
+	}
+
 	// 내보내기: markdown and JSON carry the safe dialogue only.
 	md, err := f.svc.ExportSessions(testCtx, f.human, SessionExportInput{Scope: scopeA, IDs: []string{withArchive, without}, Format: "markdown", Transcript: true})
 	if err != nil || md.Sessions != 2 || md.Messages != 3 || !strings.HasSuffix(md.Filename, ".md") || !strings.Contains(md.Content, "### Assistant\n\n답변입니다") ||

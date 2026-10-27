@@ -96,6 +96,29 @@ func TestCatalogMemoryGlobalQueryPrivacyAndCursor(t *testing.T) {
 		t.Fatal("anonymous", e)
 	}
 }
+// ids names the records to read in one call (불러오기 shows recalled memories by text); denied and unknown ids are just absent.
+func TestCatalogMemoryIDsFilter(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Embedder = nil
+	seedCatalogMemories(t, f)
+	f.svc.Auth = &memoryListAuth{Authorizer: f.auth, deny: map[string]bool{"catalog-002": true}}
+	page, e := f.svc.QueryMemoryCatalog(testCtx, f.human, CatalogQueryInput{Scope: scopeA, IDs: []string{"catalog-150", "catalog-001", "catalog-002", "no-such"}, Limit: 100}, false)
+	if e != nil || page.Total != 2 || len(page.Items) != 2 || page.Items[0].ID != "catalog-150" || page.Items[1].ID != "catalog-001" || page.Items[0].Text != "Rare NEEDLE" {
+		t.Fatal(page, e)
+	}
+	many := make([]string, 101)
+	for i := range many {
+		many[i] = fmt.Sprintf("catalog-%03d", i)
+	}
+	for _, bad := range []CatalogQueryInput{{Scope: scopeA, IDs: many}, {Scope: scopeA, IDs: []string{"bad\nid"}}} {
+		if _, e = f.svc.QueryMemoryCatalog(testCtx, f.human, bad, false); !errors.Is(e, ErrInvalid) {
+			t.Fatal("accepted", len(bad.IDs), e)
+		}
+	}
+	if _, e = f.svc.QuerySkillCatalog(testCtx, f.human, CatalogQueryInput{Scope: scopeA, IDs: []string{"catalog-001"}}); !errors.Is(e, ErrInvalid) {
+		t.Fatal("skills accepted ids", e)
+	}
+}
 func TestCatalogWindowBindingCyclesAndCancellation(t *testing.T) {
 	in := CatalogQueryInput{Scope: scopeA, Limit: 1}
 	binding := catalogBinding(in, "fixture", "reader/human")
