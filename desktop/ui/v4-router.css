@@ -111,7 +111,15 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .ag-select { width: min(245px, 45%); flex: none; height: 38px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); }
 .ag-roles .mp-assist { width: min(245px, 45%); flex: none; height: 38px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); }
 .ag-roles .v4-role { padding: 8px 0; border-top: 0; gap: 8px; }
-/* right column */
+/* right column: wider on this tab, and its left border is a drag handle (pages.js agentsResizer); 60% keeps the list readable */
+.ag-resize { display: none; }
+.panel:has(.v4-set-agents) > .detail { width: clamp(360px, var(--ag-detail-w, 480px), 60%); }
+.panel:has(.v4-set-agents) > .ag-resize { display: block; flex: none; width: 8px; margin: 0 -4px; position: relative; z-index: 1; cursor: col-resize; touch-action: none; }
+.ag-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background .12s; }
+.ag-resize:hover::after, .ag-resize.on::after, .ag-resize:focus-visible::after { background: var(--nc-quiet); }
+.ag-resize:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.app.wide .panel > .ag-resize { display: none; }
+@media (max-width: 1180px) { .panel:has(.v4-set-agents) > .ag-resize { display: none; } } /* the column sits under the list there */
 .ag-detail-head { display: flex; align-items: center; gap: 10px; }
 .ag-detail-head .agent-tile { width: 22px; height: 22px; }
 .ag-detail-head > strong { flex: 1; font: 500 calc(16px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-text); }

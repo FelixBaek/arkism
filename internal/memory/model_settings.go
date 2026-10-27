@@ -433,8 +433,10 @@ func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(
 			p.Disabled = append([]string{}, p.Disabled...)
 			p.Extra = append([]string{}, p.Extra...)
 		}
+		// Store every expiry the read view shows: a stale pending request is never trimmed, so 100 of them
+		// (lost keys, unanswered model tests) would turn every new request into a conflict.
 		for i, q := range p.Requests {
-			if (q.Kind == "cli_update" || q.Kind == "models_refresh") && providerRequestExpired(q, now) {
+			if providerRequestExpired(q, now) {
 				p.Requests[i].Status = "expired"
 			}
 		}
@@ -737,8 +739,8 @@ func (s *Service) ProviderHandoff(ctx context.Context, token string, scope Scope
 		if q.Status != "pending" {
 			continue
 		}
-		// An expired refresh may already have a newer one queued; handing off both rereads twice.
-		if (q.Kind == "cli_update" || q.Kind == "models_refresh") && providerRequestExpired(q, now) {
+		// An expired request already reads as expired, and a refresh may have a newer one queued.
+		if providerRequestExpired(q, now) {
 			continue
 		}
 		if q.Kind == "key_remove" || q.Kind == "model_test" || q.Kind == "cli_update" || q.Kind == "models_refresh" {

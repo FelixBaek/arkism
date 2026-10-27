@@ -799,3 +799,30 @@ func TestProviderAssistModelSetReadAndClear(t *testing.T) {
 		t.Fatal("clear", r.Providers, err)
 	}
 }
+
+// Stale pending requests the read view already shows as expired (lost keys, unanswered model tests) must not fill the
+// queue: with 100 of them stored as pending, 목록 새로고침 answered revision_conflict and nothing was queued.
+func TestProviderModelsRefreshIsNotBlockedByStalePendingRequests(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.RefreshProviderModels(testCtx, f.human, ProviderModelsRefresh{Scope: scopeA}); err != nil {
+		t.Fatal(err)
+	}
+	stored := f.repo.store[colProviders][recKey(scopeA, providersID(scopeA))]
+	stale := time.Now().Add(-providerKeyTTL - time.Minute)
+	stored.Providers.Requests = nil
+	for i := range providerRequestsKept {
+		kind := []string{"model_test", "key_add", "key_test"}[i%3]
+		stored.Providers.Requests = append(stored.Providers.Requests, ProviderRequest{ID: ID(), Kind: kind, Provider: "openai", Model: "gpt-5", Status: "pending", RequestedAt: stale})
+	}
+	f.repo.store[colProviders][recKey(scopeA, stored.ID)] = stored
+	if page, _ := f.svc.ProviderHandoff(testCtx, f.runner(), scopeA); len(page.Items) != 0 {
+		t.Fatal("expired requests handed off", page)
+	}
+	r, err := f.svc.RefreshProviderModels(testCtx, f.human, ProviderModelsRefresh{Scope: scopeA})
+	if err != nil {
+		t.Fatal("stale pending requests blocked a refresh", err)
+	}
+	if last := r.Providers.Requests[len(r.Providers.Requests)-1]; last.Kind != "models_refresh" || last.Status != "pending" || len(r.Providers.Requests) != providerRequestsKept {
+		t.Fatal("refresh not queued", r.Providers.Requests)
+	}
+}

@@ -185,7 +185,17 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.match(text(app.$(".ag-link")), /훅연결 안 됨|훅 ?연결 안 됨/);
   // what the old ROUTER › 모델 설정 tab held lives here now: account names, typed-in models, providers with no agent
   assert.ok(app.$$(".ag-account button").some((x) => /이름 고치기$/.test(x.getAttribute("aria-label") || "")));
-  assert.ok(app.$$(".v4-side button").some((x) => text(x) === "모델 추가"));
+  assert.ok(app.$$(".v4-side button").some((x) => text(x) === "목록 새로고침"));
+  assert.ok(!app.$$(".v4-side button").some((x) => text(x) === "모델 추가"));
+  // the right column is wider here and its border resizes it: arrows step it, the width is kept per viewer
+  const grip = app.$(".panel > .ag-resize");
+  assert.equal(grip.getAttribute("role"), "separator");
+  assert.equal(grip.getAttribute("aria-valuenow"), "480");
+  grip.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+  assert.equal(grip.getAttribute("aria-valuenow"), "496");
+  assert.equal(window.localStorage.getItem("arkism.agentsDetailWidth"), "496");
+  grip.dispatchEvent(new window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  assert.equal(grip.getAttribute("aria-valuenow"), "360");
   assert.match(rowSub("DeepSeek"), /^키 1 · 모델 \d+개 켜짐$/);
   app.$$(".ag-row-main").find((b) => text(b).startsWith("DeepSeek")).click(); await app.settle();
   assert.match(text(app.$(".v4-side")), /직접 추가한 제공자는 키로만 연결해요.*API 키.*모델/);
