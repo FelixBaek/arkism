@@ -1,7 +1,7 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
 window.ArkismPages = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist } = ctx;
+  const { state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus } = ctx;
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";
@@ -304,6 +304,8 @@ window.ArkismPages = (ctx) => {
     // Arkism's own MCP server on for this agent = its memory and skill tools are linked.
     const arkismOn = (id) => servers.some((x) => x.name === "arkism" && x.agents?.[id] === "on");
     const mcpOn = (id) => servers.some((x) => x.agents?.[id] === "on");
+    // The PC side's last hook or skill call for this agent (tools.pc_links) stands in for "its hooks are installed".
+    const hook = (id) => pcStatus((tools?.pc_links || []).find((l) => l.agent === id));
     const skillCount = (a) => (a.skills === null || a.skills === undefined ? state.data.skills.filter((sk) => allowed(sk, a.id)).length : a.skills);
 
     const list = el("section", "ag-list");
@@ -320,7 +322,7 @@ window.ArkismPages = (ctx) => {
       if (!e.api && src) top.append(...models.cliBadge(src));
       if (pendingAgent(a.id)) top.append(el("span", "tag warn", "적용 대기"));
       if (a.custom) top.append(el("span", "tag", "직접 추가"));
-      const sub = [arkismOn(a.id) ? "기억 연결됨" : "", `스킬 ${skillCount(a)}`, mcpOn(a.id) ? "MCP" : ""].filter(Boolean).join(" · ");
+      const sub = [arkismOn(a.id) ? "기억" : "", `스킬 ${skillCount(a)}`, hook(a.id)[0] === "off" ? "" : "훅", mcpOn(a.id) ? "MCP" : ""].filter(Boolean).join(" · ");
       info.append(top, el("small", "", sub));
       info.addEventListener("click", () => { selAgent = e.key; render(false); });
       const go = el("button", "icon-btn plain ag-chev");
@@ -384,11 +386,11 @@ window.ArkismPages = (ctx) => {
     if (foundBar) shared.append(foundBar);
     out.push(shared);
 
-    if (cur) toSide(...agentDetail(cur, { isOn, toggle, arkismOn, tools }));
+    if (cur) toSide(...agentDetail(cur, { isOn, toggle, arkismOn, hook, tools }));
     return out;
   }
   // The right column for the chosen row: who it is, its accounts or keys, its models, and how it is linked to Arkism.
-  function agentDetail(e, { isOn, toggle, arkismOn, tools }) {
+  function agentDetail(e, { isOn, toggle, arkismOn, hook, tools }) {
     const { a, src } = e;
     const head = el("div", "ag-detail-head");
     head.append(logoOf(a), el("strong", "", e.api ? `${a.name} API` : a.name));
@@ -405,7 +407,9 @@ window.ArkismPages = (ctx) => {
     link.append(el("strong", "", "Arkism 연결"));
     const age = tools?.collected_at ? Math.round((Date.now() - new Date(tools.collected_at).getTime()) / 60000) : null;
     const dot = (ok, text) => { const s = el("span", `ag-state${ok ? " ok" : ""}`); s.append(el("i"), el("span", "", text)); return s; };
-    link.append(kvRow("MCP", dot(arkismOn(a.id), arkismOn(a.id) ? "연결됨 · 기억·스킬 도구" : "연결 안 됨")),
+    const [hookCls, hookText] = hook(a.id);
+    link.append(kvRow("훅", dot(hookCls === "ok", hookCls === "ok" ? "연결됨 · 대화 저장·기억 넣기" : hookText)),
+      kvRow("MCP", dot(arkismOn(a.id), arkismOn(a.id) ? "연결됨 · 기억·스킬 도구" : "연결 안 됨")),
       kvRow("대화 수집", isOn(a) ? `켜짐${age == null ? "" : ` · 마지막 ${age < 1 ? "방금" : `${age}분 전`}`}` : "꺼짐"));
     const dirs = [...(a.skills_dirs || []).map((d) => kvRow("스킬", el("span", "mono", d))), ...(a.chats_dir ? [kvRow("대화", el("span", "mono", a.chats_dir))] : [])];
     if (dirs.length) link.append(el("strong", "ag-sub", "폴더"), ...dirs);
@@ -1070,7 +1074,7 @@ window.ArkismPages = (ctx) => {
         // The server keeps originals 7 days (SessionArchiveTTL), longer while memories use them; not a setting.
         line("대화 원문 보관", "원문은 7일 뒤 지워져요. 기억에 쓰인 원문은 쓸 때마다 7일 늘어나요.", el("output", "", "7일"))];
       for (const folder of current.exclude) {
-        rows.push(line(folder, "이 폴더와 그 안의 폴더", button("삭제", "", null, () => save({ ...current, exclude: current.exclude.filter((f) => f !== folder) }, "폴더를 다시 수집해요."))));
+        rows.push(line(folder, "", button("삭제", "", null, () => save({ ...current, exclude: current.exclude.filter((f) => f !== folder) }, "폴더를 다시 수집해요."))));
       }
       const input = el("input"); input.placeholder = "C:\\work\\secret-repo"; input.setAttribute("aria-label", "뺄 폴더 경로");
       const add = button("제외 폴더 추가", "", null, () => {

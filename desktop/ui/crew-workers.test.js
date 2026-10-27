@@ -281,6 +281,9 @@ test("persona settings tab", async () => {
   const h = await boot({ view: "settings" });
   h.render(); await h.settle();
   assert.ok(document.querySelector("#table").children.length);
+  // Figma 198:6134: the persona list sits alone, with no 페르소나 title or hint above it
+  assert.ok(document.querySelector("#table .cat-head"));
+  assert.equal(document.querySelector("#table .pg-group h2"), null);
   await sweep(h, document.querySelector("#table"), 3);
   for (const d of h.dialogs()) await sweep(h, d);
   assert.deepEqual(clean(), []);

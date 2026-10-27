@@ -370,7 +370,7 @@ window.ArkismModels = (ctx) => {
     const f = el("input", "mp-model-filter");
     f.type = "search";
     f.value = filters[p.id] || "";
-    f.placeholder = all.length > 20 ? `모델 ${all.length}개에서 찾기` : "모델 이름";
+    f.placeholder = all.length > 20 ? `모델 ${all.length}개에서 찾기` : "모델 검색";
     f.setAttribute("aria-label", "모델 찾기");
     f.addEventListener("focus", () => { typing = p.id; });
     f.addEventListener("blur", (ev) => { if (ev.relatedTarget) typing = null; });
