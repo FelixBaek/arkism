@@ -483,7 +483,8 @@ window.ArkismDigests = (ctx) => {
     }
     if (p.action === "merge" && cand) {
       const after = ctx.section("합친 뒤");
-      after.append(diffBox([...targets.map((t) => ({ op: "-", text: t.text })), { op: "+", text: edit.hidden ? cand.text : edit.value || cand.text }]));
+      after.append(wordDiff(targets.map((t) => t.text).join("\n"), edit.hidden ? cand.text : edit.value || cand.text),
+        el("p", "meta", "기존 기억에서 빠지는 말은 빨간 취소선, 새로 들어오는 말은 초록으로 보여요."));
       body.append(after);
     }
     const how = ctx.section("이렇게 하면");
@@ -491,6 +492,12 @@ window.ArkismDigests = (ctx) => {
       ["무시", "제안만 닫혀요 · 후보는 새로 저장 목록에 그대로 남아요"]]));
     body.append(how);
     if (v?.notice) body.append(raw(el("p", "meta", v.notice)));
+  }
+  // existing memory → candidate, word by word (text-diff.js); the texts are data, drawn as plain text
+  function wordDiff(before, after) {
+    const box = raw(el("p", "dg-diff dg-words"));
+    for (const [op, t] of window.ArkismTextDiff(before, after)) box.append(op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t));
+    return box;
   }
   function mergeQuote(text, foot) {
     const q = el("div", "quote dg-quote");

@@ -4472,6 +4472,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "이미 있는 기억": "Existing memory",
   "대상 기억": "Target memory",
   "합친 뒤": "After merging",
+  "기존 기억에서 빠지는 말은 빨간 취소선, 새로 들어오는 말은 초록으로 보여요.": "Words dropped from the existing memory are struck through in red; words the new content adds are green.",
   "이렇게 하면": "What happens",
   "대상 기억은 이력으로 남고, 새 내용이 그 자리를 대신해요": "The target stays in history and the new text takes its place",
   "새 내용을 기억으로 저장해요": "Saves the new text as a memory",

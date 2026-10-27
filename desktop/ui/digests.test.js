@@ -32,6 +32,7 @@ function setup(opts = {}) {
   const { document } = dom.install();
   delete require.cache[require.resolve("./digests.js")];
   require("./digests.js");
+  require("./text-diff.js");
   const h = dom.helpers(document);
   for (const id of ["app", "controls", "chips", "stats", "table", "detail"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
   const f = fixtures();
@@ -52,7 +53,7 @@ function setup(opts = {}) {
       return { items: [f.uo1] };
     },
     "/v1/merge_proposals?": () => { if (opts.noMerge) throw new Error("not_found"); return { items: f.mp }; },
-    "/v1/merge_proposals/p1?": () => ({ proposal: { id: "p1" }, current: true, candidate: mem("k1", { text: "보는 후보" }), targets: [mem("m1")], notice: "서버 안내" }),
+    "/v1/merge_proposals/p1?": () => ({ proposal: { id: "p1" }, current: true, candidate: mem("k1", { text: "보는 후보" }), targets: [mem("m1", { text: "보는 기억" })], notice: "서버 안내" }),
     "/v1/merge_proposals/p2?": () => ({ proposal: { id: "p2" }, current: false }),
     "/v1/merge_proposals/p3?": () => { throw new Error("gone"); },
     "/v1/memories/m4?": () => mem("m4"),
@@ -347,6 +348,12 @@ test("병합 제안 lists AI proposals and accepts, edits or dismisses them", as
   assert.match(d, /서버 안내/);
   assert.match(d, /“보는 후보”/);
   assert.match(d, /합친 뒤/);
+  // existing memory vs candidate, word by word: the shared word stays plain, the rest is marked
+  const words = t.h.$("#detail .dg-words");
+  assert.equal(words.getAttribute("data-no-i18n"), "");
+  assert.deepEqual([...words.querySelectorAll("del")].map((n) => n.textContent), ["기억"]);
+  assert.deepEqual([...words.querySelectorAll("ins")].map((n) => n.textContent), ["후보"]);
+  assert.equal(words.textContent, "보는 기억후보");
   btn(t.h.$("#detail"), "열기").click();
   assert.equal(t.opened[0].id, "m1");
   btn(t.h.$("#detail"), "고쳐서 수락").click();
