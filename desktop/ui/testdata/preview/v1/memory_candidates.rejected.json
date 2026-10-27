@@ -1,0 +1,5 @@
+{"authority": "data_only_untrusted", "items": [
+ {"id": "r1", "kind": "lesson", "status": "rejected", "text": "테스트는 가끔 실패해도 괜찮다.", "created_at": "2098-12-30T09:00:00Z", "tags": ["event_id:codex:session_01JX8K2M4QWERTY"], "review": {"action": "reject", "reason": "한 번 있었던 일이라 규칙이 아님"}},
+ {"id": "r2", "kind": "fact", "status": "rejected", "text": "오늘 점심은 김밥이었다.", "created_at": "2098-12-30T11:00:00Z", "tags": ["event_id:claude_code:session_01JX8K2M5QWERTY"], "review": {"action": "reject", "reason": "작업과 관계없음"}},
+ {"id": "r3", "kind": "decision", "status": "rejected", "text": "배포는 금요일에 한다.", "created_at": "2098-12-31T09:00:00Z", "tags": [], "review": {"action": "reject", "reason": "한 번 있었던 일이라 규칙이 아님"}}
+]}

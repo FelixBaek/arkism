@@ -239,6 +239,15 @@
 .ov-recall { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
 .ov-recall-head { display: flex; justify-content: space-between; gap: 8px; } .ov-recall-head span { color: var(--text-2); font-size: 12px; }
 .ov-recall-row { display: flex; align-items: center; gap: 8px; } .ov-recall-row b { flex: none; width: 36px; font-variant-numeric: tabular-nums; font-weight: 500; } .ov-recall-row .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ov-recall-row small.ov-recall-why { flex: none; color: var(--text-2); font-size: 11.5px; white-space: nowrap; }
+.ov-recall-more { color: var(--text-2); font-size: 12px; } .ov-recall-more summary { cursor: pointer; width: fit-content; } .ov-recall-more p { margin: 2px 0 0; font-variant-numeric: tabular-nums; }
+/* 분석 · 대화 저장 summaries */
+.ov-sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.ov-sum { display: flex; flex-direction: column; gap: 10px; } .ov-sum .ov-win-chart-title { margin-bottom: 0; }
+.ov-sum-line { margin: 0; font-size: 13px; color: var(--text-1); }
+.ov-sum .ov-detail-bars { display: flex; flex-direction: column; gap: 10px; } .ov-sum .ov-detail-bar p { font-size: 13px; margin-bottom: 4px; }
+.ov-sum-cells { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
+.ov-sum-why { display: flex; flex-direction: column; gap: 4px; font-size: 13px; } .ov-sum-why small { color: var(--text-2); font-size: 12px; } .ov-sum-why p { display: flex; justify-content: space-between; gap: 8px; margin: 0; } .ov-sum-why span { color: var(--text-2); }
 .ov-lane { padding: 0 7px; border-radius: 6px; background: rgba(100,140,255,.16); color: var(--ov-blue); font-size: 11px; }
 .ov-kinds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12.5px; color: var(--text-2); }
 .ov-detail-quote small { display: block; margin-top: 6px; color: var(--text-2); font-size: 12.5px; }
