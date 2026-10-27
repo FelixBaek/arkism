@@ -108,7 +108,7 @@ func nextArchiveMetadata(r *bufio.Reader) (record any, done bool, err error) {
 	structured := len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
 	if len(line) > archiveMetadataRecordBytes {
 		if structured {
-			return nil, false, errArchiveInspectionLimit
+			return nil, false, valueErr("archive_metadata_inspection_limit")
 		}
 		if err := skipArchiveUnstructuredLine(r, line); err != nil {
 			return nil, false, err
@@ -166,14 +166,14 @@ func (p *archivePolicy) addPath(value any, file bool) error {
 	}
 	p.paths[s] = struct{}{}
 	if len(p.paths) > archiveMetadataPaths {
-		return errArchiveInspectionLimit
+		return valueErr("archive_metadata_inspection_limit")
 	}
 	return nil
 }
 
 func (p *archivePolicy) walk(value any, depth int) error {
 	if depth > archiveMetadataDepth {
-		return errArchiveInspectionLimit
+		return valueErr("archive_metadata_inspection_limit")
 	}
 	switch v := value.(type) {
 	case map[string]any:
@@ -212,7 +212,7 @@ func (p *archivePolicy) walkJSONText(value string, depth int) error {
 		return nil
 	}
 	if len(text) > archiveMetadataRecordBytes {
-		return errArchiveInspectionLimit
+		return valueErr("archive_metadata_inspection_limit")
 	}
 	var child any
 	if json.Unmarshal([]byte(text), &child) == nil {
@@ -254,7 +254,7 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 			return nil, valueErr("archive_metadata_inspection_failed")
 		}
 		if len(record) >= archiveMetadataRecordBytes {
-			return nil, errArchiveInspectionLimit
+			return nil, valueErr("archive_metadata_inspection_limit")
 		}
 		line, readErr := readLine(r, archiveMetadataRecordBytes-len(record)+1)
 		if readErr != nil {
@@ -264,7 +264,7 @@ func readArchiveMetadataRecord(r *bufio.Reader, record []byte) (any, error) {
 			return nil, valueErr("archive_metadata_inspection_failed")
 		}
 		if len(record)+len(line)+1 > archiveMetadataRecordBytes {
-			return nil, errArchiveInspectionLimit
+			return nil, valueErr("archive_metadata_inspection_limit")
 		}
 		record = append(record, '\n')
 		record = append(record, line...)
