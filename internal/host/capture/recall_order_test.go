@@ -34,14 +34,14 @@ func TestStandingOrderUserThenOldestThenID(t *testing.T) {
 	}
 	want := []string{"2222000000000000000000000000000b", "ffff0000000000000000000000000000", "1111000000000000000000000000000a",
 		"0000ffff000000000000000000000000", "033b6394712964a139f82bfc9edd59e8", "a79d597c4af56e9d17534b150a09436c"}
-	if got := itemIDs(standingOrder(rows())); !reflect.DeepEqual(got, want) {
+	if got := itemIDs(standingOrder(rows(), "")); !reflect.DeepEqual(got, want) {
 		t.Fatal(got)
 	}
 	rev := rows()
 	for i, j := 0, len(rev)-1; i < j; i, j = i+1, j-1 {
 		rev[i], rev[j] = rev[j], rev[i]
 	}
-	if got := itemIDs(standingOrder(rev)); !reflect.DeepEqual(got, want) {
+	if got := itemIDs(standingOrder(rev, "")); !reflect.DeepEqual(got, want) {
 		t.Fatal("order depends on the input order", got)
 	}
 }
@@ -59,9 +59,9 @@ func TestSessionIndexCutsNewestRuleFirst(t *testing.T) {
 		}
 		return map[string]any{"items": []any{newer, old}}, nil // the server lists by id
 	}
-	limit := len([]rune(indexHeader)) + 1 + len([]rune(indexLine(pref, ""))) + 1 + len([]rune(indexLine(old, ""))) + 1
+	limit := len([]rune(indexHeader)) + 1 + len([]rune(indexLine(pref, ""))) + 1 + len([]rune(indexLine(old, ""))) + 1 + len([]rune(fmt.Sprintf(indexMoreLine, 999))) + 1
 	idx, err := sessionIndex("s1", "", limit)
-	if err != nil || !reflect.DeepEqual(idx.IDs, itemIDs([]map[string]any{pref, old})) || !strings.Contains(idx.Full, "자동 생성") {
+	if err != nil || !reflect.DeepEqual(idx.IDs, itemIDs([]map[string]any{pref, old})) || !strings.Contains(idx.Full, "자동 생성") || !strings.HasSuffix(idx.Full, fmt.Sprintf(indexMoreLine, 1)) {
 		t.Fatal(err, idx.IDs, idx.Full)
 	}
 	again, _ := sessionIndex("s2", "", limit)
@@ -146,7 +146,7 @@ func TestHookRecallAppliesSharedBudget(t *testing.T) {
 	if p, _, err := promptParts("관련 없는 질문을 하나 해 볼게요", "s1", ""); err != nil || p.Full != "" {
 		t.Fatal(err, p.Full)
 	}
-	if got := contractRelated("작업 계약 본문", ""); len(got) != 0 {
+	if got := recallRelated("작업 계약 본문", "", "SessionStart:contract"); len(got) != 0 {
 		t.Fatal(got)
 	}
 	var procedural []any
@@ -198,5 +198,98 @@ func TestSessionIndexContractBudgetAfterSkip(t *testing.T) {
 	idx, err := sessionIndexSkipping("s1", repo, 4000, map[string]bool{"d0": true, "d1": true})
 	if err != nil || !strings.Contains(idx.Full, "결정 2") {
 		t.Fatal(err, idx.Full)
+	}
+}
+
+// This repository's rules (project reach or repo tag) go first whatever their kind, the index stops
+// at the line budget, and a closing line counts what recall can still fetch.
+func TestSessionIndexRepoRulesFirstWithinLineBudget(t *testing.T) {
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "https://github.com/o/a.git"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatal(err, string(out))
+		}
+	}
+	t.Chdir(repo)
+	capFake(t)
+	t.Setenv("ARKISM_REPO", "o/a")
+	hookTranscript = ""
+	var general []any
+	for i := range 12 {
+		general = append(general, standingRow(fmt.Sprintf("%031x0", i), "procedural", "2026-09-24T10:00:00Z", fmt.Sprintf("일반 규칙 %d", i)))
+	}
+	mine := standingRow("aaaa0000000000000000000000000001", "procedural", "2026-10-20T00:00:00Z", "이 저장소 규칙")
+	mine["tags"] = []any{"repo:o/a"}
+	other := standingRow("bbbb0000000000000000000000000002", "procedural", "2026-10-20T00:00:00Z", "다른 저장소 규칙")
+	other["tags"] = []any{"repo:o/b"}
+	proj := standingRow("cccc0000000000000000000000000003", "procedural", "2026-10-21T00:00:00Z", "프로젝트 규칙")
+	proj["reach"] = "project"
+	pref := standingRow("dddd0000000000000000000000000004", "user", "2026-09-01T00:00:00Z", "보고는 짧게")
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		if strings.Contains(path, "kind=user") {
+			return map[string]any{"items": []any{pref}}, nil
+		}
+		return map[string]any{"items": append(append([]any{}, general...), other, mine, proj)}, nil
+	}
+	idx, err := sessionIndex("s1", repo, 4000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(idx.Full, "\n")[2:] // header and recall guide
+	if len(lines) != 11 || !strings.HasPrefix(lines[0], "- [procedural] 이 저장소 규칙") || !strings.HasPrefix(lines[1], "- [procedural, 이 프로젝트 전용") ||
+		!strings.HasPrefix(lines[2], "- [user] 보고는 짧게") || lines[10] != fmt.Sprintf(indexMoreLine, 5) || strings.Contains(idx.Full, "다른 저장소") {
+		t.Fatal(idx.Full)
+	}
+	if len(idx.IDs) != 10 || idx.IDs[0] != "aaaa0000000000000000000000000001" || idx.IDs[1] != "cccc0000000000000000000000000003" {
+		t.Fatal(idx.IDs)
+	}
+	t.Setenv("ARKISM_SESSION_INDEX_LINES", "3")
+	if short, _ := sessionIndex("s2", repo, 4000); len(short.IDs) != 3 || !strings.HasSuffix(short.Full, fmt.Sprintf(indexMoreLine, 12)) {
+		t.Fatal(short.Full)
+	}
+}
+
+// A resumed session's first typed question picks the related memories; without one (a new session
+// has no transcript yet) the task contract does, and with neither there is no related section.
+func TestSessionIndexFirstQuestionThenContract(t *testing.T) {
+	t.Chdir(t.TempDir())
+	capFake(t)
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	os.WriteFile(transcript, []byte(`{"type":"user","isMeta":true,"message":{"role":"user","content":"meta"}}`+"\n"+
+		`{"type":"user","message":{"role":"user","content":[{"type":"text","text":"회상 예산을 어떻게 정하나요"}]}}`+"\n"+
+		`{"type":"user","message":{"role":"user","content":"두 번째 질문"}}`+"\n"), 0o644)
+	hookTranscript = transcript
+	t.Cleanup(func() { hookTranscript = "" })
+	var queries []string
+	search = func(q string, _ string, _ int, _ float64) ([]any, bool, error) {
+		queries = append(queries, q)
+		hit := memoryHit("c8b788c964a0350e97d8635111de6824", 1, "")
+		hit["kind"], hit["text"] = "decision", "예산 규칙"
+		return []any{hit}, true, nil
+	}
+	capGet = func(string, time.Duration) (map[string]any, error) { return map[string]any{"items": []any{}}, nil }
+	idx, err := sessionIndex("s1", "", 4000)
+	if err != nil || !reflect.DeepEqual(queries, []string{"회상 예산을 어떻게 정하나요"}) || !strings.HasPrefix(idx.Full, questionHeader+"\n- [decision] 예산 규칙") {
+		t.Fatal(err, queries, idx.Full)
+	}
+	hookTranscript, queries = filepath.Join(t.TempDir(), "none.jsonl"), nil
+	if idx, err = sessionIndex("s2", "", 4000); err != nil || len(queries) != 0 || idx.Full != "" {
+		t.Fatal(err, queries, idx.Full)
+	}
+}
+
+// A zero line or char budget injects nothing and makes no server call.
+func TestSessionIndexBudgetZeroInjectsNothing(t *testing.T) {
+	capFake(t)
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		t.Fatal("fetched at budget 0", path)
+		return nil, nil
+	}
+	for _, env := range [][2]string{{"ARKISM_SESSION_INDEX_LINES", "0"}, {"ARKISM_SESSION_INDEX_CHARS", "0"}} {
+		t.Setenv("ARKISM_SESSION_INDEX_LINES", "10")
+		t.Setenv(env[0], env[1])
+		if idx, err := sessionIndex("s", "", 4000); err != nil || idx.Full != "" || idx.Meta != "" || len(idx.IDs) != 0 {
+			t.Fatal(env, err, idx)
+		}
 	}
 }

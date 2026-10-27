@@ -165,6 +165,9 @@ func TestStableLedgerCommitsOnlySuccessfulFinalOutput(t *testing.T) {
 			t.Setenv("ARKISM_AGENT", "")
 			oldLimit := sessionMaxChars
 			t.Cleanup(func() { sessionMaxChars = oldLimit })
+			// the meta and stub forms need an index far past the 10-line default
+			t.Setenv("ARKISM_SESSION_INDEX_LINES", "1000")
+			t.Setenv("ARKISM_SESSION_INDEX_CHARS", "100000")
 			*standing = []any{}
 			switch mode {
 			case "meta":
