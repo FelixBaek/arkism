@@ -6275,7 +6275,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기억이 실제로 답에 도움이 됐는지 봐요": "See whether memories actually helped answers", "답에 쓰임": "Used in answers", "이 조건에 맞는 기억이 없어요.": "No memories match.",
   "최근 불러온 기록 없음": "Not recalled recently", "답에 넣은 횟수": "Times included", "답에 쓰였다고 남긴 횟수": "Times reported used", "답 내용과 겹침 (추정)": "Overlaps the answer (estimate)",
   "그전 주 평균": "Earlier weekly average", "넣었는데 답에 안 쓰였어요": "Included but not used",
-  "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 검증에서 정리해 보세요.": "It may be outdated or too broad. Edit it, or tidy it up in Check.", "왼쪽에서 기억을 고르면 자세히 보여요.": "Pick a memory on the left to see details."
+  "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 쓰임 확인에서 정리해 보세요.": "It may be outdated or too broad. Edit it, or tidy it up in Use check.", "왼쪽에서 기억을 고르면 자세히 보여요.": "Pick a memory on the left to see details."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "· {0} 프로젝트": "· project {0}", "{0}에서 기억 {1}개를 받았어요": "{0} received {1} memories", "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
