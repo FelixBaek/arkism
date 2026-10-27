@@ -44,6 +44,7 @@ var (
 	usageRoots      = usageSessionRoots
 	usageSleep      = time.Sleep
 	usageKST        = time.FixedZone("KST", 9*3600)
+	usageSettings   = readCaptureSettings
 )
 
 type usageTok struct{ Input, Output, CacheRead, CacheWrite, Requests int64 }
@@ -94,6 +95,7 @@ type usagePair struct {
 // and per-file results are kept in the JSON cache.
 type usageSession struct {
 	Agent, Device, Sid, Title, Project string
+	Folder, File                       string // the working folder and the log file, for the copyable resume command
 	Days                               []usageDay
 	Stamps                             []int64 // microseconds
 	Tools, Skills                      []usagePair
@@ -155,6 +157,12 @@ func (s *usageSession) merge(o *usageSession) {
 	}
 	if s.Project == "" {
 		s.Project = o.Project
+	}
+	if s.Folder == "" {
+		s.Folder = o.Folder
+	}
+	if s.File == "" {
+		s.File = o.File
 	}
 	s.Stamps = append(s.Stamps, o.Stamps...)
 	s.Messages += o.Messages
@@ -225,7 +233,7 @@ func usageActive(stamps []int64) int64 {
 }
 
 // row is the session's count-only report, or nil when nobody answered (nothing to count).
-func (s *usageSession) row() host.Obj {
+func (s *usageSession) row(settings captureSettings) host.Obj {
 	counted := false
 	for _, d := range s.Days {
 		for _, m := range d.Models {
@@ -266,12 +274,20 @@ func (s *usageSession) row() host.Obj {
 		}
 		return o
 	}
-	return host.Obj{{Key: "agent", Value: s.Agent}, {Key: "device", Value: s.Device}, {Key: "session_id", Value: s.Sid},
+	row := host.Obj{{Key: "agent", Value: s.Agent}, {Key: "device", Value: s.Device}, {Key: "session_id", Value: s.Sid},
 		{Key: "title", Value: head(s.Title, 300)}, {Key: "project", Value: head(s.Project, 200)},
 		{Key: "started_at", Value: isoformat(time.UnixMicro(stamps[0]).UTC())},
 		{Key: "ended_at", Value: isoformat(time.UnixMicro(stamps[len(stamps)-1]).UTC())},
 		{Key: "messages", Value: s.Messages}, {Key: "active_seconds", Value: usageActive(stamps)}, {Key: "days", Value: days},
 		{Key: "hours", Value: hours}, {Key: "tools", Value: pairs(s.Tools)}, {Key: "skills", Value: pairs(s.Skills)}}
+	// paths only for a folder capture still covers; a paused or excluded one keeps the counts alone
+	if s.Folder != "" && len(s.Folder) <= 1024 && !captureSkippedWithSettings(s.Folder, settings) {
+		row = append(row, host.KV{Key: "folder", Value: s.Folder})
+		if s.File != "" && len(s.File) <= 1024 {
+			row = append(row, host.KV{Key: "file", Value: s.File})
+		}
+	}
+	return row
 }
 
 var usageSep = regexp.MustCompile(`[/\\]`)
@@ -390,7 +406,7 @@ func (p *usageParser) claude(path string) error {
 		}
 		when := usageTS(d["timestamp"])
 		if truthy(d["cwd"]) && s.Project == "" {
-			s.Project = usageProject(sstr(d["cwd"]))
+			s.Project, s.Folder = usageProject(sstr(d["cwd"])), sstr(d["cwd"])
 		}
 		m := obj(d["message"])
 		if t == "user" {
@@ -464,7 +480,7 @@ func (p *usageParser) codex(path string) error {
 		if t == "session_meta" {
 			s = p.get(usageText(pl["id"], usageStem(path)))
 			if s.Project == "" {
-				s.Project = usageProject(sstr(pl["cwd"]))
+				s.Project, s.Folder = usageProject(sstr(pl["cwd"])), sstr(pl["cwd"])
 			}
 			return
 		}
@@ -532,7 +548,7 @@ func (p *usageParser) zcodeDB(path string) error {
 	err = eachRow(db, "SELECT id, title, directory FROM session WHERE time_archived IS NULL ORDER BY time_created", nil, func(_ []string, v []any) error {
 		s := p.get(str(v[0]))
 		s.Title = usageText(v[1], "")
-		s.Project = usageProject(sstr(v[2]))
+		s.Project, s.Folder = usageProject(sstr(v[2])), sstr(v[2])
 		sessions[str(v[0])] = s
 		return nil
 	})
@@ -606,7 +622,7 @@ func (p *usageParser) gemini(path string) error {
 		if truthy(d["sessionId"]) && d["type"] == nil {
 			s = p.get(str(d["sessionId"]))
 			if dirs, ok := d["directories"].([]any); ok && len(dirs) > 0 && s.Project == "" {
-				s.Project = usageProject(sstr(dirs[0]))
+				s.Project, s.Folder = usageProject(sstr(dirs[0])), sstr(dirs[0])
 			}
 			return
 		}
@@ -745,6 +761,11 @@ func usageLive(cache map[string]*usageFile) map[string]*usageFile {
 					continue
 				}
 				f.Sig = sig
+				for _, part := range f.Sessions {
+					if part.File == "" && r.origin != "zcode" && r.origin != "opencode" { // a shared database is no one session's file
+						part.File = path
+					}
+				}
 				hit = f
 			}
 			live[path] = hit
@@ -803,6 +824,7 @@ func usageCollect(state host.Obj, onlyChanged bool, cache map[string]*usageFile)
 		}
 	}
 	titles := usageCodexTitles()
+	settings := usageSettings()
 	var sent host.Obj
 	if v, ok := state.Get("sent"); ok {
 		sent, _ = v.(host.Obj)
@@ -814,7 +836,7 @@ func usageCollect(state host.Obj, onlyChanged bool, cache map[string]*usageFile)
 				s.Title = t
 			}
 		}
-		r := s.row()
+		r := s.row(settings)
 		if r == nil {
 			continue
 		}
@@ -946,7 +968,7 @@ func usageMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	// A JSON cache beside the state (the Python tool kept a pickle, files.pickle).
-	cachePath := filepath.Join(dir, "files.json")
+	cachePath := filepath.Join(dir, "files-v2.json") // v2 keeps each session's folder and file; the older cache is read again once
 	cache := map[string]*usageFile{}
 	if raw, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(raw, &cache) != nil {
 		cache = map[string]*usageFile{}

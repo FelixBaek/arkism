@@ -98,6 +98,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	routingRoutes(mux, s)
 	usageRoutes(mux, s)
 	sessionManageRoutes(mux, s)
+	usageSessionFindRoutes(mux, s)
 	registerKnowledgeRetrievalHTTP(mux, s)
 	sessionArchiveRoutes(mux, s)
 	workCheckpointRoutes(mux, s)

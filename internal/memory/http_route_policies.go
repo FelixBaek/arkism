@@ -266,6 +266,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/usage/sessions":                         {action: "write:routing_calls", scope: routeJSON, limit: 8 << 20},
 	"POST /v1/usage/sessions/delete":                  {action: "delete:usage_sessions", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/usage/sessions/export":                  {action: "read:routing", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/usage/sessions/handoff":                 {action: "read:routing", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/usage/sessions/search":                  {action: "read:routing", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/usage/sessions/transcript":              {action: "read:routing", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/wiki/jobs":                              {action: "write:wiki_pages", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/wiki/jobs/{id}/run":                     {action: "write:wiki_pages", scope: routeJSON, limit: 256 << 10},

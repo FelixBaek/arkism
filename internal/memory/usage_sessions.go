@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // 사용량 (magpie Usage 화면): the host collector reads every agent's session log,
@@ -56,6 +58,8 @@ type UsageSession struct {
 	SessionID     string                            `json:"session_id" bson:"session_id"`
 	Title         string                            `json:"title,omitempty" bson:"title,omitempty"`
 	Project       string                            `json:"project,omitempty" bson:"project,omitempty"`
+	Folder        string                            `json:"folder,omitempty" bson:"folder,omitempty"` // working folder as the agent reported it
+	File          string                            `json:"file,omitempty" bson:"file,omitempty"`     // the agent's own log file on that device
 	StartedAt     time.Time                         `json:"started_at" bson:"started_at"`
 	EndedAt       time.Time                         `json:"ended_at" bson:"ended_at"`
 	Messages      int                               `json:"messages" bson:"messages"`
@@ -78,7 +82,7 @@ var (
 
 func validUsageSession(u UsageSession) bool {
 	ok := usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
-		len(u.Title) <= 300 && len(u.Project) <= 200 && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
+		len(u.Title) <= 300 && len(u.Project) <= 200 && usagePath(u.Folder) && usagePath(u.File) && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
 		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
 		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
 	if !ok {
@@ -95,6 +99,11 @@ func validUsageSession(u UsageSession) bool {
 		}
 	}
 	return true
+}
+
+// usagePath is an optional absolute-looking path: no control characters, at most 1 KiB.
+func usagePath(p string) bool {
+	return len(p) <= 1024 && utf8.ValidString(p) && strings.IndexFunc(p, unicode.IsControl) < 0
 }
 
 func validUsageCounts(m map[string]int) bool {
@@ -564,7 +573,7 @@ func usageRoutes(mux routeRegistrar, s *Service) {
 			return
 		}
 		limit, _ := strconv.Atoi(v.Get("limit"))
-		out, e := s.UsageSessionListPage(r.Context(), bearer(r), scopeQuery(r), v.Get("range"), v.Get("source"), v.Get("q"), v.Get("sort"), v.Get("cursor"), limit)
+		out, e := s.usageSessionListPage(r.Context(), bearer(r), scopeQuery(r), v.Get("range"), v.Get("source"), v.Get("project"), v.Get("q"), v.Get("sort"), v.Get("cursor"), limit)
 		respond(w, usageSessionResponse(out), e)
 	})
 	mux.HandleFunc("POST /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
