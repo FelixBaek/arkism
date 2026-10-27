@@ -9,7 +9,7 @@
 
 **Memory, passed on.** Arkism is an open-source app that lets AI coding agents share memories and skills.
 
-Carry context between Claude Code, Codex and Gemini CLI without repeating the same explanations. Arkism collects what is worth keeping from your conversations and hands over memories that fit the current job. Manage memory, tools, model selection and team workflows in one place.
+Carry context between Claude Code, Codex and Gemini CLI. Arkism collects what is worth keeping from your conversations and hands over approved memories that match the current job. A test with real agents showed memories reaching the task, but no gain over a static instructions file yet ([report](evaluation/reuse-20261015/REPORT.ko.md), Korean). Manage memory, tools, model selection and team workflows in one place.
 
 > Arkism is still in testing and development. The product overview below and the [future roadmap](ROADMAP.md) describe different stages of the work.
 
@@ -21,7 +21,7 @@ Carry context between Claude Code, Codex and Gemini CLI without repeating the sa
 
 - **Shared memory.** Keep decisions, preferences and solutions with their sources.
 - **You decide what stays.** AI-generated notes are candidates. Agents use them after a person approves them.
-- **Shared skills.** Manage working methods with versions and history, and load them when needed.
+- **Shared skills.** Manage working methods with versions and history. Any connected agent can load them through MCP; installing them as skill folders covers Claude Code, Codex and ZCode only.
 - **Connected work.** Configure tasks and teams through model routing and Arkism's own workflow engine.
 
 Start on your own PC, without an Arkism account or Docker. Memory extraction uses your chosen model and agent login. Your model provider's terms and charges still apply.
@@ -73,7 +73,7 @@ The [roadmap](ROADMAP.md) describes the order of improvements and the conditions
 | **MEMORY** | Review candidates; search, edit, merge and delete memories; view and export sessions; check usage. |
 | **CREW** | Configure agents and teams, hold team meetings, and manage canvas workflows and automations. |
 | **ROUTER** | Register model providers and accounts, set routing rules and fallback order, and inspect call records. |
-| **TOOLS** | Manage skill versions and check records, connect MCP servers and plugins per agent, and manage knowledge sources. |
+| **TOOLS** | Manage skill versions and validation records, see the success or failure results agents report after using a skill (self-reported, not independently checked), connect MCP servers and plugins per agent, and manage knowledge sources. |
 
 Workflows run on Arkism's own Go engine. Team meetings and task execution are managed as separate flows.
 
