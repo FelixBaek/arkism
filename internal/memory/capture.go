@@ -276,6 +276,10 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 		item.Status, item.Reason = "candidate", "review_required:instruction_like"
 		return item, nil
 	}
+	if s.captureMergeGate(ctx, token, in, scope, cand) {
+		item.Status, item.Reason = "candidate", "merge_proposed"
+		return item, nil
+	}
 	// Authorship describes evidence, not consent to store the extracted wording.
 	item.Status, item.Reason = "candidate", "review_required"
 	return item, nil

@@ -247,7 +247,7 @@ func (s *Service) BuildMergePool(ctx context.Context, token string, in MergePool
 		} else if !errors.Is(err, ErrNotFound) {
 			return out, err
 		}
-		similar, degraded, err := s.similarMemories(ctx, token, d, in.Scope, r, in.K)
+		similar, _, _, degraded, err := s.similarMemories(ctx, token, d, in.Scope, r, in.K)
 		if err != nil {
 			return out, err
 		}
@@ -297,22 +297,24 @@ func appendMissing(list, values []string) []string {
 
 // similarMemories is search's lanes over approved memories for one candidate's
 // text, rechecked against the records and read with the caller's context permission.
-func (s *Service) similarMemories(ctx context.Context, token string, d Decision, scope Scope, cand Record, k int) ([]Record, []string, error) {
+// similarMemories returns the k approved memories closest to the candidate's
+// text, with the query vector and its space (empty when the text was not embedded).
+func (s *Service) similarMemories(ctx context.Context, token string, d Decision, scope Scope, cand Record, k int) ([]Record, []float64, string, []string, error) {
 	query := clipText(strings.TrimSpace(cand.Text), 1000)
 	sd, err := s.authorize(ctx, token, "search:"+colMemories, scope, "", query)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", nil, err
 	}
 	if sd.PrincipalID != d.PrincipalID {
-		return nil, nil, ErrDenied
+		return nil, nil, "", nil, ErrDenied
 	}
 	vec, space, degraded, err := s.mergeQueryVector(ctx, sd, scope, query)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, "", nil, err
 	}
 	lists, err := s.Repo.SearchCollection(ctx, colMemories, SearchInput{Scope: scope, Query: query, Limit: k * 3}, vec, space)
 	if err != nil {
-		return nil, nil, ErrUnavailable
+		return nil, nil, "", nil, ErrUnavailable
 	}
 	records := map[string]Record{}
 	for i, list := range lists {
@@ -330,10 +332,10 @@ func (s *Service) similarMemories(ctx context.Context, token string, d Decision,
 				if errors.Is(err, ErrDenied) || errors.Is(err, ErrSecretDetected) {
 					continue
 				}
-				return nil, nil, err
+				return nil, nil, "", nil, err
 			}
 			if allowed.PrincipalID != d.PrincipalID {
-				return nil, nil, ErrDenied
+				return nil, nil, "", nil, ErrDenied
 			}
 			records[r.ID] = r
 			why := h.Reasons
@@ -347,7 +349,7 @@ func (s *Service) similarMemories(ctx context.Context, token string, d Decision,
 	for _, h := range Fuse(lists, k) {
 		out = append(out, records[h.ID])
 	}
-	return out, degraded, nil
+	return out, vec, space, degraded, nil
 }
 
 // mergeQueryVector embeds the query when transfer is allowed; a failed
