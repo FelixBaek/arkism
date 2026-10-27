@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"slices"
@@ -100,6 +101,9 @@ type MeetingApproval struct {
 }
 
 type CrewMeeting struct {
+	RootID          string             `json:"root_id,omitempty"`
+	ParentID        string             `json:"parent_id,omitempty"`
+	ParentNodeID    string             `json:"parent_node_id,omitempty"`
 	Status          string             `json:"status"`
 	TeamID          string             `json:"team_id"`
 	TeamRevision    int64              `json:"team_revision"`
@@ -398,6 +402,12 @@ func (s *Service) ListCrewMeetings(ctx context.Context, token string, scope Scop
 		if m == nil || teamID != "" && m.TeamID != teamID {
 			continue
 		}
+		if err := s.authorizeLinkedMeetingSources(ctx, token, r, s.Repo); err != nil {
+			if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return CrewMeetingPage{}, err
+		}
 		out.Counts["all"]++
 		if terminalMeeting(m.Status) {
 			out.Counts["ended"]++
@@ -430,22 +440,22 @@ func (s *Service) GetCrewMeeting(ctx context.Context, token string, scope Scope,
 	if err != nil {
 		return Record{}, err
 	}
-	if r.CrewMeeting == nil {
-		return Record{}, ErrNotFound
+	if err := s.authorizeLinkedMeetingSources(ctx, token, r, s.Repo); err != nil {
+		return Record{}, err
 	}
 	return r, nil
 }
 
 // changeMeeting runs change on the stored meeting in one transaction and saves it.
-func (s *Service) changeMeeting(ctx context.Context, scope Scope, id string, d Decision, action string, change func(r *Record, m *CrewMeeting, now time.Time) error) (Record, error) {
+func (s *Service) changeMeeting(ctx context.Context, token string, scope Scope, id string, d Decision, action string, change func(r *Record, m *CrewMeeting, now time.Time) error) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		r, err := tx.Get(ctx, colCrewMeetings, scope, id)
 		if err != nil {
 			return err
 		}
-		if r.CrewMeeting == nil {
-			return ErrNotFound
+		if err := s.authorizeLinkedMeetingSources(ctx, token, r, tx); err != nil {
+			return err
 		}
 		m := *r.CrewMeeting
 		now := time.Now().UTC().Truncate(time.Millisecond)
@@ -502,7 +512,7 @@ func (s *Service) NoteCrewMeeting(ctx context.Context, token, id string, in Crew
 			by = in.By
 		}
 	}
-	return s.changeMeeting(ctx, in.Scope, id, d, "note", func(r *Record, m *CrewMeeting, now time.Time) error {
+	return s.changeMeeting(ctx, token, in.Scope, id, d, "note", func(r *Record, m *CrewMeeting, now time.Time) error {
 		if r.Revision != in.ExpectedRevision || terminalMeeting(m.Status) || m.Status == "stopping" {
 			return ErrConflict
 		}
@@ -521,7 +531,7 @@ func (s *Service) StopCrewMeeting(ctx context.Context, token, id string, in Crew
 	if err != nil {
 		return Record{}, err
 	}
-	return s.changeMeeting(ctx, in.Scope, id, d, "stop", func(r *Record, m *CrewMeeting, now time.Time) error {
+	return s.changeMeeting(ctx, token, in.Scope, id, d, "stop", func(r *Record, m *CrewMeeting, now time.Time) error {
 		switch m.Status {
 		case "pending", "waiting":
 			m.Status, m.EndedReason, m.Waiting, m.Speaking, m.LeaseUntil = "stopped", "human_stop", nil, "", nil
@@ -545,7 +555,7 @@ func (s *Service) DecideCrewMeeting(ctx context.Context, token, id string, in Cr
 	if err != nil {
 		return Record{}, err
 	}
-	return s.changeMeeting(ctx, in.Scope, id, d, "decide", func(r *Record, m *CrewMeeting, now time.Time) error {
+	return s.changeMeeting(ctx, token, in.Scope, id, d, "decide", func(r *Record, m *CrewMeeting, now time.Time) error {
 		if r.Revision != in.ExpectedRevision || m.Status != "waiting" || m.Waiting == nil || m.Waiting.Kind != "budget" {
 			return ErrConflict
 		}
@@ -628,7 +638,7 @@ func (s *Service) UpdateCrewMeeting(ctx context.Context, token, id string, in Cr
 	if err != nil {
 		return Record{}, err
 	}
-	return s.changeMeeting(ctx, in.Scope, id, d, "update", func(r *Record, m *CrewMeeting, now time.Time) error {
+	return s.changeMeeting(ctx, token, in.Scope, id, d, "update", func(r *Record, m *CrewMeeting, now time.Time) error {
 		old := *m
 		if r.Revision != in.ExpectedRevision || terminalMeeting(old.Status) {
 			return ErrConflict
@@ -637,6 +647,10 @@ func (s *Service) UpdateCrewMeeting(ctx context.Context, token, id string, in Cr
 			return ErrConflict
 		}
 		next := in.Meeting
+		// Linked snapshots are server-owned. The worker wire model is a projection.
+		if old.ParentID != "" {
+			next.TeamSnapshot = old.TeamSnapshot
+		}
 		if err := meetingUpdateKeeps(old, next); err != nil {
 			return err
 		}
@@ -645,6 +659,7 @@ func (s *Service) UpdateCrewMeeting(ctx context.Context, token, id string, in Cr
 		}
 		// What only people and the Discord bot write stays as stored.
 		next.Discord, next.BudgetApproved = old.Discord, old.BudgetApproved
+		next.RootID, next.ParentID, next.ParentNodeID = old.RootID, old.ParentID, old.ParentNodeID
 		if terminalMeeting(next.Status) {
 			next.LeaseUntil, next.Speaking = nil, ""
 			r.LeaseToken, r.LeaseUntil = "", time.Time{}
@@ -705,7 +720,7 @@ func (s *Service) UpdateMeetingDiscord(ctx context.Context, token, id string, in
 	if err != nil {
 		return Record{}, err
 	}
-	return s.changeMeeting(ctx, in.Scope, id, d, "discord", func(r *Record, m *CrewMeeting, now time.Time) error {
+	return s.changeMeeting(ctx, token, in.Scope, id, d, "discord", func(r *Record, m *CrewMeeting, now time.Time) error {
 		if r.Revision != in.ExpectedRevision {
 			return ErrConflict
 		}

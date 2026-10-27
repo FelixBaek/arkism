@@ -29,6 +29,9 @@ type progressEvent struct{ moment, text string }
 
 // progress queues a moment; saveLocked sends the queue once the change is stored.
 func (x *runExec) progress(moment, text string) {
+	if x.flow != nil { // FLOW outbound notices require an explicit approved effect node.
+		return
+	}
 	n := x.item.Crew.Notify
 	if n == nil || len(n.Channels) == 0 || x.run.State.Trigger == "test" { // 시험 실행 sends nothing outside
 		return

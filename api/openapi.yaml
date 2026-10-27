@@ -4913,7 +4913,46 @@
             }
           }}}
     },
-    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "swapped", "dismissed", "forgotten", "stale"]}}], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at; or a signal proposal : type rule_often_violated|lesson_often_failing, memory ref, reason low_pass_rate, evidence {samples, passed, pass_rate}). No memory text."},
+    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "accepted",
+                "swapped",
+                "dismissed",
+                "forgotten",
+                "stale"
+              ]
+            }
+          }
+        ], "responses": {"200": {"description": "items (records with a maintenance field: type duplicate|contradiction, keep and retire refs {collection memories, id, revision}, reason same_meaning|more_specific|newer_replaces_older, decision, decided_by, decided_at; or a signal proposal : type rule_often_violated|lesson_often_failing, memory ref, reason low_pass_rate, evidence {samples, passed, pass_rate}). No memory text."},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -5156,12 +5195,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -5267,12 +5317,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -5369,12 +5430,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -5481,12 +5553,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -5583,12 +5666,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -5740,12 +5834,23 @@
             }
           },
           "401": {
-            "description": "Missing bearer credentials",
+            "description": "Missing bearer credentials.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            },
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             }
           },
@@ -29428,6 +29533,2890 @@
         }
       }
     },
+    "/v1/flow/capabilities/{id}": {
+      "get": {
+        "operationId": "get_v1_flow_capabilities_id",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: definition execution capabilities",
+        "description": "Checks the referenced definition tree under current read grants. Unsupported saved options are reported rather than silently discarded; this read does not start work.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowCapabilities"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/crew/runs/{id}/result": {
+      "get": {
+        "operationId": "get_v1_crew_runs_id_result",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: saved result and delivery state",
+        "description": "Returns the saved run state, full result, child references and optional delivery status after rechecking current access to pinned source definitions. Waiting and cancellation requested are not completion. No model call or restart.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowResultView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/crew/runs/{id}/children": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_children",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: create or reuse one durable child",
+        "description": "Requires a live parent lease and exact running node attempt. Pins the invocation-time referenced definition, atomically stores child and parent link, and enforces lineage, depth, total-child and concurrency bounds. Same attempt and identical payload reuse the child; changed payload conflicts.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowChildCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowChildInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "node_id",
+                          "attempt",
+                          "kind",
+                          "crew_id",
+                          "input"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "attempt": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "workflow",
+                          "meeting"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/children/cancel": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_children_cancel",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: request descendant cancellation",
+        "description": "Requires the live parent lease. Marks nonterminal descendant workflows for cancellation and meetings for stopping; the returned references are not proof that descendants have terminated.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowChildrenCancelled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestFlowChildrenCancel"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "lease_token"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/attempts": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_attempts",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: reserve one model attempt",
+        "description": "Reserves the root budget before dispatch under current run/ancestor authority and a live lease. Same request identity never redispatches. Hard token/cost bounds fail closed when the adapter cannot provide enforceable bounds. Unknown attempts retain reservations and block retries.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowAttemptReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowAttemptInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "node_id",
+                          "attempt",
+                          "call_key",
+                          "model",
+                          "max_input_tokens",
+                          "max_output_tokens"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "attempt": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      "max_input_tokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "max_output_tokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/attempts/{attempt_id}/settle": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_attempts_attempt_id_settle",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: settle an attempt receipt",
+        "description": "Idempotently records measured, estimated or unknown usage for the reserved attempt without dispatch. Estimates and unknown usage remain separate from committed usage. A changed settlement receipt conflicts.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowAttemptReservation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowAttemptSettleInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "status",
+                          "input_tokens",
+                          "output_tokens",
+                          "usage_known",
+                          "estimated"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "succeeded",
+                          "failed",
+                          "unknown"
+                        ]
+                      },
+                      "input_tokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      },
+                      "output_tokens": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 1000000000
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/flow/improvements": {
+      "post": {
+        "operationId": "post_v1_flow_improvements",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: start a durable skill improvement",
+        "description": "Binds a terminal source run ID/revision, skill and request ID to the existing typed generation material and fixed trial bounds. The source run is context, not a substitute for independently grounded lessons. Same identity requires identical input. This request creates management state only; it neither generates nor approves a skill.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowImprovementView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestFlowImprovementStart"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "request_id",
+                      "source_run",
+                      "generation",
+                      "runtime",
+                      "trial_ends_at"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "get_v1_flow_improvements",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: list improvement references and states",
+        "description": "Checks current crew/skill/evidence read permissions. Filters scope and kind before pagination and omits generation material. Follow next_cursor even after an empty authorized page. Stages grant no authority.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowImprovementPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/flow/improvements/{id}": {
+      "get": {
+        "operationId": "get_v1_flow_improvements_id",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: read improvement state",
+        "description": "Returns the saved stages, canonical references and pending/receipt state under current source and skill permissions. Data only; no quality proof, approval, generation, trial or observation is inferred from a read.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowImprovementView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/flow/improvements/{id}/advance": {
+      "post": {
+        "operationId": "post_v1_flow_improvements_id_advance",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: advance one explicit improvement action",
+        "description": "Reserves action ID, request hash, actor and revision before calling the existing generation/comparison/approval/trial/apply/monitor service. Independent comparison and current permissions remain required. Agent/pipeline approval is forbidden. Observe/monitor require an existing authorized service policy; no policy is installed here. recover=true reconciles the same uncertain action with canonical receipts and never repeats generation or effects.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowImprovementView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowImprovementAdvance"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "expected_revision",
+                          "action_id",
+                          "action"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "expected_revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "generate",
+                          "compare",
+                          "approve",
+                          "trial",
+                          "observe",
+                          "apply",
+                          "monitor",
+                          "rollback"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/deliveries/{id}/recover": {
+      "post": {
+        "operationId": "post_v1_crew_deliveries_id_recover",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: explicitly recover uncertain delivery",
+        "description": "Human-only explicit confirmation for a failed or unknown Discord delivery. retry reopens delivery, ack_part records a confirmed message, redirect selects a new destination while preserving prior receipts in recovery history. Does not rerun the workflow. The sender still rechecks current connector permissions; no automatic retransmission of unknown effects.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowDeliveryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowDeliveryRecovery"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "expected_revision",
+                          "action",
+                          "confirmed"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "expected_revision": {
+                        "type": "integer",
+                        "minimum": 1
+                      },
+                      "action": {
+                        "type": "string",
+                        "enum": [
+                          "retry",
+                          "ack_part",
+                          "redirect"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean",
+                        "const": true
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/effects": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_effects",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: prepare an outbound notification for approval",
+        "description": "Executor-only preparation binds the current lease, pinned node attempt, adapter version, target and argument hashes, and human-visible preview. The first preparation durably pauses the run for explicit human approval; it does not send. Supported adapters are existing configured Telegram and Slack notification targets, not arbitrary URLs or tools. Jobs retain only hashes and state; the preview is stored on the waiting run. Changed arguments cannot reuse approval.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowEffectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowEffectInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "node_id",
+                          "attempt",
+                          "adapter",
+                          "target_hash",
+                          "args_hash",
+                          "preview"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "attempt": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      "adapter": {
+                        "type": "string",
+                        "enum": [
+                          "notify.telegram.v1",
+                          "notify.slack.v1"
+                        ]
+                      },
+                      "target_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "args_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "preview": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1900
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/effects/{effect_id}/claim": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_effects_effect_id_claim",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: claim one approved outbound dispatch",
+        "description": "Rechecks the current lease, run and pinned source permissions, exact approved preview, and external-transfer authority. Only the first atomic claim of an approved effect returns dispatch_allowed=true. Repeated claims never permit another send; a claimed or unknown effect must not be automatically replayed. This endpoint grants a dispatch receipt and does not itself contact the external adapter.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowEffectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowEffectClaimInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "effect_hash",
+                          "preview"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "effect_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "preview": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1900
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/crew/runs/{id}/effects/{effect_id}/settle": {
+      "post": {
+        "operationId": "post_v1_crew_runs_id_effects_effect_id_settle",
+        "tags": [
+          "Management"
+        ],
+        "summary": "FLOW: save an outbound dispatch receipt",
+        "description": "Stores a body-free receipt for the claiming executor. A succeeded receipt requires a 2xx HTTP status and SHA-256 response hash. An uncertain transport outcome remains unknown and cannot be upgraded or replayed automatically. Exact duplicate receipts are idempotent; changed receipts conflict. The preview must be omitted or empty. Cancellation does not erase accounting; current authorization and executor-lease checks still apply.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "effect_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseFlowEffectView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "allOf": [
+                      {
+                        "$ref": "#/components/schemas/WireRequestFlowEffectSettleInput"
+                      },
+                      {
+                        "required": [
+                          "scope",
+                          "lease_token",
+                          "effect_hash",
+                          "status",
+                          "http_status"
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "effect_hash": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "preview": {
+                        "type": "string",
+                        "const": ""
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "succeeded",
+                          "unknown"
+                        ]
+                      },
+                      "http_status": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 599
+                      },
+                      "response_hash": {
+                        "type": "string",
+                        "pattern": "^([a-f0-9]{64})?$"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/usage/sessions/handoff": {
       "post": {
         "operationId": "post_v1_usage_sessions_handoff",
@@ -34547,7 +37536,16 @@
               "payload_too_large",
               "digest_mismatch",
               "semantic_lane_unavailable",
-              "authentication_required"
+              "authentication_required",
+              "flow_depth_limit",
+              "flow_child_limit",
+              "flow_concurrency_limit",
+              "flow_budget_limit",
+              "flow_budget_unsupported",
+              "attempt_replay_blocked",
+              "flow_time_limit",
+              "flow_legacy_run",
+              "effect_outcome_unknown"
             ]
           }
         },
@@ -41186,6 +44184,16 @@
           "memory_signal": {
             "$ref": "#/components/schemas/WireResponseMemorySignal"
           },
+          "stale_mark": {
+            "$ref": "#/components/schemas/WireResponseStaleMark"
+          },
+          "proof_count": {
+            "type": "integer"
+          },
+          "last_confirmed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "run": {
             "$ref": "#/components/schemas/WireResponseRunDetails"
           },
@@ -41370,6 +44378,21 @@
           "crew_run": {
             "$ref": "#/components/schemas/WireResponseCrewRun"
           },
+          "delivery": {
+            "$ref": "#/components/schemas/WireResponseFlowDelivery"
+          },
+          "flow_effect": {
+            "$ref": "#/components/schemas/WireResponseFlowEffect"
+          },
+          "flow_attempt": {
+            "$ref": "#/components/schemas/WireResponseFlowAttempt"
+          },
+          "flow_budget": {
+            "$ref": "#/components/schemas/WireResponseFlowBudget"
+          },
+          "flow_improvement": {
+            "$ref": "#/components/schemas/WireResponseFlowImprovement"
+          },
           "crew_assist": {
             "$ref": "#/components/schemas/WireResponseCrewAssist"
           },
@@ -41387,6 +44410,9 @@
           },
           "routing_call": {
             "$ref": "#/components/schemas/WireResponseRoutingCall"
+          },
+          "skill_route": {
+            "$ref": "#/components/schemas/WireResponseSkillRoute"
           },
           "usage_session": {
             "$ref": "#/components/schemas/WireResponseUsageSession"
@@ -41432,22 +44458,6 @@
           },
           "reject_score": {
             "type": "number"
-          },
-          "stale_mark": {
-            "$ref": "#/components/schemas/WireResponseStaleMark"
-          },
-          "proof_count": {
-            "type": "integer"
-          },
-          "last_confirmed_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "skill_route": {
-            "$ref": "#/components/schemas/WireResponseSkillRoute"
-          },
-          "flow_delivery": {
-            "$ref": "#/components/schemas/WireResponseFlowDelivery"
           }
         },
         "additionalProperties": false,
@@ -45415,10 +48425,7 @@
             "type": "string"
           },
           "evidence_strategy": {
-            "type": "string",
-            "enum": [
-              "sources-and-gaps-v1"
-            ]
+            "type": "string"
           },
           "helper_origin": {
             "type": "string"
@@ -45430,7 +48437,9 @@
           "deep_alias",
           "evidence_strategy",
           "helper_origin"
-        ]
+        ],
+        "x-go-type": "memory.CrewResearch",
+        "x-go-source": "internal/memory/flow_research_policy.go"
       },
       "WireResponseFlowDelivery": {
         "type": "object",
@@ -45443,29 +48452,33 @@
             "type": "integer"
           },
           "origin": {
-            "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "waiting_run",
-              "pending",
-              "sending",
-              "retry_wait",
-              "unknown",
-              "failed",
-              "delivered"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
+          "status": {
+            "type": "string"
+          },
           "part": {
-            "type": "integer",
-            "minimum": 0
+            "type": "integer"
           },
           "message_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "result_hash": {
             "type": "string"
@@ -45476,6 +48489,12 @@
           "lease_until": {
             "type": "string",
             "format": "date-time"
+          },
+          "recovery_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseFlowDeliveryRecoveryReceipt"
+            }
           }
         },
         "required": [
@@ -45485,7 +48504,10 @@
           "status",
           "part",
           "message_ids"
-        ]
+        ],
+        "x-go-type": "memory.FlowDelivery",
+        "x-go-source": "internal/memory/flow_delivery.go",
+        "description": "Jobs contain references and receipts only. Result bodies stay in crew_runs."
       },
       "FlowDeliveryView": {
         "type": "object",
@@ -45763,6 +48785,9 @@
           },
           "research": {
             "$ref": "#/components/schemas/WireResponseCrewResearch"
+          },
+          "flow_policy": {
+            "$ref": "#/components/schemas/WireResponseFlowPolicy"
           }
         },
         "additionalProperties": false,
@@ -46291,23 +49316,55 @@
             "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
           },
           "invocation_mode": {
-            "type": "string",
-            "enum": [
-              "flow"
-            ]
+            "type": "string"
           },
           "definition": {
             "$ref": "#/components/schemas/WireResponseCrew"
           },
           "research_mode": {
-            "type": "string",
-            "enum": [
-              "auto",
-              "deep"
-            ]
+            "type": "string"
           },
           "cancel_requested": {
             "type": "boolean"
+          },
+          "result_revision": {
+            "type": "integer"
+          },
+          "effects": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "root_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "parent_node_id": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer"
+          },
+          "children": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseFlowChildRef"
+            }
+          },
+          "definitions": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseFlowDefinition"
+            }
+          },
+          "policy": {
+            "$ref": "#/components/schemas/WireResponseFlowPolicy"
           }
         },
         "additionalProperties": false,
@@ -46379,6 +49436,24 @@
           },
           "callback_hash": {
             "type": "string"
+          },
+          "effect_id": {
+            "type": "string"
+          },
+          "effect_hash": {
+            "type": "string"
+          },
+          "child_run_id": {
+            "type": "string"
+          },
+          "child_kind": {
+            "type": "string"
+          },
+          "decision_kind": {
+            "type": "string"
+          },
+          "child_revision": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -46585,6 +49660,15 @@
           "lease_until": {
             "type": "string",
             "format": "date-time"
+          },
+          "root_id": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string"
+          },
+          "parent_node_id": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -52678,6 +55762,1497 @@
         "x-go-type": "memory.SkillRoute",
         "x-go-source": "internal/memory/skill_route_log.go",
         "description": "SkillRoute is one route_skills decision as the router made it: skill ids,\nnames and the judge, never the query."
+      },
+      "WireResponseFlowPolicy": {
+        "type": "object",
+        "properties": {
+          "max_depth": {
+            "type": "integer"
+          },
+          "max_children": {
+            "type": "integer"
+          },
+          "max_concurrent": {
+            "type": "integer"
+          },
+          "max_tokens": {
+            "type": "integer"
+          },
+          "max_cost_usd": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "max_depth",
+          "max_children",
+          "max_concurrent"
+        ],
+        "x-go-type": "memory.FlowPolicy",
+        "x-go-source": "internal/memory/flow_common.go"
+      },
+      "WireResponseFlowChildRef": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "crew_id",
+          "node_id",
+          "attempt",
+          "required"
+        ],
+        "x-go-type": "memory.FlowChildRef",
+        "x-go-source": "internal/memory/flow_common.go"
+      },
+      "WireResponseFlowDefinition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "crew": {
+            "$ref": "#/components/schemas/WireResponseCrew"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "crew"
+        ],
+        "x-go-type": "memory.FlowDefinition",
+        "x-go-source": "internal/memory/flow_common.go"
+      },
+      "WireResponseFlowDeliveryRecoveryReceipt": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireResponseCrewRunOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "part": {
+            "type": "integer"
+          },
+          "message_ids": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmed_message_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action",
+          "by",
+          "at",
+          "status",
+          "origin",
+          "part",
+          "message_ids"
+        ],
+        "x-go-type": "memory.FlowDeliveryRecoveryReceipt",
+        "x-go-source": "internal/memory/flow_delivery_recovery.go"
+      },
+      "WireResponseFlowEffect": {
+        "type": "object",
+        "properties": {
+          "root_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "adapter": {
+            "type": "string"
+          },
+          "target_hash": {
+            "type": "string"
+          },
+          "args_hash": {
+            "type": "string"
+          },
+          "preview_hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "approved_by": {
+            "type": "string"
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/WireResponseFlowEffectReceipt"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root_id",
+          "run_id",
+          "node_id",
+          "attempt",
+          "adapter",
+          "target_hash",
+          "args_hash",
+          "preview_hash",
+          "status"
+        ],
+        "x-go-type": "memory.FlowEffect",
+        "x-go-source": "internal/memory/flow_effects.go",
+        "description": "FlowEffect is a body-free receipt. The human preview exists only on the\ncanonical run waiting for approval; targets, credentials and payloads do not."
+      },
+      "WireResponseFlowEffectReceipt": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "http_status": {
+            "type": "integer"
+          },
+          "response_hash": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "http_status"
+        ],
+        "x-go-type": "memory.FlowEffectReceipt",
+        "x-go-source": "internal/memory/flow_effects.go"
+      },
+      "WireResponseFlowAttempt": {
+        "type": "object",
+        "properties": {
+          "root_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "call_key": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "max_input_tokens": {
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "type": "integer"
+          },
+          "reserved_tokens": {
+            "type": "integer"
+          },
+          "reserved_cost_usd": {
+            "type": "number"
+          },
+          "cost_known": {
+            "type": "boolean"
+          },
+          "pricing_revision": {
+            "type": "string"
+          },
+          "settlement": {
+            "$ref": "#/components/schemas/WireResponseFlowAttemptUsage"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "root_id",
+          "run_id",
+          "node_id",
+          "attempt",
+          "call_key",
+          "model",
+          "status",
+          "max_input_tokens",
+          "max_output_tokens",
+          "reserved_tokens",
+          "reserved_cost_usd",
+          "cost_known"
+        ],
+        "x-go-type": "memory.FlowAttempt",
+        "x-go-source": "internal/memory/flow_attempts.go",
+        "description": "Attempts contain identity and accounting only, never prompts or outputs."
+      },
+      "WireResponseFlowAttemptUsage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer"
+          },
+          "output_tokens": {
+            "type": "integer"
+          },
+          "usage_known": {
+            "type": "boolean"
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "cost_usd": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "input_tokens",
+          "output_tokens",
+          "usage_known",
+          "estimated"
+        ],
+        "x-go-type": "memory.FlowAttemptUsage",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireResponseFlowBudget": {
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "type": "integer"
+          },
+          "reserved_tokens": {
+            "type": "integer"
+          },
+          "committed_tokens": {
+            "type": "integer"
+          },
+          "estimated_tokens": {
+            "type": "integer"
+          },
+          "reserved_cost_usd": {
+            "type": "number"
+          },
+          "committed_cost_usd": {
+            "type": "number"
+          },
+          "estimated_cost_usd": {
+            "type": "number"
+          },
+          "unknown_usage": {
+            "type": "integer"
+          },
+          "unknown_cost": {
+            "type": "integer"
+          },
+          "pending": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseFlowAttemptPending"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "attempts",
+          "reserved_tokens",
+          "committed_tokens",
+          "estimated_tokens",
+          "reserved_cost_usd",
+          "committed_cost_usd",
+          "estimated_cost_usd",
+          "unknown_usage",
+          "unknown_cost"
+        ],
+        "x-go-type": "memory.FlowBudget",
+        "x-go-source": "internal/memory/flow_attempts.go",
+        "description": "Root-only counters are changed atomically with each attempt. Estimates are\nseparate from reported actual usage. Uncertain usage retains its reservation."
+      },
+      "WireResponseFlowAttemptPending": {
+        "type": "object",
+        "properties": {
+          "run_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "unknown": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "node_id",
+          "attempt",
+          "unknown"
+        ],
+        "x-go-type": "memory.FlowAttemptPending",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireResponseFlowImprovement": {
+        "type": "object",
+        "properties": {
+          "source_run": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/WireResponseGenerateSkillInput"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "trial_ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "trial": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "trial_comparison": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "observation_state": {
+            "type": "string"
+          },
+          "observations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseSkillTrialObservation"
+            }
+          },
+          "pending": {
+            "$ref": "#/components/schemas/WireResponseFlowImprovementAttempt"
+          },
+          "receipts": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseFlowImprovementReceipt"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "source_run",
+          "generation",
+          "runtime",
+          "trial_ends_at",
+          "stage",
+          "candidate",
+          "comparison",
+          "trial",
+          "trial_comparison",
+          "receipts"
+        ],
+        "x-go-type": "memory.FlowImprovement",
+        "x-go-source": "internal/memory/flow_improvement.go",
+        "description": "FlowImprovement links existing canonical evidence and skill lifecycles. It\nnever stores prompts, grants authority, or treats its stage as an evaluation."
+      },
+      "WireResponseGenerateSkillInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireResponseScope"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "skill_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "lessons": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseRef"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comparison_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireResponseSkillComparisonPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "event_id",
+          "skill_id",
+          "path",
+          "lessons",
+          "comparison_plan"
+        ],
+        "x-go-type": "memory.GenerateSkillInput",
+        "x-go-source": "internal/memory/skill_generation.go"
+      },
+      "WireResponseSkillTrialObservation": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireResponseScope"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "evaluation": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "independently_verified": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "source",
+          "outcome",
+          "independently_verified"
+        ],
+        "x-go-type": "memory.SkillTrialObservation",
+        "x-go-source": "internal/memory/skill_trial_observation.go"
+      },
+      "WireResponseFlowImprovementAttempt": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "request_hash": {
+            "type": "string"
+          },
+          "principal_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "skill_revision": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action_id",
+          "action",
+          "request_hash",
+          "principal_id",
+          "role",
+          "skill_revision",
+          "started_at",
+          "state"
+        ],
+        "x-go-type": "memory.FlowImprovementAttempt",
+        "x-go-source": "internal/memory/flow_improvement.go"
+      },
+      "WireResponseFlowImprovementReceipt": {
+        "type": "object",
+        "properties": {
+          "action_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "request_hash": {
+            "type": "string"
+          },
+          "principal_id": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "skill_revision": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action_id",
+          "action",
+          "request_hash",
+          "principal_id",
+          "role",
+          "skill_revision",
+          "started_at",
+          "state"
+        ],
+        "x-go-type": "memory.FlowImprovementReceipt",
+        "x-go-source": "internal/memory/flow_improvement.go"
+      },
+      "WireResponseFlowCapabilities": {
+        "type": "object",
+        "properties": {
+          "supported": {
+            "type": "boolean"
+          },
+          "unsupported": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "supported",
+          "unsupported",
+          "modes"
+        ],
+        "x-go-type": "memory.FlowCapabilities",
+        "x-go-source": "internal/memory/flow_common.go"
+      },
+      "WireResponseFlowResultView": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "$ref": "#/components/schemas/WireResponseFlowBudget"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "invocation_mode": {
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "cancel_requested": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "string"
+          },
+          "waiting": {
+            "$ref": "#/components/schemas/WireResponseCrewRunWaiting"
+          },
+          "children": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseFlowChildRef"
+            }
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/WireResponseFlowDeliveryView"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "run_id",
+          "revision",
+          "crew_id",
+          "status",
+          "invocation_mode",
+          "source_type",
+          "cancel_requested",
+          "result"
+        ],
+        "x-go-type": "memory.FlowResultView",
+        "x-go-source": "internal/memory/flow_result.go"
+      },
+      "WireResponseFlowDeliveryView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/WireResponseFlowDelivery"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "delivery"
+        ],
+        "x-go-type": "memory.FlowDeliveryView",
+        "x-go-source": "internal/memory/flow_delivery.go"
+      },
+      "WireResponseFlowChildCreated": {
+        "type": "object",
+        "properties": {
+          "parent": {
+            "$ref": "#/components/schemas/WireResponseRecord"
+          },
+          "child": {
+            "$ref": "#/components/schemas/WireResponseFlowChildRef"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "parent",
+          "child"
+        ],
+        "x-go-type": "memory.FlowChildCreated",
+        "x-go-source": "internal/memory/flow_children.go"
+      },
+      "WireRequestFlowChildInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "input": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowChildInput",
+        "x-go-source": "internal/memory/flow_children.go"
+      },
+      "WireResponseFlowChildrenCancelled": {
+        "type": "object",
+        "properties": {
+          "children": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseFlowChildRef"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "children"
+        ],
+        "x-go-type": "memory.FlowChildrenCancelled",
+        "x-go-source": "internal/memory/flow_children.go"
+      },
+      "WireRequestFlowChildrenCancel": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowChildrenCancel",
+        "x-go-source": "internal/memory/flow_children.go"
+      },
+      "WireResponseFlowAttemptReservation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "dispatch_allowed": {
+            "type": "boolean"
+          },
+          "reserved_tokens": {
+            "type": "integer"
+          },
+          "reserved_cost_usd": {
+            "type": "number"
+          },
+          "cost_known": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "dispatch_allowed",
+          "reserved_tokens",
+          "reserved_cost_usd",
+          "cost_known"
+        ],
+        "x-go-type": "memory.FlowAttemptReservation",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireRequestFlowAttemptInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "call_key": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "max_input_tokens": {
+            "type": "integer"
+          },
+          "max_output_tokens": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowAttemptInput",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireRequestFlowAttemptSettleInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer"
+          },
+          "output_tokens": {
+            "type": "integer"
+          },
+          "usage_known": {
+            "type": "boolean"
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowAttemptSettleInput",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireRequestFlowAttemptUsage": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "input_tokens": {
+            "type": "integer"
+          },
+          "output_tokens": {
+            "type": "integer"
+          },
+          "usage_known": {
+            "type": "boolean"
+          },
+          "estimated": {
+            "type": "boolean"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowAttemptUsage",
+        "x-go-source": "internal/memory/flow_attempts.go"
+      },
+      "WireResponseFlowImprovementView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "improvement": {
+            "$ref": "#/components/schemas/WireResponseFlowImprovement"
+          },
+          "authority": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "improvement",
+          "authority"
+        ],
+        "x-go-type": "memory.FlowImprovementView",
+        "x-go-source": "internal/memory/flow_improvement.go"
+      },
+      "WireRequestFlowImprovementStart": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "source_run": {
+            "$ref": "#/components/schemas/WireRequestRef"
+          },
+          "generation": {
+            "$ref": "#/components/schemas/WireRequestGenerateSkillInput"
+          },
+          "runtime": {
+            "type": "string"
+          },
+          "trial_ends_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowImprovementStart",
+        "x-go-source": "internal/memory/flow_improvement.go"
+      },
+      "WireRequestGenerateSkillInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "skill_id": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "lessons": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestRef"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comparison_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSkillComparisonPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.GenerateSkillInput",
+        "x-go-source": "internal/memory/skill_generation.go"
+      },
+      "WireRequestSkillComparisonPlan": {
+        "type": "object",
+        "properties": {
+          "baseline_version": {
+            "type": "string"
+          },
+          "dataset_sha256": {
+            "type": "string"
+          },
+          "environment_sha256": {
+            "type": "string"
+          },
+          "min_score_gain": {
+            "type": "number"
+          },
+          "max_cost": {
+            "type": "number"
+          },
+          "max_duration_ms": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillComparisonPlan",
+        "x-go-source": "internal/memory/skill_comparison.go",
+        "description": "SkillComparisonPlan is fixed before a candidate is evaluated. Hashes identify\nan externally retained dataset/environment; they do not certify execution."
+      },
+      "WireResponseFlowImprovementPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseRecord"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "x-go-type": "memory.FlowImprovementPage",
+        "x-go-source": "internal/memory/flow_improvement_list.go"
+      },
+      "WireRequestFlowImprovementAdvance": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "expected_revision": {
+            "type": "integer"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "recover": {
+            "type": "boolean"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSkillComparisonResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "application": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestChangeInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowImprovementAdvance",
+        "x-go-source": "internal/memory/flow_improvement.go"
+      },
+      "WireRequestSkillComparisonResult": {
+        "type": "object",
+        "properties": {
+          "format_version": {
+            "type": "integer"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/WireRequestRef"
+          },
+          "baseline_id": {
+            "type": "string"
+          },
+          "baseline_revision": {
+            "type": "integer"
+          },
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataset_sha256": {
+            "type": "string"
+          },
+          "environment_sha256": {
+            "type": "string"
+          },
+          "comparison_report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSkillComparisonReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "cases": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestSkillComparisonCase"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillComparisonResult",
+        "x-go-source": "internal/memory/skill_comparison_record.go"
+      },
+      "WireRequestSkillComparisonReport": {
+        "type": "object",
+        "properties": {
+          "plan_sha256": {
+            "type": "string"
+          },
+          "baseline_score": {
+            "type": "number"
+          },
+          "candidate_score": {
+            "type": "number"
+          },
+          "candidate_cost": {
+            "type": "number"
+          },
+          "candidate_duration_ms": {
+            "type": "integer"
+          },
+          "regression_passed": {
+            "type": "boolean"
+          },
+          "safety_passed": {
+            "type": "boolean"
+          },
+          "bundle_sha256": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "companion_coverage": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillComparisonReport",
+        "x-go-source": "internal/memory/skill_comparison.go"
+      },
+      "WireRequestSkillComparisonCase": {
+        "type": "object",
+        "properties": {
+          "case_sha256": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "output_sha256": {
+            "type": "string"
+          },
+          "cost": {
+            "type": "number"
+          },
+          "duration_ms": {
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SkillComparisonCase",
+        "x-go-source": "internal/memory/skill_comparison_record.go"
+      },
+      "WireRequestFlowDeliveryRecovery": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "expected_revision": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string"
+          },
+          "confirmed": {
+            "type": "boolean"
+          },
+          "message_id": {
+            "type": "string"
+          },
+          "destination": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestFlowDeliveryDestination"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowDeliveryRecovery",
+        "x-go-source": "internal/memory/flow_delivery_recovery.go"
+      },
+      "WireRequestFlowDeliveryDestination": {
+        "type": "object",
+        "properties": {
+          "bot_id": {
+            "type": "string"
+          },
+          "guild_id": {
+            "type": "string"
+          },
+          "channel_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowDeliveryDestination",
+        "x-go-source": "internal/memory/flow_delivery_recovery.go"
+      },
+      "WireResponseFlowEffectView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "effect_hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "dispatch_allowed": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "effect_hash",
+          "status",
+          "dispatch_allowed"
+        ],
+        "x-go-type": "memory.FlowEffectView",
+        "x-go-source": "internal/memory/flow_effects.go"
+      },
+      "WireRequestFlowEffectInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "adapter": {
+            "type": "string"
+          },
+          "target_hash": {
+            "type": "string"
+          },
+          "args_hash": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowEffectInput",
+        "x-go-source": "internal/memory/flow_effects.go"
+      },
+      "WireRequestFlowEffectClaimInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "effect_hash": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowEffectClaimInput",
+        "x-go-source": "internal/memory/flow_effects.go"
+      },
+      "WireRequestFlowEffectSettleInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "lease_token": {
+            "type": "string"
+          },
+          "effect_hash": {
+            "type": "string"
+          },
+          "preview": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "http_status": {
+            "type": "integer"
+          },
+          "response_hash": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowEffectSettleInput",
+        "x-go-source": "internal/memory/flow_effects.go"
+      },
+      "WireRequestFlowEffectReceipt": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "http_status": {
+            "type": "integer"
+          },
+          "response_hash": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.FlowEffectReceipt",
+        "x-go-source": "internal/memory/flow_effects.go"
       },
       "WireResponseUsageSessionHandoffOutput": {
         "type": "object",

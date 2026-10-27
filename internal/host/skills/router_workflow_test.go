@@ -134,6 +134,9 @@ func TestWorkflowWaitingDistinguishesTimerAndHumanDecision(t *testing.T) {
 		{"workflow", nil, false},
 		{"workflow", map[string]any{"node_id": "approve", "question": "보낼까요?"}, true},
 		{"workflow", map[string]any{"kind": "wait", "until": "later"}, false},
+		{"workflow", map[string]any{"kind": "child", "child_run_id": "child-1", "decision_kind": "approval"}, true},
+		{"workflow", map[string]any{"kind": "child", "child_run_id": "child-1", "decision_kind": "budget"}, true},
+		{"workflow", map[string]any{"kind": "child", "child_run_id": "child-1", "decision_kind": "wait"}, false},
 		{"meeting", nil, true},
 	} {
 		host.GetWorkflow = func(id, kind string) (map[string]any, error) {
@@ -171,5 +174,18 @@ func TestWorkflowLifecycleRejectsInvalidIdentityAndNonFiniteWait(t *testing.T) {
 		if _, err := callTool(c.name, j(t, c.args)); err == nil {
 			t.Fatal(c)
 		}
+	}
+}
+
+func TestWorkflowPartialMeetingIsNotReportedAsSuccess(t *testing.T) {
+	swapRouter(t)
+	swapCrew(t)
+	host.GetWorkflow = func(string, string) (map[string]any, error) {
+		return map[string]any{"run_id": "meeting-1", "run_kind": "meeting", "status": "partial", "terminal": true, "result": "합의에 이르지 못했어요"}, nil
+	}
+	out := call(t, "get_workflow", `{"run_id":"meeting-1","run_kind":"meeting"}`)
+	v := structured(t, out)
+	if field(out, "isError") != true || field(v, "terminal") != true || field(v, "next_action") != nil || field(v, "result") != "합의에 이르지 못했어요" {
+		t.Fatal(out)
 	}
 }

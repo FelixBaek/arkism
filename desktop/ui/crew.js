@@ -9,6 +9,7 @@ import { createCrewRunView } from "./modules/crewRunView.mjs";
 import { createCrewPersonas } from "./modules/crewPersonas.mjs";
 import { createCrewWorkers } from "./modules/crewWorkers.mjs";
 import { FLOW_KINDS, flowItems, flowAlias, flowKind } from "./modules/flowCatalog.mjs";
+import { createFlowHistory, flowNeedsDecision } from "./modules/flowHistory.mjs";
 // FLOW keeps role, team and workflow definitions intact and presents their existing editors in one catalogue.
 // app.js passes the shared helpers in once; this file owns the list, the detail panel, the settings window, the
 // graph editor (with the one-step simple view and the structure review) and the run view.
@@ -42,6 +43,7 @@ export const createCrew = (ctx) => {
   // template: a saved agent definition (instructions·model·effort·skills). 새 워크플로우 can start from one.
   const templates = () => items().filter((r) => r.crew.type === "template");
   const byId = (id) => items().find((r) => r.id === id);
+  const flowHistory = createFlowHistory({ state, el, button, request, query, notice, byId, ago, go: ctx.go });
   const byHandle = (h) => workflows().find((r) => r.crew.handle === (h || "").replace(/^\$/, ""));
   async function reload(selectId) {
     state.data.crew = (await request(`/v1/crew?${query()}`)).items || [];
@@ -316,7 +318,7 @@ export const createCrew = (ctx) => {
   }
   const waitingRuns = () => {
     const seen = new Set();
-    return [...waiting, ...(recent || [])].filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval" && !seen.has(x.id) && seen.add(x.id));
+    return [...waiting, ...(recent || [])].filter((x) => x.crew_run?.status === "waiting" && flowNeedsDecision(x.crew_run.waiting) && !seen.has(x.id) && seen.add(x.id));
   };
   function categories(list) {
     const counts = new Map();
@@ -342,6 +344,28 @@ export const createCrew = (ctx) => {
     afterClose: () => { markSelected(); if (state.view === "crew") drawCards(); }
   }));
   function renderList() {
+    const page = ["results", "improvements"].includes(state.flowPage) ? state.flowPage : "catalog";
+    const navigation = segment([["catalog", "작업"], ["results", "결과함"], ["improvements", "개선 흐름"]], page, (key) => {
+      state.flowPage = key; render();
+      $("#chips [role=tab][aria-selected=true]")?.focus();
+    });
+    navigation.setAttribute("aria-label", "FLOW 보기");
+    navigation.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+      const tabs = [...navigation.querySelectorAll("[role=tab]")], at = tabs.indexOf(document.activeElement);
+      if (at < 0) return;
+      event.preventDefault();
+      tabs[event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length].click();
+    });
+    if (page !== "catalog") {
+      $("#app").classList.add("wide");
+      $("#controls").replaceChildren();
+      $("#chips").replaceChildren(navigation);
+      $("#stats").replaceChildren();
+      void flowHistory.render(page, $("#table"));
+      return;
+    }
+    flowHistory.reset();
     if (!crewVocabulary.TABS.some(([k]) => k === state.crewTab)) state.crewTab = "all";
     const tab = state.crewTab;
     const all = flows().filter((r) => inTab(r, tab));
@@ -393,7 +417,7 @@ export const createCrew = (ctx) => {
     kind.addEventListener("change", () => { state.flowKind = kind.value; state.selected = null; drawCards(); });
     bar.append(search, kind, how, button("페르소나 설정", "ghost", "sliders-horizontal", () => { state.settingsTab = "workflow"; ctx.go("settings"); }), button("+ 새 워크플로우", "primary", null, openFlowCreate));
     $("#controls").replaceChildren(bar);
-    $("#chips").replaceChildren();
+    $("#chips").replaceChildren(navigation);
     $("#stats").replaceChildren();
     const main = $("#table");
     main.className = "wf-main";
@@ -408,7 +432,7 @@ export const createCrew = (ctx) => {
   // 확인해 주세요: runs that wait for a person's answer, with the answer buttons right there.
   function drawWaiting() {
     const box = $("#stats");
-    if (!box || state.view !== "crew") return;
+    if (!box || state.view !== "crew" || ["results", "improvements"].includes(state.flowPage)) return;
     const out = [];
     // 이 PC의 Arkism에는 워크플로우 실행기가 없다: 만들고 저장은 되지만 실행은 서버에서.
     if (state.mode === "local") out.push(el("p", "local-note wf-local", "이 PC 모드에서는 워크플로우를 만들고 저장할 수 있어요. 실행과 @이름 호출은 서버에 연결했을 때 돼요."));
@@ -421,7 +445,10 @@ export const createCrew = (ctx) => {
       const acts = el("div", "wf-attn-actions");
       const after = async () => { recent = null; await loadRecent(); };
       acts.append(button("거절", "", null, async () => { await crewExecution.decide(run, false); void after(); }), button("승인", "primary", null, async () => { await crewExecution.decide(run, true); void after(); }));
-      if (rec) acts.prepend(button("실행 보기", "ghost", null, () => crewEditor.openGraph(rec, { run })));
+      if (run.crew_run.invocation_mode === "flow") acts.prepend(button("실행 보기", "ghost", null, () => {
+        state.flowPage = "results"; render(); void flowHistory.openResult(run.id, $("#table"));
+      }));
+      else if (rec) acts.prepend(button("실행 보기", "ghost", null, () => crewEditor.openGraph(rec, { run })));
       card.append(t, acts);
       out.push(card);
     }
@@ -1373,6 +1400,7 @@ export const createCrew = (ctx) => {
 
   return {
     reset() {
+      flowHistory.reset();
       crewRunView.stopPolling();
       Object.assign(crewEditor.ed, { rec: null, graph: null, run: null, test: null, suggestions: null, reviewAI: null });
       Object.assign(crewWorkers.wk, { id: null, draft: null, dirty: false, ai: null, instrAI: null, test: null, status: {}, usage: null, statusAt: 0, teamsPick: new Set() });

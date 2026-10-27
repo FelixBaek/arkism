@@ -113,6 +113,7 @@ func TestOpenAPIHTTPResponses(t *testing.T) {
 	call("&limit=2&q=other&ignore_case=true&cursor="+url.QueryEscape(first.NextCursor), f.human, 400)
 	call("", "", 401)
 	cases = append(cases, managementHTTPResponses(t)...)
+	cases = append(cases, flowHTTPContractResponses(t)...)
 	if dest := os.Getenv("ARKISM_OPENAPI_CASES"); dest != "" {
 		b, e := json.MarshalIndent(cases, "", "  ")
 		if e != nil {

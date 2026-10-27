@@ -45,11 +45,14 @@ Arkism MCP가 연결된 활성 대화에서 `@리서치 조사할 주제`처럼 
 |---|---|
 | `run_workflow` | `handle`, `task`로 시작합니다. 새 FLOW 워크플로우 실행에는 고유 `request_id`를 주고, 불확실한 응답을 재시도할 때 같은 ID와 내용을 재사용합니다. |
 | `get_workflow` | 시작 때 받은 `run_id`, `run_kind`로 저장된 상태와 결과를 조회합니다. 재접속해도 새 실행을 만들 필요가 없습니다. |
+| `list_workflow_runs` | 재접속 후 실행 ID를 잃었을 때 현재 범위의 실행 목록을 읽습니다. `limit` 기본 50/최대 200, 선택적인 `status` 필터를 사용합니다. |
 | `wait_workflow` | 같은 실행을 기본 30초, 최대 60초씩 관찰합니다. `terminal=false`이고 `requires_decision=false`이면 반복합니다. |
 | `decide_workflow` | 필요한 사람의 결정을 받은 뒤 워크플로우 승인을 전달합니다. 팀 예산 승인은 Arkism 앱에서 처리합니다. |
 | `cancel_workflow` | 사용자가 요청한 새 `@워크플로우` FLOW 실행의 중단을 요청합니다. 이후 같은 실행을 조회해 실제 종료를 확인합니다. |
 
 대기 시간이 끝났다는 것은 실행 완료나 취소가 아닙니다. 에이전트는 `terminal=true`가 될 때까지 같은 실행을 따라가고, 최종 `status`와 `result`를 사용자에게 전달해야 합니다. `requires_decision=true`이면 필요한 결정을 알리고 기다립니다. 재실행으로 대기를 대신하지 않습니다.
+
+재접속 목록은 ID·작업 ID·상태·작업 종류·부모 ID·생성 시각·결과 조회 가능 여부만 제공합니다. 입력·프롬프트·정의·결과 본문은 포함하지 않습니다. `result_available=true`는 종료 상태의 결과를 따로 조회할 수 있다는 뜻이며 성공·품질·전달 완료나 비어 있지 않은 보고서를 보장하지 않습니다. 사용자의 현재 작업과 관련된 실행을 선택한 뒤 그 `id`를 `run_id`로, `run_kind=workflow`로 조회·대기를 이어갑니다. 목록의 모든 결과를 자동으로 대화에 넣거나 다시 실행하지 않습니다. 기존 assist·독립 meeting 기록은 이 목록에 포함하지 않습니다.
 
 `run_kind`는 `workflow`, `assist`, `meeting`을 구별합니다. 기존 전문가·팀 실행은 시작 중복 방지를 지원하지 않는 경로가 있으므로 `idempotency_supported`를 확인하고 응답 불명 상태에서 무조건 다시 시작하지 않습니다. `cancel_workflow`는 기존 assist·meeting·`$워크플로우` 실행을 지원하지 않습니다. `cancel_requested=true`만으로 중단됐다고 표시하지 않으며 실제 종료 결과를 확인합니다.
 

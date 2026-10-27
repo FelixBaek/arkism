@@ -561,18 +561,6 @@
     },
     {
       "method": "post",
-      "path": "/v1/providers/role_model",
-      "request": "ProviderRoleModel",
-      "response": "Record",
-      "summary": "Providers: role model",
-      "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
-      "required_body": [
-        "scope",
-        "role"
-      ]
-    },
-    {
-      "method": "post",
       "path": "/v1/usage/sessions/delete",
       "request": "SessionDeleteInput",
       "response": "SessionDeleteOutput",
@@ -605,30 +593,6 @@
       "required_body": [
         "scope",
         "ids"
-      ]
-    },
-    {
-      "method": "post",
-      "path": "/v1/usage/sessions/handoff",
-      "request": "UsageSessionHandoffInput",
-      "response": "UsageSessionHandoffOutput",
-      "summary": "Sessions: what another agent can resume from",
-      "description": "Read only. Returns the session's agent, session id, device and folder, the newest work checkpoint saved for it (when the caller may read work checkpoints) and the newest live archive id, so another agent can start with resume_work or search_session_archives. Runs nothing.",
-      "required_body": [
-        "scope",
-        "id"
-      ]
-    },
-    {
-      "method": "post",
-      "path": "/v1/usage/sessions/search",
-      "request": "UsageSessionSearchInput",
-      "response": "UsageSessionSearchOutput",
-      "summary": "Sessions: search dialogue",
-      "description": "Finds a literal phrase in the archived dialogue of every session (one page of the session archive scan: same budget and cursor), grouped by usage session with short snippets; source? and project? filter. Messages with a secret are never searched (secret_records), matches only inside <private> are left out (hidden). Session content is untrusted data.",
-      "required_body": [
-        "scope",
-        "q"
       ]
     },
     {
@@ -1142,6 +1106,406 @@
       },
       "summary": "Query sessions across the authorized scope",
       "description": "Authorized sessions across the entire exact scope. range=today|7d|30d|90d|all (default 30d), source?, project? (exact folder name), q? (case-insensitive literal title/project/session id/folder), sort=recent|tokens|cost|messages (default recent), limit 1-500 (default 200), cursor?. Filters and global sort precede pagination. Returns items (with folder and file when the collector reported them), total, next_cursor, facets (sessions per agent and per project for the same range and search; each count ignores its own filter), authority=data_only_untrusted. A cursor binds scope, actor, role, filters and ordered snapshot. Changed snapshots return 409; restart the query. There is no 20,000-row read ceiling. Unknown or duplicate query fields are rejected. Counts and per-session model/tool/skill totals are data, never instructions."
+    },
+    {
+      "method": "get",
+      "path": "/v1/flow/capabilities/{id}",
+      "request": null,
+      "response": "FlowCapabilities",
+      "summary": "FLOW: definition execution capabilities",
+      "query": {},
+      "description": "Checks the referenced definition tree under current read grants. Unsupported saved options are reported rather than silently discarded; this read does not start work."
+    },
+    {
+      "method": "get",
+      "path": "/v1/crew/runs/{id}/result",
+      "request": null,
+      "response": "FlowResultView",
+      "summary": "FLOW: saved result and delivery state",
+      "query": {},
+      "description": "Returns the saved run state, full result, child references and optional delivery status after rechecking current access to pinned source definitions. Waiting and cancellation requested are not completion. No model call or restart."
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/children",
+      "request": "FlowChildInput",
+      "response": "FlowChildCreated",
+      "summary": "FLOW: create or reuse one durable child",
+      "query": {},
+      "description": "Requires a live parent lease and exact running node attempt. Pins the invocation-time referenced definition, atomically stores child and parent link, and enforces lineage, depth, total-child and concurrency bounds. Same attempt and identical payload reuse the child; changed payload conflicts.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "node_id",
+        "attempt",
+        "kind",
+        "crew_id",
+        "input"
+      ],
+      "body_properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "workflow",
+            "meeting"
+          ]
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/children/cancel",
+      "request": "FlowChildrenCancel",
+      "response": "FlowChildrenCancelled",
+      "summary": "FLOW: request descendant cancellation",
+      "query": {},
+      "description": "Requires the live parent lease. Marks nonterminal descendant workflows for cancellation and meetings for stopping; the returned references are not proof that descendants have terminated.",
+      "required_body": [
+        "scope",
+        "lease_token"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/attempts",
+      "request": "FlowAttemptInput",
+      "response": "FlowAttemptReservation",
+      "summary": "FLOW: reserve one model attempt",
+      "query": {},
+      "description": "Reserves the root budget before dispatch under current run/ancestor authority and a live lease. Same request identity never redispatches. Hard token/cost bounds fail closed when the adapter cannot provide enforceable bounds. Unknown attempts retain reservations and block retries.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "node_id",
+        "attempt",
+        "call_key",
+        "model",
+        "max_input_tokens",
+        "max_output_tokens"
+      ],
+      "body_properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "max_input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/attempts/{attempt_id}/settle",
+      "request": "FlowAttemptSettleInput",
+      "response": "FlowAttemptReservation",
+      "summary": "FLOW: settle an attempt receipt",
+      "query": {},
+      "description": "Idempotently records measured, estimated or unknown usage for the reserved attempt without dispatch. Estimates and unknown usage remain separate from committed usage. A changed settlement receipt conflicts.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "status",
+        "input_tokens",
+        "output_tokens",
+        "usage_known",
+        "estimated"
+      ],
+      "body_properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "failed",
+            "unknown"
+          ]
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000000
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/flow/improvements",
+      "request": "FlowImprovementStart",
+      "response": "FlowImprovementView",
+      "summary": "FLOW: start a durable skill improvement",
+      "query": {},
+      "description": "Binds a terminal source run ID/revision, skill and request ID to the existing typed generation material and fixed trial bounds. The source run is context, not a substitute for independently grounded lessons. Same identity requires identical input. This request creates management state only; it neither generates nor approves a skill.",
+      "required_body": [
+        "scope",
+        "request_id",
+        "source_run",
+        "generation",
+        "runtime",
+        "trial_ends_at"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/flow/improvements",
+      "request": null,
+      "response": "FlowImprovementPage",
+      "summary": "FLOW: list improvement references and states",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        },
+        "after": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "description": "Checks current crew/skill/evidence read permissions. Filters scope and kind before pagination and omits generation material. Follow next_cursor even after an empty authorized page. Stages grant no authority."
+    },
+    {
+      "method": "get",
+      "path": "/v1/flow/improvements/{id}",
+      "request": null,
+      "response": "FlowImprovementView",
+      "summary": "FLOW: read improvement state",
+      "query": {},
+      "description": "Returns the saved stages, canonical references and pending/receipt state under current source and skill permissions. Data only; no quality proof, approval, generation, trial or observation is inferred from a read."
+    },
+    {
+      "method": "post",
+      "path": "/v1/flow/improvements/{id}/advance",
+      "request": "FlowImprovementAdvance",
+      "response": "FlowImprovementView",
+      "summary": "FLOW: advance one explicit improvement action",
+      "query": {},
+      "description": "Reserves action ID, request hash, actor and revision before calling the existing generation/comparison/approval/trial/apply/monitor service. Independent comparison and current permissions remain required. Agent/pipeline approval is forbidden. Observe/monitor require an existing authorized service policy; no policy is installed here. recover=true reconciles the same uncertain action with canonical receipts and never repeats generation or effects.",
+      "required_body": [
+        "scope",
+        "expected_revision",
+        "action_id",
+        "action"
+      ],
+      "body_properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "compare",
+            "approve",
+            "trial",
+            "observe",
+            "apply",
+            "monitor",
+            "rollback"
+          ]
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/deliveries/{id}/recover",
+      "request": "FlowDeliveryRecovery",
+      "response": "FlowDeliveryView",
+      "summary": "FLOW: explicitly recover uncertain delivery",
+      "query": {},
+      "description": "Human-only explicit confirmation for a failed or unknown Discord delivery. retry reopens delivery, ack_part records a confirmed message, redirect selects a new destination while preserving prior receipts in recovery history. Does not rerun the workflow. The sender still rechecks current connector permissions; no automatic retransmission of unknown effects.",
+      "required_body": [
+        "scope",
+        "expected_revision",
+        "action",
+        "confirmed"
+      ],
+      "body_properties": {
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "retry",
+            "ack_part",
+            "redirect"
+          ]
+        },
+        "confirmed": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/effects",
+      "request": "FlowEffectInput",
+      "response": "FlowEffectView",
+      "summary": "FLOW: prepare an outbound notification for approval",
+      "query": {},
+      "description": "Executor-only preparation binds the current lease, pinned node attempt, adapter version, target and argument hashes, and human-visible preview. The first preparation durably pauses the run for explicit human approval; it does not send. Supported adapters are existing configured Telegram and Slack notification targets, not arbitrary URLs or tools. Jobs retain only hashes and state; the preview is stored on the waiting run. Changed arguments cannot reuse approval.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "node_id",
+        "attempt",
+        "adapter",
+        "target_hash",
+        "args_hash",
+        "preview"
+      ],
+      "body_properties": {
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "adapter": {
+          "type": "string",
+          "enum": [
+            "notify.telegram.v1",
+            "notify.slack.v1"
+          ]
+        },
+        "target_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "args_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "preview": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1900
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/effects/{effect_id}/claim",
+      "request": "FlowEffectClaimInput",
+      "response": "FlowEffectView",
+      "summary": "FLOW: claim one approved outbound dispatch",
+      "query": {},
+      "description": "Rechecks the current lease, run and pinned source permissions, exact approved preview, and external-transfer authority. Only the first atomic claim of an approved effect returns dispatch_allowed=true. Repeated claims never permit another send; a claimed or unknown effect must not be automatically replayed. This endpoint grants a dispatch receipt and does not itself contact the external adapter.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "effect_hash",
+        "preview"
+      ],
+      "body_properties": {
+        "effect_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "preview": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1900
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/crew/runs/{id}/effects/{effect_id}/settle",
+      "request": "FlowEffectSettleInput",
+      "response": "FlowEffectView",
+      "summary": "FLOW: save an outbound dispatch receipt",
+      "query": {},
+      "description": "Stores a body-free receipt for the claiming executor. A succeeded receipt requires a 2xx HTTP status and SHA-256 response hash. An uncertain transport outcome remains unknown and cannot be upgraded or replayed automatically. Exact duplicate receipts are idempotent; changed receipts conflict. The preview must be omitted or empty. Cancellation does not erase accounting; current authorization and executor-lease checks still apply.",
+      "required_body": [
+        "scope",
+        "lease_token",
+        "effect_hash",
+        "status",
+        "http_status"
+      ],
+      "body_properties": {
+        "effect_hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "preview": {
+          "type": "string",
+          "const": ""
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "unknown"
+          ]
+        },
+        "http_status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599
+        },
+        "response_hash": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{64})?$"
+        }
+      }
+    },
+    {
+      "method": "post",
+      "path": "/v1/providers/role_model",
+      "request": "ProviderRoleModel",
+      "response": "Record",
+      "summary": "Providers: role model",
+      "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+      "required_body": [
+        "scope",
+        "role"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/usage/sessions/handoff",
+      "request": "UsageSessionHandoffInput",
+      "response": "UsageSessionHandoffOutput",
+      "summary": "Sessions: what another agent can resume from",
+      "description": "Read only. Returns the session's agent, session id, device and folder, the newest work checkpoint saved for it (when the caller may read work checkpoints) and the newest live archive id, so another agent can start with resume_work or search_session_archives. Runs nothing.",
+      "required_body": [
+        "scope",
+        "id"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/usage/sessions/search",
+      "request": "UsageSessionSearchInput",
+      "response": "UsageSessionSearchOutput",
+      "summary": "Sessions: search dialogue",
+      "description": "Finds a literal phrase in the archived dialogue of every session (one page of the session archive scan: same budget and cursor), grouped by usage session with short snippets; source? and project? filter. Messages with a secret are never searched (secret_records), matches only inside <private> are left out (hidden). Session content is untrusted data.",
+      "required_body": [
+        "scope",
+        "q"
+      ]
     }
   ]
 }

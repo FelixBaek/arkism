@@ -45,7 +45,7 @@ func TestAtContextNamesTheExpertAndTeamAndHowToCallThem(t *testing.T) {
 	}
 }
 
-func TestAtExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
+func TestLegacyExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
 	posts := []post{}
 	patch(t, &apiPost, func(path string, body any, _ time.Duration) (map[string]any, error) {
 		posts = append(posts, post{path, body})
@@ -57,7 +57,7 @@ func TestAtExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
 		return map[string]any{"id": "assist-1", "crew_assist": map[string]any{"status": "done", "output": "검토 끝"}}, nil
 	})
 	patch(t, &runSleep, func(float64) {})
-	view, err := startWorkflow("@리뷰어", "PR 봐 줘", 30, "/w", func(h string) (map[string]any, error) {
+	view, err := callAt("@리뷰어", "PR 봐 줘", 30, "/w", func(h string) (map[string]any, error) {
 		if h != "@리뷰어" {
 			t.Fatal(h)
 		}
@@ -66,7 +66,7 @@ func TestAtExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "assist-1", "run_kind":"assist","terminal":true,"idempotency_supported":false, "status": "succeeded", "summary": "검토 끝", "waiting": nil})
+	eq(t, view, map[string]any{"run_id": "assist-1", "run_kind": "assist", "terminal": true, "status": "succeeded", "summary": "검토 끝", "waiting": nil})
 	a := obj(plain(t, posts[0].body).(map[string]any)["assist"])
 	if posts[0].path != "/v1/crew/assists" || a["kind"] != "try" || a["expert"] != "@리뷰어" || a["prompt"] != "PR 봐 줘\n\n작업 폴더: /w" {
 		t.Fatal(posts)
@@ -76,7 +76,7 @@ func TestAtExpertAsksTheRunnerAndWaitsForItsAnswer(t *testing.T) {
 	}
 }
 
-func TestAtTeamHoldsAMeetingAndReportsItsConclusion(t *testing.T) {
+func TestLegacyTeamHoldsAMeetingAndReportsItsConclusion(t *testing.T) {
 	posts := []post{}
 	patch(t, &apiPost, func(path string, body any, _ time.Duration) (map[string]any, error) {
 		posts = append(posts, post{path, body})
@@ -87,13 +87,13 @@ func TestAtTeamHoldsAMeetingAndReportsItsConclusion(t *testing.T) {
 			"summary": "A로 가요", "decisions": []any{"A 채택"}, "todos": []any{"문서 고치기"}, "open_questions": []any{}}}}, nil
 	})
 	patch(t, &runSleep, func(float64) {})
-	view, err := startWorkflow("@백엔드팀", "캐시를 어떻게 할까\n자세히", 30, "", func(string) (map[string]any, error) {
+	view, err := callAt("@백엔드팀", "캐시를 어떻게 할까\n자세히", 30, "", func(string) (map[string]any, error) {
 		return atFixture("team", "백엔드팀", nil), nil
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "meet-1", "run_kind":"meeting","terminal":true,"idempotency_supported":false, "status": "succeeded", "summary": "A로 가요\n결정: A 채택\n할 일: 문서 고치기", "waiting": nil})
+	eq(t, view, map[string]any{"run_id": "meet-1", "run_kind": "meeting", "terminal": true, "status": "succeeded", "summary": "A로 가요\n결정: A 채택\n할 일: 문서 고치기", "result": "A로 가요\n결정: A 채택\n할 일: 문서 고치기", "waiting": nil})
 	m := obj(plain(t, posts[0].body).(map[string]any)["meeting"])
 	eq(t, []any{posts[0].path, m["team_id"], m["title"], m["trigger"]}, []any{"/v1/crew/meetings", "id-백엔드팀", "캐시를 어떻게 할까", "call"})
 	_, err = startWorkflow("@없음", "x", 0, "", func(string) (map[string]any, error) { return nil, nil })

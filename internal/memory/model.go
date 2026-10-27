@@ -213,6 +213,10 @@ type Record struct {
 	Crew               *Crew                `json:"crew,omitempty" bson:"crew,omitempty"`
 	CrewRun            *CrewRun             `json:"crew_run,omitempty" bson:"crew_run,omitempty"`
 	FlowDelivery       *FlowDelivery        `json:"delivery,omitempty" bson:"delivery,omitempty"`
+	FlowEffect         *FlowEffect          `json:"flow_effect,omitempty" bson:"flow_effect,omitempty"`
+	FlowAttempt        *FlowAttempt         `json:"flow_attempt,omitempty" bson:"flow_attempt,omitempty"`
+	FlowBudget         *FlowBudget          `json:"flow_budget,omitempty" bson:"flow_budget,omitempty"`
+	FlowImprovement    *FlowImprovement     `json:"flow_improvement,omitempty" bson:"flow_improvement,omitempty"`
 	CrewAssist         *CrewAssist          `json:"crew_assist,omitempty" bson:"crew_assist,omitempty"`
 	CrewMeeting        *CrewMeeting         `json:"crew_meeting,omitempty" bson:"crew_meeting,omitempty"`
 	DiscordBot         *DiscordBot          `json:"discord_bot,omitempty" bson:"discord_bot,omitempty"`

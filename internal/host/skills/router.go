@@ -1042,15 +1042,12 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		value, err = callToolSkills(n, args)
 	case "run_workflow", "decide_workflow", "get_workflow", "wait_workflow", "cancel_workflow":
 		return callWorkflow(n, args)
+	case "start_flow_improvement", "get_flow_improvement", "list_flow_improvements", "advance_flow_improvement":
+		value, err = callFlowImprovement(n, args)
+	case "list_workflow_runs":
+		value, err = listWorkflowRuns(args)
 	case "list_crew":
-		var rows []map[string]any
-		if rows, err = host.ListCrew(8 * time.Second); err == nil {
-			list := make([]any, len(rows))
-			for i, r := range rows {
-				list[i] = r
-			}
-			value = host.Obj{{Key: "crew", Value: list}, {Key: "authority", Value: "data_only_untrusted"}}
-		}
+		value, err = callCrewList()
 	case "search_knowledge", "recall", "recall_digest", "search_session_archives", "recall_at", "trace_memory_sources",
 		"read_session_message", "record_memory_usage", "read_wiki":
 		value, err = callToolMemory(n, args)
@@ -1070,6 +1067,18 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		return nil, err
 	}
 	return toolText(value)
+}
+
+func callCrewList() (host.Obj, error) {
+	rows, err := host.ListCrew(8 * time.Second)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]any, len(rows))
+	for i, row := range rows {
+		list[i] = row
+	}
+	return host.Obj{{Key: "crew", Value: list}, {Key: "authority", Value: "data_only_untrusted"}}, nil
 }
 
 // callToolSkills dispatches the skill catalog tools.
@@ -1248,12 +1257,11 @@ func workflowToolResult(value map[string]any, kind string) (host.Obj, error) {
 		value["run_kind"] = kind
 	}
 	value["delivery_mode"] = "caller_wait"
-	waitKind := field(value["waiting"], "kind")
-	requiresDecision := status == "waiting" && (value["run_kind"] == "meeting" || truthy(value["waiting"]) && (waitKind == nil || waitKind == "approval" || waitKind == "budget"))
+	requiresDecision := workflowNeedsDecision(value)
 	value["requires_decision"] = requiresDecision
 	if value["terminal"] != true {
 		if requiresDecision {
-			value["next_action"] = map[string]any{"type": "approval_required", "instruction": "Read waiting; obtain the required human decision before resuming. Team budget approvals are handled in the Arkism app."}
+			value["next_action"] = map[string]any{"type": "approval_required", "instruction": "Read waiting and obtain the required human decision before resuming. For a FLOW child wait, decide_workflow uses this parent run_id; the server checks the actual child. Legacy team approvals use the Arkism app."}
 		} else {
 			value["next_action"] = map[string]any{"tool": "wait_workflow", "arguments": map[string]any{"run_id": value["run_id"], "run_kind": value["run_kind"], "wait_seconds": 30}, "instruction": "Continue waiting on this same run until terminal is true or a human decision is required. A timed out wait is not completion. No push to a closed conversation is supported."}
 		}
@@ -1262,7 +1270,25 @@ func workflowToolResult(value map[string]any, kind string) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(out, host.KV{Key: "isError", Value: status == "failed" || status == "stopped" || status == "cancelled"}), nil
+	return append(out, host.KV{Key: "isError", Value: status == "failed" || status == "stopped" || status == "cancelled" || status == "partial"}), nil
+}
+
+func workflowNeedsDecision(value map[string]any) bool {
+	if value["status"] != "waiting" {
+		return false
+	}
+	if value["run_kind"] == "meeting" {
+		return true
+	}
+	if !truthy(value["waiting"]) {
+		return false
+	}
+	kind := field(value["waiting"], "kind")
+	if kind == "child" {
+		decision := field(value["waiting"], "decision_kind")
+		return decision == "approval" || decision == "budget"
+	}
+	return kind == nil || kind == "approval" || kind == "budget"
 }
 
 // loadsStrict is json.loads: one value and nothing but whitespace after it.

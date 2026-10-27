@@ -1,8 +1,7 @@
 package crew
 
-// @handle calls: an expert answers once with its own model and instructions (an assist "try" the host runner picks up,
-// the same path the desktop's 써보기 and Discord use); a team holds a meeting the engine drives. Both report like a
-// workflow run, {run_id, status, summary, waiting}, so every harness calls them through run_workflow.
+// Legacy direct expert/meeting helpers remain available to their existing callers.
+// New @ calls use the common server FLOW lifecycle in runs.go.
 
 import (
 	"fmt"
@@ -58,7 +57,7 @@ func askExpert(handle, task string, wait float64) (map[string]any, error) {
 		} else if status == "" {
 			status = "running"
 		}
-		return map[string]any{"run_id": id,"run_kind":"assist", "terminal":status!="running", "status": status, "summary": summary, "waiting": nil}
+		return map[string]any{"run_id": id, "run_kind": "assist", "terminal": status != "running", "status": status, "summary": summary, "waiting": nil}
 	})
 }
 
@@ -78,7 +77,7 @@ func holdMeeting(teamID, task string, wait float64) (map[string]any, error) {
 }
 
 func meetingView(id string, m map[string]any) map[string]any {
-	status := map[string]string{"concluded": "succeeded", "no_conclusion": "succeeded", "stopped": "stopped", "failed": "failed",
+	status := map[string]string{"concluded": "succeeded", "no_conclusion": "partial", "stopped": "stopped", "failed": "failed",
 		"waiting": "waiting"}[pyStr(m["status"])]
 	if status == "" {
 		status = "running"
@@ -103,7 +102,8 @@ func meetingView(id string, m map[string]any) map[string]any {
 	if status == "failed" || status == "stopped" {
 		lines = append(lines, "끝난 이유: "+pyStr(getOr(m, "ended_reason", "")))
 	}
-	return map[string]any{"run_id": id,"run_kind":"meeting","terminal":in([]string{"succeeded","failed","stopped"},status), "status": status, "summary": strings.Join(lines, "\n"), "waiting": nil}
+	summary := strings.Join(lines, "\n")
+	return map[string]any{"run_id": id, "run_kind": "meeting", "terminal": in([]string{"succeeded", "failed", "stopped", "partial"}, status), "status": status, "summary": summary, "result": summary, "waiting": nil}
 }
 
 // pollView reads the record until its view leaves running or wait seconds pass, like waitRun.

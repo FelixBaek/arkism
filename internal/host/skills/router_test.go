@@ -304,7 +304,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 			t.Fatalf("work tool %d differs from host.WorkTools", i)
 		}
 	}
-	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work" {
+	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,list_workflow_runs,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,start_flow_improvement,get_flow_improvement,list_flow_improvements,advance_flow_improvement,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work" {
 		t.Fatal(names)
 	}
 	if _, err := routeSkills("  "); err == nil {

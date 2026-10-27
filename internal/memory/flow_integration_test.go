@@ -236,7 +236,7 @@ func TestFlowHTTPScopeRoleAndPrivacyBoundaries(t *testing.T) {
 	if err := f.repo.Replace(testCtx, colCrewRuns, r, r.Revision); err != nil {
 		t.Fatal(err)
 	}
-	h.call("POST", path, tokEngine, change, 409, nil)
+	h.call("POST", path, tokEngine, change, 404, nil) // erased results are hidden like quarantined ones
 }
 
 func TestFlowHTTPExpiredDeliveryLeaseNeverReclaimsSend(t *testing.T) {

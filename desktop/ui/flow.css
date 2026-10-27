@@ -21,3 +21,25 @@
 .flow-create-option small { color: var(--nc-muted); font-size: calc(.75rem * var(--fs, 1)); line-height: 1.5; }
 .wf-settings .crew-card.wf-preview { padding-top: 8rem; }
 .wf-settings .crew-card.wf-preview .crew-cover-img { height: 7.25rem; }
+.flow-history { max-width: 68rem; margin-inline: auto; }
+.flow-history-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
+.flow-history-head h2 { margin: 0; font-size: calc(1.125rem * var(--fs, 1)); }
+.flow-history-list { display: grid; gap: .625rem; }
+.flow-history-row { display: grid; gap: .375rem; width: 100%; height: auto; min-height: 4.5rem; align-content: center; padding: 1rem; text-align: left; white-space: normal; overflow-wrap: anywhere; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); color: var(--nc-text); }
+.flow-history-row small, .flow-history-note { color: var(--nc-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.flow-history-row:hover { border-color: var(--nc-accent); }
+.flow-history-row:focus-visible { outline: .125rem solid var(--nc-accent); outline-offset: .1875rem; }
+.flow-history-detail { padding: 1.25rem; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); }
+.flow-history-detail h3 { margin-block: 1.5rem .5rem; font-size: calc(.875rem * var(--fs, 1)); }
+.flow-result-text { margin-block: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }
+.flow-history-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; }
+.flow-delivery-recovery { margin-block: 1rem; padding: 1rem; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); }
+.flow-delivery-recovery summary { cursor: pointer; font-weight: 600; }
+.flow-delivery-recovery summary:focus-visible { outline: .125rem solid var(--nc-accent); outline-offset: .1875rem; }
+.flow-recovery-form, .flow-recovery-fields { display: grid; gap: .875rem; }
+.flow-recovery-field { display: grid; gap: .375rem; color: var(--nc-text); }
+.flow-recovery-field input, .flow-recovery-field select { width: 100%; min-width: 0; min-height: 2.5rem; }
+.flow-recovery-confirm { display: flex; align-items: flex-start; gap: .625rem; line-height: 1.6; }
+.flow-recovery-confirm[hidden] { display: none; }
+.flow-recovery-confirm input { flex: 0 0 auto; margin-block-start: .3rem; }
+.flow-recovery-form > button { justify-self: start; max-width: 100%; height: auto; min-height: 2.5rem; white-space: normal; }

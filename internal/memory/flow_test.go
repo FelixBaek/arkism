@@ -37,7 +37,7 @@ func flowFixture(t *testing.T) (*fixture, Record, CrewRunInput) {
 		t.Fatal("invalid research template")
 	}
 	it := f.crew(c)
-	in := CrewRunInput{Scope: scopeA, RequestID: "discord-event-1", Run: CrewRun{CrewID: it.ID, CrewRevision: it.Revision, Trigger: "discord", Status: "running", InvocationMode: "flow", Input: `{"request":"research"}`, Nodes: map[string]CrewRunNode{"start": {Status: "pending"}, "research": {Status: "pending"}, "end": {Status: "pending"}}, Origin: &CrewRunOrigin{Connector: "discord", GuildID:"123456789012345681",ChannelID:"123456789012345682",UserID:"123456789012345683", BotID: "bot-1", ThreadID: "123456789012345678", EventID: "123456789012345679"}}}
+	in := CrewRunInput{Scope: scopeA, RequestID: "discord-event-1", Run: CrewRun{CrewID: it.ID, CrewRevision: it.Revision, Trigger: "discord", Status: "running", InvocationMode: "flow", Input: `{"request":"research"}`, Nodes: map[string]CrewRunNode{"start": {Status: "pending"}, "research": {Status: "pending"}, "end": {Status: "pending"}}, Origin: &CrewRunOrigin{Connector: "discord", GuildID: "123456789012345681", ChannelID: "123456789012345682", UserID: "123456789012345683", BotID: "bot-1", ThreadID: "123456789012345678", EventID: "123456789012345679"}}}
 	return f, it, in
 }
 

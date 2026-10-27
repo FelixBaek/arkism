@@ -25,7 +25,7 @@ var crewNodeStatuses = []string{"pending", "running", "waiting", "done", "failed
 
 // budget: a step would go over an agent's or Discord's budget; a person decides
 // (POST …/decision) whether the run goes on, so a run never overspends silently.
-var crewWaitKinds = []string{"approval", "wait", "callback", "budget"}
+var crewWaitKinds = []string{"approval", "wait", "callback", "budget", "child", "capacity"}
 var crewHashRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 const crewRunMaxBytes = 2 << 20
@@ -46,10 +46,16 @@ type CrewRunNode struct {
 }
 
 type CrewRunWaiting struct {
-	NodeID   string     `json:"node_id" bson:"node_id"`
-	Kind     string     `json:"kind" bson:"kind"`
-	ResumeAt *time.Time `json:"resume_at,omitempty" bson:"resume_at,omitempty"`
-	Question string     `json:"question,omitempty" bson:"question,omitempty"`
+	EffectID      string     `json:"effect_id,omitempty" bson:"effect_id,omitempty"`
+	EffectHash    string     `json:"effect_hash,omitempty" bson:"effect_hash,omitempty"`
+	ChildRunID    string     `json:"child_run_id,omitempty" bson:"child_run_id,omitempty"`
+	ChildKind     string     `json:"child_kind,omitempty" bson:"child_kind,omitempty"`
+	DecisionKind  string     `json:"decision_kind,omitempty" bson:"decision_kind,omitempty"`
+	ChildRevision int64      `json:"child_revision,omitempty" bson:"child_revision,omitempty"`
+	NodeID        string     `json:"node_id" bson:"node_id"`
+	Kind          string     `json:"kind" bson:"kind"`
+	ResumeAt      *time.Time `json:"resume_at,omitempty" bson:"resume_at,omitempty"`
+	Question      string     `json:"question,omitempty" bson:"question,omitempty"`
 	// CallbackHash is the SHA-256 (hex) of a one-time callback token; the token
 	// itself stays with the engine.
 	CallbackHash string `json:"callback_hash,omitempty" bson:"callback_hash,omitempty"`
@@ -63,6 +69,16 @@ type CrewRunDecision struct {
 }
 
 type CrewRun struct {
+	ResultRevision  int64                      `json:"result_revision,omitempty" bson:"result_revision,omitempty"`
+	Effects         map[string]string          `json:"effects,omitempty" bson:"effects,omitempty"`
+	SourceType      string                     `json:"source_type,omitempty" bson:"source_type,omitempty"`
+	RootID          string                     `json:"root_id,omitempty" bson:"root_id,omitempty"`
+	ParentID        string                     `json:"parent_id,omitempty" bson:"parent_id,omitempty"`
+	ParentNodeID    string                     `json:"parent_node_id,omitempty" bson:"parent_node_id,omitempty"`
+	Depth           int                        `json:"depth,omitempty" bson:"depth,omitempty"`
+	Children        map[string]FlowChildRef    `json:"children,omitempty" bson:"children,omitempty"`
+	Definitions     map[string]FlowDefinition  `json:"definitions,omitempty" bson:"definitions,omitempty"`
+	Policy          *FlowPolicy                `json:"policy,omitempty" bson:"policy,omitempty"`
 	ResearchMode    string                     `json:"research_mode,omitempty" bson:"research_mode,omitempty"`
 	CancelRequested bool                       `json:"cancel_requested,omitempty" bson:"cancel_requested,omitempty"`
 	InvocationMode  string                     `json:"invocation_mode,omitempty" bson:"invocation_mode,omitempty"`
@@ -220,6 +236,12 @@ func (s *Service) ListCrewRuns(ctx context.Context, token string, scope Scope, c
 		if !readableCrewRun(r) || crewID != "" && r.CrewRun.CrewID != crewID || status != "" && r.CrewRun.Status != status {
 			continue
 		}
+		if err := s.authorizeFlowSources(ctx, token, r); err != nil {
+			if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) {
+				continue
+			}
+			return CrewRunPage{}, err
+		}
 		out.Items = append(out.Items, r)
 		if len(out.Items) == limit {
 			break
@@ -245,6 +267,9 @@ func (s *Service) GetCrewRun(ctx context.Context, token string, scope Scope, id 
 	}
 	if !readableCrewRun(r) {
 		return Record{}, ErrNotFound
+	}
+	if err := s.authorizeFlowSources(ctx, token, r); err != nil {
+		return Record{}, err
 	}
 	return r, nil
 }
@@ -290,6 +315,14 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		r.ID = flowRequestID(in.Scope, d.PrincipalID, in.RequestID)
 		r.RequestHash = flowRequestHash(in.Run)
 	}
+	var definitions map[string]FlowDefinition
+	if run.InvocationMode == "flow" {
+		definitions, err = s.flowDefinitions(ctx, token, in.Scope, run.CrewID)
+		if err != nil {
+			return Record{}, err
+		}
+		run.RootID = r.ID
+	}
 	owners, err := s.workflowOwners(ctx, in.Scope)
 	if err != nil {
 		return Record{}, err
@@ -299,6 +332,9 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 			if old, e := tx.Get(ctx, colCrewRuns, in.Scope, r.ID); e == nil {
 				if !readableCrewRun(old) || old.RequestHash != r.RequestHash {
 					return ErrConflict
+				}
+				if e := s.authorizeFlowSourcesFrom(ctx, token, old, tx); e != nil {
+					return e
 				}
 				r = old
 				return nil
@@ -310,18 +346,14 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 		if err != nil {
 			return err
 		}
-		if !liveWorkflow(crew) {
-			return ErrInvalid
-		}
-		if err := prepareFlowRun(&run, crew, in.RequestID, resumed); err != nil {
+		if err := checkCrewRunTarget(crew, &run, owners, d.Role); err != nil {
 			return err
 		}
-		// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook; a 시험 실행 (test) is the one exception.
-		if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" && run.Trigger != "test" {
-			return ErrInvalid
+		if err := prepareFlowRun(&run, crew, in.RequestID, resumed, definitions); err != nil {
+			return err
 		}
-		if run.Trigger == "agent" && !crewRunWriter(d.Role) {
-			return ErrDenied
+		if err := checkFlowDefinitions(ctx, tx, in.Scope, definitions); err != nil {
+			return err
 		}
 		approvals := map[string]bool{}
 		addApprovals(approvals, crew.Crew)
@@ -340,10 +372,28 @@ func (s *Service) CreateCrewRun(ctx context.Context, token string, in CrewRunInp
 	})
 	if errors.Is(err, ErrConflict) && in.RequestID != "" {
 		if old, e := s.Repo.Get(ctx, colCrewRuns, in.Scope, flowRequestID(in.Scope, d.PrincipalID, in.RequestID)); e == nil && readableCrewRun(old) && old.RequestHash == flowRequestHash(in.Run) {
+			if e = s.authorizeFlowSources(ctx, token, old); e != nil {
+				return Record{}, e
+			}
 			return old, nil
 		}
 	}
 	return r, err
+}
+
+// checkCrewRunTarget checks that the crew item may start this run.
+func checkCrewRunTarget(crew Record, run *CrewRun, owners map[string]string, role string) error {
+	if !liveFlowTarget(crew) || run.InvocationMode != "flow" && crew.Crew.Type != "workflow" {
+		return ErrInvalid
+	}
+	// A workflow an agent works by runs only when that agent is called (@), never alone by $, schedule or webhook; a 시험 실행 (test) is the one exception.
+	if _, owned := owners[crew.Crew.Handle]; owned && run.Trigger != "agent" && run.Trigger != "test" {
+		return ErrInvalid
+	}
+	if run.Trigger == "agent" && !crewRunWriter(role) {
+		return ErrDenied
+	}
+	return nil
 }
 
 // UpdateCrewRun replaces a run's progress. The crew, revision and trigger are
@@ -372,36 +422,28 @@ func (s *Service) UpdateCrewRun(ctx context.Context, token, id string, in CrewRu
 		if err := checkCrewRunProgress(r, in); err != nil {
 			return err
 		}
+		if err := s.authorizeFlowSourcesFrom(ctx, token, r, tx); err != nil {
+			return err
+		}
 		old := r.CrewRun
-		approvals := map[string]bool{}
-		if old.InvocationMode == "flow" && old.Definition != nil {
-			addApprovals(approvals, old.Definition)
-		} else {
-			var err error
-			approvals, err = s.approvalNodes(ctx, tx, in.Scope, old.CrewID)
-			if err != nil {
-				return err
-			}
+		if err := checkFlowEffectProgress(ctx, tx, r, in.Run); err != nil {
+			return err
+		}
+		if err := checkFlowChildrenTerminal(ctx, tx, r, in.Run.Status); err != nil {
+			return err
+		}
+		approvals, err := s.runApprovals(ctx, tx, in.Scope, old)
+		if err != nil {
+			return err
 		}
 		if !keepsApprovals(old, in.Run, approvals) {
 			return ErrInvalid
 		}
 		run := in.Run
-		run.CancelRequested = old.CancelRequested
-		run.Definition = old.Definition
 		if run.InvocationMode != old.InvocationMode {
 			return ErrInvalid
 		}
-		// A back edge that sends an approval node to pending again needs a new decision.
-		run.Decisions = nil
-		for id, dec := range old.Decisions {
-			if n, ok := run.Nodes[id]; !ok || n.Status != "pending" {
-				if run.Decisions == nil {
-					run.Decisions = map[string]CrewRunDecision{}
-				}
-				run.Decisions[id] = dec
-			}
-		}
+		keepCrewRunFields(&run, old, r.Revision)
 		if run.Nodes == nil {
 			run.Nodes = map[string]CrewRunNode{}
 		}
@@ -421,8 +463,46 @@ func (s *Service) UpdateCrewRun(ctx context.Context, token, id string, in CrewRu
 	return out, err
 }
 
+// runApprovals are the approval nodes of the graph a run follows: a flow run's
+// pinned definition, else the crew item's current graph.
+func (s *Service) runApprovals(ctx context.Context, tx Tx, scope Scope, old *CrewRun) (map[string]bool, error) {
+	if old.InvocationMode == "flow" && old.Definition != nil {
+		approvals := map[string]bool{}
+		addApprovals(approvals, old.Definition)
+		return approvals, nil
+	}
+	return s.approvalNodes(ctx, tx, scope, old.CrewID)
+}
+
+// keepCrewRunFields copies onto a progress update the fields only the store
+// sets, and keeps the decisions still in force.
+func keepCrewRunFields(run, old *CrewRun, revision int64) {
+	run.CancelRequested = old.CancelRequested
+	if old.InvocationMode == "flow" {
+		run.Deadline = old.Deadline
+	}
+	run.Definition = old.Definition
+	run.RootID, run.ParentID, run.ParentNodeID, run.Depth = old.RootID, old.ParentID, old.ParentNodeID, old.Depth
+	run.Definitions, run.Children, run.Policy, run.SourceType = old.Definitions, old.Children, old.Policy, old.SourceType
+	run.Effects = old.Effects
+	run.ResultRevision = old.ResultRevision
+	if run.InvocationMode == "flow" && terminalCrewRun(run.Status) {
+		run.ResultRevision = revision + 1
+	}
+	// A back edge that sends an approval node to pending again needs a new decision.
+	run.Decisions = nil
+	for id, dec := range old.Decisions {
+		if n, ok := run.Nodes[id]; !ok || n.Status != "pending" {
+			if run.Decisions == nil {
+				run.Decisions = map[string]CrewRunDecision{}
+			}
+			run.Decisions[id] = dec
+		}
+	}
+}
+
 func validateCrewRunStart(in CrewRunInput) (bool, error) {
-	if !validScope(in.Scope) || !validCrewRun(in.Run) || in.Run.CancelRequested || in.Run.Definition != nil || in.Run.Status != "running" || in.Run.Waiting != nil || len(in.Run.Decisions) > 0 || in.RequestID != "" && !validRunLabel(in.RequestID, 200) {
+	if !validScope(in.Scope) || !validCrewRun(in.Run) || !clientFlowStart(in.Run) || in.Run.Status != "running" || in.Run.Waiting != nil || len(in.Run.Decisions) > 0 || in.RequestID != "" && !validRunLabel(in.RequestID, 200) {
 		return false, ErrInvalid
 	}
 	resumed := false
@@ -450,6 +530,9 @@ func checkCrewRunProgress(r Record, in CrewRunUpdate) error {
 		return ErrInvalid
 	}
 	if old.InvocationMode == "flow" {
+		if old.Deadline != nil && !old.Deadline.After(time.Now()) && in.Run.Status == "succeeded" {
+			return ErrConflict
+		}
 		if in.Run.Input != old.Input {
 			return ErrInvalid
 		}
@@ -562,17 +645,19 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 		if !readableCrewRun(r) {
 			return ErrNotFound
 		}
+		if err := s.authorizeFlowSourcesFrom(ctx, token, r, tx); err != nil {
+			return err
+		}
+		if r.CrewRun.InvocationMode == "flow" && r.CrewRun.Waiting != nil && r.CrewRun.Waiting.Kind == "child" {
+			out, err = s.decideFlowChild(ctx, tx, token, r, in, d, 0, r.CrewRun.Trigger == "discord")
+			return err
+		}
 		run := *r.CrewRun
-		w := run.Waiting
-		// A service (the Discord host, on an allowed person's button) answers budget waits only; approvals stay people's.
-		if d.Role == roleService && (w == nil || w.Kind != "budget" || run.Trigger != "discord") {
-			return ErrDenied
+		if err := checkCrewRunDecision(r, in, d.Role); err != nil {
+			return err
 		}
-		if r.Revision != in.ExpectedRevision || run.Status != "waiting" || w == nil || w.Kind != "approval" && w.Kind != "budget" || w.NodeID != in.NodeID {
-			return ErrConflict
-		}
-		if _, done := run.Decisions[in.NodeID]; done {
-			return ErrConflict
+		if err := s.decideFlowEffect(ctx, tx, token, r, in.Approve, d); err != nil {
+			return err
 		}
 		decisions := make(map[string]CrewRunDecision, len(run.Decisions)+1)
 		for k, v := range run.Decisions {
@@ -592,6 +677,24 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "decide:"+colCrewRuns, id)
 	})
 	return out, err
+}
+
+// checkCrewRunDecision checks that the run waits on the approval or budget
+// node the decision answers.
+func checkCrewRunDecision(r Record, in CrewRunDecisionInput, role string) error {
+	run := r.CrewRun
+	w := run.Waiting
+	// A service (the Discord host, on an allowed person's button) answers budget waits only; approvals stay people's.
+	if role == roleService && (w == nil || w.Kind != "budget" || run.Trigger != "discord") {
+		return ErrDenied
+	}
+	if r.Revision != in.ExpectedRevision || run.Status != "waiting" || w == nil || w.Kind != "approval" && w.Kind != "budget" || w.NodeID != in.NodeID {
+		return ErrConflict
+	}
+	if _, done := run.Decisions[in.NodeID]; done {
+		return ErrConflict
+	}
+	return nil
 }
 
 func crewRunRoutes(mux routeRegistrar, s *Service) {
