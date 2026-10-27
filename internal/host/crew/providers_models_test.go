@@ -207,6 +207,18 @@ func TestModelTestResultIsKeptUntilReported(t *testing.T) {
 	}
 }
 
+func TestFinishedCLIUpdateReportsTheInventoryWithItsResult(t *testing.T) {
+	f := &providersFake{}
+	patch(t, &runnerCall, f.call)
+	poolMu.Lock()
+	testsDone["cu1"] = map[string]any{"id": "cu1", "status": "done"}
+	poolMu.Unlock()
+	modelTestJob(map[string]any{"request": map[string]any{"id": "cu1", "kind": "cli_update", "provider": "claude"}})
+	if len(f.reports) != 1 || f.reports[0]["providers"] == nil {
+		t.Fatalf("finished update sent without the inventory: %v", f.reports)
+	}
+}
+
 func TestProvidersWatchReportsFailuresAndStops(t *testing.T) {
 	f := &providersFake{fail: map[string]error{"/v1/providers/handoff": errors.New("down")}}
 	stop := make(chan struct{})
