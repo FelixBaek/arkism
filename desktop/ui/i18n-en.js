@@ -4401,6 +4401,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "새 후보": "New draft",
   "잠잠함": "Quiet",
   "바탕 기억이 수정됨": "Source memories changed",
+  "그 뒤 승인된 기억 있음": "Memories approved since",
+  "바탕 기억이 대체됨": "A source memory was replaced",
   "요약을 불러오는 중…": "Loading summaries…",
   "검색과 맞는 주제가 없어요.": "No topics match your search.",
   "아직 주제 요약이 없어요. 승인된 기억이 쌓이면 밤사이 제안돼요.": "No topic summaries yet. They are suggested overnight once approved memories pile up.",

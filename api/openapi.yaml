@@ -16086,6 +16086,284 @@
         }
       }
     },
+    "/v1/memories/{id}/confirm": {
+      "post": {
+        "summary": "Count a lesson held again (proof_count), text and revision unchanged",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The confirmed record (untrusted data)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Human transition:memories permission and expected revision. Future review_due_at; null or omission clears the reminder. Does not approve, expire, renew originals, change trust or resolve a conflict. Source/deletion fences and audit commit in the same transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryConfirmInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memory_candidates/{id}/confirm": {
+      "post": {
+        "summary": "Count a waiting lesson held again (proof_count), text and revision unchanged",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The confirmed record (untrusted data)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Record"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Human transition:memories permission and expected revision. Future review_due_at; null or omission clears the reminder. Does not approve, expire, renew originals, change trust or resolve a conflict. Source/deletion fences and audit commit in the same transaction.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MemoryConfirmInput"
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/code_graph/repos": {
       "get": {
         "operationId": "get_v1_code_graph_repos",
@@ -38810,6 +39088,17 @@
           },
           "authority": {
             "const": "data_only_untrusted"
+          }
+        }
+      },
+      "MemoryConfirmInput": {
+        "type": "object",
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
           }
         }
       },

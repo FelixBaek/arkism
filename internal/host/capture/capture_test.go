@@ -436,7 +436,7 @@ func TestCaptureApplyLessonsOnlyCapturesAndNeverApproves(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(paths, []string{"/v1/capture"}) || len(field(sent, "claims").([]any)) != 2 {
+	if !reflect.DeepEqual(paths, []string{"/v1/memory_candidates/c1/confirm", "/v1/capture"}) || len(field(sent, "claims").([]any)) != 2 {
 		t.Fatal(paths, sent)
 	}
 	if len(trialState()) != 0 {

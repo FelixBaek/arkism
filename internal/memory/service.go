@@ -1612,6 +1612,7 @@ func HitFromRecord(col string, r Record) Hit {
 		hit.ConflictPending = r.ConflictID != ""
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)
 		hit.SupersededBy = r.SupersededBy
+		hit.ProofCount, hit.LastConfirmedAt = r.ProofCount, r.LastConfirmedAt
 	}
 	if r.Generator != nil {
 		hit.GeneratorModel = r.Generator.Model

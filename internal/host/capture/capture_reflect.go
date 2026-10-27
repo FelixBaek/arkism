@@ -694,12 +694,13 @@ func networkish(err error) bool {
 }
 
 // applyLessons stores new and replacing lessons as candidates with their risk call; a person approves them
-// (ADR-0022). A confirm only notes the recurrence: approving on it would be the AI deciding.
+// (ADR-0022). A confirm only counts the recurrence on the lesson (proof_count): approving on it would be the AI deciding.
 func applyLessons(checked []checkedLesson, eventID, sid, origin string) error {
 	claims := []any{}
 	for _, c := range checked {
 		if c.action == "confirm" {
 			metric(kv("event", "reflection_confirmed"), kv("target_id", c.target["id"]), kv("same_session", containsAny(listOf(c.target["tags"]), "session:"+sid)))
+			confirmLesson(c.target)
 			continue
 		}
 		claims = append(claims, c.claim)
@@ -709,6 +710,17 @@ func applyLessons(checked []checkedLesson, eventID, sid, origin string) error {
 	}
 	_, err := sendCapture("session_end", eventID, sid, host.NowISO(), claims, origin, 0, reflectGenerator(origin))
 	return err
+}
+
+// confirmLesson raises the lesson's proof count on the server; a failure is a metric line, never a stopped reflection.
+func confirmLesson(target map[string]any) {
+	col := "memory_candidates"
+	if target["status"] == "active" {
+		col = "memories"
+	}
+	if _, err := capPost(fmt.Sprintf("/v1/%s/%s/confirm", col, str(target["id"])), host.Obj{{Key: "scope", Value: capScope()}}, 30*time.Second); err != nil {
+		metric(kv("event", "reflection_confirm_failure"), kv("target_id", target["id"]), kv("error", errorCode(err)))
+	}
 }
 
 type existingLessons struct {

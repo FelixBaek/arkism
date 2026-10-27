@@ -175,6 +175,7 @@ window.ArkismDigests = (ctx) => {
       const cell = el("div", "cell mem-cell");
       const meta = [`기억 ${d.members?.length || 0}개`, `열기 ${scoreOf(e)}`, ago(d.updated_at)];
       if (e.digest?.outdated) meta.push("바탕 기억이 수정됨");
+      if (e.digest?.stale) meta.push("그 뒤 승인된 기억 있음");
       cell.append(raw(el("div", "text", titleOf(e))), el("div", "mem-meta", meta.join(" · ")));
       const cls = classOf(e, max);
       const badge = e.cand ? el("span", "mem-badge warn", e.digest ? "새 후보" : PROPOSAL[e.cand.proposal] || "새 후보")
@@ -228,6 +229,8 @@ window.ArkismDigests = (ctx) => {
     head.append(el("p", "d-kind", d ? `주제 · 열기 ${scoreOf(e)}` : `주제 후보 · ${PROPOSAL[c.proposal] || "새 후보"}`), raw(el("h2", "", titleOf(e))));
     if (d) head.append(el("p", "meta", `기억 ${d.members?.length || 0}개 · 요약 v${d.revision} · ${day(d.review?.at || d.updated_at)} 요약`));
     if (d?.outdated) head.append(el("span", "mem-badge warn dg-flag", "바탕 기억이 수정됨"));
+    if (d?.stale) head.append(el("span", "mem-badge warn dg-flag", "그 뒤 승인된 기억 있음"));
+    if (d?.stale_mark) head.append(el("span", "mem-badge warn dg-flag", "바탕 기억이 대체됨"));
     body.append(head);
     if (c) body.append(candidateCard(c, "topic", topicLead(c)));
     if (d) {

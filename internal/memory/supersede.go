@@ -46,7 +46,7 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 	if e != nil {
 		return out, e
 	}
-	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	e = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
 		out = SupersedeOutput{}
 		old, e := tx.Get(ctx, "memories", in.Scope, id)
 		if e != nil {
@@ -94,6 +94,9 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 			return e
 		}
 		if e = enqueue(ctx, tx, "memories", next); e != nil {
+			return e
+		}
+		if e = staleCascade(ctx, tx, old, next, actor.PrincipalID, now); e != nil {
 			return e
 		}
 		if e = audit(ctx, tx, in.Scope, actor.PrincipalID, "supersede:memories", old.ID); e != nil {

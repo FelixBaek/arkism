@@ -470,6 +470,12 @@ func eraseErasureRow(ctx context.Context, tx Tx, job Record, ref Ref, currentPar
 			return e
 		}
 		progress.PendingArtifacts = append(progress.PendingArtifacts, artifactCleanup{ID: r.ID, Digest: r.Artifact.Digest})
+	} else if ref.Collection == "jobs" {
+		if e = scrubUsageReceipt(ctx, tx, r, job.Target.ID); e != nil {
+			return e
+		}
+		progress.DeletedRecords["context_usage"]++
+		return nil
 	} else if e = tx.Delete(ctx, ref.Collection, job.Scope, ref.ID, ref.Revision); e != nil {
 		return e
 	}
@@ -490,6 +496,8 @@ func erasureRowReferencesTarget(ctx context.Context, tx Tx, job Record, ref Ref,
 	if isMemoryErasureKind(job.Kind) {
 		if ref.Collection == "evaluations" {
 			found = memoryEvaluationReferences(r, job.Target.ID, job.Proposal != nil, job.Kind)
+		} else if ref.Collection == "jobs" {
+			found = usageReceiptReferences(r, job.Target.ID)
 		} else {
 			found = memoryRelationReferences(r, job.Target.ID, job.Proposal != nil, job.Kind)
 			if ref.Collection == "memory_relations" {
@@ -732,7 +740,7 @@ func (s *Service) retryDeletion(ctx context.Context, token, col, id string, in R
 func sourceErasureCollections(kind string) []string {
 	switch kind {
 	case memoryEvaluationErasureKind, candidateEvaluationErasureKind:
-		return []string{"evaluations", "memory_relations", colSkillVersions, "sources"}
+		return []string{"evaluations", "memory_relations", colSkillVersions, "sources", "jobs"}
 	case memoryRelationErasureKind:
 		return []string{"memory_relations"}
 	case sourceMemoryErasureKind:
@@ -802,4 +810,21 @@ func deferHeldErasure(ctx context.Context, tx Tx, lease Record, actor, action st
 		return err
 	}
 	return audit(ctx, tx, lease.Scope, actor, action+"_held", lease.ID)
+}
+
+// usageReceiptReferences: a context_usage receipt handed out this memory.
+func usageReceiptReferences(r Record, memoryID string) bool {
+	return r.Kind == "context_usage" && r.Usage != nil && usedRef(r.Usage, memoryID)
+}
+
+// scrubUsageReceipt takes the erased memory out of a receipt and deletes a receipt with nothing left.
+func scrubUsageReceipt(ctx context.Context, tx Tx, r Record, memoryID string) error {
+	u := *r.Usage
+	u.Items = slices.DeleteFunc(slices.Clone(u.Items), func(it MemoryUse) bool { return it.Memory.ID == memoryID })
+	if len(u.Items) == 0 {
+		return tx.Delete(ctx, "jobs", r.Scope, r.ID, r.Revision)
+	}
+	prev := r.Revision
+	r.Usage, r.Revision, r.UpdatedAt = &u, r.Revision+1, time.Now().UTC()
+	return tx.Replace(ctx, "jobs", r, prev)
 }
