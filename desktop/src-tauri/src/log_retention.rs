@@ -120,13 +120,16 @@ pub fn maintain(directory: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
     fn root() -> std::path::PathBuf {
+        // a counter, not only the clock: Windows tests running in parallel can read the same time
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let root = std::env::temp_dir().join(format!(
-            "arkism-log-test-{}-{}",
+            "arkism-log-test-{}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_nanos()
+                .as_nanos(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         fs::create_dir(&root).unwrap();
         root
