@@ -48,7 +48,7 @@ window.ArkismAlerts = (() => {
       if (review != null) seen.review = review;
       if (error != null) seen.error = error;
       if (!away()) return;
-      for (const [title, body] of out.slice(0, 3)) await tauri.invoke("notify", { title, body, sound: !!prefs.sound }).catch(() => {});
+      await Promise.all(out.slice(0, 3).map(([title, body]) => tauri.invoke("notify", { title, body, sound: !!prefs.sound }).catch(() => {})));
     } finally { busy = false; }
   }
   return { check, get: () => ({ ...prefs }), set: (patch) => {
