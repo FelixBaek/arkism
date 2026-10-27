@@ -84,10 +84,17 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 	if err := x.researchApproval(n); err != nil {
 		return result{}, err
 	}
-	c := x.shared(n.Config)
 	if out, ok := x.fake(n, input); ok {
 		return result{out: out}, nil
 	}
+	if x.flow != nil && flowChildNode(n) {
+		return x.runFlowChild(ctx, n, input)
+	}
+	return e.executeNode(ctx, x, n, input)
+}
+
+func (e *Engine) executeNode(ctx context.Context, x *runExec, n Node, input any) (result, error) {
+	c := x.shared(n.Config)
 	switch n.Type {
 	case "start", "schedule", "webhook":
 		return result{out: input}, nil
@@ -125,6 +132,9 @@ func (e *Engine) execute(ctx context.Context, x *runExec, n Node, input any) (re
 	case "wait":
 		return e.runWait(c, input)
 	case "notify":
+		if x.flow != nil {
+			return x.runFlowNotify(ctx, n, input)
+		}
 		out, err := e.notify(ctx, c, input)
 		return result{out: out}, err
 	case "end":
@@ -419,29 +429,36 @@ func runTrace(t map[string]any) map[string]any {
 // stop the runner, so nothing keeps working after the node failed.
 func (e *Engine) callAI(ctx context.Context, s aiSpec, limit time.Duration, retries int) (aiAnswer, error) {
 	s.TimeoutS = max(1, int((limit-5*time.Second)/time.Second))
-	in, _ := json.Marshal(s)
-	args := append(append([]string{}, e.Runner...), "run-node", "--json")
 	var err error
 	for try := 0; try <= retries && ctx.Err() == nil; try++ {
-		var out []byte
-		out, err = runCmd(ctx, cmdSpec{args: args, env: os.Environ(), stdin: in, timeout: limit})
 		var res aiAnswer
-		switch {
-		case json.Unmarshal(bytes.TrimSpace(out), &res) != nil:
-			if err == nil {
-				err = failf("ai_output", "실행기가 JSON으로 답하지 않았어요")
-			}
-		case !res.OK:
-			err = failf("ai_failed", "%s", clip(res.Error, 300))
-			if res.Backend != nil {
-				return aiAnswer{Backend: runTrace(res.Backend)}, err // one external task: never tried again
-			}
-		default:
-			res.Backend = runTrace(res.Backend)
-			return res, nil
+		res, err = e.budgetedAI(ctx, s, try, func() (aiAnswer, error) { return e.callAIOnce(ctx, s, limit) })
+		if err == nil || res.Backend != nil || flowCallControl(err) {
+			return res, err // an external task or denied dispatch is never retried
 		}
 	}
+	if ctx.Err() != nil {
+		return aiAnswer{}, ctx.Err()
+	}
 	return aiAnswer{}, err
+}
+
+func (e *Engine) callAIOnce(ctx context.Context, s aiSpec, limit time.Duration) (aiAnswer, error) {
+	in, _ := json.Marshal(s)
+	args := append(append([]string{}, e.Runner...), "run-node", "--json")
+	out, err := runCmd(ctx, cmdSpec{args: args, env: os.Environ(), stdin: in, timeout: limit})
+	var res aiAnswer
+	if json.Unmarshal(bytes.TrimSpace(out), &res) != nil {
+		if err == nil {
+			err = failf("ai_output", "실행기가 JSON으로 답하지 않았어요")
+		}
+		return res, err
+	}
+	res.Backend = runTrace(res.Backend)
+	if !res.OK {
+		return res, failf("ai_failed", "%s", clip(res.Error, 300))
+	}
+	return res, nil
 }
 
 func intIn(s string, lo, hi, def int) int {
@@ -463,10 +480,10 @@ func joinText(parts ...string) string {
 }
 
 // instructions: the persona's text, the node's own, its fence and done rule.
-func (e *Engine) instructions(c map[string]string) (string, error) {
+func (e *Engine) instructions(ctx context.Context, c map[string]string) (string, error) {
 	persona := ""
 	if id := strings.TrimSpace(c["persona"]); id != "" {
-		it, ok := e.item(id)
+		it, ok := e.roleItem(ctx, id)
 		if !ok || it.Crew.Type != "persona" {
 			return "", failf("bad_config", "페르소나 %s를 찾지 못했어요", id)
 		}
@@ -523,13 +540,16 @@ func routePick(answer string, ports []string, def string) (string, string) {
 }
 
 func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (result, error) {
-	c := n.Config
-	instr, err := e.instructions(c)
+	c := x.aiConfig(ctx, n.Config)
+	instr, err := e.instructions(ctx, c)
 	if err != nil {
 		return result{}, err
 	}
 	s := aiSpec{Model: cmp.Or(c["model"], x.item.Crew.Model, e.DefaultModel), Effort: cmp.Or(c["effort"], "medium"), Instructions: instr,
 		CWD: expandHome(render(c["cwd"], input)), Access: c["access"], Once: n.Type == "ai_once", Research: c["validator"] == "research-v1", Skills: skillList(c["skills"])}
+	if err := checkFlowAI(ctx, s, c["backend"]); err != nil {
+		return result{}, err
+	}
 	limit := durationOr(c["timeout"], 20*time.Minute)
 	s.Task = taskText(c["goal"], input)
 	if s.Once {
@@ -553,7 +573,7 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 		return e.runCollab(ctx, c, s, limit, retries, ports, def)
 	}
 	s.Task += routeAsk(ports)
-	res, err := e.callAI(ctx, s, limit, retries)
+	res, err := e.callWithFallback(ctx, s, c["fallback_model"], limit, retries)
 	if err != nil {
 		return result{trace: res.Backend}, err
 	}
@@ -584,6 +604,7 @@ func (e *Engine) runAI(ctx context.Context, x *runExec, n Node, input any) (resu
 }
 
 type collabWorker struct {
+	skills       []string
 	Expert       string `json:"expert,omitempty"` // a saved expert: its model and instructions are the defaults
 	Name         string `json:"name"`
 	Model        string `json:"model"`
@@ -604,20 +625,15 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 		return result{}, failf("bad_config", "협업에는 workers(JSON 배열)가 필요해요")
 	}
 	most, conc := intIn(c["max_workers"], 1, 16, 5), intIn(c["concurrency"], 1, 16, 3)
-	var names []string
-	for i, w := range workers {
-		if it, ok := e.item(w.Expert); ok && w.Expert != "" && (it.Crew.Type == "agent" || it.Crew.Type == "persona" || it.Crew.Type == "template") {
-			workers[i].Name = cmp.Or(w.Name, it.Crew.Name)
-			workers[i].Model = cmp.Or(w.Model, it.Crew.Model)
-			workers[i].Instructions = joinText(it.Crew.Instructions, w.Instructions)
-		}
-		names = append(names, workers[i].Name)
+	names, err := e.collabWorkers(ctx, workers)
+	if err != nil {
+		return result{}, err
 	}
 	plan := s
 	plan.Once, plan.Skills = true, nil // splitting the work needs no skill bodies
 	plan.Task = fmt.Sprintf("다음 일을 최대 %d개 하위 작업으로 나눠 JSON 배열로만 답해: [{\"worker\":\"<워커 이름>\",\"task\":\"…\"}]\n워커: %s\n\n%s",
 		most, strings.Join(names, ", "), s.Task)
-	planned, err := e.callAI(ctx, plan, limit, retries)
+	planned, err := e.callAI(withCallLabel(ctx, "plan"), plan, limit, retries)
 	if err != nil {
 		return result{}, err
 	}
@@ -634,6 +650,7 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 	}
 	subs = subs[:min(len(subs), most)]
 	results := make([]collabResult, len(subs))
+	callErrors := make([]error, len(subs))
 	sem := make(chan struct{}, conc)
 	var wg sync.WaitGroup
 	for k, sub := range subs {
@@ -645,12 +662,17 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 		}
 		ws := s
 		ws.Model, ws.Instructions, ws.Task = cmp.Or(w.Model, s.Model), joinText(w.Instructions, fenceOf(c)), sub.Task
+		ws.Skills = mergeSkills(s.Skills, w.skills)
+		if flowContext(ctx) {
+			ws.Instructions = joinText(s.Instructions, ws.Instructions)
+		}
 		wg.Add(1)
 		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			res, err := e.callAI(ctx, ws, limit, retries)
+			res, err := e.callAI(withCallLabel(ctx, fmt.Sprintf("worker%d", k)), ws, limit, retries)
+			callErrors[k] = err
 			used.Add(res.tokens())
 			out := res.Output
 			if err != nil {
@@ -660,10 +682,13 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 		}()
 	}
 	wg.Wait()
+	if err := firstFlowCallError(callErrors); err != nil {
+		return result{}, err
+	}
 	done, _ := json.Marshal(results)
 	synth := s
 	synth.Task = s.Task + "\n\n하위 작업 결과(자료):\n" + string(done) + routeAsk(ports)
-	res, err := e.callAI(ctx, synth, limit, retries)
+	res, err := e.callAI(withCallLabel(ctx, "synthesis"), synth, limit, retries)
 	if err != nil {
 		return result{}, err
 	}
@@ -893,13 +918,16 @@ func (e *Engine) runLoop(ctx context.Context, x *runExec, n Node, input any) (re
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			r, err := e.execute(ctx, x, body, item)
+			r, err := e.execute(withCallLabel(ctx, fmt.Sprintf("item%d", i)), x, body, item)
 			results[i], errs[i] = r.out, err
 		}()
 	}
 	wg.Wait()
 	for i, err := range errs {
 		if err != nil {
+			if flowCallControl(err) {
+				return result{}, err
+			}
 			return result{}, failf("loop_item", "item %d: %s", i, errText(err))
 		}
 	}

@@ -102,6 +102,8 @@ func (f *flowExecution) monitor() {
 			}
 			if run.State.CancelRequested {
 				f.cancel(errFlowCancelled)
+			} else if f.e.flowExpired(run.State) {
+				f.cancel(errFlowDeadline)
 			} else if terminal(run.State.Status) {
 				f.cancel(errStopped)
 				return
@@ -123,7 +125,7 @@ func (f *flowExecution) monitor() {
 // user stop can then be acknowledged; process shutdown or a lost lease cannot
 // claim that the requested work completed or was cancelled by the user.
 func (f *flowExecution) finish(x *runExec, driveErr error) error {
-	if !errors.Is(context.Cause(f.ctx), errFlowCancelled) {
+	if !errors.Is(context.Cause(f.ctx), errFlowCancelled) && !errors.Is(context.Cause(f.ctx), errFlowDeadline) {
 		if errors.Is(context.Cause(f.ctx), errStopped) {
 			return nil
 		}
@@ -141,20 +143,25 @@ func (f *flowExecution) finish(x *runExec, driveErr error) error {
 	if terminal(fresh.State.Status) {
 		return nil
 	}
-	if !fresh.State.CancelRequested {
+	status, summary := f.stopOutcome(fresh)
+	if status == "" {
 		return driveErr
 	}
 	x.mu.Lock()
 	defer x.mu.Unlock()
 	fresh.LeaseToken = f.token
 	x.run = fresh
+	childrenDone, err := x.cancelChildren(ctx)
+	if err != nil || !childrenDone {
+		return err
+	}
 	for _, st := range x.run.State.Nodes {
 		if st.Status == "running" {
-			st.Status, st.Error = "skipped", "cancelled: user requested stop"
+			st.Status, st.Error = "skipped", summary
 			x.stamp(st)
 		}
 	}
-	x.closeRun("stopped", "사용자 요청으로 실행을 중단했어요")
+	x.closeRun(status, summary)
 	return x.saveLocked(ctx, "")
 }
 

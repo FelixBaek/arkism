@@ -35,7 +35,7 @@ func resolve(handle string, timeout time.Duration) (map[string]any, error) {
 		return nil, nil
 	}
 	if strings.HasPrefix(h, "@") {
-		key = "@" + key // an expert or a team, not a workflow
+		key = "@" + key // preserve the shared expert/team/workflow alias namespace
 	}
 	res, err := apiGet("/v1/crew/resolve?"+scopeQuery("handle", key), timeout)
 	if code := host.HTTPCode(err); code == 400 || code == 404 {
@@ -131,18 +131,12 @@ func apiErr(err error) error {
 // runView is {run_id, status, summary, waiting}: waiting is {node_id, question} while an approval waits for a person.
 func runView(rec map[string]any) map[string]any {
 	st := obj(rec["crew_run"])
-	w := obj(st["waiting"])
-	_, decided := obj(st["decisions"])[pyStr(w["node_id"])]
-	if _, isStr := w["node_id"].(string); !isStr {
-		decided = false
-	}
-	asks := st["status"] == "waiting" && (w["kind"] == "approval" || w["kind"] == "budget") && !decided
-	var waiting any
-	if asks {
-		waiting = host.Obj{{Key: "node_id", Value: getOr(w, "node_id", "")}, {Key: "question", Value: getOr(w, "question", "")}}
-	}
 	status := pyStr(st["status"])
-	return map[string]any{"run_id": getOr(rec, "id", ""), "run_kind": "workflow", "terminal": in([]string{"succeeded", "failed", "stopped"}, status), "status": getOr(st, "status", ""), "summary": getOr(st, "summary", ""), "result": workflowResult(st), "waiting": waiting, "cancel_requested": truthy(st["cancel_requested"])}
+	view := map[string]any{"run_id": getOr(rec, "id", ""), "run_kind": "workflow", "terminal": in([]string{"succeeded", "failed", "stopped"}, status), "status": getOr(st, "status", ""), "summary": getOr(st, "summary", ""), "result": workflowResult(st), "waiting": runDecisionWait(st), "cancel_requested": truthy(st["cancel_requested"])}
+	if typ := pyStr(getOr(st, "source_type", "")); typ != "" {
+		view["source_type"] = typ
+	}
+	return view
 }
 
 var viewOrder = []string{"run_id", "run_kind", "terminal", "status", "summary", "result", "waiting"}
@@ -180,30 +174,14 @@ func waitRun(runID string, wait float64, rec map[string]any) (map[string]any, er
 }
 
 // startWorkflow starts the workflow $handle with input {"request": task} (and "cwd" when given) and waits up to wait seconds.
-// An @handle calls an expert (one answer from its own model) or a team (a meeting) the same way.
+// An @handle starts the server-compiled FLOW for an expert, team or workflow.
 func startWorkflow(handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
 	return startWorkflowRequest(handle, task, wait, cwd, "", resolver)
 }
 
 func startWorkflowRequest(handle, task string, wait float64, cwd, requestID string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
-	if strings.HasPrefix(strings.TrimSpace(handle), "@") {
-		if resolver == nil {
-			resolver = resolveDefault
-		}
-		resolved, err := resolver(handle)
-		if err != nil {
-			return nil, apiErr(err)
-		}
-		if obj(obj(resolved["item"])["crew"])["type"] == "workflow" {
-			return startWorkflowAsRequest("call", handle, task, wait, cwd, requestID, true, func(string) (map[string]any, error) { return resolved, nil })
-		}
-		view, err := callAt(handle, task, wait, cwd, func(string) (map[string]any, error) { return resolved, nil })
-		if err == nil {
-			view["idempotency_supported"] = false
-		}
-		return view, err
-	}
-	return startWorkflowAsRequest("call", handle, task, wait, cwd, requestID, false, resolver)
+	flow := strings.HasPrefix(strings.TrimSpace(handle), "@")
+	return startWorkflowAsRequest("call", handle, task, wait, cwd, requestID, flow, resolver)
 }
 
 // startWorkflowAs is startWorkflow with the run's trigger: "agent" when the agent that owns the workflow starts it.
@@ -224,17 +202,14 @@ func startWorkflowAsRequest(trigger, handle, task string, wait float64, cwd, req
 	}
 	item := obj(res["item"])
 	c := obj(item["crew"])
-	if c["type"] != "workflow" {
-		return nil, crewErr(fmt.Sprintf("$%s(이)라는 워크플로우를 찾지 못했어요", strings.TrimLeft(strings.TrimSpace(handle), "$")))
+	nodes, err := startRunNodes(c, handle, flow)
+	if err != nil {
+		return nil, err
 	}
-	nodes := map[string]any{}
-	for _, n := range list(obj(c["graph"])["nodes"]) {
-		if id := obj(n)["id"]; truthy(id) {
-			nodes[pyStr(id)] = map[string]any{"status": "pending"}
+	if flow {
+		if err := requireFlowCapabilities(pyStr(item["id"])); err != nil {
+			return nil, err
 		}
-	}
-	if len(nodes) == 0 {
-		return nil, crewErr("이 워크플로우에는 아직 단계가 없어요")
 	}
 	input := host.Obj{{Key: "request", Value: strings.TrimSpace(task)}}
 	if cwd != "" {
@@ -256,7 +231,11 @@ func startWorkflowAsRequest(trigger, handle, task string, wait float64, cwd, req
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	return waitRun(pyStr(rec["id"]), wait, rec)
+	view, err := waitRun(pyStr(rec["id"]), wait, rec)
+	if err == nil && flow {
+		view["idempotency_supported"] = requestID != ""
+	}
+	return view, err
 }
 
 // decideRun answers the approval the run waits on, then waits like startWorkflow.

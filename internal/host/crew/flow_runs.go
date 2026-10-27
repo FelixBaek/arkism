@@ -2,11 +2,83 @@ package crew
 
 import (
 	"encoding/json"
-	"github.com/FelixBaek/arkism/internal/flowresult"
-	"github.com/FelixBaek/arkism/internal/host"
+	"fmt"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/flowresult"
+	"github.com/FelixBaek/arkism/internal/host"
 )
+
+func startRunNodes(c map[string]any, handle string, flow bool) (map[string]any, error) {
+	if flow && !in([]string{"workflow", "agent", "team"}, pyStr(c["type"])) {
+		return nil, crewErr(fmt.Sprintf("%s(이)라는 FLOW 작업을 찾지 못했어요", strings.TrimSpace(handle)))
+	}
+	if !flow && c["type"] != "workflow" {
+		return nil, crewErr(fmt.Sprintf("$%s(이)라는 워크플로우를 찾지 못했어요", strings.TrimLeft(strings.TrimSpace(handle), "$")))
+	}
+	nodes := map[string]any{}
+	for _, n := range list(obj(c["graph"])["nodes"]) {
+		if id := obj(n)["id"]; truthy(id) {
+			nodes[pyStr(id)] = map[string]any{"status": "pending"}
+		}
+	}
+	if c["type"] == "workflow" && len(nodes) == 0 {
+		return nil, crewErr("이 워크플로우에는 아직 단계가 없어요")
+	}
+	return nodes, nil
+}
+
+// Capabilities describe the current server/compiler boundary. A failed or old
+// capability endpoint must not silently start through a less constrained path.
+func requireFlowCapabilities(id string) error {
+	if !runIDRe.MatchString(id) {
+		return crewErr("FLOW 작업 id가 올바르지 않아요")
+	}
+	capability, err := apiGet("/v1/flow/capabilities/"+pyQuote(id, "")+"?"+scopeQuery(), 15*time.Second)
+	if err != nil {
+		return apiErr(err)
+	}
+	if capability["supported"] == true {
+		return nil
+	}
+	unsupported := stringList(capability["unsupported"])
+	if len(unsupported) > 0 {
+		return crewErr(fmt.Sprintf("이 FLOW 실행 경로에서 지원하지 않는 설정: %s. 기존 설정은 보존했어요", strings.Join(unsupported, ", ")))
+	}
+	return crewErr("이 작업은 아직 공통 FLOW 실행을 지원하지 않아요. 기존 설정은 보존했어요")
+}
+
+// Child waits carry the durable child link and observed decision revision.
+// Keep the parent node identity for the server's checked decision relay.
+func runDecisionWait(st map[string]any) any {
+	if st["status"] != "waiting" {
+		return nil
+	}
+	w := obj(st["waiting"])
+	if w["kind"] == "child" {
+		if w["decision_kind"] != "approval" && w["decision_kind"] != "budget" {
+			return nil
+		}
+		out := host.Obj{}
+		for _, key := range []string{"node_id", "question", "kind", "child_run_id", "child_kind", "decision_kind"} {
+			out = append(out, host.KV{Key: key, Value: getOr(w, key, "")})
+		}
+		if revision, present := w["child_revision"]; present {
+			out = append(out, host.KV{Key: "child_revision", Value: revision})
+		}
+		return out
+	}
+	if w["kind"] != "approval" && w["kind"] != "budget" {
+		return nil
+	}
+	if id, ok := w["node_id"].(string); ok {
+		if _, decided := obj(st["decisions"])[id]; decided {
+			return nil
+		}
+	}
+	return host.Obj{{Key: "node_id", Value: getOr(w, "node_id", "")}, {Key: "question", Value: getOr(w, "question", "")}}
+}
 
 // Preserve full terminal node outputs; Summary is intentionally size limited.
 func workflowResult(st map[string]any) string {

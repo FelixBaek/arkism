@@ -72,7 +72,7 @@ func (m *Manager) followFlowWait(b *bot, record map[string]any) {
 	}
 	run := body(response, "crew_run")
 	waiting := obj(run["waiting"])
-	kind, node := str(waiting["kind"]), str(waiting["node_id"])
+	kind, node := flowWaitKind(waiting), str(waiting["node_id"])
 	index := m.flowWaitIndex(b.cfg.ID, id)
 	if str(run["status"]) != "waiting" {
 		if index >= 0 {
@@ -83,9 +83,8 @@ func (m *Manager) followFlowWait(b *bot, record map[string]any) {
 	if node == "" || (kind != "approval" && kind != "budget") || obj(run["decisions"])[node] != nil {
 		return
 	}
-	raw, _ := json.Marshal([]any{waiting, obj(run["nodes"])[node]})
-	hash := sha256.Sum256(raw)
-	marker := hex.EncodeToString(hash[:])
+	revision := int64(num(response["revision"]))
+	marker := flowWaitMarker(run, revision)
 	if index >= 0 && m.st.Jobs[index].Asked == marker {
 		return
 	}
@@ -96,9 +95,13 @@ func (m *Manager) followFlowWait(b *bot, record map[string]any) {
 	if question == "" {
 		question = "확인이 필요해요."
 	}
-	out := Out{Content: "**워크플로** · " + question + "\n실행 ID: `" + id + "`"}
+	j := job{Kind: "flow_wait", ID: id, BotID: b.cfg.ID, ChannelID: str(origin["thread_id"]), Since: m.now()}
+	if index >= 0 {
+		j = m.st.Jobs[index]
+	}
+	out := Out{Content: "**FLOW** · " + question + "\n실행 ID: `" + id + "`"}
 	if kind == "budget" {
-		out.Buttons = []Button{{ID: "ark:r:" + id + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + id + ":" + node + ":n", Label: "멈춤", Danger: true}}
+		out.Buttons = budgetButtons(&j, node, revision)
 	} else {
 		out.Content += "\nArkism 앱의 FLOW에서 이 실행을 열어 승인해 주세요. 승인 후 이 대화에 최종 결과를 올립니다."
 	}
@@ -106,10 +109,11 @@ func (m *Manager) followFlowWait(b *bot, record map[string]any) {
 		return
 	}
 	if index < 0 {
-		m.st.Jobs = append(m.st.Jobs, job{Kind: "flow_wait", ID: id, BotID: b.cfg.ID, ChannelID: str(origin["thread_id"]), Since: m.now()})
+		m.st.Jobs = append(m.st.Jobs, j)
 		index = len(m.st.Jobs) - 1
 	}
-	m.st.Jobs[index].Asked = marker
+	j.Asked = marker
+	m.st.Jobs[index] = j
 }
 
 func (m *Manager) flowWaitIndex(botID, runID string) int {
@@ -152,7 +156,7 @@ func (m *Manager) deliverResult(b *bot, record map[string]any) {
 	}
 	m.forgetFlowWait(b.cfg.ID, str(delivery["run_id"]))
 	run, err := m.api.Get("/v1/crew/runs/" + url.PathEscape(str(delivery["run_id"])) + "?" + scopeQuery())
-	if err != nil || num(run["revision"]) != num(delivery["result_revision"]) {
+	if err != nil || deliveryRunRevision(run) != num(delivery["result_revision"]) {
 		return
 	}
 	text, terminal := resultMessageV1(body(run, "crew_run"))
@@ -197,13 +201,20 @@ func (m *Manager) deliverResult(b *bot, record map[string]any) {
 	}
 }
 
+func deliveryRunRevision(record map[string]any) float64 {
+	if revision := num(body(record, "crew_run")["result_revision"]); revision > 0 {
+		return revision
+	}
+	return num(record["revision"])
+}
+
 func (m *Manager) sendDeliveryPart(b *bot, record, origin map[string]any, token, text string, part int) (map[string]any, bool) {
 	if action, code := m.deliveryAllowed(b, origin); action != "" {
 		_, _ = m.changeDelivery(record, token, action, map[string]any{"error_code": code})
 		return nil, false
 	}
 	delivery := body(record, "delivery")
-	nonce := deliveryNonce(str(record["id"]), int64(num(delivery["result_revision"])), part)
+	nonce := deliveryNonce(deliveryNonceIdentity(str(record["id"]), delivery), int64(num(delivery["result_revision"])), part)
 	deadline, parseErr := time.Parse(time.RFC3339Nano, str(delivery["lease_until"]))
 	if parseErr != nil || !deadline.After(time.Now()) {
 		_, _ = m.changeDelivery(record, token, "unknown", map[string]any{"error_code": "send_lease_expired"})
@@ -242,6 +253,23 @@ func (m *Manager) changeDelivery(record map[string]any, token, action string, ex
 func deliveryNonce(id string, revision int64, part int) string {
 	sum := sha256.Sum256([]byte(id + "/" + strconv.FormatInt(revision, 10) + "/" + strconv.Itoa(part)))
 	return hex.EncodeToString(sum[:12]) // Discord accepts at most 25 characters.
+}
+
+// Only a human redirect creates a new send identity. An uncertain retry keeps
+// the nonce so the connector can still suppress a recently accepted duplicate.
+func deliveryNonceIdentity(id string, delivery map[string]any) string {
+	generation := 0
+	for i, item := range list(delivery["recovery_history"]) {
+		if str(obj(item)["action"]) == "redirect" {
+			generation = i + 1
+		}
+	}
+	if generation == 0 {
+		return id
+	}
+	origin := obj(delivery["origin"])
+	raw, _ := json.Marshal([]any{id, "redirect", generation, origin["bot_id"], origin["guild_id"], origin["channel_id"], origin["thread_id"]})
+	return string(raw)
 }
 
 func deliveryResultHash(text string) string {

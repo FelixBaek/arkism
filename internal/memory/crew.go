@@ -167,13 +167,14 @@ type CrewGraph struct {
 }
 
 type Crew struct {
-	Research *CrewResearch `json:"research,omitempty" bson:"research,omitempty"`
-	Type     string        `json:"type"`
-	Name     string        `json:"name"`
-	Handle   string        `json:"handle,omitempty"`
-	Role     string        `json:"role,omitempty"`
-	Category string        `json:"category,omitempty"`
-	Avatar   *CrewAvatar   `json:"avatar,omitempty"`
+	FlowPolicy *FlowPolicy   `json:"flow_policy,omitempty" bson:"flow_policy,omitempty"`
+	Research   *CrewResearch `json:"research,omitempty" bson:"research,omitempty"`
+	Type       string        `json:"type"`
+	Name       string        `json:"name"`
+	Handle     string        `json:"handle,omitempty"`
+	Role       string        `json:"role,omitempty"`
+	Category   string        `json:"category,omitempty"`
+	Avatar     *CrewAvatar   `json:"avatar,omitempty"`
 	// template and persona (model: also a workflow's default worker model)
 	Instructions string   `json:"instructions,omitempty"`
 	Model        string   `json:"model,omitempty"`
@@ -447,6 +448,9 @@ func validCrewWorkflow(c Crew) bool {
 }
 
 func validCrew(c Crew) bool {
+	if !validFlowPolicy(c.FlowPolicy) {
+		return false
+	}
 	if c.Research != nil && (c.Type != "workflow" || !validResearchPolicy(c)) {
 		return false
 	}

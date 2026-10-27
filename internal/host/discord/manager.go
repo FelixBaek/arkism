@@ -87,15 +87,18 @@ type meetingMark struct {
 
 // job is a run or an assist whose answer goes back to a thread.
 type job struct {
-	Kind      string    `json:"kind"` // "run" | "assist" | "flow_wait" (notice marker only)
-	ID        string    `json:"id"`
-	BotID     string    `json:"bot_id"`
-	ChannelID string    `json:"channel_id"`
-	Who       string    `json:"who,omitempty"` // agent or workflow name for the header
-	Asked     string    `json:"asked,omitempty"`
-	Since     time.Time `json:"since"`
-	Accepted  bool      `json:"accepted,omitempty"` // an external runner took it; the thread was told once
-	Sent      int       `json:"sent,omitempty"`     // answer parts already posted, so a retry sends only the rest
+	Kind             string    `json:"kind"` // "run" | "assist" | "flow_wait" (notice marker only)
+	ID               string    `json:"id"`
+	BotID            string    `json:"bot_id"`
+	ChannelID        string    `json:"channel_id"`
+	Who              string    `json:"who,omitempty"` // agent or workflow name for the header
+	Asked            string    `json:"asked,omitempty"`
+	Since            time.Time `json:"since"`
+	Accepted         bool      `json:"accepted,omitempty"` // an external runner took it; the thread was told once
+	Sent             int       `json:"sent,omitempty"`     // answer parts already posted, so a retry sends only the rest
+	DecisionKey      string    `json:"decision_key,omitempty"`
+	DecisionNode     string    `json:"decision_node,omitempty"`
+	DecisionRevision int64     `json:"decision_revision,omitempty"`
 }
 
 type persisted struct {
@@ -594,11 +597,7 @@ func (m *Manager) onCommand(botID string, c Command) {
 			return
 		}
 		_ = b.sess.Respond(c.InteractionID, fmt.Sprintf("@%s 에게 물어볼게요.", name), false)
-		target := ch.ID
-		if rec := m.findCrew(name); rec == nil || str(body(rec, "crew")["type"]) != "workflow" {
-			target = m.replyTarget(b, ch, "", q)
-		}
-		m.ask(b, c.GuildID, ch, target, name, fenced(c.UserName, cfg.Name, q), c.InteractionID, c.UserID)
+		m.ask(b, c.GuildID, ch, ch.ID, name, fenced(c.UserName, cfg.Name, q), c.InteractionID, c.UserID)
 	case c.Name == cmdMeeting && c.Sub == subStop:
 		link, ok := m.st.Threads[ch.ID]
 		if !ch.Thread || !ok || link.Meeting == "" {
@@ -645,8 +644,8 @@ func (m *Manager) onPress(botID string, p Press) {
 		} else {
 			err = m.decideMeeting(parts[2], approve)
 		}
-	case len(parts) == 5 && parts[1] == "r":
-		err = m.pressRun(botID, p.ChannelID, parts[2], parts[3], approve)
+	case len(parts) == 5 && parts[1] == "b":
+		err = m.pressBudget(botID, p.ChannelID, parts[2], parts[3], approve)
 	default:
 		return
 	}
@@ -670,15 +669,6 @@ func (m *Manager) pressStart(b *bot, p Press, key string, approve bool, answer s
 		m.doStart(b, ps)
 	}
 	return answer, true
-}
-
-func (m *Manager) pressRun(botID, channelID, runID, node string, approve bool) error {
-	for _, j := range m.st.Jobs {
-		if (j.Kind == "run" || j.Kind == "flow_wait") && j.ID == runID && j.BotID == botID && j.ChannelID == channelID {
-			return m.decideRun(runID, node, approve)
-		}
-	}
-	return errors.New("run origin mismatch")
 }
 
 // ---- starting work ----
@@ -775,7 +765,8 @@ func (m *Manager) byID(id string) map[string]any {
 	return nil
 }
 
-// ask: @이름 or /물어보기 — an agent answers once (read-only), a team holds a meeting in the thread.
+// Explicit @ calls share the durable FLOW lifecycle. Configured channel actions
+// retain their existing assist/meeting/workflow compatibility paths.
 func (m *Manager) ask(b *bot, guildID string, ch Channel, target, handle, topic, eventID, userID string) {
 	if target == "" {
 		return
@@ -793,15 +784,9 @@ func (m *Manager) ask(b *bot, guildID string, ch Channel, target, handle, topic,
 	ps := pendingStart{botID: b.cfg.ID, guildID: guildID, channelID: base, threadID: target, targetID: str(rec["id"]),
 		title: threadName(str(c["name"]) + ": " + topicLine(topic)), topic: topic,
 		requestID: discordRequestID(b.cfg.ID, guildID, ch.ID, eventID), eventID: eventID, userID: userID}
-	switch str(c["type"]) {
-	case "team":
-		ps.kind = "meeting"
-	case "workflow":
-		ps.kind = "workflow"
-		ps.flow = true
+	ps.kind, ps.flow = "workflow", true
+	if str(c["type"]) == "workflow" {
 		ps.researchMode = researchAliasMode(c, handleKey(handle))
-	default:
-		ps.kind = "agent"
 	}
 	m.start(b, ps)
 }
@@ -887,6 +872,9 @@ func (m *Manager) startRun(b *bot, ps pendingStart) error {
 	run := map[string]any{"crew_id": ps.targetID, "crew_revision": int64(num(rec["revision"])), "trigger": "discord", "status": "running",
 		"input": ps.topic, "nodes": map[string]any{}, "origin": map[string]any{"bot_id": b.cfg.ID, "thread_id": ps.threadID}}
 	if ps.flow {
+		if err := m.requireFlowCapability(ps.targetID); err != nil {
+			return err
+		}
 		if ps.requestID == "" || ps.userID == "" || ps.eventID == "" {
 			return errors.New("workflow event identity missing")
 		}
@@ -909,7 +897,7 @@ func (m *Manager) startRun(b *bot, ps pendingStart) error {
 	if !ps.flow {
 		m.st.Jobs = append(m.st.Jobs, job{Kind: "run", ID: str(out["id"]), BotID: b.cfg.ID, ChannelID: ps.threadID, Who: name, Since: m.now()})
 	}
-	message := fmt.Sprintf("워크플로 **%s** 를 시작했어요. 끝나면 이 대화에 결과를 올릴게요.", name)
+	message := fmt.Sprintf("FLOW **%s** 를 시작했어요. 끝나면 이 대화에 결과를 올릴게요.", name)
 	if ps.flow {
 		message += "\n실행 ID: `" + str(out["id"]) + "`\n승인이 필요한 단계에서는 기다립니다. Arkism 앱의 FLOW에서 진행 상태와 승인 요청을 확인할 수 있어요."
 	}
@@ -955,18 +943,21 @@ func (m *Manager) decideMeeting(id string, approve bool) error {
 	return err
 }
 
-func (m *Manager) decideRun(id, node string, approve bool) error {
+func (m *Manager) decideRun(id, node string, revision int64, approve bool) error {
 	rec, err := m.api.Get("/v1/crew/runs/" + id + "?" + scopeQuery())
 	if err != nil {
 		return err
 	}
 	run := body(rec, "crew_run")
 	waiting := obj(run["waiting"])
-	if str(run["status"]) != "waiting" || str(waiting["kind"]) != "budget" || str(waiting["node_id"]) != node {
+	if int64(num(rec["revision"])) != revision {
+		return errors.New("요청이 바뀌었어요. 새 안내를 확인해 주세요")
+	}
+	if str(run["status"]) != "waiting" || flowWaitKind(waiting) != "budget" || str(waiting["node_id"]) != node {
 		return errors.New("일반 작업 승인은 Arkism 앱에서 확인해 주세요")
 	}
 	_, err = m.api.Post("/v1/crew/runs/"+id+"/decision", map[string]any{"scope": host.Scope(),
-		"expected_revision": int64(num(rec["revision"])), "node_id": node, "approve": approve})
+		"expected_revision": revision, "node_id": node, "approve": approve})
 	return err
 }
 
@@ -1204,23 +1195,7 @@ func (m *Manager) followJobsRun(b *bot, j *job) bool {
 		label := map[string]string{"failed": "실패했어요", "stopped": "멈췄어요"}[st]
 		return m.sendRest(b, j, Out{Content: "**" + j.Who + "** · " + label + "\n" + str(r["summary"])})
 	case "waiting":
-		w := obj(r["waiting"])
-		if k := str(w["kind"]); (k == "approval" || k == "budget") && str(w["node_id"]) != j.Asked {
-			q := str(w["question"])
-			if q == "" {
-				q = "승인이 필요해요."
-			}
-			node := str(w["node_id"])
-			out := Out{Content: "**" + j.Who + "** · " + q}
-			if k == "budget" {
-				out.Buttons = []Button{{ID: "ark:r:" + j.ID + ":" + node + ":y", Label: "계속"}, {ID: "ark:r:" + j.ID + ":" + node + ":n", Label: "멈춤", Danger: true}}
-			} else {
-				out.Content += "\nArkism 앱에서 해당 실행을 열어 승인해 주세요."
-			}
-			if m.send(b, j.ChannelID, out) {
-				j.Asked = node
-			}
-		}
+		m.followRunWait(b, j, rec)
 	}
 	return false
 }

@@ -709,15 +709,15 @@ func (s *Service) ReportDiscord(ctx context.Context, token string, in DiscordRep
 		return Record{}, err
 	}
 	for _, p := range in.Posted {
-		s.markPosted(ctx, in.Scope, d.PrincipalID, in.BotID, p)
+		s.markPosted(ctx, token, in.Scope, d.PrincipalID, in.BotID, p)
 	}
 	return out, nil
 }
 
 // markPosted moves a meeting's last_posted_seq forward (best effort: a
 // meeting of another bot, or a seq past its turns, is left as it is).
-func (s *Service) markPosted(ctx context.Context, scope Scope, actor, botID string, p DiscordPosted) {
-	_, _ = s.changeMeeting(ctx, scope, p.MeetingID, Decision{PrincipalID: actor}, "posted", func(r *Record, m *CrewMeeting, now time.Time) error {
+func (s *Service) markPosted(ctx context.Context, token string, scope Scope, actor, botID string, p DiscordPosted) {
+	_, _ = s.changeMeeting(ctx, token, scope, p.MeetingID, Decision{PrincipalID: actor}, "posted", func(r *Record, m *CrewMeeting, now time.Time) error {
 		if m.Discord == nil || m.Discord.BotID != botID || p.LastPostedSeq > len(m.Turns) {
 			return ErrInvalid
 		}

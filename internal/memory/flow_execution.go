@@ -97,7 +97,7 @@ func (s *Service) StopFlow(ctx context.Context, token, id string, in FlowStopInp
 			return ErrDenied
 		}
 		if terminalCrewRun(r.CrewRun.Status) || r.CrewRun.CancelRequested {
-			out = r
+			out = s.flowStopResponse(ctx, token, r, tx)
 			return nil
 		}
 		if r.Revision != in.ExpectedRevision {
@@ -115,7 +115,7 @@ func (s *Service) StopFlow(ctx context.Context, token, id string, in FlowStopInp
 		if e = tx.Replace(ctx, colCrewRuns, r, prev); e != nil {
 			return e
 		}
-		out = r
+		out = s.flowStopResponse(ctx, token, r, tx)
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "cancel:"+colCrewRuns, id)
 	})
 	return out, err

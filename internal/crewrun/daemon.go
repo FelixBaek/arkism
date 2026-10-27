@@ -136,7 +136,7 @@ func (e *Engine) PollWaiting(ctx context.Context) error {
 	}
 	now := e.now()
 	for _, r := range runs {
-		if r.State.InvocationMode == "flow" && r.State.CancelRequested || readyToResume(r, now) {
+		if e.flowNeedsAttention(r) || readyToResume(r, now) {
 			e.Go(ctx, r.ID)
 		}
 	}

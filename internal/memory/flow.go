@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func flowRequestID(scope Scope, principal, key string) string {
@@ -33,9 +34,29 @@ func flowCallable(c Crew) bool {
 	}
 	for _, n := range c.Graph.Nodes {
 		switch n.Type {
-		case "start", "end", "condition", "merge", "wait":
-		case "ai":
-			if n.Config["access"] != "read" || n.Config["collab"] == "on" || (n.Config["backend"] != "" && n.Config["backend"] != "local") {
+		case "start", "end", "condition", "merge", "wait", "approval":
+		case "subflow":
+			if strings.TrimSpace(n.Config["workflow"]) == "" {
+				return false
+			}
+		case "team":
+			if strings.TrimSpace(n.Config["team"]) == "" {
+				return false
+			}
+		case "expert":
+			if strings.TrimSpace(n.Config["expert"]) == "" || !flowReadNode(n) {
+				return false
+			}
+		case "loop":
+			if !flowReadLoop(c.Graph, n.ID) {
+				return false
+			}
+		case "notify":
+			if !FlowNotifyNode(n) {
+				return false
+			}
+		case "ai", "ai_once":
+			if !flowReadNode(n) {
 				return false
 			}
 		default:
@@ -43,6 +64,27 @@ func flowCallable(c Crew) bool {
 		}
 	}
 	return true
+}
+
+func flowReadNode(n CrewNode) bool {
+	return (n.Config["access"] == "read" || n.Type == "expert" && n.Config["access"] == "") && (n.Config["backend"] == "" || n.Config["backend"] == "local")
+}
+func flowReadLoop(g *CrewGraph, id string) bool {
+	target := ""
+	for _, e := range g.Edges {
+		if e.From == id {
+			if target != "" {
+				return false
+			}
+			target = e.To
+		}
+	}
+	for _, n := range g.Nodes {
+		if n.ID == target {
+			return (n.Type == "ai" || n.Type == "ai_once" || n.Type == "expert") && flowReadNode(n)
+		}
+	}
+	return false
 }
 
 func liveWorkflow(r Record) bool {
@@ -62,11 +104,11 @@ func completeDiscordOrigin(o *CrewRunOrigin, requestID string) bool {
 }
 
 // Pin the effective graph once, before a run and its outbox are committed.
-func prepareFlowRun(run *CrewRun, crew Record, requestID string, resumed bool) error {
+func prepareFlowRun(run *CrewRun, crew Record, requestID string, resumed bool, definitions map[string]FlowDefinition) error {
 	if run.InvocationMode != "flow" {
 		return nil
 	}
-	if crew.Revision != run.CrewRevision || !flowCallable(*crew.Crew) || run.Only != "" || resumed {
+	if crew.Revision != run.CrewRevision || run.Only != "" || resumed {
 		return ErrInvalid
 	}
 	if run.Trigger == "discord" && !completeDiscordOrigin(run.Origin, requestID) {
@@ -75,20 +117,50 @@ func prepareFlowRun(run *CrewRun, crew Record, requestID string, resumed bool) e
 	if run.ResearchMode != "" && crew.Crew.Research == nil {
 		return ErrInvalid
 	}
-	if crew.Crew.Research == nil {
-		run.Definition = crew.Crew
-		return nil
+	if len(flowDefinitionUnsupported(definitions)) > 0 {
+		return ErrInvalid
 	}
-	definition, err := ResearchDefinition(*crew.Crew, run.ResearchMode)
+	pinned, ok := definitions[crew.ID]
+	if !ok {
+		return ErrInvalid
+	}
+	definition, err := flowGraphFor(pinned.Crew, crew.ID, definitions)
 	if err != nil {
 		return err
 	}
+	if !flowCallable(definition) {
+		return ErrInvalid
+	}
+	if crew.Crew.Research != nil {
+		definition, err = ResearchDefinition(definition, run.ResearchMode)
+		if err != nil {
+			return err
+		}
+	}
 	run.Definition = &definition
+	run.Definitions = definitions
+	run.SourceType = crew.Crew.Type
+	policy := effectiveFlowPolicy(*crew.Crew)
+	if !validFlowPolicy(&policy) {
+		return ErrInvalid
+	}
+	run.Policy = &policy
+	setFlowDeadline(run, definition.Limits)
 	run.Nodes = map[string]CrewRunNode{}
 	for _, n := range definition.Graph.Nodes {
 		run.Nodes[n.ID] = CrewRunNode{Status: "pending"}
 	}
 	return nil
+}
+
+func setFlowDeadline(run *CrewRun, limits *CrewLimits) {
+	if limits == nil || limits.MaxMinutes <= 0 {
+		return
+	}
+	deadline := time.Now().UTC().Add(time.Duration(limits.MaxMinutes) * time.Minute).Truncate(time.Millisecond)
+	if run.Deadline == nil || deadline.Before(*run.Deadline) {
+		run.Deadline = &deadline
+	}
 }
 
 func deepResearchTemplate() Crew {
@@ -115,8 +187,15 @@ func (s *Service) flowTemplate(ctx context.Context, token string, scope Scope) (
 }
 
 func flowRoutes(mux routeRegistrar, s *Service) {
+	flowCommonRoutes(mux, s)
+	flowResultRoutes(mux, s)
+	flowAttemptRoutes(mux, s)
+	flowEffectRoutes(mux, s)
+	flowChildrenRoutes(mux, s)
+	flowImprovementRoutes(mux, s)
 	flowExecutionRoutes(mux, s)
 	flowDeliveryRoutes(mux, s)
+	flowDeliveryRecoveryRoutes(mux, s)
 	mux.HandleFunc("GET /v1/crew/templates/research", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.researchProposal(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)

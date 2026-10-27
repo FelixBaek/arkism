@@ -53,17 +53,18 @@ type Trigger struct {
 // Crew is the part of a crew item the engine needs: a workflow, or a persona
 // whose instructions an AI node may take.
 type Crew struct {
-	Research *CrewResearch `json:"research,omitempty"`
-	Type         string      `json:"type"`
-	Name         string      `json:"name"`
-	Handle       string      `json:"handle,omitempty"`
-	Model        string      `json:"model,omitempty"`
-	Instructions string      `json:"instructions,omitempty"`
-	Trigger      *Trigger    `json:"trigger,omitempty"`
-	Enabled      bool        `json:"enabled,omitempty"`
-	Limits       *Limits     `json:"limits,omitempty"`
-	Graph        *Graph      `json:"graph,omitempty"`
-	Notify       *CrewNotify `json:"notify,omitempty"` // 진행 알림 (progress.go)
+	Research     *CrewResearch `json:"research,omitempty"`
+	Type         string        `json:"type"`
+	Name         string        `json:"name"`
+	Handle       string        `json:"handle,omitempty"`
+	Model        string        `json:"model,omitempty"`
+	Instructions string        `json:"instructions,omitempty"`
+	Skills       []string      `json:"skills,omitempty"`
+	Trigger      *Trigger      `json:"trigger,omitempty"`
+	Enabled      bool          `json:"enabled,omitempty"`
+	Limits       *Limits       `json:"limits,omitempty"`
+	Graph        *Graph        `json:"graph,omitempty"`
+	Notify       *CrewNotify   `json:"notify,omitempty"` // 진행 알림 (progress.go)
 	// work agents (type agent, or template saved before agents) and teams, for meetings
 	Role            string            `json:"role,omitempty"`
 	Effort          string            `json:"effort,omitempty"`
@@ -100,11 +101,17 @@ type NodeState struct {
 }
 
 type Waiting struct {
-	NodeID       string     `json:"node_id"`
-	Kind         string     `json:"kind"`
-	ResumeAt     *time.Time `json:"resume_at,omitempty"`
-	Question     string     `json:"question,omitempty"`
-	CallbackHash string     `json:"callback_hash,omitempty"`
+	EffectID      string     `json:"effect_id,omitempty"`
+	EffectHash    string     `json:"effect_hash,omitempty"`
+	ChildRunID    string     `json:"child_run_id,omitempty"`
+	ChildKind     string     `json:"child_kind,omitempty"`
+	ChildRevision int64      `json:"child_revision,omitempty"`
+	DecisionKind  string     `json:"decision_kind,omitempty"`
+	NodeID        string     `json:"node_id"`
+	Kind          string     `json:"kind"`
+	ResumeAt      *time.Time `json:"resume_at,omitempty"`
+	Question      string     `json:"question,omitempty"`
+	CallbackHash  string     `json:"callback_hash,omitempty"`
 }
 
 type Decision struct {
@@ -116,7 +123,16 @@ type Decision struct {
 
 // RunState is the crew_run body of a runs API record.
 type RunState struct {
-	ResearchMode string `json:"research_mode,omitempty"`
+	Effects         map[string]string     `json:"effects,omitempty"`
+	SourceType      string                `json:"source_type,omitempty"`
+	RootID          string                `json:"root_id,omitempty"`
+	ParentID        string                `json:"parent_id,omitempty"`
+	ParentNodeID    string                `json:"parent_node_id,omitempty"`
+	Depth           int                   `json:"depth,omitempty"`
+	Children        map[string]FlowChild  `json:"children,omitempty"`
+	Definitions     map[string]CrewItem   `json:"definitions,omitempty"`
+	Policy          *FlowPolicy           `json:"policy,omitempty"`
+	ResearchMode    string                `json:"research_mode,omitempty"`
 	InvocationMode  string                `json:"invocation_mode,omitempty"`
 	Definition      *Crew                 `json:"definition,omitempty"`
 	Origin          map[string]string     `json:"origin,omitempty"`

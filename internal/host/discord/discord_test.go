@@ -93,6 +93,8 @@ func (f *fakeMemoryd) serve(w http.ResponseWriter, r *http.Request) {
 	case p == "/v1/discord/report":
 	case p == "/v1/crew":
 		out = map[string]any{"items": f.crew}
+	case strings.HasPrefix(p, "/v1/flow/capabilities/"):
+		out = map[string]any{"supported": true, "unsupported": []any{}}
 	case p == "/v1/crew/meetings" && r.Method == http.MethodGet:
 		if c.Query.Get("status") != "running" {
 			f.t.Errorf("meetings listed with status %q", c.Query.Get("status"))
@@ -504,10 +506,10 @@ func TestAutoStartMeetingMirrorNotesAndStop(t *testing.T) {
 	}
 }
 
-func TestAtNameAsksAgentOnce(t *testing.T) {
+func TestLegacyAssistOnceAndCommonTeamCommand(t *testing.T) {
 	h := setup(t)
 	h.m.Tick()
-	h.post("u1", "c2", "@리서처 이 논문 요약해 줘")
+	startLegacyAssist(t, h, "이 논문 요약해 줘")
 	as := h.f.find("POST", "/v1/crew/assists")
 	if len(as) != 1 {
 		t.Fatalf("assists: %d", len(as))
@@ -537,11 +539,11 @@ func TestAtNameAsksAgentOnce(t *testing.T) {
 		t.Fatalf("unknown: %q", got)
 	}
 
-	// /물어보기 with a team handle starts a meeting instead.
+	// Explicit /물어보기 now uses the common FLOW lifecycle for a team.
 	h.sess.h.Command(Command{InteractionID: "i2", Name: cmdAsk, Options: map[string]string{optName: "@기획팀", optQuestion: "출시일?"},
 		ChannelID: "c2", GuildID: "g1", UserID: "u1", UserName: "u1"})
-	ms := h.f.find("POST", "/v1/crew/meetings")
-	if len(ms) != 1 || ms[0].Body["meeting"].(map[string]any)["team_id"] != "tm1" {
+	ms := h.f.find("POST", "/v1/crew/runs")
+	if len(ms) != 1 || ms[0].Body["run"].(map[string]any)["crew_id"] != "tm1" || obj(ms[0].Body["run"])["invocation_mode"] != "flow" {
 		t.Fatalf("team ask: %v", ms)
 	}
 }
@@ -567,13 +569,13 @@ func TestWorkflowRunBudgetApproval(t *testing.T) {
 	h.m.Tick()
 	h.m.Tick()
 	bs := h.sess.lastButtons()
-	if len(bs) != 2 || bs[0].ID != "ark:r:run1:n2:y" {
+	if len(bs) != 2 || !strings.HasPrefix(bs[0].ID, "ark:b:") {
 		t.Fatalf("buttons: %v", bs)
 	}
 	if n := strings.Count(strings.Join(h.sess.sentTo("t1"), "|"), "보낼까요?"); n != 1 {
 		t.Fatalf("asked %d times", n)
 	}
-	h.sess.h.Button(Press{InteractionID: "i", CustomID: "ark:r:run1:n2:y", ChannelID: "t1", GuildID: "g1", UserID: "u1"})
+	h.sess.h.Button(Press{InteractionID: "i", CustomID: bs[0].ID, ChannelID: "t1", GuildID: "g1", UserID: "u1"})
 	ds := h.f.find("POST", "/v1/crew/runs/run1/decision")
 	if len(ds) != 1 || ds[0].Body["approve"] != true || ds[0].Body["node_id"] != "n2" || ds[0].Body["expected_revision"] != float64(1) {
 		t.Fatalf("decision: %v", ds)
@@ -714,10 +716,10 @@ func TestBotTargetServesChannelsWithoutAction(t *testing.T) {
 	}
 }
 
-func TestAtNameOnExternalRunnerAcceptedThenAnswered(t *testing.T) {
+func TestLegacyAssistOnExternalRunnerAcceptedThenAnswered(t *testing.T) {
 	h := setup(t)
 	h.m.Tick()
-	h.post("u1", "c2", "@리서처 오래 걸리는 조사")
+	startLegacyAssist(t, h, "오래 걸리는 조사")
 	h.f.mu.Lock()
 	h.f.assists["as1"]["crew_assist"] = map[string]any{"status": "running", "trace": map[string]any{"backend": "mine", "task_id": "t-1", "state": "accepted"}}
 	h.f.mu.Unlock()

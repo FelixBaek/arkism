@@ -530,7 +530,7 @@ func TestFlowBudgetNoticeKeepsExistingDecisionPolicy(t *testing.T) {
 	if len(s.sent) != 1 || len(s.sent[0].Out.Buttons) != 2 {
 		t.Fatal("budget continuation controls disappeared")
 	}
-	s.h.Button(Press{InteractionID: "budget", CustomID: "ark:r:r1:approval:y", ChannelID: "t-result", GuildID: "g1", UserID: "u1"})
+	s.h.Button(Press{InteractionID: "budget", CustomID: s.sent[0].Out.Buttons[0].ID, ChannelID: "t-result", GuildID: "g1", UserID: "u1"})
 	if len(h.f.find("POST", "/v1/crew/runs/r1/decision")) != 1 {
 		t.Fatal("bound budget continuation was not forwarded")
 	}

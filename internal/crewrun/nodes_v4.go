@@ -54,17 +54,40 @@ func (e *Engine) runExpert(ctx context.Context, x *runExec, n Node, input any) (
 	if c == nil {
 		c = map[string]string{}
 	}
-	it, ok := e.item(strings.TrimSpace(c["expert"]))
+	if flowContext(ctx) {
+		c["access"] = cmp.Or(c["access"], "read")
+		if c["access"] != "read" {
+			return result{}, failf("flow_unsupported", "FLOW expert writes require an effect gateway")
+		}
+	}
+	it, ok := e.roleItem(ctx, strings.TrimSpace(c["expert"]))
 	if !ok || it.Crew.Type != "agent" && it.Crew.Type != "persona" && it.Crew.Type != "template" {
 		return result{}, failf("bad_config", "전문가 %s를 찾지 못했어요", c["expert"])
 	}
 	c["model"] = cmp.Or(c["model"], it.Crew.Model)
 	c["effort"] = cmp.Or(c["effort"], it.Crew.Effort)
 	c["instructions"] = joinText(it.Crew.Instructions, c["instructions"])
+	if _, flow := ctx.Value(flowCallScopeKey{}).(flowCallScope); flow {
+		applyFlowExpert(c, it.Crew, n.Config)
+	}
 	c["backend"] = cmp.Or(c["backend"], it.Crew.Backend) // the step's own choice wins; "local" picks Arkism's path
 	delete(c, "persona")
 	n.Config = c
 	return e.runAI(ctx, x, n, input)
+}
+
+func applyFlowExpert(c map[string]string, role Crew, own map[string]string) {
+	if own["model"] == "" && (role.ModelMode == "auto" || role.Model == "") {
+		c["model"] = "auto"
+	}
+	c["instructions"] = joinText(role.Role, c["instructions"])
+	if role.OutputFormat == "json" || role.OutputFormat == "markdown" {
+		c["instructions"] = joinText(c["instructions"], "답은 "+role.OutputFormat+" 형식으로 써.")
+	}
+	if own["skills"] == "" {
+		c["skills"] = strings.Join(role.Skills, ",")
+	}
+	c["fallback_model"] = cmp.Or(own["fallback_model"], role.FallbackModel)
 }
 
 // MeetingCreator is the optional MeetingStore part that asks for a new meeting (Client implements it).

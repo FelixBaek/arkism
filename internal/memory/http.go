@@ -242,6 +242,10 @@ func respond(w http.ResponseWriter, v any, e error) {
 	writeJSON(w, status, map[string]string{"code": code})
 }
 func errorResponse(e error) (string, int) {
+	var flowLimit flowLimitError
+	if errors.As(e, &flowLimit) {
+		return flowLimit.Error(), 409
+	}
 	code, status := "dependency_unavailable", 503
 	switch {
 	case errors.Is(e, errBlobTooLarge):

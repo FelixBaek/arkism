@@ -13,15 +13,16 @@ const flowDeliveryLease = 90 * time.Second
 
 // Jobs contain references and receipts only. Result bodies stay in crew_runs.
 type FlowDelivery struct {
-	ResultHash     string         `json:"result_hash,omitempty" bson:"result_hash,omitempty"`
-	RunID          string         `json:"run_id" bson:"run_id"`
-	ResultRevision int64          `json:"result_revision" bson:"result_revision"`
-	Origin         *CrewRunOrigin `json:"origin" bson:"origin"`
-	Status         string         `json:"status" bson:"status"`
-	Part           int            `json:"part" bson:"part"`
-	MessageIDs     []string       `json:"message_ids" bson:"message_ids"`
-	ErrorCode      string         `json:"error_code,omitempty" bson:"error_code,omitempty"`
-	LeaseUntil     time.Time      `json:"lease_until,omitempty" bson:"lease_until,omitempty"`
+	RecoveryHistory []FlowDeliveryRecoveryReceipt `json:"recovery_history,omitempty" bson:"recovery_history,omitempty"`
+	ResultHash      string                        `json:"result_hash,omitempty" bson:"result_hash,omitempty"`
+	RunID           string                        `json:"run_id" bson:"run_id"`
+	ResultRevision  int64                         `json:"result_revision" bson:"result_revision"`
+	Origin          *CrewRunOrigin                `json:"origin" bson:"origin"`
+	Status          string                        `json:"status" bson:"status"`
+	Part            int                           `json:"part" bson:"part"`
+	MessageIDs      []string                      `json:"message_ids" bson:"message_ids"`
+	ErrorCode       string                        `json:"error_code,omitempty" bson:"error_code,omitempty"`
+	LeaseUntil      time.Time                     `json:"lease_until,omitempty" bson:"lease_until,omitempty"`
 }
 
 type FlowDeliveryView struct {
@@ -44,6 +45,15 @@ type FlowDeliveryChange struct {
 	ErrorCode        string `json:"error_code,omitempty"`
 }
 
+func flowResultRevision(r Record) int64 {
+	if r.CrewRun != nil && r.CrewRun.ResultRevision > 0 {
+		return r.CrewRun.ResultRevision
+	}
+	return r.Revision
+}
+func readableFlowDelivery(r Record) bool {
+	return r.Kind == flowDeliveryKind && r.FlowDelivery != nil && !r.ContentErased && !r.PrivacyQuarantined
+}
 func flowDeliveryID(runID string) string { return "delivery-" + runID }
 func flowDeliveryView(r Record) FlowDeliveryView {
 	return FlowDeliveryView{r.ID, r.Revision, *r.FlowDelivery}
@@ -71,7 +81,7 @@ func readyFlowDelivery(ctx context.Context, tx Tx, r Record) error {
 	}
 	prev := d.Revision
 	delivery := *d.FlowDelivery
-	delivery.ResultRevision, delivery.Status = r.Revision, "pending"
+	delivery.ResultRevision, delivery.Status = flowResultRevision(r), "pending"
 	d.FlowDelivery = &delivery
 	d.Status = "pending"
 	d.Revision++
@@ -99,6 +109,12 @@ func (s *Service) ListFlowDeliveries(ctx context.Context, token string, scope Sc
 		rows = rows[:limit]
 	}
 	for _, r := range rows {
+		if !readableFlowDelivery(r) {
+			continue
+		}
+		if e := s.authorizeFlowDeliveryRun(ctx, s.Repo, token, scope, r.FlowDelivery.RunID); e != nil {
+			continue
+		}
 		out.Items = append(out.Items, flowDeliveryView(r))
 	}
 	return out, nil
@@ -129,12 +145,12 @@ func (s *Service) ChangeFlowDelivery(ctx context.Context, token, id string, in F
 		if e != nil {
 			return e
 		}
-		if r.Kind != flowDeliveryKind || r.FlowDelivery == nil {
+		if !readableFlowDelivery(r) {
 			return ErrNotFound
 		}
 		cur := *r.FlowDelivery
 		if in.Action == "claim" {
-			if _, e := s.authorize(ctx, token, "read:"+colCrew, in.Scope, cur.RunID, ""); e != nil {
+			if e := s.authorizeFlowDeliveryRun(ctx, tx, token, in.Scope, cur.RunID); e != nil {
 				return e
 			}
 		}
@@ -173,6 +189,19 @@ func (s *Service) ChangeFlowDelivery(ctx context.Context, token, id string, in F
 	return out, err
 }
 
+func (s *Service) authorizeFlowDeliveryRun(ctx context.Context, reader flowRecordReader, token string, scope Scope, id string) error {
+	if _, e := s.authorize(ctx, token, "read:"+colCrew, scope, id, ""); e != nil {
+		return e
+	}
+	run, e := reader.Get(ctx, colCrewRuns, scope, id)
+	if e != nil {
+		return e
+	}
+	if !readableCrewRun(run) {
+		return ErrNotFound
+	}
+	return s.authorizeFlowSourcesFrom(ctx, token, run, reader)
+}
 func (s *Service) flowDeliveryAction(ctx context.Context, tx Tx, r *Record, cur *FlowDelivery, in FlowDeliveryChange, now time.Time) error {
 	if in.Action == "claim" {
 		return claimFlowDelivery(ctx, tx, r, cur, in, now)
@@ -223,7 +252,7 @@ func claimFlowDelivery(ctx context.Context, tx Tx, r *Record, cur *FlowDelivery,
 	if err != nil {
 		return err
 	}
-	if !readableCrewRun(run) || !terminalCrewRun(run.CrewRun.Status) || run.Revision != cur.ResultRevision {
+	if !readableCrewRun(run) || !terminalCrewRun(run.CrewRun.Status) || flowResultRevision(run) != cur.ResultRevision {
 		return ErrConflict
 	}
 	r.LeaseToken = in.LeaseToken

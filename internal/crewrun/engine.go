@@ -274,6 +274,10 @@ func (x *runExec) advance(ctx context.Context) error {
 		t := e.now().UTC().Add(time.Duration(l.MaxMinutes) * time.Minute).Truncate(time.Millisecond)
 		x.run.State.Deadline = &t
 	}
+	if flow != nil && e.flowExpired(x.run.State) {
+		flow.cancel(errFlowDeadline)
+		return errFlowDeadline
+	}
 	if err := x.settleInterrupted(ctx); err != nil {
 		return err
 	}
@@ -358,9 +362,9 @@ func (x *runExec) settleInterrupted(ctx context.Context) error {
 		}
 		changed = true
 		n := x.nodes[id]
-		if n.Config["access"] == "read" || x.flow != nil && slices.Contains([]string{"start", "end", "condition", "merge", "wait"}, n.Type) {
+		if x.recoverableNode(n) {
 			st.Status, st.StartedAt = "pending", nil
-			if x.e.stepBackend(x.nodes[id]) != "" && st.Runs > 0 {
+			if (x.stepBackend(n) != "" || x.flow != nil && flowSameAttempt(n)) && st.Runs > 0 {
 				st.Runs-- // the resumed start asks the runner about the same task (same key) instead of starting another
 			}
 			continue
@@ -376,6 +380,10 @@ func (x *runExec) settleInterrupted(ctx context.Context) error {
 		return nil
 	}
 	return x.saveLocked(ctx, "")
+}
+
+func (x *runExec) recoverableNode(n Node) bool {
+	return n.Config["access"] == "read" || x.flow != nil && (flowChildNode(n) || slices.Contains([]string{"start", "end", "condition", "merge", "wait", "ai_once", "loop", "expert", "notify"}, n.Type))
 }
 
 func (x *runExec) stamp(st *NodeState) {
@@ -579,7 +587,7 @@ func (x *runExec) startLocked(batch []string) map[string]any {
 		inputs[id] = x.inputFor(id)
 		s := x.state(id)
 		s.Status, s.Error = "running", ""
-		if b := x.e.stepBackend(x.nodes[id]); b != "" {
+		if b := x.stepBackend(x.nodes[id]); b != "" {
 			s.Backend = map[string]any{"backend": b, "state": "starting"} // the host runner's trace replaces it at the end
 		}
 		s.Runs++
@@ -620,8 +628,10 @@ func (x *runExec) loop(ctx context.Context) error {
 			continue
 		}
 		if len(ready) == 0 {
-			x.closeRun("succeeded", x.lastSummary())
-			err := x.saveLocked(ctx, "")
+			err := x.completeState(ctx, x.lastSummary())
+			if err == nil {
+				err = x.saveLocked(ctx, "")
+			}
 			x.mu.Unlock()
 			return err
 		}
@@ -669,6 +679,9 @@ func (x *runExec) loop(ctx context.Context) error {
 // another node or end the run.
 func (x *runExec) concurrent(id string) bool {
 	n := x.nodes[id]
+	if x.flow != nil && flowChildNode(n) {
+		return false
+	}
 	switch n.Type {
 	case "approval", "wait", "loop", "end":
 		return false
@@ -771,7 +784,14 @@ func failf(code, format string, a ...any) error { return &nodeError{code, fmt.Sp
 
 func (x *runExec) runNode(ctx context.Context, id string, input any) error {
 	n := x.nodes[id]
+	ctx = x.callContext(ctx, id)
 	res, err := x.e.execute(ctx, x, n, input)
+	if x.expireFlow() {
+		return errFlowDeadline
+	}
+	if errors.Is(err, errFlowChildUnavailable) || errors.Is(err, errFlowAttemptUnavailable) || errors.Is(err, errFlowEffectUnavailable) {
+		return err
+	}
 	if ctx.Err() != nil {
 		return ctx.Err() // leave it running; the next start settles it
 	}
@@ -812,7 +832,9 @@ func (x *runExec) runNode(ctx context.Context, id string, input any) error {
 			x.progress("step", "단계 끝: "+x.title(id))
 		}
 		if res.end && open {
-			x.closeRun("succeeded", res.summary)
+			if err := x.completeState(ctx, res.summary); err != nil {
+				return err
+			}
 		} else if open {
 			x.followBack(id)
 		}
@@ -842,7 +864,14 @@ func (x *runExec) resumeLocked(ctx context.Context) (bool, error) {
 	}
 	now := x.e.now()
 	switch w.Kind {
+	case "child":
+		return x.resumeChildLocked(ctx, w.NodeID)
+	case "capacity":
+		return x.resumeCapacityLocked(ctx, w)
 	case "approval":
+		if w.EffectID != "" {
+			return x.resumeEffectLocked(ctx, w)
+		}
 		d, ok := x.run.State.Decisions[w.NodeID]
 		if !ok {
 			return false, nil
@@ -893,6 +922,8 @@ func readyToResume(r Run, now time.Time) bool {
 		return false
 	}
 	switch w.Kind {
+	case "child":
+		return r.State.InvocationMode == "flow"
 	case "approval", "budget":
 		_, ok := r.State.Decisions[w.NodeID]
 		return ok
