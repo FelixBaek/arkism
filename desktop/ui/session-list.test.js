@@ -42,3 +42,13 @@ test("a hit is cut at the server's byte offset, falling back to the first match"
   assert.deepEqual(S.hitParts(snip, 0, "뒷말"), ["…앞말 배포 스크립트 ", "뒷말", ""]);
   assert.deepEqual(S.hitParts("없음", 0, "x"), ["없음", "", ""]);
 });
+
+test("a message shows its own time, the day only when it changes, nothing when unrecorded", () => {
+  const a = new Date(2026, 9, 13, 9, 5).toISOString(), b = new Date(2026, 9, 13, 23, 59).toISOString(), c = new Date(2026, 9, 14, 0, 1).toISOString();
+  assert.equal(S.msgTime(a, undefined), "10월 13일 09:05");
+  assert.equal(S.msgTime(b, a), "23:59");
+  assert.equal(S.msgTime(c, b), "10월 14일 00:01");
+  assert.equal(S.msgTime(c, "bad"), "10월 14일 00:01");
+  assert.equal(S.msgTime(undefined, a), "");
+  assert.equal(S.msgTime("nope", a), "");
+});

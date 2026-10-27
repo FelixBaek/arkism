@@ -69,9 +69,10 @@ type SessionTranscriptArchive struct {
 }
 
 type SessionTranscriptMessage struct {
-	Role      string `json:"role"`
-	Text      string `json:"text"`
-	Truncated bool   `json:"truncated,omitempty"`
+	Role      string     `json:"role"`
+	Text      string     `json:"text"`
+	Truncated bool       `json:"truncated,omitempty"`
+	At        *time.Time `json:"at,omitempty"`
 }
 
 type SessionTranscriptHidden struct {
@@ -247,7 +248,7 @@ func (s *Service) transcriptPage(ctx context.Context, token string, scope Scope,
 			hidden.Secrets++
 			continue
 		}
-		items = append(items, SessionTranscriptMessage{Role: it.Role, Text: redactSessionPrivate(text), Truncated: truncated})
+		items = append(items, SessionTranscriptMessage{Role: it.Role, Text: redactSessionPrivate(text), Truncated: truncated, At: it.At})
 	}
 	return items, page.Next, nil
 }

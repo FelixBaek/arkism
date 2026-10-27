@@ -472,12 +472,21 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
   await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
-  // 대화 보기 reads the dialogue into the window itself; 대화 닫기 folds it
+  // 대화 보기 turns the window into the dialogue: the person on the right, the agent by name, each message's own time; ‹ 세션 정보 goes back
   win().querySelector(".ov-wide-row").click(); await app.settle();
   await press("대화 보기", win(), 50);
   assert.match(text(win()), /리뷰 일정 좀 같이 잡아 줘/);
-  await press("대화 닫기", win());
+  assert.ok(win().querySelector(".ss-body.ss-talk:not(.ss-solo)"), "the dialogue takes the window");
+  const msgs = [...win().querySelectorAll(".ss-msg")], label = msgs.find((m) => m.classList.contains("assistant"))?.querySelector("b");
+  assert.ok(msgs[0].classList.contains("user") && label && !/에이전트/.test(text(label)), "roles told apart, the agent by its name");
+  const times = msgs.map((m) => text(m.querySelector("time")));
+  assert.match(times[0], /월 .*\d\d:\d\d$/, "the first message carries its day");
+  assert.match(times[1], /^\d\d:\d\d$/, "the same day again shows only the time");
+  assert.ok(times.some((t, i) => i > 1 && /월/.test(t)), "a new day shows the day again");
+  assert.ok(times.includes(""), "a message without a recorded time shows none");
+  await press("‹ 세션 정보", win());
   assert.equal(win().querySelector(".ss-msg"), null);
+  assert.ok(win().querySelector(".ss-body.ss-solo .ss-detail"), "back on the session's details");
   // a failed page offers 다시 시도
   off();
   const offBad = route("GET", "/v1/usage/sessions", () => fail(500, "boom"));
