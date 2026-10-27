@@ -31,6 +31,7 @@ type CatalogQueryInput struct {
 	Categories    []CatalogCategory `json:"categories,omitempty"`
 	Agents        []string          `json:"agents,omitempty"`
 	KeptIDs       []string          `json:"kept_ids,omitempty"`
+	IDs           []string          `json:"ids,omitempty"` // memories and candidates only: just these records (≤100), for screens naming memories by id
 	CollectUnused *bool             `json:"collect_unused,omitempty"`
 	Format        string            `json:"format,omitempty"`
 }
@@ -101,6 +102,14 @@ func normalizeCatalog(in CatalogQueryInput, domain string) (CatalogQueryInput, e
 	}
 	if in.Kind != "" && !validCreateKind("memory_candidates", in.Kind) {
 		return in, ErrInvalid
+	}
+	if len(in.IDs) > 0 && domain != "memories" && domain != "candidates" || len(in.IDs) > 100 {
+		return in, ErrInvalid
+	}
+	for _, id := range in.IDs {
+		if !validRunLabel(id, 256) || containsSecret(id) {
+			return in, ErrInvalid
+		}
 	}
 	if err := validateCatalogPreferences(in); err != nil {
 		return in, err

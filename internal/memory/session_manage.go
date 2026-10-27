@@ -66,6 +66,26 @@ type SessionTranscriptArchive struct {
 	Supported  bool       `json:"supported"`
 	ObservedAt time.Time  `json:"observed_at"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"` // last time a memory use renewed the archive
+}
+
+// SessionArchiveStatusInput asks, for up to 50 usage sessions, whether their dialogue is still kept.
+type SessionArchiveStatusInput struct {
+	Scope Scope    `json:"scope"`
+	IDs   []string `json:"ids"`
+}
+
+// SessionArchiveStatus is one session's archive state as 대화 보기 would find it: active, unsupported, expired or none.
+type SessionArchiveStatus struct {
+	ID       string                     `json:"id"`
+	State    string                     `json:"state"`
+	Archives []SessionTranscriptArchive `json:"archives"`
+}
+
+type SessionArchiveStatusOutput struct {
+	Items     []SessionArchiveStatus `json:"items"`
+	Missing   []string               `json:"missing"`
+	Authority string                 `json:"authority"`
 }
 
 type SessionTranscriptMessage struct {
@@ -213,7 +233,7 @@ func (s *Service) transcriptArchives(headers []Record) []SessionTranscriptArchiv
 		a := SessionTranscriptArchive{ID: h.ID, State: state, Format: h.SessionArchive.Format, Supported: archiveSupported(h.SessionArchive.Format),
 			ObservedAt: h.SessionArchive.ObservedAt}
 		if state == sessionArchiveStateActive {
-			a.ExpiresAt = h.ExpiresAt
+			a.ExpiresAt, a.LastUsedAt = h.ExpiresAt, h.SessionArchive.LastUsedAt
 		}
 		out = append(out, a)
 	}
@@ -298,6 +318,50 @@ func (s *Service) SessionTranscript(ctx context.Context, token string, in Sessio
 	out.Items, out.Next, err = s.transcriptPage(ctx, token, in.Scope, pick.ID, in.After, in.Limit, &out.Hidden)
 	if err != nil {
 		return SessionTranscriptOutput{}, err
+	}
+	return out, nil
+}
+
+// archiveSummaryState is the state 대화 보기 opens with: the first active archive decides, else expired if any existed.
+func archiveSummaryState(archives []SessionTranscriptArchive) string {
+	for _, a := range archives {
+		if a.State == sessionArchiveStateActive {
+			if !a.Supported {
+				return "unsupported"
+			}
+			return sessionArchiveStateActive
+		}
+	}
+	if len(archives) > 0 {
+		return sessionArchiveStateExpired
+	}
+	return "none"
+}
+
+// SessionArchiveStatuses is 대화 저장: for each listed session, whether its dialogue is kept and until when. Read-only, no text.
+func (s *Service) SessionArchiveStatuses(ctx context.Context, token string, in SessionArchiveStatusInput) (SessionArchiveStatusOutput, error) {
+	out := SessionArchiveStatusOutput{Items: []SessionArchiveStatus{}, Missing: []string{}, Authority: AuthorityDataOnly}
+	if s.Repo == nil {
+		return out, ErrUnavailable
+	}
+	if !validScope(in.Scope) || !validSessionIDs(in.IDs, 50) {
+		return out, ErrInvalid
+	}
+	for _, id := range in.IDs {
+		row, err := s.usageSessionRecord(ctx, token, in.Scope, id)
+		if errors.Is(err, ErrNotFound) {
+			out.Missing = append(out.Missing, id)
+			continue
+		}
+		if err != nil {
+			return SessionArchiveStatusOutput{}, err
+		}
+		headers, err := s.sessionArchiveHeaders(ctx, in.Scope, row.UsageSession)
+		if err != nil {
+			return SessionArchiveStatusOutput{}, err
+		}
+		archives := s.transcriptArchives(headers)
+		out.Items = append(out.Items, SessionArchiveStatus{ID: id, State: archiveSummaryState(archives), Archives: archives})
 	}
 	return out, nil
 }
@@ -645,6 +709,14 @@ func sessionManageRoutes(mux routeRegistrar, s *Service) {
 			return
 		}
 		out, e := s.SessionTranscript(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/usage/sessions/archives", func(w http.ResponseWriter, r *http.Request) {
+		var in SessionArchiveStatusInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.SessionArchiveStatuses(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("POST /v1/usage/sessions/export", func(w http.ResponseWriter, r *http.Request) {
