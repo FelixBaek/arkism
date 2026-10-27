@@ -62,6 +62,8 @@ type Service struct {
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
 
+	// SignalRankingOff keeps judged outcomes (memory_signal) out of recall ranking (ARKISM_RANK_SIGNAL=off).
+	SignalRankingOff bool
 	// ReviewClassifier orders pending candidates by likely rejection; nil leaves the queue order alone.
 	ReviewClassifier *ReviewClassifier
 	reviewScores     reviewScoreCache

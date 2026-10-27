@@ -132,6 +132,40 @@ func buildMemorySignal(m Record, pc, wt MemoryOutcomeCount, use MemoryUseCount) 
 	return sig
 }
 
+// outcomeFactor is the ranking weight a memory's judged outcomes earn: +5% per
+// passed sample (three at most), ÷10 once any sample failed, 1 with no judgement.
+// A pass rate alone cannot tell one bad session from ten, so the counts are used.
+func outcomeFactor(sig *MemorySignal) float64 {
+	if sig == nil || sig.Samples < 1 {
+		return 1
+	}
+	f := 1 + 0.05*float64(min(sig.Passed, 3))
+	if sig.Passed < sig.Samples {
+		f /= 10
+	}
+	return f
+}
+
+// outcomeWeights reads the stored signal of each fused memory hit and maps the
+// ids whose weight is not 1. Unreadable or missing signals leave the fused
+// order alone: ranking is a hint, never an authority.
+func (s *Service) outcomeWeights(ctx context.Context, scope Scope, rows []ScoredHit) map[string]float64 {
+	if s.SignalRankingOff {
+		return nil
+	}
+	weights := map[string]float64{}
+	for _, r := range rows {
+		rec, e := s.Repo.Get(ctx, colJobs, scope, memorySignalID(scope, r.ID))
+		if e != nil || rec.Kind != memorySignalKind || rec.MemorySignal == nil || rec.MemorySignal.Memory.ID != r.ID {
+			continue
+		}
+		if w := outcomeFactor(rec.MemorySignal); w != 1 {
+			weights[r.ID] = w
+		}
+	}
+	return weights
+}
+
 func sameMemorySignal(a, b MemorySignal) bool {
 	a.ComputedAt, b.ComputedAt = time.Time{}, time.Time{}
 	return structuredText(a) == structuredText(b)

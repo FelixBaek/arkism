@@ -1,0 +1,504 @@
+{
+  "base_ec057c4": {
+    "before": {
+      "calibration": {
+        "mrr": 0.8333,
+        "negative_false_positives": 2,
+        "negative_queries": 30,
+        "recall@1": 0.8333,
+        "recall@3": 0.8333,
+        "recall@6": 0.8333,
+        "relevant_queries": 36,
+        "wrong_documents": 9
+      },
+      "holdout": {
+        "mrr": 0.8333,
+        "negative_false_positives": 0,
+        "negative_queries": 30,
+        "recall@1": 0.8333,
+        "recall@3": 0.8333,
+        "recall@6": 0.8333,
+        "relevant_queries": 36,
+        "wrong_documents": 12
+      }
+    },
+    "fail_divisor_10": {
+      "after_no_judged_outcomes": {
+        "calibration": {
+          "mrr": 0.8333,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.8333,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      },
+      "oracle_noise_documents_fail": {
+        "calibration": {
+          "mrr": 0.8194,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8056,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.8333,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      },
+      "random_signals": {
+        "calibration.mrr": {
+          "max": 0.8333,
+          "mean": 0.8173,
+          "min": 0.7778
+        },
+        "calibration.recall@1": {
+          "max": 0.8333,
+          "mean": 0.8014,
+          "min": 0.7222
+        },
+        "calibration.recall@6": {
+          "max": 0.8333,
+          "mean": 0.8333,
+          "min": 0.8333
+        },
+        "calibration.wrong_documents": {
+          "max": 9,
+          "mean": 9,
+          "min": 9
+        },
+        "holdout.mrr": {
+          "max": 0.8333,
+          "mean": 0.8073,
+          "min": 0.75
+        },
+        "holdout.recall@1": {
+          "max": 0.8333,
+          "mean": 0.7813,
+          "min": 0.6667
+        },
+        "holdout.recall@6": {
+          "max": 0.8333,
+          "mean": 0.8333,
+          "min": 0.8333
+        },
+        "holdout.wrong_documents": {
+          "max": 12,
+          "mean": 12,
+          "min": 12
+        }
+      },
+      "worst_useful_documents_fail": {
+        "calibration": {
+          "mrr": 0.8194,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8056,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.7917,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.75,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      }
+    },
+    "fail_divisor_2": {
+      "after_no_judged_outcomes": {
+        "calibration": {
+          "mrr": 0.8333,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.8333,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      },
+      "oracle_noise_documents_fail": {
+        "calibration": {
+          "mrr": 0.8194,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8056,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.8333,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      },
+      "random_signals": {
+        "calibration.mrr": {
+          "max": 0.8333,
+          "mean": 0.8301,
+          "min": 0.8056
+        },
+        "calibration.recall@1": {
+          "max": 0.8333,
+          "mean": 0.8269,
+          "min": 0.7778
+        },
+        "calibration.recall@6": {
+          "max": 0.8333,
+          "mean": 0.8333,
+          "min": 0.8333
+        },
+        "calibration.wrong_documents": {
+          "max": 9,
+          "mean": 9,
+          "min": 9
+        },
+        "holdout.mrr": {
+          "max": 0.8333,
+          "mean": 0.8252,
+          "min": 0.7917
+        },
+        "holdout.recall@1": {
+          "max": 0.8333,
+          "mean": 0.8171,
+          "min": 0.75
+        },
+        "holdout.recall@6": {
+          "max": 0.8333,
+          "mean": 0.8333,
+          "min": 0.8333
+        },
+        "holdout.wrong_documents": {
+          "max": 12,
+          "mean": 12,
+          "min": 12
+        }
+      },
+      "worst_useful_documents_fail": {
+        "calibration": {
+          "mrr": 0.8333,
+          "negative_false_positives": 2,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 9
+        },
+        "holdout": {
+          "mrr": 0.8333,
+          "negative_false_positives": 0,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.8333,
+          "recall@6": 0.8333,
+          "relevant_queries": 36,
+          "wrong_documents": 12
+        }
+      }
+    },
+    "random_signals_model": "200 draws, seed 20261027: each document unjudged with p=0.5, else 1..5 samples each passing with p=0.8",
+    "scenario_signal_counts": {
+      "after_no_judged_outcomes": 0,
+      "oracle_noise_documents_fail": 3,
+      "worst_useful_documents_fail": 33
+    },
+    "shipped_fail_divisor": 10
+  },
+  "frozen_2026-10-18": {
+    "before": {
+      "calibration": {
+        "mrr": 0.8519,
+        "negative_false_positives": 14,
+        "negative_queries": 30,
+        "recall@1": 0.8056,
+        "recall@3": 0.9167,
+        "recall@6": 0.9167,
+        "relevant_queries": 36,
+        "wrong_documents": 88
+      },
+      "holdout": {
+        "mrr": 0.8472,
+        "negative_false_positives": 13,
+        "negative_queries": 30,
+        "recall@1": 0.7778,
+        "recall@3": 0.9167,
+        "recall@6": 0.9167,
+        "relevant_queries": 36,
+        "wrong_documents": 87
+      }
+    },
+    "fail_divisor_10": {
+      "after_no_judged_outcomes": {
+        "calibration": {
+          "mrr": 0.8519,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.8056,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 88
+        },
+        "holdout": {
+          "mrr": 0.8472,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.7778,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        }
+      },
+      "oracle_noise_documents_fail": {
+        "calibration": {
+          "mrr": 0.8287,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.75,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 88
+        },
+        "holdout": {
+          "mrr": 0.8009,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.6944,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        }
+      },
+      "random_signals": {
+        "calibration.mrr": {
+          "max": 0.8519,
+          "mean": 0.7341,
+          "min": 0.5926
+        },
+        "calibration.recall@1": {
+          "max": 0.8056,
+          "mean": 0.6556,
+          "min": 0.4722
+        },
+        "calibration.recall@6": {
+          "max": 0.9722,
+          "mean": 0.8422,
+          "min": 0.6389
+        },
+        "calibration.wrong_documents": {
+          "max": 98,
+          "mean": 90.68,
+          "min": 86
+        },
+        "holdout.mrr": {
+          "max": 0.8472,
+          "mean": 0.7095,
+          "min": 0.5046
+        },
+        "holdout.recall@1": {
+          "max": 0.8056,
+          "mean": 0.6389,
+          "min": 0.3611
+        },
+        "holdout.recall@6": {
+          "max": 0.9444,
+          "mean": 0.8026,
+          "min": 0.6389
+        },
+        "holdout.wrong_documents": {
+          "max": 97,
+          "mean": 91.105,
+          "min": 86
+        }
+      },
+      "worst_useful_documents_fail": {
+        "calibration": {
+          "mrr": 0.7454,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.6389,
+          "recall@3": 0.8889,
+          "recall@6": 0.8889,
+          "relevant_queries": 36,
+          "wrong_documents": 89
+        },
+        "holdout": {
+          "mrr": 0.8009,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.7222,
+          "recall@3": 0.8889,
+          "recall@6": 0.8889,
+          "relevant_queries": 36,
+          "wrong_documents": 88
+        }
+      }
+    },
+    "fail_divisor_2": {
+      "after_no_judged_outcomes": {
+        "calibration": {
+          "mrr": 0.8519,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.8056,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 88
+        },
+        "holdout": {
+          "mrr": 0.8472,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.7778,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        }
+      },
+      "oracle_noise_documents_fail": {
+        "calibration": {
+          "mrr": 0.8704,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.8333,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 88
+        },
+        "holdout": {
+          "mrr": 0.8426,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.7778,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        }
+      },
+      "random_signals": {
+        "calibration.mrr": {
+          "max": 0.9074,
+          "mean": 0.8329,
+          "min": 0.7454
+        },
+        "calibration.recall@1": {
+          "max": 0.8889,
+          "mean": 0.7692,
+          "min": 0.6667
+        },
+        "calibration.recall@6": {
+          "max": 0.9722,
+          "mean": 0.9161,
+          "min": 0.8333
+        },
+        "calibration.wrong_documents": {
+          "max": 91,
+          "mean": 88.02,
+          "min": 86
+        },
+        "holdout.mrr": {
+          "max": 0.875,
+          "mean": 0.811,
+          "min": 0.6991
+        },
+        "holdout.recall@1": {
+          "max": 0.8333,
+          "mean": 0.7374,
+          "min": 0.5556
+        },
+        "holdout.recall@6": {
+          "max": 0.9444,
+          "mean": 0.9032,
+          "min": 0.8333
+        },
+        "holdout.wrong_documents": {
+          "max": 90,
+          "mean": 87.485,
+          "min": 86
+        }
+      },
+      "worst_useful_documents_fail": {
+        "calibration": {
+          "mrr": 0.8472,
+          "negative_false_positives": 14,
+          "negative_queries": 30,
+          "recall@1": 0.7778,
+          "recall@3": 0.9444,
+          "recall@6": 0.9444,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        },
+        "holdout": {
+          "mrr": 0.8472,
+          "negative_false_positives": 13,
+          "negative_queries": 30,
+          "recall@1": 0.7778,
+          "recall@3": 0.9167,
+          "recall@6": 0.9167,
+          "relevant_queries": 36,
+          "wrong_documents": 87
+        }
+      }
+    },
+    "random_signals_model": "200 draws, seed 20261027: each document unjudged with p=0.5, else 1..5 samples each passing with p=0.8",
+    "scenario_signal_counts": {
+      "after_no_judged_outcomes": 0,
+      "oracle_noise_documents_fail": 30,
+      "worst_useful_documents_fail": 6
+    },
+    "shipped_fail_divisor": 10
+  }
+}
