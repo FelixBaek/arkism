@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strconv"
@@ -24,10 +25,18 @@ func auditRetentionDays() (int, error) {
 	return days, nil
 }
 
+type auditExpirer interface {
+	ExpireAuditEvents(ctx context.Context, cutoff time.Time, execute bool) (int64, error)
+}
+
 // runDaemonAuditExpiry counts the audit events past retention, logs that count,
 // and with "execute" deletes them. It runs on the schema owner's connection.
 func runDaemonAuditExpiry(ctx context.Context, pg *memory.Postgres, cfg daemonOptions, standalone string) error {
-	if cfg.AuditExpiry != "preview" && cfg.AuditExpiry != "execute" {
+	return expireAuditEvents(ctx, pg, cfg.AuditExpiry, os.Stdout)
+}
+
+func expireAuditEvents(ctx context.Context, store auditExpirer, mode string, out io.Writer) error {
+	if mode != "preview" && mode != "execute" {
 		return memory.ErrInvalid
 	}
 	days, err := auditRetentionDays()
@@ -35,23 +44,23 @@ func runDaemonAuditExpiry(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 		return err
 	}
 	if days == 0 {
-		fmt.Println(`{"mode":"disabled","count":0,"deleted":0}`)
-		return nil
+		_, err = fmt.Fprintln(out, `{"mode":"disabled","count":0,"deleted":0}`)
+		return err
 	}
 	cutoff := time.Now().UTC().Add(-time.Duration(days) * 24 * time.Hour)
 	op, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	count, err := pg.ExpireAuditEvents(op, cutoff, false)
+	count, err := store.ExpireAuditEvents(op, cutoff, false)
 	if err != nil {
 		return err
 	}
-	slog.Info("audit events past retention", "mode", cfg.AuditExpiry, "before", cutoff.Format(time.RFC3339), "count", count)
+	slog.Info("audit events past retention", "mode", mode, "before", cutoff.Format(time.RFC3339), "count", count)
 	var deleted int64
-	if cfg.AuditExpiry == "execute" {
-		if deleted, err = pg.ExpireAuditEvents(op, cutoff, true); err != nil {
+	if mode == "execute" {
+		if deleted, err = store.ExpireAuditEvents(op, cutoff, true); err != nil {
 			return err
 		}
 	}
-	fmt.Printf("{\"mode\":%q,\"before\":%q,\"count\":%d,\"deleted\":%d}\n", cfg.AuditExpiry, cutoff.Format(time.RFC3339), count, deleted)
-	return nil
+	_, err = fmt.Fprintf(out, "{\"mode\":%q,\"before\":%q,\"count\":%d,\"deleted\":%d}\n", mode, cutoff.Format(time.RFC3339), count, deleted)
+	return err
 }
