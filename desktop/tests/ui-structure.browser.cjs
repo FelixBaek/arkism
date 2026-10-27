@@ -84,15 +84,16 @@ fs.mkdirSync(output,{recursive:true});
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({state:"detached"});
     await page.locator("#settings-button").click();
-    // #218: 설정 › 에이전트 opens with the AI 도구 기본 모델 picker, its list grouped by provider like the workflow model list.
-    await page.getByRole("tab",{name:"에이전트",exact:true}).click();
-    const assist=page.locator(".v4-set-agents > .pg-group").first().getByRole("combobox",{name:"AI 도구 기본 모델"});
+    // #218: 설정 › 역할별 모델 opens with the AI 도구 기본 모델 picker, its list grouped by provider like the workflow model list.
+    await page.getByRole("tab",{name:"역할별 모델",exact:true}).click();
+    const assist=page.locator(".ag-roles").first().getByRole("combobox",{name:"AI 도구 기본 모델"});
     await assist.click();await page.locator(".combo-pop .combo-head").first().waitFor();
     assert.equal(await page.locator(".combo-pop .combo-head .brand-mark").count()>0,true,"provider heads lost their logo");
     assert.equal(await page.locator(".combo-pop .combo-opt small").first().innerText()>"",true,"model rows lost their provider");
     await capture("settings-agents");await page.keyboard.press("Escape");
     await page.getByRole("tab",{name:"모양",exact:true}).click();await capture("settings");
-    // English loads only on demand; original user content survives both language changes.
+    // English loads only on demand; original user content survives both language changes. The language switch is in 설정 › 일반.
+    await page.getByRole("tab",{name:"일반",exact:true}).click();
     await page.getByRole("tab",{name:"English",exact:true}).click();
     await page.waitForFunction(()=>window.ArkismI18n.lang()==="en");
     assert.equal(requests.some(u=>/i18n-en/.test(u)),true);

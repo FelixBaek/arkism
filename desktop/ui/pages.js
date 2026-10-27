@@ -181,7 +181,7 @@ window.ArkismPages = (ctx) => {
     let gen = null;
     const setGeneral = (patch, done) => tauri.invoke("general_set", { keepRunning: gen.keep_running, shortcut: gen.shortcut, ...patch })
       .then((g) => { gen = g; drawGeneral(); if (done) notice(done); },
-        (e) => drawGeneral() || notice(String(e).includes("shortcut_taken") ? "다른 앱이 이미 쓰는 키예요. 다른 조합을 골라 주세요." : String(e).includes("shortcut_invalid") ? "이 조합은 단축키로 쓸 수 없어요." : "설정을 바꾸지 못했어요."));
+        (e) => { drawGeneral(); notice(String(e).includes("shortcut_taken") ? "다른 앱이 이미 쓰는 키예요. 다른 조합을 골라 주세요." : String(e).includes("shortcut_invalid") ? "이 조합은 단축키로 쓸 수 없어요." : "설정을 바꾸지 못했어요."); });
     // 앱이 떠 있어야 수집·정리가 돈다: 로그인할 때 트레이로 시작(기본 켜짐).
     const start = group("시작과 종료");
     const slot = el("span"), keepSlot = el("span");

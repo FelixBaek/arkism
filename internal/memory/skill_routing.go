@@ -135,13 +135,7 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 		return RouteResult{}, ErrInvalid
 	}
 	in.ExtraCandidates = nil
-	most := 8
-	if s.SkillCandidates > 0 && s.SkillCandidates < most {
-		most = s.SkillCandidates
-	}
-	if in.Limit == 0 || in.Limit > most-len(extras) {
-		in.Limit = max(1, most-len(extras))
-	}
+	in.Limit = s.skillSearchLimit(in.Limit, len(extras))
 	searchInput := in
 	searchInput.retrievalQuery = skillQueryVariants(in.Query)
 	bundle, actor, err := s.searchWithActor(ctx, token, searchInput)
@@ -530,4 +524,16 @@ func judgeMeasured(ctx context.Context, judge SkillJudge, query string, candidat
 	out, err := judge.Judge(ctx, query, candidates)
 	provider, model := judgeIdentity(judge)
 	return out, ProviderUsage{Provider: provider, Model: model, Requests: 1}, err
+}
+
+// skillSearchLimit caps the search at SkillCandidates (default 8) minus the caller's extras, at least 1.
+func (s *Service) skillSearchLimit(limit, extras int) int {
+	most := 8
+	if s.SkillCandidates > 0 && s.SkillCandidates < most {
+		most = s.SkillCandidates
+	}
+	if limit == 0 || limit > most-extras {
+		return max(1, most-extras)
+	}
+	return limit
 }
