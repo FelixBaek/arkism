@@ -4,6 +4,8 @@ package crew
 
 import (
 	"errors"
+
+	"github.com/FelixBaek/arkism/internal/host"
 	"strings"
 	"testing"
 )
@@ -103,4 +105,21 @@ func TestRefreshCLINowCachesTheNewBinaryBeforeReturning(t *testing.T) {
 	if got := cliInfo("codex", path, state, false); got["version"] != "1.0.0" {
 		t.Fatal(got)
 	}
+}
+
+func TestCLIUpdateRequestRefreshesTheCacheWhenDone(t *testing.T) {
+	state, request, _ := jobsFixture(t)
+	patch(t, &host.AgentsState, state)
+	updatePerform = func(string, string, any, any, string) map[string]any {
+		return map[string]any{"ok": true, "info": map[string]any{"version": "1.2.4", "updated": true}}
+	}
+	request["kind"] = "cli_update"
+	res, err := carryOut(map[string]any{"request": request}, nil, nil)
+	if err != nil || res["status"] != "done" {
+		t.Fatal(res, err)
+	}
+	if res, _ := carryOut(map[string]any{"request": withKey(request, "cli", "custom")}, nil, nil); res["status"] != "failed" {
+		t.Fatal("custom CLI must be refused", res)
+	}
+	refreshCLINow("gemini", "/synthetic/gemini", state) // unsupported CLIs are not inspected
 }
