@@ -3505,6 +3505,7 @@ window.ArkismI18nEN = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+  "- 나머지 {0}개는 arkism MCP의 recall 도구로 보세요.": "- {0} more: read them with the arkism MCP recall tool.",
   "AI 제안 · {0}": "AI suggestion · {0}",
   "AI 제안을 받지 못했어요: {0}": "Could not get an AI suggestion: {0}",
   "내보내지 못했어요 ({0}).": "Couldn't export ({0}).",
