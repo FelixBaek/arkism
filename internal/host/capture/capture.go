@@ -692,7 +692,8 @@ func firstQuestion(transcript string) string {
 	}
 	question := ""
 	found := errors.New("found")
-	eachLine(transcript, 0, func(raw []byte, _ int64) error {
+	// found only stops the walk; an unreadable transcript leaves question "" like a new session
+	_, _ = eachLine(transcript, 0, func(raw []byte, _ int64) error {
 		v, err := loadsBytes(raw)
 		d, _ := v.(map[string]any)
 		if err != nil || d == nil || !humanTyped(d) {
