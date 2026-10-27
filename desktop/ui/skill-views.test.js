@@ -343,8 +343,8 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.equal(btn(d, "품질·보안 검사").getAttribute("aria-expanded"), "true");
   btn(d, "품질·보안 검사").click();
   assert.equal(more.hidden, true);
-  assert.ok(d.querySelector(".v4s-foot"));
-  btn(d.querySelector(".v4s-foot"), "휴지통으로").click();
+  assert.ok(d.querySelector(".v4s-trash"));
+  btn(d.querySelector(".v4s-trash"), "휴지통으로").click();
   assert.deepEqual(s.log.at(-1), ["trash", ["a"]]);
   assert.equal(chat.state, s.chats[0].state);
   assert.match((await chat.ask("뭐야?", [])).say, /설명: /);

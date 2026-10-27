@@ -524,7 +524,7 @@ export function createSkillViews(deps) {
     rec.append(skFacts([["출처", r ? (r.remote || r.repo) : "", "mono"], ["버전", verCell.childNodes.length ? verCell : ""], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"], ["이력", history], ["검사·사용", checks]]), more);
     parts.push(rec);
     if (sk.status !== "deprecated") {
-      const foot = deps.el("div", "v4s-foot");
+      const foot = deps.el("div", "v4s-trash");
       foot.append(deps.button("휴지통으로", "ghost danger", null, () => deps.confirmBatch([sk], () => deps.trashSkills([sk]))));
       parts.push(foot);
     }

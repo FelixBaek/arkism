@@ -49,7 +49,7 @@ pub fn init(app: &tauri::AppHandle, dir: PathBuf) {
     let _ = PATH.set(path);
     KEEP_RUNNING.store(g.keep_running, Ordering::Relaxed);
     g.shortcut_error = take_shortcut(app, None, &g.shortcut).err().unwrap_or_default();
-    *CURRENT.lock().unwrap_or_else(|e| e.into_inner()) = Some(g);
+    *CURRENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(g);
 }
 
 fn take_shortcut(app: &tauri::AppHandle, old: Option<&str>, new: &str) -> Result<(), String> {
@@ -64,7 +64,7 @@ fn take_shortcut(app: &tauri::AppHandle, old: Option<&str>, new: &str) -> Result
 
 #[tauri::command]
 pub fn general_get() -> General {
-    CURRENT.lock().unwrap_or_else(|e| e.into_inner()).clone().unwrap_or_default()
+    CURRENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone().unwrap_or_default()
 }
 
 #[tauri::command]
@@ -73,7 +73,7 @@ pub fn general_set(app: tauri::AppHandle, keep_running: bool, shortcut: String) 
     if !shortcut.is_empty() && shortcut.parse::<Shortcut>().is_err() {
         return Err("shortcut_invalid".into());
     }
-    let mut cur = CURRENT.lock().unwrap_or_else(|e| e.into_inner());
+    let mut cur = CURRENT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let old = cur.clone().unwrap_or_default();
     let mut next = General { keep_running, shortcut, shortcut_error: String::new() };
     let changed = next.shortcut != old.shortcut;
