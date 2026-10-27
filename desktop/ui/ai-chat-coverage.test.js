@@ -117,9 +117,11 @@ test("bubble footer: a purple row under the input closes the bubble and runs its
   root.querySelector(".ex-ai-btn").click(); await flush();
   const foot = root.querySelector(".ex-ai-pop .ex-ai-foot");
   assert.ok(foot.textContent.includes("이 스킬 개선하기") && foot.textContent.includes("새 버전을 만들어요") && foot.textContent.includes("→"));
+  const btnEl = root.querySelector(".ex-ai-btn");
   foot.click();
   assert.deepEqual(hits, ["improve"]);
   assert.equal(st.open, false);
+  assert.notEqual(btnEl.ownerDocument.activeElement, btnEl, "the footer's action places focus, not the old AI button");
   const bare = AI.button({ state: {}, ask: async () => ({}), footer: { label: "힌트 없음" } });
   mountIn(bare);
   bare.querySelector(".ex-ai-btn").click(); await flush();

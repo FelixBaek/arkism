@@ -79,7 +79,7 @@ window.ArkismAIChat = (() => {
     const dock = el("span", "ex-ai-dock");
     dock.append(anchor); root.append(dock, zone); root.dock = dock;
     const docked = () => dock.parentNode !== root;
-    const toggle = (on) => { st.open = on; st.grow = on; paint(); if (!on) anchor.focus(); };
+    const toggle = (on, refocus = true) => { st.open = on; st.grow = on; paint(); if (!on && refocus) anchor.focus(); };
     const busy = () => st.log.some((m) => m.busy);
     const line = (who, text, more = {}) => { const m = { who, text, fresh: true, ...more }; st.log.push(m); if (st.log.length > 12) st.log.shift(); return m; };
     const repaint = () => st.paint?.();
@@ -158,7 +158,7 @@ window.ArkismAIChat = (() => {
         const txt = el("span", "");
         txt.append(el("strong", "", f.label), ...(f.hint ? [el("small", "", f.hint)] : []));
         foot.append(txt, el("span", "arrow", "→"));
-        foot.addEventListener("click", () => { toggle(false); f.onClick?.(); });
+        foot.addEventListener("click", () => { toggle(false, false); f.onClick?.(); }); // onClick usually redraws the screen: it moves focus, not the old anchor
         pop.append(foot);
       }
       pop.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); toggle(false); } });

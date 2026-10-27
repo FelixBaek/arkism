@@ -6100,7 +6100,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "한도 새로 확인": "Check limits again",
   "로그인한 계정이 없어요.": "No signed-in accounts.",
   "훅": "Hooks",
-  "연결됨 · 대화 저장·기억 넣기": "Connected · saves chats, adds memories",
+  "연결됨 · 최근 PC 통신": "Connected · recent PC contact",
   "모델 검색": "Search models",
   "Arkism 연결": "Arkism link",
   "연결됨 · 기억·스킬 도구": "Connected · memory and skill tools",

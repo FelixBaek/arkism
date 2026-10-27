@@ -305,7 +305,7 @@ test("staged agent changes: chips, change bar, apply per skill, revert and failu
 });
 
 test("detail: security card, updates, repo check, experts, AI chat, version facts and the late analysis", async () => {
-  const sk = SK("a", { description: "설명.", version: "1.0", version_history: [1, 2], experts: true, category: "개발", source_path: "/repo/a/SKILL.md" });
+  const sk = SK("a", { description: "설명.", version: "1.0", version_history: [1, 2, 3], active_version: 3, experts: true, category: "개발", source_path: "/repo/a/SKILL.md" });
   const s = await views({ skills: [sk], handler: (path) => (path.startsWith("/v1/skill_versions/") ? s.analysis : {}) });
   s.state.data.skillUse = new Map();
   s.state.data.tools.skill_checks = [{ name: "a", verdict: "DO_NOT_INSTALL", quality_score: 95 }];
@@ -333,7 +333,7 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.deepEqual(s.state.skillPage, { kind: "improve", id: "a", step: 0 });
   // 버전과 기록: 언제 쓰나요 comes before it, history opens step 2, 검사·사용 reveals the folded checks and usage.
   assert.ok(d.textContent.indexOf("언제 쓰나요") < d.textContent.indexOf("버전과 기록"));
-  btn(d, "지난 버전 2개 ›").click();
+  btn(d, "지난 버전 2개 ›").click(); // three in the history, one of them in use
   assert.equal(s.state.skillPage.step, 2);
   const more = d.querySelector(".v4s-more");
   assert.equal(more.hidden, true);
