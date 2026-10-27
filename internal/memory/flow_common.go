@@ -221,9 +221,7 @@ func flowDefinitionRefs(c Crew, available map[string]FlowDefinition) []string {
 				out = append(out, id)
 			}
 		}
-		for _, id := range flowWorkerRefs(n) {
-			out = append(out, id)
-		}
+		out = append(out, flowWorkerRefs(n)...)
 		if n.Type == "subflow" {
 			out = append(out, flowDefinitionByHandle(available, n.Config["workflow"]).ID)
 		}

@@ -87,10 +87,6 @@ func flowReadLoop(g *CrewGraph, id string) bool {
 	return false
 }
 
-func liveWorkflow(r Record) bool {
-	return r.Status == statusActive && !r.ContentErased && !r.PrivacyQuarantined && r.Crew != nil && r.Crew.Type == "workflow"
-}
-
 func completeDiscordOrigin(o *CrewRunOrigin, requestID string) bool {
 	if o == nil || o.Connector != "discord" {
 		return false
