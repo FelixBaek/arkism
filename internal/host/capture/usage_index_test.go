@@ -146,6 +146,10 @@ func TestUsageCollectGolden(t *testing.T) {
 	for k, v := range map[string]string{"ARKISM_WORKSPACE": "ws", "ARKISM_PROJECT": "pj", "ARKISM_USER": "us", "ARKISM_AGENT": "ag"} {
 		t.Setenv(k, v)
 	}
+	// the golden predates folder/file paths; a paused capture leaves them out (TestUsageFolderAndFile covers them)
+	old := usageSettings
+	usageSettings = func() captureSettings { return captureSettings{Paused: true} }
+	t.Cleanup(func() { usageSettings = old })
 	cache := map[string]*usageFile{}
 	rows, _ := usageCollect(host.Obj{}, false, cache)
 	state := host.Obj{{Key: "sent", Value: host.Obj{{Key: rows[0].key, Value: usageDigest(rows[0].row)}, {Key: "gone|x|y", Value: "0"}}}}
@@ -213,7 +217,7 @@ func TestUsageMathGolden(t *testing.T) {
 	for _, c := range in.Sums {
 		s := &usageSession{Stamps: c.Stamps}
 		s.tokens(1_000_000, "m", usageTok{Input: 1})
-		row := s.row()
+		row := s.row(captureSettings{})
 		stamps := []any{}
 		for _, x := range c.Stamps {
 			stamps = append(stamps, x)
@@ -245,7 +249,7 @@ func TestUsageMainPlansAndWritesTheJSONCache(t *testing.T) {
 	if code := usageMain(nil, nil, &out, &errb); code != 0 || out.String() != `{"sessions": 0, "changed": 0, "sent": 0, "failed": 0}`+"\n" {
 		t.Fatal(code, out.String(), errb.String())
 	}
-	if _, err := os.Stat(filepath.Join(d, "state", "files.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(d, "state", "files-v2.json")); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
@@ -311,5 +315,33 @@ func TestUsageReadStateRejectsBrokenJSONAndTreatsMissingAsEmpty(t *testing.T) {
 	}
 	if _, err := usageReadState(); err == nil {
 		t.Fatal("broken state accepted")
+	}
+}
+
+// A session's folder and log file go with its counts so the app can copy an exact resume
+// command; an excluded folder sends neither.
+func TestUsageFolderAndFile(t *testing.T) {
+	src, _ := filepath.Abs("testdata/usage_input")
+	usageFake(t, []archiveRoot{{"codex", "server", filepath.Join(src, "codex"), "rollout*.jsonl"}}, filepath.Join(src, "codex_index.jsonl"))
+	old := usageSettings
+	t.Cleanup(func() { usageSettings = old })
+	pick := func(settings captureSettings) host.Obj {
+		usageSettings = func() captureSettings { return settings }
+		rows, _ := usageCollect(host.Obj{}, false, map[string]*usageFile{})
+		for _, r := range rows {
+			if r.key == "server|codex|c1" {
+				return r.row
+			}
+		}
+		t.Fatal("no c1 row")
+		return nil
+	}
+	row := pick(captureSettings{})
+	if usageGet(row, "folder") != "/opt/arkism/proj" || usageGet(row, "file") != filepath.Join(src, "codex", "2026", "rollout-1.jsonl") {
+		t.Fatalf("folder/file: %v %v", usageGet(row, "folder"), usageGet(row, "file"))
+	}
+	row = pick(captureSettings{Exclude: []string{"/opt/arkism"}})
+	if usageGet(row, "folder") != nil || usageGet(row, "file") != nil || usageGet(row, "project") != "proj" {
+		t.Fatalf("excluded folder leaked: %v", row)
 	}
 }
