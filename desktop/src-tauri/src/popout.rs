@@ -19,6 +19,9 @@ pub fn on_new_window<R: Runtime>(app: &AppHandle<R>, url: Url, features: NewWind
     }
     let built = WebviewWindowBuilder::new(app, &label, WebviewUrl::External("about:blank".parse().expect("about:blank")))
         .window_features(features)
+        // no OS title bar: the popup's own head moves the window (popup-drag.js), as on the main window
+        .decorations(false)
+        .shadow(true)
         .title(if title.is_empty() { "Arkism".to_string() } else { format!("{title} · Arkism") })
         .min_inner_size(360.0, 320.0)
         .focused(true)
@@ -27,7 +30,10 @@ pub fn on_new_window<R: Runtime>(app: &AppHandle<R>, url: Url, features: NewWind
         .on_new_window(|url, _| open_external(&url))
         .build();
     match built {
-        Ok(window) => NewWindowResponse::Create { window },
+        Ok(window) => {
+            crate::app_keys_only(&window);
+            NewWindowResponse::Create { window }
+        }
         Err(_) => NewWindowResponse::Deny,
     }
 }

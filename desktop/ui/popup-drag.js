@@ -35,6 +35,13 @@
     // Esc closes the top popup there the way it does here (the root is no longer modal, so no cancel of its own).
     // On the document, set again whenever the window swaps in a fresh page (a listener on the old one would be gone).
     d.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented) { const top = [...d.querySelectorAll("dialog[open]")].pop(); if (top) { e.preventDefault(); dismiss(top); } } });
+    // The window has no OS title bar (popout.rs): its popup's head moves it, and a double-click there maximizes it.
+    d.addEventListener("mousedown", (e) => {
+      const t = e.target;
+      if (e.button !== 0 || !t.closest?.(HEAD) || t.closest(SKIP) || !t.closest("dialog.popout-root")) return;
+      e.preventDefault();
+      void tauri()?.invoke(e.detail === 2 ? "plugin:window|toggle_maximize" : "plugin:window|start_dragging", { label: kid.label }).catch(() => {});
+    });
     window.dispatchEvent(new CustomEvent("arkism-popout", { detail: d })); // other scripts set up their listeners there (ArkismPopout below)
   }
   // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be

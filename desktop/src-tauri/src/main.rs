@@ -885,6 +885,21 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
     code
 }
 
+/// The app is not a browser: WebView2's own shortcuts (Ctrl+F find bar, Ctrl+J downloads, Ctrl+P print, F5 reload,
+/// F12 tools) are turned off. Copy, paste, undo and select all stay; the app's zoom keys are its own (look.js).
+pub(crate) fn app_keys_only<R: tauri::Runtime>(w: &tauri::WebviewWindow<R>) {
+    #[cfg(windows)]
+    let _ = w.with_webview(|wv| unsafe {
+        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+        use windows_core::Interface;
+        if let Ok(s) = wv.controller().CoreWebView2().and_then(|c| c.Settings()).and_then(|s| s.cast::<ICoreWebView2Settings3>()) {
+            let _ = s.SetAreBrowserAcceleratorKeysEnabled(false);
+        }
+    });
+    #[cfg(not(windows))]
+    let _ = w;
+}
+
 fn main() {
     // ssh runs this program as its SSH_ASKPASS for a password login; answer and quit before any app setup.
     if let Some(code) = ssh_tunnel::askpass() {
@@ -919,9 +934,10 @@ fn main() {
             // The main window is built here (not from tauri.conf.json) so that window.open can open popouts (popout.rs).
             let conf = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or("main window config missing")?;
             let handle = app.handle().clone();
-            WebviewWindowBuilder::from_config(app, &conf)?
+            let main = WebviewWindowBuilder::from_config(app, &conf)?
                 .on_new_window(move |url, features| popout::on_new_window(&handle, url, features))
                 .build()?;
+            app_keys_only(&main);
             if std::env::args().any(|a| a == "--hidden") {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.hide();
