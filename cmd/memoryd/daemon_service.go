@@ -155,33 +155,37 @@ func configureDaemonRouting(svc *memory.Service) {
 	if account, token := os.Getenv("CLOUDFLARE_ACCOUNT_ID"), os.Getenv("CLOUDFLARE_AI_TOKEN"); account != "" && token != "" {
 		clef = memory.NewClefJudge(account, token)
 	}
-	// 설정 › 역할별 모델 can pick the skill judge and the model judge apart: ARKISM_SKILL_JUDGE and
-	// ARKISM_MODEL_JUDGE are fixed (rules / the fixed model), clef or jev; unset keeps the pairing above.
-	pickJudge := func(env string) (memory.SkillJudge, memory.ModelPicker) {
+	// Every engine this server can run, by name: 설정 › 역할별 모델 may pick one per scope (role_models.go).
+	judges, pickers := map[string]memory.SkillJudge{}, map[string]memory.ModelPicker{}
+	if jev != nil {
+		judges["jev"], pickers["jev"] = jev, jevPicker
+	}
+	if clef != nil {
+		judges["clef"], pickers["clef"] = &memory.FallbackJudge{Primary: clef, Secondary: jev}, clef // 라우팅: Clef picks the model
+	}
+	// The server default: ARKISM_SKILL_JUDGE and ARKISM_MODEL_JUDGE are fixed (rules / the fixed model), clef or jev;
+	// unset prefers Clef, then Jev.
+	pickJudge := func(env string) string {
 		switch os.Getenv(env) {
 		case "fixed":
-			return nil, nil
+			return "fixed"
 		case "jev":
-			if jev == nil {
-				return nil, nil
-			}
-			return jev, jevPicker
+			return "jev"
 		}
 		if clef != nil {
-			return &memory.FallbackJudge{Primary: clef, Secondary: jev}, clef // 라우팅: Clef picks the model
+			return "clef"
 		}
-		if jev != nil {
-			return jev, jevPicker
-		}
-		return nil, nil
+		return "jev"
 	}
-	svc.Router, _ = pickJudge("ARKISM_SKILL_JUDGE")
-	_, svc.ModelPicker = pickJudge("ARKISM_MODEL_JUDGE")
+	svc.Router = judges[pickJudge("ARKISM_SKILL_JUDGE")]
+	svc.ModelPicker = pickers[pickJudge("ARKISM_MODEL_JUDGE")]
 	if n, err := strconv.Atoi(os.Getenv("ARKISM_SKILL_CANDIDATES")); err == nil && n >= 1 && n <= 8 {
 		svc.SkillCandidates = n
 	}
 	// 라우팅 with the user's own chat model (Ollama, OpenAI, OpenRouter…): replaces Clef or Jev for picking models.
 	if endpoint, model := os.Getenv("ARKISM_ROUTING_PICKER_URL"), os.Getenv("ARKISM_ROUTING_PICKER_MODEL"); endpoint != "" && model != "" {
-		svc.ModelPicker = &memory.ChatModelPicker{Endpoint: endpoint, APIKey: os.Getenv("ARKISM_ROUTING_PICKER_KEY"), Model: model}
+		pickers["chat"] = &memory.ChatModelPicker{Endpoint: endpoint, APIKey: os.Getenv("ARKISM_ROUTING_PICKER_KEY"), Model: model}
+		svc.ModelPicker = pickers["chat"]
 	}
+	svc.Judges, svc.Pickers = judges, pickers
 }

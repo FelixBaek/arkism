@@ -839,6 +839,78 @@ window.ArkismPages = (ctx) => {
   const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
   const ROLE_MODELS = [["haiku", "Claude Haiku"], ["sonnet", "Claude Sonnet"], ["opus", "Claude Opus"]];
   const EMBED = [["auto", "자동 (Ollama가 있으면)"], ["ollama", "Ollama"], ["none", "끄기"]];
+  // 설정 › 역할별 모델 on a server: each role's pick goes to POST /v1/providers/role_model and runs from the next call.
+  // The first option is what the server runs with nothing picked (providers.role_defaults).
+  const ENGINE = { fixed: "고정 규칙", clef: "Clef", jev: "Jev", chat: "내 모델" };
+  const SCAN_NAMES = Object.fromEntries(SCANNERS.map(([k, name]) => [k, name]));
+  function serverRoles(body, rows) {
+    const d = () => state.data.providers || {};
+    const hint = Object.fromEntries(rows);
+    async function save(role, patch, done) {
+      try {
+        state.data.providers = (await request("/v1/providers/role_model", { method: "POST", body: JSON.stringify({ scope: state.scope, role, ...patch }) })).providers;
+        notice(done);
+      } catch (e) { notice(e.message === "access_denied" ? "이 계정은 역할별 모델을 바꿀 수 없어요." : "저장하지 못했어요."); }
+      draw();
+    }
+    const source = (picked) => pill(picked ? "내가 고름" : "기본값", picked);
+    // ROUTER › 라우팅 현황 keeps what 라우팅 판정 and route_skills actually picked.
+    const recent = () => button("최근 판정", "ghost small", null, () => { go("routing"); notice("최근 판정은 라우팅 현황에서 봐요."); });
+    const controls = (...parts) => { const c = el("div", "v4-role-pick"); c.append(...parts.filter(Boolean)); return c; };
+    // options: [[value, label]]; claude adds the Anthropic models the host runs through the Claude CLI.
+    function picker(role, title, defaultLabel, options, claude, ...extra) {
+      const pick = d().roles?.[role] || {};
+      const current = pick.model ? (pick.provider ? `${pick.provider}|${pick.model}` : pick.model) : "";
+      const sel = el("select", claude ? "mp-assist" : "ag-select");
+      sel.setAttribute("aria-label", `${title} 모델`);
+      sel.append(Object.assign(el("option", "", `서버 기본값 (${defaultLabel || "서버 설정"})`), { value: "" }));
+      for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
+      if (claude) {
+        for (const p of models.enabledByProvider().filter((x) => x.id === "anthropic")) {
+          const g = el("optgroup"); g.label = p.name; g.logo = models.logo(p);
+          for (const m of p.models) g.append(Object.assign(el("option", "", m), { value: `${p.id}|${m}` }));
+          sel.append(g);
+        }
+      }
+      if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", pick.model), { value: current })); // picked earlier, now off
+      sel.value = current;
+      sel.addEventListener("change", () => {
+        const [provider, model] = sel.value.includes("|") ? sel.value.split("|") : ["", sel.value];
+        sel.disabled = true;
+        void save(role, { model, ...(provider ? { provider } : {}) }, model ? `${title}: ${sel.selectedOptions[0].textContent}. 다음 실행부터 써요.` : `${title}: 서버 기본값으로 돌아갔어요.`);
+      });
+      return controls(...extra, source(!!current), sel); // the select last, so every row lines up on the right
+    }
+    const engines = (role) => (d().role_options?.[role] || ["fixed"]).map((k) => [k, ENGINE[k] || k]);
+    const def = (role) => d().role_defaults?.[role] || "";
+    const row = (title, right, ...extra) => roleBlock(line(title, hint[title], right), ...extra);
+    function scanRow() {
+      const installed = (def("skill_scan") || "").split(",").filter((k) => SCAN_NAMES[k]);
+      const off = d().roles?.skill_scan?.off || [];
+      const engineRows = installed.map((k) => line(SCAN_NAMES[k], SCANNERS.find(([x]) => x === k)[2],
+        sw(!off.includes(k), SCAN_NAMES[k], (on) => void save("skill_scan", { off: on ? off.filter((x) => x !== k) : [...off, k] }, on ? `${SCAN_NAMES[k]}: 켰어요.` : `${SCAN_NAMES[k]}: 껐어요.`))));
+      const note = installed.length ? null : el("p", "pg-hint", "이 서버에 설치된 검사 엔진이 없어요. 기본 검사만 돌아요.");
+      return row("스킬 보안 검사", source(off.length > 0), ...engineRows, ...(note ? [note] : []));
+    }
+    function draw() {
+      const summaryDef = def("skill_summary") === "basic" ? "스킬 설명 그대로" : def("skill_summary");
+      const counts = ["4", "6", "8"].map((k) => [k, `${k}개`]);
+      const embed = el("select", "ag-select");
+      embed.setAttribute("aria-label", "임베딩 모델");
+      embed.append(Object.assign(el("option", "", `서버 기본값 (${def("embed") === "none" ? "끄기" : def("embed") || "서버 설정"})`), { value: "" }));
+      embed.disabled = true; // one embedder per server: changing it means a server setting and a full re-index
+      body.replaceChildren(
+        row("라우팅 판정", picker("route_judge", "라우팅 판정", ENGINE[def("route_judge")], engines("route_judge"), false, recent())),
+        row("스킬 요약", picker("skill_summary", "스킬 요약", summaryDef, [["basic", "스킬 설명 그대로"]], true)),
+        row("스킬 후보 찾기", picker("skill_candidates", "스킬 후보 찾기", def("skill_candidates") && `${def("skill_candidates")}개`, counts, false, recent())),
+        row("스킬 판정", picker("skill_judge", "스킬 판정", ENGINE[def("skill_judge")], engines("skill_judge"), false, recent())),
+        scanRow(),
+        row("기억 추출", picker("extract", "기억 추출", def("extract"), [], true)),
+        row("반성·검토", picker("reflect", "반성·검토", def("reflect"), [], true)),
+        row("임베딩", controls(source(false), embed), el("p", "pg-hint", "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요.")));
+    }
+    draw();
+  }
   function agentRoleCards() {
     if (kitCard) return kitCard;
     const roles = group("역할별 모델");
@@ -856,9 +928,15 @@ window.ArkismPages = (ctx) => {
     const kitBody = el("div", "v4-kit-body");
     kit.append(kitBody);
     if (!(tauri && state.mode === "local")) {
-      // No server API reports its role models (they are env on the host), so say only that the server decides.
-      for (const [t, hint] of [ROWS[0], ...SKILL_ROWS, ...ROWS.slice(1)]) roles.append(roleBlock(line(t, hint, pill("서버가 정함"))));
-      kitBody.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 위치와 모델을 써요."));
+      if (state.data.providers) {
+        const body = el("div", "v4-roles-body");
+        roles.append(body);
+        serverRoles(body, [ROWS[0], ...SKILL_ROWS, ...ROWS.slice(1)]);
+      } else {
+        // An older server keeps its role models in env on the host only.
+        for (const [t, hint] of [ROWS[0], ...SKILL_ROWS, ...ROWS.slice(1)]) roles.append(roleBlock(line(t, hint, pill("서버가 정함"))));
+      }
+      kitBody.append(el("p", "pg-hint", "서버에 연결해 쓰는 동안에는 서버가 정한 폴더 위치를 써요."));
       return kitCard;
     }
     const roleBody = el("div", "v4-roles-body");
@@ -871,10 +949,15 @@ window.ArkismPages = (ctx) => {
       const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
       const embedSub = roleSub("Ollama 모델 이름", embedModel);
       embedSub.hidden = cur.embedder === "none";
+      // A new embedder re-indexes every memory on save, so it asks first.
+      const embedPick = pick(EMBED, cur.embedder || "auto", "임베딩", async (k) => {
+        if (!await ask("임베딩을 바꿀까요?\n저장하면 기억을 모두 다시 색인해요. 기억이 많으면 시간이 걸려요.")) { embedPick.value = next.embedder || cur.embedder || "auto"; return; }
+        next.embedder = k; embedSub.hidden = k === "none";
+      });
       roleBody.replaceChildren(judge.node, ...skill.nodes, judge.skillNode, skill.scan,
         roleBlock(line(...ROWS[1], pick(ROLE_MODELS, cur.extract_model || "haiku", "기억 추출 모델", (k) => { next.extract_model = k; }))),
         roleBlock(line(...ROWS[2], pick(ROLE_MODELS, cur.reflect_model || "sonnet", "반성·검토 모델", (k) => { next.reflect_model = k; }))),
-        roleBlock(line(...ROWS[3], pick(EMBED, cur.embedder || "auto", "임베딩", (k) => { next.embedder = k; embedSub.hidden = k === "none"; })), embedSub));
+        roleBlock(line(...ROWS[3], embedPick), embedSub));
       const inputs = ROOTS.map(([k, label]) => [k, roleField(cur[k], label, "기본 위치")]);
       const folders = roleBlock(line("폴더 위치", "비워 두면 기본 위치를 써요", el("span")), ...inputs.map(([, i], n) => roleSub(ROOTS[n][1], i)));
       const actions = el("div", "pg-actions");

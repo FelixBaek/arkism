@@ -657,6 +657,7 @@ func checksMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	switch cmd {
 	case "scan":
+		skipScanners()
 		return scanChecks(stderr)
 	case "show":
 		printJSON(stdout, loadChecks(), 1)
@@ -665,4 +666,42 @@ func checksMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	return 0
+}
+
+// scanGet reads Arkism for skipScanners (a test seam).
+var scanGet = host.Get
+
+// skipScanners drops the engines switched off in 설정 › 역할별 모델 (스킬 보안 검사) for this run: an engine
+// without a binary is not run, and checkSource then rescans with the rest.
+func skipScanners() {
+	_, off := host.RolePick(scanGet, host.Scope(), "skill_scan")
+	for _, k := range off {
+		switch k {
+		case "spector":
+			spectorBin = ""
+		case "evaluator":
+			evaluatorBin = ""
+		case "cisco":
+			ciscoBin = ""
+		}
+	}
+}
+
+// InstalledScanners names the optional engines found on this host, for 설정 › 역할별 모델.
+func InstalledScanners() []string {
+	out := []string{}
+	for _, t := range [][2]string{{"spector", spectorBin}, {"evaluator", evaluatorBin}, {"cisco", ciscoBin}} {
+		if toolInstalled(t[1]) {
+			out = append(out, t[0])
+		}
+	}
+	return out
+}
+
+// SummaryDefault is what 스킬 요약 runs with nothing picked: the endpoint's model, or basic without one.
+func SummaryDefault() string {
+	if llmURL == "" {
+		return "basic"
+	}
+	return llmModel
 }

@@ -65,8 +65,13 @@ func maxSignalPassRate() float64 {
 	return v
 }
 func useLLM() bool { return host.Env("ARKISM_MAINTAIN_LLM", "1") == "1" }
+
+// maintainModel is the 반성·검토 model picked in 설정 › 역할별 모델, else the host default.
 func maintainModel() string {
-	return host.Env("ARKISM_MAINTAIN_MODEL", host.HarnessCLIModel("consolidator", "sonnet"))
+	def := host.Env("ARKISM_MAINTAIN_MODEL", host.HarnessCLIModel("consolidator", "sonnet"))
+	return host.RoleModel(func(path string, timeout time.Duration) (map[string]any, error) {
+		return runnerCall(path, nil, timeout)
+	}, host.Scope(), "reflect", def)
 }
 
 const (

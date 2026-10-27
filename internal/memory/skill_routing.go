@@ -135,12 +135,25 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 		return RouteResult{}, ErrInvalid
 	}
 	in.ExtraCandidates = nil
-	in.Limit = s.skillSearchLimit(in.Limit, len(extras))
+	asked := in.Limit
+	in.Limit = skillSearchLimit(s.SkillCandidates, asked, len(extras))
 	searchInput := in
 	searchInput.retrievalQuery = skillQueryVariants(in.Query)
 	bundle, actor, err := s.searchWithActor(ctx, token, searchInput)
 	if err != nil {
 		return RouteResult{}, err
+	}
+	// 설정 › 역할별 모델, read only once the search is authorized; unreadable keeps the defaults.
+	providers, _ := s.providersDoc(ctx, in.Scope)
+	router := s.skillJudge(providers.role("skill_judge"))
+	if want := skillSearchLimit(s.skillCandidates(providers.role("skill_candidates")), asked, len(extras)); want < in.Limit {
+		bundle.Items = bundle.Items[:min(want, len(bundle.Items))]
+		in.Limit = want
+	} else if want > in.Limit {
+		in.Limit, searchInput.Limit = want, want
+		if bundle, actor, err = s.searchWithActor(ctx, token, searchInput); err != nil {
+			return RouteResult{}, err
+		}
 	}
 	candidates, records := s.skillRouteCandidates(ctx, in, criteria, bundle)
 	candidates, known := appendRouteExtras(candidates, records, extras)
@@ -170,7 +183,7 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 		}
 	}()
 	fallback := ruleRoute(candidates, "jev_unavailable")
-	if len(candidates) == 0 || s.Router == nil {
+	if len(candidates) == 0 || router == nil {
 		return fallback, nil
 	}
 	reason, err := s.authorizeSkillRoute(ctx, token, in, candidates, records, actor)
@@ -182,12 +195,12 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	}
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
-	provider, model := judgeIdentity(s.Router)
+	provider, model := judgeIdentity(router)
 	reserved, e := s.beginProviderCall(ctx, in.Scope, "skill_routing", provider, model)
 	if e != nil {
 		return RouteResult{}, e
 	}
-	result, usage, e := judgeMeasured(op, s.Router, in.Query, candidates)
+	result, usage, e := judgeMeasured(op, router, in.Query, candidates)
 	if e != nil {
 		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: provider, Model: model, Requests: 1}, false)
 		return fallback, nil
@@ -531,11 +544,11 @@ func judgeMeasured(ctx context.Context, judge SkillJudge, query string, candidat
 	return out, ProviderUsage{Provider: provider, Model: model, Requests: 1}, err
 }
 
-// skillSearchLimit caps the search at SkillCandidates (default 8) minus the caller's extras, at least 1.
-func (s *Service) skillSearchLimit(limit, extras int) int {
+// skillSearchLimit caps the search at candidates (0 means 8) minus the caller's extras, at least 1.
+func skillSearchLimit(candidates, limit, extras int) int {
 	most := 8
-	if s.SkillCandidates > 0 && s.SkillCandidates < most {
-		most = s.SkillCandidates
+	if candidates > 0 && candidates < most {
+		most = candidates
 	}
 	if limit == 0 || limit > most-extras {
 		return max(1, most-extras)

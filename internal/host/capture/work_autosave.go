@@ -812,6 +812,7 @@ func autosaveMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s\narkism work-autosave: error: argument --expected-revision: invalid int value: '%s'\n", autosaveUsage, values["expected_revision"])
 		return 2
 	}
+	useRoleModels()
 	result, err := autosaveRun(values, revision)
 	if err != nil {
 		// Never print provider output, prepared state, dialogue, or remote error bodies.
