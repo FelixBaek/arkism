@@ -15,16 +15,9 @@ func TestGeminiGroupRejectionOnlyRetriesBeforeOutput(t *testing.T) {
 		g.clear()
 		g.reply("first", upstreamReply{failure, "application/json", []byte(`{"error":"host-secret private-details"}`)})
 		reply := g.post(geminiRequest)
-		want, calls := 200, 2
-		if failure == 500 {
-			want, calls = 500, 1
-		}
 		raw := string(reply.body)
-		if reply.status != want || g.seenCount() != calls || strings.Contains(raw, "private-details") || strings.Contains(raw, "host-secret") {
+		if reply.status != 200 || g.seenCount() != 2 || strings.Contains(raw, "private-details") || strings.Contains(raw, "host-secret") {
 			t.Fatalf("%d: %d %d %s", failure, reply.status, g.seenCount(), raw)
-		}
-		if failure == 500 && at(parsed(t, reply.body), "error", "status") != "INTERNAL" {
-			t.Fatalf("status %s", raw)
 		}
 	}
 }

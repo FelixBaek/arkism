@@ -537,7 +537,9 @@ func TestCoreGroupAttemptsAtMostThreeFallbacksAndReturnsExplicitError(t *testing
 	}
 }
 
-func TestCoreGroupNeverReplaysArbitrary500OrTransportErrors(t *testing.T) {
+// A 500 or a transport failure before any response moves on to the next member; when every
+// member fails the same way the caller gets the pick's own error.
+func TestCoreGroup500AndTransportErrorsMoveToNextMember(t *testing.T) {
 	for _, failure := range []error{nil, errors.New("synthetic-timeout"), errors.New("synthetic-network")} {
 		t.Run(fmt.Sprint(failure), func(t *testing.T) {
 			c := newCore(t)
@@ -552,12 +554,13 @@ func TestCoreGroupNeverReplaysArbitrary500OrTransportErrors(t *testing.T) {
 				return next.RoundTrip(r)
 			})
 			reply := c.messages(`{"model":"group/test",` + coreTask + `}`)
-			want := 500
+			want, backupOK := 200, true
 			if failure != nil {
-				want = 502
+				want, backupOK = 502, false
 			}
 			reports := c.reportList()
-			if reply.status != want || opened.Load() != 1 || len(reports) != 1 || reports[0]["ok"] != false {
+			if reply.status != want || opened.Load() != 2 || len(reports) != 2 || reports[0]["ok"] != false ||
+				reports[1]["ok"] != backupOK || reports[1]["decision"] != "failover" {
 				t.Fatalf("%d %s %d %v", reply.status, reply.body, opened.Load(), reports)
 			}
 		})
@@ -614,8 +617,9 @@ func TestCoreGroupDetectsTruncatedHTTPBodyWithoutReplay(t *testing.T) {
 }
 
 // Python also covered an exception wrapping an HTTPError (__cause__) and one carrying a
-// status_code attribute; Go's chat stream reports a rejection only as its own *statusError.
-func TestCoreGroupChatRetriesOnlyWithProvenHTTPRejection(t *testing.T) {
+// status_code attribute; Go's chat stream reports a rejection as its own *statusError and a
+// transport failure as a *url.Error, and a group moves on from either.
+func TestCoreGroupChatRetriesOnRejectionAndTransportFailure(t *testing.T) {
 	for _, confirmed := range []bool{true, false} {
 		t.Run(strconv.FormatBool(confirmed), func(t *testing.T) {
 			c := newCore(t)
@@ -630,11 +634,7 @@ func TestCoreGroupChatRetriesOnlyWithProvenHTTPRejection(t *testing.T) {
 				})
 			}
 			reply := c.messages(`{"model":"group/test","max_tokens":5,` + coreTask + `}`)
-			want, backup, reports := 200, 1, 2
-			if !confirmed {
-				want, backup, reports = 502, 0, 1
-			}
-			if reply.status != want || len(c.seenList()) != backup || c.reportCount() != reports {
+			if reply.status != 200 || len(c.seenList()) != 1 || c.reportCount() != 2 {
 				t.Fatalf("%d %s seen %d reports %d", reply.status, reply.body, len(c.seenList()), c.reportCount())
 			}
 			if confirmed && c.seenCount() != 1 {
