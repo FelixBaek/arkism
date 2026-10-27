@@ -98,6 +98,16 @@ func refreshCLI(cli, executable, path, key string) {
 	}
 }
 
+// refreshCLINow inspects the binary again right away, for the moment an update has replaced it.
+func refreshCLINow(cli, executable, state string) {
+	if cli != "claude" && cli != "codex" {
+		return
+	}
+	key := digest([]byte(cli + executable))
+	background.Add(1)
+	refreshCLI(cli, executable, filepath.Join(state, "cli-status", key+".json"), key)
+}
+
 var qidRe = regexp.MustCompile(`^[a-f0-9]{32}$`)
 
 // executeUpdate does one accepted update at most once, even after a failed report or restart.

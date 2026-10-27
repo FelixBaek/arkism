@@ -102,7 +102,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .ag-cli { font: 400 calc(11px * var(--fs, 1)) var(--mono); color: var(--nc-quiet); }
 .ag-update { padding: 0 8px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; font: 400 calc(11px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-amber); }
 .ag-update:disabled { color: var(--nc-quiet); }
-.ag-update.busy { color: var(--nc-muted); }
+.ag-update.busy { color: var(--nc-muted); font-family: var(--sans); } /* Korean text; the mono stack has no Korean glyphs */
 .ag-chev { color: var(--nc-quiet); }
 .ag-add-agent { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px; border: 0; border-top: 1px solid var(--nc-line); background: none; font: 500 calc(14px * var(--fs, 1)) var(--sans); color: var(--nc-muted); }
 .ag-add-agent:hover { color: var(--nc-text); background: var(--nc-raised); }
