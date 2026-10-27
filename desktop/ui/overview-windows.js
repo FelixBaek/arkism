@@ -650,86 +650,177 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const step = approved.length ? 4 : cands.some((m) => m.classification) ? 3 : cands.length ? 2 : 1;
     return { cands, approved, step, ...(cands.length || approved.length ? { tone: "ok", label: "분석 끝" } : fresh ? { tone: "wait", label: "분석 대기" } : { tone: "none", label: "후보 없음" }) };
   }
-  // 세션 기록 (580:51861). focus: a session_id (or row id) to open with its dialogue, searched over every day; quote: words to underline in it
+  // 세션 기록 (580:51861): every agent's sessions in one list, newest first; the agent chips and the project choice only filter.
+  // Opened by wide("sessions", focus, quote) and by the arkism:open-overview-window event {wide: "sessions", args: [focus, quote]}.
+  // focus: a session_id (or row id) to open with its dialogue, searched over every day; quote: words to underline in it.
+  // 재개 and 이어가기 only copy a command; nothing here starts an agent.
+  const SL = window.ArkismSessionList;
+  const RANGES = [["today", "오늘"], ["7d", "최근 7일"], ["30d", "최근 30일"], ["all", "전체 기간"]];
+  const inRange = (x, r) => r === "all" || time(x.ended_at || x.started_at) >= (r === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - (r === "7d" ? 7 : 30) * 24 * HOUR);
+  const when = (v) => (time(v) ? new Date(v).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : SL.NONE);
+  const copyText = (text, from, done) => { Promise.resolve().then(() => from.ownerDocument.defaultView.navigator.clipboard.writeText(text)).then(() => done(true), () => done(false)); }; // a popout copies in its own window
   function wideSessions(focus = "", quote = "") {
-    const items = env.sessions(), today = items.filter((x) => time(x.ended_at || x.started_at) >= new Date().setHours(0, 0, 0, 0)).length;
-    const d = shell("세션 기록", `${num(items.length)}건${today ? ` · 오늘 ${num(today)}` : ""}`, "저장된 대화예요. 원문은 여기서만 열려요", () => open("collect"));
+    const cached = env.sessions(); // the overview's last 7 days: shown at once while the window's own page loads
+    const d = shell("세션 기록", "", "저장된 대화예요. 원문은 여기서만 열려요", () => open("collect")), badge = d.querySelector(".ov-win-badge");
     recipe(d, { wide: "sessions", args: [focus, quote] });
-    let q = focus, agent = "all", sel = focus ? null : items[0]?.id, talk = null, xp = { busy: false, id: "", note: "" }; const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
-    const search = el("input", "ov-wide-search"); search.placeholder = "세션 찾기"; search.setAttribute("aria-label", "세션 찾기"); search.value = q;
-    const bar = el("div", "ov-wide-bar"); bar.append(search, chipHost, button("새로고침", "ghost small", null, async () => { await env.reloadSessions(); wideSessions(); }));
-    const agents = [...new Set(items.map((x) => x.agent).filter(Boolean))];
-    const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range: focus ? "all" : "7d", sort: "recent", q, source: agent === "all" ? "" : agent }), paint, true);
+    let q = focus, agent = "all", project = "", range = focus ? "all" : "7d", opened = "", menuFor = "", pending = focus, talk = null, find = null, facets = {};
+    const xp = { busy: false, id: "", note: "" }, notes = new Map(), handoffs = new Map();
+    const list = el("div", "ov-wide-list"), chipHost = el("div", "ov-wide-filter"), projHost = el("span", "ss-proj");
+    const body = el("div", "ov-wide-body ss-body ss-solo"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
+    const search = el("input", "ov-wide-search"); search.placeholder = "제목·프로젝트로 찾기, Enter는 대화에서 찾기"; search.setAttribute("aria-label", "세션 찾기"); search.value = q;
+    const findBtn = button("대화에서 찾기", "small", "magnifying-glass", () => { if (search.value.trim()) void runFind(); else search.focus(); });
+    const rangeSel = sortSelect(RANGES, range, (k) => { range = k; paint(); }); rangeSel.setAttribute("aria-label", "기간");
+    const bar = el("div", "ov-wide-bar"); bar.append(search, findBtn, rangeSel, projHost, button("새로고침", "ghost small", null, async () => { await env.reloadSessions(); wideSessions(); }));
+    const remote = pagedWindow(d, "/v1/usage/sessions", () => ({ range, sort: "recent", q, source: agent === "all" ? "" : agent, project }), paint, true);
+    const say = (id, text, code = "") => { notes.set(id, { text, code }); if (d.isConnected) paint(); };
+
     // the archived dialogue (POST /v1/usage/sessions/transcript: user·assistant text only, secrets and <private> never shown), 30 messages a page
-    async function readTalk(id, mark = "", more = false) {
-      const t = talk = more && talk?.id === id ? { ...talk, loading: true, error: "" } : { id, mark, items: [], next: "", archive: "", state: "", hidden: 0, pages: 0, loading: true, error: "" };
+    async function readTalk(x, mark = "", more = false) {
+      const id = x.id, t = talk = more && talk?.id === id ? { ...talk, loading: true, error: "" } : { id, session: x, mark, items: [], next: "", archive: "", state: "", hidden: 0, pages: 0, loading: true, error: "" };
       paint();
       try {
         const r = await request("/v1/usage/sessions/transcript", { method: "POST", body: JSON.stringify({ scope: state.scope, id, limit: 30, ...(t.next ? { archive_id: t.archive, after: t.next } : {}) }) });
         if (talk !== t) return;
         if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
         Object.assign(t, { state: r.state, archive: r.archive_id || "", next: r.next_cursor || "", items: [...t.items, ...r.items], hidden: t.hidden + (r.hidden?.secret_records || 0), pages: t.pages + 1, loading: false });
-        // shortcut: looks at most 10 pages (300 messages) for the quoted words; add a server-side search if sessions get longer
-        if (t.mark && t.next && t.pages < 10 && !t.items.some((x) => x.text.includes(t.mark))) { void readTalk(id, t.mark, true); return; }
+        // shortcut: looks at most 10 pages (300 messages) for the quoted words; ask the transcript for a position if sessions get longer
+        if (t.mark && t.next && t.pages < 10 && !t.items.some((m) => m.text.includes(t.mark))) { void readTalk(x, t.mark, true); return; }
       } catch (e) {
         if (talk !== t) return;
         t.loading = false; t.error = /HTTP 404|not_found/.test(e?.message || "") && !t.items.length ? "이 서버는 아직 대화 보기를 지원하지 않아요." : `대화를 불러오지 못했어요 (${e.message}).`;
       }
       if (d.isConnected) paint();
     }
-    function talkBox(id) {
-      const box = el("div", "ov-detail-sec"), msgs = el("div", "ss-msgs"), say = (t) => box.append(el("p", "ov-win-empty", t)); box.append(el("small", "", "대화"));
+    function talkBox() {
+      const box = el("div", "ov-detail-sec"), msgs = el("div", "ss-msgs"), empty = (t) => box.append(el("p", "ov-win-empty", t));
+      const head = el("div", "ov-detail-head"), x = talk.session; head.append(el("span", "ov-win-tag", SL.label(x.agent)), el("small", "", when(x.started_at)), button("대화 닫기", "ghost small", "x", () => { talk = null; paint(); }));
+      const h = el("h3", "", x.title || "제목 없음"); h.dataset.noI18n = ""; box.append(head, h);
       for (const m of talk.items) {
         const [b, hit] = msgLine(m, talk.mark);
-        if (hit && !talk.scrolled) { talk.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); } // from a memory: bring the underlined words into view once
+        if (hit && !talk.scrolled) { talk.scrolled = true; requestAnimationFrame(() => hit.scrollIntoView({ block: "center" })); } // from a memory or a search hit: bring the words into view once
         msgs.append(b);
       }
       if (talk.items.length) box.append(msgs);
-      if (talk.error) say(talk.error);
-      else if (!talk.loading && !talk.items.length) say({ none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[talk.state] || "보여 줄 대화가 없어요.");
+      if (talk.error) empty(talk.error);
+      else if (!talk.loading && !talk.items.length) empty({ none: "이 세션은 보관된 대화가 없어요. 대화 원문은 수집된 뒤 7일 동안만 보관돼요.", expired: "보관된 대화가 만료됐거나 지워졌어요.", unsupported: "이 형식의 대화는 아직 볼 수 없어요." }[talk.state] || "보여 줄 대화가 없어요.");
       if (talk.hidden) box.append(el("p", "ss-note", `비밀값이 들어 있어 숨긴 메시지 ${talk.hidden}개`));
-      if (talk.loading) say("불러오는 중…"); else if (talk.next) box.append(button("메시지 더 보기", "small", null, () => readTalk(id, talk.mark, true)));
+      if (talk.loading) empty("불러오는 중…"); else if (talk.next) box.append(button("메시지 더 보기", "small", null, () => readTalk(x, talk.mark, true)));
       return box;
     }
-    function paint() {
-      chipHost.replaceChildren(chipBar([["all", "전체", items.length], ...agents.map((a) => [a, a, items.filter((x) => x.agent === a).length])], agent, (k) => { agent = k; paint(); }));
-      const { items: shown, loading } = remote.snapshot();
-      list.replaceChildren(); if (!shown.length) list.append(el("p", "ov-win-empty", loading ? "불러오는 중…" : "찾은 세션이 없어요."));
-      for (const x of shown) {
-        const r = el("div", `ov-wide-row${x.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t");
-        t.append(el("span", "ov-win-item-title", x.title || x.session_id), el("small", "", [x.agent, x.project, `메시지 ${num(x.messages)}개`].filter(Boolean).join(" · ")));
-        const st = sessionState(x), rr = el("span", "ov-wide-row-r"); rr.append(el("span", `ov-pill ov-pill-${st.tone}`, st.label), ...(st.cands.length ? [el("span", "ov-wide-row-n", `후보 ${num(st.cands.length)}개`)] : []), el("span", "", ago(x.ended_at || x.started_at)));
-        r.append(t, rr); r.addEventListener("click", () => { sel = x.id; paint(); }); list.append(r);
+
+    // 세션 찾기 in the dialogue itself (POST /v1/usage/sessions/search), hits grouped by session; the period applies here, the server has no date filter
+    async function runFind(more = false) {
+      const f = more && find ? find : (find = { q: search.value.trim(), items: [], next: "", hidden: 0, secrets: 0, loading: false, error: "" });
+      f.loading = true; f.error = ""; paint();
+      try {
+        const r = await request("/v1/usage/sessions/search", { method: "POST", body: JSON.stringify({ scope: state.scope, q: f.q, limit: 20, ...(agent === "all" ? {} : { source: agent }), ...(project ? { project } : {}), ...(f.next ? { after: f.next } : {}) }) });
+        if (find !== f) return;
+        if (r?.authority !== "data_only_untrusted" || !Array.isArray(r.items)) throw new Error("invalid_response");
+        for (const g of r.items) { const have = f.items.find((y) => y.session.id === g.session.id); if (have) have.hits.push(...g.hits); else f.items.push(g); } // a session can come back on the next page too
+        Object.assign(f, { next: r.next_cursor || "", hidden: f.hidden + (r.hidden || 0), secrets: f.secrets + (r.secret_records || 0), loading: false });
+      } catch (e) {
+        if (find !== f) return;
+        f.loading = false; f.error = /HTTP 404/.test(e?.message || "") ? "이 서버는 아직 대화 찾기를 지원하지 않아요." : `찾지 못했어요 (${e.message}).`;
       }
-      remote.footer(list);
-      if (focus && !sel) { // the asked-for session, once the search answered; a missing one must not look like the first row
-        const hit = !loading && shown.find((x) => x.session_id === focus || x.id === focus);
-        if (hit) { sel = hit.id; void readTalk(hit.id, quote.trim()); return; } // readTalk paints again with it picked
-        if (!loading) list.prepend(el("p", "ov-win-empty", "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요."));
-        detail.replaceChildren(); return;
+      if (d.isConnected) paint();
+    }
+    function paintFind() {
+      const f = find, head = el("div", "ss-find-head"), groups = f.items.filter((g) => inRange(g.session, range));
+      head.append(el("span", "", `대화에서 "${f.q}" 찾기`), button("목록으로", "ghost small", "arrow-left", () => { find = null; paint(); }));
+      list.append(head);
+      for (const g of groups) {
+        const hits = el("div", "ss-hits");
+        for (const h of g.hits) {
+          const [a, w, b] = SL.hitParts(h.snippet, h.match, f.q), line = el("button", "ss-hit-line"), p = el("p", ""); line.type = "button"; p.dataset.noI18n = "";
+          if (w) { const m = el("mark", "ss-hit", w); p.append(a, m, b); } else p.append(a);
+          line.append(el("b", "", h.role === "user" ? "사용자" : "에이전트"), p);
+          line.addEventListener("click", () => { opened = g.session.id; void readTalk(g.session, f.q); });
+          hits.append(line);
+        }
+        const wrap = rowEl(g.session); wrap.append(hits); list.append(wrap);
       }
-      const cur = shown.find((x) => x.id === sel) || shown[0]; sel = cur?.id; if (talk && talk.id !== sel) talk = null; list.querySelectorAll(".ov-wide-row").forEach((rw, k) => rw.classList.toggle("on", shown[k]?.id === sel));
-      detail.replaceChildren(); if (!cur) return;
-      const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", cur.agent || "세션"), el("small", "", `${cur.project || ""} · ${new Date(cur.started_at).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}`));
-      detail.append(h, el("h3", "", cur.title || cur.session_id));
-      const f = el("div", "ov-detail-facts"); const fact = (a, b) => { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); };
-      fact("메시지", `${num(cur.messages)}개`); if (cur.active_seconds) fact("작업 시간", `${Math.round(cur.active_seconds / 60)}분`); if (cur.tokens) fact("토큰", num(cur.tokens)); if (cur.requests) fact("요청", `${num(cur.requests)}회`); if (cur.device) fact("기기", cur.device);
-      const ss = sessionState(cur), fl = el("div", "ov-flow");
+      if (!groups.length && !f.loading) list.append(el("p", "ov-win-empty", f.error || (f.next ? "아직 못 찾았어요. 더 찾아볼 수 있어요." : "이 말이 들어간 대화가 없어요.")));
+      if (f.items.length > groups.length) list.append(el("p", "ov-wide-foot-note", `기간 밖이라 뺀 세션 ${num(f.items.length - groups.length)}개. 기간을 넓히면 보여요.`));
+      const skipped = [f.hidden && `비공개 부분에만 있어 뺀 메시지 ${num(f.hidden)}개`, f.secrets && `비밀값이 있어 건너뛴 메시지 ${num(f.secrets)}개`].filter(Boolean).join(" · ");
+      if (skipped) list.append(el("p", "ov-wide-foot-note", skipped));
+      if (f.loading) list.append(el("p", "ov-wide-foot-note", "대화를 찾는 중…"));
+      else if (f.next) list.append(button("더 찾기", "small", null, () => runFind(true)));
+    }
+
+    // 이어가기: what the server can hand over (saved work state or archived dialogue), turned into the other agent's start command and copied
+    async function continueIn(x, target, from) {
+      menuFor = ""; say(x.id, `${SL.label(target)}에 넘길 내용을 읽는 중…`);
+      let h = handoffs.get(x.id);
+      try {
+        if (!h) {
+          h = await request("/v1/usage/sessions/handoff", { method: "POST", body: JSON.stringify({ scope: state.scope, id: x.id }) });
+          if (h?.authority !== "data_only_untrusted") throw new Error("invalid_response");
+          handoffs.set(x.id, h);
+        }
+      } catch (e) { say(x.id, /HTTP 404|not_found/.test(e?.message || "") ? "이어갈 내용을 찾지 못했어요. 서버가 아직 이어가기를 지원하지 않을 수도 있어요." : `이어갈 내용을 읽지 못했어요 (${e.message}).`); return; }
+      const cmd = SL.continueCommand(target, h);
+      if (!cmd) { say(x.id, "넘겨줄 작업 상태나 보관된 대화가 없어요."); return; }
+      const what = h.work ? `저장된 작업 "${h.work.title || h.work.id}"` : "보관된 대화";
+      copyText(cmd, from, (ok) => say(x.id, ok ? `${SL.label(target)} 시작 명령을 복사했어요. ${what}를 읽고 이어가요.` : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd));
+    }
+    function continueMenu(x, seen) {
+      const m = el("div", "cat-menu ss-menu"); m.setAttribute("role", "menu");
+      const targets = SL.continueTargets(x.agent, seen);
+      for (const a of targets) {
+        const b = el("button", "cat-menu-item", `${SL.label(a)}에서 이어가기`); b.type = "button"; b.setAttribute("role", "menuitem");
+        b.addEventListener("click", (ev) => { ev.stopPropagation(); void continueIn(x, a, ev.currentTarget); }); m.append(b);
+      }
+      if (!targets.length) { const b = el("button", "cat-menu-item", "이어갈 다른 에이전트가 없어요"); b.type = "button"; b.disabled = true; m.append(b); }
+      m.append(el("small", "ss-menu-note", "명령만 복사해요. 실행하지 않아요."));
+      requestAnimationFrame(() => m.querySelector("button:not(:disabled)")?.focus());
+      return m;
+    }
+
+    function factList(x) {
+      const f = el("div", "ov-detail-facts ss-facts");
+      const fact = (k, v, copy = "") => {
+        const p = el("p", ""), val = el("strong", "", v); val.dataset.noI18n = "";
+        p.append(el("span", "", k), val);
+        if (copy) { const b = button("", "ghost small ss-copy", "copy", (ev) => copyText(copy, ev.currentTarget, (ok) => say(x.id, ok ? `${k}을(를) 복사했어요.` : "복사하지 못했어요."))); b.setAttribute("aria-label", `${k} 복사`); b.title = `${k} 복사`; val.append(b); }
+        f.append(p);
+      };
+      fact("시간", time(x.started_at) ? `${when(x.started_at)} – ${when(x.ended_at)}` : SL.NONE);
+      fact("작업 시간", x.active_seconds ? `${Math.max(1, Math.round(x.active_seconds / 60))}분` : SL.NONE);
+      fact("기기", x.device || SL.NONE);
+      fact("폴더", x.folder || SL.NONE, x.folder);
+      fact("세션 ID", x.session_id || SL.NONE, x.session_id);
+      const cmd = SL.resumeCommand(x);
+      fact("재개 명령", cmd || "이 에이전트의 재개 명령은 몰라요.", cmd);
+      fact("토큰", x.tokens > 0 ? `${SL.tokens(x)} (${SL.split(x)})` : SL.NONE);
+      fact("비용", SL.cost(x));
+      const ms = SL.models(x);
+      fact("모델", ms.length ? ms.map(SL.modelLine).join("\n") : SL.NONE);
+      fact("파일", x.file || SL.NONE, x.file);
+      return f;
+    }
+    function detailEl(x, seen) {
+      const box = el("div", "ss-detail");
+      box.append(factList(x));
+      const cont = el("div", "ov-detail-sec"); cont.append(el("small", "", "다른 에이전트로 이어가기"));
+      const ca = el("div", "ov-detail-actions"), targets = SL.continueTargets(x.agent, seen);
+      for (const a of targets) ca.append(button(SL.label(a), "small", "copy", (ev) => continueIn(x, a, ev.currentTarget)));
+      cont.append(targets.length ? ca : el("p", "ov-win-empty", "이어갈 다른 에이전트가 없어요."), el("small", "ov-detail-hint", "저장된 작업 상태가 있으면 그걸, 없으면 보관된 대화를 읽도록 시작 명령을 만들어 복사해요."));
+      box.append(cont);
+      const ss = sessionState(x), fl = el("div", "ov-flow");
       FLOW.forEach((n, k) => { if (k) fl.append(el("i", "", "›")); fl.append(el("span", `ov-flow-step${k + 1 < ss.step ? " done" : k + 1 === ss.step ? " now" : ""}`, n)); });
-      const fs = el("div", "ov-detail-sec"); fs.append(el("small", "", "이 세션의 흐름"), fl); detail.append(fs);
-      const s = el("div", "ov-detail-sec"); s.append(el("small", "", "이 세션"), f); detail.append(s);
+      const fs = el("div", "ov-detail-sec"); fs.append(el("small", "", "이 세션의 흐름"), fl); box.append(fs);
       const cs = el("div", "ov-detail-sec"); cs.append(el("small", "", "여기서 나온 후보"));
       for (const m of [...ss.cands, ...ss.approved]) { const rw = el("div", "ov-detail-cand"); rw.append(el("span", "", clip(m.text, 60)), el("small", "", ss.cands.includes(m) ? "승인 대기" : "승인됨")); if (ss.cands.includes(m)) { rw.classList.add("link"); rw.addEventListener("click", () => wide("review", m.id)); } cs.append(rw); }
       if (!ss.cands.length && !ss.approved.length) cs.append(el("p", "ov-win-empty", "이 세션에서 나온 후보가 없어요."));
-      detail.append(cs);
+      box.append(cs);
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       // the export's progress and result live on the window, so a repaint mid-request keeps them
       const exportAs = async (format) => {
         if (xp.busy) return;
-        const id = cur.id; Object.assign(xp, { busy: true, id, note: "" }); paint();
+        Object.assign(xp, { busy: true, id: x.id, note: "" }); paint();
         let url = "";
         try {
-          const r = await request("/v1/usage/sessions/export", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [id], format, transcript: true }) });
+          const r = await request("/v1/usage/sessions/export", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [x.id], format, transcript: true }) });
           if (typeof r?.content !== "string") throw new Error("invalid_response");
           url = URL.createObjectURL(new Blob([r.content], { type: r.content_type || "text/plain" }));
           const link = el("a"); link.href = url; link.download = r.filename || (format === "json" ? "arkism-session.json" : "arkism-session.md"); link.click();
@@ -737,18 +828,80 @@ window.ArkismOverviewWindows = (ctx, env) => {
         } catch (e) { xp.note = `내보내지 못했어요 (${e.message}).`; }
         finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); xp.busy = false; if (d.isConnected) paint(); }
       };
-      if (xp.id === cur.id) st.textContent = xp.busy ? "내보내는 중…" : xp.note;
-      const md = button("Markdown으로 내보내기", "small", null, () => exportAs("markdown")), js = button("JSON", "small", null, () => exportAs("json"));
+      if (xp.id === x.id) st.textContent = xp.busy ? "내보내는 중…" : xp.note;
+      const md = button("Markdown 내보내기", "small", null, () => exportAs("markdown")), js = button("JSON", "small", null, () => exportAs("json"));
       md.disabled = js.disabled = xp.busy;
-      act.append(talk?.id === cur.id ? button("대화 닫기", "small", null, () => { talk = null; paint(); }) : button("대화 원문 보기", "primary small", null, () => readTalk(cur.id)), md, js,
-        button("세션 지우기", "small", null, () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
-          try { await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [cur.id] }) }); sel = null; await env.reloadSessions(); wideSessions(); }
+      act.append(talk?.id === x.id ? button("대화 닫기", "small", null, () => { talk = null; paint(); }) : button("대화 보기", "primary small", "chat-text", () => readTalk(x)), md, js,
+        button("세션 지우기", "small", "trash", () => askConfirm("이 세션을 지울까요?", "세션과 보관된 대화가 지워지고 되돌릴 수 없어요. 에이전트의 원래 파일은 그대로 남고, 이 대화를 출처로 둔 기억은 내용은 남고 출처 연결만 사라져요.", async () => {
+          try { await request("/v1/usage/sessions/delete", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [x.id] }) }); await env.reloadSessions(); wideSessions(); }
           catch (e) { st.textContent = /access_denied/.test(e?.message || "") ? "지울 권한이 없어요." : `지우지 못했어요: ${e.message}`; }
         })));
-      detail.append(st, act, ...(talk?.id === cur.id ? [talkBox(cur.id)] : []));
+      const cv = el("div", "ov-detail-sec"); cv.append(el("small", "", "대화"), act, st); box.append(cv);
+      return box;
     }
-    search.addEventListener("input", () => { q = search.value.trim(); paint(); });
-    twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(el("div", "ov-wide-foot-note", focus ? "모든 기간에서 찾았어요" : `최근 7일 ${num(items.length)}건`)); paint();
+    function rowEl(x, seen = agentsSeen()) {
+      const wrap = el("div", "ss-row"), r = el("div", `ov-wide-row${x.id === opened ? " on" : ""}`), t = el("div", "ov-wide-row-t");
+      r.setAttribute("role", "button"); r.tabIndex = 0; r.setAttribute("aria-expanded", String(x.id === opened));
+      const title = el("span", "ov-win-item-title", x.title || "제목 없음"); title.dataset.noI18n = "";
+      t.append(title, el("small", "", [SL.label(x.agent), x.project, ago(x.ended_at || x.started_at), SL.mainModel(x), `메시지 ${num(x.messages)}개`].filter(Boolean).join(" · ")));
+      const st = sessionState(x), rr = el("span", "ov-wide-row-r"), tok = el("span", "ss-num", x.tokens > 0 ? `${SL.tokens(x)} 토큰` : `토큰 ${SL.NONE}`);
+      if (x.tokens > 0) tok.title = SL.split(x);
+      rr.append(tok, el("span", "ss-num", SL.cost(x)), el("span", `ov-pill ov-pill-${st.tone}`, st.label));
+      const cmd = SL.resumeCommand(x), resume = button("재개", "small", "copy", (ev) => { ev.stopPropagation(); copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "재개 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
+      resume.disabled = !cmd; resume.title = cmd || "이 에이전트의 재개 명령은 몰라요.";
+      const more = button("이어가기", "small ss-more", "caret-down", (ev) => { ev.stopPropagation(); menuFor = menuFor === x.id ? "" : x.id; paint(); });
+      more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", String(menuFor === x.id));
+      rr.append(resume, more);
+      r.append(t, rr);
+      const toggle = () => { opened = opened === x.id ? "" : x.id; menuFor = ""; paint(); };
+      r.addEventListener("click", toggle); r.addEventListener("keydown", (ev) => { if ((ev.key === "Enter" || ev.key === " ") && ev.target === r) { ev.preventDefault(); toggle(); } });
+      wrap.append(r);
+      if (menuFor === x.id) wrap.append(continueMenu(x, seen));
+      const n = notes.get(x.id);
+      if (n) { const p = el("div", "ss-say"); p.append(el("span", "", n.text)); if (n.code) { const c = el("code", "", n.code); c.dataset.noI18n = ""; p.append(c); } wrap.append(p); }
+      if (opened === x.id) wrap.append(detailEl(x, seen));
+      return wrap;
+    }
+    const agentsSeen = () => [...Object.keys(facets.agents || {}), ...cached.map((x) => x.agent)].filter(Boolean);
+
+    function paint() {
+      const snap = remote.snapshot();
+      if (snap.ready) facets = snap.facets || {};
+      const early = !snap.ready && !snap.error && !snap.items.length && !q && !project && range === "7d"; // the cached page answers the default filters only
+      const rows = early ? cached.filter((x) => agent === "all" || x.agent === agent) : snap.items;
+      badge.textContent = snap.total != null ? `${num(snap.total)}건` : early ? `${num(cached.length)}건` : "";
+      // counts beside each agent come from the server (every page, this period and project); before it answers, from the cached page
+      // an older server sends no counts: its agents still get a chip, without a number
+      const counts = snap.ready && facets.agents ? facets.agents : early ? cached.reduce((m, x) => ({ ...m, [x.agent]: (m[x.agent] || 0) + 1 }), {}) : null;
+      const known = counts ? Object.entries(counts).filter(([a]) => a).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) : [...new Set(agentsSeen().concat(rows.map((x) => x.agent)))].filter(Boolean).map((a) => [a, null]);
+      if (agent !== "all" && !known.some(([a]) => a === agent)) known.push([agent, counts ? 0 : null]);
+      chipHost.replaceChildren(chipBar([["all", "전체", counts ? known.reduce((n, [, c]) => n + c, 0) : null], ...known.map(([a, c]) => [a, SL.label(a), c])], agent, (k) => { agent = k; if (find) void runFind(); paint(); }));
+      const projects = Object.entries(facets.projects || {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      if (project && !projects.some(([p]) => p === project)) projects.unshift([project, 0]);
+      const ps = sortSelect([["", "모든 프로젝트"], ...projects.map(([p, c]) => [p, `${p} ${num(c)}`])], project, (k) => { project = k; if (find) void runFind(); paint(); }); ps.setAttribute("aria-label", "프로젝트");
+      projHost.replaceChildren(ps);
+      list.replaceChildren();
+      if (find) paintFind();
+      else {
+        if (pending && !snap.loading && snap.ready) { // the asked-for session, once the search answered; a missing one must not look like the first row
+          const hit = rows.find((x) => x.session_id === pending || x.id === pending); pending = "";
+          if (hit) { opened = hit.id; void readTalk(hit, quote.trim()); return; } // readTalk paints again with it open
+          list.append(el("p", "ov-win-empty", "이 세션을 찾지 못했어요. 지워졌거나 보관 기간이 지났을 수 있어요."));
+        }
+        if (!rows.length) list.append(el("p", "ov-win-empty", snap.loading || !snap.ready ? "불러오는 중…" : snap.error ? `불러오지 못했어요 (${snap.error}).` : "찾은 세션이 없어요."));
+        const seen = agentsSeen();
+        for (const x of rows) list.append(rowEl(x, seen));
+        if (early) { if (rows.length) list.append(el("p", "ov-wide-foot-note", "최근 목록을 먼저 보여 줘요. 새 목록을 불러오는 중…")); }
+        else remote.footer(list);
+      }
+      body.classList.toggle("ss-solo", !talk);
+      right.replaceChildren(...(talk ? [talkBox()] : []));
+    }
+    search.addEventListener("input", () => { q = search.value.trim(); if (!find) paint(); });
+    search.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && search.value.trim()) { ev.preventDefault(); void runFind(); } });
+    d.addEventListener("click", () => { if (menuFor) { menuFor = ""; paint(); } }); // a click outside the open 이어가기 menu closes it
+    d.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && menuFor) { ev.preventDefault(); menuFor = ""; paint(); } });
+    left.append(bar, chipHost, list); body.append(left, right); d.append(body); paint();
   }
 
   // 사용량 (580:54204)

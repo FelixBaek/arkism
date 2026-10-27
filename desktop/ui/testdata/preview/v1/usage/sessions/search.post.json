@@ -1,0 +1,130 @@
+{
+ "authority": "data_only_untrusted",
+ "items": [
+  {
+   "session": {
+    "id": "ss-4",
+    "agent": "codex",
+    "device": "my-server",
+    "session_id": "session_01JX8K2M4QWERTY",
+    "title": "배포 스크립트 만들기",
+    "project": "orbit-app",
+    "started_at": "2026-10-09T23:52:00Z",
+    "ended_at": "2026-10-10T00:44:00Z",
+    "messages": 31,
+    "active_seconds": 3120,
+    "tokens": 61000,
+    "input": 52460,
+    "output": 8540,
+    "cache_read": 45750,
+    "cache_write": 6100,
+    "requests": 21,
+    "cost_usd": 0.4,
+    "priced": true,
+    "models": [
+     {
+      "name": "gpt-6-astra",
+      "tokens": 61000,
+      "cost_usd": 0.4,
+      "priced": true
+     }
+    ],
+    "tools": [
+     {
+      "name": "exec",
+      "count": 18,
+      "sessions": 1
+     },
+     {
+      "name": "use_figma",
+      "count": 12,
+      "sessions": 1
+     }
+    ],
+    "skills": [
+     {
+      "name": "figma-use",
+      "count": 6,
+      "sessions": 1
+     }
+    ],
+    "folder": "C:\\Users\\me\\work\\orbit-app",
+    "file": "/home/me/.codex/sessions/2026/10/13/rollout-ss-4.jsonl"
+   },
+   "hits": [
+    {
+     "role": "user",
+     "snippet": "배포 스크립트 하나 만들어 줘. 서버에 올리기 전에 테스트도 돌리게.",
+     "match": 0
+    },
+    {
+     "role": "assistant",
+     "snippet": "…말씀하신 대로 배포 스크립트에 테스트 단계를 먼저 넣었어요. 실패하면 멈춰요.",
+     "match": 23
+    }
+   ]
+  },
+  {
+   "session": {
+    "id": "ss-1",
+    "agent": "codex",
+    "device": "my-pc",
+    "session_id": "session_01JX8K2M1QWERTY",
+    "title": "Arkism UI 정리",
+    "project": "arkism",
+    "started_at": "2026-10-13T01:12:00Z",
+    "ended_at": "2026-10-13T02:04:00Z",
+    "messages": 42,
+    "active_seconds": 3120,
+    "tokens": 128000,
+    "input": 110080,
+    "output": 17920,
+    "cache_read": 96000,
+    "cache_write": 12800,
+    "requests": 21,
+    "cost_usd": 0.84,
+    "priced": true,
+    "models": [
+     {
+      "name": "GPT-6.1-Sol",
+      "tokens": 128000,
+      "cost_usd": 0.84,
+      "priced": true
+     }
+    ],
+    "tools": [
+     {
+      "name": "exec",
+      "count": 18,
+      "sessions": 1
+     },
+     {
+      "name": "use_figma",
+      "count": 12,
+      "sessions": 1
+     }
+    ],
+    "skills": [
+     {
+      "name": "figma-use",
+      "count": 6,
+      "sessions": 1
+     }
+    ],
+    "folder": "/home/me/work/arkism",
+    "file": "/home/me/.codex/sessions/2026/10/13/rollout-ss-1.jsonl"
+   },
+   "hits": [
+    {
+     "role": "assistant",
+     "snippet": "…예전 배포 스크립트는 그대로 두고 화면만 고쳤어요.",
+     "match": 10
+    }
+   ]
+  }
+ ],
+ "next_cursor": "",
+ "hidden": 1,
+ "secret_records": 0,
+ "scanned_bytes": 48211
+}
