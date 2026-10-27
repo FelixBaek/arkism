@@ -154,16 +154,16 @@ func TestMessagesChatReturnedProviderToolIDRoundTrips(t *testing.T) {
 	sameJSON(t, at(sent[len(sent)-1], "tool_call_id"), `"call.a/한글"`)
 }
 
-func TestMessagesChatGroupOnlyReplaysProvenHTTPRejection(t *testing.T) {
+func TestMessagesChatGroupReplaysRejectionAndServerError(t *testing.T) {
 	f := newMessagesFixture(t)
 	request := messagesWith(t, "model", "group/test")
-	for _, c := range []struct{ failure, status, calls int }{{429, 200, 2}, {500, 500, 1}} {
-		t.Run(fmt.Sprint(c.failure), func(t *testing.T) {
+	for _, failure := range []int{429, 500} {
+		t.Run(fmt.Sprint(failure), func(t *testing.T) {
 			f.clear()
-			f.replies["first"] = upstreamReply{c.failure, "application/json", []byte(`{"error":"host-secret private-provider-details"}`)}
+			f.replies["first"] = upstreamReply{failure, "application/json", []byte(`{"error":"host-secret private-provider-details"}`)}
 			reply := f.post(request)
-			mustStatus(t, reply, c.status)
-			if f.seenCount() != c.calls || f.reportCount() != c.calls {
+			mustStatus(t, reply, 200)
+			if f.seenCount() != 2 || f.reportCount() != 2 {
 				t.Fatalf("seen %d reports %d", f.seenCount(), f.reportCount())
 			}
 			if bytes.Contains(reply.body, []byte("private-provider-details")) || bytes.Contains(reply.body, []byte("host-secret")) {

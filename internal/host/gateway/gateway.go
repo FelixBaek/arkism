@@ -42,9 +42,10 @@ import (
 //     OpenAI Chat API through the Messages -> Chat translation;
 //   - openai/<model>: the host Codex login, or the stored key in explicit codex API mode; xai
 //     uses its stored key in grok API mode; google/<model> uses the native host adapter;
-//   - group/<slug>: Arkism's scoped decision and up to three fallbacks, failing over only on a
-//     proven rejection before any client response starts. Each attempt is reported without
-//     request or response content.
+//   - group/<slug>: Arkism's scoped decision and up to three fallbacks, failing over on a
+//     rejection, a 5xx (529 included) or a transport failure, only before any client response
+//     starts. When no member answers the caller gets the pick's own error. Each attempt is
+//     reported without request or response content.
 //   - every provider/model request (a group's members included) keeps to the model's 라우팅 설정
 //     concurrency and rpm_limit, and quota, credit or 429 failures rest a model (lanes.go).
 // Chat, Responses and Gemini entrances use the same engine through pure codecs; caller headers
@@ -76,6 +77,8 @@ var (
 	// Body fields a non-Anthropic model understands; Claude Code's beta-only fields are dropped.
 	portableKeys  = []string{"model", "max_tokens", "messages", "system", "tools", "tool_choice", "stream", "temperature", "top_p", "stop_sequences"}
 	retryStatuses = map[int]bool{401: true, 402: true, 403: true, 429: true, 503: true}
+	// upstreamWait bounds one provider call, headers and body; a test shortens it.
+	upstreamWait = 10 * time.Minute
 	// Our own checks refused these before any egress: the candidate was skipped, not called (a
 	// login, capacity or provider rejection stays a real attempt signal).
 	noCall     = set("unsupported_field", "unsupported_request", "unsupported_or_invalid_request")
@@ -599,7 +602,7 @@ func chatStream(parent context.Context, base, key string, body host.Obj) byteSeq
 			yield(nil, err)
 			return
 		}
-		ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+		ctx, cancel := context.WithTimeout(parent, upstreamWait)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/chat/completions", bytes.NewReader(raw))
 		if err != nil {
@@ -1947,6 +1950,7 @@ type groupFailure struct {
 // tryGroup runs the candidates in turn until one answers.
 func (x *exchange) tryGroup(body host.Obj, candidates []string, choice string, ms int64) error {
 	last := groupFailure{503, "group_target_unavailable", ""}
+	var first *groupFailure // the first member actually refused: its error is the caller's when none answers
 	var limitErr error
 	var limitAfter time.Duration
 	unique := []string{}
@@ -1985,20 +1989,27 @@ func (x *exchange) tryGroup(body host.Obj, candidates []string, choice string, m
 		i++
 		x.group = map[string]any{"model": mid, "decision": kind, "replaced": previous, "classifier_ms": classifier}
 		x.attemptAt, x.attemptErr, x.status, x.retryAfter = time.Now(), "", 0, 0
+		before := last
 		done, skipped, err := x.groupAttempt(body, mid, release, &last)
 		if done {
 			return err
 		}
 		if !skipped {
 			x.reportAttempt()
+			if first == nil && last != before {
+				refused := last
+				first = &refused
+			}
 		}
 		previous = mid
 	}
 	x.group = nil
-	x.publicErr = last.code
 	if limitErr != nil { // the last word was a limit: every later member was full too
 		x.w.Header().Set("Retry-After", retrySeconds(limitAfter))
+	} else if first != nil {
+		last = *first
 	}
+	x.publicErr = last.code
 	return x.sendBytes(anthropicError(last.status, last.message))
 }
 
@@ -2064,7 +2075,7 @@ func (x *exchange) groupAttempt(body host.Obj, mid string, release func(), last 
 }
 
 func (x *exchange) reject(status int) error {
-	if x.group != nil && !x.started && retryStatuses[status] {
+	if x.group != nil && !x.started && (retryStatuses[status] || status >= 500 && status <= 599) {
 		return rejected(status)
 	}
 	return nil
@@ -2490,7 +2501,7 @@ func (x *exchange) forwardHeaders(target string, data []byte, headers [][2]strin
 	if len(data) > 0 {
 		body = bytes.NewReader(data)
 	}
-	ctx, cancel := context.WithTimeout(x.r.Context(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(x.r.Context(), upstreamWait)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, x.r.Method, target, body)
 	if err == nil {
@@ -2503,8 +2514,20 @@ func (x *exchange) forwardHeaders(target string, data []byte, headers [][2]strin
 			return x.relay(resp, secret)
 		}
 	}
-	x.attemptErr = "upstream_unreachable"
+	if err := x.unreachable(); err != nil {
+		return err
+	}
 	return x.sendBytes(anthropicError(502, "upstream unreachable: URLError"))
+}
+
+// unreachable notes a transport failure (timeout, refused, reset): a group that has sent nothing
+// yet moves on to its next member; nil otherwise.
+func (x *exchange) unreachable() error {
+	x.attemptErr = "upstream_unreachable"
+	if x.group != nil && !x.started {
+		return &upstreamRejected{502, x.attemptErr}
+	}
+	return nil
 }
 
 func (x *exchange) relay(resp *http.Response, secret string) error {
@@ -2567,9 +2590,14 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) er
 	}
 	if err != nil {
 		var se *statusError
+		var ue *url.Error
 		status := 0
 		if errors.As(err, &se) {
 			status = se.status
+		} else if errors.As(err, &ue) {
+			if err := x.unreachable(); err != nil {
+				return err
+			}
 		}
 		if err := x.reject(status); err != nil {
 			return err

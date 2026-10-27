@@ -262,24 +262,20 @@ func TestChatClaudeUsesHostLoginAndMissingLoginNeverSends(t *testing.T) {
 	}
 }
 
-func TestChatGroupRejectionCanSwitchButServerErrorCannot(t *testing.T) {
+func TestChatGroupRejectionAndServerErrorBothSwitch(t *testing.T) {
 	f := newFixture(t)
 	request := `{"model": "group/test", "messages": [{"role": "user", "content": "hi"}]}`
-	for _, c := range []struct{ failure, expected int }{{429, 200}, {500, 500}} {
-		t.Run(strconv.Itoa(c.failure), func(t *testing.T) {
+	for _, failure := range []int{429, 500} {
+		t.Run(strconv.Itoa(failure), func(t *testing.T) {
 			f.clear()
-			f.replies["first"] = upstreamReply{c.failure, "application/json", []byte(`{"error":"caller-secret host-secret"}`)}
+			f.replies["first"] = upstreamReply{failure, "application/json", []byte(`{"error":"caller-secret host-secret"}`)}
 			reply := f.post(request)
-			mustStatus(t, reply, c.expected)
+			mustStatus(t, reply, 200)
 			if bytes.Contains(reply.body, []byte("secret")) {
 				t.Fatalf("secret leaked: %s", reply.body)
 			}
-			want := 1
-			if c.failure == 429 {
-				want = 2
-			}
-			if f.seenCount() != want || f.reportCount() != want {
-				t.Fatalf("seen %d reports %d, want %d", f.seenCount(), f.reportCount(), want)
+			if f.seenCount() != 2 || f.reportCount() != 2 {
+				t.Fatalf("seen %d reports %d, want 2", f.seenCount(), f.reportCount())
 			}
 			if strings.Contains(sortedJSON(f.reportList()[0]), "hi") {
 				t.Fatal("task text reported")

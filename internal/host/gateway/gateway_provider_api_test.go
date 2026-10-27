@@ -250,7 +250,7 @@ func TestProviderAPIToolResultIdsAndStringsSurviveEachPublicAPI(t *testing.T) {
 	}
 }
 
-func TestProviderAPIGroupFailoverOnlyOnConfirmedRejection(t *testing.T) {
+func TestProviderAPIGroupFailoverOnRejectionAndServerError(t *testing.T) {
 	p := newProviderAPI(t)
 	p.decide = func(task, group string) (map[string]any, error) {
 		return map[string]any{"group": "group/test", "id": "openai/first", "fallbacks": []any{"xai/backup"},
@@ -265,11 +265,8 @@ func TestProviderAPIGroupFailoverOnlyOnConfirmedRejection(t *testing.T) {
 				p.clear()
 				p.replies["first"] = upstreamReply{status, "application/json", []byte(`{"error":"host-secret private"}`)}
 				reply := p.postObj(p.request(protocol, "group/test", false))
-				want, models := 500, []string{"first"}
-				if status == 429 {
-					want, models = 200, []string{"first", "backup"}
-				}
-				if reply.status != want || !slices.Equal(p.sentModels(), models) || bytes.Contains(reply.body, []byte("host-secret")) {
+				models := []string{"first", "backup"}
+				if reply.status != 200 || !slices.Equal(p.sentModels(), models) || bytes.Contains(reply.body, []byte("host-secret")) {
 					t.Fatalf("%d %s %v", reply.status, reply.body, p.sentModels())
 				}
 				if p.reportCount() != len(models) {

@@ -459,21 +459,17 @@ func TestResponsesUnsupportedResourcesNeverForward(t *testing.T) {
 	}
 }
 
-func TestResponsesGroupOnlySwitchesOnProvenRejection(t *testing.T) {
+func TestResponsesGroupSwitchesOnRejectionAndServerError(t *testing.T) {
 	f := newResponses(t)
 	for _, failure := range []int{429, 500} {
 		f.clear()
 		f.reply("first", upstreamReply{failure, "application/json", []byte(`{"error":"host-secret private-details"}`)})
 		reply := f.post(responsesRequest("model", "group/test"))
-		want, calls := 500, 1
-		if failure == 429 {
-			want, calls = 200, 2
-		}
-		if reply.status != want || f.seenCount() != calls || f.reportCount() != calls ||
+		if reply.status != 200 || f.seenCount() != 2 || f.reportCount() != 2 ||
 			bytes.Contains(reply.body, []byte("private-details")) || bytes.Contains(reply.body, []byte("host-secret")) {
 			t.Fatalf("%d: %d seen %d reports %d %s", failure, reply.status, f.seenCount(), f.reportCount(), reply.body)
 		}
-		if failure == 429 && at(parsed(t, reply.body), "model") != "group/test" {
+		if at(parsed(t, reply.body), "model") != "group/test" {
 			t.Fatalf("model %s", reply.body)
 		}
 	}
