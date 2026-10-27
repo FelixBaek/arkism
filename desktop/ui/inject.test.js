@@ -21,24 +21,22 @@ test("forRepo keeps shared memories and the chosen repository's", () => {
   assert.deepEqual(core.forRepo(items, "").map((i) => i.id), ["s"]);
 });
 
-test("sessionPreview fills the 4000-char budget in standing order and reports what is cut", () => {
+test("sessionPreview keeps this repository's rules first, at most 10 lines, and counts what is cut", () => {
   const items = Array.from({ length: 60 }, (_, i) => ({ id: `m${i}`, kind: i % 2 ? "procedural" : "user", text: `${i} ${"규칙".repeat(40)}`, tags: [] }));
-  items.push({ id: "empty", kind: "user", text: "", tags: [] }, { id: "other", kind: "user", text: "다른 저장소", tags: ["repo:o/b"] });
+  items.push({ id: "empty", kind: "user", text: "", tags: [] }, { id: "other", kind: "user", text: "다른 저장소", tags: ["repo:o/b"] },
+    { id: "mine", kind: "procedural", text: "이 저장소 규칙", tags: ["repo:o/a"] }, { id: "proj", kind: "procedural", text: "프로젝트 규칙", reach: "project" });
   const p = core.sessionPreview(items, "o/a");
-  assert.ok(p.text.startsWith(core.INDEX_HEADER + "\n- [user] 0 "));
-  assert.ok([...p.text].length <= core.SESSION_MAX_CHARS);
-  assert.equal(p.included.length + p.cut.length, 60);
-  assert.ok(p.cut.length > 0 && p.included.length > 0);
-  // No created_at here: user before procedural, then id.
-  const order = items.slice(0, 60).sort((a, b) => (a.kind === "user" ? 0 : 1) - (b.kind === "user" ? 0 : 1) || (a.id < b.id ? -1 : 1));
+  assert.ok(p.text.startsWith(core.INDEX_HEADER + "\n- [procedural] 이 저장소 규칙\n- [procedural] 프로젝트 규칙\n- [user] 0 "));
+  assert.ok([...p.text].length <= core.SESSION_INDEX_CHARS);
+  assert.equal(p.included.length, core.SESSION_INDEX_LINES);
+  assert.equal(p.included.length + p.cut.length, 62);
+  assert.ok(p.text.endsWith(`\n- 나머지 ${p.cut.length}개는 arkism MCP의 recall 도구로 보세요.`));
+  // No created_at here: repo-bound, then user before procedural, then id.
+  const order = items.filter((i) => i.text && !i.id.startsWith("other")).sort((a, b) =>
+    (a.reach === "project" || (a.tags || []).includes("repo:o/a") ? 0 : a.kind === "user" ? 1 : 2) - (b.reach === "project" || (b.tags || []).includes("repo:o/a") ? 0 : b.kind === "user" ? 1 : 2) || (a.id < b.id ? -1 : 1));
   assert.deepEqual([...p.included, ...p.cut].map((i) => i.id), order.map((i) => i.id));
   assert.equal(p.outOfRepo, 1);
   assert.equal(p.chars, [...p.text].length);
-  // Exactly what within() admits: each line plus a newline, the header and its newline inside the limit.
-  const lines = p.text.split("\n").slice(1);
-  const used = lines.reduce((a, l) => a + [...l].length + 1, 0);
-  const next = core.indexLine(p.cut[0]);
-  assert.ok(used + [...next].length + 1 > core.SESSION_MAX_CHARS - [...core.INDEX_HEADER].length - 1);
 });
 
 test("contract-related memories go after the index and take their share of the budget", () => {

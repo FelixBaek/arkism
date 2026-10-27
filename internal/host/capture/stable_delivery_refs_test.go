@@ -132,6 +132,9 @@ func TestStableMetadataReplayRetainsFormAndCacheRefs(t *testing.T) {
 	old := sessionMaxChars
 	sessionMaxChars = 20000
 	t.Cleanup(func() { sessionMaxChars = old })
+	// the meta and stub forms need an index far past the 10-line default
+	t.Setenv("ARKISM_SESSION_INDEX_LINES", "1000")
+	t.Setenv("ARKISM_SESSION_INDEX_CHARS", "100000")
 	*standing = nil
 	for i := 0; i < 50; i++ {
 		m := memoryHit(fmt.Sprintf("m%d", i), 3, "")
