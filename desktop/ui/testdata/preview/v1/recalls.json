@@ -3,6 +3,191 @@
  "measurement_basis": "server_return",
  "items": [
   {
+   "id": "rc4",
+   "created_at": "2026-10-28T01:40:00Z",
+   "requested_by": "codex",
+   "project_key": "orbit-app",
+   "purpose": "answer",
+   "items": [
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m10",
+      "revision": 1
+     },
+     "rank": 1,
+     "score": 0.88,
+     "lanes": [
+      "vector"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m11",
+      "revision": 1
+     },
+     "rank": 2,
+     "score": 0.79,
+     "lanes": [
+      "keyword",
+      "vector"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m6",
+      "revision": 1
+     },
+     "rank": 3,
+     "score": 0.61,
+     "lanes": [
+      "relation"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m-pin-icons",
+      "revision": 1
+     },
+     "rank": 4,
+     "lanes": []
+    }
+   ]
+  },
+  {
+   "id": "rc5",
+   "created_at": "2026-10-27T23:15:00Z",
+   "requested_by": "claude-code",
+   "project_key": "arkism",
+   "purpose": "answer",
+   "items": [
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m2",
+      "revision": 1
+     },
+     "rank": 1,
+     "score": 0.9,
+     "lanes": [
+      "exact"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m8",
+      "revision": 1
+     },
+     "rank": 2,
+     "score": 0.77,
+     "lanes": [
+      "keyword"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m-pin-select",
+      "revision": 1
+     },
+     "rank": 3,
+     "lanes": []
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m-pin-copy",
+      "revision": 1
+     },
+     "rank": 4,
+     "lanes": []
+    }
+   ]
+  },
+  {
+   "id": "rc6",
+   "created_at": "2026-10-27T15:02:00Z",
+   "requested_by": "gemini",
+   "project_key": "orbit-app",
+   "purpose": "answer",
+   "items": [
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m5",
+      "revision": 1
+     },
+     "rank": 1,
+     "score": 0.84,
+     "lanes": [
+      "vector"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m9",
+      "revision": 1
+     },
+     "rank": 2,
+     "score": 0.58,
+     "lanes": [
+      "vector",
+      "relation"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "rc7",
+   "created_at": "2026-10-26T09:30:00Z",
+   "requested_by": "codex",
+   "project_key": "arkism",
+   "purpose": "answer",
+   "items": [
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m4",
+      "revision": 1
+     },
+     "rank": 1,
+     "score": 0.81,
+     "lanes": [
+      "keyword"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m7",
+      "revision": 1
+     },
+     "rank": 2,
+     "score": 0.72,
+     "lanes": [
+      "vector"
+     ]
+    },
+    {
+     "memory": {
+      "collection": "memories",
+      "id": "m3",
+      "revision": 1
+     },
+     "rank": 3,
+     "score": 0.55,
+     "lanes": [
+      "relation"
+     ]
+    }
+   ]
+  },
+  {
    "id": "rc1",
    "created_at": "2026-10-20T04:10:00Z",
    "requested_by": "claude-code",

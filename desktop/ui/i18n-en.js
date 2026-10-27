@@ -6263,7 +6263,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
   "이름으로 바로 찾았어요": "Found by name", "같은 낱말이 있어요": "Shares words", "뜻이 비슷해요": "Similar meaning", "이어진 기억이에요": "Linked memory",
   "낱말": "words", "뜻": "meaning", "늘 넣는 기억이에요 (고정)": "Always included (pinned)", "검색으로 찾았어요": "Found by search",
-  "최근 불러오기 (질문 내용은 저장하지 않아요)": "Recent recalls (questions are not stored)", "한 번에 평균": "Average per recall", "점수 보기": "Show scores",
+  "점수 보기": "Show scores",
   "점수는 0~1이에요. 1에 가까울수록 질문과 가깝다고 봤어요.": "Scores run from 0 to 1. Closer to 1 means closer to the question.", "고정 (점수 없음)": "Pinned (no score)",
   "분석한 대화": "Conversations analyzed", "후보가 나온 대화": "Produced candidates", "분석 기다리는 대화": "Waiting for analysis", "후보가 안 나온 대화": "No candidates",
   "나온 것": "What came out", "아직 나온 후보가 없어요.": "No candidates yet.", "승인됨 (7일)": "Approved (7 days)", "중복 의심": "Likely duplicate", "버림 (7일)": "Rejected (7 days)",
@@ -6284,3 +6284,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "원문은 저장 뒤 7일 동안만 보관돼요.{0}": "Transcripts are kept for 7 days after saving.{0}", "{0}일 · 넣음 {1}번": "{0} days · included {1} times",
   "마지막 불러옴 {0}": "last recalled {0}", "넣음 {0}": "included {0}", "쓰임 {0}": "used {0}", "불러온 횟수 · {0}": "Recalls · {0}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "에이전트가 질문할 때 넣어 준 기억이에요. 질문 내용은 저장하지 않아요": "Memories handed to agents when they asked. Questions are not stored", "기억 열기": "Open memory",
+  "넣어 준 기억 (높은 순위부터)": "Memories handed out (highest rank first)", "원문 만료": "Transcript expired", "만료됐어요": "Expired", "원문 못 읽음": "Transcript unreadable",
+  "이 형식은 아직 볼 수 없어요": "This format cannot be shown yet", "보관된 원문이 없어요": "No transcript was kept", "원문 보관 중": "Transcript kept"
+});
+Object.assign(window.ArkismI18nEN.patterns, { "{0}번 불러올 때 평균": "Average over {0} recalls", "원문 D-{0}": "Transcript D-{0}", "{0}까지 ({1}일 남음)": "Until {0} ({1} days left)" });
