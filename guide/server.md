@@ -141,6 +141,33 @@ Values the `arkism` tools read:
 | `ARKISM_SKILLS_ROOT` | `~/skills` | Shared skill folder (`SKILL.md` files) |
 | `ARKISM_DATA_DIR` | `~/.local/share/arkism` | Skill catalog data. Keep it out of Git |
 | `ARKISM_GIT_ORG` | none | GitHub user or organization the desktop TOOLS › 저장소 screen shows. The app runs `arkism git` over SSH, which does not load a systemd `EnvironmentFile`, so set it in the SSH user's shell (for example an `export` at the top of `~/.bashrc`). Unset, the screen reports `git_org_unset` |
+| `ARKISM_SESSION_PROCESSOR` | unset (off) | `1` switches the capture hooks to session-processor mode: finished sessions are summarized by the harness models and memory candidates are proposed automatically. Needs `ARKISM_HARNESS_TOKEN_FILE` |
+| `ARKISM_HARNESS_TOKEN_FILE` | none | Service token the session processor captures with, so automated capture never runs as the owner |
+| `ARKISM_MEMORY_OUTCOME_SPOOL` | unset (off) | Directory for memory outcome receipts. See [Memory outcome spool](#memory-outcome-spool) |
+
+### Memory outcome spool
+
+With `ARKISM_SESSION_PROCESSOR=1` and `ARKISM_MEMORY_OUTCOME_SPOOL=/srv/arkism/state/outcome-spool`
+set for the capture hooks (and for `arkism-crew serve`, whose finished runs become traces the same way),
+every recall writes the exact memory versions it delivered to a per-session ledger under the capture state
+directory. Once a session has been idle for 30 minutes the next `arkism capture reflect` turns the ledger
+into execution traces on the server and drops a receipt into the spool. The ledger and the receipts hold
+references only (memory id, revision, scope), never memory text or transcript lines, so the spool adds no
+new personal data to disk.
+
+The spool stays off by default for two reasons that are about the install, not privacy:
+
+- Nothing drains it on its own. `arkism capture outcomes --spool DIR --config FILE --evaluator-token-file F --producer-token-file G`
+  consumes the receipts once per call and needs a second service credential plus a checker configuration;
+  the repository ships no unit or timer for it. A spool nobody drains only grows.
+- It is a side effect of the session processor, which is itself opt-in because it sends session text to
+  the harness models.
+
+Turn it on when you run the processor and want outcome evidence: add the two variables above to
+`/srv/arkism/config/arkism.env` (the file the hook wrapper loads), create the directory with mode `0700`
+for the hook user, and schedule `arkism capture outcomes` (a systemd timer or cron entry, daily is enough)
+with the same `--spool` directory. `arkism capture reflect` reports `session_trace_recorded`,
+`session_trace_pending` and `session_trace_dropped` in its metrics so you can see the ledger moving.
 
 ## Host tools and systemd
 

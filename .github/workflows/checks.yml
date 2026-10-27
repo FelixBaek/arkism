@@ -127,6 +127,8 @@ jobs:
           echo "PYTHONPATH=$RUNNER_TEMP/api-contract-validator" >> "$GITHUB_ENV"
       - name: Offline OpenAPI structure and reference validation
         run: python3 tools/check_openapi.py
+      - name: Haiku quality evidence agrees with its own rows (config/harness-quality.json)
+        run: python3 tools/check_harness_model_quality.py
       - name: Offline evaluation and measurement regression tests
         run: |
           python3 -m unittest discover -s tools -p 'test_*.py'
