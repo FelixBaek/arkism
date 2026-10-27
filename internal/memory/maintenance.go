@@ -276,7 +276,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		return Record{}, ErrConflict
 	}
 	signal := isSignalProposal(*seen.Maintenance)
-	if signal && in.Decision == "swap" || in.Decision == "forget_both" && seen.Maintenance.Type != "contradiction" {
+	if !decisionFits(*seen.Maintenance, in.Decision, signal) {
 		return Record{}, ErrInvalid
 	}
 	var mark *ConflictInput
@@ -297,6 +297,15 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		return Record{}, ErrConflict
 	}
 	return out, err
+}
+
+// decisionFits says whether a decision applies to the proposal: a signal has nothing to swap,
+// and only a contradiction can forget both sides.
+func decisionFits(p MaintenanceProposal, decision string, signal bool) bool {
+	if decision == "swap" {
+		return !signal
+	}
+	return decision != "forget_both" || p.Type == "contradiction"
 }
 
 // decideTx changes the memories (when mark is set) and closes the proposal in one transaction.
