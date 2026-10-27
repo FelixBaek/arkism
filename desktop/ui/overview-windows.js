@@ -1121,8 +1121,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
         for (const [a, n] of [["이번 주", r.d7], ["그전 주 평균", Math.round(r.trend.before * 10) / 10]]) { const p = el("div", "ov-detail-bar"), track = el("i"), fill = el("b"), line = el("p", ""); fill.style.width = `${Math.round((n / max) * 100)}%`; track.append(fill); line.append(el("span", "", a), el("strong", "", `${num(n)}번`)); p.append(line, track); bars.append(p); }
         sec(`불러온 횟수 · ${r.trend.label}`, bars);
       }
-      if (idle(r.host)) detail.append(note("a", "넣었는데 답에 안 쓰였어요", "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 검증에서 정리해 보세요."));
-      const act = el("div", "ov-detail-actions"); act.append(button("고치기", "primary small", null, () => editMemory(m, r.id)), button("검증 보기", "small", null, () => open("judge"))); detail.append(act);
+      if (idle(r.host)) detail.append(note("a", "넣었는데 답에 안 쓰였어요", "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 쓰임 확인에서 정리해 보세요."));
+      const act = el("div", "ov-detail-actions"); act.append(button("고치기", "primary small", null, () => editMemory(m, r.id)), button("쓰임 확인 보기", "small", null, () => open("judge"))); detail.append(act);
     } else detail.append(el("p", "ov-win-empty", "왼쪽에서 기억을 고르면 자세히 보여요."));
     twoPane(d, bar, list, detail);
   }
