@@ -168,18 +168,20 @@ type sent struct {
 }
 
 type fakeSession struct {
-	mu        sync.Mutex
-	token     string
-	refuse    bool
-	h         Handlers
-	open      bool
-	perms     map[string]int64
-	channels  map[string]Channel
-	sent      []sent
-	threads   int
-	responses []string
-	commands  []string
-	failSend  int // when > 0, the send after this many sent messages fails once
+	mu         sync.Mutex
+	token      string
+	refuse     bool
+	h          Handlers
+	open       bool
+	perms      map[string]int64
+	channels   map[string]Channel
+	sent       []sent
+	threads    int
+	threadFor  map[string]string
+	failThread bool
+	responses  []string
+	commands   []string
+	failSend   int // when > 0, the send after this many sent messages fails once
 }
 
 func newFakeSession() *fakeSession {
@@ -199,8 +201,9 @@ func (s *fakeSession) Open(h Handlers) error {
 	s.h, s.open = h, true
 	return nil
 }
-func (s *fakeSession) Close() error           { s.open = false; return nil }
-func (s *fakeSession) Self() (string, string) { return "app1", "botuser" }
+func (s *fakeSession) Close() error                              { s.open = false; return nil }
+func (s *fakeSession) Self() (string, string)                    { return "app1", "botuser" }
+func (s *fakeSession) MemberRoles(_, _ string) ([]string, error) { return nil, nil }
 func (s *fakeSession) Guilds() []Guild {
 	return []Guild{{ID: "g1", Name: "우리 서버", OwnerID: "owner"}}
 }
@@ -236,9 +239,21 @@ func (s *fakeSession) Send(ch string, o Out) (string, error) {
 func (s *fakeSession) StartThread(ch, msg, name string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.failThread {
+		return "", errors.New("thread unavailable")
+	}
+	if id := s.threadFor[msg]; msg != "" && id != "" {
+		return id, nil
+	}
 	s.threads++
 	id := "t" + strconv.Itoa(s.threads)
 	s.channels[id] = Channel{ID: id, GuildID: "g1", Name: name, ParentID: ch, Thread: true}
+	if msg != "" {
+		if s.threadFor == nil {
+			s.threadFor = map[string]string{}
+		}
+		s.threadFor[msg] = id
+	}
 	return id, nil
 }
 func (s *fakeSession) RegisterCommands(g string) error {
@@ -531,7 +546,7 @@ func TestAtNameAsksAgentOnce(t *testing.T) {
 	}
 }
 
-func TestWorkflowRunApproval(t *testing.T) {
+func TestWorkflowRunBudgetApproval(t *testing.T) {
 	h := setup(t)
 	h.f.bots[0]["bot"].(map[string]any)["discord_bot"].(map[string]any)["channels"] = []any{
 		map[string]any{"channel_id": "c1", "auto_start": true, "action": map[string]any{"kind": "workflow", "id": "wf1"}}}
@@ -547,7 +562,7 @@ func TestWorkflowRunApproval(t *testing.T) {
 		t.Fatalf("run: %v", run)
 	}
 	h.f.mu.Lock()
-	h.f.runs["run1"]["crew_run"] = map[string]any{"status": "waiting", "waiting": map[string]any{"kind": "approval", "node_id": "n2", "question": "보낼까요?"}}
+	h.f.runs["run1"]["crew_run"] = map[string]any{"status": "waiting", "waiting": map[string]any{"kind": "budget", "node_id": "n2", "question": "보낼까요?"}}
 	h.f.mu.Unlock()
 	h.m.Tick()
 	h.m.Tick()

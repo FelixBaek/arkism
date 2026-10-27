@@ -204,8 +204,9 @@ window.ArkismAutomation = (h) => {
       }, { maxLength: 60, placeholder: "자동화 이름을 적어 주세요" });
       inlineText(role, () => d.role, (v) => { d.role = v; touch(); }, { maxLength: 200, placeholder: "무엇을 하는 자동화인가요? 한 줄로 적어요" });
       const hv = el("span", "");
-      inlineText(hv, () => (d.handle ? `$${d.handle}` : "$이름"), (v) => {
-        v = v.replace(/^\$/, "");
+      const callAlias = () => d.handle ? h.flowAlias(d) : "@이름";
+      inlineText(hv, callAlias, (v) => {
+        v = v.replace(/^[@$]/, "");
         if (v && !/^[\p{L}\p{N}_-]{1,40}$/u.test(v)) { notice("$이름은 띄어쓰기 없이 글자·숫자·_·-만 써요."); return; }
         if (v && h.workflows().some((r) => r.crew.handle === v && r.id !== rec?.id)) { notice("이미 쓰는 이름이에요. 다른 이름을 써 주세요."); return; }
         d.handle = v;
@@ -220,11 +221,11 @@ window.ArkismAutomation = (h) => {
         name.toggleAttribute("data-no-i18n", !!d.name); // the user's words stay; only the placeholder is UI text
         name.textContent = d.name || "자동화 이름을 적어 주세요";
         name.classList.toggle("empty", !d.name);
-        hv.textContent = d.handle ? `$${d.handle}` : "$이름";
+        hv.textContent = callAlias();
         role.toggleAttribute("data-no-i18n", !!d.role);
         role.textContent = d.role || "무엇을 하는 자동화인가요? 한 줄로 적어요";
         role.classList.toggle("empty", !d.role);
-        copyHost.replaceChildren(d.handle ? h.copyButton(`$${d.handle}`) : "");
+        copyHost.replaceChildren(d.handle ? h.copyButton(callAlias()) : "");
         credit.replaceChildren();
         if (d.cover) { const c = h.coverCredit({ cover: d.cover }); if (c) credit.append(c); }
       };

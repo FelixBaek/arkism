@@ -41,7 +41,7 @@ export function createCrewEditor(deps) {
     ed.run = null;
     // A workflow an agent works by is edited from that agent, so leaving the editor goes back there (its unsaved draft stays).
     const owner = deps.ownerOf(rec);
-    if (owner) { deps.state.workerNew = false; if (deps.wk.id !== owner.id) deps.workerPick(owner.id); deps.state.view = "workers"; deps.render(); return; }
+    if (owner) { deps.resumeWorker(owner); return; }
     deps.state.view = "crew";
     deps.state.selected = `crew:${rec.id}`;
     deps.render();

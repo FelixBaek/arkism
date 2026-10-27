@@ -26,6 +26,7 @@ test("new automation window", async () => {
   const h = await boot();
   h.render(); await h.settle();
   h.btn(document, /새 워크플로우/).click(); await h.settle();
+  h.btn(h.top(), /단계 구성/).click(); await h.settle();
   const d = h.top();
   assert.match(d.className, /v4-auto-new/);
   await sweep(h, d);
@@ -147,6 +148,7 @@ test("a new automation drafted by AI, given steps and created", async () => {
   const h = await boot();
   h.render(); await h.settle();
   h.btn(document, /새 워크플로우/).click(); await h.settle();
+  h.btn(h.top(), /단계 구성/).click(); await h.settle();
   const d = h.top();
   const chat = h.chats.filter((c) => c.label === "AI로 초안").at(-1);
   // saving with no name asks for one

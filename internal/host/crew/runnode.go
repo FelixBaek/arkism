@@ -262,6 +262,9 @@ func stringList(v any) []string {
 // no CLI for the model, no working folder).
 func runNode(spec map[string]any) (map[string]any, error) {
 	if b := strings.TrimSpace(sOr(spec["backend"])); b != "" && b != "local" {
+		if truthy(spec["research"]) {
+			return nil, researchUnsupported("외부 실행기 " + b)
+		}
 		return runBackend(spec) // a step on an agent-runner connection (backends.go); never the local CLIs
 	}
 	return runLocalNode(spec)
@@ -299,6 +302,9 @@ func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := validateResearchNode(spec, row, access); err != nil {
+		return nil, err
+	}
 	rules, sum, err := workerRules(access, truthy(spec["once"]))
 	rulesSum = sum
 	if err != nil {
@@ -330,20 +336,64 @@ func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 	if reason == "quota_exhausted" {
 		return result(false, "", model, effort, row.Name, started, reason), nil
 	}
-	if truthy(spec["handoff_isolated"]) {
-		var cleanup func()
+	env, workdir, cleanup, err := isolatedNodeEnvironment(spec, row, env, workdir)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	res, err = spawnNode(spec, row, model, effort, task, own, skills, access, workdir, env, profile, timeout, started)
+	redactResearchResult(spec, res, env)
+	return res, err
+}
+
+func validateResearchNode(spec map[string]any, row host.CLI, access string) error {
+	if !truthy(spec["research"]) {
+		return nil
+	}
+	if row.Name != "claude" {
+		return researchUnsupported(row.Name)
+	}
+	if access != "read" {
+		return crewErr("research_access_required: 조사 단계는 access=read로 설정해 주세요")
+	}
+	return nil
+}
+
+// isolatedNodeEnvironment prepares the opt-in research or handoff boundary. A
+// failed capability probe cleans up here; a successful caller owns the cleanup.
+func isolatedNodeEnvironment(spec map[string]any, row host.CLI, env map[string]string, workdir string) (map[string]string, string, func(), error) {
+	cleanup := func() {}
+	var err error
+	if truthy(spec["research"]) {
+		env, workdir, cleanup, err = researchEnvironment(env, workdir, strings.TrimSpace(sOr(spec["cwd"])) != "")
+		if err != nil {
+			return nil, "", nil, err
+		}
+		err = verifyResearchClaude(binOf(row), workdir, env)
+	} else if truthy(spec["handoff_isolated"]) {
 		env, cleanup, err = isolatedHandoffEnv(env, row.Name)
 		if err != nil {
-			return nil, err
+			return nil, "", nil, err
 		}
-		defer cleanup()
 		if row.Name == "codex" {
-			if err = verifyHandoffCodex(binOf(row), workdir, env); err != nil {
-				return nil, err
+			err = verifyHandoffCodex(binOf(row), workdir, env)
+		}
+	}
+	if err != nil {
+		cleanup()
+		return nil, "", nil, err
+	}
+	return env, workdir, cleanup, nil
+}
+
+func redactResearchResult(spec, res map[string]any, env map[string]string) {
+	if truthy(spec["research"]) && res != nil {
+		if token := env["CLAUDE_CODE_OAUTH_TOKEN"]; token != "" {
+			for _, field := range []string{"output", "error"} {
+				res[field] = strings.ReplaceAll(sOr(res[field]), token, "***")
 			}
 		}
 	}
-	return spawnNode(spec, row, model, effort, task, own, skills, access, workdir, env, profile, timeout, started)
 }
 
 // nodeLimits reads the step's effort and timeout.
@@ -470,7 +520,10 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 		return nil, err
 	}
 	argv, stdin := buildCommand(row, model, effort, instructions, task, outFile, truthy(spec["once"]), access)
-	if truthy(spec["handoff_isolated"]) {
+	if truthy(spec["research"]) {
+		argv = researchCommand(argv)
+	}
+	if truthy(spec["handoff_isolated"]) && !truthy(spec["research"]) {
 		argv = isolatedHandoffCommand(argv, row.Name)
 	}
 	out, errOut, code, err := spawnCLI(argv, stdin, workdir, env, timeout, outFile)

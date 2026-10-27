@@ -901,7 +901,7 @@ test("home palette: Ctrl K, tabs, keys, results by kind and the empty actions", 
   pal().querySelector('.pal-tab[data-tab="all"]').click(); await app.settle();
   // every kind turns up for its own word
   await palType("리");
-  assert.match(text(pal()), /크루/);
+  assert.match(text(pal()), /FLOW/);
   for (const [q, group] of [["github", "MCP"], ["orbit mail", "플러그인"], ["review", "스킬"], ["설정", "설정"]]) { await palType(q); assert.match(text(pal()), new RegExp(group), q); }
   pal().querySelector('.pal-tab[data-tab="skill"]').click(); await app.settle();
   await palType("review");

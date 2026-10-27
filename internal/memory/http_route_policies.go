@@ -4,6 +4,12 @@ package memory
 // Dynamic permissions are resolved from the same scoped request used by the endpoint.
 // Secondary evidence and state transitions remain authorized by the service.
 var httpRoutePolicies = map[string]routePolicy{
+"GET /v1/crew/templates/research": {action:"read:crew",scope:routeQuery},
+	"POST /v1/crew/runs/{id}/lease":                   {action: "write:crew_runs", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/crew/runs/{id}/stop":                    {action: "write:crew_runs", scope: routeJSON, limit: 256 << 10},
+	"GET /v1/crew/templates/deep-research":            {action: "read:crew", scope: routeQuery},
+	"GET /v1/crew/deliveries":                         {action: "read:crew", scope: routeQuery},
+	"POST /v1/crew/deliveries/{id}/change":            {action: "write:crew_runs", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman, roleService}},
 	"POST /v1/memories/query":                         {action: "read:memories", scope: routeJSON, limit: 1 << 20},
 	"POST /v1/memory_candidates/query":                {action: "review:memory_candidates", scope: routeJSON, limit: 1 << 20},
 	"POST /v1/skills/query":                           {action: "read:skills", scope: routeJSON, limit: 1 << 20},

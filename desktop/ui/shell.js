@@ -16,10 +16,9 @@ window.ArkismShell = (ctx) => {
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
-    agent: { label: "CREW", tabs: [
-      ["workers", "전문가", () => { state.workerNew = false; go("workers"); }, () => state.view === "workers"],
-      ["teams", "팀", () => go("teams"), () => ["teams", "teamNew", "meetings"].includes(state.view)],
-      ["crew", "자동화", () => go("crew"), () => ["crew", "graph"].includes(state.view), count("crew")],
+    agent: { label: "FLOW", tabs: [
+      ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph", "workers", "teams", "teamNew"].includes(state.view), count("crew")],
+      ["meetings", "회의 기록", () => go("meetings"), () => state.view === "meetings"],
       // 디스코드 tab hidden: bots live in 설정 › 메신저 (Figma 1012:60790); the view code stays in team.js.
       ["crew-usage", "사용량", () => go("crewUsage"), () => state.view === "crewUsage"]
     ] },

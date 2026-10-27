@@ -1066,7 +1066,7 @@ export function startApp() {
   // 먼저 확인 holds three rows; 기억 처리 멈춤 is a fourth row on top while it lasts (Figma 523:35767).
   const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
   // The Home row for lists that failed while the memories loaded; each failed list is named once (#186).
-  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요", crew: "크루 목록을 불러오지 못했어요" };
+  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요", crew: "FLOW 목록을 불러오지 못했어요" };
   function failedListsItem() {
     const failed = Object.keys(state.listErrors);
     if (!failed.length) return null;
@@ -1306,6 +1306,11 @@ export function startApp() {
     pop.body.replaceChildren(list);
   }
   function go(view, tab) {
+    // Old links keep their destination available inside FLOW instead of opening separate catalogues.
+    if (view === "workers" || view === "teams") {
+      state.flowKind = view === "workers" ? "agent" : "team";
+      view = "crew";
+    }
     state.view = view;
     if (view === "todo") state.todoAll = false;
     state.skillPage = null;

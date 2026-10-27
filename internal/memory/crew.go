@@ -167,12 +167,13 @@ type CrewGraph struct {
 }
 
 type Crew struct {
-	Type     string      `json:"type"`
-	Name     string      `json:"name"`
-	Handle   string      `json:"handle,omitempty"`
-	Role     string      `json:"role,omitempty"`
-	Category string      `json:"category,omitempty"`
-	Avatar   *CrewAvatar `json:"avatar,omitempty"`
+	Research *CrewResearch `json:"research,omitempty" bson:"research,omitempty"`
+	Type     string        `json:"type"`
+	Name     string        `json:"name"`
+	Handle   string        `json:"handle,omitempty"`
+	Role     string        `json:"role,omitempty"`
+	Category string        `json:"category,omitempty"`
+	Avatar   *CrewAvatar   `json:"avatar,omitempty"`
 	// template and persona (model: also a workflow's default worker model)
 	Instructions string   `json:"instructions,omitempty"`
 	Model        string   `json:"model,omitempty"`
@@ -250,6 +251,7 @@ type CrewPage struct {
 // CrewResolution is what a hook needs to call "$handle". Members and
 // LeaderModels are always empty (kept for older readers).
 type CrewResolution struct {
+	Mode         string   `json:"mode,omitempty"`
 	Item         Record   `json:"item"`
 	Members      []Record `json:"members"`
 	LeaderModels []string `json:"leader_models"`
@@ -445,6 +447,9 @@ func validCrewWorkflow(c Crew) bool {
 }
 
 func validCrew(c Crew) bool {
+	if c.Research != nil && (c.Type != "workflow" || !validResearchPolicy(c)) {
+		return false
+	}
 	if !slices.Contains(crewTypes, c.Type) || !validCrewText(c) || !validCrewAvatar(c.Avatar) || !validCrewCover(c.Cover) ||
 		!validCrewGoalNotify(c) || !validCrewPins(c.Pinned) || len(c.Pinned) > 0 && c.Type != "agent" && c.Type != "team" {
 		return false
@@ -601,7 +606,6 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 	flows := map[string]bool{}  // live workflow key -> it has a schedule or webhook on
 	owners := map[string]bool{} // workflow keys another live agent works by
 	var prev *Crew
-	ns := crewNamespace(c.Type)
 	for _, r := range rows {
 		if r.ID == self {
 			prev = r.Crew
@@ -618,11 +622,21 @@ func (s *Service) checkCrewRefs(ctx context.Context, scope Scope, c Crew, self s
 		if r.Crew.Type == "workflow" {
 			flows[crewKey(r.Crew.Handle)] = r.Crew.Trigger != nil && r.Crew.Enabled
 		}
-		if c.Handle != "" && r.Crew.Handle != "" && crewNamespace(r.Crew.Type) == ns && crewKey(r.Crew.Handle) == crewKey(c.Handle) {
+		if crewAliasCollision(c, *r.Crew) {
 			return ErrHandleTaken
 		}
 	}
 	return checkCrewLinks(c, prev, agents, flows, owners)
+}
+
+func crewAliasCollision(c, other Crew) bool {
+	if c.Handle != "" && other.Handle != "" && crewNamespace(other.Type) == crewNamespace(c.Type) && crewKey(other.Handle) == crewKey(c.Handle) {
+		return true
+	}
+	if c.Research != nil && (crewKey(c.Research.DeepAlias) == crewKey(other.Handle) || other.Research != nil && crewKey(c.Research.DeepAlias) == crewKey(other.Research.DeepAlias)) {
+		return true
+	}
+	return other.Research != nil && c.Handle != "" && crewKey(c.Handle) == crewKey(other.Research.DeepAlias)
 }
 
 // checkCrewLinks checks a team's members and an agent's or workflow's
@@ -782,6 +796,9 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 		if crewNamespace(r.Crew.Type) == ns && r.Crew.Handle != "" && crewKey(r.Crew.Handle) == key {
 			return CrewResolution{Item: r, Members: []Record{}, LeaderModels: []string{}}, nil
 		}
+	}
+	if ns == "@" {
+		return flowAlias(page, key)
 	}
 	return CrewResolution{}, ErrNotFound
 }

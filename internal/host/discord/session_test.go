@@ -18,15 +18,17 @@ import (
 
 // fakeDiscord is a tiny Discord REST API plus gateway, enough for dgSession to connect, read state and post.
 type fakeDiscord struct {
-	t        *testing.T
-	srv      *httptest.Server
-	mu       sync.Mutex
-	userCode int  // status for GET /users/@me (0 = 200)
-	noApp    bool // GET /oauth2/applications/@me fails
-	closeGW  int  // gateway close code sent instead of READY (0 = send READY)
-	events   []string
-	calls    []string
-	bodies   map[string]string
+	t            *testing.T
+	srv          *httptest.Server
+	mu           sync.Mutex
+	userCode     int  // status for GET /users/@me (0 = 200)
+	noApp        bool // GET /oauth2/applications/@me fails
+	closeGW      int  // gateway close code sent instead of READY (0 = send READY)
+	sendCode     int
+	emptyReceipt bool
+	events       []string
+	calls        []string
+	bodies       map[string]string
 }
 
 func newFakeDiscord(t *testing.T) *fakeDiscord {
@@ -52,7 +54,7 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls = append(f.calls, r.Method+" "+p)
 	f.bodies[r.Method+" "+p] = string(b)
-	userCode, noApp := f.userCode, f.noApp
+	userCode, noApp, sendCode, emptyReceipt := f.userCode, f.noApp, f.sendCode, f.emptyReceipt
 	f.mu.Unlock()
 	switch {
 	case p == "/users/@me":
@@ -77,16 +79,28 @@ func (f *fakeDiscord) serve(w http.ResponseWriter, r *http.Request) {
 		})
 	case p == "/guilds/gx/channels":
 		f.reply(w, 404, map[string]any{"message": "unknown guild"})
+	case p == "/guilds/g1/members/u1":
+		f.reply(w, 200, map[string]any{"user": map[string]any{"id": "u1"}, "roles": []string{"role1"}})
 	case p == "/channels/rest1":
 		f.reply(w, 200, map[string]any{"id": "rest1", "guild_id": "g1", "name": "스레드", "type": 11, "parent_id": "c1"})
 	case strings.HasPrefix(p, "/channels/") && r.Method == http.MethodGet:
 		f.reply(w, 404, map[string]any{"message": "unknown channel"})
 	case p == "/channels/c1/messages":
+		if sendCode != 0 {
+			f.reply(w, sendCode, map[string]any{"message": "unavailable"})
+			return
+		}
+		if emptyReceipt {
+			f.reply(w, 200, map[string]any{})
+			return
+		}
 		f.reply(w, 200, map[string]any{"id": "m9", "channel_id": "c1"})
 	case p == "/channels/bad/messages", p == "/channels/bad/threads":
 		f.reply(w, 403, map[string]any{"message": "missing access"})
 	case p == "/channels/c1/messages/m9/threads":
 		f.reply(w, 200, map[string]any{"id": "t1", "type": 11})
+	case p == "/channels/c1/messages/rest1/threads":
+		f.reply(w, 400, map[string]any{"message": "Thread already created", "code": 160004})
 	case p == "/channels/c1/threads":
 		f.reply(w, 200, map[string]any{"id": "t2", "type": 11})
 	case p == "/applications/app1/guilds/g1/commands":
@@ -324,6 +338,62 @@ func TestDiscordgoSessionOpenFailures(t *testing.T) {
 	}
 	if restCode(errors.New("plain")) != 0 {
 		t.Fatal("non-REST errors have no status")
+	}
+}
+
+func TestDiscordgoDurableSendNonceAndUncertainErrors(t *testing.T) {
+	f := newFakeDiscord(t)
+	d := f.session(t)
+	nonce := deliveryNonce("delivery-1", 4, 0)
+	if id, err := d.Send("c1", Out{Content: "@everyone 결과", Nonce: nonce}); err != nil || id != "m9" {
+		t.Fatalf("receipt=%s err=%v", id, err)
+	}
+	f.mu.Lock()
+	var payload map[string]any
+	_ = json.Unmarshal([]byte(f.bodies["POST /channels/c1/messages"]), &payload)
+	f.mu.Unlock()
+	if payload["nonce"] != nonce || payload["enforce_nonce"] != true || len(list(obj(payload["allowed_mentions"])["parse"])) != 0 {
+		t.Fatalf("unsafe send payload %v", payload)
+	}
+	roles, err := d.MemberRoles("g1", "u1")
+	if err != nil || len(roles) != 1 || roles[0] != "role1" {
+		t.Fatalf("membership=%v %v", roles, err)
+	}
+	if id, err := d.StartThread("c1", "rest1", "duplicate"); err != nil || id != "rest1" {
+		t.Fatalf("duplicate thread=%s %v", id, err)
+	}
+	// Override the SDK's default retry setting: the durable send must still
+	// make exactly one request when a server error could hide an accepted write.
+	d.s.MaxRestRetries = 3
+	f.mu.Lock()
+	f.sendCode = 500
+	before := len(f.calls)
+	f.mu.Unlock()
+	if _, err = d.Send("c1", Out{Content: "result", Nonce: nonce}); err == nil {
+		t.Fatal("500 must be uncertain")
+	}
+	f.mu.Lock()
+	after := len(f.calls)
+	f.sendCode = 0
+	f.emptyReceipt = true
+	f.mu.Unlock()
+	if after-before != 1 {
+		t.Fatalf("uncertain send retried %d times", after-before)
+	}
+	if _, err = d.Send("c1", Out{Content: "result", Nonce: nonce}); err == nil {
+		t.Fatal("missing receipt accepted")
+	}
+	f.mu.Lock()
+	before = len(f.calls)
+	f.mu.Unlock()
+	if _, err = d.Send("c1", Out{Content: "expired", Nonce: nonce, Deadline: time.Now().Add(-time.Second)}); err == nil {
+		t.Fatal("expired lease sent")
+	}
+	f.mu.Lock()
+	after = len(f.calls)
+	f.mu.Unlock()
+	if after != before {
+		t.Fatal("expired lease reached Discord")
 	}
 }
 

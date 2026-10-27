@@ -136,7 +136,7 @@ func (e *Engine) PollWaiting(ctx context.Context) error {
 	}
 	now := e.now()
 	for _, r := range runs {
-		if readyToResume(r, now) {
+		if r.State.InvocationMode == "flow" && r.State.CancelRequested || readyToResume(r, now) {
 			e.Go(ctx, r.ID)
 		}
 	}
@@ -148,7 +148,8 @@ func (e *Engine) PollWaiting(ctx context.Context) error {
 // that nothing has touched yet: every node pending, or done/skipped when the
 // run restarts from where a failed one stopped. Runs another engine process
 // created are never taken; an expert's workflow run (trigger "agent") is, even
-// when the assist runner started it on a service token.
+// when the assist runner started it on a service token. Flow runs can already
+// be touched: their persisted lease decides whether recovery may proceed.
 func (e *Engine) StartRequested(ctx context.Context) error {
 	runs, err := e.Store.ListRuns(ctx, "running", maxListedRuns)
 	if err != nil {
@@ -156,8 +157,8 @@ func (e *Engine) StartRequested(ctx context.Context) error {
 	}
 	var todo []string
 	for _, r := range runs {
-		requested := r.CreatedByType == "human" || r.CreatedByType == "agent" || r.State.Trigger == "agent"
-		if requested && untouched(r) {
+		requested := r.CreatedByType == "human" || r.CreatedByType == "agent" || r.State.Trigger == "agent" || r.State.InvocationMode == "flow"
+		if requested && (r.State.InvocationMode == "flow" || untouched(r)) {
 			todo = append(todo, r.ID)
 		}
 	}
@@ -188,7 +189,8 @@ func untouched(r Run) bool {
 const maxListedRuns = 1000
 
 // ResumeRunning continues runs left running by an earlier engine; used once
-// at start-up (a run another process drives would be settled as interrupted).
+// at start-up. Flow runs acquire a persisted lease before settling nodes;
+// legacy runs continue to rely on the daemon's process lock.
 func (e *Engine) ResumeRunning(ctx context.Context) error {
 	runs, err := e.Store.ListRuns(ctx, "running", maxListedRuns)
 	if err != nil {

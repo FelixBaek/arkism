@@ -39,7 +39,7 @@ window.ArkismHome = function (ctx) {
     // 크루: 전문가 · 팀 · 자동화 (personas and templates are not things you open from search).
     const CREW_WHERE = { agent: "전문가", team: "팀", workflow: "자동화" };
     (d.crew || []).filter((r) => CREW_WHERE[r.crew?.type] && (has(r.crew.name, q) || has(r.crew.handle, q) || has(r.crew.role, q))).slice(0, each)
-      .forEach((r) => out.push({ kind: "crew", type: r.crew.type, id: r.id, title: r.crew.type === "workflow" ? `$${r.crew.handle || r.crew.name}` : r.crew.name || r.crew.handle, where: `CREW › ${CREW_WHERE[r.crew.type]}`, badge: CREW_WHERE[r.crew.type] }));
+      .forEach((r) => out.push({ kind: "crew", type: r.crew.type, id: r.id, title: r.crew.type === "workflow" ? `$${r.crew.handle || r.crew.name}` : r.crew.name || r.crew.handle, where: `FLOW › ${CREW_WHERE[r.crew.type]}`, badge: CREW_WHERE[r.crew.type] }));
     const tools = d.tools || {};
     (tools.servers || []).filter((x) => has(x.name, q) || has(x.desc, q)).slice(0, each)
       .forEach((x) => out.push({ kind: "mcp", id: x.name, title: x.name, mono: true, where: "TOOLS › MCP", badge: "MCP" }));
@@ -116,7 +116,7 @@ window.ArkismHome = function (ctx) {
 
   // ------------------------------------------------------------ 통합 검색 창 (설정 줄의 검색 아이콘 · Ctrl K)
   // One dialog over every screen: type tabs, results grouped by kind, recent memories and quick actions while empty.
-  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "크루"], ["mcp", "MCP"], ["plugin", "플러그인"], ["setting", "설정"]];
+  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "FLOW"], ["mcp", "MCP"], ["plugin", "플러그인"], ["setting", "설정"]];
   const KIND_ICON = { memory: "brain", skill: "puzzle-piece", crew: "users-three", prompt: "image", mcp: "plug", plugin: "stack", setting: "gear-six", action: "arrow-right" };
   let pal = null, palTab = "all", palHits = [], palActive = 0;
   const palQ = () => pal.querySelector(".pal-input").value.trim().toLowerCase();
@@ -486,7 +486,7 @@ window.ArkismHome = function (ctx) {
       const week = Date.now() - 7 * 86400000;
       const waiting = extra.runs.filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval").length;
       const failed = extra.runs.filter((x) => x.crew_run?.status === "failed" && new Date(x.created_at).getTime() > week).length;
-      rows.push(["CREW", "워크플로우", [{ label: `확인 대기 ${waiting}`, n: waiting }, { label: `실패 ${failed}`, n: failed }].filter((p) => p.n), ["crew"]]);
+      rows.push(["FLOW", "워크플로우", [{ label: `확인 대기 ${waiting}`, n: waiting }, { label: `실패 ${failed}`, n: failed }].filter((p) => p.n), ["crew"]]);
     }
     if (extra.route) {
       const parts = (extra.route.models || []).filter((m) => m.status === "watch" || m.status === "slow")

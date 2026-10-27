@@ -304,7 +304,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 			t.Fatalf("work tool %d differs from host.WorkTools", i)
 		}
 	}
-	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,decide_workflow,list_crew,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work" {
+	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work" {
 		t.Fatal(names)
 	}
 	if _, err := routeSkills("  "); err == nil {
@@ -360,7 +360,11 @@ func TestRecallBelowScoreFloorReturnsNoRelatedMemory(t *testing.T) {
 
 func swapCrew(t *testing.T) {
 	start, decide, list := host.StartWorkflow, host.DecideRun, host.ListCrew
-	t.Cleanup(func() { host.StartWorkflow, host.DecideRun, host.ListCrew = start, decide, list })
+	startRequest, get, wait, cancel := host.StartWorkflowRequest, host.GetWorkflow, host.WaitWorkflow, host.CancelWorkflow
+	t.Cleanup(func() {
+		host.StartWorkflow, host.DecideRun, host.ListCrew = start, decide, list
+		host.StartWorkflowRequest, host.GetWorkflow, host.WaitWorkflow, host.CancelWorkflow = startRequest, get, wait, cancel
+	})
 }
 
 func TestWorkflowTools(t *testing.T) {
@@ -373,7 +377,7 @@ func TestWorkflowTools(t *testing.T) {
 	}
 	out := call(t, "run_workflow", `{"handle":"$리서치","task":"AI 뉴스 정리","cwd":"/tmp"}`)
 	v := structured(t, out)
-	if got[0] != "$리서치" || got[1] != "AI 뉴스 정리" || got[2] != 600*time.Second || got[3] != "/tmp" ||
+	if got[0] != "$리서치" || got[1] != "AI 뉴스 정리" || got[2] != 30*time.Second || got[3] != "/tmp" ||
 		field(v, "run_id") != "run-1" || asMap(field(v, "waiting"))["question"] != "보낼까요?" || field(v, "authority") != "data_only_untrusted" || field(out, "isError") != false {
 		t.Fatal(got, out)
 	}
