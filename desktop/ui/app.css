@@ -396,6 +396,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .cat-head:hover { background: var(--bg-muted); }
 .cat-rules { flex: 1; min-width: 0; text-align: right; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-body { padding: 4px 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.cat-body .field input { font-family: var(--sans); } /* names and descriptions are Korean prose; the mono stack has no Korean glyphs */
 .cat-top { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: end; }
 .icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
 .icon-pick .icon-btn.on { background: var(--bg-selected); color: var(--text-1); border-color: var(--border-strong); }
