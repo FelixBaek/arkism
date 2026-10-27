@@ -160,6 +160,23 @@ def probe_one(model, system, fixture, key):
             "token_usage": reply.get("usage", {}), "stop_reason": reply.get("stop_reason")}
 
 
+def cost_of(result, price):
+    """USD for one result from a [per-M-input, per-M-output] price, or None when the price is unknown."""
+    if price is None:
+        return None
+    usage = result["token_usage"]
+    return (usage.get("input_tokens", 0) * price[0] + usage.get("output_tokens", 0) * price[1]) / 1e6
+
+
+def probe_case(name, fixture, models, system, key, prompt, prices):
+    results = []
+    for model in models:
+        r = probe_one(model, system, fixture, key)
+        r.update(prompt_version=prompt, operation_id=f"quality-{name}-{model}", cost_usd=cost_of(r, prices.get(model)))
+        results.append(r)
+    return {"category": name, "results": results}
+
+
 def probe(models, prices):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key:
@@ -168,24 +185,15 @@ def probe(models, prices):
     presets = json.loads(MODELS.read_text(encoding="utf-8"))["prompts"]
     system = presets["common"] + "\n" + presets["session_processor"]
     suites = {1: [], 2: [], 3: []}
-    cost = 0.0
     for category, fixtures in FIXTURES.items():
         for variant, fixture in zip((1, *HELDOUT_VARIANTS), fixtures):
-            results = []
-            for model in models:
-                r = probe_one(model, system, fixture, key)
-                r.update(prompt_version=prompt, operation_id=f"quality-{category_name(category, variant)}-{model}")
-                price = prices.get(model)
-                r["cost_usd"] = None if price is None else (r["token_usage"].get("input_tokens", 0) * price[0] + r["token_usage"].get("output_tokens", 0) * price[1]) / 1e6
-                cost += r["cost_usd"] or 0
-                results.append(r)
-            suites[variant].append({"category": category_name(category, variant), "results": results})
-    heldout_cases = suites[2] + suites[3]
+            suites[variant].append(probe_case(category_name(category, variant), fixture, models, system, key, prompt, prices))
+    cost = sum(r["cost_usd"] or 0 for cases in suites.values() for case in cases for r in case["results"])
     gate = {"schema_version": schema, "prompt_version": prompt, "cases": suites[1],
-            "model_discovery": {m: True for m in models}, "actual_cost_usd": cost,
+            "model_discovery": dict.fromkeys(models, True), "actual_cost_usd": cost,
             "limitation": "Three synthetic cases per category (one initial + two held-out). Passing them does not establish general Korean quality.",
             "evaluated_at": datetime.date.today().isoformat(), "input_data": "synthetic fixtures in tools/check_harness_model_quality.py",
-            "heldout": {"schema_version": schema, "prompt_version": prompt, "cases": heldout_cases, "model_discovery": {m: True for m in models}, "suite": "heldout"}}
+            "heldout": {"schema_version": schema, "prompt_version": prompt, "cases": suites[2] + suites[3], "model_discovery": dict.fromkeys(models, True), "suite": "heldout"}}
     gate["initial_passed_categories"] = passed_cases(gate)
     gate["heldout"]["passed_categories"] = passed_cases(gate["heldout"])
     gate["passed_categories"] = derive_passed(gate)
