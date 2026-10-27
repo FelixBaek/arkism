@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Every path the gateway answers by an exact match must be described under x-local-gateway in api/openapi.yaml.
+// Every path the gateway answers by an exact match (path == "..." or the entrances set) must be described under x-local-gateway in api/openapi.yaml.
 func TestGatewayPathsAreInOpenAPI(t *testing.T) {
 	data, err := os.ReadFile("../../../api/openapi.yaml")
 	if err != nil {
@@ -25,8 +25,14 @@ func TestGatewayPathsAreInOpenAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	set := regexp.MustCompile(`entrances\s*=\s*set\(([^)]*)\)`).FindSubmatch(src)
+	if set == nil {
+		t.Fatal("entrances set not found in gateway.go; the scan needs updating")
+	}
+	quoted := regexp.MustCompile(`"(/[^"]*)"`)
+	matches := append(regexp.MustCompile(`path == "(/[^"]*)"`).FindAllStringSubmatch(string(src), -1), quoted.FindAllStringSubmatch(string(set[1]), -1)...)
 	seen := 0
-	for _, m := range regexp.MustCompile(`path == "(/[^"]*)"`).FindAllStringSubmatch(string(src), -1) {
+	for _, m := range matches {
 		if m[1] == "/v1beta" { // prefix test for the /v1beta/models/... paths documented one by one
 			continue
 		}

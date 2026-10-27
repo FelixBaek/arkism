@@ -21,7 +21,7 @@ Carry context between Claude Code, Codex and Gemini CLI. Arkism collects what is
 
 - **Shared memory.** Keep decisions, preferences and solutions with their sources.
 - **You decide what stays.** AI-generated notes are candidates. Agents use them after a person approves them.
-- **Shared skills.** Manage working methods with versions and history. Any connected agent can load them through MCP; installing them as skill folders covers Claude Code, Codex and ZCode only.
+- **Shared skills.** Manage working methods with versions and history. Any agent connected through MCP can load them; installing them as skill folders covers Claude Code, Codex and ZCode only.
 - **Connected work.** Configure tasks and teams through model routing and Arkism's own workflow engine.
 
 Start on your own PC, without an Arkism account or Docker. Memory extraction uses your chosen model and agent login. Your model provider's terms and charges still apply.
