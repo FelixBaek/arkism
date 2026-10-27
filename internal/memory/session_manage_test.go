@@ -28,7 +28,7 @@ func sessionManageUsage(t *testing.T, f *fixture, now time.Time, sid string) str
 
 func testSessionManage(t *testing.T, repo Repository) {
 	f, now := archiveSearchFixture(t, repo)
-	raw := jsonLine(map[string]string{"role": "user", "content": "첫 질문 <private>내 비밀 계획</private> 끝"})
+	raw := jsonLine(map[string]string{"role": "user", "content": "첫 질문 <private>내 비밀 계획</private> 끝", "timestamp": "2026-10-13T01:12:05.250+09:00"})
 	raw = append(raw, jsonLine(map[string]any{"role": "assistant", "content": []map[string]string{{"type": "text", "text": "답변입니다"}, {"type": "tool_use", "text": "rm -rf hidden"}}})...)
 	raw = append(raw, jsonLine(map[string]string{"role": "tool", "content": "tool output hidden"})...)
 	raw = append(raw, jsonLine(map[string]string{"role": "user", "content": "password: hunter2secret"})...)
@@ -67,6 +67,9 @@ func testSessionManage(t *testing.T, repo Repository) {
 	if !strings.Contains(got[0].Text, "[비공개]") || strings.Contains(string(joined), "비밀 계획") || strings.Contains(string(joined), "hunter2") ||
 		strings.Contains(string(joined), "hidden") || !strings.HasSuffix(got[2].Text, " 끝") || got[2].Truncated {
 		t.Fatalf("leak or lost text: %s", joined)
+	}
+	if got[0].At == nil || !got[0].At.Equal(time.Date(2026, 10, 12, 16, 12, 5, 250e6, time.UTC)) || got[1].At != nil {
+		t.Fatalf("message time: %s", joined)
 	}
 	none, err := f.svc.SessionTranscript(testCtx, f.human, SessionTranscriptInput{Scope: scopeA, ID: without})
 	if err != nil || none.State != "none" || len(none.Items) != 0 {

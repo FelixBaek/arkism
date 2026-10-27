@@ -55,5 +55,13 @@ window.ArkismSessionList = (() => {
     return at < 0 ? [snippet, "", ""] : [snippet.slice(0, at), q, snippet.slice(at + q.length)];
   }
 
-  return { AGENTS, hitParts, NONE, label, quote, resumeCommand, handoffPrompt, continueCommand, continueTargets, tokens, split, cost, mainModel, modelLine, models };
+  // a message's time: HH:mm, with the day in front when it is not the previous message's day; no time recorded shows nothing
+  function msgTime(at, prev, locale = "ko-KR") {
+    const t = new Date(at || NaN), p = new Date(prev || NaN);
+    if (!at || Number.isNaN(t.getTime())) return "";
+    const hm = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`;
+    return !Number.isNaN(p.getTime()) && p.toDateString() === t.toDateString() ? hm : `${t.toLocaleDateString(locale, { month: "long", day: "numeric" })} ${hm}`;
+  }
+
+  return { AGENTS, hitParts, msgTime, NONE, label, quote, resumeCommand, handoffPrompt, continueCommand, continueTargets, tokens, split, cost, mainModel, modelLine, models };
 })();

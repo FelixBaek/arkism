@@ -381,6 +381,7 @@
 
 /* 세션 기록: one list; a row opens its details under itself, the dialogue opens on the right only when asked */
 .ss-body.ss-solo { grid-template-columns: minmax(0, 1fr); } .ss-body.ss-solo > .ov-wide-right { display: none; } .ss-body.ss-solo > .ov-wide-left { border-right: 0; }
+.ss-body.ss-talk { grid-template-columns: minmax(0, 1fr); } .ss-body.ss-talk > .ov-wide-left { display: none; } /* the open dialogue takes the whole window */
 .ss-body .ov-wide-filter { flex: none; }
 .ss-row { position: relative; display: flex; flex-direction: column; gap: 6px; }
 .ss-row .ov-wide-row-r { gap: 8px; } .ss-row .ov-wide-row-r .btn { white-space: nowrap; }

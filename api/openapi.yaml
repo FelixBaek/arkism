@@ -49930,6 +49930,10 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false,

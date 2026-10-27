@@ -35,6 +35,7 @@ type ArchiveMessageView struct {
 	Text       string            `json:"text"`
 	TextOffset int               `json:"text_offset"`
 	NextOffset *int              `json:"next_text_offset,omitempty"`
+	At         *time.Time        `json:"at,omitempty"` // the record's own timestamp, when the log line carries one
 	RawBytes   int               `json:"raw_bytes"`
 	Authority  string            `json:"authority"`
 }
@@ -306,6 +307,22 @@ func archiveSafeMessage(raw []byte) (text, role string, valid bool) {
 	}
 	return archiveSafeContent(row["content"], role)
 }
+
+// archiveMessageTime is the top-level "timestamp" agents write on each log line; nil when absent or unreadable.
+func archiveMessageTime(raw []byte) *time.Time {
+	var row struct {
+		Timestamp string `json:"timestamp"`
+	}
+	if json.Unmarshal(raw, &row) != nil {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339Nano, row.Timestamp)
+	if err != nil {
+		return nil
+	}
+	t = t.UTC()
+	return &t
+}
 func archiveRawString(m map[string]json.RawMessage, key string) string {
 	var v string
 	_ = json.Unmarshal(m[key], &v)
@@ -567,7 +584,9 @@ func (s *Service) SearchSessionArchiveMessages(ctx context.Context, token string
 						}
 						start.MessageSHA256 = archiveMessageHash(h.SessionArchive.Format, role, raw)
 						start.RecordKey = archiveRecordKey(h.SessionArchive.Format, raw)
-						out.Items = append(out.Items, archiveTextView(start, role, text, begin, 4096, len(raw)))
+						view := archiveTextView(start, role, text, begin, 4096, len(raw))
+						view.At = archiveMessageTime(raw)
+						out.Items = append(out.Items, view)
 					}
 				}
 			}

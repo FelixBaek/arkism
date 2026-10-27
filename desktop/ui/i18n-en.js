@@ -6224,7 +6224,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "저장된 작업 상태가 있으면 그걸, 없으면 보관된 대화를 읽도록 시작 명령을 만들어 복사해요.": "Copies a start command that reads the saved work state, or the archived dialogue when there is none.",
   "Markdown 내보내기": "Export Markdown", "대화 보기": "View dialogue", "재개": "Resume", "이어가기": "Continue in",
   "재개 명령을 복사했어요. 터미널에 붙여 넣으세요.": "Resume command copied. Paste it into a terminal.",
-  "최근 목록을 먼저 보여 줘요. 새 목록을 불러오는 중…": "Showing the recent list first. Loading the new list…", "가격 모름": "Price unknown"
+  "최근 목록을 먼저 보여 줘요. 새 목록을 불러오는 중…": "Showing the recent list first. Loading the new list…", "가격 모름": "Price unknown", "‹ 세션 정보": "‹ Session info", "기타": "Other"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "대화에서 \"{0}\" 찾기": "\"{0}\" in the dialogue", "비공개 부분에만 있어 뺀 메시지 {0}개": "{0} messages left out (only inside private parts)",

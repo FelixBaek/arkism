@@ -218,8 +218,12 @@ div.install-way { border-style: dashed; }
 .chips.v4s-cats .chip output { font: 11px/1.5 var(--mono); color: var(--nc-quiet); }
 .ss-msgs { display: flex; flex-direction: column; gap: 8px; }
 .ss-msg { padding: 10px 12px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); min-width: 0; }
-.ss-msg.user { background: var(--nc-raised); border-color: transparent; }
+.ss-msg.assistant { align-self: flex-start; max-width: 88%; }
+.ss-msg.user { align-self: flex-end; max-width: 88%; background: var(--nc-raised); border-color: transparent; }
+.ss-msg.user b { text-align: right; }
+.ss-msg.sys { padding: 2px 12px; border: 0; } .ss-msg.sys p { font-size: 12px; color: var(--nc-quiet); }
 .ss-msg b { display: block; margin-bottom: 4px; font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
+.ss-msg b time { margin-left: 8px; font-variant-numeric: tabular-nums; }
 .ss-hit { background: none; color: inherit; text-decoration: underline 2px var(--nc-accent); text-underline-offset: 3px; }
 .ss-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
 .v4s-sec .us-empty { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
