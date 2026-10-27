@@ -12,3 +12,6 @@ Keep new memory evaluations here and link old evidence at its original path.
 `recall-quality-v2` holds the tools and the aggregate results of the human-labeled
 recall set (#366). The questions and labels themselves are held-out data and stay
 outside the repository; its README says where.
+
+`merge-threshold-v1` sweeps the capture merge threshold over pairs derived from the frozen
+`recall-quality-v1` set; its RESULTS.md says why the proxy cannot settle the default.
