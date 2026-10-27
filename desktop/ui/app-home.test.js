@@ -392,18 +392,27 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   const withSource = [...d.querySelectorAll(".ov-wide-row")].find((r) => { r.click(); return btn("세션 보기 ›", win()); });
   if (withSource) await press("세션 보기 ›", win());
   await openWindow({ wide: "active" }); await app.settle(50);
+  const editor = () => app.$$("dialog[open]").find((x) => /기억 고치기/.test(text(x)));
   await press("고치기", win().querySelector(".ov-detail-actions"), 50);
-  assert.equal(win(), null, "고치기 leaves the window for the memory");
-  // judge fixes or deletes an unused memory in its own row (the same confirm and DELETE as here)
+  assert.ok(win() && editor(), "고치기 opens the edit popup over the window");
+  editor().close(); await app.settle();
+  // 쓰임 확인 keeps, fixes or forgets an unused memory in its own row (the same confirm and DELETE as here)
   d = await openWindow({ key: "judge" });
   assert.equal(btn("정리하러 가기", d), undefined);
+  assert.match(text(d), /답에 쓰였다는 표시가 없는 기억/);
   const deletes = app.apiCalls.filter(([m]) => m === "DELETE").length;
-  await press("지우기", d.querySelector(".ov-win-list .ov-win-item"));
-  await press("지우기", app.$("dialog.ov-ask[open]"), 80);
-  assert.ok(app.apiCalls.filter(([m]) => m === "DELETE").length > deletes, "지우기 asks, then deletes");
+  await press("잊기", d.querySelector(".ov-win-list .ov-win-item"));
+  await press("잊기", app.$("dialog.ov-ask[open]"), 80);
+  assert.ok(app.apiCalls.filter(([m]) => m === "DELETE").length > deletes, "잊기 asks, then deletes");
   d = await openWindow({ key: "judge" });
   await press("고치기", d.querySelector(".ov-win-list .ov-win-item"), 50);
-  assert.equal(win(), null, "고치기 opens the memory editor");
+  assert.ok(win() && editor(), "고치기 opens the edit popup over 쓰임 확인");
+  editor().close(); await app.settle();
+  const before = win().querySelectorAll(".ov-win-list .ov-win-item").length;
+  await press("맞아요, 유지", win().querySelector(".ov-win-list .ov-win-item"));
+  assert.equal(win().querySelectorAll(".ov-win-list .ov-win-item").length, before - 1, "유지 takes the row off the list");
+  d = await openWindow({ key: "judge" });
+  assert.equal(d.querySelectorAll(".ov-win-list .ov-win-item").length, before - 1, "a kept memory is not asked about again");
   await closeAll();
 });
 
@@ -514,8 +523,8 @@ test("overview: 사용량 window draws the counts and its two buttons", async ()
   await openWindow({ wide: "usage" }); await app.settle(30); let d = win();
   assert.match(text(d), /최근 사용 기록/);
   assert.match(text(d), /많이 쓰인 기억/);
-  await press("검증 보기", d);
-  assert.match(text(win()), /검증/);
+  await press("쓰임 확인 보기", d);
+  assert.match(text(win()), /쓰임 확인/);
   d = await openWindow({ wide: "usage" });
   await press("사용량 화면으로", d, 50);
   assert.equal(win(), null);
@@ -606,7 +615,7 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   app.dom.type(search, "zzz 없음"); await app.settle(200);
   assert.match(text(d), /조건에 맞는 기억이 없어요/);
   await press("조건 지우기", d);
-  // the map's memory-edit button opens the memory list
+  // the map's memory-edit button opens the edit popup
   app.dom.key(canvas, "ArrowDown"); app.dom.key(canvas, "Enter"); await app.settle(30);
   app.dom.key(canvas, "Escape"); await app.settle();
   app.dom.key(canvas, "ArrowLeft"); app.dom.key(canvas, "Enter"); await app.settle(30);
@@ -614,7 +623,9 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   d = await openWindow({ wide: "map" }); await app.settle(50); d = win();
   app.dom.key(d.querySelector("canvas"), "ArrowRight"); app.dom.key(d.querySelector("canvas"), "Enter"); await app.settle(30);
   await press("기억 수정", d, 50);
-  assert.equal(win(), null);
+  const editor = app.$$("dialog[open]").find((x) => /기억 고치기/.test(text(x)));
+  assert.ok(win() && editor, "기억 수정 opens the edit popup over the map");
+  editor.close(); await closeAll();
   offT(); offM();
   // an empty map, a denied map, a failed map with 다시 시도, an older server's truncated flag
   const offE = route("GET", "/v1/memory-graph", () => ok({ nodes: [], edges: [] }));

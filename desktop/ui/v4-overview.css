@@ -176,6 +176,7 @@
 .ov-win-bars i.r { background: #ff5160; opacity: .85; } .ov-win-bars i.a { background: #f5b955; opacity: .85; }
 .ov-win-note { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 12.5px; }
 .ov-win-note span { color: var(--text-2); }
+.ov-win-note small { margin-top: 4px; color: var(--text-2); font-size: 12px; }
 .ov-win-note-r { border-color: #ff5160; } .ov-win-note-r strong { color: #ff5160; } .ov-win-note-a { border-color: #f5b955; } .ov-win-note-a strong { color: #f5b955; }
 .ov-win-list-title { font-size: 12px; color: var(--text-2); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ov-win-group { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--text-2); } .ov-win-group:first-child { margin-top: 0; }

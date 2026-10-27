@@ -54,6 +54,6 @@ test("검증 lists a memory returned unused_after times without a receipt, and o
   state.data.memories = memories;
   win.open("judge");
   assert.deepEqual(titles(), ["Stale rule", "Fresh rule"]);
-  assert.ok(document.body.textContent.includes("사용 기록 없이 12번 넣었어요"));
+  assert.ok(document.body.textContent.includes("쓰였다는 보고 없이 12번 건넸어요"));
   win.reset();
 });

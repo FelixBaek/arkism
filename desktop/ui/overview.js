@@ -1,5 +1,5 @@
 // MEMORY › 개요 (Figma v4 04 · Brain › 개요, 566:41431): the memory pipeline drawn on a brain.
-// Eight stages (저장: 대화 저장·분석·분류·승인 대기 / 사용: 불러오기·사용 기록·검증 / 드리밍), each a card tied to a
+// Eight stages (저장: 대화 저장·분석·분류·승인 대기 / 사용: 불러오기·사용 기록·쓰임 확인 / 드리밍), each a card tied to a
 // brain region, plus a stage × last-24-hours grid. Numbers come from data the app already loads (memories,
 // candidates, maintenance proposals, GET /v1/memory_usage, the host's memory_use report) and the session list
 // (GET /v1/usage/sessions). A stage with no timestamped source leaves its grid row dark instead of guessing.
@@ -69,7 +69,7 @@ window.ArkismOverview = (ctx) => {
     const stalled = sessions.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
     const stalledHours = Math.floor((now - since) / HOUR);
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
-    const tidy = (d.memories || []).filter((m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; }).length;
+    const kept = ctx.kept?.() || [], tidy = (d.memories || []).filter((m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used && !kept.includes(m.id); }).length;
     const oldest = waiting.length ? Math.min(...waiting.map((m) => time(m.created_at)).filter(Boolean)) : 0;
     const days = oldest ? Math.floor((now - oldest) / 86400000) : 0;
 
@@ -93,10 +93,10 @@ window.ArkismOverview = (ctx) => {
       review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
       recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
       trace: [[reported ? ago(reported) : "—", "마지막 기록"], [w ? `${num(w.sessions)}` : "—", w ? `세션 · ${w.days}일` : "보고 없음"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"]],
-      judge: [[`${num(tidy)}건`, "정리할 기억"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "넣은 횟수"]],
+      judge: [[`${num(tidy)}건`, "확인할 기억"], [rate === null ? "—" : `${rate}%`, "답에 쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "건넨 횟수"]],
       dream: [[`${num(nProp)}건`, "정리 제안"], [nProp ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
     };
-    // dot health — g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: last event <24h g, <3d y, older/none o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 검증·드리밍 y; 분석 멈춤 r
+    // dot health — g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: last event <24h g, <3d y, older/none o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 쓰임 확인·드리밍 y; 분석 멈춤 r
     const age = (t, yMax = 3 * 24 * HOUR) => !t ? "o" : now - t < 24 * HOUR ? "g" : now - t < yMax ? "y" : "o";
     const oldestUnclassified = unclassified.length ? Math.min(...unclassified.map((m) => time(m.created_at) || now)) : 0;
     const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
@@ -123,8 +123,8 @@ window.ArkismOverview = (ctx) => {
       { key: "trace", group: "use", label: "사용 기록", region: "해마", tone: "n",
         big: reported ? ago(reported) : "—", bigSub: "마지막 기록", small: w ? `${num(w.sessions)}` : "—", smallSub: w ? `세션 · ${w.days}일` : "보고 없음",
         step: reported ? ago(reported) : "보고 없음", row: reportRow, counts: slots(reported ? [reported] : []), open: () => go("usage") },
-      { key: "judge", group: "use", label: "검증", region: "소뇌", tone: "n",
-        big: `${num(tidy)}건`, bigSub: "정리할 기억", small: rate === null ? "—" : `${rate}%`, smallSub: "쓰인 비율",
+      { key: "judge", group: "use", label: "쓰임 확인", region: "소뇌", tone: "n",
+        big: `${num(tidy)}건`, bigSub: "확인할 기억", small: rate === null ? "—" : `${rate}%`, smallSub: "답에 쓰인 비율",
         step: tidy ? `대기 ${num(tidy)}` : "확인 끝", row: new Array(24).fill(""), counts: new Array(24).fill(0), open: () => go("memories", "idle") },
       { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
         big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
