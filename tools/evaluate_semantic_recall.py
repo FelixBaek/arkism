@@ -5,8 +5,12 @@ The 0.38 cutoff was fixed from the deployed configuration before this dataset
 was embedded. Labels are agent-authored development checks, not human quality
 approval. Frozen vectors let the Go PostgreSQL test replay this experiment
 without network access, model calls, or private data.
+
+With --labels and --runs it instead scores a human-labeled set (recall@k, MRR,
+precision; evaluation/recall-quality-v2) and writes an aggregate-only result file.
 """
 import argparse
+import datetime
 import hashlib
 import json
 import math
@@ -108,10 +112,62 @@ def observe(documents, queries):
     return stats
 
 
+def read_jsonl(path):
+    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def labeled_metrics(labels, runs, ks=(1, 3, 5, 10)):
+    """recall@k, MRR and precision over a human-labeled set (evaluation/recall-quality-v2/README.md).
+
+    labels: rows with id and expected_memory_ids; runs: rows with id and returned (ranked memory ids).
+    A label whose run is missing is counted under "unscored", never as a miss. Aggregates only: no query text.
+    """
+    returned = {row["id"]: list(dict.fromkeys(row["returned"])) for row in runs}
+    scored = [row for row in labels if row["id"] in returned]
+    positives = [row for row in scored if row["expected_memory_ids"]]
+    negatives = [row for row in scored if not row["expected_memory_ids"]]
+    ranks = []
+    for row in positives:
+        hit = [i for i, m in enumerate(returned[row["id"]], 1) if m in row["expected_memory_ids"]]
+        ranks.append(hit[0] if hit else None)
+    out = {"labeled": len(labels), "scored": len(scored), "unscored": len(labels) - len(scored), "positives": len(positives), "negatives": len(negatives),
+           "mrr": sum(1 / r for r in ranks if r) / len(ranks) if ranks else None, "at_k": {}}
+    for k in ks:
+        top = {row["id"]: returned[row["id"]][:k] for row in scored}
+        found = [any(m in row["expected_memory_ids"] for m in top[row["id"]]) for row in positives]
+        items = [(sum(m in top[row["id"]] for m in row["expected_memory_ids"]), len(row["expected_memory_ids"])) for row in positives]
+        with_return = [row for row in scored if top[row["id"]]]
+        out["at_k"][str(k)] = {
+            "recall": sum(found) / len(found) if found else None,
+            "item_recall": sum(f for f, _ in items) / sum(n for _, n in items) if items else None,
+            "precision": sum(sum(m in row["expected_memory_ids"] for m in top[row["id"]]) / len(top[row["id"]]) for row in with_return) / len(with_return) if with_return else None,
+            "negative_returned": sum(bool(top[row["id"]]) for row in negatives) / len(negatives) if negatives else None,
+        }
+    return out
+
+
+def labeled_main(args):
+    result = labeled_metrics(read_jsonl(args.labels), read_jsonl(args.runs))
+    result.update(labels_sha256=hashlib.sha256(Path(args.labels).read_bytes()).hexdigest(), runs_sha256=hashlib.sha256(Path(args.runs).read_bytes()).hexdigest(),
+                  created=datetime.date.today().isoformat())
+    args.out.mkdir(parents=True, exist_ok=True)
+    target = args.out / f"{result['created']}.json"
+    target.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({"out": str(target), "scored": result["scored"], "mrr": result["mrr"], "at_k": result["at_k"]}, ensure_ascii=False))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reuse-query-vectors", action="store_true", help="reuse unchanged public query vectors while re-embedding documents")
+    parser.add_argument("--labels", help="human-labeled jsonl (private); scores it with --runs instead of embedding the synthetic set")
+    parser.add_argument("--runs", help="ranked search results jsonl from evaluation/recall-quality-v2/label.py run")
+    parser.add_argument("--out", type=Path, default=Path(__file__).resolve().parent.parent / "evaluation/recall-quality-v2/results", help="directory for the aggregate result file")
     args = parser.parse_args()
+    if args.labels or args.runs:
+        if not (args.labels and args.runs):
+            parser.error("--labels and --runs go together")
+        labeled_main(args)
+        return
     opener = build_opener(NoRedirect)
     # recordContent for a memory with an empty summary is text + newline.
     documents = [{"id": name, "text": text, "vector": vector} for (name, text), vector in zip(DOCUMENTS, embed(opener, ENDPOINT, [text + "\n" for _, text in DOCUMENTS], ""))]

@@ -8,3 +8,7 @@ Historical API performance evidence lives in
 [`evaluations/2026-10-15/api`](../evaluations/2026-10-15/api/README.md).
 It measures a different subject and is not a duplicate memory benchmark.
 Keep new memory evaluations here and link old evidence at its original path.
+
+`recall-quality-v2` holds the tools and the aggregate results of the human-labeled
+recall set (#366). The questions and labels themselves are held-out data and stay
+outside the repository; its README says where.
