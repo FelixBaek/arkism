@@ -308,6 +308,8 @@ type Repository interface {
 	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
+	// MemoryWorkCounts aggregates the host-observed work of the traces that delivered each memory id in one scope.
+	MemoryWorkCounts(context.Context, Scope, []string) ([]MemoryWorkCount, error)
 	// MemoryUsageWindow counts context_usage receipts per live memory created since the first time, and since the second.
 	MemoryUsageWindow(context.Context, Scope, time.Time, time.Time) ([]MemoryUsageCount, error)
 	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.

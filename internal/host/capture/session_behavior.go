@@ -31,7 +31,87 @@ var (
 	heredocRE     = regexp.MustCompile(`<<-?\s*['"]?(\w+)['"]?`)
 	quotedRE      = regexp.MustCompile(`'[^']*'|"(?:[^"\\]|\\.)*"`) // a quoted "; git commit" is an argument, not a command
 	detailAskedRE = regexp.MustCompile(`자세히|자세하게|상세히|길게|전부 설명|walk me through|explain`)
+	// Work evidence (#356): a test run or a CI check in command position, judged by its exit status.
+	testCmdRE = regexp.MustCompile(`(^|[;&|(]|\n)\s*(\w+=\S*\s+)*(go\s+test|cargo\s+test|pytest|python3?\s+(-m\s+(pytest|unittest)|\S*check_local\.py)|(npm|pnpm|yarn)\s+(run\s+)?test|npx\s+vitest|make\s+test)\b`)
+	// `gh run watch|view` exits 0 on a failed run unless asked for its status.
+	ciCmdRE    = regexp.MustCompile(`(^|[;&|(]|\n)\s*gh\s+(pr\s+checks\b|run\s+(watch|view)\b[^;&|\n]*--exit-status)`)
+	exitCodeRE = regexp.MustCompile(`(?:exit_code\\?"?\s*:\s*|Process exited with code |Exit code:? )(\d+)`)
 )
+
+// editTools change files; a successful call is a diff the session produced.
+var editTools = map[string]bool{"Edit": true, "Write": true, "MultiEdit": true, "NotebookEdit": true, "apply_patch": true}
+
+// sessionWork is what the host saw the session's work end with: the last test
+// and CI results win, so a red run fixed later in the session counts as passed.
+type sessionWork struct {
+	pending   map[string]string // tool call id -> "test", "ci" or "edit"
+	diff      bool
+	tests, ci string
+}
+
+func newSessionWork() *sessionWork {
+	return &sessionWork{pending: map[string]string{}, tests: "none", ci: "none"}
+}
+
+// call notes a tool call whose result will tell a work outcome.
+func (w *sessionWork) call(id, name, shell string) {
+	switch {
+	case id == "":
+	case editTools[name]:
+		w.pending[id] = "edit"
+	case commitCmdRE.MatchString(shell):
+		w.pending[id] = "edit" // a commit is a diff once it succeeds
+	case ciCmdRE.MatchString(shell):
+		w.pending[id] = "ci"
+	case testCmdRE.MatchString(shell):
+		w.pending[id] = "test"
+	}
+}
+
+// result settles a pending call from its output. flagged says isError is the
+// tool's own failure flag; without it only an exit code in the output decides.
+func (w *sessionWork) result(id string, flagged, isError bool, output string) {
+	kind, ok := w.pending[id]
+	if !ok {
+		return
+	}
+	delete(w.pending, id)
+	failed := isError
+	if m := exitCodeRE.FindStringSubmatch(output); m != nil {
+		failed = m[1] != "0"
+		if kind == "ci" && m[1] == "8" {
+			return // gh pr checks: still pending, no result
+		}
+	} else if !flagged {
+		return
+	}
+	verdict := map[bool]string{false: "passed", true: "failed"}[failed]
+	switch kind {
+	case "edit":
+		w.diff = w.diff || !failed
+	case "test":
+		w.tests = verdict
+	case "ci":
+		w.ci = verdict
+	}
+}
+
+// toolResults settles the Claude Code tool_result blocks of one user line.
+func (w *sessionWork) toolResults(d, msg map[string]any) {
+	if msg == nil || d["type"] != "user" {
+		return
+	}
+	list, _ := msg["content"].([]any)
+	for _, b := range list {
+		if b, _ := b.(map[string]any); b != nil && b["type"] == "tool_result" {
+			w.result(strField(b["tool_use_id"]), true, truthy(b["is_error"]), resultText(b["content"]))
+		}
+	}
+}
+
+func (w *sessionWork) payload() map[string]any {
+	return map[string]any{"diff": w.diff, "tests": w.tests, "ci": w.ci}
+}
 
 type behaviorTurn struct {
 	at, reply string
@@ -75,7 +155,9 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 			turns[len(turns)-1].at, turns[len(turns)-1].reply = at, text
 		}
 	}
-	command := func(cmd string) {
+	work := newSessionWork()
+	command := func(id, name, cmd string) {
+		work.call(id, name, shellText(cmd)) // before redaction: only the verdict is kept
 		cmd = redact(cmd)
 		shell := shellText(cmd) // judged whole; only the stored copy is cut
 		commit, pr := commitCmdRE.MatchString(shell), prCmdRE.MatchString(shell)
@@ -111,6 +193,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		}
 		msg, _ := d["message"].(map[string]any)
 		payload, _ := d["payload"].(map[string]any)
+		work.toolResults(d, msg)
 		switch {
 		case msg != nil && humanTyped(d): // Claude Code
 			if s, ok := msg["content"].(string); ok {
@@ -128,11 +211,11 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 			for _, b := range list {
 				if b, _ := b.(map[string]any); b != nil && b["type"] == "tool_use" {
 					in, _ := b["input"].(map[string]any)
-					command(str(in["command"]))
+					command(strField(b["id"]), strField(b["name"]), str(in["command"]))
 				}
 			}
 		case d["type"] == "response_item" && payload != nil: // Codex rollout
-			behaviorCodex(payload, at, user, reply, command)
+			behaviorCodex(payload, at, user, reply, command, work)
 		}
 		return nil
 	})
@@ -151,7 +234,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 		replies = append(replies, map[string]any{"at": t.at, "text": prose,
 			"lines": len(strings.Split(t.reply, "\n")), "code_blocks": len(codeFenceRE.FindAllString(t.reply, -1)), "detail_requested": t.detail})
 	}
-	out := map[string]any{"behavior": "agent_session", "replies": replies, "commits": commits, "pull_requests": prs, "user_corrections": corrections, "incomplete": incomplete}
+	out := map[string]any{"behavior": "agent_session", "replies": replies, "commits": commits, "pull_requests": prs, "user_corrections": corrections, "incomplete": incomplete, "work": work.payload()}
 	// shortcut: oldest replies go first when the event would pass the server limit; one event per trace.
 	for raw, _ := json.Marshal(out); len(raw) > behaviorMaxBytes && len(replies) > 0; raw, _ = json.Marshal(out) {
 		replies = replies[1:]
@@ -164,7 +247,7 @@ func sessionBehavior(transcript, from, to string) map[string]any {
 }
 
 // behaviorCodex routes one Codex rollout response item to the user, reply or command recorder.
-func behaviorCodex(payload map[string]any, at string, user func(string), reply func(at, text string), command func(string)) {
+func behaviorCodex(payload map[string]any, at string, user func(string), reply func(at, text string), command func(id, name, cmd string), work *sessionWork) {
 	switch payload["type"] {
 	case "message":
 		text := codexText(payload["content"])
@@ -174,10 +257,41 @@ func behaviorCodex(payload map[string]any, at string, user func(string), reply f
 			user(text) // skip injected environment and AGENTS.md blocks
 		}
 	case "custom_tool_call":
-		command(str(payload["input"]))
+		work.call(strField(payload["call_id"]), strField(payload["name"]), shellText(str(payload["input"])))
+		command("", "", str(payload["input"]))
 	case "function_call":
-		command(str(payload["arguments"]))
+		work.call(strField(payload["call_id"]), strField(payload["name"]), shellText(codexCommand(str(payload["arguments"]))))
+		command("", "", str(payload["arguments"]))
+	case "function_call_output", "custom_tool_call_output":
+		work.result(strField(payload["call_id"]), false, false, resultText(payload["output"]))
 	}
+}
+
+// codexCommand is the shell script of a Codex call's JSON arguments: the last
+// element of an argv such as ["bash","-lc","go test ./..."], or its cmd string.
+func codexCommand(arguments string) string {
+	v, err := loadsMap(arguments)
+	if err != nil {
+		return arguments
+	}
+	if argv := anyList(v["command"]); len(argv) > 0 {
+		return strField(argv[len(argv)-1])
+	}
+	return strField(or(v["command"], v["cmd"]))
+}
+
+// resultText is a tool result's text: a string, or the text of its content blocks.
+func resultText(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	var parts []string
+	for _, b := range anyList(v) {
+		if b, _ := b.(map[string]any); b != nil {
+			parts = append(parts, strField(b["text"]))
+		}
+	}
+	return strings.Join(parts, "\n")
 }
 
 // headTail keeps both ends of s within n runes: footers and closing summaries are what checkers judge.
@@ -194,7 +308,7 @@ func codexText(content any) string {
 	var parts []string
 	for _, b := range anyList(content) {
 		if b, _ := b.(map[string]any); b != nil && (b["type"] == "output_text" || b["type"] == "input_text") {
-			parts = append(parts, str(b["text"]))
+			parts = append(parts, strField(b["text"]))
 		}
 	}
 	return strings.Join(parts, " ")

@@ -34,6 +34,24 @@ type MemoryProjectUse struct {
 	ProjectKey string `json:"project_key"`
 }
 
+// MemoryWorkCounts are the host-observed work results of the sessions a memory
+// was delivered to: one session counts once, by the last test and CI result the
+// host saw in it (#356). Counts only, never commands or output.
+type MemoryWorkCounts struct {
+	Sessions    int `json:"sessions" bson:"sessions"`
+	Diff        int `json:"diff" bson:"diff"`
+	TestsPassed int `json:"tests_passed" bson:"tests_passed"`
+	TestsFailed int `json:"tests_failed" bson:"tests_failed"`
+	CIPassed    int `json:"ci_passed" bson:"ci_passed"`
+	CIFailed    int `json:"ci_failed" bson:"ci_failed"`
+}
+
+// MemoryWorkCount is the repository aggregate of MemoryWorkCounts for one memory id.
+type MemoryWorkCount struct {
+	MemoryID string
+	MemoryWorkCounts
+}
+
 type MemorySignalCounts struct {
 	Samples int `json:"samples" bson:"samples"`
 	Passed  int `json:"passed" bson:"passed"`
@@ -50,7 +68,9 @@ type MemorySignal struct {
 	WorkTask           MemorySignalCounts `json:"work_task" bson:"work_task"`
 	Uses               int                `json:"uses" bson:"uses"`
 	LastUsedAt         *time.Time         `json:"last_used_at" bson:"last_used_at,omitempty"`
-	ComputedAt         time.Time          `json:"computed_at" bson:"computed_at"`
+	// Work is nil until a delivered session carried a work observation, so older signals keep their stored form.
+	Work       *MemoryWorkCounts `json:"work,omitempty" bson:"work,omitempty"`
+	ComputedAt time.Time         `json:"computed_at" bson:"computed_at"`
 }
 
 type MemorySignalView struct {
@@ -113,7 +133,7 @@ func deleteMemorySignal(ctx context.Context, tx Tx, scope Scope, memoryID string
 }
 
 // buildMemorySignal folds the two per-dimension outcome aggregates and the use aggregate.
-func buildMemorySignal(m Record, pc, wt MemoryOutcomeCount, use MemoryUseCount) MemorySignal {
+func buildMemorySignal(m Record, pc, wt MemoryOutcomeCount, use MemoryUseCount, work MemoryWorkCount) MemorySignal {
 	sig := MemorySignal{Memory: Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision},
 		PersonalCompliance: MemorySignalCounts{pc.Total, pc.Passed}, WorkTask: MemorySignalCounts{wt.Total, wt.Passed},
 		Samples: pc.Total + wt.Total, Passed: pc.Passed + wt.Passed, Uses: use.Uses}
@@ -128,6 +148,10 @@ func buildMemorySignal(m Record, pc, wt MemoryOutcomeCount, use MemoryUseCount) 
 	if use.Uses > 0 {
 		last := use.Last.UTC()
 		sig.LastUsedAt = &last
+	}
+	if work.Sessions > 0 {
+		w := work.MemoryWorkCounts
+		sig.Work = &w
 	}
 	return sig
 }
@@ -146,6 +170,19 @@ func outcomeFactor(sig *MemorySignal) float64 {
 	return f
 }
 
+// workFactor is the bounded weight of host-observed work after delivery:
+// 1 + 0.15·(G−B)/(G+B+2), G = sessions with a diff + last tests passed + last CI
+// passed, B = last tests failed + last CI failed. It stays inside (0.85, 1.15),
+// so it reorders near-ties only, and is exactly 1 without observations or when G = B.
+// Unlike outcomeFactor it is not a checker's verdict: the host reports it.
+func workFactor(w *MemoryWorkCounts) float64 {
+	if w == nil {
+		return 1
+	}
+	g, b := float64(w.Diff+w.TestsPassed+w.CIPassed), float64(w.TestsFailed+w.CIFailed)
+	return 1 + 0.15*(g-b)/(g+b+2)
+}
+
 // outcomeWeights reads the stored signal of each fused memory hit and maps the
 // ids whose weight is not 1. Unreadable or missing signals leave the fused
 // order alone: ranking is a hint, never an authority.
@@ -159,7 +196,7 @@ func (s *Service) outcomeWeights(ctx context.Context, scope Scope, rows []Scored
 		if e != nil || rec.Kind != memorySignalKind || rec.MemorySignal == nil || rec.MemorySignal.Memory.ID != r.ID {
 			continue
 		}
-		if w := outcomeFactor(rec.MemorySignal); w != 1 {
+		if w := outcomeFactor(rec.MemorySignal) * workFactor(rec.MemorySignal.Work); w != 1 {
 			weights[r.ID] = w
 		}
 	}
@@ -171,32 +208,64 @@ func sameMemorySignal(a, b MemorySignal) bool {
 	return structuredText(a) == structuredText(b)
 }
 
-func (s *Service) signalCounts(ctx context.Context, scope Scope, ids []string) (map[string]MemoryOutcomeCount, map[string]MemoryOutcomeCount, map[string]MemoryUseCount, error) {
+type signalInputs struct {
+	pc, wt map[string]MemoryOutcomeCount
+	uses   map[string]MemoryUseCount
+	work   map[string]MemoryWorkCount
+}
+
+func (s *Service) signalCounts(ctx context.Context, scope Scope, ids []string) (signalInputs, error) {
 	byDim := []map[string]MemoryOutcomeCount{{}, {}}
 	for i, dim := range []string{"personal_compliance", "work_task"} {
 		counts, e := s.Repo.MemoryOutcomeCounts(ctx, MemoryOutcomeQuery{Scope: scope, MemoryIDs: ids, Dimension: dim})
 		if e != nil {
-			return nil, nil, nil, e
+			return signalInputs{}, e
 		}
 		for _, c := range counts {
 			if _, dup := byDim[i][c.MemoryID]; dup || !slices.Contains(ids, c.MemoryID) || c.Total < 1 || c.Passed < 0 || c.Passed > c.Total || c.Last.IsZero() {
-				return nil, nil, nil, ErrUnavailable
+				return signalInputs{}, ErrUnavailable
 			}
 			byDim[i][c.MemoryID] = c
 		}
 	}
 	uses, e := s.Repo.MemoryUseCounts(ctx, scope, ids)
 	if e != nil {
-		return nil, nil, nil, e
+		return signalInputs{}, e
 	}
 	byUse := map[string]MemoryUseCount{}
 	for _, u := range uses {
 		if _, dup := byUse[u.MemoryID]; dup || !slices.Contains(ids, u.MemoryID) || u.Uses < 1 || u.Last.IsZero() {
-			return nil, nil, nil, ErrUnavailable
+			return signalInputs{}, ErrUnavailable
 		}
 		byUse[u.MemoryID] = u
 	}
-	return byDim[0], byDim[1], byUse, nil
+	work, e := s.Repo.MemoryWorkCounts(ctx, scope, ids)
+	if e != nil {
+		return signalInputs{}, e
+	}
+	byWork, e := workByID(work, ids)
+	if e != nil {
+		return signalInputs{}, e
+	}
+	return signalInputs{byDim[0], byDim[1], byUse, byWork}, nil
+}
+
+// workByID maps the repository's work aggregate by memory id, refusing a malformed one.
+func workByID(work []MemoryWorkCount, ids []string) (map[string]MemoryWorkCount, error) {
+	byWork := map[string]MemoryWorkCount{}
+	for _, w := range work {
+		if _, dup := byWork[w.MemoryID]; dup || !slices.Contains(ids, w.MemoryID) || !validWorkCounts(w.MemoryWorkCounts) {
+			return nil, ErrUnavailable
+		}
+		byWork[w.MemoryID] = w
+	}
+	return byWork, nil
+}
+
+// validWorkCounts: each session has one diff, one last test and one last CI result at most.
+func validWorkCounts(w MemoryWorkCounts) bool {
+	n := w.Sessions
+	return n >= 1 && min(w.Diff, w.TestsPassed, w.TestsFailed, w.CIPassed, w.CIFailed) >= 0 && w.Diff <= n && w.TestsPassed+w.TestsFailed <= n && w.CIPassed+w.CIFailed <= n
 }
 
 // signalComputer binds write:memory_signals to the principal that may read every input.
@@ -260,7 +329,7 @@ func (s *Service) RecomputeMemorySignals(ctx context.Context, token string, in M
 	if len(ids) == 0 {
 		return out, nil
 	}
-	pc, wt, uses, e := s.signalCounts(ctx, in.Scope, ids)
+	counts, e := s.signalCounts(ctx, in.Scope, ids)
 	if e != nil {
 		return MemorySignalRecomputeOutput{}, e
 	}
@@ -268,7 +337,7 @@ func (s *Service) RecomputeMemorySignals(ctx context.Context, token string, in M
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out.Changed = 0
 		for _, m := range rows {
-			sig := buildMemorySignal(m, pc[m.ID], wt[m.ID], uses[m.ID])
+			sig := buildMemorySignal(m, counts.pc[m.ID], counts.wt[m.ID], counts.uses[m.ID], counts.work[m.ID])
 			sig.ComputedAt = now
 			changed, e := writeMemorySignal(ctx, tx, in.Scope, sig, who, now)
 			if e != nil {
