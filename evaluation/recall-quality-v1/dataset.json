@@ -1,0 +1,1838 @@
+{
+  "schema_version": 1,
+  "dataset_id": "arkism-recall-quality-v1",
+  "authored_date": "2026-10-18",
+  "source": "Public synthetic agent-authored material; no production memories or user data.",
+  "label_authority": "Agent-authored labels independently reviewed by a second agent before model evaluation; not human-approved policy or user-quality validation.",
+  "model_results_seen_before_authoring": false,
+  "embedding_document_contract": "recordContent(memory) = text + \"\\n\" + summary; every summary is empty",
+  "split_contract": "36 distinct memory topics; 18 calibration and 18 holdout. Query split must equal every relevant document split. All documents may be retrieval distractors; tune using calibration queries only.",
+  "counts": {
+    "documents": 36,
+    "queries": 144,
+    "calibration_documents": 18,
+    "holdout_documents": 18,
+    "ambiguous_queries": 12
+  },
+  "documents": [
+    {
+      "id": "cal-01-meeting_timezone",
+      "split": "calibration",
+      "topic": "meeting_timezone",
+      "text": "해외 동료와 회의 시간을 정할 때 초대장에는 서울 시간과 협업 상대의 현지 시간을 함께 적는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-02-receipt_currency",
+      "split": "calibration",
+      "topic": "receipt_currency",
+      "text": "출장비 정산에는 영수증의 원래 통화와 결제 당일 카드사 적용 환율을 함께 남긴다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-03-filename_version",
+      "split": "calibration",
+      "topic": "filename_version",
+      "text": "고객에게 전달하는 설계 파일 이름은 프로젝트명_YYYYMMDD_v번호 형식을 따른다. final이나 최종이라는 단어는 넣지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-04-book_lending",
+      "split": "calibration",
+      "topic": "book_lending",
+      "text": "팀 도서를 빌릴 때 공유 대장에 책 이름과 빌린 날짜를 적고 14일 안에 반납한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-05-package_allergy",
+      "split": "calibration",
+      "topic": "package_allergy",
+      "text": "행사 간식 주문 전에는 참석자의 알레르기를 확인하고 견과류가 든 제품은 별도 상자에 보관한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-06-workstation_height",
+      "split": "calibration",
+      "topic": "workstation_height",
+      "text": "공용 촬영대는 장비를 옮긴 뒤 수평계를 확인하고 바닥의 노란 기준선에 다리를 맞춘다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-07-incident_contact",
+      "split": "calibration",
+      "topic": "incident_contact",
+      "text": "야간 서비스 장애를 발견하면 당직 전화로 먼저 알리고 응답이 10분 없으면 보조 당직자에게 연락한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-08-cli_exit_status",
+      "split": "calibration",
+      "topic": "cli_exit_status",
+      "text": "배치 명령 도구는 성공하면 종료 코드 0을 반환하고 처리 실패가 있으면 1을 반환한다. 결과 설명은 표준 오류에 쓴다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-09-csv_export",
+      "split": "calibration",
+      "topic": "csv_export",
+      "text": "회계용 CSV 내보내기는 UTF-8 BOM을 붙이고 금액 열에는 천 단위 쉼표를 넣지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-10-api_pagination",
+      "split": "calibration",
+      "topic": "api_pagination",
+      "text": "내부 목록 API는 커서 페이지 방식으로 제공하며 한 번에 최대 100개를 돌려준다. 다음 커서는 next_cursor 필드로 전달한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-11-http_retry",
+      "split": "calibration",
+      "topic": "http_retry",
+      "text": "외부 요청이 429를 받으면 Retry-After를 우선 따르고, 값이 없을 때만 지수 백오프를 사용한다. 재시도는 최대 세 번이다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-12-unit_measurement",
+      "split": "calibration",
+      "topic": "unit_measurement",
+      "text": "물류 치수 데이터는 길이를 밀리미터 정수로 저장한다. 화면에서 센티미터로 보여 주더라도 저장 단위는 바꾸지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-13-translation_glossary",
+      "split": "calibration",
+      "topic": "translation_glossary",
+      "text": "제품 한국어 번역에서는 workspace를 작업 공간으로, organization을 조직으로 표기한다. 한 화면 안에서 다른 번역을 섞지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-14-support_attachment",
+      "split": "calibration",
+      "topic": "support_attachment",
+      "text": "고객 지원 티켓의 진단 첨부파일은 만료 링크로만 전달하며 링크 유효기간은 48시간으로 설정한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-15-qr_print",
+      "split": "calibration",
+      "topic": "qr_print",
+      "text": "창고 라벨의 QR 코드는 실제 출력 크기에서 한 변 20밀리미터 이상이어야 하며 가장자리에 흰 여백을 남긴다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-16-audio_transcript",
+      "split": "calibration",
+      "topic": "audio_transcript",
+      "text": "인터뷰 녹취문에서는 알아들을 수 없는 구간을 추측해서 채우지 않고 [청취 불가]와 시각을 표시한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-17-database_decimal",
+      "split": "calibration",
+      "topic": "database_decimal",
+      "text": "청구 금액은 부동소수점 대신 소수 둘째 자리까지 보존하는 고정 소수점 타입으로 저장한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "cal-18-cache_refresh",
+      "split": "calibration",
+      "topic": "cache_refresh",
+      "text": "상품 목록 캐시는 5분 동안 사용하고 관리자가 가격을 바꾸면 해당 상품의 캐시를 즉시 무효화한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-01-accessibility_focus",
+      "split": "holdout",
+      "topic": "accessibility_focus",
+      "text": "설정 대화상자를 닫으면 키보드 초점을 그 창을 열었던 버튼으로 돌려놓는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-02-color_print",
+      "split": "holdout",
+      "topic": "color_print",
+      "text": "인쇄소 전달용 포스터는 CMYK 색상 모드로 내보내고 사방에 3밀리미터 재단 여백을 둔다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-03-lab_sample",
+      "split": "holdout",
+      "topic": "lab_sample",
+      "text": "수질 실험 시료에는 채취 위치와 시각을 적고 냉장 상태로 운반한다. 채취 후 6시간 안에 측정을 시작한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-04-contract_dates",
+      "split": "holdout",
+      "topic": "contract_dates",
+      "text": "계약서의 발효일과 서명일은 별도 항목으로 둔다. 서명을 늦게 받았다고 발효일을 자동으로 덮어쓰지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-05-shipping_fragile",
+      "split": "holdout",
+      "topic": "shipping_fragile",
+      "text": "유리 제품은 개별 완충 포장한 뒤 상자 안 빈 공간을 채운다. 포장 상자 겉면 두 곳에 파손 주의 표시를 붙인다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-06-calendar_quiet",
+      "split": "holdout",
+      "topic": "calendar_quiet",
+      "text": "집중 작업 시간을 보호하기 위해 매주 수요일 오전에는 내부 회의를 잡지 않는다. 고객이 요청한 긴급 통화는 예외다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-07-git_branch",
+      "split": "holdout",
+      "topic": "git_branch",
+      "text": "작업 브랜치 이름은 유형/이슈번호-짧은설명으로 짓는다. 유형은 feat, fix, docs 중 하나를 쓴다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-08-webhook_signature",
+      "split": "holdout",
+      "topic": "webhook_signature",
+      "text": "결제 웹훅은 JSON을 파싱하기 전에 받은 원본 바이트로 서명을 검증한다. 서명이 틀리면 처리를 중단한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-09-password_reset",
+      "split": "holdout",
+      "topic": "password_reset",
+      "text": "암호 재설정 링크는 발급 후 15분 동안 한 번만 사용할 수 있다. 새 링크를 발급하면 이전 링크는 무효화한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-10-image_upload",
+      "split": "holdout",
+      "topic": "image_upload",
+      "text": "프로필 사진 업로드는 JPEG와 PNG만 허용하며 파일당 5MB를 넘으면 거절한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-11-search_accent",
+      "split": "holdout",
+      "topic": "search_accent",
+      "text": "도서 제목 검색에서는 대소문자와 악센트 차이를 무시한다. 원래 제목의 표기는 검색 결과에서 그대로 보존한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-12-sensor_missing",
+      "split": "holdout",
+      "topic": "sensor_missing",
+      "text": "센서가 전송하지 않은 측정값은 0으로 채우지 않고 null로 저장한다. 그래프에서는 해당 구간을 끊어서 표시한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-13-subscription_cancel",
+      "split": "holdout",
+      "topic": "subscription_cancel",
+      "text": "구독을 해지해도 이미 결제한 이용 기간의 마지막 날까지 기능을 사용할 수 있다. 다음 결제만 중단한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-14-inventory_reserve",
+      "split": "holdout",
+      "topic": "inventory_reserve",
+      "text": "장바구니에 담는 것만으로는 재고를 예약하지 않는다. 결제가 시작될 때 10분간 재고를 임시 확보한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-15-markdown_links",
+      "split": "holdout",
+      "topic": "markdown_links",
+      "text": "기술 문서의 링크 문구에는 목적지 내용을 적는다. 여기를 클릭이나 보기처럼 목적지를 알 수 없는 표현은 쓰지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-16-time_log",
+      "split": "holdout",
+      "topic": "time_log",
+      "text": "작업 시간 기록은 시작과 끝 시각을 분 단위로 남긴다. 휴식 시간은 별도 항목으로 빼고 하루 총합에 포함하지 않는다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-17-notification_digest",
+      "split": "holdout",
+      "topic": "notification_digest",
+      "text": "업무 알림 요약은 평일 오전 9시에 한 번 보낸다. 같은 항목의 반복 변경은 마지막 상태 하나로 합친다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    },
+    {
+      "id": "hol-18-code_block_language",
+      "split": "holdout",
+      "topic": "code_block_language",
+      "text": "개발 안내서의 코드 블록에는 사용 언어를 표시한다. 터미널 명령은 bash, JSON 예시는 json으로 지정한다.",
+      "summary": "",
+      "kind": "procedural",
+      "provenance": "public_synthetic_agent_authored"
+    }
+  ],
+  "queries": [
+    {
+      "id": "cal-q001",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "해외 팀원에게 보낼 회의 초대장에는 시간을 어떻게 표시해야 해?",
+      "relevant": [
+        "cal-01-meeting_timezone"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q002",
+      "split": "calibration",
+      "category": "negation",
+      "text": "한국 시각 하나만 쓰지 말고 참석자가 사는 곳의 시각도 병기하라는 일정 규칙을 찾아줘.",
+      "relevant": [
+        "cal-01-meeting_timezone"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q003",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "표준 시간대가 처음 국제적으로 도입된 역사적 배경은 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q004",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "북극광의 초록빛은 어떤 원소에서 나와?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q005",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "외화로 쓴 출장 경비를 정산할 때 어떤 통화와 환율을 기록하지?",
+      "relevant": [
+        "cal-02-receipt_currency"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q006",
+      "split": "calibration",
+      "category": "correction",
+      "text": "영수증 금액을 원화로 바꾸면서 며칠 뒤의 환율을 적용해도 되나?",
+      "relevant": [
+        "cal-02-receipt_currency"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q007",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "옛 조선에서 사용하던 동전의 이름과 모양을 알려줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q008",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "아까 말한 금액은 어느 기준으로 맞추면 돼?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-02-receipt_currency"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q009",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "고객 전달용 설계 파일의 이름을 어떤 형식으로 만들기로 했지?",
+      "relevant": [
+        "cal-03-filename_version"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q010",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "설계 산출물 이름에 최종최종 대신 날짜와 판수를 넣는 약속을 알려줘.",
+      "relevant": [
+        "cal-03-filename_version"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q011",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "컴퓨터 파일 확장자가 대소문자를 구분하는 원리는 운영체제마다 왜 달라?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q012",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "유리잔에 물을 담으면 소리의 높이가 왜 변하지?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q013",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "팀 책장에서 책을 가져갈 때 기록과 반환 기한은 어떻게 돼?",
+      "relevant": [
+        "cal-04-book_lending"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q014",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "사내 도서 대여 목록에 제목과 대출일을 써 두고 이 주 안에 돌려주라는 규칙이 있었지?",
+      "relevant": [
+        "cal-04-book_lending"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q015",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "책의 ISBN 번호에 있는 검증 숫자는 어떻게 계산해?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q016",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "그것도 같은 날짜까지 돌려주면 되는 거야?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-04-book_lending"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q017",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "행사 간식을 주문하고 보관할 때 알레르기 관련해서 무엇을 해야 하지?",
+      "relevant": [
+        "cal-05-package_allergy"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q018",
+      "split": "calibration",
+      "category": "correction",
+      "text": "땅콩이 들어간 과자를 다른 다과와 한 상자에 섞어도 될까?",
+      "relevant": [
+        "cal-05-package_allergy"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q019",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "식물학에서 견과와 씨앗은 어떤 기준으로 나뉘어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q020",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "대서양과 태평양 중 평균 깊이가 더 깊은 곳은 어디야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q021",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "공용 촬영대를 다른 곳으로 이동한 후 어떻게 원위치를 맞추지?",
+      "relevant": [
+        "cal-06-workstation_height"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q022",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "카메라 작업 테이블을 옮겼다면 기울기를 재고 노란 바닥 표시로 정렬하라는 절차를 찾아줘.",
+      "relevant": [
+        "cal-06-workstation_height"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q023",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "사진에서 노란색과 파란색이 보색으로 쓰이는 이유가 뭐야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q024",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "아까 옮긴 건 표시대로 맞춰 놓으면 돼?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-06-workstation_height"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q025",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "새벽에 서비스가 멈췄는데 누구에게 어떤 순서로 연락해야 해?",
+      "relevant": [
+        "cal-07-incident_contact"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q026",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "밤중 장애 때 주 담당이 십 분 동안 답이 없으면 대체 담당에게 올리라는 지침을 알려줘.",
+      "relevant": [
+        "cal-07-incident_contact"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q027",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "전화기의 발명 과정에서 어떤 특허 분쟁이 있었어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q028",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "적도의 낮과 밤 길이가 일 년 내내 비슷한 이유는?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q029",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "우리 배치 CLI의 성공과 실패 종료 코드, 설명 출력 위치는 어떻게 정했어?",
+      "relevant": [
+        "cal-08-cli_exit_status"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q030",
+      "split": "calibration",
+      "category": "negation",
+      "text": "명령줄 작업이 실패했는데 정상 종료값을 내보내지 말라는 규칙과 stderr 사용 약속을 찾아줘.",
+      "relevant": [
+        "cal-08-cli_exit_status"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q031",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "컴퓨터가 숫자 0을 표현할 때 부호 비트가 필요한 경우는 언제야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q032",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "이 경우에는 어디에 출력하면 되지?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-08-cli_exit_status"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q033",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "회계팀에 전달할 CSV의 문자 인코딩과 금액 표기는 어떻게 해야 해?",
+      "relevant": [
+        "cal-09-csv_export"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q034",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "스프레드시트용 정산 자료를 뽑을 때 바이트 순서 표식을 넣고 숫자 구분 쉼표를 빼라는 설정이 있나?",
+      "relevant": [
+        "cal-09-csv_export"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q035",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "음악에서 쉼표 기호는 박자에 따라 어떻게 읽어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q036",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "벌새가 공중에서 제자리에 머무를 수 있는 원리는 뭐야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q037",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "내부 목록 API의 페이지 나누기 방식과 최대 항목 수를 알려줘.",
+      "relevant": [
+        "cal-10-api_pagination"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q038",
+      "split": "calibration",
+      "category": "correction",
+      "text": "목록 조회를 오프셋 방식으로 바꾸는 게 아니라 계속 이어 읽을 표식을 보내는 계약을 확인해줘.",
+      "relevant": [
+        "cal-10-api_pagination"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q039",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "워드프로세서에서 페이지 번호를 로마 숫자로 쓰는 전통은 어디서 왔어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q040",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "커피의 신맛은 볶는 정도에 따라 어떻게 달라져?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q041",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "외부 API가 요청 제한 응답을 줬을 때 재시도 간격과 횟수는 어떻게 정해?",
+      "relevant": [
+        "cal-11-http_retry"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q042",
+      "split": "calibration",
+      "category": "correction",
+      "text": "Too Many Requests를 받았는데 서버가 알려준 대기 시간보다 자체 지연 공식을 먼저 써도 될까?",
+      "relevant": [
+        "cal-11-http_retry"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q043",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "지수함수의 역함수는 왜 로그함수인지 수학적으로 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q044",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "검은색 구멍인 블랙홀에서도 호킹 복사가 나온다는 건 무슨 뜻이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q045",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "물류 상자의 치수를 데이터베이스에 어떤 단위와 숫자 형태로 넣지?",
+      "relevant": [
+        "cal-12-unit_measurement"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q046",
+      "split": "calibration",
+      "category": "correction",
+      "text": "길이를 화면에 cm로 표시하기 때문에 저장값도 소수 센티미터로 고치자는 건 기존 약속과 맞아?",
+      "relevant": [
+        "cal-12-unit_measurement"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q047",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "국제단위계에서 미터의 정의는 역사적으로 어떻게 바뀌었어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q048",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "달의 뒷면에는 왜 바다가 적어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q049",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "제품 번역에서 workspace와 organization의 한국어 표현은 뭐였지?",
+      "relevant": [
+        "cal-13-translation_glossary"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q050",
+      "split": "calibration",
+      "category": "negation",
+      "text": "워크스페이스와 작업 공간을 화면마다 번갈아 쓰지 말라는 용어집 기준을 알려줘.",
+      "relevant": [
+        "cal-13-translation_glossary"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q051",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "영어 organization이라는 단어의 라틴어 어원은 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q052",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "먼저 쓴 표현으로 통일하면 될까?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-13-translation_glossary"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q053",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "고객 지원용 진단 파일을 공유하는 방식과 만료 기간을 확인해줘.",
+      "relevant": [
+        "cal-14-support_attachment"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q054",
+      "split": "calibration",
+      "category": "negation",
+      "text": "지원 요청 자료를 영구 URL로 열어 두지 않고 이틀만 접근시키는 규칙이 있나?",
+      "relevant": [
+        "cal-14-support_attachment"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q055",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "인터넷 하이퍼링크라는 개념은 누가 처음 제안했어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q056",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "바닷물의 염도는 위도에 따라 왜 달라져?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q057",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "창고 라벨에 인쇄할 QR 코드의 최소 크기와 주변 여백 기준은?",
+      "relevant": [
+        "cal-15-qr_print"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q058",
+      "split": "calibration",
+      "category": "correction",
+      "text": "재고 표식의 이차원 코드를 작게 줄일 때 2센티미터보다 작은 정사각형으로 만들어도 돼?",
+      "relevant": [
+        "cal-15-qr_print"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q059",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "QR 코드 오류 정정의 리드 솔로몬 부호를 수학적으로 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q060",
+      "split": "calibration",
+      "category": "ambiguity",
+      "text": "그 표시는 더 작게 줄여도 읽힐까?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "cal-15-qr_print"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q061",
+      "split": "calibration",
+      "category": "relevant",
+      "text": "인터뷰 녹음을 받아쓰다가 말이 안 들리는 부분은 어떻게 적어야 해?",
+      "relevant": [
+        "cal-16-audio_transcript"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q062",
+      "split": "calibration",
+      "category": "negation",
+      "text": "잘 들리지 않는 발언을 문맥으로 지어내지 말고 시간과 미청취 표시를 남기라는 원칙을 찾아줘.",
+      "relevant": [
+        "cal-16-audio_transcript"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q063",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "인간의 귀에서 소리 진동이 신경 신호로 변하는 과정은?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q064",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "빵 반죽은 발효 중에 왜 부풀어 올라?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q065",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "청구 시스템의 금액을 DB에 보관할 때 어떤 수치 타입을 써야 해?",
+      "relevant": [
+        "cal-17-database_decimal"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q066",
+      "split": "calibration",
+      "category": "synonym",
+      "text": "돈 계산 컬럼을 float로 잡는 대신 반올림 오차를 줄이는 decimal 형식으로 두는 약속이 있었지?",
+      "relevant": [
+        "cal-17-database_decimal"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q067",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "고대 바빌로니아가 60진법을 사용한 이유는 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q068",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "나무의 나이테는 왜 계절마다 생겨?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q069",
+      "split": "calibration",
+      "category": "paraphrase",
+      "text": "상품 목록 캐시의 유효시간과 가격 수정 시 처리 방식은 어떻게 돼?",
+      "relevant": [
+        "cal-18-cache_refresh"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q070",
+      "split": "calibration",
+      "category": "correction",
+      "text": "관리자가 판매가를 고쳤는데 다섯 분이 지날 때까지 예전 값을 계속 보여 줘도 돼?",
+      "relevant": [
+        "cal-18-cache_refresh"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q071",
+      "split": "calibration",
+      "category": "near_negative",
+      "text": "경제학에서 가격 탄력성은 어떻게 계산하는 개념이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "cal-q072",
+      "split": "calibration",
+      "category": "unrelated",
+      "text": "빛이 유리에서 느려지는 현상은 무엇 때문이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q001",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "설정 창을 닫은 다음 키보드 초점은 어느 요소로 돌아가야 해?",
+      "relevant": [
+        "hol-01-accessibility_focus"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q002",
+      "split": "holdout",
+      "category": "negation",
+      "text": "환경설정 모달을 끝냈을 때 포커스를 페이지 맨 위로 보내지 말라는 상호작용 규칙을 찾아줘.",
+      "relevant": [
+        "hol-01-accessibility_focus"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q003",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "카메라 렌즈의 초점거리와 화각은 어떤 관계야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q004",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "어느 쪽으로 돌려놓으면 돼?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-01-accessibility_focus"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q005",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "포스터를 인쇄소에 맡기기 전에 색상 모드와 재단 여백을 어떻게 설정하지?",
+      "relevant": [
+        "hol-02-color_print"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q006",
+      "split": "holdout",
+      "category": "correction",
+      "text": "상업 출력할 벽보를 RGB로 보내는 대신 잉크용 색 공간으로 바꾸고 도련을 넣는 기준은?",
+      "relevant": [
+        "hol-02-color_print"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q007",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "문어가 몸의 색상을 빠르게 바꾸는 생물학적 원리를 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q008",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "화성의 대기가 지구보다 희박한 이유는 뭐야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q009",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "수질 시료를 받은 뒤 라벨, 운반, 분석 시작 시간을 어떻게 관리해?",
+      "relevant": [
+        "hol-03-lab_sample"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q010",
+      "split": "holdout",
+      "category": "negation",
+      "text": "물 표본을 실온에서 하루 두었다가 분석하면 안 되는 보관 규칙을 알려줘.",
+      "relevant": [
+        "hol-03-lab_sample"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q011",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "물 분자가 굽은 모양을 이루는 화학적 이유는 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q012",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "연필심의 경도 표기 H와 B는 각각 어떤 뜻이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q013",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "계약 문서에서 발효일과 서명한 날짜를 같은 칸에 써도 되나?",
+      "relevant": [
+        "hol-04-contract_dates"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q014",
+      "split": "holdout",
+      "category": "negation",
+      "text": "효력 시작 시점과 날인 시점을 분리하고 늦은 서명으로 시작일을 바꾸지 않는 문서 규칙은?",
+      "relevant": [
+        "hol-04-contract_dates"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q015",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "달력의 윤년이 4년마다 오지만 예외가 있는 이유는?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q016",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "나중 날짜로 바꾸면 되는 거지?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-04-contract_dates"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q017",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "유리 상품을 택배로 보낼 때 내부 포장과 외부 표시를 어떻게 해야 해?",
+      "relevant": [
+        "hol-05-shipping_fragile"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q018",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "깨지기 쉬운 물건을 각각 충격 흡수재로 감싸고 주의 스티커를 두 면에 붙이라는 배송 절차를 찾아줘.",
+      "relevant": [
+        "hol-05-shipping_fragile"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q019",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "유리가 결정 구조 없이 투명할 수 있는 물리적 이유는?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q020",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "호랑이의 줄무늬는 위장에 어떻게 도움이 돼?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q021",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "수요일 오전에 팀 정기 회의를 새로 잡아도 될까?",
+      "relevant": [
+        "hol-06-calendar_quiet"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q022",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "주중 가운데 날 오전은 미팅을 비우되 급한 고객 통화만 허용한다는 일정 약속을 확인해줘.",
+      "relevant": [
+        "hol-06-calendar_quiet"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q023",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "일주일을 일곱 날로 나누는 관습은 어디에서 시작됐어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q024",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "그 시간은 비워 둬야 하는 거야?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-06-calendar_quiet"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q025",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "새 기능 작업을 위한 Git 브랜치 이름은 어떤 형식으로 만들면 돼?",
+      "relevant": [
+        "hol-07-git_branch"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q026",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "버전관리 분기명에 작업 종류와 티켓 번호를 붙이는 명명 규칙을 찾아줘.",
+      "relevant": [
+        "hol-07-git_branch"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q027",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "생물 진화의 계통수에서 분기점은 무엇을 뜻해?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q028",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "오케스트라에서 비올라와 바이올린의 음역은 어떻게 달라?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q029",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "결제 웹훅의 서명 검사는 JSON 파싱 전후 중 언제 어떤 데이터로 해야 하지?",
+      "relevant": [
+        "hol-08-webhook_signature"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q030",
+      "split": "holdout",
+      "category": "negation",
+      "text": "콜백 본문을 다시 직렬화한 문자열로 인증하지 말고 수신 바이트 그대로 확인하라는 규칙은?",
+      "relevant": [
+        "hol-08-webhook_signature"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q031",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "화가의 작품에 남긴 서명으로 진품을 감정하는 방법은 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q032",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "먼저 확인하라고 한 게 무엇이었지?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-08-webhook_signature"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q033",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "비밀번호를 다시 설정하는 링크의 사용 횟수와 만료 시간은 어떻게 돼?",
+      "relevant": [
+        "hol-09-password_reset"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q034",
+      "split": "holdout",
+      "category": "correction",
+      "text": "새 재설정 메일을 보낸 뒤에도 옛 링크를 계속 쓸 수 있게 두는 게 우리 정책이야?",
+      "relevant": [
+        "hol-09-password_reset"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q035",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "에니그마 암호기가 전쟁사에서 중요한 이유는 무엇이야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q036",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "우주 공간에서 소리가 전달되지 않는 이유는?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q037",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "프로필 사진으로 올릴 수 있는 파일 형식과 최대 용량을 알려줘.",
+      "relevant": [
+        "hol-10-image_upload"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q038",
+      "split": "holdout",
+      "category": "correction",
+      "text": "아바타 이미지가 6메가바이트짜리 GIF인데 현재 업로드 제한에 맞아?",
+      "relevant": [
+        "hol-10-image_upload"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q039",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "JPEG의 이산 코사인 변환이 압축에 쓰이는 원리를 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q040",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "그 파일은 그대로 올려도 될까?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-10-image_upload"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q041",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "도서 제목을 찾을 때 대문자와 악센트는 구분하고 결과 표기는 바꿔야 해?",
+      "relevant": [
+        "hol-11-search_accent"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q042",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "책 이름 탐색은 발음 구별 부호를 접어서 비교하되 표시할 원문 철자는 유지하는 규칙이 있었지?",
+      "relevant": [
+        "hol-11-search_accent"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q043",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "프랑스어에서 악센트 기호가 발음에 미치는 영향을 예시로 알려줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q044",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "화산재가 항공기 엔진에 위험한 이유는 뭐야?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q045",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "센서 데이터가 비어 있을 때 저장값과 그래프를 어떻게 처리하기로 했어?",
+      "relevant": [
+        "hol-12-sensor_missing"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q046",
+      "split": "holdout",
+      "category": "negation",
+      "text": "관측하지 못한 구간을 실제 영점으로 보이게 하지 말라는 결측치 처리 기준을 찾아줘.",
+      "relevant": [
+        "hol-12-sensor_missing"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q047",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "섭씨 온도의 0도와 절대영도는 물리적으로 어떤 차이가 나?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q048",
+      "split": "holdout",
+      "category": "ambiguity",
+      "text": "그 부분은 비워 두는 게 맞아?",
+      "relevant": [],
+      "label_status": "ambiguous",
+      "annotation": "지시 대상이 빠진 단독 질문이다. 맥락으로 정답을 추측하지 않는다. 확정 관련성 지표에서 제외하고 별도로 보고한다. plausible_if_context_supplied는 비완전 참고 후보이며 정답 라벨이나 채점 기준이 아니다.",
+      "plausible_if_context_supplied": [
+        "hol-12-sensor_missing"
+      ],
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q049",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "고객이 구독을 중간에 취소하면 사용 권한은 바로 사라지는 거야?",
+      "relevant": [
+        "hol-13-subscription_cancel"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q050",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "자동 갱신을 끄더라도 선불 기간이 끝날 때까지 서비스를 열어 두는 해지 정책을 확인해줘.",
+      "relevant": [
+        "hol-13-subscription_cancel"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q051",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "구독 경제가 신문 산업에서 시작된 역사에 대해 알려줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q052",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "밀물과 썰물은 달의 중력과 어떤 관계가 있어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q053",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "상품을 장바구니에 담은 시점부터 재고를 잡아 두는 게 맞아?",
+      "relevant": [
+        "hol-14-inventory_reserve"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q054",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "구매 수량을 잠시 선점하는 건 결제 진입 뒤 십 분 동안이라는 재고 규칙을 알려줘.",
+      "relevant": [
+        "hol-14-inventory_reserve"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q055",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "고대 상인이 재고를 기록하던 점토판은 어떤 문자로 작성됐어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q056",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "사막의 모래언덕은 왜 이동해?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q057",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "기술 문서에 링크를 붙일 때 표시할 문구는 어떻게 작성해야 해?",
+      "relevant": [
+        "hol-15-markdown_links"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q058",
+      "split": "holdout",
+      "category": "negation",
+      "text": "참조 주소의 앵커 텍스트를 여기로만 쓰지 말고 연결되는 자료의 주제로 적는 원칙을 찾아줘.",
+      "relevant": [
+        "hol-15-markdown_links"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q059",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "하이퍼텍스트가 문학 작품의 서사 구조에 어떤 영향을 줬어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q060",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "철이 자석에 끌리는 이유를 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q061",
+      "split": "holdout",
+      "category": "relevant",
+      "text": "근무 시간 기록에서 시작과 종료 시각의 단위, 휴식 합산 방식은?",
+      "relevant": [
+        "hol-16-time_log"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q062",
+      "split": "holdout",
+      "category": "synonym",
+      "text": "쉬는 시간을 실제 작업량에서 제외하고 분까지 기록하라는 타임시트 작성 규칙이 있나?",
+      "relevant": [
+        "hol-16-time_log"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q063",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "상대성 이론에서 시간 지연이 생기는 원리를 쉽게 설명해줘.",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q064",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "고래는 잠을 자는 동안 어떻게 숨을 쉬어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q065",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "업무 변경 알림 요약의 전송 시간과 중복 항목 처리 방식은?",
+      "relevant": [
+        "hol-17-notification_digest"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q066",
+      "split": "holdout",
+      "category": "negation",
+      "text": "같은 일감의 갱신을 매번 따로 통지하지 않고 최종 상태로 묶어 아침에 보내는 약속을 찾아줘.",
+      "relevant": [
+        "hol-17-notification_digest"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q067",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "사람의 일주기 리듬은 뇌의 어느 부분에서 조절해?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q068",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "종이가 물에 젖으면 잘 찢어지는 이유는?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q069",
+      "split": "holdout",
+      "category": "paraphrase",
+      "text": "개발 문서에서 터미널 명령과 JSON 예시 코드 블록의 언어 표시는?",
+      "relevant": [
+        "hol-18-code_block_language"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q070",
+      "split": "holdout",
+      "category": "negation",
+      "text": "안내서 예제를 언어 없는 울타리 코드로 두지 않고 셸 종류나 데이터 형식을 붙이는 기준을 알려줘.",
+      "relevant": [
+        "hol-18-code_block_language"
+      ],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q071",
+      "split": "holdout",
+      "category": "near_negative",
+      "text": "컴파일러와 인터프리터의 실행 방식은 어떻게 달라?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    },
+    {
+      "id": "hol-q072",
+      "split": "holdout",
+      "category": "unrelated",
+      "text": "우표의 톱니 구멍은 처음 왜 만들었어?",
+      "relevant": [],
+      "label_status": "independent_agent_reviewed",
+      "label_reviewer": "memory_capture"
+    }
+  ],
+  "independent_review": {
+    "reviewer": "memory_capture",
+    "scope": "all 36 documents and 144 queries; no model outputs or similarity scores viewed",
+    "findings": "No missing relevant documents or incorrect binary labels found; 12 ambiguous cases retained separately; category wording and non-exhaustive ambiguity notes clarified."
+  }
+}

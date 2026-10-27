@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "created_at_utc": "2026-10-17T20:53:50.618369+00:00",
+  "status": "preregistered_before_calibration_metrics",
+  "dataset_sha256": "218fca196decd4e3bb5fdd78de905a82f4a86161687c7a8965f28bee99a6f11d",
+  "scope": "ST-815 FR-020 FR-021 TC-FUNC-037; offline quality experiment, no production activation",
+  "baseline": {
+    "max_distance": 0.38,
+    "relative_vector_cut": "unchanged",
+    "modes": "hybrid",
+    "limit": 6,
+    "max_chars": 6000,
+    "host_budget": "default"
+  },
+  "expanded": {
+    "max_distance": 0.55,
+    "relative_vector_cut": "unchanged",
+    "modes": "hybrid",
+    "candidate_limit": 16,
+    "max_chars": 16000
+  },
+  "rerank": {
+    "model": "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+    "revision": "1427fd652930e4ba29e8149678df786c240d8825",
+    "variant": "int8",
+    "score_kind": "raw_relevance_logit",
+    "thresholds": [
+      -8.0,
+      -7.75,
+      -7.5,
+      -7.25,
+      -7.0,
+      -6.75,
+      -6.5,
+      -6.25,
+      -6.0,
+      -5.75,
+      -5.5,
+      -5.25,
+      -5.0,
+      -4.75,
+      -4.5,
+      -4.25,
+      -4.0,
+      -3.75,
+      -3.5,
+      -3.25,
+      -3.0,
+      -2.75,
+      -2.5,
+      -2.25,
+      -2.0,
+      -1.75,
+      -1.5,
+      -1.25,
+      -1.0,
+      -0.75,
+      -0.5,
+      -0.25,
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0,
+      1.25,
+      1.5,
+      1.75,
+      2.0,
+      2.25,
+      2.5,
+      2.75,
+      3.0,
+      3.25,
+      3.5,
+      3.75,
+      4.0,
+      4.25,
+      4.5,
+      4.75,
+      5.0,
+      5.25,
+      5.5,
+      5.75,
+      6.0,
+      6.25,
+      6.5,
+      6.75,
+      7.0,
+      7.25,
+      7.5,
+      7.75,
+      8.0
+    ],
+    "candidate_caps": [
+      4,
+      8,
+      16
+    ],
+    "final_limit": 6,
+    "max_chars": 6000,
+    "host_budget": "default kind caps; accepted rerank results treated as relevance-qualified for this isolated experiment only",
+    "order": "descending raw logit; ties preserve candidate order",
+    "failure_behavior": "exact original baseline"
+  },
+  "selection": {
+    "split": "calibration",
+    "ambiguous": "excluded from binary metrics; report return/abstention separately",
+    "eligible": [
+      "target recall >= baseline",
+      "wrong documents <= baseline",
+      "irrelevant-query false positives <= baseline",
+      "precision >= baseline"
+    ],
+    "objective": "maximum document F1",
+    "ties": [
+      "fewer wrong documents",
+      "smaller candidate cap",
+      "higher threshold"
+    ],
+    "no_eligible": "reject experiment; retain baseline"
+  },
+  "holdout": {
+    "evaluate": "once after writing selected_policy.json with inputs hashes",
+    "accept": [
+      "strictly higher target recall than baseline",
+      "wrong documents <= baseline",
+      "irrelevant-query false positives <= baseline",
+      "precision >= baseline"
+    ],
+    "failure": "do not tune on holdout; retain baseline and report failure"
+  },
+  "latency": {
+    "warm_concurrency": 1,
+    "report": [
+      "p50",
+      "p95",
+      "failures",
+      "timeouts",
+      "cold setup separately"
+    ],
+    "gate_ms": 1500,
+    "limitation": "frozen query embedding and isolated small PostgreSQL corpus are not production latency; live embedding and end-to-end sample separately if adopting"
+  },
+  "limitations": [
+    "agent-authored synthetic labels independently reviewed by another agent, not human approval",
+    "policy topics split; broad domains and templates overlap",
+    "Korean was not a fine-tuning language for this cross-encoder",
+    "no operating thresholds are changed by evaluation"
+  ]
+}
