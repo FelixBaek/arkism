@@ -113,17 +113,19 @@ impl Runtime {
         )?;
         let original = self.secrets()?;
         run(self.psql(&original, DATABASE)?.args(["-c",
-            "UPDATE arkism.principal_token_history SET issued_at=statement_timestamp()-interval '80 days',expires_at=statement_timestamp()+interval '1 hour' WHERE token_sha256 IN (SELECT token_sha256 FROM arkism.principals WHERE id IN ('management:owner','worker'))"]), "token_check_age_failed")?;
+            "UPDATE arkism.principal_token_history SET issued_at=statement_timestamp()-interval '80 days',expires_at=statement_timestamp()+interval '1 hour' WHERE token_sha256 IN (SELECT token_sha256 FROM arkism.principals WHERE id IN ('management:owner','worker','agent'))"]), "token_check_age_failed")?;
         let rotated = self.start()?;
         let fresh = self.secrets()?;
         require(
-            rotated.token != original.owner && fresh.worker != original.worker,
+            rotated.token != original.owner && fresh.worker != original.worker && fresh.agent != original.agent,
             "token_check_expiry_not_rotated",
         )?;
         capabilities(&rotated.server, &original.owner, 403)?;
         capabilities(&rotated.server, &original.worker, 403)?;
+        capabilities(&rotated.server, &original.agent, 403)?;
         capabilities(&rotated.server, &fresh.owner, 200)?;
         capabilities(&rotated.server, &fresh.worker, 200)?;
+        capabilities(&rotated.server, &fresh.agent, 200)?;
 
         // Reconstruct persisted states on either side of a process crash. This
         // does not simulate a whole-machine crash or a power failure.
@@ -168,6 +170,7 @@ impl Runtime {
         capabilities(&restored.started.server, &pending.owner, 403)?;
         capabilities(&restored.started.server, &complete.owner, 200)?;
         capabilities(&restored.started.server, &complete.worker, 200)?;
+        capabilities(&restored.started.server, &complete.agent, 200)?;
         require(
             restored.started.server.starts_with("http://127.0.0.1:")
                 && initial.server.starts_with("http://127.0.0.1:"),
