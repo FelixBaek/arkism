@@ -188,8 +188,7 @@ func (s *Service) MemoryUsageSummary(ctx context.Context, token string, scope Sc
 	if s.Repo == nil {
 		return UsageSummaryPage{}, ErrUnavailable
 	}
-	now := time.Now().UTC()
-	rows, e := s.Repo.MemoryUsageWindow(ctx, scope, now.Add(-30*24*time.Hour), now.Add(-7*24*time.Hour))
+	rows, e := s.memoryUsageWindow(ctx, scope)
 	if e != nil {
 		return UsageSummaryPage{}, e
 	}
@@ -348,4 +347,24 @@ func (s *Service) recallItemVisible(ctx context.Context, token string, scope Sco
 		}
 	}
 	return true, nil
+}
+
+// memoryUsageWindow shares one scan among callers that ask for the same scope at the same time. The scan runs
+// on its own deadline, so a caller that gives up early (catalogUsage's 3 s budget) does not fail the others.
+func (s *Service) memoryUsageWindow(ctx context.Context, scope Scope) ([]MemoryUsageCount, error) {
+	ch := s.usageWindows.DoChan(scope.WorkspaceID+"\x00"+scope.ProjectID+"\x00"+scope.UserID+"\x00"+scope.AgentID, func() (any, error) {
+		run, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+		defer cancel()
+		now := time.Now().UTC()
+		return s.Repo.MemoryUsageWindow(run, scope, now.Add(-30*24*time.Hour), now.Add(-7*24*time.Hour))
+	})
+	select {
+	case <-ctx.Done():
+		return nil, ErrUnavailable
+	case r := <-ch:
+		if r.Err != nil {
+			return nil, r.Err
+		}
+		return r.Val.([]MemoryUsageCount), nil
+	}
 }
