@@ -7,7 +7,7 @@ export function createVisibleSync(deps) {
   const blocked = () => !state.token || state.loading || document.hidden || state.pending.size > 0 ||
     !!document.querySelector("dialog[open], #detail [data-sync-dirty]") || (document.activeElement?.id !== "search" && !!document.activeElement?.matches("input, textarea, select, [contenteditable=true]"));
   const eligible = () => ["todo", "memories", "skills", "tools", "crew", "images", "design", "routing", "settings"].includes(state.view) &&
-    !(state.view === "memories" && ["originals", "past"].includes(state.memTab)) && !(state.view === "settings" && state.settingsTab !== "models");
+    !(state.view === "memories" && ["originals", "past"].includes(state.memTab)) && !(state.view === "settings" && state.settingsTab !== "agents");
   const current = ticket => ticket.generation === state.connection.generation && ticket.page === pageKey() && ticket.data === state.data && !blocked();
 
   async function refreshMemories() {

@@ -49,7 +49,7 @@ export const createCrew = (ctx) => {
     if (crewWorkers.wk.pop?.dialog.open) crewWorkers.wk.redraw?.(); // an open expert popup lists the workflow just made (render skips it)
   }
   const ERRORS = {
-    secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 모델 설정에 넣어 주세요.",
+    secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 에이전트에 넣어 주세요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. $이름은 띄어쓰기 없이 글자·숫자·_·-만 써요. 앞으로 가는 선이 원을 이루면 저장되지 않아요(되돌아가는 선은 횟수를 정해요).",
     revision_conflict: "다른 곳에서 먼저 고쳤어요. 닫고 다시 열어 주세요.",
     handle_taken: "이미 쓰는 이름이에요. 다른 이름을 써 주세요."
@@ -177,7 +177,7 @@ export const createCrew = (ctx) => {
   function modelList(id = "crew-models", only = null) {
     const dl = el("datalist");
     dl.id = id;
-    // "auto" lets the router pick per run; the rest is the live list the runner reports (모델 설정), never a fixed one.
+    // "auto" lets the router pick per run; the rest is the live list the runner reports (설정 › 에이전트), never a fixed one.
     const auto = el("option");
     auto.value = "auto";
     auto.label = autoLabel();
@@ -802,7 +802,7 @@ export const createCrew = (ctx) => {
     form.method = "dialog";
     const head = el("div", "dialog-head");
     const ht = el("div", "");
-    ht.append(el("h2", "", rec ? `${c.name} 고치기` : "새 워크플로우"), el("p", "", "키·토큰은 넣지 마세요. 키는 설정 › 모델 설정에 넣어요."));
+    ht.append(el("h2", "", rec ? `${c.name} 고치기` : "새 워크플로우"), el("p", "", "키·토큰은 넣지 마세요. 키는 설정 › 에이전트에 넣어요."));
     const close = el("button", "icon-btn plain");
     close.value = "cancel";
     close.setAttribute("aria-label", "닫기");

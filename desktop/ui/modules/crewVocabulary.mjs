@@ -61,7 +61,7 @@ export function createCrewVocabulary(deps) {
     schedule: [["cron", "언제 (분 시 일 월 요일)", "text", "0 9 * * 1-5"]],
     webhook: [["note", "메모", "text", "주소와 토큰은 서버에서 arkism-crew hook-url로 받아요"]],
     code: [["lang", "언어", "radio", [["go", "Go"], ["sh", "셸"]]], ["code", "코드 (stdin JSON → stdout JSON)", "code", "stdin JSON → 처리 → stdout JSON"], ["timeout", "최대 실행 시간", "text", "30s", "기본 30s · 최대 2h"]],
-    http: [["method", "방식", "select", [["GET", "GET"], ["POST", "POST"], ["PUT", "PUT"], ["PATCH", "PATCH"], ["DELETE", "DELETE"]]], ["url", "주소", "text", "https://"], ["headers", "헤더 (한 줄에 하나)", "area"], ["body", "본문", "area"], ["key", "쓸 키 이름", "text", "", "설정 › 모델 설정에 저장한 키"]],
+    http: [["method", "방식", "select", [["GET", "GET"], ["POST", "POST"], ["PUT", "PUT"], ["PATCH", "PATCH"], ["DELETE", "DELETE"]]], ["url", "주소", "text", "https://"], ["headers", "헤더 (한 줄에 하나)", "area"], ["body", "본문", "area"], ["key", "쓸 키 이름", "text", "", "설정 › 에이전트에 저장한 키"]],
     github: [["args", "gh 인자", "text", "pr create --fill"], ["repo_dir", "작업 폴더", "text", "/srv/…"]],
     approval: [["question", "물어볼 것", "area"]],
     condition: [["expr", "조건", "text", "in.tests.failed == 0", "예: in.tests.failed == 0 and in.risky == false"]],

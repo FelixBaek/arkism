@@ -1,4 +1,4 @@
-// 설정 › 모델 설정. Providers, logged-in CLI accounts, quota, stored keys (last four
+// 설정 › 에이전트's provider parts. Providers, logged-in CLI accounts, quota, stored keys (last four
 // only) and which models workflow AI nodes may use. Keys go to the server through Arkism's one-time handoff:
 // the host runner (`arkism crew` providers watch) stores or tests them; nothing here keeps a key.
 // "5h" → "5시간 한도", "week" → "주간 한도".
@@ -10,7 +10,7 @@ function windowName(w) {
 }
 window.ArkismModels = (ctx) => {
   "use strict";
-  const { state, el, icon, button, go, render, request, query, notice, agentLogo, ago } = ctx;
+  const { state, el, icon, button, render, request, query, notice, agentLogo, ago } = ctx;
 
   const KNOWN = [
     ["anthropic", "Anthropic", "img:claude.svg", "https://console.anthropic.com/settings/keys"],
@@ -28,7 +28,6 @@ window.ArkismModels = (ctx) => {
     if (known(p.id)) return agentLogo(known(p.id)[2], name);
     const t = el("span", "agent-tile mono-logo"); t.append(icon(p.id === "xai" ? "x" : "stack")); return t;
   };
-  let selected = "openai";
   const filters = {}; // 모델 찾기 text per provider
   let typing = null; // the provider whose filter had focus before a redraw
 
@@ -60,7 +59,7 @@ window.ArkismModels = (ctx) => {
   const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
 
   const ERR = {
-    access_denied: "이 계정은 모델 설정을 바꿀 수 없어요.",
+    access_denied: "이 계정은 모델·키 설정을 바꿀 수 없어요.",
     invalid_request: "칸 형식을 확인해 주세요. 키에는 띄어쓰기가 없어야 해요.",
     secret_detected: "이름이나 주소에 키처럼 보이는 값이 있어요."
   };
@@ -214,7 +213,6 @@ window.ArkismModels = (ctx) => {
       await load();
     } catch (e) { notice(errText(e)); } finally { render(false); }
   }
-  // Figma 198:544 (모델 설정): provider chips on top, then a 계정 card and a 모델 card; 기본 모델 · API 키 · 한도 안내 on the right.
   async function renameTo(kind, pid, id, name) {
     try {
       const rec = await request("/v1/providers/labels", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, kind, id, label: name.trim() }) });
@@ -321,10 +319,21 @@ window.ArkismModels = (ctx) => {
     }
     return c;
   }
+  // Keys still being stored by the runner (or that failed), shown under the stored ones.
+  function pendingKeyRows(p) {
+    const out = [];
+    for (const q of (doc().requests || []).filter((x) => x.provider === p.id && x.kind === "key_add" && x.status !== "done").slice(-3)) {
+      const msg = { pending: "서버에 저장하는 중", failed: `저장 실패: ${q.error || "알 수 없음"}`, expired: "실행기가 받지 못해 버렸어요. 다시 넣어 주세요." }[q.status];
+      const r = el("div", "mp-key");
+      r.append(el("span", "mp-key-name", `${q.name} ••••${q.last4}`), el("span", `tag ${q.status === "pending" ? "" : "warn"}`, q.status === "pending" ? "대기" : "실패"));
+      out.push(r, el("small", "mp-key-meta", msg));
+    }
+    return out;
+  }
   function keysSection(p) {
-    const s = kit.sideSec("API 키");
-    const pendingKeys = (doc().requests || []).filter((x) => x.provider === p.id && x.kind === "key_add" && x.status !== "done").slice(-3);
-    if (!(p.keys || []).length && !pendingKeys.length) s.append(el("p", "", p.kind === "subscription" ? "저장된 키가 없어요. 구독 로그인만 쓰면 키가 없어도 돼요." : "저장된 키가 없어요."));
+    const s = card("API 키");
+    const pending = pendingKeyRows(p);
+    if (!(p.keys || []).length && !pending.length) s.append(el("p", "", p.kind === "subscription" ? "저장된 키가 없어요. 구독 로그인만 쓰면 키가 없어도 돼요." : "저장된 키가 없어요."));
     for (const k of p.keys || []) {
       const r = el("div", "mp-key");
       r.append(el("span", "mp-key-name", k.name), el("span", "mono", [`••••${k.last4}`, k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join("  ·  ")));
@@ -336,16 +345,11 @@ window.ArkismModels = (ctx) => {
       s.append(r);
       if (meta) s.append(el("small", "mp-key-meta", meta));
     }
-    for (const q of pendingKeys) {
-      const msg = { pending: "서버에 저장하는 중", failed: `저장 실패: ${q.error || "알 수 없음"}`, expired: "실행기가 받지 못해 버렸어요. 다시 넣어 주세요." }[q.status];
-      const r = el("div", "mp-key");
-      r.append(el("span", "mp-key-name", `${q.name} ••••${q.last4}`), el("span", `tag ${q.status === "pending" ? "" : "warn"}`, q.status === "pending" ? "대기" : "실패"));
-      s.append(r, el("small", "mp-key-meta", msg));
-    }
+    s.append(...pending);
     if (!p.custom) s.append(actionsRow(button("키 추가", "", null, () => openKeyDialog(p))));
     return s;
   }
-  // compact (설정 › 에이전트 detail): no title, no 모델 추가 — the list comes from the account, not typed in.
+  // compact (an agent's detail): no title or count; 모델 추가 stays for names the runner does not report.
   function modelsCard(p, compact) {
     const c = compact ? el("section", "mp-card ag-models") : card("모델", "켠 모델만 라우팅과 AI 도구에서 골라 쓸 수 있어요.");
     const addRow = el("div", "model-add");
@@ -377,11 +381,11 @@ window.ArkismModels = (ctx) => {
     if (typing === p.id) requestAnimationFrame(() => { if (!document.activeElement || document.activeElement === document.body) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } });
     const re = button(compact ? "목록 새로고침" : "새로고침", compact ? "" : "ghost", null, () => reload(re));
     tools.append(f, re);
-    if (!compact) tools.append(button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
+    tools.append(button("모델 추가", "", null, () => { addRow.hidden = !addRow.hidden; mi.focus(); }));
     c.append(tools, addRow);
     const ml = el("div", "mp-models");
     f.addEventListener("input", () => { filters[p.id] = f.value; ml.querySelectorAll(".mp-model-row").forEach((r) => { r.hidden = !!q() && !r.dataset.model.toLowerCase().includes(q()); }); });
-    if (!all.length) ml.append(el("p", "mp-empty", compact ? "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요." : "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요."));
+    if (!all.length) ml.append(el("p", "mp-empty", "서버 실행기가 알려 준 모델이 없어요. '모델 추가'로 넣을 수 있어요."));
     let onCount = 0;
     for (const m of all) {
       const on = enabled(p.id, m);
@@ -426,7 +430,7 @@ window.ArkismModels = (ctx) => {
     return c;
   }
   // ---------------------------------------------------------------- 설정 › 에이전트 (Figma 1300:5254)
-  // Which provider and CLI an agent runs on, so its row and detail read the same report as 모델 설정.
+  // Which provider and CLI an agent runs on, so its row and detail read the same providers report.
   const AGENT_SOURCE = { claude_code: ["anthropic", "claude"], codex: ["openai", "codex"], gemini: ["google", "gemini"], zcode: ["zai", "glm"], grok: ["xai", "grok"] };
   const PLAN_NAMES = { max: "MAX", pro: "PRO", plus: "PLUS", team: "TEAM", free: "FREE", enterprise: "ENTERPRISE", supergrok: "SUPER GROK" };
   const planName = (plan) => (plan ? PLAN_NAMES[String(plan).toLowerCase().replace(/[\s_-]/g, "")] || String(plan).toUpperCase() : "");
@@ -440,7 +444,7 @@ window.ArkismModels = (ctx) => {
     const main = accounts.find((a) => a.status === "connected") || accounts[0] || null;
     return { p, cli, accounts, main, info: accounts.find((a) => a.cli_info?.version)?.cli_info || null, keys: p.keys || [] };
   }
-  // The row's CLI version and, when a newer one exists, a button that installs it (the same request as 모델 설정).
+  // The row's CLI version and, when a newer one exists, a button that installs it (POST /v1/providers/cli_update).
   function cliBadge(src) {
     const a = src.accounts.find((x) => x.cli_info?.version);
     if (!a) return [];
@@ -484,7 +488,8 @@ window.ArkismModels = (ctx) => {
       if (on) mark.append(icon("check"));
       const name = el("div", "ag-account-name");
       const top = el("div", "ag-account-top");
-      top.append(el("strong", "", labelOf("account", src.p.id, a.id) || a.label || CLI_NAMES[a.cli] || a.id));
+      const shown = labelOf("account", src.p.id, a.id) || a.label || CLI_NAMES[a.cli] || a.id;
+      top.append(el("strong", "", shown), pencil("account", src.p.id, a.id, labelOf("account", src.p.id, a.id), shown));
       if (a.plan) top.append(el("span", "ag-plan", planName(a.plan)));
       name.append(top);
       const windows = a.quotas?.length ? a.quotas : a.quota ? [a.quota] : [];
@@ -528,6 +533,7 @@ window.ArkismModels = (ctx) => {
       row.append(mark, name, del);
       list.append(row);
     }
+    list.append(...pendingKeyRows(src.p));
     const add = el("button", "ag-add-line");
     add.type = "button";
     add.append(icon("plus"), el("span", "", "키 추가"));
@@ -538,7 +544,7 @@ window.ArkismModels = (ctx) => {
   }
   // AI 도구 기본 모델 (설정 › 에이전트): which model fills prompt fields, polishes text and classifies. Empty = the runner's default.
   // Grouped by provider and saved with it: several providers offer the same model name. Value = "provider|model" (model names have no |).
-  // combo.js draws the optgroups like the workflow model list: the provider's logo (the same one as its 모델 설정 chip) and name, then each model with its provider and input kind.
+  // combo.js draws the optgroups like the workflow model list: the provider's logo (the same one as its 설정 › 에이전트 row) and name, then each model with its provider and input kind.
   function assistPicker() {
     const d = doc();
     const sel = el("select", "mp-assist");
@@ -571,48 +577,19 @@ window.ArkismModels = (ctx) => {
     });
     return sel;
   }
-  let kit = null;
-  function tab(k) {
-    kit = k;
-    const add = button("공급자 추가", "primary", null, () => openKeyDialog({ id: "custom", name: "직접 추가한 제공자", custom: true }));
-    if (state.data.providers === null) {
-      const g = el("section", "mp-card");
-      g.append(el("p", "pg-hint", "이 서버는 아직 모델 설정을 지원하지 않아요. 서버를 새 버전으로 바꾸면 보여요."));
-      return [g];
-    }
-    const d = doc();
-    const out = [];
-    if (!d.collected_at) out.push(el("p", "callout-line", "서버 실행기가 아직 보고하지 않았어요. 실행기를 켜면 로그인 상태와 한도가 보여요."));
-    const list = providers();
-    if (!list.some((p) => p.id === selected)) selected = list[0].id;
-    const chips = el("div", "mp-chips");
-    chips.setAttribute("role", "tablist");
-    for (const p of list) {
-      const b = el("button", `mp-chip${p.id === selected ? " active" : ""}`);
-      b.type = "button";
-      b.setAttribute("role", "tab");
-      b.setAttribute("aria-selected", String(p.id === selected));
-      const warn = (p.accounts || []).some((a) => a.status !== "connected");
-      const ready = (p.accounts || []).some((a) => a.status === "connected") || (p.keys || []).length;
-      const kindText = warn ? "확인" : !ready ? "대기" : p.kind === "subscription" ? "구독" : "API";
-      b.append(logo(p), el("span", "", p.name), el("small", warn ? "warn" : "", kindText));
-      b.addEventListener("click", () => { selected = p.id; render(false); });
-      chips.append(b);
-    }
-    // 사용량 보기 · 공급자 추가 sit at the right end of the chip row, next to what they add to
-    const bar = el("div", "mp-chipbar"), acts = el("div", "mp-chip-actions");
-    acts.append(button("사용량 보기", "ghost", null, () => go("usage")), add);
-    bar.append(chips, acts);
-    out.push(bar);
-    const p = list.find((x) => x.id === selected);
-    out.push(accountsCard(p), modelsCard(p));
-    kit.side(keysSection(p),
-      kit.sideSec("한도 안내", el("p", "", "한도를 알려 주지 않는 계정은 안내만 보여 줘요. 계정을 추가하면 로그인 방법을 안내해요.")));
-    return out;
+  // Providers no agent runs on (직접 추가 ones, or a reported provider whose agent is not listed): 설정 › 에이전트 shows them as their own rows.
+  const looseProviders = (covered) => providers().filter((p) => !covered.has(p.id) && (isCustom(p.id) || p.custom || (p.accounts || []).length || (p.keys || []).length || (p.models || []).length));
+  // Such a provider's detail: its accounts (names, limits, CLI), keys and the full model list with 모델 추가.
+  const providerDetail = (p) => [accountsCard(p), keysSection(p), modelsCard(p)];
+  // Above 설정 › 에이전트: an older server without the providers report, or a runner that has not reported yet.
+  function notices() {
+    if (state.data.providers === null) return [el("p", "pg-hint", "이 서버는 아직 계정·모델 정보를 보내지 않아요. 서버를 새 버전으로 바꾸면 보여요.")];
+    return state.data.providers && !doc().collected_at ? [el("p", "callout-line", "서버 실행기가 아직 보고하지 않았어요. 실행기를 켜면 로그인 상태와 한도가 보여요.")] : [];
   }
+  const addProvider = (picked) => openKeyDialog({ id: "custom", name: "직접 추가한 제공자", custom: true }, picked);
 
   // ---------------------------------------------------------------- API key dialog
-  function openKeyDialog(p) {
+  function openKeyDialog(p, picked) {
     const dialog = el("dialog", "crew-dialog key-dialog");
     const form = el("form");
     form.method = "dialog";
@@ -748,7 +725,7 @@ window.ArkismModels = (ctx) => {
         if (p.custom) { // the new key becomes its own provider; the models picked here are the ones it starts with
           const pid = customPid(last(r).key_id || "");
           for (const m of found) if (!off.has(m)) await switchModel(pid, m, true, { add: true });
-          selected = pid;
+          picked?.(pid);
         } else for (const m of off) await switchModel(p.id, m, false);
         dialog.close();
         notice("서버에 저장하도록 보냈어요.");
@@ -764,5 +741,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, tab, enabledModels, enabledByProvider, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
+  return { load, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
 };
