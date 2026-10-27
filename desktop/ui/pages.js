@@ -835,7 +835,7 @@ window.ArkismPages = (ctx) => {
   }
   // 역할별 모델 and 스킬·MCP·플러그인 share one models.json load and one 저장 (at the bottom of the second card, as in Figma).
   // Kept across re-renders of the tab so typed values survive; dropped when the tab changes.
-  let kitCard = null;
+  let kitCard = null, kitHasProviders = false;
   const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
   const ROLE_MODELS = [["haiku", "Claude Haiku"], ["sonnet", "Claude Sonnet"], ["opus", "Claude Opus"]];
   const EMBED = [["auto", "자동 (Ollama가 있으면)"], ["ollama", "Ollama"], ["none", "끄기"]];
@@ -912,7 +912,9 @@ window.ArkismPages = (ctx) => {
     draw();
   }
   function agentRoleCards() {
-    if (kitCard) return kitCard;
+    // Rebuilt once the providers report arrives, so a card drawn before it does not keep the older-server rows.
+    if (kitCard && kitHasProviders === (state.data.providers != null)) return kitCard;
+    kitHasProviders = state.data.providers != null;
     const roles = group("역할별 모델");
     roles.classList.add("ag-roles");
     const kit = group("스킬·MCP·플러그인", "에이전트가 함께 쓰는 스킬·MCP·플러그인 폴더예요.");

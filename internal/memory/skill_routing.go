@@ -136,7 +136,8 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	}
 	in.ExtraCandidates = nil
 	asked := in.Limit
-	in.Limit = skillSearchLimit(s.SkillCandidates, asked, len(extras))
+	// One search at the widest count a pick can ask for; the picked count trims it below.
+	in.Limit = skillSearchLimit(maxSkillPicked, asked, len(extras))
 	searchInput := in
 	searchInput.retrievalQuery = skillQueryVariants(in.Query)
 	bundle, actor, err := s.searchWithActor(ctx, token, searchInput)
@@ -146,15 +147,8 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	// 설정 › 역할별 모델, read only once the search is authorized; unreadable keeps the defaults.
 	providers, _ := s.providersDoc(ctx, in.Scope)
 	router := s.skillJudge(providers.role("skill_judge"))
-	if want := skillSearchLimit(s.skillCandidates(providers.role("skill_candidates")), asked, len(extras)); want < in.Limit {
-		bundle.Items = bundle.Items[:min(want, len(bundle.Items))]
-		in.Limit = want
-	} else if want > in.Limit {
-		in.Limit, searchInput.Limit = want, want
-		if bundle, actor, err = s.searchWithActor(ctx, token, searchInput); err != nil {
-			return RouteResult{}, err
-		}
-	}
+	in.Limit = skillSearchLimit(s.skillCandidates(providers.role("skill_candidates")), asked, len(extras))
+	bundle.Items = bundle.Items[:min(in.Limit, len(bundle.Items))]
 	candidates, records := s.skillRouteCandidates(ctx, in, criteria, bundle)
 	candidates, known := appendRouteExtras(candidates, records, extras)
 	defer func() { // registered first so it runs after the revocation check below

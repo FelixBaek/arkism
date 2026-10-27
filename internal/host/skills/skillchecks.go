@@ -537,8 +537,14 @@ func toolInstalled(bin string) bool { _, err := exec.LookPath(bin); return err =
 // checkSource names what produced an entry; an entry from another set of scanners is rescanned.
 func checkSource() string {
 	s := "builtin"
-	if toolInstalled(evaluatorBin) || toolInstalled(spectorBin) {
+	// Each NVIDIA scanner counts on its own: one switched back on in 설정 › 역할별 모델 rescans unchanged skills.
+	switch eval, spec := toolInstalled(evaluatorBin), toolInstalled(spectorBin); {
+	case eval && spec:
 		s += "+nvidia"
+	case eval:
+		s += "+nvidia-quality"
+	case spec:
+		s += "+nvidia-security"
 	}
 	if toolInstalled(ciscoBin) {
 		s += "+cisco"
