@@ -81,6 +81,31 @@ func TestMaintenanceSwapAndDismiss(t *testing.T) {
 	}
 }
 
+func TestMaintenanceForgetBothKeepsBothAsHistory(t *testing.T) {
+	f, older, newer, in := maintenanceFixture(t)
+	p, _ := f.svc.ProposeMaintenance(testCtx, f.human, in)
+	if _, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("forget_both on a duplicate", err)
+	}
+
+	f, older, newer, in = maintenanceFixture(t)
+	in.Proposal.Type, in.Proposal.Reason = "contradiction", "newer_replaces_older"
+	p, _ = f.svc.ProposeMaintenance(testCtx, f.human, in)
+	d, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both"})
+	if err != nil || d.Status != "forgotten" || d.Maintenance.Decision != "forget_both" {
+		t.Fatal("forget_both", d.Status, err)
+	}
+	for _, id := range []string{older.ID, newer.ID} {
+		// Not deleted: the record stays, rejected and out of any conflict.
+		if got := f.get(f.human, "memories", scopeA, id); got.Status != "rejected" || got.ConflictID != "" {
+			t.Fatal("forgotten memory", id, got.Status, got.ConflictID)
+		}
+	}
+	if done, _ := f.svc.ListMaintenance(testCtx, f.human, scopeA, "forgotten"); len(done.Items) != 1 {
+		t.Fatal("forgotten list")
+	}
+}
+
 func TestMaintenanceStaleAndInvalid(t *testing.T) {
 	f, older, _, in := maintenanceFixture(t)
 	p, _ := f.svc.ProposeMaintenance(testCtx, f.human, in)
