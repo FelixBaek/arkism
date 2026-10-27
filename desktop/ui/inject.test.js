@@ -63,9 +63,10 @@ test("effect hides what cannot be computed", () => {
   const f = core.effect({ days: 30, sessions: 3, injections: 10, used: 3, inject_sessions: 4, inject_chars: 1001, items: [
     { id: "a", injected: 5, used: 2 }, { id: "b", injected: 2, used: 0 }, { id: "c", injected: 3, used: 1 }, { id: "d", injected: 4, used: 0 }] });
   assert.equal(f.rate, 30);
-  assert.equal(f.measurementBasis, "answer_text_overlap");
-  assert.equal(f.actualUseStatus, "not_measured");
-  assert.equal(f.actualUsed, null);
+  assert.equal(f.measurementBasis, "usage_receipt");
+  assert.equal(f.actualUseStatus, "receipts_only");
+  assert.equal(f.actualUsed, 3);
+  assert.equal(f.estimated, 0);
   assert.equal(f.unreadSessionPairs, null);
   assert.equal(f.avgChars, 250);
   assert.deepEqual(f.topUsed.map((x) => x.id), ["a", "c"]);

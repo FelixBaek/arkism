@@ -44,3 +44,16 @@ test("a window drawn again while names load still shows them, and a new connecti
   assert.equal(calls.length, 2);
   win.reset();
 });
+
+test("검증 lists a memory returned unused_after times without a receipt, and one with only an estimate stays out", async () => {
+  const memories = [{ id: "stale", text: "Stale rule" }, { id: "guessed", text: "Guessed rule" }, { id: "fresh", text: "Fresh rule" }];
+  const { win, state } = windows(memories, { days: 7, unused_after: 10, items: [
+    { id: "stale", injected: 12, used: 0, estimated: 2, unreceipted: 12, unused: true },
+    { id: "guessed", injected: 4, used: 0, estimated: 1, unreceipted: 4, unused: false },
+    { id: "fresh", injected: 4, used: 0, estimated: 0, unreceipted: 4, unused: false }] }, () => { throw Error("not_found"); });
+  state.data.memories = memories;
+  win.open("judge");
+  assert.deepEqual(titles(), ["Stale rule", "Fresh rule"]);
+  assert.ok(document.body.textContent.includes("사용 기록 없이 12번 넣었어요"));
+  win.reset();
+});

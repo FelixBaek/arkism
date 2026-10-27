@@ -81,12 +81,12 @@
     return { text, chars: len(text), included: items };
   }
 
-  // The capture report measures answer-text overlap; it does not establish actual use.
+  // used is record_memory_usage receipts; estimated (answer-text overlap) is shown apart and never counts as use.
   function effect(use) {
     if (!use || !Array.isArray(use.items)) return null;
     return {
-      days: use.days, sessions: use.sessions, injections: use.injections, used: use.used,
-      measurementBasis: "answer_text_overlap", actualUseStatus: "not_measured", actualUsed: null, unreadSessionPairs: null,
+      days: use.days, sessions: use.sessions, injections: use.injections, used: use.used, estimated: use.estimated || 0,
+      measurementBasis: "usage_receipt", actualUseStatus: "receipts_only", actualUsed: use.used, unreadSessionPairs: null,
       rate: use.injections > 0 ? Math.round((use.used / use.injections) * 100) : null,
       avgChars: use.inject_sessions > 0 ? Math.round(use.inject_chars / use.inject_sessions) : null,
       topUsed: use.items.filter((x) => x.used > 0).sort((a, b) => b.used - a.used || b.injected - a.injected || (a.id < b.id ? -1 : 1)).slice(0, 5),

@@ -3,6 +3,7 @@ package capture
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -58,19 +59,24 @@ func TestCaptureStatsCountsTheLocalMetrics(t *testing.T) {
 	}
 }
 
-func TestCaptureUtilityCountsTextOverlapWithoutClaimingActualUse(t *testing.T) {
+func TestCaptureUtilityCountsReceiptsFirstAndTextOverlapAsAnEstimate(t *testing.T) {
 	capFake(t)
 	projects := reflectDirs(t)
 	settledPath := writeSession(t, projects, "s1", row(userRow, "배포해"), row(aiRow, "운영은 SQLite라서 임베딩도 Gemini로 맞췄습니다"))
 	touch(t, settledPath, timeNow()-2*settled)
 	writeSession(t, projects, "s3", row(userRow, "아직 진행 중"), row(aiRow, "작업 중"))
+	// m2: a receipt (retried once) and no overlap; m1: overlap only; m5: receipted before s1 returned it again
 	writeMetrics(t,
-		`{"event": "recall", "hook": "UserPromptSubmit", "session": "s1", "ids": ["m1", "m2", "m3", "m4", "m1"], "ts": "2026-10-02"}`,
+		`{"event": "memory_used", "memory_id": "m5", "event_id": "e0", "ts": "2026-10-01T12:00:00.000Z"}`,
+		`{"event": "recall", "hook": "UserPromptSubmit", "session": "s1", "ids": ["m1", "m2", "m3", "m4", "m1", "m5"], "ts": "2026-10-02"}`,
 		`{"event": "recall", "hook": "UserPromptSubmit", "session": "s2", "ids": ["m1"], "ts": "2026-10-02"}`,
+		`{"event": "memory_used", "memory_id": "m2", "event_id": "e1", "ts": "2026-10-02T01:00:00.000Z"}`,
+		`{"event": "memory_used", "memory_id": "m2", "event_id": "e1", "ts": "2026-10-02T01:00:01.000Z"}`,
 		`{"event": "recall", "hook": "UserPromptSubmit", "session": "s3", "ids": ["m1"], "ts": "2026-10-02"}`,
 		`{"event": "recall", "hook": "SessionStart", "session": "s1", "ids": ["m9"], "ts": "2026-10-02"}`,
-		`{"event": "recall", "hook": "UserPromptSubmit", "session": "old", "ids": ["m9"], "ts": "2026-09-01"}`)
-	texts := map[string]string{"m1": "운영 Orbit은 SQLite 전용이고 임베딩은 Gemini다.", "m2": "커밋 메시지는 한국어로 쓴다."}
+		`{"event": "recall", "hook": "UserPromptSubmit", "session": "old", "ids": ["m9"], "ts": "2026-09-01"}`,
+		`{"event": "memory_used", "memory_id": "m9", "event_id": "e9", "ts": "2026-09-01"}`)
+	texts := map[string]string{"m1": "운영 Orbit은 SQLite 전용이고 임베딩은 Gemini다.", "m2": "커밋 메시지는 한국어로 쓴다.", "m5": "테스트는 먼저 돌린다."}
 	capGet = func(path string, _ time.Duration) (map[string]any, error) {
 		switch id := pathID(path); id {
 		case "m3":
@@ -85,8 +91,9 @@ func TestCaptureUtilityCountsTextOverlapWithoutClaimingActualUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// m1 overlaps in s1 and is unread in s2; s3 is busy; m3 is gone; m4 could not be read.
-	want := map[string][3]int{"m1": {1, 1, 1}, "m2": {1, 0, 0}, "m3": {1, 0, 0}}
+	// m1 overlaps in s1 and is unread in s2; s3 is busy; m3 is gone; m4 could not be read; the old receipt is before since.
+	want := map[string]host.MemoryUse{"m1": {Injected: 1, Overlap: 1, Unread: 1, Unreceipted: 1}, "m2": {Injected: 1, Receipts: 1},
+		"m3": {Injected: 1, Unreceipted: 1}, "m5": {Injected: 1, Receipts: 1, Unreceipted: 1}}
 	if sessions != 3 || !reflect.DeepEqual(counts, want) {
 		t.Fatal(sessions, counts)
 	}
@@ -104,19 +111,62 @@ func TestCaptureUtilityCountsTextOverlapWithoutClaimingActualUse(t *testing.T) {
 	for _, r := range review {
 		ids = append(ids, r.(map[string]any)["id"].(string))
 	}
-	// the old row counts here: utility reads every session
-	if got["sessions"] != 4.0 || got["memory_injections"] != 3.0 || got["used"] != 1.0 || got["use_rate"] != 0.333 ||
-		!reflect.DeepEqual(ids, []string{"m2", "m3"}) {
+	// the old row counts here: utility reads every session; used is receipts (m2, m5, m9), overlap stays an estimate
+	if got["sessions"] != 4.0 || got["memory_injections"] != 4.0 || got["used"] != 3.0 || got["text_overlap_count"] != 1.0 ||
+		got["use_rate"] != 0.25 || !reflect.DeepEqual(ids, []string{"m3"}) {
 		t.Fatal(got)
 	}
-	if got["measurement_basis"] != "answer_text_overlap" || got["actual_use_status"] != "not_measured" ||
-		got["actual_used"] != nil || got["text_overlap_count"] != got["used"] ||
-		got["text_overlap_rate"] != got["use_rate"] || got["unread_session_pairs"] != 2.0 ||
-		!reflect.DeepEqual(got["review_without_text_overlap"], review) {
+	if got["measurement_basis"] != "usage_receipt" || got["estimate_basis"] != "answer_text_overlap" || got["actual_used"] != 3.0 ||
+		got["text_overlap_rate"] != got["use_rate"] || got["unread_session_pairs"] != 2.0 || got["unused_after"] != 10.0 ||
+		!reflect.DeepEqual(got["review_without_text_overlap"], review) || len(got["review_unreceipted"].([]any)) != 0 {
 		t.Fatal("overlap and unavailable transcripts must not claim actual use", got)
 	}
-	if review[0].(map[string]any)["text"] != texts["m2"] {
+	if review[0].(map[string]any)["text"] != "" { // m3 is gone
 		t.Fatal(review)
+	}
+}
+
+func TestCaptureUtilityListsMemoriesReturnedUnusedAfterTheThreshold(t *testing.T) {
+	capFake(t)
+	t.Setenv("ARKISM_MEMORY_UNUSED_AFTER", "3")
+	projects := reflectDirs(t)
+	var rows []string
+	for i := 1; i <= 4; i++ { // four settled sessions; a receipt for m1 lands after the first, m2 after the second
+		touch(t, writeSession(t, projects, fmt.Sprintf("s%d", i), row(userRow, "해 줘"), row(aiRow, "했습니다")), timeNow()-2*settled)
+		rows = append(rows, fmt.Sprintf(`{"event": "recall", "hook": "UserPromptSubmit", "session": "s%d", "ids": ["m1", "m2", "m3"], "ts": "2026-10-0%dT00:00:00.000Z"}`, i, i))
+		if i == 1 {
+			rows = append(rows, `{"event": "memory_used", "memory_id": "m1", "event_id": "e1", "ts": "2026-10-01T01:00:00.000Z"}`)
+		}
+		if i == 2 {
+			rows = append(rows, `{"event": "memory_used", "memory_id": "m2", "event_id": "e2", "ts": "2026-10-02T01:00:00.000Z"}`)
+		}
+	}
+	writeMetrics(t, rows...)
+	capGet = func(path string, _ time.Duration) (map[string]any, error) {
+		return map[string]any{"text": pathID(path)}, nil
+	}
+	counts, _, err := utilityCounts("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]host.MemoryUse{"m1": {Injected: 4, Receipts: 1, Unreceipted: 3}, "m2": {Injected: 4, Receipts: 1, Unreceipted: 2}, "m3": {Injected: 4, Unreceipted: 4}}
+	if !reflect.DeepEqual(counts, want) {
+		t.Fatal(counts)
+	}
+	var out bytes.Buffer
+	if err := utility(9, &out); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatal(err, out.String())
+	}
+	var ids []string
+	for _, r := range got["review_unreceipted"].([]any) {
+		ids = append(ids, r.(map[string]any)["id"].(string))
+	}
+	if got["unused_after"] != 3.0 || !reflect.DeepEqual(ids, []string{"m3", "m1"}) { // m2 sits one under the threshold
+		t.Fatal(got)
 	}
 }
 
@@ -134,8 +184,8 @@ func TestCaptureUtilityWithNothingRecalledHasNoRate(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["actual_used"] != nil || got["actual_use_status"] != "not_measured" || got["text_overlap_rate"] != nil {
-		t.Fatal("absence of observations is not zero actual use", got)
+	if got["actual_used"] != 0.0 || got["text_overlap_rate"] != nil || !strings.Contains(out.String(), `"review_unreceipted": []`) {
+		t.Fatal("no receipt and no recall leaves no rate", got)
 	}
 }
 
@@ -157,8 +207,7 @@ func TestCaptureUtilityRepeatingAnIgnoredRuleDoesNotEstablishActualUse(t *testin
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got["text_overlap_count"] != 1.0 || got["measurement_basis"] != "answer_text_overlap" ||
-		got["actual_use_status"] != "not_measured" || got["actual_used"] != nil {
+	if got["text_overlap_count"] != 1.0 || got["estimate_basis"] != "answer_text_overlap" || got["used"] != 0.0 || got["actual_used"] != 0.0 {
 		t.Fatal("repeating a rule is not evidence it was followed", got)
 	}
 }

@@ -33,7 +33,7 @@ const captureDoc = `Claude Code / Codex / ZCode -> Arkism automatic memory captu
             lessons they show (a mistake that was found, and the rule that avoids it) as memories
   backfill  import a reviewed plan of existing Claude memory files
   stats     capture metrics from the local log
-  utility   transcript text overlap with recalled memories, not actual use
+  utility   record_memory_usage receipts per recalled memory, with transcript text overlap as an estimate
   trial     retire trial memories that prompt search keeps injecting and no answer uses (reflect runs it too)
   outcomes  drain the memory outcome receipt spool through the pinned independent checker
 

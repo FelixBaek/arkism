@@ -88,8 +88,8 @@ func isolateAgents(t *testing.T) (*agentsArkism, string, *[][]string) {
 	host.BaseURL, host.TokenFile = srv.URL, tok
 	claudeServers, codexServers = readClaudeServers, readCodexServers
 	lookPath = func(string) (string, error) { return "", errors.New("no systemd-run") }
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
-		return map[string][3]int{"m1": {3, 1, 0}, "m2": {5, 0, 0}, "m3": {3, 2, 0}}, 4, nil
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) {
+		return map[string]host.MemoryUse{"m1": {Injected: 3, Receipts: 1, Overlap: 1, Unreceipted: 2}, "m2": {Injected: 5, Unreceipted: 5}, "m3": {Injected: 3, Receipts: 2, Unreceipted: 1}}, 4, nil
 	}
 	host.InjectedChars = func(string) (int, int, error) { return 2, 900, nil }
 
@@ -224,8 +224,9 @@ func TestAgentsSyncAppliesRequestsAndReports(t *testing.T) {
 	}
 	use := orMap(rep["memory_use"])
 	items := asList(use["items"])
-	if use["injections"] != float64(11) || use["used"] != float64(3) || use["inject_chars"] != float64(900) || len(items) != 3 ||
-		asMap(items[0])["id"] != "m2" || asMap(items[1])["id"] != "m1" {
+	if use["injections"] != float64(11) || use["used"] != float64(3) || use["estimated"] != float64(1) || use["unused_after"] != float64(10) ||
+		use["inject_chars"] != float64(900) || len(items) != 3 || asMap(items[0])["id"] != "m2" || asMap(items[1])["id"] != "m1" ||
+		asMap(items[0])["unused"] != false || asMap(items[1])["used"] != float64(1) || asMap(items[1])["estimated"] != float64(1) {
 		t.Errorf("memory_use = %v", use)
 	}
 	if rep["memory_use_30"] == nil {
@@ -263,7 +264,7 @@ func TestAgentsSyncStopsOnMalformedRequestAndDownArkism(t *testing.T) {
 
 func TestAgentsSyncKeepsReportingWhenMemoryUseFails(t *testing.T) {
 	a, _, _ := isolateAgents(t)
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) { return nil, 0, errors.New("db down") }
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) { return nil, 0, errors.New("db down") }
 	if err := syncAgents(); err != nil {
 		t.Fatal(err)
 	}
@@ -295,19 +296,19 @@ func TestMemoryUseIsCachedForHalfAnHour(t *testing.T) {
 	if err != nil || objGet(use.(host.Obj), "days") != 7 || objGet(use30.(host.Obj), "days") != 30 {
 		t.Fatal(use, use30, err)
 	}
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) {
 		t.Fatal("recomputed within 30 minutes")
 		return nil, 0, nil
 	}
 	if _, _, err := memoryUse(now + 60); err != nil {
 		t.Fatal(err)
 	}
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) { return nil, 0, errors.New("x") }
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) { return nil, 0, errors.New("x") }
 	if _, _, err := memoryUse(now + memoryUseEvery + 1); err == nil {
 		t.Fatal("a stale cache must be recomputed")
 	}
 	host.InjectedChars = func(string) (int, int, error) { return 0, 0, nil }
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) { return nil, 0, nil }
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) { return nil, 0, nil }
 	got, err := memoryUseOver(now, 7)
 	if err != nil {
 		t.Fatal(err)

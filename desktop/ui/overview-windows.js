@@ -210,9 +210,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
       classify: () => byKind(waiting().filter((m) => !m.classification), box),
       review: () => waiting().slice(0, cap).map((m) => reviewRow(m, box)),
       recall: () => [...(state.usage?.entries() || [])].filter(([, u]) => u.last).sort((a, b) => time(b[1].last) - time(a[1].last)).slice(0, cap).map(([id, u]) => row("", clip(memText(id)), ago(u.last), `7일 ${num(u.d7 || 0)}회`)),
-      trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, `쓰임 ${num(u.used)}번`)),
-      judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => u && u.injected >= 3 && !u.used).slice(0, cap).map(([m, u]) => {
-        const r = row("안 쓰임", clip(m.text), `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, ""), err = el("small", "ov-win-err", "");
+      trace: () => (w?.items || []).slice().sort((a, b) => b.used - a.used || b.injected - a.injected).slice(0, cap).map((u) => row("", clip(memText(u.id)), `넣음 ${num(u.injected)}번`, u.estimated ? `쓰임 ${num(u.used)}번 · 추정 ${num(u.estimated)}번` : `쓰임 ${num(u.used)}번`)),
+      judge: () => D().memories.map((m) => [m, w?.items?.find((x) => x.id === m.id)]).filter(([, u]) => idle(u)).slice(0, cap).map(([m, u]) => {
+        const r = row("안 쓰임", clip(m.text), u.unused ? `사용 기록 없이 ${num(u.unreceipted)}번 넣었어요` : `${w.days}일 동안 ${num(u.injected)}번 넣었는데 한 번도 안 쓰였어요`, ""), err = el("small", "ov-win-err", "");
         r.lastChild.append(button("고치기", "small", null, () => editMemory(m, m.id)), button("지우기", "small", null, () => askConfirm("이 기억을 지울까요?", "지운 기억은 이력에 남지만 더는 쓰이지 않아요.", async () => {
           try { await deleteMemory(m); r.remove(); await reload(); } catch (e) { err.textContent = `지우지 못했어요: ${e.message}`; }
         }))); r.firstChild.append(err);
@@ -331,9 +331,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function expandTotal(key) {
     const w = D().tools?.memory_use;
     return { extract: waiting().length + D().memories.length,
-      recall: [...(state.usage?.values() || [])].filter((u) => u.last).length, judge: D().memories.filter((m) => { const u = w?.items?.find((x) => x.id === m.id); return u && u.injected >= 3 && !u.used; }).length,
+      recall: [...(state.usage?.values() || [])].filter((u) => u.last).length, judge: D().memories.filter((m) => idle(w?.items?.find((x) => x.id === m.id))).length,
       dream: dreamItems().length }[key] || 0;
   }
+  // 안 쓰임: returned unused_after times since its last record_memory_usage receipt (host memory_use), or injected 3+ times
+  // with neither a receipt nor an answer restating it (the estimate). A person decides; nothing is demoted on its own.
+  const idle = (u) => !!u && (u.unused || (u.injected >= 3 && !u.used && !u.estimated));
   const note = (tone, a, b) => { const n = el("div", `ov-win-note ov-win-note-${tone}`); n.append(el("strong", "", a), el("span", "", b)); return n; };
   function activeStage() {
     const mems = D().memories, week = mems.filter((m) => time(m.created_at) > Date.now() - 7 * 24 * HOUR).length;
@@ -613,7 +616,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const u = usage(m.id), wu = w?.items?.find((x) => x.id === m.id), f = el("div", "ov-detail-facts");
       const fact = (a, b) => { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); };
       if (u) { fact("최근 7일", `${num(u.d7 || 0)}번 쓰임`); if (u.last) fact("마지막으로 쓰임", ago(u.last)); }
-      if (wu) fact(`최근 ${w.days}일`, `${num(wu.injected)}번 넣음 · ${num(wu.used)}번 실제로 쓰임`);
+      if (wu) fact(`최근 ${w.days}일`, wu.estimated ? `${num(wu.injected)}번 넣음 · ${num(wu.used)}번 실제로 쓰임 · 추정 ${num(wu.estimated)}번` : `${num(wu.injected)}번 넣음 · ${num(wu.used)}번 실제로 쓰임`);
       if (f.children.length) sec("언제 쓰이나요", f);
       const ev = tag(m, "event_id:"); if (ev) { const b = el("div", "ov-detail-from"); b.append(el("span", "", ev.split(":")[0]), button("세션 보기 ›", "ghost small", null, () => openSession(ev, m.text))); sec("어디서 왔나요", b); }
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
@@ -769,7 +772,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const agentBox = el("div", "ov-detail-bars"); for (const [a, n] of Object.entries(byAgent).sort((x, y) => y[1] - x[1])) { const p = el("div", "ov-detail-bar"), pct = Math.round((n / Math.max(1, items.length)) * 100); const track = el("i"); const fill = el("b"); fill.style.width = `${pct}%`; track.append(fill); const line = el("p", ""); line.append(el("span", "", a), el("strong", "", `${pct}%`)); p.append(line, track); agentBox.append(p); }
     if (items.length) sec("에이전트별 (7일 세션)", agentBox);
     const top = recalls.filter(([, u]) => u.d7 > 0).sort((a, b) => b[1].d7 - a[1].d7).slice(0, 3); if (top.length) { const b = el("div", "ov-detail-list"); top.forEach(([id, u]) => b.append(row("", clip(memText(id), 40), "", `${num(u.d7)}번`))); sec("많이 쓰인 기억", b); }
-    const idle = (w?.items || []).filter((u) => u.injected >= 3 && !u.used).slice(0, 3); if (idle.length) { const b = el("div", "ov-detail-list"); idle.forEach((u) => b.append(row("", clip(memText(u.id), 40), "", `${num(u.injected)}번 중 0번`))); sec("넣었는데 안 쓰인 기억", b); }
+    const idles = (w?.items || []).filter(idle).slice(0, 3); if (idles.length) { const b = el("div", "ov-detail-list"); idles.forEach((u) => b.append(row("", clip(memText(u.id), 40), "", `${num(u.injected)}번 중 ${num(u.used)}번`))); sec("넣었는데 안 쓰인 기억", b); }
     const act = el("div", "ov-detail-actions"); act.append(button("검증 보기", "primary small", null, () => open("judge")), button("사용량 화면으로", "small", null, () => { dlg.close(); go("usage"); })); right.append(act);
     body.append(left, right); d.append(body);
   }
