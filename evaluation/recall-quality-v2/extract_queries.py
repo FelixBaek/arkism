@@ -26,7 +26,7 @@ MASKS = [
     (re.compile(re.escape(str(Path.home()))), "~"),
     (re.compile(r"\b[A-Za-z0-9_-]{32,}\b"), "[token]"),
 ]
-QUESTION = re.compile(r"\?|(?:지|까|어|야|해|나|냐|요|줘|해줘|알려|보여|찾아|확인)\s*[.!]?$")
+QUESTION = re.compile(r"(?:\?)|(?:(?:지|까|어|야|해|나|냐|요|줘|해줘|알려|보여|찾아|확인)\s*[.!]?$)")
 
 
 def anonymize(text):
@@ -53,20 +53,25 @@ def short_hash(value):
     return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
 
 
+def entries(path):
+    """Parsed user-turn lines of one transcript; unreadable files and lines are skipped."""
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return
+    for line in lines:
+        if '"user"' not in line:  # cheap pre-filter; the JSON check below decides
+            continue
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+
 def collect(transcripts):
     seen, rows = set(), []
     for path in sorted(transcripts.glob("*/*.jsonl")):
-        try:
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-        except OSError:
-            continue
-        for line in lines:
-            if '"user"' not in line:  # cheap pre-filter; the JSON check below decides
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+        for entry in entries(path):
             text = usable(entry)
             if text is None:
                 continue
