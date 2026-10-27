@@ -459,6 +459,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     let q = "", kindF = startKind || "all", typeF = "", sel = focusId || (startKind === "dream" ? dreams[0]?.id : all[0]?.id), order = "old"; const checked = new Set();
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), more = el("div", "ov-wide-foot-note");
     const merges = new Map();
+    // the text a person is shaping per candidate, and its AI sparkle state: paint() rebuilds the detail, these outlive it
+    const drafts = new Map();
     request(`/v1/merge_proposals?${query({ status: "open" })}`).then((r) => { for (const x of r?.items || []) { const pr = x.merge?.proposal; if (pr?.action === "merge" && pr.candidate?.id) merges.set(pr.candidate.id, x); } if (merges.size && d.isConnected) paint(); }, () => {});
     const chipHost = el("div");
     const search = el("input", "ov-wide-search"); search.placeholder = "후보 찾기"; search.setAttribute("aria-label", "후보 찾기");
@@ -522,8 +524,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (c.dream) { dreamDetail(c); return; }
       const k = c.classification, conf = confusing(c, merges), mp = merges.get(c.id), v = k?.verdict;
       const h = el("div", "ov-detail-head"); h.append(...(conf ? [tagEl("헷갈림", "ov-tag-r")] : []), tagEl(kind(c.kind)), el("small", "", `${k?.by ? "AI 분류 · " : ""}${ago(k?.at || c.created_at)}`));
-      const edit = el("textarea", "ov-detail-edit"); edit.value = v?.action === "fix" && v.text ? v.text : c.text; edit.rows = 3; edit.hidden = !(v?.action === "fix" && v.text); edit.setAttribute("aria-label", "고쳐서 저장할 내용");
-      const head = el("div", "ov-detail-group"); head.append(h, el("h3", "", c.text)); detail.append(head);
+      if (!drafts.has(c.id)) drafts.set(c.id, { text: null, talk: {} });
+      const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "";
+      const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? (fixText || c.text); edit.rows = 3; edit.hidden = dr.text == null && !fixText; edit.setAttribute("aria-label", "고쳐서 저장할 내용");
+      // the heading shows what 승인 would save once the person (or the AI sparkle, which types into the box) changed it
+      const title = el("h3", "", dr.text ?? c.text), head = el("div", "ov-detail-group"); head.append(h, title); detail.append(head);
+      edit.addEventListener("input", () => { dr.text = edit.value; title.textContent = edit.value.trim() ? edit.value : c.text; });
       const decide1 = el("div", "ov-detail-group"), basisG = el("div", "ov-detail-group ov-detail-group-sub"), metaG = el("div", "ov-detail-group ov-detail-group-sub");
       basisG.append(el("h4", "ov-detail-group-t", "판단 근거")); metaG.append(el("h4", "ov-detail-group-t", "자세한 정보"));
       const sec = (into, title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); into.append(s2); return s2; };
@@ -565,11 +571,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const choices = [...act.children, mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
           mk("fix", "고쳐서 승인", () => editing(true)), button("버리기", "small", null, () => askReason("후보를 버릴까요?", (reason) => go1("reject", { reason })))];
         const save = button("고친 내용으로 승인", "primary small", null, () => { if (edit.value.trim()) go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); });
-        const cancel = button("취소", "small", null, () => { edit.value = c.text; editing(false); });
+        const cancel = button("취소", "small", null, () => { edit.value = c.text; dr.text = null; title.textContent = c.text; editing(false); });
         editing = (on) => { editSec.hidden = !on; act.replaceChildren(...(on ? [save, cancel] : choices)); if (on) edit.focus(); };
       }
       const editSec = sec(decide1, "저장할 내용 · 고칠 수 있어요", edit); editSec.hidden = true;
-      window.ArkismAIChat?.field(edit, { state: {}, title: "기억 다듬기", preset: "You polish one memory an AI agent will be given later: one clear Korean statement of the rule, decision or fact, keeping its meaning and its applicability conditions, nothing added that the text does not say. At most 1000 characters.", context: () => JSON.stringify({ kind: c.kind, original: c.text, summary: c.summary || "" }) });
+      window.ArkismAIChat?.field(edit, { state: dr.talk, title: "기억 다듬기", preset: "You polish one memory an AI agent will be given later: one clear Korean statement of the rule, decision or fact, keeping its meaning and its applicability conditions, nothing added that the text does not say. At most 1000 characters.", context: () => JSON.stringify({ kind: c.kind, original: c.text, summary: c.summary || "" }) });
       editing?.(!edit.hidden);
       decide1.append(act, ...(mp || oldMem ? [el("small", "ov-detail-hint", "합치기는 위 기존 기억에 이 내용을 더해 하나로 만들어요. 새 기억으로 승인하면 둘 다 따로 남아요.")] : []), st); detail.append(decide1);
       // 판단 근거: why it was flagged, the source quote, the meaning checks

@@ -193,6 +193,9 @@
 .ov-wide-win[open] { display: flex; }
 .ov-wide-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); }
 .ov-wide-left { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-height: 0; overflow: auto; border-right: 1px solid var(--border); }
+/* the list is the one thing that scrolls on the left: the sort/search/chips stay put; a thumb bright enough to see (#363636 on the dark panel was not) */
+.ov-wide-list, .ov-wide-right { scrollbar-color: var(--nc-quiet) transparent; }
+.ov-wide-left > .ov-wide-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; margin-right: -10px; padding-right: 10px; }
 .ov-wide-right { overflow: auto; min-height: 0; padding: 20px 24px 24px; }
 .ov-wide-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ov-wide-search { flex: 1 1 140px; min-width: 120px; }
@@ -211,10 +214,11 @@
 .ov-detail-quote { margin: 0; background: var(--bg-muted); border-radius: 8px; color: var(--text-2); padding: 12px 14px; font-size: 14px; line-height: 1.6; }
 .ov-detail-actions { display: flex; flex-wrap: wrap; margin-top: 0; gap: 8px; }
 .ov-detail-facts p { justify-content: space-between; gap: 12px; margin: 0 0 4px; display: contents; } .ov-detail-facts span { color: var(--text-2); }
-.ov-detail-from { display: flex; align-items: center; justify-content: space-between; }
+.ov-detail-from { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .ov-detail-from > span { min-width: 0; overflow-wrap: anywhere; } .ov-detail-from > button { flex: none; } /* a bare session id has no break points */
 .ov-detail-list { display: flex; flex-direction: column; gap: 6px; }
 .ov-detail-bar p { display: flex; justify-content: space-between; margin: 0 0 3px; font-size: 14px; margin-bottom: 6px; } .ov-detail-bar i { display: block; height: 5px; border-radius: 3px; background: var(--bg-muted); } .ov-detail-bar b { display: block; height: 100%; border-radius: 3px; background: var(--text-2); }
 .ov-wide-search, .ov-detail-edit, .ov-ask textarea { background: var(--bg-muted); color: var(--text-1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font: inherit; font-size: 13px; }
+@media (max-width: 720px) { .ov-wide-body:not(.ss-body) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } .ov-wide-body:not(.ss-body) > .ov-wide-left { border-right: 0; border-bottom: 1px solid var(--border); } .ov-wide-right { padding: 16px; } }
 .ov-detail-edit { width: 100%; box-sizing: border-box; font-size: 14px; line-height: 1.6; padding: 10px 12px; resize: vertical; }
 .ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
 .ov-detail-list .ov-win-item { padding: 9px 12px; font-size: 14px; }
