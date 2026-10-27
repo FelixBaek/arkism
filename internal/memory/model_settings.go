@@ -131,6 +131,12 @@ type Providers struct {
 	AssistModel string `json:"assist_model,omitempty"`
 	// The provider the AI 도움 model was picked under: several providers offer the same model name.
 	AssistProvider string `json:"assist_provider,omitempty"`
+	// The owner's picks in 설정 › 역할별 모델 (role_models.go); a role without one runs its server default.
+	Roles map[string]ProviderRole `json:"roles,omitempty"`
+	// What each role runs when nothing is picked: the runner reports the host's roles, memoryd adds its own on read.
+	RoleDefaults map[string]string `json:"role_defaults,omitempty"`
+	// The engines memoryd can run for its roles; added on read, never stored.
+	RoleOptions map[string][]string `json:"role_options,omitempty"`
 }
 
 // ProviderAssistModel picks the AI 도움 model; an empty Model goes back to the runner's default.
@@ -220,6 +226,8 @@ type ProvidersReport struct {
 	// Absent keeps the last inventory: a watch round may only settle requests.
 	Providers *[]Provider      `json:"providers,omitempty"`
 	Results   []ProviderResult `json:"results"`
+	// The host's defaults for the roles it runs (extract, reflect, skill_summary, skill_scan); absent keeps the last.
+	RoleDefaults map[string]string `json:"role_defaults,omitempty"`
 }
 
 type heldKey struct {
@@ -397,7 +405,9 @@ func (s *Service) Providers(ctx context.Context, token string, scope Scope) (Rec
 	}
 	r, err := s.Repo.Get(ctx, colProviders, scope, providersID(scope))
 	if errors.Is(err, ErrNotFound) {
-		return Record{ID: providersID(scope), Scope: scope, Providers: &Providers{Providers: []Provider{}, Requests: []ProviderRequest{}, Disabled: []string{}}}, nil
+		p := &Providers{Providers: []Provider{}, Requests: []ProviderRequest{}, Disabled: []string{}}
+		s.addRoleDefaults(p)
+		return Record{ID: providersID(scope), Scope: scope, Providers: p}, nil
 	}
 	if err != nil || r.Providers == nil {
 		return r, err
@@ -410,6 +420,7 @@ func (s *Service) Providers(ctx context.Context, token string, scope Scope) (Rec
 			p.Requests[i].Status = "expired"
 		}
 	}
+	s.addRoleDefaults(&p)
 	r.Providers = &p
 	return r, nil
 }
@@ -755,7 +766,7 @@ func (s *Service) ProviderHandoff(ctx context.Context, token string, scope Scope
 }
 
 func validProvidersReport(in ProvidersReport) bool {
-	if !validScope(in.Scope) || in.Providers != nil && !validProviders(*in.Providers) || len(in.Results) > providerRequestsKept {
+	if !validScope(in.Scope) || in.Providers != nil && !validProviders(*in.Providers) || len(in.Results) > providerRequestsKept || !validRoleDefaults(in.RoleDefaults) {
 		return false
 	}
 	for _, res := range in.Results {
@@ -780,6 +791,9 @@ func (s *Service) ReportProviders(ctx context.Context, token string, in Provider
 	return s.updateProviders(ctx, in.Scope, func(p *Providers, now time.Time) error {
 		if in.Providers != nil {
 			p.Providers, p.CollectedAt = *in.Providers, &now
+		}
+		if in.RoleDefaults != nil {
+			p.RoleDefaults = in.RoleDefaults
 		}
 		index := map[string]ProviderResult{}
 		for _, res := range in.Results {
@@ -865,6 +879,14 @@ func providersRoutes(mux routeRegistrar, s *Service) {
 			return
 		}
 		out, e := s.SetAssistModel(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/providers/role_model", func(w http.ResponseWriter, r *http.Request) {
+		var in ProviderRoleModel
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.SetRoleModel(r.Context(), bearer(r), in)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("POST /v1/providers/keys/remove", func(w http.ResponseWriter, r *http.Request) {

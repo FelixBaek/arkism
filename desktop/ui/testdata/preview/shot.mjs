@@ -24,7 +24,7 @@ await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKE
     const fake = { model_roles: { embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet", cloudflare_account: "", cloudflare_token_saved: false },
       autostart_get: true, capture_settings: { paused: false, exclude: ["~/private", "~/work/client-a"], instructions: "" }, search_mode: "ollama:qwen3-embedding:0.6b",
       local_backups: { backups: [] }, gateway_token_status: { state: gw || "set", updated_ms: Date.UTC(2026, 9, 13, 3), from_env: false },
-      gateway_token_regenerate: { status: { state: "set", updated_ms: Date.now(), from_env: false }, agents_updated: true }, update_check: { current: "0.1.1", latest: "0.1.2", newer: true }, general_get: { keep_running: true, shortcut: "Ctrl+Shift+Space", shortcut_error: "" } };
+      gateway_token_regenerate: { status: { state: "set", updated_ms: Date.now(), from_env: false }, agents_updated: true }, update_check: { current: "0.1.1", latest: "0.1.2", newer: true }, ssh_host_key_check: { state: "trusted" }, general_get: { keep_running: true, shortcut: "Ctrl+Shift+Space", shortcut_error: "" } };
     if (cmd in fake) return fake[cmd];
     if (cmd === "api") { const r = await fetch(a.base + a.path, { method: a.method, body: a.body == null ? undefined : (typeof a.body === "string" ? a.body : JSON.stringify(a.body)) }); return { status: r.status, body: await r.text() }; }
     throw new Error("preview: " + cmd);

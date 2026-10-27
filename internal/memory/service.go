@@ -57,7 +57,11 @@ type Service struct {
 	// SkillCandidates is how many skills the search hands the judge (1–8); 0 means 8.
 	SkillCandidates int
 	// ModelPicker picks a model for 라우팅 (Clef-flash); nil sends every task to the fixed or first model.
-	ModelPicker   ModelPicker
+	ModelPicker ModelPicker
+	// Judges and Pickers are the engines 설정 › 역할별 모델 may pick per scope ("clef", "jev", "chat");
+	// Router and ModelPicker stay the default (role_models.go).
+	Judges        map[string]SkillJudge
+	Pickers       map[string]ModelPicker
 	searchCommits searchCommitGate
 	analysisMu    sync.Mutex
 	draftMu       sync.Mutex

@@ -635,8 +635,8 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	}
 	if doc.AutoRouting && (group == nil || group.Strategy == "smart") {
 		how = "default"
-		if s.ModelPicker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
-			pick, how, ms = s.clefRoute(ctx, in, group, models, byID, pick, how)
+		if picker := s.modelPicker(p.role("route_judge")); picker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
+			pick, how, ms = s.clefRoute(ctx, picker, in, group, models, byID, pick, how)
 		}
 	}
 	if pick < 0 {
@@ -706,13 +706,13 @@ func routeCandidates(p *Providers, doc Routing, group *RoutingGroup, in RoutingD
 
 // clefRoute asks Clef to pick among models, keeping pick and how when it
 // cannot answer.
-func (s *Service) clefRoute(ctx context.Context, in RoutingDecideInput, group *RoutingGroup, models []routingModel, byID func(string) int, pick int, how string) (int, string, int64) {
+func (s *Service) clefRoute(ctx context.Context, picker ModelPicker, in RoutingDecideInput, group *RoutingGroup, models []routingModel, byID func(string) int, pick int, how string) (int, string, int64) {
 	options := make([]ModelOption, len(models))
 	for i, m := range models {
 		options[i] = ModelOption{ID: m.ID, Name: m.Name, When: m.When}
 	}
 	started := time.Now()
-	if choice, ok := s.pickModel(ctx, in.Scope, in.Task, options); ok && (group == nil || byID(choice) >= 0) {
+	if choice, ok := s.pickModel(ctx, picker, in.Scope, in.Task, options); ok && (group == nil || byID(choice) >= 0) {
 		pick, how = byID(choice), "clef"
 	}
 	return pick, how, time.Since(started).Milliseconds()
@@ -750,12 +750,12 @@ func pickerIdentity(p ModelPicker) (string, string) {
 }
 
 // pickModel asks Clef and records the call's cost; false means fall back to the fixed model.
-func (s *Service) pickModel(ctx context.Context, scope Scope, task string, options []ModelOption) (string, bool) {
-	provider, model := pickerIdentity(s.ModelPicker)
+func (s *Service) pickModel(ctx context.Context, picker ModelPicker, scope Scope, task string, options []ModelOption) (string, bool) {
+	provider, model := pickerIdentity(picker)
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
 	reserved, err := s.beginProviderCall(op, scope, "model_routing", provider, model)
-	choice, usage, err2 := s.ModelPicker.PickModel(op, task, options)
+	choice, usage, err2 := picker.PickModel(op, task, options)
 	if err == nil {
 		if usage.Provider == "" {
 			usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
@@ -901,8 +901,8 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 
 	p50Delta, successDelta := routingDeltas(all, prev, prevOK)
 	classifierName := ""
-	if s.ModelPicker != nil {
-		_, classifierName = pickerIdentity(s.ModelPicker)
+	if picker := s.modelPicker(p.role("route_judge")); picker != nil {
+		_, classifierName = pickerIdentity(picker)
 	}
 	out := map[string]any{
 		"kpi": map[string]any{"requests": all.n, "requests_now_per_min": math.Round(10*float64(t.lastMin.n)/5) / 10,

@@ -78,7 +78,7 @@ func metricsFile() string { return filepath.Join(capState, "metrics.jsonl") }
 
 // generator is GENERATOR with the given pipeline version.
 func generator(pipeline string) host.Obj {
-	return host.Obj{{Key: "model", Value: "claude-" + capModel}, {Key: "prompt_version", Value: "capture-extract-v2"},
+	return host.Obj{{Key: "model", Value: claudeName(capModel)}, {Key: "prompt_version", Value: "capture-extract-v2"},
 		{Key: "pipeline_version", Value: pipeline}}
 }
 

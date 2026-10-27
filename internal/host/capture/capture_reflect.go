@@ -55,7 +55,7 @@ const (
 )
 
 func reflectGenerator(origin string) host.Obj {
-	return host.Obj{{Key: "model", Value: "claude-" + reflectModel}, {Key: "prompt_version", Value: "session-reflect-v2"},
+	return host.Obj{{Key: "model", Value: claudeName(reflectModel)}, {Key: "prompt_version", Value: "session-reflect-v2"},
 		{Key: "pipeline_version", Value: strings.ReplaceAll(origin, "_", "-") + "-reflect-v1"}}
 }
 

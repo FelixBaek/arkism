@@ -75,6 +75,9 @@ func privateModel(system, user, model string, timeout time.Duration, schema, key
 		return nil, sessionWait("model_private_content")
 	}
 	out, err := llm(system, user, model, timeout, schema, key)
+	if def, ok := fallbackModel[model]; ok && err != nil { // the picked model could not answer here: the default does
+		out, err = llm(system, user, def, timeout, schema, key)
+	}
 	if policyErr := privateCapturePolicy("model_capture_policy_wait", policyPaths...); policyErr != nil {
 		return nil, policyErr
 	}

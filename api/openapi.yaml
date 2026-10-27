@@ -6224,7 +6224,7 @@
             }
           }}}},
     "/v1/providers": {
-      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
+      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked and the engines this server can run)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -6246,7 +6246,7 @@
               }
             }
           }}},
-      "post": {"summary": "Host runner report (handoff:providers)", "description": "Body {scope, providers?, results[{id, status done|failed, error, models}]}. providers[{id, name, kind subscription|api, custom, accounts[{id,label,cli,status connected|expired|missing,default,plan?,usage_status?,usage_checked_at?,credits?,cli_info?,quota?,quotas?}], keys[{id,name,last4,base_url,monthly_budget_usd,created_at}], models[]}]. Optional account plan is at most 60 characters; usage_status is ok|unavailable|expired; usage_checked_at is a nonzero RFC3339 UTC timestamp; credits is {balance?: finite number >=0, unlimited?: boolean}. Optional cli_info is {version?,latest?,via?,update:boolean}: version/latest are SemVer strings of at most 60 characters, via is npm|brew|self or empty, and update=true requires version, latest and via. Omitted cli_info keeps legacy reports compatible. Account IDs are unique within each provider. quota and quotas entries are {window,left_pct?,resets_at?,model?}, with left_pct 0..100 and optional model at most 40 characters; quotas has at most 12 windows, and quota remains the first-window alias for older clients. Omitted usage fields remain compatible with older reports. A failed usage lookup does not imply 100% remaining or logout. Absent providers keeps the last inventory. Credentials and raw authentication or external error bodies must not be reported.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not the runner"}, "422": {"description": "secret_detected"},
+      "post": {"summary": "Host runner report (handoff:providers)", "description": "Body {scope, providers?, results[{id, status done|failed, error, models}]}. providers[{id, name, kind subscription|api, custom, accounts[{id,label,cli,status connected|expired|missing,default,plan?,usage_status?,usage_checked_at?,credits?,cli_info?,quota?,quotas?}], keys[{id,name,last4,base_url,monthly_budget_usd,created_at}], models[]}]. Optional account plan is at most 60 characters; usage_status is ok|unavailable|expired; usage_checked_at is a nonzero RFC3339 UTC timestamp; credits is {balance?: finite number >=0, unlimited?: boolean}. Optional cli_info is {version?,latest?,via?,update:boolean}: version/latest are SemVer strings of at most 60 characters, via is npm|brew|self or empty, and update=true requires version, latest and via. Omitted cli_info keeps legacy reports compatible. Account IDs are unique within each provider. quota and quotas entries are {window,left_pct?,resets_at?,model?}, with left_pct 0..100 and optional model at most 40 characters; quotas has at most 12 windows, and quota remains the first-window alias for older clients. Omitted usage fields remain compatible with older reports. A failed usage lookup does not imply 100% remaining or logout. Absent providers keeps the last inventory. Optional role_defaults {extract?, reflect?, skill_summary?, skill_scan?} reports what the host runs for those roles with nothing picked (skill_scan: comma-separated installed engines); absent keeps the last. Credentials and raw authentication or external error bodies must not be reported.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not the runner"}, "422": {"description": "secret_detected"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -28884,6 +28884,181 @@
           }
         }
       }
+    },
+    "/v1/providers/role_model": {
+      "post": {
+        "operationId": "post_v1_providers_role_model",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Providers: role model",
+        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseRecord"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestProviderRoleModel"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "role"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -43755,6 +43930,34 @@
           },
           "assist_provider": {
             "type": "string"
+          },
+          "roles": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseProviderRole"
+            }
+          },
+          "role_defaults": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "role_options": {
+            "type": "object",
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
           }
         },
         "additionalProperties": false,
@@ -51395,6 +51598,55 @@
         "additionalProperties": false,
         "x-go-type": "memory.UsageSessionSearchInput",
         "x-go-source": "internal/memory/usage_session_find.go"
+      },
+      "WireResponseProviderRole": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "off": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "skill_scan: engines not to run"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ProviderRole",
+        "x-go-source": "internal/memory/role_models.go",
+        "description": "ProviderRole is the owner's pick for one role."
+      },
+      "WireRequestProviderRoleModel": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "role": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "off": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ProviderRoleModel",
+        "x-go-source": "internal/memory/role_models.go",
+        "description": "ProviderRoleModel sets or (all empty) clears one role's pick."
       }
     },
     "headers": {

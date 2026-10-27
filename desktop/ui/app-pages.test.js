@@ -8,7 +8,7 @@ const path = require("path");
 const { boot } = require("./testdata/app-harness.js");
 
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, "testdata/preview/v1", name), "utf8"));
-let app, answers = [], nextFile = null, blobs = [], postFails = false, lastAssist = "";
+let app, answers = [], nextFile = null, blobs = [], postFails = false, lastAssist = "", rolePosts = [];
 
 // The server's agent list with an agent found but off, one more off, a pending request and a second shared folder.
 function agentTools() {
@@ -30,6 +30,14 @@ async function api(a) {
     const cat = /Categories: ([^,\n]+)/.exec(lastAssist)[1], skills = lastAssist.split("(name: description):\n")[1].split("\n\n")[0].split("\n").map((l) => l.split(":")[0]);
     const map = Object.fromEntries([...skills.map((n) => [n, cat]), ["no-such-skill", cat], [skills[0] + "x", "no-such-category"]]);
     return { status: 200, body: JSON.stringify({ crew_assist: { status: "done", output: "답: " + JSON.stringify(map) } }) };
+  }
+  // 역할별 모델 on a server: the reply carries the pick back with the defaults
+  if (a.method === "POST" && p === "/v1/providers/role_model") {
+    const pick = JSON.parse(a.body); rolePosts.push(pick);
+    if (pick.role === "reflect") return { status: 403, body: JSON.stringify({ code: "access_denied" }) };
+    const d = fixture("providers.json").providers;
+    d.roles = { ...d.roles, [pick.role]: { model: pick.model, provider: pick.provider, off: pick.off } };
+    return { status: 200, body: JSON.stringify({ providers: d }) };
   }
   if (postFails && a.method === "POST" && p === "/v1/agent_tools/requests") return { status: 500, body: JSON.stringify({ code: "boom" }) };
   return null;
@@ -277,6 +285,8 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   await save();
   assert.match(notice(), /https이거나/);
   roles().querySelector('[aria-label="판별 모델 주소"]').value = "http://127.0.0.1:11434/v1";
+  answers.push(false); await choose("임베딩", "ollama"); // re-indexing is asked first; no keeps the old one
+  assert.equal(roles().querySelector('[aria-label="임베딩"]').value, "auto");
   await choose("기억 추출 모델", "opus"); await choose("임베딩", "none");
   kit().querySelector('[aria-label="스킬 폴더"]').value = "relative/path";
   await save();
@@ -512,7 +522,31 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await press("연결 끊기");
   await settings("connect");
   await settings("roles");
-  assert.match(text(app.$(".ag-roles")), /서버가 정함/);
+  // on a server every role is a pick saved per scope, starting from the server default
+  const roles = () => app.$(".ag-roles");
+  const sel = (label) => roles().querySelector(`[aria-label="${label}"]`);
+  const choose = async (label, value) => { sel(label).value = value; app.dom.fire(sel(label), "change"); await app.settle(); };
+  assert.doesNotMatch(text(roles()), /서버가 정함/);
+  assert.equal(sel("스킬 판정 모델").options[0].textContent, "서버 기본값 (Clef)");
+  assert.equal(sel("기억 추출 모델").value, "anthropic|claude-haiku-4-5"); // the preview's pick
+  assert.ok(sel("임베딩 모델").disabled);
+  await choose("스킬 판정 모델", "jev");
+  assert.deepEqual(rolePosts.at(-1), { scope: rolePosts.at(-1).scope, role: "skill_judge", model: "jev" });
+  assert.match(notice(), /스킬 판정: Jev/);
+  assert.equal(sel("스킬 판정 모델").value, "jev");
+  await choose("스킬 후보 찾기 모델", "4");
+  assert.equal(rolePosts.at(-1).model, "4");
+  await choose("반성·검토 모델", sel("반성·검토 모델").options[1].value);
+  assert.equal(rolePosts.at(-1).provider, "anthropic");
+  assert.match(notice(), /바꿀 수 없어요/);
+  assert.equal(sel("반성·검토 모델").value, ""); // refused: stays on the server default
+  const evaluator = roles().querySelector('[aria-label="NVIDIA SkillEvaluator"]');
+  assert.equal(evaluator.getAttribute("aria-checked"), "false"); // switched off in the preview
+  evaluator.click(); await app.settle();
+  assert.deepEqual(rolePosts.at(-1).off, []);
+  assert.equal(roles().querySelector('[aria-label="Cisco Skill Scanner"]'), null); // not installed on this server
+  await press("최근 판정", roles());
+  assert.match(notice(), /라우팅 현황/);
   await settings("advanced");
   assert.doesNotMatch(text(app.$("#table")), /지금 백업/);
   await settings("connect");

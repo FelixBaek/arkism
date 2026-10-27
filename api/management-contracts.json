@@ -561,6 +561,18 @@
     },
     {
       "method": "post",
+      "path": "/v1/providers/role_model",
+      "request": "ProviderRoleModel",
+      "response": "Record",
+      "summary": "Providers: role model",
+      "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+      "required_body": [
+        "scope",
+        "role"
+      ]
+    },
+    {
+      "method": "post",
       "path": "/v1/usage/sessions/delete",
       "request": "SessionDeleteInput",
       "response": "SessionDeleteOutput",

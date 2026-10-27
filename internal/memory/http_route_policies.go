@@ -216,6 +216,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/prompts/{id}/restore":                   {action: "write:prompts", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/providers":                              {action: "handoff:providers", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/providers/assist_model":                 {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"POST /v1/providers/role_model":                   {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/providers/cli_update":                   {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/providers/keys":                         {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/providers/keys/remove":                  {action: "write:providers", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},

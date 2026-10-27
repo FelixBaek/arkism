@@ -26,7 +26,9 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/capture"
 	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
+	"github.com/FelixBaek/arkism/internal/host/skills"
 )
 
 var providerNames = map[string]string{"anthropic": "Anthropic", "openai": "OpenAI", "google": "Google", "zai": "Z.ai", "xai": "xAI", "custom": "직접 추가"}
@@ -885,7 +887,7 @@ func providersRound(report bool) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		body = append(body, host.KV{Key: "providers", Value: inv})
+		body = append(body, host.KV{Key: "providers", Value: inv}, host.KV{Key: "role_defaults", Value: roleDefaults()})
 	}
 	if _, err := runnerCall("/v1/providers", body, 15*time.Second); err != nil {
 		return 0, err
@@ -917,4 +919,11 @@ func providersWatchUntil(interval, reportEvery time.Duration, stderr io.Writer, 
 			}
 		}
 	})
+}
+
+// roleDefaults is what the host runs for its 설정 › 역할별 모델 roles when nothing is picked.
+// shortcut: read from this runner's env; a capture or skill timer started with other env shows the runner's values.
+func roleDefaults() host.Obj {
+	return host.Obj{{Key: "extract", Value: capture.CaptureModel()}, {Key: "reflect", Value: capture.ReflectModel()},
+		{Key: "skill_summary", Value: skills.SummaryDefault()}, {Key: "skill_scan", Value: strings.Join(skills.InstalledScanners(), ",")}}
 }

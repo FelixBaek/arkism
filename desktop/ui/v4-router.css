@@ -111,6 +111,8 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .ag-select { width: min(245px, 45%); flex: none; height: 38px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); }
 .ag-roles .mp-assist { width: min(245px, 45%); flex: none; height: 38px; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); }
 .ag-roles .v4-role { padding: 8px 0; border-top: 0; gap: 8px; }
+.ag-roles .v4-role-pick { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; max-width: 60%; }
+.ag-roles .v4-role-pick > select { width: 245px; max-width: 100%; }
 /* right column: wider on this tab, and its left border is a drag handle (pages.js agentsResizer); 60% keeps the list readable */
 .ag-resize { display: none; }
 .panel:has(.v4-set-agents) > .detail { width: clamp(360px, var(--ag-detail-w, 480px), 60%); }
