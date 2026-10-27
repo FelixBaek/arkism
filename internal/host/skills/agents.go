@@ -583,7 +583,7 @@ const (
 	memoryUseDays  = 7
 )
 
-// memoryUse is injections and answer use per memory over the last week and the last 30 days,
+// memoryUse is injections, receipts and estimated use per memory over the last week and the last 30 days,
 // recomputed at most every 30 minutes.
 func memoryUse(now float64) (any, any, error) {
 	path := filepath.Join(agentsState, "memory-use.json")
@@ -622,19 +622,25 @@ func memoryUseOver(now float64, days int) (host.Obj, error) {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool { // most injected first; ties by id, since Go maps keep no order
-		if counts[ids[i]][0] != counts[ids[j]][0] {
-			return counts[ids[i]][0] > counts[ids[j]][0]
+		if counts[ids[i]].Injected != counts[ids[j]].Injected {
+			return counts[ids[i]].Injected > counts[ids[j]].Injected
 		}
 		return ids[i] < ids[j]
 	})
-	items, injections, used := []any{}, 0, 0
+	// used is record_memory_usage receipts; estimated is answers restating the memory, shown apart;
+	// unused marks a memory returned unused_after times since its last receipt for a person to review.
+	after := host.UnusedAfter()
+	items, injections, used, estimated := []any{}, 0, 0, 0
 	for _, id := range ids[:min(len(ids), 5000)] {
 		n := counts[id]
-		items = append(items, host.Obj{{Key: "id", Value: id}, {Key: "injected", Value: n[0]}, {Key: "used", Value: n[1]}})
-		injections += n[0]
-		used += n[1]
+		items = append(items, host.Obj{{Key: "id", Value: id}, {Key: "injected", Value: n.Injected}, {Key: "used", Value: n.Receipts},
+			{Key: "estimated", Value: n.Overlap}, {Key: "unreceipted", Value: n.Unreceipted}, {Key: "unused", Value: n.Unreceipted >= after}})
+		injections += n.Injected
+		used += n.Receipts
+		estimated += n.Overlap
 	}
-	use := host.Obj{{Key: "days", Value: days}, {Key: "sessions", Value: sessions}, {Key: "injections", Value: injections}, {Key: "used", Value: used}, {Key: "items", Value: items}}
+	use := host.Obj{{Key: "days", Value: days}, {Key: "sessions", Value: sessions}, {Key: "injections", Value: injections}, {Key: "used", Value: used},
+		{Key: "estimated", Value: estimated}, {Key: "unused_after", Value: after}, {Key: "items", Value: items}}
 	// The hooks' own text size (SessionStart index + prompt recall); a host that has not logged it yet sends nothing.
 	if n, chars, err := host.InjectedChars(since); err == nil && n > 0 {
 		use.Set("inject_sessions", n)

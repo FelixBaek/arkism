@@ -913,6 +913,11 @@ func recordMemoryUsage(memoryID, eventID any) (host.Obj, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The local use judgement (capture utility, the app's 안 쓰임 list) counts this line; the server's
+	// archive receipts below exist only while a linked original is live.
+	if err := host.Metric(map[string]any{"event": "memory_used", "memory_id": pyStr(memoryID), "event_id": pyStr(eventID)}); err != nil {
+		return nil, err
+	}
 	sessions := map[string]bool{}
 	for _, tag := range asList(getOr(memory, "tags", []any{})) {
 		if s := str(tag); strings.HasPrefix(s, "session:") {

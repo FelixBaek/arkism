@@ -447,15 +447,17 @@ func TestCaptureApplyLessonsOnlyCapturesAndNeverApproves(t *testing.T) {
 func TestCaptureTrialRetiresUnusedAndGraduatesOld(t *testing.T) {
 	today := time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
 	state := host.Obj{{Key: "a", Value: "2026-11-01T00:00:00.000Z"}, {Key: "b", Value: "2026-11-01T00:00:00.000Z"},
-		{Key: "c", Value: "2026-10-01T00:00:00.000Z"}, {Key: "d", Value: "2026-11-01T00:00:00.000Z"}, {Key: "e", Value: "2026-11-01T00:00:00.000Z"}}
-	counts := map[string][3]int{"a": {5, 0, 0}, "b": {9, 1, 0}, "c": {2, 0, 0}, "d": {4, 0, 0}, "e": {6, 0, 1}} // e: also recalled by Codex
+		{Key: "c", Value: "2026-10-01T00:00:00.000Z"}, {Key: "d", Value: "2026-11-01T00:00:00.000Z"}, {Key: "e", Value: "2026-11-01T00:00:00.000Z"},
+		{Key: "g", Value: "2026-11-01T00:00:00.000Z"}}
+	// b restated in an answer (the estimate stands in without a receipt), e also recalled by Codex, g receipted once
+	counts := map[string]host.MemoryUse{"a": {Injected: 5}, "b": {Injected: 9, Overlap: 1}, "c": {Injected: 2}, "d": {Injected: 4}, "e": {Injected: 6, Unread: 1}, "g": {Injected: 9, Receipts: 1, Unreceipted: 8}}
 	never := func(string) bool { return false }
 	got, err := trialVerdicts(state, counts, today, never)
 	if err != nil || host.MustDumps(got, host.DumpOpts{}) != `{"a": "retire", "c": "graduate"}` {
 		t.Fatal(got, err)
 	}
 	state = append(state, host.KV{Key: "f", Value: "2026-10-01T00:00:00.000Z"})
-	counts["c"], counts["f"] = [3]int{5, 0, 0}, [3]int{5, 0, 0}
+	counts["c"], counts["f"] = host.MemoryUse{Injected: 5}, host.MemoryUse{Injected: 5}
 	kept := func(id string) bool { return id != "a" }
 	got, err = trialVerdicts(state, counts, today, kept) // a kept one due for retirement waits, then graduates
 	if err != nil || host.MustDumps(got, host.DumpOpts{}) != `{"a": "retire", "c": "graduate", "f": "graduate"}` {
@@ -527,8 +529,8 @@ func TestCaptureTrialReviewKeepsAnUnusedProhibition(t *testing.T) {
 		posts = append(posts, path)
 		return nil, nil
 	}
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
-		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}, "c": {5, 0, 0}, "d": {5, 0, 0}, "e": {5, 0, 0}}, 0, nil // injected five times, never restated
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) {
+		return map[string]host.MemoryUse{"a": {Injected: 5}, "b": {Injected: 5}, "c": {Injected: 5}, "d": {Injected: 5}, "e": {Injected: 5}}, 0, nil // injected five times, never receipted or restated
 	}
 	if err := seedTrial([]string{"a", "b", "c", "d", "e"}); err != nil {
 		t.Fatal(err)
@@ -559,8 +561,8 @@ func TestCaptureTrialNeverWritesAMemoryStatus(t *testing.T) {
 		posts = append(posts, path)
 		return nil, nil
 	}
-	host.UtilityCounts = func(string) (map[string][3]int, int, error) {
-		return map[string][3]int{"a": {5, 0, 0}, "b": {5, 0, 0}}, 0, nil // both due for retirement
+	host.UtilityCounts = func(string) (map[string]host.MemoryUse, int, error) {
+		return map[string]host.MemoryUse{"a": {Injected: 5}, "b": {Injected: 5}}, 0, nil // both due for retirement
 	}
 	if err := seedTrial([]string{"a", "b"}); err != nil {
 		t.Fatal(err)

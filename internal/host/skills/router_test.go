@@ -30,6 +30,9 @@ func swapRouter(t *testing.T) {
 	kitEnv(t) // route_skills also reads the agents' MCP configs: never this machine's
 	req, base, tok, cache, rt, ro, pc, loaded := routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills
 	routerTokenFile = filepath.Join(t.TempDir(), "missing-token") // never the real token
+	capState := host.CaptureState
+	host.CaptureState = t.TempDir() // record_memory_usage writes the metrics log
+	t.Cleanup(func() { host.CaptureState = capState })
 	routerCacheDir, fromPC, receiveOnly, loadedSkills = t.TempDir(), false, false, map[string]loadedSkill{}
 	sessions, maxChars, pinRoot := routerSessions, skillMaxChars, t.TempDir()
 	routerSessions = func() host.SessionStore { return host.SessionStore{Root: pinRoot} }
@@ -209,6 +212,11 @@ func TestMemoryUseFollowsSessionLink(t *testing.T) {
 	calls = fakeRequest(t, `{"tags":[]}`)
 	if v, err := recordMemoryUsage("memory-a", "turn-1"); err != nil || len(asList(field(v, "receipts"))) != 0 || len(*calls) != 1 {
 		t.Fatal(v, err)
+	}
+	// Both calls leave the local receipt the use judgement counts, linked original or not.
+	log, err := os.ReadFile(filepath.Join(host.CaptureState, "metrics.jsonl"))
+	if err != nil || strings.Count(string(log), `"event": "memory_used", "event_id": "turn-1", "memory_id": "memory-a"`) != 2 {
+		t.Fatal(string(log), err)
 	}
 }
 

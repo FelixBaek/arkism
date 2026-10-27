@@ -591,11 +591,12 @@ func trialPop(cid string) error {
 
 // trialVerdicts is {id: "retire" | "graduate"} for trial memories that are decided. keep is asked only about
 // one due for retirement; a kept one waits to graduate instead.
-func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time, keep func(string) bool) (host.Obj, error) {
+func trialVerdicts(state host.Obj, counts map[string]host.MemoryUse, today time.Time, keep func(string) bool) (host.Obj, error) {
 	out := host.Obj{}
 	for _, e := range state {
 		n := counts[e.Key]
-		if n[0] >= trialRetireAt && n[1] == 0 && n[2] == 0 && !keep(e.Key) { // another agent may have used it: never retire blind
+		// no receipt, no answer restating it (the estimate stands in for a missing receipt), no unread session
+		if n.Injected >= trialRetireAt && n.Receipts == 0 && n.Overlap == 0 && n.Unread == 0 && !keep(e.Key) { // another agent may have used it: never retire blind
 			out.Set(e.Key, "retire")
 			continue
 		}
@@ -615,8 +616,8 @@ func trialVerdicts(state host.Obj, counts map[string][3]int, today time.Time, ke
 }
 
 // trialReview drains the legacy trial list: it reports unused memories and graduates old ones, writing nothing.
-// shortcut: `used` is word overlap, so a lesson followed without being restated can read as unused;
-// trialRetireAt is high for that reason; add an LLM judge if it bites.
+// shortcut: without a receipt, word overlap decides, so a lesson followed without being restated can read as
+// unused; trialRetireAt is high for that reason; add an LLM judge if it bites.
 func trialReview() error {
 	for _, e := range trialState() {
 		cid := e.Key
@@ -675,7 +676,7 @@ func trialReview() error {
 		if verdict == "retire" {
 			verdict = "unused" // a person removes it from the 안 쓰임 list; the AI never expires a memory (ADR-0022)
 		}
-		metric(kv("event", "trial_"+verdict), kv("memory_id", mid), kv("injected", counts[mid][0]))
+		metric(kv("event", "trial_"+verdict), kv("memory_id", mid), kv("injected", counts[mid].Injected))
 		if err := trialPop(mid); err != nil {
 			return err
 		}
@@ -1070,16 +1071,36 @@ func answerTextOverlap(memoryText, answer string) bool {
 }
 
 // recalledBySession is the memory ids injected by prompt search per session, from the local metrics.
-func recalledBySession(since string) (map[string][]string, []string, error) {
+// receipt is one memory's record_memory_usage calls since an ISO time: distinct event ids, and the last time.
+type receipt struct {
+	n    int
+	last string
+}
+
+// recalledBySession is {session: memory ids its prompts recalled} with the sessions in first-recall order and
+// each one's first recall time, plus the receipts per memory, all since an ISO time.
+func recalledBySession(since string) (map[string][]string, []string, map[string]string, map[string]receipt, error) {
 	rows, err := metricRows()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	out := map[string][]string{}
 	var order []string
 	seen := map[string]map[string]bool{}
+	first := map[string]string{}
+	receipts := map[string]receipt{}
+	events := map[string]bool{}
 	for _, r := range rows {
-		if since != "" && str(or(r["ts"], "")) < since {
+		ts := str(or(r["ts"], ""))
+		if since != "" && ts < since {
+			continue
+		}
+		if r["event"] == "memory_used" && truthy(r["memory_id"]) {
+			mid, key := str(r["memory_id"]), str(r["memory_id"])+"\x00"+str(or(r["event_id"], ""))
+			if !events[key] { // a retry reuses its event id: one use
+				events[key] = true
+				receipts[mid] = receipt{receipts[mid].n + 1, max(receipts[mid].last, ts)}
+			}
 			continue
 		}
 		ids, _ := r["ids"].([]any)
@@ -1088,6 +1109,7 @@ func recalledBySession(since string) (map[string][]string, []string, error) {
 			if seen[sid] == nil {
 				seen[sid] = map[string]bool{}
 				order = append(order, sid)
+				first[sid] = ts
 			}
 			for _, id := range ids {
 				if s := str(id); !seen[sid][s] {
@@ -1097,7 +1119,7 @@ func recalledBySession(since string) (map[string][]string, []string, error) {
 			}
 		}
 	}
-	return out, order, nil
+	return out, order, first, receipts, nil
 }
 
 // memoryText is the memory's text, "" when it is gone, ok false when it could not be read.
@@ -1114,11 +1136,12 @@ func memoryText(mid string) (string, bool) {
 
 const settled = 3600 // a session quiet this long has written its answers; a busier one may still use what it recalled
 
-// utilityCounts is {memory id: [injected, answer text overlap, unread]} over settled sessions whose prompts
-// recalled it (since an ISO time), and the session count. unread counts sessions whose answers
-// this client cannot read (Codex, ZCode share the memories).
-func utilityCounts(since string) (map[string][3]int, int, error) {
-	bySession, order, err := recalledBySession(since)
+// utilityCounts is one host.MemoryUse per memory over settled sessions whose prompts recalled it (since an
+// ISO time), and the session count. A record_memory_usage receipt is the use judgement; answer text overlap
+// is kept apart as an estimate. Unread counts sessions whose answers this client cannot read (Codex, ZCode
+// share the memories).
+func utilityCounts(since string) (map[string]host.MemoryUse, int, error) {
+	bySession, order, first, receipts, err := recalledBySession(since)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1127,14 +1150,17 @@ func utilityCounts(since string) (map[string][3]int, int, error) {
 		ok bool
 	}
 	texts := map[string]text{}
-	counts := map[string][3]int{}
+	counts := map[string]host.MemoryUse{}
+	for mid, r := range receipts {
+		counts[mid] = host.MemoryUse{Receipts: r.n}
+	}
 	for _, sid := range order {
 		ids := bySession[sid]
 		matches, _ := filepath.Glob(filepath.Join(globEscape(capProjects), "*", globEscape(sid)+".jsonl"))
 		if len(matches) == 0 {
 			for _, mid := range ids {
 				n := counts[mid]
-				n[2]++
+				n.Unread++
 				counts[mid] = n
 			}
 			continue
@@ -1168,9 +1194,12 @@ func utilityCounts(since string) (map[string][3]int, int, error) {
 				continue // unreadable now: counted as neither injected nor unused, so an outage never retires it
 			}
 			n := counts[mid]
-			n[0]++
+			n.Injected++
+			if first[sid] > receipts[mid].last { // returned again after the last receipt (or never receipted)
+				n.Unreceipted++
+			}
 			if t.s != "" && answerTextOverlap(norm(t.s), answer) {
-				n[1]++
+				n.Overlap++
 			}
 			counts[mid] = n
 		}
@@ -1178,50 +1207,61 @@ func utilityCounts(since string) (map[string][3]int, int, error) {
 	return counts, len(bySession), nil
 }
 
-// utility reports transcript text overlap. The legacy used/use_rate/review_unused
-// fields are compatibility aliases; neither overlap nor its absence measures use.
-// Review candidates are informational and are never automatically demoted.
+// utility reports record_memory_usage receipts (used) and, apart, transcript text overlap (an estimate
+// that never claims actual use). The legacy use_rate/review_unused fields are compatibility aliases.
+// review_unused lists memories injected minInjected times with neither; review_unreceipted lists those
+// returned host.UnusedAfter times since their last receipt. Both are informational: nothing is demoted here.
 func utility(minInjected int, stdout io.Writer) error {
 	counts, sessions, err := utilityCounts("")
 	if err != nil {
 		return err
 	}
-	injected, hit, unread := 0, 0, 0
+	injected, used, hit, unread := 0, 0, 0, 0
 	type row struct {
 		id string
 		n  int
 	}
-	var unused []row
+	var unused, unreceipted []row
 	for mid, n := range counts {
-		injected += n[0]
-		hit += n[1]
-		unread += n[2]
-		if n[0] >= minInjected && n[1] == 0 {
-			unused = append(unused, row{mid, n[0]})
+		injected += n.Injected
+		used += n.Receipts
+		hit += n.Overlap
+		unread += n.Unread
+		if n.Injected >= minInjected && n.Receipts == 0 && n.Overlap == 0 {
+			unused = append(unused, row{mid, n.Injected})
+		}
+		if n.Unreceipted >= host.UnusedAfter() {
+			unreceipted = append(unreceipted, row{mid, n.Unreceipted})
 		}
 	}
 	// shortcut: Python kept first-seen order among ties; ties here are ordered by id.
-	sort.Slice(unused, func(i, j int) bool {
-		if unused[i].n != unused[j].n {
-			return unused[i].n > unused[j].n
+	reviewList := func(rows []row, key string) []any {
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].n != rows[j].n {
+				return rows[i].n > rows[j].n
+			}
+			return rows[i].id < rows[j].id
+		})
+		out := []any{}
+		for _, u := range rows {
+			t, _ := memoryText(u.id)
+			out = append(out, host.Obj{{Key: "id", Value: u.id}, {Key: key, Value: u.n}, {Key: "text", Value: head(t, 80)}})
 		}
-		return unused[i].id < unused[j].id
-	})
+		return out
+	}
 	var rate any
 	if injected > 0 {
 		rate = math.Round(float64(hit)/float64(injected)*1000) / 1000
 	}
-	review := []any{}
-	for _, u := range unused {
-		t, _ := memoryText(u.id)
-		review = append(review, host.Obj{{Key: "id", Value: u.id}, {Key: "injected", Value: u.n}, {Key: "text", Value: head(t, 80)}})
-	}
-	fmt.Fprintln(stdout, dumpsIndent(host.Obj{{Key: "measurement_basis", Value: "answer_text_overlap"},
-		{Key: "actual_use_status", Value: "not_measured"}, {Key: "actual_used", Value: nil},
+	review := reviewList(unused, "injected")
+	fmt.Fprintln(stdout, dumpsIndent(host.Obj{{Key: "measurement_basis", Value: "usage_receipt"},
+		{Key: "estimate_basis", Value: "answer_text_overlap"}, {Key: "actual_use_status", Value: "receipts_only"},
+		{Key: "actual_used", Value: used}, {Key: "unused_after", Value: host.UnusedAfter()},
 		{Key: "sessions", Value: sessions}, {Key: "memory_injections", Value: injected},
 		{Key: "unread_session_pairs", Value: unread}, {Key: "text_overlap_count", Value: hit},
 		{Key: "text_overlap_rate", Value: rate}, {Key: "review_without_text_overlap", Value: review},
-		{Key: "used", Value: hit}, {Key: "use_rate", Value: rate}, {Key: "review_unused", Value: review}}, true))
+		{Key: "review_unreceipted", Value: reviewList(unreceipted, "unreceipted")},
+		{Key: "used", Value: used}, {Key: "use_rate", Value: rate}, {Key: "review_unused", Value: review}}, true))
 	return nil
 }
 

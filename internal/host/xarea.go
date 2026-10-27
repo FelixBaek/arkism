@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -44,11 +45,26 @@ var (
 	}
 )
 
+// MemoryUse is how one memory fared over settled sessions. Receipts (record_memory_usage calls) are the
+// use judgement; Overlap (answers restating its text) is only an estimate for memories without one.
+// Unreceipted is the injected sessions since the last receipt: a person reviews a memory over UnusedAfter.
+type MemoryUse struct {
+	Injected, Receipts, Overlap, Unread, Unreceipted int
+}
+
+// UnusedAfter is the unreceipted returns after which a memory shows as 안 쓰임 (ARKISM_MEMORY_UNUSED_AFTER, default 10).
+func UnusedAfter() int {
+	if n, err := strconv.Atoi(Env("ARKISM_MEMORY_UNUSED_AFTER", "10")); err == nil && n > 0 {
+		return n
+	}
+	return 10
+}
+
 // Area C (capture, work, PC client) owns these.
 var (
-	// UtilityCounts returns {memory id: [injected, used, unread]} over settled sessions since
-	// an ISO time ("" = all), and the session count.
-	UtilityCounts = func(since string) (map[string][3]int, int, error) { return nil, 0, errNotPorted }
+	// UtilityCounts returns one MemoryUse per memory id over settled sessions since an ISO time
+	// ("" = all), and the session count.
+	UtilityCounts = func(since string) (map[string]MemoryUse, int, error) { return nil, 0, errNotPorted }
 )
 
 // Area RC (crew runner) owns these.
