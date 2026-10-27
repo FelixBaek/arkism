@@ -1,0 +1,7 @@
+{"authority": "data_only_untrusted", "missing": [], "items": [
+ {"id": "ss-1", "state": "active", "archives": [{"id": "a1", "state": "active", "format": "codex_jsonl", "supported": true, "observed_at": "2098-12-31T02:04:00Z", "expires_at": "2026-11-02T02:04:00Z", "last_used_at": "2098-12-31T20:00:00Z"}]},
+ {"id": "ss-2", "state": "active", "archives": [{"id": "a2", "state": "active", "format": "claude_jsonl", "supported": true, "observed_at": "2098-12-31T03:00:00Z", "expires_at": "2026-11-01T03:00:00Z"}]},
+ {"id": "ss-3", "state": "expired", "archives": [{"id": "a3", "state": "expired", "format": "claude_jsonl", "supported": true, "observed_at": "2098-12-20T03:00:00Z"}]},
+ {"id": "ss-4", "state": "none", "archives": []},
+ {"id": "ss-5", "state": "active", "archives": [{"id": "a5", "state": "active", "format": "claude_jsonl", "supported": true, "observed_at": "2098-12-31T05:00:00Z", "expires_at": "2026-11-03T05:00:00Z"}]}
+]}

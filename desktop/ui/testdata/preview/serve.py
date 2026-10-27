@@ -94,6 +94,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             for r in rows: groups[group(r)] = groups.get(group(r), 0) + 1  # "" is the uncategorized count, as the server sends it
             want = body.get("category") or ""
             if want not in ("", "all"): rows = [r for r in rows if group(r) == ("" if want == "none" else want)]
+        if body.get("ids"): rows = [r for r in rows if r.get("id") in body["ids"]]  # normalizeCatalog: memories by id, for the batch name read
         kinds = count(rows, lambda r: r.get("kind"))
         if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
         start, limit = int(body.get("cursor") or 0), int(body.get("limit") or 50)  # the cursor is a plain offset here

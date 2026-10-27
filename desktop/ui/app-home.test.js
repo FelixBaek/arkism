@@ -57,11 +57,20 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.equal(d.querySelector(".ov-win-next"), null);
   assert.ok(!/다음 단계/.test(text(d.querySelector(".ov-win-cells"))));
   // every stage draws its own list; only a stage whose list a wide window shows whole keeps a footer button
-  for (const key of ["extract", "classify", "trace", "judge", "dream", "active"]) {
+  for (const key of ["extract", "classify", "judge", "dream", "active"]) {
     d = await openWindow({ key });
     assert.ok(d.querySelector(".ov-win-list"), key);
     assert.equal(!!d.querySelector(".ov-win-foot button"), ["extract", "active"].includes(key), `${key} footer`);
   }
+  // 사용 기록 opens wide; ‹ 작게 보기 gives the stage window, whose footer widens it again
+  d = await openWindow({ key: "trace" });
+  assert.ok(d.classList.contains("ov-wide-win"), "trace opens wide");
+  assert.ok(d.querySelector(".ov-wide-row"), "a row per memory");
+  assert.ok(d.querySelector("select.ov-wide-sort"), "sortable");
+  await press("‹ 작게 보기", d, 20);
+  assert.ok(win().querySelector(".ov-win-list") && !win().classList.contains("ov-wide-win"));
+  await press("넓게 보기 ›", win(), 20);
+  assert.ok(win().classList.contains("ov-wide-win"));
   // collect's 열기 opens that session's dialogue in the 세션 기록 window (there is no separate 세션 screen)
   d = await openWindow({ key: "collect" });
   const talks = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/transcript").length;
@@ -173,7 +182,10 @@ test("overview: review rows approve and reject in place, with the reason asked f
 test("overview: 불러오기 shows receipts, an empty history and a failed read", async () => {
   let d = await openWindow({ key: "recall" });
   await app.settle(50);
-  assert.match(text(d), /한 번에 넣는 양/);
+  assert.match(text(d), /한 번에 평균/);
+  assert.match(text(d), /에서 기억 \d+개를 받았어요/, "who asked, in words");
+  assert.ok(!/m1|m7/.test(text(d.querySelector(".ov-recall-row"))), "a memory shows as its text, not its id");
+  assert.ok(d.querySelector("details.ov-recall-more"), "scores sit behind a toggle");
   let off = route("GET", "/v1/recalls", () => ok({ items: [] }));
   d = await openWindow({ key: "recall" }); await app.settle(50);
   assert.match(text(d), /아직 불러온 기록이 없어요/);

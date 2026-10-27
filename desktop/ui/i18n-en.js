@@ -6260,3 +6260,27 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}: 켰어요.": "{0}: on.",
   "{0}: 껐어요.": "{0}: off."
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "이름으로 바로 찾았어요": "Found by name", "같은 낱말이 있어요": "Shares words", "뜻이 비슷해요": "Similar meaning", "이어진 기억이에요": "Linked memory",
+  "낱말": "words", "뜻": "meaning", "늘 넣는 기억이에요 (고정)": "Always included (pinned)", "검색으로 찾았어요": "Found by search",
+  "최근 불러오기 (질문 내용은 저장하지 않아요)": "Recent recalls (questions are not stored)", "한 번에 평균": "Average per recall", "점수 보기": "Show scores",
+  "점수는 0~1이에요. 1에 가까울수록 질문과 가깝다고 봤어요.": "Scores run from 0 to 1. Closer to 1 means closer to the question.", "고정 (점수 없음)": "Pinned (no score)",
+  "분석한 대화": "Conversations analyzed", "후보가 나온 대화": "Produced candidates", "분석 기다리는 대화": "Waiting for analysis", "후보가 안 나온 대화": "No candidates",
+  "나온 것": "What came out", "아직 나온 후보가 없어요.": "No candidates yet.", "승인됨 (7일)": "Approved (7 days)", "중복 의심": "Likely duplicate", "버림 (7일)": "Rejected (7 days)",
+  "이유 없음": "No reason", "버린 이유": "Why rejected", "저장한 대화": "Saved conversations", "기억·후보가 나온 대화": "Led to memories or candidates",
+  "아직 안 나온 대화": "Nothing yet", "원문 보관": "Transcript retention", "이 서버는 원문 보관 상태를 아직 알려 주지 않아요.": "This server does not report transcript retention yet.",
+  "보관 중": "Kept", "원문 없음": "No transcript", "오늘 지워지는 원문이 있어요.": "A transcript expires today.",
+  "답에 쓰인 순": "Most used in answers", "넣은 순": "Most included", "최근 불러온 순": "Recently recalled", "요즘 늘어난 순": "Rising lately",
+  "안 불러옴": "Not recalled", "새로 쓰임": "Newly used", "늘었어요 ↑": "Rising ↑", "줄었어요 ↓": "Falling ↓", "비슷해요": "Steady",
+  "기억이 실제로 답에 도움이 됐는지 봐요": "See whether memories actually helped answers", "답에 쓰임": "Used in answers", "이 조건에 맞는 기억이 없어요.": "No memories match.",
+  "최근 불러온 기록 없음": "Not recalled recently", "답에 넣은 횟수": "Times included", "답에 쓰였다고 남긴 횟수": "Times reported used", "답 내용과 겹침 (추정)": "Overlaps the answer (estimate)",
+  "그전 주 평균": "Earlier weekly average", "넣었는데 답에 안 쓰였어요": "Included but not used",
+  "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 검증에서 정리해 보세요.": "It may be outdated or too broad. Edit it, or tidy it up in Check.", "왼쪽에서 기억을 고르면 자세히 보여요.": "Pick a memory on the left to see details."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "· {0} 프로젝트": "· project {0}", "{0}에서 기억 {1}개를 받았어요": "{0} received {1} memories", "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
+  "기억 {0}": "memories {0}", "최근 대화 {0}개, 메시지 {1}개를 봤어요.": "Read the latest {0} conversations, {1} messages.", "최근 대화 {0}개, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved the latest {0} conversations: {1} messages, {2} tokens.",
+  "보관 상태를 읽지 못했어요 ({0}).": "Could not read retention ({0}).", "가장 먼저 지워지는 원문은 {0}일 남았어요.": "The next transcript expires in {0} days.",
+  "원문은 저장 뒤 7일 동안만 보관돼요.{0}": "Transcripts are kept for 7 days after saving.{0}", "{0}일 · 넣음 {1}번": "{0} days · included {1} times",
+  "마지막 불러옴 {0}": "last recalled {0}", "넣음 {0}": "included {0}", "쓰임 {0}": "used {0}", "불러온 횟수 · {0}": "Recalls · {0}"
+});

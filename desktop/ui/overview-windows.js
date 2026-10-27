@@ -31,14 +31,20 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (readGen !== state.connection.generation) { read.clear(); readGen = state.connection.generation; } // names from another server or scope, and reads it dropped, start over
     return D().memories.find((m) => m.id === id) || ctx.maintenanceRecords?.get(id) || read.get(id) || undefined; // proposals point past the loaded first page too
   };
+  // one POST /v1/memories/query {ids} per drawing pass (100 ids a call); a server without ids answers 400, so those fall back to one GET each
   function readMemory(id) {
-    const g = state.connection.generation, keep = (v) => { if (g === state.connection.generation) read.set(id, v); };
-    read.set(id, null);
-    batch.push(request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => keep(r?.text && (r.status ?? "active") === "active" ? r : false), () => keep(false)));
+    read.set(id, null); batch.push(id);
     if (batch.length > 1) return;
     queueMicrotask(() => { // one redraw per drawing pass, after every name it asked for has come back
-      const wait = batch; batch = [];
-      void Promise.allSettled(wait).then(() => { if (dlg?.isConnected) redraw?.(); }); // whichever window is open now: a redraw while waiting asks for no new reads
+      const g = state.connection.generation, ids = batch; batch = [];
+      const keep = (i, v) => { if (g === state.connection.generation) read.set(i, v); };
+      const one = (i) => request(`/v1/memories/${encodeURIComponent(i)}?${query()}`).then((r) => keep(i, r?.text && (r.status ?? "active") === "active" ? r : false), () => keep(i, false));
+      const part = (ps) => request("/v1/memories/query", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: ps, limit: 100 }) }).then((r) => {
+        const got = new Map((r?.items || []).filter((m) => m?.text).map((m) => [m.id, m]));
+        for (const i of ps) keep(i, got.get(i) || false);
+      }, () => Promise.allSettled(ps.map(one)));
+      const parts = []; for (let k = 0; k < ids.length; k += 100) parts.push(part(ids.slice(k, k + 100)));
+      void Promise.allSettled(parts).then(() => { if (dlg?.isConnected) redraw?.(); }); // whichever window is open now: a redraw while waiting asks for no new reads
     });
   }
   const memText = (id) => {
@@ -204,12 +210,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const LIST_TITLE = { collect: "최근 저장된 대화", extract: "최근 추출된 후보·기억", classify: "분류 기다리는 후보", review: "승인 기다리는 후보", recall: "최근 불러온 기억 (질문 내용은 저장하지 않아요)",
     trace: "기억별 넣음·쓰임", judge: "확인 기다리는 기억", dream: "정리 제안", active: "많이 쓰인 순" };
   // a stage window does its own work in place; a footer only widens the same list (2026-10-25)
-  const FULL = { collect: ["세션 기록 전체 보기 ›", () => wide("sessions")], extract: ["세션 기록 보기 ›", () => wide("sessions")], review: ["넓게 보기 ›", () => wide("review")], active: ["넓게 보기 ›", () => wide("active")] };
+  const FULL = { collect: ["세션 기록 전체 보기 ›", () => wide("sessions")], extract: ["세션 기록 보기 ›", () => wide("sessions")], review: ["넓게 보기 ›", () => wide("review")], trace: ["넓게 보기 ›", () => wideTrace()], active: ["넓게 보기 ›", () => wide("active")] };
 
   function stageRows(key, box, expanded) {
     const sessions = env.sessions(), w = D().tools?.memory_use, cap = expanded ? (+expanded > 1 ? +expanded : 60) : 6, out = []; // expanded: true (60 rows) or a row count
     const rows = {
-      collect: () => sessions.slice(0, cap).map((x) => row("", [x.agent, x.project].filter(Boolean).join(" · ") || x.title || "세션", `메시지 ${num(x.messages)}개 · ${ago(x.ended_at || x.started_at)}`, "", [button("열기", "small", null, () => openSession(`:${x.session_id}`, ""))])),
+      collect: () => sessions.slice(0, cap).map((x) => row("", [x.agent, x.project].filter(Boolean).join(" · ") || x.title || "세션", `메시지 ${num(x.messages)}개 · ${ago(x.ended_at || x.started_at)}`, made(sessionState(x)), [button("열기", "small", null, () => openSession(`:${x.session_id}`, ""))])),
       extract: () => [...waiting(), ...D().memories].sort((a, b) => time(b.created_at) - time(a.created_at)).slice(0, cap).map((m) => row(kind(m.kind), clip(m.text), `${tag(m, "event_id:") ? "대화 저장 · " : ""}${ago(m.created_at)}`, "")),
       classify: () => byKind(waiting().filter((m) => !m.classification)),
       review: () => waiting().slice(0, cap).map((m) => reviewRow(m)),
@@ -257,36 +263,100 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   // 불러오기 (592:53571): the newest context receipts from GET /v1/recalls. A receipt keeps what was handed out with its score and
-  // lanes, not what fell below the cut or how long it took, so those parts of the design are not drawn.
-  const LANE = { exact: "정확", keyword: "키워드", vector: "벡터", relation: "관계" };
+  // lanes, not the question, what fell below the cut or how long it took, so those parts of the design are not drawn.
+  const LANE = { exact: "이름으로 바로 찾았어요", keyword: "같은 낱말이 있어요", vector: "뜻이 비슷해요", relation: "이어진 기억이에요" };
+  const LANE_SHORT = { exact: "이름", keyword: "낱말", vector: "뜻", relation: "연결" };
+  // why one memory was handed out, in words: a pinned one has no score; otherwise the lanes that found it
+  const recallWhy = (it) => (it.score == null ? "늘 넣는 기억이에요 (고정)" : (it.lanes || []).map((l) => LANE[l] || l).join(" · ") || "검색으로 찾았어요");
+  const recallWho = (x) => `${x.requested_by || "에이전트"}${x.project_key ? ` · ${x.project_key} 프로젝트` : ""}`;
+  let recalls = null, redrawing = false; // one GET /v1/recalls per opened window; a redraw after the names arrive reuses it
   function recallBox() {
     const box = el("div", "ov-recall-box"), host = el("div", "ov-detail-list");
-    box.append(el("div", "ov-win-list-title", "최근 불러오기 · 점수와 고른 이유 (질문 내용은 저장하지 않아요)"), host);
+    box.append(el("div", "ov-win-list-title", "최근 불러오기 (질문 내용은 저장하지 않아요)"), host);
     host.append(el("p", "ov-win-empty", "불러오는 중…"));
-    request(`/v1/recalls?${query({})}`).then((r) => {
+    const g = state.connection.generation;
+    if (recalls?.g !== g) recalls = { g, p: request(`/v1/recalls?${query({})}`).catch((e) => { recalls = null; throw e; }) };
+    recalls.p.then((r) => {
       const list = (r?.items || []).filter((x) => x.items?.length).slice(0, 6); host.replaceChildren();
       if (!list.length) { host.append(el("p", "ov-win-empty", "아직 불러온 기록이 없어요.")); return; }
-      const count = {}; for (const x of list) for (const it of x.items) { const m = D().memories.find((y) => y.id === it.memory.id); if (m) count[m.kind] = (count[m.kind] || 0) + 1; }
-      const kinds = el("div", "ov-kinds"); kinds.append(el("span", "", "한 번에 넣는 양")); for (const [k2, n] of Object.entries(count)) { const t = tagEl(kind(k2)); t.textContent += ` ${num(Math.round(n / list.length * 10) / 10)}`; kinds.append(t); } box.insertBefore(kinds, host);
+      const count = {}; for (const x of list) for (const it of x.items) { const m = memOf(it.memory.id); if (m) count[m.kind] = (count[m.kind] || 0) + 1; }
+      const kinds = el("div", "ov-kinds"); kinds.append(el("span", "", "한 번에 평균")); for (const [k2, n] of Object.entries(count)) { const t = tagEl(kind(k2)); t.textContent += ` ${num(Math.round(n / list.length * 10) / 10)}개`; kinds.append(t); } box.insertBefore(kinds, host);
       for (const x of list) {
-        const c = el("div", "ov-recall"), h = el("div", "ov-recall-head"); h.append(el("strong", "", [x.requested_by, x.project_key].filter(Boolean).join(" · ")), el("span", "", `${ago(x.created_at)} · 넣음 ${num(x.items.length)}`)); c.append(h);
+        const c = el("div", "ov-recall"), h = el("div", "ov-recall-head");
+        h.append(el("strong", "", `${recallWho(x)}에서 기억 ${num(x.items.length)}개를 받았어요`), el("span", "", ago(x.created_at))); c.append(h);
         for (const it of x.items) {
-          const m = D().memories.find((y) => y.id === it.memory.id), r2 = el("div", "ov-recall-row");
-          r2.append(el("b", "", it.score ? it.score.toFixed(2) : "고정"), ...(it.lanes || []).map((l) => el("span", "ov-lane", LANE[l] || l)), ...(m ? [tagEl(kind(m.kind))] : []), el("span", "t", clip(m?.text || it.memory.id, 60)));
+          const m = memOf(it.memory.id), r2 = el("div", "ov-recall-row"), t = el("span", "t", clip(memText(it.memory.id).split("\n")[0], 70));
+          t.title = recallWhy(it);
+          r2.append(el("b", "", `${num(it.rank || 0)}위`), ...(m ? [tagEl(kind(m.kind))] : []), t, el("small", "ov-recall-why", recallWhy(it)));
           c.append(r2);
         }
-        host.append(c);
+        // the raw numbers stay one click away: score 0–1 (higher = closer to the question) and the search lanes
+        const more = el("details", "ov-recall-more"), sum = el("summary", "", "점수 보기");
+        more.append(sum, el("p", "", "점수는 0~1이에요. 1에 가까울수록 질문과 가깝다고 봤어요."), ...x.items.map((it) => el("p", "", `${num(it.rank || 0)}위 · ${it.score == null ? "고정 (점수 없음)" : `점수 ${it.score.toFixed(2)}`} · ${(it.lanes || []).map((l) => LANE_SHORT[l] || l).join(", ") || "—"}`)));
+        c.append(more); host.append(c);
       }
     }, () => { host.replaceChildren(el("p", "ov-win-empty", "불러오기 기록을 읽지 못했어요.")); });
     return box;
   }
 
-  function open(key, expanded = false) {
+  // ------------------------------------------------------------ 대화 저장 · 분석 summaries (read-only; each read once per connection)
+  const once = new Map(); // key → { g, v, err }: a failed read stays failed until the connection or scope changes (no retry loop on redraw)
+  function readOnce(k, get) {
+    const g = state.connection.generation, hit = once.get(k);
+    if (hit?.g === g) return hit;
+    const e = { g, v: undefined, err: null }; once.set(k, e);
+    e.p = get().then((v) => { e.v = v; }, (er) => { e.err = er; }).then(() => { if (dlg?.isConnected) redraw?.(); });
+    return e;
+  }
+  const made = (st) => [st.cands.length && `후보 ${num(st.cands.length)}`, st.approved.length && `기억 ${num(st.approved.length)}`].filter(Boolean).join(" · ") || st.label;
+  const barList = (pairs, max = Math.max(1, ...pairs.map(([, n]) => n))) => { const box = el("div", "ov-detail-bars"); for (const [a, n, tagged] of pairs) { const p = el("div", "ov-detail-bar"), track = el("i"), fill = el("b"), line = el("p", ""); fill.style.width = `${Math.round((n / max) * 100)}%`; if (tagged) fill.style.background = KIND_COLOR[tagged] || ""; track.append(fill); line.append(el("span", "", a), el("strong", "", `${num(n)}`)); p.append(line, track); box.append(p); } return box; };
+  const block = (title, ...nodes) => { const b = el("div", "ov-win-chart ov-sum"); b.append(el("div", "ov-win-chart-title", title), ...nodes); return b; };
+  const cellRow = (pairs) => { const c = el("div", "ov-win-cells ov-sum-cells"); for (const [l, v] of pairs) { const x = el("div", "ov-win-cell"); x.append(el("small", "", l), el("strong", "", v)); c.append(x); } return c; };
+  // 분석: what went in (the 7-day sessions and their messages) and what came out (candidates by kind, and how each ended)
+  function analysisBox() {
+    const ses = env.sessions(), st = ses.map(sessionState), wk = Date.now() - 7 * 24 * HOUR;
+    const n = { ok: st.filter((x) => x.tone === "ok").length, wait: st.filter((x) => x.tone === "wait").length };
+    const inBox = block("분석한 대화", el("p", "ov-sum-line", `최근 대화 ${num(ses.length)}개, 메시지 ${num(ses.reduce((a, x) => a + (x.messages || 0), 0))}개를 봤어요.`),
+      barList([["후보가 나온 대화", n.ok], ...(n.wait ? [["분석 기다리는 대화", n.wait]] : []), ["후보가 안 나온 대화", ses.length - n.ok - n.wait]], Math.max(1, ses.length)));
+    const rej = readOnce("rejected", () => request(`/v1/memory_candidates?${query({ status: "rejected", created_from: new Date(wk).toISOString(), limit: 100 })}`));
+    const rejected = rej.v?.items || [], pending = waiting(), approved = D().memories.filter((m) => tag(m, "event_id:") && time(m.created_at) >= wk);
+    const kinds = {}; for (const m of [...pending, ...approved, ...rejected]) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
+    const out = [...pending, ...approved, ...rejected].length, dup = pending.filter((c) => c.classification?.dup_hint).length, clash = pending.filter((c) => c.conflict_id || c.status === "conflicted").length;
+    const outBox = block("나온 것", ...(out ? [barList(Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, c]) => [kind(k), c, k]))] : [el("p", "ov-win-empty", "아직 나온 후보가 없어요.")]),
+      cellRow([["승인 대기", `${num(pending.length)}건`], ["승인됨 (7일)", `${num(approved.length)}건`], ["중복 의심", `${num(dup)}건`], ["충돌", `${num(clash)}건`], ["버림 (7일)", rej.v ? `${num(rejected.length)}건` : rej.err ? "—" : "…"]]));
+    const why = {}; for (const c of rejected) { const r = (c.review?.reason || "이유 없음").trim(); why[r] = (why[r] || 0) + 1; }
+    const top = Object.entries(why).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    if (top.length) { const l = el("div", "ov-sum-why"); l.append(el("small", "", "버린 이유")); for (const [r, c] of top) { const p = el("p", ""); p.append(el("span", "", clip(r, 60)), el("strong", "", `${num(c)}건`)); l.append(p); } outBox.append(l); }
+    const box = el("div", "ov-sum-grid"); box.append(inBox, outBox);
+    return box;
+  }
+  // 대화 저장: how many dialogues came in, how many led to memories, and whether their text is still kept (POST /v1/usage/sessions/archives).
+  // The session list itself is 세션 기록 (the footer button); this stays a summary.
+  function collectBox() {
+    const ses = env.sessions(), st = ses.map(sessionState), ids = ses.slice(0, 50).map((x) => x.id).filter(Boolean);
+    const arc = ids.length ? readOnce(`archives|${ids.join(",")}`, () => request("/v1/usage/sessions/archives", { method: "POST", body: JSON.stringify({ scope: state.scope, ids }) })) : { v: { items: [] } };
+    const states = {}; for (const x of arc.v?.items || []) states[x.state] = (states[x.state] || 0) + 1;
+    const soon = (arc.v?.items || []).flatMap((x) => x.archives || []).map((a) => time(a.expires_at)).filter(Boolean).sort((a, b) => a - b)[0];
+    const left = soon ? Math.max(0, Math.ceil((soon - Date.now()) / (24 * HOUR))) : null;
+    const savedBox = block("저장한 대화", el("p", "ov-sum-line", `최근 대화 ${num(ses.length)}개, 메시지 ${num(ses.reduce((a, x) => a + (x.messages || 0), 0))}개, 토큰 ${num(ses.reduce((a, x) => a + (x.tokens || 0), 0))}개를 저장했어요.`),
+      barList([["기억·후보가 나온 대화", st.filter((x) => x.tone === "ok").length], ["아직 안 나온 대화", st.filter((x) => x.tone !== "ok").length]], Math.max(1, ses.length)));
+    const keptBox = block("원문 보관", ...(arc.err ? [el("p", "ov-win-empty", /HTTP 4(00|04)|not_found|invalid/.test(arc.err.message || "") ? "이 서버는 원문 보관 상태를 아직 알려 주지 않아요." : `보관 상태를 읽지 못했어요 (${arc.err.message}).`)]
+      : !arc.v ? [el("p", "ov-win-empty", "불러오는 중…")]
+      : [cellRow([["보관 중", `${num(states.active || 0)}개`], ["만료됨", `${num(states.expired || 0)}개`], ["원문 없음", `${num((states.none || 0) + (states.unsupported || 0) + (arc.v.missing?.length || 0))}개`]]),
+        el("p", "ov-sum-line", `원문은 저장 뒤 7일 동안만 보관돼요.${left == null ? "" : left ? ` 가장 먼저 지워지는 원문은 ${num(left)}일 남았어요.` : " 오늘 지워지는 원문이 있어요."}`)]));
+    const box = el("div", "ov-sum-grid"); box.append(savedBox, keptBox);
+    return box;
+  }
+
+  function open(key, expanded = false, small = false) { // small: 사용 기록 opens wide unless asked for the stage window itself
+    if (key === "trace" && !expanded && !small) return wideTrace();
+    if (!redrawing) { recalls = null; once.clear(); } // a fresh open reads again; a redraw after names arrive reuses what it read
+    redrawing = false;
     const list = env.stages(), i = list.findIndex((x) => x.key === key), s = i >= 0 ? list[i] : activeStage();
     const spec = SPEC[key];
     const d = modal(`ov-stage-win ov-t-${s.badge?.[1] || "n"} ov-win-${key}${expanded ? " ov-win-expanded" : ""}`); // 모두 보기: the window becomes the list
-    recipe(d, { key, expanded });
-    redraw = () => open(key, expanded);
+    recipe(d, { key, expanded, small });
+    redraw = () => { redrawing = true; open(key, expanded, small); };
     const nav = (n) => () => open(list[(i + n + list.length) % list.length].key);
     const head = el("div", "ov-win-head"), title = el("div", "ov-win-title");
     title.append(el("span", "ov-win-crumb", "기억 처리"), el("span", "ov-win-crumb", "›"), el("i", "ov-dot"), el("h2", "", LABEL[key] || s.label));
@@ -311,6 +381,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       "맞아요, 유지: 그대로 두고 다시 묻지 않아요 · 고치기: 고친 문장을 승인 대기에 넣어요 · 잊기: 에이전트에게 더는 건네지 않아요")); // nothing changes on its own
     if (key === "dream") body.append(note("n", "드리밍 제안은 여기서 바로 골라요", "바로 바뀌지 않아요. 사람이 고르면 반영되고, 지운 기억도 기억 이력에 남아요. 승인 대기에도 [정리]로 같이 떠요."));
     if (key === "recall") body.append(recallBox());
+    if (key === "extract") body.append(analysisBox());
+    if (key === "collect") body.append(collectBox());
     const rows = stageRows(key, body, expanded), total = expandTotal(key);
     const ul = el("div", "ov-win-list");
     const listHead = el("div", "ov-win-list-title", LIST_TITLE[key]);
@@ -368,7 +440,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   function wide(kindKey, ...args) {
-    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap }[kindKey])(...args); // each sets its own recipe, so a redraw can still pop out
+    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap, trace: wideTrace }[kindKey])(...args); // each sets its own recipe, so a redraw can still pop out
   }
   // Search on its own line; under it the sort control at the far left, a divider, then the filter chips on one line that scrolls sideways (never wraps).
   // wide windows: sort first, then the search, then the kind chips on their own line (they wrap, never scroll sideways)
@@ -947,6 +1019,74 @@ window.ArkismOverviewWindows = (ctx, env) => {
     body.append(left, right); d.append(body);
   }
 
+  // 사용 기록 (SCREEN-008: 기억이 실제로 도움이 됐는지 본다). One row per memory: 넣음·쓰임 from the host's memory_use report
+  // (its days window), 불러옴 and the last use from GET /v1/memory_usage (7·30 days). Nothing here writes.
+  const TRACE_SORT = [["used", "답에 쓰인 순"], ["injected", "넣은 순"], ["last", "최근 불러온 순"], ["trend", "요즘 늘어난 순"]];
+  // 추세: this week's recalls against the weekly average of the 23 days before it; null while /v1/memory_usage has no row
+  function traceTrend(r) {
+    if (r.d30 == null) return null;
+    const before = Math.max(0, r.d30 - r.d7) * 7 / 23, delta = r.d7 - before;
+    const label = !r.d30 ? "안 불러옴" : !before ? (r.d7 ? "새로 쓰임" : "안 불러옴") : r.d7 >= before * 1.5 ? "늘었어요 ↑" : r.d7 <= before * 0.5 ? "줄었어요 ↓" : "비슷해요";
+    return { before, delta, label };
+  }
+  function traceRows() {
+    const by = new Map(), blank = (id) => ({ id, injected: 0, used: 0, estimated: 0, host: null });
+    for (const u of D().tools?.memory_use?.items || []) by.set(u.id, { ...blank(u.id), injected: u.injected || 0, used: u.used || 0, estimated: u.estimated || 0, host: u });
+    for (const [id, u] of state.usage || []) by.set(id, { ...(by.get(id) || blank(id)), d7: u.d7 || 0, d30: u.d30 || 0, last: u.last || "" });
+    return [...by.values()].map((r) => ({ ...r, trend: traceTrend(r) }));
+  }
+  const TRACE_ORDER = { used: (a, b) => b.used - a.used || b.injected - a.injected, injected: (a, b) => b.injected - a.injected || b.used - a.used,
+    last: (a, b) => time(b.last) - time(a.last), trend: (a, b) => (b.trend?.delta ?? -1e9) - (a.trend?.delta ?? -1e9) };
+  let traceWin = null;
+  function wideTrace(filter = "all", focusId = null, sort = "used") {
+    const w = D().tools?.memory_use, all = traceRows(), days = w?.days || 30;
+    const d = traceWin = shell("사용 기록", w ? `${num(days)}일 · 넣음 ${num(w.injections || 0)}번` : "", "기억이 실제로 답에 도움이 됐는지 봐요", () => open("trace", false, true));
+    recipe(d, { wide: "trace", args: [filter, focusId, sort] });
+    redraw = () => wideTrace(filter, sel, sort);
+    let sel = focusId;
+    const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
+    const keep = (r) => filter === "all" || (filter === "used" ? r.used > 0 : idle(r.host));
+    const chips = [["all", "전체", all.length], ["used", "답에 쓰임", all.filter((r) => r.used > 0).length], ["idle", "안 쓰임", all.filter((r) => idle(r.host)).length]];
+    chipHost.append(chipBar(chips, filter, (k) => wideTrace(k, null, sort)));
+    const bar = filterBar([], sortSelect(TRACE_SORT, sort, (k) => wideTrace(filter, sel, k)), chipHost);
+    const rows = all.filter(keep).sort(TRACE_ORDER[sort] || TRACE_ORDER.used);
+    if (!rows.some((r) => r.id === sel)) sel = rows[0]?.id || null;
+    for (const r of rows) {
+      const m = memOf(r.id), x = el("div", `ov-wide-row${r.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t");
+      x.tabIndex = 0; x.setAttribute("role", "button"); x.setAttribute("aria-pressed", String(r.id === sel));
+      if (m) l1.append(tagEl(kind(m.kind)));
+      l1.append(el("span", "ov-win-item-title", clip(memText(r.id).split("\n")[0], 70))); t.append(l1);
+      t.append(el("small", "", [r.last ? `마지막 불러옴 ${ago(r.last)}` : "", r.trend?.label].filter(Boolean).join(" · ")));
+      const right = el("div", "ov-wide-row-r"); right.append(el("span", "", `넣음 ${num(r.injected)}`), el("span", r.used ? "" : "ov-r-a", `쓰임 ${num(r.used)}`));
+      x.append(t, right);
+      const pick = () => wideTrace(filter, r.id, sort);
+      x.addEventListener("click", pick); x.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+      list.append(x);
+    }
+    if (!rows.length) list.append(el("p", "ov-win-empty", state.usageDone || w ? "이 조건에 맞는 기억이 없어요." : "불러오는 중…"));
+    const r = rows.find((y) => y.id === sel);
+    if (r) {
+      const m = memOf(r.id), h = el("div", "ov-detail-head");
+      if (m) h.append(tagEl(kind(m.kind)));
+      h.append(el("small", "", r.last ? `마지막 불러옴 ${ago(r.last)}` : "최근 불러온 기록 없음"));
+      const sec = (title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); detail.append(s2); };
+      detail.append(h, el("h3", "", memText(r.id)));
+      const facts = el("div", "ov-detail-facts"), fact = (a, b) => { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); facts.append(p); };
+      fact("답에 넣은 횟수", `${num(r.injected)}번`); fact("답에 쓰였다고 남긴 횟수", `${num(r.used)}번`);
+      if (r.estimated) fact("답 내용과 겹침 (추정)", `${num(r.estimated)}번`);
+      fact("쓰인 비율", r.injected ? `${Math.round((r.used / r.injected) * 100)}%` : "—");
+      sec(`최근 ${num(days)}일`, facts);
+      if (r.trend) {
+        const bars = el("div", "ov-detail-bars"), max = Math.max(1, r.d7, r.trend.before);
+        for (const [a, n] of [["이번 주", r.d7], ["그전 주 평균", Math.round(r.trend.before * 10) / 10]]) { const p = el("div", "ov-detail-bar"), track = el("i"), fill = el("b"), line = el("p", ""); fill.style.width = `${Math.round((n / max) * 100)}%`; track.append(fill); line.append(el("span", "", a), el("strong", "", `${num(n)}번`)); p.append(line, track); bars.append(p); }
+        sec(`불러온 횟수 · ${r.trend.label}`, bars);
+      }
+      if (idle(r.host)) detail.append(note("a", "넣었는데 답에 안 쓰였어요", "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 검증에서 정리해 보세요."));
+      const act = el("div", "ov-detail-actions"); act.append(button("고치기", "primary small", null, () => editMemory(m, r.id)), button("검증 보기", "small", null, () => open("judge"))); detail.append(act);
+    } else detail.append(el("p", "ov-win-empty", "왼쪽에서 기억을 고르면 자세히 보여요."));
+    twoPane(d, bar, list, detail);
+  }
+
   // 기억 지도 (611:54134 · 611:56374): GET /v1/memory-graph?mode=all, grouped by 칸 (reach), curved lines between memories.
   // The map has no AI-suggestion write API (POST /v1/knowledge-graph/relations writes a separate store the map never reads), so 연결/아니요 are not drawn.
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
@@ -1073,5 +1213,5 @@ window.ArkismOverviewWindows = (ctx, env) => {
     left.append(bar, canvas); canvas.append(legend, empty); paint();
   }
 
-  return { open, wide, reset() { dlg?.close(); read.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); } };
+  return { open, wide, reset() { dlg?.close(); read.clear(); recalls = null; once.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); if (traceWin && traceWin === dlg) wideTrace(); } };
 };
