@@ -162,6 +162,14 @@ export function createSkillViews(deps) {
     deps.render();
   }
 
+  // After a keyboard jump into a skill page, focus its heading so the reader stays in the new screen.
+  function focusPage() {
+    const h = deps.$("#table h2") || deps.$("#table button");
+    if (!h) return;
+    if (h.tagName === "H2") h.tabIndex = -1;
+    h.focus();
+  }
+
   const skBadge = (text, cls = "") => deps.el("span", `v4s-badge ${cls}`.trim(), text);
 
   function skillBadge(sk) {
@@ -466,7 +474,7 @@ export function createSkillViews(deps) {
     const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI", title: "AI", sub: sk.name,
       greeting: "무엇이 궁금하세요?\n쉽게 설명하거나, 바로 고쳐 볼 수 있어요.",
       placeholder: "궁금한 것을 물어보세요", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
-      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: () => openSkillPage({ kind: "improve", id: sk.id, step: 0 }) },
+      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: () => { openSkillPage({ kind: "improve", id: sk.id, step: 0 }); focusPage(); } },
       ask: async (q, history) => ({ say: await deps.crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     titleRow.append(aiBtn);
     const c = skillChecks(sk), u = useOf(sk);
@@ -505,7 +513,7 @@ export function createSkillViews(deps) {
         const checking = (deps.state.data.tools?.requests || []).some((q) => q.kind === "skill_check" && q.name === r.repo && q.status === "pending");
         const b = deps.button(checking ? "확인 중…" : "업데이트 확인", "small", null, () => deps.checkSkillRepo(r)); b.disabled = checking; verCell.append(b);
       }
-      const n = sk.version_history?.length || 0;
+      const n = (sk.version_history || []).filter((id) => id !== sk.active_version).length; // the version in use is not a past one
       history = link(n ? `지난 버전 ${n}개 ›` : "지난 버전 보기 ›", () => openSkillPage({ kind: "improve", id: sk.id, step: 2 }));
     }
     if (r) verCell.append(deps.el("small", "meta", `마지막 확인 ${deps.ago(r.checked_at)}`));

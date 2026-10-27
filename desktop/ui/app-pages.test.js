@@ -179,7 +179,7 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   const rowSub = (name) => text(app.$$(".ag-row-main").find((b) => text(b).startsWith(name)).querySelector("small"));
   assert.match(rowSub("Claude Code"), /^기억 · 스킬 \d+ · 훅 · MCP$/);
   assert.doesNotMatch(rowSub("Codex"), /훅/);
-  assert.match(text(app.$(".ag-link")), /훅.*연결됨 · 대화 저장·기억 넣기.*MCP/);
+  assert.match(text(app.$(".ag-link")), /훅.*연결됨 · 최근 PC 통신.*MCP/);
   assert.ok(app.$$(".v4-side input").some((i) => i.placeholder === "모델 검색" || /모델 \d+개에서 찾기/.test(i.placeholder)));
   app.$$(".ag-row-main").find((b) => text(b).startsWith("Codex")).click(); await app.settle();
   assert.match(text(app.$(".ag-link")), /훅연결 안 됨|훅 ?연결 안 됨/);

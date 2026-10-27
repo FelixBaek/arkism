@@ -442,7 +442,7 @@ window.ArkismPages = (ctx) => {
     const age = tools?.collected_at ? Math.round((Date.now() - new Date(tools.collected_at).getTime()) / 60000) : null;
     const dot = (ok, text) => { const s = el("span", `ag-state${ok ? " ok" : ""}`); s.append(el("i"), el("span", "", text)); return s; };
     const [hookCls, hookText] = hook(a.id);
-    link.append(kvRow("훅", dot(hookCls === "ok", hookCls === "ok" ? "연결됨 · 대화 저장·기억 넣기" : hookText)),
+    link.append(kvRow("훅", dot(hookCls === "ok", hookCls === "ok" ? "연결됨 · 최근 PC 통신" : hookText)),
       kvRow("MCP", dot(arkismOn(a.id), arkismOn(a.id) ? "연결됨 · 기억·스킬 도구" : "연결 안 됨")),
       kvRow("대화 수집", isOn(a) ? `켜짐${age == null ? "" : ` · 마지막 ${age < 1 ? "방금" : `${age}분 전`}`}` : "꺼짐"));
     const dirs = [...(a.skills_dirs || []).map((d) => kvRow("스킬", el("span", "mono", d))), ...(a.chats_dir ? [kvRow("대화", el("span", "mono", a.chats_dir))] : [])];
