@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -288,5 +289,38 @@ func TestCatalogUsedSortDoesNotWaitForUsageCounts(t *testing.T) {
 	defer cancel()
 	if _, e = f.svc.QueryMemoryCatalog(short, f.human, CatalogQueryInput{Scope: scopeA, State: "idle"}, false); e == nil {
 		t.Fatal("idle needs usage counts and must not guess without them")
+	}
+}
+
+// countingUsageRepo holds every usage scan until release closes, counting how many started.
+type countingUsageRepo struct {
+	*fakeRepo
+	calls   *atomic.Int32
+	release chan struct{}
+}
+
+func (r countingUsageRepo) MemoryUsageWindow(ctx context.Context, s Scope, since, recent time.Time) ([]MemoryUsageCount, error) {
+	r.calls.Add(1)
+	<-r.release
+	return r.fakeRepo.MemoryUsageWindow(ctx, s, since, recent)
+}
+
+func TestMemoryUsageSummaryRunsOneScanForConcurrentCallers(t *testing.T) {
+	f := newFixture(t)
+	repo := countingUsageRepo{f.repo, &atomic.Int32{}, make(chan struct{})}
+	f.svc.Repo = repo
+	errs := make(chan error, 3)
+	for range 3 {
+		go func() { _, e := f.svc.MemoryUsageSummary(testCtx, f.human, scopeA); errs <- e }()
+	}
+	time.Sleep(200 * time.Millisecond) // let all three join before the scan returns
+	close(repo.release)
+	for range 3 {
+		if e := <-errs; e != nil {
+			t.Fatal(e)
+		}
+	}
+	if n := repo.calls.Load(); n != 1 {
+		t.Fatal("three callers at once should share one scan, ran", n)
 	}
 }

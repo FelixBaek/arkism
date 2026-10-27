@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/singleflight"
 	"math"
 	"slices"
 	"strings"
@@ -18,6 +19,8 @@ import (
 )
 
 type Service struct {
+	// usageWindows runs one memory-usage scan per scope at a time; the app asks for it up to three times at once.
+	usageWindows            singleflight.Group
 	ModelBudgetPolicy       *ModelBudgetPolicy
 	MemoryReviewPolicies    []MemoryReviewPolicy
 	SkillAutomationPolicies []SkillAutomationPolicy
