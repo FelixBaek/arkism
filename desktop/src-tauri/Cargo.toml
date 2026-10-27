@@ -29,6 +29,9 @@ tauri-plugin-global-shortcut = "=2.4.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-registry = "=0.6.1"
+# Turns off the browser shortcuts (Ctrl+F find bar, Ctrl+J downloads, F5 reload…); same versions wry already uses.
+webview2-com = "=0.39.1"
+windows-core = "=0.62.2"
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_Threading"] }
 # The SSH login password, kept in the OS credential store (never in a file): Windows Credential
 # Manager, macOS Keychain, the Secret Service on Linux.

@@ -76,6 +76,8 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "ureq",
+ "webview2-com",
+ "windows-core",
  "windows-registry",
  "windows-sys 0.61.2",
 ]
