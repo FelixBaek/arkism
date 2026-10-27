@@ -248,6 +248,37 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   await closeAll();
 });
 
+test("overview: 승인 대기 keeps the edited text across redraws, as the next AI base and in the heading", async () => {
+  const kit = app.window.ArkismAIChat.kit, asked = [];
+  let answer = "코드를 수정한 뒤에는 꼭 관련 테스트를 실행한다";
+  app.window.ArkismAIChat.kit = { assist: async (_k, prompt) => { asked.push(prompt); return { status: "done", output: JSON.stringify({ value: answer }) }; }, assistError: () => "x", parseJSON: JSON.parse };
+  try {
+    let d = await reviewOf("코드 수정 후");
+    const heading = () => text(win().querySelector(".ov-wide-detail h3")), box = () => win().querySelector(".ov-detail-edit");
+    assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
+    // the AI rewrites the fix text; 저장 keeps it, and the heading now shows what 승인 would save
+    d.querySelector(".ex-ai-spark").click(); await app.settle(30);
+    await press("저장", d.querySelector(".ex-ai-note"));
+    assert.equal(heading(), answer);
+    // a redraw (another row, then back) keeps the saved text in the box and the heading
+    const rows = () => [...win().querySelectorAll(".ov-wide-row:not(.ov-wide-row-dream)")];
+    rows().find((r) => !text(r).includes("코드 수정 후")).click(); await app.settle();
+    rows().find((r) => text(r).includes("코드 수정 후")).click(); await app.settle();
+    assert.equal(box().value, answer);
+    assert.equal(heading(), answer);
+    // the next AI run starts from that saved text, so its diff is against it
+    const first = answer; answer = "코드를 수정한 뒤에는 반드시 관련 테스트를 실행한다";
+    win().querySelector(".ex-ai-spark").click(); await app.settle(30);
+    assert.match(asked.at(-1), new RegExp(`Current text of the field:\\n${first}\\n`));
+    assert.deepEqual([...win().querySelectorAll(".ex-ai-diff del")].map(text), ["꼭"]);
+    await press("저장", win().querySelector(".ex-ai-note"));
+    assert.equal(heading(), answer);
+    // 취소 drops the draft: the heading is the candidate's own text again
+    await press("취소", win().querySelector(".ov-detail-actions"));
+    assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
+  } finally { app.window.ArkismAIChat.kit = kit; await closeAll(); }
+});
+
 test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject and conflict paths", async () => {
   const merge = { id: "mpx", revision: 3, merge: { proposal: { action: "merge", candidate: { id: "c3" }, targets: [{ id: "m1" }] } } };
   const offMerge = route("GET", "/v1/merge_proposals", () => ok({ items: [merge] }));
