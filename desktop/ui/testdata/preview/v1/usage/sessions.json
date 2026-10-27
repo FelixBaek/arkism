@@ -48,7 +48,9 @@
      "count": 6,
      "sessions": 1
     }
-   ]
+   ],
+   "folder": "/home/me/work/arkism",
+   "file": "/home/me/.codex/sessions/2026/10/13/rollout-ss-1.jsonl"
   },
   {
    "id": "ss-2",
@@ -95,7 +97,9 @@
      "count": 6,
      "sessions": 1
     }
-   ]
+   ],
+   "folder": "C:\\Users\\me\\work\\orbit-app",
+   "file": "/home/me/.claude/projects/orbit-app/ss-2.jsonl"
   },
   {
    "id": "ss-3",
@@ -142,7 +146,9 @@
      "count": 6,
      "sessions": 1
     }
-   ]
+   ],
+   "folder": "/home/me/work/arkism",
+   "file": "/home/me/.claude/projects/arkism/ss-3.jsonl"
   },
   {
    "id": "ss-4",
@@ -189,7 +195,9 @@
      "count": 6,
      "sessions": 1
     }
-   ]
+   ],
+   "folder": "C:\\Users\\me\\work\\orbit-app",
+   "file": "/home/me/.codex/sessions/2026/10/13/rollout-ss-4.jsonl"
   },
   {
    "id": "ss-5",
@@ -238,5 +246,16 @@
     }
    ]
   }
- ]
+ ],
+ "facets": {
+  "agents": {
+   "codex": 214,
+   "claude_code": 172
+  },
+  "projects": {
+   "arkism": 201,
+   "orbit-app": 139,
+   "home": 46
+  }
+ }
 }

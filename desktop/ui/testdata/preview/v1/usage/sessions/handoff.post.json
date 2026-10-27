@@ -1,0 +1,16 @@
+{
+ "authority": "data_only_untrusted",
+ "id": "ss-1",
+ "agent": "codex",
+ "session_id": "session_01JX8K2M1QWERTY",
+ "device": "my-pc",
+ "folder": "/home/me/work/arkism",
+ "work": {
+  "id": "work-ui-cleanup",
+  "revision": 2,
+  "title": "Arkism UI 정리",
+  "status": "in_progress",
+  "updated_at": "2026-10-13T02:04:00Z"
+ },
+ "archive_id": "0f3a9c2b7d4e"
+}

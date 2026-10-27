@@ -33,6 +33,7 @@ import "./usage.js";
 import "./gallery-delete.js";
 import "./knowledge.js";
 import "./memory-bubbles.js";
+import "./session-list.js";
 import "./overview-windows.js";
 import "./overview.js";
 import "./arkism-triangle.js";

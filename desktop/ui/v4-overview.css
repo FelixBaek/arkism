@@ -378,3 +378,23 @@
 .ov-win-proposal-panel { display: flex; flex-direction: column; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; } .ov-win-proposal-panel[hidden] { display: none; }
 .ov-filter-pop .ov-wide-chip { white-space: nowrap; }
 .ov-context { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+/* 세션 기록: one list; a row opens its details under itself, the dialogue opens on the right only when asked */
+.ss-body.ss-solo { grid-template-columns: minmax(0, 1fr); } .ss-body.ss-solo > .ov-wide-right { display: none; } .ss-body.ss-solo > .ov-wide-left { border-right: 0; }
+.ss-body .ov-wide-filter { flex: none; }
+.ss-row { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.ss-row .ov-wide-row-r { gap: 8px; } .ss-row .ov-wide-row-r .btn { white-space: nowrap; }
+.ss-num { font-variant-numeric: tabular-nums; }
+.cat-menu.ss-menu { position: absolute; top: 46px; right: 8px; z-index: 5; }
+.ss-menu-note { padding: 4px 8px 2px; color: var(--text-2); font-size: 11.5px; }
+.ss-say { display: flex; flex-direction: column; gap: 4px; padding: 0 14px; font-size: 12.5px; color: var(--text-2); }
+.ss-say code, .ss-facts code { font: var(--type-mono-md); color: var(--text-1); overflow-wrap: anywhere; user-select: text; }
+.ss-detail { display: flex; flex-direction: column; gap: 14px; padding: 12px 14px 14px; border: 1px solid var(--border); border-radius: 10px; }
+.ss-facts strong { text-align: left; white-space: pre-line; overflow-wrap: anywhere; user-select: text; }
+.ss-copy { margin-left: 6px; padding: 0 4px; height: 22px; vertical-align: middle; }
+.ss-find-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--text-2); }
+.ss-hits { display: flex; flex-direction: column; gap: 4px; padding: 0 0 0 14px; }
+.ss-hit-line { display: flex; gap: 10px; align-items: baseline; padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.ss-hit-line:hover, .ss-hit-line:focus-visible { background: var(--bg-muted); }
+.ss-hit-line b { flex: none; font-weight: 400; font-size: 11.5px; color: var(--text-2); } .ss-hit-line p { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .ss-row .ov-wide-row { flex-wrap: wrap; } .ss-row .ov-wide-row-r { flex: 1 1 100%; flex-wrap: wrap; white-space: normal; } }

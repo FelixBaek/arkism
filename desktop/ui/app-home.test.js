@@ -432,7 +432,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   assert.match(text(d), /후보 없음/);
   await press("더 보기", d, 50);
   assert.equal(d.querySelectorAll(".ov-wide-row").length, 4);
-  for (const label of ["codex", "전체"]) { [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith(label)).click(); await app.settle(30); }
+  for (const label of ["Codex", "전체"]) { [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith(label)).click(); await app.settle(30); }
   app.dom.type(d.querySelector(".ov-wide-search"), "후보"); await app.settle(30);
   app.dom.type(d.querySelector(".ov-wide-search"), ""); await app.settle(30);
   d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle();
@@ -442,18 +442,18 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   const made = [], real = [URL.createObjectURL, URL.revokeObjectURL];
   URL.createObjectURL = (b) => { made.push(b); return "blob:t"; }; URL.revokeObjectURL = () => {};
   let offExp = route("POST", "/v1/usage/sessions/export", (a) => ok({ content: "# s", filename: JSON.parse(a.body).format === "json" ? "s.json" : "s.md" }));
-  await press("Markdown으로 내보내기", d, 50);
+  await press("Markdown 내보내기", d, 50);
   const exp = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/export").pop();
   assert.equal(JSON.parse(exp[2]).ids.length, 1); assert.equal(JSON.parse(exp[2]).format, "markdown");
   assert.equal(made.length, 1); assert.match(text(d), /세션 다운로드를 시작했어요/);
   offExp(); offExp = route("POST", "/v1/usage/sessions/export", () => fail(500, "boom"));
   await press("JSON", d, 50);
   assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);
-  // a repaint while the export runs (대화 원문 보기) keeps it busy, and its failure still shows
+  // a repaint while the export runs (대화 보기) keeps it busy, and its failure still shows
   offExp(); let answer; offExp = route("POST", "/v1/usage/sessions/export", () => new Promise((r) => { answer = r; }));
-  btn("Markdown으로 내보내기", d).click(); await app.settle(0, 20);
-  btn("대화 원문 보기", d).click(); await app.settle(0, 20);
-  assert.ok(btn("JSON", d).disabled && btn("Markdown으로 내보내기", d).disabled); assert.match(text(d), /내보내는 중/);
+  btn("Markdown 내보내기", d).click(); await app.settle(0, 20);
+  btn("대화 보기", d).click(); await app.settle(0, 20);
+  assert.ok(btn("JSON", d).disabled && btn("Markdown 내보내기", d).disabled); assert.match(text(d), /내보내는 중/);
   answer(fail(500, "late")); await app.settle(30);
   assert.match(text(d), /내보내지 못했어요/); assert.ok(!btn("JSON", d).disabled);
   offExp(); [URL.createObjectURL, URL.revokeObjectURL] = real;
@@ -472,8 +472,9 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
   await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
-  // 대화 원문 보기 reads the dialogue into the window itself; 대화 닫기 folds it
-  await press("대화 원문 보기", win(), 50);
+  // 대화 보기 reads the dialogue into the window itself; 대화 닫기 folds it
+  win().querySelector(".ov-wide-row").click(); await app.settle();
+  await press("대화 보기", win(), 50);
   assert.match(text(win()), /리뷰 일정 좀 같이 잡아 줘/);
   await press("대화 닫기", win());
   assert.equal(win().querySelector(".ss-msg"), null);
@@ -509,7 +510,7 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   // a dialogue that cannot be read says so
   offTalk(); const offBad = route("POST", "/v1/usage/sessions/transcript", () => fail(500, "boom"));
   d.querySelectorAll(".ov-wide-row")[0].click(); await app.settle();
-  await press("대화 원문 보기", win(), 50);
+  await press("대화 보기", win(), 50);
   assert.match(text(win()), /대화를 불러오지 못했어요/);
   offBad();
   // a session the search does not find is named missing, and no other row is picked for it
@@ -517,6 +518,50 @@ test("overview: 세션 기록 opened on one session underlines the quote, pages 
   assert.match(text(d), /이 세션을 찾지 못했어요/);
   assert.equal(d.querySelector(".ov-wide-detail").children.length, 0);
   off(); await closeAll();
+});
+
+test("overview: 세션 기록 copies resume and continue-in commands, counts agents and finds words in the dialogue", async () => {
+  const rows = [
+    { id: "h1", agent: "codex", session_id: "cx-1", title: "배포 고치기", project: "arkism", folder: "/home/me/arkism", file: "/home/me/.codex/r.jsonl", started_at: ago(2), ended_at: ago(1), messages: 6, tokens: 3000, input: 1000, output: 500, cache_read: 1500, priced: true, cost_usd: 0.42, models: [{ name: "gpt-x", tokens: 3000, priced: true, cost_usd: 0.42 }] },
+    { id: "h2", agent: "claude_code", session_id: "cc-1", title: "", started_at: ago(3), messages: 2 }
+  ];
+  const offList = route("GET", "/v1/usage/sessions", () => ok({ authority: "data_only_untrusted", items: rows, next_cursor: "", total: 7, facets: { agents: { codex: 5, claude_code: 2 }, projects: { arkism: 5 } } }));
+  const offHand = route("POST", "/v1/usage/sessions/handoff", () => ok({ authority: "data_only_untrusted", id: "h1", agent: "codex", session_id: "cx-1", folder: "/home/me/arkism", work: { id: "wk-1", title: "배포 고치기" }, archive_id: "arc-1" }));
+  const offFind = route("POST", "/v1/usage/sessions/search", () => ok({ authority: "data_only_untrusted", items: [{ session: rows[0], hits: [{ role: "assistant", snippet: "…스크립트를 고쳤어요", match: 3 }] }], hidden: 1, secret_records: 0 }));
+  const offTalk = route("POST", "/v1/usage/sessions/transcript", () => ok({ authority: "data_only_untrusted", state: "active", items: [{ role: "assistant", text: "배포 스크립트를 고쳤어요" }], next_cursor: "" }));
+  await openWindow({ wide: "sessions" }); await app.settle(50); let d = win();
+  // one list, newest first; the chips carry the server's counts and the project is only a filter
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-chip")].map(text), ["전체 7", "Codex 5", "Claude Code 2"]);
+  assert.equal(d.querySelectorAll(".ss-row").length, 2);
+  assert.match(text(d), /제목 없음[\s\S]*토큰 기록 없음/);
+  // 재개 copies the session's own command; nothing runs
+  await press("재개", d.querySelector(".ss-row"), 20);
+  assert.equal(app.clipboard.text, "cd /home/me/arkism; codex resume cx-1");
+  // 이어가기 ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
+  await press("이어가기", d.querySelector(".ss-row"));
+  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code에서 이어가기"]);
+  await press("Claude Code에서 이어가기", d, 30);
+  assert.match(app.clipboard.text, /^cd \/home\/me\/arkism; claude 'Arkism resume_work 도구로 작업 wk-1를/);
+  assert.match(text(win()), /Claude Code 시작 명령을 복사했어요/);
+  assert.ok(!app.calls.some((c) => /spawn|execute|run_command/.test(String(c?.[0] ?? c))), "no command is run");
+  // the row opens its facts in place
+  win().querySelector(".ov-wide-row").click(); await app.settle(); d = win();
+  assert.match(text(d.querySelector(".ss-facts")), /폴더\/home\/me\/arkism[\s\S]*세션 IDcx-1[\s\S]*재개 명령cd \/home\/me\/arkism; codex resume cx-1[\s\S]*gpt-x[\s\S]*파일\/home\/me\/.codex\/r.jsonl/);
+  // a session without folder or tokens says 기록 없음 instead of guessing
+  d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle(); d = win();
+  assert.match(text(d.querySelector(".ss-facts")), /폴더기록 없음[\s\S]*토큰기록 없음/);
+  // 대화에서 찾기: hits grouped under their session, a hit opens the dialogue at the words
+  app.dom.type(d.querySelector(".ov-wide-search"), "스크립트"); await app.settle();
+  await press("대화에서 찾기", d, 50); d = win();
+  const call = app.apiCalls.filter(([, p]) => p === "/v1/usage/sessions/search").pop();
+  assert.equal(JSON.parse(call[2]).q, "스크립트");
+  assert.equal(text(d.querySelector(".ss-hit-line mark.ss-hit")), "스크립트");
+  assert.match(text(d), /비공개 부분에만 있어 뺀 메시지 1개/);
+  d.querySelector(".ss-hit-line").click(); await app.settle(50); d = win();
+  assert.equal(text(d.querySelector(".ov-wide-right mark.ss-hit")), "스크립트");
+  await press("목록으로", d);
+  assert.equal(win().querySelectorAll(".ss-hit-line").length, 0);
+  offList(); offHand(); offFind(); offTalk(); await closeAll();
 });
 
 test("overview: 사용량 window draws the counts and its two buttons", async () => {
