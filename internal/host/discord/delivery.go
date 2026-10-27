@@ -188,7 +188,7 @@ func (m *Manager) deliverResult(b *bot, record map[string]any) {
 			if err != nil || str(body(claimed, "delivery")["status"]) != "sending" {
 				return
 			}
-			record, delivery = claimed, body(claimed, "delivery")
+			record = claimed
 		}
 		ack, ok := m.sendDeliveryPart(b, record, origin, token, parts[i], i)
 		if !ok {
