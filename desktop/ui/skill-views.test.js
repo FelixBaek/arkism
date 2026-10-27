@@ -324,13 +324,28 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.ok(d.querySelector(".experts"));
   btn(d, "업데이트 받기").click();
   assert.deepEqual(s.log.at(-1), ["update", 1]);
-  btn(d, "AI로 개선").click();
-  assert.deepEqual(s.state.skillPage, { kind: "improve", id: "a", step: 0 });
-  btn(d, "버전 이력 2건").click();
-  assert.equal(s.state.skillPage.step, 2);
-  btn(d, "휴지통으로").click();
-  assert.deepEqual(s.log.at(-1), ["trash", ["a"]]);
+  // One AI button; its chat footer opens 개선하기.
   const chat = s.chats[0];
+  assert.equal(chat.label, "AI");
+  assert.match(chat.greeting, /무엇이 궁금하세요\?\n/);
+  assert.equal(chat.footer.label, "이 스킬 개선하기");
+  chat.footer.onClick();
+  assert.deepEqual(s.state.skillPage, { kind: "improve", id: "a", step: 0 });
+  // 버전과 기록: 언제 쓰나요 comes before it, history opens step 2, 검사·사용 reveals the folded checks and usage.
+  assert.ok(d.textContent.indexOf("언제 쓰나요") < d.textContent.indexOf("버전과 기록"));
+  btn(d, "지난 버전 2개 ›").click();
+  assert.equal(s.state.skillPage.step, 2);
+  const more = d.querySelector(".v4s-more");
+  assert.equal(more.hidden, true);
+  assert.ok(more.querySelector(".checks") && more.querySelector(".legend"));
+  btn(d, "품질·보안 검사, 에이전트별 사용 기록").click();
+  assert.equal(more.hidden, false);
+  assert.equal(btn(d, "품질·보안 검사").getAttribute("aria-expanded"), "true");
+  btn(d, "품질·보안 검사").click();
+  assert.equal(more.hidden, true);
+  assert.ok(d.querySelector(".v4s-foot"));
+  btn(d.querySelector(".v4s-foot"), "휴지통으로").click();
+  assert.deepEqual(s.log.at(-1), ["trash", ["a"]]);
   assert.equal(chat.state, s.chats[0].state);
   assert.match((await chat.ask("뭐야?", [])).say, /설명: /);
   assert.match((await chat.ask("또?", [{ who: "me", text: "a" }, { who: "ai", text: "b" }])).say, /설명: /);
@@ -352,6 +367,7 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   await s.v.skillDetailV4(latest);
   const d3 = s.doc.querySelectorAll(".detail")[2];
   assert.match(d3.textContent, /v3 · 최신/);
+  assert.ok(btn(d3, "지난 버전 보기 ›"));
   btn(d3, "업데이트 확인").click();
   assert.deepEqual(s.log.at(-1), ["check", "/r2"]);
   // A detail replaced before its analysis arrives leaves the rows alone.
@@ -371,7 +387,9 @@ test("deprecated detail restores the skill, and restore failures are reported", 
   await s.v.skillDetailV4(sk);
   const d = s.doc.querySelector(".detail");
   assert.match(d.textContent, /휴지통에 있어요/);
-  assert.equal(btn(d, "AI로 개선"), undefined);
+  assert.equal(s.chats.at(-1).footer, null);
+  assert.equal(btn(d, "휴지통으로"), undefined);
+  assert.equal(btn(d, "지난 버전"), undefined);
   btn(d, "되돌리기").click();
   await flush();
   assert.deepEqual(s.keys.trash, [{ id: "b" }]);
