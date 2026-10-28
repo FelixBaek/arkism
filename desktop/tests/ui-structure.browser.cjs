@@ -80,7 +80,12 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator(".g-stage").waitFor();await capture("graph");
     await page.locator(".g-node[data-id=plan] .g-node-head > .g-icon").click();
     await page.locator(".g-right").getByRole("button",{name:"자세히",exact:true}).click();
-    await page.locator("dialog[open]").waitFor();await capture("node-editor");
+    await page.locator("dialog.node-dialog[open]").waitFor();await capture("node-editor");
+    await page.keyboard.press("Escape");
+    await page.locator("dialog.node-dialog").waitFor({state:"detached"});
+    // The graph editor is its own window (in place here, no desktop bridge); leaving it reopens the workflow window.
+    await page.keyboard.press("Escape");
+    await page.locator("dialog.graph-win").waitFor({state:"detached"});
     await page.keyboard.press("Escape");
     await page.locator("dialog[open]").waitFor({state:"detached"});
     await page.locator("#settings-button").click();
