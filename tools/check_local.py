@@ -15,6 +15,7 @@ def main():
         os.environ.pop(key, None)
     # Archive copies have no VCS metadata, including for binaries built by tests.
     os.environ["GOFLAGS"] = os.environ.get("GOFLAGS", "") + " -buildvcs=false"
+    subprocess.run([sys.executable, "tools/check_roadmap_plan.py"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tools",
                     "-p", "test_*.py"], cwd=ROOT, check=True)
     for directory in ("evaluation", "evaluation/reuse-v010/benchmark"):
