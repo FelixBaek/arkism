@@ -835,7 +835,8 @@ window.ArkismPages = (ctx) => {
   }
   // 역할별 모델 and 스킬·MCP·플러그인 share one models.json load and one 저장 (at the bottom of the second card, as in Figma).
   // Kept across re-renders of the tab so typed values survive; dropped when the tab changes.
-  let kitCard = null, kitHasProviders = false;
+  // kitProviders is the providers report the card's model pickers were drawn from; kitRedraw redraws them from a newer one.
+  let kitCard = null, kitHasProviders = false, kitProviders = null, kitRedraw = [];
   const ROOTS = [["skills_root", "스킬 폴더"], ["mcp_root", "MCP 폴더"], ["plugins_root", "플러그인 폴더"]];
   const ROLE_MODELS = [["haiku", "Claude Haiku"], ["sonnet", "Claude Sonnet"], ["opus", "Claude Opus"]];
   const EMBED = [["auto", "자동 (Ollama가 있으면)"], ["ollama", "Ollama"], ["none", "끄기"]];
@@ -866,11 +867,7 @@ window.ArkismPages = (ctx) => {
       sel.append(Object.assign(el("option", "", `서버 기본값 (${defaultLabel || "서버 설정"})`), { value: "" }));
       for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
       if (claude) {
-        for (const p of models.enabledByProvider().filter((x) => x.id === "anthropic")) {
-          const g = el("optgroup"); g.label = p.name; g.logo = models.logo(p);
-          for (const m of p.models) g.append(Object.assign(el("option", "", m), { value: `${p.id}|${m}` }));
-          sel.append(g);
-        }
+        for (const p of models.enabledByProvider().filter((x) => x.id === "anthropic")) sel.append(models.modelGroup(p));
       }
       if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", pick.model), { value: current })); // picked earlier, now off
       sel.value = current;
@@ -910,17 +907,29 @@ window.ArkismPages = (ctx) => {
         row("임베딩", controls(source(false), embed), el("p", "pg-hint", "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요.")));
     }
     draw();
+    kitRedraw.push(draw);
   }
   function agentRoleCards() {
     // Rebuilt once the providers report arrives, so a card drawn before it does not keep the older-server rows.
-    if (kitCard && kitHasProviders === (state.data.providers != null)) return kitCard;
+    // A newer report (a key or account added, removed or renamed in 설정 › 에이전트) redraws only the model pickers, so typed values stay.
+    if (kitCard && kitHasProviders === (state.data.providers != null)) {
+      if (kitProviders !== state.data.providers) { kitProviders = state.data.providers; kitRedraw.forEach((f) => f()); }
+      return kitCard;
+    }
     kitHasProviders = state.data.providers != null;
+    kitProviders = state.data.providers; kitRedraw = [];
+    // The runner reports new accounts, keys and their models on its own schedule: read the report again each time the tab opens.
+    if (kitHasProviders) void models.load().then(() => { if (state.view === "settings" && state.settingsTab === "roles") render(false); });
     const roles = group("역할별 모델");
     roles.classList.add("ag-roles");
     const kit = group("스킬·MCP·플러그인", "에이전트가 함께 쓰는 스킬·MCP·플러그인 폴더예요.");
     kitCard = [roles, kit];
     // AI 도구 saves on its own (the providers report); servers without one have nothing to pick.
-    if (state.data.providers != null) roles.append(roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker())));
+    if (state.data.providers != null) {
+      let assist = roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker()));
+      roles.append(assist);
+      kitRedraw.push(() => { const next = roleBlock(line("AI 도구", "프롬프트 칸 채우기, 글 다듬기, 분류에 써요.", models.assistPicker())); assist.replaceWith(next); assist = next; });
+    }
     const ROWS = [["라우팅 판정", "요청마다 맞는 모델을 골라요."],
       ["기억 추출", "대화에서 기억 후보를 뽑아요. 가벼운 모델이 좋아요."],
       ["반성·검토", "3시간마다 교훈을 정리하고 검토할 기억을 골라요."],

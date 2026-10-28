@@ -19,9 +19,9 @@
       for (const o of ctl.options) {
         if (o.hidden) continue;
         const g = o.parentElement.tagName === "OPTGROUP" ? o.parentElement : null;
-        if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, logo: g.logo, disabled: true });
+        if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, logo: g.logo, badges: g.dataset.badges || "", disabled: true });
         og = g;
-        rows.push({ value: o.value, label: o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", disabled: o.disabled, on: o.selected });
+        rows.push({ value: o.value, label: o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", badges: o.dataset.badges || "", disabled: o.disabled, on: o.selected });
       }
       return rows;
     }
@@ -55,6 +55,8 @@
     pop.style.maxHeight = `${Math.round(Math.min(320, up ? above : below))}px`;
     pop.style.top = up ? `${Math.round(r.top - 4 - Math.min(pop.scrollHeight, 320, above))}px` : `${Math.round(r.bottom + 4)}px`;
   }
+  // data-badges ("MAX,API"): how the model is connected, the same small marks as 설정 › 에이전트's rows (.ag-plan), after the name.
+  const badges = (t, list) => { for (const b of (list || "").split(",").filter(Boolean)) { const s = document.createElement("span"); s.className = "ag-plan"; s.textContent = b; t.append(" ", s); } };
   function paint() {
     const bar = open.tabs && document.createElement("div");
     if (bar) {
@@ -76,6 +78,7 @@
         const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation");
         const m = o.logo ? o.logo.cloneNode(true) : window.ArkismBrand?.mark(o.icon); // the provider's logo before its name
         const t = document.createElement("span"); t.textContent = o.head; // one flex item, so the gap never splits the name
+        badges(t, o.badges);
         h.append(...(m ? [m] : []), t);
         return h;
       }
@@ -86,6 +89,7 @@
       b.setAttribute("aria-selected", String(!!o.on));
       const t = document.createElement("span");
       t.textContent = o.label ?? o.value;
+      badges(t, o.badges);
       const m = o.icon && window.ArkismBrand?.mark(o.icon);
       if (m) b.append(m);
       b.append(t);

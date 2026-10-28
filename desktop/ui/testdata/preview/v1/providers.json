@@ -8,6 +8,7 @@
     "accounts": [
      {
       "id": "codex-main",
+      "plan": "pro",
       "cli": "codex",
       "label": "Codex",
       "status": "connected",
@@ -50,6 +51,7 @@
     "accounts": [
      {
       "id": "claude-main",
+      "plan": "max",
       "cli": "claude",
       "label": "Claude Code",
       "status": "connected",

@@ -8,7 +8,7 @@ const path = require("path");
 const { boot } = require("./testdata/app-harness.js");
 
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, "testdata/preview/v1", name), "utf8"));
-let app, answers = [], nextFile = null, blobs = [], postFails = false, lastAssist = "", rolePosts = [];
+let app, answers = [], nextFile = null, blobs = [], postFails = false, lastAssist = "", rolePosts = [], providersPatch = null;
 
 // The server's agent list with an agent found but off, one more off, a pending request and a second shared folder.
 function agentTools() {
@@ -31,6 +31,8 @@ async function api(a) {
     const map = Object.fromEntries([...skills.map((n) => [n, cat]), ["no-such-skill", cat], [skills[0] + "x", "no-such-category"]]);
     return { status: 200, body: JSON.stringify({ crew_assist: { status: "done", output: "답: " + JSON.stringify(map) } }) };
   }
+  // the providers report as the runner sends it after a key or login was added in 설정 › 에이전트
+  if (providersPatch && a.method === "GET" && p === "/v1/providers") { const d = fixture("providers.json"); providersPatch(d.providers); return { status: 200, body: JSON.stringify(d) }; }
   // 역할별 모델 on a server: the reply carries the pick back with the defaults
   if (a.method === "POST" && p === "/v1/providers/role_model") {
     const pick = JSON.parse(a.body); rolePosts.push(pick);
@@ -309,6 +311,27 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   await settings("info"); await settings("roles");
   assert.match(text(app.$(".ag-roles")), /역할별 모델을 읽지 못했어요/);
   app.fake.model_roles = saved;
+});
+
+test("역할별 모델 reads the providers report again and shows how each model is connected", async () => {
+  await settings("info"); await settings("roles");
+  const picker = () => app.$('.ag-roles [aria-label="AI 도구 기본 모델"]');
+  const group = (name) => picker().querySelectorAll("optgroup").find((g) => g.label === name);
+  assert.ok(picker());
+  assert.ok(!picker().querySelectorAll("option").some((o) => o.value === "anthropic|claude-new"));
+  // an API key and a MAX login reported for Anthropic, a PRO login for OpenAI
+  providersPatch = (d) => {
+    const a = d.providers.find((p) => p.id === "anthropic");
+    a.models.push("claude-new"); a.accounts[0].plan = "max"; a.keys = [{ id: "k9", name: "api", last4: "9999" }];
+    d.providers.find((p) => p.id === "openai").accounts[0].plan = "pro";
+  };
+  try {
+    await settings("info"); await settings("roles"); // the card draws from the loaded report, reads it again and redraws its pickers in place
+    assert.ok(picker().querySelectorAll("option").some((o) => o.value === "anthropic|claude-new"));
+    assert.equal(group("Anthropic").dataset.badges, "MAX,API");
+    assert.equal(group("OpenAI").dataset.badges, "PRO,API");
+    assert.ok(group("Anthropic").querySelectorAll("option").every((o) => o.dataset.badges === "MAX,API"));
+  } finally { providersPatch = null; }
 });
 
 test("역할별 모델 › 스킬 요약·후보 찾기·판정·보안 검사를 고르고 저장한다", async () => {
