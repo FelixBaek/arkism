@@ -375,10 +375,11 @@ class ContractIOTests(unittest.TestCase):
             manifest = sample('InputManifest')
             manifest['files'] = [{'logical_path': n, 'sha256': '0' * 64, 'byte_length': 0} for n in names]
             self.assertCode('invalid_value', lambda: io.validate_typed('InputManifest', manifest))
-        for name in ('../policy.json', '/tmp/policy.json', 'sub/policy.json'):
-            entry = sample('ArtifactEntry')
-            entry['logical_path'] = name
-            self.assertCode('invalid_value', lambda: io.validate_typed('ArtifactEntry', entry))
+        with tempfile.TemporaryDirectory(prefix='arkism-harness-') as directory:
+            for name in ('../policy.json', str(Path(directory) / 'policy.json'), 'sub/policy.json'):
+                entry = sample('ArtifactEntry')
+                entry['logical_path'] = name
+                self.assertCode('invalid_value', lambda: io.validate_typed('ArtifactEntry', entry))
 
     def test_raw_byte_and_length_mismatch(self):
         with tempfile.TemporaryDirectory(prefix='arkism-harness-') as directory:
@@ -390,7 +391,8 @@ class ContractIOTests(unittest.TestCase):
             self.fixture_repair_policy(root)
             manifest = json.loads((root / 'input_manifest.json').read_bytes())
             manifest['files'][0]['byte_length'] += 1
-            (root / 'input_manifest.json').write_bytes(encoded(manifest))
+            with (root / 'input_manifest.json').open('wb') as stream:
+                stream.write(encoded(manifest))
             self.assertCode('hash_mismatch', lambda: io.load_input_bundle(root / 'input_manifest.json'))
 
     def fixture_repair_policy(self, root):
@@ -409,12 +411,14 @@ class ContractIOTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='arkism-harness-') as directory:
             root = Path(directory)
             self.fixture(root)
-            (root / 'input_manifest.json').write_bytes((root / 'input_manifest.json').read_bytes() + b'\n')
+            with (root / 'input_manifest.json').open('ab') as stream:
+                stream.write(b'\n')
             self.assertCode('hash_mismatch', lambda: io.load_evaluation_bundle(root / 'evaluation_manifest.json'))
             self.refresh(root)
             gold = json.loads((root / 'gold.json').read_bytes())
             gold['labels'][0]['at_ns'] += 1
-            (root / 'gold.json').write_bytes(encoded(gold))
+            with (root / 'gold.json').open('wb') as stream:
+                stream.write(encoded(gold))
             self.refresh(root)
             self.assertCode('snapshot_binding', lambda: io.load_evaluation_bundle(root / 'evaluation_manifest.json'))
 
@@ -428,7 +432,8 @@ class ContractIOTests(unittest.TestCase):
             self.assertCode('schedule_mismatch', lambda: io.load_input_bundle(root / 'input_manifest.json'))
             self.fixture(root)
             probes = {'contract_id': CID, 'probes': []}
-            (root / 'probes.json').write_bytes(encoded(probes))
+            with (root / 'probes.json').open('wb') as stream:
+                stream.write(encoded(probes))
             self.refresh(root)
             self.assertCode('schedule_mismatch', lambda: io.load_input_bundle(root / 'input_manifest.json'))
 
@@ -441,7 +446,8 @@ class ContractIOTests(unittest.TestCase):
             (root / 'policy.json').write_bytes(encoded(policy))
             probes = json.loads((root / 'probes.json').read_bytes())
             probes['probes'][0]['final_k'] = 'invalid'
-            (root / 'probes.json').write_bytes(encoded(probes))
+            with (root / 'probes.json').open('wb') as stream:
+                stream.write(encoded(probes))
             self.refresh(root)
             self.assertCode('invalid_type', lambda: io.load_input_bundle(root / 'input_manifest.json'), '$.probes[*].final_k')
 
@@ -451,7 +457,8 @@ class ContractIOTests(unittest.TestCase):
             self.fixture(root)
             probes = json.loads((root / 'probes.json').read_bytes())
             probes['probes'][0]['at_ns'] = 11
-            (root / 'probes.json').write_bytes(encoded(probes))
+            with (root / 'probes.json').open('wb') as stream:
+                stream.write(encoded(probes))
             self.refresh(root)
             self.assertCode('snapshot_binding', lambda: io.load_input_bundle(root / 'input_manifest.json'))
 
@@ -479,8 +486,8 @@ class ContractIOTests(unittest.TestCase):
             self.assertCode('unsafe_path', lambda: io.load_input_bundle(root / 'sub' / '..' / 'input_manifest.json'))
 
     def test_nul_paths_are_contract_errors(self):
-        self.assertCode('unsafe_path', lambda: io.load_input_bundle(Path('/tmp/invalid\x00path')))
         with tempfile.TemporaryDirectory(prefix='arkism-harness-') as directory:
+            self.assertCode('unsafe_path', lambda: io.load_input_bundle(Path(directory) / 'invalid\x00path'))
             self.assertCode('unsafe_path', lambda: io.write_json_new(Path(directory) / 'invalid\x00name', {}))
 
     def test_write_exclusive_sorted_utf8_lf(self):
