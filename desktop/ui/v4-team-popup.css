@@ -94,6 +94,7 @@
 .tm-pop-tag:hover .tm-copy, .tm-copy:focus-visible { opacity: 1; }
 .tm-warn { color: var(--nc-amber); font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); }
 .tm-pop-words .tm-plain-sub { align-self: stretch; max-width: 420px; padding-bottom: 4px; border-bottom: 1px dashed var(--nc-line); border-radius: 0; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/16px var(--sans); }
+textarea.tm-plain-sub { display: block; resize: none; field-sizing: content; } /* the purpose wraps; it was one line cut at the edge */
 .tm-est-box { display: flex; flex-direction: column; gap: 3px; min-width: 200px; font: 400 calc(11px * var(--fs, 1))/1.5 var(--mono); }
 .tm-est-box > div { display: flex; align-items: baseline; gap: 6px; }
 .tm-est-box span { color: var(--nc-quiet); font-family: var(--sans); }

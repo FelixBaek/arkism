@@ -325,6 +325,7 @@ dialog.wf-settings { width: min(1000px, calc(100vw - 48px)); }
 .wf-dialog .dialog-head p { color: var(--nc-muted); font: 400 calc(12.5px * var(--fs, 1))/1.5 var(--sans); }
 .wf-dialog .dialog-head .icon-btn { border-color: transparent; color: var(--nc-quiet); }
 .wf-dialog .dialog-body { padding: 0; gap: 0; }
+.wf-dialog .dialog-body.wf-cover-body { padding: 16px 24px; gap: 12px; } /* 배경 사진: a plain body, not the two-column grid that pads its own columns */
 .wf-dialog .dialog-body.wf-dlg-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: stretch; overflow: hidden; }
 .wf-dlg-main { display: flex; flex-direction: column; gap: 16px; padding: 20px 24px 24px; overflow: auto; max-height: calc(100vh - 230px); }
 .wf-dlg-side { display: flex; flex-direction: column; gap: 14px; padding: 20px; border-left: 1px solid var(--nc-line); overflow: auto; max-height: calc(100vh - 230px); }

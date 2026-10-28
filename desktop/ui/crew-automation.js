@@ -118,10 +118,12 @@ window.ArkismAutomation = (h) => {
     node.setAttribute("role", "button");
     const show = () => { const v = get(); node.textContent = v || attrs.placeholder || ""; node.classList.toggle("empty", !v); };
     const edit = () => {
-      const i = h.input(get(), { maxLength: attrs.maxLength || 200, placeholder: attrs.placeholder || "", cls: `auto-inline-edit ${attrs.cls || ""}` });
+      // multiline: a long description edits as wrapped text, not one line scrolled sideways
+      const i = attrs.multiline ? Object.assign(el("textarea", `auto-inline-edit multiline ${attrs.cls || ""}`), { value: get() || "", maxLength: attrs.maxLength || 200, placeholder: attrs.placeholder || "", rows: 1 })
+        : h.input(get(), { maxLength: attrs.maxLength || 200, placeholder: attrs.placeholder || "", cls: `auto-inline-edit ${attrs.cls || ""}` });
       let done = false;
       const end = (commit) => { if (done) return; done = true; if (commit) set(i.value.trim()); i.replaceWith(node); show(); };
-      i.addEventListener("keydown", (e) => { if (e.isComposing) return; if (e.key === "Enter") { e.preventDefault(); end(true); } if (e.key === "Escape") { e.stopPropagation(); end(false); } });
+      i.addEventListener("keydown", (e) => { if (e.isComposing) return; if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); end(true); } if (e.key === "Escape") { e.stopPropagation(); end(false); } });
       i.addEventListener("blur", () => end(true));
       node.replaceWith(i);
       i.focus();
@@ -202,7 +204,7 @@ window.ArkismAutomation = (h) => {
         if (!handleTouched) d.handle = h.freeHandle(v || h.UNTITLED);
         touch();
       }, { maxLength: 60, placeholder: "자동화 이름을 적어 주세요" });
-      inlineText(role, () => d.role, (v) => { d.role = v; touch(); }, { maxLength: 200, placeholder: "무엇을 하는 자동화인가요? 한 줄로 적어요" });
+      inlineText(role, () => d.role, (v) => { d.role = v; touch(); }, { maxLength: 200, placeholder: "무엇을 하는 자동화인가요?", multiline: true });
       const hv = el("span", "");
       const callAlias = () => d.handle ? h.flowAlias(d) : "@이름";
       inlineText(hv, callAlias, (v) => {
@@ -223,7 +225,7 @@ window.ArkismAutomation = (h) => {
         name.classList.toggle("empty", !d.name);
         hv.textContent = callAlias();
         role.toggleAttribute("data-no-i18n", !!d.role);
-        role.textContent = d.role || "무엇을 하는 자동화인가요? 한 줄로 적어요";
+        role.textContent = d.role || "무엇을 하는 자동화인가요?";
         role.classList.toggle("empty", !d.role);
         copyHost.replaceChildren(d.handle ? h.copyButton(callAlias()) : "");
         credit.replaceChildren();
@@ -255,7 +257,7 @@ window.ArkismAutomation = (h) => {
       const cover = h.coverPicker(d.cover, d.category || "", () => ({ name: d.name, role: d.role, category: d.category, meta: d.handle ? `$${d.handle}` : "" }));
       const hd = el("div", "dialog-head");
       hd.append(el("h2", "", "배경 사진"));
-      const body = el("div", "dialog-body");
+      const body = el("div", "dialog-body wf-cover-body");
       body.append(cover.side, cover.node, el("small", "dim", "고른 사진은 카드와 이 창 위쪽에 깔려요 · 사진: Unsplash"));
       const foot = el("div", "dialog-foot");
       const cancel = button("취소", "ghost");

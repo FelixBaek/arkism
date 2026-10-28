@@ -5013,7 +5013,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "진행 알림": "Progress alerts",
   "배경 사진 고르기": "Choose background photo",
   "자동화 이름을 적어 주세요": "Enter an automation name",
-  "무엇을 하는 자동화인가요? 한 줄로 적어요": "What does this automation do? One line",
+  "무엇을 하는 자동화인가요?": "What does this automation do?",
   "$이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.": "$name uses letters, digits, _ and - only, no spaces.",
   "이미 쓰는 이름이에요. 다른 이름을 써 주세요.": "That name is taken. Choose another.",
   "예상 시간": "Est. time",

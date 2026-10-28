@@ -855,14 +855,14 @@ export function createCrewWorkers(deps) {
 
 
   // ---- inline editing in the popup head (868:61909): click a text, Enter or leaving the box keeps it, Esc cancels.
-  function inlineEdit(tag, cls, get, set, { max, ph, validate }) {
+  function inlineEdit(tag, cls, get, set, { max, ph, validate, multiline }) {
     const b = deps.el(tag, `ex-inline ${cls}`);
     b.tabIndex = 0;
     b.setAttribute("role", "button");
     const paint = () => { b.toggleAttribute("data-no-i18n", !!get()); b.textContent = get() || ph; b.classList.toggle("empty", !get()); }; // the user's words stay; only the placeholder is UI text
     paint();
     const start = () => {
-      const i = deps.input(get(), { maxLength: max, placeholder: ph, cls: `ex-inline-input ${cls}` });
+      const i = deps.input(get(), { maxLength: max, placeholder: ph, cls: `ex-inline-input ${cls}${multiline ? " multiline" : ""}`, ...(multiline ? { tag: "textarea", rows: 1 } : {}) }); // multiline: a long 소개 wraps instead of scrolling sideways
       i.setAttribute("aria-label", ph);
       b.replaceWith(i);
       i.focus();
@@ -877,7 +877,8 @@ export function createCrewWorkers(deps) {
         paint();
       };
       i.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        if (e.isComposing) return;
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); finish(true); }
         if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
       });
       i.addEventListener("blur", () => finish(true));
@@ -1013,7 +1014,7 @@ export function createCrewWorkers(deps) {
       // A new expert's @이름 follows its name until the @이름 itself is edited.
       const named = (v) => { if (isNew && (!d.handle || d.handle === wk.autoHandle)) { d.handle = wk.autoHandle = v.replace(/\s+/g, "").slice(0, 40); wk.paintHead(); } };
       line.append(inlineEdit("h2", "ex-name", () => d.name, (v) => { d.name = v; wk.dirty = true; named(v); drawWorkerSave(); }, { max: 60, ph: "이름", validate: (v) => (v ? "" : "이름을 비울 수 없어요.") }), handle, ...(isNew ? [] : [copyBtn(d, "icon-btn plain ex-copy")]));
-      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); }, { max: 200, ph: "한 줄 소개" }));
+      names.replaceChildren(cat, line, inlineEdit("p", "ex-role", () => d.role, (v) => { d.role = v; wk.dirty = true; drawWorkerSave(); }, { max: 200, ph: "한 줄 소개", multiline: true }));
     };
     wk.paintAct = () => {
       acts.replaceChildren();

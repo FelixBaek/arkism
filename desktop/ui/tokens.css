@@ -47,8 +47,8 @@
   --size-stroke-hairline: 1px; --size-stroke-strong: 1.5px; --size-stroke-focus: 2px;
 
   /* Typography */
-  --font-family-sans: "Plex KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-  --font-family-mono: "D2Coding", "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace; /* D2Coding(한글 지원) 우선 — PC에 설치된 경우만 쓰이고, 없으면 Geist Mono(한글 글리프 없음 — 한글 글자에 쓰지 않는다)로 내려간다 */
+  --font-family-sans: "Pretendard", "Pretendard Variable", "Plex KR", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  --font-family-mono: "D2Coding", "Geist Mono", "Pretendard", "Plex KR", ui-monospace, "SF Mono", Menlo, monospace; /* Geist Mono has no Korean glyphs: Korean in mono text falls through to Pretendard (Plex KR offline) instead of the system font */
   --font-family-latin: "Geist", system-ui, sans-serif;
   --font-weight-regular: 400; --font-weight-medium: 500; --font-weight-semibold: 600; --font-weight-bold: 700;
   --font-size-2xs: 10.5px; --font-size-xs: 11px; --font-size-sm: 11.5px; --font-size-md: 12px; --font-size-lg: 12.5px;
