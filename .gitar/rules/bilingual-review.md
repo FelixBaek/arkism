@@ -1,3 +1,11 @@
+---
+title: "Bilingual review output"
+description: "Write every review comment in English and Korean"
+type: automation
+when: "Any pull request review comment, summary or recommendation"
+actions: "Write the comment with an English section followed by a Korean section"
+---
+
 # Bilingual review output
 
 Provide all review summaries, finding descriptions, and recommendations in both English and Korean (Bilingual).
