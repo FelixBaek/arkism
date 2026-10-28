@@ -81,7 +81,7 @@ fs.mkdirSync(output,{recursive:true});
     await page.waitForFunction(()=>document.querySelector("#app")?.inert===false&&document.querySelector("#count-memories")?.textContent);
     await page.locator('[data-menu="agent"]').click();
     const tabs=page.locator("#area-tabs [role=tab]");
-    assert.deepEqual(await tabs.locator("span").allTextContents(),["워크플로우","회의 기록","사용량"]);
+    assert.deepEqual(await tabs.locator("span").allTextContents(),["워크플로우","사용량"]);
     for(const kind of ["agent","team","workflow"]) assert.ok(await page.locator(`[data-flow-kind="${kind}"]`).count(),kind+" remains reachable");
     assert.equal(await page.locator('[data-id="crew:wf-research"]').count(),0,"owned definitions remain behind their role");
     await capture("flow-dark");
