@@ -7,6 +7,10 @@ use super::{
 
 pub(crate) const MARKER: &str = "arkism-fresh-runtime-check-v2";
 
+#[path = "runtime_fixture_check.rs"]
+mod durable;
+pub(crate) use durable::DurableFixture;
+
 fn ordinary_ancestor(path: &Path) -> Result<(), String> {
     let info = match fs::symlink_metadata(path) {
         Ok(info) => info,
@@ -103,7 +107,7 @@ impl Runtime {
     pub(crate) fn check_managed_tokens(
         &self,
         initial: &Started,
-    ) -> Result<(Started, serde_json::Value), String> {
+    ) -> Result<(Started, serde_json::Value, DurableFixture), String> {
         require(self.home.is_none(), "token_check_requires_isolation")?;
         require(
             fs::read(self.data_dir().join(".runtime-check-owned"))
@@ -111,6 +115,7 @@ impl Runtime {
                 == MARKER.as_bytes(),
             "token_check_requires_fresh_marker",
         )?;
+        let fixture = self.seed_fixture_data(initial)?;
         let original = self.secrets()?;
         run(self.psql(&original, DATABASE)?.args(["-c",
             "UPDATE arkism.principal_token_history SET issued_at=statement_timestamp()-interval '80 days',expires_at=statement_timestamp()+interval '1 hour' WHERE token_sha256 IN (SELECT token_sha256 FROM arkism.principals WHERE id IN ('management:owner','worker','agent'))"]), "token_check_age_failed")?;
@@ -171,6 +176,7 @@ impl Runtime {
         capabilities(&restored.started.server, &complete.owner, 200)?;
         capabilities(&restored.started.server, &complete.worker, 200)?;
         capabilities(&restored.started.server, &complete.agent, 200)?;
+        self.check_fixture_data(&restored.started, &fixture)?;
         require(
             restored.started.server.starts_with("http://127.0.0.1:")
                 && initial.server.starts_with("http://127.0.0.1:"),
@@ -179,7 +185,9 @@ impl Runtime {
         Ok((
             restored.started,
             serde_json::json!({"expiry_rotation":true,"pending_before_commit":true,
-            "pending_after_commit":true,"pending_backup_restore":true,"retired_token_http_403":true}),
+            "pending_after_commit":true,"pending_backup_restore":true,
+            "pending_backup_restore_content":true,"retired_token_http_403":true}),
+            fixture,
         ))
     }
 }

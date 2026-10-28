@@ -393,7 +393,9 @@ function Read-InstalledSmokeResult([string]$Path) {
   $uri = $null
   if (-not [Uri]::TryCreate($result.server, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -cne 'http' -or
       $uri.Host -cne '127.0.0.1' -or $uri.Port -le 0 -or $uri.UserInfo -or $uri.AbsolutePath -ne '/' -or $uri.Query -or $uri.Fragment) { throw 'smoke_server_not_loopback' }
-  return [ordered]@{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false; token_checks = $result.token_checks }
+  return [ordered]@{ ok = $true; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = $result.backup_bytes; expiry = 'ok'; safety_copy = $false; token_checks = $result.token_checks
+    fixture_source_rows = $result.fixture_source_rows; fixture_memory_rows = $result.fixture_memory_rows
+    fixture_sha256 = $result.fixture_sha256; backup_restore_content = $result.backup_restore_content }
 }
 
 function Test-InstalledSmokeInteger($Value) {
@@ -435,6 +437,7 @@ function Assert-InstalledSmokeOwnedRoot($Context, [string]$Root) {
 
 function Remove-InstalledSmokeOwnedRoot($Context, [string]$Root) {
   Assert-InstalledSmokeOwnedRoot $Context $Root
+  Write-Host "Removing verified owned installed-smoke directory: $Root"
   Clear-InstalledSmokeOwnedReadOnly $Root
   Assert-InstalledSmokeOwnedRoot $Context $Root
   [IO.Directory]::Delete($Root, $true)

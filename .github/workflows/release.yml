@@ -133,7 +133,25 @@ jobs:
           $installer = Join-Path $env:GITHUB_WORKSPACE "desktop/dist/Arkism-$version-setup.exe"
           $stage = Join-Path $env:GITHUB_WORKSPACE 'desktop/stage'
           $evidence = Join-Path $env:RUNNER_TEMP 'arkism-windows-product-uninstall-check.json'
-          ./desktop/installer/smoke-windows-product-uninstall.ps1 -InstallerPath $installer -StagePath $stage -Version $version -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
+          ./desktop/installer/smoke-windows-product-uninstall.ps1 -InstallerPath $installer -StagePath $stage -Version $version -SourceSha $env:GITHUB_SHA -EvidencePath $evidence -DatabasePreservation
+      - name: Existing synthetic profile upgrade from published 0.1.4 (disposable Windows)
+        shell: powershell
+        run: |
+          $version = $env:VERSION.TrimStart('v')
+          $evidence = Join-Path $env:RUNNER_TEMP 'arkism-windows-upgrade-check.json'
+          if ([Version]$version -le [Version]'0.1.4') {
+            @{ status = 'not_applicable'; cross_version_upgrade_tested = $false; baseline_version = '0.1.4'; candidate_version = $version; source_sha = $env:GITHUB_SHA } | ConvertTo-Json | Set-Content -LiteralPath $evidence -Encoding UTF8
+            Write-Host 'Published-baseline upgrade is not applicable to versions at or below 0.1.4.'
+            exit 0
+          }
+          $baseline = Join-Path $env:RUNNER_TEMP 'arkism-upgrade-baseline'
+          if (Test-Path -LiteralPath $baseline) { throw 'upgrade baseline directory already exists' }
+          New-Item -ItemType Directory -Path $baseline | Out-Null
+          $oldInstaller = Join-Path $baseline 'Arkism-0.1.4-setup.exe'
+          Invoke-WebRequest -UseBasicParsing -Uri 'https://github.com/FelixBaek/arkism/releases/download/v0.1.4/Arkism-0.1.4-setup.exe' -OutFile $oldInstaller
+          $installer = Join-Path $env:GITHUB_WORKSPACE "desktop/dist/Arkism-$version-setup.exe"
+          $stage = Join-Path $env:GITHUB_WORKSPACE 'desktop/stage'
+          ./desktop/installer/smoke-windows-upgrade.ps1 -BaselineInstallerPath $oldInstaller -InstallerPath $installer -StagePath $stage -Version $version -SourceSha $env:GITHUB_SHA -EvidencePath $evidence
       - name: Syft SBOM of the Windows payload and dependency locks
         env:
           SYFT_CHECK_FOR_APP_UPDATE: "false"
@@ -185,6 +203,11 @@ jobs:
             New-Item -ItemType Directory -Force desktop/dist | Out-Null
             Copy-Item -LiteralPath $productEvidence -Destination desktop/dist/windows-product-uninstall-check.json
           }
+          $upgradeEvidence = Join-Path $env:RUNNER_TEMP 'arkism-windows-upgrade-check.json'
+          if (Test-Path -LiteralPath $upgradeEvidence -PathType Leaf) {
+            New-Item -ItemType Directory -Force desktop/dist | Out-Null
+            Copy-Item -LiteralPath $upgradeEvidence -Destination desktop/dist/windows-upgrade-check.json
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
@@ -195,6 +218,7 @@ jobs:
             desktop/dist/nsis-autorun-check.json
             desktop/dist/nsis-process-job-check.json
             desktop/dist/windows-product-uninstall-check.json
+            desktop/dist/windows-upgrade-check.json
           if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
