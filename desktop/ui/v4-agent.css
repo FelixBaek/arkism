@@ -126,11 +126,6 @@
 
 /* ---------------------------------------------------------------- graph editor (198:2350 · 321:*) */
 /* The editor keeps the left rail and fills the panel edge to edge: canvas | 366px side panel. */
-.app.graph-mode { grid-template-columns: var(--nc-rail-w) minmax(0, 1fr); }
-.app.graph-mode .sidebar { display: flex; }
-.app.graph-mode .panel-main { padding: 0; gap: 0; }
-.app.graph-mode .panel-main > .notice { position: absolute; z-index: 5; left: 16px; right: calc(var(--nc-detail-w) + 16px); top: 12px; }
-.app.graph-mode .table-wrap > .page-wrap { overflow: hidden; }
 .app.wide .table-wrap > .page-wrap .graph-page, .graph-page { height: 100%; min-height: 480px; grid-template-columns: minmax(0, 1fr) var(--nc-detail-w); border: 0; border-radius: 0; background: var(--nc-canvas); }
 .graph-page.run { grid-template-columns: minmax(0, 1fr) var(--nc-detail-w); }
 .g-stage { background-color: var(--nc-canvas); background-image: radial-gradient(color-mix(in srgb, var(--nc-line) 70%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; }

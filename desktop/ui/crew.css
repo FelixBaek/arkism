@@ -187,8 +187,6 @@
 .g-sends h4 { margin: 4px 0; font-size: calc(12px * var(--fs, 1)); }
 .g-send { display: flex; justify-content: space-between; font-size: calc(12px * var(--fs, 1)); padding: 2px 0; }
 .app.wide .table-wrap > .page-wrap .graph-page { height: calc(100vh - 140px); }
-.app.graph-mode { grid-template-columns: minmax(0, 1fr); }
-.app.graph-mode .sidebar { display: none; }
 
 /* 설정 › 모델 설정 (models.js) */
 .mp-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }

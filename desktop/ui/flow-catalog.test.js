@@ -72,10 +72,10 @@ test("an owned graph returns to its role inside FLOW with the unsaved role draft
   document.querySelector('[data-id="crew:ag1"]').click(); await h.settle();
   dom.type(h.fields.find((f) => f.input.classList.contains("wk-instr")).input, "아직 저장하지 않은 지시");
   h.btn(h.top(), "단계 고치기").click(); await h.settle();
-  assert.equal(h.state.view, "graph");
-  assert.equal(h.top(), null, "the role dialog no longer covers the graph");
-  h.btn(document.querySelector(".page-head"), "돌아가기").click(); await h.settle();
-  assert.equal(h.state.view, "crew");
+  assert.ok(h.top()?.classList.contains("graph-win"), "the graph opens in its own window, the role dialog no longer over it");
+  assert.equal(h.dialogs().length, 1);
+  h.btn(document.querySelector(".graph-win-head"), "돌아가기").click(); await h.settle();
+  assert.equal(document.querySelector(".graph-win"), null);
   assert.ok(h.top()?.classList.contains("ex-pop"));
   assert.equal(h.fields.filter((f) => f.input.classList.contains("wk-instr")).at(-1).input.value, "아직 저장하지 않은 지시");
   h.closeAll();

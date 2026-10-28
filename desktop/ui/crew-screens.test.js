@@ -12,9 +12,12 @@ async function openGraph(id = "wf1", opts) {
   const h = await boot(opts);
   h.state.view = "crew"; h.state.selected = `crew:${id}`; h.render(); await h.settle();
   await h.click(document.querySelector("#detail"), "편집");
-  assert.equal(h.state.view, "graph");
+  assert.ok(graphOpen());
   return h;
 }
+// the editor opens in its own window: a dialog popup-drag.js moves out (it stays here without Tauri, as in the preview)
+const graphOpen = () => !!document.querySelector("dialog.graph-win[open]");
+const nodeWin = (h) => { const d = h.top(); return d?.classList.contains("graph-win") ? null : d; }; // a window over the editor
 const node = (id) => document.querySelector(`.g-node[data-id="${id}"]`);
 
 test("list and both workflow details run every control without errors", async () => {
@@ -230,10 +233,10 @@ test("a save that returns after leaving the editor does not reopen it", async ()
   dom.key(document, "Delete"); await h.settle();
   document.querySelector(".page-head .g-save").click(); await h.settle();
   h.answer = true;
-  await h.click(document.querySelector(".page-head"), /돌아가기/);
-  assert.equal(h.state.view, "crew");
+  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  assert.ok(!graphOpen());
   release(); await h.settle();
-  assert.equal(h.state.view, "crew", "the late save leaves the user where they went");
+  assert.ok(!graphOpen(), "the late save leaves the editor closed");
   assert.ok(!h.notices.some((n) => /저장했어요/.test(n)));
   assert.deepEqual(clean(), []);
 });
@@ -304,18 +307,18 @@ test("add, remove, delete keys, leave and save in the editor", async () => {
   assert.equal(document.querySelectorAll(".g-edge-hit").length, edges - 1);
   // leave with unsaved changes: refused, then accepted
   h.answer = false;
-  await h.click(document.querySelector(".page-head"), /돌아가기/);
-  assert.equal(h.state.view, "graph");
+  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  assert.ok(graphOpen());
   // save failure then success
   h.routes.unshift(["POST", /^\/v1\/crew\/wf1$/, () => new Error("저장 실패")], ["POST", /\/v1\/crew$/, () => new Error("저장 실패")]);
-  const saveBtn = document.querySelector(".page-head .g-save") || h.btn(document.querySelector(".page-head"), "저장");
+  const saveBtn = document.querySelector(".page-head .g-save") || h.btn(document.querySelector(".graph-win-head"), "저장");
   saveBtn.click(); await h.settle();
   h.routes.splice(0, 2);
-  (document.querySelector(".page-head .g-save") || h.btn(document.querySelector(".page-head"), "저장")).click(); await h.settle();
+  (document.querySelector(".page-head .g-save") || h.btn(document.querySelector(".graph-win-head"), "저장")).click(); await h.settle();
   assert.ok(h.notices.some((n) => /저장했어요/.test(n)));
   h.answer = true;
-  await h.click(document.querySelector(".page-head"), /돌아가기/);
-  assert.equal(h.state.view, "crew");
+  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  assert.ok(!graphOpen());
   assert.deepEqual(clean(), []);
 });
 
@@ -372,7 +375,7 @@ test("the run box starts a run and opens it in the editor", async () => {
   dom.type(q, "보고서 써 줘");
   dom.key(q, "Enter"); await h.settle();
   assert.ok(h.calls.some((c) => c.method === "POST" && /runs/.test(c.url)));
-  assert.equal(h.state.view, "graph");
+  assert.ok(graphOpen());
   await sweep(h, document.body, 2);
   assert.deepEqual(clean(), []);
 });
@@ -398,10 +401,10 @@ test("every kind of node can be added and edited in its node window", async () =
     const more = h.btn(document.querySelector(".g-right"), "자세히");
     assert.ok(more, `panel for preset ${i}`);
     more.click(); await h.settle();
-    const d = h.top();
+    const d = nodeWin(h);
     assert.ok(d, "node window opens");
     await sweep(h, d, 2);
-    const keep = h.top();
+    const keep = nodeWin(h);
     if (keep) { const b = h.btn(keep, i % 2 ? "취소" : "적용"); (b || keep).click?.(); if (keep.open) keep.close(); await h.settle(); }
   }
   // every node of the saved graph too, and the inspector panel for each
@@ -409,7 +412,7 @@ test("every kind of node can be added and edited in its node window", async () =
     node(box)?.click(); await h.settle();
     await sweep(h, document.querySelector(".g-right"), 1);
     const more = h.btn(document.querySelector(".g-right"), "자세히");
-    if (more) { more.click(); await h.settle(); const d = h.top(); if (d) { await sweep(h, d, 1); if (d.open) d.close(); await h.settle(); } }
+    if (more) { more.click(); await h.settle(); const d = nodeWin(h); if (d) { await sweep(h, d, 1); if (d.open) d.close(); await h.settle(); } }
   }
   assert.deepEqual(clean(), []);
 });
@@ -594,7 +597,7 @@ async function openRun(wf, i) {
   const rows = h.top().querySelectorAll(".auto-runline");
   if (!rows[i]) return null;
   rows[i].click(); await h.settle();
-  assert.equal(h.state.view, "graph");
+  assert.ok(graphOpen());
   return h;
 }
 
@@ -604,8 +607,8 @@ test("each kind of run opens in the run view with its list and side panel", asyn
       const h = await openRun(wf, i);
       assert.ok(h, `${wf} run ${i}`);
       await sweep(h, document.body, 2);
-      const list = h.btn(document.querySelector(".page-head"), "목록");
-      if (list && list.isConnected) { list.click(); await h.settle(); await sweep(h, document.querySelector("#table"), 2); }
+      const list = h.btn(document.querySelector(".graph-win-head"), "목록");
+      if (list && list.isConnected) { list.click(); await h.settle(); await sweep(h, document.querySelector(".graph-win-body"), 2); }
       assert.deepEqual(clean(), []);
     }
   }
@@ -614,7 +617,7 @@ test("each kind of run opens in the run view with its list and side panel", asyn
 test("waiting run: approve and reject from the run view", async () => {
   for (const label of ["승인", "거절"]) {
     const h = await openRun("wf1", 0);
-    const b = h.btn(document.querySelector("#table"), label);
+    const b = h.btn(document.querySelector(".graph-win-body"), label);
     assert.ok(b, label);
     b.click(); await h.settle();
     assert.ok(h.calls.some((c) => /decision/.test(c.url)));
@@ -630,8 +633,8 @@ test("failed run: retry from the failure and from a done step", async () => {
   window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } }));
   await h.settle();
   h.top().querySelector(".auto-runline").click(); await h.settle();
-  h.btn(document.querySelector(".page-head"), "목록").click(); await h.settle();
-  await h.click(document.querySelector("#table"), "실패한 곳부터 다시");
+  h.btn(document.querySelector(".graph-win-head"), "목록").click(); await h.settle();
+  await h.click(document.querySelector(".graph-win-body"), "실패한 곳부터 다시");
   assert.ok(h.calls.some((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)));
   await sweep(h, document.body, 2);
   assert.deepEqual(clean(), []);
@@ -665,7 +668,71 @@ test("a step on an agent runner shows the runner, its state and what it could no
   await h.settle();
   h.top().querySelector(".auto-runline").click(); await h.settle();
   assert.match(document.querySelector(".wf-run-step.st-failed").title, /외부 실행기 myrunner · 실패/);
-  h.btn(document.querySelector(".page-head"), "목록").click(); await h.settle();
-  assert.match(document.querySelector("#table").textContent, /외부 실행기 myrunner · 실패 · 작업 t-9 · 못 쓴 것: 고른 모델 · 기억 1개 보냄 · 비용 모름/);
+  h.btn(document.querySelector(".graph-win-head"), "목록").click(); await h.settle();
+  assert.match(document.querySelector(".graph-win-body").textContent, /외부 실행기 myrunner · 실패 · 작업 t-9 · 못 쓴 것: 고른 모델 · 기억 1개 보냄 · 비용 모름/);
+  assert.deepEqual(clean(), []);
+});
+
+test("graph editing always opens in its own window, from the detail, the workflow window and its history", async () => {
+  const h = await openGraph();
+  const win = document.querySelector("dialog.graph-win");
+  assert.ok(win.open && win.parentNode === document.body, "a body dialog popup-drag.js can move into a new window");
+  assert.deepEqual(JSON.parse(win.dataset.popout), { detail: { id: "wf1" } });
+  assert.equal(win.dataset.popoutTitle, h.data.crew.find((r) => r.id === "wf1").crew.name);
+  assert.equal(h.state.view, "crew", "this window keeps its own screen");
+  assert.match(win.querySelector(".graph-win-head").textContent, /워크플로우 편집/);
+  assert.ok(win.querySelector(".graph-win-body .graph-page, .graph-win-body .wf-simple"));
+  await h.click(win.querySelector(".graph-win-head"), /돌아가기/);
+  assert.ok(!graphOpen());
+
+  // the workflow window's 그래프로 편집: the window gives way to the editor's, and 창으로 돌아가기 brings it back
+  window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1" } })); await h.settle();
+  await h.click(h.top(), /그래프로 편집/);
+  assert.ok(graphOpen());
+  assert.equal(h.dialogs().length, 1, "only the editor's window is open");
+  await h.click(document.querySelector(".graph-win-head"), "창으로 돌아가기");
+  assert.ok(!graphOpen());
+  assert.ok(h.top()?.classList.contains("v4-auto"), "back in the workflow window");
+  h.closeAll();
+
+  // a run in its history opens in the same kind of window
+  window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } })); await h.settle();
+  h.top().querySelector(".auto-runline").click(); await h.settle();
+  assert.ok(graphOpen());
+  assert.match(document.querySelector(".graph-win-head").textContent, /실행/);
+  assert.deepEqual(clean(), []);
+});
+
+test("where no window can open (the browser preview) the editor covers this one and Esc leaves it like 돌아가기", async () => {
+  const h = await openGraph();
+  assert.equal(window.__TAURI__, undefined);
+  const win = document.querySelector("dialog.graph-win");
+  assert.ok(win.open && win.ownerDocument === document, "it stays here, open over the page");
+  node("ai1").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  h.answer = false;
+  assert.equal(win.dispatchEvent(new Event("cancel", { cancelable: true })), false, "Esc never closes it straight away");
+  await h.settle();
+  assert.ok(graphOpen(), "unsaved edits: refused, so it stays");
+  h.answer = true;
+  win.dispatchEvent(new Event("cancel", { cancelable: true })); await h.settle();
+  assert.ok(!graphOpen());
+  assert.equal(document.querySelector(".graph-win"), null, "nothing is left behind");
+  assert.deepEqual(clean(), []);
+});
+
+test("a save in the editor's window refreshes the list and cards in this one", async () => {
+  const h = await openGraph("wf1", { routes: [["POST", /^\/v1\/crew\/wf1$/, (m, url, body) => {
+    const r = h.data.crew.find((x) => x.id === "wf1");
+    Object.assign(r, { revision: r.revision + 1, crew: { ...body.crew, name: "고친 워크플로우" } });
+    return structuredClone(r);
+  }]] });
+  assert.doesNotMatch(document.querySelector("#table").textContent, /고친 워크플로우/);
+  node("ai1").click(); await h.settle();
+  dom.key(document, "Delete"); await h.settle();
+  document.querySelector(".graph-win .g-save").click(); await h.settle();
+  assert.match(document.querySelector("#table").textContent, /고친 워크플로우/, "the card here shows the saved workflow");
+  assert.ok(graphOpen(), "the editor stays open");
+  assert.match(document.querySelector(".graph-win-title").textContent, /고친 워크플로우/);
   assert.deepEqual(clean(), []);
 });

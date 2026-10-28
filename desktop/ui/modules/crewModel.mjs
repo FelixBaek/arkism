@@ -76,7 +76,7 @@ export function createCrewModel(deps) {
     if (n.type === "end") return [];
     if (deps.IS_AI(n.type)) {
       const named = [...new Set((g.edges || []).filter((e) => e.from === n.id && e.port).map((e) => e.port))];
-      return [...named.map((p) => [p, p]), ["", named.length ? "다른 갈래" : ""]];
+      return [...named.map((p) => [p, p]), ["", named.length ? "노드 추가" : ""]];
     }
     return [["", ""]];
   }

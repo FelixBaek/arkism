@@ -29,7 +29,7 @@ for (const [name, change] of [
   ["connection scope changes", f => { f.state.scope = {project_id: "b"}; }],
   ["same run reopens in another editor", f => { f.ed.rec = {id: "workflow"}; }],
   ["locking cancels polling", f => { f.api.stopPolling(); }],
-  ["navigation leaves the graph", f => { f.state.view = "memories"; }]
+  ["the editor closes", f => { f.ed.rec = null; }]
 ]) test("late polling cannot repaint after " + name, async () => {
   const f = await runFixture(), original = f.ed.run;
   change(f);
