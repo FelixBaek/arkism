@@ -25,8 +25,8 @@ export function createCrewRunView(deps) {
     const epoch = pollEpoch, session = sessionKey(), record = deps.ed.rec;
     const key = deps.ed.run ? "run" : "test";
     const id = deps.ed[key]?.id;
-    const current = () => epoch === pollEpoch && session === sessionKey() && record === deps.ed.rec && deps.ed[key]?.id === id && deps.state.view === "graph";
-    if (!id || deps.state.view !== "graph") return;
+    const current = () => epoch === pollEpoch && session === sessionKey() && record === deps.ed.rec && deps.ed[key]?.id === id;
+    if (!id || !deps.ed.rec) return;
     try {
       const response = await deps.request(`/v1/crew/runs/${encodeURIComponent(id)}?${deps.query()}`);
       if (!current() || response.id !== id) return;

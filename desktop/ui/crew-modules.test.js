@@ -43,7 +43,7 @@ test("graph model orders steps, finds cycles, ports and the one-step form", asyn
   assert.equal(model.wouldCycle(g, "s", "e"), false);
   assert.deepEqual(model.portsOf(g.nodes[3], g), [["yes", "예"], ["no", "아니오"]]);
   assert.deepEqual(model.portsOf(g.nodes[4], g), []);
-  assert.deepEqual(model.portsOf(g.nodes[1], g), [["ok", "ok"], ["", "다른 갈래"]]);
+  assert.deepEqual(model.portsOf(g.nodes[1], g), [["ok", "ok"], ["", "노드 추가"]]);
   assert.deepEqual(model.portsOf(g.nodes[2], g), [["", ""]]);
   assert.deepEqual(model.portsOf(g.nodes[0], g), [["", ""]]);
   assert.equal(model.stepCount(g), 3);

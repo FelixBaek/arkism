@@ -24,11 +24,9 @@ export function createCrewEditor(deps) {
       const last = (r.items || []).find((x) => x.crew_run?.crew_id === rec.id);
       if (ed.rec !== rec || !last) return;
       ed.last = last;
-      if (deps.state.view === "graph" && !nodeDlg && !ed.run) deps.render(false);
+      if (!nodeDlg && !ed.run) deps.render(false);
     }, () => {});
-    deps.state.view = "graph";
-    deps.state.selected = null;
-    deps.render();
+    deps.render(); // the editor's own window (crew.js drawGraph)
     if (ed.run) void deps.pollRun();
   }
 
@@ -39,12 +37,10 @@ export function createCrewEditor(deps) {
     const rec = ed.rec;
     ed.rec = null;
     ed.run = null;
+    deps.closeGraph();
     // A workflow an agent works by is edited from that agent, so leaving the editor goes back there (its unsaved draft stays).
     const owner = deps.ownerOf(rec);
     if (owner) { deps.resumeWorker(owner); return; }
-    deps.state.view = "crew";
-    deps.state.selected = `crew:${rec.id}`;
-    deps.render();
     if (ed.fromPopup) deps.getAuto().open(deps.byId(rec.id) || rec); // opened from the workflow window: finish there
   }
 
@@ -75,7 +71,6 @@ export function createCrewEditor(deps) {
       await deps.reload();
       if (at !== session) return false; // left or reopened while the list reloaded
       ed.rec = deps.byId(saved.id) || saved;
-      deps.state.view = "graph";
       deps.render();
       deps.notice(ed.fromPopup ? "저장했어요. '창으로 돌아가기'를 눌러 마무리해요." : "워크플로우를 저장했어요.");
       void deps.autoTitle(ed.rec);
@@ -88,13 +83,14 @@ export function createCrewEditor(deps) {
 
   const markDirty = () => {
     ed.dirty = true;
-    const save = document.querySelector(".page-head .g-save"), run = document.querySelector(".page-head .g-trial");
+    const win = deps.graphBody()?.closest("dialog");
+    const save = win?.querySelector(".page-head .g-save"), run = win?.querySelector(".page-head .g-trial");
     if (save) save.disabled = false;
     if (run) { run.disabled = true; run.title = "저장한 뒤에 실행할 수 있어요"; }
     historyButtons();
   };
   const historyButtons = () => {
-    const undoB = document.querySelector(".g-tools .g-undo"), redoB = document.querySelector(".g-tools .g-redo");
+    const undoB = deps.graphBody()?.querySelector(".g-tools .g-undo"), redoB = deps.graphBody()?.querySelector(".g-tools .g-redo");
     if (undoB) undoB.disabled = !hist.past.length;
     if (redoB) redoB.disabled = !hist.future.length;
   };
@@ -375,13 +371,13 @@ export function createCrewEditor(deps) {
 
   // A panel edit shows on the canvas card without redrawing the page (a redraw would drop the field being typed in).
   function syncCard(n) {
-    const box = document.querySelector(`.g-node[data-id="${CSS.escape(n.id)}"]`);
+    const box = deps.graphBody()?.querySelector(`.g-node[data-id="${CSS.escape(n.id)}"]`);
     if (box) {
       box.querySelector(".g-node-head strong").textContent = deps.nodeTitle(n);
       const rows = box.querySelectorAll(".g-node-field > span");
       nodeSummary(n).forEach(([, v], i) => { if (rows[i]) rows[i].textContent = v; });
     }
-    const t = document.querySelector(".g-right .g-node-name");
+    const t = deps.graphBody()?.querySelector(".g-right .g-node-name");
     if (t) t.textContent = deps.nodeTitle(n);
   }
 
@@ -464,8 +460,7 @@ export function createCrewEditor(deps) {
   function renderGraph() {
     const t0 = performance.now();
     const rec = ed.rec;
-    if (!rec) { deps.state.view = "crew"; deps.render(); return; }
-    deps.$("#controls").replaceChildren();
+    if (!rec) return;
     const simple = !ed.run && !ed.graphMode && deps.simpleNode(ed.graph);
     if (simple) return deps.renderSimple(simple);
     const page = deps.el("div", `graph-page${ed.run ? " run" : ""}`);
@@ -571,7 +566,7 @@ export function createCrewEditor(deps) {
       if (!onCanvas(ev.target) || !(ev.button === 1 || (ev.button === 0 && deps.spaceDown))) return;
       ev.preventDefault();
       ev.stopPropagation();
-      const sx = ev.clientX, sy = ev.clientY, px = ed.panX, py = ed.panY;
+      const sx = ev.clientX, sy = ev.clientY, px = ed.panX, py = ed.panY, win = stage.ownerDocument.defaultView; // the editor's own window
       let moved = false;
       stage.classList.add("panning");
       try { stage.setPointerCapture(ev.pointerId); } catch { /* the pointer is already gone */ }
@@ -583,15 +578,15 @@ export function createCrewEditor(deps) {
       };
       const up = (e) => {
         if (e?.type === "pointerup") move(e); // the last move can arrive only with the release
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", up);
+        win.removeEventListener("pointermove", move);
+        win.removeEventListener("pointerup", up);
+        win.removeEventListener("pointercancel", up);
         stage.classList.remove("panning");
         if (moved && ev.button === 0) ed.justPanned = true;
       };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-      window.addEventListener("pointercancel", up);
+      win.addEventListener("pointermove", move);
+      win.addEventListener("pointerup", up);
+      win.addEventListener("pointercancel", up);
     }, true);
     // A middle click would otherwise show the browser's auto-scroll or open a link.
     // and a space-drag would select text or start a native drag that cancels the pointer.
@@ -661,7 +656,7 @@ export function createCrewEditor(deps) {
     if (ed.run) side = deps.runPanel;
     else if (ed.review) side = deps.reviewPanel;
     page.append(ed.run && ed.runList ? deps.runList() : stage, side());
-    deps.$("#table").replaceChildren(page);
+    deps.graphBody().replaceChildren(page);
     requestAnimationFrame(() => {
       drawEdges(svg, labels, nodeEls);
       window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
@@ -779,7 +774,7 @@ export function createCrewEditor(deps) {
   function selectOnCanvas(id, edge = null) {
     ed.sel = id;
     ed.selEdge = edge;
-    const page = deps.$("#table .graph-page");
+    const page = deps.graphBody().querySelector(".graph-page");
     const side = page?.querySelector(":scope > .g-right");
     if (ed.run) { deps.render(false); return; }
     if (id && ed.review) { ed.review = false; deps.render(false); return; }
@@ -848,9 +843,10 @@ export function createCrewEditor(deps) {
         window.ArkismPerf?.note("canvas.drag", performance.now() - t0, ed.graph.edges.length);
       });
     };
-    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); if (moved) touch(); };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    const win = canvas.ownerDocument.defaultView;
+    const up = () => { win.removeEventListener("pointermove", move); win.removeEventListener("pointerup", up); if (moved) touch(); };
+    win.addEventListener("pointermove", move);
+    win.addEventListener("pointerup", up);
   }
 
   function startLink(ev, n, port, canvas, svg) {
@@ -861,19 +857,19 @@ export function createCrewEditor(deps) {
     const temp = document.createElementNS("http://www.w3.org/2000/svg", "path");
     temp.setAttribute("class", "g-edge drawing");
     svg.append(temp);
-    const sx = ev.clientX, sy = ev.clientY;
+    const sx = ev.clientX, sy = ev.clientY, win = canvas.ownerDocument.defaultView;
     const move = (e) => temp.setAttribute("d", curve(from, toCanvas(e, canvas)));
     const up = (e) => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      win.removeEventListener("pointermove", move);
+      win.removeEventListener("pointerup", up);
       temp.remove();
       // A click on the + (no drag): pick the target node next.
       if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) < 5) { ed.linking = { from: n.id, port }; deps.render(false); return; }
-      const target = document.elementFromPoint(e.clientX, e.clientY)?.closest(".g-node");
+      const target = canvas.ownerDocument.elementFromPoint(e.clientX, e.clientY)?.closest(".g-node"); // the editor's own window
       if (target && target.dataset.id !== n.id) linkTo(n, port, target.dataset.id);
     };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    win.addEventListener("pointermove", move);
+    win.addEventListener("pointerup", up);
   }
 
 

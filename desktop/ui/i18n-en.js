@@ -980,7 +980,6 @@ window.ArkismI18nEN = {
   "이 워크플로우": "this workflow",
   "보관했어요. 기록은 남아 있어요.": "Archived. History is kept.",
   "기본 모델": "Default model",
-  "다른 갈래": "Other branch",
   "시작→끝 도달": "Start → end reachable",
   "되돌아가기 제한": "Loop-back limits",
   "되돌아가는 선이 없어요": "No loop-back lines",
