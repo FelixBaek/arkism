@@ -69,3 +69,14 @@ The linter ran against the existing local module cache, without network or
 package installation. The repeated complete local check finished with exit0: Python286, Go
 complexity/vet/full race and UI532 passed.
 This follow-up changes no contract bytes, field rules or expected results.
+
+## PR418 test-fixture security review
+
+The remote security gate flagged two hardcoded public temporary-path strings
+and five file-content mutation writes in the contract tests. The negative
+absolute/NUL path cases now use their own TemporaryDirectory. Fixed-name
+fixture mutations use explicit opened write handles, keeping file contents
+separate from the target path. The same42 tests and original expectations
+pass; production validation and all security rules are unchanged. The complete
+local suite passed again with exit0 (Python286, Go complexity/vet/full race,
+UI532). Remote gate acceptance remains pending.
