@@ -466,7 +466,8 @@ export const createCrew = (ctx) => {
     const alias = raw(el("code", "flow-alias", flowAlias(rec, items())));
     if (x.cover?.url) {
       // On a photo the card reads like a workflow card (name, @name); the avatar moves to the bottom-right corner.
-      coverImg(card, x.cover);
+      // a photo that fails to load: the card is drawn again as one without a photo (role, category, avatar top-left)
+      coverImg(card, x.cover, () => card.replaceWith(flowCard({ ...rec, crew: { ...x, cover: undefined } })));
       top.append(el("span", "flow-kind", tr(flowKind(rec))));
       const foot = el("div", "flow-card-foot");
       foot.append(alias);
@@ -519,12 +520,12 @@ export const createCrew = (ctx) => {
     const named = items().filter((r) => ["agent", "team", "workflow"].includes(r.crew.type) && r.crew.handle === "리서치");
     return named.find((r) => r.crew.type === "workflow") || named[0];
   }
-  function coverImg(card, cover) {
+  function coverImg(card, cover, onFail = (img) => { img.remove(); card.classList.remove("has-cover"); }) {
     const img = el("img", "crew-cover-img");
     img.alt = "";
     img.loading = "lazy";
     img.src = cover.url;
-    img.addEventListener("error", () => { img.remove(); card.classList.remove("has-cover"); });
+    img.addEventListener("error", () => onFail(img));
     card.append(img);
   }
   // Card (198:286): photo, the 일정 badge and the name. The 일정·웹훅 switch, one line and $이름 · 단계 live in the popup.

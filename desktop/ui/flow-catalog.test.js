@@ -154,6 +154,10 @@ test("agent and team cards show their cover like a workflow card, the avatar in 
   assert.ok(card("ag2").querySelector(".flow-card-top .wf-mark"), "a card without a photo keeps the avatar top-left");
   card("ag1").querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
   assert.equal(card("ag1").classList.contains("has-cover"), false, "a photo that fails to load drops the dark cover look");
+  assert.ok(card("ag1").querySelector(".flow-card-role") && card("ag1").querySelector(".flow-card-top .wk-face"), "and the card reads like one without a photo");
+  const wf = document.querySelector(".wf-card.has-cover[data-flow-kind=workflow]");
+  wf.querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
+  assert.equal(wf.classList.contains("has-cover"), false, "a workflow card keeps its layout and only drops the photo");
 
   // the expert window picks a photo apart from the avatar and saves it with the agent
   card("ag2").click(); await h.settle();
