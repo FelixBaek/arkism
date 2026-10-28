@@ -148,6 +148,18 @@ test("a select's optgroup heads draw the group's own logo element, else its data
   s.remove();
 });
 
+test("a list input heads one group per way a provider is connected, with its marks", () => {
+  add(`<input id="w" list="ways"><datalist id="ways">
+    <option value="auto"></option>
+    <option value="opus" data-group="Anthropic" data-group-badges="MAX" data-badges="MAX"></option>
+    <option value="opus" data-group="Anthropic" data-group-badges="API" data-badges="API"></option></datalist>`);
+  const w = $("#w"), pop = $(".combo-pop");
+  fire(w, "focusin"); fire(w, "pointerdown", { button: 0 });
+  assert.deepEqual([...pop.querySelectorAll(".combo-head")].map((h) => h.textContent), ["Anthropic MAX", "Anthropic API"]);
+  assert.deepEqual([...pop.querySelectorAll(".combo-opt")].map((n) => n.textContent), ["auto", "opus MAX", "opus API"]);
+  fire(document.body, "pointerdown", { button: 0 });
+});
+
 test("a list input filters as typed, shows tabs, groups, tags, keys and an empty note", async () => {
   window.ArkismBrand = { mark: (name) => { const m = document.createElement("i"); m.className = "mark-" + name; return m; } };
   add(`<input id="m" list="models" data-combo-empty="없음"><datalist id="models" data-tabs="전체">

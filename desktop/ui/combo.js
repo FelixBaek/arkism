@@ -32,10 +32,11 @@
     const out = [];
     let group = "";
     for (const o of dl?.options || []) {
-      const it = { value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value, key: o.dataset.key || "", group: o.dataset.group || "", icon: o.dataset.icon || "", tag: o.dataset.tag || "" };
+      const it = { value: o.value, hint: o.label && o.label !== o.value ? o.label : "", on: o.value === ctl.value, key: o.dataset.key || "", group: o.dataset.group || "", icon: o.dataset.icon || "", tag: o.dataset.tag || "", badges: o.dataset.badges || "" };
       if (tab && o.dataset.tab !== tab || q && !it.value.toLowerCase().includes(q) && !it.hint.toLowerCase().includes(q)) continue;
-      if (it.group && it.group !== group) out.push({ head: it.group, icon: o.dataset.groupIcon || it.group, disabled: true });
-      group = it.group;
+      const gk = `${it.group}\n${o.dataset.groupBadges || ""}`; // the same provider once per way it is connected
+      if (it.group && gk !== group) out.push({ head: it.group, icon: o.dataset.groupIcon || it.group, badges: o.dataset.groupBadges || "", disabled: true });
+      group = it.group ? gk : "";
       out.push(it);
     }
     return out;

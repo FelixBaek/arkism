@@ -57,6 +57,9 @@ window.ArkismModels = (ctx) => {
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
   // The same, per provider ({name, models}), for pickers that show where a model comes from.
+  // The same, one group per way the provider is connected (each subscription plan, API): a provider with a login and a key shows twice.
+  // Both copies save the same value; the runner, not the pick, decides how a model runs.
+  const pickerGroups = () => enabledByProvider().flatMap((p) => (p.badges.length > 1 ? p.badges.map((b) => ({ ...p, badges: [b] })) : [p]));
   const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, badges: viaBadges(p), models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
 
   const ERR = {
@@ -535,11 +538,12 @@ window.ArkismModels = (ctx) => {
   // Grouped by provider and saved with it: several providers offer the same model name. Value = "provider|model" (model names have no |).
   // combo.js draws the optgroups like the workflow model list: the provider's logo (the same one as its 설정 › 에이전트 row) and name, then each model with its provider and input kind.
   // One enabledByProvider() entry as a picker's optgroup. combo.js draws the badges (data-badges, comma-separated) after the name, on the head and on each model.
-  function modelGroup(p) {
+  // valueOf: what an option saves; workflow pickers save the plain model name.
+  function modelGroup(p, valueOf = (m) => `${p.id}|${m}`) {
     const tr = (x) => (window.ArkismI18n ? window.ArkismI18n.translate(x) : x);
     const g = el("optgroup"); g.label = p.name; g.logo = logo(p); g.dataset.badges = p.badges.join(",");
     for (const m of p.models) {
-      const o = Object.assign(el("option", "", m), { value: `${p.id}|${m}` });
+      const o = Object.assign(el("option", "", m), { value: valueOf(m) });
       o.dataset.hint = p.name;
       o.dataset.badges = g.dataset.badges;
       o.dataset.tag = tr(window.ArkismBrand?.kindLabel(m) || "");
@@ -554,7 +558,7 @@ window.ArkismModels = (ctx) => {
     const current = d.assist_model ? `${d.assist_provider || ""}|${d.assist_model}` : "";
     sel.append(Object.assign(el("option", "", "기본값 · 서버 설정"), { value: "" }));
     const groups = enabledByProvider();
-    for (const p of groups) sel.append(modelGroup(p));
+    for (const p of pickerGroups()) sel.append(modelGroup(p));
     if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", d.assist_model), { value: current })); // picked earlier, now off or saved without a provider
     sel.value = current;
     sel.addEventListener("change", async () => {
@@ -733,5 +737,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
+  return { load, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
 };
