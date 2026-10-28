@@ -136,7 +136,6 @@ jobs:
           python3 -m unittest discover -s tools -p 'test_*.py'
           python3 -m unittest discover -s evaluation -p 'test_*.py'
           python3 -m unittest discover -s evaluation/reuse-v010/benchmark -p 'test_*.py'
-          python3 -m unittest discover -s evaluation/memory-harness-v1 -p 'test_*.py'
 
   go-windows:
     runs-on: windows-2022

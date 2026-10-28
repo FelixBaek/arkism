@@ -366,7 +366,9 @@ class MetricsCLITests(unittest.TestCase):
 
     def test_cli_prediction_hash_bindings_mismatch_before_output(self):
         path=self.root/'predictions.json';run=json.loads(path.read_bytes())
-        run['policy_sha256']='f'*64;path.write_text(json.dumps(run))
+        run['policy_sha256']='f'*64
+        with path.open('w',encoding='utf-8')as stream:
+            json.dump(run,stream)
         code,out,err=self.invoke();self.assertEqual((code,out),(2,''))
         self.assertEqual(json.loads(err)['code'],'hash_mismatch')
         self.assertFalse((self.root/'metrics.json').exists())
