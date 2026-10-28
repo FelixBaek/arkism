@@ -494,6 +494,24 @@ Invoke-SmokeTestCase 'owned readonly cleanup clears only the observed bit' {
   Assert-SmokeTest ($changes.Count -eq 2 -and -not [IO.Directory]::Exists($owned)) 'Only guarded readonly entries should be normalized and removed'
 }
 
+Invoke-SmokeTestCase 'the Windows cache junction is skipped, not followed, and only by its exact place' {
+  param($f)
+  $owned = New-InstalledSmokeOwnedRoot $f.Context 'cache-link-test'
+  $cache = Join-Path $owned 'profile\AppData\Local\Microsoft\Windows\INetCache'
+  [IO.Directory]::CreateDirectory($cache) | Out-Null
+  $target = Join-Path $f.Root 'cache link target'
+  $link = Join-Path $cache 'Content.IE5'
+  New-SmokeTestLink $f $link $target
+  Assert-InstalledSmokeTree $owned
+  Remove-InstalledSmokeOwnedRoot $f.Context $owned
+  $f.Links.Remove($link) | Out-Null
+  Assert-SmokeTest (-not [IO.Directory]::Exists($owned) -and [IO.File]::Exists((Join-Path $target 'probe.txt'))) 'Removing the root must delete the cache link, not its target'
+  $other = New-InstalledSmokeOwnedRoot $f.Context 'cache-link-other'
+  New-SmokeTestLink $f (Join-Path $other 'Content.IE5') (Join-Path $f.Root 'other link target')
+  try { Assert-InstalledSmokeTree $other; throw 'Expected misplaced cache link rejection' }
+  catch { Assert-SmokeTest ($_.Exception.Message.Contains('smoke_tree_changed')) 'A cache-named link elsewhere must still fail closed' }
+}
+
 Invoke-SmokeTestCase 'marker failure precedes every readonly attribute mutation' {
   param($f)
   $owned = New-InstalledSmokeOwnedRoot $f.Context 'readonly-test'
