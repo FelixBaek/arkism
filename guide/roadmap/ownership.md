@@ -5,9 +5,13 @@ issues [#150–158](https://github.com/FelixBaek/arkism/issues/150). It contains
 development cards. Paper-writing cards are outside that implementation count;
 an external review prerequisite is retained where later acceptance needs it.
 
-Every entry is **planned**, not implemented or accepted. The manifest contains
-public card IDs, proposed technical paths and dependency edges. The private
-plan, hypotheses, source ledger and participant material are not published here.
+The manifest records editing boundaries and current local progress. A
+`verified` card has local acceptance evidence linked from the [progress
+record](progress.md); it does not imply PR merge, product integration or research
+acceptance. The preparation checker validates ownership and the pinned source,
+not the truth of a status field. Private hypotheses, participant material and
+source ledgers remain outside the public checkout. R0 owns the public progress
+record and work-record directory so documentation has one continuing writer.
 
 ## Before assigning work
 
@@ -50,6 +54,10 @@ must not quietly add fields to `types.go` or adjust canonical encoding. The
 contract ID and SHA-256 remain fixed. If publishing the original bytes conflicts
 with the repository's public-content rules, record the conflict and keep the
 original private; do not redact it, change its hash, or claim it was published.
+
+The exact immutable asset was subsequently authorized for publication by the
+user and published in [PR417](https://github.com/FelixBaek/arkism/pull/417), with
+its digest unchanged. That authorization covers this one asset only.
 
 The destination remains declared in the manifest so a publication conflict does
 not silently transfer ownership or create a second contract version. Preparation

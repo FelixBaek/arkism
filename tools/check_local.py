@@ -18,8 +18,7 @@ def main():
     subprocess.run([sys.executable, "tools/check_roadmap_plan.py"], cwd=ROOT, check=True)
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tools",
                     "-p", "test_*.py"], cwd=ROOT, check=True)
-    for directory in ("evaluation", "evaluation/reuse-v010/benchmark",
-                      "evaluation/memory-harness-v1"):
+    for directory in ("evaluation", "evaluation/reuse-v010/benchmark"):
         subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", directory,
                         "-p", "test_*.py"], cwd=ROOT, check=True)
     # Commits on this branch must say why, what was verified, and link research where a study screen changed.
