@@ -6443,7 +6443,8 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}건 중 {1}건 · 내리면 더 나와요": "{1} of {0} · scroll for more", "{0}% · {1}번": "{0}% · {1} times"
 });
 Object.assign(window.ArkismI18nEN.strings, {
-  "에이전트가 일할 때 넣어 준 기억이에요. 한 줄이 한 번이에요": "Memories handed to agents while they worked. One row is one recall",
+  "에이전트가 세션에서 넣어 준 기억이에요. 한 줄이 세션 하나예요": "Memories handed to agents in their sessions. One row is one session",
+  "세션 정보 없음": "No session info", "이전 기록": "Older records", "이 제공자의 기록이 없어요.": "No records from this provider.",
   "프로젝트 밖": "Outside a project", "저장소 없는 폴더": "Folder without a repository"
 });
-Object.assign(window.ArkismI18nEN.patterns, { "최근 {0}번, 한 번에 평균": "Last {0} recalls, average per recall", "{0}에 기억 {1}개를 넣어 줬어요": "Handed {1} memories to {0}" });
+Object.assign(window.ArkismI18nEN.patterns, { "세션 {0}개 · {1}번 불러옴, 한 번에 평균": "{0} sessions · {1} recalls, average per recall", "이 세션에 {0}번, 기억 {1}개를 넣어 줬어요": "Recalled {0} times in this session, {1} memories", "세션 {0}": "Session {0}", "{0}번 · 기억 {1}개": "{0} times · {1} memories", "{0} · {1} · 기억 {2}개": "{0} · {1} · {2} memories" });

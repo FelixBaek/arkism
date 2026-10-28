@@ -1107,6 +1107,8 @@ func hookInject(data map[string]any, name any, stdout io.Writer, accepted *bool)
 		}
 	}
 	sid := str(or(data["session_id"], ""))
+	host.Client, host.Session = capOrigin, sid // the recalls below carry them to the server's receipts
+	defer func() { host.Client, host.Session = "", "" }()
 	if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
 	}

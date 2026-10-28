@@ -49,6 +49,7 @@ func registerSearchCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		if !decode(w, r, &in) {
 			return
 		}
+		in.client, in.session = recallLabel(r.Header.Get("X-Arkism-Client"), 64), recallLabel(r.Header.Get("X-Arkism-Session"), 128)
 		v, e := s.Search(r.Context(), bearer(r), in)
 		respond(w, v, e)
 	})
@@ -64,4 +65,12 @@ func registerRecallsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetri
 		out, e := s.RecentRecalls(r.Context(), bearer(r), scope, 20)
 		respond(w, out, e)
 	})
+}
+
+// recallLabel keeps a caller label that is short, printable and not a secret; anything else is dropped, not refused.
+func recallLabel(v string, maxN int) string {
+	if !validRunLabel(v, maxN) || containsSecret(v) {
+		return ""
+	}
+	return v
 }
