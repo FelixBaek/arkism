@@ -2972,7 +2972,7 @@
     },
     "/v1/{collection}": {
       "post": {
-        "summary": "Create source, candidate, run, call, evaluation, reflection, relation or skill version. No direct memory/active writes.",
+        "summary": "Create source, candidate, run, call, evaluation, reflection, relation, skill version or shared evaluation record (eval_tasks, eval_runs, eval_trials, judge_calibrations; an eval_trials record relates to one eval_tasks and one eval_runs record). No direct memory/active writes.",
         "parameters": [
           {
             "name": "collection",
@@ -40051,7 +40051,7 @@
         "required": [
           "eval_type"
         ],
-        "description": "Required for new evaluations only. user_rating: human; automated_check: service/pipeline; model_self: agent/service/pipeline evaluating their own target. Independent evaluations require a different principal. Scores are optional but must be paired with a finite positive score_max and lie within [0,score_max]. Omitted passed means unrated. model_self never verifies skills or reflections.",
+        "description": "Required for new evaluations only. user_rating: human; automated_check: service/pipeline; model_self: agent/service/pipeline evaluating their own target; llm_judge: service/pipeline, and calibration_ref (a judge_calibrations record) is required with it and forbidden otherwise. Independent evaluations require a different principal. Scores are optional but must be paired with a finite positive score_max and lie within [0,score_max]. Omitted passed means unrated. model_self and llm_judge never verify skills or reflections; llm_judge is counted in summary groups but never preferred. spec_ref (eval_tasks), trial_ref (eval_trials) and calibration_ref must name the exact current revision of a live record in the same scope, read by the same principal; a stale ref fails 409 and invalidates the evaluation as evidence.",
         "properties": {
           "comparison_report": {"$ref": "#/components/schemas/SkillComparisonReport"},
           "eval_type": {
@@ -40059,9 +40059,13 @@
             "enum": [
               "user_rating",
               "automated_check",
-              "model_self"
+              "model_self",
+              "llm_judge"
             ]
           },
+          "spec_ref": {"$ref": "#/components/schemas/Ref"},
+          "trial_ref": {"$ref": "#/components/schemas/Ref"},
+          "calibration_ref": {"$ref": "#/components/schemas/Ref"},
           "passed": {
             "type": "boolean"
           },
@@ -51238,6 +51242,15 @@
           },
           "score_max": {
             "type": "number"
+          },
+          "spec_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "trial_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "calibration_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
           }
         },
         "additionalProperties": false,
