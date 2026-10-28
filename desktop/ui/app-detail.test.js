@@ -474,12 +474,12 @@ test("a failed load shows the retry notice, and 다시 시도 loads again", asyn
   await home();
 });
 
-test("the legacy team route opens FLOW and keeps meetings reachable in its tabs", async () => {
+test("the legacy team route opens FLOW with no separate meetings tab", async () => {
   deps.ArkismHome.go("teams"); await app.settle(1000);
   const head = app.$(".main > .page-head");
   assert.ok(head.classList.contains("bare"));
   assert.equal(head.style.display, "none");
-  assert.ok(byText("#area-tabs button", /회의 기록/), "meetings stay reachable from FLOW");
+  assert.equal(byText("#area-tabs button", /회의 기록/), undefined, "meetings open from a team, not a FLOW tab");
   assert.ok(app.$('[data-flow-kind="team"]'), "team definitions stay visible");
   await home();
   assert.equal(head.classList.contains("bare"), false);
