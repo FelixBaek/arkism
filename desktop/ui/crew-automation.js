@@ -144,7 +144,8 @@ window.ArkismAutomation = (h) => {
   }
 
   // ------------------------------------------------------------------ the window
-  function open(rec, startTab = "overview") {
+  // run: a run record to open straight in 기록's run detail (실행 보기 on a waiting FLOW run)
+  function open(rec, startTab = "overview", run = null) {
     const creating = !rec;
     const base = creating ? { type: "workflow", name: "", handle: "", role: "", category: "", model: "", enabled: false, graph: h.defaultGraph("simple", {}) } : structuredClone(rec.crew);
     base.graph?.nodes?.forEach((n) => { n.config ||= {}; }); // so a just-opened popup does not count as edited
@@ -1060,7 +1061,7 @@ window.ArkismAutomation = (h) => {
     }
 
     // -------------------------------------------------------------- 기록: the runs of this workflow
-    function historyTab(body) {
+    function historyTab(body, focus = null) {
       body.classList.remove("auto-body");
       body.classList.add("auto-history");
       // 판 이력 from the server (GET /v1/crew/versions/{id}, same as the team popup): the live definition first, then each one a save replaced.
@@ -1128,8 +1129,16 @@ window.ArkismAutomation = (h) => {
         const err = bad ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || h.readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "";
         const end = bad ? [h.RUN_LABEL[cr.status], err].filter(Boolean).join(" · ") : cr.status === "running" || cr.status === "waiting" ? h.RUN_LABEL[cr.status] : [h.runTookText(r), tokens ? `${fmtTokens(tokens)} 토큰` : ""].filter(Boolean).join(" · ");
         row.append(el("span", "auto-runline-mark", MARK[cr.status] ?? "○"), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("small", "", TRIGGERS[cr.trigger] || ""), el("span", "auto-runline-title", h.runRequest(cr) || h.readable(cr.summary) || rec.crew.name), el("small", "auto-runline-end", end));
-        row.addEventListener("click", () => leave(() => h.openGraph(rec, { run: r })));
+        row.addEventListener("click", () => showRun(r));
         return row;
+      };
+      // 실행 결과: final text, decision·stop, delivery and its recovery, child runs and meetings (flowHistory.mjs)
+      const showRun = (r) => {
+        const steps = el("div", "flow-history-actions");
+        steps.append(button("단계 보기", "ghost", "tree-structure", () => leave(() => h.openGraph(rec, { run: r }))));
+        const box = el("div", "flow-history");
+        body.replaceChildren(steps, box);
+        void h.openRunResult(r.id, box, () => { body.replaceChildren(); historyTab(body); });
       };
       let all = false;
       const load = async () => {
@@ -1143,6 +1152,7 @@ window.ArkismAutomation = (h) => {
         if (!items.length) list.append(el("p", "wf-empty", pick.value !== "all" ? "이 상태인 실행이 없어요." : "이 자동화는 아직 실행한 적이 없어요."));
       };
       pick.addEventListener("change", () => { all = false; void load(); });
+      if (focus) { showRun(focus); return; }
       void load();
     }
 
@@ -1150,7 +1160,7 @@ window.ArkismAutomation = (h) => {
     const tabs = creating ? [{ key: "overview", label: "개요", render: overview }] : [
       { key: "overview", label: "개요", render: (b) => { b.className = "dialog-body crew-popup-body"; overview(b); } },
       { key: "test", label: "테스트", render: (b) => { b.className = "dialog-body crew-popup-body"; testTab(b); } },
-      { key: "history", label: "기록", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b); } }
+      { key: "history", label: "기록", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b, run); run = null; } }
     ];
     pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); pop.dialog.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
     // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this
@@ -1168,5 +1178,5 @@ window.ArkismAutomation = (h) => {
     return pop;
   }
 
-  return { open: (rec, tab) => open(rec, tab), create: () => open(null), diffLines, whenToCron };
+  return { open: (rec, tab, run) => open(rec, tab, run), create: () => open(null), diffLines, whenToCron };
 };

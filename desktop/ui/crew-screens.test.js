@@ -600,6 +600,7 @@ async function openRun(wf, i) {
   const rows = h.top().querySelectorAll(".auto-runline");
   if (!rows[i]) return null;
   rows[i].click(); await h.settle();
+  h.btn(h.top(), "단계 보기").click(); await h.settle();
   assert.ok(graphOpen());
   return h;
 }
@@ -636,6 +637,7 @@ test("failed run: retry from the failure and from a done step", async () => {
   window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } }));
   await h.settle();
   h.top().querySelector(".auto-runline").click(); await h.settle();
+  h.btn(h.top(), "단계 보기").click(); await h.settle();
   h.btn(document.querySelector(".graph-win-head"), "목록").click(); await h.settle();
   await h.click(document.querySelector(".graph-win-body"), "실패한 곳부터 다시");
   assert.ok(h.calls.some((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)));
@@ -670,6 +672,7 @@ test("a step on an agent runner shows the runner, its state and what it could no
   window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } }));
   await h.settle();
   h.top().querySelector(".auto-runline").click(); await h.settle();
+  h.btn(h.top(), "단계 보기").click(); await h.settle();
   assert.match(document.querySelector(".wf-run-step.st-failed").title, /외부 실행기 myrunner · 실패/);
   h.btn(document.querySelector(".graph-win-head"), "목록").click(); await h.settle();
   assert.match(document.querySelector(".graph-win-body").textContent, /외부 실행기 myrunner · 실패 · 작업 t-9 · 못 쓴 것: 고른 모델 · 기억 1개 보냄 · 비용 모름/);
@@ -701,6 +704,7 @@ test("graph editing always opens in its own window, from the detail, the workflo
   // a run in its history opens in the same kind of window
   window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } })); await h.settle();
   h.top().querySelector(".auto-runline").click(); await h.settle();
+  h.btn(h.top(), "단계 보기").click(); await h.settle();
   assert.ok(graphOpen());
   assert.match(document.querySelector(".graph-win-head").textContent, /실행/);
   assert.deepEqual(clean(), []);

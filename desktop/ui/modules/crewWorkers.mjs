@@ -1282,7 +1282,9 @@ export function createCrewWorkers(deps) {
       if (wk.histOpen.has(h.revision)) vbox.append(window.ArkismVersionDiff.render(deps.el, list[0].crew, h.crew, `v${h.revision} 버전으로 바꾸면`));
     });
     if (!list.length) vbox.append(deps.el("p", "ex-hist-empty", wk.versions ? "버전 기록이 아직 없어요." : "불러오는 중…"));
-    box.append(sec("버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", runsBox(rec)));
+    const called = deps.el("div", "flow-history");
+    void deps.flowRuns(rec.id, called);
+    box.append(sec("버전 기록", "저장할 때마다 버전이 하나 생겨요. 다른 버전으로 바꿔도 지금 버전은 남아요.", vbox), sec("최근 실행", "테스트 탭에서 보낸 것도 여기 남아요", runsBox(rec)), sec("부른 실행 결과", "@이름으로 부른 실행의 최종 결과와 전달 상태", called));
   }
 
   // Runs of its workflow and its own calls, newest first.
