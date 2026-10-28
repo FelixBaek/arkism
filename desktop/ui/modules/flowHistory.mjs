@@ -9,7 +9,7 @@ export function flowNeedsDecision(waiting) {
 
 // All result bodies are rendered as text. Every async response is confined to
 // the initiating page and connection; no private result survives a scope switch.
-export function createFlowHistory({ state, el, button, request, query, notice, byId, ago, go }) {
+export function createFlowHistory({ state, el, button, request, query, notice, ago, go }) {
   const recovery = createFlowDeliveryRecovery({ state, el, button, request, notice });
   let generation = 0;
   const session = () => JSON.stringify([state.server, state.scope, state.token, state.connection?.generation]);
