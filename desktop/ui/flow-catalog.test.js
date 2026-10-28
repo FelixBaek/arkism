@@ -166,5 +166,11 @@ test("agent and team cards show their cover like a workflow card, the avatar in 
   h.btn(d, "저장").click(); await h.settle();
   const saved = h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag2$/.test(c.url)).at(-1);
   assert.equal(saved?.body.crew.cover.author, "Park");
+  d.querySelector(".ex-cover").click(); await h.settle();
+  h.btn(document.querySelector("dialog.tp-cover"), "배경 없애기").click(); await h.settle();
+  assert.equal(d.querySelector(".ex-cover img"), null);
+  assert.equal(d.querySelector(".ex-heads .tm-pop-credit").textContent, "");
+  h.btn(d, "저장").click(); await h.settle();
+  assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag2$/.test(c.url)).at(-1).body.crew.cover, undefined, "배경 빼기 saves without one");
   h.closeAll();
 });

@@ -113,7 +113,7 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator(".auto-bar-top select").first().selectOption("agent");await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
     const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
     assert.deepEqual(await page.locator('.flow-card[data-flow-kind="agent"] strong').allInnerTexts(),agentsFixture.map(r=>r.crew.name));
-    assert.deepEqual(await page.locator(".flow-card-category").allInnerTexts(),agentsFixture.map(r=>r.crew.category));
+    assert.deepEqual(await page.locator(".flow-card-category").allInnerTexts(),agentsFixture.filter(r=>!r.crew.cover).map(r=>r.crew.category)); // a card on a photo shows name and @name only
     assert.equal(await page.locator(".flow-card",{hasText:"코드리뷰어"}).getAttribute("title"),"코드리뷰어");
     await page.locator(".flow-card",{hasText:"디자이너"}).click();
     const flowNames=new Set(data["v1/crew.json"].items.map(r=>r.crew.name));
