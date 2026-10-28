@@ -9787,7 +9787,7 @@
       }
     },
     "/v1/recalls": {
-      "get": {"summary": "Newest context receipts (20) with the memories returned, their fused score and lanes", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Receipts newest first; what was left out below the score cut is not recorded", "content": {"application/json": {"schema": {"type": "object", "required": ["items"], "properties": {"measurement_basis": {"type": "string"}, "authority": {"type": "string"}, "items": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "requested_by": {"type": "string"}, "purpose": {"type": "string"}, "project_key": {"type": "string"}, "items": {"type": "array", "items": {"type": "object", "properties": {"memory": {"type": "object"}, "rank": {"type": "integer"}, "score": {"type": "number"}, "lanes": {"type": "array", "items": {"type": "string"}}}}}}}}}}}}}, "400": {"description": "Error"}, "403": {"description": "Error"},
+      "get": {"summary": "Newest context receipts (20) with the memories returned, their fused score and lanes", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Receipts newest first; what was left out below the score cut is not recorded", "content": {"application/json": {"schema": {"type": "object", "required": ["items"], "properties": {"measurement_basis": {"type": "string"}, "authority": {"type": "string"}, "items": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}, "requested_by": {"type": "string"}, "purpose": {"type": "string"}, "project_key": {"type": "string"}, "client": {"type": "string", "description": "Caller-reported coding agent (X-Arkism-Client); label only"}, "session_id": {"type": "string", "description": "Caller-reported session id (X-Arkism-Session); label only"}, "items": {"type": "array", "items": {"type": "object", "properties": {"memory": {"type": "object"}, "rank": {"type": "integer"}, "score": {"type": "number"}, "lanes": {"type": "array", "items": {"type": "string"}}}}}}}}}}}}}, "400": {"description": "Error"}, "403": {"description": "Error"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -46699,6 +46699,12 @@
             ]
           },
           "project_key": {
+            "type": "string"
+          },
+          "client": {
+            "type": "string"
+          },
+          "session_id": {
             "type": "string"
           }
         },

@@ -561,7 +561,7 @@ export function createCrewNodes(deps) {
     acts.append(deps.button("워크플로우 설정", "ghost", "gear-six", () => deps.openSettings(deps.ed.rec, null, true)));
     side.append(more, deps.el("i", "wf-rule"), acts);
     page.append(form, side);
-    deps.$("#table").replaceChildren(page);
+    deps.graphBody().replaceChildren(page);
   }
 
   return {

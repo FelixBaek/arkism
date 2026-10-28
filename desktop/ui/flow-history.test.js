@@ -28,7 +28,7 @@ test("a run detail in 기록 shows the final result text and delivery status", a
   assert.ok(box(h).querySelector(".auto-runline"));
   box(h).querySelector(".auto-runline").click(); await h.settle();
   h.btn(box(h), "단계 보기").click(); await h.settle();
-  assert.equal(h.state.view, "graph");
+  assert.ok(document.querySelector("dialog.graph-win[open]"), "단계 보기 opens the run in the graph window");
   h.closeAll();
 });
 

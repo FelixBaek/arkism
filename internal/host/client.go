@@ -38,6 +38,9 @@ var (
 	McpRoot     = Env("ARKISM_MCP_ROOT", filepath.Join(Home, "mcp"))
 	PluginsRoot = Env("ARKISM_PLUGINS_ROOT", filepath.Join(Home, "plugins"))
 	DataDir     = Env("ARKISM_DATA_DIR", filepath.Join(Home, ".local/share/arkism"))
+	// Client and Session label this process's requests (X-Arkism-Client, X-Arkism-Session) so the server's
+	// recall receipts say which coding agent and session got the memories. A hook sets them; empty sends none.
+	Client, Session string
 )
 
 // claudeBin turns a Windows npm shim (claude.cmd / claude.ps1) into the claude.exe behind it.
@@ -204,6 +207,12 @@ func call(tokenFile, method, path string, payload any, timeout time.Duration) (m
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
+	if Client != "" {
+		req.Header.Set("X-Arkism-Client", Client)
+	}
+	if Session != "" {
+		req.Header.Set("X-Arkism-Session", Session)
+	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

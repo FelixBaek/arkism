@@ -1195,14 +1195,13 @@ export function startApp() {
     $("#app").classList.toggle("wide", (!!page && !page.keepDetail) || popupDetail()); // TOOLS lists take the full width; an item opens in a popup
     if (!popupDetail()) itemPop?.dialog.close();
     $("#app").classList.toggle("keep-detail", !!page && !!page.keepDetail); // narrow windows: this detail sits under the list, not in a drawer
-    $("#app").classList.toggle("graph-mode", state.view === "graph");
     $("#app").classList.toggle("memory-mode", state.view === "memories");
     $("#app").classList.toggle("knowledge-mode", state.view === "knowledge");
     $("#app").classList.toggle("skills-mode", state.view === "skills");
     $("#app").classList.toggle("gallery-mode", ["images", "design", "tokens"].includes(state.view));
     $("#app").classList.toggle("home-mode", state.view === "todo");
     $("#app").classList.toggle("overview-mode", state.view === "overview");
-    table.className = { todo: "todo-wrap", images: "card-grid", crew: "card-grid crew-grid", settings: "page-wrap", design: "page-wrap", tokens: "page-wrap", graph: "page-wrap" }[state.view] || "table";
+    table.className = { todo: "todo-wrap", images: "card-grid", crew: "card-grid crew-grid", settings: "page-wrap", design: "page-wrap", tokens: "page-wrap" }[state.view] || "table";
     renderHeadActions();
     // a bare screen drops its title row, but keeps the row while it carries buttons (팀 › 회의 보기, 사용량 › 새로고침)
     $(".main > .page-head").style.display = bare && !$("#head-actions").childElementCount ? "none" : "";

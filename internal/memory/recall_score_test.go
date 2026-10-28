@@ -3,6 +3,7 @@ package memory
 import (
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -93,5 +94,35 @@ func TestRecentRecallsListsNewestReceiptsWithScore(t *testing.T) {
 	}
 	if page, e = f.svc.RecentRecalls(testCtx, f.human, scopeB, 5); e == nil && len(page.Items) != 0 {
 		t.Fatal("scope leak", page)
+	}
+}
+
+// A receipt keeps the caller's client and session headers; an unsafe value is dropped and the search still answers.
+func TestRecallReceiptKeepsClientAndSessionHeaders(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Embedder = nil
+	f.activeMemory("recallhdr body", "recallhdr")
+	send := func(client, session string) {
+		body, _ := json.Marshal(SearchInput{Scope: scopeA, Query: "recallhdr"})
+		w, r := httptest.NewRecorder(), httptest.NewRequest("POST", "/v1/search", strings.NewReader(string(body)))
+		r.Header.Set("Authorization", "Bearer "+f.human)
+		r.Header.Set("X-Arkism-Client", client)
+		r.Header.Set("X-Arkism-Session", session)
+		Handler(f.svc).ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body.String())
+		}
+	}
+	send("codex", "019a-session")
+	send(" bad\n", strings.Repeat("s", 200))
+	page, e := f.svc.RecentRecalls(testCtx, f.human, scopeA, 2)
+	if e != nil || len(page.Items) != 2 {
+		t.Fatal(page, e)
+	}
+	if got := page.Items[1]; got.Client != "codex" || got.SessionID != "019a-session" {
+		t.Fatal("labels lost", got)
+	}
+	if got := page.Items[0]; got.Client != "" || got.SessionID != "" {
+		t.Fatal("unsafe labels kept", got)
 	}
 }

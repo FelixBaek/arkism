@@ -580,7 +580,7 @@ export const createCrew = (ctx) => {
       const handle = cur.crew.handle.startsWith("제목없음") ? freeHandle(name) : cur.crew.handle;
       const saved = await save(cur, { ...cur.crew, name, handle, role: cur.crew.role || String(j.role || "").slice(0, 200) });
       await reload();
-      if (crewEditor.ed.rec?.id === saved.id) { crewEditor.ed.rec = byId(saved.id) || saved; if (state.view === "graph") render(false); }
+      if (crewEditor.ed.rec?.id === saved.id) { crewEditor.ed.rec = byId(saved.id) || saved; drawGraph(); }
       notice(`AI가 제목을 '${name}'(으)로, 부르는 이름을 $${handle}로 붙였어요. 설정에서 바꿀 수 있어요.`);
     } catch { /* naming is best effort */ }
   }
@@ -1031,8 +1031,7 @@ export const createCrew = (ctx) => {
           await reload();
           crewEditor.ed.rec = byId(saved.id) || saved;
           crewEditor.ed.dirty = false;
-          state.view = "graph";
-          render();
+          drawGraph();
           notice("워크플로우 설정과 그래프를 저장했어요.");
           return;
         }
@@ -1052,7 +1051,8 @@ export const createCrew = (ctx) => {
     dialog.showModal();
   }
   const crewEditor = createCrewEditor({
-    get $() { return $; },
+    get closeGraph() { return closeGraph; },
+    get graphBody() { return graphBody; },
     get autoTitle() { return autoTitle; },
     get avatarMark() { return avatarMark; },
     get button() { return button; },
@@ -1094,7 +1094,7 @@ export const createCrew = (ctx) => {
     get query() { return query; },
     get readable() { return readable; },
     get reload() { return reload; },
-    get render() { return render; },
+    get render() { return paint; },
     get renderSimple() { return crewNodes.renderSimple; },
     get request() { return request; },
     get reviewPanel() { return crewReview.reviewPanel; },
@@ -1118,7 +1118,7 @@ export const createCrew = (ctx) => {
   });
 
   const crewNodes = createCrewNodes({
-    get $() { return $; },
+    get graphBody() { return graphBody; },
     get agents() { return crewWorkers.agents; },
     get aiField() { return crewEditor.aiField; },
     get aiNodes() { return crewModel.aiNodes; },
@@ -1163,7 +1163,7 @@ export const createCrew = (ctx) => {
     get redraw() { return crewEditor.redraw; },
     set redraw(value) { crewEditor.redraw = value; },
     get removeNode() { return crewEditor.removeNode; },
-    get render() { return render; },
+    get render() { return paint; },
     get runFromEditor() { return crewRunView.runFromEditor; },
     get save() { return save; },
     get saveGraph() { return crewEditor.saveGraph; },
@@ -1193,7 +1193,7 @@ export const createCrew = (ctx) => {
     get models() { return models; },
     get NODES() { return crewVocabulary.NODES; },
     get notice() { return notice; },
-    get render() { return render; },
+    get render() { return paint; },
     get ruleChecks() { return crewModel.ruleChecks; },
     get touch() { return crewEditor.touch; },
     get uid() { return crewEditor.uid; }
@@ -1216,7 +1216,7 @@ export const createCrew = (ctx) => {
     get PORTS() { return crewVocabulary.PORTS; },
     get query() { return query; },
     get readable() { return readable; },
-    get render() { return render; },
+    get render() { return paint; },
     get request() { return request; },
     get runRequest() { return runRequest; },
     get spanText() { return spanText; },
@@ -1227,18 +1227,18 @@ export const createCrew = (ctx) => {
   });
 
 
-  function graphHead() {
+  function graphHead(line) {
     const rec = crewEditor.ed.rec;
     if (!rec) return [];
     if (crewEditor.ed.run) {
-      const view = segment([["graph", "그래프"], ["list", "목록"]], crewEditor.ed.runList ? "list" : "graph", (k) => { crewEditor.ed.runList = k === "list"; render(false); });
+      const view = segment([["graph", "그래프"], ["list", "목록"]], crewEditor.ed.runList ? "list" : "graph", (k) => { crewEditor.ed.runList = k === "list"; drawGraph(); });
       view.classList.add("wf-view");
-      headTitle(button("돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
+      headTitle(line, button("돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
       return [view];
     }
     const save2 = button("저장", "primary g-save", null, crewEditor.saveGraph);
     save2.disabled = !crewEditor.ed.dirty;
-    const review = button(`구조 검토${crewEditor.ed.suggestions?.length ? ` · ${crewEditor.ed.suggestions.length}` : ""}`, crewEditor.ed.review ? "active" : "", "sparkle", () => { crewEditor.ed.review = !crewEditor.ed.review; render(false); });
+    const review = button(`구조 검토${crewEditor.ed.suggestions?.length ? ` · ${crewEditor.ed.suggestions.length}` : ""}`, crewEditor.ed.review ? "active" : "", "sparkle", () => { crewEditor.ed.review = !crewEditor.ed.review; drawGraph(); });
     const testing = ["running", "waiting"].includes(crewEditor.ed.test?.crew_run?.status);
     const trial = button(testing ? "실행 중…" : crewEditor.ed.test ? "다시 실행" : "실행", "g-trial", "play", crewRunView.runFromEditor);
     trial.disabled = crewEditor.ed.dirty || testing;
@@ -1246,48 +1246,92 @@ export const createCrew = (ctx) => {
     const settings = button("설정", "ghost", "gear-six", () => openSettings(crewEditor.ed.rec, null, true));
     settings.title = "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진";
     // An owned workflow runs only through its agent (@); the server refuses a manual run.
-    headTitle(button(crewEditor.ed.fromPopup ? "창으로 돌아가기" : "돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
+    headTitle(line, button(crewEditor.ed.fromPopup ? "창으로 돌아가기" : "돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
     return [settings, review, ...(ownerOf(rec) ? [] : [trial]), save2];
   }
+  // 그래프로 편집하기 always opens in its own window: a data-popout dialog that popup-drag.js moves into a separate OS
+  // window as it opens. Where no window can open (the browser preview) the same dialog covers this window instead.
+  // It shares this window's JS, so a save reloads the list and cards here as well.
+  let graphWin = null;
+  const graphBody = () => graphWin?.querySelector(".graph-win-body");
+  const paint = (reset) => { if (crewEditor.ed.rec) drawGraph(); else render(reset); }; // what used to redraw the graph page
+  function drawGraph() {
+    const rec = crewEditor.ed.rec;
+    if (!rec) return closeGraph();
+    if (!graphWin) {
+      graphWin = el("dialog", "graph-win");
+      graphWin.append(el("header", "page-head graph-win-head"), el("div", "graph-win-body page-wrap"));
+      // Esc, the OS ✕ and a click outside: cancel a pending link first, else leave the way 돌아가기 does (unsaved edits ask)
+      graphWin.addEventListener("cancel", (e) => {
+        e.preventDefault();
+        if (crewEditor.ed.linking) { crewEditor.ed.linking = null; drawGraph(); } else void crewEditor.leaveGraph();
+      });
+      graphWin.addEventListener("close", function () {
+        this.remove();
+        if (graphWin !== this) return;
+        graphWin = null;
+        if (crewEditor.ed.rec) { crewRunView.stopPolling(); Object.assign(crewEditor.ed, { rec: null, run: null }); } // closed from outside
+      });
+      document.body.append(graphWin);
+    }
+    Object.assign(graphWin.dataset, { popout: JSON.stringify({ detail: { id: rec.id } }), popoutTitle: rec.crew.name });
+    const line = el("div", "title-line"), title = el("h1", "graph-win-title");
+    if (crewRunView.rerunOf()) title.textContent = "실패한 곳부터 재실행";
+    else title.append(raw(el("span", "", rec.crew.name)), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
+    const aside = el("div", "head-aside");
+    aside.append(...graphHead(line)); // graphHead puts ← 돌아가기 in the line
+    line.append(title);
+    graphWin.querySelector(".graph-win-head").replaceChildren(line, aside);
+    crewEditor.renderGraph();
+    if (!graphWin.open) graphWin.showModal();
+  }
+  function closeGraph() {
+    const w = graphWin;
+    graphWin = null;
+    if (w?.open) w.close(); else w?.remove();
+  }
   // 제목 줄: ← 돌아가기 at the far left, then the workflow's name with what this screen is on a smaller line under it.
-  // page-back is the class the app clears on every screen change (head-back would be cleared again right after head()).
-  function headTitle(back) {
-    const line = $(".page-head .title-line");
-    if (!line) return;
+  function headTitle(line, back) {
     back.classList.add("page-back", "g-head-back");
     line.prepend(back);
-    if (!crewRunView.rerunOf()) $("#title").replaceChildren(raw(el("span", "", crewEditor.ed.rec.crew.name)), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
   }
+  // Keys reach the document of the window the editor is in: this one, or its popout window (popup-drag.js).
+  const inGraph = (e) => !!crewEditor.ed.rec && !!graphWin && graphWin.ownerDocument === e.currentTarget;
   // Space held = hand tool on the graph, as in Figma.
   let spaceDown = false;
-  const typing = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
-  const setSpace = (on) => { spaceDown = on; document.querySelector(".g-stage")?.classList.toggle("space", on); };
-  document.addEventListener("keydown", (e) => {
-    if (e.code !== "Space" || state.view !== "graph" || typing()) return;
-    e.preventDefault();
-    if (!spaceDown) setSpace(true);
-  });
-  document.addEventListener("keyup", (e) => { if (e.code === "Space") setSpace(false); });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && crewEditor.ed.linking && state.view === "graph") { crewEditor.ed.linking = null; render(false); } });
-  window.addEventListener("blur", () => setSpace(false));
-  // Ctrl/Cmd+Z undoes a canvas edit, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes it; inside a field the text's own undo wins.
-  document.addEventListener("keydown", (e) => {
-    if (state.view !== "graph" || crewEditor.ed.run || crewEditor.nodeDlg || typing() || document.querySelector("dialog[open]")) return;
-    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-    // A non-Latin layout (두벌식: ㅋ) types another letter on the Z key: fall back to the physical key there.
-    const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : (e.code || "").replace(/^Key/, "").toLowerCase();
-    if (k === "z") { e.preventDefault(); if (e.shiftKey) crewEditor.redo(); else crewEditor.undo(); }
-    else if (k === "y" && e.ctrlKey && !e.shiftKey) { e.preventDefault(); crewEditor.redo(); }
-  });
-  document.addEventListener("keydown", (e) => {
-    if (state.view !== "graph" || crewEditor.ed.run || (!crewEditor.ed.sel && crewEditor.ed.selEdge === null)) return;
-    if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
-    if (e.key === "Delete" || e.key === "Backspace") {
+  const typing = (d) => ["INPUT", "TEXTAREA", "SELECT"].includes(d.activeElement?.tagName) || d.activeElement?.isContentEditable;
+  const setSpace = (on) => { spaceDown = on; graphWin?.querySelector(".g-stage")?.classList.toggle("space", on); };
+  function graphKeys(doc) {
+    doc.addEventListener("keydown", (e) => {
+      if (e.code !== "Space" || !inGraph(e) || typing(doc)) return;
       e.preventDefault();
-      if (crewEditor.ed.sel) crewEditor.removeNode(crewEditor.ed.sel);
-      else { crewEditor.ed.graph.edges.splice(crewEditor.ed.selEdge, 1); crewEditor.ed.selEdge = null; crewEditor.touch(); render(false); }
-    }
-  });
+      if (!spaceDown) setSpace(true);
+    });
+    doc.addEventListener("keyup", (e) => { if (e.code === "Space") setSpace(false); });
+    // before the dialog's own Esc (cancel), which would leave the editor
+    doc.addEventListener("keydown", (e) => { if (e.key === "Escape" && crewEditor.ed.linking && inGraph(e)) { e.preventDefault(); crewEditor.ed.linking = null; drawGraph(); } });
+    doc.defaultView?.addEventListener("blur", () => setSpace(false));
+    // Ctrl/Cmd+Z undoes a canvas edit, Ctrl/Cmd+Shift+Z or Ctrl+Y redoes it; inside a field the text's own undo wins.
+    doc.addEventListener("keydown", (e) => {
+      if (!inGraph(e) || crewEditor.ed.run || crewEditor.nodeDlg || typing(doc) || [...doc.querySelectorAll("dialog[open]")].some((d) => d !== graphWin)) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      // A non-Latin layout (두벌식: ㅋ) types another letter on the Z key: fall back to the physical key there.
+      const k = /^[a-z]$/i.test(e.key) ? e.key.toLowerCase() : (e.code || "").replace(/^Key/, "").toLowerCase();
+      if (k === "z") { e.preventDefault(); if (e.shiftKey) crewEditor.redo(); else crewEditor.undo(); }
+      else if (k === "y" && e.ctrlKey && !e.shiftKey) { e.preventDefault(); crewEditor.redo(); }
+    });
+    doc.addEventListener("keydown", (e) => {
+      if (!inGraph(e) || crewEditor.ed.run || (!crewEditor.ed.sel && crewEditor.ed.selEdge === null)) return;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(doc.activeElement?.tagName)) return;
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        if (crewEditor.ed.sel) crewEditor.removeNode(crewEditor.ed.sel);
+        else { crewEditor.ed.graph.edges.splice(crewEditor.ed.selEdge, 1); crewEditor.ed.selEdge = null; crewEditor.touch(); drawGraph(); }
+      }
+    });
+  }
+  graphKeys(document);
+  window.addEventListener("arkism-popout", (e) => graphKeys(e.detail));
 
   async function explain(prompt) {
     const a = await kit.assist("explain", prompt, { purpose: "skill" });
@@ -1359,19 +1403,12 @@ export const createCrew = (ctx) => {
     get WORK() { return crewModel.WORK; }
   });
 
-
-  const pageSub = () => {
-    if (!crewEditor.ed.rec) return "";
-    const x = crewEditor.ed.rec.crew;
-    if (crewEditor.ed.run) return `$${x.handle} · ${crewExecution.RUN_LABEL[crewEditor.ed.run.crew_run?.status] || ""}`;
-    return `워크플로우 › ${x.name} · $${x.handle} · ${crewEditor.ed.dirty ? "저장하지 않은 변경이 있어요" : "변경은 저장을 눌러야 남아요"}`;
-  };
-
   return {
     reset() {
       flowHistory.reset();
       crewRunView.stopPolling();
       Object.assign(crewEditor.ed, { rec: null, graph: null, run: null, test: null, suggestions: null, reviewAI: null });
+      closeGraph();
       Object.assign(crewWorkers.wk, { id: null, draft: null, dirty: false, ai: null, instrAI: null, test: null, status: {}, usage: null, statusAt: 0, teamsPick: new Set() });
     },
     explain, assist: (...a) => kit.assist(...a), assistError: (a) => kit.assistError(a), parseJSON: (t) => kit.parseJSON(t),
@@ -1397,8 +1434,7 @@ export const createCrew = (ctx) => {
     pages: {
       workers: { title: () => "전문가", count: () => `${crewWorkers.agents().length}명`,
         sub: () => "",
-        bare: () => true, head: () => [], render: crewWorkers.renderWorkers },
-      graph: { title: () => (crewRunView.rerunOf() ? "실패한 곳부터 재실행" : crewEditor.ed.rec ? `${crewEditor.ed.rec.crew.name} · ${crewEditor.ed.run ? "실행" : "워크플로우 편집"}` : "워크플로우 편집"), sub: pageSub, headInTitle: true, head: graphHead, render: crewEditor.renderGraph }
+        bare: () => true, head: () => [], render: crewWorkers.renderWorkers }
     },
     // exported for tests in a browser console
     _test: { parseCron: crewSchedule.parseCron, nextRun: crewSchedule.nextRun, cronText: crewSchedule.cronText, levels: crewModel.levels, wouldCycle: crewModel.wouldCycle, cliOf: crewVocabulary.cliOf, ruleChecks: crewModel.ruleChecks, simpleNode: crewModel.simpleNode, portsOf: crewModel.portsOf }
