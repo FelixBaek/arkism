@@ -1,0 +1,347 @@
+{
+  "format": "arkism-fixtures-spec-v1",
+  "data_role": "unit_fixture",
+  "is_runner_input": false,
+  "contract_sha256": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+  "oracle_sources": {
+    "golden_vectors_sha256": "3ab88b141d399269478775bb2dd068a762d9444a43a46123a17dbe95c4c427c1",
+    "golden_cases_sha256": "10141d83582c3f5a095730cc60fb3439386dda19b4800dd8a369a4f7730a2f8f"
+  },
+  "notice": "Synthetic implementation checks only; no product quality, generalization, lifecycle, measured token cost or authorization claims. Expected ranks/scores are development oracles and never runtime ranker inputs. R5 comparison is separate acceptance evidence.",
+  "scope": {
+    "workspace": "ws",
+    "project": "proj",
+    "user": "usr",
+    "agent": "agt"
+  },
+  "candidate_defaults": {
+    "trust": 0.5,
+    "updated_at_ns": 10,
+    "observed_seq": 1,
+    "effective_at_ns": 10,
+    "context_cost_units": 1,
+    "approved": true,
+    "active": true,
+    "deleted": false,
+    "source_verified": true,
+    "authority": "data_only_untrusted"
+  },
+  "at_ns": 100,
+  "cutoff_accepted_seq": 3,
+  "source_commit": "27bb41807ff48d47559ba2cfc30feb300caacecf",
+  "seed_order": {
+    "prefix": "fixture-v0",
+    "separators": "LF byte",
+    "sort": "sha256(prefix+LF+seed_decimal+LF+opaque_query_id), then query_id; never reorder lane items"
+  },
+  "cases": [
+    {
+      "query_id": "q01",
+      "stream_id": "s1",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ]
+          },
+          {
+            "symbol": "a",
+            "reasons": [
+              "exact_keyword"
+            ]
+          },
+          {
+            "symbol": "b",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "vector"
+            ]
+          },
+          {
+            "symbol": "c",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        []
+      ],
+      "final_k": 3,
+      "budget": 3,
+      "gold": {
+        "label_status": "relevant",
+        "symbols": [
+          "a"
+        ]
+      },
+      "oracle_id": "GV-RRF-04",
+      "expected": {
+        "rank": [
+          "memory:a",
+          "memory:c",
+          "memory:b"
+        ],
+        "score_fractions": [
+          "2/61",
+          "1/62",
+          "1/63"
+        ],
+        "selected": [
+          "memory:a",
+          "memory:c",
+          "memory:b"
+        ],
+        "used_context_units": 3
+      }
+    },
+    {
+      "query_id": "q02",
+      "stream_id": "s1",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ],
+            "origin": "fixture_alt"
+          }
+        ],
+        []
+      ],
+      "final_k": 2,
+      "budget": 2,
+      "gold": {
+        "label_status": "relevant",
+        "symbols": [
+          "a"
+        ]
+      },
+      "oracle_id": "GV-RRF-05",
+      "expected": {
+        "rank": [
+          "fixture_alt:a",
+          "memory:a"
+        ],
+        "score_fractions": [
+          "1/61",
+          "1/61"
+        ],
+        "selected": [
+          "fixture_alt:a",
+          "memory:a"
+        ],
+        "used_context_units": 2
+      }
+    },
+    {
+      "query_id": "q03",
+      "stream_id": "s1",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ],
+            "approved": false
+          },
+          {
+            "symbol": "b",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [],
+        []
+      ],
+      "final_k": 3,
+      "budget": 10,
+      "gold": {
+        "label_status": "relevant",
+        "symbols": [
+          "b"
+        ]
+      },
+      "oracle_id": "GV-RRF-08",
+      "expected": {
+        "rank": [
+          "memory:b"
+        ],
+        "score_fractions": [
+          "1/62"
+        ],
+        "selected": [
+          "memory:b"
+        ],
+        "used_context_units": 1
+      }
+    },
+    {
+      "query_id": "q04",
+      "stream_id": "s2",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ],
+            "context_cost_units": 4
+          },
+          {
+            "symbol": "b",
+            "reasons": [
+              "text_search"
+            ],
+            "context_cost_units": 2
+          },
+          {
+            "symbol": "c",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [],
+        []
+      ],
+      "final_k": 2,
+      "budget": 3,
+      "gold": {
+        "label_status": "relevant",
+        "symbols": [
+          "b",
+          "c"
+        ]
+      },
+      "oracle_id": "GV-RRF-09/GV-PACK-01",
+      "expected": {
+        "rank": [
+          "memory:a",
+          "memory:b",
+          "memory:c"
+        ],
+        "score_fractions": [
+          "1/61",
+          "1/62",
+          "1/63"
+        ],
+        "selected": [
+          "memory:b",
+          "memory:c"
+        ],
+        "used_context_units": 3
+      }
+    },
+    {
+      "query_id": "q05",
+      "stream_id": "s3",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [],
+        []
+      ],
+      "final_k": 3,
+      "budget": 0,
+      "gold": {
+        "label_status": "clear_negative",
+        "symbols": []
+      },
+      "oracle_id": "GV-PACK-02_budget",
+      "expected": {
+        "rank": [
+          "memory:a"
+        ],
+        "score_fractions": [
+          "1/61"
+        ],
+        "selected": [],
+        "used_context_units": 0
+      }
+    },
+    {
+      "query_id": "q06",
+      "stream_id": "s3",
+      "lanes": [
+        [],
+        [],
+        []
+      ],
+      "final_k": 3,
+      "budget": 10,
+      "gold": {
+        "label_status": "ambiguous",
+        "symbols": []
+      },
+      "oracle_id": "empty-ambiguous-unit-fixture",
+      "expected": {
+        "rank": [],
+        "score_fractions": [],
+        "selected": [],
+        "used_context_units": 0
+      }
+    },
+    {
+      "query_id": "q07",
+      "stream_id": "s3",
+      "lanes": [
+        [
+          {
+            "symbol": "a",
+            "reasons": [
+              "text_search"
+            ]
+          }
+        ],
+        [],
+        []
+      ],
+      "final_k": 3,
+      "budget": 10,
+      "gold": {
+        "label_status": "clear_negative",
+        "symbols": []
+      },
+      "oracle_id": "fixed-negative-nonempty-unit-fixture",
+      "expected": {
+        "rank": [
+          "memory:a"
+        ],
+        "score_fractions": [
+          "1/61"
+        ],
+        "selected": [
+          "memory:a"
+        ],
+        "used_context_units": 1
+      }
+    }
+  ],
+  "invalid_fixture_policy": "Negative tests mutate isolated copies or DTOs and rehash their manifests for semantic failures. Malformed cases never enter the normal eight-output dataset. Keep original hashes only for intentional raw-file-integrity failures."
+}
