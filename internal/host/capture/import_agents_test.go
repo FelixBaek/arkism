@@ -62,6 +62,7 @@ func importHome(t *testing.T) (home, repoDir string) {
 	write(".gemini/GEMINI.md", "## 지속 메모리\n\n- managed text only\n")
 	repoDir = filepath.Join(dir, "work", "my.repo")
 	write("../work/my.repo/.git/config", "[remote \"origin\"]\n\turl = git@github.com:Owner/Name.git\n")
+	write("../work/my.repo/.git/HEAD", "ref: refs/heads/main\n")
 	proj := ".claude/projects/" + importEncode(repoDir) + "/memory/"
 	write(proj+"MEMORY.md", "- [보고 짧게](report.md) — 결론부터 짧게\n- [Deploy steps](deploy.md) — compose 배포 후 nginx reload\n")
 	write(proj+"report.md", "---\nname: 보고 짧게\ndescription: short\ntype: user\n---\n\n보고는 결론 1~2줄.\n\n**Why:** 긴 글 읽기 힘듦.\n")

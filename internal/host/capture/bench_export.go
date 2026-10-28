@@ -27,9 +27,6 @@ func SetBenchState(dir string) { capState = dir }
 // CaptureModel is the extraction model (ARKISM_CAPTURE_MODEL, default haiku).
 func CaptureModel() string { return capModel }
 
-// CueMatch reports whether the drain would treat text as a remember-worthy user turn.
-func CueMatch(text string) bool { return cueRE.MatchString(text) }
-
 // ExtractClaims runs the drain's extraction on userText. today is the TODAY line (YYYY-MM-DD),
 // related the EXISTING MEMORIES rows (id, text, revision) the drain gets from search, guidance an
 // optional user note appended the way capture.json's is. pipeline names the generator.

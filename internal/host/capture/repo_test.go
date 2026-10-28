@@ -10,6 +10,9 @@ func TestRepoKeyFindsTheRepositoryFromAnySubfolder(t *testing.T) {
 	root := t.TempDir()
 	repo := filepath.Join(root, "Work", "Arkism")
 	os.MkdirAll(filepath.Join(repo, ".git"), 0o755)
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	os.MkdirAll(filepath.Join(repo, "desktop", "ui"), 0o755)
 	if got := repoKey(filepath.Join(repo, "desktop", "ui")); got != "arkism" {
 		t.Fatal("folder name without a remote:", got)
@@ -31,6 +34,31 @@ func TestRepoKeyFindsTheRepositoryFromAnySubfolder(t *testing.T) {
 	}
 	if got := repoKey(filepath.Join(root, "Work")); got != "" {
 		t.Fatal("outside a repository:", got)
+	}
+}
+
+func TestRepoKeyIgnoresIncompleteGitDirectory(t *testing.T) {
+	for _, state := range []string{"empty", "config-only", "head-directory"} {
+		t.Run(state, func(t *testing.T) {
+			root := t.TempDir()
+			dotGit := filepath.Join(root, ".git")
+			if err := os.Mkdir(dotGit, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if state == "config-only" {
+				if err := os.WriteFile(filepath.Join(dotGit, "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:wrong/repo.git\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if state == "head-directory" {
+				if err := os.Mkdir(filepath.Join(dotGit, "HEAD"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := repoKey(root); got != "" {
+				t.Fatalf("incomplete .git directory produced repository key %q", got)
+			}
+		})
 	}
 }
 

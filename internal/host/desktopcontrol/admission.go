@@ -66,8 +66,6 @@ func (g *Gate) Enter(scope Scope) (func(), error) {
 	return func() { once.Do(func() { g.mu.Lock(); g.active[scope]--; g.mu.Unlock() }) }, nil
 }
 
-func Enter(scope Scope) (func(), error) { return Default.Enter(scope) }
-
 // Submit takes admission before a scheduler can publish pending work. The activity
 // survives the submitting caller and is released only when the scheduled work returns.
 func Submit(gate *Gate, scope Scope, schedule func(func()), work func()) bool {

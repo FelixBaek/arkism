@@ -21,11 +21,13 @@ func TestProjectKey(t *testing.T) {
 	}
 	repo := filepath.Join(root, "arkism")
 	write(filepath.Join(repo, ".git", "config"), "[remote \"origin\"]\n\turl = git@github.com:FelixBaek/Arkism.git\n")
+	write(filepath.Join(repo, ".git", "HEAD"), "ref: refs/heads/main\n")
 	write(filepath.Join(repo, ".git", "worktrees", "wt", "commondir"), "../..\n")
 	wt := filepath.Join(root, "arkism-wt")
 	write(filepath.Join(wt, ".git"), "gitdir: "+filepath.Join(repo, ".git", "worktrees", "wt")+"\n")
 	plain := filepath.Join(root, "Plain")
 	write(filepath.Join(plain, ".git", "config"), "[core]\n")
+	write(filepath.Join(plain, ".git", "HEAD"), "ref: refs/heads/main\n")
 	if err := os.MkdirAll(filepath.Join(root, "outside"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -46,5 +48,34 @@ func TestProjectKey(t *testing.T) {
 	t.Setenv("ARKISM_REPO", "override/repo")
 	if got := ProjectKey(repo); got != "override/repo" {
 		t.Fatal("ARKISM_REPO must win", got)
+	}
+}
+
+func TestProjectKeyIgnoresIncompleteGitDirectory(t *testing.T) {
+	t.Setenv("ARKISM_REPO", "")
+	if err := os.Unsetenv("ARKISM_REPO"); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []string{"empty", "config-only", "head-directory"} {
+		t.Run(state, func(t *testing.T) {
+			root := t.TempDir()
+			dotGit := filepath.Join(root, ".git")
+			if err := os.Mkdir(dotGit, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if state == "config-only" {
+				if err := os.WriteFile(filepath.Join(dotGit, "config"), []byte("[remote \"origin\"]\n\turl = git@github.com:wrong/repo.git\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if state == "head-directory" {
+				if err := os.Mkdir(filepath.Join(dotGit, "HEAD"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := ProjectKey(root); got != "" {
+				t.Fatalf("incomplete .git directory produced project key %q", got)
+			}
+		})
 	}
 }
