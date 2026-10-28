@@ -149,7 +149,7 @@ class FixtureTests(unittest.TestCase):
         baseline = gen._objects(17, spec)
         altered = copy.deepcopy(spec)
         for case in altered['cases']:
-            case['expected'] = {'secret': 'must-not-be-read'}
+            case['expected'] = {'unused_oracle_marker': 'ignored'}
             case['oracle_id'] = 'changed-development-label'
         self.assertEqual(gen._objects(17, altered), baseline)
 
