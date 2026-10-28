@@ -169,11 +169,14 @@ export const createCrew = (ctx) => {
     for (const o of document.querySelectorAll("option[data-router]")) { o.label = autoLabel(); if (o.parentElement?.tagName === "SELECT") o.textContent = o.label; }
   }, () => {});
   const autoLabel = () => (router ? tr(`자동 — ${router} 라우터가 일마다 골라요`) : tr("자동 — 라우터가 일마다 골라요"));
-  // The same live list as a plain choice (자동화 팝업): "" = the fallback, "auto" = the router picks; a saved model off the list stays choosable.
+  // The same live list as a plain choice (자동화 팝업, 그래프 노드): "" = the fallback, "auto" = the router picks, then the models grouped
+  // like 설정 › 역할별 모델 (logo, MAX·PRO·API, input kind). The value is the plain model name; a saved model off the list stays choosable.
   function modelSelect(value, emptyLabel) {
-    const ids = [...new Set([...(models?.enabledModels() || []), ...(value && value !== "auto" ? [value] : [])])];
-    const s = select([["", emptyLabel], ["auto", autoLabel()], ...ids.map((m) => [m, m])], value || "");
+    const s = select([["", emptyLabel], ["auto", autoLabel()]], value || "");
     s.querySelector('option[value="auto"]').dataset.router = "1";
+    for (const p of models?.pickerGroups?.() || []) s.append(models.modelGroup(p, (m) => m));
+    if (value && value !== "auto" && ![...s.querySelectorAll("option")].some((o) => o.value === value)) s.append(Object.assign(el("option", "", value), { value }));
+    s.value = value || "";
     return s;
   }
   // only: keep the models this returns true for (the 이미지 picker lists vision models only).
@@ -188,9 +191,10 @@ export const createCrew = (ctx) => {
     if (!only) dl.append(auto);
     // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
-    const byProvider = models?.enabledByProvider?.() || [];
+    // One group per way a provider is connected (MAX·PRO·API, as in 설정 › 역할별 모델).
+    const byProvider = models?.pickerGroups?.() || [];
     const where = new Map();
-    for (const p of byProvider) for (const m of p.models) where.set(m, [...(where.get(m) || []), p.name]);
+    for (const p of byProvider) for (const m of p.models) where.set(m, [...new Set([...(where.get(m) || []), p.name])]);
     for (const p of byProvider) for (const m of p.models) {
       if (only && !only(m)) continue;
       const o = el("option");
@@ -198,6 +202,7 @@ export const createCrew = (ctx) => {
       o.label = where.get(m).join(" · "); // 1209:68243: every row names its provider; a model on several routes lists them all
       o.dataset.group = p.name;
       o.dataset.groupIcon = p.id;
+      o.dataset.groupBadges = o.dataset.badges = p.badges.join(",");
       o.dataset.tag = tr(window.ArkismBrand?.kindLabel(m) || "");
       dl.append(o);
     }

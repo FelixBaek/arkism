@@ -316,7 +316,7 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
 test("역할별 모델 reads the providers report again and shows how each model is connected", async () => {
   await settings("info"); await settings("roles");
   const picker = () => app.$('.ag-roles [aria-label="AI 도구 기본 모델"]');
-  const group = (name) => picker().querySelectorAll("optgroup").find((g) => g.label === name);
+  const groups = (name) => picker().querySelectorAll("optgroup").filter((g) => g.label === name);
   assert.ok(picker());
   assert.ok(!picker().querySelectorAll("option").some((o) => o.value === "anthropic|claude-new"));
   // an API key and a MAX login reported for Anthropic, a PRO login for OpenAI
@@ -328,9 +328,13 @@ test("역할별 모델 reads the providers report again and shows how each model
   try {
     await settings("info"); await settings("roles"); // the card draws from the loaded report, reads it again and redraws its pickers in place
     assert.ok(picker().querySelectorAll("option").some((o) => o.value === "anthropic|claude-new"));
-    assert.equal(group("Anthropic").dataset.badges, "MAX,API");
-    assert.equal(group("OpenAI").dataset.badges, "PRO,API");
-    assert.ok(group("Anthropic").querySelectorAll("option").every((o) => o.dataset.badges === "MAX,API"));
+    // a provider with a login and a key shows once per way, each copy saving the same value
+    assert.deepEqual(groups("Anthropic").map((g) => g.dataset.badges), ["MAX", "API"]);
+    assert.deepEqual(groups("OpenAI").map((g) => g.dataset.badges), ["PRO", "API"]);
+    assert.ok(groups("Anthropic")[1].querySelectorAll("option").every((o) => o.dataset.badges === "API"));
+    const [sub, api] = groups("Anthropic").map((g) => g.querySelectorAll("option").map((o) => o.value));
+    assert.deepEqual(sub, api);
+    assert.ok(api.includes("anthropic|claude-new"));
   } finally { providersPatch = null; }
 });
 

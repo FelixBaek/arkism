@@ -867,7 +867,7 @@ window.ArkismPages = (ctx) => {
       sel.append(Object.assign(el("option", "", `서버 기본값 (${defaultLabel || "서버 설정"})`), { value: "" }));
       for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
       if (claude) {
-        for (const p of models.enabledByProvider().filter((x) => x.id === "anthropic")) sel.append(models.modelGroup(p));
+        for (const p of models.pickerGroups().filter((x) => x.id === "anthropic")) sel.append(models.modelGroup(p));
       }
       if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", pick.model), { value: current })); // picked earlier, now off
       sel.value = current;

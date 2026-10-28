@@ -148,7 +148,15 @@ function appHelpers(h) {
     if (aside.length) { const a = el("div", "head-aside"); a.append(...aside); head.append(a); }
   };
   const agentLogo = (spec, name) => { const t = el("span", "agent-tile"); t.title = name; return t; };
-  const models = { enabledModels: () => ["sonnet", "haiku", "gpt-5", "gemini-2.5-pro", "vision-x"], enabledByProvider: () => [{ id: "anthropic", name: "Anthropic", models: ["sonnet", "haiku"] }, { id: "openai", name: "OpenAI", models: ["gpt-5"] }] };
+  // pickerGroups: Anthropic with a MAX login and a key (two groups), OpenAI on a subscription with no plan; modelGroup as models.js draws it.
+  const groups = [{ id: "anthropic", name: "Anthropic", badges: ["MAX"], models: ["sonnet", "haiku"] }, { id: "anthropic", name: "Anthropic", badges: ["API"], models: ["sonnet", "haiku"] }, { id: "openai", name: "OpenAI", badges: [], models: ["gpt-5"] }];
+  const modelGroup = (p, valueOf = (m) => `${p.id}|${m}`) => {
+    const g = el("optgroup"); g.label = p.name; g.dataset.badges = p.badges.join(",");
+    for (const m of p.models) { const o = el("option", "", m); o.value = valueOf(m); o.dataset.badges = g.dataset.badges; g.append(o); }
+    return g;
+  };
+  const models = { enabledModels: () => ["sonnet", "haiku", "gpt-5", "gemini-2.5-pro", "vision-x"], enabledByProvider: () => [{ id: "anthropic", name: "Anthropic", models: ["sonnet", "haiku"] }, { id: "openai", name: "OpenAI", models: ["gpt-5"] }],
+    pickerGroups: () => groups, modelGroup };
   return { el, raw, icon, button, $, segment, detailShell, section, facts, callout, markSelected, notice, ago, query, catIcon, catChipBody, catMenu, copyButton, headExtras, agentLogo, models };
 }
 

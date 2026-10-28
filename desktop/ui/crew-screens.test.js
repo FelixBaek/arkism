@@ -247,6 +247,9 @@ test("inline card edits change cron, model and text values", async () => {
   // model: a select that saves on change
   rowOf("ai1", "모델").click(); await h.settle();
   const sel = node("ai1").querySelector("select.g-inline");
+  // the 설정 › 역할별 모델 picker: 기본·자동 first, then one group per way a provider is connected, saving the plain model name
+  assert.deepEqual([...sel.querySelectorAll("optgroup")].map((g) => `${g.label}:${g.dataset.badges}`), ["Anthropic:MAX", "Anthropic:API", "OpenAI:"]);
+  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "sonnet", "haiku", "sonnet", "haiku", "gpt-5"]);
   sel.value = sel.options[sel.options.length - 1].value; dom.fire(sel, "change"); await h.settle();
   rowOf("ai1", "모델").click(); await h.settle();
   const sel2 = node("ai1").querySelector("select.g-inline");
