@@ -38,10 +38,6 @@
 .crew-tile { display: inline-grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--bg-muted); color: var(--text-2); }
 .crew-tile.l { width: 56px; height: 56px; border-radius: var(--radius-xl); }
 .crew-tile.l .icon { width: 22px; height: 22px; }
-.crew-card.new, .crew-card.new.expert { align-items: center; justify-content: center; text-align: center; min-height: 180px; border: 1px dashed var(--border-strong); background: none; color: var(--text-2); }
-.crew-card.new strong { color: var(--text-1); }
-.crew-card.new small { font-size: calc(11.5px * var(--fs, 1)); color: var(--text-3); }
-.crew-card.new.team, .crew-card.new.automation { min-height: 170px; }
 
 /* Team · automation cards (03c·03f): photo under a dark fade, white text. Without a photo the fade sits on dark paper. */
 .crew-card.cover { position: relative; isolation: isolate; overflow: hidden; justify-content: space-between; gap: 8px; padding: 12px 14px 14px;
@@ -264,7 +260,6 @@
 /* 워크플로우 (03 · 03a~03h) */
 .table-wrap > .crew-grid.workflow { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
 .crew-card.workflow.cover { min-height: 211px; }
-.crew-card.new.workflow { min-height: 170px; }
 .crew-card.workflow .crew-cover-foot small { margin-top: 2px; }
 .crew-health { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg-surface); font-size: calc(12px * var(--fs, 1)); }
 .crew-health p { display: flex; align-items: center; gap: 6px; margin: 0; }
@@ -328,7 +323,9 @@
 button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor: pointer; }
 
 /* 크루 상세 팝업 틀 (crew-popup.js) */
-.crew-popup { width: min(880px, calc(100vw - 32px)); padding: 0; }
+/* every FLOW window is wide; each pane scrolls on its own (the popout window takes this size too) */
+.crew-popup, .wf-settings, .node-dialog { width: min(1200px, calc(100vw - 32px)); }
+.crew-popup { padding: 0; }
 /* head and tabs keep their size; the body takes what is left of the window (dialog max-height) and scrolls, so the 저장 bar stays inside */
 .crew-popup[open] { display: flex; flex-direction: column; }
 .crew-popup-head, .crew-popup-tabs { flex: none; }

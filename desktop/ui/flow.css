@@ -1,6 +1,4 @@
 /* FLOW uses the existing catalogue and popup tokens for every execution type. */
-.flow-intro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; margin-bottom: 1rem; color: var(--nc-muted); }
-.flow-intro p { margin: 0; font-size: calc(.8125rem * var(--fs, 1)); }
 .flow-card-top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; width: 100%; }
 .flow-kind { color: var(--nc-muted); font-size: calc(.75rem * var(--fs, 1)); }
 .flow-card-category { color: var(--nc-muted); font-size: calc(.75rem * var(--fs, 1)); }
@@ -24,6 +22,7 @@
 .flow-history { max-width: 68rem; margin-inline: auto; }
 .flow-history-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
 .flow-history-head h2 { margin: 0; font-size: calc(1.125rem * var(--fs, 1)); }
+.flow-history-head > .flow-history-note { margin: 0; }
 .flow-history-list { display: grid; gap: .625rem; }
 .flow-history-row { display: grid; gap: .375rem; width: 100%; height: auto; min-height: 4.5rem; align-content: center; padding: 1rem; text-align: left; white-space: normal; overflow-wrap: anywhere; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); color: var(--nc-text); }
 .flow-history-row small, .flow-history-note { color: var(--nc-muted); line-height: 1.6; overflow-wrap: anywhere; }

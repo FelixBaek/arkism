@@ -19,7 +19,7 @@
 .crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / .6); font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
 
 /* ---- popup */
-.v4-auto { width: min(940px, calc(100vw - 32px)); position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
+.v4-auto { position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
 .v4-auto .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 20px; row-gap: 12px; padding: 28px 32px 20px; }
 .v4-auto .crew-popup-who { grid-area: who; align-items: flex-start; gap: 20px; min-width: 0; }
 .v4-auto .crew-popup-actions { grid-area: side; justify-self: end; flex-direction: row; align-items: flex-start; gap: 12px; }

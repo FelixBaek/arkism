@@ -49,7 +49,6 @@ export function startApp() {
     query: "",
     selected: null,
     data: emptyData(),
-    crewTab: "all",
     crewCat: "all",
     toolTab: "mcp",
     settingsTab: "general",
@@ -1320,7 +1319,7 @@ export function startApp() {
     if (view === "images" && tab) state.imageTab = tab;
     if (view === "images") state.promptRun = null;
     gallery.reset();
-    if (view === "crew" && tab) { state.crewTab = tab; state.crewCat = "all"; }
+    if (view === "crew" && tab) state.crewCat = "all";
     state.kind = "all";
     state.repo = "";
     state.selected = null;

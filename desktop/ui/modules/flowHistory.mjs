@@ -21,9 +21,10 @@ export function createFlowHistory({ state, el, button, request, query, notice, b
     const epoch = ++generation, key = session();
     return () => epoch === generation && key === session() && state.view === "crew" && container.isConnected;
   }
-  function heading(box, title, refresh) {
+  // title: an h2 on a detail; a list passes only a note, since the tab above already names it
+  function heading(box, title, refresh, note = "") {
     const row = el("div", "flow-history-head");
-    row.append(el("h2", "", title), button("새로고침", "ghost", "arrow-clockwise", refresh));
+    row.append(title ? el("h2", "", title) : paragraph(note), button("새로고침", "ghost", "arrow-clockwise", refresh));
     box.append(row);
   }
   function row(title, detail, action) {
@@ -38,8 +39,7 @@ export function createFlowHistory({ state, el, button, request, query, notice, b
     const current = view(container);
     container.replaceChildren();
     container.className = "wf-main flow-history";
-    heading(container, kind === "results" ? "결과함" : "개선 흐름", () => void render(kind, container));
-    container.append(paragraph(kind === "results" ? "최근 200개 실행을 확인해요. 실행 완료와 대화로의 전달 상태는 따로 표시해요." : "실행 근거에서 시작한 스킬 개선을 확인해요. 표시된 다음 단계는 실행 권한을 뜻하지 않아요."));
+    heading(container, "", () => void render(kind, container), kind === "results" ? "최근 실행 200개" : "실행에서 나온 스킬 개선");
     const list = el("div", "flow-history-list");
     list.setAttribute("aria-live", "polite");
     list.append(paragraph("불러오는 중…"));

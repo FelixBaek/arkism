@@ -122,7 +122,7 @@ fs.mkdirSync(output,{recursive:true});
     assert.equal(await page.locator("dialog[open] .ex-role").innerText(),"UI 시안 정리 · 디자인 검토");
     await page.keyboard.press("Escape");await page.locator("dialog[open]").waitFor({state:"detached"});
     // #193: the time before a meeting title is translated; the title is not, and the rows fit at 900px.
-    await page.locator("#area-tabs .area-tab").nth(2).click();
+    await page.locator("#area-tabs .area-tab").nth(1).click();
     const lastMeeting=page.locator(".cu-team .tm-urow").nth(1).locator("> span").last();
     await lastMeeting.waitFor();
     assert.match(await lastMeeting.innerText(),/^\d+ days? ago · 로그인 화면 다크 테마 검토$/);

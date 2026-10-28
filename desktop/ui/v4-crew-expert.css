@@ -30,7 +30,6 @@
 .ex-empty { margin: 0; color: var(--nc-quiet); font-size: calc(13px * var(--fs, 1)); }
 
 /* popup */
-.ex-pop { width: min(940px, calc(100vw - 32px)); }
 /* 868:61909: face and names on the left, the estimate and ✕ top right, the tabs (a pill group) under them.
    938:62634 (편집): the tabs drop under the names, beside the @이름 line; the estimate steps away. */
 .ex-pop .crew-popup-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who side" "who tabs"; align-items: start; column-gap: 16px; row-gap: 12px; padding: 22px 28px 12px; }

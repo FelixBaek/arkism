@@ -325,8 +325,7 @@ export const createCrew = (ctx) => {
     list.forEach((r) => { if (r.crew.category) counts.set(r.crew.category, (counts.get(r.crew.category) || 0) + 1); });
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"));
   }
-  const inTab = (r, tab) => tab === "all" || (tab === "trigger" ? crewSchedule.triggered(r.crew) : !crewSchedule.triggered(r.crew));
-  const shownCards = () => flows().filter((r) => (!state.flowKind || state.flowKind === "all" || r.crew.type === state.flowKind) && inTab(r, state.crewTab) && (state.crewCat === "all" || r.crew.category === state.crewCat) &&
+  const shownCards = () => flows().filter((r) => (!state.flowKind || state.flowKind === "all" || r.crew.type === state.flowKind) && (state.crewCat === "all" || r.crew.category === state.crewCat) &&
     (!state.query || `${r.crew.name} ${r.crew.handle || ""} ${r.crew.role || ""}`.toLowerCase().includes(state.query)));
   // 자동화 상세·새로 만들기 팝업 (crew-automation.js): built on first use, once every helper below exists.
   let autoKit = null;
@@ -366,12 +365,10 @@ export const createCrew = (ctx) => {
       return;
     }
     flowHistory.reset();
-    if (!crewVocabulary.TABS.some(([k]) => k === state.crewTab)) state.crewTab = "all";
-    const tab = state.crewTab;
-    const all = flows().filter((r) => inTab(r, tab));
+    const all = flows();
     const cats = categories(all);
     if (state.crewCat !== "all" && !cats.some(([c]) => c === state.crewCat)) state.crewCat = "all";
-    // 카테고리 칩 · 검색 · 실행 방식 · 새 워크플로우: one row (the search box here and the one on top share state.query)
+    // 카테고리 칩 · 검색 · 실행 방식 · 새 워크플로우: one bar (the search box here and the one on top share state.query)
     $("#app").classList.add("wide"); // the card opens a popup: no side panel
     const bar = el("div", "wf-bar auto-bar-top");
     const chips = el("div", "auto-cats");
@@ -397,15 +394,6 @@ export const createCrew = (ctx) => {
       drawCards();
     });
     search.append(icon("magnifying-glass"), q);
-    const how = el("select", "wf-select");
-    how.setAttribute("aria-label", "실행 조건");
-    for (const [k, l] of crewVocabulary.TABS) {
-      const o = el("option", "", k === "all" ? "모든 실행 조건" : `${l} · ${flows().filter((r) => inTab(r, k)).length}`);
-      o.value = k;
-      o.selected = k === tab;
-      how.append(o);
-    }
-    how.addEventListener("change", () => { state.crewTab = how.value; state.crewCat = "all"; state.selected = null; render(); });
     const kind = el("select", "wf-select");
     kind.setAttribute("aria-label", "실행 방식");
     for (const [key, label] of FLOW_KINDS) {
@@ -415,16 +403,13 @@ export const createCrew = (ctx) => {
       kind.append(option);
     }
     kind.addEventListener("change", () => { state.flowKind = kind.value; state.selected = null; drawCards(); });
-    bar.append(search, kind, how, button("페르소나 설정", "ghost", "sliders-horizontal", () => { state.settingsTab = "workflow"; ctx.go("settings"); }), button("+ 새 워크플로우", "primary", null, openFlowCreate));
+    bar.append(search, kind, button("+ 새 워크플로우", "primary", null, openFlowCreate));
     $("#controls").replaceChildren(bar);
     $("#chips").replaceChildren(navigation);
     $("#stats").replaceChildren();
     const main = $("#table");
     main.className = "wf-main";
-    const intro = el("div", "flow-intro");
-    intro.append(el("p", "", "할 일을 고르고 @이름으로 불러요. 역할·협업·자동화를 한곳에서 관리해요."));
-    intro.append(button("리서치 열기", "ghost", "magnifying-glass", openResearch), button("리서치 개선안 검토", "ghost", "git-branch", previewResearch));
-    main.replaceChildren(intro, el("div", "wf-grid"));
+    main.replaceChildren(el("div", "wf-grid"));
     drawWaiting();
     drawCards();
     void loadRecent();
@@ -435,7 +420,7 @@ export const createCrew = (ctx) => {
     if (!box || state.view !== "crew" || ["results", "improvements"].includes(state.flowPage)) return;
     const out = [];
     // 이 PC의 Arkism에는 워크플로우 실행기가 없다: 만들고 저장은 되지만 실행은 서버에서.
-    if (state.mode === "local") out.push(el("p", "local-note wf-local", "이 PC 모드에서는 워크플로우를 만들고 저장할 수 있어요. 실행과 @이름 호출은 서버에 연결했을 때 돼요."));
+    if (state.mode === "local") out.push(el("p", "local-note wf-local", "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요."));
     for (const run of waitingRuns()) {
       const rec = byId(run.crew_run.crew_id);
       const node = (rec?.crew.graph?.nodes || []).find((n) => n.id === run.crew_run.waiting.node_id);
@@ -457,7 +442,7 @@ export const createCrew = (ctx) => {
   function drawCards() {
     const grid = $("#table .wf-grid");
     if (!grid) return;
-    grid.replaceChildren(...shownCards().map(flowCard), newCard());
+    grid.replaceChildren(...shownCards().map(flowCard));
     markSelected();
   }
   function openFlow(rec) {
@@ -495,21 +480,16 @@ export const createCrew = (ctx) => {
       return pick;
     };
     choices.append(
-      choose("리서치", "기존 리서치를 열어요. 근거가 부족할 때 깊게 조사하도록 개선할 수 있어요", "magnifying-glass", openResearch),
-      choose("단독 실행", "역할·모델·스킬·도구를 정하고 바로 시작해요", "robot", () => window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { create: true, over: true } }))),
-      choose("협업·회의", "참여할 역할과 회의 방식을 정해요", "users-three", () => window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { over: true } }))),
-      choose("단계 구성", "일정·분기·승인 등 실행 순서를 정해요", "tree-structure", () => getAuto().create())
+      choose("리서치", researchRecord() ? "지금 리서치에 개선안을 받아 검토해요" : "출처를 찾아 정리하는 리서치를 만들어요", "magnifying-glass", () => void previewResearch()),
+      choose("단독 실행", "역할·모델·도구를 정해 혼자 일해요", "robot", () => window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { create: true, over: true } }))),
+      choose("협업·회의", "여러 역할이 회의해요", "users-three", () => window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { over: true } }))),
+      choose("단계 구성", "일정·분기·승인 순서를 정해요", "tree-structure", () => getAuto().create())
     );
     dlg.append(head, choices);
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
     dlg.showModal();
     choices.querySelector("button")?.focus();
-  }
-  function openResearch() {
-    const existing = researchRecord();
-    if (existing) { openFlow(existing.crew.type === "workflow" && ownerOf(existing) || existing); return; }
-    void previewResearch();
   }
   async function previewResearch() {
     try {
@@ -550,13 +530,6 @@ export const createCrew = (ctx) => {
     c.title = [x.role, flowAlias(r, items())].filter(Boolean).join(" · ");
     const aliases = [flowAlias(r, items()), x.research?.deep_alias ? `@${x.research.deep_alias}` : ""].filter(Boolean).join(" · ");
     c.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("code", "flow-alias", aliases)));
-    return c;
-  }
-  function newCard() {
-    const c = el("button", "crew-card new workflow wf-card");
-    c.type = "button";
-    c.append(icon("plus"), el("strong", "", "새 워크플로우"), el("small", "", "AI 하나로 간단히 시작하거나 단계를 이어 그려요"));
-    c.addEventListener("click", openFlowCreate);
     return c;
   }
   const headActions = () => []; // 새 워크플로우 sits in the list's own bar

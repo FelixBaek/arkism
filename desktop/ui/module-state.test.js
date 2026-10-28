@@ -2,7 +2,7 @@ const test = require("node:test"), assert = require("node:assert/strict");
 
 test("screen filters and connection identity have one owner", async () => {
   const { createAppState } = await import("./modules/state.mjs");
-  const state = createAppState({server: "local", scope: {}, kind: "all", memTab: "active", skillTab: "all", crewTab: "all"});
+  const state = createAppState({server: "local", scope: {}, kind: "all", memTab: "active", skillTab: "all", crewCat: "all"});
   state.kind = "decision";
   assert.equal(state.screens.memory.kind, "decision");
   state.screens.memory.memTab = "candidate";
@@ -12,7 +12,7 @@ test("screen filters and connection identity have one owner", async () => {
   state.server = "remote";
   assert.equal(state.connection.server, "remote");
   assert.equal(state.screens.skills.skillTab, "all");
-  assert.equal(state.screens.crew.crewTab, "all");
+  assert.equal(state.screens.crew.crewCat, "all");
 });
 
 async function runFixture() {
