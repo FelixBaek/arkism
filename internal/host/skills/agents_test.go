@@ -222,3 +222,16 @@ func TestInventoryLiveKeepsServersSwitchedOnForSomeAgent(t *testing.T) {
 		t.Fatal(sortedKeys(live))
 	}
 }
+
+func TestAgentNameRejectsLeadingDash(t *testing.T) {
+	for _, name := range []string{"-s", "--scope", "-"} {
+		if agentNameRx.MatchString(name) {
+			t.Fatalf("%q must not pass: it would reach the agent CLI as a flag", name)
+		}
+	}
+	for _, name := range []string{"docs", "@scope/pkg", "a-b", "x"} {
+		if !agentNameRx.MatchString(name) {
+			t.Fatalf("%q must pass", name)
+		}
+	}
+}
