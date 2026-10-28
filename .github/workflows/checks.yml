@@ -234,6 +234,12 @@ jobs:
       - name: Product removal boundaries (offline)
         shell: powershell
         run: ./desktop/installer/test-windows-product-uninstall.ps1
+      - name: Synthetic database preservation boundaries (offline)
+        shell: powershell
+        run: ./desktop/installer/test-product-database-preservation.ps1
+      - name: Published baseline upgrade boundaries (offline)
+        shell: powershell
+        run: ./desktop/installer/test-windows-upgrade.ps1
       - name: Verify cross-platform migration checksums
         run: go test -v -count=1 -run '^TestSchemaMigrationChecksumAcrossPlatforms$' ./internal/memory
 

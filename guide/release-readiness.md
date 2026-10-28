@@ -4,7 +4,7 @@ The current milestone is approval-policy consistency, public installation, reuse
 
 ## Packaging preflight
 
-Changes to the release workflow, installer or Tauri shell trigger the Windows Release preflight on pull requests. It builds only the Windows installer and uploads it as an Actions artifact. These builds use version `0.1.0`; they do not create tags, publish a release or update the public update feed. The Windows build script runs its built-in runtime smoke checks.
+Changes to the release workflow, installer or Tauri shell trigger Release metadata checks on pull requests. Windows installer builds require an explicit manual workflow dispatch or a tag. A direct manual dispatch builds the requested version and uploads Actions artifacts; it does not create tags, publish a release or update the public update feed. The Windows build script runs its built-in runtime smoke checks.
 
 Download artifacts only from the expected repository, pull request and commit. Record that commit alongside results. A successful packaging build is not evidence that memory quality or approval policy is correct.
 
@@ -37,7 +37,9 @@ silent launch options without starting the product GUI.
 The installed `Arkism.exe --runtime-check` must start its own local database,
 reuse its local endpoint, back up, erase and restore it. The check requires
 successful original and restored capabilities, a nonempty backup and successful
-expiry. It uses fresh test data, disabled embedding, a fixed judge and a child
+expiry. A synthetic source and an approved memory referring to it must retain
+their full record contents through both backup/restore cycles. It uses fresh
+test data, disabled embedding, a fixed judge and a child
 environment without provider or signing credentials. It does not make a model
 request. Stage-only execution is recorded separately.
 
@@ -61,9 +63,27 @@ The separate `windows-installed-check` Actions artifact contains only check
 summaries and source/payload hashes. Runtime tokens, database backups and child
 profiles are excluded, and this evidence artifact is excluded from release
 assets. A successful job establishes fresh installed-runtime operation for that
-commit. Existing-data upgrades, migration from older releases, normal uninstall,
-agent connection, interactive UI and operating-system signing trust still need
-their own acceptance checks.
+commit. Migration from older releases, agent connection, interactive UI and
+operating-system signing trust still need their own acceptance checks.
+
+The separate hosted product-removal check runs the actual product uninstaller.
+With `-DatabasePreservation`, it first creates the same source/memory fixture in
+a fresh owned diagnostic data directory. A verified copy of the bundled
+PostgreSQL tools stays outside the installation directory. The check closes
+PostgreSQL, inventories the retained bytes, silently reinstalls the same
+candidate without auto-launch and checks the bytes and unrelated profile files
+again. After actual uninstallation, the stopped data must still match; the
+copied PostgreSQL tools then reopen it and verify identical logical source and
+memory rows. Only those observed postconditions set
+`database_preservation_tested: true`. Row contents, credentials and the database
+are excluded from evidence artifacts; only counts and hashes are recorded.
+
+This establishes preservation of a synthetic database across same-candidate
+reinstallation and removal. It does not establish an older-version upgrade or
+normal GUI startup against an existing profile. A closed text sentinel alone
+is reported separately as `closed_synthetic_data_preserved`. The removal check
+retains its owned directory and pending-operation reservations for disposable
+VM teardown rather than claiming that cleanup removed them.
 
 ## Runtime download inputs
 

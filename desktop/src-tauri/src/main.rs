@@ -845,7 +845,7 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
             .status()
             .as_u16();
         phase = "managed_token_lifecycle";
-        let (s, token_checks) = rt.check_managed_tokens(&s)?;
+        let (s, token_checks, fixture) = rt.check_managed_tokens(&s)?;
         phase = "reuse_start";
         let again = rt.start()?; // a second start reuses what runs
         // Backup, erase everything, restore: the old owner token opens the restored Arkism again.
@@ -856,6 +856,8 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
         rt.erase()?;
         phase = "restore";
         let restored = rt.restore_from(&backups, &backup.name)?;
+        phase = "restored_fixture_content";
+        rt.check_fixture_data(&restored.started, &fixture)?;
         // The hourly expiry runs against the built-in Arkism (needs the bundled agent client).
         let expiry = if rt.agent_client().is_some() { rt.expire().map(|_| "ok".to_string()).unwrap_or_else(|e| e) } else { "no_client".into() };
         phase = "restored_capabilities";
@@ -865,8 +867,11 @@ fn runtime_check(dir: &std::path::Path) -> i32 {
             .map_err(|e| format!("capabilities after restore: {e}"))?
             .status()
             .as_u16();
-        Ok(serde_json::json!({ "server": s.server, "capabilities": caps, "token_checks":token_checks, "reused": again.server == s.server,
-            "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry }))
+        let mut report = fixture.report()?;
+        let details = serde_json::json!({ "server": s.server, "capabilities": caps, "token_checks":token_checks, "reused": again.server == s.server,
+            "backup_bytes": backup.bytes, "restored_capabilities": after, "safety_copy": restored.safety_copy.is_some(), "expiry": expiry });
+        report.as_object_mut().ok_or("runtime_fixture_report")?.extend(details.as_object().ok_or("runtime_fixture_report")?.clone());
+        Ok(report)
     });
     rt.stop();
     let (code, report) = match outcome {

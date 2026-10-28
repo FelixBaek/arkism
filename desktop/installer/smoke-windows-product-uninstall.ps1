@@ -1,7 +1,7 @@
 # Explicit fresh-product removal check for disposable hosted Windows CI only.
 # Dot-sourcing defines functions; it never installs or removes a product.
 param([string]$InstallerPath, [string]$StagePath, [string]$Version,
-      [string]$SourceSha, [string]$EvidencePath)
+      [string]$SourceSha, [string]$EvidencePath, [switch]$DatabasePreservation)
 
 function Initialize-ProductUninstallTypes {
   if ('Arkism.InstallerChecks.ProductUninstallCheck' -as [type]) { throw 'product_types_preloaded' }
@@ -181,7 +181,8 @@ function Get-ProductSortedManifest($Rows) {
 }
 
 function New-ProductManifestFailure($Expected, $Actual, [string]$Check, [int]$Index = -1) {
-  $checks = @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')
+  $checks = @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal',
+    'database_tools_copy', 'database_after_reinstall', 'database_profile_after_reinstall', 'database_after_uninstall')
   if (-not (Test-ProductOrdinalMember $Check $checks)) { throw 'product_manifest_check_invalid' }
   $diagnostic = @{ Check = $Check; Kind = 'count'; ExpectedFiles = @($Expected).Count; ActualFiles = @($Actual).Count
     FirstIndex = $Index; PathCaseEqual = $false; PathSeparatorEqual = $false }
@@ -224,7 +225,8 @@ function Add-ProductManifestDiagnostic($Report, $Failure) {
   $diagnostic = Get-ProductManifestDiagnostic $Failure
   if ($null -eq $diagnostic) { return }
   if ($diagnostic['Check'] -isnot [string] -or $diagnostic['Kind'] -isnot [string]) { return }
-  if (-not (Test-ProductOrdinalMember $diagnostic['Check'] @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal')) -or
+  if (-not (Test-ProductOrdinalMember $diagnostic['Check'] @('unspecified', 'profile_initial', 'profile_before_removal', 'profile_after_removal', 'stage_payload', 'data_before_removal', 'data_after_removal',
+      'database_tools_copy', 'database_after_reinstall', 'database_profile_after_reinstall', 'database_after_uninstall')) -or
     -not (Test-ProductOrdinalMember $diagnostic['Kind'] @('count', 'path', 'hash', 'path_and_hash'))) { return }
   foreach ($name in @('ExpectedFiles', 'ActualFiles', 'FirstIndex')) {
     if ($diagnostic[$name] -isnot [int] -or $diagnostic[$name] -lt -1) { return }
@@ -620,11 +622,12 @@ function Set-ProductRetention($State, $Report) {
   }
 }
 
-function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePath, [string]$Version, [string]$SourceSha, [string]$EvidencePath) {
+function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePath, [string]$Version, [string]$SourceSha, [string]$EvidencePath, [switch]$DatabasePreservation) {
   $ErrorActionPreference = 'Stop'
   $setupInput = $InstallerPath; $stageInput = $StagePath; $sourceInput = $SourceSha; $evidenceInput = $EvidencePath; $versionInput = $Version
   . (Join-Path $PSScriptRoot 'smoke-windows-installed.ps1')
   . (Join-Path $PSScriptRoot 'test-nsis-uninstall-job.ps1')
+  . (Join-Path $PSScriptRoot 'product-database-preservation.ps1')
   $Version = $versionInput
   if ($Version -notmatch '\A\d+\.\d+\.\d+\z') { throw 'product_version_invalid' }
   $context = Get-InstalledSmokeContext $sourceInput
@@ -643,6 +646,7 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     Setup = $setup; SetupHash = $setupHash; Stage = $stage; Manifest = $manifest; Environment = New-InstalledSmokeEnvironment $root }
   $report = [ordered]@{ ok = $false; source_sha = $sourceInput; setup_sha256 = $setupHash; phase = 'prepare'
     product_uninstaller_tested = $false; helper_exit_code_observed = $false; database_preservation_tested = $false
+    same_candidate_reinstall_tested = $false; cross_version_upgrade_tested = $false
     version = $Version; manifest_file_count = $manifest.Count
     common_runner_sha256 = Get-InstalledSmokeHash (Join-Path $PSScriptRoot 'WindowsProcessJob.cs')
     product_runner_sha256 = Get-InstalledSmokeHash (Join-Path $PSScriptRoot 'WindowsProductUninstallCheck.cs') }
@@ -668,7 +672,17 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
     Initialize-ProductProfileBaseline $state
     $report.profile_files_after_setup = @($state.SetupProfile).Count
     New-ProductSyntheticData $state
+    if ($DatabasePreservation) {
+      $report.phase = 'synthetic_database'
+      New-ProductDatabaseFixture $state $report
+      $report.phase = 'same_candidate_reinstall'
+      Invoke-ProductDatabaseReinstall $state $request $report
+    }
     Invoke-ProductRemovalCheck $state $request $report
+    if ($DatabasePreservation) {
+      $report.phase = 'database_after_uninstall'
+      Assert-ProductDatabasePreserved $state $report
+    }
     $report.ok = $true; $report.phase = 'complete'
   } catch {
     $primary = $_; $report.error = 'product_check_failed'; $report.error_type = $_.Exception.GetType().FullName
@@ -686,5 +700,5 @@ function Invoke-WindowsProductUninstall([string]$InstallerPath, [string]$StagePa
 }
 
 if ($MyInvocation.InvocationName -ne '.') {
-  Invoke-WindowsProductUninstall $InstallerPath $StagePath $Version $SourceSha $EvidencePath | Out-Null
+  Invoke-WindowsProductUninstall $InstallerPath $StagePath $Version $SourceSha $EvidencePath -DatabasePreservation:$DatabasePreservation | Out-Null
 }

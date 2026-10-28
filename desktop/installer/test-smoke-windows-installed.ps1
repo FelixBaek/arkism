@@ -25,6 +25,7 @@ function New-SmokeTestState {
 
 function New-SmokeTestFixture {
   $root = Join-Path ([IO.Path]::GetTempPath()) ('arkism installed offline ' + [Guid]::NewGuid().ToString('N'))
+  Write-Host "Only owned installed offline fixture root: $root"
   $stage = Join-Path $root 'stage'
   $files = @('uninstall.exe', 'runtime/arkism-installer.exe', 'Arkism.exe', 'integration/arkism.exe', 'runtime/memoryd.exe', 'runtime/memory-principal.exe', 'runtime/roles.sql',
     'runtime/pgsql/bin/postgres.exe', 'runtime/pgsql/bin/pg_ctl.exe', 'runtime/pgsql/bin/initdb.exe',
@@ -41,7 +42,8 @@ function New-SmokeTestFixture {
     Evidence = (Join-Path $root 'evidence.json'); State = (New-SmokeTestState)
     Events = [Collections.Generic.List[string]]::new(); Links = [Collections.Generic.List[string]]::new(); Mode = ''; CleanupMode = ''
     Result = @{ ok = $true; phase = 'complete'; capabilities = 200; restored_capabilities = 200; reused = $true; backup_bytes = 128; expiry = 'ok'; safety_copy = $false; server = 'http://127.0.0.1:8091'
-      token_checks = @{ expiry_rotation = $true; pending_before_commit = $true; pending_after_commit = $true; pending_backup_restore = $true; retired_token_http_403 = $true } }
+      token_checks = @{ expiry_rotation = $true; pending_before_commit = $true; pending_after_commit = $true; pending_backup_restore = $true; pending_backup_restore_content = $true; retired_token_http_403 = $true }
+      fixture_source_rows = 1; fixture_memory_rows = 1; fixture_sha256 = ('b' * 64); backup_restore_content = $true }
   }
 }
 
@@ -162,8 +164,13 @@ function Invoke-SmokeTestCase([string]$Name, [scriptblock]$Body) {
     $script:caseCount++
     Write-Host "PASS $Name"
   } finally {
-    foreach ($link in $fixture.Links) { [IO.Directory]::Delete($link) }
+    foreach ($link in $fixture.Links) {
+      Assert-SmokeTest (Test-InstalledSmokeWithin $link $fixture.Root) 'Only fixture-owned links may be removed'
+      Write-Host "Removing only owned installed offline fixture link: $link"
+      [IO.Directory]::Delete($link)
+    }
     Assert-InstalledSmokeTree $fixture.Root
+    Write-Host "Removing only owned installed offline fixture root: $($fixture.Root)"
     [IO.Directory]::Delete($fixture.Root, $true)
   }
 }
@@ -256,19 +263,40 @@ foreach ($binding in @(@('phase', 'start'), @('expiry', 'expiry failed'), @('cap
     # Windows PowerShell serializes the Double 200.0 as the valid integer 200.
     # Preserve the literal JSON type that this rejection case intends to supply.
     if ($binding[0] -eq 'capabilities' -and $binding[1] -is [double]) {
-      $f.ResultJson = '{"ok":true,"phase":"complete","token_checks":{"expiry_rotation":true,"pending_before_commit":true,"pending_after_commit":true,"pending_backup_restore":true,"retired_token_http_403":true},"capabilities":200.0,"restored_capabilities":200,"reused":true,"backup_bytes":128,"expiry":"ok","safety_copy":false,"server":"http://127.0.0.1:8091"}'
+      $f.ResultJson = ($f.Result | ConvertTo-Json -Depth 8 -Compress) -replace '"capabilities":200(?=[,}])', '"capabilities":200.0'
     }
     Assert-SmokeTest ((Get-SmokeTestError $f).Length -gt 0) 'False success runtime report must be rejected'
   }
 }
 
-foreach ($tokenCase in @('expiry_rotation', 'pending_before_commit', 'pending_after_commit', 'pending_backup_restore', 'retired_token_http_403')) {
+foreach ($tokenCase in @('expiry_rotation', 'pending_before_commit', 'pending_after_commit', 'pending_backup_restore', 'pending_backup_restore_content', 'retired_token_http_403')) {
   foreach ($badTokenValue in @($false, 'true', $null)) {
     Invoke-SmokeTestCase "missing or false token evidence $tokenCase" {
       param($f)
       $f.Result.token_checks[$tokenCase] = $badTokenValue
       Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_token_evidence_failed')) 'Token lifecycle evidence cannot be missing, false or a string'
     }
+  }
+}
+
+foreach ($fixtureField in @('fixture_source_rows', 'fixture_memory_rows', 'fixture_sha256', 'backup_restore_content')) {
+  Invoke-SmokeTestCase "missing durable record evidence $fixtureField" {
+    param($f)
+    $f.Result.Remove($fixtureField)
+    Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_fixture_evidence_failed')) 'Missing durable record evidence must fail closed'
+  }
+}
+foreach ($binding in @(@('fixture_source_rows', 0), @('fixture_source_rows', 2), @('fixture_source_rows', $true), @('fixture_source_rows', '1'), @('fixture_source_rows', 1.0),
+    @('fixture_memory_rows', 0), @('fixture_memory_rows', $true), @('fixture_memory_rows', 1.0),
+    @('fixture_sha256', ''), @('fixture_sha256', ('a' * 63)), @('fixture_sha256', ('A' * 64)), @('fixture_sha256', 123),
+    @('backup_restore_content', $false), @('backup_restore_content', 'true'), @('backup_restore_content', 1))) {
+  Invoke-SmokeTestCase "invalid durable record evidence $($binding[0])" {
+    param($f)
+    $f.Result[$binding[0]] = $binding[1]
+    if ($binding[1] -is [double]) {
+      $f.ResultJson = ($f.Result | ConvertTo-Json -Depth 8 -Compress) -replace ('"' + $binding[0] + '":1(?=[,}])'), ('"' + $binding[0] + '":1.0')
+    }
+    Assert-SmokeTest ((Get-SmokeTestError $f).Contains('runtime_fixture_evidence_failed')) 'Counts must be exact integers, hashes lower-case SHA256 and content checks Boolean true'
   }
 }
 
