@@ -23,6 +23,6 @@ Format comments with an English section first, then Korean:
 ### 🇰🇷 한국어
 <한국어 설명 및 조치 권장사항>
 
-Format fix commit messages as an English title and body, a `---` line, then the Korean version with `제목:`, `이유:`, `검증:` and `한계:` lines.
+Format fix commit messages so `tools/check_work_record.py` passes: a `type(scope): title` line, then `Why:`, `Task:`, `Research:`, `Verified:` (only checks that ran) and `Limits:` lines, a `---` line, then `제목:`, `이유:`, `검증:` and `한계:` lines in Korean.
 
 Keep code snippets, variable names, and technical identifiers intact in code blocks; do not translate them.
