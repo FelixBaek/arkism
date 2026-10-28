@@ -61,11 +61,12 @@ test("overview: stage windows step through every stage and their lists", async (
   d = await openWindow({ key: "review" });
   assert.equal(d.querySelector(".ov-win-next"), null);
   assert.ok(!/다음 단계/.test(text(d.querySelector(".ov-win-cells"))));
-  // every stage draws its own list; only a stage whose list a wide window shows whole keeps a footer button
-  for (const key of ["extract", "classify", "judge", "dream", "active"]) {
+  // every stage opens wide with its own list on the right; 분석 links to the session list
+  for (const key of ["extract", "classify", "judge", "dream"]) {
     d = await openWindow({ key });
-    assert.ok(d.querySelector(".ov-win-list"), key);
-    assert.equal(!!d.querySelector(".ov-win-foot button"), ["extract", "active"].includes(key), `${key} footer`);
+    assert.ok(d.classList.contains("ov-wide-win"), `${key} opens wide`);
+    assert.ok(d.querySelector(".ov-stage-list .ov-win-list"), key);
+    assert.equal(!!btn("세션 기록 보기 ›", d), key === "extract", `${key} session link`);
   }
   // 사용 기록 opens wide, with no compact step first
   d = await openWindow({ key: "trace" });
@@ -121,40 +122,26 @@ test("overview: 드리밍 decides each proposal in its own row, with the 승인 
   await closeAll();
 });
 
-test("overview: 모두 보기 expands a stage, scrolling loads more, 접기 folds it", async () => {
-  let d = await openWindow({ key: "extract" });
-  const all = btn(btn("24건 모두 보기 ›", d) ? "24건 모두 보기 ›" : [...d.querySelectorAll("button")].map(text).find((t) => /모두 보기/.test(t)), d);
-  assert.ok(all, "모두 보기");
-  all.click(); await app.settle();
-  d = win(); assert.ok(d.classList.contains("ov-win-expanded"));
-  assert.match(text(d), /모두 보는 중/);
-  await press("접기 ⌃", d);
-  assert.ok(!win().classList.contains("ov-win-expanded"));
-  // a row count: two rows, then the list's end loads the rest
-  d = await openWindow({ key: "extract", expanded: 2 });
-  const ul = d.querySelector(".ov-win-list-scroll");
-  assert.equal(ul.querySelectorAll(".ov-win-item").length, 2);
-  assert.match(text(d), /중 2건/);
-  ul._rect = { top: 0, left: 0, width: 300, height: 100, right: 300, bottom: 100 }; ul.scrollHeight = 120; ul.scrollTop = 0;
-  app.dom.fire(ul, "scroll"); // 100 + 0 < 120 - 40 is false: at the end
-  assert.ok(ul.querySelectorAll(".ov-win-item").length > 2);
-  assert.match(text(d), /모두 보는 중/);
-  app.dom.fire(ul, "scroll"); // everything shown: nothing more
-  ul.scrollHeight = 1000; d = await openWindow({ key: "judge", expanded: 2 });
-  const ul2 = d.querySelector(".ov-win-list-scroll"); ul2._rect = { top: 0, left: 0, width: 300, height: 100, right: 300, bottom: 100 }; ul2.scrollHeight = 1000;
-  app.dom.fire(ul2, "scroll"); // far from the end
-  assert.equal(ul2.querySelectorAll(".ov-win-item").length, 2);
+test("overview: a stage window lists every row on the right and loads more on scroll", async () => {
+  const d = await openWindow({ key: "extract" });
+  assert.equal([...d.querySelectorAll("button")].find((b) => /모두 보기|작게 보기/.test(text(b))), undefined, "no compact or expanded mode");
+  const list = d.querySelector(".ov-stage-list");
+  const before = list.querySelectorAll(".ov-win-item").length;
+  assert.ok(before > 1);
+  list._rect = { top: 0, left: 0, width: 300, height: 100, right: 300, bottom: 100 }; list.scrollHeight = 120; list.scrollTop = 0;
+  app.dom.fire(list, "scroll"); // fewer rows than one page: nothing more to load
+  assert.equal(list.querySelectorAll(".ov-win-item").length, before);
   await closeAll();
 });
 
 test("overview: review rows approve and reject in place, with the reason asked first", async () => {
-  let d = await openWindow({ key: "review" });
+  let d = await openWindow({ key: "classify" });
   const before = d.querySelectorAll(".ov-win-item").length;
   const row = d.querySelector(".ov-win-item");
   await press("승인", row, 50);
   assert.ok(!row.isConnected, "an approved row leaves the list");
   assert.ok(app.apiCalls.some(([m, p]) => m === "POST" && /\/review$/.test(p)));
-  d = win() || await openWindow({ key: "review" });
+  d = win() || await openWindow({ key: "classify" });
   // 버리기 asks for a reason; an empty one is refused, 취소 keeps the row
   const row2 = d.querySelector(".ov-win-item");
   await press("버리기", row2);
@@ -168,7 +155,7 @@ test("overview: review rows approve and reject in place, with the reason asked f
   assert.ok(!row2.isConnected);
   // a server error keeps the row and says why
   const off = route("POST", "/v1/memory_candidates/", () => fail(409, "revision_conflict"));
-  d = win() || await openWindow({ key: "review" });
+  d = win() || await openWindow({ key: "classify" });
   const row3 = d.querySelector(".ov-win-item");
   if (row3) {
     await press("승인", row3, 50);
@@ -409,7 +396,6 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
   app.dom.type(d.querySelector(".ov-wide-search"), "없는말"); await app.settle(30);
   assert.match(text(win()), /지금 보여 줄 후보가 없어요/);
-  await press("‹ 작게 보기", win(), 30);
   assert.match(text(win()), /승인 대기/);
   await closeAll();
 });
@@ -468,7 +454,7 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   // 쓰임 확인 keeps, fixes or forgets an unused memory in its own row (the same confirm and DELETE as here)
   d = await openWindow({ key: "judge" });
   assert.equal(btn("정리하러 가기", d), undefined);
-  assert.match(text(d), /답에 쓰였다는 표시가 없는 기억/);
+  assert.match(text(d), /답에 안 쓰인 기억/);
   const deletes = app.apiCalls.filter(([m]) => m === "DELETE").length;
   await press("잊기", d.querySelector(".ov-win-list .ov-win-item"));
   await press("잊기", app.$("dialog.ov-ask[open]"), 80);
@@ -613,10 +599,10 @@ test("overview: 세션 기록 copies resume and continue-in commands, counts age
   // 재개 copies the session's own command; nothing runs
   await press("재개", d.querySelector(".ss-row"), 20);
   assert.equal(app.clipboard.text, "cd /home/me/arkism; codex resume cx-1");
-  // 이어가기 ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
-  await press("이어가기", d.querySelector(".ss-row"));
-  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code에서 이어가기"]);
-  await press("Claude Code에서 이어가기", d, 30);
+  // handoff ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
+  await press("handoff", d.querySelector(".ss-row"));
+  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 handoff"]);
+  await press("Claude Code(으)로 handoff", d, 30);
   assert.match(app.clipboard.text, /^cd \/home\/me\/arkism; claude 'Arkism resume_work 도구로 작업 wk-1를/);
   assert.match(text(win()), /Claude Code 시작 명령을 복사했어요/);
   assert.ok(!app.calls.some((c) => /spawn|execute|run_command/.test(String(c?.[0] ?? c))), "no command is run");

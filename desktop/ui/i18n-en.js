@@ -5273,7 +5273,7 @@ Object.assign(window.ArkismI18nEN.strings, {
  "쓰는 중": "In use",
  "최근 쓰임": "Recently used",
  "이번 주 새로": "New this week",
- "‹ 작게 보기": "‹ Small view",
+ 
  "AI는 분류만 해요. 승인은 사람이 해요.": "AI only classifies. People approve.",
  "후보 찾기": "Find candidates",
  "선택 0개 승인": "Approve 0 selected",
@@ -5375,7 +5375,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "잊지 못했어요: {0}": "Couldn't forget: {0}",
  "7일 {0}번 쓰임": "Used {0} times in 7 days",
  "{0}이에요": "It is {0}",
- "{0}건 모두 보기 ›": "View all {0} ›",
+ 
  "{0}건은 처리하지 못했어요.": "{0} could not be processed.",
  "선택 {0}개 승인": "Approve {0} selected",
  "AI 분류 · 위험도 {0}": "AI classification · risk {0}",
@@ -6252,23 +6252,23 @@ Object.assign(window.ArkismI18nEN.strings, {
   "이 서버는 아직 대화 찾기를 지원하지 않아요.": "This server doesn't support dialogue search yet.",
   "아직 못 찾았어요. 더 찾아볼 수 있어요.": "Nothing yet. You can search further.",
   "이 말이 들어간 대화가 없어요.": "No dialogue has these words.", "대화를 찾는 중…": "Searching the dialogue…", "더 찾기": "Search further",
-  "이어갈 내용을 찾지 못했어요. 서버가 아직 이어가기를 지원하지 않을 수도 있어요.": "Nothing to continue from was found. The server may not support continuing yet.",
+  "넘길 내용을 찾지 못했어요. 서버가 아직 handoff를 지원하지 않을 수도 있어요.": "Nothing to hand off was found. The server may not support handoff yet.",
   "넘겨줄 작업 상태나 보관된 대화가 없어요.": "There is no saved work state or archived dialogue to hand over.",
   "보관된 대화": "the archived dialogue", "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.": "Couldn't copy. Copy the command below yourself.",
-  "이어갈 다른 에이전트가 없어요": "No other agent to continue in", "이어갈 다른 에이전트가 없어요.": "No other agent to continue in.",
+  "넘길 다른 에이전트가 없어요": "No other agent to hand off to", "넘길 다른 에이전트가 없어요.": "No other agent to hand off to.",
   "명령만 복사해요. 실행하지 않아요.": "Only copies the command. Nothing runs.",
   "재개 명령": "Resume command", "이 에이전트의 재개 명령은 몰라요.": "The resume command for this agent is unknown.",
-  "다른 에이전트로 이어가기": "Continue in another agent",
-  "저장된 작업 상태가 있으면 그걸, 없으면 보관된 대화를 읽도록 시작 명령을 만들어 복사해요.": "Copies a start command that reads the saved work state, or the archived dialogue when there is none.",
-  "Markdown 내보내기": "Export Markdown", "대화 보기": "View dialogue", "재개": "Resume", "이어가기": "Continue in",
+  "다른 에이전트로 handoff": "Hand off to another agent",
+  "작업 상태나 보관된 대화를 읽고 시작하는 명령을 복사해요.": "Copies a start command that reads the saved work state or the archived dialogue.",
+  "Markdown 내보내기": "Export Markdown", "대화 보기": "View dialogue", "재개": "Resume", "handoff": "Handoff",
   "재개 명령을 복사했어요. 터미널에 붙여 넣으세요.": "Resume command copied. Paste it into a terminal.",
   "최근 목록을 먼저 보여 줘요. 새 목록을 불러오는 중…": "Showing the recent list first. Loading the new list…", "가격 모름": "Price unknown", "‹ 세션 정보": "‹ Session info", "기타": "Other"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "대화에서 \"{0}\" 찾기": "\"{0}\" in the dialogue", "비공개 부분에만 있어 뺀 메시지 {0}개": "{0} messages left out (only inside private parts)",
   "비밀값이 있어 건너뛴 메시지 {0}개": "{0} messages skipped (hold a secret)", "{0}에 넘길 내용을 읽는 중…": "Reading what to hand to {0}…",
-  "이어갈 내용을 읽지 못했어요 ({0}).": "Couldn't read what to continue from ({0}).", "저장된 작업 \"{0}\"": "the saved work \"{0}\"",
-  "{0} 시작 명령을 복사했어요. {1}를 읽고 이어가요.": "{0} start command copied. It reads {1} and continues.", "{0}에서 이어가기": "Continue in {0}",
+  "넘길 내용을 읽지 못했어요 ({0}).": "Couldn't read what to hand off ({0}).", "저장된 작업 \"{0}\"": "the saved work \"{0}\"",
+  "{0} 시작 명령을 복사했어요. {1}를 읽고 이어가요.": "{0} start command copied. It reads {1} and continues.", "{0}(으)로 handoff": "Hand off to {0}",
   "{0}을(를) 복사했어요.": "{0} copied.", "원래 {0} 세션 {1}에서 하던 일이야.": "This was the work in {0} session {1}.",
   "Arkism resume_work 도구로 작업 {0}를 불러와 이어서 해 줘. {1}": "Load work {0} with the Arkism resume_work tool and continue it. {1}",
   "Arkism search_session_archives 도구에 archive_id {0}를 넣어 대화를 읽고 이어서 해 줘. {1}": "Read the dialogue with the Arkism search_session_archives tool using archive_id {0} and continue it. {1}",
@@ -6426,4 +6426,20 @@ Object.assign(window.ArkismI18nEN.strings, {
   "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals",
   "최근 실행 200개": "Latest 200 runs",
   "실행에서 나온 스킬 개선": "Skill improvements from runs"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
+  "질문할 때 넣어 준 기억이에요": "Memories handed in with a question",
+  "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요.": "Conversations come in but no new candidates appear. Check the server's analysis sign-in and connection.",
+  "글을 다 읽고 골라요": "Read the whole text, then choose",
+  "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요.": "AI help suggests approve or discard with a reason. A person makes the choice.",
+  "건넸는데 답에 안 쓰인 기억이에요": "Memories handed out but not used in an answer",
+  "아직 맞으면 유지, 틀렸으면 고치기, 필요 없으면 잊기를 눌러 주세요.": "Keep it if still right, fix it if wrong, forget it if not needed.",
+  "골라야 바뀌어요": "Nothing changes until you choose", "지운 기억도 이력에 남아요.": "Deleted memories stay in the history.",
+  "원문은 7일 동안 보관돼요": "Transcripts are kept for 7 days", "기억이 답에 도움이 됐는지 봐요": "See whether memories helped answers",
+  "종류별 답에 쓰인 횟수": "Uses in answers by kind", "종류별 넣은 횟수 (쓰인 기록은 아직 없어요)": "Hand-ins by kind (no use recorded yet)"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "요약: {0}": "Summary: {0}", "AI 추천 · {0}": "AI suggests · {0}", "AI 도움을 받지 못했어요: {0}": "Couldn't get AI help: {0}",
+  "{0}건 중 {1}건 · 내리면 더 나와요": "{1} of {0} · scroll for more", "{0}% · {1}번": "{0}% · {1} times"
 });

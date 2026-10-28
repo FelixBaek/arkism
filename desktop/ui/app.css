@@ -965,7 +965,7 @@ html.popout dialog.popout-root::backdrop { background: var(--nc-canvas); }
 dialog.tear-off { opacity: .6; }
 html.popout dialog.popout-root[open] { display: flex; flex-direction: column; }
 html.popout dialog.popout-root[open] > * { flex: none; }
-html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }
+html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popout-root[open] > .dialog-body, html.popout dialog.popout-root[open] > .ov-wide-body, html.popout dialog.popout-root[open] > .ov-map-body { flex: 1; min-height: 0; max-height: none; height: auto; overflow: auto; }
 /* 채울 칸 (field-need.js): red line + one short shake + the reason under it. */
 /* :is(#app, body) outranks the one-line field rule above, which is !important too */
 :is(#app, body) .field-need, :is(#app, body) .field-need:focus { border-bottom: 2px solid var(--status-danger) !important; }
