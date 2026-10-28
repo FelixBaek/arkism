@@ -392,7 +392,7 @@ window.ArkismTeams = (ctx) => {
     i.className = `tm-plain ${attrs.cls || ""}`.trim();
     i.addEventListener("focus", () => { before = i.value; });
     i.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); i.blur(); }
+      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); i.blur(); }
       if (e.key === "Escape" && i.value !== before) { e.stopPropagation(); e.preventDefault(); i.value = before; set(before); changed(pop); }
     });
     return i;
@@ -429,7 +429,7 @@ window.ArkismTeams = (ctx) => {
     at.append(tag, copy);
     line.append(name, at);
     const warn = el("small", "tm-warn", "이미 쓰는 이름이에요"); warn.hidden = !takenHandle(pop);
-    const purpose = inline(pop, () => d.role, (v) => { d.role = v; }, { max: 200, placeholder: "무엇을 하는 팀인가요? 목적을 한 줄로 적어요", cls: "tm-plain-sub" });
+    const purpose = inline(pop, () => d.role, (v) => { d.role = v; }, { max: 200, placeholder: "무엇을 하는 팀인가요? 목적을 한 줄로 적어요", cls: "tm-plain-sub", tag: "textarea", rows: 1 });
     purpose.setAttribute("aria-label", "목적");
     words.append(row, line, warn, purpose, ...(credit ? [credit] : []));
     dlg.querySelector(".crew-popup-who").replaceChildren(card, words);

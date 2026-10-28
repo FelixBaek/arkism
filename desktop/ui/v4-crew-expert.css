@@ -59,6 +59,7 @@ h2.ex-name { font-size: calc(20px * var(--fs, 1)); font-weight: 600; }
 .ex-handle { padding: 1px 8px; border-radius: 6px; background: var(--nc-amber-bg, var(--nc-raised)); color: var(--nc-accent); font-size: calc(12.5px * var(--fs, 1)); } /* 868:61909: @이름 as a small amber chip */
 p.ex-role { color: var(--text-2); font-size: calc(13px * var(--fs, 1)); }
 .ex-inline-input { max-width: 100%; field-sizing: content; min-width: 6em; } /* the box grows with the text instead of a fixed web-form width */
+textarea.ex-inline-input.multiline { display: block; width: 100%; resize: none; line-height: inherit; }
 .ex-copy { opacity: 0; }
 .ex-line:hover .ex-copy, .ex-copy:focus-visible { opacity: 1; }
 .ex-acts { display: flex; align-items: center; gap: 12px; }
