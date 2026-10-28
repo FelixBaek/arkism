@@ -68,11 +68,15 @@ func ProjectKey(cwd string) string {
 			if common == "" {
 				return ""
 			}
-			if key := RemoteKey(filepath.Join(common, "config")); key != "" {
-				return key
+			// An empty .git directory is not repository metadata. Check HEAD in the
+			// common directory so linked worktrees keep the main repository's key.
+			if head, err := os.Stat(filepath.Join(common, "HEAD")); err == nil && head.Mode().IsRegular() {
+				if key := RemoteKey(filepath.Join(common, "config")); key != "" {
+					return key
+				}
+				sum := sha256.Sum256([]byte(filepath.Dir(common)))
+				return "path:" + hex.EncodeToString(sum[:8])
 			}
-			sum := sha256.Sum256([]byte(filepath.Dir(common)))
-			return "path:" + hex.EncodeToString(sum[:8])
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {

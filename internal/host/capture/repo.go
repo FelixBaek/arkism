@@ -26,11 +26,15 @@ func repoKey(cwd string) string {
 		dotGit := filepath.Join(dir, ".git")
 		if info, err := os.Stat(dotGit); err == nil {
 			if info.IsDir() {
-				if key := host.RemoteKey(filepath.Join(dotGit, "config")); key != "" {
-					return key
+				if head, err := os.Stat(filepath.Join(dotGit, "HEAD")); err == nil && head.Mode().IsRegular() {
+					if key := host.RemoteKey(filepath.Join(dotGit, "config")); key != "" {
+						return key
+					}
+					return strings.ToLower(filepath.Base(dir))
 				}
+			} else {
+				return strings.ToLower(filepath.Base(dir))
 			}
-			return strings.ToLower(filepath.Base(dir))
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
