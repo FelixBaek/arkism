@@ -65,3 +65,13 @@ executed. R8 reporting/acceptance and the full #151 issue remain incomplete.
 실행한 검증: R3 24+독립20검사, R5 70leaf·제한된산식300대조, R6 39methods/64leaf·독립30, R7 17주검사/16하위·독립13검사 통과. 전체 check_local 종료0(Python349/Go 복잡도·vet·race/UI532), 고정lint0issues.
 미실행: R8 builtbinary 완주, DB 통합수용, 제품 빌드·배포·연구 본실험.
 커밋 상태: 전체검사 통과 후 다음 단계 로컬 커밋으로 고정.
+
+## PR419 test-fixture review
+
+A synthetic unused-oracle marker previously named secret was renamed to an
+explicit non-credential sentinel. The metric hash-mismatch test now writes
+JSON through a fixed opened target, separating payload from filename. These
+address remote test-only security findings without changing the tested
+conditions, expected values, production code or security rules. The complete
+local suite passed again: Python349, Go complexity/vet/full race and UI532.
+Remote reanalysis remains pending.
