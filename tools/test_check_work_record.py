@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import check_work_record as w
 
@@ -57,6 +58,70 @@ class CommitRecordTest(unittest.TestCase):
         self.assertEqual(w.check_commit("e" * 40, ok, ["desktop/ui/memory-time.js"],
                                         exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
 
+    def test_a_new_research_link_requires_design_relation_and_deviation(self):
+        problems = w.check_commit("a" * 40, GOOD + "Task: R4\nResearch: exact-decay-v1\n", [],
+                                  exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))
+        self.assertEqual([p.split(" ", 1)[1] for p in problems],
+                         ["research record missing Design:", "research record missing Relation:",
+                          "research record missing Deviation:"])
+
+    def test_a_complete_research_record_and_korean_aliases_pass(self):
+        for details in (
+            "Design: keep the scalar calculation independent.\nRelation: faithful\nDeviation: none\n",
+            "설계 이유: 독립적인 단일 값 계산을 유지한다.\n구현 관계: adapted\n원문과 다른 점: 시간 단위를 명시한다.\n",
+        ):
+            message = GOOD + "Task: R4\nResearch: exact-decay-v1\n" + details
+            self.assertEqual(w.check_commit("b" * 40, message, [],
+                                            exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
+
+    def test_research_relation_is_an_explicit_fidelity_class(self):
+        for relation in ("better", "none", "faithful and improved"):
+            message = GOOD + "Research: protocol-1\nDesign: bounded replay\nRelation: " + relation + "\nDeviation: units only\n"
+            problems = w.check_commit("c" * 40, message, [],
+                                      exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))
+            self.assertEqual([p.split(" ", 1)[1] for p in problems],
+                             ["research Relation must be faithful, adapted, partial, or unsupported"])
+        for relation in ("faithful", "adapted", "partial", "unsupported"):
+            message = GOOD + f"Research: protocol-1\nDesign: bounded replay\nRelation: {relation}\nDeviation: none\n"
+            self.assertEqual(w.check_commit("c" * 40, message, [],
+                                            exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
+
+    def test_research_none_preserves_ordinary_and_partial_detail_contracts(self):
+        for research in ("none", "none (layout only)", "해당 없음", "해당 없음 (문구 정리)"):
+            message = GOOD + "Research: " + research + "\n"
+            self.assertEqual(w.check_commit("d" * 40, message, [],
+                                            exists("desktop/ui/schedule-words.test.js", "shots/auto.png")), [])
+        problems = w.check_commit("d" * 40, GOOD + "Research: none\nDesign: keep existing behavior\n", [],
+                                  exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))
+        self.assertEqual([p.split(" ", 1)[1] for p in problems],
+                         ["research record missing Relation:", "research record missing Deviation:"])
+
+    def test_detail_fields_need_a_research_declaration_even_when_none(self):
+        message = GOOD + "Design: none\nRelation: none\nDeviation: none\n"
+        problems = w.check_commit("e" * 40, message, [],
+                                  exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))
+        self.assertEqual([p.split(" ", 1)[1] for p in problems],
+                         ["research detail fields need Research: (none is fine)"])
+
+    def test_existing_research_history_is_not_retroactively_rejected(self):
+        self.assertEqual(w.check_commit("f" * 40, GOOD + "Research: historical-protocol\n", [],
+                                        exists("desktop/ui/schedule-words.test.js", "shots/auto.png"),
+                                        research_fields_required=False), [])
+
+    def test_ordinary_commit_template_has_a_consistent_research_block(self):
+        template = (w.ROOT / ".github/commit_template.txt").read_text(encoding="utf-8")
+        message = "\n".join(line for line in template.splitlines() if not line.startswith("#"))
+        self.assertEqual(w.research_problems(w.sections(message)), [])
+
+    def test_pr_headings_do_not_turn_research_none_into_a_link(self):
+        template = (w.ROOT / ".github/pull_request_template.md").read_text(encoding="utf-8")
+        self.assertEqual(w.research_problems(w.sections(template)), [])
+
+    def test_none_is_an_explicit_value_not_an_arbitrary_prefix(self):
+        message = GOOD + "Research: nonetheless a real experiment\n"
+        self.assertEqual(len(w.check_commit("f" * 40, message, [],
+                                           exists("desktop/ui/schedule-words.test.js", "shots/auto.png"))), 3)
+
 
 class ReportTest(unittest.TestCase):
     REPORT = "작업 ID / 단계: R4\n실행한 검증 명령 / 결과: go test ./internal/memory 통과\n" \
@@ -90,6 +155,21 @@ class InputTest(unittest.TestCase):
     def test_an_unknown_range_head_fails_instead_of_skipping(self):
         with self.assertRaises(SystemExit):
             w.check_range("HEAD..no-such-ref-here")
+
+    def test_range_checks_new_research_fields_only_from_the_rule_start(self):
+        from datetime import datetime, timedelta
+        start = datetime.fromisoformat(w.RESEARCH_RULE_START)
+        before, after = "a" * 40, "b" * 40
+        message = GOOD + "Research: existing-protocol\n"
+        log = (before + "\0" + (start - timedelta(seconds=1)).isoformat() + "\0" + message + "\0" +
+               after + "\0" + start.isoformat() + "\0" + message + "\0")
+        with patch.object(w, "known_rev", return_value="HEAD"), \
+             patch.object(w, "resolve_range", return_value="base..HEAD"), \
+             patch.object(w, "git", side_effect=[log, "", ""]), \
+             patch.object(w, "commit_has", return_value=exists("desktop/ui/schedule-words.test.js", "shots/auto.png")):
+            problems = w.check_range("base..HEAD")
+        self.assertEqual(len(problems), 3)
+        self.assertTrue(all(p.startswith(after[:9] + " ") for p in problems))
 
 
 if __name__ == "__main__":
