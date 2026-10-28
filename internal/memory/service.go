@@ -612,7 +612,7 @@ func normalizeCreateConfidence(col string, in *CreateInput) error {
 
 func createFieldsMisplaced(col string, in CreateInput, file *textArtifact) bool {
 	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
-	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
+	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] && !isEvalRecordCollection(col) || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
 }
 
 func createLabelsInvalid(col string, in CreateInput) bool {
@@ -797,6 +797,9 @@ func (s *Service) prepareCreateRecord(ctx context.Context, token, col string, r 
 	if col == "evaluations" {
 		return s.prepareEvaluation(ctx, token, r, in, d)
 	}
+	if isEvalRecordCollection(col) && !validEvalRecord(col, *r) {
+		return ErrInvalid
+	}
 	return nil
 }
 
@@ -871,6 +874,15 @@ func (s *Service) prepareEvaluation(ctx context.Context, token string, r *Record
 	}
 	if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
 		return ErrDenied
+	}
+	for _, ref := range evaluationRefs(r.Evaluation) {
+		ok, err := s.authorize(ctx, token, "read:"+ref.Collection, r.Scope, ref.ID, "")
+		if err != nil {
+			return err
+		}
+		if ok.PrincipalID != d.PrincipalID || ok.Role != d.Role {
+			return ErrDenied
+		}
 	}
 	return nil
 }
@@ -947,7 +959,7 @@ func checkEvaluationTarget(ctx context.Context, tx Tx, r Record, d Decision, now
 	if r.Target.Collection == "agent_runs" && v.Run != nil && (!validRun(v.Run, v.Scope, now) || !terminalOutcome(v.Run.Outcome)) {
 		return ErrConflict
 	}
-	return nil
+	return checkDirectRelations(ctx, tx, Record{Scope: r.Scope, Relations: evaluationRefs(r.Evaluation)})
 }
 
 func writeCreateTx(ctx context.Context, tx Tx, col string, in CreateInput, r Record, d Decision, inspection Inspection) error {
