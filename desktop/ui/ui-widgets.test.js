@@ -117,6 +117,19 @@ test("a select opens the app's list, picks with the pointer and the keyboard, an
   assert.equal(pop._popover, false);
 });
 
+test("data-badges draw the connection marks (MAX, API) after a group head and a model name", () => {
+  const s = document.createElement("select");
+  const g = document.createElement("optgroup"); g.label = "Anthropic"; g.dataset.badges = "MAX,API";
+  const o = document.createElement("option"); o.value = "anthropic|opus"; o.textContent = "opus"; o.dataset.badges = "SUPER GROK"; g.append(o); s.append(g);
+  page.append(s);
+  fire(s, "pointerdown", { button: 0 });
+  const pop = $(".combo-pop");
+  assert.deepEqual([...pop.querySelectorAll(".combo-head .ag-plan")].map((b) => b.textContent), ["MAX", "API"]);
+  assert.deepEqual([...pop.querySelectorAll(".combo-opt .ag-plan")].map((b) => b.textContent), ["SUPER GROK"]);
+  fire(s, "pointerdown", { button: 0 });
+  s.remove();
+});
+
 test("a select's optgroup heads draw the group's own logo element, else its data-icon mark", () => {
   window.ArkismBrand = { mark: (name) => { const m = document.createElement("i"); m.className = "mark-" + name; return m; } };
   const s = document.createElement("select");
