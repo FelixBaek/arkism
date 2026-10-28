@@ -7,6 +7,15 @@ explanation text, trust display, feedback and correction) also need "Task:" and 
 fine). A worker's completion report (--report) needs its task ID, checks, failures
 and commit state, and the commit it names must exist.
 
+New research-linked commits also record "Design:", "Relation:" (faithful,
+adapted, partial, or unsupported), and "Deviation:". "Research: none" keeps
+ordinary changes outside that requirement. The additional rule starts at
+RESEARCH_RULE_START and does not rewrite earlier records. If any detail field
+is supplied, all three and a Research declaration are checked together.
+The fixed cutoff uses the author date, like RULE_START, so rebasing does not
+retroactively change a record's requirements. A backdated author date can bypass
+it; this format check is not a trusted timestamp or an enforcement boundary.
+
 This proves the record has its form, not that its content is true or that a change works.
 """
 import argparse
@@ -19,11 +28,16 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 # shortcut: commits authored before the rule began are exempt; replace with a baseline commit once main has one.
 RULE_START = "2026-10-21T03:40:00+09:00"
+RESEARCH_RULE_START = "2026-10-29T06:25:00+09:00"
 RESEARCH_PATHS = re.compile(r"^desktop/ui/(memory-[\w-]+|inject|overview[\w-]*|reviews|intelligence)\.js$")
 SECTIONS = {"Why": "why", "Task": "task", "Verified": "verified", "Limits": "limits", "Research": "research",
             "제목": "title_ko", "이유": "why_ko", "작업": "task", "검증": "verified_ko", "한계": "limits_ko",
-            "연구": "research"}
+            "연구": "research", "Design": "design", "Relation": "relation", "Deviation": "deviation",
+            "설계 이유": "design", "구현 관계": "relation", "원문과 다른 점": "deviation"}
 REQUIRED = ("Why", "Verified", "제목", "이유", "검증")
+RESEARCH_DETAILS = ("Design", "Relation", "Deviation")
+NO_RESEARCH = re.compile(r"^(?:none|해당\s*없음)(?=$|\s*\()", re.I)
+RESEARCH_RELATIONS = {"faithful", "adapted", "partial", "unsupported"}
 NOT_RUN = re.compile(r"not[ _]run|미실행|skipped|못 ?[했함돌]", re.I)
 PASSED = re.compile(r"\bpass(ed)?\b|통과|\bok\b", re.I)
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
@@ -83,6 +97,8 @@ def sections(message):
         if hit:
             key = hit[0]
             out[key] = hit[1].strip()
+        elif re.match(r"\s*#{1,6}\s", line):
+            key = None  # PR headings end a field; their prose is not its value.
         elif key:
             out[key] = (out[key] + "\n" + line.strip()).strip()
     return out
@@ -110,7 +126,26 @@ def verified_problems(text, exists):
     return problems
 
 
-def check_commit(sha, message, files, exists):
+def research_problems(found):
+    """Check record structure and declared fidelity, never claim scientific validity."""
+    declared = found.get("research", "")
+    linked = bool(declared and not NO_RESEARCH.match(declared))
+    details = any(SECTIONS[name] in found for name in RESEARCH_DETAILS)
+    if not linked and not details:
+        return []
+    problems = []
+    if not declared:
+        problems.append("research detail fields need Research: (none is fine)")
+    for name in RESEARCH_DETAILS:
+        if not found.get(SECTIONS[name]):
+            problems.append(f"research record missing {name}:")
+    relation = found.get("relation", "")
+    if relation and relation not in RESEARCH_RELATIONS and (linked or relation != "none"):
+        problems.append("research Relation must be faithful, adapted, partial, or unsupported")
+    return problems
+
+
+def check_commit(sha, message, files, exists, research_fields_required=True):
     found, problems = sections(message), []
     for name in REQUIRED:
         if not found.get(SECTIONS[name]):
@@ -119,6 +154,8 @@ def check_commit(sha, message, files, exists):
         for name in ("Task", "Research"):
             if not found.get(SECTIONS[name]):
                 problems.append(f"touches a study-facing screen; missing {name}: (none is fine)")
+    if research_fields_required:
+        problems += research_problems(found)
     for key in ("verified", "verified_ko"):
         problems += verified_problems(found.get(key, ""), exists)
     return [f"{sha[:9]} {p}" for p in problems]
@@ -156,12 +193,14 @@ def check_range(rng):
     rng = resolved
     problems = []
     start = datetime.fromisoformat(RULE_START)
+    research_start = datetime.fromisoformat(RESEARCH_RULE_START)
     log = git("log", "--no-merges", "--format=%H%x00%aI%x00%B%x00", "--end-of-options", rng).split("\0")
     for sha, authored, message in zip(log[0::3], log[1::3], log[2::3]):
         sha = sha.strip()
         if sha and datetime.fromisoformat(authored) >= start:  # author date survives a rebase
             files = git("diff-tree", "--no-commit-id", "--name-only", "-r", "--end-of-options", sha).split()
-            problems += check_commit(sha, message, files, commit_has(sha))
+            problems += check_commit(sha, message, files, commit_has(sha),
+                                     research_fields_required=datetime.fromisoformat(authored) >= research_start)
     return problems
 
 
