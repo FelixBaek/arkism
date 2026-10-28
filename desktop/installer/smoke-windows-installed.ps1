@@ -403,8 +403,8 @@ function Test-InstalledSmokeInteger($Value) {
   return $Value -is [int] -or $Value -is [long]
 }
 
-# Windows adds this legacy cache junction to any profile that loads WinINet; it is skipped, never followed,
-# and Directory.Delete removes the link itself.
+# Windows adds this legacy cache junction to any profile that loads WinINet; walks skip it without following,
+# and cleanup removes only the link.
 function Test-InstalledSmokeOsCacheLink([string]$Path, $Attributes) {
   $link = [IO.FileAttributes]::Directory -bor [IO.FileAttributes]::ReparsePoint
   return $null -ne $Attributes -and ($Attributes -band $link) -eq $link -and
@@ -459,7 +459,8 @@ function Clear-InstalledSmokeOwnedReadOnly([string]$Directory) {
   Assert-InstalledSmokeDirectory $Directory
   foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
     $attrs = Get-InstalledSmokeAttributes $path
-    if (Test-InstalledSmokeOsCacheLink $path $attrs) { continue }
+    # Remove the cache link itself before the recursive delete so no runtime has to decide whether to follow it.
+    if (Test-InstalledSmokeOsCacheLink $path $attrs) { [IO.Directory]::Delete($path); continue }
     if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
     if ($attrs -band [IO.FileAttributes]::Directory) { Clear-InstalledSmokeOwnedReadOnly $path }
     Clear-InstalledSmokeReadOnlyEntry $path ([bool]($attrs -band [IO.FileAttributes]::Directory))
