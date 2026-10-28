@@ -643,7 +643,7 @@ func codecString(value string, field codecField, path string) error {
 	if !utf8.ValidString(value) {
 		return contractError("invalid_unicode", path)
 	}
-	valid := true
+	var valid bool
 	switch field.kind {
 	case "id":
 		valid = codecID.MatchString(value)
