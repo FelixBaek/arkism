@@ -28,11 +28,11 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     } finally { img.close?.(); }
   }
 
-  function open({ current, onPick, anchor }) {
+  function open({ current, onPick, anchor, note = "팀 목록 카드에 깔리는 사진이에요" }) {
     const dlg = el("dialog", "crew-dialog tp-cover");
     const head = el("div", "tp-cover-head");
     const title = el("div", "tp-cover-title");
-    title.append(el("b", "", "카드 사진"), el("span", "", "팀 목록 카드에 깔리는 사진이에요"));
+    title.append(el("b", "", "카드 사진"), el("span", "", note));
     const acts = el("div", "tp-cover-acts");
     const file = el("input"); file.type = "file"; file.accept = "image/*"; file.hidden = true;
     const upload = el("button", "tp-link"); upload.type = "button"; upload.textContent = "↑ 내 사진 올리기";

@@ -497,7 +497,7 @@ func validCrewTypeFields(c Crew) bool {
 			return false
 		}
 	}
-	return !(c.Type != "workflow" && c.Type != "team" && c.Cover != nil || c.Type != "workflow" && (c.Limits != nil || c.Trigger != nil || c.Graph != nil))
+	return !(c.Type == "persona" && c.Cover != nil || c.Type != "workflow" && (c.Limits != nil || c.Trigger != nil || c.Graph != nil))
 }
 
 // isAgent: a work agent, including a template saved before agents existed.

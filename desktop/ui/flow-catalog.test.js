@@ -136,3 +136,35 @@ test("FLOW opens role and team editors from one catalogue and keeps every creati
     h.closeAll();
   }
 });
+
+test("agent and team cards show their cover like a workflow card, the avatar in the bottom-right", async () => {
+  const records = crewRecords();
+  const cover = { id: "c1", url: "https://img/c.jpg", thumb: "https://img/ct.jpg", author: "Kim", author_url: "https://u/kim" };
+  Object.assign(records.find((r) => r.id === "ag1").crew, { cover, avatar: { art: "001", bg: "sage" } });
+  records.find((r) => r.id === "tm1").crew.cover = cover;
+  const h = await boot({ view: "crew", data: { crew: records } });
+  h.render(); await h.settle();
+  const card = (id) => document.querySelector(`[data-id="crew:${id}"]`);
+  for (const id of ["ag1", "tm1"]) {
+    assert.ok(card(id).classList.contains("has-cover"), id);
+    assert.equal(card(id).querySelector(".crew-cover-img").src, cover.url);
+  }
+  assert.ok(card("ag1").querySelector(".flow-card-foot .wk-face"), "an avatar moves to the bottom-right");
+  assert.equal(card("tm1").querySelector(".flow-card-foot .wf-mark"), null, "no avatar, no corner mark");
+  assert.ok(card("ag2").querySelector(".flow-card-top .wf-mark"), "a card without a photo keeps the avatar top-left");
+  card("ag1").querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
+  assert.equal(card("ag1").classList.contains("has-cover"), false, "a photo that fails to load drops the dark cover look");
+
+  // the expert window picks a photo apart from the avatar and saves it with the agent
+  card("ag2").click(); await h.settle();
+  const d = h.top();
+  assert.ok(d.querySelector(".ex-heads .ex-face") && d.querySelector(".ex-heads .ex-cover"));
+  d.querySelector(".ex-cover").click(); await h.settle();
+  document.querySelector("dialog.tp-cover .tp-cover-ph").click(); await h.settle();
+  assert.ok(d.querySelector(".ex-cover img"));
+  assert.ok(d.querySelector(".ex-heads .tm-pop-credit a"), "the photo credit sits beside the photo");
+  h.btn(d, "저장").click(); await h.settle();
+  const saved = h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag2$/.test(c.url)).at(-1);
+  assert.equal(saved?.body.crew.cover.author, "Park");
+  h.closeAll();
+});

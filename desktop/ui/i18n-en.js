@@ -5149,7 +5149,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "우주": "Space", "숲": "Forest", "바다": "Sea", "도시": "City", "추상": "Abstract",
-  "카드 사진": "Card photo", "팀 목록 카드에 깔리는 사진이에요": "The photo behind the card in the team list",
+  "카드 사진": "Card photo", "팀 목록 카드에 깔리는 사진이에요": "The photo behind the card in the team list", "워크플로우 목록 카드에 깔리는 사진이에요": "The photo behind the card in the workflow list",
   "↑ 내 사진 올리기": "↑ Upload my photo", "배경 없애기": "Remove background",
   "영어로 찾으면 더 많아요 (예: space, desk)": "English finds more (e.g. space, desk)",
   "Unsplash 무료 사진 · 찍은 사람 이름이 카드 구석에 같이 보여요": "Free Unsplash photos · the photographer's name shows in the card corner",

@@ -521,6 +521,13 @@
         "avatar": {
           "art": "001",
           "bg": "rose"
+        },
+        "cover": {
+          "id": "p3",
+          "url": "img/arkism-art.svg",
+          "thumb": "img/arkism-art.svg",
+          "author": "Kim Lee",
+          "author_url": "https://unsplash.com/@kimlee"
         }
       }
     },
