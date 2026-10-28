@@ -43,7 +43,7 @@ export const createCrew = (ctx) => {
   // template: a saved agent definition (instructions·model·effort·skills). 새 워크플로우 can start from one.
   const templates = () => items().filter((r) => r.crew.type === "template");
   const byId = (id) => items().find((r) => r.id === id);
-  const flowHistory = createFlowHistory({ state, el, button, request, query, notice, byId, ago, go: ctx.go });
+  const flowHistory = createFlowHistory({ state, el, button, request, query, notice, ago, go: ctx.go });
   const byHandle = (h) => workflows().find((r) => r.crew.handle === (h || "").replace(/^\$/, ""));
   async function reload(selectId) {
     state.data.crew = (await request(`/v1/crew?${query()}`)).items || [];
