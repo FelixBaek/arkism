@@ -6311,7 +6311,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 쓰임 확인에서 정리해 보세요.": "It may be outdated or too broad. Edit it, or tidy it up in Use check.", "왼쪽에서 기억을 고르면 자세히 보여요.": "Pick a memory on the left to see details."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "· {0} 프로젝트": "· project {0}", "{0}에서 기억 {1}개를 받았어요": "{0} received {1} memories", "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
+  "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
   "기억 {0}": "memories {0}", "최근 대화 {0}개, 메시지 {1}개를 봤어요.": "Read the latest {0} conversations, {1} messages.", "최근 대화 {0}개, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved the latest {0} conversations: {1} messages, {2} tokens.",
   "보관 상태를 읽지 못했어요 ({0}).": "Could not read retention ({0}).", "가장 먼저 지워지는 원문은 {0}일 남았어요.": "The next transcript expires in {0} days.",
   "원문은 저장 뒤 7일 동안만 보관돼요.{0}": "Transcripts are kept for 7 days after saving.{0}", "{0}일 · 넣음 {1}번": "{0} days · included {1} times",
@@ -6322,7 +6322,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "넣어 준 기억 (높은 순위부터)": "Memories handed out (highest rank first)", "원문 만료": "Transcript expired", "만료됐어요": "Expired", "원문 못 읽음": "Transcript unreadable",
   "이 형식은 아직 볼 수 없어요": "This format cannot be shown yet", "보관된 원문이 없어요": "No transcript was kept", "원문 보관 중": "Transcript kept"
 });
-Object.assign(window.ArkismI18nEN.patterns, { "{0}번 불러올 때 평균": "Average over {0} recalls", "원문 D-{0}": "Transcript D-{0}", "{0}까지 ({1}일 남음)": "Until {0} ({1} days left)" });
+Object.assign(window.ArkismI18nEN.patterns, { "원문 D-{0}": "Transcript D-{0}", "{0}까지 ({1}일 남음)": "Until {0} ({1} days left)" });
 Object.assign(window.ArkismI18nEN.strings, {
   "결과함": "Results",
   "개선 흐름": "Improvements",
@@ -6428,7 +6428,6 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
-  "질문할 때 넣어 준 기억이에요": "Memories handed in with a question",
   "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요.": "Conversations come in but no new candidates appear. Check the server's analysis sign-in and connection.",
   "글을 다 읽고 골라요": "Read the whole text, then choose",
   "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요.": "AI help suggests approve or discard with a reason. A person makes the choice.",
@@ -6442,3 +6441,8 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "요약: {0}": "Summary: {0}", "AI 추천 · {0}": "AI suggests · {0}", "AI 도움을 받지 못했어요: {0}": "Couldn't get AI help: {0}",
   "{0}건 중 {1}건 · 내리면 더 나와요": "{1} of {0} · scroll for more", "{0}% · {1}번": "{0}% · {1} times"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "에이전트가 일할 때 넣어 준 기억이에요. 한 줄이 한 번이에요": "Memories handed to agents while they worked. One row is one recall",
+  "프로젝트 밖": "Outside a project", "저장소 없는 폴더": "Folder without a repository"
+});
+Object.assign(window.ArkismI18nEN.patterns, { "최근 {0}번, 한 번에 평균": "Last {0} recalls, average per recall", "{0}에 기억 {1}개를 넣어 줬어요": "Handed {1} memories to {0}" });

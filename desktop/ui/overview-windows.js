@@ -278,14 +278,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const LANE_SHORT = { exact: "이름", keyword: "낱말", vector: "뜻", relation: "연결" };
   // why one memory was handed out, in words: a pinned one has no score; otherwise the lanes that found it
   const recallWhy = (it) => (it.score == null ? "늘 넣는 기억이에요 (고정)" : (it.lanes || []).map((l) => LANE[l] || l).join(" · ") || "검색으로 찾았어요");
-  const recallWho = (x) => `${x.requested_by || "에이전트"}${x.project_key ? ` · ${x.project_key} 프로젝트` : ""}`;
+  // where a recall went: owner/name for a repository, a folder with no remote ("path:" + hash) or no project at all
+  const recallWhere = (x) => (!x.project_key ? "프로젝트 밖" : x.project_key.startsWith("path:") ? "저장소 없는 폴더" : x.project_key);
   let recalls = null, redrawing = false; // one GET /v1/recalls per opened window; a redraw after the names arrive reuses it
   // 불러오기 opens wide: the receipts on the left (who, which project, when, how many), the picked one's memories on the right
   let recallWin = null;
-  function wideRecall(sel = null, agent = "all") {
-    const d = shell("불러오기", "", "질문할 때 넣어 준 기억이에요", "recall");
-    recipe(d, { wide: "recall", args: [sel, agent] });
-    recallWin = d; redraw = () => wideRecall(sel, agent);
+  function wideRecall(sel = null, where = "all") {
+    const d = shell("불러오기", "", "에이전트가 일할 때 넣어 준 기억이에요. 한 줄이 한 번이에요", "recall");
+    recipe(d, { wide: "recall", args: [sel, where] });
+    recallWin = d; redraw = () => wideRecall(sel, where);
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div"), top = el("div", "ov-wide-sum");
     const g = state.connection.generation;
     if (recalls?.g !== g) { // one GET /v1/recalls per open (open() drops it); chips and picks reuse it
@@ -295,29 +296,31 @@ window.ArkismOverviewWindows = (ctx, env) => {
     twoPane(d, filterBar([], el("span"), chipHost), list, detail); list.before(top);
     if (recalls.err) { list.append(el("p", "ov-win-empty", "불러오기 기록을 읽지 못했어요.")); return; }
     if (!recalls.v) { list.append(el("p", "ov-win-empty", "불러오는 중…")); return; }
-    const all = (recalls.v.items || []).filter((x) => x.items?.length), agents = [...new Set(all.map((x) => x.requested_by).filter(Boolean))];
+    const all = (recalls.v.items || []).filter((x) => x.items?.length), places = [...new Set(all.map(recallWhere))];
+    // who asked is a login name; it only tells rows apart when more than one caller shows up
+    const who = new Set(all.map((x) => x.requested_by)).size > 1 ? (x) => ` · ${x.requested_by || "에이전트"}` : () => "";
     if (!all.length) { list.append(el("p", "ov-win-empty", "아직 불러온 기록이 없어요.")); return; }
-    chipHost.append(chipBar([["all", "전체", all.length], ...agents.map((a) => [a, a, all.filter((x) => x.requested_by === a).length])], agent, (k) => wideRecall(null, k)));
-    const shown = all.filter((x) => agent === "all" || x.requested_by === agent);
+    chipHost.append(chipBar([["all", "전체", all.length], ...places.map((a) => [a, a, all.filter((x) => recallWhere(x) === a).length])], where, (k) => wideRecall(null, k)));
+    const shown = all.filter((x) => where === "all" || recallWhere(x) === where);
     // what a recall hands out on average, by kind
     const count = {}; for (const x of shown) for (const it of x.items) { const m = memOf(it.memory.id); if (m) count[m.kind] = (count[m.kind] || 0) + 1; }
-    const kinds = el("div", "ov-kinds"); kinds.append(el("span", "", `${num(shown.length)}번 불러올 때 평균`));
+    const kinds = el("div", "ov-kinds"); kinds.append(el("span", "", `최근 ${num(shown.length)}번, 한 번에 평균`));
     for (const [k2, n] of Object.entries(count)) { const t = tagEl(kind(k2)); t.textContent += ` ${num(Math.round(n / shown.length * 10) / 10)}개`; kinds.append(t); }
     top.append(kinds);
     const cur = shown.find((x) => x.id === sel) || shown[0];
     for (const x of shown) {
       const r = el("div", `ov-wide-row${x === cur ? " on" : ""}`), t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t");
       r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-pressed", String(x === cur));
-      l1.append(el("span", "ov-win-item-title", recallWho(x))); t.append(l1);
+      l1.append(el("span", "ov-win-item-title", recallWhere(x) + who(x))); t.append(l1);
       t.append(el("small", "", x.items.slice(0, 2).map((it) => clip(memText(it.memory.id).split("\n")[0], 28)).join(" · ")));
       const right = el("div", "ov-wide-row-r"); right.append(el("span", "", `기억 ${num(x.items.length)}개`), el("span", "", ago(x.created_at)));
       r.append(t, right);
-      const pick = () => wideRecall(x.id, agent);
+      const pick = () => wideRecall(x.id, where);
       r.addEventListener("click", pick); r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
       list.append(r);
     }
     const h = el("div", "ov-detail-head"); h.append(el("span", "ov-win-tag", cur.requested_by || "에이전트"), el("small", "", new Date(cur.created_at).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })));
-    detail.append(h, el("h3", "", `${recallWho(cur)}에서 기억 ${num(cur.items.length)}개를 받았어요`));
+    detail.append(h, el("h3", "", `${recallWhere(cur)}에 기억 ${num(cur.items.length)}개를 넣어 줬어요`));
     const items = el("div", "ov-detail-list");
     for (const it of cur.items) {
       const m = memOf(it.memory.id), b = el("div", "ov-recall-item"), head = el("div", "ov-detail-head");

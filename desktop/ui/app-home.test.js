@@ -172,16 +172,22 @@ test("overview: 불러오기 shows receipts, an empty history and a failed read"
   await openWindow({ key: "recall" });
   await app.settle(50); let d = win();
   assert.ok(d.classList.contains("ov-wide-win"), "불러오기 opens wide");
-  assert.match(text(d), /번 불러올 때 평균/);
+  assert.match(text(d), /최근 \d+번, 한 번에 평균/);
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-chip")].map((c) => text(c).replace(/\s*\d+$/, "")), ["전체", "orbit-app", "arkism"], "chips split by project");
+  assert.match(text(d.querySelector(".ov-wide-row .ov-win-item-title")), /^orbit-app · codex$/, "the project first, the caller only when there are several");
   assert.ok(d.querySelectorAll(".ov-wide-row").length > 1, "one row per recall");
   d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle(); d = win();
   assert.ok(d.querySelectorAll(".ov-wide-row")[1].classList.contains("on"), "the picked recall shows on the right");
-  assert.match(text(d), /에서 기억 \d+개를 받았어요/, "who asked, in words");
+  assert.match(text(d), /arkism에 기억 \d+개를 넣어 줬어요/, "where it went, in words");
   assert.ok(d.querySelector(".ov-recall-item") && !/^m\d/.test(text(d.querySelector(".ov-recall-item p"))), "a memory shows as its text, not its id");
   assert.ok(d.querySelector("details.ov-recall-more"), "scores sit behind a toggle");
   let off = route("GET", "/v1/recalls", () => ok({ items: [] }));
   await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /아직 불러온 기록이 없어요/);
+  // one login for every call: no caller name; a folder with no remote and no project read as words, not keys
+  off(); off = route("GET", "/v1/recalls", () => ok({ items: [["path:274fec32160f60b2", "2026-10-28T10:00:00Z"], [null, "2026-10-28T09:00:00Z"]].map(([project_key, created_at], i) => ({ id: `r${i}`, requested_by: "owner", project_key, created_at, items: [{ memory: { id: "m1" }, rank: 1, score: 0.5, lanes: ["vector"] }] })) }));
+  await openWindow({ key: "recall" }); await app.settle(50); d = win();
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-row .ov-win-item-title")].map(text), ["저장소 없는 폴더", "프로젝트 밖"]);
   off(); off = route("GET", "/v1/recalls", () => fail(500, "boom"));
   await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /불러오기 기록을 읽지 못했어요/);
