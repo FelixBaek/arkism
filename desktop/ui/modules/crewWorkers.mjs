@@ -700,6 +700,7 @@ export function createCrewWorkers(deps) {
     if (Number(d.budget?.ask_over_usd) > 0) b.ask_over_usd = Number(d.budget.ask_over_usd);
     if (Object.keys(b).length) out.budget = b;
     if (d.avatar) out.avatar = d.avatar;
+    if (d.cover) out.cover = d.cover;
     if (d.pinned?.length) out.pinned = d.pinned;
     return out;
   }
@@ -929,6 +930,32 @@ export function createCrewWorkers(deps) {
       paintFace();
       drawWorkerSave();
     });
+    // 배경 사진: picked apart from the avatar; it lies behind the card in the workflow list.
+    const covers = window.ArkismCoverPicker?.({ el: deps.el, icon: deps.icon, request: deps.request, query: deps.query, state: deps.state, notice: deps.notice });
+    const cover = deps.el("button", "tm-prev ex-cover");
+    cover.type = "button";
+    cover.setAttribute("aria-label", "배경 사진 고르기");
+    const credit = deps.el("small", "tm-pop-credit");
+    const paintCover = () => {
+      const cv = wk.draft.cover;
+      cover.classList.toggle("has-cover", !!cv);
+      if (cv) { const img = deps.el("img"); img.alt = ""; img.src = cv.thumb || cv.url; cover.replaceChildren(img); } else cover.replaceChildren(deps.icon("image"));
+      // the photo credit Unsplash asks for, beside the photo (a link cannot live inside the button)
+      const who = deps.el(cv?.author_url ? "a" : "span", "", cv?.author || "");
+      if (cv?.author_url) { who.href = cv.author_url; who.target = "_blank"; who.rel = "noreferrer"; }
+      credit.replaceChildren(...(cv ? [deps.raw(who)] : []));
+    };
+    paintCover();
+    cover.addEventListener("click", () => covers?.open({ anchor: cover, current: wk.draft.cover, note: "워크플로우 목록 카드에 깔리는 사진이에요", onPick: (c) => {
+      if (c) wk.draft.cover = c; else delete wk.draft.cover;
+      wk.dirty = true;
+      paintCover();
+      drawWorkerSave();
+    } }));
+    const heads = deps.el("span", "ex-heads");
+    const row = deps.el("span", "ex-heads-row");
+    row.append(face, cover);
+    heads.append(row, credit);
     const acts = deps.el("div", "ex-acts");
     // Each tab marks the window (data-tab) so the head can lay itself out the way that screen's design does.
     const mark = (box, key) => { wk.tab = key; const dl = box.closest("dialog"); if (dl) dl.dataset.tab = key; };
@@ -938,7 +965,7 @@ export function createCrewWorkers(deps) {
         { key: "usage", label: "사용량", render: (box) => { mark(box, "usage"); wk.bar = wk.okBtn = null; usageTab(box, deps.byId(wk.id)); } },
         { key: "history", label: "기록", render: (box) => { mark(box, "history"); wk.bar = wk.okBtn = null; historyTab(box, deps.byId(wk.id)); } }];
     const pop = expertPopup.open({
-      title: "", sub: "", avatar: face, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`, popout: isNew ? null : { event: "arkism:open-expert", detail: { id: wk.id }, title: deps.byId(wk.id)?.crew?.name || "" },
+      title: "", sub: "", avatar: heads, tabs, initial: isNew ? "edit" : (wk.openTab || "edit"), actions: [acts], cls: `ex-pop${isNew ? " ex-new" : ""}`, popout: isNew ? null : { event: "arkism:open-expert", detail: { id: wk.id }, title: deps.byId(wk.id)?.crew?.name || "" },
       onClose: () => { if (wk.pop !== pop) return; wk.pop = null; deps.state.workerNew = false; wk.bar = wk.okBtn = wk.estPaint = null; if (isNew && !wk.keep) wk.draft = null; wk.keep = false; deps.render(false); }
     });
     wk.pop = pop;
@@ -969,6 +996,7 @@ export function createCrewWorkers(deps) {
     wk.paintHead = () => {
       const d = wk.draft;
       paintFace();
+      paintCover();
       const cat = deps.el("button", "ex-cat");
       cat.type = "button";
       cat.setAttribute("aria-label", "카테고리");
@@ -1193,6 +1221,7 @@ export function createCrewWorkers(deps) {
     if (JSON.stringify(a.agents || []) !== JSON.stringify(b.agents || [])) out.push("부르는 곳 바꿈");
     if (JSON.stringify(a.memory || {}) !== JSON.stringify(b.memory || {})) out.push("기억 종류 바꿈");
     if ((a.avatar?.art || "") !== (b.avatar?.art || "")) out.push("아바타 바꿈");
+    if ((a.cover?.url || "") !== (b.cover?.url || "")) out.push("배경 사진 바꿈");
     return out;
   }
 

@@ -457,14 +457,25 @@ export const createCrew = (ctx) => {
   function flowCard(rec) {
     if (rec.crew.type === "workflow") return workflowCard(rec);
     const x = rec.crew;
-    const card = raw(el("button", `crew-card workflow wf-card flow-card${x.enabled === false ? " flow-disabled" : ""}`));
+    const card = raw(el("button", `crew-card workflow wf-card flow-card${x.cover?.url ? " has-cover" : ""}${x.enabled === false ? " flow-disabled" : ""}`));
     card.type = "button";
     card.dataset.id = `crew:${rec.id}`;
     card.dataset.flowKind = x.type;
     card.title = x.enabled === false ? `${x.name} · ${tr("꺼짐")}` : x.name;
     const top = el("div", "flow-card-top");
-    top.append(avatarMark(x), el("span", "flow-kind", tr(flowKind(rec))));
-    card.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("p", "flow-card-role", x.role || "")), raw(el("small", "flow-card-category", x.category || "")), raw(el("code", "flow-alias", flowAlias(rec, items()))));
+    const alias = raw(el("code", "flow-alias", flowAlias(rec, items())));
+    if (x.cover?.url) {
+      // On a photo the card reads like a workflow card (name, @name); the avatar moves to the bottom-right corner.
+      coverImg(card, x.cover);
+      top.append(el("span", "flow-kind", tr(flowKind(rec))));
+      const foot = el("div", "flow-card-foot");
+      foot.append(alias);
+      if (validAvatar(x.avatar)) foot.append(avatarMark(x));
+      card.append(top, raw(el("strong", "crew-cover-title", x.name)), foot);
+    } else {
+      top.append(avatarMark(x), el("span", "flow-kind", tr(flowKind(rec))));
+      card.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("p", "flow-card-role", x.role || "")), raw(el("small", "flow-card-category", x.category || "")), alias);
+    }
     card.addEventListener("click", () => openFlow(rec));
     card.ctxItems = () => [{ label: "열기", run: () => card.click() }, { label: "@이름 복사", off: !x.handle, run: () => Promise.resolve().then(() => navigator.clipboard.writeText(flowAlias(rec, items()))).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")) }];
     return card;
@@ -508,6 +519,14 @@ export const createCrew = (ctx) => {
     const named = items().filter((r) => ["agent", "team", "workflow"].includes(r.crew.type) && r.crew.handle === "리서치");
     return named.find((r) => r.crew.type === "workflow") || named[0];
   }
+  function coverImg(card, cover) {
+    const img = el("img", "crew-cover-img");
+    img.alt = "";
+    img.loading = "lazy";
+    img.src = cover.url;
+    img.addEventListener("error", () => { img.remove(); card.classList.remove("has-cover"); });
+    card.append(img);
+  }
   // Card (198:286): photo, the 일정 badge and the name. The 일정·웹훅 switch, one line and $이름 · 단계 live in the popup.
   // A cover photo (배경 사진) sits as a band on top of the card.
   function workflowCard(r) {
@@ -517,14 +536,7 @@ export const createCrew = (ctx) => {
     c.dataset.id = `crew:${r.id}`;
     c.dataset.flowKind = "workflow";
     c.addEventListener("click", () => { state.selected = `crew:${r.id}`; markSelected(); getAuto().open(r); });
-    if (x.cover?.url) {
-      const img = el("img", "crew-cover-img");
-      img.alt = "";
-      img.loading = "lazy";
-      img.src = x.cover.url;
-      img.addEventListener("error", () => img.remove());
-      c.append(img);
-    }
+    if (x.cover?.url) coverImg(c, x.cover);
     const top = el("div", "crew-cover-top");
     const kind = x.trigger?.kind === "schedule" ? "스케줄" : "웹훅";
     const when2 = x.trigger ? (x.enabled ? kind : `${kind} · 꺼짐`) : "수동 실행";

@@ -50,7 +50,7 @@ func TestUnsplashSearchAndUse(t *testing.T) {
 	}
 }
 
-// only workflows carry a cover, and only from images.unsplash.com.
+// every kind but a persona carries a cover, and only from images.unsplash.com.
 func TestCrewCover(t *testing.T) {
 	f := newFixture(t)
 	cover := &CrewCover{ID: "abc_1", URL: "https://images.unsplash.com/photo-1?w=1080", Thumb: "https://images.unsplash.com/photo-1?w=400",
@@ -62,8 +62,12 @@ func TestCrewCover(t *testing.T) {
 	}
 	ex := crewTemplate("작가")
 	ex.Cover = cover
-	if _, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: ex}); !errors.Is(err, ErrInvalid) {
-		t.Fatal("a template took a cover", err)
+	if r := f.crew(ex); r.Crew.Cover == nil || r.Crew.Cover.URL != cover.URL {
+		t.Fatal("agent cover not kept", r.Crew)
+	}
+	persona := Crew{Type: "persona", Name: "차분한 편집자", Instructions: "차분하게", Cover: cover}
+	if _, err := f.svc.CreateCrew(testCtx, f.human, CrewInput{Scope: scopeA, Crew: persona}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("a persona took a cover", err)
 	}
 	off := *cover
 	off.URL = "https://evil.example/p.jpg"

@@ -42,6 +42,9 @@
 .ex-pop .crew-popup-tab:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 1px; }
 .ex-pop .crew-popup-body { padding: 4px 28px 24px; }
 .ex-pop.ex-new .crew-popup-head { grid-template-areas: "who side"; }
+.ex-heads { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.ex-heads-row { display: flex; gap: 8px; }
+.ex-cover { width: 110px; height: 110px; }
 .ex-face { flex: none; width: 110px; height: 110px; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer; background: var(--bg-muted); }
 .ex-face .ex-art, .ex-face .ex-art img { width: 100%; height: 100%; display: block; }
 .ex-face .ex-art { background: var(--face-bg); }
