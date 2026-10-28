@@ -166,6 +166,7 @@ function Invoke-SmokeTestCase([string]$Name, [scriptblock]$Body) {
   } finally {
     foreach ($link in $fixture.Links) {
       Assert-SmokeTest (Test-InstalledSmokeWithin $link $fixture.Root) 'Only fixture-owned links may be removed'
+      if ($null -eq (Get-InstalledSmokeAttributes $link)) { continue }
       Write-Host "Removing only owned installed offline fixture link: $link"
       [IO.Directory]::Delete($link)
     }
