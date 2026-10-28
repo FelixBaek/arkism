@@ -142,16 +142,13 @@
 
 /* stage window (opens over the screen) */
 .ov-win { width: min(760px, calc(100vw - 32px)); padding: 0; --tone: var(--text-1); }
-.ov-win.ov-t-r { --tone: #ff5160; } .ov-win.ov-t-a { --tone: #f5b955; }
 .ov-win-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .ov-win-title { display: flex; align-items: center; gap: 8px; } .ov-win-title h2 { margin: 0; font-size: 17px; font-weight: 600; }
-.ov-win-crumb { color: var(--text-2); font-size: 12px; }
 .ov-win .ov-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); display: inline-block; }
 .ov-win-step { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
 .ov-win-title { min-width: 0; } .ov-win-title h2, .ov-win-badge, .ov-win-title .btn { white-space: nowrap; flex: none; }
 /* a narrow window: the title row keeps one line, the hint gives way */
 @media (max-width: 640px) { .ov-win-head { padding: 12px 14px; gap: 8px; } .ov-win-step > span { display: none; } }
-.ov-win-body { display: flex; flex-direction: column; gap: 14px; padding-top: 16px; }
 .ov-win-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .ov-win-tile { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .ov-win-tile strong { font-size: 22px; font-weight: 600; color: var(--tone); } .ov-win-tile span { color: var(--text-2); font-size: 12px; }
@@ -171,8 +168,6 @@
 /* stage + wide windows (overview-windows.js) */
 .ov-win-badge { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--tone); font-size: 12px; font-weight: 600; }
 .ov-win-badge:empty { display: none; }
-.ov-win-how { background: var(--bg-muted); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
-.ov-win-how > p { margin: 0; } .ov-win-how strong { font-weight: 600; }
 .ov-win-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ov-win-cell { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); text-align: left; color: inherit; font: inherit; }
 .ov-win-cell small { color: var(--text-2); font-size: 11px; } .ov-win-cell strong { font-size: 12.5px; }
@@ -185,11 +180,23 @@
 .ov-win-group { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; color: var(--text-2); } .ov-win-group:first-child { margin-top: 0; }
 .ov-win-item-l { min-width: 0; display: flex; flex-direction: column; gap: 3px; } .ov-win-item-r { display: flex; align-items: center; gap: 6px; flex: none; color: var(--text-2); font-size: 12px; }
 .ov-win-item-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a stage window's list shows every row in full: 분류 reads the whole candidate before deciding */
+.ov-stage-list .ov-win-item { align-items: flex-start; flex-wrap: wrap; } .ov-stage-list .ov-win-item-l { flex: 1 1 100%; } .ov-stage-list .ov-win-item-t { align-items: flex-start; }
+.ov-stage-list .ov-win-item-t > span.ov-win-item-title { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; line-height: 1.55; }
+.ov-stage-list .ov-win-item-r { flex-wrap: wrap; justify-content: flex-end; width: 100%; } .ov-stage-list .ov-win-item-r:empty { display: none; }
+.ov-stage-list .ov-verdict { margin-top: 8px; }
+.ov-stage-what { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
+.ov-kind-share { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.ov-kind-share > small { color: var(--text-2); font-size: 12px; }
+.ov-kind-strip { display: flex; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; }
+.ov-kind-strip > i { min-width: 3px; }
+.ov-kind-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--text-2); }
+.ov-kind-legend > span { display: inline-flex; align-items: center; gap: 5px; } .ov-kind-legend i { width: 8px; height: 8px; border-radius: 50%; } .ov-kind-legend b { color: var(--text-1); font-weight: 600; }
 .ov-win-err { color: #ff5160; font-size: 12px; margin: 0; }
 .ov-win-click { cursor: pointer; }
 .ov-win-tiles-4 { grid-template-columns: repeat(4, 1fr); }
 .ov-ask { width: min(420px, calc(100vw - 32px)); padding: 0; } .ov-ask textarea { width: 100%; box-sizing: border-box; }
-.ov-wide-win { width: min(1180px, calc(100vw - 32px)); height: min(900px, calc(100vh - 32px)); display: flex; flex-direction: column; }
+.ov-wide-win { width: min(1440px, calc(100vw - 32px)); height: min(900px, calc(100vh - 32px)); display: flex; flex-direction: column; }
 .ov-wide-win[open] { display: flex; }
 .ov-wide-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); }
 .ov-wide-left { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; min-height: 0; overflow: auto; border-right: 1px solid var(--border); }
@@ -222,12 +229,6 @@
 .ov-detail-edit { width: 100%; box-sizing: border-box; font-size: 14px; line-height: 1.6; padding: 10px 12px; resize: vertical; }
 .ov-wide-left > .ov-wide-bar .ghost { border: 1px solid var(--border); }
 .ov-detail-list .ov-win-item { padding: 9px 12px; font-size: 14px; }
-.ov-win-list-scroll { max-height: min(46vh, 520px); overflow: auto; }
-/* 모두 보기: only the list stays, and it fills the window */
-.ov-win.ov-win-expanded[open] { display: flex; flex-direction: column; height: min(86vh, 900px); }
-.ov-win-expanded .ov-win-body > :not(.ov-win-list-title, .ov-win-list) { display: none; }
-.ov-win-expanded .ov-win-body { min-height: 0; flex: 1; overflow: hidden; }
-.ov-win-expanded .ov-win-list-scroll { max-height: none; flex: 1; min-height: 0; }
 .ov-win-foot .ov-wide-foot-note { margin-right: auto; align-self: center; }
 .ov-detail-list .ov-win-item.on { background: var(--bg-muted); }
 
