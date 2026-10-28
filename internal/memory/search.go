@@ -32,6 +32,9 @@ type SearchInput struct {
 	// pinned: memories a context build already injected ahead of this search
 	// (crew_pins.go); the receipt lists them first and the search hits after.
 	pinned []Ref
+	// client and session label the receipt (which coding agent, which of its sessions). They come
+	// from request headers, not the body, so older servers that reject unknown fields keep working.
+	client, session string
 }
 
 func searchModeEnabled(modes []string, mode string) bool {
@@ -343,7 +346,7 @@ func boundSearchInput(in *SearchInput) bool {
 
 func searchUsage(run *Ref, in SearchInput, items []Hit) *ContextUsage {
 	usage := pinnedUsage(run, in.Purpose, in.pinned)
-	usage.ProjectKey = in.ProjectKey
+	usage.ProjectKey, usage.Client, usage.SessionID = in.ProjectKey, in.client, in.session
 	for i, h := range items {
 		if h.Collection == colMemories && h.Origin == "memory" && !usedRef(usage, h.ID) {
 			usage.Items = append(usage.Items, MemoryUse{Memory: Ref{Collection: colMemories, ID: h.ID, Revision: h.Revision}, Rank: len(in.pinned) + i + 1, Score: h.Score, Lanes: h.Lanes})

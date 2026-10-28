@@ -19,6 +19,9 @@ type ContextUsage struct {
 	Items   []MemoryUse `json:"items" bson:"items"`
 	// ProjectKey (ST-825) is the search's project key, so a memory's uses can be counted per project.
 	ProjectKey string `json:"project_key,omitempty" bson:"project_key,omitempty"`
+	// Client and SessionID are the caller's own labels (X-Arkism-Client, X-Arkism-Session), shown only.
+	Client    string `json:"client,omitempty" bson:"client,omitempty"`
+	SessionID string `json:"session_id,omitempty" bson:"session_id,omitempty"`
 }
 
 // pinnedUsage is a receipt body that starts with the pinned memories, in order.
@@ -270,6 +273,8 @@ type RecallEntry struct {
 	RequestedBy string      `json:"requested_by"`
 	Purpose     string      `json:"purpose,omitempty"`
 	ProjectKey  string      `json:"project_key,omitempty"`
+	Client      string      `json:"client,omitempty"`
+	SessionID   string      `json:"session_id,omitempty"`
 	Items       []MemoryUse `json:"items"`
 }
 type RecallPage struct {
@@ -308,7 +313,7 @@ func (s *Service) RecentRecalls(ctx context.Context, token string, scope Scope, 
 		if r.Scope != scope || r.Kind != "context_usage" || r.Usage == nil {
 			return RecallPage{}, ErrUnavailable
 		}
-		entry := RecallEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Purpose: r.Usage.Purpose, ProjectKey: r.Usage.ProjectKey, Items: []MemoryUse{}}
+		entry := RecallEntry{ContextID: r.ID, CreatedAt: r.CreatedAt, RequestedBy: r.CreatedBy, Purpose: r.Usage.Purpose, ProjectKey: r.Usage.ProjectKey, Client: r.Usage.Client, SessionID: r.Usage.SessionID, Items: []MemoryUse{}}
 		for _, it := range r.Usage.Items {
 			ok, e := s.recallItemVisible(ctx, token, scope, who, perRow, it)
 			if e != nil {

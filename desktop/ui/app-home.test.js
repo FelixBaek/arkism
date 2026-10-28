@@ -168,26 +168,30 @@ test("overview: review rows approve and reject in place, with the reason asked f
   await closeAll();
 });
 
-test("overview: 불러오기 shows receipts, an empty history and a failed read", async () => {
+test("overview: 불러오기 shows sessions by provider, an empty history and a failed read", async () => {
   await openWindow({ key: "recall" });
   await app.settle(50); let d = win();
   assert.ok(d.classList.contains("ov-wide-win"), "불러오기 opens wide");
-  assert.match(text(d), /최근 \d+번, 한 번에 평균/);
-  assert.deepEqual([...d.querySelectorAll(".ov-wide-chip")].map((c) => text(c).replace(/\s*\d+$/, "")), ["전체", "orbit-app", "arkism"], "chips split by project");
-  assert.match(text(d.querySelector(".ov-wide-row .ov-win-item-title")), /^orbit-app · codex$/, "the project first, the caller only when there are several");
-  assert.ok(d.querySelectorAll(".ov-wide-row").length > 1, "one row per recall");
-  d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle(); d = win();
-  assert.ok(d.querySelectorAll(".ov-wide-row")[1].classList.contains("on"), "the picked recall shows on the right");
-  assert.match(text(d), /arkism에 기억 \d+개를 넣어 줬어요/, "where it went, in words");
+  assert.match(text(d), /세션 \d+개 · \d+번 불러옴, 한 번에 평균/);
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-chip")].map((c) => text(c).replace(/\s*\d+$/, "")), ["전체", "Codex", "Claude Code", "Gemini CLI", "이전 기록"], "chips split by provider");
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-row .ov-win-item-title")].map(text), ["Codex · 세션 019a2f6c", "Claude Code · 세션 7d3e9b12", "Gemini CLI · 세션 g-202610", "이전 기록 · 세션 정보 없음"], "one row per session; older receipts fold into one");
+  assert.match(text(d.querySelector(".ov-wide-row .ov-wide-row-r")), /^2번 · 기억 \d+개/, "a session's recalls fold together");
+  assert.match(text(d), /이 세션에 2번, 기억 \d+개를 넣어 줬어요/, "the first session shows on the right");
+  d.querySelectorAll(".ov-wide-row")[3].click(); await app.settle(); d = win();
+  assert.ok(d.querySelectorAll(".ov-wide-row")[3].classList.contains("on"), "the picked session shows on the right");
+  assert.match(text(d.querySelector(".ov-wide-detail .ov-detail-head")), /세션 정보 없음/);
+  [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith("Codex")).click(); await app.settle(); d = win();
+  assert.equal(d.querySelectorAll(".ov-wide-row").length, 1, "a provider chip keeps its sessions only");
   assert.ok(d.querySelector(".ov-recall-item") && !/^m\d/.test(text(d.querySelector(".ov-recall-item p"))), "a memory shows as its text, not its id");
   assert.ok(d.querySelector("details.ov-recall-more"), "scores sit behind a toggle");
   let off = route("GET", "/v1/recalls", () => ok({ items: [] }));
   await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /아직 불러온 기록이 없어요/);
-  // one login for every call: no caller name; a folder with no remote and no project read as words, not keys
-  off(); off = route("GET", "/v1/recalls", () => ok({ items: [["path:274fec32160f60b2", "2026-10-28T10:00:00Z"], [null, "2026-10-28T09:00:00Z"]].map(([project_key, created_at], i) => ({ id: `r${i}`, requested_by: "owner", project_key, created_at, items: [{ memory: { id: "m1" }, rank: 1, score: 0.5, lanes: ["vector"] }] })) }));
+  // a folder with no remote and no project read as words, not keys
+  off(); off = route("GET", "/v1/recalls", () => ok({ items: [["path:274fec32160f60b2", "2026-10-28T10:00:00Z"], [null, "2026-10-28T09:00:00Z"]].map(([project_key, created_at], i) => ({ id: `r${i}`, client: "zcode", session_id: "s1", project_key, created_at, items: [{ memory: { id: "m1" }, rank: 1, score: 0.5, lanes: ["vector"] }] })) }));
   await openWindow({ key: "recall" }); await app.settle(50); d = win();
-  assert.deepEqual([...d.querySelectorAll(".ov-wide-row .ov-win-item-title")].map(text), ["저장소 없는 폴더", "프로젝트 밖"]);
+  assert.deepEqual([...d.querySelectorAll(".ov-wide-row .ov-win-item-title")].map(text), ["ZCode · 세션 s1"]);
+  assert.match(text(d.querySelector(".ov-wide-row small")), /^저장소 없는 폴더, 프로젝트 밖$/);
   off(); off = route("GET", "/v1/recalls", () => fail(500, "boom"));
   await openWindow({ key: "recall" }); await app.settle(50); d = win();
   assert.match(text(d), /불러오기 기록을 읽지 못했어요/);
