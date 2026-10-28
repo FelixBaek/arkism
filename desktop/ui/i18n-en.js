@@ -1018,7 +1018,6 @@ window.ArkismI18nEN = {
   "일정·웹훅을 껐어요.": "Schedule and webhook turned off.",
   "단계 1개": "1 step",
   "새 워크플로우": "New workflow",
-  "AI 하나로 간단히 시작하거나 단계를 이어 그려요": "Start simple with one AI, or draw connected steps",
   "워크플로우": "Workflows",
   "어느 에이전트에서든 $이름으로 불러요. 부르면 서버 실행기가 그래프대로 돌리고, 부른 자리에는 진행과 결과를 보고해요. AI 칸은 칸마다 정한 모델이 맡아요.": "Call it from any agent with $name. The server runner runs the graph and reports progress and results back to the caller. Each AI block uses the model set for it.",
   "지금": "Now",
@@ -4388,12 +4387,10 @@ window.ArkismI18nEN = {
 };
 Object.assign(window.ArkismI18nEN.strings, {
   "이름이나 @이름 검색": "Search name or @handle",
-  "리서치 열기": "Open research",
   "리서치": "Research",
   "리서치 개선안 검토": "Review research improvements",
   "리서치 템플릿 검토": "Review the research template",
   "이 제안에는 자동 심층 전환이 포함되지 않아요. 변경 사항과 모델·한도를 확인한 뒤 만들어 주세요.": "This proposal does not include automatic escalation to deep research. Review its changes, model and limits before creating it.",
-  "기존 리서치를 열어요. 근거가 부족할 때 깊게 조사하도록 개선할 수 있어요": "Open existing research, with an option to investigate further when evidence is insufficient",
   "리서치 개선안을 불러오지 못했어요.": "Couldn't load the research proposal.",
   "근거를 보고 깊게 조사해요": "Investigate further based on evidence",
   "시간이 오래 걸린다는 이유로 전환하지 않아요. 근거가 부족할 때 추가 조사로 이어져요.": "Further research starts when evidence is insufficient, regardless of elapsed time.",
@@ -4407,13 +4404,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "에이전트가 직접 쓴 토큰은 MEMORY·FLOW의 사용량에서 봐요.": "Tokens agents used directly are under MEMORY · FLOW usage.",
   "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·FLOW 사용량에서 봐요.": "Counts only requests that went through the Arkism router. Tokens agents used directly are under MEMORY · FLOW usage.",
   "토큰은 서버에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 봇을 만들고 Message Content Intent를 켠 뒤 토큰을 넣어 주세요.": "The token is stored encrypted on the server; only the last 4 characters are shown. Create a bot in the Discord Developer Portal and turn on Message Content Intent before entering its token.",
-  "이 PC 모드에서는 워크플로우를 만들고 저장할 수 있어요. 실행과 @이름 호출은 서버에 연결했을 때 돼요.": "In This PC mode you can create and save workflows. Running them and calling @handle requires a server connection.",
   "실행 조건": "Run trigger",
-  "모든 실행 조건": "All triggers",
   "모든 실행 방식": "All execution types",
   "실행 방식": "Execution type",
-  "페르소나 설정": "Persona settings",
-  "할 일을 고르고 @이름으로 불러요. 역할·협업·자동화를 한곳에서 관리해요.": "Choose a task and call it by @handle. Manage roles, collaboration and automation in one place.",
   "딥리서치": "Deep research",
   "@딥리서치": "@딥리서치",
   "@딥리서치로 부를 조사 템플릿을 확인하고 만들어요": "Review and create a research template to call with @딥리서치",
@@ -4422,11 +4415,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "딥리서치 템플릿을 불러오지 못했어요.": "Couldn't load the deep research template.",
   "기존 $이름 호출도 계속 쓸 수 있어요": "Existing $handle calls continue to work",
   "단독 실행": "Solo task",
-  "역할·모델·스킬·도구를 정하고 바로 시작해요": "Choose a role, model, skills and tools to get started",
   "협업·회의": "Collaboration & meetings",
-  "참여할 역할과 회의 방식을 정해요": "Choose participants and how they meet",
   "단계 구성": "Build steps",
-  "일정·분기·승인 등 실행 순서를 정해요": "Define the steps, schedule, branches and approvals",
   "역할·협업·자동화를 한곳에서 관리해요.": "Manage roles, collaboration and automation in one place.",
   "회의 기록": "Meeting history"
 });
@@ -6373,8 +6363,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "전달 실패": "Delivery failed",
   "전달됨": "Delivered",
   "불러오지 못했어요. 연결과 접근 권한을 확인한 뒤 새로고침해 주세요.": "Could not load. Check the connection and access permissions, then refresh.",
-  "최근 200개 실행을 확인해요. 실행 완료와 대화로의 전달 상태는 따로 표시해요.": "View the latest 200 runs. Execution and conversation delivery are shown separately.",
-  "실행 근거에서 시작한 스킬 개선을 확인해요. 표시된 다음 단계는 실행 권한을 뜻하지 않아요.": "View skill improvements linked to execution evidence. A listed next step does not grant permission to execute it.",
   "아직 실행 결과가 없어요.": "There are no run results yet.",
   "아직 연결된 개선 흐름이 없어요.": "There are no linked improvements yet.",
   "아직 최종 결과가 없어요.": "The final result is not available yet.",
@@ -6429,3 +6417,13 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.strings, { "스킬 개선": "Skill improvement" });
 Object.assign(window.ArkismI18nEN.patterns, { "확인한 메시지: {0}": "Confirmed messages: {0}" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요.": "On this PC you can only create and save. Connect to a server to run.",
+  "지금 리서치에 개선안을 받아 검토해요": "Get and review improvements for your research",
+  "출처를 찾아 정리하는 리서치를 만들어요": "Create research that finds and sums up sources",
+  "역할·모델·도구를 정해 혼자 일해요": "Set a role, model and tools; it works alone",
+  "여러 역할이 회의해요": "Several roles meet together",
+  "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals",
+  "최근 실행 200개": "Latest 200 runs",
+  "실행에서 나온 스킬 개선": "Skill improvements from runs"
+});

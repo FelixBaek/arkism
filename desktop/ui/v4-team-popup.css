@@ -64,7 +64,7 @@
 .tm-card2.has-cover .tm-face.s, .tm-card2.has-cover .tm-faces .tm-mark { border-color: #fff; }
 
 /* ---------------------------------------------------------------- popup */
-.tm-pop { width: min(940px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; margin-top: 16px; }
+.tm-pop { max-height: calc(100vh - 32px); display: flex; flex-direction: column; margin-top: 16px; }
 .tm-pop[open] { display: flex; } /* 961:60688 · 981:59766 · 981:60196: the window hangs 16px from the top, its height follows the tab */
 .tm-pop:has(.tm-test-log) { height: calc(100vh - 50px); }
 .tm-pop-body:has(> .tm-test-log) { display: flex; flex-direction: column; }

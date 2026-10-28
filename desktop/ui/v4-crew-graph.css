@@ -43,8 +43,6 @@
 .g-legend-item[data-kind="human"] .g-port { border-color: var(--g-human); }
 
 /* 노드 설정 팝업 (1024:60724 … 1033:69906) */
-.node-dialog { width: min(826px, calc(100vw - 48px)); }
-.node-dialog.wide { width: min(1018px, calc(100vw - 48px)); }
 .node-dialog .dialog-head { padding: 20px 24px 16px; display: flex; align-items: center; gap: 12px; }
 .node-dialog .dialog-head > div { flex: 1; min-width: 0; }
 .node-dialog .dialog-head .g-icon { width: 44px; height: 44px; background: none; overflow: hidden; }

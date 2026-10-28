@@ -4,7 +4,6 @@ export function createCrewVocabulary(_deps) {
  // 항상 넣는 자료 (pins.js)
 
   // ---------------------------------------------------------------- vocabulary (mirrors internal/memory/crew.go)
-  const TABS = [["all", "전체"], ["call", "직접 부름"], ["trigger", "일정·웹훅"]];
 
   const EFFORTS = [["low", "낮음"], ["medium", "보통"], ["high", "높음"], ["max", "최고"]];
 
@@ -85,6 +84,5 @@ export function createCrewVocabulary(_deps) {
     get MODES() { return MODES; },
     get NODES() { return NODES; },
     get PORTS() { return PORTS; },
-    get TABS() { return TABS; }
   };
 }

@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { boot, dom, simpleGraph, crewRecords } = require("./testdata/crew-harness.cjs");
+// 리서치 개선안 검토 lives in 새 워크플로우 › 리서치 (the existing research itself opens from its card).
+async function reviewResearch(h) {
+  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
+  h.btn(h.top(), /^리서치/).click(); await h.settle();
+}
 
 test("FLOW preserves callable roles and teams without exposing owned workflow definitions", async () => {
   const { flowItems, flowAlias } = await import("./modules/flowCatalog.mjs");
@@ -38,7 +43,7 @@ test("research is previewed before creation and preserves its graph and deep mod
   h.closeAll();
 });
 
-test("research opens the existing definition first and explicitly saves a reviewed revision", async () => {
+test("research review of an existing definition explicitly saves a reviewed revision", async () => {
   const records = crewRecords();
   const existing = records.find((r) => r.id === "wf2");
   Object.assign(existing.crew, { name: "리서치", handle: "리서치", enabled: true, skills: ["source-check"], budget: { monthly_usd: 25 } });
@@ -46,13 +51,7 @@ test("research opens the existing definition first and explicitly saves a review
   const crew = { ...structuredClone(existing.crew), research: { quick_node: "ai1", deep_node: "deep", deep_alias: "리서치_심층", evidence_strategy: "sources-and-gaps-v1", helper_origin: "reviewed" } };
   const h = await boot({ view: "crew", data: { crew: records }, routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => ({ crew, existing_id: "wf2", expected_revision: 17, aliases: { standard: "리서치", deep: "리서치_심층" }, changes: ["기존 딥리서치를 보존하고 고유 별칭을 제안해요"] })]] });
   h.render(); await h.settle();
-  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
-  h.btn(h.top(), /^리서치/).click(); await h.settle();
-  assert.ok(h.top()?.classList.contains("v4-auto"));
-  assert.equal(h.calls.some((r) => r.url.includes("templates/research")), false);
-  assert.equal(h.calls.some((r) => r.method === "POST"), false);
-  h.closeAll();
-  h.btn(document.querySelector(".flow-intro"), "리서치 개선안 검토").click(); await h.settle();
+  await reviewResearch(h);
   assert.ok(h.top()?.classList.contains("wf-settings"));
   assert.match(h.top().querySelector(".research-review").textContent, /@리서치_심층/);
   assert.equal(h.calls.some((r) => r.method === "POST"), false);
@@ -88,7 +87,7 @@ test("research review refuses an unknown revision and keeps conflicts open for r
     const proposal = { crew, existing_id: "wf1", changes: [], ...(issue === "missing-revision" ? {} : { expected_revision: 17 }) };
     const h = await boot({ view: "crew", routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => proposal], ["POST", /^\/v1\/crew\/wf1$/, () => new Error(issue)]] });
     h.render(); await h.settle();
-    h.btn(document.querySelector(".flow-intro"), "리서치 개선안 검토").click(); await h.settle();
+    await reviewResearch(h);
     if (issue === "missing-revision") {
       assert.equal(h.top(), null);
       assert.equal(h.calls.some((r) => r.method === "POST"), false);
@@ -106,23 +105,9 @@ test("a basic research fallback does not claim to support automatic deep escalat
   const crew = { type: "workflow", name: "리서치", handle: "리서치", graph: simpleGraph() };
   const h = await boot({ view: "crew", routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => ({ crew, changes: ["기본 조사 템플릿"], aliases: { standard: "리서치", deep: "" } })]] });
   h.render(); await h.settle();
-  h.btn(document.querySelector(".flow-intro"), "리서치 개선안 검토").click(); await h.settle();
+  await reviewResearch(h);
   assert.match(h.top().querySelector(".research-review").textContent, /자동 심층 전환이 포함되지 않아요/);
   assert.equal(h.top().querySelector('[aria-label="깊은 조사 @이름"]'), null);
-  assert.equal(h.calls.some((r) => r.method === "POST"), false);
-  h.closeAll();
-});
-
-test("an owned research definition opens its owner without installing a second workflow", async () => {
-  const records = crewRecords();
-  records.find((r) => r.id === "ag1").crew.workflow = "리서치";
-  records.find((r) => r.id === "wf3").crew.handle = "리서치";
-  const h = await boot({ view: "crew", data: { crew: records } });
-  h.render(); await h.settle();
-  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
-  h.btn(h.top(), /^리서치/).click(); await h.settle();
-  assert.ok(h.top()?.classList.contains("ex-pop"));
-  assert.equal(h.calls.some((r) => r.url.includes("templates/research")), false);
   assert.equal(h.calls.some((r) => r.method === "POST"), false);
   h.closeAll();
 });

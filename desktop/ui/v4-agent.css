@@ -65,10 +65,6 @@
 .wf-card .wf-card-meta { color: var(--nc-quiet); }
 .wf-card .wf-card-when { color: var(--nc-muted); }
 .wf-card .wf-card-when.on { color: var(--nc-amber); }
-.crew-card.new.wf-card { align-items: center; justify-content: center; gap: 8px; text-align: center; border: 1px dashed var(--nc-line); border-radius: 20px; background: none; color: var(--nc-text); }
-.crew-card.new.wf-card .icon { width: 20px; height: 20px; color: var(--nc-text); }
-.crew-card.new.wf-card strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
-.crew-card.new.wf-card small { max-width: 190px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
 
 .wf-sec-head { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .wf-sec-head strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
