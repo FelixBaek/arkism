@@ -208,26 +208,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
   };
   const LIST_TITLE = { extract: "최근 추출된 후보·기억", classify: "분류 기다리는 후보", judge: "확인 기다리는 기억", dream: "정리 제안" };
 
+  // a row built for one item stays the same node while the window is open, so loading more keeps its AI advice and open panel;
+  // keyed by the item object, so a reload that brings new objects builds fresh rows
+  let shown = new WeakMap();
+  const keepRow = (o, make) => { if (!shown.has(o)) shown.set(o, make()); return shown.get(o); };
   function stageRows(key, cap) {
     const w = D().tools?.memory_use;
     const rows = {
       extract: () => [...waiting(), ...D().memories].sort((a, b) => time(b.created_at) - time(a.created_at)).slice(0, cap).map((m) => row(kind(m.kind), m.text, `${D().memories.includes(m) ? "승인됨" : "승인 대기"} · ${tag(m, "event_id:") ? "대화에서 · " : ""}${ago(m.created_at)}`, "")),
       classify: () => byKind(waiting().filter((m) => !m.classification).slice(0, cap)),
-      judge: () => toCheck().slice(0, cap).map(([m, u]) => {
+      judge: () => toCheck().slice(0, cap).map(([m, u]) => keepRow(m, () => {
         const r = row("안 쓰임", m.text, u.unused ? `쓰였다는 보고 없이 ${num(u.unreceipted)}번 건넸어요` : `${w.days}일 동안 ${num(u.injected)}번 건넸는데 답에 쓰였다는 표시가 없어요`, ""), err = el("small", "ov-win-err", "");
         r.lastChild.append(button("맞아요, 유지", "small", null, () => { ctx.keepMemory?.(m.id); r.remove(); }),
           button("고치기", "small", null, () => editMemory(m, m.id)), button("잊기", "small", null, () => askConfirm("이 기억을 잊을까요?", "에이전트에게 더는 건네지 않아요. 바뀐 이력에는 남아요.", async () => {
             try { await deleteMemory(m); r.remove(); await reload(); } catch (e) { err.textContent = `잊지 못했어요: ${e.message}`; }
           }, "잊기"))); r.firstChild.append(err);
         return r;
-      }),
-      dream: () => dreamItems().slice(0, cap).map((c) => {
+      })),
+      dream: () => dreamItems().slice(0, cap).map((c) => keepRow(c.dream, () => {
         const t = c.dream.maintenance || {}, ev = t.evidence, wrap = el("div", "ov-win-proposal"), panel = el("div", "ov-win-proposal-panel"); panel.hidden = true;
         const meta = !t.memory ? `→ ${clip(memText(t.retire?.id), 40)}` : ev ? (t.type === "lesson_often_failing" ? `실패가 잦은 교훈 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙";
         const toggle = button("결정하기 ⌄", "small", null, () => { panel.hidden = !panel.hidden; toggle.textContent = panel.hidden ? "결정하기 ⌄" : "접기 ⌃"; if (!panel.hidden && !panel.childElementCount) panel.append(...dreamDecision(c, () => redraw?.())); });
         wrap.append(row(c.label, c.text, meta, "", [toggle]), panel);
         return wrap;
-      })
+      }))
     };
     return rows[key]?.() || [];
   }
@@ -237,7 +241,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     for (const m of list) { if (!groups.has(m.kind)) groups.set(m.kind, []); groups.get(m.kind).push(m); }
     return [...groups].filter(([, ms]) => ms.length).flatMap(([k, ms]) => {
       const h = el("div", "ov-win-group"); h.append(tagEl(kind(k)), el("small", "", `${num(ms.length)}건`));
-      return [h, ...ms.map((m) => reviewRow(m))];
+      return [h, ...ms.map((m) => keepRow(m, () => reviewRow(m)))];
     });
   }
   const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
@@ -404,12 +408,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
   function wideStage(key) {
     const s = env.stages().find((x) => x.key === key) || { label: key, tiles: [] }, spec = SPEC[key];
     const d = shell(s.label, s.badge?.[0] ?? null, null, key);
-    d.classList.add(`ov-win-${key}`); recipe(d, { key });
+    d.classList.add(`ov-win-${key}`); recipe(d, { key }); shown = new WeakMap();
     redraw = () => { redrawing = true; open(key); };
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-stage-list");
     const tiles = el("div", "ov-win-tiles");
     for (const [v, l] of s.tiles || []) { const t = el("div", "ov-win-tile"); t.append(el("strong", "", v), el("span", "", l)); tiles.append(t); }
-    left.append(tiles, el("p", "ov-stage-what", `${spec[0]}. ${spec[2]}, ${spec[3]}.`));
+    left.append(tiles, el("p", "ov-stage-what", `${tr(spec[0])}. ${tr(spec[2])}, ${tr(spec[3])}.`));
     if (s.counts) {
       const chart = el("div", "ov-win-chart"), max = Math.max(1, ...s.counts), bars = el("div", "ov-win-bars");
       chart.append(el("div", "ov-win-chart-title", "최근 24시간"));
@@ -1075,7 +1079,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const bar = filterBar([], sortSelect(TRACE_SORT, sort, (k) => wideTrace(filter, sel, k)), chipHost);
     // 종류별: how much each kind was used in answers (or handed out, before any use is reported), as one stacked bar and a legend
     const share = {}, by = all.some((r) => r.used) ? "used" : "injected";
-    for (const r of all) { const k = memOf(r.id)?.kind; if (k && r[by]) share[k] = (share[k] || 0) + r[by]; }
+    for (const r of all) { if (!r[by]) continue; const k = memOf(r.id)?.kind; if (k) share[k] = (share[k] || 0) + r[by]; else memText(r.id); } // a filtered-out row is not drawn, so ask for its kind here
     const sum = Object.values(share).reduce((a, b) => a + b, 0), kinds = el("div", "ov-kind-share");
     if (sum) {
       const strip = el("div", "ov-kind-strip"), legend = el("div", "ov-kind-legend");
