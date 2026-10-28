@@ -59,3 +59,13 @@ model call, participant collection or memory-performance claim was made.
 미실행: 원격 PR/CI, 제품 빌드·배포, DB 통합수용, 연구 본실험.
 커밋 상태: 로컬 커밋으로 고정.
 원격 상태: 원본계약 공개 예외 대기로 push/PR 미실행.
+
+## PR418 lint follow-up
+
+The remote Go linter found an overwritten initializer in codecString. Replacing
+the initializer with a boolean declaration preserves the exhaustive switch
+behavior. The cached pinned golangci-lint v2.14.0 reports zero issues.
+The linter ran against the existing local module cache, without network or
+package installation. The repeated complete local check finished with exit0: Python286, Go
+complexity/vet/full race and UI532 passed.
+This follow-up changes no contract bytes, field rules or expected results.
