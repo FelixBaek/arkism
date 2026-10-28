@@ -25,11 +25,8 @@
 .flow-create-option small { color: var(--nc-muted); font-size: calc(.75rem * var(--fs, 1)); line-height: 1.5; }
 .wf-settings .crew-card.wf-preview { padding-top: 8rem; }
 .wf-settings .crew-card.wf-preview .crew-cover-img { height: 7.25rem; }
-.flow-history { max-width: 68rem; margin-inline: auto; }
 .flow-history-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
 .flow-history-head h2 { margin: 0; font-size: calc(1.125rem * var(--fs, 1)); }
-.flow-history-head > .flow-history-note { margin: 0; }
-.flow-history-list { display: grid; gap: .625rem; }
 .flow-history-row { display: grid; gap: .375rem; width: 100%; height: auto; min-height: 4.5rem; align-content: center; padding: 1rem; text-align: left; white-space: normal; overflow-wrap: anywhere; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); color: var(--nc-text); }
 .flow-history-row small, .flow-history-note { color: var(--nc-muted); line-height: 1.6; overflow-wrap: anywhere; }
 .flow-history-row:hover { border-color: var(--nc-accent); }

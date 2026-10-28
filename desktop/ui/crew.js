@@ -338,7 +338,7 @@ export const createCrew = (ctx) => {
     state, el, icon, button, notice, request, query, byId, kit, catMenu: ctx.catMenu, catChipBody: ctx.catChipBody, NODES: crewVocabulary.NODES, IS_AI: crewVocabulary.IS_AI, WORK: crewModel.WORK, UNTITLED, RUN_LABEL: crewExecution.RUN_LABEL,
     levels: crewModel.levels, nodeTitle: crewModel.nodeTitle, stepCount: crewModel.stepCount, isBack: crewModel.isBack, modelOf: crewModel.modelOf, modelMark, avatarMark, personas, agents: crewWorkers.agents, workflows, ownerOf, categories, ruleChecks: crewModel.ruleChecks, waitingRuns,
     cronText: crewSchedule.cronText, nextRun: crewSchedule.nextRun, parseCron: crewSchedule.parseCron, when: crewSchedule.when, switchEl, copyButton, coverCredit, coverPicker, input, select, modelInput, modelSelect, freeHandle, layoutGraph, defaultGraph: crewModel.defaultGraph,
-    save, reload, archive, remove, errorText, startRun: crewExecution.startRun, decide: crewExecution.decide, stopRun: crewExecution.stopRun, askTask: crewRunView.askTask, openGraph: crewEditor.openGraph, runRequest, readable, nodeDur: crewRunView.nodeDur, spanText, runMs, runTookText: runTook, ago,
+    save, reload, archive, remove, errorText, openRunResult: flowHistory.openResult, startRun: crewExecution.startRun, decide: crewExecution.decide, stopRun: crewExecution.stopRun, askTask: crewRunView.askTask, openGraph: crewEditor.openGraph, runRequest, readable, nodeDur: crewRunView.nodeDur, spanText, runMs, runTookText: runTook, ago,
     duplicate: (r) => dupButton(r).click(),
     flowAlias: (crew) => flowAlias({ crew }, items()),
     refreshRuns: async () => { recent = null; await loadRecent(); },
@@ -348,28 +348,6 @@ export const createCrew = (ctx) => {
     afterClose: () => { markSelected(); if (state.view === "crew") drawCards(); }
   }));
   function renderList() {
-    const page = ["results", "improvements"].includes(state.flowPage) ? state.flowPage : "catalog";
-    const navigation = segment([["catalog", "작업"], ["results", "결과함"], ["improvements", "개선 흐름"]], page, (key) => {
-      state.flowPage = key; render();
-      $("#chips [role=tab][aria-selected=true]")?.focus();
-    });
-    navigation.setAttribute("aria-label", "FLOW 보기");
-    navigation.addEventListener("keydown", (event) => {
-      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-      const tabs = [...navigation.querySelectorAll("[role=tab]")], at = tabs.indexOf(document.activeElement);
-      if (at < 0) return;
-      event.preventDefault();
-      tabs[event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length].click();
-    });
-    if (page !== "catalog") {
-      $("#app").classList.add("wide");
-      $("#controls").replaceChildren();
-      $("#chips").replaceChildren(navigation);
-      $("#stats").replaceChildren();
-      void flowHistory.render(page, $("#table"));
-      return;
-    }
-    flowHistory.reset();
     const all = flows();
     const cats = categories(all);
     if (state.crewCat !== "all" && !cats.some(([c]) => c === state.crewCat)) state.crewCat = "all";
@@ -410,7 +388,7 @@ export const createCrew = (ctx) => {
     kind.addEventListener("change", () => { state.flowKind = kind.value; state.selected = null; drawCards(); });
     bar.append(search, kind, button("+ 새 워크플로우", "primary", null, openFlowCreate));
     $("#controls").replaceChildren(bar);
-    $("#chips").replaceChildren(navigation);
+    $("#chips").replaceChildren();
     $("#stats").replaceChildren();
     const main = $("#table");
     main.className = "wf-main";
@@ -422,7 +400,7 @@ export const createCrew = (ctx) => {
   // 확인해 주세요: runs that wait for a person's answer, with the answer buttons right there.
   function drawWaiting() {
     const box = $("#stats");
-    if (!box || state.view !== "crew" || ["results", "improvements"].includes(state.flowPage)) return;
+    if (!box || state.view !== "crew") return;
     const out = [];
     // 이 PC의 Arkism에는 워크플로우 실행기가 없다: 만들고 저장은 되지만 실행은 서버에서.
     if (state.mode === "local") out.push(el("p", "local-note wf-local", "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요."));
@@ -435,10 +413,8 @@ export const createCrew = (ctx) => {
       const acts = el("div", "wf-attn-actions");
       const after = async () => { recent = null; await loadRecent(); };
       acts.append(button("거절", "", null, async () => { await crewExecution.decide(run, false); void after(); }), button("승인", "primary", null, async () => { await crewExecution.decide(run, true); void after(); }));
-      if (run.crew_run.invocation_mode === "flow") acts.prepend(button("실행 보기", "ghost", null, () => {
-        state.flowPage = "results"; render(); void flowHistory.openResult(run.id, $("#table"));
-      }));
-      else if (rec) acts.prepend(button("실행 보기", "ghost", null, () => crewEditor.openGraph(rec, { run })));
+      // a FLOW run opens its result (final text, delivery) in its own 기록; others open the step view
+      if (rec) acts.prepend(button("실행 보기", "ghost", null, () => run.crew_run.invocation_mode === "flow" ? openFlow(rec, run) : crewEditor.openGraph(rec, { run })));
       card.append(t, acts);
       out.push(card);
     }
@@ -450,9 +426,10 @@ export const createCrew = (ctx) => {
     grid.replaceChildren(...shownCards().map(flowCard));
     markSelected();
   }
-  function openFlow(rec) {
-    if (rec.crew.type === "workflow") { getAuto().open(rec); return; }
-    window.dispatchEvent(new CustomEvent(rec.crew.type === "team" ? "arkism:open-team" : "arkism:open-expert", { detail: { id: rec.id, over: true } }));
+  // run: a FLOW run to show in its 기록 (a workflow opens it directly; an agent or team lists it under 부른 실행 결과)
+  function openFlow(rec, run = null) {
+    if (rec.crew.type === "workflow") { getAuto().open(rec, run ? "history" : undefined, run); return; }
+    window.dispatchEvent(new CustomEvent(rec.crew.type === "team" ? "arkism:open-team" : "arkism:open-expert", { detail: { id: rec.id, over: true, ...(run ? { tab: "history" } : {}) } }));
   }
   function flowCard(rec) {
     if (rec.crew.type === "workflow") return workflowCard(rec);
@@ -1347,6 +1324,7 @@ export const createCrew = (ctx) => {
     get errorText() { return errorText; },
     get field() { return field; },
     get getAuto() { return getAuto; },
+    get flowRuns() { return flowHistory.runs; },
     get icon() { return icon; },
     get input() { return input; },
     get IS_AI() { return crewVocabulary.IS_AI; },
@@ -1398,6 +1376,7 @@ export const createCrew = (ctx) => {
     },
     explain, assist: (...a) => kit.assist(...a), assistError: (a) => kit.assistError(a), parseJSON: (t) => kit.parseJSON(t),
     runWorkflow: (rec, text) => crewExecution.startRun(rec, text),
+    flowRuns: flowHistory.runs,
     skillExperts: () => null,
     openWorkers: crewWorkers.openWorkers,
     load: () => request(`/v1/crew?${query()}`).then((r) => {

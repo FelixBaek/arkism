@@ -6325,36 +6325,12 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, { "{0}번 불러올 때 평균": "Average over {0} recalls", "원문 D-{0}": "Transcript D-{0}", "{0}까지 ({1}일 남음)": "Until {0} ({1} days left)" });
 Object.assign(window.ArkismI18nEN.strings, {
-  "결과함": "Results",
-  "개선 흐름": "Improvements",
-  "FLOW 보기": "FLOW view",
   "목록으로": "Back to list",
   "실행 결과": "Run result",
   "부분 완료": "Partial result",
   "결론 없음": "No conclusion",
   "중단 요청됨": "Stop requested",
   "중단 요청": "Request stop",
-  "개선 근거 준비": "Improvement evidence ready",
-  "독립 비교 필요": "Independent comparison required",
-  "사람 승인 필요": "Human approval required",
-  "제한 시험 준비": "Limited trial ready",
-  "제한 시험 중": "Limited trial running",
-  "시험 결과 비교 필요": "Trial comparison required",
-  "적용 검토 필요": "Application review required",
-  "적용 후 확인 중": "Monitoring the applied version",
-  "복구 확인 필요": "Recovery review required",
-  "비교에서 실패": "Comparison failed",
-  "시험에서 실패": "Trial failed",
-  "이전 버전으로 복구됨": "Previous version restored",
-  "저장한 근거와 비교 계획으로 개선 후보를 생성해요.": "Generate a candidate using the saved evidence and comparison plan.",
-  "독립 평가자가 기존 버전과 비교한 결과가 필요해요.": "An independent evaluation against the existing version is required.",
-  "비교 결과를 검토한 뒤 사람이 시험을 승인해요.": "A person reviews the comparison and approves the trial.",
-  "허용된 실행 환경과 기한으로 제한 시험을 시작해요.": "Start a limited trial in the permitted runtime and time window.",
-  "정책이 허용한 서비스가 실제 시험 결과를 수집해요.": "A policy-authorized service collects actual trial outcomes.",
-  "실제 시험 근거를 독립적으로 비교해요.": "Independently compare the actual trial evidence.",
-  "적용 권한과 평가 근거를 다시 확인해요.": "Recheck application permission and evaluation evidence.",
-  "다음 실행의 효과를 확인하고 필요하면 복구해요.": "Check subsequent outcomes and recover when needed.",
-  "복구할 버전과 현재 권한을 확인해요.": "Check the recovery version and current permissions.",
   "결과를 기다리는 중": "Waiting for the result",
   "전달 대기": "Delivery pending",
   "전달 중": "Delivering",
@@ -6363,9 +6339,11 @@ Object.assign(window.ArkismI18nEN.strings, {
   "전달 실패": "Delivery failed",
   "전달됨": "Delivered",
   "불러오지 못했어요. 연결과 접근 권한을 확인한 뒤 새로고침해 주세요.": "Could not load. Check the connection and access permissions, then refresh.",
-  "아직 실행 결과가 없어요.": "There are no run results yet.",
-  "아직 연결된 개선 흐름이 없어요.": "There are no linked improvements yet.",
   "아직 최종 결과가 없어요.": "The final result is not available yet.",
+  "단계 보기": "View steps",
+  "부른 실행 결과": "Called run results",
+  "@이름으로 부른 실행의 최종 결과와 전달 상태": "Final results and delivery status of runs called by @name",
+  "아직 @이름으로 부른 실행이 없어요.": "No runs called by @name yet.",
   "함께 실행한 작업": "Related executions",
   "회의 결과": "Meeting result",
   "하위 실행": "Child run",
@@ -6380,15 +6358,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "서비스가 메시지 접수를 확인했어요. 사람이 읽었다는 뜻은 아니에요.": "The service confirmed message receipt. This does not mean a person read it.",
   "아직 결론이 없어요.": "There is no conclusion yet.",
   "전체 회의 기록": "Full meeting history",
-  "다음에 필요한 작업": "Next required step",
-  "처리 중인 작업의 결과를 확인해야 해요. 확인 없이 같은 작업을 다시 시작하지 마세요.": "Confirm the pending operation's outcome. Do not start it again without checking.",
-  "후보 생성·독립 비교·시험·적용에는 각각 필요한 근거와 권한이 있어야 해요. 이 화면을 여는 것만으로 승인하거나 적용하지 않아요.": "Generation, comparison, trial and application each require evidence and permission. Opening this view does not approve or apply anything.",
-  "근거 실행": "Source run",
-  "개선 후보": "Improvement candidate",
-  "독립 비교": "Independent comparison",
-  "제한 시험": "Limited trial",
-  "시험 비교": "Trial comparison",
-  "처리 기록": "Operation history"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "전달 복구": "Recover delivery",
@@ -6415,7 +6384,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "복구 요청을 저장했어요. 실제 전달 상태를 다시 확인해 주세요.": "Recovery requested. Check the actual delivery state again.",
   "복구 요청 결과를 확인하지 못했어요. 새로고침해 현재 상태와 권한을 확인해 주세요.": "The recovery outcome could not be confirmed. Refresh to check the current state and permissions."
 });
-Object.assign(window.ArkismI18nEN.strings, { "스킬 개선": "Skill improvement" });
 Object.assign(window.ArkismI18nEN.patterns, { "확인한 메시지: {0}": "Confirmed messages: {0}" });
 Object.assign(window.ArkismI18nEN.strings, {
   "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요.": "On this PC you can only create and save. Connect to a server to run.",
@@ -6424,8 +6392,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "역할·모델·도구를 정해 혼자 일해요": "Set a role, model and tools; it works alone",
   "여러 역할이 회의해요": "Several roles meet together",
   "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals",
-  "최근 실행 200개": "Latest 200 runs",
-  "실행에서 나온 스킬 개선": "Skill improvements from runs"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
