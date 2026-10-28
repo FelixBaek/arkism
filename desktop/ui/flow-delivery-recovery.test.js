@@ -5,8 +5,9 @@ const delivery = () => ({ id: "delivery-1", revision: 17, delivery: { status: "u
 async function ready(post, status = "unknown") {
   let current = delivery(); current.delivery.status = status;
   const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => ({ run_id: "run1", revision: 8, status: "succeeded", result: "완료한 결과", delivery: current })], ["POST", /\/deliveries\/delivery-1\/recover$/, (_m, _url, body) => post(body, value => { current = value; })]] });
-  h.render(); await h.settle(); h.btn(document.querySelector("#chips"), "결과함").click(); await h.settle();
-  document.querySelector(".flow-history-row").click(); await h.settle();
+  h.render(); await h.settle();
+  window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1", tab: "history" } })); await h.settle();
+  h.top().querySelector(".auto-runline").click(); await h.settle();
   return h;
 }
 function choose(action) {
@@ -14,7 +15,7 @@ function choose(action) {
 }
 function input(name, value) { const field = document.querySelector(`[name="${name}"]`); field.value = value; dom.fire(field, "input"); }
 function confirm() { document.querySelector('[aria-label="복구 내용 확인"]').click(); }
-const send = h => h.btn(document.querySelector("#table"), "확인한 내용으로 복구 요청");
+const send = h => h.btn(h.top(), "확인한 내용으로 복구 요청");
 
 test("delivery retry requires explicit confirmation and the displayed delivery revision", async () => {
   const h = await ready((body, save) => {
@@ -26,7 +27,7 @@ test("delivery retry requires explicit confirmation and the displayed delivery r
   confirm(); assert.equal(send(h).disabled, false);
   send(h).click(); await h.settle();
   assert.equal(h.calls.filter(c => c.method === "POST").length, 1);
-  assert.match(document.querySelector("#table").textContent, /전달 대기/);
+  assert.match(h.top().textContent, /전달 대기/);
   assert.match(h.notices.join(" "), /실제 전달 상태/);
   h.closeAll();
 });
@@ -58,10 +59,9 @@ test("a stale recovery reply never reopens the previous connection's result", as
   choose("retry"); confirm(); send(h).click();
   assert.equal(send(h).disabled, true);
   h.state.token = "different-connection";
-  h.btn(document.querySelector("#chips"), "작업").click(); await h.settle();
+  h.btn(h.top(), "개요").click(); await h.settle();
   resolve({}); await h.settle();
-  assert.ok(document.querySelector(".wf-grid"));
-  assert.equal(document.querySelector(".flow-history-detail"), null);
+  assert.equal(h.top().querySelector(".flow-history-detail"), null);
   assert.equal(h.notices.length, 0);
   h.closeAll();
 });
@@ -73,6 +73,6 @@ test("failed recovery does not automatically retry or report delivery success", 
   assert.equal(h.calls.filter(c => c.method === "POST").length, 1);
   assert.match(h.notices.join(" "), /결과를 확인하지 못했어요/);
   assert.doesNotMatch(h.notices.join(" "), /저장했어요/);
-  assert.match(document.querySelector("#table").textContent, /전달 실패/);
+  assert.match(h.top().textContent, /전달 실패/);
   h.closeAll();
 });

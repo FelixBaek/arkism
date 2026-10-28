@@ -2238,7 +2238,7 @@ export function startApp() {
   shell = window.ArkismShell({ state, $, el, go, render });
   $("#status-toggle").addEventListener("click", () => renderStatusCard()); // after shell.js opened it: fill the 기억 처리 stages
   Object.assign(views, pages.views);
-  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request: appApi.request, query: appApi.query, notice, ago, headExtras, hasView: (v) => !!views[v] }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
+  Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request: appApi.request, query: appApi.query, notice, ago, headExtras, hasView: (v) => !!views[v], flowRuns: (...a) => crew.flowRuns(...a) }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
   Object.assign(views, crew.views, crew.pages, reviews.views);
   window.ArkismNotice = notice;
   // A separate window saved or closed: show its changes here too.

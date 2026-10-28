@@ -343,8 +343,8 @@ window.ArkismTeams = (ctx) => {
     popRedraw("history");
   }
 
-  window.addEventListener("arkism:open-team", (e) => { if (!e.detail?.over) go("crew"); setTimeout(() => openPopup(e.detail?.id)); });
-  function openPopup(id) {
+  window.addEventListener("arkism:open-team", (e) => { if (!e.detail?.over) go("crew"); setTimeout(() => openPopup(e.detail?.id, e.detail?.tab)); });
+  function openPopup(id, tab = "overview") {
     if (S.pop || !popup) return;
     const rec = id ? byId(id) : null;
     const base = rec ? clone(rec.crew) : blankTeam();
@@ -353,7 +353,7 @@ window.ArkismTeams = (ctx) => {
     pop.estBox = el("div", "tm-est-box");
     const tabs = [["overview", "개요"], ["test", "테스트"], ["history", "기록"]].map(([key, label]) => ({ key, label, render: (box) => { pop.tab = key; paintTab(pop, box); } }));
     const actions = [pop.estBox];
-    pop.h = popup.open({ title: "", sub: "", tabs, initial: "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", popout: rec ? { event: "arkism:open-team", detail: { id }, title: rec.crew.name || "" } : null, onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
+    pop.h = popup.open({ title: "", sub: "", tabs, initial: rec ? tab : "overview", actions, cls: rec ? "tm-pop" : "tm-pop is-new", popout: rec ? { event: "arkism:open-team", detail: { id }, title: rec.crew.name || "" } : null, onClose: () => { clearTimeout(pop.estTimer); clearTimeout(pop.testTimer); S.pop = null; } });
     const dlg = pop.h.dialog;
     // 961:60688: the tabs sit at the head's right under the estimate, as pills
     const side = dlg.querySelector(".crew-popup-actions"), top = el("div", "tm-pop-side-top");
@@ -954,8 +954,12 @@ window.ArkismTeams = (ctx) => {
     }
     if (!(pop.meetings || []).length) rows.append(empty(pop.meetings ? "아직 연 회의가 없어요." : "불러오는 중…"));
     s2.append(rows);
-    s1.classList.add("tm-hist-sec"); s2.classList.add("tm-hist-sec"); // 981:60196: plain titles, no rule or icon
-    return [s1, s2];
+    const s3 = sec("play", "부른 실행 결과", "@이름으로 부른 실행의 최종 결과와 전달 상태");
+    const called = el("div", "flow-history");
+    void ctx.flowRuns(pop.id, called);
+    s3.append(called);
+    s1.classList.add("tm-hist-sec"); s2.classList.add("tm-hist-sec"); s3.classList.add("tm-hist-sec"); // 981:60196: plain titles, no rule or icon
+    return [s1, s2, s3];
   }
 
   // 참여자와 발언 순서: a table you can drag to reorder (editor) or a list with focus pills (new team, 310:19981).

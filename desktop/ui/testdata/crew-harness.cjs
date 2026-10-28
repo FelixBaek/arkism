@@ -268,7 +268,7 @@ async function boot(opts = {}) {
   if (opts.teams !== false) {
     loadScript("team.js");
     h.teamsApi = globalThis.ArkismTeams({ state: h.state, $: a.$, el: a.el, icon: a.icon, catIcon: a.catIcon, catMenu: a.catMenu, catChipBody: a.catChipBody, button: a.button, go: h.go, render: h.render,
-      request: h.request, query: a.query, notice: a.notice, ago: a.ago, headExtras: a.headExtras, hasView: () => true });
+      request: h.request, query: a.query, notice: a.notice, ago: a.ago, headExtras: a.headExtras, hasView: () => true, flowRuns: (...a) => h.crew.flowRuns(...a) });
     Object.assign(h.crew.pages, h.teamsApi.pages);
   }
   h.settle = async (ms) => { for (let i = 0; i < 4; i++) { await dom.flush(4); env.timers.tick(ms ?? 1000, 50); } await dom.flush(4); };

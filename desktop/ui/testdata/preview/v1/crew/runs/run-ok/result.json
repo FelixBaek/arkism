@@ -1,0 +1,11 @@
+{
+  "run_id": "run-ok",
+  "revision": 9,
+  "crew_id": "wf-research",
+  "status": "succeeded",
+  "invocation_mode": "manual",
+  "source_type": "workflow",
+  "result": "그래프 엔지니어링 리서치 요약\n\n1. 그래프 기반 검색은 관계가 많은 질문에서 정확도가 높았어요.\n2. 색인 비용은 문서 1,000개당 약 $4였어요.\n3. 출처 8개를 모두 원문으로 확인했어요.",
+  "children": {},
+  "delivery": { "id": "delivery-run-ok", "revision": 3, "delivery": { "status": "delivered", "message_ids": ["123456789012345678"] } }
+}
