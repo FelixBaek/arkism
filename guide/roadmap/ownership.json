@@ -3594,7 +3594,7 @@
       "id": "CRW-06",
       "issue": 154,
       "owner": "CRW-06",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
