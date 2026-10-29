@@ -47750,6 +47750,9 @@
             "items": {
               "$ref": "#/components/schemas/WireResponseSkillRepo"
             }
+          },
+          "analysis_run": {
+            "$ref": "#/components/schemas/WireResponseAnalysisRun"
           }
         },
         "additionalProperties": false,
@@ -58039,6 +58042,81 @@
         "x-go-type": "memory.Removal",
         "x-go-source": "internal/memory/removal.go",
         "description": "Removal is why a person removed a memory: it stays in history (status rejected) with this note."
+      },
+      "WireResponseAnalysisRun": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "jobs": {
+            "type": "integer"
+          },
+          "done": {
+            "type": "integer"
+          },
+          "candidates": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "dropped": {
+            "type": "integer"
+          },
+          "parked": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "last_done_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_done_candidates": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "at",
+          "jobs",
+          "done",
+          "candidates",
+          "waiting",
+          "dropped",
+          "parked",
+          "failed",
+          "reason",
+          "error",
+          "last_done_at",
+          "last_done_candidates"
+        ],
+        "x-go-type": "memory.AnalysisRun",
+        "x-go-source": "internal/memory/agent_tools.go",
+        "description": "AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,\nwith the most common waiting or failure code. LastDoneAt is the last time any job finished, kept\nacross runs, so a stretch without candidates can be told from a stretch without processing (#449)."
       }
     },
     "headers": {

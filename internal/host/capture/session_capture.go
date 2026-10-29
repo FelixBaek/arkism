@@ -486,7 +486,10 @@ func sessionProcess(job map[string]any, persist func() error, origin string) (er
 			if prepared, err = sessionPrepare(scope, sid, chunk, chunkStart, end, expected, previous, nil, sessionCategory(event), authorize, str(or(job["cwd"], "")), str(or(job["repository"], "")), repository); err != nil {
 				return sessionWithhold(job, err, chunkStart, end, repository, persist)
 			}
-			job["session_validation"] = sessionValidationDiagnostic("", chunkStart, end, len(anyList(prepared["output"].(map[string]any)["memory_candidates"])))
+			found := len(anyList(prepared["output"].(map[string]any)["memory_candidates"]))
+			job["session_validation"] = sessionValidationDiagnostic("", chunkStart, end, found)
+			sofar, _ := num(or(job["session_candidates"], 0))
+			job["session_candidates"] = int(sofar) + found // drain reports it once the job is done (analysis.json)
 			pkg := sessionCheckpointPackage(prepared, sid, origin, str(or(job["cwd"], job["repository"], "")))
 			pkg["source_refs"] = dedupeRefs(append(chunkSources(chunk), anyList(autosaveGet(or(previous, map[string]any{}), "source_refs"))...))
 			// Only this window's refs: the server takes at most 8, all from the current archive snapshot,

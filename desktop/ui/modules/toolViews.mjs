@@ -11,7 +11,7 @@ export function createToolViews(deps) {
       const r = await deps.request(`/v1/agent_tools?${deps.query()}`);
       const t = r.agent_tools || {};
       return { servers: t.servers || [], plugins: t.plugins || [], requests: t.requests || [], collected_at: t.collected_at || "", skill_checks: t.skill_checks || [], skill_check_tools: t.skill_check_tools || "",
-        agents: t.agents || null, shared_dirs: t.shared_dirs || null, memory_use: t.memory_use || null, skill_updates: t.skill_updates || [], pc_links: t.pc_links || [], skill_repos: t.skill_repos || [] };
+        agents: t.agents || null, shared_dirs: t.shared_dirs || null, memory_use: t.memory_use || null, skill_updates: t.skill_updates || [], pc_links: t.pc_links || [], skill_repos: t.skill_repos || [], analysis_run: t.analysis_run || null };
     } catch {
       // null tells renderTools to explain that the host sync has not reported (older server or stopped timer).
       console.warn("agent tools unavailable");

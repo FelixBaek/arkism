@@ -371,6 +371,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const barList = (pairs, max = Math.max(1, ...pairs.map(([, n]) => n))) => { const box = el("div", "ov-detail-bars"); for (const [a, n, tagged] of pairs) { const p = el("div", "ov-detail-bar"), track = el("i"), fill = el("b"), line = el("p", ""); fill.style.width = `${Math.round((n / max) * 100)}%`; if (tagged) fill.style.background = KIND_COLOR[tagged] || ""; track.append(fill); line.append(el("span", "", a), el("strong", "", `${num(n)}`)); p.append(line, track); box.append(p); } return box; };
   const block = (title, ...nodes) => { const b = el("div", "ov-win-chart ov-sum"); b.append(el("div", "ov-win-chart-title", title), ...nodes); return b; };
   const cellRow = (pairs) => { const c = el("div", "ov-win-cells ov-sum-cells"); for (const [l, v] of pairs) { const x = el("div", "ov-win-cell"); x.append(el("small", "", l), el("strong", "", v)); c.append(x); } return c; };
+  // 마지막 분석: the host's last capture drain that touched a job (agent_tools.analysis_run, #449), its reason in words and what to do
+  const RUN_WHY = { session_batch_wait: "대화가 끝나고 5분 쉬면 분석해요", archive_prompt_pending: "대화 원문이 보관되기를 기다려요",
+    session_archive_private_skipped: "비공개로 표시한 대화라 건너뛰었어요", capture_policy_pending: "저장 정책 승인을 기다려요",
+    session_batch_parent_pending: "같은 대화의 앞 묶음을 기다려요", 429: "모델 사용 한도에 걸려 1시간 뒤 다시 해요",
+    401: "서버가 분석 요청을 거부했어요 (로그인 만료)", 403: "서버가 분석 요청을 거부했어요 (권한 없음)" };
+  const RUN_CMD = "sudo systemctl start arkism-reflect.service";
+  function runBox(stopped) {
+    const run = D().tools?.analysis_run, box = block("마지막 분석");
+    const copy = () => { const b = button("명령 복사", "ghost small", null, () => Promise.resolve().then(() => b.ownerDocument.defaultView.navigator.clipboard.writeText(RUN_CMD)).then(() => { b.textContent = "복사했어요"; }, () => { b.textContent = "복사하지 못했어요"; })); return b; };
+    const stale = !run || Date.now() - time(run.at) > 2 * HOUR; // reflect runs hourly and drain every minute; two missed hours means no run
+    if (!run) box.append(el("p", "ov-win-empty", "서버가 아직 분석 결과를 보고하지 않았어요."));
+    else {
+      box.append(cellRow([["마지막 실행", ago(time(run.at))], ["본 대화", `${num(run.jobs)}개`], ["끝남", `${num(run.done)}개`], ["대기", `${num(run.waiting)}개`],
+        ["건너뜀·보류·실패", `${num(run.dropped + run.parked + run.failed)}개`], ["새 후보", `${num(run.candidates)}건`]]));
+      const code = run.error || run.reason;
+      if (code) { const l = el("div", "ov-sum-why"), p = el("p", ""); p.append(el("span", "", RUN_WHY[code] || code)); l.append(el("small", "", "이유"), p); box.append(l); }
+      box.append(cellRow([["마지막으로 분석을 끝낸 때", run.last_done_at ? ago(time(run.last_done_at)) : "—"], ["그때 나온 후보", run.last_done_at ? `${num(run.last_done_candidates)}건` : "—"]]));
+    }
+    const auth = /^40[13]$/.test(run?.error || run?.reason || "");
+    const why = stopped && note("r", `${stopped}이에요`, auth ? "서버가 분석 요청을 거부했어요. 에이전트 로그인을 확인해 주세요." : stale ? "최근 2시간 동안 서버의 분석이 돌지 않았어요. 서버에서 분석 타이머를 켜 주세요." : "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.");
+    if (auth) box.append(button("에이전트 설정 열기", "ghost small", null, (e) => { e.target.closest("dialog")?.close(); state.settingsTab = "agents"; go("settings"); }));
+    else if (stale) { const r = el("div", "ov-sum-cmd"); r.append(el("code", "", RUN_CMD), copy()); box.append(r); }
+    return why ? [why, box] : [box];
+  }
   // 분석: what went in (the 7-day sessions and their messages) and what came out (candidates by kind, and how each ended)
   function analysisBox() {
     const ses = env.sessions(), st = ses.map(sessionState), wk = Date.now() - 7 * 24 * HOUR;
@@ -446,8 +470,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       s.counts.forEach((n, k) => { const b = el("i", n ? (s.row?.[k] === "r" ? "r" : s.row?.[k] === "a" ? "a" : "") : "none"); b.style.height = `${6 + (n / max) * 54}px`; b.title = `${n}`; bars.append(b); });
       chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금")); left.append(chart);
     }
-    if (key === "extract" && s.badge?.[1] === "r") left.append(note("r", `${s.badge[0]}이에요`, "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요."));
-    if (key === "extract") left.append(analysisBox());
+    if (key === "extract") left.append(...runBox(s.badge?.[1] === "r" ? s.badge[0] : ""), analysisBox());
     if (key === "classify") left.append(note("n", "글을 다 읽고 골라요", "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요."));
     if (key === "judge") left.append(note("a", "건넸는데 답에 안 쓰인 기억이에요", "아직 맞으면 유지, 틀렸으면 고치기, 필요 없으면 잊기를 눌러 주세요."));
     if (key === "dream") left.append(note("n", "골라야 바뀌어요", "지운 기억도 이력에 남아요."));

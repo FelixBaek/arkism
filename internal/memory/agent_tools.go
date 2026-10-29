@@ -171,6 +171,25 @@ type AgentTools struct {
 	SkillUpdates    []SkillUpdate   `json:"skill_updates,omitempty"`
 	PCLinks         []PCLink        `json:"pc_links,omitempty"`
 	SkillRepos      []SkillRepo     `json:"skill_repos,omitempty"`
+	AnalysisRun     *AnalysisRun    `json:"analysis_run,omitempty"`
+}
+
+// AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,
+// with the most common waiting or failure code. LastDoneAt is the last time any job finished, kept
+// across runs, so a stretch without candidates can be told from a stretch without processing (#449).
+type AnalysisRun struct {
+	At                 time.Time  `json:"at"`
+	Jobs               int        `json:"jobs"`
+	Done               int        `json:"done"`
+	Candidates         int        `json:"candidates"`
+	Waiting            int        `json:"waiting"`
+	Dropped            int        `json:"dropped"`
+	Parked             int        `json:"parked"`
+	Failed             int        `json:"failed"`
+	Reason             string     `json:"reason"`
+	Error              string     `json:"error"`
+	LastDoneAt         *time.Time `json:"last_done_at"`
+	LastDoneCandidates *int       `json:"last_done_candidates"`
 }
 
 // MemoryUseStats counts injections and observed answer-text overlap over Days.
@@ -237,6 +256,8 @@ type AgentToolsReport struct {
 	PCLinks *[]PCLink `json:"pc_links,omitempty"`
 	// Absent keeps the last list: repositories are checked on a slower schedule.
 	SkillRepos *[]SkillRepo `json:"skill_repos,omitempty"`
+	// Absent keeps the last run: an idle drain does not report.
+	AnalysisRun *AnalysisRun `json:"analysis_run,omitempty"`
 }
 
 const agentToolRequestsKept = 50
@@ -397,6 +418,20 @@ func validSkillRepos(list []SkillRepo) bool {
 		}
 	}
 	return true
+}
+
+// validAnalysisRun accepts an absent run (the last one is kept).
+func validAnalysisRun(a *AnalysisRun) bool {
+	if a == nil {
+		return true
+	}
+	for _, n := range []int{a.Jobs, a.Done, a.Candidates, a.Waiting, a.Dropped, a.Parked, a.Failed} {
+		if n < 0 || n > 1_000_000 {
+			return false
+		}
+	}
+	code := func(c string) bool { return c == "" || validRunLabel(c, 80) }
+	return !a.At.IsZero() && code(a.Reason) && code(a.Error) && (a.LastDoneCandidates == nil || *a.LastDoneCandidates >= 0)
 }
 
 func validPCLinks(list []PCLink) bool {
@@ -635,7 +670,7 @@ func validAgentToolsReport(in AgentToolsReport) bool {
 	if in.SkillChecks != nil && !validSkillChecks(*in.SkillChecks) || in.Agents != nil && !validAgentInfos(*in.Agents) || in.SkillUpdates != nil && !validSkillUpdates(*in.SkillUpdates) || in.PCLinks != nil && !validPCLinks(*in.PCLinks) || in.SkillRepos != nil && !validSkillRepos(*in.SkillRepos) {
 		return false
 	}
-	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) {
+	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) || !validAnalysisRun(in.AnalysisRun) {
 		return false
 	}
 	return validSharedDirs(in.SharedDirs) && validAgentToolResults(in.Results)
@@ -716,6 +751,9 @@ func (s *Service) ReportAgentTools(ctx context.Context, token string, in AgentTo
 		}
 		if in.SkillRepos != nil {
 			t.SkillRepos = *in.SkillRepos
+		}
+		if in.AnalysisRun != nil {
+			t.AnalysisRun = in.AnalysisRun
 		}
 		t.settle(in.Results, now)
 		t.expireLogins(now)
