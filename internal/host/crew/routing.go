@@ -73,6 +73,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if decide == nil {
 		decide = host.DecideRoute
 	}
+	injected := run != nil
 	if run == nil {
 		run = func(s map[string]any) (map[string]any, error) { return runNodeFn(s) }
 	}
@@ -115,7 +116,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 			return nil, crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
 		}
 		attempt := withKey(withKey(spec, "model", model), "provider", provider)
-		res, err = run(attempt)
+		res, err = observationRoutedRun(attempt, i, injected, run)
 		if err != nil {
 			if !isCrewErr(err) {
 				return nil, err
@@ -182,4 +183,15 @@ func toAny(ss []string) []any {
 		out[i] = s
 	}
 	return out
+}
+
+func observationRoutedRun(attempt map[string]any, index int, injected bool, run runFn) (map[string]any, error) {
+	if hostObservationSessionFrom(attempt) == nil {
+		return run(attempt)
+	}
+	attempt = withKey(attempt, hostObservationRouteKey, index)
+	if injected {
+		return observedInjectedRun(attempt, run)
+	}
+	return run(attempt)
 }

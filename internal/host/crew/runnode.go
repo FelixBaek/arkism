@@ -130,8 +130,9 @@ func joinSkills(own, skills, beside string) (string, error) {
 
 // ---------------------------------------------------------------- 직접 추가 chat
 
-// runChat runs a 직접 추가 provider with only an OpenAI-style API: one chat completion, no tools.
-func runChat(key map[string]any, model, effort, instructions, task string, timeout time.Duration, started time.Time) (map[string]any, error) {
+// runChatObserved performs one OpenAI-style completion; observation is optional.
+func runChatObserved(observation *hostObservationCall, owned bool, spec map[string]any, key map[string]any, model, effort, instructions, task string, timeout time.Duration, started time.Time) (res map[string]any, callErr error) {
+	defer func() { finishHostObservation(observation, owned, spec, res, callErr) }()
 	messages := []any{}
 	if instructions != "" {
 		messages = append(messages, host.Obj{{Key: "role", Value: "system"}, {Key: "content", Value: instructions}})
@@ -150,8 +151,16 @@ func runChat(key map[string]any, model, effort, instructions, task string, timeo
 	}
 	body := host.MustDumps(host.Obj{{Key: "model", Value: model}, {Key: "messages", Value: messages}}, host.DumpOpts{})
 	// OpenCode Go refuses a request without a per-conversation id (MissingSessionID); others ignore it.
+	if observation != nil {
+		observation.dispatched()
+	}
 	raw, err := providerDo(http.MethodPost, url, []byte(body), map[string]string{"Authorization": bearer + secret,
 		"content-type": jsonType, "x-opencode-session": randHex(16)}, timeout, 8<<20)
+	if observation != nil && len(raw) > 0 {
+		if decoded, decodeErr := host.Loads(string(raw)); decodeErr == nil {
+			observation.offerReported(customObservationUsage(obj(decoded)["usage"]), "chat-completions-v1")
+		}
+	}
 	if err != nil {
 		var he *host.HTTPError
 		if errors.As(err, &he) {
@@ -165,6 +174,9 @@ func runChat(key map[string]any, model, effort, instructions, task string, timeo
 	v, err := host.Loads(string(raw))
 	if err != nil {
 		return done(false, "", "unreachable"), nil
+	}
+	if observation != nil {
+		observation.offerReported(customObservationUsage(obj(v)["usage"]), "chat-completions-v1")
 	}
 	choices := list(obj(v)["choices"])
 	first := map[string]any{}
@@ -265,6 +277,9 @@ func runNode(spec map[string]any) (map[string]any, error) {
 		if truthy(spec["research"]) {
 			return nil, researchUnsupported("외부 실행기 " + b)
 		}
+		if hostObservationSessionFrom(spec) != nil {
+			return observedBackendRun(spec)
+		}
 		return runBackend(spec) // a step on an agent-runner connection (backends.go); never the local CLIs
 	}
 	return runLocalNode(spec)
@@ -321,7 +336,8 @@ func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 			return nil, err
 		}
 		if info["api"] == "openai" {
-			return runChat(key, model, effort, chatInstructions(own, skills), task, timeout, started)
+			observation, owned := startHostObservation(spec)
+			return runChatObserved(observation, owned, spec, key, model, effort, chatInstructions(own, skills), task, timeout, started)
 		}
 	}
 	workdir, err := nodeWorkdir(access, spec)
@@ -499,7 +515,9 @@ func accountEnv(row host.CLI, model string, env map[string]string) (map[string]s
 }
 
 func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skills, access, workdir string,
-	env map[string]string, profile map[string]any, timeout time.Duration, started time.Time) (map[string]any, error) {
+	env map[string]string, profile map[string]any, timeout time.Duration, started time.Time) (res map[string]any, callErr error) {
+	observation, owned := startHostObservation(spec)
+	defer func() { finishHostObservation(observation, owned, spec, res, callErr) }()
 	outFile := ""
 	if row.Name == "codex" {
 		f, err := os.CreateTemp("", "arkism-crew-*.txt")
@@ -526,9 +544,19 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 	if truthy(spec["handoff_isolated"]) && !truthy(spec["research"]) {
 		argv = isolatedHandoffCommand(argv, row.Name)
 	}
+	if observation != nil {
+		observation.dispatched()
+		observation.incomplete()
+	}
 	out, errOut, code, err := spawnCLI(argv, stdin, workdir, env, timeout, outFile)
+	observeSpawnEstimate(observation, instructions, task, out, model)
 	switch err {
 	case errSpawn:
+		if observation != nil {
+			observation.notDispatched = true
+			observation.knownDispatch = false
+		}
+
 		unlink(outFile)
 		return result(false, "", model, effort, row.Name, started, "cli_not_found"), nil
 	case errTimeout:
@@ -565,3 +593,9 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 var runNodeFn func(map[string]any) (map[string]any, error)
 
 func init() { runNodeFn, runRoutedFn = runNode, runRouted }
+
+func observeSpawnEstimate(observation *hostObservationCall, instructions, task, out, model string) {
+	if observation != nil {
+		observation.offerEstimate(usageOf(map[string]any{"instructions": instructions, "task": task}, map[string]any{"output": out, "model": model}))
+	}
+}
