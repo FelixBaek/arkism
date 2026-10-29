@@ -179,37 +179,7 @@ func TestDynamicsOutcomeRechecksSourceTargetAndTrace(t *testing.T) {
 	for _, col := range []string{"memories", "execution_traces", "sources"} {
 		for _, mode := range []string{"revision", "deleted", "erased", "quarantined", "missing"} {
 			t.Run(col+"/"+mode, func(t *testing.T) {
-				f, ref, in := dynamicsOutcomeAccepted(t, false)
-				if _, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in); err != nil {
-					t.Fatal(err)
-				}
-				target := in.Target
-				if col == "execution_traces" {
-					target = in.Trace
-				}
-				if col == "sources" {
-					target = in.Evidence[0]
-				}
-				if mode == "missing" {
-					if err := f.repo.Delete(testCtx, col, scopeA, target.ID, target.Revision); err != nil {
-						t.Fatal(err)
-					}
-				} else {
-					dynamicsOutcomeMutate(t, f, col, target, func(r *Record) {
-						switch mode {
-						case "revision":
-							r.Revision++
-						case "deleted":
-							r.Status = "deleted"
-						case "erased":
-							r.ContentErased = true
-						case "quarantined":
-							r.PrivacyQuarantined = true
-						}
-					})
-				}
-				out, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in)
-				dynamicsOutcomeZero(t, out, err)
+				checkDynamicsOutcomeSourceLiveness(t, col, mode)
 			})
 		}
 	}
@@ -273,65 +243,7 @@ func TestDynamicsOutcomeIndependentEvaluatorAndTraceGuards(t *testing.T) {
 func TestDynamicsOutcomeCurrentConsumerAuthorization(t *testing.T) {
 	for _, mode := range []string{"human", "pipeline", "unknown", "collection", "runs", "evaluation", "target", "trace", "source", "principal_change", "role_change", "scope_change", "provider_error"} {
 		t.Run(mode, func(t *testing.T) {
-			f, ref, in := dynamicsOutcomeAccepted(t, false)
-			base := f.auth
-			call := 0
-			f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
-				call++
-				decision, err := base.Authorize(ctx, token, req)
-				if err != nil {
-					return decision, err
-				}
-				switch mode {
-				case "human":
-					decision.Role = "human"
-				case "pipeline":
-					decision.Role = "pipeline"
-				case "unknown":
-					return Decision{}, ErrDenied
-				case "collection":
-					if req.Action == "read:evaluations" && req.ResourceID == "" {
-						decision.Allowed = false
-					}
-				case "runs":
-					if req.Action == "read:agent_runs" {
-						decision.Allowed = false
-					}
-				case "evaluation":
-					if req.Action == "read:evaluations" && req.ResourceID == ref.ID {
-						decision.Allowed = false
-					}
-				case "target":
-					if req.Action == "read:memories" {
-						decision.Allowed = false
-					}
-				case "trace":
-					if req.Action == "read:execution_traces" {
-						decision.Allowed = false
-					}
-				case "source":
-					if req.Action == "read:sources" {
-						decision.Allowed = false
-					}
-				case "principal_change":
-					if call > 1 {
-						decision.PrincipalID = "other"
-					}
-				case "role_change":
-					if call > 1 {
-						decision.Role = "human"
-					}
-				case "scope_change":
-					if call > 1 {
-						decision.Scope = scopeB
-					}
-				case "provider_error":
-					return Decision{}, errors.New("policy provider unavailable")
-				}
-				return decision, nil
-			})
-			out, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in)
-			dynamicsOutcomeZero(t, out, err)
+			checkDynamicsOutcomeConsumerAuthorization(t, mode)
 		})
 	}
 }
@@ -460,13 +372,13 @@ func TestDynamicsOutcomeStoreCommitRetryAndCancellationFailures(t *testing.T) {
 }
 
 func TestDynamicsOutcomeNativeClockRepresentability(t *testing.T) {
-	min := time.Unix(0, -1<<63).UTC()
-	max := time.Unix(0, 1<<63-1).UTC()
+	minimumClock := time.Unix(0, -1<<63).UTC()
+	maximumClock := time.Unix(0, 1<<63-1).UTC()
 	for _, item := range []struct {
 		name  string
 		at    time.Time
 		known bool
-	}{{"min", min, true}, {"max", max, true}, {"before", min.Add(-time.Nanosecond), false}, {"after", max.Add(time.Nanosecond), false}, {"epoch", time.Unix(0, 0).UTC(), true}} {
+	}{{"min", minimumClock, true}, {"max", maximumClock, true}, {"before", minimumClock.Add(-time.Nanosecond), false}, {"after", maximumClock.Add(time.Nanosecond), false}, {"epoch", time.Unix(0, 0).UTC(), true}} {
 		t.Run(item.name, func(t *testing.T) {
 			f, ref, in := dynamicsOutcomeAccepted(t, false)
 			dynamicsOutcomeMutate(t, f, "evaluations", ref, func(r *Record) { r.CreatedAt = item.at; r.UpdatedAt = item.at })
@@ -581,4 +493,112 @@ func TestDynamicsOutcomePureProjectionOwnsPrivateSnapshot(t *testing.T) {
 	if second.Evidence[0].ID == in.Evidence[0].ID || snapshot.original.Evidence[0].ID == in.Evidence[0].ID {
 		t.Fatal("snapshot aliases caller")
 	}
+}
+
+func checkDynamicsOutcomeSourceLiveness(t *testing.T, col, mode string) {
+	t.Helper()
+
+	f, ref, in := dynamicsOutcomeAccepted(t, false)
+	if _, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in); err != nil {
+		t.Fatal(err)
+	}
+	target := in.Target
+	if col == "execution_traces" {
+		target = in.Trace
+	}
+	if col == "sources" {
+		target = in.Evidence[0]
+	}
+	if mode == "missing" {
+		if err := f.repo.Delete(testCtx, col, scopeA, target.ID, target.Revision); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		dynamicsOutcomeMutate(t, f, col, target, func(r *Record) {
+			mutateDynamicsOutcomeLiveness(r, mode)
+		})
+	}
+	out, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in)
+	dynamicsOutcomeZero(t, out, err)
+}
+
+func checkDynamicsOutcomeConsumerAuthorization(t *testing.T, mode string) {
+	t.Helper()
+
+	f, ref, in := dynamicsOutcomeAccepted(t, false)
+	base := f.auth
+	call := 0
+	f.svc.Auth = authorizerFunc(func(ctx context.Context, token string, req Authorization) (Decision, error) {
+		call++
+		decision, err := base.Authorize(ctx, token, req)
+		if err != nil {
+			return decision, err
+		}
+		return dynamicsOutcomeAuthorizationDecision(mode, call, req, ref, decision)
+	})
+	out, err := f.svc.PrepareMemoryOutcomeIntent(testCtx, "consumer", ref, in)
+	dynamicsOutcomeZero(t, out, err)
+}
+
+func mutateDynamicsOutcomeLiveness(r *Record, mode string) {
+	switch mode {
+	case "revision":
+		r.Revision++
+	case "deleted":
+		r.Status = "deleted"
+	case "erased":
+		r.ContentErased = true
+	case "quarantined":
+		r.PrivacyQuarantined = true
+	}
+}
+
+func dynamicsOutcomeAuthorizationDecision(mode string, call int, req Authorization, ref Ref, decision Decision) (Decision, error) {
+	switch mode {
+	case "human":
+		decision.Role = "human"
+	case "pipeline":
+		decision.Role = "pipeline"
+	case "unknown":
+		return Decision{}, ErrDenied
+	case "collection", "runs", "evaluation", "target", "trace", "source":
+		if dynamicsOutcomeDeniedResource(mode, req, ref) {
+			decision.Allowed = false
+		}
+	case "principal_change", "role_change", "scope_change":
+		if call > 1 {
+			decision = dynamicsOutcomeChangedActor(mode, decision)
+		}
+	case "provider_error":
+		return Decision{}, errors.New("policy provider unavailable")
+	}
+	return decision, nil
+}
+func dynamicsOutcomeDeniedResource(mode string, req Authorization, ref Ref) bool {
+	switch mode {
+	case "collection":
+		return req.Action == "read:evaluations" && req.ResourceID == ""
+	case "runs":
+		return req.Action == "read:agent_runs"
+	case "evaluation":
+		return req.Action == "read:evaluations" && req.ResourceID == ref.ID
+	case "target":
+		return req.Action == "read:memories"
+	case "trace":
+		return req.Action == "read:execution_traces"
+	case "source":
+		return req.Action == "read:sources"
+	}
+	return false
+}
+func dynamicsOutcomeChangedActor(mode string, decision Decision) Decision {
+	switch mode {
+	case "principal_change":
+		decision.PrincipalID = "other"
+	case "role_change":
+		decision.Role = "human"
+	case "scope_change":
+		decision.Scope = scopeB
+	}
+	return decision
 }

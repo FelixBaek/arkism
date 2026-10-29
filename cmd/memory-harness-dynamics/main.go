@@ -576,33 +576,8 @@ func publish(o options, b bundle, runs []dyn.PredictionRunV2) (published dyn.CLI
 	if err != nil {
 		return empty, err
 	}
-	status := dyn.OutputStatus("completed")
-	if failed > 0 {
-		status = "completed_with_failures"
-	}
-	manifest := dyn.OutputManifest{Protocol: "dynamics-output-manifest-v2", RunID: b.cfg.RunID, InputManifestSHA256: b.selectedRawSHA, RunConfigSHA256: b.cfg.ConfigSHA256, RunConfigRawSHA256: b.configRawSHA, RegistrySHA256: b.cfg.RegistrySHA256, Status: status, PlannedRows: planned, FailedRows: failed, Files: refs}
-	if err = dyn.ValidateTyped("OutputManifest", manifest); err != nil {
-		return empty, err
-	}
-	raw, err := jsonBytes(manifest)
+	result, err := finishPublication(b, parent, root, name, identity, refs, planned, failed, owned)
 	if err != nil {
-		return empty, err
-	}
-	id, err := writeNew(root, "manifest.json", raw)
-	if err != nil {
-		return empty, err
-	}
-	owned["manifest.json"] = id
-	info, err := parent.Lstat(name)
-	if err != nil || !os.SameFile(info, identity) {
-		return empty, problem("unsafe_path", "$")
-	}
-	refs = append(refs, dyn.OutputRoleFile{Role: "completion_manifest", RelativePath: "manifest.json", RawSHA256: rawSHA(raw), SizeBytes: int64(len(raw))})
-	result := dyn.CLIStatus{Status: string(status), RunID: &b.cfg.RunID, Outputs: refs}
-	if err = dyn.ValidateTyped("CLIStatus", result); err != nil {
-		return empty, err
-	}
-	if err = syncDirectories(root); err != nil {
 		return empty, err
 	}
 	complete = true
@@ -668,36 +643,20 @@ func syncDirectories(root *os.Root) error {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	o, err := parse(args)
+	status, err := executeRun(args)
 	if err == nil {
-		var b bundle
-		b, err = load(o)
-		if err == nil {
-			var runs []dyn.PredictionRunV2
-			if o.p1 {
-				runs, err = dyn.RunPoliciesP1(b.events, b.probes, b.candidates, b.features, b.cfg)
-			} else {
-				runs, err = dyn.RunPolicies(b.events, b.probes, b.candidates, b.cfg)
-			}
-			if err == nil {
-				var status dyn.CLIStatus
-				status, err = publish(o, b, runs)
-				if err == nil {
-					raw, writeErr := jsonBytes(status)
-					if writeErr != nil {
-						return 1
-					}
-					count, writeErr := stdout.Write(raw)
-					if writeErr != nil || count != len(raw) {
-						return 1
-					}
-					return 0
-				}
-			}
+		raw, writeErr := jsonBytes(status)
+		if writeErr != nil {
+			return 1
 		}
+		count, writeErr := stdout.Write(raw)
+		if writeErr != nil || count != len(raw) {
+			return 1
+		}
+		return 0
 	}
 	issue := fixedError(err)
-	status := dyn.CLIStatus{Status: "failed", Outputs: []dyn.OutputRoleFile{}, Error: issue}
+	status = dyn.CLIStatus{Status: "failed", Outputs: []dyn.OutputRoleFile{}, Error: issue}
 	raw, marshalErr := jsonBytes(status)
 	if marshalErr != nil {
 		return 1
@@ -712,3 +671,59 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+
+func finishPublication(b bundle, parent, root *os.Root, name string, identity os.FileInfo, refs []dyn.OutputRoleFile, planned, failed int64, owned map[string]os.FileInfo) (dyn.CLIStatus, error) {
+	var empty dyn.CLIStatus
+	status := dyn.OutputStatus("completed")
+	if failed > 0 {
+		status = "completed_with_failures"
+	}
+	manifest := dyn.OutputManifest{Protocol: "dynamics-output-manifest-v2", RunID: b.cfg.RunID, InputManifestSHA256: b.selectedRawSHA, RunConfigSHA256: b.cfg.ConfigSHA256, RunConfigRawSHA256: b.configRawSHA, RegistrySHA256: b.cfg.RegistrySHA256, Status: status, PlannedRows: planned, FailedRows: failed, Files: refs}
+	if err := dyn.ValidateTyped("OutputManifest", manifest); err != nil {
+		return empty, err
+	}
+	raw, err := jsonBytes(manifest)
+	if err != nil {
+		return empty, err
+	}
+	id, err := writeNew(root, "manifest.json", raw)
+	if err != nil {
+		return empty, err
+	}
+	owned["manifest.json"] = id
+	info, err := parent.Lstat(name)
+	if err != nil || !os.SameFile(info, identity) {
+		return empty, problem("unsafe_path", "$")
+	}
+	refs = append(refs, dyn.OutputRoleFile{Role: "completion_manifest", RelativePath: "manifest.json", RawSHA256: rawSHA(raw), SizeBytes: int64(len(raw))})
+	result := dyn.CLIStatus{Status: string(status), RunID: &b.cfg.RunID, Outputs: refs}
+	if err = dyn.ValidateTyped("CLIStatus", result); err != nil {
+		return empty, err
+	}
+	if err = syncDirectories(root); err != nil {
+		return empty, err
+	}
+	return result, nil
+}
+
+func executeRun(args []string) (dyn.CLIStatus, error) {
+	var empty dyn.CLIStatus
+	o, err := parse(args)
+	if err != nil {
+		return empty, err
+	}
+	b, err := load(o)
+	if err != nil {
+		return empty, err
+	}
+	var runs []dyn.PredictionRunV2
+	if o.p1 {
+		runs, err = dyn.RunPoliciesP1(b.events, b.probes, b.candidates, b.features, b.cfg)
+	} else {
+		runs, err = dyn.RunPolicies(b.events, b.probes, b.candidates, b.cfg)
+	}
+	if err != nil {
+		return empty, err
+	}
+	return publish(o, b, runs)
+}

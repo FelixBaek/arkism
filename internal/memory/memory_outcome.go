@@ -100,17 +100,18 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		}
 		old, e := tx.Get(ctx, "evaluations", in.Scope, id)
 		if e == nil {
-			if old.RequestHash != hash || !live(old) || old.ContentErased || old.PrivacyQuarantined {
-				return ErrConflict
-			}
-			return checkEvaluationEvidence(ctx, tx, old)
+			return validateMemoryOutcomeRetryTx(ctx, tx, in, old, hash)
 		}
 		if !errors.Is(e, ErrNotFound) {
 			return e
 		}
+		stamp, e := s.nativeCreationStampTx(ctx, tx, in)
+		if e != nil {
+			return e
+		}
 		now := time.Now().UTC()
 		passed := in.Passed
-		record := Record{ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
+		record := Record{NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
 		if e = checkEvaluationEvidence(ctx, tx, record); e != nil {
 			return e
 		}
@@ -118,6 +119,9 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 			return e
 		}
 		if e = recordMemoryEvaluation(ctx, tx, record); e != nil {
+			return e
+		}
+		if e = stageNativeOutcomeCaptureTx(ctx, tx, actor, in, result, stamp); e != nil {
 			return e
 		}
 		return audit(ctx, tx, in.Scope, actor.PrincipalID, "evaluate:memory_outcome", id)
@@ -190,4 +194,14 @@ func memoryOutcomeEvidence(in MemoryOutcomeInput, trace Record, actor string, re
 		return nil, nil, ErrDenied
 	}
 	return sources, relations, nil
+}
+
+func validateMemoryOutcomeRetryTx(ctx context.Context, tx Tx, in MemoryOutcomeInput, old Record, hash string) error {
+	if old.RequestHash != hash || !live(old) || old.ContentErased || old.PrivacyQuarantined {
+		return ErrConflict
+	}
+	if e := checkEvaluationEvidence(ctx, tx, old); e != nil {
+		return e
+	}
+	return nativeCaptureIntegrityTx(ctx, tx, in, old)
 }

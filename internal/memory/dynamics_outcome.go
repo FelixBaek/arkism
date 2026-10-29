@@ -3,7 +3,6 @@ package memory
 // Task: SYS-02. Accepted native observations are prepared metadata, not learning events.
 import (
 	"context"
-	"reflect"
 	"slices"
 	"time"
 )
@@ -100,67 +99,10 @@ func (s *Service) loadNativeOutcomeSnapshot(ctx context.Context, token string, e
 	}
 	var staged acceptedNativeOutcome
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		// Serializable transactions may replay the callback. Never retain an earlier result.
 		staged = acceptedNativeOutcome{}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		read := func(ref Ref) (Record, error) {
-			r, err := tx.Get(ctx, ref.Collection, original.Scope, ref.ID)
-			if err != nil {
-				return Record{}, err
-			}
-			if r.ID != ref.ID || r.Scope != original.Scope || r.Revision != ref.Revision || !live(r) || r.ContentErased || r.PrivacyQuarantined {
-				return Record{}, ErrConflict
-			}
-			if err := checkSources(ctx, tx, r); err != nil {
-				return Record{}, err
-			}
-			return r, nil
-		}
-		r, err := read(evaluation)
-		if err != nil {
-			return err
-		}
-		if !canonicalNativeOutcome(r, evaluation, original) {
-			return ErrConflict
-		}
-		target, err := read(original.Target)
-		if err != nil {
-			return err
-		}
-		if target.CreatedBy == r.CreatedBy || target.ApprovedBy == r.CreatedBy {
-			return ErrDenied
-		}
-		trace, err := read(original.Trace)
-		if err != nil {
-			return err
-		}
-		if trace.CreatedBy == r.CreatedBy {
-			return ErrDenied
-		}
-		completed, err := memoryOutcomeTraceCompleted(ctx, tx, original.Scope, trace)
-		if err != nil {
-			return err
-		}
-		if !completed {
-			return ErrConflict
-		}
-		sources, relations, err := memoryOutcomeEvidence(original, trace, r.CreatedBy, read)
-		if err != nil {
-			return err
-		}
-		if !reflect.DeepEqual(r.Sources, sources) || !reflect.DeepEqual(r.Relations, relations) {
-			return ErrConflict
-		}
-		if err := checkEvaluationEvidence(ctx, tx, r); err != nil {
-			return err
-		}
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		staged = acceptedNativeOutcome{evaluation: evaluation, original: original, evaluator: r.CreatedBy, createdAt: r.CreatedAt, requestSHA: r.RequestHash}
-		return nil
+		var callbackErr error
+		staged, callbackErr = resolveAcceptedNativeOutcomeTx(ctx, tx, evaluation, original)
+		return callbackErr
 	})
 	if err != nil {
 		return acceptedNativeOutcome{}, err
@@ -181,7 +123,7 @@ func canonicalNativeOutcome(r Record, ref Ref, in MemoryOutcomeInput) bool {
 }
 
 func nativeOutcomeEvaluation(r Record, passed bool) bool {
-	return validEvaluation(r.Evaluation) && r.Evaluation.EvalType == "automated_check" && r.Evaluation.Passed != nil &&
+	return len(evaluationRefs(r.Evaluation)) == 0 && validEvaluation(r.Evaluation) && r.Evaluation.EvalType == "automated_check" && r.Evaluation.Passed != nil &&
 		*r.Evaluation.Passed == passed && r.Passed == passed && r.Evaluation.Score == nil &&
 		r.Evaluation.ScoreMax == nil && r.Evaluation.ComparisonReport == nil
 }
@@ -190,9 +132,9 @@ func nativeOutcomeClock(at time.Time) NativeOutcomeClock {
 	if at.IsZero() {
 		return NativeOutcomeClock{State: "native_zero"}
 	}
-	min := time.Unix(0, -1<<63).UTC()
-	max := time.Unix(0, 1<<63-1).UTC()
-	if at.Before(min) || at.After(max) {
+	minimumClock := time.Unix(0, -1<<63).UTC()
+	maximumClock := time.Unix(0, 1<<63-1).UTC()
+	if at.Before(minimumClock) || at.After(maximumClock) {
 		return NativeOutcomeClock{State: "outside_int64_ns"}
 	}
 	ns := at.UnixNano()

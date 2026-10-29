@@ -60,6 +60,9 @@ func (s *Service) deleteMemoryAndProposal(ctx context.Context, token, id string,
 				}
 			}
 		}
+		if e = invalidateNativeDynamicsDependencyTx(ctx, tx, in.Scope, Ref{Collection: "memories", ID: id, Revision: in.ExpectedRevision}, "target_deleted"); e != nil {
+			return e
+		}
 		if e = tx.Delete(ctx, "memories", in.Scope, id, in.ExpectedRevision); e != nil {
 			return e
 		}

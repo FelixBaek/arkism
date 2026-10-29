@@ -399,6 +399,9 @@ func quarantinePrivacyRecords(ctx context.Context, tx Tx, scope Scope, impact Pr
 		if record.Revision != ref.Revision {
 			return ErrConflict
 		}
+		if err := invalidateNativeDynamicsDependencyTx(ctx, tx, scope, ref, "source_quarantined"); err != nil {
+			return err
+		}
 		if !record.PrivacyQuarantined {
 			record.PrivacyQuarantined = true
 			record.Revision++
@@ -729,6 +732,11 @@ func verifyPrivacyDeletion(ctx context.Context, tx Tx, scope Scope, r *Record) e
 	report.RuntimePurged = pd.Report.RuntimePurged
 	report.BackupOldestRetainedAt = pd.Report.BackupOldestRetainedAt
 	report.BackupExpiryPending = pd.RetentionPolicyRef != retentionSynthetic && report.BackupOldestRetainedAt == nil
+	if pending, e := nativePurgePendingTx(ctx, tx, scope); e != nil {
+		return e
+	} else if pending {
+		report.DerivedPurged = false
+	}
 	pd.Report = report
 	if !report.LiveAccessRemoved || !report.RuntimePurged || !report.DerivedPurged || !report.ArtifactsPurged {
 		// A re-purge must wait again: backups taken before it can still hold what it removes.
