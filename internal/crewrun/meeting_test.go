@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -590,5 +591,238 @@ func TestMeetingRefusesAMemberOnAnExternalRunner(t *testing.T) {
 		if turn.Kind == "turn" && turn.AgentID == "w" && (turn.OK || !strings.Contains(turn.Error, "외부 연결")) {
 			t.Fatalf("the member's turn should say why it was skipped: %+v", turn)
 		}
+	}
+}
+
+func meetingObservationFixture() (*meetingExec, speaker) {
+	team := Crew{Type: "team", Name: "synthetic team"}
+	snapshot := &MeetingSnapshot{Team: team, Agents: map[string]Crew{}}
+	e := &Engine{Meetings: &Client{Scope: Scope{WorkspaceID: "ws", ProjectID: "proj", UserID: "usr", AgentID: "crew"}}}
+	x := &meetingExec{e: e, base: MeetingRecord{ID: "observed-meeting", Revision: 7}, m: Meeting{TeamID: "observed-team", TeamRevision: 3, Topic: "stable synthetic topic", TeamSnapshot: snapshot}, team: team}
+	sp := speaker{member: TeamMember{AgentID: "member", Role: "worker"}, agent: Crew{Type: "agent", Model: "synthetic-model"}}
+	return x, sp
+}
+
+func TestMeetingObservationActualStandaloneContext(t *testing.T) {
+	x, sp := meetingObservationFixture()
+	seen := false
+	x.e.MeetingAI = func(ctx context.Context, s aiSpec) (aiAnswer, error) {
+		seen = true
+		identity, ok := AttemptContextFrom(ctx)
+		if !ok {
+			t.Error("actual meeting has no observation context")
+		} else {
+			r := identity.Run
+			if r.RunRef != (ObservationRef{Collection: "crew_meetings", ID: "observed-meeting", Revision: 7}) || r.RootRunCollection == nil || *r.RootRunCollection != "crew_meetings" || r.RootRunID == nil || *r.RootRunID != "observed-meeting" {
+				t.Errorf("not actual explicit meeting root: %+v", r)
+			}
+			if r.Definition.Ref != (ObservationRef{Collection: "crew", ID: "observed-team", Revision: 3}) {
+				t.Errorf("not actual team revision: %+v", r.Definition.Ref)
+			}
+		}
+		return aiAnswer{OK: true, Output: "unchanged business answer"}, nil
+	}
+	ctx := WithAttemptObserver(context.Background(), NewAttemptObserver(nil))
+	ans, err := x.call(withCallLabel(ctx, "brief"), sp, "synthetic role", "synthetic task")
+	if err != nil || ans.Output != "unchanged business answer" || !seen {
+		t.Fatal(ans, err, seen)
+	}
+}
+
+func TestMeetingObservationOffAndMissingFacts(t *testing.T) {
+	t.Run("off", func(t *testing.T) {
+		x, sp := meetingObservationFixture()
+		x.e.MeetingAI = func(ctx context.Context, _ aiSpec) (aiAnswer, error) {
+			if _, ok := AttemptContextFrom(ctx); ok {
+				t.Error("observer off added context")
+			}
+			return aiAnswer{OK: true, Output: "same"}, nil
+		}
+		a, err := x.call(context.Background(), sp, "role", "task")
+		if err != nil || a.Output != "same" {
+			t.Fatal(a, err)
+		}
+	})
+	for _, missing := range []string{"meeting_revision", "team_revision", "snapshot", "linked_parent", "root_conflict"} {
+		t.Run(missing, func(t *testing.T) {
+			x, sp := meetingObservationFixture()
+			switch missing {
+			case "meeting_revision":
+				x.base.Revision = 0
+			case "team_revision":
+				x.m.TeamRevision = 0
+			case "snapshot":
+				x.m.TeamSnapshot = nil
+			case "linked_parent":
+				x.m.ParentID = "actual-unobserved-parent"
+			case "root_conflict":
+				x.m.RootID = "other-root"
+			}
+			o := NewAttemptObserver(nil)
+			ctx := WithAttemptObserver(context.Background(), o)
+			x.e.MeetingAI = func(_ context.Context, _ aiSpec) (aiAnswer, error) {
+				return aiAnswer{OK: true, Output: "business success"}, nil
+			}
+			a, err := x.call(ctx, sp, "role", "task")
+			if err != nil || a.Output != "business success" {
+				t.Fatal(a, err)
+			}
+			if !slices.Contains(o.Snapshot().Issues, "identity_unavailable") {
+				t.Fatal("missing identity became observed", o.Snapshot())
+			}
+		})
+	}
+}
+
+func TestMeetingObservationPreservesTaskAndActualLinkedParent(t *testing.T) {
+	x, sp := meetingObservationFixture()
+	x.m.ParentID = "run"
+	x.m.RootID = "run"
+	x.m.ParentNodeID = "team-node"
+	ctx := observerTestContext()
+	prior, _ := AttemptContextFrom(ctx)
+	prior.Run.Scope = ObservationScope{"ws", "proj", "usr", "crew"}
+	prior.Task.TaskID = "caller-task"
+	prior.Task.TaskVersion = "caller-revision"
+	parent := observerTestRecord(t, WithAttemptContext(ctx, prior), "main", "delegation", "failed", 1, 0)
+	prior.ParentAttemptID = &parent.Identity.AttemptID
+	o := NewAttemptObserver(nil)
+	o.Observe(parent)
+	ctx = WithAttemptObserver(WithAttemptContext(ctx, prior), o)
+	x.e.MeetingAI = func(ctx context.Context, _ aiSpec) (aiAnswer, error) {
+		next, ok := AttemptContextFrom(ctx)
+		if !ok || next.Task != prior.Task || next.ParentAttemptID == nil || *next.ParentAttemptID != parent.Identity.AttemptID {
+			t.Error("caller task/delegation identity replaced", next)
+		}
+		r := next.Run
+		if r.RunRef.Collection != "crew_meetings" || r.ParentRunCollection == nil || *r.ParentRunCollection != "crew_runs" || r.ParentRunID == nil || *r.ParentRunID != "run" || r.RootRunCollection == nil || *r.RootRunCollection != "crew_runs" || r.InvocationMode != "flow" {
+			t.Error("linked namespaces lost", r)
+		}
+		return aiAnswer{OK: true}, nil
+	}
+	if _, err := x.call(withCallLabel(ctx, "turn1-0"), sp, "role", "task"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMeetingObservationFailedFallbackSpendAndLabels(t *testing.T) {
+	x, sp := meetingObservationFixture()
+	sp.agent.Model = "primary"
+	sp.agent.FallbackModel = "fallback"
+	o := NewAttemptObserver(nil)
+	ctx := WithAttemptObserver(context.Background(), o)
+	var seen []AttemptContext
+	x.e.MeetingAI = func(ctx context.Context, s aiSpec) (aiAnswer, error) {
+		a, _ := AttemptContextFrom(ctx)
+		seen = append(seen, a)
+		u := observerKnownUsage()
+		answer := aiAnswer{OK: true, Output: "success", observationUsage: &u}
+		if s.Model == "primary" {
+			answer.OK = false
+			return answer, failf("ai_failed", "synthetic primary failure")
+		}
+		return answer, nil
+	}
+	answer, err := x.call(withCallLabel(ctx, "turn2-5"), sp, "role", "task")
+	if err != nil || answer.Output != "success" {
+		t.Fatal(answer, err)
+	}
+	snap := o.Snapshot()
+	if len(snap.Latest) != 2 || snap.Totals.Cost.KnownSum != .5 || snap.Totals.StatusCounts["failed"] != 1 || snap.Totals.StatusCounts["succeeded"] != 1 {
+		t.Fatalf("failed cost lost: %+v", snap)
+	}
+	if len(seen) != 2 || seen[1].ParentAttemptID == nil || seen[1].FallbackParentCallKey == nil {
+		t.Fatalf("fallback lineage absent: %+v", seen)
+	}
+	var failedID string
+	for _, r := range snap.Latest {
+		if r.Status == "failed" {
+			failedID = r.Identity.AttemptID
+		}
+		if !strings.Contains(r.Identity.CallKey, "turn2-5") {
+			t.Error("caller label lost", r.Identity.CallKey)
+		}
+	}
+	if *seen[1].ParentAttemptID != failedID {
+		t.Fatal("fallback parent is not actual failed leaf")
+	}
+	if len(ObservationEvidenceFromContext(ctx).ParentLinks) != 1 {
+		t.Fatal("actual fallback proof missing")
+	}
+}
+
+func TestMeetingObservationSnapshotUsesActuallyReadRevision(t *testing.T) {
+	x, _ := meetingObservationFixture()
+	x.m.TeamSnapshot = nil
+	x.e.crew = map[string]CrewItem{"observed-team": {ID: "observed-team", Revision: 9, Crew: Crew{Type: "team"}}}
+	if err := x.snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	d, ok := x.meetingObservationDefinition()
+	if !ok || d.Ref.Revision != 9 || x.m.TeamRevision != 3 {
+		t.Fatal("snapshot borrowed stale revision or changed business record", d, x.m.TeamRevision)
+	}
+}
+
+func TestMeetingObservationFullDriverOnOffAndStageLabels(t *testing.T) {
+	var results []Meeting
+	var specs [][]aiSpec
+	var captured []AttemptObservation
+	for _, enabled := range []bool{false, true} {
+		members := []TeamMember{{AgentID: "mod", Order: 0, Role: "moderator"}, {AgentID: "w", Order: 1, Role: "worker"}, {AgentID: "r", Order: 2, Role: "reviewer"}}
+		rig := newMeetingRig(t, baseItems(agentItem("mod", "진행자", nil), teamItem("moderator_picks", &TeamEnding{MaxRounds: 1}, members...))...)
+		rig.e.Now = func() time.Time { return time.Date(2026, 10, 29, 1, 2, 3, 0, time.UTC) }
+		rig.e.MeetingAI = func(ctx context.Context, s aiSpec) (aiAnswer, error) {
+			a, err := rig.ai.call(ctx, s)
+			u := observerKnownUsage()
+			a.observationUsage = &u
+			return a, err
+		}
+		rig.add("observed-full-meeting", Meeting{MaxRounds: 1})
+		ctx := observerTestContext()
+		o := NewAttemptObserver(nil)
+		if enabled {
+			ctx = WithAttemptObserver(ctx, o)
+		}
+		if err := rig.e.DriveMeeting(ctx, "observed-full-meeting"); err != nil {
+			t.Fatal(err)
+		}
+		results = append(results, cloneMeeting(rig.store.recs["observed-full-meeting"].Meeting))
+		specs = append(specs, append([]aiSpec(nil), rig.ai.specs...))
+		if enabled {
+			captured = o.Snapshot().Latest
+		}
+	}
+	if !reflect.DeepEqual(results[0], results[1]) || !reflect.DeepEqual(specs[0], specs[1]) {
+		t.Fatal("observation changed meeting business result or dispatch input")
+	}
+	if len(captured) != len(specs[1]) || len(captured) < 6 {
+		t.Fatal("actual meeting calls missing", len(captured), len(specs[1]))
+	}
+	for _, label := range []string{"brief", "pick1-", "turn1-", "conclusion"} {
+		found := false
+		for _, r := range captured {
+			if strings.Contains(r.Identity.CallKey, label) {
+				found = true
+			}
+			if r.Identity.Run.RunRef.Collection != "crew_meetings" || r.Identity.Run.Definition.Ref.Revision != 3 || r.Task.TaskID != "task" {
+				t.Fatal("meeting identity/task lost", r.Identity)
+			}
+		}
+		if !found {
+			t.Fatal("stage not captured", label)
+		}
+	}
+}
+
+func TestMeetingObservationUnknownReadRevisionCannotBorrowPersistedRevision(t *testing.T) {
+	x, _ := meetingObservationFixture()
+	x.m.TeamSnapshot = nil
+	x.e.crew = map[string]CrewItem{"observed-team": {ID: "observed-team", Revision: 0, Crew: Crew{Type: "team"}}}
+	if err := x.snapshot(); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := x.meetingObservationDefinition(); ok {
+		t.Fatal("unknown actual read revision borrowed old persisted revision")
 	}
 }

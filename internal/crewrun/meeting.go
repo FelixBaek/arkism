@@ -26,6 +26,7 @@ import (
 	"cmp"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -198,7 +199,8 @@ var errMeetingGone = errors.New("meeting ended elsewhere")
 // meetingAIFn runs one meeting turn; callAI unless a test sets it.
 func (e *Engine) meetingAIFn(ctx context.Context, s aiSpec) (aiAnswer, error) {
 	if e.MeetingAI != nil {
-		return e.budgetedAI(ctx, s, 0, func() (aiAnswer, error) { return e.MeetingAI(ctx, s) })
+		ctx = withDirectObservation(ctx)
+		return e.budgetedAIContext(ctx, s, 0, func(callCtx context.Context) (aiAnswer, error) { return e.MeetingAI(callCtx, s) })
 	}
 	return e.callAI(ctx, s, meetingTurnTimeout, 0)
 }
@@ -269,6 +271,10 @@ type meetingExec struct {
 	team   Crew
 	// closed: rounds the moderator ended early (END without end_on_moderator).
 	closed map[int]bool
+	// The revision actually read when this drive creates its frozen snapshot.
+	// Resumed snapshots use their persisted TeamRevision instead.
+	observationTeamRevision int64
+	observationSnapshotRead bool
 }
 
 // DriveMeeting runs a meeting until it ends, waits for a person, or the context ends.
@@ -292,6 +298,9 @@ func (e *Engine) DriveMeeting(ctx context.Context, id string) error {
 }
 
 func (x *meetingExec) drive(ctx context.Context) error {
+	if AttemptObserverEnabled(ctx) && x.m.TeamSnapshot != nil {
+		x.observationTeamRevision, x.observationSnapshotRead = x.m.TeamRevision, true
+	}
 	err := x.run(ctx)
 	if errors.Is(err, errFlowAttemptUnavailable) {
 		return err // leave the call recoverable; never spend again after an ambiguous receipt
@@ -433,6 +442,8 @@ func (x *meetingExec) snapshot() error {
 		}
 	}
 	x.m.TeamSnapshot = sn
+	x.observationTeamRevision = team.Revision
+	x.observationSnapshotRead = true
 	return nil
 }
 
@@ -809,12 +820,107 @@ func (x *meetingExec) call(ctx context.Context, sp speaker, role, task string) (
 	if s.Effort == "max" {
 		s.Effort = "high"
 	}
+	ctx = x.meetingObservationContext(ctx, sp)
 	ans, err := x.e.meetingAIFn(ctx, s)
 	if err != nil && sp.agent.FallbackModel != "" && ctx.Err() == nil && !flowCallControl(err) {
 		s.Model = sp.agent.FallbackModel
-		ans, err = x.e.meetingAIFn(withCallLabel(ctx, "fallback"), s)
+		ans, err = x.e.meetingAIFn(withCallLabel(meetingFallbackObservation(ctx, ans), "fallback"), s)
 	}
 	return ans, err
+}
+
+// meetingObservationContext binds local calls to the actual meeting record,
+// rather than borrowing its FLOW parent's execution identity.
+func (x *meetingExec) meetingObservationContext(ctx context.Context, sp speaker) context.Context {
+	if !AttemptObserverEnabled(ctx) {
+		return ctx
+	}
+	client, _ := x.e.Meetings.(*Client)
+	scope, ok := observationScopeFrom(ctx, client)
+	definition, definitionOK := x.meetingObservationDefinition()
+	if !ok || !definitionOK || x.base.ID == "" || x.base.Revision < 1 {
+		return unavailableMeetingObservation(ctx)
+	}
+	run := ObservationRun{Scope: scope, RunRef: ObservationRef{Collection: "crew_meetings", ID: x.base.ID, Revision: x.base.Revision},
+		Definition: definition, ExecutionPath: "crew", InvocationMode: "legacy"}
+	if !x.meetingObservationRoot(ctx, &run) {
+		return unavailableMeetingObservation(ctx)
+	}
+	label, _ := ctx.Value(flowCallLabelKey{}).(string)
+	if label == "" {
+		label = "main"
+	}
+	input := map[string]string{"topic": x.m.Topic, "template_key": x.m.TemplateKey}
+	// This is the persisted local turn position, not an invented jobs revision.
+	// Pick/fallback calls at that position remain distinct through their labels.
+	return observationExecutionContext(ctx, run, input, x.m.TeamSnapshot, "meeting/"+label+"/"+sp.member.AgentID, int64(len(x.m.Turns))+1)
+}
+
+func (x *meetingExec) meetingObservationDefinition() (ObservationDefinition, bool) {
+	revision := x.m.TeamRevision
+	if x.observationSnapshotRead {
+		revision = x.observationTeamRevision
+	}
+	if x.m.TeamSnapshot == nil || x.m.TeamSnapshot.Team.Type != "team" || x.m.TeamID == "" || revision < 1 {
+		return ObservationDefinition{}, false
+	}
+	raw, err := json.Marshal(x.m.TeamSnapshot)
+	if err != nil {
+		return ObservationDefinition{}, false
+	}
+	sum := sha256.Sum256(raw)
+	digest := hex.EncodeToString(sum[:])
+	return ObservationDefinition{Ref: ObservationRef{Collection: "crew", ID: x.m.TeamID, Revision: revision}, SourceType: "team", DefinitionSHA256: &digest, HashState: "recorded"}, true
+}
+
+func (x *meetingExec) meetingObservationRoot(ctx context.Context, run *ObservationRun) bool {
+	if x.m.ParentID == "" {
+		if x.m.RootID != "" && x.m.RootID != x.base.ID {
+			return false
+		}
+		collection, id := "crew_meetings", x.base.ID
+		run.RootRunCollection, run.RootRunID = &collection, &id
+		return true
+	}
+	previous, ok := AttemptContextFrom(ctx)
+	if !ok || previous.Run.RunRef.Collection != "crew_runs" || previous.Run.RunRef.ID != x.m.ParentID || previous.Run.RunRef.Revision < 1 ||
+		previous.Run.RootRunCollection == nil || previous.Run.RootRunID == nil || previous.ParentAttemptID == nil {
+		return false
+	}
+	if x.m.RootID != "" && x.m.RootID != *previous.Run.RootRunID {
+		return false
+	}
+	collection, parent := "crew_runs", x.m.ParentID
+	run.RootRunCollection, run.RootRunID = previous.Run.RootRunCollection, previous.Run.RootRunID
+	run.ParentRunCollection, run.ParentRunID = &collection, &parent
+	if x.m.ParentNodeID != "" {
+		node := x.m.ParentNodeID
+		run.ParentNodeID = &node
+	}
+	run.InvocationMode = "flow"
+	return true
+}
+
+func unavailableMeetingObservation(ctx context.Context) context.Context {
+	MarkAttemptObservationIncomplete(ctx, "identity_unavailable")
+	return WithAttemptContext(ctx, AttemptContext{})
+}
+
+func meetingFallbackObservation(ctx context.Context, answer aiAnswer) context.Context {
+	if !AttemptObserverEnabled(ctx) || answer.observationID == "" {
+		return ctx
+	}
+	current, ok := AttemptContextFrom(ctx)
+	if !ok {
+		return ctx
+	}
+	parent := answer.observationID
+	current.ParentAttemptID = &parent
+	current.FallbackParentCallKey = nil
+	if key := answer.observationCallKey; key != "" {
+		current.FallbackParentCallKey = &key
+	}
+	return WithAttemptContext(ctx, current)
 }
 
 func usageOf(a aiAnswer) (int64, int64, float64, bool) {

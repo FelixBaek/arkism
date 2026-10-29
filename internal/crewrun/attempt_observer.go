@@ -778,6 +778,7 @@ type AttemptObserver struct {
 	issues    map[string]bool
 	pending   int64
 	canonical map[string]string
+	runtime   *observationRuntime
 }
 
 // NewAttemptObserver explicitly enables collection. A nil sink means in-memory
@@ -1706,6 +1707,15 @@ func DecodeAttemptObservation(raw []byte) (AttemptObservation, error) {
 		return value, err
 	}
 	return value, ValidateAttemptObservation(value)
+}
+
+// DecodeUsageObservation preserves component presence at the optional runner boundary.
+func DecodeUsageObservation(raw []byte) (UsageObservation, error) {
+	var value UsageObservation
+	if err := decodeObservationJSON(raw, &value); err != nil {
+		return value, err
+	}
+	return value, ValidateUsageObservation(value)
 }
 func DecodeObservationParentLink(raw []byte) (ObservationParentLinkEvidence, error) {
 	var value ObservationParentLinkEvidence

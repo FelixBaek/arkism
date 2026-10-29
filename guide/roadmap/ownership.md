@@ -111,13 +111,14 @@ acceptance. Continue recording actual commands, failures, unknowns and remaining
 limits as implementation progresses.
 
 CRW-02 first freezes and independently reviews its owned helper API at
-`CRW-02.modules`. The single INTEGRATION writer then connects the observer
+`CRW-02.modules`. The INTEGRATION coordinator then assigns disjoint exact-file handoffs to connect the observer
 to calls, existing FLOW reservations, meeting turns, trace delivery and host
 usage transport. This substage resolves the former circular interpretation
 of waiting for full CRW-02 acceptance before its own wiring. The CRW-02
 completion gate still requires the integrated card criteria. Host producer
 and corresponding test paths are explicitly registered as shared files;
-worker file ownership is unchanged. Frozen private CRW-01 artifacts retain
+each file has one writer at a time. Further edits wait for its completed handoff,
+and the coordinator reviews the combined diff. Frozen private CRW-01 artifacts retain
 their accepted bytes; a private dispatch overlay records this later ownership
 revision. No external-call or build authorization is granted by this change.
 

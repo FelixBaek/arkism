@@ -70,13 +70,16 @@ type flowCallScopeKey struct{}
 type flowCallLabelKey struct{}
 
 func (x *runExec) callContext(ctx context.Context, nodeID string) context.Context {
-	if x.flow == nil {
+	if x.flow == nil && !AttemptObserverEnabled(ctx) {
 		return ctx
 	}
 	x.mu.Lock()
-	scope := flowCallScope{run: Run{ID: x.run.ID, LeaseToken: x.run.LeaseToken}, nodeID: nodeID, attempt: x.state(nodeID).Runs, definitions: x.run.State.Definitions}
-	x.mu.Unlock()
-	return context.WithValue(ctx, flowCallScopeKey{}, scope)
+	defer x.mu.Unlock()
+	if x.flow != nil {
+		scope := flowCallScope{run: Run{ID: x.run.ID, LeaseToken: x.run.LeaseToken}, nodeID: nodeID, attempt: x.state(nodeID).Runs, definitions: x.run.State.Definitions}
+		ctx = context.WithValue(ctx, flowCallScopeKey{}, scope)
+	}
+	return x.observationCallContextLocked(ctx, nodeID)
 }
 
 func (e *Engine) roleItem(ctx context.Context, id string) (CrewItem, bool) {
@@ -97,12 +100,19 @@ func withCallLabel(ctx context.Context, label string) context.Context {
 var errFlowAttemptUnavailable = errors.New("flow attempt accounting unavailable")
 
 func (e *Engine) budgetedAI(ctx context.Context, s aiSpec, retry int, dispatch func() (aiAnswer, error)) (aiAnswer, error) {
+	return e.budgetedAIContext(ctx, s, retry, func(context.Context) (aiAnswer, error) { return dispatch() })
+}
+
+func (e *Engine) budgetedAIContext(ctx context.Context, s aiSpec, retry int, dispatch func(context.Context) (aiAnswer, error)) (aiAnswer, error) {
+	completed := observationDeliveryPending(ctx)
+	defer completed()
 	scope, flow := ctx.Value(flowCallScopeKey{}).(flowCallScope)
 	if !flow {
-		return dispatch()
+		return e.observationDispatch(ctx, s, retry, nil, dispatch)
 	}
 	store, ok := e.Store.(FlowAttemptStore)
 	if !ok {
+		e.observationRefused(ctx, s, retry, nil, false, nil)
 		return aiAnswer{}, failf("attempt_store_required", "FLOW model calls require durable accounting")
 	}
 	label, _ := ctx.Value(flowCallLabelKey{}).(string)
@@ -114,19 +124,23 @@ func (e *Engine) budgetedAI(ctx context.Context, s aiSpec, retry int, dispatch f
 	// ceilings. Zero advertises that limitation instead of inventing a bound.
 	reservation, err := store.ReserveFlowAttempt(ctx, scope.run, in)
 	if err != nil {
+		e.observationRefused(ctx, s, retry, nil, false, err)
 		return aiAnswer{}, flowAttemptError(err)
 	}
 	if reservation.ID == "" {
+		e.observationRefused(ctx, s, retry, nil, false, nil)
 		return aiAnswer{}, errors.Join(errFlowAttemptUnavailable, errors.New("reservation id missing"))
 	}
 	if !reservation.DispatchAllowed {
+		e.observationRefused(ctx, s, retry, &reservation.ID, true, nil)
 		return aiAnswer{}, failf("attempt_replay_blocked", "the earlier call has no reusable result; automatic redispatch is blocked")
 	}
-	answer, callErr := dispatch()
+	answer, callErr := e.observationDispatch(ctx, s, retry, &reservation.ID, dispatch)
 	bounded, done := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 	defer done()
 	if err := store.SettleFlowAttempt(bounded, scope.run, reservation.ID, flowSettlement(answer, callErr)); err != nil {
-		return aiAnswer{}, errors.Join(errFlowAttemptUnavailable, err)
+		MarkAttemptObservationIncomplete(ctx, "host_attempts_incomplete")
+		return observationAnswerOnly(answer), errors.Join(errFlowAttemptUnavailable, err)
 	}
 	return answer, callErr
 }
@@ -177,7 +191,7 @@ func (e *Engine) callWithFallback(ctx context.Context, spec aiSpec, fallback str
 		return answer, err
 	}
 	spec.Model = fallback
-	return e.callAI(withCallLabel(ctx, "fallback"), spec, limit, retries)
+	return e.callAI(withCallLabel(observationAnswerParent(ctx, answer, true), "fallback"), spec, limit, retries)
 }
 
 func (x *runExec) resumeCapacityLocked(ctx context.Context, w *Waiting) (bool, error) {
