@@ -52,7 +52,7 @@ standalone go build를 요구하는 마지막 인수 경로도 아직 미실행�
 - [CRW-01 계약·근거와 검증 범위](../work-records/2026-10-29-roadmap-crew-contract.md)
 
 CRW-02는 소유 helper의 독립 검토·인계 관문 `CRW-02.modules`를 추가해
-전체 카드 수용과 공유 호출부 연결을 분리했다. 현재 63카드/95관문이며,
+전체 카드 수용과 공유 호출부 연결을 분리했다. 이전 관측 단계는 63카드/95관문이며,
 INTEGRATION 담당자가 인계 후 등록된 공유 파일을 연결한다.
 병렬 작업은 파일·함수별 단독 작성자를 먼저 배정하며 서로 겹치지 않는다.
 고정 CRW-01 비공개 계약 원문은 그대로 유지하고 후속 배정 기록으로 범위를 잇는다.
@@ -93,3 +93,16 @@ CRW-02 실제 연결 단계는 최종 21개 Go 소스 핀에서 전체 check_loc
 caller-supplied/unknown으로 남는다. 실제 모델·청구·빌드·배포를 검증한 것은 아니다.
 
 - [CRW-02 실제 호출 연결·회귀·검증 한계](../work-records/2026-10-29-roadmap-crew-callers.md)
+
+CRW-03을 현재 코드 기준으로 착수했다. 원형 자료형·판단 API·fixture를 독립 검토하는
+CRW-03.modules 관문을 먼저 두고, 이후 기존 meeting/store 경로를 연결한다.
+현재 63카드/96관문이며 로컬 완료12/63은 유지한다.
+
+CRW-03.modules는 자료형·판단 보조 모듈과 비공개 합성 fixture 범위에서 수용했다.
+각14필드, 독립 일반/race169leaf, fixture32결정·4계보 및 최종
+Python412/Go/UI532·고정lint0을 확인했다. 실제 Client/회의 연결은 다음 단계이며
+전체 CRW-03과 전체 완료12/63은 바꾸지 않는다.
+
+- [CRW-03 보조 모듈·독립 검증·실행 한계](../work-records/2026-10-29-roadmap-crew-context-module.md)
+
+PR424의 고정 a48d3ff4는 원격6워크플로를 통과해 검토 가능 상태다. 병합하지 않았다.
