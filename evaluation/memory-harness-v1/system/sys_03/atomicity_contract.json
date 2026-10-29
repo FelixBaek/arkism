@@ -1,0 +1,216 @@
+{
+  "protocol": "sys-atomicity-model-v1",
+  "scope": "SYS-03.spec A synthetic_model only",
+  "closed_models": {
+    "ExternalLedger": [
+      "protocol",
+      "verification_scope",
+      "observations",
+      "schedule"
+    ],
+    "Command": [
+      "op",
+      "request_id",
+      "event_index",
+      "writer_epoch",
+      "expected_revision",
+      "checkpoint_seq",
+      "reader_id",
+      "path",
+      "included",
+      "presentation_id"
+    ],
+    "InternalLedger": [
+      "protocol",
+      "verification_scope",
+      "claims",
+      "costs"
+    ],
+    "Claim": [
+      "command_index",
+      "op",
+      "request_id",
+      "event_id",
+      "payload_sha256",
+      "key",
+      "logical_evidence_identity_sha256",
+      "claim_sha256",
+      "accepted_seq",
+      "durable_receipt",
+      "first_consumption_receipt",
+      "commit_id",
+      "state_revision",
+      "state_sha256",
+      "checkpoint_seq",
+      "status",
+      "semantic_updates",
+      "presentation_id"
+    ]
+  },
+  "semantics": {
+    "source": "External independently planned observation+fault schedule, compared with every ordered internal claim; neither file is authenticated service evidence.",
+    "accepted": "Accepted synthetic SYS02 event; native metadata/prepared intent cannot become committed event.",
+    "durable": "Separate modeled durable receipt; crash preserves durable intent.",
+    "commit": "One declared transaction: state revision+request result+event application receipt+logical evidence consumption+checkpoint. No DB schema chosen.",
+    "retry": "Same stream/event+same payload and original acceptance returns original receipt; same evidence new ID nonlearning; conflict errors.",
+    "publish": "Only current epoch/revision+commit/checkpoint, no old scope/ref/source after invalidation.",
+    "costs": "semantic_updates, durable_receipt_writes, application_receipt_writes, state_writes, consumption_writes, checkpoint_writes, db_transactions, db_flushes independently counted modeled operations; no measured DB cost.",
+    "state": "Model event-chain commitment, not numeric DYN state or exact-once service proof. Fixed DYN canonical event/evidence identity reused unchanged.",
+    "presentation": "display/return/packing/reader/use/outcome are distinct; a new explicit presentation cycle never inherits prior-cycle reader facts. Exclusion cannot generate same-cycle included reader evidence. Other paths assessed separately.",
+    "consumption_storage_slot": "Exact DynamicsKeyV2 + unchanged frozen logical evidence identity; separate config versions cannot silently share state or consumption storage."
+  },
+  "dependency_pins": {
+    "evaluation/memory-harness-v1/system/sys_02/outcome_contract.json": "0746994f05df55800a3fbbebddb3acb6b737518aa1fd93f764a0456eba236fd3",
+    "evaluation/memory-harness-v1/system/sys_02/outcome_cases.json": "17e11a15ef970adfbe5bb723c51f52e73648092b685709f71eb9903803a4755d",
+    "evaluation/memory-harness-v1/system/sys_02/test_outcome_contract.py": "0e33d7ff9751f857b163226d39ee08bf594d2d01db3439006824bdcf2a30b663",
+    "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json": "82936159380c3d34720ea80822db0b8c10c3242dba8bb493876c7a8895bad5f0",
+    "evaluation/memory-harness-v1/system/sys_01/test_shadow_contract.py": "38ec2e8fcd04649487a4693a3d05eb35d831e4445cb4f8f9435f5cdcf0e3cc29",
+    "evaluation/memory-harness-v1/contract_io.py": "d575bf82f5d1088883fddf5191e97a60a2260cc46a37051af9a89cdd5b7aa74e",
+    "evaluation/memory-harness-v1/contracts/implementation_contract.json": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+    "docs/research/memory-harness/dynamics_policy_contract.json": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da"
+  },
+  "native_identity": "No new native logical-evidence namespace proposed/selected. Native path unsupported for learning/durable commit until owner protocol selection; do not spoof synthetic_independent.",
+  "remaining": [
+    "fresh independent review",
+    "root integration and fullcheck",
+    "B real DB fault injection/migrations/native durable qualification"
+  ],
+  "task_id": "SYS-03.spec",
+  "verification_scope": "synthetic_model",
+  "is_product_contract": false,
+  "transaction_model": {
+    "accept": "Volatile validated admission only; durable responsibility begins at durable transaction. Crash loses admissions not durable.",
+    "durable": "TxD durable event receipt; no state/consumption update.",
+    "commit": "TxA state chain+event application receipt+request result+qualified consumption+checkpoint atomic. TxA db_flush=1 is declared schedule accounting, not measured physical flush.",
+    "recovery": "TxD without TxA stays pending and worker retries. TxA reply-loss/crash returns exact first committed result.",
+    "storage_ADR": "unselected; no DB table/record/migration/writer implementation supplied."
+  },
+  "presentation_model": {
+    "key": "Exact dynamics key + event identity + explicit presentation_id + reader_id + primary/other path. Each presentation is a distinct observation cycle; no inheritance of earlier-cycle reader evidence.",
+    "stages": [
+      "display",
+      "return",
+      "pack",
+      "reader",
+      "use",
+      "outcome"
+    ],
+    "limits": "Declared fixture observations only. Reader receipt requires included pack on same reader/path; no outcome proof of use, no inference of actual reader receipt from server receipt. Current native pipeline has distinct receipt contracts and no universal event join.",
+    "repeat": "A stage boolean is immutable within one cycle. Exact repeat is duplicate_stage_observation with no new fact; conflicting repeat is presentation_conflict. Earlier valid observations remain historical and are not erased.",
+    "payload_binding": "Each cycle binds original payload SHA, accepted_seq and accepted_at_ns. Changed binding conflicts, including when presentation precedes modeled durable admission. Existing accepted-event conflict also has precedence over presentation. Outcome obeys the same immutable stage boolean rule but never proves use."
+  },
+  "cost_counter_semantics": {
+    "semantic_updates": "Qualified first logical evidence applications, even if selected zero numeric coefficient; not numerical changed-row count.",
+    "state_writes": "Accepted unique event-chain/revision writes, including nonlearning; numeric scalar contents not computed.",
+    "durable_receipt_writes": "Unique modeled TxD records.",
+    "application_receipt_writes": "Unique modeled TxA event application records.",
+    "consumption_writes": "First qualified logical-evidence consumption records.",
+    "checkpoint_writes": "TxA processing sequence checkpoints.",
+    "db_transactions": "Declared TxD+TxA commits, excludes rejected/CAS/crash attempts; not actual DB measurements.",
+    "db_flushes": "Declared one flush per successful modeled transaction, no physical durability guarantee.",
+    "request_writes": "One retained request result per first TxA commit.",
+    "db_writes": "Declared record writes: TxD durable + TxA state/application receipt/request/checkpoint plus first consumption; not measured physical write amplification."
+  },
+  "source_inventory": [
+    {
+      "path": "internal/memory/search.go",
+      "line_start": 245,
+      "line_end": 282,
+      "sha256": "2dbaa170175048b207c8cc444c4b9b4be5028dd18ab37e970dd7d84cc6ae7b69",
+      "observation": "Packing/final source/ref/run fence then context_usage receipt+audit in native Tx; server_return only."
+    },
+    {
+      "path": "internal/memory/usage.go",
+      "line_start": 47,
+      "line_end": 52,
+      "sha256": "2cafce6f99f5fa721610decf252d61d65f467a201558715fd9f60375be45270b",
+      "observation": "context_usage jobs record; RecentMemoryUsage measurement server_return and actual_use not_measured."
+    },
+    {
+      "path": "internal/memory/crew_pins.go",
+      "line_start": 393,
+      "line_end": 411,
+      "sha256": "b50f4a262f5742cb39eb86819c9b4bf4949e05471d2e668d44ca16ff2909610d",
+      "observation": "Pinned injection has independent usage receipt path; primary packing exclusion says nothing about it."
+    },
+    {
+      "path": "internal/memory/memory_outcome.go",
+      "line_start": 59,
+      "line_end": 124,
+      "sha256": "73373f6ba7081f6a046fcf17cc580a11efad816c56b40341d041f153d6c1f600",
+      "observation": "evaluation outcome+audit transaction, API retry/current refs; absent native task/trial/processing sequence."
+    },
+    {
+      "path": "internal/memory/memory_signal.go",
+      "line_start": 325,
+      "line_end": 350,
+      "sha256": "9dadb9de5ea3fb462e70c76ee6ff8975b7beacb2bdbefe446d2131fab31c23a9",
+      "observation": "Derived signals persisted in jobs; aggregate context_usage not reader-use proof."
+    },
+    {
+      "path": "internal/crewrun/context_receipt.go",
+      "line_start": 16,
+      "line_end": 55,
+      "sha256": "859cf2673c22b5595e228f9ef271ca3fc80b44ae9b650769c663dd4958436503",
+      "observation": "Separate source_read/briefing/summary_handoff/turn_input metadata, not universal future information-path proof."
+    },
+    {
+      "path": "internal/crewrun/meeting.go",
+      "line_start": 1029,
+      "line_end": 1040,
+      "sha256": "0ab59a833445b2e8cf59d92def80cb09c38d72ec154cbb06d2fdc3c97c861c93",
+      "observation": "Briefing/summary path can retain context beyond immediate retrieval."
+    },
+    {
+      "path": "internal/memory/source_erasure.go",
+      "line_start": 815,
+      "line_end": 817,
+      "sha256": "f817bc5d4a3f189f33baeee3191790561687e27af0c74b6a1d540354ba65c370",
+      "observation": "Persisted usage receipt dependencies included in erasure lookup."
+    }
+  ],
+  "support_ledger": [
+    {
+      "reference": "Transfiver history-sufficiency",
+      "relation": "partial: current known persistent paths inventoried and stage separation modeled; no implementation of paper algorithm or all-future-path sufficiency proof."
+    },
+    {
+      "reference": "SYS03 v4",
+      "relation": "A model/fixture only; B actual commit/fault/migration/service remains unsupported."
+    }
+  ],
+  "command_primitives": {
+    "op": [
+      "accept",
+      "durable",
+      "commit",
+      "publish",
+      "retry",
+      "crash",
+      "checkpoint",
+      "invalidate_revision",
+      "invalidate_scope",
+      "invalidate_source",
+      "revoke",
+      "display",
+      "return",
+      "pack",
+      "reader",
+      "use",
+      "outcome"
+    ],
+    "request_id": "nonempty Unicode scalar UTF8<=256bytes no controls",
+    "reader_id": "same bounded identifier, not authorization",
+    "event_index": "JSON integer0..MaxInt64 and < observation count, bool/float forbidden",
+    "writer_epoch": "JSON integer0..MaxInt64; model-only local worker generation",
+    "expected_revision": "JSON integer0..MaxInt64, compare to exact key revision",
+    "checkpoint_seq": "JSON integer0..MaxInt64; accepted processing order, not timestamp",
+    "path": [
+      "primary",
+      "other"
+    ],
+    "included": "JSON boolean; no server-return inference of use",
+    "presentation_id": "Required bounded nonempty identifier; separate presentation cycle identity, not request id or authorization. Used only by presentation stages."
+  },
+  "claim_validation": "Every key required, no extra; exact JSON-semantic typed equality to independently supplied external source schedule replay. bool not int; fixed DYN/SYS validators validate original full observation/key/ref/clock."
+}
