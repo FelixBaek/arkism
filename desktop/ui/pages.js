@@ -166,7 +166,10 @@ window.ArkismPages = (ctx) => {
       line("명령처럼 보이는 문장", "붙여 넣은 글이나 웹 문서에 섞인 지시", fixed("항상 내가 확인")));
     toSide(sideSec("이 앱", ...(tauri ? [kvRow("버전", update.info?.current || update.current || "—")] : []), kvRow("연결", state.mode === "local" ? "이 PC" : state.mode === "remote" ? "SSH" : "서버 주소")),
       sideNote("기억 규칙은 연결한 Arkism 서버가 정해요. 앱을 업데이트해도 저장한 기억은 그대로예요."));
-    return tauri ? [updateGroup(), a, c] : [a, c];
+    if (tauri) return [updateGroup(), a, c];
+    const server = group("업데이트"); // the browser cannot update, but still shows what the server runs
+    if (ctx.serverBanner && state.serverInfo !== undefined) server.append(ctx.serverBanner.row());
+    return [server, a, c];
   }
   // 설정 › 일반 (Figma 198:5962): 수집, 정리, 시작과 종료, 언어와 단축키, 알림.
   function tabGeneral() {
@@ -689,19 +692,21 @@ window.ArkismPages = (ctx) => {
     const row = el("div", "v4-version");
     const left = el("div", "v4-version-text");
     const top = el("div", "v4-version-top");
-    top.append(el("span", "", update.text));
-    if (update.info?.newer) top.append(el("span", "tag warn", "새 버전"));
+    // Same shape as the server line below: name and status, version, then the detail.
+    top.append(el("span", "", "앱"));
+    if (update.info) top.append(update.info.newer ? el("span", "tag warn", "업데이트 있음") : el("span", "tag", "최신"));
     const ver = el("div", "v4-version-num");
-    ver.append(el("span", "", "Arkism"), el("strong", "mono", update.info ? (update.info.newer ? update.info.latest : update.info.current) : update.current || "—"));
-    left.append(top, ver);
-    if (update.info?.newer) left.append(el("small", "", `현재 버전 ${update.info.current}`));
+    const shown = update.info ? update.info.current : update.current;
+    ver.append(el("strong", "mono", shown ? `v${shown}` : "—"));
+    left.append(top, ver, el("small", "", update.text));
     const acts = el("div", "v4-version-actions");
     const again = button(update.info?.newer ? "다시 확인" : update.label, update.info?.newer ? "" : "primary", null, () => checkUpdate(false));
     again.disabled = update.busy;
     acts.append(again);
     if (update.info?.newer) { const now = button("지금 업데이트", "primary", null, installUpdate); now.disabled = update.busy; acts.append(now); }
     row.append(left, acts);
-    g.append(row);
+    // The connected server gets its own line: version, build, status and its own update (serverVersion.mjs).
+    g.append(row, ...(ctx.serverBanner && state.serverInfo !== undefined ? [ctx.serverBanner.row()] : []));
     if (!update.info && !update.busy && update.label === "업데이트 확인") void checkUpdate(false);
     return g;
   }
@@ -905,6 +910,10 @@ window.ArkismPages = (ctx) => {
         row("기억 추출", picker("extract", "기억 추출", def("extract"), [], true)),
         row("반성·검토", picker("reflect", "반성·검토", def("reflect"), [], true)),
         row("임베딩", controls(source(false), embed), el("p", "pg-hint", "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요.")));
+      if (state.serverLacks?.has("role_model_picks")) { // an older server has no POST /v1/providers/role_model: show, do not offer
+        for (const c of body.querySelectorAll("select, input, [role=switch]")) c.disabled = true;
+        body.prepend(el("p", "pg-hint", "서버 업데이트가 필요해요 · 이 서버는 역할별 모델 저장을 아직 몰라요."));
+      }
     }
     draw();
     kitRedraw.push(draw);

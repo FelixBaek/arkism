@@ -52,7 +52,13 @@ class H(http.server.SimpleHTTPRequestHandler):
         return {"items": []} if not suffix else {}
     def do_GET(s):
         p = s.path.split("?")[0]
-        if p in ("/readyz", "/healthz"): return s._json(200, {"status": "ready"})
+        if p == "/readyz": return s._json(200, {"status": "ready"})
+        # a current server (internal/buildinfo); an older one is tested in server-version.test.js
+        if p == "/healthz":  # PREVIEW_SERVER=0.1.0 plays an older server build; "old" one from before /healthz named it
+            old = os.environ.get("PREVIEW_SERVER", "")
+            if old == "old": return s._json(200, {"status": "ok"})
+            if old: return s._json(200, {"status": "ok", "version": old, "commit": "ec057c47f757", "built": "2026-10-26T09:12:00Z", "api_level": 1, "features": ["role_model_picks"]})
+            return s._json(200, {"status": "ok", "version": "dev", "api_level": 1, "features": ["role_model_picks", "forget_both"]})
         key = p + ("?topic" if "kind=topic" in s.path and "status=active" in s.path else "")
         if key in MANY: return s._json(200, MANY[key])
         if p.startswith("/v1/"): return s._json(200, s._fixture())

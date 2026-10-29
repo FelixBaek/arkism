@@ -43,8 +43,10 @@ Invoke-Checked { node (Join-Path $desktop 'frontend\check.cjs') } 'frontend outp
 # then prepare Postgres with pgvector (prepare-runtime.ps1).
 $env:CGO_ENABLED = '0'
 Push-Location $repo
-Invoke-Checked { go build -trimpath -o (Join-Path $stage 'integration\arkism.exe') ./cmd/arkism } 'go build arkism'
-Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memoryd.exe') ./cmd/memoryd } 'go build memoryd'
+# The built-in server and the CLI report the app's version on /healthz and `arkism version`.
+$versionFlag = "-ldflags=-X github.com/FelixBaek/arkism/internal/buildinfo.Version=$Version"
+Invoke-Checked { go build -trimpath $versionFlag -o (Join-Path $stage 'integration\arkism.exe') ./cmd/arkism } 'go build arkism'
+Invoke-Checked { go build -trimpath $versionFlag -o (Join-Path $stage 'runtime\memoryd.exe') ./cmd/memoryd } 'go build memoryd'
 Invoke-Checked { go build -trimpath -o (Join-Path $stage 'runtime\memory-principal.exe') ./cmd/memory-principal } 'go build memory-principal'
 Invoke-Checked { go build -trimpath '-ldflags=-H=windowsgui' -o (Join-Path $stage 'runtime\arkism-installer.exe') ./cmd/arkism-installer } 'go build installer participant'
 Pop-Location

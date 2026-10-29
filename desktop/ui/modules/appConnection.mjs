@@ -1,5 +1,20 @@
 // Owns lock and server connections. Dependencies are explicit live ports, never a global scope.
+import { createServerBanner } from "./serverVersion.mjs";
+
 export function createAppConnection(deps) {
+  let appVersion = "";
+  const serverBanner = createServerBanner({
+    get $() { return deps.$; }, get el() { return deps.el; }, get state() { return deps.state; }, get request() { return deps.request; },
+    get tauri() { return deps.tauri; }, get notice() { return deps.notice; },
+    listen: (name, fn) => window.__TAURI__?.event?.listen?.(name, fn),
+    ask: (message, ok) => window.ask(message, ok),
+    reconnect: (b) => reconnect(b),
+    sshForm: () => ({ ...deps.state.ssh, password: sshPassword || null }),
+    appVersion: () => appVersion,
+    openInfo: () => { deps.state.settingsTab = "info"; deps.go("settings"); },
+    changed: () => { if (deps.state.view === "settings" && deps.state.settingsTab === "info") deps.render(false); }
+  });
+  void window.__TAURI__?.app?.getVersion?.().then((v) => { appVersion = v; serverBanner.draw(); }, () => {});
 
 
   // ---------------------------------------------------------------- auth, settings, keys
@@ -19,6 +34,9 @@ export function createAppConnection(deps) {
     deps.generation++;
     deps.state.token = "";
     deps.state.caps = null;
+    deps.state.serverInfo = null;
+    deps.state.serverLacks = new Set();
+    serverBanner.draw();
     deps.store("arkism.token", null);
     deps.store("arkism.email", null);
     unlocked(false);
@@ -29,6 +47,7 @@ export function createAppConnection(deps) {
 
   async function open() {
     deps.state.caps = await deps.request(`/v1/capabilities?${deps.query()}`);
+    await serverBanner.check();
     unlocked(true);
     await deps.loadAll();
     deps.pages.checkUpdate(true);
@@ -453,6 +472,7 @@ export function createAppConnection(deps) {
     // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set open(value) { open = value; },
     get readSSH() { return readSSH; },
+    get serverBanner() { return serverBanner; },
     get reconnect() { return reconnect; },
     get sshConnect() { return sshConnect; },
     get sshErrorText() { return sshErrorText; },
