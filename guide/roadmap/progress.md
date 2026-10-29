@@ -330,3 +330,30 @@ SYS02 A는 현행 독립 평가·현재 참조·checker·trace 경계에 맞춘 
 A 모델 단계만 수용하며 실제 numeric state·동일Tx 영속화·격리PG fault/upgrade는 B 구현으로 이어 간다. 포괄 수집핀 스냅샷은 독립 실행 시작 후 수집한 한계를 기록했다. 전체21/63 유지, 제품 빌드·배포·Claude 변경 없음.
 
 - [원자성 모델·외부 원장·관측 주기 검증](../work-records/2026-10-30-roadmap-atomicity-ledger-model.md)
+
+
+## DYN05 p1 실제 실행·비교와 순위 예외 수용
+
+필수7정책의 순수 adapter·registry·prefix replay/read 기반 runner·Go CLI와 Python compare_runs를 구현했다. 실제 CLI가 게시한7파일을 그대로 비교했으며, 실패·대체·빈 일정과 각 비용 분모를 보존한다. snapshot은 수치 seed가 아닌 consistency witness로만 읽고 state는 원 사건열로 재생한다.
+
+사용자가 기존순위 우선 규칙을 선택해6개 non-B0 정책을 p1-zeroaux-order-v1으로 구분했다. 모든 보조 가중치가0이면 원 상태/feature 검증과 binary64 점수를 유지한 채 B0 순서·포장을 보존한다. 원 버전의 등록 반례와 실패는 실제 재현해 보관했다. 새 버전은 같은 minsubnormal/score0 반례에서 B0와 일치했다.
+
+독립 포함208메서드894세부 일반/race·실제7정책/Python비교 통과. 고정42자산·9source·69입력 검증. 최신 clean 부모a3cd67de에 소스9개를 그대로 통합하고 기본수집380/857·전체92315 종료0(Python624·Go복잡도/vet/race·UI532)을 확인했다.
+
+- [실제 정책 실행기·비교·수치 예외 검증](../work-records/2026-10-30-roadmap-native-policy-runner.md)
+
+원 v4 정의상 p1은 전체 DYN05/capture 완료가 아니다. 선택적 fastslow/capture를 자동 필수화하지 않았으며 전체21/63을 유지한다. 실제 서비스·native producer·실험과 채택은 후속이다.
+
+## 정책 비교 선언 중복 제거와 원격 품질 후속
+
+최초 PR491 원격 검사는 중복8.4%와 테스트 파일 쓰기의 보안 흐름 지적으로 실패했다. 원 결과와 소스를 보존하고, 복제된 모델 선언을 기존 고정 계약 SHA 확인 후 재사용하도록 줄였다. 기존25모델·enum·primitive·필드 순서·required 값은 정확히 같다. 상수 경로 쓰기는 목적지와 데이터를 분리해 표현했으며 실제 제품 경로 조작 취약성을 입증한 것으로 과장하지 않는다.
+
+독립12메서드62세부·작성22/45세부·실제 cold-loader 파일/오류 경계와 root51핀·7증거를 확인했다. 전체94001 종료0(Python627·Go복잡도/vet/race·UI532). 원격 새 판정은 아직 대기하며 품질 기준·제외·고정 계약은 바꾸지 않았다. 전체21/63 유지, 제품 빌드·배포·Claude 변경 없음.
+
+- [고정 정책 schema 재사용·원격 품질 후속](../work-records/2026-10-30-roadmap-policy-schema-reuse.md)
+
+## 실제 상태 통합의 결합 기준 검증
+
+PR491의 정책 실행기·schema 후속과 PR492/493의 실제 수락 입력 확인·원자성 모델을 하나의 선행으로 결합했다. 수용된16소스와 고정42계약/증거 핀은 그대로이며 진행 기록 충돌은 양쪽 문단을 모두 보존했다. 기본 수집451과 전체55904 종료0(Python695·Go복잡도/vet/race·UI532)을 통과했다.
+
+이 결합은 새 native 상태 저장 구현 자체가 아니다. 명시적 등록/설정·동일Tx capture·numeric state/seen/consumption/receipt/checkpoint·전체 근거 재검증·삭제 후 무효화는 별도 private 후보에서 실제 서비스 검사와 자체 격리PG 검사로 이어 간다. 원격 공유 이력은 재작성하지 않았고 전체21/63을 유지한다. 제품 빌드·배포·Claude 변경 없음.
