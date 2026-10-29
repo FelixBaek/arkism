@@ -128,3 +128,9 @@ consumer pins. The extension must distinguish actual workflow, meeting and
 assist record collections, require explicit verified roots, and keep effect
 approval bound to crew_runs. Full CRW-02 acceptance and meeting/host wiring
 also require this gate; v1 helper review does not satisfy it.
+
+CRW-03 freezes its receipt/decision helper at `CRW-03.modules` before handing
+off existing meeting/store paths to INTEGRATION. This prevents waiting for full
+card acceptance before its own wiring. Observe-only receipt delivery and an
+explicit current-use gate remain distinct; original contracts and server schemas
+are not widened. The full card still requires its integrated acceptance checks.

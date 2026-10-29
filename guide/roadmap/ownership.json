@@ -3383,7 +3383,7 @@
       "id": "CRW-03",
       "issue": 154,
       "owner": "CRW-03",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3428,7 +3428,7 @@
           "path": "internal/crewrun/meeting.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-03"
+            "CRW-03.modules"
           ]
         },
         {
@@ -3436,7 +3436,7 @@
           "path": "internal/crewrun/store.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-03"
+            "CRW-03.modules"
           ]
         },
         {
@@ -3444,7 +3444,7 @@
           "path": "internal/crewrun/meeting_test.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-03"
+            "CRW-03.modules"
           ]
         }
       ],
@@ -5096,7 +5096,8 @@
       "id": "CRW-03",
       "depends_on": [
         "CRW-01",
-        "CRW-02"
+        "CRW-02",
+        "CRW-03.modules"
       ],
       "condition": "required before acceptance",
       "kind": "acceptance"
@@ -5339,6 +5340,16 @@
       ],
       "kind": "acceptance",
       "condition": "Separately versioned execution-reference contract and canonical vectors independently reviewed. Preserve all accepted v1 bytes. Verified own roots are explicit collection/id pairs; null pairs remain unknown. Effect authority remains crew_runs only."
+    },
+    {
+      "id": "CRW-03.modules",
+      "depends_on": [
+        "CRW-01",
+        "CRW-02",
+        "CRW-01.execution_refs_v2"
+      ],
+      "kind": "acceptance",
+      "condition": "Context receipt projection, pure decision API and fixtures independently reviewed before serialized meeting/store INTEGRATION handoff. Not full CRW-03 card acceptance."
     }
   ],
   "handoff_rules": [
