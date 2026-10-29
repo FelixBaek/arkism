@@ -39,6 +39,7 @@ mod ssh_tunnel;
 mod ssh_exec;
 mod ssh_private;
 mod ssh_identity;
+mod server_update;
 mod storage_location;
 mod work_handoff;
 mod popout;
@@ -359,6 +360,27 @@ async fn ssh_test(rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm) ->
         let target = ssh_tunnel::target_from_form(&form.into())?;
         let (api, workspace) = ssh_tunnel::connect_info_for(&target, &ssh_identity::Store::new(&rt.data_dir()))?;
         Ok(serde_json::json!({ "host": target.host, "api": api, "workspace_id": workspace }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 서버 업데이트: installs the server build with this app's version on the SSH server
+/// (server_update.rs). Steps reach the page as `server-update-step` events.
+#[tauri::command]
+async fn server_update(app: tauri::AppHandle, rt: tauri::State<'_, Arc<runtime::Runtime>>, form: SshForm, version: String) -> Result<server_update::Done, String> {
+    use tauri::Emitter;
+    // The page names the version only to confirm it; the bundle always matches this build.
+    if version != app.package_info().version.to_string() {
+        return Err("server_update_version_invalid".into());
+    }
+    let feed = feed().map_err(|_| "server_update_disabled".to_string())?;
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _activity = rt.activity()?;
+        let target = ssh_tunnel::target_from_form(&form.into())?;
+        let store = ssh_identity::Store::new(&rt.data_dir());
+        server_update::run(&target, &store, feed, update_manifest::PUBLIC_KEY, &version, |step| { let _ = app.emit("server-update-step", step); })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1079,7 +1101,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

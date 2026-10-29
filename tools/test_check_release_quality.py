@@ -53,7 +53,7 @@ class ReleaseQualityTests(unittest.TestCase):
         release = text.split("\n  release:\n")[1]
         self.assertNotIn("secrets.ARKISM_UPDATE_SIGNING_KEY", windows)
         self.assertIn("environment: release-signing", release)
-        steps = ["Verify build provenance before signing", "Sign and verify Windows release assets",
+        steps = ["Verify build provenance before signing", "Sign and verify release assets",
                  "Independent final signature and checksum gate", "Recheck exact-commit quality before release",
                  "Draft tag release", "Publish the verified initial release"]
         positions = [release.index(name) for name in steps]
@@ -336,8 +336,13 @@ class ReleaseQualityTests(unittest.TestCase):
         self.assertNotIn("macos-", workflow)
         self.assertNotIn("build-unix.sh", workflow)
         release = workflow.split("\n  release:\n")[1]
-        self.assertIn("needs: [windows]", release)
+        self.assertIn("needs: [windows, server]", release)
         self.assertIn("name: windows", release)
+        self.assertIn("name: server", release)
+        # The server bundles are built without the signing secret, like the installer.
+        server = workflow.split("\n  server:\n")[1].split("\n  release:\n")[0]
+        self.assertIn("needs: validate", server)
+        self.assertNotIn("secrets.", server)
         self.assertNotIn("merge-multiple: true", release)
         recheck = release.index("--timeout-seconds 0")
         self.assertLess(recheck, release.index("- name: Draft tag release"))
