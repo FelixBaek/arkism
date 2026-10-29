@@ -238,6 +238,10 @@ test("install page: a zip file goes in the request, previews and installs; a big
   await dom.flush();
   assert.deepEqual([t.calls[0][2].name, t.calls[0][2].zip, t.calls[0][2].enabled], ["pdf.zip", zipBody, false]);
   assert.match(page.querySelector(".v4s-status").textContent, /pdf\.zip · SHA-256 fffffff/);
+  // A bad address after the zip preview keeps the zip: install still sends it.
+  page.querySelector("input").value = "bad";
+  dom.fire(page.querySelector("form"), "submit");
+  assert.equal(t.needs.length, 1);
   t.host.poll = done({ installed: ["claude_code"] });
   btn(page, "설치").click();
   await dom.flush();

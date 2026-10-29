@@ -235,6 +235,8 @@
       }
       top.addEventListener("submit", (e) => {
         e.preventDefault();
+        // A bad address leaves a zip preview as it was; only a valid one replaces it.
+        if (!parseSource(src.value)) { window.ArkismNeed(src, "GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
         zip = null;
         void preview();
       });
