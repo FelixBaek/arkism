@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 func arkismBinary(t *testing.T) string {
 	t.Helper()
 	arkismBuild.once.Do(func() {
-		if arkismBuild.dir, arkismBuild.err = os.MkdirTemp("", "arkism-bin-"); arkismBuild.err != nil {
+		if arkismBuild.dir, arkismBuild.err = os.MkdirTemp("", "arkism-bin-"); arkismBuild.err != nil { //nolint:usetesting // one build shared by every test, removed in TestMain
 			return
 		}
 		arkismBuild.path = filepath.Join(arkismBuild.dir, "arkism")

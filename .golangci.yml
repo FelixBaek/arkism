@@ -8,7 +8,12 @@ linters:
     - staticcheck
     - ineffassign
     - unused
+    - predeclared
+    - usetesting
   settings:
+    usetesting:
+      # os.Setenv leaks into later tests; t.Setenv restores it and refuses parallel tests.
+      os-setenv: true
     staticcheck:
       # Correctness (SA) and simplification (S1) checks; naming style (ST) and editor quick fixes (QF) are not gated.
       checks: ["all", "-ST*", "-QF*"]
@@ -27,3 +32,6 @@ linters:
       # Test helpers fail the test through their assertions instead.
       - path: _test\.go
         linters: [errcheck]
+      # Under active roadmap work elsewhere; this exclusion lifts once that work merges.
+      - path: ^(internal/crewrun|internal/memoryharness|internal/host/crew|cmd/memory-harness-baseline)/
+        linters: [predeclared, usetesting]

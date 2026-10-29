@@ -1,7 +1,7 @@
 name: Lint Go
 
 # golangci-lint with the small linter set in .golangci.yml (errcheck, govet, staticcheck,
-# ineffassign, unused). Same runner choice as checks.yml: outside code stays on GitHub-hosted runners.
+# ineffassign, unused, predeclared, usetesting). Same runner choice as checks.yml: outside code stays on GitHub-hosted runners.
 
 on:
   push:
