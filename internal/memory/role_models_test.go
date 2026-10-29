@@ -66,6 +66,20 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 	if r, err := f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "skill_scan"}); err != nil || len(r.Providers.Roles["skill_scan"].Off) != 0 {
 		t.Fatal("clear", err)
 	}
+	// #466: each model change keeps its before and after; an off-list change is not a model change.
+	if _, err := f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "extract", Model: "sonnet 5.5", Provider: "anthropic"}); err != nil {
+		t.Fatal(err)
+	}
+	changes, extract := decisionsOf(f.repo, "role_model_changed"), []string{}
+	for _, r := range changes {
+		if r.Audit.ReasonCode == "extract" {
+			extract = append(extract, r.Audit.Reason)
+		}
+	}
+	slices.Sort(extract)
+	if len(changes) != 5 || !slices.Equal(extract, []string{"- -> haiku 4.5", "haiku 4.5 -> sonnet 5.5"}) {
+		t.Fatalf("role model history: %d changes, extract %q", len(changes), extract)
+	}
 }
 
 // route_skills runs the judge and the candidate count picked for the scope, and the defaults without a pick.

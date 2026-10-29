@@ -101,6 +101,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/twin/claims":                                  {action: "{twin_action}", scope: routeQuery},
 	"GET /v1/unsplash/search":                              {action: "read:crew", scope: routeQuery},
 	"GET /v1/usage/sessions":                               {action: "read:routing", scope: routeQuery},
+	"GET /v1/decisions/summary":                            {action: "read:routing", scope: routeQuery, roles: []string{roleHuman}},
+	"POST /v1/decisions":                                   {action: "write:crew", scope: routeJSON, limit: 4 << 10, roles: []string{roleHuman}},
 	"GET /v1/usage/summary":                                {action: "read:routing", scope: routeQuery},
 	"GET /v1/wiki/graph":                                   {action: "read:wiki_links", scope: routeQuery},
 	"GET /v1/wiki/jobs":                                    {action: "read:wiki_pages", scope: routeQuery},

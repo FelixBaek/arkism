@@ -186,6 +186,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     } catch (e) { if (e.message === "revision_conflict") await reload(); return { error: e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 개요를 새로 고쳐 주세요." : `처리하지 못했어요: ${e.message}` }; }
     finally { reviewing.delete(c.id); }
   }
+  // Whether the person followed the AI help's advice: only the desktop sees it, so it tells the server (#466).
+  // Counting is best effort; the review itself has already gone through.
+  function followedAI(c, pick, action) {
+    if (!pick) return;
+    void request("/v1/decisions", { method: "POST", body: JSON.stringify({ scope: state.scope, kind: pick === action ? "ai_help_accepted" : "ai_help_discarded", target_id: c.id }) }).catch(() => {});
+  }
   function askReason(title, onOk) {
     const d = el("dialog", "crew-dialog ov-ask"), body = el("div", "dialog-body"), why = el("textarea"); why.rows = 3; why.placeholder = "버리는 이유 (버릴 때만 필요해요)"; why.setAttribute("aria-label", "버리는 이유");
     const err = el("p", "meta", ""), foot = el("div", "ov-win-foot");
@@ -252,8 +258,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (confusing(c)) r.querySelector(".ov-win-item-t").prepend(tagEl("헷갈림", "ov-tag-r"));
     const side = r.lastChild, note = el("small", "ov-win-err", ""), advice = el("div", "ov-verdict"); advice.hidden = true;
     const lock = (on) => { for (const b of [ok, no, ai]) b.disabled = on; };
-    const ok = button("승인", "small", null, async () => { lock(true); const res = await decide(c, "approve"); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); });
-    const no = button("버리기", "small", null, () => askReason("후보를 버릴까요?", async (reason) => { lock(true); const res = await decide(c, "reject", { reason }); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); }));
+    let aiPick = "";
+    const ok = button("승인", "small", null, async () => { lock(true); const res = await decide(c, "approve"); if (res?.error) { note.textContent = res.error; lock(false); } else { followedAI(c, aiPick, "approve"); r.remove(); } });
+    const no = button("버리기", "small", null, () => askReason("후보를 버릴까요?", async (reason) => { lock(true); const res = await decide(c, "reject", { reason }); if (res?.error) { note.textContent = res.error; lock(false); } else { followedAI(c, aiPick, "reject"); r.remove(); } }));
     const ai = button("AI 도움", "small", "sparkle", async () => {
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
       lock(true); note.textContent = "AI가 읽는 중…";
@@ -262,7 +269,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } } });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!["approve", "reject"].includes(j?.pick)) throw new Error(tr("AI가 고르지 못했어요."));
-        ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
+        aiPick = j.pick; ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
         advice.replaceChildren(el("strong", "", `AI 추천 · ${j.pick === "approve" ? "승인" : "버리기"}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 300))] : [])); advice.hidden = false; note.textContent = "";
       } catch (e) { note.textContent = `AI 도움을 받지 못했어요: ${e.message}`; }
       finally { lock(false); }

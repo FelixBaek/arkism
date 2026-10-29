@@ -455,7 +455,8 @@ func agentToolsDoc(ctx context.Context, repo interface {
 }
 
 // updateAgentTools applies change to the scope's document inside one transaction.
-func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func(*AgentTools, time.Time)) (Record, error) {
+// then runs in the same transaction after change, to record what changed.
+func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func(*AgentTools, time.Time), then ...func(context.Context, Tx) error) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		now := time.Now().UTC().Truncate(time.Millisecond)
@@ -474,6 +475,11 @@ func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func
 			tools.Requests = append([]AgentToolRequest(nil), tools.Requests...)
 		}
 		change(&tools, now)
+		for _, f := range then {
+			if err := f(ctx, tx); err != nil {
+				return err
+			}
+		}
 		r.AgentTools = &tools
 		r.UpdatedAt = now
 		if fresh {
@@ -539,6 +545,10 @@ func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentTo
 		if over := len(t.Requests) - agentToolRequestsKept; over > 0 {
 			t.Requests = t.Requests[over:]
 		}
+	}, func(ctx context.Context, tx Tx) error {
+		// Only the newest 50 requests are kept; the count of every switch outlives them.
+		kind := map[bool]string{true: "agent_tool_on", false: "agent_tool_off"}[in.Enabled]
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, kind, in.Agent, in.Kind, in.Name)
 	})
 }
 

@@ -15,6 +15,9 @@ type AuditMetadata struct {
 	RequestID        string `json:"request_id" bson:"request_id"`
 	Decision         string `json:"decision" bson:"decision"`
 	PolicyDecisionID string `json:"policy_decision_id,omitempty" bson:"policy_decision_id,omitempty"`
+	// ReasonCode and Reason are set on decision rows (see recordDecision).
+	ReasonCode string `json:"reason_code,omitempty" bson:"reason_code,omitempty"`
+	Reason     string `json:"reason,omitempty" bson:"reason,omitempty"`
 }
 
 // Denial classes stored in audit_events. Verified policy denials keep the

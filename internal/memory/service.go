@@ -1213,6 +1213,9 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			}
 			action = "review:memory_candidates:" + review.Action
 		}
+		if e = recordTransitionDecision(ctx, tx, col, in.Status, r, review, d); e != nil {
+			return e
+		}
 		return audit(ctx, tx, r.Scope, d.PrincipalID, action, id)
 	})
 	if e != nil {
@@ -1520,6 +1523,11 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			}
 		}
 		result = skill
+		if rollback {
+			if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_rolled_back", id, decidedBy(d), ""); e != nil {
+				return e
+			}
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, action+":skills", id)
 	})
 	return result, e

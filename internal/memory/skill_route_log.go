@@ -68,8 +68,14 @@ func (s *Service) recordSkillRoute(ctx context.Context, scope Scope, actor Decis
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jevTimeout)
 	defer cancel()
 	id := ID()
-	if s.Repo.Insert(recordCtx, colSkillRoutes, Record{ID: id, Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
-		Text: sr.Selected, SkillRoute: &sr, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role}) != nil {
+	// Counted with the route so "routed but never loaded" outlives the 50 newest rows ROUTER lists.
+	if s.Repo.Transaction(recordCtx, func(ctx context.Context, tx Tx) error {
+		if err := tx.Insert(ctx, colSkillRoutes, Record{ID: id, Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
+			Text: sr.Selected, SkillRoute: &sr, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role}); err != nil {
+			return err
+		}
+		return recordDecision(ctx, tx, scope, actor.PrincipalID, "skill_routed", id, map[bool]string{true: "rules", false: "judge"}[sr.Provider == "rules"], "")
+	}) != nil {
 		return ""
 	}
 	return id
@@ -104,6 +110,7 @@ func (s *Service) MarkSkillRoute(ctx context.Context, token, id string, in Skill
 		return SkillRouteItem{}, ErrInvalid
 	}
 	sr := *r.SkillRoute
+	firstLoad := sr.Loaded == ""
 	switch {
 	case sr.Outcome != "":
 		return SkillRouteItem{}, ErrConflict
@@ -115,7 +122,13 @@ func (s *Service) MarkSkillRoute(ctx context.Context, token, id string, in Skill
 		sr.Outcome = in.Event
 	}
 	r.SkillRoute, r.UpdatedAt = &sr, time.Now().UTC().Truncate(time.Millisecond)
-	if err := s.Repo.Replace(ctx, colSkillRoutes, r, r.Revision); err != nil {
+	if err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := tx.Replace(ctx, colSkillRoutes, r, r.Revision); err != nil || in.Event != "loaded" || !firstLoad {
+			return err
+		}
+		// pick: the agent loaded what the router chose; other: it loaded another candidate.
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_route_loaded", r.ID, map[bool]string{true: "pick", false: "other"}[in.VersionID == sr.Selected], "")
+	}); err != nil {
 		return SkillRouteItem{}, err
 	}
 	return SkillRouteItem{ID: r.ID, At: r.CreatedAt, SkillRoute: sr}, nil

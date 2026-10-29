@@ -397,5 +397,11 @@ func closeMaintenanceTx(ctx context.Context, tx Tx, scope Scope, seen Record, st
 	if err := tx.Replace(ctx, colMaintenance, r, prev); err != nil {
 		return Record{}, err
 	}
+	// The code is the proposal's own reason (same_meaning, ...), so a dismiss can be counted by what was proposed.
+	if decision != "" {
+		if err := recordDecision(ctx, tx, scope, principal, "dreaming_"+decision, r.ID, p.Reason, ""); err != nil {
+			return Record{}, err
+		}
+	}
 	return r, audit(ctx, tx, scope, principal, status+":"+colMaintenance, r.ID)
 }

@@ -50,4 +50,7 @@ func TestSkillRouteRecordsLoadAndOutcome(t *testing.T) {
 	if e != nil || len(logged) != 1 || logged[0].ID != routed.RouteID || logged[0].Loaded != v.ID || logged[0].Outcome != "failure" {
 		t.Fatalf("ROUTER does not see load and outcome: %+v %v", logged, e)
 	}
+	// #466: routed and loaded are counted apart, so "routed but never loaded" outlives the 50 rows ROUTER keeps.
+	requireDecision(t, f.repo, "skill_routed", "judge")
+	requireDecision(t, f.repo, "skill_route_loaded", "pick")
 }

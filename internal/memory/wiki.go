@@ -308,6 +308,9 @@ func (s *Service) ReviewWikiPage(ctx context.Context, token, id string, in WikiR
 			}
 		}
 		out = r
+		if err = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "wiki_"+in.Decision, id, "", ""); err != nil {
+			return err
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:"+in.Decision, id)
 	})
 	if err != nil {

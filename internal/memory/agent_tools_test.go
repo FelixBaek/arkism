@@ -31,6 +31,12 @@ func TestAgentToolSwitchesFlowThroughTheHostReport(t *testing.T) {
 	if err != nil || done.AgentTools.Requests[0].Status != "done" || done.AgentTools.Servers[0].Agents["codex"] != "on" || done.AgentTools.CollectedAt == nil {
 		t.Fatal("report did not settle the switch", done.AgentTools, err)
 	}
+	// #466: the replaced request is gone from the list, but both switches stay counted.
+	for _, kind := range []string{"agent_tool_off", "agent_tool_on"} {
+		if d := requireDecision(t, f.repo, kind, "mcp"); d.Audit.Reason != gh.Name || d.Target.ID != "codex" {
+			t.Fatalf("%s: %+v %+v", kind, d.Audit, d.Target)
+		}
+	}
 }
 
 func TestAgentToolReportsRefuseSecretsAndUnknownShapes(t *testing.T) {

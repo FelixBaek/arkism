@@ -7,7 +7,11 @@ import (
 )
 
 func TestSkillAvailabilityDeprecatesAndLimitsRuntimes(t *testing.T) {
-	checkSkillAvailability(t, newFixture(t), func() {}, func(string) context.Context { return testCtx })
+	f := newFixture(t)
+	checkSkillAvailability(t, f, func() {}, func(string) context.Context { return testCtx })
+	// Each status change is counted once (#466); setting the same status again is not a decision.
+	requireDecision(t, f.repo, "skill_trashed", "")
+	requireDecision(t, f.repo, "skill_restored", "")
 }
 
 // The same flow on Postgres under the app role's forced RLS.

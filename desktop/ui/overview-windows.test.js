@@ -108,3 +108,28 @@ test("분석 and 대화 저장 summarize what went in and what came out, each re
   assert.equal(calls.filter((c) => c === "/v1/usage/sessions/archives").length, 1);
   win.reset();
 });
+
+test("AI 도움 then 승인 or 버리기 tells the server whether the person followed the advice (#466)", async () => {
+  window.ArkismMemoryEvaluation = { reviewPayload: (id, p) => p };
+  let pick = "approve";
+  window.ArkismAIChat = { kit: { assist: async () => ({ status: "done", output: "x" }), assistError: () => "", parseJSON: () => ({ pick, reason: "좋아요" }) } };
+  const cand = (id) => ({ id, kind: "fact", text: `후보 ${id}`, revision: 1, created_at: new Date().toISOString() });
+  const state = { data: { memories: [], candidates: [cand("c1"), cand("c2"), cand("c3")], conflicted: [] }, scope: { project_id: "p" }, connection: { generation: 1 } };
+  const posts = [];
+  const request = async (path, opts) => { if (path === "/v1/decisions") posts.push(JSON.parse(opts.body)); return {}; };
+  const ctx = { state, ...h, query: (o = {}) => h.query(o), request, ago: () => "방금", go() {}, render() {} };
+  const win = window.ArkismOverviewWindows(ctx, { stages: () => [{ key: "classify", label: "분류", tiles: [] }], sessions: () => [] });
+  win.open("classify"); // 분류 lists waiting candidates with 승인·버리기·AI 도움
+  const row = (id) => document.querySelectorAll(".ov-win-item").find((r) => r.textContent.includes(`후보 ${id}`));
+  const press = async (id, label) => { dom.buttons(row(id), label)[0].click(); await dom.flush(); };
+  await press("c1", "AI 도움"); await press("c1", "승인"); // followed
+  pick = "reject";
+  await press("c2", "AI 도움"); await press("c2", "승인"); // went against it
+  await press("c3", "승인"); // no AI help asked: nothing to count
+  await dom.flush();
+  assert.deepEqual(posts, [
+    { scope: { project_id: "p" }, kind: "ai_help_accepted", target_id: "c1" },
+    { scope: { project_id: "p" }, kind: "ai_help_discarded", target_id: "c2" },
+  ]);
+  delete window.ArkismAIChat; delete window.ArkismMemoryEvaluation;
+});

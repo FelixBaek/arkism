@@ -8152,6 +8152,54 @@
             }
           }}}
     },
+    "/v1/decisions/summary": {
+      "get": {"summary": "Counts of people's and the AI's decisions by kind, reason code and period (read:routing, human principals only)", "description": "Query period=day|week|month (default week), days=1-366 (default 30). Kinds: skill_trashed, skill_restored, skill_rolled_back, skill_version_rejected, skill_improvement_rejected, candidate_approve|edit_approve|reject, candidate_expired, dreaming_<decision>, merge_<decision>, conflict_resolved, wiki_approve|reject, flow_approved, flow_rejected, flow_cancelled, skill_routed, skill_route_loaded, role_model_changed, agent_tool_on|off, ai_help_accepted|discarded. reason_code is empty when none applies; automatic marks a decision a service made. Counts are kept per day apart from audit_events, so audit retention does not lower them.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "period", "in": "query", "schema": {"type": "string", "enum": ["day", "week", "month"]}}, {"name": "days", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 366}}], "responses": {"200": {"description": "{authority, period, from, rows[{period (first day, YYYY-MM-DD UTC), kind, reason_code, count}]}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
+    "/v1/decisions": {
+      "post": {"summary": "Record a decision only the desktop sees (write:crew, human principals only)", "description": "Body {scope, kind ai_help_accepted|ai_help_discarded, target_id}: whether the person followed the AI help's advice on a candidate. Any other kind is refused.", "responses": {"200": {"description": "{recorded: true}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
     "/v1/usage/summary": {
       "get": {"summary": "사용량 화면 집계 (read:routing)", "description": "Query range=today|7d|30d|90d|all (default 30d), source=agent?. Returns kpi, by_day, projects, models, by_agent, agents, hours, shape, tools, skills, top_sessions, latest, requests, authority.", "responses": {"200": {"description": "Summary"}, "400": {"description": "invalid_request"},
           "401": {
@@ -46416,6 +46464,12 @@
             "type": "string"
           },
           "policy_decision_id": {
+            "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "reason": {
             "type": "string"
           }
         },

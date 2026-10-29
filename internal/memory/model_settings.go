@@ -425,7 +425,8 @@ func (s *Service) Providers(ctx context.Context, token string, scope Scope) (Rec
 	return r, nil
 }
 
-func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(*Providers, time.Time) error, auditAction, actor string) (Record, error) {
+// then runs in the same transaction after a successful change, to record what changed.
+func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(*Providers, time.Time) error, auditAction, actor string, then ...func(context.Context, Tx) error) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		now := time.Now().UTC().Truncate(time.Millisecond)
@@ -458,6 +459,11 @@ func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(
 				return nil
 			}
 			return err
+		}
+		for _, f := range then {
+			if err := f(ctx, tx); err != nil {
+				return err
+			}
 		}
 		if over := len(p.Requests) - providerRequestsKept; over > 0 {
 			// Never discard work the runner still needs to collect or settle.

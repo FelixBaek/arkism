@@ -313,6 +313,8 @@ func TestWikiMergeIntoReviewedPageKeepsServedText(t *testing.T) {
 	if err != nil || rejected.Draft != nil || rejected.ReviewState != "reviewed" || rejected.Status != "active" {
 		t.Fatalf("reject keeps reviewed: %+v %v", rejected, err)
 	}
+	requireDecision(t, f.repo, "wiki_approve", "") // #466
+	requireDecision(t, f.repo, "wiki_reject", "")
 }
 
 func TestWikiSourceRemovalCascade(t *testing.T) {

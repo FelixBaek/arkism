@@ -755,6 +755,12 @@ func closeMergeTx(ctx context.Context, tx Tx, scope Scope, seen Record, status, 
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	p := *r.Merge.Proposal
+	if decision != "" {
+		// The proposal drops the AI's words below; the decision row keeps them until audit retention.
+		if err := recordDecision(ctx, tx, scope, principal, "merge_"+decision, r.ID, p.ReasonCode, p.Reason); err != nil {
+			return Record{}, err
+		}
+	}
 	p.Decision, p.DecidedBy, p.DecidedAt, p.Memory, p.Reason = decision, principal, &now, memory, ""
 	prev := r.Revision
 	r.Merge, r.Status, r.Revision, r.UpdatedAt = &MergeRecord{Proposal: &p}, status, r.Revision+1, now

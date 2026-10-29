@@ -63,6 +63,7 @@ func TestMaintenanceSwapAndDismiss(t *testing.T) {
 	if f.get(f.human, "memories", scopeA, older.ID).Status != "active" || f.get(f.human, "memories", scopeA, newer.ID).Status != "superseded" {
 		t.Fatal("swap kept the wrong memory")
 	}
+	requireDecision(t, f.repo, "dreaming_swap", "same_meaning") // #466: counted with what the proposal said
 
 	f, older, newer, in = maintenanceFixture(t)
 	p, _ = f.svc.ProposeMaintenance(testCtx, f.human, in)
@@ -79,6 +80,7 @@ func TestMaintenanceSwapAndDismiss(t *testing.T) {
 	if dismissed, _ := f.svc.ListMaintenance(testCtx, f.human, scopeA, "dismissed"); len(dismissed.Items) != 1 {
 		t.Fatal("dismissed list")
 	}
+	requireDecision(t, f.repo, "dreaming_dismiss", "same_meaning")
 }
 
 func TestMaintenanceForgetBothKeepsBothAsHistory(t *testing.T) {
