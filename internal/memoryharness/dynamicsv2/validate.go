@@ -831,9 +831,10 @@ func checkEvent(v reflect.Value, p string) error {
 	if e.ObservedAtNS != nil && *e.ObservedAtNS > e.AcceptedAtNS {
 		return contractError("future_event", p+".observed_at_ns")
 	}
-	if e.ArrivedAtNS != nil && *e.ArrivedAtNS > e.AcceptedAtNS {
-		return contractError("future_event", p+".arrived_at_ns")
-	}
+	// Arrival belongs to this transport attempt; an exact retry retains the
+	// original logical acceptance coordinates. A standalone event cannot know
+	// whether it is a retry. First-acceptance ordering is checked by the event
+	// stream (and the transition's fresh-event boundary), after ID lookup.
 	if e.Kind != "outcome" {
 		if e.Outcome != "not_applicable" || e.Attribution != "not_applicable" || e.Strength != nil {
 			return contractError("invalid_value", p)
@@ -1434,6 +1435,9 @@ func checkEventFile(v reflect.Value, p string) error {
 				return contractError("event_conflict", p+".events[*]")
 			}
 			continue
+		}
+		if e.ArrivedAtNS != nil && *e.ArrivedAtNS > e.AcceptedAtNS {
+			return contractError("future_event", p+".events[*].arrived_at_ns")
 		}
 		if lastSeq == math.MaxInt64 || e.AcceptedSeq != lastSeq+1 || e.AcceptedAtNS < lastTime {
 			return contractError("sequence_regression", p+".events[*]")
