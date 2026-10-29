@@ -47,6 +47,16 @@ func recordDecision(ctx context.Context, tx Tx, scope Scope, actor, kind, id, co
 		ID: ID(), Scope: scope, Kind: decisionKindPrefix + kind, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
 }
 
+// runInTx runs each step in the caller's transaction, stopping at the first error.
+func runInTx(ctx context.Context, tx Tx, steps []func(context.Context, Tx) error) error {
+	for _, f := range steps {
+		if err := f(ctx, tx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // decidedBy is the reason code for a decision a service made on its own rather than a person.
 func decidedBy(d Decision) string {
 	if d.Role != roleHuman {

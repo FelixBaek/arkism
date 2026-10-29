@@ -475,10 +475,8 @@ func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func
 			tools.Requests = append([]AgentToolRequest(nil), tools.Requests...)
 		}
 		change(&tools, now)
-		for _, f := range then {
-			if err := f(ctx, tx); err != nil {
-				return err
-			}
+		if err := runInTx(ctx, tx, then); err != nil {
+			return err
 		}
 		r.AgentTools = &tools
 		r.UpdatedAt = now

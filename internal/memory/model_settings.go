@@ -425,32 +425,62 @@ func (s *Service) Providers(ctx context.Context, token string, scope Scope) (Rec
 	return r, nil
 }
 
+// loadProvidersTx reads the scope's model settings for a change: a new record when there is none, copies of the
+// lists the change may edit, and stale requests marked expired.
+func loadProvidersTx(ctx context.Context, tx Tx, scope Scope, now time.Time) (Record, Providers, bool, error) {
+	r, err := tx.Get(ctx, colProviders, scope, providersID(scope))
+	fresh := errors.Is(err, ErrNotFound)
+	if err != nil && !fresh {
+		return r, Providers{}, false, err
+	}
+	if fresh {
+		r = Record{ID: providersID(scope), Scope: scope, Kind: colProviders, Status: statusActive, Revision: 1, CreatedAt: now, Text: "model settings"}
+	}
+	p := Providers{Providers: []Provider{}, Disabled: []string{}}
+	if r.Providers != nil {
+		p = *r.Providers
+		p.Requests = append([]ProviderRequest(nil), p.Requests...)
+		p.Disabled = append([]string{}, p.Disabled...)
+		p.Extra = append([]string{}, p.Extra...)
+	}
+	// Store every expiry the read view shows: a stale pending request is never trimmed, so 100 of them
+	// (lost keys, unanswered model tests) would turn every new request into a conflict.
+	for i, q := range p.Requests {
+		if providerRequestExpired(q, now) {
+			p.Requests[i].Status = "expired"
+		}
+	}
+	return r, p, fresh, nil
+}
+
+// trimProviderRequests keeps the newest providerRequestsKept requests, never dropping a pending one.
+func trimProviderRequests(p *Providers) error {
+	over := len(p.Requests) - providerRequestsKept
+	if over <= 0 {
+		return nil
+	}
+	// Never discard work the runner still needs to collect or settle.
+	p.Requests = slices.DeleteFunc(p.Requests, func(q ProviderRequest) bool {
+		if over > 0 && q.Status != "pending" {
+			over--
+			return true
+		}
+		return false
+	})
+	if over > 0 {
+		return ErrConflict
+	}
+	return nil
+}
+
 // then runs in the same transaction after a successful change, to record what changed.
 func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(*Providers, time.Time) error, auditAction, actor string, then ...func(context.Context, Tx) error) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		now := time.Now().UTC().Truncate(time.Millisecond)
-		r, err := tx.Get(ctx, colProviders, scope, providersID(scope))
-		fresh := errors.Is(err, ErrNotFound)
-		if err != nil && !fresh {
+		r, p, fresh, err := loadProvidersTx(ctx, tx, scope, now)
+		if err != nil {
 			return err
-		}
-		if fresh {
-			r = Record{ID: providersID(scope), Scope: scope, Kind: colProviders, Status: statusActive, Revision: 1, CreatedAt: now, Text: "model settings"}
-		}
-		p := Providers{Providers: []Provider{}, Disabled: []string{}}
-		if r.Providers != nil {
-			p = *r.Providers
-			p.Requests = append([]ProviderRequest(nil), p.Requests...)
-			p.Disabled = append([]string{}, p.Disabled...)
-			p.Extra = append([]string{}, p.Extra...)
-		}
-		// Store every expiry the read view shows: a stale pending request is never trimmed, so 100 of them
-		// (lost keys, unanswered model tests) would turn every new request into a conflict.
-		for i, q := range p.Requests {
-			if providerRequestExpired(q, now) {
-				p.Requests[i].Status = "expired"
-			}
 		}
 		if err := change(&p, now); err != nil {
 			if err == errProviderRequestExists {
@@ -460,23 +490,11 @@ func (s *Service) updateProviders(ctx context.Context, scope Scope, change func(
 			}
 			return err
 		}
-		for _, f := range then {
-			if err := f(ctx, tx); err != nil {
-				return err
-			}
+		if err := runInTx(ctx, tx, then); err != nil {
+			return err
 		}
-		if over := len(p.Requests) - providerRequestsKept; over > 0 {
-			// Never discard work the runner still needs to collect or settle.
-			p.Requests = slices.DeleteFunc(p.Requests, func(q ProviderRequest) bool {
-				if over > 0 && q.Status != "pending" {
-					over--
-					return true
-				}
-				return false
-			})
-			if over > 0 {
-				return ErrConflict
-			}
+		if err := trimProviderRequests(&p); err != nil {
+			return err
 		}
 		r.Providers = &p
 		r.UpdatedAt = now
