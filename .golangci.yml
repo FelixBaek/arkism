@@ -8,9 +8,13 @@ linters:
     - staticcheck
     - ineffassign
     - unused
+    - gocognit
     - predeclared
     - usetesting
   settings:
+    gocognit:
+      # Same limit the earlier splits used; older functions above it are left to the new-code gate below.
+      min-complexity: 20
     usetesting:
       # os.Setenv leaks into later tests; t.Setenv restores it and refuses parallel tests.
       os-setenv: true
@@ -34,4 +38,9 @@ linters:
         linters: [errcheck]
       # Under active roadmap work elsewhere; this exclusion lifts once that work merges.
       - path: ^(internal/crewrun|internal/memoryharness|internal/host/crew|cmd/memory-harness-baseline)/
-        linters: [predeclared, usetesting]
+        linters: [gocognit, predeclared, usetesting]
+
+issues:
+  # Report only code added or changed since the merge base with main: 776 older functions sit over
+  # the gocognit limit and are split when touched. The other linters already pass on the whole tree.
+  new-from-merge-base: origin/main
