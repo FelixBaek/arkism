@@ -16,3 +16,8 @@ paths = [
 description = "public tokenizer artifact digest (not a credential)"
 regexTarget = "match"
 regexes = ['''^tokenizer_sha256"\s*:\s*"[a-f0-9]{64}"$''']
+
+[[allowlists]]
+description = "sha256 digest of a project key in eval fixtures (a hash, not the key)"
+regexTarget = "match"
+regexes = ['''^project_key_sha256"\s*:\s*"[a-f0-9]{64}"$''']
