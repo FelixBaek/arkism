@@ -60,6 +60,16 @@ test("every popout kind is known here, and its head moves the window", () => {
   assert.deepEqual(keyshortcut, ["popup-drag.js"]);
 });
 
+// The native side of a popout window has no test runtime here (no tauri mock), so its builder is pinned by source.
+test("the native popout window: links leave for the browser, row dragging works (1b52b55c)", () => {
+  const rs = fs.readFileSync(path.join(UI, "../src-tauri/src/popout.rs"), "utf8");
+  const open = rs.slice(rs.indexOf("pub fn on_new_window"), rs.indexOf("fn open_external"));
+  assert.match(open, /popout_request\(&url\) else \{ return open_external\(&url\) \}/, "a window.open that is not a popup goes to the OS browser, not an app window");
+  assert.match(open, /\.disable_drag_drop_handler\(\)/, "HTML5 drag (reordering rows) needs the native file drop off, as on the main window");
+  assert.match(open, /\.on_new_window\(\|url, _\| open_external\(&url\)\)/, "a link inside a popout window opens in the OS browser too");
+  assert.doesNotMatch(open, /NewWindowResponse::Allow/);
+});
+
 test("a popup copies with its own window's clipboard (9461bf34)", () => {
   // the main window has no focus while a popout window is in use, so its clipboard refuses the write
   const bare = sources.filter(({ f, src }) => /(?<![.\w])navigator\.clipboard/.test(src) && !MAIN_CLIPBOARD.includes(f)).map(({ f }) => f);

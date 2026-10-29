@@ -627,6 +627,11 @@ test("window buttons minimize, maximize, close (asking a popout popup first) and
   $("#small").showModal();
   await flush();
   assert.ok(bar.classList.contains("under-modal"));
+  // a popout window marks its popup popout-root (full window) only after it opened: the strip moves in then (beb626a6)
+  $("#small")._rect = { left: 0, top: 0, width: 1280, height: 800 };
+  $("#small").classList.add("popout-root");
+  await flush();
+  assert.equal(bar.parentNode, $("#small"));
   $("#small").close();
   fire(window, "resize");
   assert.equal(bar.classList.contains("under-modal"), false);
