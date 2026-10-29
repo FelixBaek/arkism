@@ -311,3 +311,383 @@ func (c *Client) LeaseRun(ctx context.Context, id, action, token string) (FlowLe
 		map[string]any{"scope": c.Scope, "action": action, "lease_token": token}, &lease)
 	return lease, err
 }
+
+// The actor is supplied by the actual meeting caller, never inferred from a node
+// label. This optional binding has no effect on legacy ContextText reads.
+type contextReceiptActorKey struct{}
+
+func withContextReceiptActor(ctx context.Context, actorID string) context.Context {
+	return context.WithValue(ctx, contextReceiptActorKey{}, actorID)
+}
+
+type contextNativeRecord struct {
+	fields   map[string]json.RawMessage
+	scope    ObservationScope
+	id       string
+	revision int64
+	text     string
+	bound    bool
+}
+
+// ContextReceipt reads the selected body and then independently checks the
+// current team's sharing policy. A readable historical body is not current-use
+// authorization; policy diagnostics do not erase a successful source read.
+func (c *Client) ContextReceipt(ctx context.Context, requested TeamContext) (ContextReceiptRead, error) {
+	result := ContextReceiptRead{Observation: SourceObservation{Scope: ObservationScope(c.Scope), Collection: requested.Collection, ID: requested.ID, ProvenanceStatus: "not_observed", ReadAuthorization: "not_recorded", Sharing: "not_recorded", ObservationReason: "metadata_not_recorded", Authority: "data_only_untrusted"}}
+	if requested.Collection == "" || requested.ID == "" {
+		return result, observationError("invalid_value", "$.source")
+	}
+	record, err := c.contextRecord(ctx, requested.Collection, requested.ID)
+	if err != nil {
+		return result, err
+	}
+	now := time.Now()
+	stamp := now.UnixNano()
+	result.Text = record.text
+	result.Facts = ContextUseFacts{Source: ContextSourceKey{ObservationScope(c.Scope), requested.Collection, requested.ID}, ReadState: "confirmed", Lifecycle: "unknown", Sharing: "unknown", PolicyState: "unknown", CheckedAtNS: &stamp}
+	result.Observation.ReadAtNS = &stamp
+	result.Observation.ObservedAtNS = &stamp
+	if record.bound {
+		digest, hashErr := ContextTextSHA256(record.text)
+		if hashErr != nil {
+			return result, hashErr
+		}
+		result.Observation.Revision = &record.revision
+		result.Observation.ContentSHA256 = &digest
+		result.Observation.ProvenanceStatus = "pinned"
+		result.Observation.ReadAuthorization = "confirmed"
+		result.Observation.ObservationReason = ""
+		result.Facts.Ref = ObservationRef{Collection: requested.Collection, ID: record.id, Revision: record.revision}
+		result.Facts.ContentSHA256 = digest
+		result.Facts.Lifecycle = contextNativeLifecycle(requested.Collection, record.fields, now)
+		result.Facts.GuardSHA256 = contextNativeGuard(record.fields)
+	}
+	c.contextPolicy(ctx, requested, &result)
+	return result, nil
+}
+
+func (c *Client) contextRecord(ctx context.Context, collection, id string) (contextNativeRecord, error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, "GET", "/v1/"+url.PathEscape(collection)+"/"+url.PathEscape(id)+"?"+c.query(nil), nil, &raw); err != nil {
+		return contextNativeRecord{}, contextReceiptReadError(err)
+	}
+	if err := checkObservationJSONUnicode(raw); err != nil {
+		return contextNativeRecord{}, observationError("invalid_json", "$")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := walkObservationJSON(decoder, 0); err != nil {
+		return contextNativeRecord{}, observationError("invalid_json", "$")
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return contextNativeRecord{}, observationError("invalid_json", "$")
+	}
+	return contextBoundRecord(fields, ObservationScope(c.Scope), collection, id)
+}
+func contextBoundRecord(fields map[string]json.RawMessage, expected ObservationScope, collection, id string) (contextNativeRecord, error) {
+	text, known, err := contextSelectedBody(fields)
+	if err != nil {
+		return contextNativeRecord{}, err
+	}
+	record := contextNativeRecord{fields: fields, text: text}
+	record.id, _ = contextNativeString(fields, "id")
+	if record.id != "" && record.id != id {
+		return record, observationError("source_binding", "$.id")
+	}
+	if value, ok := fields["collection"]; ok {
+		var got string
+		if json.Unmarshal(value, &got) != nil || got != collection {
+			return record, observationError("source_binding", "$.collection")
+		}
+	}
+	scope, scopeOK := contextNativeScope(fields["scope"])
+	record.scope = scope
+	if scopeOK && scope != expected {
+		return record, observationError("scope_mismatch", "$.scope")
+	}
+	revision, revisionOK := contextNativeInt(fields["revision"])
+	record.revision = revision
+	record.bound = known && record.id == id && scopeOK && revisionOK && revision > 0
+	return record, nil
+}
+func contextSelectedBody(fields map[string]json.RawMessage) (string, bool, error) {
+	text, textOK := contextNativeString(fields, "text")
+	summary, summaryOK := contextNativeString(fields, "summary")
+	if !textOK && fields["text"] != nil || !summaryOK && fields["summary"] != nil {
+		return "", false, observationError("invalid_type", "$.text")
+	}
+	if text != "" {
+		return text, true, nil
+	}
+	return summary, textOK || summaryOK, nil
+}
+func contextNativeString(fields map[string]json.RawMessage, key string) (string, bool) {
+	raw, ok := fields[key]
+	if !ok || len(raw) == 0 || raw[0] != '"' {
+		return "", false
+	}
+	var result string
+	err := json.Unmarshal(raw, &result)
+	return result, err == nil
+}
+func contextNativeInt(raw []byte) (int64, bool) {
+	if len(raw) == 0 {
+		return 0, false
+	}
+	for i, ch := range raw {
+		if ch < '0' || ch > '9' {
+			if i != 0 || ch != '-' {
+				return 0, false
+			}
+		}
+	}
+	result, err := strconv.ParseInt(string(raw), 10, 64)
+	return result, err == nil
+}
+func contextNativeScope(raw []byte) (ObservationScope, bool) {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || fields == nil {
+		return ObservationScope{}, false
+	}
+	workspace, w := contextNativeString(fields, "workspace_id")
+	project, p := contextNativeString(fields, "project_id")
+	user, u := contextNativeString(fields, "user_id")
+	agent, a := contextNativeString(fields, "agent_id")
+	if fields["user_id"] == nil {
+		u = true
+	}
+	if fields["agent_id"] == nil {
+		a = true
+	}
+	return ObservationScope{WorkspaceID: workspace, ProjectID: project, UserID: user, AgentID: agent}, w && p && u && a && workspace != "" && project != ""
+}
+func contextNativeFlag(fields map[string]json.RawMessage, key string) (bool, bool) {
+	raw, ok := fields[key]
+	if !ok {
+		return false, true
+	}
+	if bytes.Equal(raw, []byte("true")) {
+		return true, true
+	}
+	return false, bytes.Equal(raw, []byte("false"))
+}
+func contextNativeTime(fields map[string]json.RawMessage, key string) (*time.Time, bool) {
+	raw, ok := fields[key]
+	if !ok || bytes.Equal(raw, []byte("null")) {
+		return nil, true
+	}
+	value, valid := contextNativeString(fields, key)
+	if !valid {
+		return nil, false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, value)
+	return &parsed, err == nil
+}
+func contextNativeLifecycle(collection string, fields map[string]json.RawMessage, now time.Time) string {
+	if !contextNativeHeader(fields) {
+		return "unknown"
+	}
+	erased, eOK := contextNativeFlag(fields, "content_erased")
+	quarantined, qOK := contextNativeFlag(fields, "privacy_quarantined")
+	if !eOK || !qOK {
+		return "unknown"
+	}
+	if erased || quarantined {
+		return "deleted"
+	}
+	status, ok := contextNativeString(fields, "status")
+	if !ok {
+		return "unknown"
+	}
+	if status != "active" {
+		return "inactive"
+	}
+	effective, eOK := contextNativeTime(fields, "effective_at")
+	expiry, xOK := contextNativeTime(fields, "expires_at")
+	if !eOK || !xOK {
+		return "unknown"
+	}
+	if effective != nil && effective.After(now) || expiry != nil && !expiry.After(now) {
+		return "inactive"
+	}
+	if !contextNativeCollection(collection) {
+		return "unknown"
+	}
+	if collection == "memories" && !contextNativeMemoryApproved(fields) {
+		return "unknown"
+	}
+	return "active"
+}
+func contextNativeCollection(collection string) bool {
+	switch collection {
+	case "sources", "memories", "skills", "skill_versions", "prompts", "design_systems", "crew":
+		return true
+	}
+	return false
+}
+func contextNativeMemoryApproved(fields map[string]json.RawMessage) bool {
+	if value, ok := fields["stale_mark"]; ok && !bytes.Equal(value, []byte("null")) {
+		return false
+	}
+	if value, ok := fields["superseded_by"]; ok && !bytes.Equal(value, []byte("null")) {
+		return false
+	}
+	approved, ok := contextNativeString(fields, "approved_by")
+	return ok && strings.TrimSpace(approved) != ""
+
+}
+
+// Guard commits the native non-display facts, independently of the exact
+// selected text digest. Record CAS and display timestamps are not premises.
+func contextNativeGuard(fields map[string]json.RawMessage) string {
+	copyFields := map[string]json.RawMessage{}
+	for k, v := range fields {
+		switch k {
+		case "revision", "created_at", "updated_at", "title", "name":
+			continue
+		}
+		copyFields[k] = v
+	}
+	// Native omitempty false flags have the same semantics as explicit false.
+	for _, key := range []string{"content_erased", "privacy_quarantined"} {
+		if copyFields[key] == nil {
+			copyFields[key] = json.RawMessage("false")
+		}
+	}
+	if scope, ok := contextNativeScope(fields["scope"]); ok {
+		copyFields["scope"], _ = json.Marshal(scope)
+	}
+	raw, err := json.Marshal(copyFields)
+	if err != nil {
+		return ""
+	}
+	var canonical any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if decoder.Decode(&canonical) != nil {
+		return ""
+	}
+	normalized, err := json.Marshal(canonical)
+	if err != nil {
+		return ""
+	}
+	return observationBytesSHA(normalized)
+}
+func (c *Client) contextPolicy(ctx context.Context, requested TeamContext, result *ContextReceiptRead) {
+	actual, actor, ok := c.contextPolicyActor(ctx)
+	if !ok {
+		return
+	}
+	policy, err := c.contextRecord(ctx, "crew", actual.Run.Definition.Ref.ID)
+	if err != nil {
+		if apiCode(err) == "permission_denied" || apiCode(err) == "forbidden" || apiCode(err) == "access_denied" {
+			result.Facts.PolicyState = "denied"
+		}
+		return
+	}
+	if !policy.bound || policy.revision < actual.Run.Definition.Ref.Revision || contextNativeLifecycle("crew", policy.fields, time.Now()) != "active" {
+		return
+	}
+	var team struct {
+		Type    string        `json:"type"`
+		Members []TeamMember  `json:"members"`
+		Context []TeamContext `json:"context"`
+	}
+	if json.Unmarshal(policy.fields["crew"], &team) != nil || team.Type != "team" {
+		return
+	}
+	member := false
+	for _, m := range team.Members {
+		if m.AgentID == actor {
+			member = true
+		}
+	}
+	if !member {
+		result.Facts.PolicyState = "denied"
+		return
+	}
+	sharing := ""
+	for _, ref := range team.Context {
+		if ref.Collection == requested.Collection && ref.ID == requested.ID {
+			if sharing != "" {
+				return
+			}
+			sharing = ref.Share
+		}
+	}
+	if sharing != "team" && sharing != "shared" {
+		return
+	}
+	now := time.Now().UnixNano()
+	ref := ObservationRef{Collection: "crew", ID: policy.id, Revision: policy.revision}
+	result.Facts.PolicyRef = &ref
+	result.Facts.PolicyScope = policy.scope
+	result.Facts.PolicyReadAtNS = &now
+	result.Facts.PolicyState = "confirmed"
+	result.Facts.GuardSHA256 = contextCombinedGuard(result.Facts.GuardSHA256, policy.fields)
+	result.Facts.Sharing = sharing
+	result.Observation.Sharing = sharing
+}
+
+func contextCombinedGuard(source string, policy map[string]json.RawMessage) string {
+	if source == "" {
+		return ""
+	}
+	var team map[string]json.RawMessage
+	if json.Unmarshal(policy["crew"], &team) != nil {
+		return ""
+	}
+	for _, key := range []string{"name", "avatar", "cover"} {
+		delete(team, key)
+	}
+	var refs []map[string]json.RawMessage
+	if json.Unmarshal(team["context"], &refs) == nil {
+		for _, ref := range refs {
+			delete(ref, "title")
+		}
+		team["context"], _ = json.Marshal(refs)
+	}
+	cleaned := map[string]json.RawMessage{}
+	for k, v := range policy {
+		cleaned[k] = v
+	}
+	cleaned["crew"], _ = json.Marshal(team)
+	guard := contextNativeGuard(cleaned)
+	if guard == "" {
+		return ""
+	}
+	return observationBytesSHA([]byte(source + "\n" + guard))
+}
+
+func (c *Client) contextPolicyActor(ctx context.Context) (AttemptContext, string, bool) {
+	actual, ok := AttemptContextFrom(ctx)
+	actor, _ := ctx.Value(contextReceiptActorKey{}).(string)
+	valid := ok && validateObservation(actual.Run.RunRef) == nil && validateObservation(actual.Run.Definition.Ref) == nil && actual.Run.RunRef.Collection == "crew_meetings" && actual.Run.Definition.SourceType == "team" && actual.Run.Definition.Ref.Collection == "crew" && actual.Run.Scope == ObservationScope(c.Scope) && actor != ""
+	return actual, actor, valid
+}
+
+func contextNativeHeader(fields map[string]json.RawMessage) bool {
+	kind, ok := contextNativeString(fields, "kind")
+	if !ok || kind == "" {
+		return false
+	}
+	if value, exists := fields["content_hash"]; exists {
+		var digest string
+		return json.Unmarshal(value, &digest) == nil && validContextSHA(digest)
+	}
+	return true
+}
+
+func contextReceiptReadError(err error) error {
+	var api *APIError
+	if errors.As(err, &api) {
+		code := "source_read_failed"
+		switch api.Code {
+		case "access_denied", "permission_denied", "forbidden", "not_found", "invalid_request", "revision_conflict", "invalid_token", "secret_detected":
+			code = api.Code
+		}
+		return &APIError{Status: api.Status, Code: code}
+	}
+	return observationError("source_read_failed", "$")
+}
