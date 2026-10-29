@@ -841,7 +841,7 @@ window.ArkismPages = (ctx) => {
   const ROLE_MODELS = [["haiku", "Claude Haiku"], ["sonnet", "Claude Sonnet"], ["opus", "Claude Opus"]];
   const EMBED = [["auto", "자동 (Ollama가 있으면)"], ["ollama", "Ollama"], ["none", "끄기"]];
   // 설정 › 역할별 모델 on a server: each role's pick goes to POST /v1/providers/role_model and runs from the next call.
-  // The first option is what the server runs with nothing picked (providers.role_defaults).
+  // The first option names what the server runs with nothing picked (providers.role_defaults).
   const ENGINE = { fixed: "고정 규칙", clef: "Clef", jev: "Jev", chat: "내 모델" };
   const SCAN_NAMES = Object.fromEntries(SCANNERS.map(([k, name]) => [k, name]));
   function serverRoles(body, rows) {
@@ -864,7 +864,8 @@ window.ArkismPages = (ctx) => {
       const current = pick.model ? (pick.provider ? `${pick.provider}|${pick.model}` : pick.model) : "";
       const sel = el("select", claude ? "mp-assist" : "ag-select");
       sel.setAttribute("aria-label", `${title} 모델`);
-      sel.append(Object.assign(el("option", "", `서버 기본값 (${defaultLabel || "서버 설정"})`), { value: "" }));
+      // The host roles' defaults arrive with the runner's report; until then the server cannot name them.
+      sel.append(Object.assign(el("option", "", `서버 기본값 · ${defaultLabel || "아직 확인 안 됨"}`), { value: "" }));
       for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
       if (claude) {
         for (const p of models.pickerGroups().filter((x) => x.id === "anthropic")) sel.append(models.modelGroup(p));
@@ -880,6 +881,8 @@ window.ArkismPages = (ctx) => {
     }
     const engines = (role) => (d().role_options?.[role] || ["fixed"]).map((k) => [k, ENGINE[k] || k]);
     const def = (role) => d().role_defaults?.[role] || "";
+    // haiku/sonnet/opus as the host reports them read as the model's name; anything else is shown as reported.
+    const modelName = (v) => ROLE_MODELS.find(([k]) => k === v)?.[1] || v;
     const row = (title, right, ...extra) => roleBlock(line(title, hint[title], right), ...extra);
     function scanRow() {
       const installed = (def("skill_scan") || "").split(",").filter((k) => SCAN_NAMES[k]);
@@ -890,11 +893,11 @@ window.ArkismPages = (ctx) => {
       return row("스킬 보안 검사", source(off.length > 0), ...engineRows, ...(note ? [note] : []));
     }
     function draw() {
-      const summaryDef = def("skill_summary") === "basic" ? "스킬 설명 그대로" : def("skill_summary");
+      const summaryDef = def("skill_summary") === "basic" ? "스킬 설명 그대로" : modelName(def("skill_summary"));
       const counts = ["4", "6", "8"].map((k) => [k, `${k}개`]);
       const embed = el("select", "ag-select");
       embed.setAttribute("aria-label", "임베딩 모델");
-      embed.append(Object.assign(el("option", "", `서버 기본값 (${def("embed") === "none" ? "끄기" : def("embed") || "서버 설정"})`), { value: "" }));
+      embed.append(Object.assign(el("option", "", `서버 기본값 · ${def("embed") === "none" ? "끄기" : def("embed") || "아직 확인 안 됨"}`), { value: "" }));
       embed.disabled = true; // one embedder per server: changing it means a server setting and a full re-index
       body.replaceChildren(
         row("라우팅 판정", picker("route_judge", "라우팅 판정", ENGINE[def("route_judge")], engines("route_judge"), false, recent())),
@@ -902,8 +905,8 @@ window.ArkismPages = (ctx) => {
         row("스킬 후보 찾기", picker("skill_candidates", "스킬 후보 찾기", def("skill_candidates") && `${def("skill_candidates")}개`, counts, false, recent())),
         row("스킬 판정", picker("skill_judge", "스킬 판정", ENGINE[def("skill_judge")], engines("skill_judge"), false, recent())),
         scanRow(),
-        row("기억 추출", picker("extract", "기억 추출", def("extract"), [], true)),
-        row("반성·검토", picker("reflect", "반성·검토", def("reflect"), [], true)),
+        row("기억 추출", picker("extract", "기억 추출", modelName(def("extract")), [], true)),
+        row("반성·검토", picker("reflect", "반성·검토", modelName(def("reflect")), [], true)),
         row("임베딩", controls(source(false), embed), el("p", "pg-hint", "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요.")));
     }
     draw();
@@ -939,7 +942,8 @@ window.ArkismPages = (ctx) => {
     const kitBody = el("div", "v4-kit-body");
     kit.append(kitBody);
     if (!(tauri && state.mode === "local")) {
-      if (state.data.providers) {
+      // role_defaults comes with POST /v1/providers/role_model: a server without it cannot save a pick, so it shows none.
+      if (state.data.providers?.role_defaults) {
         const body = el("div", "v4-roles-body");
         roles.append(body);
         serverRoles(body, [ROWS[0], ...SKILL_ROWS, ...ROWS.slice(1)]);

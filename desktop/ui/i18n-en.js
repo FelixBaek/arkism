@@ -5378,11 +5378,12 @@ Object.assign(window.ArkismI18nEN.strings, {
   "이 서버에 설치된 검사 엔진이 없어요. 기본 검사만 돌아요.": "No check engine is installed on this server. Only the built-in check runs.",
   "이 서버가 돌릴 수 있는 임베딩은 이것 하나예요. 바꾸려면 서버 설정을 바꾸고 기억을 다시 색인해야 해요.": "This is the only embedding this server can run. Changing it takes a server setting and re-indexing every memory.",
   "서버에 연결해 쓰는 동안에는 서버가 정한 폴더 위치를 써요.": "While connected to a server, the server's folder locations are used.",
+  "아직 확인 안 됨": "not reported yet",
   "임베딩을 바꿀까요?\n저장하면 기억을 모두 다시 색인해요. 기억이 많으면 시간이 걸려요.": "Change the embedding?\nSaving re-indexes every memory. With many memories this takes a while."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 모델": "{0} model",
-  "서버 기본값 ({0})": "Server default ({0})",
+  "서버 기본값 · {0}": "Server default · {0}",
   "{0}: {1}. 다음 실행부터 써요.": "{0}: {1}. Used from the next run.",
   "{0}: 서버 기본값으로 돌아갔어요.": "{0}: back to the server default.",
   "{0}: 켰어요.": "{0}: on.",
