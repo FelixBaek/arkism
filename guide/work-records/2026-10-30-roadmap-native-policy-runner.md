@@ -1,0 +1,21 @@
+# Run seven registered policies and preserve baseline order at zero auxiliary weight
+
+Task: DYN-05.p1; R8 (#152)
+Research: Offline P1 engineering implementation and synthetic verification; no pilot or confirmatory result
+Design: Reuse immutable B0 fusion/packing, scalar replay/read and exact state/feature bindings. Run B0/B1/B2/FD/IR/NOTIME/NOOUT on explicit files; preserve planned, failed, fallback and cost rows. Separate raw artifact hashes, typed manifest/config commitments and actual observable comparisons.
+Relation: adapted
+Deviation: The owner selected baseline-order priority for the registered binary64 underflow counterexample. Six non-B0 policies now explicitly use p1-zeroaux-order-v1. With every auxiliary weight exactly zero, preserve B0 eligible order and packing after all validation and unchanged score arithmetic. Historical versions preserve the former tie rule and its reproduced divergence. Fastslow/capture remain separately selected extensions.
+
+Why: Implement the complete p1 adapter/runner/Go CLI and Python compare_runs API, including empty schedules, policy-specific failures, secure role-file admission and owned output rollback. Do not add scores with incompatible units or turn hashes into source authorization. Preserve the zero-auxiliary baseline requirement even when positive relevance underflows to zero in binary64.
+Verified: Author173 methods/735 leaf and combined independent208 methods/894 leaf passed in normal and race runs, with zero failures/skips. Independent69 typed inputs covered60 normal six-policy cases, the fully registered subnormal counterexample, historical divergence, missing state/features, sparse/ineligible/tied candidates and budget variants. Actual Go run() published seven policy files; Python compare_runs read those exact files and passed nine condition checks plus10 independent Python tests. All9 source pins,42 fixed assets and60 independent artifacts were verified by root. The registry changed only28 version/derived-hash fields, preserving numeric parameters, Dynamics and roles. Default collector380 methods/857 leaf includes DYN19/42 exactly once; eight negative guards and one positive control passed separately. Actual integrated fullcheck92315 exit0: Python624 (173 tools,402 evaluation,49 integrations), Go complexity/vet/race, UI532. Strict lint and added-complexity checks passed; existing three complexity debts remain.
+Limits: p1 acceptance is explicitly not whole DYN05/capture completion; count21/63 remains unchanged. No strongest-reference selection, tuning, pilot, holdout or scientific claim. Snapshot input is a consistency witness, never the numeric replay seed. Compare proves actual registry and observed candidate/budget relations, while other equal-condition checks rely on shared manifest/full-config commitments rather than reopening source files or proving current authorization. Empty/failed-only comparisons do not establish full equality. Elapsed/provider cost stays null when unmeasured. No product UI/API/DB/provider/model, standalone product/CLI build, deployment or Claude changes. Parent selection documents keep their historical selection status; current implementation evidence is recorded here.
+
+## Interfaces and validation
+
+Go CLI source accepts run with exactly one of --manifest/--p1-manifest plus --config, --registry and --out. The P1 wrapper resolves only its fixed sibling base manifest. Output input-manifest commitment is the actual selected file's raw SHA; run/config references retain their separate typed semantic commitments. Read roles and registry binding are checked before execution. Stateful policy context is closed; stateless jobs retain per-query baseline contexts. The Python comparison entry is compare_runs(run_paths, registry_path), with at least two distinct run artifacts and no hidden source reads. Standalone CLI building was not performed; actual CLI behavior was exercised through Go tests calling run().
+
+## 한국어 작업 기록
+
+이유: 일곱 정책의 실제 실행·파일 게시·비교를 구현하고, 소수점 충돌에서도 보조 가중치0이면 기존 순위가 유지되도록 승인된 새 정책 버전을 적용했다.
+검증: 작성173메서드735세부·독립 포함208메서드894세부 일반/race 모두 통과. 실제7파일→Python비교,69입력·고정42자산 검증. 전체92315 종료0(Python624·Go·UI532), 수집380/857·실패 차단8종/정상1종 통과.
+한계: p1 하위 단계만 수용하며 전체21/63을 유지한다. 과거 실패는 보존했고 새 버전의 실제 통과와 구분했다. native 서비스 연결·실험/채택·선택적 capture는 후속이며 빌드·배포·Claude 변경은 없다.

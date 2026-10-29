@@ -11,6 +11,7 @@ _SYSTEM_MODULES = ('system/sys_01/test_shadow_contract.py',
                    'system/sys_03/test_atomicity.py')
 _EXPERIMENT_MODULES = ('experiments/exp_01/test_protocol.py',
                        'experiments/exp_02/test_run_plan.py')
+_DYNAMICS_MODULES = ('test_dynamics_compare.py',)
 _DIRECTORY = Path(__file__).parent / 'memory-harness-v1'
 
 
@@ -41,7 +42,7 @@ def load_tests(loader, standard_tests, pattern):
     original_path = list(sys.path)
     try:
         sys.path.insert(0, str(_DIRECTORY))
-        for filename in _MODULES + _SYSTEM_MODULES + _EXPERIMENT_MODULES:
+        for filename in _MODULES + _SYSTEM_MODULES + _EXPERIMENT_MODULES + _DYNAMICS_MODULES:
             path = _DIRECTORY / filename
             if not path.is_file() or path.is_symlink():
                 raise AssertionError('required harness test module missing')
