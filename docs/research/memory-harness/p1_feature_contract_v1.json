@@ -1,0 +1,338 @@
+{
+  "dynamics_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "feature_rules": [
+    "present⇒valueunitnonnull/missing_reasonnull; missing⇒valuenull/fixedmissingreason",
+    "samefullscope/target/sourceCAS/hash; observedknown<=probeat,sameclock; availableat<=probeat/seq<=cutoff",
+    "featurefuture/backfill/gold/split/posthoc/trustrename forbidden; independent rules/version/provenance mandatory"
+  ],
+  "hash_reference_domains": {
+    "CLIStatus.outputs completion_manifest raw_sha256": {
+      "referent": "actual published manifest.json rawbytesSHA",
+      "self_reference": "not inside OutputManifest.files"
+    },
+    "EvidenceBinding.task_sha256": {
+      "metadata_equality": "TaskBinding.task_sha256 and task_ref.content_sha256",
+      "referent": "exact original task-definition raw artifact SHA"
+    },
+    "EvidenceConsumption.claim_sha256": {
+      "projection": "EvidenceClaimProjectionV2",
+      "registration": "only firstqualifiedknownoutcome; unknown/unattributable/unqualified/exposure never creates entry"
+    },
+    "EvidenceConsumption.first_receipt_sha256": {
+      "immutable": true,
+      "referent": "최초적격consumptionReceipt의ReceiptV2.receipt_sha256"
+    },
+    "EvidenceConsumption.identity_sha256": {
+      "does_not_depend_on": [
+        "ReceiptV2",
+        "EvidenceConsumption.first_receipt_sha256",
+        "duplicate_of_receipt_sha256",
+        "claim_sha256"
+      ],
+      "projection": "EvidenceIdentityProjectionV2"
+    },
+    "EvidenceRef.content_sha256_for_task_ref": {
+      "referent": "exact original task-definition artifact rawbytesSHA; sourceevidencehash와구별"
+    },
+    "OutputManifest.run_config_raw_sha256": {
+      "not": "typed config hash",
+      "referent": "SHA256(actual --config argvfile exactrawbytes)"
+    },
+    "OutputManifest.run_config_sha256": {
+      "not": "argvrawfilehash",
+      "referent": "DynamicsRunConfigV2.config_sha256 typed full config semantic hash"
+    },
+    "OutputRoleFile.raw_sha256": {
+      "path_domain": "trusted outroot-relative fixed output path",
+      "referent": "SHA256(actual relative_path artifact exactrawbytes)"
+    },
+    "RankerConfigV2.inherited_b2_config_sha256": {
+      "binding": "That B2 ranker parameter digest already includes original B2 dynamics_config_sha256; never use full PolicyConfig or registry-associated full-wire hash.",
+      "consumption": "Ablation disables only numeric decay or jumps. A qualified known outcome still has the same evidence-consumption eligibility when NOOUT/eta=0 gives a zero jump; no qualification, binding or history guard is removed.",
+      "context": "PolicyRegistryV2/DynamicsRunConfigV2 validation must locate actual selected B2 entry and compare both complete configurations.",
+      "dynamics_allowed_difference": [
+        "exactly selected decay_enabled or outcome_jump_enabled switch",
+        "own config_sha256"
+      ],
+      "ranker_allowed_difference": [
+        "policy_id",
+        "policy_version",
+        "dynamics_config_sha256",
+        "inherited_b2_config_sha256",
+        "ablation",
+        "config_sha256",
+        "registry_sha256 association"
+      ],
+      "required_unchanged": "All other fields, including lane definitions/weights, offset, feature/missing/fallback rules, tolerances and evidence rules, must match selected B2.",
+      "target": "selected B2 RankerConfigV2.config_sha256, the fixed RankerParametersProjection digest"
+    },
+    "ReceiptV2.duplicate_of_receipt_sha256": {
+      "nonnull_when": "NEW-IDsamequalifiedconsumedidentity+sameclaim",
+      "null_otherwise": true,
+      "referent": "동일consumedidentity의EvidenceConsumption.first_receipt_sha256"
+    },
+    "ReceiptV2.evidence_consumption_sha256": {
+      "exactretry": "reuseoriginalreceiptfieldunchanged",
+      "kind": "identityprojectionSHA, NOT full EvidenceConsumptionrecordSHA",
+      "nonnull_when": [
+        "firstqualifiedconsumptionreceipt",
+        "NEW-IDduplicateofpreviousqualifiedconsumption"
+      ],
+      "null_when": [
+        "unknown",
+        "failed_unattributable",
+        "unqualifiedoutcome",
+        "exposure",
+        "activate",
+        "invalidation"
+      ],
+      "referent": "EvidenceConsumption.identity_sha256"
+    },
+    "TaskBinding.task_sha256": {
+      "algorithm": "SHA256 exact original task-definition artifact rawbytes",
+      "equal_to": [
+        "TaskBinding.task_ref.content_sha256",
+        "EvidenceBinding.task_sha256"
+      ],
+      "not": [
+        "TaskBindingselfhash",
+        "relationshipgraphhash",
+        "nativeDTOcanonicalselfhash"
+      ],
+      "rawbody_verifier": "fixtureparent 별도검증; EventDTObody미휴대"
+    }
+  },
+  "is_product_contract": false,
+  "models": {
+    "ImportanceFeatureV1": {
+      "additional_fields": false,
+      "fields": {
+        "available_accepted_seq": {
+          "nullable": false,
+          "ref": "Seq",
+          "required": true,
+          "type": "ref"
+        },
+        "available_at_ns": {
+          "nullable": false,
+          "ref": "NS",
+          "required": true,
+          "type": "ref"
+        },
+        "clock_domain": {
+          "nullable": false,
+          "ref": "LegacyID",
+          "required": true,
+          "type": "ref"
+        },
+        "feature_id": {
+          "nullable": false,
+          "ref": "LegacyID",
+          "required": true,
+          "type": "ref"
+        },
+        "feature_name": {
+          "const": "importance",
+          "nullable": false,
+          "required": true,
+          "type": "string"
+        },
+        "feature_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "feature_version": {
+          "nullable": false,
+          "ref": "LegacyID",
+          "required": true,
+          "type": "ref"
+        },
+        "generator_config_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "input_refs": {
+          "items": {
+            "nullable": false,
+            "ref": "EvidenceRef",
+            "type": "ref"
+          },
+          "max_items": "selected ResourceLimits.max_array_items with field-specific limits applied additionally",
+          "nullable": false,
+          "required": true,
+          "type": "array"
+        },
+        "missing_reason": {
+          "nullable": true,
+          "ref": "Reason",
+          "required": true,
+          "type": "ref"
+        },
+        "observed_at_ns": {
+          "nullable": true,
+          "ref": "NS",
+          "required": true,
+          "type": "ref"
+        },
+        "producer_version": {
+          "nullable": false,
+          "ref": "LegacyID",
+          "required": true,
+          "type": "ref"
+        },
+        "rule_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "scope": {
+          "nullable": false,
+          "ref": "ScopeV2",
+          "required": true,
+          "type": "ref"
+        },
+        "source": {
+          "nullable": false,
+          "ref": "EvidenceRef",
+          "required": true,
+          "type": "ref"
+        },
+        "status": {
+          "enum": [
+            "present",
+            "missing"
+          ],
+          "nullable": false,
+          "required": true,
+          "type": "string"
+        },
+        "target": {
+          "nullable": false,
+          "ref": "RefV2",
+          "required": true,
+          "type": "ref"
+        },
+        "unit": {
+          "const": "dimensionless",
+          "nullable": false,
+          "required": true,
+          "type": "string"
+        },
+        "value": {
+          "nullable": true,
+          "ref": "UnitFloat",
+          "required": true,
+          "type": "ref"
+        }
+      },
+      "kind": "closed_object",
+      "required": [
+        "feature_id",
+        "scope",
+        "target",
+        "source",
+        "clock_domain",
+        "observed_at_ns",
+        "available_at_ns",
+        "available_accepted_seq",
+        "feature_name",
+        "feature_version",
+        "rule_sha256",
+        "generator_config_sha256",
+        "producer_version",
+        "input_refs",
+        "status",
+        "value",
+        "unit",
+        "missing_reason",
+        "feature_sha256"
+      ]
+    },
+    "P1FeatureFileV1": {
+      "additional_fields": false,
+      "fields": {
+        "feature_contract_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "features": {
+          "items": {
+            "nullable": false,
+            "ref": "ImportanceFeatureV1",
+            "type": "ref"
+          },
+          "max_items": "selected ResourceLimits.max_array_items with field-specific limits applied additionally",
+          "nullable": false,
+          "required": true,
+          "type": "array"
+        },
+        "protocol": {
+          "const": "p1-feature-file-v1",
+          "nullable": false,
+          "required": true,
+          "type": "string"
+        }
+      },
+      "kind": "closed_object",
+      "required": [
+        "protocol",
+        "feature_contract_sha256",
+        "features"
+      ]
+    },
+    "P1InputManifestV1": {
+      "additional_fields": false,
+      "fields": {
+        "base_dynamic_manifest_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "feature_contract_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "feature_file": {
+          "nullable": false,
+          "ref": "RoleFile",
+          "required": true,
+          "type": "ref"
+        },
+        "manifest_sha256": {
+          "nullable": false,
+          "ref": "SHA",
+          "required": true,
+          "type": "ref"
+        },
+        "protocol": {
+          "const": "p1-input-manifest-v1",
+          "nullable": false,
+          "required": true,
+          "type": "string"
+        }
+      },
+      "kind": "closed_object",
+      "required": [
+        "protocol",
+        "base_dynamic_manifest_sha256",
+        "feature_contract_sha256",
+        "feature_file",
+        "manifest_sha256"
+      ]
+    }
+  },
+  "protocol": "arkism-p1-importance-sidecar-v1",
+  "scope": "deterministic pinned available-observation features only; no trust rename/gold/future data/model extraction",
+  "status": "reviewed_contract_pending_typed_implementation",
+  "uses_closed_types_from_dynamics_contract": true
+}
