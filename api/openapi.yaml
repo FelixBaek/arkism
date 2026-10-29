@@ -7478,7 +7478,7 @@
                 }
               }
             }
-          }}, "description": "range today|7d|30d|90d|all, kind all|workflow|agent|team, agent_id, team_id → {kpi, by_day, workflows, failing_nodes, agents, teams}."}},
+          }}, "description": "range today|7d|30d|90d|all, kind all|workflow|agent|team, agent_id, team_id, workflow_id (one workflow's runs only) → {kpi, by_day, workflows (with avg_ms, max_ms of succeeded runs), failing_nodes, agents, teams}."}},
     "/v1/crew/agents/status": {"get": {"summary": "Work agents: working|idle|off (read:crew)", "responses": {"200": {"description": "OK"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",

@@ -177,27 +177,6 @@ test("Discord: bots, bot side, settings and connect steps", async () => {
   assert.deepEqual(clean(), []);
 });
 
-test("usage: KPIs, chart, tables, filters and retrying failures", async () => {
-  const h = await bootTeams("crewUsage");
-  await h.settle();
-  assert.match(table().textContent, /성공률/);
-  for (const col of document.querySelectorAll(".tm-col")) { dom.fire(col, "mouseenter"); dom.fire(col, "mouseleave"); }
-  h.data.runs.push({ id: "runf", revision: 1, created_at: iso(-5), updated_at: iso(-4), crew_run: { crew_id: "wf1", status: "failed", input: "{}", nodes: { code: { status: "failed", error: "exit 1" }, ai1: { status: "done", output: "x" } }, loops: { "code>ai1:fail": 1 } } });
-  h.render(); await h.settle();
-  await sweep(h, document.body, 2);
-  for (const k of ["today", "7d", "90d", "all"]) {
-    const t = [...document.querySelectorAll("#controls .tm-seg-tab")].find((b) => b.textContent === { today: "오늘", "7d": "7일", "90d": "90일", all: "전체" }[k]);
-    t?.click(); await h.settle();
-  }
-  h.routes.unshift(["GET", /^\/v1\/crew\/usage/, () => new Error("HTTP 501")]);
-  await h.click(document, "새로고침");
-  assert.match(table().textContent, /지원하지 않아요/);
-  h.routes[0] = ["GET", /^\/v1\/crew\/usage/, () => ({})];
-  await h.click(document, "새로고침");
-  assert.match(table().textContent, /불러오지 못했어요/);
-  assert.deepEqual(clean(), []);
-});
-
 const exact = (root, text) => [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === text);
 async function openTeam(h, id) {
   window.dispatchEvent(new CustomEvent("arkism:open-team", { detail: { id } }));
@@ -379,28 +358,3 @@ test("Discord: unlink a bot and save the settings, with failures", async () => {
   assert.deepEqual(clean(), []);
 });
 
-test("usage: retrying failed runs, refused, partly failed and done", async () => {
-  const h = await bootTeams("crewUsage");
-  h.data.runs.push({ id: "runf", revision: 1, created_at: iso(-5), updated_at: iso(-4), crew_run: { crew_id: "wf1", status: "failed", input: "{}", nodes: { code: { status: "failed", error: "exit 1" }, ai1: { status: "done", output: "x" } }, loops: { "code>ai1:fail": 1 } } });
-  await h.click(document, "새로고침");
-  const retry = () => dom.byText(table(), "button", /실패한 곳부터 다시/);
-  h.answer = false; retry().click(); await h.settle();
-  h.answer = true;
-  h.routes.unshift(["POST", /^\/v1\/crew\/runs$/, () => new Error("맡기기 실패")]);
-  retry().click(); await h.settle();
-  h.routes.shift();
-  retry().click(); await h.settle();
-  const again = exact(table(), "다시 실행");
-  if (again) { again.click(); await h.settle(); }
-  assert.ok(h.notices.some((n) => /실행을 맡겼어요/.test(n)), h.notices.join(" / "));
-  assert.deepEqual(clean(), []);
-});
-
-test("#465 usage: failed run and meeting reads are said under the numbers, not shown as no failures", async () => {
-  const h = await bootTeams("crewUsage", {});
-  h.routes.unshift(["GET", /^\/v1\/crew\/runs\?/, () => new Error("boom")], ["GET", /^\/v1\/crew\/meetings\?/, () => new Error("boom")]);
-  await h.click(document, "새로고침");
-  await h.settle();
-  assert.match(table().textContent, /성공률/);
-  assert.match(table().textContent, /실행·회의 기록을 불러오지 못해/);
-});

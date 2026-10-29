@@ -33,12 +33,16 @@ test("a run detail in 기록 shows the final result text and delivery status", a
   h.closeAll();
 });
 
-test("실행 보기 on a waiting FLOW run opens that run in its workflow's 기록", async () => {
+test("a waiting FLOW run rings its card, and 실행 보기 in the popup opens it in 기록·사용량", async () => {
   const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "waiting", waiting: { kind: "approval", node_id: "ok", question: "보낼까요?" } })]] });
   h.data.runs[0].crew_run.invocation_mode = "flow";
   h.render(); await h.settle();
-  h.btn(document.querySelector("#stats"), "실행 보기").click(); await h.settle();
-  assert.equal(h.top().querySelector(".crew-popup-tab.on").textContent, "기록");
+  assert.equal(document.querySelector("#stats .wf-attn"), null, "no banner over the list");
+  const card = document.querySelector('[data-id="crew:wf1"]');
+  assert.ok(card.classList.contains("run-waiting"));
+  card.click(); await h.settle();
+  h.btn(h.top(), "실행 보기").click(); await h.settle();
+  assert.equal(h.top().querySelector(".crew-popup-tab.on").textContent, "기록·사용량");
   assert.ok(h.top().querySelector(".flow-history-detail"));
   assert.match(h.top().textContent, /사람의 결정이 필요해요/);
   h.closeAll();

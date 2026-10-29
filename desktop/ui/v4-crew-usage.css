@@ -1,47 +1,12 @@
-/* CREW › 사용량 (Figma 325:37545): stacked day bars in one violet, hover tooltip, four tables. */
-/* Figma chart/agent (#a594f9 dark, #6e5bd8 light); team and expert are its lighter steps. Bars sit at 45% until hovered. */
-.tm-usage { --cu-violet: #a594f9; --cu-team: #beb2fb; --cu-agent: #d2c9fc; }
-:root[data-theme="light"] .tm-usage { --cu-violet: #6e5bd8; --cu-team: color-mix(in srgb, #6e5bd8 72%, #fff); --cu-agent: color-mix(in srgb, #6e5bd8 45%, #fff); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .tm-usage { --cu-violet: #6e5bd8; --cu-team: color-mix(in srgb, #6e5bd8 72%, #fff); --cu-agent: color-mix(in srgb, #6e5bd8 45%, #fff); } }
-.tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
-.tm-col i.cu-ag, .tm-col i.team, .tm-col i.auto { border-radius: 0; opacity: .45; }
-.tm-col i.cu-ag { background: var(--cu-agent); }
-.tm-col i.team { background: var(--cu-team); }
-.tm-col i.auto { background: var(--cu-violet); }
-.tm-col.hot i { opacity: 1; }
-.tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
-.tm-cols { position: relative; }
-.cu-tip { position: absolute; top: 0; z-index: 2; min-width: 148px; padding: 8px 10px; border-radius: 8px; background: var(--nc-raised); border: 1px solid var(--nc-line); box-shadow: 0 6px 18px rgba(0, 0, 0, .3); pointer-events: none; }
-.cu-tip[hidden] { display: none; }
-.cu-tip b { display: block; margin-bottom: 4px; color: var(--nc-text); font: 500 12px/1.5 var(--sans); white-space: nowrap; }
-.cu-tip p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--nc-muted); font: 400 12px/1.6 var(--sans); }
-.cu-tip i { width: 8px; min-width: 8px; max-width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--cu-violet); }
-.cu-tip i.cu-ag { background: var(--cu-agent); }
-.cu-tip i.team { background: var(--cu-team); }
-.cu-tip i.bad { background: var(--nc-amber); }
-.cu-tip em { margin-left: auto; padding-left: 12px; color: var(--nc-text); font-style: normal; }
-.cu-card .tm-utable { margin-top: 12px; }
-.cu-table .tm-urow { gap: 12px; }
-/* 325:37545: 180·130·110·110·130·110·198 at 1440, scaled with the window */
-.cu-expert .tm-urow, .cu-team .tm-urow, .cu-auto .tm-urow { grid-template-columns: minmax(0, 180fr) minmax(0, 130fr) minmax(0, 110fr) minmax(0, 110fr) minmax(0, 130fr) minmax(0, 110fr) minmax(0, 198fr); }
-.cu-table .tm-urow > span, .cu-table .tm-urow > .cu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cu-table .tm-urow > span:first-child, .cu-table .tm-urow > .cu-name { text-align: left; }
-.cu-table .tm-urow > span:nth-child(2) { text-align: left; }
-.cu-expert .tm-urow > span:last-child, .cu-team .tm-urow > span:last-child, .cu-auto .tm-urow > span:last-child { text-align: left; }
-.cu-table .quiet { color: var(--nc-muted); }
-.cu-table .amber { color: var(--nc-amber); }
-.cu-name { display: flex; align-items: center; gap: 8px; }
-.cu-name .tm-mark { width: 22px; height: 22px; flex: none; }
-.cu-name .tm-mark img, .cu-name .tm-mark svg { width: 22px; height: 22px; }
-.cu-face { border-radius: 50%; overflow: hidden; }
-.cu-face img { object-fit: cover; }
-.cu-table .tm-urow > span:nth-child(6) { text-align: right; }
-/* Narrow windows: drop the 평균 column (5th) and let the last column wrap instead of cutting it off. */
-@media (max-width: 1200px) {
-  .cu-table .tm-urow > :nth-child(5) { display: none; }
-  /* text columns may shrink to 0 (they clip with an ellipsis or wrap), so the row never runs past the card at 900px */
-  .cu-expert .tm-urow { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 48px 64px 72px minmax(0, 1.2fr); }
-  .cu-team .tm-urow { grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 48px 84px 64px minmax(0, 1.8fr); }
-  .cu-auto .tm-urow { grid-template-columns: minmax(0, 1.1fr) minmax(0, .8fr) 48px 64px 72px minmax(0, 1.8fr); }
-  .cu-table .tm-urow > span:last-child { white-space: normal; overflow-wrap: anywhere; }
-}
+/* FLOW › workflow popup › 기록·사용량 (Figma 1404:16985): numbers, day bars in one violet, failing steps. */
+/* Figma chart violet (#a594f9 dark, #6e5bd8 light). Bars sit at 45% until hovered. */
+.tm-usage { --cu-violet: #a594f9; }
+:root[data-theme="light"] .tm-usage { --cu-violet: #6e5bd8; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .tm-usage { --cu-violet: #6e5bd8; } }
+.tm-usage .tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
+.tm-usage .tm-col i.auto { background: var(--cu-violet); border-radius: 0; opacity: .45; }
+.tm-usage .tm-col:hover i { opacity: 1; }
+.tm-usage .tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
+.flow-usage .tm-uctl { margin-bottom: 12px; }
+.flow-usage-body { display: flex; flex-direction: column; gap: 12px; }
+.flow-usage .amber { color: var(--nc-amber); }

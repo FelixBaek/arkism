@@ -60,3 +60,20 @@ test("ROUTER has no 라우팅 설정 tab: the policy card opens it and 라우팅
   await app.click(app.$$("#area-tabs .area-tab")[0], 100);
   assert.ok(!app.$("#table .v4-set-routing"), "the tab goes back to 라우팅 현황");
 });
+
+test("the rail folds to icons, says where you are, and stays folded after a reload of the setting", async () => {
+  const root = app.$("#app").ownerDocument.documentElement, fold = app.$("#rail-toggle");
+  await app.click(app.$('.nav-item[data-menu="router"]'), 50);
+  assert.equal(root.classList.contains("rail-collapsed"), false);
+  assert.equal(fold.getAttribute("aria-label"), "메뉴 접기");
+  await app.click(fold, 20);
+  assert.ok(root.classList.contains("rail-collapsed"));
+  assert.equal(fold.getAttribute("aria-expanded"), "false");
+  assert.equal(fold.getAttribute("aria-label"), "메뉴 펼치기");
+  assert.equal(app.$("#location-bar").textContent, "Router›라우팅 현황");
+  await app.click(app.$('.nav-item[data-menu="agent"]'), 50);
+  assert.equal(app.$("#location-bar").textContent, "Flow", "a one-page menu names only the menu");
+  assert.equal(app.$("#app").ownerDocument.defaultView.localStorage.getItem("arkism.rail.folded"), "1");
+  await app.click(fold, 20);
+  assert.equal(root.classList.contains("rail-collapsed"), false);
+});

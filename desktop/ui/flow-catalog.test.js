@@ -24,49 +24,6 @@ test("FLOW preserves callable roles and teams without exposing owned workflow de
   assert.equal(flowAlias(records[0], records), "@review");
 });
 
-test("research is previewed before creation and preserves its graph and deep mode", async () => {
-  const crew = { type: "workflow", name: "리서치", handle: "리서치", model: "auto", graph: simpleGraph(), limits: { max_steps: 12, max_minutes: 20 }, research: { quick_node: "ai1", deep_node: "deep", deep_alias: "딥리서치", evidence_strategy: "sources-and-gaps-v1" } };
-  const h = await boot({ view: "crew", routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => ({ crew, aliases: { standard: "리서치", deep: "딥리서치" }, changes: ["근거 부족 시 추가 조사"] })]] });
-  h.render(); await h.settle();
-  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
-  h.btn(h.top(), /^리서치/).click(); await h.settle();
-  assert.ok(h.top()?.classList.contains("wf-settings"));
-  assert.equal(h.calls.filter((r) => r.method === "POST" && r.url === "/v1/crew").length, 0);
-  assert.match(h.top().querySelector(".research-review").textContent, /시간이 오래 걸린다는 이유로 전환하지 않아요/);
-  h.btn(h.top(), "리서치 만들기").click(); await h.settle();
-  const saved = h.calls.find((r) => r.method === "POST" && r.url === "/v1/crew");
-  assert.ok(saved);
-  assert.equal(saved.body.crew.handle, "리서치");
-  assert.equal(saved.body.crew.model, crew.model);
-  assert.deepEqual(saved.body.crew.graph, crew.graph);
-  assert.deepEqual(saved.body.crew.limits, crew.limits);
-  assert.deepEqual(saved.body.crew.research, crew.research);
-  h.closeAll();
-});
-
-test("research review of an existing definition explicitly saves a reviewed revision", async () => {
-  const records = crewRecords();
-  const existing = records.find((r) => r.id === "wf2");
-  Object.assign(existing.crew, { name: "리서치", handle: "리서치", enabled: true, skills: ["source-check"], budget: { monthly_usd: 25 } });
-  records.push({ id: "existing-deep", revision: 2, crew: { ...structuredClone(existing.crew), name: "기존 딥리서치", handle: "딥리서치" } });
-  const crew = { ...structuredClone(existing.crew), research: { quick_node: "ai1", deep_node: "deep", deep_alias: "리서치_심층", evidence_strategy: "sources-and-gaps-v1", helper_origin: "reviewed" } };
-  const h = await boot({ view: "crew", data: { crew: records }, routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => ({ crew, existing_id: "wf2", expected_revision: 17, aliases: { standard: "리서치", deep: "리서치_심층" }, changes: ["기존 딥리서치를 보존하고 고유 별칭을 제안해요"] })]] });
-  h.render(); await h.settle();
-  await reviewResearch(h);
-  assert.ok(h.top()?.classList.contains("wf-settings"));
-  assert.match(h.top().querySelector(".research-review").textContent, /@리서치_심층/);
-  assert.equal(h.calls.some((r) => r.method === "POST"), false);
-  dom.type(h.top().querySelector('[aria-label="깊은 조사 @이름"]'), "근거심층조사");
-  h.btn(h.top(), "개선안 저장").click(); await h.settle();
-  const saved = h.calls.find((r) => r.method === "POST" && r.url === "/v1/crew/wf2");
-  assert.ok(saved);
-  assert.equal(saved.body.expected_revision, 17, "use the reviewed server revision, not the stale catalogue revision");
-  for (const key of ["graph", "model", "limits", "skills", "budget", "enabled", "trigger"]) assert.deepEqual(saved.body.crew[key], crew[key], key);
-  assert.deepEqual(saved.body.crew.research, { ...crew.research, deep_alias: "근거심층조사" });
-  assert.equal(h.calls.some((r) => r.method === "POST" && (r.url === "/v1/crew" || r.url === "/v1/crew/existing-deep")), false);
-  h.closeAll();
-});
-
 test("an owned graph returns to its role inside FLOW with the unsaved role draft", async () => {
   const h = await boot({ view: "crew" });
   h.render(); await h.settle();
@@ -79,37 +36,6 @@ test("an owned graph returns to its role inside FLOW with the unsaved role draft
   assert.equal(document.querySelector(".graph-win"), null);
   assert.ok(h.top()?.classList.contains("ex-pop"));
   assert.equal(h.fields.filter((f) => f.input.classList.contains("wk-instr")).at(-1).input.value, "아직 저장하지 않은 지시");
-  h.closeAll();
-});
-
-test("research review refuses an unknown revision and keeps conflicts open for review", async () => {
-  const crew = { type: "workflow", name: "리서치", handle: "리서치", graph: simpleGraph(), research: { deep_alias: "딥리서치" } };
-  for (const issue of ["missing-revision", "revision_conflict", "handle_taken"]) {
-    const proposal = { crew, existing_id: "wf1", changes: [], ...(issue === "missing-revision" ? {} : { expected_revision: 17 }) };
-    const h = await boot({ view: "crew", routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => proposal], ["POST", /^\/v1\/crew\/wf1$/, () => new Error(issue)]] });
-    h.render(); await h.settle();
-    await reviewResearch(h);
-    if (issue === "missing-revision") {
-      assert.equal(h.top(), null);
-      assert.equal(h.calls.some((r) => r.method === "POST"), false);
-    } else {
-      h.btn(h.top(), "개선안 저장").click(); await h.settle();
-      assert.ok(h.top()?.classList.contains("wf-settings"));
-      assert.ok(h.top().querySelector(".form-error").textContent);
-      assert.equal(h.calls.some((r) => r.method === "POST" && r.url === "/v1/crew"), false);
-    }
-    h.closeAll();
-  }
-});
-
-test("a basic research fallback does not claim to support automatic deep escalation", async () => {
-  const crew = { type: "workflow", name: "리서치", handle: "리서치", graph: simpleGraph() };
-  const h = await boot({ view: "crew", routes: [["GET", /^\/v1\/crew\/templates\/research\?/, () => ({ crew, changes: ["기본 조사 템플릿"], aliases: { standard: "리서치", deep: "" } })]] });
-  h.render(); await h.settle();
-  await reviewResearch(h);
-  assert.match(h.top().querySelector(".research-review").textContent, /자동 심층 전환이 포함되지 않아요/);
-  assert.equal(h.top().querySelector('[aria-label="깊은 조사 @이름"]'), null);
-  assert.equal(h.calls.some((r) => r.method === "POST"), false);
   h.closeAll();
 });
 
@@ -126,6 +52,9 @@ test("FLOW opens role and team editors from one catalogue and keeps every creati
   document.querySelector('[data-id="crew:tm1"]').click(); await h.settle();
   assert.ok(h.top()?.classList.contains("tm-pop"));
   assert.equal(h.state.view, "crew");
+  h.closeAll();
+  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
+  assert.deepEqual([...h.top().querySelectorAll(".flow-create-option strong")].map((n) => n.textContent), ["단독 실행", "협업·회의", "단계 구성"], "리서치 is no longer a choice");
   h.closeAll();
   for (const label of ["단독 실행", "협업·회의", "단계 구성"]) {
     h.render();
@@ -178,4 +107,22 @@ test("agent and team cards show their cover like a workflow card, the avatar in 
   h.btn(d, "저장").click(); await h.settle();
   assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag2$/.test(c.url)).at(-1).body.crew.cover, undefined, "배경 빼기 saves without one");
   h.closeAll();
+});
+
+test("FLOW filters by 실행 방식 tabs 전체 | 단독 | 단계 | 협업, with the search box first", async () => {
+  const h = await boot({ view: "crew" });
+  h.render(); await h.settle();
+  const bar = document.querySelector(".wf-bar");
+  assert.ok(bar.firstElementChild.classList.contains("wf-search"));
+  const tabs = [...bar.querySelectorAll(".wf-kinds [role=tab]")];
+  assert.deepEqual(tabs.map((t) => t.textContent), ["전체", "단독", "단계", "협업"]);
+  const kinds = () => new Set([...document.querySelectorAll(".wf-card[data-flow-kind]")].map((n) => n.dataset.flowKind));
+  for (const [i, kind] of [[1, "agent"], [2, "workflow"], [3, "team"]]) {
+    tabs[i].click(); await h.settle();
+    assert.deepEqual(kinds(), new Set([kind]));
+    assert.equal(tabs[i].getAttribute("aria-selected"), "true");
+    assert.equal(bar.querySelectorAll(".wf-kinds .active").length, 1);
+  }
+  tabs[0].click(); await h.settle();
+  assert.deepEqual(kinds(), new Set(["workflow", "agent", "team"]));
 });

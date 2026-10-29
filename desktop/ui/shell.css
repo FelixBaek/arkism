@@ -10,12 +10,14 @@
 .sidebar { position: relative; background: var(--nc-rail); border-right: 0; padding: 32px 20px 20px; gap: 24px; }
 /* Figma 198:110: the mark sits alone on top, the word below it with the status dot */
 .sidebar .brand { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 53px; padding: 0; font-weight: 400; }
-.brand-mark { grid-column: 1 / -1; width: 21px; height: 19px; flex: none; }
+.brand-mark { grid-column: 1; width: 21px; height: 19px; flex: none; }
 .brand-word { font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
-/* Search, status and help sit as icons at the right end of the settings row. */
-.rail-tools { position: absolute; right: 16px; bottom: 28px; z-index: 1; display: flex; gap: 2px; }
+/* Figma 198:110: the status icon sits at the right end of the 설정 row, the drawing under it. */
+.rail-foot { display: flex; align-items: center; gap: 8px; flex: none; }
+.rail-foot .rail-settings { flex: 1; }
+.rail-tools { display: flex; gap: 2px; }
 .rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-quiet); }
-.rail-tool:hover, .rail-tool[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
+.rail-tool:hover, .rail-tool:not(.rail-toggle)[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
 .rail-tool .icon { width: 16px; height: 16px; }
 .rail-tool.ok { color: var(--status-ok); }
 .rail-tool.warn { color: var(--warn); }
@@ -44,10 +46,11 @@
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* connection details: a small card under the logo */
-.sidebar .status-card { position: absolute; bottom: 64px; left: 20px; right: -120px; z-index: 20; margin: 0; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); box-shadow: var(--shadow-popover); }
+.sidebar .status-card { position: absolute; bottom: 210px; left: 20px; right: -120px; z-index: 20; margin: 0; background: var(--nc-surface); border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); box-shadow: var(--shadow-popover); }
 
 /* ---------------------------------------------------------------- content */
 .main { padding: var(--nc-page-pad); gap: 24px; background: var(--nc-canvas); }
+.area-bar[hidden] { display: none; }
 .area-bar { display: flex; align-items: center; gap: 8px; flex: none; }
 .area-tabs { display: flex; gap: 8px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .area-tab { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--nc-radius-control); background: none; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); white-space: nowrap; }
@@ -129,20 +132,36 @@
   .area-bar .search kbd { display: none; }
 }
 
-/* Narrow windows (app minimum 720): app.css turns the sidebar into a top bar at 760, which the v4 rail never
-   supported — keep a slim icon rail instead, already from 1000 so the content keeps its width. Labels stay for
-   screen readers. */
+/* 메뉴 접기 (Figma 198:112): the rail folds to its icons, and a line on top of the page names where you are.
+   Narrow windows (below 1000, app minimum 720) always get this rail (shell.js), so the content keeps its width;
+   app.css's 760 top bar is never used. Labels stay for screen readers. */
+.rail-toggle { grid-row: 1; grid-column: 2; justify-self: end; }
+.rail-toggle[hidden] { display: none; }
+.rail-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; flex: none; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-quiet); font: 400 calc(13px * var(--fs, 1))/20px var(--sans); text-align: left; }
+.rail-search:hover { color: var(--nc-text); }
+.rail-search .icon { width: 16px; height: 16px; flex: none; }
+.rail-search span { flex: 1; }
+.rail-search kbd { padding: 2px 6px; border-radius: 6px; background: var(--nc-raised); color: var(--nc-muted); font: 400 11px/16px var(--mono); }
+.location-bar { display: none; }
+:root.rail-collapsed { --nc-rail-w: 72px; }
+:root.rail-collapsed .location-bar { display: flex; align-items: center; flex: none; height: 53px; margin: calc(-1 * var(--nc-page-pad)) calc(-1 * var(--nc-page-pad)) 0; padding: 0 17px; border-bottom: 1px solid var(--nc-line); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.location-bar .sep { margin: 0 8px; color: var(--nc-quiet); }
+:root.rail-collapsed .sidebar { align-items: center; gap: 16px; padding: 24px 12px 16px; }
+:root.rail-collapsed .sidebar .brand { grid-template-columns: auto; row-gap: 16px; justify-items: center; }
+:root.rail-collapsed .rail-toggle { grid-row: 2; grid-column: 1; justify-self: center; }
+:root.rail-collapsed :is(.sidebar .brand-word, .rail-art) { display: none; }
+:root.rail-collapsed .rail-line { align-self: stretch; }
+:root.rail-collapsed .rail-search { width: 44px; padding: 0; justify-content: center; }
+:root.rail-collapsed .rail-search :is(span, kbd) { display: none; }
+:root.rail-collapsed .rail-foot { flex-direction: column; }
+:root.rail-collapsed .sidebar .nav { flex-direction: column; }
+:root.rail-collapsed .sidebar :is(.nav-item, .rail-settings) { flex: none; width: 44px; padding: 0; justify-content: center; }
+:root.rail-collapsed .sidebar :is(.nav-item, .rail-settings) span { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+:root.rail-collapsed .sidebar .status-card { top: auto; bottom: 16px; left: calc(100% + 8px); right: auto; width: 318px; }
+:root.rail-collapsed .main > .page-head:is(.bare, :has(#title.sr-only)):not(:has(> :not(.title-line, .home-back, .home-all))) { top: calc(53px + 24px); }
 @media (max-width: 1000px) {
-  .app, .app.wide { grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
-  .sidebar { flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 16px; padding: 24px 12px 16px; border-bottom: 0; }
-  .sidebar .brand { flex-direction: column; height: auto; gap: 8px; }
-  .sidebar .brand-word, .rail-art { display: none; }
-  .rail-tools { position: static; flex-direction: column; }
-  .rail-line { align-self: stretch; }
-  .sidebar .nav { flex-direction: column; }
-  .sidebar .nav-item { width: 44px; padding: 0; justify-content: center; }
-  .sidebar .nav-item span { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .sidebar .status-card { top: 80px; bottom: auto; right: auto; width: 260px; }
+  .app, .app.wide { grid-template-rows: minmax(0, 1fr); }
+  .sidebar { flex-direction: column; flex-wrap: nowrap; border-bottom: 0; }
 }
 @media (max-width: 760px) {
   .main { padding: 20px 16px 12px; gap: 16px; }

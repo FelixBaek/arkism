@@ -1,5 +1,5 @@
 // 크루 › 자동화 상세·새로 만들기 팝업 (Figma 993:60224 · 998:59605 · 998:60693 · 1044:65953).
-// One window on the shared frame (crew-popup.js): 개요 (목표 · 언제 실행 · 워크플로우 · 진행 알림 · 실행 설정 · 관리), 테스트, 기록.
+// One window on the shared frame (crew-popup.js): 개요 (목표 · 언제 실행 · 워크플로우 · 진행 알림 · 실행 설정 · 관리), 테스트, 기록·사용량.
 // Every field edits a draft; the 저장/취소 bar shows only while something differs. crew.js passes its helpers in once.
 window.ArkismAutomation = (h) => {
   const { state, el, icon, button, notice, request, query, byId, kit } = h;
@@ -169,7 +169,7 @@ window.ArkismAutomation = (h) => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
       bar.querySelector(".primary").disabled = !creating && !n; // the bar stays for AI 제안
-      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록 탭에서 되돌릴 수 있어요`;
+      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록·사용량 탭에서 되돌릴 수 있어요`;
     };
     const touch = () => { updateBar(); paintHead(); };
     const dirty = () => !creating && changed().length > 0;
@@ -347,7 +347,7 @@ window.ArkismAutomation = (h) => {
       let cost = null;
       let tokens = 0;
       let usageRuns = null; // the usage total counts every non-test run in 30 days; the runs list stops at 30
-      try { const w = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow" })}`)).workflows?.find((x) => x.id === rec.id); cost = w?.cost_usd ?? null; tokens = w?.tokens || 0; usageRuns = w?.runs ?? null; } catch (_) { /* no usage yet */ }
+      try { const w = (await request(`/v1/crew/usage?${query({ range: "30d", kind: "workflow", workflow_id: rec.id })}`)).workflows?.find((x) => x.id === rec.id); cost = w?.cost_usd ?? null; tokens = w?.tokens || 0; usageRuns = w?.runs ?? null; } catch (_) { /* no usage yet */ }
       const now = Date.now();
       const recentRuns = runs.filter((r) => r.crew_run?.trigger !== "test" && now - new Date(r.created_at).getTime() < 30 * 864e5);
       const bin = (list) => { const a = Array(15).fill(0); for (const r of list) a[14 - Math.min(14, Math.floor((now - new Date(r.created_at).getTime()) / (2 * 864e5)))]++; const m = Math.max(1, ...a); return a.map((n) => n / m); };
@@ -358,14 +358,16 @@ window.ArkismAutomation = (h) => {
       head.paintEst?.();
     }
 
-    function approvalCard(run) {
-      const node = (rec.crew.graph?.nodes || []).find((n) => n.id === run.crew_run.waiting.node_id);
+    // The answer the card's ring asks for (1486:5990): 실행 보기 opens that run in 기록·사용량.
+    function approvalCard(wait) {
+      const node = (rec.crew.graph?.nodes || []).find((n) => n.id === wait.crew_run.waiting.node_id);
       const card = el("div", "wf-attn");
       const t = el("div", "");
-      t.append(el("strong", "", `확인해 주세요${node ? ` · ${h.nodeTitle(node)}` : ""}`), el("p", "", run.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"));
+      t.append(el("strong", "", `확인해 주세요${node ? ` · ${h.nodeTitle(node)}` : ""}`), el("p", "", wait.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"));
       const acts = el("div", "wf-attn-actions");
       const after = async () => { await h.refreshRuns(); pop.select("overview"); };
-      acts.append(button("거절", "", null, async () => { await h.decide(run, false); void after(); }), button("승인", "primary", null, async () => { await h.decide(run, true); void after(); }));
+      acts.append(button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
+        button("거절", "", null, async () => { await h.decide(wait, false); void after(); }), button("승인", "primary", null, async () => { await h.decide(wait, true); void after(); }));
       card.append(t, acts);
       return card;
     }
@@ -1067,6 +1069,7 @@ window.ArkismAutomation = (h) => {
     function historyTab(body, focus = null) {
       body.classList.remove("auto-body");
       body.classList.add("auto-history");
+      body.append(h.flowUsage.section(rec)); // 사용량 first, then 버전 기록 and 최근 실행 (1404:16985)
       // 판 이력 from the server (GET /v1/crew/versions/{id}, same as the team popup): the live definition first, then each one a save replaced.
       const ver = el("section", "auto-sec auto-versions");
       const vh = el("div", "wf-sec-head");
@@ -1164,7 +1167,7 @@ window.ArkismAutomation = (h) => {
     const tabs = creating ? [{ key: "overview", label: "개요", render: overview }] : [
       { key: "overview", label: "개요", render: (b) => { b.className = "dialog-body crew-popup-body"; overview(b); } },
       { key: "test", label: "테스트", render: (b) => { b.className = "dialog-body crew-popup-body"; testTab(b); } },
-      { key: "history", label: "기록", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b, run); run = null; } }
+      { key: "history", label: "기록·사용량", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b, run); run = null; } }
     ];
     pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); pop.dialog.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });
     // closing with unsaved changes asks first (Esc and 닫기); saving closes with dialog.close(), which skips this

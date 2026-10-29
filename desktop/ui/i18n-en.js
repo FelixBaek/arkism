@@ -187,7 +187,6 @@ window.ArkismI18nEN = {
   "채널 고르기": "Pick a channel",
   "채널 불러오는 중…": "Loading channels…",
   "채널을 불러오지 못했어요": "Couldn't load channels",
-  "실행·회의 기록을 불러오지 못해 부르는 곳·평균 시간·마지막 실패·마지막 회의 칸이 비어 있을 수 있어요. 새로고침하면 다시 불러와요.": "Couldn't load the run and meeting records, so the called-from, average time, last failure and last meeting columns may be empty. Refresh to try again.",
   "자료 목록을 불러오지 못했어요. 잠시 뒤 다시 불러와요.": "Couldn't load the documents. Trying again shortly.",
   "주제를 불러오지 못해 주제별 보기가 빠졌어요. 지도를 다시 열면 다시 불러와요.": "Couldn't load topics, so the by-topic view is missing. Reopen the map to retry.",
   "스크립트 목록을 불러오지 못했어요. 다시 열면 다시 불러와요.": "Couldn't load the scripts. Open this again to retry.",
@@ -219,9 +218,7 @@ window.ArkismI18nEN = {
   "넣을 수 있는 전문가를 모두 넣었어요.": "Every expert is already in.",
   "먼저 전문가를 만들어 주세요.": "Create an expert first.",
   "전문가에게 바로 물어봐요": "Ask an expert directly",
-  "이 기간에 부른 전문가가 없어요.": "No experts were called in this period.",
   "전문가 여럿이 정한 순서대로 말하며 하나의 결과를 만들어요. 연결된 채널에 글을 쓰면 회의가 시작돼요.": "Several experts speak in a set order to produce one result. Posting in a connected channel starts a meeting.",
-  "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.": "How often workflows, experts and teams were called and what they spent. Costs are estimates from public list prices.",
   "아직 팀이 없어요. 새 팀을 만들어 전문가 여럿이 함께 회의하게 해 보세요.": "No teams yet. Make one so several experts can meet together.",
   "팀은 전문가로 만들어요. 먼저 전문가를 만들어 주세요.": "Teams are made of experts. Make an expert first.",
   "개발": "Development",
@@ -2650,17 +2647,9 @@ window.ArkismI18nEN = {
   "채널을 정해요": "Pick channels",
   "채널마다 팀·워크플로우·에이전트": "A team, workflow or agent per channel",
   "디스코드는 서버 하나만 연결해요. 디스코드에서 부른 일은 읽기만 하고 파일을 고치지 않아요.": "Only one Discord server is connected. Work started from Discord is read-only and never edits files.",
-  "이 서버는 아직 워크플로우·에이전트 사용량을 지원하지 않아요.": "This server doesn't report workflow and agent usage yet.",
-  "확인하기 →": "Review →",
-  "기다리는 일이 없어요": "Nothing waiting",
   "이 기간에는 실행 기록이 없어요.": "No runs in this period.",
-  "실행 기록 전체 보기 →": "All run history →",
-  "실패가 많은 노드": "Nodes that fail most",
   "열기": "Open",
-  "실패한 노드가 없어요.": "No failed nodes.",
   "팀 회의": "Team meetings",
-  "평균 라운드": "Avg rounds",
-  "결론 난 비율": "Concluded",
   "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.": "A team takes turns in its set order and reaches one conclusion.",
   "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.": "Call agents, teams and workflows from a channel and get results back there.",
   "예산 넘김": "Over budget",
@@ -3472,7 +3461,6 @@ window.ArkismI18nEN = {
   "Arkism 내장 검사(비밀값·원격 실행·삭제 명령·자격 파일·유출·프롬프트 주입, SKILL.md 구성)가 서버의 스킬 폴더를 검사한 결과예요.{0}": "Result of Arkism's built-in check of the skill folder (secrets, remote execution, destructive commands, credential files, exfiltration, prompt injection, SKILL.md structure).{0}",
   "{0}개 · {1}": "{0} · {1}",
   "스킬 {0}개 찾음 · {1} · 커밋 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · commit {2} · {3} files · {4}",
-  "확인해 주세요 · {0}": "Please check · {0}",
   "협업 워커 {0}명": "{0} collaborating workers",
   "{0} · 꺼짐": "{0} · off",
   "{0}/{1} 단계": "Step {0}/{1}",
@@ -3637,16 +3625,13 @@ window.ArkismI18nEN = {
   "팀 회의 · {0}": "Team meeting · {0}",
   "워크플로우 · ${0}": "Workflow · ${0}",
   "'{0}' 봇 연결을 끊을까요? 디스코드 서버에서 봇이 나가지는 않아요.": "Disconnect bot '{0}'? It won't leave the Discord server.",
-  "가장 오래된 것 {0}": "oldest {0}",
   "실패 {0}번": "{0} failed",
   "기록 {0}번 중": "of {0} recorded",
   "실행당 평균 {0}": "{0} per run on average",
   "{0} · 성공 {1} · 실패 {2}": "{0} · {1} ok · {2} failed",
-  "{0}개 · 줄을 누르면 실행 기록으로 가요": "{0} · click a row for its run history",
   "실패 {0}번이 {1}곳에서": "{0} failures in {1} places",
   "{0}번 호출": "{0} calls",
   "평균 {0} 토큰": "avg {0} tokens",
-  "{0} · 팀 {1}개": "{0} · {1} teams",
   "{0}건 · {1}건": "{0} · {1}",
   "{0}건 · {1}{2}": "{0} · {1}{2}",
   "보내지 못한 {0}건이 밀려 있어요": "{0} unsent, waiting",
@@ -3741,19 +3726,7 @@ window.ArkismI18nEN = {
  }
 };
 Object.assign(window.ArkismI18nEN.strings, {
-  "이름이나 @이름 검색": "Search name or @handle",
   "리서치": "Research",
-  "리서치 개선안 검토": "Review research improvements",
-  "리서치 템플릿 검토": "Review the research template",
-  "이 제안에는 자동 심층 전환이 포함되지 않아요. 변경 사항과 모델·한도를 확인한 뒤 만들어 주세요.": "This proposal does not include automatic escalation to deep research. Review its changes, model and limits before creating it.",
-  "리서치 개선안을 불러오지 못했어요.": "Couldn't load the research proposal.",
-  "근거를 보고 깊게 조사해요": "Investigate further based on evidence",
-  "시간이 오래 걸린다는 이유로 전환하지 않아요. 근거가 부족할 때 추가 조사로 이어져요.": "Further research starts when evidence is insufficient, regardless of elapsed time.",
-  "기본 호출과 깊은 조사 호출은 같은 리서치를 사용해요. 기존 모델·예산·승인·스킬 설정을 유지하는지 변경 사항과 입력 값을 확인해 주세요. 저장하기 전에는 적용되지 않아요.": "Standard and deep calls use the same research definition. Review the changes and fields to confirm existing models, budgets, approvals and skills are preserved. Nothing is applied until you save.",
-  "깊은 조사 @이름": "Deep research @handle",
-  "같은 리서치에서 깊은 조사를 바로 요청해요. 기존 별칭과 겹치지 않아야 해요.": "Request deep research from the same definition. Choose a handle that is not already in use.",
-  "개선안 저장": "Save improvements",
-  "리서치 만들기": "Create research",
   "FLOW 목록을 불러오지 못했어요": "Couldn't load the FLOW list",
   "FLOW 작업이 끝나면 알려줘요.": "Tells you when a FLOW job finishes.",
   "토큰은 서버에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 봇을 만들고 Message Content Intent를 켠 뒤 토큰을 넣어 주세요.": "The token is stored encrypted on the server; only the last 4 characters are shown. Create a bot in the Discord Developer Portal and turn on Message Content Intent before entering its token.",
@@ -3904,7 +3877,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "붙여넣기": "Paste",
   "링크 복사": "Copy link",
   "Ctrl+V로 붙여넣어 주세요.": "Press Ctrl+V to paste.",
-  "부르는 곳": "Callers",
+  "부르는 곳": "Callers"
 });
 // memory harness: 기억 맥락·평가, 모델 예산·생성 모델, 스킬 시험 상태 (memory-context.js, memory-evaluation.js, model-budget.js, model-generation.js, skill-trial-status.js)
 Object.assign(window.ArkismI18nEN.strings, {
@@ -3993,11 +3966,11 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "자동 확인   {0}": "Automatic check   {0}",
   "현재 시도   {0}회": "Current attempt   {0}",
   "다음 확인   {0}": "Next check   {0}",
-  "제목없음{0}": "Untitled{0}",
+  "제목없음{0}": "Untitled{0}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "템플릿·설정으로 만들기": "Start from a template or settings",
-  "AI 답을 읽지 못했어요. 다시 보내 주세요.": "Couldn't read the AI's answer. Please send again.",
+  "AI 답을 읽지 못했어요. 다시 보내 주세요.": "Couldn't read the AI's answer. Please send again."
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "제목없음": "Untitled"
@@ -4149,7 +4122,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "시작·끝": "Start/End",
   "아직 실행 안 함": "Not run yet",
   "저장한 뒤에 실행할 수 있어요.": "You can run it after saving.",
-  "시작 조건": "Start condition",
+  "시작 조건": "Start condition"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "새 기억 {0}개 · 비슷한 것은 한 줄로 묶여 있어요. 펼쳐서 하나씩 저장하거나 버려 주세요.": "{0} new memories · similar ones share a row. Open it to save or discard each one.",
@@ -4198,12 +4171,12 @@ Object.assign(window.ArkismI18nEN.strings, {
   "텔레그램 연결을 끊을까요? 저장된 값이 지워져요.": "Disconnect Telegram? The saved values will be deleted.",
   "슬랙 연결을 끊을까요? 저장된 값이 지워져요.": "Disconnect Slack? The saved values will be deleted.",
   "토큰은 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요.": "The token is stored on this PC and only the last 4 characters are shown. Add the bot you made with @BotFather to the group or DM first.",
-  "웹훅 주소는 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요.": "The webhook URL is stored on this PC and only the last 4 characters are shown. Create it in Slack's Incoming Webhooks.",
+  "웹훅 주소는 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요.": "The webhook URL is stored on this PC and only the last 4 characters are shown. Create it in Slack's Incoming Webhooks."
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "설정 › 메신저에서 디스코드 연결 보기 →": "See Discord in Settings › Messenger →",
   "토큰 형식을 확인해 주세요.": "Check the token format.",
-  "다른 곳에서 먼저 고쳤어요. 다시 불러올게요.": "It was changed elsewhere first. Reloading.",
+  "다른 곳에서 먼저 고쳤어요. 다시 불러올게요.": "It was changed elsewhere first. Reloading."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}분 전 확인": "Checked {0} min ago",
@@ -4218,26 +4191,15 @@ Object.assign(window.ArkismI18nEN.patterns, {"기억 추출이 {0}시간째 멈�
 Object.assign(window.ArkismI18nEN.strings, {"필터 초기화": "Reset filters", "불러오지 못했어요": "Couldn't load", "연결을 확인하고 다시 시도해 주세요.": "Check the connection and try again.", "다른 곳에서 내용이 바뀌었어요": "Changed elsewhere", "작성 중인 내용은 유지했어요. 최신 내용을 확인해 주세요.": "Your draft is kept. Check the latest version.", "최신 내용 보기": "View latest", "입력 복사": "Copy input", "데스크톱에서 사용하세요": "Use the desktop app", "Git 작업과 비교 실행은 Arkism 데스크톱 앱에서 열 수 있어요.": "Git work and comparison runs open in the Arkism desktop app.", "이 서버는 아직 이 기능을 지원하지 않아요.": "This server doesn't support this feature yet.", "AI 도움을 기다리는 중": "Waiting for AI", "요청을 처리하고 있어요.": "Working on the request.", "너무 오래 걸려요. 잠시 후 다시 시도해 주세요.": "This is taking too long. Try again in a moment.", "이 작업은 관리 계정에서 사용할 수 있어요.": "This action needs an admin account."});
 { const add = (t, o) => { for (const k in o) if (!(k in t)) t[k] = o[k]; };
 add(window.ArkismI18nEN.strings, {
-  "자동화": "Automations", "시작": "Trigger", "실행": "Runs", "평균 시간": "Avg time", "마지막 실패": "Last failure", "마지막 회의": "Last meeting",
-  "부르는 곳": "Called from", "쓰는 곳": "Used in", "평균 토큰": "Avg tokens", "모델": "Model", "이름": "Name", "비용": "Cost", "호출": "Calls", "성공률": "Success rate",
+  "자동화": "Automations", "시작": "Trigger", "실행": "Runs", "평균 시간": "Avg time", "마지막 실패": "Last failure", "부르는 곳": "Called from", "쓰는 곳": "Used in", "모델": "Model", "이름": "Name", "비용": "Cost", "호출": "Calls", "성공률": "Success rate",
   "회의": "Meetings", "전문가": "Experts", "팀": "Teams", "직접": "Direct", "일정": "Schedule", "웹훅": "Webhook", "디스코드": "Discord",
-  "오늘": "Today", "전체 기간": "All time", "회의 기록 전체 보기 →": "View all meeting records →", "실행 기록 전체 보기 →": "View all run records →",
-  "이 기간에 회의한 팀이 없어요.": "No team met in this period.",
-  "호출 기록 전체 보기 →": "View all call records →", "실패한 곳부터 다시 →": "Retry from failures →", "다시 실행": "Run again", "실패한 자동화마다 마지막 실행을": "the last run of each failed automation",
-  "다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요.": "Couldn't find the failed run to retry. Open it from run records.", "이 기간에 돈 자동화가 없어요.": "No automation ran in this period."
+  "오늘": "Today", "전체 기간": "All time", "실패한 곳부터 다시 →": "Retry from failures →", "다시 실행": "Run again"
 });
 add(window.ArkismI18nEN.patterns, {
-  "최근 {0}": "Last {0}", "전문가 {0} · 팀 {1} · 자동화 {2}": "Experts {0} · Teams {1} · Automations {2}",
-  "{0} · 성공 {1} · 실패 {2} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요": "{0} · {1} succeeded · {2} failed · hover a bar to see experts, teams and automations",
-  "{0} · 실행 {1} · 실패 {2}": "{0} · {1} runs · {2} failed", "{0} · 실행 {1}": "{0} · {1} runs",
-  "{0}명 · 호출 {1}번(단독 {2}) · 줄을 누르면 사용 기록을 봐요": "{0} experts · {1} calls ({2} direct) · click a row for its usage",
-  "{0}개 · 회의 {1}번 · 줄을 누르면 회의 기록으로 가요": "{0} teams · {1} meetings · click a row for meeting records",
-  "{0}개 · 줄을 누르면 실행 기록으로 가요": "{0} · click a row for run records",
+  "최근 {0}": "Last {0}", "{0} · 실행 {1} · 실패 {2}": "{0} · {1} runs · {2} failed", "{0} · 실행 {1}": "{0} · {1} runs",
   "{0} · 실패 {1}번이 {2}곳에서": "{0} · {1} failures in {2} places",
   "{0} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry {0} from where it failed? Finished steps keep their results.",
-  "${0}의 마지막 실패 실행을": "the last failed run of ${0}",
-  "${0}을 다시 돌리지 못했어요 ({1}).": "Couldn't rerun ${0} ({1}).", "{0}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Queued {0} runs. The server runner will start within 10 seconds.",
-  "자동화 {0} · 팀 {1}": "Automations {0} · Teams {1}", "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
+  "자동화 {0}": "Automations {0}", "팀 {0}": "Teams {0}"
 }); }
 // 크루 › 전문가 (카드 목록 · 상세 팝업 · 새로 만들기)
 Object.assign(window.ArkismI18nEN.strings, {
@@ -4268,7 +4230,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}단계 넘으면 멈춤": "Stops past {0} steps",
   "멈추는 조건 {0}": "Stops when {0}",
   "약 {0}": "About {0}",
-  "제안 {0}개": "{0} suggestions",
+  "제안 {0}개": "{0} suggestions"
 });
 // 크루 › 전문가: 스킬 칩·상세
 Object.assign(window.ArkismI18nEN.strings, {"항상 먼저 넣기": "Always put in first", "스킬 목록에서 찾지 못했어요. 이름이 바뀌었거나 아직 승인되지 않았을 수 있어요.": "This skill is not in the skill list. It may have been renamed or not approved yet.", "넣는 방식": "How it is put in", "요약": "Summary", "참조": "Reference", "버전": "Version", "최신": "Latest", "최신으로": "Use latest", "이 전문가에서 빼기": "Remove from this expert", "항상 넣는 자료는 20개까지예요.": "You can pin up to 20 items.", "+ 스킬 추가": "+ Add skill"});
@@ -4372,7 +4334,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "준비 중": "Coming soon",
   "예: GitHub PR 열림": "e.g. GitHub PR opened",
   "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요": "Change the template, run mode and webhook in the classic settings window",
-  "판 이력": "Version history",
+  "판 이력": "Version history"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "전문가 · 워커 최대 {0}": "Expert · up to {0} workers",
@@ -4392,7 +4354,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "되돌아가는 선은 {0}번까지": "Loop-back edges up to {0} times",
   "목록에서 숨기고 ${0} 부르기를 멈춰요": "Hide from the list and stop calling ${0}",
   "${0}에게 맡길 주제…": "Topic to give ${0}…",
-  "{0}단계 중 {1}단계 · {2}": "Step {1} of {0} · {2}",
+  "{0}단계 중 {1}단계 · {2}": "Step {1} of {0} · {2}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "우주": "Space", "숲": "Forest", "바다": "Sea", "도시": "City", "추상": "Abstract",
@@ -4429,7 +4391,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "회의 중…": "In meeting…", "회의 기록 보기": "View meeting log", "말하는 중…": "Speaking…", "마침": "Done", "맡길 일을 적어 주세요.": "Write the task to hand over.",
   "판 이력": "Version history",
   "바뀐 점 보기": "View changes", "바뀐 점을 찾지 못했어요.": "No changes found.",
-  "최근 회의": "Recent meetings", "테스트 탭에서 연 회의도 여기 남아요": "Meetings opened in the Test tab appear here too", "아직 연 회의가 없어요.": "No meetings yet.",
+  "최근 회의": "Recent meetings", "테스트 탭에서 연 회의도 여기 남아요": "Meetings opened in the Test tab appear here too", "아직 연 회의가 없어요.": "No meetings yet."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "모델 {0} → {1}": "Model {0} → {1}", "{0} 바꿈": "{0} changed", "v{0}로 되돌렸어요.": "Restored v{0}.",
@@ -4437,13 +4399,13 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "회의 방식 → {0}": "Meeting mode → {0}", "최대 라운드 {0} → {1}": "Max rounds {0} → {1}", "토큰 상한 {0} → {1}": "Token cap {0} → {1}",
   "{0} 추가 ({1})": "Added {0} ({1})", "{0} 뺌": "Removed {0}", "디스코드 · #{0}": "Discord · #{0}",
   "저장하면 다음 판 v{0} · 기록 탭에서 되돌릴 수 있어요": "Saving makes v{0} · restore from the History tab",
-  "{0} 토큰 · {1}": "{0} tokens · {1}",
+  "{0} 토큰 · {1}": "{0} tokens · {1}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "다음 단계": "Next stage",
   "24시간 전 ··· 지금": "24 hours ago ··· now",
   "지금 보여 줄 항목이 없어요.": "Nothing to show right now.",
-  "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요.": "The server did not return the recall counts. Open this again in a moment.",
+  "서버가 불러오기 집계를 주지 못했어요. 잠시 뒤 다시 열어 보세요.": "The server did not return the recall counts. Open this again in a moment."
 });
 Object.assign(window.ArkismI18nEN.patterns, {"{0} / {1} 단계": "Stage {0} / {1}"});
 Object.assign(window.ArkismI18nEN.strings, {
@@ -4488,7 +4450,7 @@ Object.assign(window.ArkismI18nEN.strings, {
  "답에 쓰인 비율": "Share used in answers",
  "건넨 횟수": "Times handed over",
  "쓰는 중": "In use",
- 
+
  "AI는 분류만 해요. 승인은 사람이 해요.": "AI only classifies. People approve.",
  "후보 찾기": "Find candidates",
  "선택 0개 승인": "Approve 0 selected",
@@ -4576,7 +4538,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
  "{0}일 동안 {1}번 건넸는데 답에 쓰였다는 표시가 없어요": "Handed over {1} times in {0} days with no sign of use in an answer",
  "7일 {0}번 쓰임": "Used {0} times in 7 days",
  "{0}이에요": "It is {0}",
- 
+
  "{0}건은 처리하지 못했어요.": "{0} could not be processed.",
  "선택 {0}개 승인": "Approve {0} selected",
  "AI 분류 · 위험도 {0}": "AI classification · risk {0}",
@@ -4767,7 +4729,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "단계마다 정해요": "Set per step",
   "모델을 비워 둔 AI 단계가 이걸 써요": "AI steps with no model use this",
   "단계마다 바꿀 수 있어요": "Each step can change it",
-  "예전 설정 창": "Old settings window",
+  "예전 설정 창": "Old settings window"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}은 이미 켜져 있어요.": "{0} is already on.",
@@ -4920,7 +4882,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기본 채널": "Default channel"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "바뀐 칸 {0}개 · 저장하면 다음 판 v{1} · 기록 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History tab"
+  "바뀐 칸 {0}개 · 저장하면 다음 판 v{1} · 기록·사용량 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History & usage tab"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "팀 삭제": "Delete team",
@@ -4999,7 +4961,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "자료 조사 팀": "Research team",
   "멤버": "Members",
   "진행 방법 다듬기": "Refine how it goes",
-  "주제 다듬기": "Refine the topic",
+  "주제 다듬기": "Refine the topic"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "제안 {0}개를 찾았어요. 버튼 아래 목록에서 보고 적용하세요.": "Found {0} proposals. Look them over in the list under the button and apply.",
@@ -5049,7 +5011,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "적용했어요. 저장하면 반영돼요.": "Applied. It takes effect when you save."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "{0} 다듬기": "Refine {0}",
+  "{0} 다듬기": "Refine {0}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "버전 기록": "Version history", "이 버전으로 변경": "Switch to this version", "지금 버전": "Current version", "접기": "Collapse",
@@ -5073,7 +5035,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "반": "half",
   "시": "Hour",
   "평소 말로 적어요 · 예: 평일 아침 9시, 매주 월·목 오후 3시 반": "Say it in plain words · e.g. weekdays at 9 am, every Mon·Thu 3:30 pm",
-  "언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.": "Couldn't tell when. Write the days and the time again.",
+  "언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.": "Couldn't tell when. Write the days and the time again."
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "한 번 묻기": "One question",
@@ -5091,11 +5053,11 @@ Object.assign(window.ArkismI18nEN.strings, {
   "이름을 적어 주세요.": "Enter a name.",
   "지시를 적어 주세요.": "Enter the instructions.",
   "@이름을 적어 주세요.": "Enter the @name.",
-  "@이름은 띄어쓰기 없이 글자·숫자·_·-로 적어 주세요.": "Use letters, numbers, _ or - for the @name, no spaces.",
+  "@이름은 띄어쓰기 없이 글자·숫자·_·-로 적어 주세요.": "Use letters, numbers, _ or - for the @name, no spaces."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "한 번 묻기 {0}": "One question {0}",
-  "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}",
+  "단계 {0} 이름 · 예: {1}": "Step {0} name · e.g. {1}"
 });
 Object.assign(window.ArkismI18nEN.strings, { "템플릿 이름을 적어 주세요.": "Enter a template name." });
 Object.assign(window.ArkismI18nEN.strings, {
@@ -5118,7 +5080,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, { "불러온 기억 {0}개 · 마지막 저장 {1}": "Loaded {0} memories · newest loaded {1}", "불러온 {0}개 중 {1}개 표시 · 다음 목록 있음": "Showing {1} of {0} loaded · more available" });
 Object.assign(window.ArkismI18nEN.strings, {
-  "다음 목록에도 후보가 있어요.": "More candidates are available on the next page.",
+  "다음 목록에도 후보가 있어요.": "More candidates are available on the next page."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "반영하면 다음 {0}개가 이어서 나와요 · 불러온 남은 후보 {1}개": "After applying, the next {0} appear · {1} loaded candidates left"
@@ -5342,7 +5304,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "대화에서 \"{0}\" 찾기": "\"{0}\" in the dialogue", "비공개 부분에만 있어 뺀 메시지 {0}개": "{0} messages left out (only inside private parts)",
   "비밀값이 있어 건너뛴 메시지 {0}개": "{0} messages skipped (hold a secret)", "{0}에 넘길 내용을 읽는 중…": "Reading what to hand to {0}…",
   "넘길 내용을 읽지 못했어요 ({0}).": "Couldn't read what to hand off ({0}).", "저장된 작업 \"{0}\"": "the saved work \"{0}\"",
-  "{0} 시작 명령을 복사했어요. {1}를 읽고 이어가요.": "{0} start command copied. It reads {1} and continues.", 
+  "{0} 시작 명령을 복사했어요. {1}를 읽고 이어가요.": "{0} start command copied. It reads {1} and continues.",
   "{0}을(를) 복사했어요.": "{0} copied.", "원래 {0} 세션 {1}에서 하던 일이야.": "This was the work in {0} session {1}.",
   "Arkism resume_work 도구로 작업 {0}를 불러와 이어서 해 줘. {1}": "Load work {0} with the Arkism resume_work tool and continue it. {1}",
   "Arkism search_session_archives 도구에 archive_id {0}를 넣어 대화를 읽고 이어서 해 줘. {1}": "Read the dialogue with the Arkism search_session_archives tool using archive_id {0} and continue it. {1}",
@@ -5434,7 +5396,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "권한이나 대화 상태를 확인해 주세요. 전달을 복구하려고 작업을 다시 실행하지 마세요.": "Check permissions and the conversation state. Do not rerun the task to recover delivery.",
   "서비스가 메시지 접수를 확인했어요. 사람이 읽었다는 뜻은 아니에요.": "The service confirmed message receipt. This does not mean a person read it.",
   "아직 결론이 없어요.": "There is no conclusion yet.",
-  "전체 회의 기록": "Full meeting history",
+  "전체 회의 기록": "Full meeting history"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "전달 복구": "Recover delivery",
@@ -5464,11 +5426,9 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, { "확인한 메시지: {0}": "Confirmed messages: {0}" });
 Object.assign(window.ArkismI18nEN.strings, {
   "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요.": "On this PC you can only create and save. Connect to a server to run.",
-  "지금 리서치에 개선안을 받아 검토해요": "Get and review improvements for your research",
-  "출처를 찾아 정리하는 리서치를 만들어요": "Create research that finds and sums up sources",
   "역할·모델·도구를 정해 혼자 일해요": "Set a role, model and tools; it works alone",
   "여러 역할이 회의해요": "Several roles meet together",
-  "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals",
+  "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
@@ -5518,7 +5478,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "서버가 분석 요청을 거부했어요 (권한 없음)": "The server refused the analysis request (no permission)",
   "서버가 분석 요청을 거부했어요. 에이전트 로그인을 확인해 주세요.": "The server refused the analysis request. Check the agent sign-in.",
   "최근 2시간 동안 서버의 분석이 돌지 않았어요. 서버에서 분석 타이머를 켜 주세요.": "The server has not run an analysis in the last 2 hours. Start the analysis timer on the server.",
-  "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.": "Analysis is running, but conversations are still going or waiting.",
+  "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.": "Analysis is running, but conversations are still going or waiting."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",
@@ -5976,4 +5936,14 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "최근 {0}번 중 {1}번만 지켜졌어요.": "Kept only {1} of the last {0} times.",
   "{0}번 중 {1}번 지켜짐": "Kept {1} of {0} times",
   "{0}(으)로 넘기기": "Hand over to {0}"
+});
+// 기록·사용량 tab of a workflow (modules/flowUsage.mjs)
+Object.assign(window.ArkismI18nEN.strings, {
+  "기록·사용량": "History & usage", "실패가 많은 단계": "Steps that fail most", "실패한 단계가 없어요.": "No step has failed.", "끝난 실행이 없어요": "No finished runs",
+  "단독": "Solo", "메뉴 접기": "Collapse menu", "메뉴 펼치기": "Expand menu", "현재 위치": "Current location",
+  "이 워크플로우 실행만 세요. 테스트 실행은 빼요.": "Counts this workflow's runs only, without test runs.", "사용량을 불러오지 못했어요.": "Couldn't load usage.",
+  "다시 돌릴 실패 기록을 찾지 못했어요.": "No failed run to retry.", "마지막 실패 실행을 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry the last failed run from where it failed? Finished steps keep their results."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "실행당 평균 {0} · 토큰 {1}": "{0} per run · {1} tokens", "가장 긴 실행 {0}": "Longest run {0}"
 });
