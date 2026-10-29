@@ -453,6 +453,14 @@
       "requesters": [
         "CRW-02"
       ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/context_reader_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-03"
+      ]
     }
   ],
   "cards": [
@@ -3383,7 +3391,7 @@
       "id": "CRW-03",
       "issue": 154,
       "owner": "CRW-03",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3442,6 +3450,14 @@
         {
           "root": "repo",
           "path": "internal/crewrun/meeting_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-03.modules"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/context_reader_test.go",
           "owner": "INTEGRATION",
           "after": [
             "CRW-03.modules"
