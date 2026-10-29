@@ -906,6 +906,11 @@
           "owner": "R7",
           "root": "repo",
           "path": "cmd/memory-harness-baseline/main.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/test_shadow_contract.py",
+          "owner": "SYS-01"
         }
       ],
       "shared_updates": [],
@@ -1316,7 +1321,7 @@
       "id": "SYS-01",
       "issue": 152,
       "owner": "SYS-01",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -1385,6 +1390,11 @@
           "owner": "DYN-05",
           "root": "repo",
           "path": "internal/memoryharness/dynamicsv2/policy.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/test_memory_harness.py",
+          "owner": "R8"
         }
       ],
       "shared_updates": [
