@@ -128,6 +128,9 @@ type ChangeInput struct {
 	Status              string                `json:"status"`
 	ValidationID        string                `json:"validation_id"`
 	VersionID           string                `json:"version_id"`
+	// ReasonCode and Reason say why a person moves a memory to rejected (see Removal).
+	ReasonCode string `json:"reason_code,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 func ID() string {
@@ -1112,6 +1115,9 @@ func (s *Service) Transition(ctx context.Context, token, col, id string, in Chan
 	if col == "memories" && in.Status == "superseded" {
 		return Record{}, ErrInvalid
 	}
+	if !validRemoval(in.ReasonCode, in.Reason) || in.ReasonCode != "" && (col != colMemories || in.Status != "rejected") {
+		return Record{}, ErrInvalid
+	}
 	return s.transition(ctx, token, col, id, in, nil)
 }
 func (s *Service) transition(ctx context.Context, token, col, id string, in ChangeInput, review *CandidateReviewInput) (Record, error) {
@@ -1301,6 +1307,9 @@ func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 	if review != nil {
 		applyReviewDecision(r, *review, d)
 	}
+	if in.ReasonCode != "" {
+		r.Removal = &Removal{Code: in.ReasonCode, Note: in.Reason, By: d.PrincipalID, At: r.UpdatedAt}
+	}
 	if in.Status == "approved" {
 		r.ApprovedBy = d.PrincipalID
 		if col == "memory_candidates" {
@@ -1314,7 +1323,7 @@ func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 }
 
 func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
-	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
 	if d.Role == roleHuman {
 		r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 		if r.Classification != nil {

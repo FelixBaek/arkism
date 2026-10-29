@@ -977,3 +977,15 @@ html.popout dialog.popout-root[open] > .crew-popup-body, html.popout dialog.popo
 .field-shake { animation: field-shake .36s ease-in-out; }
 @keyframes field-shake { 20%, 60% { translate: -5px 0; } 40%, 80% { translate: 5px 0; } }
 @media (prefers-reduced-motion: reduce) { .field-shake { animation: none; } }
+
+/* 지우기 with a reason (delete-reason.js): opens in place under the buttons that asked for it. */
+.del-reason { display: flex; flex-direction: column; gap: var(--space-8); margin-top: var(--space-8); padding: var(--space-12); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-surface); }
+.del-reason > strong { font-size: var(--font-size-xl); font-weight: var(--font-weight-semibold); color: var(--text-1); }
+.del-reason-chips { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.del-reason .del-reason-chip { border-radius: var(--radius-full); }
+.del-reason .del-reason-chip.on { color: var(--text-1); background: var(--bg-selected); border-color: var(--border-strong); }
+.del-reason-note { width: 100%; resize: vertical; font: inherit; }
+.del-reason-err:empty { display: none; }
+.del-reason-err { margin: 0; color: var(--status-danger); font-size: var(--font-size-md); }
+.del-reason-foot { display: flex; justify-content: flex-end; gap: var(--space-6); }
+.del-reason-hint { color: var(--warn); font-size: var(--font-size-md); align-self: center; }

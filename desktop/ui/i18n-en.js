@@ -6426,3 +6426,29 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",
   "스킬 {0}개 찾음 · {1} · SHA-256 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · SHA-256 {2} · {3} files · {4}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "넘길 기억": "The one to retire",
+  "둘 다": "Both",
+  "지웠어요. 지운 이유와 함께 기억 이력에 남아요.": "Removed. It stays in memory history with the reason.",
+  "지우지 못했어요.": "Couldn't remove it.",
+  "오래된 기억": "Outdated",
+  "이미 바뀜": "Already changed",
+  "사용하지 않음": "Not used",
+  "사실과 다름": "Not true",
+  "왜 지우나요?": "Why remove it?",
+  "무엇을 지울까요": "What to remove",
+  "지우는 이유": "Reason for removing",
+  "메모 (선택)": "Note (optional)",
+  "이유를 하나 골라 주세요.": "Pick a reason.",
+  "오래된 기억일 수 있어요": "This may be outdated",
+  "왜 잊나요?": "Why forget it?",
+  "지웠어요. 기억 이력에 지운 이유와 함께 남아요.": "Removed. It stays in memory history with the reason.",
+  "고친 내용과 지금 기억을 왜 지우나요?": "Why remove both the edit and the current memory?",
+  "왜 버리나요?": "Why discard it?",
+  "버리지 못했어요.": "Couldn't discard it.",
+  "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요.": "Review again and It's fine leave memories unchanged. A removed memory stays in memory history with its reason.",
+  "지우지 못했어요. 위 알림을 확인해 주세요.": "Couldn't remove it. Check the notice above."
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "지운 이유: {0}{1}": "Removed because: {0}{1}"
+});

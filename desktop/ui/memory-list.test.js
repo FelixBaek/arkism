@@ -260,8 +260,9 @@ test("decide reviews once per item with an operation id and reports conflicts", 
   assert.equal(env.notices.at(-1), "처리하지 못했어요: boom");
 });
 
-test("resolveConflict sends the chosen resolution and deletes the old memory on drop", async () => {
+test("resolveConflict sends the chosen resolution and removes the old memory with a reason on drop", async () => {
   const env = setup(); const api = await list(env);
+  delete require.cache[require.resolve("./delete-reason.js")]; require("./delete-reason.js");
   const rel = { id: "rel", revision: 2, relations: [{ collection: "memories", id: "m1", revision: 5 }] };
   env.deps.reply = (path) => (path.startsWith("/v1/memory_relations/") ? rel : {});
   const c = { id: "c1", conflict_id: "k1", revision: 4 };
@@ -275,11 +276,13 @@ test("resolveConflict sends the chosen resolution and deletes the old memory on 
     assert.ok(env.notices.at(-1).startsWith(note));
   }
   env.calls.length = 0;
-  await api.resolveConflict(c, "drop");
-  assert.equal(env.calls[2][1].method, "DELETE");
-  assert.equal(JSON.parse(env.calls[2][1].body).expected_revision, 6);
+  await api.resolveConflict(c, "drop", { code: "duplicate", note: "같은 말" });
+  assert.equal(JSON.parse(env.calls[1][1].body).reason_code, "duplicate", "the candidate reject carries the reason");
+  assert.equal(env.calls[2][0], "/v1/memories/m1/transition");
+  const removal = JSON.parse(env.calls[2][1].body);
+  assert.deepEqual([removal.expected_revision, removal.status, removal.reason_code, removal.reason], [6, "rejected", "duplicate", "같은 말"]);
   assert.match(env.notices.at(-1), /모두 지웠어요/);
-  env.deps.reply = (path, opts) => { if (opts?.method === "DELETE") throw new Error("x"); return path.startsWith("/v1/memory_relations/") ? rel : {}; };
+  env.deps.reply = (path, opts) => { if (/\/transition$/.test(path)) throw new Error("x"); return path.startsWith("/v1/memory_relations/") ? rel : {}; };
   await api.resolveConflict(c, "drop");
   assert.match(env.notices.at(-1), /지금 기억은 지우지 못했어요/);
   env.deps.reply = () => ({ relations: [] });

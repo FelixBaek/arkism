@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -36,7 +37,7 @@ var (
 	maintenanceReasons = []string{"same_meaning", "newer_replaces_older", "more_specific"}
 	// signal proposal type -> the memory kinds it may name
 	signalTypes          = map[string][]string{"rule_often_violated": {"user", "procedural", "decision"}, "lesson_often_failing": {"lesson"}}
-	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed", "forget_both": "forgotten"}
+	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed", "forget_both": "forgotten", "forget_keep": "forgotten", "forget_retire": "forgotten", "forget": "forgotten"}
 )
 
 type MaintenanceProposal struct {
@@ -68,6 +69,9 @@ type MaintenanceDecision struct {
 	Scope            Scope  `json:"scope"`
 	ExpectedRevision int64  `json:"expected_revision"`
 	Decision         string `json:"decision"`
+	// ReasonCode (required for a forget decision) and Reason are stored on each removed memory.
+	ReasonCode string `json:"reason_code,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 type MaintenancePage struct {
@@ -252,13 +256,15 @@ func checkSignalEvidence(ctx context.Context, tx Tx, scope Scope, p *Maintenance
 }
 
 // DecideMaintenance is a person's answer: accept (keep stays, the other becomes
-// history), swap (the other way round), dismiss (both stay) or, for a
-// contradiction, forget_both (both become history, neither is deleted). The memory
-// change and the decision commit together. A memory that changed since the
+// history), swap (the other way round), dismiss (both stay) or a forget decision:
+// forget_keep, forget_retire or forget_both on a pair, forget on a signal proposal.
+// A forgotten memory becomes history (rejected) with the person's reason, never
+// deleted. The memory change and the decision commit together. A memory that changed since the
 // proposal makes it stale instead.
 func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in MaintenanceDecision) (Record, error) {
 	status, ok := maintenanceDecisions[in.Decision]
-	if !ok || !validScope(in.Scope) || !validRunLabel(id, 256) || in.ExpectedRevision < 1 {
+	forgets := strings.HasPrefix(in.Decision, "forget")
+	if !ok || !validScope(in.Scope) || !validRunLabel(id, 256) || !validDecisionInput(in, forgets) {
 		return Record{}, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "write:"+colMaintenance, in.Scope, id, "")
@@ -280,8 +286,15 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		return Record{}, ErrInvalid
 	}
 	var mark *ConflictInput
-	// A signal proposal changes no memory either way: accept records that a person agrees.
-	if in.Decision != "dismiss" && !signal {
+	var forget []Ref
+	var removal *Removal
+	if forgets {
+		if forget, err = s.forgettable(ctx, token, in.Scope, *seen.Maintenance, in.Decision, d.PrincipalID); err != nil {
+			return Record{}, err
+		}
+		removal = &Removal{Code: in.ReasonCode, Note: in.Reason, By: d.PrincipalID}
+	} else if in.Decision != "dismiss" && !signal {
+		// A signal proposal changes no memory either way: accept records that a person agrees.
 		m := supersedeInput(in.Scope, seen, in.Decision)
 		// The same permission the conflict path asks for: a human who may change both memories.
 		if _, err := s.conflictPrincipal(ctx, token, m); err != nil {
@@ -289,7 +302,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		}
 		mark = &m
 	}
-	out, err := s.decideTx(ctx, in.Scope, seen, mark, status, in.Decision, d.PrincipalID)
+	out, err := s.decideTx(ctx, in.Scope, seen, mark, forget, removal, status, in.Decision, d.PrincipalID)
 	if errors.Is(err, errMemoryChanged) {
 		if _, e := s.closeMaintenance(ctx, in.Scope, seen, maintenanceStale, "", d.PrincipalID); e != nil && !errors.Is(e, ErrConflict) {
 			return Record{}, e
@@ -299,20 +312,64 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 	return out, err
 }
 
-// decisionFits says whether a decision applies to the proposal: a signal has nothing to swap,
-// and only a contradiction can forget both sides.
-func decisionFits(p MaintenanceProposal, decision string, signal bool) bool {
-	if decision == "swap" {
-		return !signal
+// validDecisionInput: a forget decision carries a known reason code, every other decision none.
+func validDecisionInput(in MaintenanceDecision, forgets bool) bool {
+	return in.ExpectedRevision >= 1 && validRemoval(in.ReasonCode, in.Reason) && forgets == (in.ReasonCode != "")
+}
+
+// forgettable is the memories a forget decision removes, once the same person may reject each of them.
+func (s *Service) forgettable(ctx context.Context, token string, scope Scope, p MaintenanceProposal, decision, principal string) ([]Ref, error) {
+	refs := forgetRefs(p, decision)
+	for _, ref := range refs {
+		who, err := s.authorize(ctx, token, "transition:"+colMemories, scope, ref.ID, "")
+		if err != nil {
+			return nil, err
+		}
+		if who.Role != roleHuman || who.PrincipalID != principal {
+			return nil, ErrDenied
+		}
 	}
-	return decision != "forget_both" || p.Type == "contradiction"
+	return refs, nil
+}
+
+// decisionFits says whether a decision applies to the proposal: a signal has one memory to
+// forget and nothing to swap; a pair can forget either side or both.
+func decisionFits(p MaintenanceProposal, decision string, signal bool) bool {
+	switch decision {
+	case "swap", "forget_keep", "forget_retire", "forget_both":
+		return !signal
+	case "forget":
+		return signal
+	}
+	return true
+}
+
+// forgetRefs is the memories a forget decision removes.
+func forgetRefs(p MaintenanceProposal, decision string) []Ref {
+	switch decision {
+	case "forget_keep":
+		return []Ref{p.Keep}
+	case "forget_retire":
+		return []Ref{p.Retire}
+	case "forget_both":
+		return []Ref{p.Keep, p.Retire}
+	case "forget":
+		return []Ref{*p.Memory}
+	}
+	return nil
 }
 
 // decideTx changes the memories (when mark is set) and closes the proposal in one transaction.
-func (s *Service) decideTx(ctx context.Context, scope Scope, seen Record, mark *ConflictInput, status, decision, principal string) (Record, error) {
+func (s *Service) decideTx(ctx context.Context, scope Scope, seen Record, mark *ConflictInput, forget []Ref, removal *Removal, status, decision, principal string) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if err := changeMemories(ctx, tx, scope, seen, mark, principal); err != nil {
+		if forget != nil {
+			for _, ref := range forget {
+				if err := forgetMemoryTx(ctx, tx, scope, ref, *removal, principal); err != nil {
+					return err
+				}
+			}
+		} else if err := changeMemories(ctx, tx, scope, seen, mark, principal); err != nil {
 			return err
 		}
 		var err error
@@ -336,6 +393,28 @@ func changeMemories(ctx context.Context, tx Tx, scope Scope, seen Record, mark *
 	return err
 }
 
+// forgetMemoryTx moves one proposed memory, still as proposed, to rejected with the person's reason:
+// the same status change as POST /v1/memories/{id}/transition, so it leaves recall and stays in history.
+func forgetMemoryTx(ctx context.Context, tx Tx, scope Scope, ref Ref, removal Removal, principal string) error {
+	r, err := tx.Get(ctx, colMemories, scope, ref.ID)
+	if errors.Is(err, ErrNotFound) {
+		return errors.Join(errMemoryChanged, err)
+	}
+	if err != nil {
+		return err
+	}
+	if r.Revision != ref.Revision || r.Status != "active" || r.ConflictID != "" || r.PrivacyQuarantined || r.ContentErased {
+		return errors.Join(errMemoryChanged, ErrConflict)
+	}
+	now := time.Now().UTC()
+	removal.At = now
+	r.Status, r.Revision, r.UpdatedAt, r.Removal = "rejected", ref.Revision+1, now, &removal
+	if err := tx.Replace(ctx, colMemories, r, ref.Revision); err != nil {
+		return err
+	}
+	return audit(ctx, tx, scope, principal, "transition:memories:rejected", r.ID)
+}
+
 // supersedeInput is the conflict mark for a decision: the memory to retire
 // first, the one to keep second.
 func supersedeInput(scope Scope, r Record, decision string) ConflictInput {
@@ -343,11 +422,7 @@ func supersedeInput(scope Scope, r Record, decision string) ConflictInput {
 	if decision == "swap" {
 		keep, retire = retire, keep
 	}
-	in := ConflictInput{Scope: scope, Memories: []Ref{retire, keep}, Action: "mark", Hold: "both", Reason: "기억 정리 제안 " + r.ID}
-	if decision == "forget_both" { // both become history (rejected), neither is deleted
-		in.Resolution = "reject_both"
-	}
-	return in
+	return ConflictInput{Scope: scope, Memories: []Ref{retire, keep}, Action: "mark", Hold: "both", Reason: "기억 정리 제안 " + r.ID}
 }
 
 // supersedeInTx marks the pair as a conflict and resolves it with mark.Resolution

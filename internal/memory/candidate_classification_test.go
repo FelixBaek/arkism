@@ -65,8 +65,10 @@ func TestClassifierCannotApproveAndOverturnsAreCounted(t *testing.T) {
 	review := func(c Record, action string) Record {
 		t.Helper()
 		in := CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: action}
-		if action == "reject" {
+		if action == "reject" && c.ID == lo.ID {
 			in.Reason = "no"
+		} else if action == "reject" {
+			in.ReasonCode = "stale" // a quick reason alone is enough
 		}
 		if _, e := f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); e != nil {
 			t.Fatal(e)
@@ -79,11 +81,20 @@ func TestClassifierCannotApproveAndOverturnsAreCounted(t *testing.T) {
 	if r := review(lo, "reject"); r.Review.AIRisk != "low" || !r.Review.Overturned {
 		t.Fatal(r.Review)
 	}
-	if r := review(mid, "reject"); r.Review.AIRisk != "medium" || r.Review.Overturned {
+	for _, bad := range []CandidateReviewInput{
+		{Scope: scopeA, ExpectedRevision: mid.Revision, Action: "reject", ReasonCode: "someday"},
+		{Scope: scopeA, ExpectedRevision: mid.Revision, Action: "approve", ReasonCode: "stale"},
+	} {
+		if _, e := f.svc.ReviewCandidate(testCtx, f.human, mid.ID, bad); !errors.Is(e, ErrInvalid) {
+			t.Fatal(bad, e)
+		}
+	}
+	if r := review(mid, "reject"); r.Review.AIRisk != "medium" || r.Review.Overturned || r.Review.ReasonCode != "stale" {
 		t.Fatal(r.Review)
 	}
 	rep, e := f.svc.ClassificationReport(testCtx, f.human, scopeA)
-	if e != nil || rep.Decided["high"] != 1 || rep.Overturned["high"] != 1 || rep.Overturned["low"] != 1 || rep.Decided["medium"] != 1 || rep.Overturned["medium"] != 0 {
+	if e != nil || rep.Decided["high"] != 1 || rep.Overturned["high"] != 1 || rep.Overturned["low"] != 1 || rep.Decided["medium"] != 1 || rep.Overturned["medium"] != 0 ||
+		rep.RejectReasons["stale"] != 1 || rep.RejectReasons["none"] != 1 {
 		t.Fatal(rep, e)
 	}
 }

@@ -45,7 +45,7 @@ async function setup({caps = {}, routes = {}, ...overrides} = {}) {
     notice: text => notices.push(text), failNotice: (error, denied, other) => notices.push(other),
     render: () => renders++, renderDetail: () => {}, reloadMemories: async () => { reloads++; },
     decide: async (c, action, reason) => decisions.push([action, reason]),
-    resolveConflict: async (c, choice) => conflicts.push(choice),
+    resolveConflict: async (c, choice, why) => conflicts.push(why ? [choice, why] : choice),
     waitReason: () => ["반복해서 나온 말이에요"], isCorrection: () => false,
     request: async (route, options) => {
       calls.push([route, options && JSON.parse(options.body)]);
@@ -61,11 +61,16 @@ async function setup({caps = {}, routes = {}, ...overrides} = {}) {
     ArkismMemoryEvaluation: {mount: () => {}},
     ArkismNeed: () => { needs++; }
   };
+  // the real reason helpers; only the picker is a stand-in that keeps what it was opened with
+  delete require.cache[require.resolve("./delete-reason.js")];
+  require("./delete-reason.js");
+  const picks = [];
+  window.ArkismDeleteReason.picker = opts => { picks.push(opts); return el("div", "del-reason", opts.title || "왜 지우나요?"); };
   globalThis.ask = async () => true;
   globalThis.askText = async () => "고친 문장";
   const { createMemoryDetail } = await moduleTask;
   Object.assign(ctx, createMemoryDetail(ctx));
-  return {ctx, shell, calls, notices, decisions, conflicts, sources, stored,
+  return {ctx, shell, calls, notices, decisions, conflicts, sources, stored, picks,
     reloads: () => reloads, renders: () => renders, needs: () => needs};
 }
 
@@ -112,22 +117,38 @@ test("an unconfirmed memory can be kept or forgotten", async () => {
   assert.equal(h.notices.at(-1), "유지할게요. 이 기억은 다시 묻지 않아요.");
   assert.equal(h.renders(), 1);
   await find(h.shell, "잊기").onClick();
+  assert.equal(h.picks[0].reason, "unused", "잊기 starts on 사용하지 않음");
+  assert.ok(!h.calls.some(([, b]) => b), "nothing changes before the reason is confirmed");
+  await h.picks[0].onConfirm({code: "unused", note: "안 씀"});
   const [route, body] = h.calls.at(-1);
-  assert.equal(route, "/v1/memories/m1");
-  assert.equal(body.expected_revision, 4);
-  assert.equal(h.notices.at(-1), "잊었어요.");
+  assert.equal(route, "/v1/memories/m1/transition");
+  assert.deepEqual(body, {scope: {workspace_id: "w"}, expected_revision: 4, status: "rejected", reason_code: "unused", reason: "안 씀"});
+  assert.equal(h.notices.at(-1), "지웠어요. 기억 이력에 지운 이유와 함께 남아요.");
   assert.equal(h.ctx.state.selected, null);
   assert.equal(h.reloads(), 1);
 });
 
-test("forgetting reports a refused delete and does nothing when declined", async () => {
+test("forgetting reports a refused delete and keeps the picker open", async () => {
   const h = await setup({idle: () => true, request: async () => { throw new Error("forbidden"); }});
   await h.ctx.memoryDetail(memory);
   await find(h.shell, "잊기").onClick();
-  assert.equal(h.notices.at(-1), "잊지 못했어요 (forbidden).");
-  globalThis.ask = async () => false;
-  await find(h.shell, "잊기").onClick();
-  assert.equal(h.notices.length, 1);
+  const res = await h.picks[0].onConfirm({code: "stale", note: ""});
+  assert.equal(h.notices.at(-1), "지우지 못했어요 (forbidden).");
+  assert.match(res.error, /forbidden/);
+  assert.equal(h.reloads(), 0);
+});
+
+test("memory detail offers 지우기 with a reason and shows why a removed memory went", async () => {
+  const h = await setup({caps: {review_decide: true}});
+  await h.ctx.memoryDetail(memory);
+  find(h.shell, "지우기").onClick();
+  assert.equal(h.picks.length, 1);
+  await h.picks[0].onConfirm({code: "changed", note: ""});
+  assert.deepEqual(h.calls.at(-1)[1], {scope: {workspace_id: "w"}, expected_revision: 4, status: "rejected", reason_code: "changed"});
+  const gone = await setup({caps: {review_decide: true}});
+  await gone.ctx.memoryDetail({...memory, status: "rejected", removal: {code: "stale", note: "새 파일로 옮김", by: "u", at: "2026-10-20T00:00:00Z"}});
+  assert.match(texts(gone.shell), /지운 이유: 오래된 기억 · 새 파일로 옮김 · 2026-10-20/);
+  assert.equal(find(gone.shell, "지우기"), undefined, "a removed memory has nothing left to remove");
 });
 
 for (const [name, overrides, expected] of [
@@ -189,11 +210,9 @@ test("a new candidate is approved, rejected with a reason, or fixed", async () =
   assert.match(texts(h.shell), /AI가 제안한 이유/);
   const reject = find(h.shell, "버리기");
   reject.onClick();
-  assert.equal(h.needs(), 1);
-  assert.deepEqual(h.decisions, []);
-  all(h.shell).find(node => node.id === "reject-reason").value = " 틀림 ";
-  reject.onClick();
-  assert.deepEqual(h.decisions, [["reject", "틀림"]]);
+  assert.deepEqual(h.decisions, [], "버리기 only opens the reason picker");
+  await h.picks[0].onConfirm({code: "wrong", note: "틀림"});
+  assert.deepEqual(h.decisions, [["reject", {reason_code: "wrong", reason: "틀림"}]]);
   assert.equal(find(h.shell, "그대로 저장").disabled, true);
   const fresh = await setup({caps: {review_decide: true}});
   await fresh.ctx.candidateDetail(candidate);
@@ -258,9 +277,9 @@ for (const correction of [false, true]) {
     assert.match(texts(h.shell), correction ? /고친 내용/ : /새로 들어온 내용/);
     find(h.shell, "새 내용으로 바꾸기").onClick();
     find(h.shell, "지금 기억 유지").onClick();
-    if (correction) await find(h.shell, "둘 다 지우기").onClick();
+    if (correction) { find(h.shell, "둘 다 지우기").onClick(); await h.picks[0].onConfirm({code: "stale", note: ""}); }
     else find(h.shell, "둘 다 맞아요").onClick();
-    assert.deepEqual(h.conflicts, ["new", "keep_old", correction ? "drop" : "both"]);
+    assert.deepEqual(h.conflicts, ["new", "keep_old", correction ? ["drop", {code: "stale", note: ""}] : "both"]);
   });
 }
 
