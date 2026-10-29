@@ -44,6 +44,7 @@ type CatalogFacets struct {
 	Repositories map[string]int `json:"repositories"`
 	Categories   map[string]int `json:"categories"`
 	States       map[string]int `json:"states"`
+	Unclassified int            `json:"unclassified"` // candidates only: matching rows the AI has not classified yet
 }
 
 func newCatalogFacets() CatalogFacets {

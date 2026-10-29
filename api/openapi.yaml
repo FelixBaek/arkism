@@ -55654,6 +55654,10 @@
                 "type": "null"
               }
             ]
+          },
+          "unclassified": {
+            "type": "integer",
+            "description": "candidates only: matching rows the AI has not classified yet"
           }
         },
         "additionalProperties": false,
@@ -55661,7 +55665,8 @@
           "kinds",
           "repositories",
           "categories",
-          "states"
+          "states",
+          "unclassified"
         ],
         "x-go-type": "memory.CatalogFacets",
         "x-go-source": "internal/memory/catalog_query.go"

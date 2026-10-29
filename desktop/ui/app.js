@@ -68,6 +68,8 @@ export function startApp() {
     usageFailed: false, // GET /v1/memory_usage failed: screens show — instead of 0 (A2)
     memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
     candidateTotal: null, // every candidate on the server, read apart from memoryTotals (#188)
+    waitingTotals: null, // { total, unclassified } over every candidate and conflict on the server, for 개요
+    skillTotal: null, // every skill on the server, while the list shows only its first page
     listErrors: {}, // list name -> loadFailure() for a list that failed while the memories loaded (#186)
     loading: true,
     ready: null,
@@ -405,7 +407,7 @@ export function startApp() {
   function renderStatusCard() {
     const d = state.data;
     const host = (() => { try { return new URL(state.server).host; } catch (_) { return state.server; } })();
-    const skills = listCount("skills"), skillsUnknown = skills.state === "failed";
+    const skills = listCount("skills", state.skillTotal), skillsUnknown = skills.state === "failed";
     const items = [
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
@@ -567,6 +569,8 @@ export function startApp() {
     state.usageFailed = false;
     state.memoryTotals = null;
     state.candidateTotal = null;
+    state.waitingTotals = null;
+    state.skillTotal = null;
     state.listErrors = {};
     state.versions = new Map();
     state.versionsDone = false;
@@ -621,9 +625,15 @@ export function startApp() {
       .then((r) => (Number.isSafeInteger(r?.total) ? r : null), () => null);
     const candidates = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "candidate", limit: 1 }) })
       .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null) : null;
-    const [active, idleRows, candidateTotal] = await Promise.all([read("active"), read("idle"), candidates]);
+    const waiting = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "all", limit: 1 }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? { total: r.total, unclassified: Number.isSafeInteger(r.facets?.unclassified) ? r.facets.unclassified : null } : null), () => null) : null;
+    const skills = appApi.request("/v1/skills/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "all", limit: 1 }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null);
+    const [active, idleRows, candidateTotal, waitingTotals, skillTotal] = await Promise.all([read("active"), read("idle"), candidates, waiting, skills]);
     if (g !== state.connection.generation) return;
     state.candidateTotal = candidateTotal; // kept even when the memory totals failed
+    state.waitingTotals = waitingTotals;
+    state.skillTotal = skillTotal;
     if (active) state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null };
     render(false);
   }
@@ -1151,7 +1161,7 @@ export function startApp() {
     c.textContent = state.loading ? "" : String(todo.length);
     c.className = todo.some((t) => t.warn) ? "warn" : "";
     $("#count-memories").textContent = state.loading ? "" : memoryPaging.memoryCount();
-    $("#count-skills").textContent = state.loading ? "" : listCount("skills").text;
+    $("#count-skills").textContent = state.loading ? "" : listCount("skills", state.skillTotal).text;
     const promptsOf = (kind) => d.prompts.filter((p) => p.image_prompt.kind === kind).length;
     const prompts = state.listErrors.prompts || state.loadError ? null : d.prompts; // a failed read is "—", not 0 (#465)
     $("#count-image").textContent = state.loading ? "" : serverCount(prompts && promptsOf("image")).text;
