@@ -911,6 +911,11 @@
           "root": "repo",
           "path": "evaluation/memory-harness-v1/system/sys_01/test_shadow_contract.py",
           "owner": "SYS-01"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/test_protocol.py",
+          "owner": "EXP-01"
         }
       ],
       "shared_updates": [],
@@ -1918,7 +1923,7 @@
       "id": "EXP-01",
       "issue": 153,
       "owner": "EXP-01",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -1976,6 +1981,11 @@
           "owner": "R8",
           "root": "repo",
           "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/test_memory_harness.py",
+          "owner": "R8"
         }
       ],
       "shared_updates": [],
