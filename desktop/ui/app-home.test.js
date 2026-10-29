@@ -1115,7 +1115,7 @@ test("overview and skills: counts are the server totals while more pages wait", 
     route("GET", "/v1/memory_usage", () => { asked++; return ok({ items: [] }); }),
     route("GET", "/v1/memory_candidates", (a) => ok({ items: /conflicted/.test(a.path) ? [] : [cand], next_cursor: /conflicted/.test(a.path) ? "" : "more", authority: "data_only_untrusted" })),
     route("POST", "/v1/memory_candidates/query", (a) => JSON.parse(a.body).state === "all" ? page(123, { unclassified: 77 }) : page(120)),
-    route("GET", "/v1/skills?", (a) => ok({ items: [{ id: "s1", name: "one", status: "approved" }], next_cursor: "more", authority: "data_only_untrusted" })),
+    route("GET", "/v1/skills?", () => ok({ items: [{ id: "s1", name: "one", status: "approved" }], next_cursor: "more", authority: "data_only_untrusted" })),
     route("POST", "/v1/skills/query", () => page(137))
   ];
   await reload();
