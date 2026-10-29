@@ -656,15 +656,15 @@ export function createCrewWorkers(deps) {
       const known = wk.chKnown?.[b.id];
       if (known === undefined) {
         wk.chKnown = { ...(wk.chKnown || {}), [b.id]: null };
-        const got = (items) => { wk.chKnown[b.id] = items; wk.redraw(); };
-        deps.request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${deps.query()}`).then((r) => got(r.items || []), () => got([]));
+        const got = (items) => { wk.chKnown[b.id] = items; wk.redraw(); }; // false: the read failed, so the picker says so instead of offering no channels (#465)
+        deps.request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${deps.query()}`).then((r) => got(r.items || []), () => got(false));
       }
       const row = deps.el("div", "ex-ch-add");
       const botSel = deps.select(bots.map((x) => [x.id, x.name || x.id]), b.id);
       botSel.className = "wf-select";
       botSel.setAttribute("aria-label", "봇");
       botSel.addEventListener("change", () => { f.bot = botSel.value; f.channel = ""; wk.redraw(); });
-      const chSel = deps.select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel);
+      const chSel = deps.select([["", known ? "채널 고르기" : known === false ? "채널을 불러오지 못했어요" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], f.channel);
       chSel.className = "wf-select";
       chSel.setAttribute("aria-label", "채널");
       chSel.addEventListener("change", () => { f.channel = chSel.value; });
@@ -677,6 +677,7 @@ export function createCrewWorkers(deps) {
         wk.chAdd = null;
         saveBotChannels(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
       }));
+      if (known === false) row.append(deps.button("다시 시도", "small", null, () => { delete wk.chKnown[b.id]; wk.redraw(); }));
       out.push(row);
     } else if (wk.chAdd) out.push(deps.el("small", "dim", "먼저 디스코드 봇을 추가해 주세요."));
     out.push(deps.el("small", "dim", "봇 토큰·연결 상태는 설정 › 메신저에서 관리해요. 바꾸면 바로 저장돼요."));
@@ -1295,8 +1296,8 @@ export function createCrewWorkers(deps) {
     const rbox = deps.el("div", "tm-hist");
     rbox.append(deps.el("p", "ex-hist-empty", "불러오는 중…"));
     const wf = deps.allWorkflows().find((w) => w.crew.handle === (rec.crew.workflow || "").replace(/^\$/, ""));
-    const runsP = wf ? deps.request(`/v1/crew/runs?${deps.query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || [], () => []) : Promise.resolve([]);
-    const callsP = deps.request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${deps.query({ limit: "30" })}`).then((r) => r.items || [], () => []);
+    const runsP = wf ? deps.request(`/v1/crew/runs?${deps.query({ crew_id: wf.id, limit: "30" })}`).then((r) => r.items || []) : Promise.resolve([]);
+    const callsP = deps.request(`/v1/crew/agents/${encodeURIComponent(rec.id)}/calls?${deps.query({ limit: "30" })}`).then((r) => r.items || [], (e) => (e?.status === 404 ? [] : Promise.reject(e))); // an older server has no calls route; any other failure is "couldn't load" below, not "no runs" (#465)
     Promise.all([runsP, callsP]).then(([runs, calls]) => {
       const rows = [...runs.map((x) => ({ at: String(x.created_at), x })), ...calls.map((c) => ({ at: String(c.at), c }))].sort((a, b) => b.at.localeCompare(a.at));
       if (!rows.length) { rbox.replaceChildren(deps.el("p", "ex-hist-empty", "아직 실행 기록이 없어요.")); return; }

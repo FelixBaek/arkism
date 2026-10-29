@@ -142,3 +142,47 @@ test("#465 workflows: an approval older than the latest runs still counts on Hom
   await reload(); await home(); await until(() => !!flow());
   assert.equal(text(flow()?.querySelector(".sub")), "확인 대기 1");
 }));
+
+const go = async (menu, tab) => {
+  for (const d of app.$$("dialog[open]")) d.close();
+  app.$(`.nav-item[data-menu="${menu}"]`).click(); await app.settle(100);
+  app.$$("#area-tabs .area-tab").find((t) => tab.test(text(t)))?.click(); await app.settle(100);
+};
+test("#465 list screens: a failed FLOW, prompt or design system list says it could not load, with a retry, not its empty state", withRoutes(async (add) => {
+  add("GET", "/v1/crew?", () => fail(500, "boom")); add("GET", "/v1/prompts", () => fail(500, "boom")); add("GET", "/v1/design_systems", () => fail(500, "boom"));
+  await reload(); await until(has("#count-crew", /—/));
+  assert.equal(text(app.$("#count-crew")), "—");
+  for (const [menu, tab, words] of [["agent", /워크플로우/, /FLOW 목록을 불러오지 못했어요/], ["gallery", /이미지/, /프롬프트 목록을 불러오지 못했어요/], ["gallery", /디자인/, /디자인 시스템 목록을 불러오지 못했어요/]]) {
+    await go(menu, tab);
+    const body = text(app.$("#table"));
+    assert.match(body, words, menu);
+    assert.ok([...app.$("#table").querySelectorAll("button")].some((b) => text(b) === "다시 시도"), `${menu}: retry`);
+    assert.doesNotMatch(body, /서버를 새 버전으로|아직 없어요/, menu);
+  }
+}));
+
+test("#465 design systems: only a missing route reads as an older server", withRoutes(async (add) => {
+  add("GET", "/v1/design_systems", () => fail(404, "not_found"));
+  await reload(); await go("gallery", /디자인/);
+  assert.doesNotMatch(text(app.$("#table")), /목록을 불러오지 못했어요/, "an older server keeps its existing not-supported screen");
+  assert.ok(!app.window.document.querySelector("#table .callout"));
+}));
+
+test("#465 memory map: failed topics are said on the map; an older server without topics is quiet", withRoutes(async (add) => {
+  add("GET", "/v1/memory-graph", () => ok({ nodes: [{ id: "m1", label: "하나", kind: "decision", reach: "general" }], edges: [] }));
+  let topics = () => fail(500, "boom");
+  add("GET", "/v1/digests", () => topics());
+  const open = async () => { for (const d of app.$$("dialog[open]")) d.close(); app.window.dispatchEvent(new app.window.CustomEvent("arkism:open-overview-window", { detail: { wide: "map" } })); await app.settle(80); return text(app.$("dialog.ov-win[open]")); };
+  assert.match(await open(), /주제를 불러오지 못해 주제별 보기가 빠졌어요/);
+  topics = () => fail(404, "not_found");
+  assert.doesNotMatch(await open(), /주제를 불러오지 못해/);
+  for (const d of app.$$("dialog[open]")) d.close();
+}));
+
+test("#465 knowledge: a full page of sources reads N+ on Home, not the page as the whole", withRoutes(async (add) => {
+  const src = (i) => ({ id: `ks${i}`, lifecycle_status: "draft", trust_level: "unreviewed" });
+  add("GET", "/v1/knowledge/sources?", () => ok({ items: Array.from({ length: 500 }, (_, i) => src(i)) }));
+  const knowledge = () => [...app.$$(".home-menus .todo-item")].find((r) => text(r.querySelector(".label")) === "지식");
+  await reload(); await home(); await until(() => /검토 대기 자료/.test(text(knowledge()?.querySelector(".sub"))));
+  assert.match(text(knowledge()?.querySelector(".sub")), /검토 대기 자료 500\+/);
+}));

@@ -18,7 +18,7 @@ export function createMemoryList(deps) {
   function checkCounts() {
     const d = deps.state.data, merge = deps.digests.mergeCount();
     return { candidate: deps.listCount("candidates", deps.state.candidateTotal), provenance: serverCount(d.memories.filter(deps.approvalUnproven), { more: deps.partialMemories() }),
-      conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge) };
+      conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge === false ? null : merge) };
   }
 
   // What is known to wait, with "+" when a part is still unknown or partial.

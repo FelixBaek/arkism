@@ -81,6 +81,17 @@ test("a failed library read leaves knowledge empty", async () => {
   assert.deepEqual(x.api.candidates("knowledge_sources"), []);
 });
 
+test("#465 pins: a failed library read says so in the picker instead of \"none approved\"", async () => {
+  const x = setup({ fail: true });
+  const { root } = mount(x, { rec: { id: "c1", revision: 1, crew: { handle: "a", pinned: [] } }, draft: {} });
+  await settle();
+  dom.fire(root.querySelector("input[type=search]"), "focus");
+  root.querySelectorAll(".pn-kindchip").find((b) => b.textContent === "지식").click();
+  const drop = root.querySelector(".pn-drop").textContent;
+  assert.match(drop, /자료 목록을 불러오지 못했어요/);
+  assert.doesNotMatch(drop, /승인된 자료가 없어요/);
+});
+
 test("the picker adds approved records, filters by words and kind, and keeps the box open while picking", async () => {
   const x = setup({ knowledge: [{ id: "k1", status: "active", trust_level: "reviewed", approved_by: "o", display_name: "가이드", chunk_count: 1 }] });
   const draft = {};

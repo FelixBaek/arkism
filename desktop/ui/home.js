@@ -481,9 +481,10 @@ window.ArkismHome = function (ctx) {
       const g = generation;
       const again = () => { if (extra.g === g && state.view === "todo" && !state.selected && !state.todoAll) render(false); };
       // by status, not the latest 30 runs: an approval or failure older than those still counts (#465)
-      const runs = (status) => request(`/v1/crew/runs?${query({ status, limit: RUN_LIMIT })}`).then((r) => r.items || []);
-      void Promise.all([runs("waiting"), runs("failed")]).then(([waiting, failed]) => ({ waiting, failed }), () => null).then((v) => { if (extra.g === g) { extra.runs = v; again(); } });
-      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => (d?.kpi ? d : null), () => null).then((v) => { if (extra.g === g) { extra.route = v; again(); } });
+      const runs = (v) => { if (extra.g === g) { extra.runs = v; again(); } }, route = (v) => { if (extra.g === g) { extra.route = v; again(); } };
+      const byStatus = (status) => request(`/v1/crew/runs?${query({ status, limit: RUN_LIMIT })}`).then((r) => r.items || []);
+      Promise.all([byStatus("waiting"), byStatus("failed")]).then(([waiting, failed]) => runs({ waiting, failed }), () => runs(null));
+      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => route(d?.kpi ? d : null), () => route(null));
     }
     const rows = [];
     if (extra.runs) {

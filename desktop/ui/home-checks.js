@@ -87,20 +87,22 @@ window.ArkismHomeChecks = (ctx) => {
   }
 
   // ---- 지식 (위키 · 자료)
+  const SOURCE_LIMIT = 500;
   let K = { g: -1, pages: undefined, sources: undefined };
   function knowledgeRow(generation) {
     if (K.g !== generation) {
       K = { g: generation, pages: undefined, sources: undefined };
       const g = generation, get = (p, extra) => request(`${p}?${query(extra)}`).then((r) => (Array.isArray(r?.items) ? r.items : null), () => null);
-      Promise.all([get("/v1/wiki/pages", { state: "all" }), get("/v1/knowledge/sources", { limit: 500 })]).then(([pages, sources]) => {
+      Promise.all([get("/v1/wiki/pages", { state: "all" }), get("/v1/knowledge/sources", { limit: SOURCE_LIMIT })]).then(([pages, sources]) => {
         if (K.g !== g) return; K.pages = pages; K.sources = sources; if (live()) render(false);
       }, () => {});
     }
     const pages = (K.pages || []).filter((p) => p.review_state !== "deleted");
     const drafts = pages.filter((p) => p.review_state === "draft").length;
     const stale = pages.filter((p) => p.review_state !== "draft" && p.stale_sources?.length).length;
-    const wait = (K.sources || []).filter((s) => s.lifecycle_status === "draft" || (s.lifecycle_status !== "failed" && s.trust_level !== "reviewed")).length;
-    const parts = [{ label: `위키 초안 ${drafts}`, n: drafts }, { label: `출처 바뀜 ${stale}`, n: stale }, { label: `검토 대기 자료 ${wait}`, n: wait }].filter((p) => p.n);
+    // the source list has no cursor or total: a full page of SOURCE_LIMIT may have more behind it, so its count reads "N+" (#465)
+    const wait = ctx.count((K.sources || []).filter((s) => s.lifecycle_status === "draft" || (s.lifecycle_status !== "failed" && s.trust_level !== "reviewed")), { more: (K.sources || []).length >= SOURCE_LIMIT });
+    const parts = [{ label: `위키 초안 ${drafts}`, n: drafts }, { label: `출처 바뀜 ${stale}`, n: stale }, { label: `검토 대기 자료 ${wait.text}`, n: wait.min }].filter((p) => p.n);
     return ["TOOLS", "지식", parts, ["knowledge"]];
   }
   return { stalledItem, knowledgeRow };

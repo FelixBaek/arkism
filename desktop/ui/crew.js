@@ -1422,7 +1422,7 @@ export const createCrew = (ctx) => {
       crewWorkers.wk.urlDone = true;
       if (want) setTimeout(() => { if (byId(want)?.crew.type === "agent") crewWorkers.openWorkers(want); }, 400);
       return r.items || [];
-    }, () => []),
+    }), // a failure reaches loadAll's settle(), so the list reads as failed, not empty (#465)
     count: () => flows().length,
     settingsTab: crewPersonas.personaTab,
     render: renderList,

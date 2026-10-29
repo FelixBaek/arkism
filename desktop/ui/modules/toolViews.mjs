@@ -775,7 +775,7 @@ export function createToolViews(deps) {
     if (!scriptCache.has(sk.id)) {
       scriptCache.set(sk.id, deps.request("/v1/skills/resolve", { method: "POST", body: JSON.stringify({ scope: deps.state.scope, refs: [`${sk.id}@latest-approved`] }) })
         .then((r) => (r.items || r.skills || r.resolved || [r]).flatMap((x) => x?.bundle?.files || []).map((f) => f.path).filter((f) => /(^|\/)scripts\//.test(f)))
-        .catch(() => []));
+        .catch(() => { scriptCache.delete(sk.id); return null; })); // null: failed, so the section says so (and the next opening asks again) instead of hiding (#465)
     }
     return scriptCache.get(sk.id).then(paths => context === scriptContextKey() ? paths : []);
   }
@@ -786,11 +786,12 @@ export function createToolViews(deps) {
     s.append(itemRows(list.map((sk) => ({ name: sk.name, desc: sk.description, label: ITEM_KIND.skill }))));
     const sc = cnSection("스크립트");
     sc.hidden = true;
-    void Promise.all(list.map((sk) => skillScripts(sk).then((fs) => fs.map((f) => ({ name: f, desc: sk.name, label: "스크립트" }))))).then((rows) => {
-      const all = rows.flat();
-      if (!all.length) return;
+    void Promise.all(list.map((sk) => skillScripts(sk).then((fs) => fs && fs.map((f) => ({ name: f, desc: sk.name, label: "스크립트" }))))).then((rows) => {
+      const all = rows.filter(Boolean).flat(), failed = rows.includes(null);
+      if (!all.length && !failed) return;
       sc.querySelector("h3 small")?.remove();
-      sc.append(itemRows(all));
+      if (all.length) sc.append(itemRows(all));
+      if (failed) sc.append(deps.el("div", "empty", "스크립트 목록을 불러오지 못했어요. 다시 열면 다시 불러와요."));
       sc.hidden = false;
     });
     return [s, sc];

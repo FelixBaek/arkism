@@ -80,6 +80,8 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");
   env.state.usageDone = false; env.deps.memory.memTab = "conflicted"; env.snap("memories").total = undefined;
   assert.equal(api.memTitle()[2], "3+개"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
+  env.state.usageDone = true; env.deps.digests.mergeCount = () => false; // the merge proposal read failed (#465)
+  assert.equal(api.memTitle()[2], "4+개", "a failed merge count makes the total open-ended, not +0");
 });
 
 test("the main list draws check card, filters, chips, badges, paging and empty state", async () => {
