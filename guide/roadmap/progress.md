@@ -289,3 +289,15 @@ PSY02는등록된실제caseID로양세션계획과재생을연결하도록고쳤
 - [합성 비교 화면·배정·ID 연결 수정 검증](../work-records/2026-10-30-roadmap-correction-stimulus-harness.md)
 
 이번공개기록의parent f5aebd07과문서상태는전체53294 종료0(Python567·Go복잡도/vet/race·UI532)이다. 다른작업트리의미발행DYN05소스는이검사에포함하지않았으며,그별도전체167메서드의규칙충돌1FAIL을통과로바꾸지않는다.
+
+
+## RTE03·PSY03 격리 구현 독립 후속
+
+RTE03은 결정 시점과 receipt 가용 시각, 정확한 ref/revision/content hash, history 누락과 알려진 빈값, 후선택 packing 대사를 검증한 격리 메타데이터 구현이다. FIFO 입력이 파일 검사 전에 멈추는 실제 결함을 고쳐 작성52/89세부·독립37/99를 통과했다. 실제 호스트/API·native reader/fence 연결은 남아 있어 전체 카드 완료는 아니다.
+
+PSY03은 세션2의 상태→참여자→집단 Brier, 결측/탈락 및 군·상태별 행동·시간 분석의 합성 구현이다. 군별 행동·완료시간을 바꿔도 같은 출력이 나오는 실제 결함2건을 수정해 작성45/107세부·독립30/63를 통과했다. 연구 선택과 실제 정답/사람 자료는 미확정이며 pilot 준비 완료로 표시하지 않는다.
+
+- [선택 전 메타데이터·FIFO 수정 검증](../work-records/2026-10-30-roadmap-routing-feature-preparation.md)
+- [Brier·군별 행동/시간 모의분석 검증](../work-records/2026-10-30-roadmap-correction-simulation.md)
+
+두 하위 구현만 수용했으며 전체21/63은 유지한다. 원 실패와 수정 전 소스는 별도로 보존했다. 공개 기록은 전체55678 종료0(Python567·Go복잡도/vet/race·UI532)과 공개 검사를 통과했다. 최초 샌드박스 소켓 오류는 원본 보존 후 동일 검사를 재실행했다. 별도 DYN05 작업트리의 수치 규범 충돌1FAIL은 미해결로 유지한다. SYS02는 기존 수락 API와 변환 계약을 대조해 다음 격리 구현을 준비 중이다. 빌드·배포·Claude 변경 없음.
