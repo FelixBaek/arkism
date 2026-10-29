@@ -10,7 +10,7 @@
 - DYN-05: zero-aux 규칙 선택을 반영한 p1 runner/CLI/compare와 원격 검사를 수용했다. 아래 초기 실패 기록은 보존하며 전체 DYN-05/capture 완료로 합산하지 않는다.
 - SYS-01: A 수용 뒤 실제 Search/HTTP shadow 후보를 검증 중이다. 전체 수용은 아직 아니다.
 - SYS-03: 원자 저장 B 구성요소를 검증했지만 실제 같은-reader packing 영수증·표시/저장/읽기/답변 연결이 남았다.
-- SYS-04: 별도 metadata 모델 후보의 삭제 ID 반례를 수정·독립 재검증했다. 기본 수집 통합과 실제 복원·게시 B는 별도 진행 중이다.
+- SYS-04: 별도 metadata 모델 후보의 삭제 ID 반례를 수정·독립 재검증했다. 기본 수집510개(기존451+새59)와 Python758 검증을 마쳤으며 실제 복원·게시 B는 별도 진행 중이다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -390,3 +390,17 @@ SYS02의원A·현재v8거절/멱등/unknown·B5기준을정확한격리native범
 
 - [native 수락·저장 범위](native-state.md)
 - [작업 기록](../work-records/2026-10-30-roadmap-native-service.md)
+
+
+## SYS-04 A 수명·현재 Eval metadata 모델과 기본 수집
+
+원 source/memory 프로필과 signed64 clock 범위를 보존하고, 별도 metadata-v2에서 sources/memories/evaluations/eval_tasks/eval_runs/eval_trials/judge_calibrations의 exact scope/ref/revision/hash를 대조한다. Sources/Target/Relations와 Eval3참조·trial task/run은 필수 AND 근거이며, 누락·foreign·stale·unknown·cycle과 불완전 coverage/readback을 거절·보류한다. 여섯 복원 필드와 일곱 삭제 facet을 유지하고, 같은 여섯 hash만으로 불완전 graph의 복원을 허용하지 않는다. 승인된 기억과 ordinaryEval currentness·학습 자격은 서로 구분한다.
+
+새 프로필의 정상 Unicode/129~256byte/Cf ID를 두 삭제 입력 경로가 기존 ASCII label로 거절한 독립8반례를 보존했다. 새 후보에서 그 두 경로만 v2 Ref-ID 규칙을 쓰도록 고쳐 작성자59메서드·515세부사례 및 독립19/281이 실패·skip0으로 통과했다. 기존54 fixture 전체 plan 출력과JSON3원문을 보존했으며, v1 strict label·v2 fact-withdrawal/history 미지원은 그대로다. 현재 Go의문자열조건119경계대사는별도격리검사이며기본Python수집과구분한다.
+
+R8 기본 수집에 정확한 모듈 한 개만 등록해 기존451개ID와새59개ID를각각1회수집했다(510메서드·1483세부사례). 기존8음성+1양성·외부inventory음성2대조를 통과했다. 후자2개를기존생산guard가영구감지한다고주장하지않는다. root가5모델소스·28독립증거와6통합소스·31R8증거를재검산했고Python758(173+536+49)·메타데이터63카드96게이트를통과했다.
+
+이 단계는 A의 합성 모델·필요경계 검사다. 실제 DB/백업 복원·삭제 완료·최종 게시 B와 SYS01/03 선행 통합 수용은 별도다. 전체22/63·필수27개 미완료를 유지하며 빌드·배포·원격main·Claude 변경은 없다.
+
+- [모델 계약·검사 설명](../../evaluation/memory-harness-v1/system/sys_04/README.md)
+- [작업 기록](../work-records/2026-10-30-roadmap-lifecycle-metadata.md)

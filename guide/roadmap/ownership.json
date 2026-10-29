@@ -961,6 +961,31 @@
           "root": "repo",
           "path": "evaluation/memory-harness-v1/experiments/exp_02/test_run_plan.py",
           "owner": "EXP-02"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/lifecycle_contract.json"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/dependency_cases.json"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/restore_cases.json"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/test_lifecycle.py"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/README.md"
         }
       ],
       "shared_updates": [],
@@ -1870,9 +1895,9 @@
       "id": "SYS-04",
       "issue": 152,
       "owner": "SYS-04",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "A lifecycle/current Eval metadata model and exact collection registered; actual deletion/recovery/publication B and upstream integration acceptance remain required.",
       "entry_gates": [
         "SYS-04.spec"
       ],
@@ -1931,6 +1956,16 @@
           "owner": "SYS-03",
           "root": "repo",
           "path": "evaluation/memory-harness-v1/system/sys_03/atomicity_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json"
         }
       ],
       "shared_updates": [
