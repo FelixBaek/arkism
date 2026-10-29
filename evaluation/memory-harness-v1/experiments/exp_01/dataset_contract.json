@@ -1,0 +1,975 @@
+{
+  "scope": "Pending EXP draft-only machine-contract proposal002. Synthetic semantic plan/data, not native EventV2/ProbeV2 or product authority. No implementation, dataset, tests, scientific decisions or final lock.",
+  "root_selected_scope": "Draft synthetic development data and lockvalidator; all research decisions null+unresolved and final_locked always rejected. Fourartifacts are distinct EXP plans, not DYNEventV2/ProbeV2. This is an explicit interim draft→spec→DYN05→pilot stage, not permanent relaxation of final EXP criteria.",
+  "closed_wire": {
+    "models": {
+      "PlanEvent": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "stream_id": "ID",
+          "event_id": "ID",
+          "plan_seq": "PositiveInt64",
+          "scope": "external:v1.Scope",
+          "clock_domain": "ID",
+          "available_at_ns": "NS",
+          "source_at_ns": "NS?",
+          "arrived_at_ns": "NS?",
+          "kind": "PlanEventKind",
+          "target": "external:v1.Ref?",
+          "related_refs": "external:v1.Ref[]",
+          "cause_event_ids": "ID[]",
+          "task_id": "ID?",
+          "outcome": "SyntheticOutcome?",
+          "source_payload": "SourcePayload?"
+        }
+      },
+      "SyntheticOutcome": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "judgment": "OutcomeJudgment",
+          "evidence_id": "ID",
+          "source_rule_sha256": "SHA",
+          "generation": "literal:exogenous_synthetic",
+          "validity": "literal:declared_not_authenticated"
+        }
+      },
+      "QueryPlan": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "stream_id": "ID",
+          "query_id": "ID",
+          "scope": "external:v1.Scope",
+          "clock_domain": "ID",
+          "at_ns": "NS",
+          "cutoff_plan_seq": "Seq0",
+          "query_text": "Text",
+          "request_mode": "TemporalIntent",
+          "requested_as_of_ns": "NS?"
+        }
+      },
+      "GoldRow": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "stream_id": "ID",
+          "query_id": "ID",
+          "scope": "external:v1.Scope",
+          "clock_domain": "ID",
+          "at_ns": "NS",
+          "cutoff_plan_seq": "Seq0",
+          "cohort": "GoldCohort",
+          "temporal_intent": "TemporalIntent",
+          "historical_as_of_ns": "NS?",
+          "correction_phase": "CorrectionPhase",
+          "required_refs": "external:v1.Ref[]",
+          "alternative_ref_sets": "external:v1.Ref[][]",
+          "forbidden_refs": "external:v1.Ref[]",
+          "plausible_refs": "external:v1.Ref[]",
+          "cause_event_ids": "ID[]",
+          "label_version": "ID",
+          "label_status": "literal:provisional",
+          "label_rule_id": "ID"
+        }
+      },
+      "SplitEntry": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "stream_id": "ID",
+          "root_stream_id": "ID",
+          "split": "SplitRole",
+          "fact_group_ids": "ID[]",
+          "template_family_ids": "ID[]",
+          "entity_ids": "ID[]",
+          "topic_ids": "ID[]",
+          "entity_topic_pairs": "EntityTopicPair[]",
+          "seed": "Count",
+          "stream_cohort": "StreamCohort",
+          "template_variant_id": "ID",
+          "template_version": "ID",
+          "time_regime_id": "ID",
+          "slot_bindings": "ResolvedSlot[]"
+        }
+      },
+      "EntityTopicPair": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "entity_id": "ID",
+          "topic_id": "ID"
+        }
+      },
+      "ReviewReference": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "reviewer_id": "ID?",
+          "review_record": "ArtifactReference?",
+          "reviewed_gold_sha256": "SHA?",
+          "label_version": "ID",
+          "status": "ReviewBindingStatus"
+        }
+      },
+      "ArtifactReference": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "path": "SafeRelativePath",
+          "sha256": "SHA",
+          "size_bytes": "Count"
+        }
+      },
+      "ThreeFileHashes": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "events_sha256": "SHA",
+          "queries_sha256": "SHA",
+          "gold_sha256": "SHA"
+        }
+      },
+      "SplitManifest": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-plan-split-v1",
+          "dataset_id": "ID",
+          "dataset_version": "ID",
+          "generator_version": "ID",
+          "label_version": "ID",
+          "spec_sha256": "SHA",
+          "contract_sha256": "SHA",
+          "external_dependencies": "ExternalDependencies",
+          "seed": "Count",
+          "verification_scope": "literal:synthetic_plan_only",
+          "implementation_status": "literal:materialization_pending",
+          "files": "ThreeFileHashes",
+          "entries": "SplitEntry[]",
+          "review": "ReviewReference",
+          "split_mode": "SplitMode",
+          "generator_author_ids": "ID[]",
+          "label_author_ids": "ID[]",
+          "split_assignment_sha256": "SHA"
+        }
+      },
+      "ExternalDependencies": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "baseline_contract_sha256": "SHA",
+          "baseline_codec_sha256": "SHA",
+          "dynamics_contract_sha256": "SHA"
+        }
+      },
+      "GeneratorSpec": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-generator-spec-v1",
+          "dataset_id": "ID",
+          "dataset_version": "ID",
+          "generator_version": "ID",
+          "label_version": "ID",
+          "generator_author_ids": "ID[]",
+          "label_author_ids": "ID[]",
+          "seed": "Count",
+          "external_dependencies": "ExternalDependencies",
+          "split_mode": "SplitMode",
+          "partitions": "PartitionPool[]",
+          "template_families": "TemplateFamily[]",
+          "time_regimes": "TimeRegime[]",
+          "expansions": "ExpansionRequest[]"
+        }
+      },
+      "ResearchUnresolved": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "primary_v7_hypothesis": "literal:null",
+          "primary_contrast": "literal:null",
+          "primary_outcome": "literal:null",
+          "independent_confirmatory_task_success": "literal:null",
+          "delta_min": "literal:null",
+          "sample_size": "literal:null",
+          "cluster_unit": "literal:null",
+          "candidate_count": "literal:null",
+          "k": "literal:null",
+          "token_budget": "literal:null",
+          "repetitions": "literal:null",
+          "total_budget": "literal:null",
+          "REF_score": "literal:null",
+          "REF_tie_tolerance": "literal:null",
+          "REF_cost_tie_break": "literal:null",
+          "REF_id_order": "literal:null",
+          "tuning_trials": "literal:null",
+          "tuning_compute_budget": "literal:null",
+          "analysis_CI_multiplicity": "literal:null",
+          "failure_missingness_exclusion": "literal:null",
+          "stopping_rules": "literal:null",
+          "strong_prior_comparators": "literal:null",
+          "cost_frontier_operating_point": "literal:null"
+        }
+      },
+      "ProtocolDraft": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-protocol-draft-v1",
+          "experiment_family": "literal:candidate_a_development",
+          "state": "literal:draft",
+          "claim_scope": "literal:synthetic_development_not_confirmatory",
+          "research": "ResearchUnresolved",
+          "unresolved": "ResearchDecisionID[]",
+          "final_lock_supported": "literal:false",
+          "dataset_reference": "ArtifactReference?",
+          "independent_gold_review": "ReviewReference",
+          "materialization_acceptance": "literal:pending_EXP02_DYN05",
+          "novelty_review": "literal:pending_researcher_review",
+          "ref_contract": "REFContract",
+          "ref_contract_sha256": "SHA"
+        }
+      },
+      "ValidationResult": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-validation-result-v1",
+          "status": "literal:valid_provisional_draft",
+          "dataset_manifest_sha256": "SHA",
+          "protocol_sha256": "SHA",
+          "verification_scope": "literal:synthetic_plan_only",
+          "final_locked": "literal:false",
+          "materialization": "literal:not_run",
+          "gold_review": "ReviewValidationStatus",
+          "unresolved": "ResearchDecisionID[]"
+        }
+      },
+      "GenerationResult": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-generation-result-v1",
+          "status": "literal:published_provisional_draft",
+          "manifest_sha256": "SHA",
+          "artifact_count": "literal:4",
+          "verification_scope": "literal:synthetic_plan_only"
+        }
+      },
+      "ExpError": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-error-v1",
+          "code": "ErrorCode",
+          "path": "KnownExpSchemaPath"
+        }
+      },
+      "PartitionPool": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "split": "SplitRole",
+          "entity_slots": "EntitySlot[]",
+          "entity_topic_pairs": "EntityTopicPair[]",
+          "fact_group_ids": "ID[]",
+          "topic_slots": "TopicSlot[]"
+        }
+      },
+      "EntitySlot": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "entity_id": "ID",
+          "display_text": "Text"
+        }
+      },
+      "TemplateFamily": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "family_id": "ID",
+          "assigned_split": "SplitRole",
+          "template_version": "ID",
+          "semantic_review_state": "literal:provisional",
+          "variants": "ScenarioTemplate[]"
+        }
+      },
+      "ScenarioTemplate": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "variant_id": "ID",
+          "slot_names": "ID[]",
+          "materials": "MaterialTemplate[]",
+          "events": "EventTemplate[]",
+          "questions": "QuestionTemplate[]",
+          "gold_rules": "GoldRule[]",
+          "stream_cohort": "StreamCohort"
+        }
+      },
+      "TextSegment": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "kind": "SegmentKind",
+          "literal": "Text?",
+          "slot_name": "ID?"
+        }
+      },
+      "MaterialTemplate": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "symbol": "ID",
+          "revision": "PositiveInt64",
+          "text": "TextSegment[]",
+          "summary": "TextSegment[]",
+          "kind": "ID",
+          "created_anchor": "ID",
+          "updated_anchor": "ID",
+          "effective_anchor": "ID?",
+          "identity_symbol": "ID",
+          "fact_group_slot": "ID"
+        }
+      },
+      "EventTemplate": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "symbol": "ID",
+          "available_anchor": "ID",
+          "source_anchor": "ID?",
+          "arrived_anchor": "ID?",
+          "kind": "PlanEventKind",
+          "target_symbol": "ID?",
+          "related_symbols": "ID[]",
+          "cause_symbols": "ID[]",
+          "task_symbol": "ID?",
+          "outcome": "OutcomeTemplate?"
+        }
+      },
+      "OutcomeTemplate": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "judgment": "OutcomeJudgment",
+          "evidence_symbol": "ID",
+          "source_rule_sha256": "SHA",
+          "generation": "literal:exogenous_synthetic",
+          "validity": "literal:declared_not_authenticated"
+        }
+      },
+      "QuestionTemplate": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "symbol": "ID",
+          "at_anchor": "ID",
+          "cutoff_event_symbol": "ID?",
+          "query_text": "TextSegment[]",
+          "request_mode": "TemporalIntent",
+          "requested_as_of_anchor": "ID?"
+        }
+      },
+      "GoldRule": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "question_symbol": "ID",
+          "cohort": "GoldCohort",
+          "temporal_intent": "TemporalIntent",
+          "historical_as_of_anchor": "ID?",
+          "correction_phase": "CorrectionPhase",
+          "required_symbols": "ID[]",
+          "alternative_symbol_sets": "ID[][]",
+          "forbidden_symbols": "ID[]",
+          "plausible_symbols": "ID[]",
+          "cause_symbols": "ID[]",
+          "label_rule_id": "ID"
+        }
+      },
+      "TimeRegime": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "regime_id": "ID",
+          "kind": "TimeRegimeKind",
+          "base_ns": "NS",
+          "steps": "TimeStep[]"
+        }
+      },
+      "TimeStep": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "anchor_id": "ID",
+          "gap_min_ns": "NS",
+          "gap_max_ns": "NS"
+        }
+      },
+      "ExpansionRequest": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "root_stream_symbol": "ID",
+          "instance_symbols": "ID[]",
+          "split": "SplitRole",
+          "template_family_id": "ID",
+          "time_regime_id": "ID",
+          "stream_seeds": "Count[]",
+          "allowed_entity_topic_pairs": "EntityTopicPair[]",
+          "slot_entity_bindings": "SlotBinding[]",
+          "fact_group_bindings": "FactGroupBinding[]",
+          "scope_strategy": "literal:independent_virtual_stream"
+        }
+      },
+      "SlotBinding": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "slot_name": "ID",
+          "pool_entity_ids": "ID[]"
+        }
+      },
+      "SourcePayload": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "text": "Text",
+          "summary": "Text",
+          "kind": "ID",
+          "created_at_ns": "NS",
+          "updated_at_ns": "NS",
+          "effective_at_ns": "NS?"
+        }
+      },
+      "ResolvedSlot": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "slot_name": "ID",
+          "entity_id": "ID"
+        }
+      },
+      "REFContract": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-ref-draft-v1",
+          "eligible_base": "literal:[B0,B1,V3-P1-FD,V3-P1-IR]",
+          "excluded": "literal:[B2,V3-P1-NOTIME,V3-P1-NOOUT]",
+          "optional_b6_preincluded": "literal:null",
+          "optional_b6_support_sha256": "literal:null",
+          "selection_split": "literal:validation",
+          "final_test_access": "literal:forbidden",
+          "score": "literal:null",
+          "tie_tolerance": "literal:null",
+          "cost_tie_break": "literal:null",
+          "id_order": "literal:null",
+          "tuning_trials": "literal:null",
+          "common_tuning_compute_budget": "literal:null",
+          "execution_allowed": "literal:false",
+          "unresolved": "REFDecisionID[]"
+        }
+      },
+      "ReviewRecord": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "protocol": "literal:exp01-gold-review-v1",
+          "dataset_id": "ID",
+          "dataset_version": "ID",
+          "label_version": "ID",
+          "dataset_contract_sha256": "SHA",
+          "generator_spec_sha256": "SHA",
+          "events_sha256": "SHA",
+          "queries_sha256": "SHA",
+          "gold_sha256": "SHA",
+          "split_assignment_sha256": "SHA",
+          "generator_author_ids": "ID[]",
+          "label_author_ids": "ID[]",
+          "reviewer_id": "ID",
+          "reviewer_role": "literal:independent_gold_reviewer",
+          "review_version": "ID",
+          "items": "ReviewItem[]",
+          "status": "ReviewRecordStatus",
+          "disagreements": "ReviewDisagreement[]",
+          "prior_review_sha256": "SHA?"
+        }
+      },
+      "ReviewItem": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "query_id": "ID",
+          "gold_row_sha256": "SHA",
+          "judgment": "ReviewItemJudgment",
+          "rule_id": "ID"
+        }
+      },
+      "ReviewDisagreement": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "query_id": "ID",
+          "code": "DisagreementCode",
+          "resolution": "DisagreementResolution",
+          "adjudicator_id": "ID?"
+        }
+      },
+      "FactGroupBinding": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "slot_name": "ID",
+          "fact_group_id": "ID"
+        }
+      },
+      "TopicSlot": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "topic_id": "ID",
+          "display_text": "Text"
+        }
+      },
+      "SplitAssignmentProjection": {
+        "additional_fields": false,
+        "all_fields_required": true,
+        "fields": {
+          "dataset_id": "ID",
+          "dataset_version": "ID",
+          "label_version": "ID",
+          "spec_sha256": "SHA",
+          "contract_sha256": "SHA",
+          "external_dependencies": "ExternalDependencies",
+          "seed": "Count",
+          "split_mode": "SplitMode",
+          "generator_author_ids": "ID[]",
+          "label_author_ids": "ID[]",
+          "entries": "SplitEntry[]"
+        }
+      }
+    },
+    "type_notation": "A?=null orA, A[]=orderedarray; externalreferencesareexactsupportedv1types,noredefinition. Allfieldkeysrequired,additionalfalse. Errororder only error_contract pipeline, notimplicitdiscriminator/globalcodepriority.",
+    "primitives": {
+      "ID": "Exact legacy ^[a-z][a-z0-9_-]{0,63}$; externally scoped IDs preserve externalcontract. No IDs encode cohort/split/gold; no telemetry of raw IDs on errors.",
+      "NS": "JSON lexical int64 0..9223372036854775807, nanoseconds in named synthetic clockdomain, no realtime clock reads.",
+      "PositiveInt64": "JSON lexical int64 1..9223372036854775807.",
+      "Count": "JSON lexical int64 0..9223372036854775807.",
+      "Seq0": "Count; planseq is local causal schedule index, NOT DYNaccepted_seq evidence.",
+      "SHA": "64 lowercase hex, raw SHA256 unless separately named external semantic hash.",
+      "Text": "ValidUnicodeScalar UTF8<=4096bytes, NULforbidden, may beempty; field-specificnonempty rules apply. No Unicode normalization/strip.",
+      "SafeRelativePath": "Generated artifactnames exactly events.jsonl/queries.jsonl/gold.jsonl/split_manifest.json. Reviewrecord logicalpath fixed review.json, resolved only under explicit evidence-root. No arbitrarysource/materialpath. Reject absolute/dot/dotdot/backslash/NUL and every symlinkcomponent.",
+      "KnownExpSchemaPath": "$ or paths derivable from closedfieldmodels with [*] for arrays; never callerfieldname/index/value/filesystempath. External nestedpath errors map to $.external_dependencies or external-own fixedschema path under explicitnamespace, not arbitrary originals."
+    },
+    "enums": {
+      "PlanEventKind": [
+        "material_available",
+        "task_started",
+        "exposure_observed",
+        "outcome_observed",
+        "correction_proposed",
+        "correction_committed",
+        "material_deleted",
+        "scope_changed"
+      ],
+      "OutcomeJudgment": [
+        "passed",
+        "failed",
+        "unknown"
+      ],
+      "GoldCohort": [
+        "primary_answerable",
+        "clear_negative",
+        "ambiguous",
+        "alternative_answers"
+      ],
+      "TemporalIntent": [
+        "current",
+        "historical"
+      ],
+      "CorrectionPhase": [
+        "none",
+        "pending",
+        "committed"
+      ],
+      "SplitRole": [
+        "development",
+        "validation",
+        "final_test"
+      ],
+      "ResearchDecisionID": [
+        "primary_v7_hypothesis",
+        "primary_contrast",
+        "primary_outcome",
+        "independent_confirmatory_task_success",
+        "delta_min",
+        "sample_size",
+        "cluster_unit",
+        "candidate_count",
+        "k",
+        "token_budget",
+        "repetitions",
+        "total_budget",
+        "REF_score",
+        "REF_tie_tolerance",
+        "REF_cost_tie_break",
+        "REF_id_order",
+        "tuning_trials",
+        "tuning_compute_budget",
+        "analysis_CI_multiplicity",
+        "failure_missingness_exclusion",
+        "stopping_rules",
+        "strong_prior_comparators",
+        "cost_frontier_operating_point"
+      ],
+      "StreamCohort": [
+        "primary_eligible",
+        "diagnostic_only"
+      ],
+      "SplitMode": [
+        "combination_disjoint",
+        "entity_and_topic_disjoint"
+      ],
+      "SegmentKind": [
+        "literal",
+        "entity_slot",
+        "topic_slot"
+      ],
+      "TimeRegimeKind": [
+        "regular",
+        "bounded_irregular"
+      ],
+      "REFDecisionID": [
+        "optional_b6_preincluded",
+        "score",
+        "tie_tolerance",
+        "cost_tie_break",
+        "id_order",
+        "tuning_trials",
+        "common_tuning_compute_budget"
+      ],
+      "ReviewRecordStatus": [
+        "completed_provisional_review",
+        "changes_requested",
+        "unresolved"
+      ],
+      "ReviewItemJudgment": [
+        "confirmed_provisional",
+        "needs_change",
+        "meaning_unresolved"
+      ],
+      "DisagreementCode": [
+        "missing_ref",
+        "wrong_ref",
+        "temporal_meaning",
+        "correction_meaning",
+        "scope_or_deletion",
+        "answerability",
+        "template_slot_semantics"
+      ],
+      "DisagreementResolution": [
+        "open",
+        "resolved_without_gold_change",
+        "requires_new_label_version"
+      ],
+      "ReviewBindingStatus": [
+        "pending_independent_review",
+        "record_supplied"
+      ],
+      "ReviewValidationStatus": [
+        "pending",
+        "record_joins_verified_not_authority"
+      ]
+    },
+    "resource_bounds": {
+      "max_file_bytes": 67108864,
+      "max_json_depth": 32,
+      "max_string_bytes": 4096,
+      "max_events_per_stream": 100000,
+      "max_queries_per_stream": 100000,
+      "max_array_items": 200000,
+      "max_streams": 100000,
+      "max_total_event_rows": 100000,
+      "max_total_query_rows": 100000,
+      "max_total_gold_rows": 100000,
+      "line_bytes_bound": 67108864,
+      "basis": "Reuse DYN selectedresource ceilings whereapplicable; whole artifacts64MiB cap and totalrowbound apply beforeallocation. maxstreams same fixed100000 ceiling is new engineering proposal pendingroot, not planned sampleN."
+    }
+  },
+  "external_reuse": {
+    "pinned_codec": "d575bf82f5d1088883fddf5191e97a60a2260cc46a37051af9a89cdd5b7aa74e",
+    "actual_signatures": {
+      "_parse_json(text:str)": "Returns _Pairs/list/scalars; limit10000depth, floatsincludingoverflowInf mayparse. Not32depth/finite/integeronlybyitself.",
+      "_unicode(value)": "IterativeUnicodecheck over _Pairs/list/dict; mayraiseContractErrorinvalid_unicode.",
+      "_duplicates(value)": "Globalduplicatekeycheck overrawpairtree, before_plain.",
+      "_plain(value)": "Pairtree→plain containers; noEXPschema.",
+      "_safe_absolute(path)": "Requires everycomponentalreadyexists; suitableinput/existingparentonly, notabsentoutputtarget. Convertsrelative; EXPCLI itselfrequiresabsolute.",
+      "_directory_fd(path:Path)": "Opens eachdirectorynofollow andreturnsFD. Callercloses.",
+      "_read_regular(path)": "Unbounded stream.read(); NOT used for untrusted EXPinputs orresource-boundclaims.",
+      "write_json_new(path,value)": "Prettyindent2 bytes; NOT used to emit compactEXPartifactbytes.",
+      "fixture_gen._write_bytes(directory_fd,name,data,owned)": "ExactbytewriteO_EXCL/NOFOLLOW,0600/fsync andinodeownershiptracking; use compactserializedbytes here.",
+      "fixture_gen._identity(stat_result)": "dev,ino tuple.",
+      "fixture_gen._cleanup(parent_fd,name,descriptor,identity,owned)": "Owned inodecleanup only; false meansleftovers notsuccess.",
+      "fixture_gen._publish_file(source_fd,destination_fd,basename)": "Hardlinkexclusive; callertracksnewdestinationinode/fsync."
+    },
+    "bounded_read_adapter": "Small EXP-local bounded_read(path,limit) uses pinned _safe_absolute for existinginput + _directory_fd(parent), statnofollow require regular, os.open basenameO_RDONLY|O_NOFOLLOW|O_NONBLOCK, fstatregular, readatmostlimit+1 bytes thenrejectiflen>limit. No delegationto_read_regular. KeepFDanchoredthroughread; closeallFDs.64MiBresourcecap beforeUTF8decode. Thisnecessarysmallorchestration is not a copiedgenerator/commonframework.",
+    "parse_adapter": "UTF8decode(strict)→string-aware lexicaldepthguard<=32 (honorsquotes/backslashescapes, onlycountscontainersoutside strings; not a replacementJSONparser)→_parse_json(text)→_unicode(pairtree)→_duplicates(pairtree)→iterativeprimitive/arraycounts onpairtree→_plain→closedEXPshape/fieldsemantics. Anyfloat tokenparsedfloat rejectedinvalid_type (nonfiniteinvalid_value), any_OverflowInteger/intoutsideint64range rejectedinvalid_value; booleansacceptedonlyBoolfields. Preserveboolvsintidentity. EscapedunpairedUnicode is checkedaftervalidJSONsyntax; invalidrawUTF8checkedbeforeparse. Parsedtreeallocation isboundedby64MiBrawand32depth, arraycountscheckedbefore_plain/expansion; no claimallnodeallocationsavoided.",
+    "registry": "Never modify/monkeypatch _MAX_JSON_DEPTH/_OBJECTS/_TYPES. Existing externalv1Scope/Ref validate_typed/canonical_bytes onlysupportednames. EXP schemas/hashes separate. DYNexternalDTOs not reimplemented/registered.",
+    "publication": "Retaincompactserializer then_write_bytes and_publish_file, notprettywriter. ExistinghelperprivateAPIs hashpinned; dependencyhashdriftfailsclosed. _objects fixedunitdata/generatorframework notcopied."
+  },
+  "functions_and_CLI": {
+    "generate_streams": "generate_streams(spec_raw:bytes, output_dir:Path)->GenerationResult. Hash exactspec_raw bytes afterboundedstrictparse; expand approveddeclarativetemplates, symbols/slots/times andliteralGoldRules. No fulloutputrowsaccepted asGeneratorSpec. No policy/model/state/semantictruthengine.",
+    "validate_dataset": "validate_dataset(dataset_dir:Path, spec_raw:bytes, protocol_raw:bytes, evidence_root:Path)->ValidationResult. Recompute specrawSHA and protocolrawSHA; strictparse and independently check all4artifactjoins/hash/provenance. No dict-reencoding calledrawinputhash. Validation verifiesactualgeneratorprovenance by deterministicre-expansion equivalence (does not independentlyprovegoldmeaning). Deterministic comparison excludes only manifest.review for the separate exact review binding phase; no other regenerated field is ignored.",
+    "validate_protocol": "validate_protocol(protocol_raw:bytes, requested_state:str)->None; accepted requested_state=draft. final_locked always explicitfinal_lock_forbidden_in_draft, even with reviews. Othersinvalid_value. Researchnulls namedunresolved accepted onlydraft.",
+    "generator_argv": [
+      "--spec ABSFILE",
+      "--out NEW_ABSDIR"
+    ],
+    "validator_argv": [
+      "--dataset ABSDIR",
+      "--spec ABSFILE",
+      "--protocol ABSFILE",
+      "--evidence-root ABSDIR",
+      "--request-state draft|final_locked"
+    ],
+    "flags": "Requiredexactlyonce; no unknown/duplicate/abbreviation/positional/default/environmentlookup. Paths syntacticallyabsolute; no ~ expansion. Spec embedscatalog/rules, cannotloadarbitrarytemplates/plugins/schemas. Evidence-root mustexist evenpending but review.json notreadwhenreferenceallnull.",
+    "exit_codes": {
+      "0": "Published/validatedprovisionaldraft only; no nativeexecution/approval/final_LOCK.",
+      "1": "UnexpectedIO/internal/stdout failure.",
+      "2": "Knownargv/data/resource/path/semantic/review/lockerror; fixedExpError JSON only."
+    }
+  },
+  "error_contract": {
+    "ordering_model": "Deterministic shortcircuitpipeline, NOT a global sort oferrorcodes. No claiminvalid_unicode globallyprecedesinvalid_json. Error enum is membershiponly.",
+    "pipeline": [
+      "1 Parseargv left-to-right andrequireflags; validate requestedstate token.",
+      "2 Verifyfixeddependencyhashes; path/open failures asencountered usingexplicitpathorder:spec,protocol,existingdatasetdirectory,evidence-root.",
+      "3 For eachrawdocument: boundedread→UTF8→depthguard→legacyparse→Unicode→duplicates→primitive/arraybounds→shape(unknownkeyASCII first,thenmissingkeyASCII,thenfieldsdeclaredorder)→localfieldsemantics. Firstencounterederrorwins; resourceguardcanprecedemalformedJSON bydesign.",
+      "4 Generator:validatespecalltemplates/splits/rules→boundedexpansionpreflight→instantiate→crossjoins/gold/splitchecks→publication.",
+      "5 Validator:firstsplit_manifest strictparse; spec/protocolraw parsed andhashbound; then events,queries,gold exactrawhashcheck BEFORE contentparse; JSONL lineorder forrows. File1errorwinsbeforefile2, regardlesscodeclass.",
+      "6 After allshapes: identity→causal/prefix→sourcehash/time→goldjoins/sets→splitaxes→reviewbindings→draftprotocol/REFconstraints→requestedfinal_lockedexplicitrejection. No execution even before finalreject."
+    ],
+    "ErrorCode": [
+      "causal_order",
+      "dependency_mismatch",
+      "duplicate_key",
+      "final_lock_forbidden_in_draft",
+      "gold_incomplete",
+      "gold_semantics",
+      "hash_mismatch",
+      "identity_conflict",
+      "input_limit",
+      "internal_error",
+      "invalid_argv",
+      "invalid_json",
+      "invalid_type",
+      "invalid_unicode",
+      "invalid_value",
+      "io_error",
+      "missing_field",
+      "output_exists",
+      "review_unresolved",
+      "runtime_leakage",
+      "schedule_mismatch",
+      "split_overlap",
+      "unknown_field",
+      "unsafe_path"
+    ],
+    "fixed_helper_code_mapping": {
+      "invalid_json": "invalid_json",
+      "invalid_unicode": "invalid_unicode",
+      "duplicate_key": "duplicate_key",
+      "invalid_type": "invalid_type",
+      "invalid_value": "invalid_value",
+      "unsafe_path": "unsafe_path",
+      "io_error": "io_error",
+      "output_exists": "output_exists",
+      "resource_limit": "input_limit",
+      "hash_mismatch": "hash_mismatch",
+      "schedule_mismatch": "schedule_mismatch",
+      "snapshot_binding": "identity_conflict",
+      "unsupported_type": "internal_error",
+      "other_fixed_ContractError_code": "internal_error"
+    },
+    "os_mapping": "EEXIST onexclusivefile/dir/link→output_exists; ELOOP/ENOTDIR→unsafe_path; otherOSError→io_error; cleanupfailure recordedfixedio_error ifnocompletepublication. Unexpectedexceptioninternal_error. Never emitstr(exception)/privatepath/input.",
+    "paths": "ClosedregisteredEXPschemapaths only, wildcard[*]; externalScope/Ref supportedfixedpath remappedunderknownEXPfield; unknowndependency/errorpath maps$.external_dependencies. No callerunknownfieldname/index/value. Multifaultoracle tests required for exactpipeline."
+  },
+  "artifact_contract": {
+    "events.jsonl": "Oneclosed PlanEvent perline. material_available includes SourcePayload and fullRef contenthash; allobservableprefixsource/lifecycle/outcome only, noevaluatormetadata. Sourcechannelisembedded, nohiddenfile.",
+    "queries.jsonl": "Exactly one QueryPlan perline; no split/cohort/requiredrefs/family/topic/futurequestions. Entirefile is scheduleloader input, never passed wholesale to perqueryranker; materializer exposes currentquery only.",
+    "gold.jsonl": "Exactly one provisionalGoldRow perquery, evaluator-only. No ranker/materializerread capability.",
+    "split_manifest.json": "One SplitManifest JSONobject, evaluator-only; binds first3rawhashes+spec/contract/dependencies and allsplits/reviewmetadata. No selfhashfield. Owner externalprotocolreference binds rawmanifesthash.",
+    "encoding": "UTF8 withoutBOM; eachline/object json sortedASCIIkeyorder, ensure_ascii=false, compactseparators, LF ending once; no blanklines, duplicatekeys, nonfinite, unsupportedfloats. EXP records contain only ints/strings/bools/null/arrays/objects.",
+    "generation_order": "ExpansionRequests are processed by root_stream_symbol ASCII, instances retain provided order for association with stream_seeds. Final stream serialization uses hash_algorithms.stream_order. Events retain template order with contiguous plan_seq and nondecreasing availability; queries sort by (at_ns,cutoff_plan_seq,query_id ASCII), gold follows query order and split entries follow stream serialization. No sorting repairs an invalid event chronology.",
+    "seed_rule": "Generatorseed and individualstreamseeds are explicitengineeringints, not plannedN. Eachrootexpansionstreamseed disjoint acrosssplits; globalgeneratorseed is onlydomainseparator. Seed chooses variant/entities/slotvalues/gaps, not goldtruth. It no longer onlyreorderscompleteoutputs.",
+    "hashes": "RawSHA256 exactspec_raw/protocol_raw and eachpublishedartifact. AllsemanticEXP hashes=SHA256(UTF8(exp01-draft-v1)+NUL+UTF8(type_name)+NUL+compactsortedUTF8objectbytes_withoutLF); primitiveints only, arraysorderpreserved. canonicalwire JSONL eachrow samebytes+LF; split_manifest JSON samebytes+LF. GoldRow/ReviewRecord/REFContract/SplitAssignmentProjection names fixed here, no hashesinsideownprojection. ExistingDYNhashes nevercomputedwithEXPdomain.",
+    "safe_publication": "Outputparent must preexist realdirectory, outputtargetabsent. Descriptor nofollow walk, exclusive owned staging underparent,0600files/0700dirs, fsyncfiles/staging, verify hashes and all4exactfilenames. Exclusive reserve outputdirectory then publish3datafiles and splitmanifestlast, fsyncparent. Precompletionfailure cleans only inode-owned files/staging/output; never outsideexistingfiles. Publishedmanifest means draftpublication complete; stdoutfailure leaves completed artifacts. No overwrite/retrymutation; newoutputdirectory required. Exactbyteswrittenvia_write_bytes; rejectoutputexistingincludingbrokensymlink; _safe_absolute invokedonlyparent. Stage/targetnamesreserved0600/0700peroldrules. Preservefailedcleanup evidence ratherthanclaimnoresidue.",
+    "scope_of_atomicity": "Manifest-last consumer gate only; no claim4files become visible atomically or crash-proofDBtransaction."
+  },
+  "semantic_rules": {
+    "identity_and_causality": [
+      "UniqueallIDsandexactstream/scope/clock joins. Eventplanseq1..ncontiguous,availabletimesnondecreasing; source/arrival ifknown<=availability. causeID mustexist earlierinthe SAMEstream/scope/clock andcause.available<=dependent.available; noforwardcause evenwithsametimestamp.",
+      "task_started requiresnonnulltask_id,targetnull,relatedempty,outcomenull,sourcepayloadnull. outcome_observed requiresnonnulltask_id/target/outcome, sourcepayloadnull, exactlyonetask_started causewithEXACTtask_id andexactlyonematerial_available causewithEXACTfullRef target includingorigin/collection/id/revision/contenthash; unrelatedadditionalcausesallowedonlyearlier. No inferredrewardfromexposure/unknown. EvidenceID uniqueperindependentdeclaredoutcome; retries notinventedbygenerator.",
+      "material_available requiresnonnulltarget/nonnullsource_payload,outcomenull,task_idnull,relatedempty; content/timehashconstraintsabove. Othermaterialkinds requiretargetnonnulland sourcepayloadnull. exposure targetmustreferpriormaterial_available fullRef.",
+      "correction_proposed targetoldRef,related_refs exactly[newRef]; oldandnewfulldifferent andbothdeclaredsourceprovenancebeforeavailable. correction_committed mustcauseexactlyonepriorproposal withEXACT(oldRef,newRef) pair, notmerelysameIDs. No nativeapproval/state/evidence migration inferred. Pendingandcommittedlabelmeaning independentreviewrequired.",
+      "scope_changed means observable WITHDRAWAL of availability for thismaterial in itscurrentstreamscope only. It hasnotargetscope/grant/newactor/authoritytransfer. No queryingforeignscope/newpermissionfeature. material_deleted similarlyobservedlocalwithdrawal; laterhistoricalaccessnotautomaticallyallowed ordeniedbygenerator.",
+      "Query cutoff c must be0..n in its own stream. If c>0, event[c].available_at_ns<=query.at_ns. If a next event exists, its available_at_ns must be>=query.at_ns; a strictly earlier omitted event rejects schedule_mismatch. Equality is permitted: the explicit cutoff orders a query before later same-time events. For c=0 the first event, if present, must have available_at_ns>=query.at_ns. Thus time ties never force all tied events into the prefix. Every gold cause must satisfy both seq<=c and available_at_ns<=query.at_ns. Native accepted coordinates are still materialized separately.",
+      "Querycurrent requiresrequested_as_of=null; historicalrequiresknownasof<=at_ns. Gold temporalintent EXACTmatchesrequestmode AND historical_as_of==requested_as_of (includingbothnullcurrent). Goldcausesmustbeinexactqueryprefix andavailable<=querytime; thisis causalprovenancecheck, notgoldtruth.",
+      "scope_changed ormaterial_deleted neverrestoreseligibility. Anylateravailabilitymustbeanexplicitseparatelysupportedobservation. Historicalintent/asofdoesnotresurrectdeletedsourceorcurrentauthority: qualifiedoldsourceonly; conflictwithactualnativecontract→unresolved/stop, nevergeneratorassumedpermission."
+    ],
+    "split": [
+      "Specsplit_mode required; combination_disjoint is rootselectedoriginalminimum. Mandatorynonemptyperstream factgroup/templatefamily/entity/topic/entitytopicpair androot/seed; duplicatesrejectedwithinaxis, not silentlydeduped. ManifestaxesmustEXACTequalinstantiatedtemplate+slot+expansionprovenance; pairsetderivedfromactualusedentity-topicbindings, eachpairendpointlisted, noextra/dangling/vacuouspairs.",
+      "Acrossdevelopment/validation/finaltest rejectintersection ofrootstream IDs,factgroup IDs,templatefamily IDs,streamseeds,andENTITY-TOPIC PAIRS. Individualentity/topicoverlapallowedincombination_disjoint; neverclaimunseenbroad-domain generalization.",
+      "Only explicit entity_and_topic_disjoint adds individual entity or topic intersection rejection. combination_disjoint permits reuse of an individual entity or topic in a different pair. Manifest pairs must equal the actual entity and topic values used in text-slot instantiation; endpoints must be nonempty, unique and match the listed axes. Each stream must have nonempty fact groups, template families, stream seeds and effective pairs. Pool metadata cannot prove semantic independence; actual review is required."
+    ],
+    "gold_proposals": [
+      "Eachqueryexactlyonegoldsameopaqueidentity/stream/scope/clock/time/cutoff/requestintent/asof. AllRefsfullandtraceabletosourcepayload; noID-onlymatching. Labelsremainprovisional. Pendingvscommitted/currentvshistory/deletion/scopeexpectedmeaningcomesfromreviewedliteralGoldRule, notgeneratorsimulatedstate.",
+      "primary_answerable:required_refs nonemptyunique,alternative_ref_sets empty,plausibleempty; required∩forbiddenempty. clear_negative:required/alternatives/plausibleempty. ambiguous:required/alternativesempty;plausibleuniqueoptionalNOTgradinggoldandmustnotintersectforbidden. alternative_answers:required/plausibleempty,outeralternativesnonempty,EVERYinnernonemptyunique/fullRefandinner∩forbiddenempty. Alternativeinnerorderhasnorelevancemeaning; sortfullRefidentityforcanonicalset, rejectduplicateequivalentsetsregardlessorder. Neverflattenunionorincludealternativesinprimary.",
+      "Everyprimary_eligible stream has>=1primaryanswerable query; diagnostic_only has0primaryanswerable queries. Allscheduledfailure/query/streamsretained; cohortselectioninputfixedbeforepolicyresults. PastoldRefmaybeintentionalhistory; merehigherrevisiondoesnotproveineligible. Isolationsafetyviolationsnotoffsetbyrecall/cost.",
+      "Goldlabelversionchange/modelresultinformedrepair producesnewdataset/labelversion+allhashes andnewindependentreview, oldbytes/resultskept. No oldholdout/frozenv1 renamedasnew EXP.",
+      "Historicalrelevancecannotrestorecurrentauthorization/deletedavailability. SymbolicGoldRule witholdref requiresreviewedhistorical/currentauthoritysupport; ifactualcontractcontradicts, keepunresolved/stopbeforefullacceptance, notfabricateoldrefeligibility. Structuralprovisionaldraft is notauthorityoracle.",
+      "For required_refs, every alternative inner set and plausible_refs, each exact fullRef must have a material_available event with SourcePayload in the SAME query stream/scope and inside that exact (available_at_ns,plan_seq) prefix. A future/global source declaration alone is insufficient. Any same-fullRef material_deleted or scope_changed within that prefix makes it unavailable for these sets, even for historical intent; mere source reobservation cannot restore authority. Reject such contradictory gold_semantics. forbidden_refs may refer to any source declared in the generated corpus, including a future source for leakage diagnostics, but are evaluator-only and never authorize runtime exposure. These are explicit source/cutoff/withdrawal joins, not inferred natural-language truth or native permission proof."
+    ],
+    "review": [
+      "Useactual_review_record exactschema/combination/joins. Pendingallowedonlydraft; review_unresolvedmustnotrejectlegitimateallnullpending. No stringgrant/reviewerproof. Finaloriginalgoldreviewcriterion remainsunmetuntilactualindependentreviewowneracceptance."
+    ],
+    "runtime_projection": [
+      "Perquery materializer allowlist: observed eventprefix (available_at<=queryat AND planseq<=cutoff), currentQueryPlan text/bindings and approvedexplicitpolicyfeatures only. No gold/split/family/evaluator-topic/cohort/labelrule/latentfuturequery. No filecapability to evaluatorfiles.",
+      "Currentquery may be read for selection, not persistent reinforcement. Same independentexternaloutcome visible to allowedarms undermatchedschedule; gold never setsstrength or reward. No current/futureanswer-key or split-derivedIDs."
+    ]
+  },
+  "DYN_EXP02_seam": {
+    "ownership": "EXP01 owns plan/dataanddraftvalidation only. EXP02.spec accepts planprotocol; DYN05/EXP02 approvedadapter owns candidate snapshot/reader/config/policy/finalk/budget and eventqualification/nativevalidation, then replay. No existingDTO fields added.",
+    "mapping_proposals": {
+      "material_available": "Future reviewedadapter may produce existingactivate only with lawfulnativeeligibility and completekey/config; planaloneinsufficient.",
+      "exposure_observed": "Existingexposure with exactobservedtask/ref ifqualified; never reward.",
+      "outcome_observed": "Existingoutcome only after exactTaskBinding/EvidenceBinding/qualification/observed-arrived-accepted mapping validated. unknown preserved; oldrevision remainsold.",
+      "correction_proposed": "No newDYNkind and no implicitinvalidate; pendingproposal observation only unless reviewedexistingnativeeffect.",
+      "correction_committed": "Existinginvalidate old plus separatelyvalidatedactivate new whenappropriate; no state/evidence migration.",
+      "material_deleted/scope_changed": "Reviewedexistinginvalidations/materialeligibility filters, no inventedtransition or permissiongrant.",
+      "task_started": "Taskdefinition/provenance input to futureexistingTaskBinding, no newEventKind."
+    },
+    "ProbeV2": "QueryPlan at/cutoff/stream is not acceptedSeq proof. Futureadapter must derive and validate exactacceptedprefixSHA, CandidateSnapshotID/SHA,policyVersion, existingScope/dimension/clock, FinalK,LegacyContextBudget and actualreaderbinding. Gold/split do not enter native DTO. Candidatefile/config/registry dependency notin4artifact; adapter publishes separate newbundle onlyafteritsowneracceptance.",
+    "runtime_acceptance": "No dynamics CLI currently exists (lockedfutureinterface). Planvalidation passes cannot satisfy nativeEventV2/ProbeV2/actualranker execution criterion. No imitation CLI or substitute stateengine added in these6files. Original label-free replaycriterion retained pending downstream acceptance, not markedcompleted. EXP02 gate also retains originalminimum7requiredpolicy coverage and EXP01REF-protocolhash binding. First fallback error identity remains existing dynamics952d contract; EXP01 does not create substitute fallback semantics."
+  },
+  "six_file_ownership": {
+    "dataset_contract.json": "ExactEXPwire/template/rule/source/REF/reviewschema andalljoinsemantics, externalv1typesreferences; noDYNDTOnewfields.",
+    "protocol.template.json": "Exactdraftonly allresearchnull, final_locked forbidden.",
+    "generate_streams.py": "Boundedstrictspec parser+declarativetemplate/symbol/entity/time/seed expansion andcompact safe4artifactpublication; notfulloutputrowserializer/state/truthengine.",
+    "validate_splits.py": "ClosedEXPschema/hash/joins/causal/split/leakage/cohort/reviewreference checks; draftscope only.",
+    "test_protocol.py": "Handliteralwire/hash/causal/gold negativefixtures and false-lock/forgedreview/runtimelabelsentinels; independent oracle roots.",
+    "README.md": "ExactCLI/artifact/pendingstages and reviewlimitations; no nativeexecution/novelty/scientificresults claim."
+  },
+  "proposed_verification_not_executed": [
+    "Strict raw duplicatekeys/badUTF8/surrogates/nonfinite/boolexponentoverflow/depth/bytebounds includingnestedunknownfields; exactfieldanderrorpath/literalhashoracles.",
+    "Same spec/seed bytes identical; streamorderseedchangesdo not altereventchronology/goldmeaning; input/outputdeepimmutability.",
+    "Reject overlapping paraphrases, facts, template families, entities, topics, pairs or seeds as specified. Check duplicate IDs, dangling causes, future outcomes, missing gold, scope or time or hash mismatches, and empty primary cohorts. Never exclude observations because a policy failed.",
+    "Provisionalpending/current-vs-historical/committed/delete/scope/ambiguous/alternatives handwrittenexamples, noautoexpectations fromengine.",
+    "Symlink/brokenlink/unsafeparent/preexistingoutput/raceofpublication/partialfailure/stdoutaftercomplete with ownedinode-onlycleanup; fixeddependencyhashmismatch and registryunchanged.",
+    "Draftgeneration+validation canpass while final_locked explicitlyfails; fabricatedreviewstringwithoutboundactualrecord cannotenableacceptance; unfinishedmaterialization remainspending.",
+    "D01 templateinstantiation withseedchangingentity/variant/time whileliteralGoldRule fullrefsubstitution remainsmanual; expansionlimitsoverflow beforelargeallocation.",
+    "D02 SourcePayload rawcontenthash/updatedanchors/samerefchangedbody/oldnewrevision exactliteralcounterexamples; current-vs-historicalnotinferredfrommaxrevision.",
+    "D03 REFdraftsha literalmatrix,B2excluded,B6unresolved/executionfalse andno-testinput; noimplicitnumericdefault.",
+    "D04 pendingallnull vs mixednull/missingrecord/forgedreviewer/authorcollision/coverage/goldhash/disagreement/versionmismatch; requireownerreviewoutsideparser.",
+    "D05 rawspec/protocol2differentwhitespace→differentrawsha butsametypedvalues; no reconstructedrawhash.",
+    "D06 emptyaxes/wrongpair/unusedpool/familycrosssplit/combinationmodeindividualreusetests,strongermodeexplicit.",
+    "D07 historicalqueryasof10vsoldgoldasof5,alternativeforbidden/emptyinner/duplicatesets; exactnullablejoins.",
+    "D08 multifaultmatrix distinguishesrawUTF8,depthguard,JSONsyntax,escapedUnicode,duplicatekey,schema/code/fileorder; mappingallreachablefixedhelpererrors.",
+    "D09 real64MiB+1boundedread/depth33/rowcap/compactbytewriter/nooverwrite/inodecleanup boundary tests; fixedhelper10000/unbounded/pretty notclaimedasnewguarantee.",
+    "D10 taskID mismatch/fullRefsource mismatch/commit-proposalpair/queryfuturecutoff/excludedtieevent/localavailabilitywithdrawal controls."
+  ],
+  "template_expansion": {
+    "role": "Actual deterministicboundedgenerator of declarativereviewabletemplates, not serializer offinishedrows. No interpretationofnatural-language truth, graphreachability, semanticrevisioneligibility, policyoutput orreward-learning used tocomputeGoldRule.",
+    "language": "No Python/eval/arbitraryformat/plugins/files. literal segment requiresliteralnonnull,slot_namenull. entity_slot requiresliteralnull andnamedboundentityslot. topic_slot requiresliteralnull,slot_namenull anduseschosenpairtopicdisplaytext. Eachtemplatevariant mustactuallyuse>=1entity_slot and>=1topic_slot in source/querytext; no emptytext/queryafterexpansion. Everydeclaredentityslotused. Emptysegments onlysummary. Source/querynaturalmeaning requiresreview; no automaticsemanticinference.",
+    "selection": "Use exactly hash_algorithms.choice and its fixed choice_names. Variant/entity-topic-pair/slot arrays retain declared order; gap choices use the exact inclusive integer interval rule. No implementation-defined random draws.",
+    "ids": "Use exactly hash_algorithms.id/id_kinds/root_stream/scope/clock. Every generated ID is prefix+62hex. Material identity_symbol preserves the same logical id across explicit revisions; version symbols remain unique source references. Root lineage clusters related instances and does not assert independent sample N.",
+    "bounds": "EachExpansionRequest instance_symbols andstream_seeds equalnonzerolen<=rowcap, everyinstanceIDunique. Precomputesuminst×selectedtemplateevents/queries/gold bounds beforeexpandedlists; overflowcheckedint64androwcap. Catalogarray/string/depth/rawlimits applybeforeexpansion. Anyresultartifact>64MiBrejectwithoutpublication. Developmentinstancecountisexplicitinputsize, not confirmatorysampleN.",
+    "partitions": "ExactlyonePartitionPool perdevelopment/validation/final_test; entity_slots/topic_slots/fact_group_ids/entity_topic_pairs nonemptyunique; eachpairendpointinitsentity/topicpool. Expansionallowedpairs nonemptysubset. Chooseoneorderedallowedpair asprimaryentity/topic; firstdeclaredslotusesprimaryentity, subsequententityslotschoosefromtheirpoolintersectentitieshavingapprovedpairwithchosenTopic. Emptyeligibleintersectioninvalidspec, no resampling. Eachfact_group_binding mapsuniqueMaterialTemplate.fact_group_slot toapprovedsplitfact_group_id; allboundslotsusedandallmaterialslotsbound. Manifestentity/topic/pair/factaxes derivedEXACTLYfromactualselectedslots/materialfacts, no fabricatedcoverage. Unselectedallowedpoolchoices mayremainunused; allcatalogvariants arestrictvalidated butonlyselectedvariant appearsinoutputlineage. Everyexpansioninstanceandpartitionhasactualnonemptyrows; outputaxes cannotclaimunusedcatalogvalues.",
+    "time": "EveryTimeRegime stepsnonempty/uniqueanchor, baseNSexplicit. Firstanchor=base+chosenfirstgap, lateranchor=previous+chosenstepgap; gapschooseclosed[min,max], int64overflowreject. regular requiresmin=max foreachstep; bounded_irregular permitsrange; no elapsed units otherthanns. Events source/arrival/availability referexplicitanchors, so latentregimelabel neverruntimefield. Longgaps/repeatedexposure/delayoutcomes ariseonlyfromexplicitreviewedanchors/events, notinferredtruth.",
+    "materials": "Eachsymboluniqueandreferenced; revision explicitpositiveinteger. ResolveTextSegments into SourcePayload. FullRef proposedorigin=memory,collection=memories,id=opaque materialID,revisionexplicit,content_sha256=SHA256(UTF8(text+LF+summary)) EXACTincludingterminalLFwhenemptySummary. SourcePayloadmetadata separatelyboundbyeventrawbytes; no hashingofJSONascontent. TheseareEXPdeclaredsourcebytes, notclaimactualproductrecord. created<=updated<=materialavailable; effectiveifknown<=available. NewrevisionnewfullRef/contentpayloadexplicit, notautomaticupdatedclockfromexposure. SamefullRef repeatedmustexactsourcepayloadmatch. For sameidentitysymbol allversionshaveexactcreated_at_ns, nondecreasingupdated_at_ns byexplicitrevision; body/contenthashmaychangeonlywitheachdeclaredversion. Revisionnumbersaloneimplynolifecycleeligibility, andEXPsourcedeclarationsarenotnativeDYN03initialstateimports; actualadaptermustvalidateinitialcatalog/newrevisionrulesseparately.",
+    "gold": "SymbolicGoldRule resolvesexplicitmaterialsymbols andtimeanchors one-to-one, nevercomputesexpectedrefsfromsame lifecycle/statealgorithm. Templatevariant bindsquestion+provisionalGoldRule asmanualreviewedproposal; allresultrowsprovisional. Slots/variantsmeaningneedsactualindependentreview; syntacticsubstitutionisnotsemanticcorrectnessproof.",
+    "hash_algorithms": {
+      "notation": "U(x)=UTF8 of exact string with no normalization; D(n)=ASCII canonical base10 nonnegative integer without leading zeros except0; NUL=one0byte; H=SHA256 digest; hex=lowercase hex. All symbols are validated IDs and contain no NUL. A tuple below is exact byte concatenation; no JSON encoding in these tuples.",
+      "choice": "H(U(exp01-expand-v1)+NUL+D(global_seed)+NUL+D(stream_seed)+NUL+U(root_stream_symbol)+NUL+U(instance_symbol)+NUL+U(choice_name)). Interpret digest as unsigned big-endian integer and take modulo N over the declared ordered nonempty alternatives. No claim of statistically uniform sampling.",
+      "choice_names": {
+        "variant": "variant",
+        "entity_topic_pair": "entity_topic_pair",
+        "slot": "slot/ followed by the exact slot_name",
+        "gap": "gap/ followed by the exact anchor_id"
+      },
+      "choice_bounds": "Integer interval choice uses N=max-min+1 and min+(Hinteger mod N), with exact Python integer intermediates and int64 checks on resulting gaps/times; never wrap. Each chosen pair/variant must have every required slot bindable; reject incompatible pools before expansion.",
+      "id": "H(U(exp01-id-v1)+NUL+U(kind)+NUL+D(global_seed)+NUL+D(stream_seed)+NUL+U(root_stream_symbol)+NUL+U(instance_symbol)+NUL+U(symbol_key)); prefix+first62 lowercase hex characters.",
+      "id_kinds": {
+        "stream": {
+          "prefix": "s",
+          "symbol_key": "literal stream"
+        },
+        "event": {
+          "prefix": "e",
+          "symbol_key": "EventTemplate.symbol"
+        },
+        "query": {
+          "prefix": "q",
+          "symbol_key": "QuestionTemplate.symbol"
+        },
+        "material": {
+          "prefix": "m",
+          "symbol_key": "MaterialTemplate.identity_symbol, excluding revision/version symbol"
+        },
+        "task": {
+          "prefix": "t",
+          "symbol_key": "task_symbol"
+        },
+        "evidence": {
+          "prefix": "v",
+          "symbol_key": "evidence_symbol"
+        }
+      },
+      "root_stream": "r+first62hex(H(U(exp01-root-v1)+NUL+D(global_seed)+NUL+U(root_stream_symbol))). Deliberately excludes stream_seed and instance_symbol so related instances retain a common cluster lineage.",
+      "scope": "For each component workspace_id/project_id/user_id/agent_id use prefixes w/p/u/a respectively and first62hex(H(U(exp01-scope-v1)+NUL+U(component_name)+NUL+U(generated_stream_id))). Each exact v1 Scope is validated with the pinned codec; these are synthetic identities, never real credentials.",
+      "clock": "c+first62hex(H(U(exp01-clock-v1)+NUL+U(generated_stream_id))). Simulated nanoseconds only.",
+      "stream_order": "Sort by (H(U(exp01-stream-order-v1)+NUL+D(global_seed)+NUL+U(generated_stream_id)) as raw digest bytes, then generated_stream_id ASCII bytes).",
+      "collision": "Any generated identity collision within the corresponding identity domain rejects identity_conflict; no salt, retry or silent deduplication."
+    }
+  },
+  "actual_review_record": {
+    "reference_combinations": "Standalone draft template may carry pending metadata without a dataset. In validate_dataset, both SplitManifest.review and ProtocolDraft.independent_gold_review must have label_version EXACTLY SplitManifest.label_version (not dataset_version). Both references must be structurally identical: either all three reviewer_id/review_record/reviewed_gold_sha256 null with pending_independent_review, or all nonnull with record_supplied. Any mixed/mismatched combination rejects review_unresolved at $.independent_gold_review. Pending never reads review.json.",
+    "record_read": "Onlyevidence-root/review.json, boundednofollowread; ArtifactReference.path mustliteralreview.json,size/rawSHAexact. StrictclosedReviewRecord; no arbitrarypayload/privatepath echo.",
+    "joins": "Record datasetid/version,labelversion,contractrawSHA,specrawSHA,event/query/goldrawSHA,SplitAssignmentProjectionsemanticSHA EXACTdatasetbindings; generator_author_ids/label_author_ids exactlyspec,nonemptyunique. ReviewerIDdistinctfromeachauthorandroleindependent_gold_reviewer. Reviewitems EXACTquerycoverage uniquequeryid, GoldRowsemanticSHA exact, ruleidexists. AlllisteddisagreementsqueryIDsvalid anduniqueby(queryID,code). Recordcompleted requiresallitemsconfirmed_provisional andnoopen/requiresnewlabelversion disagreements; completedrecordcannotpromotegoldbeyondprovisionalresearchscope.",
+    "adjudication": "Openresolution requiresadjudicatornull; resolved requiresnonnulladjudicator notoriginalgenerator/labelauthor. requires_new_label_version cannotbeacceptedcompletedonoldgoldhash. Meaning-unresolved/changesrequested records maybestored/read, validatorraisesreview_unresolvedforclaimedcompletedbinding; neverpretendsapproval.",
+    "no_self_cycle": "ReviewRecord doesNOTbindmanifestrawSHA or protocolrawSHA containingreviewreference. It bindsdatahashesandSplitAssignmentProjection excludingreviewmetadata; recordsemanticsha excludesnoselfhashfield (thereisnone). Externalreference rawrecordSHA bindsrecordbytes. No circularhash.",
+    "scope": "Joinsverifyevidenceconsistency ONLY. Reviewer/role/statusstrings donotauthenticateidentity,authorindependence,humanapprovalorauthority. Owneractualindependentreviewmustexistandbecheckedseparately; ValidationResult saysrecord_joins_verified_not_authority,neveracceptednative/scientific.",
+    "exact_reference_joins": "For supplied references, ref.reviewer_id==Record.reviewer_id; ref.reviewed_gold_sha256==Record.gold_sha256==actual gold raw SHA; ref.label_version==Record.label_version==SplitManifest.label_version. Record.dataset_id/dataset_version bind the corresponding manifest fields separately. Each ReviewItem.rule_id==the matching GoldRow.label_rule_id, not merely any existing rule. All existing item coverage/author separation/hash/split/disagreement rules also remain required.",
+    "dataset_acceptance": "A supplied bound record must have completed_provisional_review, every item confirmed_provisional and no open or requires_new_label_version disagreement; otherwise review_unresolved. Structured unresolved/changes_requested records may be decoded as records but never pass combined dataset validation. These consistency checks do not authenticate a reviewer or confer approval.",
+    "regeneration_boundary": "The events/queries/gold bytes and every generated manifest field except manifest.review must exactly match deterministic expansion. The actual manifest.review is checked separately by the exact reference/record joins above. This sole review-metadata exception does not permit changes to data, file hashes, spec/dependency/projection bindings, author lists or entries. A nonnull ProtocolDraft.dataset_reference must point to split_manifest.json and match its actual raw bytes/size/hash, including review metadata."
+  },
+  "REF_handoff": {
+    "hash": "REFContractsemanticdomainabove bindsstaticeligibility/exclusion/split/no-test/executionblock EVENwhilechoicevaluesnull. EXP02.spec canpinthisdraft hash, but cannotexecuteselection; laterresolvedrulesnewversion/hash, olddraftunchanged.",
+    "constraints": "eligible_base/excluded exactfixedarraysorder. B2 treatmentexcluded andNOOUT/NOTIMEablationsnotREF. OptionalB6 neveraddedasfakeDYNPolicyID; currentdecisionnull andexecutionfalse. LaterpreincludedB6 requiresitsownactualregistry/support evidence androotapprovalbeforevalidationselection. No oldBstar substitute. Score/tie/cost/idorder/tuning/B6choice null⇒executionblocked, notdefault0 orIDsort.",
+    "7policies": "REFsubset distinctfromEXP02 originalminimum7policymatrix; EXP01 doesnotremoveotherarms. DYN05.p1/actualnamespace/config/prefix/candidate/readerbudgetgateandfirstfallbackerror952didentityretained."
+  },
+  "split_projection_definition": "SplitAssignmentProjection is the exact closed model declared here, taken field-for-field from SplitManifest. It excludes files, review and split_assignment_sha256. Its semantic type_name is exactly SplitAssignmentProjection; GoldRow, ReviewRecord and REFContract use those exact closed model names. There is no SemanticGoldRow alias. ReviewRecord separately binds raw data hashes. No projection hashes itself.",
+  "all_original_full_gates_pending": [
+    "Actual label-free materialization/native EventV2/ProbeV2/CandidateSnapshot/config/policy/readerbudget+execution",
+    "Actual independent goldmeaningreview andversionedrecordownercheck",
+    "Fullsplit semanticvalidity andactualleakage tests",
+    "Resolved REFselection/tuning and EXP02minimum7/DYN05.p1 actualsupportgate",
+    "Developmentpilot evidence anddistinctv7primary/task-success/cost/noveltydecisions",
+    "Laterseparatefinalprotocol design+implementation+immutablefinal_lock; currentdraftalwaysrejectsfinal_locked"
+  ],
+  "artifact_hash_static_mapping": {
+    "files.events_sha256": "events.jsonl",
+    "files.queries_sha256": "queries.jsonl",
+    "files.gold_sha256": "gold.jsonl"
+  },
+  "source_clock_and_initial_state_boundary": "SourcePayloadprovidesbody/kind/created/updated/effectiveclocks, notnativeapproved/active/sourceverifiedpermissions orDynamicsState. Availableatdeclaresobservationvisibility, notautomaticactivate. Futureadaptermustderiveexistingnativeeligibility/sourceguard/initialcatalog/key/config/revision fromacceptedfixturecontract andactualGo validation, no undeclaredgoldread.",
+  "protocol": "exp01-dataset-contract-v1",
+  "task": "EXP-01.draft",
+  "status": "root_selected_engineering_contract_pending_implementation_validation",
+  "template_path": "protocol.template.json"
+}
