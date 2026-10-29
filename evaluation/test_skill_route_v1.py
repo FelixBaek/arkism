@@ -25,10 +25,10 @@ class ScoreTests(unittest.TestCase):
                 {"id": "q4", **run("", latency=40)}, {"id": "q5", **run("x", ["x"], latency=50)}]
         got = route_eval.score(labels, runs)
         self.assertEqual((got["labeled"], got["scored"], got["with_fit"], got["without_fit"]), (6, 5, 3, 2))  # q6 has no run
-        self.assertEqual(got["pick_accuracy"], round(1 / 3, 4))
-        self.assertEqual(got["wrong_pick_rate"], round(1 / 3, 4))
-        self.assertEqual(got["withheld_rate"], round(1 / 3, 4))
-        self.assertEqual(got["candidate_recall"], round(2 / 3, 4))
+        self.assertAlmostEqual(got["pick_accuracy"], 1 / 3, places=4)
+        self.assertAlmostEqual(got["wrong_pick_rate"], 1 / 3, places=4)
+        self.assertAlmostEqual(got["withheld_rate"], 1 / 3, places=4)
+        self.assertAlmostEqual(got["candidate_recall"], 2 / 3, places=4)
         self.assertEqual((got["abstain_accuracy"], got["unneeded_pick_rate"]), (0.5, 0.5))
         self.assertEqual((got["latency_ms_p50"], got["latency_ms_p95"]), (30, 50))
         self.assertEqual(got["providers"], {"jev": 4, "rules": 1})
