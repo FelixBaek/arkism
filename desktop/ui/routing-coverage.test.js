@@ -351,3 +351,18 @@ test("스킬 판정 card hides when the server has no decision log or nothing wa
     assert.doesNotMatch(text(v.table), /스킬 판정/);
   }
 });
+
+test("reset drops a settings read still out: the old answer neither repaints nor counts as loaded (#468)", async () => {
+  let land;
+  const v = mk({ replies: { "/v1/routing/models": () => new Promise((r) => { land = () => r(modelsDoc()); }) } });
+  v.state.view = "settings";
+  let paints = 0; const draw = v.ctx.render; v.ctx.render = () => { paints++; draw(); };
+  const read = v.r.loadSettings();
+  v.r.reset(); // switched project or connection while the read was out
+  land(); await read; await settle();
+  assert.equal(paints, 0, "the stale read repainted the settings tab");
+  const before = v.calls.filter(([p]) => p.startsWith("/v1/routing/models")).length;
+  v.R["/v1/routing/models"] = () => modelsDoc();
+  v.draw(); await settle(); // the tab is still unloaded, so it reads again
+  assert.equal(v.calls.filter(([p]) => p.startsWith("/v1/routing/models")).length, before + 1);
+});
