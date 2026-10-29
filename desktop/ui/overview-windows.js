@@ -658,7 +658,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!drafts.has(c.id)) drafts.set(c.id, { text: null, talk: {} });
       const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "";
       const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? (fixText || c.text); edit.rows = 3; edit.hidden = dr.text == null && !fixText; edit.setAttribute("aria-label", "고쳐서 저장할 내용");
-      // the heading shows what 승인 would save once the person (or the AI sparkle, which types into the box) changed it
+      // the heading shows what 승인 would save once the person (or the AI sparkle's 저장, which types into the box) changed it
       const title = el("h3", "", dr.text ?? c.text), head = el("div", "ov-detail-group"); head.append(h, title); detail.append(head);
       edit.addEventListener("input", () => { dr.text = edit.value; title.textContent = edit.value.trim() ? edit.value : c.text; });
       const decide1 = el("div", "ov-detail-group"), basisG = el("div", "ov-detail-group ov-detail-group-sub"), metaG = el("div", "ov-detail-group ov-detail-group-sub");

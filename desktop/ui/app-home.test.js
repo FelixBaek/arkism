@@ -291,9 +291,20 @@ test("overview: 승인 대기 keeps the edited text across redraws, as the next 
     let d = await reviewOf("코드 수정 후");
     const heading = () => text(win().querySelector(".ov-wide-detail h3")), box = () => win().querySelector(".ov-detail-edit");
     assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
-    // the AI rewrites the fix text; 저장 keeps it, and the heading now shows what 승인 would save
+    // the AI proposal is a preview: the box keeps the original and the heading does not move
+    const original = box().value;
     d.querySelector(".ex-ai-spark").click(); await app.settle(30);
-    await press("저장", d.querySelector(".ex-ai-note"));
+    assert.equal(box().value, original);
+    assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
+    assert.ok(win().querySelector(".ex-ai-diff ins"), "the proposal shows as a diff beside the box");
+    // 취소 drops only the preview
+    await press("취소", win().querySelector(".ex-ai-note"));
+    assert.equal(box().value, original);
+    assert.equal(win().querySelector(".ex-ai-diff").hidden, true);
+    // 저장 puts it in the box, and the heading now shows what 승인 would save
+    win().querySelector(".ex-ai-spark").click(); await app.settle(30);
+    await press("저장", win().querySelector(".ex-ai-note"));
+    assert.equal(box().value, answer);
     assert.equal(heading(), answer);
     // a redraw (another row, then back) keeps the saved text in the box and the heading
     const rows = () => [...win().querySelectorAll(".ov-wide-row:not(.ov-wide-row-dream)")];
