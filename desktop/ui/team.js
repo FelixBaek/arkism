@@ -1864,7 +1864,8 @@ window.ArkismTeams = (ctx) => {
       if (!S.discord) await loadDiscord(true);
       if (ticket !== S.uTicket) return;
       if (!doc || !doc.kpi) throw new Error("invalid_response");
-      S.usage = doc; S.uRuns = runs?.items || []; S.uMeets = meets?.items || []; S.uState = "ready";
+      S.usage = doc; // null: that read failed, said under the numbers (#465)
+      S.uRuns = runs ? runs.items || [] : null; S.uMeets = meets ? meets.items || [] : null; S.uState = "ready";
     } catch (e) {
       if (ticket !== S.uTicket) return;
       S.usage = null; S.uState = unsupported(e) ? "unsupported" : "error"; S.uErr = e.message;
@@ -1924,6 +1925,7 @@ window.ArkismTeams = (ctx) => {
       tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : "")), // ≈ marks the estimate (325:37545 has no 추정 badge)
       tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
     const kids = [kp, dayChart(byDay)];
+    if (!S.uRuns || !S.uMeets) kids.push(empty("실행·회의 기록을 불러오지 못해 부르는 곳·평균 시간·마지막 실패·마지막 회의 칸이 비어 있을 수 있어요. 새로고침하면 다시 불러와요."));
     if (kind === "all" || kind === "agent") kids.push(expertTable(d.agents || [], direct));
     if (kind === "all" || kind === "team") kids.push(teamTable(d.teams || [], meetings));
     if (kind === "all" || kind === "workflow") kids.push(autoTable(d.workflows || []), failingCard(d.failing_nodes || []));

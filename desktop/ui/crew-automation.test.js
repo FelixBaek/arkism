@@ -293,3 +293,22 @@ test("automation test tab runs and polls, history restores a version", async () 
   assert.ok(h.notices.some((n) => /되돌렸어요/.test(n)), h.notices.join(" / "));
   assert.deepEqual(clean(), []);
 });
+
+test("#465 automation: failed channel and destination reads say so, with a retry, instead of offering nothing", async () => {
+  const bots = [{ id: "b1", revision: 1, discord_bot: { name: "봇", state: "connected", channels: [] } }];
+  const h = await boot({ discord: { bots, settings: {} } });
+  let up = false;
+  h.routes.unshift(["GET", /^\/v1\/discord\/bots\/[^/]+\/channels/, () => (up ? { items: [{ channel_id: "c2", name: "release" }] } : new Error("boom"))],
+    ["GET", /^\/v1\/messengers/, () => (up ? { destinations: [{ channel: "telegram", name: "default" }] } : new Error("boom"))]);
+  const d = await openAuto(h, "wf1");
+  exact(d, "채널 추가").click(); await h.settle(); await h.settle();
+  const chan = () => d.querySelector('select[aria-label="봇"]').parentNode.querySelector('select[aria-label="채널"]').options[0].textContent;
+  assert.equal(chan(), "채널을 불러오지 못했어요");
+  exact(d, "+ 채널 연결").click(); await h.settle(); await h.settle();
+  assert.match(d.textContent, /보낼 곳을 불러오지 못했어요/);
+  assert.doesNotMatch(d.textContent, /설정 › 메신저에서 먼저 연결해요/);
+  up = true;
+  for (let b; (b = exact(d, "다시 시도"));) { b.click(); await h.settle(); await h.settle(); }
+  assert.equal(chan(), "채널 고르기");
+  assert.doesNotMatch(d.textContent, /보낼 곳을 불러오지 못했어요/);
+});

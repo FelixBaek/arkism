@@ -31,7 +31,7 @@ window.ArkismPins = (ctx) => {
   const firstLine = (s) => String(s || "").trim().split("\n")[0].slice(0, 120);
 
   // ---------------------------------------------------------------- what can be pinned (same scope, approved only)
-  const lib = { key: "", at: 0, knowledge: [], loading: null };
+  const lib = { key: "", at: 0, knowledge: [], failed: false, loading: null };
   // Every card on screen redraws when the library or a resolution arrives (a page redraw may have replaced the one that asked).
   const live = new Set();
   const redrawAll = () => { for (const f of live) f(); };
@@ -39,8 +39,9 @@ window.ArkismPins = (ctx) => {
     const key = query();
     if (lib.key === key && Date.now() - lib.at < 60000) return;
     if (lib.loading) return;
-    lib.loading = request(`/v1/knowledge/sources?${query({ limit: 500 })}`).then((r) => r.items || [], () => [])
-      .then((items) => { Object.assign(lib, { key, at: Date.now(), knowledge: items, loading: null }); redrawAll(); });
+    // failed: the picker says so, not "none approved"; asked again after a minute (#465)
+    const set = (items) => { Object.assign(lib, { key, at: Date.now(), knowledge: items || [], failed: !items, loading: null }); redrawAll(); };
+    lib.loading = request(`/v1/knowledge/sources?${query({ limit: 500 })}`).then((r) => set(r.items || []), () => set(null));
   }
   const skillVersions = (s) => Math.max(1, (s.version_history || []).length);
   const skillActive = (s) => { const i = (s.version_history || []).indexOf(s.active_version); return i >= 0 ? i + 1 : skillVersions(s); };
@@ -212,7 +213,7 @@ window.ArkismPins = (ctx) => {
           });
           return b;
         }));
-        if (!found.length) drop.append(el("p", "pn-none", ui.kind === "knowledge_sources" && lib.loading ? "불러오는 중…" : "넣을 수 있는 승인된 자료가 없어요."));
+        if (!found.length) drop.append(el("p", "pn-none", ui.kind === "knowledge_sources" && lib.loading ? "불러오는 중…" : ui.kind === "knowledge_sources" && lib.failed ? "자료 목록을 불러오지 못했어요. 잠시 뒤 다시 불러와요." : "넣을 수 있는 승인된 자료가 없어요."));
       };
       const drawChips = () => chips.replaceChildren(...KINDS.map(([k, label]) => {
         const b = el("button", `pn-kindchip${ui.kind === k ? " on" : ""}`, label);

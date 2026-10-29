@@ -1170,9 +1170,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const sk = el("div", "ov-map-sidehead"); sk.append(el("h4", "", "지도 요약")); right.append(sk, ...Array.from({ length: 4 }, () => el("div", "skeleton ov-map-sk")));
     body.append(left, right); d.append(body);
     let graph, topics;
-    try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], () => [])]); }
+    try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], (e) => (e?.status === 404 ? [] : null))]); } // null: topics failed (an older server without topics is [])
     catch (e) { if (!d.isConnected) return; status.classList.add("off"); msg.textContent = /access_denied/.test(e?.message || "") ? "지도를 볼 권한이 없어요." : "지도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; status.append(button("다시 시도", "small", null, () => { d.close(); void wideMap(); })); right.replaceChildren(); return; }
     if (!d.isConnected) return;
+    const topicsFailed = topics === null; topics ||= []; // the map still draws; it says the topic view is missing instead of hiding it (#465)
     const nodes = graph.nodes || [], edges = graph.edges || [];
     if (!nodes.length) { status.classList.add("off"); msg.textContent = "지도에 그릴 기억이 아직 없어요."; right.replaceChildren(); return; }
     status.remove();
@@ -1208,7 +1209,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const mapEdges = edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })); // one array: the map skips relinking while it is the same
     // a cut map says so on the canvas; older servers send only truncated
     const cut = "nodes_truncated" in graph ? [graph.nodes_truncated && `기억이 많아 ${num(nodes.length)}개까지만 그렸어요`, graph.edges_truncated && "선이 많아 일부 선은 빠졌어요"].filter(Boolean).join(" · ") : graph.truncated ? "기억이 많아 일부만 그렸어요." : "";
-    if (cut) canvas.append(el("p", "ov-map-cut", cut));
+    const note = [cut, topicsFailed && tr("주제를 불러오지 못해 주제별 보기가 빠졌어요. 지도를 다시 열면 다시 불러와요.")].filter(Boolean).join(" · ");
+    if (note) canvas.append(el("p", "ov-map-cut", note));
     function drawMap() {
       const qq = q.toLowerCase(), topicHit = new Set(qq ? topics.filter((t) => (t.title || "").toLowerCase().includes(qq)).flatMap((t) => (t.members || []).map((r) => r.id)) : []);
       const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!qq || (n.label || label(n.id)).toLowerCase().includes(qq) || topicHit.has(n.id));

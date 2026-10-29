@@ -586,7 +586,8 @@ export function startApp() {
         canReview ? loadMaintenance() : [],
         settle("skills", collectionPaging.read("skills", true), []),
         settle("prompts", appApi.request(`/v1/prompts?${appApi.query()}`).then((r) => r.items || []), []),
-        appApi.request(`/v1/design_systems?${appApi.query()}`).then((r) => r.items || [], () => null),
+        // null only when the server has no such route (an older server); any other failure is a failed list (#465)
+        settle("designSystems", appApi.request(`/v1/design_systems?${appApi.query()}`).then((r) => r.items || [], (e) => (e?.status === 404 ? null : Promise.reject(e))), []),
         toolViews.loadTools(),
         settle("crew", crew.load(), []),
         models.load(), usageReq, reviewsReq, trashReq
@@ -1066,7 +1067,7 @@ export function startApp() {
   const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
   // The Home row for lists that failed while the memories loaded; each failed list is named once (#186).
   const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", conflicted: "부딪히는 기억 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요",
-    crew: "FLOW 목록을 불러오지 못했어요", prompts: "프롬프트 목록을 불러오지 못했어요" };
+    crew: "FLOW 목록을 불러오지 못했어요", prompts: "프롬프트 목록을 불러오지 못했어요", designSystems: "디자인 시스템 목록을 불러오지 못했어요" };
   // A paged server list as a count (#465): its server total while more pages wait, "N+" without one, "—" when the list failed.
   function listCount(name, total) {
     const more = !!collectionPaging.snapshot(name).cursor;
@@ -1153,8 +1154,8 @@ export function startApp() {
     const prompts = state.listErrors.prompts || state.loadError ? null : d.prompts; // a failed read is "—", not 0 (#465)
     $("#count-image").textContent = state.loading ? "" : serverCount(prompts && promptsOf("image")).text;
     $("#count-slide").textContent = state.loading ? "" : serverCount(prompts && promptsOf("slide")).text;
-    $("#count-design").textContent = state.loading ? "" : serverCount(state.loadError ? null : d.designSystems).text;
-    $("#count-crew").textContent = state.loading ? "" : String(crew.count());
+    $("#count-design").textContent = state.loading ? "" : serverCount(state.listErrors.designSystems || state.loadError ? null : d.designSystems || []).text;
+    $("#count-crew").textContent = state.loading ? "" : serverCount(state.listErrors.crew || state.loadError ? null : crew.count()).text;
     $("#count-routing").textContent = state.loading ? "" : String(routing.count());
     $("#count-usage").textContent = state.loading ? "" : String(usage.count());
     const t = d.tools;
@@ -1232,6 +1233,13 @@ export function startApp() {
     if (state.view === "design") designViews.renderLibrary();
     if (state.view === "tools") toolViews.renderTools();
     if (state.view === "reviews") reviews.render();
+    // a list that failed at load says so instead of its empty state, until a refresh brings it back (#465)
+    const failedList = { images: "prompts", crew: "crew", design: "designSystems" }[state.view];
+    if (failedList && state.listErrors[failedList]) {
+      const c = callout(LIST_FAILED[failedList], state.listErrors[failedList].text || "연결을 확인하고 다시 시도해 주세요.");
+      c.append(button("다시 시도", "small", null, () => void loadAll()));
+      table.replaceChildren(c);
+    }
     table.scrollTop = scroll;
     if (resetDetail || !state.selected) renderDetail();
   }
@@ -2249,7 +2257,7 @@ export function startApp() {
   const home = window.ArkismHome({ count: serverCount, state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });
-  const homeChecks = window.ArkismHomeChecks({ state, request: appApi.request, query: appApi.query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
+  const homeChecks = window.ArkismHomeChecks({ count: serverCount, state, request: appApi.request, query: appApi.query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   $("#status-toggle").addEventListener("click", () => renderStatusCard()); // after shell.js opened it: fill the 기억 처리 stages

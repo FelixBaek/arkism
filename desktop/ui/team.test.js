@@ -394,3 +394,12 @@ test("usage: retrying failed runs, refused, partly failed and done", async () =>
   assert.ok(h.notices.some((n) => /실행을 맡겼어요/.test(n)), h.notices.join(" / "));
   assert.deepEqual(clean(), []);
 });
+
+test("#465 usage: failed run and meeting reads are said under the numbers, not shown as no failures", async () => {
+  const h = await bootTeams("crewUsage", {});
+  h.routes.unshift(["GET", /^\/v1\/crew\/runs\?/, () => new Error("boom")], ["GET", /^\/v1\/crew\/meetings\?/, () => new Error("boom")]);
+  await h.click(document, "새로고침");
+  await h.settle();
+  assert.match(table().textContent, /성공률/);
+  assert.match(table().textContent, /실행·회의 기록을 불러오지 못해/);
+});

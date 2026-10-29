@@ -416,3 +416,20 @@ test("merge decisions report success for store, skip and dismiss, and the list w
   assert.match(empty.h.$("#table").textContent, /확인할 병합 제안이 없어요/);
   empty.state.memTab = "digests"; empty.state.view = "skills"; empty.view.drawMerge();
 });
+
+test("#465 digests: a failed read says it could not load; only a missing route reads as not supported", async () => {
+  const down = setup({ routes: { "/v1/merge_proposals?": () => { const e = new Error("boom"); e.status = 500; throw e; } }, digestsDown: true });
+  assert.equal(down.view.mergeCount(), null, "loading");
+  await dom.flush();
+  assert.equal(down.view.mergeCount(), false, "failed, not 0");
+  down.view.draw(); await dom.flush();
+  assert.match(down.h.$("#table").textContent, /요약을 불러오지 못했어요/);
+  assert.doesNotMatch(down.h.$("#table").textContent, /아직 주제 요약이 없어요/);
+  down.state.memTab = "merge"; down.view.drawMerge(); await dom.flush();
+  assert.match(down.h.$("#table").textContent, /병합 제안을 불러오지 못했어요/);
+  assert.doesNotMatch(down.h.$("#table").textContent, /지원하지 않아요/);
+  const old = setup({ routes: { "/v1/merge_proposals?": () => { const e = new Error("not_found"); e.status = 404; throw e; } } });
+  old.state.memTab = "merge"; old.view.drawMerge(); await dom.flush();
+  assert.match(old.h.$("#table").textContent, /병합 제안을 지원하지 않아요/);
+  assert.equal(old.view.mergeCount(), 0);
+});
