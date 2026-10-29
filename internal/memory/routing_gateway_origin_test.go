@@ -59,7 +59,7 @@ func TestGatewayCallsAreRecordedWithTheirTraceAndStayOutOfCrewUsage(t *testing.T
 		Origin: &RoutingOrigin{Kind: "side"}}}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("side call without a reason", err)
 	}
-	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "all", "", "")
+	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "all", "", "", "")
 	if err != nil || u.KPI.CostUSD != 0 {
 		t.Fatal("gateway calls counted as crew work", u.KPI, err)
 	}

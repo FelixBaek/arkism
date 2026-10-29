@@ -3,7 +3,7 @@
 // A team is a crew record of type "team" (called @이름, same namespace as work agents; workflows keep $이름).
 // Meetings live in /v1/crew/meetings (the host engine runs the turns; this screen polls every 2 s while one runs),
 // Discord bots in /v1/discord (tokens go to the host keyring; the record keeps only the last four characters),
-// and CREW › 사용량 reads /v1/crew/usage. Every cost here is an estimate from public list prices (marked 추정).
+// and each workflow's 기록·사용량 tab (modules/flowUsage.mjs) reads /v1/crew/usage. Every cost here is an estimate from public list prices (marked 추정).
 window.ArkismTeams = (ctx) => {
   "use strict";
   const { state, $, el, icon, button, go, render, request, query, notice, ago } = ctx;
@@ -42,7 +42,6 @@ window.ArkismTeams = (ctx) => {
   const PERM_BITS = PERMS.reduce((s, [, , bit]) => s + (1n << BigInt(bit)), 0n).toString(); // 311385197568
   const inviteURL = (appId) => `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(appId)}&scope=bot%20applications.commands&permissions=${PERM_BITS}`;
   window.ArkismDiscordInvite = inviteURL; // 설정 › 메신저 uses the same invite link
-  const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const ERRORS = {
     secret_detected: "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요.",
     invalid_request: "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.",
@@ -78,7 +77,6 @@ window.ArkismTeams = (ctx) => {
   };
   const usd = (n) => `$${Number(n || 0).toFixed(2)}`;
   const pad2 = (n) => String(n || 0).padStart(2, "0");
-  const pct = (r) => (r == null ? "—" : `${Number(r).toFixed(1)}%`); // the server sends percentages (0–100)
   const est = () => el("span", "tm-est", "추정");
   function modelLabel(m) {
     const s = (m || "").trim();
@@ -148,7 +146,7 @@ window.ArkismTeams = (ctx) => {
     nd: null, ndFrom: "", estimate: null, estTimer: 0, estKey: "",
     meetTab: "running", meetings: null, counts: {}, meetErr: "", meetSel: null, meeting: null, note: "", noteFocus: false, newMeeting: null, tick: 0, timer: 0,
     discord: null, discordErr: "", discordLoading: false, bot: null, settingsOpen: false, connect: null, channels: new Map(), botDraft: null, botDraftFor: null, connectTimer: 0,
-    usage: null, uState: "idle", uErr: "", uRange: "30d", uKind: "all", agentStatus: null
+    agentStatus: null
   };
   const here = (view) => state.view === view;
 
@@ -1849,234 +1847,9 @@ window.ArkismTeams = (ctx) => {
     side(s, el("p", "tm-side-text", "디스코드는 서버 하나만 연결해요. 디스코드에서 부른 일은 읽기만 하고 파일을 고치지 않아요."));
   }
 
-  // ================================================================ 사용량 (325:37545)
-  // Everything the usage API does not sum up is worked out here from the same data: runs and meetings are read once more
-  // (newest 200 / 50) for each table's 시작·평균 시간·마지막 실패·마지막 회의; 쓰는 곳 comes from the crew records.
-  const USAGE_FILTERS = [["all", "전체"], ["agent", "전문가"], ["team", "팀"], ["workflow", "자동화"]];
-  const usageLoads = globalThis.ArkismKeep.latest(); // a 기간 change while a read is out: the older answer is dropped
-  async function loadUsage() {
-    S.uState = "loading"; paintUsage();
-    const ticket = usageLoads.begin();
-    try {
-      const [doc, runs, meets] = await Promise.all([
-        request(`/v1/crew/usage?${query({ range: S.uRange })}`),
-        request(`/v1/crew/runs?${query({ limit: 200 })}`).catch(() => null),
-        request(`/v1/crew/meetings?${query({ status: "all", limit: 50 })}`).catch(() => null)]);
-      if (!S.discord) await loadDiscord(true);
-      if (!ticket.live()) return;
-      if (!doc || !doc.kpi) throw new Error("invalid_response");
-      S.usage = doc; // null: that read failed, said under the numbers (#465)
-      S.uRuns = runs ? runs.items || [] : null; S.uMeets = meets ? meets.items || [] : null; S.uState = "ready";
-    } catch (e) {
-      if (!ticket.live()) return;
-      S.usage = null; S.uState = unsupported(e) ? "unsupported" : "error"; S.uErr = e.message;
-    }
-    paintUsage();
-  }
-  const paintUsage = () => { if (here("crewUsage")) render(false); };
-  function segBox(tabs, cur, onPick) {
-    const s = el("div", "tm-seg"); s.setAttribute("role", "tablist");
-    for (const [k, l] of tabs) { const t = el("button", `tm-seg-tab${k === cur ? " active" : ""}`, l); t.type = "button"; t.setAttribute("role", "tab"); t.addEventListener("click", () => onPick(k)); s.append(t); }
-    return s;
-  }
-  const rangeLabel = () => (S.uRange === "today" ? "오늘" : S.uRange === "all" ? "전체 기간" : `최근 ${RANGES.find(([k]) => k === S.uRange)?.[1] || ""}`);
-  const usageFrom = () => { const d = { today: 0, "7d": 7, "30d": 30, "90d": 90 }[S.uRange]; if (d == null) return 0; if (!d) { const t = new Date(); t.setHours(0, 0, 0, 0); return t.getTime(); } return Date.now() - d * 86400000; };
-  const inRange = (rec) => Date.parse(rec.created_at || rec.crew_meeting?.created_at) >= usageFrom();
-  const runAt = (r) => Date.parse(r.updated_at || r.created_at);
-  const meetAt = (r) => Date.parse(r.crew_meeting.finished_at || r.crew_meeting.updated_at || r.updated_at);
-  const sumBy = (rows, key) => rows.reduce((s, x) => s + (x[key] || 0), 0);
+  // a run's length and how it started, for the meeting history rows
   const dur = (ms) => { const s = Math.round(ms / 1000); return s >= 60 ? `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, "0")}초` : `${s}초`; };
   const TRIGGERS = { manual: "직접", call: "직접", test: "직접", workflow: "자동화", schedule: "일정", webhook: "웹훅", discord: "디스코드", agent: "전문가" };
-  // failed splits by kind: agent_failed, team_failed, and the rest of failed is automations (older servers: all automations).
-  const dayParts = (x) => { const hasKinds = x.workflow != null || x.team != null || x.agent != null; const tf = x.team_failed || 0; return { agent: x.agent || 0, team: hasKinds ? x.team || 0 : 0, auto: hasKinds ? x.workflow || 0 : x.ok || 0, failed: (x.failed || 0) + (x.agent_failed || 0), fAgent: x.agent_failed || 0, fTeam: tf, fAuto: Math.max(0, (x.failed || 0) - tf) }; };
-  function usageAvatar(rec, model) {
-    const art = rec?.crew?.avatar?.art;
-    if (!art || !/^[\w-]+$/.test(art)) return mark(model);
-    const box = el("span", "tm-mark cu-face"); const img = el("img"); img.src = `img/avatars/${art}.png`; img.alt = ""; box.append(img);
-    if (/^[\w-]+$/.test(rec.crew.avatar.bg || "")) box.style.background = `var(--avatar-${rec.crew.avatar.bg})`;
-    return box;
-  }
-  function renderUsage() {
-    const ctl = el("div", "tm-uctl");
-    ctl.append(segBox(RANGES, S.uRange, (k) => { if (S.uRange !== k) { S.uRange = k; void loadUsage(); } }), segBox(USAGE_FILTERS, S.uKind, (k) => { if (S.uKind !== k) { S.uKind = k; render(false); } }));
-    const span = el("span", "tm-urange mono");
-    const days = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.uRange];
-    if (days) { const to = new Date(), from = new Date(Date.now() - (days - 1) * 86400000); const f = (x) => x.toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }); span.textContent = days === 1 ? f(to) : `${f(from)} – ${f(to)}`; }
-    ctl.append(span);
-    $("#controls").replaceChildren(ctl);
-    const table = $("#table");
-    table.className = "tm-wrap tm-usage";
-    if (S.uState === "idle") queueMicrotask(loadUsage);
-    if (S.uState !== "ready") {
-      table.replaceChildren(empty(S.uState === "unsupported" ? "이 서버는 아직 워크플로우·에이전트 사용량을 지원하지 않아요." : S.uState === "error" ? `사용량을 불러오지 못했어요 (${S.uErr}).` : "불러오는 중…"));
-      return;
-    }
-    const d = S.usage, k = d.kpi, byDay = d.by_day || [];
-    const kind = S.uKind;
-    const direct = sumBy(d.agents || [], "direct"), meetings = sumBy(d.teams || [], "meetings"), autoRuns = sumBy(d.workflows || [], "runs");
-    const total = direct + meetings + autoRuns;
-    const ok = byDay.reduce((s, x) => { const p = dayParts(x); return s + p.agent + p.team + p.auto; }, 0), failed = byDay.reduce((s, x) => s + dayParts(x).failed, 0);
-    const kp = el("div", "tm-ukpis");
-    const tile = (value, label, sub, cls, extra) => { const c = el("div", `tm-ukpi ${cls || ""}`.trim()); const v = el("strong", "", value); if (extra) v.append(extra); c.append(v, el("p", "", label)); if (sub) c.append(sub); return c; };
-    const waitSub = el("small", "");
-    if (k.waiting) { waitSub.append(k.oldest_waiting_at ? `가장 오래된 것 ${ago(k.oldest_waiting_at)} ` : ""); waitSub.append(link("확인하기 →", () => go("crew"))); } else waitSub.append("기다리는 일이 없어요");
-    const cost = Number(k.cost_usd || 0);
-    kp.append(tile(total.toLocaleString("en-US"), "실행", el("small", "", `전문가 ${direct} · 팀 ${meetings} · 자동화 ${autoRuns}`)),
-      tile(ok + failed ? pct((ok / (ok + failed)) * 100) : "—", "성공률", el("small", "", `끝난 ${ok + failed}번 중 실패 ${failed}번`)), // 실행 also counts runs still going or cancelled
-      tile(`≈${cost >= 100 ? `$${Math.round(cost).toLocaleString("en-US")}` : usd(cost)}`, "비용", el("small", "", total ? `실행당 평균 ${usd(cost / total)}` : "")), // ≈ marks the estimate (325:37545 has no 추정 badge)
-      tile(String(k.waiting || 0), "사람 확인 대기", waitSub, k.waiting ? "amber" : ""));
-    const kids = [kp, dayChart(byDay)];
-    if (!S.uRuns || !S.uMeets) kids.push(empty("실행·회의 기록을 불러오지 못해 부르는 곳·평균 시간·마지막 실패·마지막 회의 칸이 비어 있을 수 있어요. 새로고침하면 다시 불러와요."));
-    if (kind === "all" || kind === "agent") kids.push(expertTable(d.agents || [], direct));
-    if (kind === "all" || kind === "team") kids.push(teamTable(d.teams || [], meetings));
-    if (kind === "all" || kind === "workflow") kids.push(autoTable(d.workflows || []), failingCard(d.failing_nodes || []));
-    table.replaceChildren(...kids);
-  }
-  function dayChart(days) {
-    const c = card("tm-chart", "날짜별 실행");
-    const show = (key) => S.uKind === "all" || S.uKind === key;
-    const parts = days.map((x) => { const p = dayParts(x); return { x, p, agent: show("agent") ? p.agent : 0, team: show("team") ? p.team : 0, auto: show("workflow") ? p.auto : 0, failed: (show("agent") ? p.fAgent : 0) + (show("team") ? p.fTeam : 0) + (show("workflow") ? p.fAuto : 0) }; });
-    const ok = sumBy(parts, "agent") + sumBy(parts, "team") + sumBy(parts, "auto"), bad = sumBy(parts, "failed");
-    const head = c.firstChild;
-    head.append(el("p", "", `${rangeLabel()} · 성공 ${ok} · 실패 ${bad} · 막대에 올리면 전문가·팀·자동화로 나뉘어 보여요`));
-    const legend = el("div", "tm-legend"); legend.append(el("span", "ok", "성공"), el("span", "bad", "실패")); head.append(legend);
-    const sum = (q) => q.agent + q.team + q.auto + q.failed;
-    const max = Math.max(1, ...parts.map(sum));
-    const top = Math.ceil(max / 10) * 10 || 10;
-    const plot = el("div", "tm-plot");
-    const axis = el("div", "tm-axis"); [top, Math.round(top / 2), 0].forEach((v) => axis.append(el("span", "mono", String(v))));
-    const cols = el("div", "tm-cols");
-    const tip = el("div", "cu-tip"); tip.hidden = true;
-    const step = Math.max(1, Math.ceil(days.length / 5));
-    parts.forEach((q, i) => {
-      const col = el("div", "tm-col");
-      for (const [cls, v] of [["bad", q.failed], ["cu-ag", q.agent], ["team", q.team], ["auto", q.auto]]) { const b = el("i", cls); b.style.height = `${(v / top) * 100}%`; col.append(b); }
-      const [, mm, dd] = (q.x.date || "").split("-");
-      col.append(el("small", "mono", i % step === 0 || i === parts.length - 1 ? `${Number(mm)}.${Number(dd)}` : ""));
-      const label = new Date(`${q.x.date}T12:00:00`).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" });
-      col.setAttribute("aria-label", `${label} · 실행 ${sum(q)} · 실패 ${q.failed}`);
-      col.addEventListener("mouseenter", () => {
-        tip.replaceChildren(el("b", "", `${label} · 실행 ${sum(q)}`));
-        for (const [cls, name, v] of [["cu-ag", "전문가", q.agent], ["team", "팀", q.team], ["auto", "자동화", q.auto], ["bad", "실패", q.failed]]) { const r = el("p", ""); r.append(el("i", cls), el("span", "", name), el("em", "mono", String(v))); tip.append(r); }
-        tip.hidden = false;
-        const left = col.offsetLeft + col.offsetWidth + 8;
-        tip.style.left = `${left + tip.offsetWidth > cols.clientWidth ? Math.max(0, col.offsetLeft - tip.offsetWidth - 8) : left}px`;
-        col.classList.add("hot");
-      });
-      col.addEventListener("mouseleave", () => { tip.hidden = true; col.classList.remove("hot"); });
-      cols.append(col);
-    });
-    if (!days.length) cols.append(empty("이 기간에는 실행 기록이 없어요."));
-    cols.append(tip);
-    plot.append(axis, cols);
-    c.append(plot);
-    return c;
-  }
-  // A table card: title + subtitle + link on the right, then a grid of rows (first column left, the rest right-aligned).
-  function usageTable(title, sub, link_, cols, rows, emptyText, cls) {
-    const [linkText, linkGo] = link_;
-    const c = card("cu-card", title, sub);
-    if (linkText) c.firstChild.append(link(linkText, linkGo));
-    const t = el("div", `tm-utable cu-table ${cls}`);
-    const h = el("div", "tm-urow head"); cols.forEach((x) => h.append(el("span", "", x))); t.append(h);
-    for (const r of rows) t.append(r);
-    if (!rows.length) t.append(empty(emptyText));
-    c.append(t);
-    return c;
-  }
-  function urow(cells, onClick) {
-    const r = el(onClick ? "button" : "div", "tm-urow"); if (onClick) { r.type = "button"; r.addEventListener("click", onClick); }
-    for (const x of cells) r.append(typeof x === "string" || x == null ? el("span", "mono", x ?? "—") : x);
-    return r;
-  }
-  const lowRate = (v) => (v != null && v < 90 ? " amber" : "");
-  const cell = (text, cls = "") => el("span", cls, text);
-  function expertTable(rows, direct) {
-    const list = rows.filter((a) => a.calls > 0);
-    const body = list.map((a) => {
-      const rec = byId(a.id), model = agentModel(rec);
-      const name = el("span", "cu-name"); name.append(usageAvatar(rec, model), raw(el("span", "", `@${rec?.crew?.handle || a.name}`)));
-      const rateV = a.calls ? ((a.calls - (a.failed || 0)) / a.calls) * 100 : null;
-      const teamN = teams().filter((t) => (t.crew.members || []).some((m) => m.agent_id === a.id)).length;
-      // An automation uses an agent through a subflow node that calls the agent's own workflow ($handle).
-      const own = (rec?.crew?.workflow || "").replace(/^\$/, "");
-      const autoN = own ? items().filter((r) => r.crew.type === "workflow" && r.crew.handle !== own && (r.crew.graph?.nodes || []).some((n) => n.type === "subflow" && (n.config?.workflow || "").replace(/^\$/, "") === own)).length : 0;
-      const where = [autoN ? `자동화 ${autoN}` : "", teamN ? `팀 ${teamN}` : ""].filter(Boolean).join(" · ") || "—";
-      const cost = el("span", "mono", usd(a.cost_usd));
-      return urow([name, cell(modelLabel(model), "mono quiet"), cell(String(a.calls), "mono"), cell(pct(rateV), `mono${lowRate(rateV)}`), cell(num(a.tokens / a.calls), "mono"), cost, cell(where, "quiet")], () => openExpertHistory(a.id));
-    });
-    return usageTable("전문가", `${list.length}명 · 호출 ${sumBy(list, "calls")}번(단독 ${direct}) · 줄을 누르면 사용 기록을 봐요`, ["호출 기록 전체 보기 →", () => go("workers")],
-      ["이름", "모델", "호출", "성공률", "평균 토큰", "비용", "쓰는 곳"], body, "이 기간에 부른 전문가가 없어요.", "cu-expert");
-  }
-  function teamTable(rows, meetings) {
-    const recs = (S.uMeets || []).filter((m) => inRange(m) && m.crew_meeting);
-    const body = rows.map((t) => {
-      const mine = recs.filter((m) => m.crew_meeting.team_id === t.id).sort((a, b) => meetAt(b) - meetAt(a));
-      const from = [...new Set(mine.map((m) => TRIGGERS[m.crew_meeting.trigger] || "직접"))];
-      if (!from.length && channelsFor(t.id).length) from.push("디스코드");
-      const last = mine[0];
-      // the time is UI text and is translated; the meeting title is the user's and stays as written
-      const lastCell = cell(last ? ago(new Date(meetAt(last))) : "—", "quiet cu-clip");
-      if (last) lastCell.append(" · ", raw(el("span", "", last.crew_meeting.title || last.crew_meeting.topic || "")));
-      return urow([raw(el("span", "", `@${byId(t.id)?.crew?.handle || t.name}`)), cell(from.map(tr).join(" · ") || "—", "quiet"), cell(String(t.meetings), "mono"), cell(pct(t.concluded_rate), `mono${lowRate(t.concluded_rate)}`), cell((t.avg_rounds || 0).toFixed(1), "mono"), cell(usd(t.cost_usd ?? t.avg_cost_usd * t.meetings), "mono"), lastCell], () => { go("meetings"); });
-    });
-    return usageTable("팀", `${rows.length}개 · 회의 ${meetings}번 · 줄을 누르면 회의 기록으로 가요`, ["회의 기록 전체 보기 →", () => go("meetings")],
-      ["이름", "부르는 곳", "회의", "결론 난 비율", "평균 라운드", "비용", "마지막 회의"], body, "이 기간에 회의한 팀이 없어요.", "cu-team");
-  }
-  function autoTable(rows) {
-    const runs = (S.uRuns || []).filter((r) => inRange(r) && r.crew_run);
-    const body = rows.map((w) => {
-      const rec = byId(w.id), x = rec?.crew || {};
-      const mine = runs.filter((r) => r.crew_run.crew_id === w.id);
-      const done = mine.filter((r) => r.crew_run.status === "succeeded");
-      const avg = done.length ? done.reduce((s, r) => s + (runAt(r) - Date.parse(r.created_at)), 0) / done.length : null;
-      const avgOK = Number.isFinite(avg) && avg >= 0;
-      const bad = mine.filter((r) => r.crew_run.status === "failed").sort((a, b) => runAt(b) - runAt(a))[0];
-      const reason = bad && Object.values(bad.crew_run.nodes || {}).find((n) => n.status === "failed" && n.error)?.error;
-      const start = [x.trigger ? (x.trigger.kind === "schedule" ? "일정" : "웹훅") : "직접"];
-      if (bots().some((b) => (b.channels || []).some((c) => c.action?.kind === "workflow" && c.action.id === w.id))) start.push("디스코드");
-      const rateCell = cell(pct(w.success_rate), `mono${lowRate(w.success_rate)}`);
-      return urow([raw(el("span", "", `$${x.handle || w.name}`)), cell(start.join("·"), "quiet"), cell(String(w.runs || 0), "mono"), rateCell, cell(avgOK ? dur(avg) : "—", "mono"), cell(usd(w.cost_usd), "mono"), raw(cell(bad ? `${ago(new Date(runAt(bad)))}${reason ? ` · ${reason}` : ""}` : "—", "quiet cu-clip"))],
-        () => { go("crew"); state.selected = `crew:${w.id}`; render(); });
-    });
-    return usageTable("자동화", `${rows.length}개 · 줄을 누르면 실행 기록으로 가요`, ["실행 기록 전체 보기 →", () => go("crew")],
-      ["이름", "시작", "실행", "성공률", "평균 시간", "비용", "마지막 실패"], body, "이 기간에 돈 자동화가 없어요.", "cu-auto");
-  }
-  // The expert popup (crew.js) opens over this page on its 사용량 tab; it listens for this event.
-  function openExpertHistory(id) { window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id, tab: "usage", over: true } })); }
-  // 실패한 곳부터 다시: the same request crew.js sends from a failed run (POST /v1/crew/runs, done nodes kept).
-  const lastFailed = (wfId, nodeId) => (S.uRuns || []).filter((r) => r.crew_run?.crew_id === wfId && r.crew_run.status === "failed" && (!nodeId || r.crew_run.nodes?.[nodeId]?.status === "failed")).sort((a, b) => runAt(b) - runAt(a))[0];
-  async function retryFailed(runs, what) {
-    const todo = runs.filter((r) => r && byId(r.crew_run.crew_id));
-    if (!todo.length) { notice("다시 돌릴 실패 기록을 찾지 못했어요. 실행 기록에서 열어 주세요."); return; }
-    if (!await ask(`${what} 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.`)) return;
-    let ok = 0;
-    for (const run of todo) {
-      const rec = byId(run.crew_run.crew_id), cr = run.crew_run;
-      const nodes = Object.fromEntries((rec.crew.graph?.nodes || []).map((n) => [n.id, { status: "pending" }]));
-      for (const [id, st] of Object.entries(cr.nodes || {})) if (nodes[id] && st.status === "done") nodes[id] = { status: "done", output: st.output, port: st.port, runs: st.runs };
-      const next = { crew_id: rec.id, crew_revision: rec.revision, trigger: "manual", status: "running", input: cr.input || JSON.stringify({ request: "" }), nodes, ...(cr.loops ? { loops: cr.loops } : {}) };
-      try { await request("/v1/crew/runs", { method: "POST", body: body({ run: next }) }); ok++; } catch (e) { notice(`$${rec.crew.handle}을 다시 돌리지 못했어요 (${e.message}).`); }
-    }
-    if (ok) { notice(`${ok}개 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.`); void loadUsage(); }
-  }
-  function failingCard(rows) {
-    const total = sumBy(rows, "failures");
-    const c = card("cu-card cu-fail", "실패가 많은 노드", `${rangeLabel()} · 실패 ${total}번이 ${rows.length}곳에서`);
-    if (rows.length) c.firstChild.append(link("실패한 곳부터 다시 →", () => retryFailed([...new Set(rows.map((f) => f.workflow_id))].map((id) => lastFailed(id)), "실패한 자동화마다 마지막 실행을")));
-    for (const f of rows) {
-      const wf = byId(f.workflow_id);
-      const node = (wf?.crew?.graph?.nodes || []).find((n) => n.id === f.node_id);
-      const run = (S.uRuns || []).filter((r) => r.crew_run?.crew_id === f.workflow_id && r.crew_run.nodes?.[f.node_id]?.error).sort((a, b) => runAt(b) - runAt(a))[0];
-      const reason = run?.crew_run.nodes[f.node_id].error;
-      const r = el("div", "tm-ulist");
-      const t = el("div", ""); t.append(raw(el("b", "", node?.title || f.node_id)), raw(el("small", "", `$${wf?.crew?.handle || f.workflow_id}${reason ? ` · ${reason}` : ""}`)));
-      const right = el("div", "tm-ulist-right"); right.append(el("span", "amber mono", `${f.failures}번`), link("다시 실행", () => retryFailed([lastFailed(f.workflow_id, f.node_id)], `$${wf?.crew?.handle || f.workflow_id}의 마지막 실패 실행을`)));
-      r.append(t, right); c.append(r);
-    }
-    if (!rows.length) c.append(empty("실패한 노드가 없어요."));
-    return c;
-  }
 
   // ---------------------------------------------------------------- pages (registered like crew.js pages)
   const pages = {
@@ -2084,9 +1857,7 @@ window.ArkismTeams = (ctx) => {
       bare: true, head: () => [button("회의 보기", "ghost", null, () => go("meetings"))], render: renderTeams },
     teamNew: { title: "새 팀", sub: () => "", keepDetail: true, head: () => [], render: () => { setTimeout(() => { go("teams"); setTimeout(() => openPopup(null)); }); $("#table").replaceChildren(); } },
     meetings: { title: "회의", sub: () => "팀이 정한 순서로 의견을 나누고 하나의 결론을 만들어요.", keepDetail: true, head: () => [], render: renderMeetings }, // 팀 보기 sits beside 새 회의 (208:19103)
-    discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord },
-    crewUsage: { title: "사용량", sub: () => "워크플로우·전문가·팀이 얼마나 불리고 얼마나 썼는지 봐요. 비용은 공시 단가로 계산한 추정이에요.",
-      bare: true, head: () => [button("새로고침", "ghost", null, loadUsage)], render: renderUsage } // like 팀: no repeated title, the button sits on the tab bar
+    discord: { title: "디스코드", sub: () => "채널에서 에이전트·팀·워크플로우를 부르고, 결과를 채널로 받아요.", keepDetail: true, head: () => [], render: renderDiscord }
   };
   return { pages, _test: { inviteURL, PERM_BITS, modelLabel, handleFrom } };
 };

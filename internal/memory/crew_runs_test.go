@@ -403,8 +403,25 @@ func TestCrewUsageLeavesOutTestRuns(t *testing.T) {
 			t.Fatal(trigger, err)
 		}
 	}
-	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "workflow", "", "")
+	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "workflow", "", "", "")
 	if err != nil || u.KPI.Runs != 1 || len(u.Workflows) != 1 || u.Workflows[0].Runs != 1 {
 		t.Fatal("usage", err, u.KPI.Runs, u.Workflows)
+	}
+}
+
+func TestCrewUsageOfOneWorkflow(t *testing.T) {
+	f, auto := crewRunFixture(t)
+	other := f.crew(crewWorkflow("저녁 정리", "저녁정리"))
+	for _, id := range []string{auto.ID, auto.ID, other.ID} {
+		if _, err := f.svc.CreateCrewRun(testCtx, f.human, CrewRunInput{Scope: scopeA, Run: newCrewRun(id)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "workflow", "", "", auto.ID)
+	if err != nil || u.KPI.Runs != 2 || len(u.Workflows) != 1 || u.Workflows[0].ID != auto.ID || len(u.Agents) != 0 {
+		t.Fatal("one workflow's usage", err, u.KPI.Runs, u.Workflows, u.Agents)
+	}
+	if _, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "workflow", "", "", "bad id\n"); !errors.Is(err, ErrInvalid) {
+		t.Fatal("a bad workflow id was accepted", err)
 	}
 }

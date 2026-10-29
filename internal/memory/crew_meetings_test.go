@@ -411,7 +411,7 @@ func TestRoutingCallOriginAndCrewUsage(t *testing.T) {
 		Origin: &RoutingOrigin{Kind: "robot"}}}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("bad origin", err)
 	}
-	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "all", "", "")
+	u, err := f.svc.CrewUsage(testCtx, f.human, scopeA, "today", "all", "", "", "")
 	if err != nil || u.KPI.CostUSD < 4 || !u.KPI.CostEstimated || len(u.Agents) != 2 || u.Agents[0].ID != f.a.ID || u.Agents[0].Pct == nil || *u.Agents[0].Pct != 20 {
 		t.Fatal("usage", fmt.Sprintf("%+v", u.KPI), u.Agents, err)
 	}
@@ -419,10 +419,10 @@ func TestRoutingCallOriginAndCrewUsage(t *testing.T) {
 	if u.Agents[0].Direct != 0 || u.Agents[1].Direct != 1 || u.Agents[1].Failed != 0 || len(u.ByDay) != 1 || u.ByDay[0].Agent != 1 || u.ByDay[0].AgentFailed != 0 {
 		t.Fatal("direct calls", u.Agents, u.ByDay)
 	}
-	if u, _ = f.svc.CrewUsage(testCtx, f.human, scopeA, "30d", "agent", f.b.ID, ""); len(u.Agents) != 1 || u.Agents[0].Calls != 1 {
+	if u, _ = f.svc.CrewUsage(testCtx, f.human, scopeA, "30d", "agent", f.b.ID, "", ""); len(u.Agents) != 1 || u.Agents[0].Calls != 1 {
 		t.Fatal("agent filter", u.Agents)
 	}
-	if u, _ = f.svc.CrewUsage(testCtx, f.human, scopeA, "30d", "team", "", ""); len(u.Teams) != 1 || u.Teams[0].Meetings != 1 || u.KPI.Runs != 1 {
+	if u, _ = f.svc.CrewUsage(testCtx, f.human, scopeA, "30d", "team", "", "", ""); len(u.Teams) != 1 || u.Teams[0].Meetings != 1 || u.KPI.Runs != 1 {
 		t.Fatal("teams", u.Teams)
 	}
 	page, err := f.svc.Discord(testCtx, f.human, scopeA)
