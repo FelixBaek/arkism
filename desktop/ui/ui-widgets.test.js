@@ -522,11 +522,13 @@ test("in a popout window: Esc closes its popup, the next popup it opens stays th
     <div class="field"><span>이름</span><input id="kn"></div><select id="ks"><option>가</option><option>나</option></select></dialog>`);
   const w1 = $("#w1");
   const dressed = [];
-  window.addEventListener("arkism-popout", (e) => dressed.push(e.detail));
+  window.ArkismPopoutSetup.probe = (d) => dressed.push(d);
   w1.showModal(); await flush(); await timers.tick(20);
+  delete window.ArkismPopoutSetup.probe;
   const kd = w1.ownerDocument, label = opened.at(-1)[1];
   assert.notEqual(kd, document);
-  assert.deepEqual(dressed, [kd], "other scripts hear of the new popout document");
+  assert.deepEqual(dressed, [kd], "other scripts' wiring runs on the new popout document");
+  assert.deepEqual(window.ArkismPopout.setups(kd), ["zoomKeys", "combo", "contextMenu", "probe"]);
   assert.equal(kd.title, "Arkism");
   assert.equal(window.ArkismPopout.current(), document, "the app, while that window has no focus");
   kd._focus = true; // the user is in that window now

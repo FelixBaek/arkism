@@ -81,7 +81,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return d;
   }
   // how a separate window reopens this one when it is dragged out of the app (popup-drag.js; overview.js listens)
-  const recipe = (d, detail) => { if (d) { Object.assign(d.dataset, { popout: JSON.stringify({ event: "arkism:open-overview-window", detail }), popoutTitle: tr("기억 처리") }); d.setAttribute("aria-keyshortcuts", "Alt+Shift+O"); } };
+  const recipe = (d, detail) => { if (d) { Object.assign(d.dataset, { popout: JSON.stringify({ event: "arkism:open-overview-window", detail }), popoutTitle: tr("기억 처리") }); } };
   const row = (tagText, title, meta, right, btns = []) => {
     const r = el("div", "ov-win-item"), t = el("div", "ov-win-item-t"), left = el("div", "ov-win-item-l");
     if (tagText) t.append(tagEl(tagText));

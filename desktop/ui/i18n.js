@@ -291,7 +291,7 @@
     walk(d.documentElement, fn);
     if (fn === apply) observer.observe(d.documentElement, OBSERVE);
   }
-  root.addEventListener("arkism-popout", (e) => { if (lang === "en") popout(e.detail, apply); });
+  (root.ArkismPopoutSetup ||= {}).translate = (d) => { if (lang === "en") popout(d, apply); };
 
   // 대화 상자 문구
   for (const name of ["confirm", "alert", "prompt"]) {

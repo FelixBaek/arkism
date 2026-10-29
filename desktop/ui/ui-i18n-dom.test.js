@@ -101,7 +101,7 @@ test("English translates text, attributes, the title and messages, but not user 
   // a popout window (popup-drag.js) opened in English: translated at once, and new text there as it appears
   const kp = popout.body.appendChild(popout.createElement("p")); kp.textContent = "저장";
   window.ArkismPopout = { docs: () => [popout] };
-  window.dispatchEvent(new dom.CustomEvent("arkism-popout", { detail: popout }));
+  window.ArkismPopoutSetup.translate(popout); // what popup-drag.js runs on a new popout window
   assert.equal(kp.textContent, "Save");
   assert.equal(popout.documentElement.lang, "en");
   const kn = popout.createElement("span"); kn.textContent = "닫기"; popout.body.append(kn);

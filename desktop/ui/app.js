@@ -514,7 +514,7 @@ export function startApp() {
     });
   };
   dialogKeys(document);
-  addEventListener("arkism-popout", (e) => dialogKeys(e.detail));
+  (window.ArkismPopoutSetup ||= {}).dialogKeys = dialogKeys;
   // 알림 줄: 문구 하나와 닫기(×). 다른 화면으로 가도 지워진다.
   function notice(text) {
     // An open window (dialog) covers the page, so its messages show inside that window instead.

@@ -455,7 +455,7 @@ export const createCrew = (ctx) => {
       card.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("p", "flow-card-role", x.role || "")), raw(el("small", "flow-card-category", x.category || "")), alias);
     }
     card.addEventListener("click", () => openFlow(rec));
-    card.ctxItems = () => [{ label: "열기", run: () => card.click() }, { label: "@이름 복사", off: !x.handle, run: () => Promise.resolve().then(() => navigator.clipboard.writeText(flowAlias(rec, items()))).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")) }];
+    card.ctxItems = () => [{ label: "열기", run: () => card.click() }, { label: "@이름 복사", off: !x.handle, run: () => Promise.resolve().then(() => card.ownerDocument.defaultView.navigator.clipboard.writeText(flowAlias(rec, items()))).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")) }];
     return card;
   }
   function openFlowCreate() {
@@ -1331,7 +1331,7 @@ export const createCrew = (ctx) => {
     });
   }
   graphKeys(document);
-  window.addEventListener("arkism-popout", (e) => graphKeys(e.detail));
+  (window.ArkismPopoutSetup ||= {}).graphKeys = graphKeys; // its popout window too (popup-drag.js)
 
   async function explain(prompt) {
     const a = await kit.assist("explain", prompt, { purpose: "skill" });
