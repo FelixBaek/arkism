@@ -27,6 +27,10 @@ type SkillRoute struct {
 	// its run ended (a skill.usage status). Both stay empty until the router reports them.
 	Loaded  string `json:"loaded,omitempty" bson:"loaded,omitempty"`
 	Outcome string `json:"outcome,omitempty" bson:"outcome,omitempty"`
+	// Rival is the judged candidate that also fit (suitability 2+, confidence 0.5+) but was not picked:
+	// two skills that keep fitting the same questions overlap and split the route between them.
+	Rival     string `json:"rival,omitempty" bson:"rival,omitempty"`
+	RivalName string `json:"rival_name,omitempty" bson:"rival_name,omitempty"`
 }
 
 func newSkillRoute(out RouteResult, candidates []SkillCandidate, runtime string) SkillRoute {
@@ -40,9 +44,18 @@ func newSkillRoute(out RouteResult, candidates []SkillCandidate, runtime string)
 			}
 		}
 	}
+	best := -1.0
+	for _, j := range out.Judgments {
+		if v := j.Suitability * j.Confidence; j.ID != sr.Selected && j.Suitability >= 2 && j.Confidence >= 0.5 && v > best {
+			best, sr.Rival = v, j.ID
+		}
+	}
 	for _, c := range candidates {
-		if c.ID == sr.Selected {
+		switch c.ID {
+		case sr.Selected:
 			sr.SelectedName = c.Name
+		case sr.Rival:
+			sr.RivalName = c.Name
 		}
 	}
 	return sr
