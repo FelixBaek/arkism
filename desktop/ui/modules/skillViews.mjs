@@ -531,11 +531,10 @@ export function createSkillViews(deps) {
     checks.setAttribute("aria-expanded", "false");
     rec.append(skFacts([["출처", r ? (r.remote || r.repo) : "", "mono"], ["버전", verCell.childNodes.length ? verCell : ""], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"], ["이력", history], ["검사·사용", checks]]), more);
     parts.push(rec);
-    if (sk.status !== "deprecated") {
-      const foot = deps.el("div", "v4s-trash");
-      foot.append(deps.button("휴지통으로", "ghost danger", null, () => deps.confirmBatch([sk], () => deps.trashSkills([sk]))));
-      parts.push(foot);
-    }
+    const foot = deps.el("div", "v4s-trash");
+    if (sk.version_id) foot.append(deps.button("zip으로 내보내기", "ghost", null, () => exportSkillZip(sk)));
+    if (sk.status !== "deprecated") foot.append(deps.button("휴지통으로", "ghost danger", null, () => deps.confirmBatch([sk], () => deps.trashSkills([sk]))));
+    if (foot.childNodes.length) parts.push(foot);
     body.append(...parts);
     const g = deps.generation;
     const v = await deps.request(`/v1/skill_versions/${encodeURIComponent(sk.version_id)}?${deps.query()}`).catch(() => null);
@@ -544,6 +543,20 @@ export function createSkillViews(deps) {
     const join = (x) => (Array.isArray(x) ? x.join(" · ") : x || "");
     const rows = [["이럴 때", join(a.use_when)], ["쓰지 마세요", join(a.avoid_when)], ["쓰는 도구", join(a.tools)]];
     when.replaceChildren(when.firstChild, ...(rows.some(([, x]) => x) ? [skFacts(rows, true)] : [deps.el("p", "meta", "스킬 설명에 쓰는 때가 적혀 있지 않아요.")]));
+  }
+
+
+  // SKILL.md와 번들 파일을 zip으로 받는다. 앱의 API 다리는 JSON 글만 읽어서 base64로 받는다.
+  async function exportSkillZip(sk) {
+    let url;
+    try {
+      const z = await deps.request(`/v1/skill_versions/${encodeURIComponent(sk.version_id)}/zip?${deps.query({ format: "json" })}`);
+      const bytes = Uint8Array.from(atob(z.content_base64), (c) => c.charCodeAt(0));
+      url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      const link = deps.el("a"); link.href = url; link.download = z.filename; link.click();
+      deps.notice(`${z.filename} 다운로드를 시작했어요.`); // a link click cannot tell whether the save went through
+    } catch (_) { deps.notice("zip을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요."); }
+    finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
   }
 
 

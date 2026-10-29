@@ -162,7 +162,24 @@
       const top = el("form", "v4s-install-bar");
       const src = el("input", "v4s-input mono"); src.placeholder = "github.com/owner/repo 또는 owner/repo/경로"; src.setAttribute("aria-label", "저장소");
       const look = button("불러오기", ""); look.type = "submit";
-      top.append(src, look);
+      // A zip goes to the host inside the request (base64), so it must fit the server's 160KB cap.
+      let zip = null;
+      const pickZip = button("zip 파일", "ghost", null, () => {
+        const input = el("input"); input.type = "file"; input.accept = ".zip,application/zip";
+        input.addEventListener("change", async () => {
+          const f = input.files?.[0];
+          if (!f) return;
+          if (f.size > 160 * 1024) { status.textContent = "zip이 160KB보다 커요. GitHub에 올려 주소로 설치해 주세요."; return; }
+          const bytes = new Uint8Array(await f.arrayBuffer());
+          let bin = "";
+          for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+          const name = f.name.trim();
+          zip = { name: name && new TextEncoder().encode(name).length <= 128 ? name : "skill.zip", data: btoa(bin) };
+          void preview();
+        });
+        input.click();
+      });
+      top.append(src, look, pickZip);
       const status = el("p", "v4s-status", "");
       const list = el("div", "v4s-list"); list.hidden = true;
       const updateL = el("label", "v4s-check"); const update = el("input"); update.type = "checkbox";
@@ -179,13 +196,13 @@
       function drawSide() {
         const s = found?.skills?.[pick];
         if (!s) {
-          side.replaceChildren(el("p", "v4s-lead", "owner/repo, owner/repo/경로 또는 GitHub 주소를 넣어요. 서버가 저장소를 내려받아 SKILL.md를 찾아요. 받은 파일은 실행하지 않아요."));
+          side.replaceChildren(el("p", "v4s-lead", "owner/repo, owner/repo/경로 또는 GitHub 주소를 넣거나 zip 파일을 골라요. 서버가 SKILL.md를 찾아요. 받은 파일은 실행하지 않아요."));
           return;
         }
         const head = el("div", "v4s-head");
         head.append(el("span", "v4s-kind mono", s.name), el("h2", "", s.description || s.name));
         const facts = el("dl", "v4s-facts");
-        for (const [k, v] of [["파일", `${s.files}개 · ${size(s.bytes)}`], ["커밋", found.commit.slice(0, 7)], ["이미 있음", (s.installed || []).map((k) => where(k)?.[1] || k).join(", ") || "없음"]]) facts.append(el("dt", "", k), el("dd", "", v));
+        for (const [k, v] of [["파일", `${s.files}개 · ${size(s.bytes)}`], [zip ? "SHA-256" : "커밋", found.commit.slice(0, 7)], ["이미 있음", (s.installed || []).map((k) => where(k)?.[1] || k).join(", ") || "없음"]]) facts.append(el("dt", "", k), el("dd", "", v));
         const check = el("section", "v4s-sec"); check.append(el("h3", "", "설치 전 확인"), facts);
         const agents = el("div", "v4s-agent-chips");
         for (const [k, n] of TARGETS) {
@@ -202,7 +219,8 @@
       }
       function drawList() {
         const files = found.skills.reduce((n, s) => n + s.files, 0), bytes = found.skills.reduce((n, s) => n + s.bytes, 0);
-        status.textContent = `스킬 ${found.skills.length}개 찾음 · ${found.source} · 커밋 ${found.commit.slice(0, 7)} · 파일 ${files}개 · ${size(bytes)}`;
+        const n = found.skills.length, pin = found.commit.slice(0, 7);
+        status.textContent = zip ? `스킬 ${n}개 찾음 · ${found.source} · SHA-256 ${pin} · 파일 ${files}개 · ${size(bytes)}` : `스킬 ${n}개 찾음 · ${found.source} · 커밋 ${pin} · 파일 ${files}개 · ${size(bytes)}`;
         list.replaceChildren(...found.skills.map((s, i) => {
           const r = el("button", `row v4s-row${i === pick ? " selected" : ""}`); r.type = "button";
           const text = el("div", "v4s-text");
@@ -215,14 +233,18 @@
         updateL.hidden = !found.skills.some((s) => s.installed?.length);
         count.textContent = `스킬 ${found.skills.length}개`;
       }
-      top.addEventListener("submit", async (e) => {
+      top.addEventListener("submit", (e) => {
         e.preventDefault();
-        const name = parseSource(src.value);
+        zip = null;
+        void preview();
+      });
+      async function preview() {
+        const name = zip ? zip.name : parseSource(src.value);
         if (!name) { window.ArkismNeed(src, "GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
-        look.disabled = true; found = null; pick = 0; update.checked = false; list.hidden = foot.hidden = updateL.hidden = true; drawSide();
-        status.textContent = "서버가 저장소를 내려받아 확인하고 있어요. 1분쯤 걸려요…";
+        look.disabled = pickZip.disabled = true; found = null; pick = 0; update.checked = false; list.hidden = foot.hidden = updateL.hidden = true; drawSide();
+        status.textContent = zip ? "서버가 zip을 확인하고 있어요. 1분쯤 걸려요…" : "서버가 저장소를 내려받아 확인하고 있어요. 1분쯤 걸려요…";
         try {
-          const r = await post({ agent: "shared", kind: "skill_install", name, enabled: false });
+          const r = await post({ agent: "shared", kind: "skill_install", name, enabled: false, ...(zip ? { zip: zip.data } : {}) });
           const mine = latest(r, "skill_install", name);
           const q = mine && (await settle([mine.id], alive))?.[0];
           if (!alive()) return;
@@ -233,16 +255,16 @@
           drawList(); drawSide();
         } catch (err) {
           status.textContent = `요청하지 못했어요 (${err.message}).`;
-        } finally { look.disabled = false; }
-      });
+        } finally { look.disabled = pickZip.disabled = false; }
+      }
       ok.addEventListener("click", async () => {
         if (!found) return;
         if (!picked.size) { notice("넣을 에이전트를 골라 주세요."); return; }
-        const name = `${found.source}@${found.commit}`;
+        const name = zip ? zip.name : `${found.source}@${found.commit}`;
         ok.disabled = true;
         status.textContent = "설치를 요청했어요. 서버가 1분 안에 설치해요…";
         try {
-          const r = await post({ agent: "shared", kind: "skill_install", name, targets: TARGETS.map(([k]) => k).filter((k) => picked.has(k)), update: !updateL.hidden && update.checked });
+          const r = await post({ agent: "shared", kind: "skill_install", name, targets: TARGETS.map(([k]) => k).filter((k) => picked.has(k)), update: !updateL.hidden && update.checked, ...(zip ? { zip: zip.data } : {}) });
           const mine = latest(r, "skill_install", name);
           const q = mine && (await settle([mine.id], () => true))?.[0];
           if (!q) { notice("설치 결과를 아직 받지 못했어요. 잠시 뒤 스킬 목록을 확인해 주세요."); return; }
