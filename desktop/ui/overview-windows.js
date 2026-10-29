@@ -892,7 +892,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const cmd = SL.continueCommand(target, h);
       if (!cmd) { say(x.id, "넘겨줄 작업 상태나 보관된 대화가 없어요."); return; }
       const what = h.work ? `저장된 작업 "${h.work.title || h.work.id}"` : "보관된 대화";
-      copyText(cmd, from, (ok) => say(x.id, ok ? `${SL.label(target)} 시작 명령을 복사했어요. ${what}를 읽고 이어가요.` : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd));
+      void copyText(cmd, from, (ok) => say(x.id, ok ? `${SL.label(target)} 시작 명령을 복사했어요. ${what}를 읽고 이어가요.` : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd));
     }
     function continueMenu(x, seen) {
       const m = el("div", "cat-menu ss-menu"); m.setAttribute("role", "menu");
@@ -980,7 +980,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (x.tokens > 0) tok.title = SL.split(x);
       const keep = stage && archiveOf(x.id);
       rr.append(tok, el("span", `ov-pill ov-pill-${st.tone}`, st.label), ...(keep ? [el("span", "ss-num", keep.short)] : []));
-      const cmd = SL.resumeCommand(x), resume = button("재개", "small", "copy", (ev) => { ev.stopPropagation(); copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "재개 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
+      const cmd = SL.resumeCommand(x), resume = button("재개", "small", "copy", (ev) => { ev.stopPropagation(); void copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "재개 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
       resume.disabled = !cmd; resume.title = cmd || "이 에이전트의 재개 명령은 몰라요.";
       const more = button("handoff", "small ss-more", "caret-down", (ev) => { ev.stopPropagation(); menuFor = menuFor === x.id ? "" : x.id; paint(); });
       more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", String(menuFor === x.id));
