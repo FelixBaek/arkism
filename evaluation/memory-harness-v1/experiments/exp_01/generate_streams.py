@@ -773,6 +773,10 @@ def load_sibling(name):
 
 
 def _reserve(parent, name, helpers):
+    basename = os.path.basename(name)
+    if basename != name or basename in ('', '.', '..'):
+        fail('unsafe_path')
+    name = basename
     os.mkdir(name, 0o700, dir_fd=parent)
     identity = helpers._identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
     descriptor = None

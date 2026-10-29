@@ -28,5 +28,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover -s evaluation/memory-h
 ```
 
 Why: Preserve the original data-generation and leakage boundaries without inventing research outcomes or a native policy adapter.
-Verified: The command above executed 35 test methods / 58 leaf test units with zero failures, errors or skips. Tests include independent source/hash/time oracles, actual CLI subprocesses, supplied-review joins and collection through an isolated importlib loader. This collection test does not claim the real outer R8 runner was connected or executed. Prior RED source/logs are preserved separately in the author evidence.
+Verified: The command above executed 36 test methods / 63 leaf test units with zero failures, errors or skips. Tests include independent source/hash/time oracles, actual CLI subprocesses, supplied-review joins and collection through an isolated importlib loader. This collection test does not claim the real outer R8 runner was connected or executed. Prior RED source/logs are preserved separately in the author evidence.
 Limits: Actual independent gold meaning review, native label-free materialization/replay, EXP-02/DYN-05 policy gates, development pilot and a later scientific final-lock protocol remain outstanding. No product, database, provider, model, build, deployment or operational execution is performed here.
+
+Security follow-up: the private reservation helper rejects empty, dot, parent and multi-component names before any filesystem operation, then uses the checked basename. The five no-I/O negative cases were preserved as actual pre-fix failures. Remote scanner acceptance is tracked separately from local test success.
