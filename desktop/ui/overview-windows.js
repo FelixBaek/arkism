@@ -254,18 +254,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const lock = (on) => { for (const b of [ok, no, ai]) b.disabled = on; };
     const ok = button("승인", "small", null, async () => { lock(true); const res = await decide(c, "approve"); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); });
     const no = button("버리기", "small", null, () => askReason("후보를 버릴까요?", async (reason) => { lock(true); const res = await decide(c, "reject", { reason }); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); }));
+    // While AI reads, this button cancels; after a failure or a cancel it says 다시 시도. The candidate text is never changed.
+    let running = null;
+    const aiLabel = (t) => { ai.lastChild.textContent = tr(t); };
     const ai = button("AI 도움", "small", "sparkle", async () => {
+      if (running) { running.abort(); return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
-      lock(true); note.textContent = "AI가 읽는 중…";
+      const mine = running = new AbortController(); let failed = true;
+      ok.disabled = no.disabled = true; aiLabel("취소"); note.textContent = "AI가 읽는 중… 최대 11분 걸려요.";
       try {
         const prompt = `An AI agent will be given this memory in later work if a person approves it.\nKind: ${c.kind}\nCandidate: ${c.text}\n${dupText ? `A similar existing memory: ${dupText}\n` : ""}Should the person approve it (true, still useful, specific) or reject it (wrong, one-off, vague, duplicate)?\nAnswer with ONE JSON object: {"pick": "approve" | "reject", "reason": "one or two short, plain Korean sentences"}.`;
-        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } } });
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } }, signal: mine.signal });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!["approve", "reject"].includes(j?.pick)) throw new Error(tr("AI가 고르지 못했어요."));
         ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
         advice.replaceChildren(el("strong", "", `AI 추천 · ${j.pick === "approve" ? "승인" : "버리기"}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 300))] : [])); advice.hidden = false; note.textContent = "";
-      } catch (e) { note.textContent = `AI 도움을 받지 못했어요: ${e.message}`; }
-      finally { lock(false); }
+        failed = false;
+      } catch (e) { note.textContent = e.code === "cancelled" ? "AI 도움을 취소했어요. 후보는 그대로예요." : `AI 도움을 받지 못했어요: ${e.message}`; }
+      finally { running = null; ok.disabled = no.disabled = false; aiLabel(failed ? "다시 시도" : "AI 도움"); }
     });
     side.append(ok, no, ai, button("자세히", "ghost small", null, () => wide("review", c.id))); r.firstChild.append(advice, note);
     return r;
@@ -552,19 +558,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (await ctx.resolveConflict(c, choice)) done();
       else act.querySelectorAll("button").forEach((x) => (x.disabled = false));
     }); b.dataset.choice = choice; return b; });
+    // While AI reads, this button cancels; after a failure or a cancel it says 다시 시도.
+    let running = null;
     const ai = button("AI 제안", "small", null, async () => {
+      if (running) { running.abort(); return; }
       if (!old) { st.textContent = "기존 기억을 불러온 뒤에 AI 제안을 받을 수 있어요."; return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { st.textContent = "AI 도움을 쓸 수 없어요."; return; }
-      ai.disabled = true; st.textContent = "";
+      const mine = running = new AbortController(); let failed = true;
+      ai.textContent = tr("취소"); st.textContent = "AI가 읽는 중… 최대 11분 걸려요.";
       try {
         const prompt = `Two memories an AI agent is given conflict. Decide which the person should keep.\nExisting memory: ${old.text}\nNew candidate: ${c.text}\nAnswer with ONE JSON object: {"pick": "new" | "both" | "keep_old", "reason": "one short Korean sentence"}.`;
-        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } } });
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } }, signal: mine.signal });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!CONFLICT_PICK[j?.pick]) throw new Error(tr("AI가 고르지 못했어요."));
         for (const b of picks) b.classList.toggle("primary", b.dataset.choice === j.pick);
         advice.replaceChildren(el("strong", "", `AI 제안 · ${tr(CONFLICT_PICK[j.pick])}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 200))] : [])); advice.hidden = false;
-      } catch (e) { st.textContent = `AI 제안을 받지 못했어요: ${e.message}`; }
-      finally { ai.disabled = false; }
+        st.textContent = ""; failed = false;
+      } catch (e) { st.textContent = e.code === "cancelled" ? "AI 제안을 취소했어요. 기억은 그대로예요." : `AI 제안을 받지 못했어요: ${e.message}`; }
+      finally { running = null; ai.textContent = tr(failed ? "다시 시도" : "AI 제안"); }
     });
     into.append(advice); act.append(...picks, ai);
   }

@@ -6426,3 +6426,12 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",
   "스킬 {0}개 찾음 · {1} · SHA-256 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · SHA-256 {2} · {3} files · {4}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "취소했어요": "Cancelled",
+  "서버에 닿지 못했어요. 연결을 확인하고 다시 시도해 주세요.": "Couldn't reach the server. Check the connection and try again.",
+  "서버가 1분 넘게 답하지 않아요. 잠시 뒤 다시 시도해 주세요.": "The server hasn't answered for over a minute. Try again in a moment.",
+  "11분 안에 답이 오지 않았어요. 다시 시도해 주세요.": "No answer within 11 minutes. Try again.",
+  "AI가 읽는 중… 최대 11분 걸려요.": "AI is reading… This can take up to 11 minutes.",
+  "AI 도움을 취소했어요. 후보는 그대로예요.": "AI help cancelled. The candidate is unchanged.",
+  "AI 제안을 취소했어요. 기억은 그대로예요.": "AI advice cancelled. The memory is unchanged."
+});
