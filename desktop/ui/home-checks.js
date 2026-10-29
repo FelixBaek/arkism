@@ -74,7 +74,7 @@ window.ArkismHomeChecks = (ctx) => {
     timer ||= setInterval(() => { if (live() && S.g >= 0) load(S.g, true); }, 60000); // forced: a tick just short of 60s after the last fetch must not skip a whole minute
     load(generation);
     // a list that did not load cannot prove a stall (#187)
-    if (!S.sessions || state.loadError || state.listErrors?.candidates) return null;
+    if (!S.sessions || state.loadError || state.listErrors?.candidates || state.listErrors?.conflicted) return null;
     const d = state.data;
     let lastExtract = 0;
     for (const list of [d.candidates, d.conflicted, d.memories]) for (const m of list) lastExtract = Math.max(lastExtract, time(m.created_at));

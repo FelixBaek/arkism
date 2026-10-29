@@ -3,7 +3,7 @@ import { createCatalogQuery } from "./modules/catalogQuery.mjs";
 import { createSkillSimilarity } from "./modules/skillSimilarity.mjs";
 import { retainListFocus } from "./modules/listFocus.mjs";
 import { createVisibleSync } from "./modules/visibleSync.mjs";
-import { createCollectionPaging } from "./modules/collectionPaging.mjs";
+import { createCollectionPaging, serverCount } from "./modules/collectionPaging.mjs";
 import { createVirtualList } from "./modules/virtualList.mjs";
 import { createAppState } from "./modules/state.mjs";
 import { createCrew } from "./crew.js";
@@ -405,11 +405,11 @@ export function startApp() {
   function renderStatusCard() {
     const d = state.data;
     const host = (() => { try { return new URL(state.server).host; } catch (_) { return state.server; } })();
-    const skillsUnknown = !!(state.listErrors.skills || state.loadError);
+    const skills = listCount("skills"), skillsUnknown = skills.state === "failed";
     const items = [
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
-      ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, !skillsUnknown],
+      ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${skills.text}개`, !skillsUnknown],
       ["lock-simple", "로그인", state.email || "토큰", true]
     ];
     const failedLists = Object.keys(state.listErrors).length;
@@ -582,10 +582,10 @@ export function startApp() {
       const [memories, candidates, conflicted, maintenance, skills, prompts, designSystems, tools, crewItems, providers, skillUse, reviewItems, skillTrash] = await Promise.all([
         memoryPaging.memoryPages.load(memoryPaging.memoryKey()),
         canReview ? settle("candidates", collectionPaging.read("candidates"), []) : [],
-        canReview ? collectionPaging.read("conflicted").catch(() => []) : [],
+        canReview ? settle("conflicted", collectionPaging.read("conflicted"), []) : [],
         canReview ? loadMaintenance() : [],
         settle("skills", collectionPaging.read("skills", true), []),
-        appApi.request(`/v1/prompts?${appApi.query()}`).then((r) => r.items || [], () => []),
+        settle("prompts", appApi.request(`/v1/prompts?${appApi.query()}`).then((r) => r.items || []), []),
         appApi.request(`/v1/design_systems?${appApi.query()}`).then((r) => r.items || [], () => null),
         toolViews.loadTools(),
         settle("crew", crew.load(), []),
@@ -1065,7 +1065,16 @@ export function startApp() {
   // 먼저 확인 holds three rows; 기억 처리 멈춤 is a fourth row on top while it lasts (Figma 523:35767).
   const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
   // The Home row for lists that failed while the memories loaded; each failed list is named once (#186).
-  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요", crew: "FLOW 목록을 불러오지 못했어요" };
+  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", conflicted: "부딪히는 기억 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요",
+    crew: "FLOW 목록을 불러오지 못했어요", prompts: "프롬프트 목록을 불러오지 못했어요" };
+  // A paged server list as a count (#465): its server total while more pages wait, "N+" without one, "—" when the list failed.
+  function listCount(name, total) {
+    const more = !!collectionPaging.snapshot(name).cursor;
+    return serverCount(state.listErrors[name] || state.loadError ? null : state.data[name], { more, total: more ? total : null });
+  }
+  // Memories to look at again: the server's idle total, else the loaded rows ("N+" while more pages wait); "…" until use counts load, "—" when they failed.
+  const idleCount = () => serverCount(state.usageFailed || state.loadError ? null : state.usageDone ? state.data.memories.filter(idle) : undefined,
+    { more: memoryPaging.partialMemories(), total: state.memoryTotals?.idle });
   function failedListsItem() {
     const failed = Object.keys(state.listErrors);
     if (!failed.length) return null;
@@ -1092,9 +1101,9 @@ export function startApp() {
     const tidy = maintenanceShown(), tp = tidy[0];
     const updates = d.tools?.skill_updates || [];
     const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
-    // the server total while more pages wait, not the first page (#188); once every candidate is loaded the rows are current
-    // null while the total is unknown, so the badge waits ("…") instead of showing the first page as the total
-    const reviewTotal = collectionPaging.snapshot("candidates").cursor ? state.candidateTotal ?? null : d.candidates.length;
+    // the server total while more pages wait, not the first page (#188); "N+" while that total is unknown (#465)
+    const review = listCount("candidates", state.candidateTotal), conflicted = listCount("conflicted");
+    const idleN = idleCount();
     const items = [
       { id: "updates", n: updates.length, icon: "arrows-clockwise", label: "업데이트 가능", title: updates.slice(0, 2).map((u) => `${u.name} ${ver(u.to)}`).join(" · "),
         sub: "원본 저장소에 새 버전이 있어요", action: "업데이트", run: () => updateSkills(updates), list: updates,
@@ -1108,10 +1117,10 @@ export function startApp() {
         sub: "하나로 합치면 관리가 쉬워요", action: "비교하기", detail: (body, i) => similarDetail(body, pairs[i] || pair), preview: pairs.map((x) => `${x.a.name} ↔ ${x.b.name} ${Math.round(x.score * 100)}%`) },
       { id: "unused", n: unusedSkills.length, icon: "clock-counter-clockwise", label: "안 쓰는 스킬", title: `60일 동안 안 쓴 스킬 ${unusedSkills.length}개`,
         sub: "휴지통으로 옮기면 에이전트가 더 읽지 않아요", action: "휴지통으로", run: () => confirmBatch(unusedSkills, () => trashSkills(unusedSkills)), preview: unusedSkills.slice(0, 5).map((sk) => sk.name) },
-      { id: "review", n: reviewTotal, icon: "tray", label: "기억 검토", title: reviewTotal === null ? `기억 후보 ${d.candidates.length}개 이상 검토` : `기억 후보 ${reviewTotal}개 검토`,
+      { id: "review", ...review, icon: "tray", label: "기억 검토", title: review.state === "partial" ? `기억 후보 ${review.min}개 이상 검토` : `기억 후보 ${review.text}개 검토`,
         sub: suspect.length ? `지시처럼 보이는 문장 ${suspect.length}개가 있어요` : "자동으로 저장하지 않은 후보예요", warn: suspect.length > 0,
         action: "한 번에 검토", detail: (body) => reviewBatchDetail(body), preview: d.candidates.slice(0, 5).map((c) => c.text) },
-      { id: "conflicted", n: d.conflicted.length, icon: "warning-circle", label: "부딪히는 기억", title: `부딪히는 기억 ${d.conflicted.length}개`,
+      { id: "conflicted", ...conflicted, icon: "warning-circle", label: "부딪히는 기억", title: conflicted.state === "partial" ? `부딪히는 기억 ${conflicted.min}개 이상` : `부딪히는 기억 ${conflicted.text}개`,
         sub: "기존 기억과 내용이 달라 어느 쪽이 맞는지 골라야 해요", warn: true, action: "고르기", go: ["memories", "conflicted"],
         preview: d.conflicted.slice(0, 5).map((c) => c.text) },
       { id: "blocked", n: blocked.length, icon: "plug", label: "빠진 에이전트", title: blocked.length ? `${blocked[0][0].name}를 ${agentName(blocked[0][1])}에서 못 써요` : "",
@@ -1119,7 +1128,7 @@ export function startApp() {
         run: () => { skillViews.stage(blocked[0][0].id, blocked[0][1], "allow"); go("skills", "missing"); }, go: ["skills", "missing"],
         agent: blocked.length ? [AGENTS.find(([k]) => k === blocked[0][1])?.[2] || "sym:i-plug", agentName(blocked[0][1])] : null,
         preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name} → ${agentName(k)}`) },
-      { id: "idle", n: state.usageDone ? idleList.length : null, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: `검토할 기억 ${idleList.length}개`,
+      { id: "idle", ...idleN, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: idleN.state === "partial" ? `검토할 기억 ${idleN.min}개 이상` : `검토할 기억 ${idleN.text}개`,
         sub: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적어요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
@@ -1129,7 +1138,8 @@ export function startApp() {
     if (stalled) items.push(stalled);
     const lists = failedListsItem();
     if (lists) items.push(lists);
-    return items.filter((t) => t.n === null || t.n > 0).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
+    // a count still loading or partial keeps its row; a failed one is not a to-do (불러오지 못한 목록 names a failed list, #186)
+    return items.filter((t) => t.state !== "failed" && (t.n === null || t.n > 0)).sort((a, b) => ORDER.indexOf(a.id) - ORDER.indexOf(b.id));
   }
   function updateCounts() {
     const d = state.data;
@@ -1138,11 +1148,12 @@ export function startApp() {
     c.textContent = state.loading ? "" : String(todo.length);
     c.className = todo.some((t) => t.warn) ? "warn" : "";
     $("#count-memories").textContent = state.loading ? "" : memoryPaging.memoryCount();
-    $("#count-skills").textContent = state.loading ? "" : state.listErrors.skills || state.loadError ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}`;
+    $("#count-skills").textContent = state.loading ? "" : listCount("skills").text;
     const promptsOf = (kind) => d.prompts.filter((p) => p.image_prompt.kind === kind).length;
-    $("#count-image").textContent = state.loading ? "" : String(promptsOf("image"));
-    $("#count-slide").textContent = state.loading ? "" : String(promptsOf("slide"));
-    $("#count-design").textContent = state.loading ? "" : String(d.designSystems?.length || 0);
+    const prompts = state.listErrors.prompts || state.loadError ? null : d.prompts; // a failed read is "—", not 0 (#465)
+    $("#count-image").textContent = state.loading ? "" : serverCount(prompts && promptsOf("image")).text;
+    $("#count-slide").textContent = state.loading ? "" : serverCount(prompts && promptsOf("slide")).text;
+    $("#count-design").textContent = state.loading ? "" : serverCount(state.loadError ? null : d.designSystems).text;
     $("#count-crew").textContent = state.loading ? "" : String(crew.count());
     $("#count-routing").textContent = state.loading ? "" : String(routing.count());
     $("#count-usage").textContent = state.loading ? "" : String(usage.count());
@@ -1336,7 +1347,9 @@ export function startApp() {
       t.setAttribute("role", "tab");
       t.setAttribute("aria-selected", String(key === current));
       t.append(label);
-      if (n !== undefined) t.append(el("output", warn && n ? "warn" : "", n === null ? "…" : String(n)));
+      // n: a number, null while unknown, or a serverCount() result
+      const c = n && typeof n === "object" ? n : null;
+      if (n !== undefined) t.append(el("output", warn && (c ? c.min : n) ? "warn" : "", c ? c.text : n === null ? "…" : String(n)));
       t.addEventListener("click", () => onPick(key));
       s.append(t);
     }
@@ -1369,7 +1382,7 @@ export function startApp() {
     ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "blocked"], ["skills"]]];
   const todoKey = (id) => (id || "").replace(/^todo:/, "").split("#")[0];
   const todoIndex = (id) => Number((id || "").split("#")[1] || 0);
-  const todoTotal = (items) => items.reduce((s, t) => s + (t.n || 0), 0);
+  const todoTotal = (items) => items.reduce((s, t) => s + (t.n ?? t.min ?? 0), 0); // a partial count adds what is known to be there
   // The page a selection opens: 새 스킬 제안 stays on 홈 (Figma 210:17783); the others get their own title and ← 홈.
   function homePage() {
     if (state.start) return { kind: "start" };
@@ -1549,7 +1562,7 @@ export function startApp() {
       if (!parts.some((t) => t.n === null || t.n > 0)) continue; // an unknown count keeps its row
       any = true;
       const item = el("div", "todo-item");
-      const text = parts.map((t) => (t.id ? `${TODO_SHORT[t.id] || t.label} ${t.n ?? "…"}` : t.label)).join(" · ");
+      const text = parts.map((t) => (t.id ? `${TODO_SHORT[t.id] || t.label} ${t.text ?? t.n ?? "…"}` : t.label)).join(" · ");
       item.append(el("span", "home-menu", menu), el("span", "label", name), raw(el("span", "sub", tr(text))), el("output", "home-badge warn", parts.some((t) => t.n === null) ? (n ? `${n}+` : "…") : String(n)), el("span", "home-chev", "›"));
       item.addEventListener("click", () => go(...target));
       list.append(item);
@@ -1594,7 +1607,7 @@ export function startApp() {
       const item = el("div", `todo-item${todoKey(state.selected) === t.id ? " selected" : ""}`);
       item.dataset.id = id;
       const count = el("span", "home-count");
-      count.append(el("output", `home-badge${t.warn ? " warn" : ""}`, t.n === null ? "…" : String(t.n)));
+      count.append(el("output", `home-badge${t.warn ? " warn" : ""}`, t.text ?? (t.n === null ? "…" : String(t.n))));
       item.append(el("span", "label", t.label), count, el("span", "sub", t.action || "보기"), el("span", "home-chev", "›"));
       item.addEventListener("click", () => { state.selected = id; markSelected(); renderDetail(); openDetail(); });
       box.append(item);
@@ -1671,6 +1684,9 @@ export function startApp() {
   const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
   const memoryList = createMemoryList({
     get memory() { return state.screens.memory; },
+    get listCount() { return listCount; },
+    get idleCount() { return idleCount; },
+    get partialMemories() { return memoryPaging.partialMemories; },
     get $() { return $; },
     get ago() { return ago; },
     get approvalUnproven() { return approvalUnproven; },
@@ -2228,9 +2244,9 @@ export function startApp() {
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views);
-  const home = window.ArkismHome({ state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
+  const home = window.ArkismHome({ count: serverCount, state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });
   const homeChecks = window.ArkismHomeChecks({ state, request: appApi.request, query: appApi.query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)

@@ -1,6 +1,6 @@
 // @ts-check
 import { candidateGroup } from "./candidateGroups.mjs";
-import { collectionFooter } from "./collectionPaging.mjs";
+import { collectionFooter, serverCount } from "./collectionPaging.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.
 export function createMemoryList(deps) {
 
@@ -14,19 +14,26 @@ export function createMemoryList(deps) {
 
   const memPanels = () => ({ relations: deps.relations, traits: deps.traits, reflections: deps.reflections, past: deps.memoryTime, originals: deps.originals });
 
+  // Each is a serverCount(): the server total or "N+" while more pages wait, "—" when the list failed (#465), never the first page as the whole.
   function checkCounts() {
-    const d = deps.state.data;
-    return { candidate: d.candidates.length, provenance: d.memories.filter(deps.approvalUnproven).length, conflicted: d.conflicted.length, idle: deps.state.usageDone ? d.memories.filter(deps.idle).length : null, merge: deps.digests.mergeCount() };
+    const d = deps.state.data, merge = deps.digests.mergeCount();
+    return { candidate: deps.listCount("candidates", deps.state.candidateTotal), provenance: serverCount(d.memories.filter(deps.approvalUnproven), { more: deps.partialMemories() }),
+      conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge) };
   }
 
-  const checkTotal = () => Object.entries(checkCounts()).reduce((a, [key, n]) => key === "provenance" ? a : a + (n || 0), 0);
+  // What is known to wait, with "+" when a part is still unknown or partial.
+  function checkTotal() {
+    const parts = Object.entries(checkCounts()).filter(([key]) => key !== "provenance").map(([, c]) => c);
+    const sum = parts.reduce((a, c) => a + c.min, 0);
+    return { sum, text: `${sum}${parts.some((c) => c.n === null) ? "+" : ""}` };
+  }
 
   // [title, one line under it, count next to the title]
   function memTitle() {
     const t = deps.memory.memTab;
     const check = { provenance: "과거 처리 계정만으로 직접 사용자 확인을 증명할 수 없는 기억이에요. 기존 내용이나 상태는 자동으로 바꾸지 않아요.", candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
       idle: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적은 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
-    if (check) return ["확인해 주세요", check, `${deps.catalogQuery.snapshot(catalogName()).total ?? checkTotal()}개`];
+    if (check) return ["확인해 주세요", check, `${deps.catalogQuery.snapshot(catalogName()).total ?? checkTotal().text}개`];
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", deps.digests.title()];
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
       reflections: "작업하면서 얻은 해석이에요. 사실이나 실행 승인으로 쓰지 않아요.", past: "정한 시각에 쓰이던 기억을 그대로 보여 줘요. 지금 지시로는 쓰지 않아요.",
@@ -97,13 +104,13 @@ export function createMemoryList(deps) {
     // 확인해 주세요: what is waiting, and one button that starts with the first non-empty list.
     const n = checkCounts(), total = checkTotal();
     const top = [];
-    if (total) {
+    if (total.sum) {
       const card = deps.el("div", "mem-check");
       const txt = deps.el("div", "mem-check-text");
-      const line = deps.el("p", "mem-check-title"); line.append("확인해 주세요", deps.el("strong", "", String(total)));
-      txt.append(line, deps.el("p", "mem-check-sub", `승인 대기 ${n.candidate} · 내용이 헷갈림 ${n.conflicted} · 검토 필요 ${n.idle ?? "…"}`));
-      if (n.merge) txt.lastChild.append(` · 병합 제안 ${n.merge}`);
-      const first = MEM_CHECK.find(([k]) => k !== "provenance" && n[k])?.[0] || "candidate";
+      const line = deps.el("p", "mem-check-title"); line.append("확인해 주세요", deps.el("strong", "", total.text));
+      txt.append(line, deps.el("p", "mem-check-sub", `승인 대기 ${n.candidate.text} · 내용이 헷갈림 ${n.conflicted.text} · 검토 필요 ${n.idle.text}`));
+      if (n.merge.min) txt.lastChild.append(` · 병합 제안 ${n.merge.text}`);
+      const first = MEM_CHECK.find(([k]) => k !== "provenance" && n[k].min)?.[0] || "candidate";
       card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", first)));
       top.push(card);
     }

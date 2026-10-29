@@ -473,22 +473,26 @@ window.ArkismHome = function (ctx) {
 
   // ------------------------------------------------------------ 메뉴별 확인할 것: 워크플로우 · 라우팅 (198:200)
   // One GET each per load (the crew runs list and the routing overview the other menus already use); hidden when the server has none.
+  const RUN_LIMIT = 100;
   let extra = { g: -1, runs: undefined, route: undefined };
   function menuExtras(generation) {
     if (extra.g !== generation) {
       extra = { g: generation, runs: undefined, route: undefined };
       const g = generation;
       const again = () => { if (extra.g === g && state.view === "todo" && !state.selected && !state.todoAll) render(false); };
-      const runs = (v) => { if (extra.g === g) { extra.runs = v; again(); } }, route = (v) => { if (extra.g === g) { extra.route = v; again(); } };
-      request(`/v1/crew/runs?${query({ limit: 30 })}`).then((r) => runs(r.items || []), () => runs(null));
-      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => route(d?.kpi ? d : null), () => route(null));
+      // by status, not the latest 30 runs: an approval or failure older than those still counts (#465)
+      const runs = (status) => request(`/v1/crew/runs?${query({ status, limit: RUN_LIMIT })}`).then((r) => r.items || []);
+      Promise.all([runs("waiting"), runs("failed")]).then(([waiting, failed]) => ({ waiting, failed }), () => null).then((v) => { if (extra.g === g) { extra.runs = v; again(); } });
+      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => (d?.kpi ? d : null), () => null).then((v) => { if (extra.g === g) { extra.route = v; again(); } });
     }
     const rows = [];
     if (extra.runs) {
       const week = Date.now() - 7 * 86400000;
-      const waiting = extra.runs.filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval").length;
-      const failed = extra.runs.filter((x) => x.crew_run?.status === "failed" && new Date(x.created_at).getTime() > week).length;
-      rows.push(["FLOW", "워크플로우", [{ label: `확인 대기 ${waiting}`, n: waiting }, { label: `실패 ${failed}`, n: failed }].filter((p) => p.n), ["crew"]]);
+      const { count } = ctx, full = (list) => list.length >= RUN_LIMIT; // a full page may have more behind it
+      const waiting = count(extra.runs.waiting.filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting?.kind === "approval"), { more: full(extra.runs.waiting) });
+      const recent = (x) => new Date(x.created_at).getTime() > week; // newest first: a full page that reaches past the week is complete
+      const failed = count(extra.runs.failed.filter((x) => x.crew_run?.status === "failed" && recent(x)), { more: full(extra.runs.failed) && extra.runs.failed.every(recent) });
+      rows.push(["FLOW", "워크플로우", [{ label: `확인 대기 ${waiting.text}`, ...waiting }, { label: `실패 ${failed.text}`, ...failed }].filter((p) => p.min), ["crew"]]);
     }
     if (extra.route) {
       const parts = (extra.route.models || []).filter((m) => m.status === "watch" || m.status === "slow")

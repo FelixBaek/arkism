@@ -6,6 +6,18 @@ const COLLECTIONS = {
   skillTrash: ["/v1/skills/trash", {}]
 };
 
+// A count read from the server, so a failed or partial read never shows as 0 or as the whole (#465).
+// rows: the loaded rows or their number, undefined while the read runs, null when it failed; more: further pages wait;
+// total: the server's own count, which wins whenever it is a number. n is exact or null; min is what is known to be there.
+/** @param {unknown[] | number | null | undefined} rows @param {{ more?: boolean, total?: number | null }} [opts] */
+export function serverCount(rows, { more = false, total = null } = {}) {
+  if (Number.isSafeInteger(total)) return { state: "loaded", n: total, min: total, text: String(total) };
+  if (rows === undefined) return { state: "loading", n: null, min: 0, text: "…" };
+  if (rows === null) return { state: "failed", n: null, min: 0, text: "—" };
+  const k = typeof rows === "number" ? rows : rows.length;
+  return more ? { state: "partial", n: null, min: k, text: `${k}+` } : { state: "loaded", n: k, min: k, text: String(k) };
+}
+
 export function createCollectionPaging({ state, request, createPager }) {
   const identity = () => JSON.stringify([state.server, state.scope, state.connection.generation]);
   const pagers = new Map(Object.entries(COLLECTIONS).map(([name, [path, extra]]) => [name, createPager(async (key, page) => {

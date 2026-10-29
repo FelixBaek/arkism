@@ -41,7 +41,7 @@ window.ArkismOverview = (ctx) => {
   const today = (t) => t >= new Date().setHours(0, 0, 0, 0);
   const latest = (times) => Math.max(0, ...times);
   // What each stage is counted from. A source that did not load leaves the stage unknown, not zero or stalled (#187).
-  const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "sessions"], classify: ["candidates"], review: ["candidates"],
+  const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "conflicted", "sessions"], classify: ["candidates", "conflicted"], review: ["candidates", "conflicted"],
     recall: ["memories", "usage"], trace: ["memories"], judge: ["memories"], dream: ["memories"] };
   const missing = () => state.loadError ? new Set(["memories", "candidates", "sessions"])
     : new Set([...Object.keys(state.listErrors || {}), ...(S.failed ? ["sessions"] : []), ...(state.usageDone ? [] : ["usage"])]);
@@ -288,11 +288,12 @@ window.ArkismOverview = (ctx) => {
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
     // every active memory on the server (the map draws them all), not the loaded first page
-    const memN = state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    const sess = ctx.count(S.failed || state.loadError ? null : S.sessions ? todaySessions : undefined); // not "오늘 0" while it loads
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
-      chip("세션 기록", S.failed || state.loadError ? "—" : `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
+      chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
-      chip("기억 지도", `점 ${state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
+      chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
