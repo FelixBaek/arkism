@@ -3610,7 +3610,7 @@
       "id": "RTE-02",
       "issue": 155,
       "owner": "RTE-02",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3981,7 +3981,7 @@
       "id": "CAP-01",
       "issue": 156,
       "owner": "CAP-01",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
