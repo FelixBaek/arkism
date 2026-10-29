@@ -44,7 +44,7 @@ test("assist: personas, body, polling, too long, timeout and error text", async 
   await kit.assist("fill", "p", { persona: { crew: { instructions: "own" } } });
   await assert.rejects(kit.assist("install_skill", "y".repeat(20001)), /2만 자까지/);
   pendingFor = Infinity;
-  assert.deepEqual(await kit.assist("fill", "p"), { status: "failed", error: "너무 오래 걸려요. 잠시 뒤 다시 해 주세요." });
+  assert.deepEqual(await kit.assist("fill", "p"), { status: "failed", error: "11분 안에 답이 오지 않았어요. 다시 시도해 주세요." });
   assert.match(kit.assistError({ error: "expired: x" }), /arkism-providers/);
   assert.equal(kit.assistError({}), "AI가 답하지 못했어요 (실패).");
   assert.equal(kit.assistError({ error: "bad" }), "AI가 답하지 못했어요 (bad).");
@@ -56,6 +56,37 @@ test("assist: personas, body, polling, too long, timeout and error text", async 
   assert.equal(kit.parseJSON("{nope}"), null);
   const empty = window.ArkismAssist({ state: { data: {} }, request, query: () => "" });
   assert.equal(empty.personas().length, 4);
+});
+
+test("assist: a slow or failed check keeps waiting, a silent server ends it, cancel ignores a late answer", async () => {
+  const state = { scope: {}, data: {} };
+  const fail = (status, msg = "server_unreachable: timeout: global") => Object.assign(new Error(msg), { status });
+  // two failed checks (a transport timeout and a 503) and then the answer
+  let polls = 0;
+  let kit = window.ArkismAssist({ state, query: () => "", request: async (p, o) => { if (o) return { id: "a" }; polls++; if (polls === 1) throw fail(undefined); if (polls === 2) throw fail(503); return { crew_assist: { status: "done", output: "ok" } }; } });
+  assert.equal((await kit.assist("json", "p")).output, "ok");
+  // a server that stays silent ends with plain words, not an endless wait
+  kit = window.ArkismAssist({ state, query: () => "", request: async (p, o) => { if (o) return { id: "a" }; throw fail(undefined); } });
+  await assert.rejects(kit.assist("json", "p"), /1분 넘게 답하지 않아요/);
+  // a refusal (4xx) and a changed connection are not retried
+  kit = window.ArkismAssist({ state, query: () => "", request: async (p, o) => { if (o) return { id: "a" }; throw fail(403, "access_denied"); } });
+  await assert.rejects(kit.assist("json", "p"), /access_denied/);
+  // the create itself not reaching the server says so in words
+  kit = window.ArkismAssist({ state, query: () => "", request: async () => { throw fail(undefined); } });
+  await assert.rejects(kit.assist("json", "p"), /서버에 닿지 못했어요/);
+  // cancel while a check is in flight: the answer that arrives afterwards is not returned
+  let answer;
+  kit = window.ArkismAssist({ state, query: () => "", request: (p, o) => o ? Promise.resolve({ id: "a" }) : new Promise((r) => { answer = r; }) });
+  const ctl = new AbortController();
+  const asked = kit.assist("json", "p", { signal: ctl.signal });
+  await new Promise((r) => setImmediate(r));
+  ctl.abort(); answer({ crew_assist: { status: "done", output: "late" } });
+  await assert.rejects(asked, (e) => e.code === "cancelled");
+  // already cancelled: nothing is sent
+  const sent = [];
+  kit = window.ArkismAssist({ state, query: () => "", request: async (p) => { sent.push(p); return { id: "a" }; } });
+  await assert.rejects(kit.assist("json", "p", { signal: AbortSignal.abort() }), (e) => e.code === "cancelled");
+  assert.deepEqual(sent, []);
 });
 
 test("brand: logos, mono masks, kinds and labels", () => {

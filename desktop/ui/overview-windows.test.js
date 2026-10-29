@@ -135,3 +135,37 @@ test("AI 도움 then 승인 or 버리기 tells the server whether the person fol
   ]);
   delete window.ArkismAIChat; delete window.ArkismMemoryEvaluation;
 });
+
+test("분류 AI 도움 can be cancelled, a late answer is ignored, and 다시 시도 asks again", async () => {
+  const { win, state } = windows([], null, () => ({}));
+  state.data.candidates = [{ id: "c1", kind: "lesson", text: "Keep PRs small", created_at: "2026-10-29T00:00:00Z" }];
+  const asks = [];
+  window.ArkismAIChat = { kit: {
+    assist: (kind, prompt, opts) => new Promise((resolve, reject) => { asks.push({ resolve, signal: opts.signal }); opts.signal.addEventListener("abort", () => reject(Object.assign(Error("취소했어요"), { code: "cancelled" }))); }),
+    assistError: (a) => a.error, parseJSON: (t) => JSON.parse(t) } };
+  win.open("classify");
+  const ai = () => dom.buttons(document.body, "AI 도움").concat(dom.buttons(document.body, "취소"), dom.buttons(document.body, "다시 시도")).find((b) => b.querySelector("svg"));
+  const note = () => document.querySelector(".ov-win-err").textContent;
+  ai().click();
+  assert.match(ai().textContent, /취소/);
+  assert.match(note(), /최대 11분/);
+  assert.ok(dom.buttons(document.body, "승인")[0].disabled, "승인 waits while AI reads");
+  ai().click(); await dom.flush();
+  assert.ok(asks[0].signal.aborted);
+  assert.equal(note(), "AI 도움을 취소했어요. 후보는 그대로예요.");
+  assert.match(ai().textContent, /다시 시도/);
+  asks[0].resolve({ status: "done", output: '{"pick":"approve","reason":"late"}' }); await dom.flush();
+  assert.ok(document.querySelector(".ov-verdict").hidden, "an answer after cancel changes nothing");
+  ai().click(); // 다시 시도
+  asks[1].resolve({ status: "failed", error: "11분 안에 답이 오지 않았어요. 다시 시도해 주세요." }); await dom.flush();
+  assert.match(note(), /AI 도움을 받지 못했어요: 11분 안에/);
+  assert.match(ai().textContent, /다시 시도/);
+  assert.ok(!dom.buttons(document.body, "승인")[0].disabled);
+  ai().click();
+  asks[2].resolve({ status: "done", output: '{"pick":"reject","reason":"one-off"}' }); await dom.flush();
+  assert.match(document.querySelector(".ov-verdict").textContent, /AI 추천 · 버리기/);
+  assert.match(ai().textContent, /AI 도움/);
+  assert.equal(state.data.candidates[0].text, "Keep PRs small");
+  delete window.ArkismAIChat;
+  win.reset();
+});
