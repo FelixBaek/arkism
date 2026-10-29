@@ -7,18 +7,21 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
 )
 
-const CrewObservationContractID = "arkism-crew-research-v1"
-const CrewObservationContractSHA256 = "0bc550da0679271e216f3c718658d91491df1d8e92612d0cd866ab6068fa6d82"
+const CrewObservationContractID = "arkism-crew-research-v2"
+const CrewObservationContractSHA256 = "7780b97e9ec705bc32a0eff5c083d2a26966e9781f794da9c15b6d19db1f9b15"
 
 // ObservationRef is the exact additive CanonicalRef projection.
 type ObservationRef struct {
@@ -45,15 +48,17 @@ type ObservationDefinition struct {
 
 // ObservationRun is the exact additive RunIdentity projection.
 type ObservationRun struct {
-	Scope          ObservationScope      `json:"scope"`
-	RunRef         ObservationRef        `json:"run_ref"`
-	RootRunID      *string               `json:"root_run_id"`
-	ParentRunID    *string               `json:"parent_run_id"`
-	ParentNodeID   *string               `json:"parent_node_id"`
-	Definition     ObservationDefinition `json:"definition"`
-	ExecutionPath  string                `json:"execution_path"`
-	InvocationMode string                `json:"invocation_mode"`
-	ResultRevision *int64                `json:"result_revision"`
+	Scope               ObservationScope      `json:"scope"`
+	RunRef              ObservationRef        `json:"run_ref"`
+	RootRunID           *string               `json:"root_run_id"`
+	ParentRunID         *string               `json:"parent_run_id"`
+	ParentNodeID        *string               `json:"parent_node_id"`
+	Definition          ObservationDefinition `json:"definition"`
+	ExecutionPath       string                `json:"execution_path"`
+	InvocationMode      string                `json:"invocation_mode"`
+	ResultRevision      *int64                `json:"result_revision"`
+	RootRunCollection   *string               `json:"root_run_collection"`
+	ParentRunCollection *string               `json:"parent_run_collection"`
 }
 
 // ObservationTask is the exact additive TaskIdentity projection.
@@ -117,6 +122,8 @@ type AttemptObservation struct {
 	ErrorCode           string           `json:"error_code"`
 	RecordSHA256        string           `json:"record_sha256"`
 	ObservationRevision int64            `json:"observation_revision"`
+	UsageRole           string           `json:"usage_role"`
+	LeafCoverage        string           `json:"leaf_coverage"`
 }
 
 // RunTimingObservation is the exact additive RunTimingObservation projection.
@@ -138,7 +145,7 @@ type observationRule struct {
 	nullable             bool
 }
 
-// This is a closed table for these nine typed projections, not a JSON schema API.
+// This is a closed compiled v2 projection table, not a caller-defined schema API.
 var observationRules = map[reflect.Type][]observationRule{
 	reflect.TypeOf(ObservationRef{}): {
 		{name: "collection", kind: "string", minLength: 1, maxLength: 64},
@@ -167,6 +174,8 @@ var observationRules = map[reflect.Type][]observationRule{
 		{name: "execution_path", kind: "string", minLength: 1, maxLength: 80, enums: []string{"single", "workflow", "crew"}},
 		{name: "invocation_mode", kind: "string", minLength: 1, maxLength: 80, enums: []string{"legacy", "flow"}},
 		{name: "result_revision", kind: "int64", nullable: true, minimum: 1, maximum: 9223372036854775807},
+		{name: "root_run_collection", kind: "string", nullable: true, minLength: 1, maxLength: 80, enums: []string{"crew_runs", "crew_meetings", "crew_assists"}},
+		{name: "parent_run_collection", kind: "string", nullable: true, minLength: 1, maxLength: 80, enums: []string{"crew_runs", "crew_meetings", "crew_assists"}},
 	},
 	reflect.TypeOf(ObservationTask{}): {
 		{name: "namespace", kind: "string", minLength: 1, maxLength: 128},
@@ -183,9 +192,9 @@ var observationRules = map[reflect.Type][]observationRule{
 		{name: "retry_index", kind: "int64", minimum: 0, maximum: 10000},
 		{name: "fallback_parent_call_key", kind: "string", nullable: true, minLength: 1, maxLength: 256},
 		{name: "attempt_ref", kind: "object", nullable: true},
-		{name: "identity_basis", kind: "string", minLength: 1, maxLength: 80, enums: []string{"canonical_flow_receipt", "observed_legacy_call"}},
-		{name: "attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw-attempt-[0-9a-f]{64}$"},
-		{name: "parent_attempt_id", kind: "string", nullable: true, minLength: 1, maxLength: 256, pattern: "^crw-attempt-[0-9a-f]{64}$"},
+		{name: "identity_basis", kind: "string", minLength: 1, maxLength: 80, enums: []string{"canonical_flow_receipt", "observed_legacy_call", "observed_host_leaf"}},
+		{name: "attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
+		{name: "parent_attempt_id", kind: "string", nullable: true, minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
 		{name: "phase", kind: "string", minLength: 1, maxLength: 80, enums: []string{"main", "plan", "worker", "synthesis", "moderator", "scribe", "meeting_turn", "tool", "unknown"}},
 		{name: "canonical_attempt_id", kind: "string", nullable: true, minLength: 1, maxLength: 256},
 	},
@@ -213,7 +222,7 @@ var observationRules = map[reflect.Type][]observationRule{
 		{name: "token_accounting", kind: "string", minLength: 1, maxLength: 80, enums: []string{"provider_components_not_implicitly_additive"}},
 	},
 	reflect.TypeOf(AttemptObservation{}): {
-		{name: "contract_id", kind: "string", minLength: 1, maxLength: 80, enums: []string{"arkism-crew-research-v1"}},
+		{name: "contract_id", kind: "string", minLength: 1, maxLength: 80, enums: []string{"arkism-crew-research-v2"}},
 		{name: "identity", kind: "object"},
 		{name: "task", kind: "object"},
 		{name: "status", kind: "string", minLength: 1, maxLength: 80, enums: []string{"reserved", "succeeded", "failed", "timeout", "cancelled", "unknown", "cancelled_before_dispatch"}},
@@ -222,6 +231,8 @@ var observationRules = map[reflect.Type][]observationRule{
 		{name: "error_code", kind: "string", minLength: 0, maxLength: 128},
 		{name: "record_sha256", kind: "string", minLength: 64, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
 		{name: "observation_revision", kind: "int64", minimum: 1, maximum: 9223372036854775807},
+		{name: "usage_role", kind: "string", minLength: 1, maxLength: 80, enums: []string{"provider_leaf", "transport_aggregate", "opaque_dispatch"}},
+		{name: "leaf_coverage", kind: "string", minLength: 1, maxLength: 80, enums: []string{"not_applicable", "complete", "partial", "unknown"}},
 	},
 	reflect.TypeOf(RunTimingObservation{}): {
 		{name: "run", kind: "object"},
@@ -239,7 +250,7 @@ func (e *ObservationError) Error() string      { return e.Code + ": " + e.Path }
 func observationError(code, path string) error { return &ObservationError{code, path} }
 
 var observationHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
-var observationAttemptHash = regexp.MustCompile(`^crw-attempt-[0-9a-f]{64}$`)
+var observationAttemptHash = regexp.MustCompile(`^crw2-attempt-[0-9a-f]{64}$`)
 var observationErrorCodes = map[string]bool{
 	"": true, "failed": true, "timeout": true, "cancelled": true, "cancelled_before_dispatch": true, "unknown": true,
 	"unknown_error": true, "execution_error": true, "transport_error": true, "provider_error": true, "rate_limit": true,
@@ -282,28 +293,19 @@ func validateObservationValue(value reflect.Value, path string) error {
 }
 func validateObservationField(value reflect.Value, rule observationRule, path string) error {
 	switch rule.kind {
+	case "strings":
+		if value.IsNil() || value.Len() > 10000 {
+			return observationError("invalid_value", path)
+		}
+		for i := 0; i < value.Len(); i++ {
+			if !observationAttemptHash.MatchString(value.Index(i).String()) {
+				return observationError("invalid_value", path+"[*]")
+			}
+		}
 	case "object":
 		return validateObservationValue(value, path)
 	case "string":
-		text := value.String()
-		if !utf8.ValidString(text) {
-			return observationError("invalid_unicode", path)
-		}
-		if len(text) < rule.minLength || len(text) > rule.maxLength {
-			return observationError("invalid_value", path)
-		}
-		if len(rule.enums) > 0 && !observationContains(rule.enums, text) {
-			return observationError("invalid_value", path)
-		}
-		if rule.pattern != "" {
-			pattern := observationHash
-			if strings.HasPrefix(rule.pattern, "^crw-attempt-") {
-				pattern = observationAttemptHash
-			}
-			if !pattern.MatchString(text) {
-				return observationError("invalid_value", path)
-			}
-		}
+		return validateObservationString(value.String(), rule, path)
 	case "int64":
 		if value.Int() < rule.minimum || value.Int() > rule.maximum {
 			return observationError("invalid_value", path)
@@ -373,20 +375,58 @@ func ValidateUsageObservation(usage UsageObservation) error {
 	return nil
 }
 func validateObservationRun(run ObservationRun) error {
-	if run.RunRef.Collection != "crew_runs" {
-		return observationError("invalid_value", "$.run_ref.collection")
-	}
-	if run.Definition.Ref.Collection != "crew" {
-		return observationError("invalid_value", "$.definition.ref.collection")
-	}
 	if err := validateObservation(run); err != nil {
 		return err
+	}
+	if !observationContains([]string{"crew_runs", "crew_meetings", "crew_assists"}, run.RunRef.Collection) || run.Definition.Ref.Collection != "crew" {
+		return observationError("invalid_value", "$.run_ref.collection")
 	}
 	if (run.Definition.DefinitionSHA256 == nil) != (run.Definition.HashState == "not_recorded") {
 		return observationError("invalid_value", "$.definition.definition_sha256")
 	}
+	if err := validateObservationExecutionKeys(run); err != nil {
+		return err
+	}
+	return validateObservationRoute(run)
+}
+func validateObservationExecutionKeys(run ObservationRun) error {
+	if (run.RootRunID == nil) != (run.RootRunCollection == nil) || (run.ParentRunID == nil) != (run.ParentRunCollection == nil) {
+		return observationError("unpaired_execution_key", "$.root_run_collection")
+	}
+	if run.ParentRunID != nil && *run.ParentRunID == run.RunRef.ID && *run.ParentRunCollection == run.RunRef.Collection {
+		return observationError("parent_cycle", "$.parent_run_id")
+	}
+	if run.RootRunID != nil {
+		self := *run.RootRunID == run.RunRef.ID && *run.RootRunCollection == run.RunRef.Collection
+		if self && run.ParentRunID != nil {
+			return observationError("parent_cycle", "$.parent_run_id")
+		}
+		if !self && run.ParentRunID == nil {
+			return observationError("missing_parent", "$.parent_run_id")
+		}
+	}
 	return nil
 }
+func validateObservationRoute(run ObservationRun) error {
+	source, path := run.Definition.SourceType, run.ExecutionPath
+	valid := false
+	switch run.RunRef.Collection {
+	case "crew_runs":
+		valid = map[string]string{"agent": "single", "workflow": "workflow", "team": "crew"}[source] == path && (source == "workflow" || run.InvocationMode == "flow")
+	case "crew_meetings":
+		valid = source == "team" && path == "crew" && (run.InvocationMode != "flow" || (run.ParentRunCollection != nil && *run.ParentRunCollection == "crew_runs"))
+	case "crew_assists":
+		valid = source == "agent" && path == "single" && run.InvocationMode == "legacy"
+	}
+	if !valid {
+		return observationError("execution_route_mismatch", "$.execution_path")
+	}
+	if run.RunRef.Collection != "crew_runs" && run.ResultRevision != nil {
+		return observationError("result_revision_domain", "$.result_revision")
+	}
+	return nil
+}
+
 func validateAttemptIdentity(identity AttemptIdentity) error {
 	if identity.AttemptRef != nil && identity.AttemptRef.Collection != "jobs" {
 		return observationError("invalid_value", "$.attempt_ref.collection")
@@ -397,6 +437,15 @@ func validateAttemptIdentity(identity AttemptIdentity) error {
 	if err := validateObservationRun(identity.Run); err != nil {
 		return err
 	}
+	if identity.Run.RootRunID == nil {
+		return observationError("identity_unavailable", "$.run.root_run_id")
+	}
+	if identity.IdentityBasis == "canonical_flow_receipt" && identity.Run.InvocationMode != "flow" {
+		return observationError("identity_basis_mismatch", "$.identity_basis")
+	}
+	if identity.IdentityBasis == "observed_host_leaf" && (identity.ParentAttemptID == nil || identity.CanonicalAttemptID != nil || identity.AttemptRef != nil) {
+		return observationError("invalid_value", "$.canonical_attempt_id")
+	}
 	if identity.IdentityBasis == "canonical_flow_receipt" && identity.CanonicalAttemptID == nil {
 		return observationError("invalid_value", "$.canonical_attempt_id")
 	}
@@ -406,19 +455,19 @@ func validateAttemptIdentity(identity AttemptIdentity) error {
 	return nil
 }
 
-// StableAttemptID uses exactly the frozen 13-field typed canonical array. Product
+// StableAttemptID uses exactly the frozen 16-field typed canonical array. Product
 // CAS revisions, usage and observer revisions intentionally do not alter it.
 func StableAttemptID(identity AttemptIdentity) (string, error) {
 	checked := identity
-	checked.AttemptID = "crw-attempt-" + strings.Repeat("0", 64)
+	checked.AttemptID = "crw2-attempt-" + strings.Repeat("0", 64)
 	if err := validateAttemptIdentity(checked); err != nil {
 		return "", err
 	}
-	values := []any{CrewObservationContractID, identity.Run.Scope, identity.Run.RootRunID, identity.Run.RunRef.ID,
-		identity.Run.Definition.Ref.ID, identity.Run.Definition.Ref.Revision, identity.NodeID, identity.NodeAttempt,
+	values := []any{CrewObservationContractID, identity.Run.Scope, identity.Run.RootRunCollection, identity.Run.RootRunID, identity.Run.RunRef.Collection, identity.Run.RunRef.ID,
+		identity.Run.Definition.Ref.Collection, identity.Run.Definition.Ref.ID, identity.Run.Definition.Ref.Revision, identity.NodeID, identity.NodeAttempt,
 		identity.Phase, identity.CallKey, identity.RetryIndex, identity.ParentAttemptID, identity.FallbackParentCallKey}
 	var encoded bytes.Buffer
-	encoded.WriteString("a13[")
+	encoded.WriteString("a16[")
 	for _, value := range values {
 		if err := encodeObservation(&encoded, reflect.ValueOf(value), false); err != nil {
 			return "", err
@@ -426,7 +475,7 @@ func StableAttemptID(identity AttemptIdentity) (string, error) {
 	}
 	encoded.WriteByte(']')
 	sum := sha256.Sum256(encoded.Bytes())
-	return "crw-attempt-" + hex.EncodeToString(sum[:]), nil
+	return "crw2-attempt-" + hex.EncodeToString(sum[:]), nil
 }
 func encodeObservation(out *bytes.Buffer, value reflect.Value, omitHash bool) error {
 	if !value.IsValid() {
@@ -457,6 +506,17 @@ func encodeObservation(out *bytes.Buffer, value reflect.Value, omitHash bool) er
 		} else {
 			out.WriteByte('f')
 		}
+	case reflect.Slice:
+		if value.IsNil() {
+			return observationError("invalid_type", "$")
+		}
+		fmt.Fprintf(out, "a%d[", value.Len())
+		for i := 0; i < value.Len(); i++ {
+			if err := encodeObservation(out, value.Index(i), false); err != nil {
+				return err
+			}
+		}
+		out.WriteByte(']')
 	case reflect.Struct:
 		return encodeObservationObject(out, value, omitHash)
 	default:
@@ -525,6 +585,9 @@ func validateAttemptObservationFields(record AttemptObservation) error {
 	if err := ValidateUsageObservation(record.Usage); err != nil {
 		return err
 	}
+	if err := validateObservationRole(record); err != nil {
+		return err
+	}
 	if !observationErrorCodes[record.ErrorCode] {
 		return observationError("invalid_value", "$.error_code")
 	}
@@ -588,6 +651,13 @@ func cloneObservationValue(value reflect.Value) reflect.Value {
 			result.Set(reflect.New(value.Type().Elem()))
 			result.Elem().Set(cloneObservationValue(value.Elem()))
 		}
+	case reflect.Slice:
+		if !value.IsNil() {
+			result = reflect.MakeSlice(value.Type(), value.Len(), value.Len())
+			for i := 0; i < value.Len(); i++ {
+				result.Index(i).Set(cloneObservationValue(value.Index(i)))
+			}
+		}
 	case reflect.Struct:
 		for i := 0; i < value.NumField(); i++ {
 			result.Field(i).Set(cloneObservationValue(value.Field(i)))
@@ -610,6 +680,7 @@ type AttemptContext struct {
 	NodeAttempt           int64
 	ParentAttemptID       *string
 	FallbackParentCallKey *string
+	IdentityBasis         string
 }
 type attemptObserverKey struct{}
 type attemptContextKey struct{}
@@ -648,6 +719,9 @@ func AttemptIdentityFromContext(ctx context.Context, phase, callKey string, retr
 	identity := AttemptIdentity{Run: scope.Run, NodeID: scope.NodeID, NodeAttempt: scope.NodeAttempt, CallKey: callKey,
 		RetryIndex: retryIndex, Phase: phase, ParentAttemptID: scope.ParentAttemptID, FallbackParentCallKey: scope.FallbackParentCallKey,
 		CanonicalAttemptID: canonicalAttemptID, IdentityBasis: "observed_legacy_call"}
+	if scope.IdentityBasis != "" {
+		identity.IdentityBasis = scope.IdentityBasis
+	}
 	if canonicalAttemptID != nil {
 		identity.IdentityBasis = "canonical_flow_receipt"
 	}
@@ -732,6 +806,7 @@ func observationLineage(record AttemptObservation) []byte {
 	var out bytes.Buffer
 	_ = encodeObservation(&out, reflect.ValueOf(identity), false)
 	_ = encodeObservation(&out, reflect.ValueOf(record.Task), false)
+	_ = encodeObservation(&out, reflect.ValueOf(record.UsageRole), false)
 	return out.Bytes()
 }
 func observationBasisRank(basis string) int {
@@ -749,7 +824,7 @@ func monotonicObservationComponent(before, after *int64, beforeBasis, afterBasis
 	if next < prior {
 		return false
 	}
-	return !(prior == 2 && next == 2 && before != nil && after != nil && *after < *before)
+	return !(prior == 2 && next == 2 && before != nil && after != nil && *after != *before)
 }
 func monotonicObservationUsage(before, after UsageObservation) bool {
 	for _, component := range []struct {
@@ -771,9 +846,18 @@ func monotonicObservationUsage(before, after UsageObservation) bool {
 	if next < prior {
 		return false
 	}
-	return !(prior == 2 && next == 2 && before.CostUSD != nil && after.CostUSD != nil && *after.CostUSD < *before.CostUSD)
+	return !(prior == 2 && next == 2 && before.CostUSD != nil && after.CostUSD != nil && *after.CostUSD != *before.CostUSD)
 }
 func monotonicObservation(before, after AttemptObservation) bool {
+	if after.Identity.Run.RunRef.Revision < before.Identity.Run.RunRef.Revision {
+		return false
+	}
+	if before.Identity.AttemptRef != nil && (after.Identity.AttemptRef == nil || !matchingEvidenceRef(*before.Identity.AttemptRef, *after.Identity.AttemptRef)) {
+		return false
+	}
+	if observationTerminal(before.Status) && before.DispatchState != "unknown" && before.DispatchState != after.DispatchState {
+		return false
+	}
 	if observationTerminal(before.Status) && after.Status != before.Status {
 		return false
 	}
@@ -919,13 +1003,18 @@ type ObserverTotals struct {
 	Cost                                                          CostTotal
 }
 type AttemptLedgerSnapshot struct {
-	Enabled      bool
-	Complete     bool
-	EvidenceKind string
-	Records      []AttemptObservation
-	Latest       []AttemptObservation
-	Issues       []string
-	Totals       ObserverTotals
+	Enabled              bool
+	Complete             bool
+	EvidenceKind         string
+	Records              []AttemptObservation
+	Latest               []AttemptObservation
+	Issues               []string
+	Totals               ObserverTotals // compatibility view: observed provider leaves only
+	ProviderLeafTotals   ObserverTotals // explicit name of the Totals compatibility scope
+	AggregateTotals      ObserverTotals
+	ReservationEstimates CostTotal
+	RuntimeAuthenticated bool
+	RunCoverage          string
 }
 
 func componentAdd(total *ComponentTotal, value *int64, basis string) {
@@ -986,15 +1075,18 @@ func observerFinishTotals(totals *ObserverTotals, issues map[string]bool) {
 	}
 }
 func observationRoot(run ObservationRun) string {
-	if run.RootRunID != nil {
-		return *run.RootRunID
+	if run.RootRunID == nil || run.RootRunCollection == nil {
+		return ""
 	}
-	return run.RunRef.ID
+	return *run.RootRunCollection + "/" + *run.RootRunID
 }
 
 func observerParentIssues(latest map[string]AttemptObservation, issues map[string]bool) {
 	for id, record := range latest {
 		parent := record.Identity.ParentAttemptID
+		if parent != nil {
+			issues["parent_evidence_unverified"] = true
+		}
 		if parent == nil {
 			continue
 		}
@@ -1023,7 +1115,7 @@ func observerParentIssues(latest map[string]AttemptObservation, issues map[strin
 // Snapshot retains every accepted observer revision, sorted deterministically.
 // Totals select one latest observation per logical call, not reservation+settle.
 func (o *AttemptObserver) Snapshot() AttemptLedgerSnapshot {
-	result := AttemptLedgerSnapshot{EvidenceKind: "per_attempt_ledger", Records: []AttemptObservation{}, Latest: []AttemptObservation{}, Issues: []string{}, Totals: ObserverTotals{StatusCounts: map[string]int64{}}}
+	result := AttemptLedgerSnapshot{EvidenceKind: "per_attempt_ledger", RunCoverage: "unknown", Records: []AttemptObservation{}, Latest: []AttemptObservation{}, Issues: []string{}, Totals: ObserverTotals{StatusCounts: map[string]int64{}}}
 	if o == nil || !o.enabled {
 		return result
 	}
@@ -1061,10 +1153,33 @@ func (o *AttemptObserver) Snapshot() AttemptLedgerSnapshot {
 	}
 	o.mu.Unlock()
 	observerParentIssues(latest, issues)
+	result.AggregateTotals.StatusCounts = map[string]int64{}
 	for _, record := range result.Latest {
-		observerCountLatest(&result.Totals, record, issues)
+		if record.DispatchState == "not_dispatched" && record.Usage.CostBasis == "estimated" && record.Usage.CostUSD != nil {
+			reservationUsage := UnknownUsageObservation()
+			reservationUsage.CostUSD = record.Usage.CostUSD
+			reservationUsage.CostBasis = "estimated"
+			temp := ObserverTotals{}
+			temp.Cost = result.ReservationEstimates
+			observerAddUsage(&temp, reservationUsage)
+			result.ReservationEstimates = temp.Cost
+		}
+		if record.UsageRole == "provider_leaf" {
+			observerCountLatest(&result.Totals, record, issues)
+		} else {
+			observerCountLatest(&result.AggregateTotals, record, issues)
+			issues["leaf_coverage_unverified"] = true
+		}
 	}
+	observerFinishTotals(&result.AggregateTotals, issues)
+	if result.AggregateTotals.DispatchedAttempts+result.AggregateTotals.UnknownDispatchAttempts == 0 {
+		clearObservationValues(&result.AggregateTotals)
+	}
+
 	observerFinishTotals(&result.Totals, issues)
+	if result.Totals.DispatchedAttempts+result.Totals.UnknownDispatchAttempts == 0 {
+		clearObservationValues(&result.Totals)
+	}
 	if len(result.Latest) == 0 {
 		issues["no_observations"] = true
 		for _, total := range []*ComponentTotal{&result.Totals.Input, &result.Totals.Output, &result.Totals.CacheRead, &result.Totals.CacheWrite, &result.Totals.Reasoning, &result.Totals.CallDuration} {
@@ -1076,6 +1191,7 @@ func (o *AttemptObserver) Snapshot() AttemptLedgerSnapshot {
 		result.Issues = append(result.Issues, issue)
 	}
 	sort.Strings(result.Issues)
+	result.ProviderLeafTotals = result.Totals
 	result.Complete = len(issues) == 0
 	return result
 }
@@ -1130,15 +1246,15 @@ func (o *AttemptObserver) Timing(run ObservationRun, wall *int64, basis string) 
 	totals := ObserverTotals{StatusCounts: map[string]int64{}}
 	issues := map[string]bool{}
 	selected := 0
-	sumBasis := "observed_monotonic"
+	sumBasis := "complete"
 	for _, record := range o.Snapshot().Latest {
-		if !sameObservationRun(record.Identity.Run, run) {
+		if record.UsageRole != "provider_leaf" || !sameObservationRun(record.Identity.Run, run) {
 			continue
 		}
 		selected++
 		observerCountLatest(&totals, record, issues)
 		if record.DispatchState == "dispatched" && record.Usage.DurationBasis == "estimated" {
-			sumBasis = "estimated"
+			sumBasis = "partial"
 		}
 	}
 	observerFinishTotals(&totals, issues)
@@ -1158,4 +1274,739 @@ func sameObservationRun(a, b ObservationRun) bool {
 	_ = encodeObservation(&left, reflect.ValueOf(a), false)
 	_ = encodeObservation(&right, reflect.ValueOf(b), false)
 	return bytes.Equal(left.Bytes(), right.Bytes())
+}
+
+// Closed additive evidence DTOs. Pins verify local bytes, never sender authentication.
+type ObservationDispatchClosure struct {
+	ContractID          string           `json:"contract_id"`
+	Scope               ObservationScope `json:"scope"`
+	Task                ObservationTask  `json:"task"`
+	RootRunCollection   string           `json:"root_run_collection"`
+	RootRunID           string           `json:"root_run_id"`
+	ParentAttemptID     string           `json:"parent_attempt_id"`
+	SenderBoundaryID    string           `json:"sender_boundary_id"`
+	MemberAttemptIDs    []string         `json:"member_attempt_ids"`
+	MembershipSHA256    string           `json:"membership_sha256"`
+	SenderJournalSHA256 string           `json:"sender_journal_sha256"`
+	RecordSHA256        string           `json:"record_sha256"`
+}
+type ObservationSenderJournal struct {
+	ContractID         string           `json:"contract_id"`
+	Scope              ObservationScope `json:"scope"`
+	Task               ObservationTask  `json:"task"`
+	RootRunCollection  string           `json:"root_run_collection"`
+	RootRunID          string           `json:"root_run_id"`
+	ParentAttemptID    string           `json:"parent_attempt_id"`
+	SenderBoundaryID   string           `json:"sender_boundary_id"`
+	State              string           `json:"state"`
+	MemberAttemptIDs   []string         `json:"member_attempt_ids"`
+	OpeningEventSHA256 string           `json:"opening_event_sha256"`
+	ClosingEventSHA256 *string          `json:"closing_event_sha256"`
+	RecordSHA256       string           `json:"record_sha256"`
+}
+type ObservationParentLinkEvidence struct {
+	ContractID        string           `json:"contract_id"`
+	Scope             ObservationScope `json:"scope"`
+	Task              ObservationTask  `json:"task"`
+	RootRunCollection string           `json:"root_run_collection"`
+	RootRunID         string           `json:"root_run_id"`
+	ParentAttemptID   string           `json:"parent_attempt_id"`
+	ChildAttemptID    string           `json:"child_attempt_id"`
+	ParentRunRef      ObservationRef   `json:"parent_run_ref"`
+	ChildRunRef       ObservationRef   `json:"child_run_ref"`
+	Relationship      string           `json:"relationship"`
+	SourceSHA256      string           `json:"source_sha256"`
+	RecordSHA256      string           `json:"record_sha256"`
+}
+
+func init() {
+	observationRules[reflect.TypeOf(ObservationDispatchClosure{})] = []observationRule{
+		{name: "contract_id", kind: "string", minLength: 1, maxLength: 80, enums: []string{"arkism-crew-research-v2"}},
+		{name: "scope", kind: "object"},
+		{name: "task", kind: "object"},
+		{name: "root_run_collection", kind: "string", minLength: 1, maxLength: 80, enums: []string{"crew_runs", "crew_meetings", "crew_assists"}},
+		{name: "root_run_id", kind: "string", minLength: 1, maxLength: 256},
+		{name: "parent_attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
+		{name: "sender_boundary_id", kind: "string", minLength: 1, maxLength: 256},
+		{name: "member_attempt_ids", kind: "strings"},
+		{name: "membership_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+		{name: "sender_journal_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+		{name: "record_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+	}
+
+	observationRules[reflect.TypeOf(ObservationSenderJournal{})] = []observationRule{
+		{name: "contract_id", kind: "string", minLength: 1, maxLength: 80, enums: []string{"arkism-crew-research-v2"}},
+		{name: "scope", kind: "object"},
+		{name: "task", kind: "object"},
+		{name: "root_run_collection", kind: "string", minLength: 1, maxLength: 80, enums: []string{"crew_runs", "crew_meetings", "crew_assists"}},
+		{name: "root_run_id", kind: "string", minLength: 1, maxLength: 256},
+		{name: "parent_attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
+		{name: "sender_boundary_id", kind: "string", minLength: 1, maxLength: 256},
+		{name: "state", kind: "string", minLength: 1, maxLength: 80, enums: []string{"open", "closed"}},
+		{name: "member_attempt_ids", kind: "strings"},
+		{name: "opening_event_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+		{name: "closing_event_sha256", kind: "string", nullable: true, minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+		{name: "record_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+	}
+
+	observationRules[reflect.TypeOf(ObservationParentLinkEvidence{})] = []observationRule{
+		{name: "contract_id", kind: "string", minLength: 1, maxLength: 80, enums: []string{"arkism-crew-research-v2"}},
+		{name: "scope", kind: "object"},
+		{name: "task", kind: "object"},
+		{name: "root_run_collection", kind: "string", minLength: 1, maxLength: 80, enums: []string{"crew_runs", "crew_meetings", "crew_assists"}},
+		{name: "root_run_id", kind: "string", minLength: 1, maxLength: 256},
+		{name: "parent_attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
+		{name: "child_attempt_id", kind: "string", minLength: 1, maxLength: 256, pattern: "^crw2-attempt-[0-9a-f]{64}$"},
+		{name: "parent_run_ref", kind: "object"},
+		{name: "child_run_ref", kind: "object"},
+		{name: "relationship", kind: "string", minLength: 1, maxLength: 80, enums: []string{"same_execution_dispatch", "linked_meeting", "host_leaf", "subflow"}},
+		{name: "source_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+		{name: "record_sha256", kind: "string", minLength: 1, maxLength: 64, pattern: "^[0-9a-f]{64}$"},
+	}
+
+}
+
+func clearObservationValues(totals *ObserverTotals) {
+	for _, part := range []*ComponentTotal{&totals.Input, &totals.Output, &totals.CacheRead, &totals.CacheWrite, &totals.Reasoning, &totals.CallDuration} {
+		part.Value = nil
+	}
+	totals.Cost.Value = nil
+}
+
+// ObservationEvidence contains caller-pinned local bytes only. No source
+// authentication, scheduled coverage or effect permission is supplied by pins.
+type ObservationEvidence struct {
+	ParentLinks    map[string][]byte
+	ParentSHA256   map[string]string
+	Closures       []ObservationDispatchClosure
+	SenderJournals map[string][]byte
+	SenderSHA256   map[string]string
+}
+type ObservationBoundaryGroup struct {
+	ParentAttemptID       string
+	MemberAttemptIDs      []string
+	LeafCost              CostTotal
+	AggregateCost         UsageObservation
+	LocalPinIntegrityOnly bool
+}
+type ObservationQualification struct {
+	AccountingComplete   bool
+	Issues               []string
+	IntegrityComplete    bool
+	RuntimeAuthenticated bool
+	RunCoverage          string
+	Groups               []ObservationBoundaryGroup
+}
+
+func evidenceHash(value any) (string, error) {
+	if err := validateObservation(value); err != nil {
+		return "", err
+	}
+	var out bytes.Buffer
+	if err := encodeObservation(&out, reflect.ValueOf(value), true); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(out.Bytes())
+	return hex.EncodeToString(sum[:]), nil
+}
+func sealEvidence(value any) (any, error) {
+	cloned := cloneObservationValue(reflect.ValueOf(value))
+	field := cloned.FieldByName("RecordSHA256")
+	field.SetString(strings.Repeat("0", 64))
+	hash, err := evidenceHash(cloned.Interface())
+	if err != nil {
+		return nil, err
+	}
+	field.SetString(hash)
+	return cloned.Interface(), nil
+}
+func SealObservationParentLink(value ObservationParentLinkEvidence) (ObservationParentLinkEvidence, error) {
+	sealed, err := sealEvidence(value)
+	if err != nil {
+		return ObservationParentLinkEvidence{}, err
+	}
+	result := sealed.(ObservationParentLinkEvidence)
+	return result, validateEvidence(result)
+}
+func SealObservationDispatchClosure(value ObservationDispatchClosure) (ObservationDispatchClosure, error) {
+	sealed, err := sealEvidence(value)
+	if err != nil {
+		return ObservationDispatchClosure{}, err
+	}
+	result := sealed.(ObservationDispatchClosure)
+	return result, validateEvidence(result)
+}
+func SealObservationSenderJournal(value ObservationSenderJournal) (ObservationSenderJournal, error) {
+	sealed, err := sealEvidence(value)
+	if err != nil {
+		return ObservationSenderJournal{}, err
+	}
+	result := sealed.(ObservationSenderJournal)
+	return result, validateEvidence(result)
+}
+
+// ObservationMembershipHash hashes the sorted set. Duplicate IDs are rejected.
+func ObservationMembershipHash(members []string) (string, error) {
+	values := append([]string{}, members...)
+	sort.Strings(values)
+	for i, id := range values {
+		if !observationAttemptHash.MatchString(id) || (i > 0 && id == values[i-1]) {
+			return "", observationError("invalid_value", "$.member_attempt_ids")
+		}
+	}
+	var out bytes.Buffer
+	if err := encodeObservation(&out, reflect.ValueOf(values), false); err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(out.Bytes())
+	return hex.EncodeToString(sum[:]), nil
+}
+func validateEvidence(value any) error {
+	if err := validateObservation(value); err != nil {
+		return err
+	}
+	hash, err := evidenceHash(value)
+	if err != nil {
+		return err
+	}
+	actual := reflect.ValueOf(value).FieldByName("RecordSHA256").String()
+	if hash != actual {
+		return observationError("hash_mismatch", "$.record_sha256")
+	}
+	switch typed := value.(type) {
+	case ObservationDispatchClosure:
+		expected, e := ObservationMembershipHash(typed.MemberAttemptIDs)
+		if e != nil {
+			return e
+		}
+		if expected != typed.MembershipSHA256 {
+			return observationError("hash_mismatch", "$.membership_sha256")
+		}
+	case ObservationSenderJournal:
+		if _, e := ObservationMembershipHash(typed.MemberAttemptIDs); e != nil {
+			return e
+		}
+		if (typed.State == "closed") != (typed.ClosingEventSHA256 != nil) {
+			return observationError("invalid_value", "$.closing_event_sha256")
+		}
+	case ObservationParentLinkEvidence:
+		for _, ref := range []ObservationRef{typed.ParentRunRef, typed.ChildRunRef} {
+			if !observationContains([]string{"crew_runs", "crew_meetings", "crew_assists"}, ref.Collection) {
+				return observationError("invalid_value", "$.parent_run_ref.collection")
+			}
+		}
+	default:
+		return observationError("invalid_type", "$")
+	}
+	return nil
+}
+
+func checkObservationJSONUnicode(raw []byte) error {
+	if !utf8.Valid(raw) {
+		return observationError("invalid_unicode", "$")
+	}
+	quoted := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '"' {
+			quoted = !quoted
+			continue
+		}
+		if !quoted || raw[i] != '\\' {
+			continue
+		}
+		i++
+		if i >= len(raw) {
+			break
+		}
+		if raw[i] != 'u' {
+			continue
+		}
+		if i+4 >= len(raw) {
+			return observationError("invalid_json", "$")
+		}
+		code, err := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
+		if err != nil {
+			return observationError("invalid_json", "$")
+		}
+		i += 4
+		if code >= 0xd800 && code <= 0xdbff {
+			if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
+				return observationError("invalid_unicode", "$")
+			}
+			low, e := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
+			if e != nil || low < 0xdc00 || low > 0xdfff {
+				return observationError("invalid_unicode", "$")
+			}
+			i += 6
+		} else if code >= 0xdc00 && code <= 0xdfff {
+			return observationError("invalid_unicode", "$")
+		}
+	}
+	return nil
+}
+func walkObservationJSON(decoder *json.Decoder, depth int) error {
+	if depth > 128 {
+		return observationError("json_depth_limit", "$")
+	}
+	token, err := decoder.Token()
+	if err != nil {
+		return observationError("invalid_json", "$")
+	}
+	delim, container := token.(json.Delim)
+	if !container {
+		return nil
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for decoder.More() {
+			key, e := decoder.Token()
+			if e != nil {
+				return observationError("invalid_json", "$")
+			}
+			name, ok := key.(string)
+			if !ok {
+				return observationError("invalid_json", "$")
+			}
+			if seen[name] {
+				return observationError("duplicate_key", "$")
+			}
+			seen[name] = true
+			if e = walkObservationJSON(decoder, depth+1); e != nil {
+				return e
+			}
+		}
+	case '[':
+		for decoder.More() {
+			if e := walkObservationJSON(decoder, depth+1); e != nil {
+				return e
+			}
+		}
+	default:
+		return observationError("invalid_json", "$")
+	}
+	if _, err = decoder.Token(); err != nil {
+		return observationError("invalid_json", "$")
+	}
+	return nil
+}
+func observationJSONShape(raw []byte, typ reflect.Type, path string) error {
+	if typ.Kind() == reflect.Pointer {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return nil
+		}
+		return observationJSONShape(raw, typ.Elem(), path)
+	}
+	switch typ.Kind() {
+	case reflect.Struct:
+		return observationJSONObject(raw, typ, path)
+	case reflect.Slice:
+		return observationJSONArray(raw, typ, path)
+	case reflect.Int64:
+		text := strings.TrimSpace(string(raw))
+		if !observationIntLexical.MatchString(text) {
+			return observationError("invalid_type", path)
+		}
+		if _, err := strconv.ParseInt(text, 10, 64); err != nil {
+			return observationError("invalid_value", path)
+		}
+	case reflect.Float64:
+		return observationJSONFloat(raw, path)
+	}
+	return nil
+}
+func observationJSONObject(raw []byte, typ reflect.Type, path string) error {
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil || object == nil {
+		return observationError("invalid_type", path)
+	}
+	rules, ok := observationRules[typ]
+	if !ok {
+		return observationError("invalid_type", path)
+	}
+	known := map[string]bool{}
+	for _, rule := range rules {
+		known[rule.name] = true
+	}
+	for key := range object {
+		if !known[key] {
+			return observationError("unknown_field", path)
+		}
+	}
+	for i, rule := range rules {
+		data, present := object[rule.name]
+		at := path + "." + rule.name
+		if !present {
+			return observationError("missing_field", at)
+		}
+		if !rule.nullable && bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+			return observationError("invalid_type", at)
+		}
+		if err := observationJSONShape(data, typ.Field(i).Type, at); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func observationJSONArray(raw []byte, typ reflect.Type, path string) error {
+	var items []json.RawMessage
+	if json.Unmarshal(raw, &items) != nil || items == nil {
+		return observationError("invalid_type", path)
+	}
+	for _, item := range items {
+		if err := observationJSONShape(item, typ.Elem(), path+"[*]"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func observationJSONFloat(raw []byte, path string) error {
+	text := strings.TrimSpace(string(raw))
+	if text == "true" || text == "false" || strings.HasPrefix(text, "\"") {
+		return observationError("invalid_type", path)
+	}
+	number, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsInf(number, 0) || math.IsNaN(number) {
+		return observationError("invalid_value", path)
+	}
+	return nil
+}
+
+var observationIntLexical = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)
+
+func decodeObservationJSON(raw []byte, out any) error {
+	if err := checkObservationJSONUnicode(raw); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := walkObservationJSON(decoder, 0); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return observationError("invalid_json", "$")
+	}
+	typ := reflect.TypeOf(out)
+	if typ.Kind() != reflect.Pointer {
+		return observationError("invalid_type", "$")
+	}
+	if err := observationJSONShape(raw, typ.Elem(), "$"); err != nil {
+		return err
+	}
+	if json.Unmarshal(raw, out) != nil {
+		return observationError("invalid_type", "$")
+	}
+	return nil
+}
+
+// DecodeAttemptObservation is a closed strict transport decoder for v2 only.
+func DecodeAttemptObservation(raw []byte) (AttemptObservation, error) {
+	var value AttemptObservation
+	if err := decodeObservationJSON(raw, &value); err != nil {
+		return value, err
+	}
+	return value, ValidateAttemptObservation(value)
+}
+func DecodeObservationParentLink(raw []byte) (ObservationParentLinkEvidence, error) {
+	var value ObservationParentLinkEvidence
+	if err := decodeObservationJSON(raw, &value); err != nil {
+		return value, err
+	}
+	return value, validateEvidence(value)
+}
+func DecodeObservationDispatchClosure(raw []byte) (ObservationDispatchClosure, error) {
+	var value ObservationDispatchClosure
+	if err := decodeObservationJSON(raw, &value); err != nil {
+		return value, err
+	}
+	return value, validateEvidence(value)
+}
+func DecodeObservationSenderJournal(raw []byte) (ObservationSenderJournal, error) {
+	var value ObservationSenderJournal
+	if err := decodeObservationJSON(raw, &value); err != nil {
+		return value, err
+	}
+	return value, validateEvidence(value)
+}
+
+func observationBytesSHA(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+func sameEvidenceLineage(scope ObservationScope, task ObservationTask, rootCollection, rootID string, record AttemptObservation) bool {
+	return scope == record.Identity.Run.Scope && task == record.Task && record.Identity.Run.RootRunID != nil && record.Identity.Run.RootRunCollection != nil && rootCollection == *record.Identity.Run.RootRunCollection && rootID == *record.Identity.Run.RootRunID
+}
+func matchingEvidenceRef(proof, actual ObservationRef) bool {
+	return proof.Collection == actual.Collection && proof.ID == actual.ID && proof.Revision <= actual.Revision
+}
+func qualifyObservationParent(record, parent AttemptObservation, raw []byte, pin string) error {
+	if pin == "" || observationBytesSHA(raw) != pin {
+		return observationError("unverified_evidence_pin", "$")
+	}
+	proof, err := DecodeObservationParentLink(raw)
+	if err != nil {
+		return err
+	}
+	if proof.ChildAttemptID != record.Identity.AttemptID || proof.ParentAttemptID != parent.Identity.AttemptID || !sameEvidenceLineage(proof.Scope, proof.Task, proof.RootRunCollection, proof.RootRunID, record) || !sameEvidenceLineage(proof.Scope, proof.Task, proof.RootRunCollection, proof.RootRunID, parent) {
+		return observationError("parent_lineage_mismatch", "$")
+	}
+	if !matchingEvidenceRef(proof.ParentRunRef, parent.Identity.Run.RunRef) || !matchingEvidenceRef(proof.ChildRunRef, record.Identity.Run.RunRef) {
+		return observationError("parent_reference_mismatch", "$")
+	}
+	return qualifyObservationRelationship(record, parent, proof)
+}
+func observationDescendants(parent string, latest map[string]AttemptObservation) ([]string, error) {
+	var members []string
+	for id, record := range latest {
+		if record.UsageRole != "provider_leaf" || record.DispatchState == "not_dispatched" {
+			continue
+		}
+		cursor := record.Identity.ParentAttemptID
+		seen := map[string]bool{id: true}
+		for cursor != nil {
+			if seen[*cursor] {
+				return nil, observationError("parent_cycle", "$")
+			}
+			seen[*cursor] = true
+			if *cursor == parent {
+				members = append(members, id)
+				break
+			}
+			next, ok := latest[*cursor]
+			if !ok {
+				return nil, observationError("missing_parent", "$")
+			}
+			cursor = next.Identity.ParentAttemptID
+		}
+	}
+	sort.Strings(members)
+	return members, nil
+}
+func qualifyObservationClosure(parent AttemptObservation, closure ObservationDispatchClosure, latest map[string]AttemptObservation, evidence ObservationEvidence) (ObservationBoundaryGroup, error) {
+	group := ObservationBoundaryGroup{ParentAttemptID: parent.Identity.AttemptID, AggregateCost: parent.Usage, LocalPinIntegrityOnly: true}
+	if err := validateEvidence(closure); err != nil {
+		return group, err
+	}
+	if !sameEvidenceLineage(closure.Scope, closure.Task, closure.RootRunCollection, closure.RootRunID, parent) {
+		return group, observationError("parent_lineage_mismatch", "$")
+	}
+	raw := evidence.SenderJournals[closure.SenderBoundaryID]
+	pin := evidence.SenderSHA256[closure.SenderBoundaryID]
+	if pin == "" || observationBytesSHA(raw) != pin || pin != closure.SenderJournalSHA256 {
+		return group, observationError("unverified_evidence_pin", "$")
+	}
+	journal, err := DecodeObservationSenderJournal(raw)
+	if err != nil {
+		return group, err
+	}
+	if journal.State != "closed" || journal.ParentAttemptID != parent.Identity.AttemptID || journal.SenderBoundaryID != closure.SenderBoundaryID || !sameEvidenceLineage(journal.Scope, journal.Task, journal.RootRunCollection, journal.RootRunID, parent) {
+		return group, observationError("unclosed_sender_boundary", "$")
+	}
+	members, err := observationDescendants(parent.Identity.AttemptID, latest)
+	if err != nil {
+		return group, err
+	}
+	expected, _ := ObservationMembershipHash(members)
+	journalMembers, _ := ObservationMembershipHash(journal.MemberAttemptIDs)
+	if expected != closure.MembershipSHA256 || journalMembers != expected {
+		return group, observationError("membership_mismatch", "$")
+	}
+	totals := ObserverTotals{}
+	for _, id := range members {
+		observerAddUsage(&totals, latest[id].Usage)
+	}
+	observerFinishTotals(&totals, map[string]bool{})
+	group.LeafCost = totals.Cost
+	group.MemberAttemptIDs = members
+	return group, nil
+}
+
+// QualifyObservationLedger verifies caller-pinned local evidence only. Matching
+// unsigned fixtures never establish runtime authentication or whole-run coverage.
+func QualifyObservationLedger(snapshot AttemptLedgerSnapshot, evidence ObservationEvidence) (ObservationQualification, error) {
+	result := ObservationQualification{RunCoverage: "unknown", Groups: []ObservationBoundaryGroup{}}
+	latest := map[string]AttemptObservation{}
+	collector := NewAttemptObserver(nil)
+	for _, record := range snapshot.Records {
+		if err := ValidateAttemptObservation(record); err != nil {
+			return result, err
+		}
+		collector.Observe(record)
+	}
+	rebuilt := collector.Snapshot()
+	issues, issueErr := qualificationObservationIssues(snapshot.Issues, rebuilt.Issues)
+	if issueErr != nil {
+		return result, issueErr
+	}
+	result.AccountingComplete = true
+	for _, issue := range issues {
+		switch issue {
+		case "parent_evidence_unverified", "leaf_coverage_unverified":
+		case "unknown_usage", "unknown_cost", "unknown_duration", "unknown_dispatch", "pending_attempt", "accounting_overflow", "observation_gap":
+			result.AccountingComplete = false
+			result.Issues = append(result.Issues, issue)
+		default:
+			result.AccountingComplete = false
+			result.Issues = issues
+			return result, observationError(issue, "$")
+		}
+	}
+	for _, record := range rebuilt.Latest {
+		latest[record.Identity.AttemptID] = record
+	}
+	if err := qualifyObservationParents(latest, evidence); err != nil {
+		result.AccountingComplete = false
+		return result, err
+	}
+	groups, err := qualifyObservationGroups(latest, evidence)
+	if err != nil {
+		result.AccountingComplete = false
+		return result, err
+	}
+	result.Groups = groups
+	result.IntegrityComplete = true
+	return result, nil
+}
+
+func validateObservationString(text string, rule observationRule, path string) error {
+	if !utf8.ValidString(text) {
+		return observationError("invalid_unicode", path)
+	}
+	if len(text) < rule.minLength || len(text) > rule.maxLength {
+		return observationError("invalid_value", path)
+	}
+	if len(rule.enums) > 0 && !observationContains(rule.enums, text) {
+		return observationError("invalid_value", path)
+	}
+	if rule.pattern != "" {
+		pattern := observationHash
+		if strings.HasPrefix(rule.pattern, "^crw2-attempt-") {
+			pattern = observationAttemptHash
+		}
+		if !pattern.MatchString(text) {
+			return observationError("invalid_value", path)
+		}
+	}
+	return nil
+}
+
+func validateObservationRole(record AttemptObservation) error {
+	if record.UsageRole == "provider_leaf" && record.LeafCoverage != "not_applicable" || record.UsageRole == "transport_aggregate" && record.LeafCoverage == "not_applicable" || record.UsageRole == "opaque_dispatch" && record.LeafCoverage == "complete" {
+		return observationError("coverage_role_mismatch", "$.leaf_coverage")
+	}
+	if record.Identity.IdentityBasis == "observed_host_leaf" && record.UsageRole != "provider_leaf" {
+		return observationError("coverage_role_mismatch", "$.usage_role")
+	}
+	if record.Status == "reserved" && record.DispatchState == "dispatched" {
+		return observationError("invalid_value", "$.dispatch_state")
+	}
+	return nil
+}
+
+func qualifyObservationRelationship(record, parent AttemptObservation, proof ObservationParentLinkEvidence) error {
+	own, p := record.Identity.Run.RunRef, parent.Identity.Run.RunRef
+	same := own.Collection == p.Collection && own.ID == p.ID
+	if same {
+		if !observationContains([]string{"same_execution_dispatch", "host_leaf"}, proof.Relationship) {
+			return observationError("parent_relationship_mismatch", "$")
+		}
+	} else {
+		run := record.Identity.Run
+		if run.ParentRunID == nil || run.ParentRunCollection == nil || *run.ParentRunID != p.ID || *run.ParentRunCollection != p.Collection {
+			return observationError("parent_reference_mismatch", "$")
+		}
+		if own.Collection == "crew_meetings" {
+			if proof.Relationship != "linked_meeting" || p.Collection != "crew_runs" {
+				return observationError("parent_relationship_mismatch", "$")
+			}
+		} else if own.Collection != "crew_runs" || proof.Relationship != "subflow" {
+			return observationError("parent_relationship_mismatch", "$")
+		}
+	}
+	return nil
+}
+
+func qualifyObservationParents(latest map[string]AttemptObservation, evidence ObservationEvidence) error {
+	for id, record := range latest {
+		parent := record.Identity.ParentAttemptID
+		if parent == nil {
+			run := record.Identity.Run
+			if *run.RootRunCollection != run.RunRef.Collection || *run.RootRunID != run.RunRef.ID {
+				return observationError("parent_evidence_unverified", "$")
+			}
+			continue
+		}
+		p, ok := latest[*parent]
+		if !ok {
+			return observationError("missing_parent", "$")
+		}
+		if err := qualifyObservationParent(record, p, evidence.ParentLinks[id], evidence.ParentSHA256[id]); err != nil {
+			return err
+		}
+	}
+	for id := range evidence.ParentLinks {
+		record, ok := latest[id]
+		if !ok || record.Identity.ParentAttemptID == nil {
+			return observationError("orphan_parent_proof", "$")
+		}
+	}
+	return nil
+}
+
+func qualifyObservationGroups(latest map[string]AttemptObservation, evidence ObservationEvidence) ([]ObservationBoundaryGroup, error) {
+	groups := []ObservationBoundaryGroup{}
+	closures := map[string]ObservationDispatchClosure{}
+	for _, closure := range evidence.Closures {
+		if _, ok := closures[closure.ParentAttemptID]; ok {
+			return nil, observationError("duplicate_closure", "$")
+		}
+		parent, ok := latest[closure.ParentAttemptID]
+		if !ok || parent.UsageRole != "transport_aggregate" || parent.LeafCoverage != "complete" {
+			return nil, observationError("orphan_closure", "$")
+		}
+		closures[closure.ParentAttemptID] = closure
+	}
+	ids := make([]string, 0, len(latest))
+	for id := range latest {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		record := latest[id]
+		if record.UsageRole == "provider_leaf" {
+			continue
+		}
+		if record.UsageRole != "transport_aggregate" || record.LeafCoverage != "complete" {
+			return nil, observationError("incomplete_leaf_coverage", "$")
+		}
+		closure, ok := closures[id]
+		if !ok {
+			return nil, observationError("unproven_leaf_coverage", "$")
+		}
+		group, err := qualifyObservationClosure(record, closure, latest, evidence)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, group)
+	}
+	return groups, nil
+}
+
+func qualificationObservationIssues(original, rebuilt []string) ([]string, error) {
+	known := []string{"parent_evidence_unverified", "leaf_coverage_unverified", "sink_pending", "no_observations", "observation_gap", "pending_attempt", "unknown_dispatch", "unknown_usage", "unknown_cost", "unknown_duration", "accounting_overflow", "canonical_attempt_conflict", "parent_cycle", "missing_parent", "parent_lineage_mismatch"}
+	seen := map[string]bool{}
+	for _, source := range [][]string{original, rebuilt} {
+		for _, issue := range source {
+			if !observationReasons[issue] && !observationContains(known, issue) {
+				return nil, observationError("invalid_snapshot_issue", "$")
+			}
+			seen[issue] = true
+		}
+	}
+	issues := make([]string, 0, len(seen))
+	for issue := range seen {
+		issues = append(issues, issue)
+	}
+	sort.Strings(issues)
+	return issues, nil
 }
