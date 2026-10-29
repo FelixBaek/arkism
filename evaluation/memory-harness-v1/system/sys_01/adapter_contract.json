@@ -1,0 +1,2468 @@
+{
+  "contract_id": "sys-shadow-contract-v1",
+  "task": "SYS-01.spec",
+  "status": "root_selected_A_contract_not_functional_acceptance",
+  "is_product_contract": false,
+  "scope": "A contract and synthetic fixture only; future B integration requires separate accepted gates and exact product Story/files. Metadata does not prove actual execution or authority.",
+  "protocols": {
+    "input": "sys-shadow-input-v1",
+    "request": "sys-shadow-request-v1",
+    "decision": "sys-shadow-decision-v1",
+    "ledger": "sys-shadow-ledger-v1"
+  },
+  "closed_schema": {
+    "models": {
+      "Scope": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "workspace_id",
+          "project_id",
+          "user_id",
+          "agent_id"
+        ],
+        "fields": {
+          "workspace_id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "project_id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "user_id": {
+            "type": "NativeOptionalID",
+            "nullable": false
+          },
+          "agent_id": {
+            "type": "NativeOptionalID",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Exact existing memory.Scope semantics; no conversion to memoryharness.Scope by field guessing."
+        ]
+      },
+      "MaterialRef": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "origin",
+          "collection",
+          "id",
+          "revision",
+          "text_sha256",
+          "summary_sha256",
+          "native_guard_sha256"
+        ],
+        "fields": {
+          "origin": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "collection": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "revision": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "text_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "summary_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "native_guard_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "All identity fields exact; origin/collection distinct. native_guard_sha256 is existing searchHitHash canonical record metadata guard, not content-text hash. Text/summary SHA are exact full UTF8 beforechar/token clipping. No product revision1 invention."
+        ]
+      },
+      "NativeClock": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "state",
+          "unix_ns"
+        ],
+        "fields": {
+          "state": {
+            "type": "enum",
+            "values": [
+              "known",
+              "absent",
+              "native_zero",
+              "outside_int64_ns",
+              "not_recorded"
+            ],
+            "nullable": false
+          },
+          "unix_ns": {
+            "type": "Int64",
+            "nullable": true
+          }
+        },
+        "semantic_rules": [
+          "known iff unix_ns nonnull. Native time.Time zero is distinct from absent; never relabel wallclock as monotonic. Nonrepresentable clock prevents qualified same-clock synthetic calculation, leaves baseline native path unchanged.",
+          "Not_recorded differsknownabsence; neitherprovesactualcurrentclock."
+        ]
+      },
+      "RecencyBasis": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "kind",
+          "created_at",
+          "effective_at",
+          "updated_at"
+        ],
+        "fields": {
+          "kind": {
+            "type": "NativeLabel",
+            "nullable": false
+          },
+          "created_at": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "effective_at": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "updated_at": {
+            "type": "NativeClock",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Existing recencyFactor ignores zero times; prefer EffectiveAt when nonzero, elseCreatedAt when nonzero, elseUpdatedAt. Unknown time cannot become syntheticnow. Existing nondecaying kinds retainfactor1."
+        ]
+      },
+      "OutcomeWeight": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "material",
+          "rrf_window_ordinal",
+          "basis",
+          "effective_factor_bits",
+          "signal_factor_bits",
+          "signal_ref",
+          "read_at"
+        ],
+        "fields": {
+          "material": {
+            "type": "MaterialRef",
+            "nullable": false
+          },
+          "rrf_window_ordinal": {
+            "type": "PositiveInt64",
+            "nullable": true
+          },
+          "basis": {
+            "type": "enum",
+            "values": [
+              "native_signal_observed",
+              "native_default_after_not_found",
+              "native_default_after_get_error",
+              "native_default_after_nonmatching_signal",
+              "ranking_disabled",
+              "not_queried",
+              "not_recorded"
+            ],
+            "nullable": false
+          },
+          "effective_factor_bits": {
+            "type": "FiniteNonnegativeF64Bits",
+            "nullable": true
+          },
+          "signal_factor_bits": {
+            "type": "FiniteNonnegativeF64Bits",
+            "nullable": true
+          },
+          "signal_ref": {
+            "type": "CanonicalRecordRef",
+            "nullable": true
+          },
+          "read_at": {
+            "type": "NativeClock",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Oneentrypercandidate inactualcandidateorder, not everyentryisDBread. OutsideactualRRFwindow=>not_queried, ordinal/factors/refnull andreadnotrecorded; neverqueryextra/default1.",
+          "Windowordinal preservesFuseScoredrows. SignalRankingOff bypassesreads: effectivefactor1onlyasnativealgorithmdefault, signalunknown. Geterror/notfound/nonmatching canleadnativeeffective1 butsignalnull. Errornotabsence/observedsignal1.",
+          "Actualsignal1canbeomittedfromreturnedmap. CaptureoriginalsingleGet results/CASifknown; missingcapture=>not_recorded/effectivefactorunknown. Mapabsenceinsufficient. No rereads/fakeCAS."
+        ]
+      },
+      "CanonicalRecordRef": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "collection",
+          "id",
+          "revision"
+        ],
+        "fields": {
+          "collection": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "revision": {
+            "type": "PositiveInt64",
+            "nullable": false
+          }
+        },
+        "semantic_rules": []
+      },
+      "Candidate": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "material",
+          "scope",
+          "status",
+          "trust_bits",
+          "recency",
+          "sources_sha256",
+          "authority",
+          "source_bindings"
+        ],
+        "fields": {
+          "material": {
+            "type": "MaterialRef",
+            "nullable": false
+          },
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "status": {
+            "type": "NativeLabel",
+            "nullable": false
+          },
+          "trust_bits": {
+            "type": "FiniteF64Bits",
+            "nullable": false
+          },
+          "recency": {
+            "type": "RecencyBasis",
+            "nullable": false
+          },
+          "sources_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "authority": {
+            "type": "enum",
+            "values": [
+              "data_only_untrusted"
+            ],
+            "nullable": false
+          },
+          "source_bindings": {
+            "type": "array",
+            "items": "SourceBinding",
+            "max_items": 64,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Deepcopy nativeHit beforeprojection; no Text/Summary/SourceURL/locator/body serialized in diagnostic. native_guard commits all actual relevant metadata. Candidate material duplicates with inconsistent guard/hash/scope are shadow input_conflict; baseline behavior not overwritten.",
+          "ActualsourceIDs/CAS projectedwithoutlocators; sources_sha stillcommitsoriginalnativeSourceRefs. UnknownCAS notcurrentproof."
+        ]
+      },
+      "LaneEntry": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "ordinal",
+          "candidate_index",
+          "exact_keyword"
+        ],
+        "fields": {
+          "ordinal": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "candidate_index": {
+            "type": "Count",
+            "nullable": false
+          },
+          "exact_keyword": {
+            "type": "Bool",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "ordinal is actual position in one cleaned native lane (not original SQL rank), monotonic1..len; duplicate material keeps original ordinal position and is never compacted after duplicate suppression. Native pre-clean filter loss must be tracked separately; do not conflate preclean or offlineB0 eligibility ordinal."
+        ]
+      },
+      "Lane": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "lane_index",
+          "lane_kind",
+          "entries"
+        ],
+        "fields": {
+          "lane_index": {
+            "type": "Count",
+            "nullable": false
+          },
+          "lane_kind": {
+            "type": "enum",
+            "values": [
+              "exact",
+              "fts",
+              "vector",
+              "relation"
+            ],
+            "nullable": false
+          },
+          "entries": {
+            "type": "array",
+            "items": "LaneEntry",
+            "max_items": 50,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Empty lane preserved; lane_index exact order. No extra lane silentlyadded."
+        ]
+      },
+      "Budget": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "final_limit",
+          "max_chars",
+          "budget_tokens",
+          "token_encoding",
+          "native_rrf_window",
+          "lane_limit"
+        ],
+        "fields": {
+          "final_limit": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "max_chars": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "budget_tokens": {
+            "type": "Count",
+            "nullable": false
+          },
+          "token_encoding": {
+            "type": "enum",
+            "values": [
+              "",
+              "cl100k_base",
+              "o200k_base"
+            ],
+            "nullable": false
+          },
+          "native_rrf_window": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "lane_limit": {
+            "type": "PositiveInt64",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Normalized actual final_limit1..50, max_chars1..64000, tokens0..64000, token0 iff encodingempty. lane_limit stays same requestlimit. native_rrf_window=3*final_limit for current active memories, elsefinal_limit. This internal3x does not expand public API or repositorylanecap. No retuning or arbitrary candidatecap increase."
+        ]
+      },
+      "BaselineContext": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "namespace",
+          "collection",
+          "include_inactive",
+          "destination_sha256",
+          "query_sha256",
+          "criteria_sha256",
+          "related_to",
+          "run_ref",
+          "clock",
+          "ranking_mode",
+          "signal_ranking_off"
+        ],
+        "fields": {
+          "namespace": {
+            "type": "enum",
+            "values": [
+              "arkism_native_recall_current"
+            ],
+            "nullable": false
+          },
+          "collection": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "include_inactive": {
+            "type": "Bool",
+            "nullable": false
+          },
+          "destination_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "query_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "criteria_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "related_to": {
+            "type": "CanonicalRecordRef",
+            "nullable": true
+          },
+          "run_ref": {
+            "type": "CanonicalRecordRef",
+            "nullable": true
+          },
+          "clock": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "ranking_mode": {
+            "type": "enum",
+            "values": [
+              "native_recency_outcome",
+              "native_rrf_only"
+            ],
+            "nullable": false
+          },
+          "signal_ranking_off": {
+            "type": "Bool",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "No query plaintext/token stored. Query/criteria/destination hashes are fixed provenance only, not opaque facts decoded by policies. rankmode derived actual collection/includeinactive. Source clock observed once for native recency computation only after future integrationowner explicitly binds exact native time.Now evaluation point; no designonlytimestamp actualclaim."
+        ]
+      },
+      "CandidateSnapshot": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "protocol",
+          "request_id",
+          "scope",
+          "baseline",
+          "budget",
+          "candidates",
+          "lanes",
+          "outcome_weights",
+          "snapshot_revision",
+          "candidate_set_sha256",
+          "ranking_capture"
+        ],
+        "fields": {
+          "protocol": {
+            "type": "enum",
+            "values": [
+              "sys-shadow-input-v1"
+            ],
+            "nullable": false
+          },
+          "request_id": {
+            "type": "OpaqueID",
+            "nullable": false
+          },
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "baseline": {
+            "type": "BaselineContext",
+            "nullable": false
+          },
+          "budget": {
+            "type": "Budget",
+            "nullable": false
+          },
+          "candidates": {
+            "type": "array",
+            "items": "Candidate",
+            "max_items": 200,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "lanes": {
+            "type": "array",
+            "items": "Lane",
+            "max_items": 4,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "outcome_weights": {
+            "type": "array",
+            "items": "OutcomeWeight",
+            "max_items": 200,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "snapshot_revision": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "candidate_set_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "ranking_capture": {
+            "type": "RankingCapture",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "snapshot_revision hashesSnapshotHashProjectionexceptself, notDBrevision/epoch. Candidateorderfirstencounterfullidentity, conflictingguards=>shadowinput_conflictbutbaselineflowunchanged.",
+          "candidate_set_sha256 hashesCandidateSetHashProjection(scope,candidates,lanes,budget) excludingclock/weights/ownhashes. Freeze/deepcloneCbeforebaseline.",
+          "Two-phasecapture: baselineconsumedC, notafuturefullsnapshotSHA. ObserveoriginalRRFwindow/Now/Getwhileunchangedbaselineexecutesonce, thenfinishSnapshot+SHA forshadow.",
+          "Weightentrynotqueriedforeachoutsidewindowcandidate; no extraweightread. BaselineContext.clock equalscapturedactualnativeargumentifknown; no earlierNowreplacement. Historynotfresh."
+        ]
+      },
+      "ShadowRequest": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "protocol",
+          "mode",
+          "snapshot",
+          "policy_id",
+          "policy_config_sha256",
+          "policy_registry_sha256",
+          "dynamics_contract_sha256",
+          "max_local_steps"
+        ],
+        "fields": {
+          "protocol": {
+            "type": "enum",
+            "values": [
+              "sys-shadow-request-v1"
+            ],
+            "nullable": false
+          },
+          "mode": {
+            "type": "enum",
+            "values": [
+              "off",
+              "shadow"
+            ],
+            "nullable": false
+          },
+          "snapshot": {
+            "type": "CandidateSnapshot",
+            "nullable": false
+          },
+          "policy_id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "policy_config_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "policy_registry_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "dynamics_contract_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "max_local_steps": {
+            "type": "PositiveInt64",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Policy IDs/params fromacceptedDYN05registry only; DYN01specalone is not executablepolicy. off means no shadowcomputation/observerwrite. max_local_steps explicit selectedregistry bound, no guessed budget default. Baseline Context namespace never offline-B0."
+        ]
+      },
+      "ShadowDecision": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "protocol",
+          "snapshot_revision",
+          "policy_id",
+          "policy_config_sha256",
+          "status",
+          "selected_indices",
+          "reason",
+          "local_steps"
+        ],
+        "fields": {
+          "protocol": {
+            "type": "enum",
+            "values": [
+              "sys-shadow-decision-v1"
+            ],
+            "nullable": false
+          },
+          "snapshot_revision": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "policy_id": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "policy_config_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "status": {
+            "type": "enum",
+            "values": [
+              "selected",
+              "failed",
+              "not_run"
+            ],
+            "nullable": false
+          },
+          "selected_indices": {
+            "type": "array",
+            "items": "Count",
+            "max_items": 50,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "reason": {
+            "type": "enum",
+            "values": [
+              "none",
+              "off",
+              "policy_not_implemented",
+              "missing_state",
+              "missing_feature",
+              "stale_revision",
+              "foreign_scope",
+              "source_unavailable",
+              "nonfinite_score",
+              "work_limit",
+              "timeout",
+              "input_conflict",
+              "invalid_policy_result",
+              "internal_error"
+            ],
+            "nullable": false
+          },
+          "local_steps": {
+            "type": "Count",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "selected requires reasonnone; failed/not_run selected_indicesempty. Allselectedindices in exactsnapshot, unique; ordersemantics selectedprepacking. Native3x/limit unchanged. NaN/Inf raw policyresult rejected beforeconstructing valid finitebits; never serialize as success. No arbitraryfree-formerror text."
+        ]
+      },
+      "ViewFact": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "scope",
+          "material",
+          "reader_binding_sha256",
+          "session_binding_sha256",
+          "view_binding_sha256",
+          "phase",
+          "material_lifecycle",
+          "reader_inclusion",
+          "exclusion_kind",
+          "active_tag_binding_sha256",
+          "supersession_edge_present",
+          "observed_at",
+          "basis"
+        ],
+        "fields": {
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "material": {
+            "type": "MaterialRef",
+            "nullable": false
+          },
+          "reader_binding_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "session_binding_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "view_binding_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "phase": {
+            "type": "enum",
+            "values": [
+              "current_turn",
+              "next_turn",
+              "new_session",
+              "history"
+            ],
+            "nullable": false
+          },
+          "material_lifecycle": {
+            "type": "enum",
+            "values": [
+              "current",
+              "superseded",
+              "deleted",
+              "revoked",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "reader_inclusion": {
+            "type": "enum",
+            "values": [
+              "included",
+              "excluded",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "exclusion_kind": {
+            "type": "enum",
+            "values": [
+              "none",
+              "one_shot_context",
+              "persistent_correction",
+              "persistent_retraction",
+              "scope_denial",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "active_tag_binding_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "supersession_edge_present": {
+            "type": "Bool",
+            "nullable": false
+          },
+          "observed_at": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "basis": {
+            "type": "enum",
+            "values": [
+              "synthetic_fixture",
+              "trusted_native_observation",
+              "not_recorded"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "No productionapprovedviewport is invented. Native observation requires actual boundreader/session/view source; otherwiseunknown/notrecorded. Supersession edge does not imply exclusion fromotheractivetag/reader. one_shot exclusion applies only selected currentturn and cannot mutate persistent lifecycle. Persistentchange requires realcanonical revision/lifecycleproof, notcontextomission. History is separate channel; includedhistory never means freshadmission."
+        ]
+      },
+      "AdvisoryCheck": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "candidate_index",
+          "status",
+          "reason",
+          "view_fact_index",
+          "observed_at"
+        ],
+        "fields": {
+          "candidate_index": {
+            "type": "Count",
+            "nullable": false
+          },
+          "status": {
+            "type": "enum",
+            "values": [
+              "eligible_at_observation",
+              "ineligible_at_observation",
+              "unknown",
+              "not_run"
+            ],
+            "nullable": false
+          },
+          "reason": {
+            "type": "enum",
+            "values": [
+              "none",
+              "revision_changed",
+              "body_changed",
+              "scope_changed",
+              "deleted",
+              "revoked",
+              "source_invalid",
+              "reader_excluded_once",
+              "persistent_excluded",
+              "reader_unknown",
+              "policy_unavailable",
+              "not_observed"
+            ],
+            "nullable": false
+          },
+          "view_fact_index": {
+            "type": "Count",
+            "nullable": true
+          },
+          "observed_at": {
+            "type": "NativeClock",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Diagnostic only, never real final fence/auth. No Tx/Repository/Authorize operation may be requested to certifyshadow-onlycandidate. Unknown reader is unknown, notcurrent. Future actualadoptionrequires separate contract and realfence."
+        ]
+      },
+      "RejectedRef": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "candidate_index",
+          "reason",
+          "basis"
+        ],
+        "fields": {
+          "candidate_index": {
+            "type": "Count",
+            "nullable": false
+          },
+          "reason": {
+            "type": "enum",
+            "values": [
+              "revision_changed",
+              "body_changed",
+              "scope_changed",
+              "deleted",
+              "revoked",
+              "source_invalid",
+              "run_changed",
+              "native_conflict_unknown"
+            ],
+            "nullable": false
+          },
+          "basis": {
+            "type": "enum",
+            "values": [
+              "synthetic_fixture",
+              "trusted_native_guard"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": []
+      },
+      "NativeOutcome": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "snapshot_revision",
+          "status",
+          "pre_final_indices",
+          "baseline_returned_refs",
+          "history_returned_refs",
+          "native_error",
+          "final_fence_status",
+          "final_rejected_refs",
+          "context_receipt_sha256",
+          "source"
+        ],
+        "fields": {
+          "snapshot_revision": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "status": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "returned",
+              "failed"
+            ],
+            "nullable": false
+          },
+          "pre_final_indices": {
+            "type": "array",
+            "items": "Count",
+            "max_items": 50,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "baseline_returned_refs": {
+            "type": "array",
+            "items": "MaterialRef",
+            "max_items": 50,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "history_returned_refs": {
+            "type": "array",
+            "items": "MaterialRef",
+            "max_items": 50,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "native_error": {
+            "type": "enum",
+            "values": [
+              "none",
+              "conflict",
+              "denied",
+              "unavailable",
+              "invalid",
+              "not_found",
+              "unmapped"
+            ],
+            "nullable": false
+          },
+          "final_fence_status": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "committed",
+              "failed"
+            ],
+            "nullable": false
+          },
+          "final_rejected_refs": {
+            "type": "array",
+            "items": "RejectedRef",
+            "max_items": 50,
+            "nullable": true
+          },
+          "context_receipt_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "source": {
+            "type": "enum",
+            "values": [
+              "synthetic_fixture",
+              "actual_native_search"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Actualreturned refs must come fromone originalSearch result, notshadow. nativefailed⇒baseline_returned/historyreturnedempty, finalfencenotcommitted, native_errornon-none. RealErrConflict may notidentifyexactref; final_rejected_refsnull/notrecorded is honest, neverinventoffender. Knownempty [] differsunknownnull. Receipt SHA fromactualrawreceipt/typedimmutableprojection only when available; do not claimnormalrunContextID stable across separateSearch calls. No transactionfailure fallback may bypass ErrConflict."
+        ]
+      },
+      "SideEffects": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "search_calls",
+          "usage_receipts",
+          "search_audits",
+          "outcome_events",
+          "dynamics_state_sha256",
+          "reference_fence_delta",
+          "canonical_mutation_sha256",
+          "fence_trace"
+        ],
+        "fields": {
+          "search_calls": {
+            "type": "Count",
+            "nullable": true
+          },
+          "usage_receipts": {
+            "type": "Count",
+            "nullable": true
+          },
+          "search_audits": {
+            "type": "Count",
+            "nullable": true
+          },
+          "outcome_events": {
+            "type": "Count",
+            "nullable": true
+          },
+          "dynamics_state_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "reference_fence_delta": {
+            "type": "Count",
+            "nullable": true
+          },
+          "canonical_mutation_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "fence_trace": {
+            "type": "FenceTrace",
+            "nullable": true
+          }
+        },
+        "semantic_rules": [
+          "Unobservedcountsnull; known0requiresactualcompletecounter. reference_fence_delta derivedsumforreportingonly, neverequality/no-calloracle. Exactperrecord/sourcefencewitnessrequired."
+        ]
+      },
+      "SideEffectEvidence": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "off",
+          "shadow",
+          "basis",
+          "equivalence"
+        ],
+        "fields": {
+          "off": {
+            "type": "SideEffects",
+            "nullable": true
+          },
+          "shadow": {
+            "type": "SideEffects",
+            "nullable": true
+          },
+          "basis": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "synthetic_model",
+              "isolated_fake_service",
+              "isolated_postgres"
+            ],
+            "nullable": false
+          },
+          "equivalence": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "equal",
+              "different",
+              "unknown"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Equal requiresbothSideEffects completecounters/state+exactwatchedFenceTrace. Differentperkeydelta/callset=>different evenaggregatesums equal; missingkey/sourceCAS/coverage=>unknown.",
+          "IsolatedsamefixturemodeexecutionsoneSearcheach; no extraSearch/usage/outcome/state/fence fromshadow. Existingbaselinewritespreserved.",
+          "Suppliedtypedwitnessrelation only; syntheticbasis cannotbeupgradedisolated_service/PG/auth byenum. ActualBtest/physicaldata/reviewmandatory."
+        ]
+      },
+      "CostEvidence": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "basis",
+          "baseline_duration_ns",
+          "shadow_duration_ns",
+          "shadow_local_steps",
+          "provider_calls",
+          "real_vendor_usd",
+          "invoice_status"
+        ],
+        "fields": {
+          "basis": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "synthetic_counter",
+              "observed_local_monotonic"
+            ],
+            "nullable": false
+          },
+          "baseline_duration_ns": {
+            "type": "Count",
+            "nullable": true
+          },
+          "shadow_duration_ns": {
+            "type": "Count",
+            "nullable": true
+          },
+          "shadow_local_steps": {
+            "type": "Count",
+            "nullable": true
+          },
+          "provider_calls": {
+            "type": "Count",
+            "nullable": true
+          },
+          "real_vendor_usd": {
+            "type": "null",
+            "nullable": true
+          },
+          "invoice_status": {
+            "type": "enum",
+            "values": [
+              "not_run"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Duration known only from monotonicstart/time.Since, never NativeClock subtraction crossdomain. Purelocal shadowmethod no provider path; actual0calls may be recorded onlywithobservedinstrumentation, notdeclared0. No currencypricing inference. Configuredcost/observedcost distinct, not researchperformanceevidence."
+        ]
+      },
+      "LossAccounting": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "lane_entries_seen",
+          "unique_verified_candidates",
+          "baseline_rrf_window_count",
+          "baseline_prepack_count",
+          "baseline_postpack_count",
+          "shadow_selected_count",
+          "preclean_filter_losses",
+          "final_limit_losses",
+          "packing_losses",
+          "baseline_stages",
+          "shadow_stages",
+          "metrics"
+        ],
+        "fields": {
+          "lane_entries_seen": {
+            "type": "Count",
+            "nullable": true
+          },
+          "unique_verified_candidates": {
+            "type": "Count",
+            "nullable": true
+          },
+          "baseline_rrf_window_count": {
+            "type": "Count",
+            "nullable": true
+          },
+          "baseline_prepack_count": {
+            "type": "Count",
+            "nullable": true
+          },
+          "baseline_postpack_count": {
+            "type": "Count",
+            "nullable": true
+          },
+          "shadow_selected_count": {
+            "type": "Count",
+            "nullable": true
+          },
+          "preclean_filter_losses": {
+            "type": "Count",
+            "nullable": true
+          },
+          "final_limit_losses": {
+            "type": "Count",
+            "nullable": true
+          },
+          "packing_losses": {
+            "type": "Count",
+            "nullable": true
+          },
+          "baseline_stages": {
+            "type": "SelectionStages",
+            "nullable": false
+          },
+          "shadow_stages": {
+            "type": "SelectionStages",
+            "nullable": false
+          },
+          "metrics": {
+            "type": "array",
+            "items": "LossMetric",
+            "max_items": 5,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Everyunobservedcountnullable inclbaselineRRF/prepack/postpack; known0requiresknownemptyset. Laneentriesnotindependentcandidates.",
+          "C=uniqueverifiedcleanedinput; R=nativeRRF3xwindow; S_B=recency/outcomeafterlimit; C_B/H_B=char-emittedcurrent/history; P_B=tokenpackedcurrent; S_S=shadowprepackselected.",
+          "rrfwindowloss=C-R denominator|C|; finallimitloss=R-S_B denominator|R|; charloss=S_B-(C_B unionH_B) denominator|S_B|; tokenloss=C_B-P_B denominator|C_B|; shadowselectionloss=C-S_S denominator|C|.",
+          "Failed/unknownshadowselection=>metricnull/notrun, not100percentloss. Earlynativefailure preservesknownpriorstagebutlaternull. SQLoversampling/precleanfilterloss unobserved=null, notinferredfromC.",
+          "metrics contains exactly5 entries with stage order baseline_rrf_window,baseline_final_limit,baseline_char_packing,baseline_token_packing,shadow_policy_selection. Every stage appears exactly once; missing,duplicate,extra or reordered stage rejects invalid_value at $.metrics.",
+          "Even not_run/not_recorded/not_applicable stages retain their record in that fixed position with already-defined null observations/counts. Do not omit them or invent0/100percent loss. Existing exact set algebra, subset checks and zero-denominator undefined rule remain required."
+        ]
+      },
+      "ShadowLedger": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "protocol",
+          "request_id",
+          "mode",
+          "snapshot_revision",
+          "baseline_namespace",
+          "offline_reference_namespace",
+          "native",
+          "shadow",
+          "advisory_checks",
+          "view_facts",
+          "fallback_reason",
+          "losses",
+          "side_effects",
+          "cost",
+          "authority",
+          "verification_scope",
+          "implementation_status",
+          "ledger_sha256",
+          "paired_semantics"
+        ],
+        "fields": {
+          "protocol": {
+            "type": "enum",
+            "values": [
+              "sys-shadow-ledger-v1"
+            ],
+            "nullable": false
+          },
+          "request_id": {
+            "type": "OpaqueID",
+            "nullable": false
+          },
+          "mode": {
+            "type": "enum",
+            "values": [
+              "off",
+              "shadow"
+            ],
+            "nullable": false
+          },
+          "snapshot_revision": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "baseline_namespace": {
+            "type": "enum",
+            "values": [
+              "arkism_native_recall_current"
+            ],
+            "nullable": false
+          },
+          "offline_reference_namespace": {
+            "type": "enum",
+            "values": [
+              "not_used",
+              "arkism_offline_b0_v1"
+            ],
+            "nullable": false
+          },
+          "native": {
+            "type": "NativeOutcome",
+            "nullable": false
+          },
+          "shadow": {
+            "type": "ShadowDecision",
+            "nullable": false
+          },
+          "advisory_checks": {
+            "type": "array",
+            "items": "AdvisoryCheck",
+            "max_items": 200,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "view_facts": {
+            "type": "array",
+            "items": "ViewFact",
+            "max_items": 800,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "fallback_reason": {
+            "type": "enum",
+            "values": [
+              "none",
+              "off",
+              "policy_not_implemented",
+              "missing_state",
+              "missing_feature",
+              "stale_revision",
+              "foreign_scope",
+              "source_unavailable",
+              "nonfinite_score",
+              "work_limit",
+              "timeout",
+              "input_conflict",
+              "invalid_policy_result",
+              "internal_error"
+            ],
+            "nullable": false
+          },
+          "losses": {
+            "type": "LossAccounting",
+            "nullable": false
+          },
+          "side_effects": {
+            "type": "SideEffectEvidence",
+            "nullable": false
+          },
+          "cost": {
+            "type": "CostEvidence",
+            "nullable": false
+          },
+          "authority": {
+            "type": "enum",
+            "values": [
+              "data_only_untrusted"
+            ],
+            "nullable": false
+          },
+          "verification_scope": {
+            "type": "enum",
+            "values": [
+              "specification",
+              "synthetic_model",
+              "isolated_fake_service",
+              "isolated_postgres"
+            ],
+            "nullable": false
+          },
+          "implementation_status": {
+            "type": "enum",
+            "values": [
+              "specification_only",
+              "synthetic_only",
+              "isolated_integration"
+            ],
+            "nullable": false
+          },
+          "ledger_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "paired_semantics": {
+            "type": "PairedSemanticEvidence",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Ledgerhash excludesitself only. Selection failure does notmakebaselinefail; baselinefencefailure neverbecomessuccess. Shadowselected indicesreferssnapshot; no claimactuallyreturned. Global authorizationrevocationatomicityunsupported. No raw query/body/path/providerpayload/errorprinted. Scopelevels come from trustedrunner provenance notcaller boolean.",
+          "Result/receiptequivalence fromPairedSemanticEvidence, sideeffectequivalencefromSideEffectEvidence independently. Missingcoverage=>unknown, notglobalpass."
+        ]
+      },
+      "SYSContractError": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "code",
+          "path"
+        ],
+        "fields": {
+          "code": {
+            "type": "enum",
+            "values": [
+              "invalid_json",
+              "invalid_unicode",
+              "duplicate_key",
+              "unknown_field",
+              "missing_field",
+              "invalid_type",
+              "invalid_value",
+              "input_limit",
+              "unsupported_version",
+              "unsupported_type",
+              "hash_mismatch",
+              "scope_mismatch",
+              "snapshot_binding",
+              "input_conflict",
+              "unknown_reader",
+              "incomplete_evidence",
+              "invalid_selection",
+              "unsupported_policy",
+              "not_implemented",
+              "invalid_stage_binding",
+              "incomplete_fence_witness",
+              "invalid_pair_binding"
+            ],
+            "nullable": false
+          },
+          "path": {
+            "type": "KnownSchemaPath",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Knownschemafieldnames and[*] only, never rawunknownkey/id/body/error/path."
+        ]
+      },
+      "ScopedRecordID": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "scope",
+          "collection",
+          "id"
+        ],
+        "fields": {
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "collection": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "id": {
+            "type": "NativeID",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Exact native physical record identity. No ID-only/time/modelheuristic."
+        ]
+      },
+      "FenceKey": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "record",
+          "revision"
+        ],
+        "fields": {
+          "record": {
+            "type": "ScopedRecordID",
+            "nullable": false
+          },
+          "revision": {
+            "type": "PositiveInt64",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "ObservedactualCAS only; FenceSource never proves sourceCAS1."
+        ]
+      },
+      "SourceBinding": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "record",
+          "revision",
+          "guard_sha256",
+          "coverage"
+        ],
+        "fields": {
+          "record": {
+            "type": "ScopedRecordID",
+            "nullable": false
+          },
+          "revision": {
+            "type": "PositiveInt64",
+            "nullable": true
+          },
+          "guard_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "coverage": {
+            "type": "enum",
+            "values": [
+              "exact_observed",
+              "revision_not_recorded",
+              "not_recorded"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Collection=sources. SourceRef mayprovideIDwithoutCAS; unknownrevision staysnull. No newnativeGet/fence tofillresearchdata."
+        ]
+      },
+      "FenceCounterSample": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "key",
+          "record",
+          "role",
+          "counter_before",
+          "counter_after",
+          "transaction_status",
+          "coverage"
+        ],
+        "fields": {
+          "key": {
+            "type": "FenceKey",
+            "nullable": true
+          },
+          "record": {
+            "type": "ScopedRecordID",
+            "nullable": false
+          },
+          "role": {
+            "type": "enum",
+            "values": [
+              "returned_record",
+              "dependent_source",
+              "anchor",
+              "run",
+              "shadow_only_record",
+              "shadow_only_source"
+            ],
+            "nullable": false
+          },
+          "counter_before": {
+            "type": "Count",
+            "nullable": true
+          },
+          "counter_after": {
+            "type": "Count",
+            "nullable": true
+          },
+          "transaction_status": {
+            "type": "enum",
+            "values": [
+              "committed",
+              "rolled_back",
+              "not_run",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "coverage": {
+            "type": "enum",
+            "values": [
+              "exact",
+              "revision_changed",
+              "not_recorded"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Exact requireskey.record=record andknownbefore/after, after>=before. Missingkey/counter or changedrevision=>nonexact, no subtractionacrossversions. Sharedsourcephysicalcountercountedonce, notperparent."
+        ]
+      },
+      "FenceCall": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "ordinal",
+          "record",
+          "key",
+          "mode",
+          "origin",
+          "outcome"
+        ],
+        "fields": {
+          "ordinal": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "record": {
+            "type": "ScopedRecordID",
+            "nullable": false
+          },
+          "key": {
+            "type": "FenceKey",
+            "nullable": true
+          },
+          "mode": {
+            "type": "enum",
+            "values": [
+              "search",
+              "source",
+              "relation"
+            ],
+            "nullable": false
+          },
+          "origin": {
+            "type": "enum",
+            "values": [
+              "native_baseline",
+              "shadow",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "outcome": {
+            "type": "enum",
+            "values": [
+              "succeeded",
+              "failed",
+              "unknown"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Actualinterceptedoriginalcalls in contiguousorder; unknownCAS keynull. Rolledbackattempt stillcall, evencommitteddelta0. No fabricatednativecall."
+        ]
+      },
+      "FenceTrace": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "coverage",
+          "watched_records",
+          "counter_samples",
+          "calls",
+          "missing_records",
+          "shadow_only_records"
+        ],
+        "fields": {
+          "coverage": {
+            "type": "enum",
+            "values": [
+              "complete_watched_set",
+              "partial",
+              "not_run",
+              "not_recorded"
+            ],
+            "nullable": false
+          },
+          "watched_records": {
+            "type": "array",
+            "items": "ScopedRecordID",
+            "max_items": 1000,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "counter_samples": {
+            "type": "array",
+            "items": "FenceCounterSample",
+            "max_items": 2000,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "calls": {
+            "type": "array",
+            "items": "FenceCall",
+            "max_items": 4000,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "missing_records": {
+            "type": "array",
+            "items": "ScopedRecordID",
+            "max_items": 1000,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "shadow_only_records": {
+            "type": "array",
+            "items": "ScopedRecordID",
+            "max_items": 1000,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Watchedset explicitly enumerates baselineoutputrecord+dependentSource/anchor/run andshadowonlyrecord+sources; unknownsourceCAS remainsmissing/nonexact. Complete requiresallwatchedcoverage/allactualcallsintercepted, no calloutsidewatchedset/missingrecord. No globalDBcompletenessclaim.",
+          "Compareexactperkeydeltas+originalcalltraces. Shadowonlynocall requirescompletecalltrace andno correspondingcall; counterdelta0aloneinsufficient. Anyoriginshadowfencecontradictsnonewsideeffects.",
+          "Independenttestrunner pre/postreads ororiginalcall instrumentation, never secondphysicalfence formeasurement. Witnesses notauthenticateglobalpermission."
+        ]
+      },
+      "ObservedIndexSet": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "state",
+          "indices"
+        ],
+        "fields": {
+          "state": {
+            "type": "enum",
+            "values": [
+              "known",
+              "not_run",
+              "not_recorded",
+              "not_applicable"
+            ],
+            "nullable": false
+          },
+          "indices": {
+            "type": "array",
+            "items": "Count",
+            "max_items": 200,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Known iffnonnullascendinguniqueindices including[]knownempty; allotherstatesnull. Setorder notactualrankorder."
+        ]
+      },
+      "SelectionStages": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "branch",
+          "verified_input",
+          "rrf_window",
+          "selected_prepack",
+          "char_current",
+          "char_history",
+          "token_current"
+        ],
+        "fields": {
+          "branch": {
+            "type": "enum",
+            "values": [
+              "baseline",
+              "shadow"
+            ],
+            "nullable": false
+          },
+          "verified_input": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "rrf_window": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "selected_prepack": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "char_current": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "char_history": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "token_current": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Bothbranches exactlysameuniqueverifiedC. R subsetC; S_B subsetR; charcurrent/history disjointsubsetsS_B; tokenP_B subsetcharcurrent. S_S subsetC.",
+          "ShadowRRF/packing not_applicable unlessregisteredpolicyhasactualstage. Missingstate/unsupportedcontext=>failed/not_run, never secretlyshrinkC. Historynotfresh."
+        ]
+      },
+      "LossMetric": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "stage",
+          "coverage",
+          "input_indices",
+          "output_indices",
+          "lost_indices",
+          "numerator",
+          "denominator"
+        ],
+        "fields": {
+          "stage": {
+            "type": "enum",
+            "values": [
+              "baseline_rrf_window",
+              "baseline_final_limit",
+              "baseline_char_packing",
+              "baseline_token_packing",
+              "shadow_policy_selection"
+            ],
+            "nullable": false
+          },
+          "coverage": {
+            "type": "enum",
+            "values": [
+              "known",
+              "undefined_empty_denominator",
+              "not_run",
+              "not_recorded",
+              "not_applicable"
+            ],
+            "nullable": false
+          },
+          "input_indices": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "output_indices": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "lost_indices": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "numerator": {
+            "type": "Count",
+            "nullable": true
+          },
+          "denominator": {
+            "type": "Count",
+            "nullable": true
+          }
+        },
+        "semantic_rules": [
+          "Known outputsubsetinput,lost=input-output,n=|lost|,d=|input|. Rateexactn/d; d0=>undefined_empty_denominator not0percent. Unknownstages=>nullcounts/lost, notalllost.",
+          "Setbindings matchSelectionStages. Disjointlossalgebra onlysamebranch, no baseline+shadowloss summation."
+        ]
+      },
+      "VectorMatchProjection": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "space",
+          "distance_bits",
+          "max_distance_bits"
+        ],
+        "fields": {
+          "space": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "distance_bits": {
+            "type": "FiniteF64Bits",
+            "nullable": false
+          },
+          "max_distance_bits": {
+            "type": "FiniteF64Bits",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Exactnativequery-specificVectorMatchmetadata, no crossspacecalibration/trusttruth."
+        ]
+      },
+      "ReturnItem": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "scope",
+          "material",
+          "position",
+          "score_bits",
+          "lanes",
+          "reasons",
+          "emitted_text_sha256",
+          "emitted_summary_sha256",
+          "emitted_native_guard_sha256",
+          "vector_match",
+          "history_expires_at"
+        ],
+        "fields": {
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "material": {
+            "type": "MaterialRef",
+            "nullable": false
+          },
+          "position": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "score_bits": {
+            "type": "FiniteF64Bits",
+            "nullable": false
+          },
+          "lanes": {
+            "type": "array",
+            "items": "NativeLabel",
+            "max_items": 4,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "reasons": {
+            "type": "array",
+            "items": "NativeLabel",
+            "max_items": 32,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          },
+          "emitted_text_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "emitted_summary_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "emitted_native_guard_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "vector_match": {
+            "type": "VectorMatchProjection",
+            "nullable": true
+          },
+          "history_expires_at": {
+            "type": "NativeClock",
+            "nullable": true
+          }
+        },
+        "semantic_rules": [
+          "MaterialRef containsprecliphashes; emittedhashes exactpostclip/tokenoutput. Position/Scorebits/lanes/reasons preserveactualorderedresponse. NativeguardonemittedHit commitsremainingmetadata excludingexplicitlycomparedscore/lanes/reasons/vector.",
+          "GuardusestheexistingsearchHitHash, notinventedcontenthash. Historyexpiryseparate; no rawbody/queryserialized."
+        ]
+      },
+      "UsageItemProjection": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "memory",
+          "rank",
+          "score_bits",
+          "lanes"
+        ],
+        "fields": {
+          "memory": {
+            "type": "CanonicalRecordRef",
+            "nullable": false
+          },
+          "rank": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "score_bits": {
+            "type": "FiniteF64Bits",
+            "nullable": true
+          },
+          "lanes": {
+            "type": "array",
+            "items": "NativeLabel",
+            "max_items": 4,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "ActualMemoryUse orderedvalues; pinnedscore absent=>nullonlyifactuallyabsent, notinferredzero."
+        ]
+      },
+      "UsageReceiptProjection": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "scope",
+          "requested_by",
+          "kind",
+          "status",
+          "revision",
+          "run_ref",
+          "purpose",
+          "project_key_sha256",
+          "client_sha256",
+          "session_sha256",
+          "items"
+        ],
+        "fields": {
+          "scope": {
+            "type": "Scope",
+            "nullable": false
+          },
+          "requested_by": {
+            "type": "NativeID",
+            "nullable": false
+          },
+          "kind": {
+            "type": "enum",
+            "values": [
+              "context_usage"
+            ],
+            "nullable": false
+          },
+          "status": {
+            "type": "enum",
+            "values": [
+              "done"
+            ],
+            "nullable": false
+          },
+          "revision": {
+            "type": "PositiveInt64",
+            "nullable": false
+          },
+          "run_ref": {
+            "type": "CanonicalRecordRef",
+            "nullable": true
+          },
+          "purpose": {
+            "type": "NativeLabel",
+            "nullable": false
+          },
+          "project_key_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "client_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "session_sha256": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "items": {
+            "type": "array",
+            "items": "UsageItemProjection",
+            "max_items": 100,
+            "nullable": false,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "FixedactualContextUsage/jobprojection excludesonlygeneratedID/CreatedAt/UpdatedAt. Preserveprincipal/scope/status/revision/run/purpose/ordereditems/requestlabelhashes. Emptylabels hashknownemptyUTF8, notnull. Missingreceiptcapture=>wholeprojectionunobserved, neverrebuildreceiptfromresponse.",
+          "100itemcapisfixtureparserproposal, actualpinned+returnedbound must beselectedbeforeB. Oversize=>incompletewitness, nevertruncatebusinessreceipt. Notproofactualuse/success."
+        ]
+      },
+      "NativeSemanticWitness": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "coverage",
+          "snapshot_revision",
+          "native_status",
+          "native_error",
+          "bundle_authority",
+          "degraded",
+          "items",
+          "history",
+          "tokens_used",
+          "token_encoding",
+          "context_data_sha256",
+          "usage_receipts",
+          "normalization_policy"
+        ],
+        "fields": {
+          "coverage": {
+            "type": "enum",
+            "values": [
+              "complete_projection",
+              "partial",
+              "not_run",
+              "not_recorded"
+            ],
+            "nullable": false
+          },
+          "snapshot_revision": {
+            "type": "SHA256",
+            "nullable": false
+          },
+          "native_status": {
+            "type": "enum",
+            "values": [
+              "returned",
+              "failed",
+              "not_run"
+            ],
+            "nullable": false
+          },
+          "native_error": {
+            "type": "enum",
+            "values": [
+              "none",
+              "conflict",
+              "denied",
+              "unavailable",
+              "invalid",
+              "not_found",
+              "unmapped"
+            ],
+            "nullable": false
+          },
+          "items": {
+            "type": "array",
+            "items": "ReturnItem",
+            "max_items": 50,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          },
+          "history": {
+            "type": "array",
+            "items": "ReturnItem",
+            "max_items": 50,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          },
+          "tokens_used": {
+            "type": "Count",
+            "nullable": true
+          },
+          "token_encoding": {
+            "type": "NativeLabel",
+            "nullable": true
+          },
+          "context_data_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "usage_receipts": {
+            "type": "array",
+            "items": "UsageReceiptProjection",
+            "max_items": 16,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          },
+          "normalization_policy": {
+            "type": "enum",
+            "values": [
+              "sys_native_projection_v1"
+            ],
+            "nullable": false
+          },
+          "bundle_authority": {
+            "type": "enum",
+            "values": [
+              "data_only_untrusted",
+              ""
+            ],
+            "nullable": true
+          },
+          "degraded": {
+            "type": "array",
+            "items": "NativeLabel",
+            "max_items": 1024,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          }
+        },
+        "semantic_rules": [
+          "Complete requiresactualtypeditems/history/receiptsnonnull. Knownfailednative mayhave[]items/receipt onlywhenobserved, missingcapturelistsnull. Combineditems+history<=actualfinal_limit; fullrefs/ordercrossbindNativeOutcome.",
+          "Clippedbody/Score/querymetadata/history/token/contextData compared. Matchingprecliprefsinsufficient. No newSearch/receiptcreation; independentrunnercapturesoriginalobjects/writes.",
+          "Known complete returned witness requires bundle_authority=data_only_untrusted and nonnull degraded. Known complete failed zero ContextBundle may record empty authority and knownempty degraded only when that zero return was actually observed; unobserved values remain null. native_status returned cannot use failed zero semantics.",
+          "A partial/not_run/not_recorded witness never becomes complete by defaulting authority or degradation. Unknown arbitrary authority rejects invalid_value at known schema path; it never confers permission.",
+          "degraded entries are exactly memory_vector_disabled,memory_vector_unavailable,external_content_filtered,context_content_filtered. Preserve order and duplicates. No sorting/deduplication of actual degradation. Unknown values reject invalid_value without raw string disclosure.",
+          "For this explicit native JSON-semantic projection, observed nil and empty degraded both encode knownempty[] because json omitempty omits both; unknown/unobserved is null. This does not permit normalizing absent observation to empty.",
+          "1024 is an engineering witness parser bound only. Oversized/unrecognized capture cannot change baseline or fabricate completeness/equality; B must record diagnostic failure/unknown according to existing error handling. No product input limits increase.",
+          "Both paired complete semantic hashes/equality include bundle_authority and ordered degraded alongside all existing projection fields. ContextID remains only excluded response field; body/context text only hashes, no raw content."
+        ]
+      },
+      "PairedSemanticEvidence": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "basis",
+          "fixture_initial_state_sha256",
+          "normalized_search_input_sha256",
+          "native_clock",
+          "off",
+          "shadow",
+          "result_equivalence",
+          "receipt_equivalence"
+        ],
+        "fields": {
+          "basis": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "synthetic_model",
+              "isolated_fake_service",
+              "isolated_postgres"
+            ],
+            "nullable": false
+          },
+          "fixture_initial_state_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "normalized_search_input_sha256": {
+            "type": "SHA256",
+            "nullable": true
+          },
+          "native_clock": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "off": {
+            "type": "NativeSemanticWitness",
+            "nullable": true
+          },
+          "shadow": {
+            "type": "NativeSemanticWitness",
+            "nullable": true
+          },
+          "result_equivalence": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "equal",
+              "different",
+              "unknown"
+            ],
+            "nullable": false
+          },
+          "receipt_equivalence": {
+            "type": "enum",
+            "values": [
+              "not_run",
+              "equal",
+              "different",
+              "unknown"
+            ],
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "Result_equal requiresbothcompleteactualfixedprojections,samecandidateinput/sameinitialisolatedphysicalworld/samenormalizedSearchInput/nativeclock/config, exactorderedoutputs. Missingbinding/clock=>unknown.",
+          "Receipt_equal requiresbothcapturedorderedlogicalreceiptlists equalunderfixednormalization. Differentprincipal/scope/ref/CAS/rank/score/lanes/run/labelhashcannotignored. Result/receipt/sideeffectequalclaimsindependent.",
+          "Equivalence isderivedcheckerrelationshipoverwitnesses, nottrustedcallerflag. OpaqueSHAwithouttypedvaluesinsufficient. Synthetic cannotbeupgradedisolated-service/auth byenum; actualBdirectGo/physicalevidence+reviewmandatory."
+        ]
+      },
+      "RankingCapture": {
+        "kind": "closed_object",
+        "additional_fields": false,
+        "all_fields_required": true,
+        "field_order": [
+          "state",
+          "rrf_window",
+          "native_clock",
+          "lookup_order_indices",
+          "not_queried_indices"
+        ],
+        "fields": {
+          "state": {
+            "type": "enum",
+            "values": [
+              "complete_original_path",
+              "partial_original_path",
+              "not_run"
+            ],
+            "nullable": false
+          },
+          "rrf_window": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          },
+          "native_clock": {
+            "type": "NativeClock",
+            "nullable": false
+          },
+          "lookup_order_indices": {
+            "type": "array",
+            "items": "Count",
+            "max_items": 200,
+            "nullable": true,
+            "order": "wire_order_preserved"
+          },
+          "not_queried_indices": {
+            "type": "ObservedIndexSet",
+            "nullable": false
+          }
+        },
+        "semantic_rules": [
+          "ExactGoorder: FuseScored(lists,Limit*3), evaluate time.Now(), outcomeWeights onlyoveractualR, decayByRecency withsamecapturedNow/map, limit. Timebeforelookup, notafter. Nonmemory/historynativeRRFnorecency/weightreads.",
+          "Completeoriginalpath requiresobservedwindow/order/clock/readcoverage. OutsideR=C-R knownnotqueried; disabledactualqueries0withoutmovingNow. No extraGet/Search/recompute/clock."
+        ]
+      }
+    },
+    "primitives": {
+      "NativeID": "UseexistingexactnativeGoID/scopevalidations, UTF8max256bytes; no personaltext masqueradingID. No broadeningnativepolicy.",
+      "NativeOptionalID": "existingnativeScope empty/ID meaningpreserved",
+      "NativeLabel": "boundedUTF8max256bytes currentnativekind/status; fixedfield notfreeformreason",
+      "OpaqueID": "^[a-z][a-z0-9_-]{0,63}$ syntheticrequestidentifier or actualtrustedrequestIDmappedonlyifvalid; no task/querystrings",
+      "SHA256": "64lowerhex",
+      "Bool": "JSONboolonly",
+      "Count": "JSONlexicalinteger0..MaxInt64,bool/float/exponentforbidden",
+      "PositiveInt64": "1..MaxInt64",
+      "Int64": "MinInt64..MaxInt64",
+      "FiniteF64Bits": "16lowerhexIEEE754binary64finite, -0normalizedallzero; noNaN/Inf",
+      "FiniteNonnegativeF64Bits": "FiniteF64Bits plusdecoded>=0",
+      "KnownSchemaPath": "compiledSYSmodel fieldpath beginning$, namedfields and[*] only, max512bytes; not arbitraryregex-onlytrustedpath"
+    },
+    "collections": "Allnonnullablearraysmust bepresentnon-null; []knownempty, nullablearraynullunknown. Unknown/missing/duplicatekey/typeerrorreject. Unicodevalidscalaronly; maxdocument4MiB/maxdepth32 proposedengineeringparsercaps, not productAPIlimits.",
+    "field_presence": "Everydeclaredfieldrequiredincludingnullable; no extra keys.",
+    "projection_names": [
+      "SnapshotHashProjection = CandidateSnapshot excluding snapshot_revision",
+      "LedgerHashProjection = ShadowLedger excluding ledger_sha256",
+      "CandidateSetHashProjection=scope,candidates,lanes,budget; no clocks/weights/selfhashes"
+    ],
+    "external_contract_mutations": "none; v1/DYN/privateacceptedrecordregistriesnotextended"
+  },
+  "canonical_hash": {
+    "grammar": "Reusetheacceptednative/DYNtypedgrammar specification exactly: n,t/f,i<decimal>;,d<16hex>;,s<bytecount>:UTF8,a<count>[...],o<count>{sortedASCIIfieldname+value...}. OnlycompiledSYSclosedtypes; no arbitraryschema/mappublicAPI. Floatwirebits decodeaslogicalfloat64 fortypedencoding, nots16string.",
+    "domain": "SHA256(UTF8(sys-shadow-contract-v1)||NUL||UTF8(ProjectionName)||NUL||typedbytes), noLF",
+    "raw_artifact": "SHA256(exactfilebytes) distinctfromtypedsemanticsha. OriginalnativeguardSHA usesunchangedsearchHitHash algorithm, nevernewdomain.",
+    "self_cycles": "snapshotselfhash excludesitself, ledgerexcludesitself butincludesalreadycomputedsnapshotsha. DecisionreferencesSnapshot; SnapshotneverreferencesDecision/ledger. Weight signal refs and source hashes alreadyexisting values, no backreference.",
+    "clock_binding": "No globalepochexists. snapshot_revisioniscontenthash, NativeOutcome.MaterialRef.revisionisactualcanonicalCAS.",
+    "limits": "No new encoder may register SYSnames in immutablev1/DYNcompiledregistry. Ownstaticclosedencoder afterformaldispatch only.",
+    "accepted_primitive_reuse": {
+      "path": "evaluation/memory-harness-v1/contract_io.py",
+      "sha256": "d575bf82f5d1088883fddf5191e97a60a2260cc46a37051af9a89cdd5b7aa74e",
+      "string": "_c14n_string(value)",
+      "array": "_c14n_array(encoded_items)",
+      "float": "_c14n_field(fixed{type:float64},alreadyvalidatedfinitevalue)",
+      "int_bool": "_c14n_field(fixedprimitiveSpec,validatedvalue)",
+      "SYS_objects": "OwnclosedstaticSYSregistry/newdomain. No change/registration incontract_io._OBJECTS/immutableDTO/source.",
+      "coupling": "Privatehelperisexplicitpinnedimplementationdependency, notstablepublicAPI/auth. Futurechange requiresreview; nocallerconfigurableloader."
+    }
+  },
+  "pure_functions_proposed": [
+    {
+      "name": "validate_snapshot",
+      "inputs": "CandidateSnapshot",
+      "output": "none or fixed SYSContractError(code,path)",
+      "effects": "none; no nativeRepo/DB/network/clock calls; currentfactsareinputdata"
+    },
+    {
+      "name": "compare_shadow",
+      "inputs": "ShadowRequest,ShadowDecision,NativeOutcome,ViewFact[],AdvisoryCheck[],LossAccounting,SideEffectEvidence,CostEvidence; PairedSemanticEvidence; FenceTrace andSelectionStages requiredforcorrespondingequalityclaims",
+      "output": "ShadowLedger",
+      "effects": "puretypedmetadatajoin/invariantchecks only; doesnotexecuteSearch or policyranker; no successstub when policyimplementationmissing"
+    },
+    {
+      "name": "canonical_bytes / semantic_sha256",
+      "inputs": "onefixedSYSrecord/projectionconcretevalue,typeName",
+      "output": "typedbytes / typedSHA",
+      "effects": "none; rawartifactSHAseparate"
+    },
+    {
+      "name": "futureOwnedSnapshotFromCleanedLanes",
+      "owner": "INTEGRATIONafterSYS01.spec",
+      "inputs": "Begin:actualcleanedlanes+normalizedInput; Finish:originalRRFwindow/Nowargument/weightreadcapture inexactnativeorder",
+      "output": "CandidateSetHashProjection thenfinishedCandidateSnapshot; no futurefullSHApretendedbaselineinput",
+      "effects": "No shadowSearch/usage/auth/state/fencecall. Bodyhashingephemeral; neverbodylogging. Existingbaselineexecutionanditsownfencesnotreplaced."
+    },
+    {
+      "name": "futureRunRegisteredShadow",
+      "owner": "SYS01integrationafterDYN05.p1",
+      "inputs": "context.Context,ShadowRequest + actualregisteredDYNpureRankPolicyreadonlyStateViews/Features",
+      "output": "ShadowDecision+localcomputeevidence",
+      "effects": "No arbitrarycallable, no Service/Repo/token/Db/Writercapability. Synchronousboundedcompiledalgorithm, explicitworklimit; cooperativecontextcancellationonly, no guaranteeagainsthostileinfinitecallback."
+    }
+  ],
+  "fixed_error_codes": [
+    "invalid_json",
+    "invalid_unicode",
+    "duplicate_key",
+    "unknown_field",
+    "missing_field",
+    "invalid_type",
+    "invalid_value",
+    "input_limit",
+    "unsupported_version",
+    "unsupported_type",
+    "hash_mismatch",
+    "scope_mismatch",
+    "snapshot_binding",
+    "input_conflict",
+    "unknown_reader",
+    "incomplete_evidence",
+    "invalid_selection",
+    "unsupported_policy",
+    "not_implemented",
+    "invalid_stage_binding",
+    "incomplete_fence_witness",
+    "invalid_pair_binding"
+  ],
+  "error_precedence": "unsupported_type→documentbytes/JSONUnicode→shapeunknown/missing→lexicaltypes/ranges→localsemantic/hash→crossbindings. Errorsfixedknownschemapathwildcardsnotunknownkey/body. Operationalshadowfailureisfixeddecisionstatusreason, notexceptionthatmutatesbaseline.",
+  "authority_and_fence": {
+    "existing": "searchWithActor initialsearchauth+perhitcontextauth/transfer/sameactor, then unchangednativeTx source/ref/runfences andreceiptcommit. No extraatomicAuthpolicyepochclaim.",
+    "returned_path": "Nativebaselineexactlyonce plusexistingpacking/finalTx; errorpathsreturnnobundleascurrentbehavior.",
+    "shadow_only": "No physicalfence/sourcefence/usage/outcome/statewrites. Advisoryeligibilityonly; actualshadowadoptionunsupportedhere.",
+    "callback_failure": "State/deliveryfailurecannotchangeactualuserbaselinebusinessoutcome. Workoverheadrecorded; no arbitrarysinkI/O/hangisolationpromise. Futurestorage/sinkcapabilityrequiresseparateownerreview.",
+    "unsupported": "TokenpolicyrevocationandnativeTxatomicpublication, actualapprovedviewserviceepoch, actualtrusttruthverification, previousbodyerasureproof, unregisteredDYNexecutor"
+  },
+  "mode_semantics": {
+    "off": "Noshadowcomputation/diagnosticpersist; Nativebaselineunchanged. Testfixturecancollectoffcountersviaindependentrunner, notproductobserver.",
+    "shadow": "Onecleanedinputcopied; baselinepathunchanged; shadowonlypurecomputeanddata-onlyledger. Dynamicpolicyfailuresfallbackmeaningactualbaselinecontinued, neverSearchreinvoked.",
+    "active": "Notdefined/supported. SYS05orotherexplicitintegrationowner must separatelyselect."
+  },
+  "accepted_dependencies": {
+    "baseline_contract_sha256": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+    "dynamics_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+    "current_dynamics_validator_sha256": "cdaee3dcc97876317dcab40bb30817061c1fe6c25934f1c459ec047347042f90",
+    "transport_followup_source_commit": "cf4f73fe27708ffe28700b30b5c9c32ef25ac96b"
+  },
+  "implementation_limits": [
+    "No product Search/DB/API/model/network call in A. Do not infer B from synthetic equality.",
+    "Same native baseline RRF window, clock evaluation, outcome-weight reads, recency, packing and final transaction; no second Search or shadow-only physical fence write.",
+    "Pure helpers consume fixed typed contract only; no caller-provided schema, auth authority or generic Service/Repository/write capability.",
+    "Preserve immutable v1/DYN registries; reuse existing contract_io canonical leaf functions without registering SYS types there.",
+    "Actual off/shadow paired outputs, per-ref/source effects and receipt/state witnesses require B instrumentation; declared fixture comparisons do not authenticate production execution."
+  ],
+  "paired_semantic_normalization": {
+    "version": "sys_native_projection_v1",
+    "preserve": [
+      "exactscope/fullmaterialref/preclipcommitments",
+      "actualorderedpostcliptext/summary/nativeguardSHA+scorebits/lanes/reasons/vectorMatch/historyexpiry",
+      "actualTokenEncoding/TokensUsed/ContextDataUTF8SHA",
+      "logicalcontext_usageprincipal/scope/status/revision/run/purpose/requestlabelhash/orderedMemoryUse",
+      "actualContextBundle.Authority and orderedDegraded reasons, preserving duplicates; observednil/empty JSON-omitted arrays knownempty[], unobservednull distinct"
+    ],
+    "exclude_only": [
+      "generatedContextBundle.ContextID",
+      "samegeneratedusagejob.ID",
+      "usagejob.CreatedAt/UpdatedAt"
+    ],
+    "pair_binding": "Independentisolatedclones ofsamephysicalfixture withsamenormalizedactualInput/candidatecommitment/nativeclock/config. No productionwalltimeequalityguarantee.",
+    "not_supported": "No arbitraryignorelist/bodyreconstruction/callerhashauthority; futureoutsideprojectionfieldrequiresreview. Physicalrawsourceverifier remainsBtestrunner; typedprojectionsalone notauthentication."
+  },
+  "native_capture_sequence": {
+    "source": "recency.go:54-59; Goargumentevaluationleft-to-right",
+    "steps": [
+      "Freeze/deepclonecleanedC once withcandidateSetSHA.",
+      "NativeFuseScored(limit*3) computesactualRonce.",
+      "Captureoriginaltime.Nowargumentbeforeweightreads.",
+      "OriginaloutcomeWeights readsactualRonly unlessdisabled; captureexistingresult notmapabsenceinference/rereads.",
+      "Native decayByRecency withoriginalNow/map sorts/limitsonce.",
+      "FinishSnapshotmetadata+SHAafteroriginalcapture, no futureSHApretendedbaselineinput.",
+      "RegisteredpureShadow consumesidenticalC+capturedmetadata; outsideRweightsunknown."
+    ],
+    "B_deferred": "Actualhookpoint andsameclockfixturebinding requirerootsharedfunctionallowlist aftergate, notimplementedhere."
+  }
+}

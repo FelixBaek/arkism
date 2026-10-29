@@ -16,3 +16,10 @@ paths = [
 description = "public tokenizer artifact digest (not a credential)"
 regexTarget = "match"
 regexes = ['''^tokenizer_sha256"\s*:\s*"[a-f0-9]{64}"$''']
+
+# SHA256(empty) in this exact public digest field is not a credential.
+# No path allowlist: every different value and every other field stays scanned.
+[[allowlists]]
+description = "exact project-key SHA256(empty) public digest"
+regexTarget = "match"
+regexes = ['''^project_key_sha256"\s*:\s*"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"$''']
