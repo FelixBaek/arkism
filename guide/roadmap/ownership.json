@@ -2830,7 +2830,7 @@
       "id": "PSY-01",
       "issue": 157,
       "owner": "PSY-01",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -2886,7 +2886,7 @@
       "id": "PSY-02",
       "issue": 157,
       "owner": "PSY-02",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -4390,7 +4390,7 @@
       "id": "CAP-07",
       "issue": 156,
       "owner": "CAP-07",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
