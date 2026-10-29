@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"net/http"
+	"slices"
 	"time"
 )
 
@@ -22,6 +23,14 @@ type SkillRoute struct {
 	Degraded     []string `json:"degraded,omitempty" bson:"degraded,omitempty"`
 	Candidates   int      `json:"candidates" bson:"candidates"`
 	Runtime      string   `json:"runtime,omitempty" bson:"runtime,omitempty"`
+	// Loaded is the skill version the agent then loaded (the pick or another candidate); Outcome is how
+	// its run ended (a skill.usage status). Both stay empty until the router reports them.
+	Loaded  string `json:"loaded,omitempty" bson:"loaded,omitempty"`
+	Outcome string `json:"outcome,omitempty" bson:"outcome,omitempty"`
+	// Rival is the judged candidate that also fit (suitability 2+, confidence 0.5+) but was not picked:
+	// two skills that keep fitting the same questions overlap and split the route between them.
+	Rival     string `json:"rival,omitempty" bson:"rival,omitempty"`
+	RivalName string `json:"rival_name,omitempty" bson:"rival_name,omitempty"`
 }
 
 func newSkillRoute(out RouteResult, candidates []SkillCandidate, runtime string) SkillRoute {
@@ -35,24 +44,98 @@ func newSkillRoute(out RouteResult, candidates []SkillCandidate, runtime string)
 			}
 		}
 	}
+	best := -1.0
+	for _, j := range out.Judgments {
+		if v := j.Suitability * j.Confidence; j.ID != sr.Selected && j.Suitability >= 2 && j.Confidence >= 0.5 && v > best {
+			best, sr.Rival = v, j.ID
+		}
+	}
 	for _, c := range candidates {
-		if c.ID == sr.Selected {
+		switch c.ID {
+		case sr.Selected:
 			sr.SelectedName = c.Name
+		case sr.Rival:
+			sr.RivalName = c.Name
 		}
 	}
 	return sr
 }
 
-// recordSkillRoute keeps the decision for ROUTER; a failed write never fails the route.
-func (s *Service) recordSkillRoute(ctx context.Context, scope Scope, actor Decision, sr SkillRoute) {
+// recordSkillRoute keeps the decision for ROUTER and returns its id; a failed write never fails the
+// route, it only returns no id.
+func (s *Service) recordSkillRoute(ctx context.Context, scope Scope, actor Decision, sr SkillRoute) string {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), jevTimeout)
 	defer cancel()
-	_ = s.Repo.Insert(recordCtx, colSkillRoutes, Record{ID: ID(), Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
-		Text: sr.Selected, SkillRoute: &sr, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role})
+	id := ID()
+	// Counted with the route so "routed but never loaded" outlives the 50 newest rows ROUTER lists.
+	if s.Repo.Transaction(recordCtx, func(ctx context.Context, tx Tx) error {
+		if err := tx.Insert(ctx, colSkillRoutes, Record{ID: id, Scope: scope, Kind: colSkillRoutes, Status: statusActive, Revision: 1,
+			Text: sr.Selected, SkillRoute: &sr, CreatedAt: now, UpdatedAt: now, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role}); err != nil {
+			return err
+		}
+		return recordDecision(ctx, tx, scope, actor.PrincipalID, "skill_routed", id, map[bool]string{true: "rules", false: "judge"}[sr.Provider == "rules"], "")
+	}) != nil {
+		return ""
+	}
+	return id
+}
+
+// SkillRouteUseInput reports what the agent did after a route: event "loaded" with the loaded
+// version, then once the run's skill.usage status.
+type SkillRouteUseInput struct {
+	Scope     Scope  `json:"scope"`
+	Event     string `json:"event"`
+	VersionID string `json:"version_id"`
+}
+
+// MarkSkillRoute records load and outcome on a decision. Only the principal that asked for the route
+// may report on it; an outcome is final, and it must follow a load of the same version.
+func (s *Service) MarkSkillRoute(ctx context.Context, token, id string, in SkillRouteUseInput) (SkillRouteItem, error) {
+	if !validScope(in.Scope) || id == "" || in.VersionID == "" || (in.Event != "loaded" && !slices.Contains(skillUsageStatuses, in.Event)) {
+		return SkillRouteItem{}, ErrInvalid
+	}
+	d, err := s.authorize(ctx, token, "search:skill_versions", in.Scope, id, "")
+	if err != nil {
+		return SkillRouteItem{}, err
+	}
+	r, err := s.Repo.Get(ctx, colSkillRoutes, in.Scope, id)
+	if err != nil || r.Kind != colSkillRoutes || r.SkillRoute == nil {
+		return SkillRouteItem{}, ErrNotFound
+	}
+	if r.CreatedBy != d.PrincipalID {
+		return SkillRouteItem{}, ErrDenied
+	}
+	if _, err := s.Repo.Get(ctx, colSkillVersions, in.Scope, in.VersionID); err != nil {
+		return SkillRouteItem{}, ErrInvalid
+	}
+	sr := *r.SkillRoute
+	firstLoad := sr.Loaded == ""
+	switch {
+	case sr.Outcome != "":
+		return SkillRouteItem{}, ErrConflict
+	case in.Event == "loaded":
+		sr.Loaded = in.VersionID
+	case sr.Loaded != in.VersionID:
+		return SkillRouteItem{}, ErrConflict
+	default:
+		sr.Outcome = in.Event
+	}
+	r.SkillRoute, r.UpdatedAt = &sr, time.Now().UTC().Truncate(time.Millisecond)
+	if err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := tx.Replace(ctx, colSkillRoutes, r, r.Revision); err != nil || in.Event != "loaded" || !firstLoad {
+			return err
+		}
+		// pick: the agent loaded what the router chose; other: it loaded another candidate.
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_route_loaded", r.ID, map[bool]string{true: "pick", false: "other"}[in.VersionID == sr.Selected], "")
+	}); err != nil {
+		return SkillRouteItem{}, err
+	}
+	return SkillRouteItem{ID: r.ID, At: r.CreatedAt, SkillRoute: sr}, nil
 }
 
 type SkillRouteItem struct {
+	ID string    `json:"id"`
 	At time.Time `json:"at"`
 	SkillRoute
 }
@@ -72,7 +155,7 @@ func (s *Service) SkillRoutes(ctx context.Context, token string, scope Scope) ([
 	out := make([]SkillRouteItem, 0, len(rows))
 	for _, r := range rows {
 		if r.SkillRoute != nil {
-			out = append(out, SkillRouteItem{At: r.CreatedAt, SkillRoute: *r.SkillRoute})
+			out = append(out, SkillRouteItem{ID: r.ID, At: r.CreatedAt, SkillRoute: *r.SkillRoute})
 		}
 	}
 	return out, nil
@@ -82,5 +165,13 @@ func skillRouteLogRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/routing/skills", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.SkillRoutes(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, map[string]any{"items": out}, e)
+	})
+	mux.HandleFunc("POST /v1/routing/skills/{id}/use", func(w http.ResponseWriter, r *http.Request) {
+		var in SkillRouteUseInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.MarkSkillRoute(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, out, e)
 	})
 }

@@ -213,7 +213,7 @@ window.ArkismAIChat = (() => {
 
   api.button = (opts = {}) => mount(opts);
   // field(): the sparkle fills this one field at once — improves what is written, or writes it from the context when empty.
-  // No chat. The result goes in like typing (Ctrl+Z works, the screen's input listener marks it unsaved); 저장 / 취소 in the note too.
+  // No chat. The field keeps its text; the proposal shows as a word diff under it until 저장 types it in (Ctrl+Z works, the screen's input listener marks it unsaved) or 취소 drops it.
   function field(inp, opts) {
     const st = opts.state || {};
     st.input = inp; // a redraw hands in a new field; the result goes into the one on screen
@@ -228,15 +228,14 @@ window.ArkismAIChat = (() => {
     star.append(icon("sparkle"));
     const note = el("div", "ex-ai-note");
     note.setAttribute("role", "status");
-    // After a fill the box shows what changed in place (added / removed); a click goes back to editing the new text.
+    // the proposal against what the field holds now (added / removed); the field itself stays as written
     const diff = raw(el("div", "ex-ai-diff")); // the user's own words: not run through the translator
-    diff.tabIndex = 0;
-    diff.title = tr("눌러서 고치기");
-    const edit = () => { if (st.note) st.note.diff = false; show(); inp.focus(); };
-    diff.addEventListener("click", edit);
-    diff.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); edit(); } });
     root.append(inp, diff, star, note);
-    inp.addEventListener("input", (e) => { if (e.isTrusted && !st.writing && st.note) { st.note = null; show(); } }); // the user typed on: the old note (and its undo) is stale
+    inp.addEventListener("input", (e) => {
+      if (st.writing || !st.note) return;
+      if (st.note.value == null) { if (e.isTrusted) st.note = null; } // the user typed on: a plain message is stale
+      show(); // a proposal stays; its diff follows the edit
+    });
     const write = (v) => {
       const i = st.input;
       if (!i) return;
@@ -267,9 +266,9 @@ window.ArkismAIChat = (() => {
         const max = st.input?.maxLength > 0 ? st.input.maxLength : 20000;
         v = v.slice(0, max);
         if (!v || v === cur) st.note = { text: tr("더 고칠 곳이 없어요.") };
-        else { write(v); st.note = { text: "", undo: cur, diff: true }; }
+        else st.note = { text: "", value: v };
       } catch (e) { st.note = { text: e?.message || tr("AI가 답하지 못했어요."), err: true }; }
-      finally { st.busy = false; show(); if (st.note?.diff) st.input?.closest(".ex-ai-field")?.querySelector(".ex-ai-note button")?.focus(); } // the box is hidden while the diff shows: keep focus on 저장 of the copy on screen (a redraw may have replaced this one)
+      finally { st.busy = false; show(); if (st.note?.value != null) st.input?.closest(".ex-ai-field")?.querySelector(".ex-ai-note button")?.focus(); } // the box is hidden while the diff shows: keep focus on 저장 of the copy on screen (a redraw may have replaced this one)
     }
     star.addEventListener("click", () => void run());
     function show() {
@@ -280,17 +279,16 @@ window.ArkismAIChat = (() => {
       star.setAttribute("aria-busy", String(!!st.busy));
       star.title = tr(st.busy ? "AI가 쓰는 중이에요…" : "AI로 채우기");
       const n = st.note;
-      const viewing = !!n?.diff && !st.busy;
-      inp.style.display = viewing ? "none" : "";
+      const viewing = n?.value != null && !st.busy;
       diff.hidden = !viewing;
-      diff.replaceChildren(...(viewing ? window.ArkismTextDiff(n.undo, inp.value).map(([op, t]) => op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t)) : []));
+      diff.replaceChildren(...(viewing ? window.ArkismTextDiff(inp.value, n.value).map(([op, t]) => op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t)) : []));
       note.replaceChildren();
       note.className = `ex-ai-note${n?.err ? " err" : ""}`;
       note.hidden = !n;
       if (!n) return;
       if (n.text) note.append(el("span", "", n.text));
-      // 저장 keeps the AI text (the screen's own save still sends it); 취소 puts the old text back
-      if (n.undo !== undefined) note.append(btn("저장", "small", () => { st.note = null; show(); }), btn("취소", "ghost small", () => { write(n.undo); st.note = null; show(); }));
+      // 저장 types the proposal in (the screen's own save still sends it); 취소 only drops the preview
+      if (n.value != null) note.append(btn("저장", "small", () => { write(n.value); st.note = null; show(); }), btn("취소", "ghost small", () => { st.note = null; show(); }));
     }
     st.show = show; // this copy is the one going on screen (as mount() sets st.paint)
     show();

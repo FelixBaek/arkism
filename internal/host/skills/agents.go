@@ -46,7 +46,7 @@ var (
 	claudeJSON        = filepath.Join(host.Home, ".claude.json")
 	claudeCredentials = filepath.Join(host.Home, ".claude/.credentials.json")
 	agentsState       = host.AgentsState
-	agentNameRx       = regexp.MustCompile(`^[A-Za-z0-9@._/-]{1,128}$`)
+	agentNameRx       = regexp.MustCompile(`^[A-Za-z0-9@._/][A-Za-z0-9@._/-]{0,127}$`) // no leading "-": names are CLI arguments
 	packageRx         = regexp.MustCompile(`^@?[a-z0-9][a-z0-9._-]*(/[a-z0-9._-]+)?(@[0-9A-Za-z.^~-]+)?$`)
 	agentIDRx         = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,39}$`)
 	loginIDRx         = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)

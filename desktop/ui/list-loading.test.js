@@ -1,4 +1,5 @@
 const test = require("node:test"), assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { create: createPager } = require("./memory-pages.js");
 const page = (items, next_cursor = "") => ({ items, next_cursor, authority: "data_only_untrusted" });
 

@@ -729,6 +729,15 @@ func TestSkillApplyNeedsIndependentApprovalAndMovesPointers(t *testing.T) {
 	if got := f.get(f.human, "skill_versions", scopeA, v2.ID); got.Status != "superseded" {
 		t.Fatalf("v2 status after rollback = %s, want superseded", got.Status)
 	}
+	requireDecision(t, f.repo, "skill_rolled_back", "") // #466: a rollback is counted, a forward apply is not
+
+	// A rejected version is counted apart from a rejected AI-drafted improvement (#466).
+	plain := version(v1.ID)
+	f.transition(f.human, "skill_versions", plain.ID, ChangeInput{Scope: scopeA, ExpectedRevision: plain.Revision, Status: "rejected"})
+	requireDecision(t, f.repo, "skill_version_rejected", "")
+	drafted := f.seedSkillVersion(Record{Text: "drafted improvement", SkillID: skill, BaseVersion: v1.ID, Generator: &Generator{Model: "m", PromptVersion: "1", PipelineVersion: "1"}}, src, experience)
+	f.transition(f.human, "skill_versions", drafted.ID, ChangeInput{Scope: scopeA, ExpectedRevision: drafted.Revision, Status: "rejected"})
+	requireDecision(t, f.repo, "skill_improvement_rejected", "")
 }
 
 func TestSearchSendsOneQueryToBothLanesAndFusesRanks(t *testing.T) {

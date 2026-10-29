@@ -1,6 +1,7 @@
 // 스킬 › 개선안과 버전 검토 (skill-review.js) and 고정 과제로 비교 실행 (skill-execution.js).
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 
 globalThis.window = globalThis;

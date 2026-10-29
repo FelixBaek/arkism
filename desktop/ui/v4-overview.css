@@ -143,10 +143,10 @@
 /* stage window (opens over the screen) */
 .ov-win { width: min(760px, calc(100vw - 32px)); padding: 0; --tone: var(--text-1); }
 .ov-win-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-.ov-win-title { display: flex; align-items: center; gap: 8px; } .ov-win-title h2 { margin: 0; font-size: 17px; font-weight: 600; }
+.ov-win-title { display: flex; align-items: center; gap: 8px; min-width: 0; } .ov-win-title h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .ov-win .ov-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); display: inline-block; }
 .ov-win-step { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 12px; }
-.ov-win-title { min-width: 0; } .ov-win-title h2, .ov-win-badge, .ov-win-title .btn { white-space: nowrap; flex: none; }
+.ov-win-title h2, .ov-win-badge, .ov-win-title .btn { white-space: nowrap; flex: none; }
 /* a narrow window: the title row keeps one line, the hint gives way */
 @media (max-width: 640px) { .ov-win-head { padding: 12px 14px; gap: 8px; } .ov-win-step > span { display: none; } }
 .ov-win-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }

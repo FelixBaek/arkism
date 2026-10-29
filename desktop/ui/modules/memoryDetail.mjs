@@ -17,9 +17,9 @@ export function createMemoryDetail(deps) {
           deps.notice("유지할게요. 이 기억은 다시 묻지 않아요.");
           deps.render(false);
           deps.renderDetail();
-        }), fix(), deps.button("잊기", "ghost small", null, () => forgetMemory(m))));
+        }), fix(), deps.button("잊기", "ghost small", null, (e) => forgetMemory(m, e?.currentTarget?.parentElement || body, { title: "왜 잊나요?", confirmLabel: "잊기", reason: "unused" }))));
     } else if (deps.reviewOverdue(m)) body.append(deps.actionCard("재검토 예정일이 지났어요. 내용이 아직 맞는지 직접 확인해 주세요."));
-    else if (deps.idle(m)) body.append(deps.actionCard("최근 30일 동안 검색으로 전달된 기록이 없어요. 실제 활용 여부와 내용의 필요성은 따로 확인해 주세요.", ...(deps.state.caps?.actions?.propose ? [fix()] : []), deps.button("잊기", "ghost small", null, () => forgetMemory(m))));
+    else if (deps.idle(m)) body.append(deps.actionCard("최근 30일 동안 검색으로 전달된 기록이 없어요. 실제 활용 여부와 내용의 필요성은 따로 확인해 주세요.", ...(deps.state.caps?.actions?.propose ? [fix()] : []), deps.button("잊기", "ghost small", null, (e) => forgetMemory(m, e?.currentTarget?.parentElement || body, { title: "왜 잊나요?", confirmLabel: "잊기", reason: "unused" }))));
     else if (deps.state.caps?.actions?.propose) body.append(deps.button("고치기", "small", "pencil-simple", () => openMemoryFix(m)));
     const why = deps.section("어디서 왔나요");
     const quoteBox = deps.el("div", "quote");
@@ -41,6 +41,8 @@ export function createMemoryDetail(deps) {
     const approval = window.ArkismMemoryManagement.approval(m);
     management.append(deps.el("p", "", approval.label), deps.el("p", "meta", approval.detail));
     if (m.conflict_id) management.append(deps.el("p", "warn-text", "정정 또는 충돌 검토가 대기 중이에요. 기존 기억이 계속 전달될 수 있으니 먼저 확인해 주세요."));
+    const removed = window.ArkismDeleteReason.describe(m);
+    if (removed) management.append(deps.el("p", "warn-text", `${removed} · ${deps.shortDate(m.removal.at)}`));
     management.append(deps.facts([["다음 재검토", m.review_due_at ? deps.shortDate(m.review_due_at) : "예정일 없음"], ["사용 종료", m.expires_at ? deps.shortDate(m.expires_at) : "만료일 없음"]]));
     management.append(deps.el("p", "meta", "재검토 예정일은 삭제·자동 승인·보관 연장과 별개예요."));
     const originalStatus = deps.el("p", "meta", "원본 보관 상태는 별도로 확인할 수 있어요.");
@@ -71,6 +73,7 @@ export function createMemoryDetail(deps) {
       }));
       if (m.review_due_at) management.append(deps.button("예정일 해제", "ghost small", null, () => saveDue(null)));
     }
+    if (deps.state.caps?.actions?.review_decide && m.status === "active" && !m.conflict_id) management.append(deps.button("지우기", "ghost small danger", null, () => forgetMemory(m, management)));
     body.append(management);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...deps.state.scope },
       request: deps.request, el: deps.el, section: deps.section, facts: deps.facts, button: deps.button });
@@ -128,14 +131,17 @@ export function createMemoryDetail(deps) {
     } catch (e) { deps.notice(`되돌리지 못했어요 (${e.message}).`); trigger.disabled = false; }
   }
 
-  async function forgetMemory(m) {
-    if (!await ask(`이 기억을 잊을까요?\n\n“${m.text}”\n\n모든 에이전트가 더 이상 쓰지 않아요.`)) return;
-    try {
-      await deps.request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: deps.state.scope, expected_revision: m.revision }) });
-      deps.notice("잊었어요.");
-      deps.state.selected = null;
-      await deps.reloadMemories();
-    } catch (e) { deps.failNotice(e, "이 계정은 기억을 지울 수 없어요.", `잊지 못했어요 (${e.message}).`); }
+  // 잊기 / 지우기: the reason picker opens inside host; the memory leaves recall and stays in history with the reason.
+  function forgetMemory(m, host, opts = {}) {
+    if (host.querySelector?.(".del-reason")) return;
+    host.append(window.ArkismDeleteReason.picker({ ...opts, onConfirm: async (why) => {
+      try {
+        await window.ArkismDeleteReason.removeMemory(deps.request, deps.state.scope, m, why);
+        deps.notice("지웠어요. 기억 이력에 지운 이유와 함께 남아요.");
+        deps.state.selected = null;
+        await deps.reloadMemories();
+      } catch (e) { deps.failNotice(e, "이 계정은 기억을 지울 수 없어요.", `지우지 못했어요 (${e.message}).`); return { error: `지우지 못했어요: ${e.message}` }; }
+    } }));
   }
 
   // 직접 추가·고치기 go through the same path as a sentence the user said in a chat (explicit_remember):
@@ -281,7 +287,8 @@ export function createMemoryDetail(deps) {
         const act = deps.el("div", "d-buttons");
         act.append(deps.button("새 내용으로 바꾸기", "primary small", null, () => deps.resolveConflict(c, "new")),
           deps.button("지금 기억 유지", "small", null, () => deps.resolveConflict(c, "keep_old")),
-          correction ? deps.button("둘 다 지우기", "ghost small", null, async () => { if (await ask("고친 내용과 지금 기억을 모두 지울까요?")) void deps.resolveConflict(c, "drop"); })
+          correction ? deps.button("둘 다 지우기", "ghost small", null, () => { if (!act.querySelector?.(".del-reason")) act.append(window.ArkismDeleteReason.picker({ title: "고친 내용과 지금 기억을 왜 지우나요?",
+            onConfirm: async (why) => (await deps.resolveConflict(c, "drop", why) ? undefined : { error: "지우지 못했어요." }) })); })
             : deps.button("둘 다 맞아요", "ghost small", null, () => deps.resolveConflict(c, "both")));
         parts.push(deps.el("p", "meta", "선택한 내용과 기존 기억의 변경을 함께 저장해요. 응답을 못 받은 경우 같은 선택으로 다시 시도할 수 있어요."), act);
       }
@@ -296,15 +303,18 @@ export function createMemoryDetail(deps) {
     const text = instructionLike ? "AI에게 명령하는 문장처럼 보여요. 저장하면 다른 에이전트가 이 말을 따를 수 있어요."
       : `${why}. 저장하면 모든 에이전트가 자료로 써요.`;
     if (canDecide) {
-      const reason = deps.el("textarea"); reason.id = "reject-reason"; reason.rows = 2; reason.placeholder = "버리는 이유 (버릴 때만 필요해요)"; reason.setAttribute("aria-label", "버리는 이유");
       const ok = deps.button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void deps.decide(c, "approve", ""); });
       const fix = deps.button("고쳐서 저장", "small", null, () => openCandidateFix(c));
+      const DR = window.ArkismDeleteReason;
       const no = deps.button("버리기", instructionLike ? "primary small" : "ghost small", null, () => {
-        if (!reason.value.trim()) { window.ArkismNeed(reason, "버리는 이유를 적어 주세요."); return; }
-        ok.disabled = no.disabled = true; void deps.decide(c, "reject", reason.value.trim());
+        if (card.querySelector?.(".del-reason")) return;
+        card.append(DR.picker({ title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: async (why) => {
+          ok.disabled = no.disabled = true;
+          if (!await deps.decide(c, "reject", DR.rejectFields(why))) { ok.disabled = no.disabled = false; return { error: "버리지 못했어요." }; }
+        } }));
       });
       const card = deps.actionCard(text, ...(instructionLike ? [no, fix, ok] : [ok, fix, no]));
-      card.insertBefore(reason, card.lastChild);
+      if (DR.maybeStale(c, [deps.state.data?.memories?.find((m) => m.id === c.classification?.dup_hint)])) card.append(DR.staleHint());
       if (instructionLike) card.setAttribute("role", "note");
       body.append(card);
     } else body.append(deps.actionCard(text));

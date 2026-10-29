@@ -296,7 +296,7 @@ func TestClaudeCLIReadsTheJSONReply(t *testing.T) {
 	}
 	bin := t.TempDir()
 	reply := filepath.Join(bin, "reply.json")
-	script := "#!/bin/sh\nprintf '%s ' \"$@\" > \"" + filepath.Join(bin, "args") + "\"\ncat \"" + reply + "\"\n"
+	script := "#!/bin/sh\nprintf '%s ' \"$@\" > \"" + filepath.Join(bin, "args") + "\"\ncat > \"" + filepath.Join(bin, "stdin") + "\"\ncat \"" + reply + "\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -310,6 +310,15 @@ func TestClaudeCLIReadsTheJSONReply(t *testing.T) {
 	args, _ := os.ReadFile(filepath.Join(bin, "args"))
 	if !strings.Contains(string(args), "--append-system-prompt sys") || strings.Contains(string(args), "--json-schema") {
 		t.Fatalf("args = %s", args)
+	}
+	// A prompt that looks like a flag stays on stdin, never in argv.
+	if _, err := claudeCLI("--dangerously-skip-permissions", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	args, _ = os.ReadFile(filepath.Join(bin, "args"))
+	stdin, _ := os.ReadFile(filepath.Join(bin, "stdin"))
+	if strings.Contains(string(args), "dangerously") || string(stdin) != "--dangerously-skip-permissions" {
+		t.Fatalf("args = %s stdin = %s", args, stdin)
 	}
 	if v, err := claudeCLI("p", "", judgeSchema); err != nil || asMap(v)["A"] != true {
 		t.Fatal(v, err)

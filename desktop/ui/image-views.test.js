@@ -1,6 +1,7 @@
 // 이미지·슬라이드 프롬프트 (modules/imageViews.mjs): gallery filters, detail, the 실행 page, the editor and AI naming.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 const mod = import("./modules/imageViews.mjs");
 

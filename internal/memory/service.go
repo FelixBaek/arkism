@@ -19,6 +19,7 @@ import (
 )
 
 type Service struct {
+	NativeDynamics *NativeDynamicsRuntime
 	// usageWindows runs one memory-usage scan per scope at a time; the app asks for it up to three times at once.
 	usageWindows            singleflight.Group
 	ModelBudgetPolicy       *ModelBudgetPolicy
@@ -128,6 +129,9 @@ type ChangeInput struct {
 	Status              string                `json:"status"`
 	ValidationID        string                `json:"validation_id"`
 	VersionID           string                `json:"version_id"`
+	// ReasonCode and Reason say why a person moves a memory to rejected (see Removal).
+	ReasonCode string `json:"reason_code,omitempty"`
+	Reason     string `json:"reason,omitempty"`
 }
 
 func ID() string {
@@ -612,7 +616,7 @@ func normalizeCreateConfidence(col string, in *CreateInput) error {
 
 func createFieldsMisplaced(col string, in CreateInput, file *textArtifact) bool {
 	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
-	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
+	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] && !isEvalRecordCollection(col) || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
 }
 
 func createLabelsInvalid(col string, in CreateInput) bool {
@@ -797,6 +801,9 @@ func (s *Service) prepareCreateRecord(ctx context.Context, token, col string, r 
 	if col == "evaluations" {
 		return s.prepareEvaluation(ctx, token, r, in, d)
 	}
+	if isEvalRecordCollection(col) && !validEvalRecord(col, *r) {
+		return ErrInvalid
+	}
 	return nil
 }
 
@@ -871,6 +878,15 @@ func (s *Service) prepareEvaluation(ctx context.Context, token string, r *Record
 	}
 	if parent.PrincipalID != d.PrincipalID || parent.Role != d.Role {
 		return ErrDenied
+	}
+	for _, ref := range evaluationRefs(r.Evaluation) {
+		ok, err := s.authorize(ctx, token, "read:"+ref.Collection, r.Scope, ref.ID, "")
+		if err != nil {
+			return err
+		}
+		if ok.PrincipalID != d.PrincipalID || ok.Role != d.Role {
+			return ErrDenied
+		}
 	}
 	return nil
 }
@@ -947,7 +963,7 @@ func checkEvaluationTarget(ctx context.Context, tx Tx, r Record, d Decision, now
 	if r.Target.Collection == "agent_runs" && v.Run != nil && (!validRun(v.Run, v.Scope, now) || !terminalOutcome(v.Run.Outcome)) {
 		return ErrConflict
 	}
-	return nil
+	return checkDirectRelations(ctx, tx, Record{Scope: r.Scope, Relations: evaluationRefs(r.Evaluation)})
 }
 
 func writeCreateTx(ctx context.Context, tx Tx, col string, in CreateInput, r Record, d Decision, inspection Inspection) error {
@@ -1100,6 +1116,9 @@ func (s *Service) Transition(ctx context.Context, token, col, id string, in Chan
 	if col == "memories" && in.Status == "superseded" {
 		return Record{}, ErrInvalid
 	}
+	if !validRemoval(in.ReasonCode, in.Reason) || in.ReasonCode != "" && (col != colMemories || in.Status != "rejected") {
+		return Record{}, ErrInvalid
+	}
 	return s.transition(ctx, token, col, id, in, nil)
 }
 func (s *Service) transition(ctx context.Context, token, col, id string, in ChangeInput, review *CandidateReviewInput) (Record, error) {
@@ -1201,6 +1220,9 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 			}
 			action = "review:memory_candidates:" + review.Action
 		}
+		if e = recordTransitionDecision(ctx, tx, col, in.Status, r, review, d); e != nil {
+			return e
+		}
 		return audit(ctx, tx, r.Scope, d.PrincipalID, action, id)
 	})
 	if e != nil {
@@ -1289,6 +1311,9 @@ func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 	if review != nil {
 		applyReviewDecision(r, *review, d)
 	}
+	if in.ReasonCode != "" {
+		r.Removal = &Removal{Code: in.ReasonCode, Note: in.Reason, By: d.PrincipalID, At: r.UpdatedAt}
+	}
 	if in.Status == "approved" {
 		r.ApprovedBy = d.PrincipalID
 		if col == "memory_candidates" {
@@ -1302,7 +1327,7 @@ func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 }
 
 func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
-	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason}
+	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
 	if d.Role == roleHuman {
 		r.Review.Person, r.Review.Overturned = true, overturned(r.Classification, review.Action)
 		if r.Classification != nil {
@@ -1508,6 +1533,11 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			}
 		}
 		result = skill
+		if rollback {
+			if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_rolled_back", id, decidedBy(d), ""); e != nil {
+				return e
+			}
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, action+":skills", id)
 	})
 	return result, e

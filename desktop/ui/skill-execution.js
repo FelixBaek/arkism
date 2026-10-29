@@ -5,8 +5,9 @@ window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
  return (version, refresh) => {
   const box = el("details", "section"), summary = el("summary", "", "고정 과제로 비교 실행"), body = el("div"); box.append(summary, body);
   const owner = JSON.stringify([state.server, state.token, state.scope, state.selected]);
-  let epoch = 0, host = state.defaults.ssh_host, busy = false, current = null;
-  const live = ticket => box.isConnected && box.open && epoch === ticket && state.view === "skills" && owner === JSON.stringify([state.server, state.token, state.scope, state.selected]);
+  const draws = globalThis.ArkismKeep.latest();
+  let host = state.defaults.ssh_host, busy = false, current = null;
+  const live = ticket => box.isConnected && box.open && ticket.live() && state.view === "skills" && owner === JSON.stringify([state.server, state.token, state.scope, state.selected]);
   const base = { scope: { ...state.scope }, server: trimSlashes(state.server) }, target = { id: version.id, revision: version.revision };
   const pendingKey = () => JSON.stringify([owner, version.id, version.revision, host]);
   const known = new Set(["running", "published", "awaiting_publication", "interrupted_or_failed"]);
@@ -17,7 +18,7 @@ window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
   }
   function validJob(value) { return known.has(value?.status) && /^[a-f0-9]{64}$/.test(value?.job_id); }
   async function draw() {
-    const ticket = ++epoch;
+    const ticket = draws.begin();
     if (!tauri || state.caps?.role !== "human") { body.replaceChildren(el("p", "meta", "관리 계정의 데스크톱 앱에서 비교를 실행할 수 있어요.")); return; }
     if (version.status !== "candidate" || !version.comparison_plan) { body.replaceChildren(el("p", "meta", "고정 비교 계획이 있는 검토 대기 버전에서 실행할 수 있어요.")); return; }
     const label = el("label", "field", "평가 서버 (SSH)"), input = el("input"), note = el("p", "meta"), content = el("div"); input.value = host; input.type = "text"; label.append(input); note.setAttribute("role", "status");
@@ -73,6 +74,6 @@ window.ArkismSkillExecution = ({ state, el, button, tauri }) => {
       finally { busy=false;if(live(ticket)){ input.disabled=find.disabled=false;body.querySelectorAll("button,select").forEach(node=>node.disabled=node.dataset.executionProfile === "true" && Boolean(current?.event_id)); } }
     }
   }
-  box.addEventListener("toggle", () => { if(box.open)void draw();else{epoch++;body.replaceChildren();} });return box;
+  box.addEventListener("toggle", () => { if(box.open)void draw();else{draws.cancel();body.replaceChildren();} });return box;
 };
 };

@@ -42,6 +42,7 @@ func TestCandidateReviewEditPreservesProposal(t *testing.T) {
 	if _, e = f.svc.ReviewCandidate(testCtx, f.human, c.ID, in); !errors.Is(e, ErrConflict) {
 		t.Fatal("duplicate review", e)
 	}
+	requireDecision(t, f.repo, "candidate_edit_approve", "") // #466: told apart from a plain approve, once
 }
 func TestCandidateReviewRejectAndGuards(t *testing.T) {
 	f := newFixture(t)
@@ -82,6 +83,10 @@ func TestCandidateReviewRejectAndGuards(t *testing.T) {
 	}
 	if len(f.repo.rows("memories")) != 0 {
 		t.Fatal("rejection created memory")
+	}
+	// #466: the refused and rolled-back attempts are not counted; the reason is kept with the count.
+	if d := requireDecision(t, f.repo, "candidate_reject", ""); d.Audit.Reason != in.Reason {
+		t.Fatalf("reject reason = %q", d.Audit.Reason)
 	}
 }
 func TestCandidateApprovalAtomicRollbackAndPrivateEdit(t *testing.T) {
@@ -173,7 +178,7 @@ func TestCandidateReviewBatchPartialFailure(t *testing.T) {
 			t.Fatal("failure exposed record")
 		}
 	}
-	if len(f.repo.rows("memories")) != 2 {
+	if len(f.repo.rows("memories")) != 2 || len(decisionsOf(f.repo, "candidate_approve")) != 2 {
 		t.Fatal("partial success lost")
 	}
 	for _, id := range []string{bad.ID, denied.ID} {

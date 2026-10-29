@@ -76,6 +76,9 @@ func (s *Service) ExpireCandidates(ctx context.Context, token string, in ExpireC
 			if e = tx.Replace(ctx, "memory_candidates", r, row.Revision); e != nil {
 				return e
 			}
+			if e = recordDecision(ctx, tx, in.Scope, actor.PrincipalID, "candidate_expired", r.ID, decidedBy(actor), ""); e != nil {
+				return e
+			}
 			if e = audit(ctx, tx, in.Scope, actor.PrincipalID, "expire:memory_candidates", r.ID); e != nil {
 				return e
 			}

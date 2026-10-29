@@ -1,3 +1,4 @@
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { create } = require('./memory-pages.js');

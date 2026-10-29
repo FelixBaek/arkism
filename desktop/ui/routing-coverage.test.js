@@ -1,6 +1,7 @@
 // 라우팅 현황 (routing.js + routing-turns.js) and 설정 › 라우팅 설정: drawn into a DOM stand-in from fixed server replies.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -42,8 +43,8 @@ function mk({ replies = {}, mode = "local" } = {}) {
   const R = {
     "/v1/routing/overview": () => overview(), "/v1/routing/models": () => modelsDoc(), "/v1/routing/groups": () => groupsDoc(),
     "/v1/routing/skills": () => ({ items: [
-      { at, selected: "skill-a", selected_name: "PDF 읽기", confirmed: true, provider: "clef-flash", candidates: 3 },
-      { at, selected: "skill-b", confirmed: false, provider: "jev-1.13.0", degraded: ["jev_uncertain"], candidates: 2 },
+      { at, selected: "skill-a", selected_name: "PDF 읽기", confirmed: true, provider: "clef-flash", candidates: 3, loaded: "skill-a", outcome: "failure", rival: "skill-b" },
+      { at, selected: "skill-b", loaded: "skill-x", confirmed: false, provider: "jev-1.13.0", degraded: ["jev_uncertain"], candidates: 2, rival: "skill-a", rival_name: "PDF 읽기" },
       { at, selected: "skill-c", selected_name: "검색", confirmed: false, provider: "rules", degraded: ["jev_unavailable"], candidates: 1 },
       { at, confirmed: false, provider: "rules", degraded: ["odd"], candidates: 0 }] }),
     "/v1/routing/policy": () => ({}), "/v1/routing/decide": () => ({ id: "a", decision: "clef", classifier_ms: 200, fallbacks: ["c", "q"] }), ...replies,
@@ -77,6 +78,10 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   assert.equal(v.r.count(), 2);
   // 스킬 판정: the judge, the pick and why it fell back
   assert.match(t, /스킬 판정/); assert.match(t, /PDF 읽기/); assert.match(t, /Clef/); assert.match(t, /skill-b/); assert.match(t, /확신 낮음/);
+  // what the agent did with the pick
+  assert.match(t, /실패/); assert.match(t, /다른 후보 · 불러옴/); assert.match(t, /불러오지 않음/);
+  // the two skills the judge found fitting the same questions twice, each picked once
+  assert.match(t, /겹치는 스킬/); assert.match(t, /PDF 읽기↔skill-b2번 겹침1 : 1/);
   assert.match(t, /판정 모델 없음/); assert.match(t, /규칙 2/); assert.match(t, /고른 스킬 없음/); assert.match(t, /odd/);
   assert.match(v.r.views.routing.sub(), /실시간/);
   // a turn opens and closes
@@ -240,6 +245,15 @@ test("agent link buttons connect, reconnect and report each failure", async () =
   delete window.__TAURI__;
 });
 
+test("agent links say the relay state is unknown when gateway_info fails, not that it is off", async () => {
+  window.__TAURI__ = { core: { invoke: async () => { throw new Error("down"); } } };
+  const v = mk();
+  v.state.view = "settings"; v.draw(); await settle();
+  assert.match(text(v.nodes.main), /중계기 상태를 확인하지 못했어요/);
+  assert.doesNotMatch(text(v.nodes.main), /중계기 꺼짐/);
+  delete window.__TAURI__;
+});
+
 test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered group, try a route and save", async () => {
   globalThis.ask = async () => true;
   const v = mk({ mode: "server" });
@@ -336,4 +350,19 @@ test("스킬 판정 card hides when the server has no decision log or nothing wa
     assert.match(text(v.table), /요청 수/);
     assert.doesNotMatch(text(v.table), /스킬 판정/);
   }
+});
+
+test("reset drops a settings read still out: the old answer neither repaints nor counts as loaded (#468)", async () => {
+  let land;
+  const v = mk({ replies: { "/v1/routing/models": () => new Promise((r) => { land = () => r(modelsDoc()); }) } });
+  v.state.view = "settings";
+  let paints = 0; const draw = v.ctx.render; v.ctx.render = () => { paints++; draw(); };
+  const read = v.r.loadSettings();
+  v.r.reset(); // switched project or connection while the read was out
+  land(); await read; await settle();
+  assert.equal(paints, 0, "the stale read repainted the settings tab");
+  const before = v.calls.filter(([p]) => p.startsWith("/v1/routing/models")).length;
+  v.R["/v1/routing/models"] = () => modelsDoc();
+  v.draw(); await settle(); // the tab is still unloaded, so it reads again
+  assert.equal(v.calls.filter(([p]) => p.startsWith("/v1/routing/models")).length, before + 1);
 });

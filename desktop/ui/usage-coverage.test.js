@@ -1,6 +1,7 @@
 // 사용량 (usage.js): every menu's 개요 plus 요청·세션·시간대 and one session, drawn into a DOM stand-in from fixed server replies.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -211,6 +212,50 @@ test("시간대 tab shows the heatmap, the busiest hour and the work pattern", a
   const none = await open(mk({ menu: "agent", doc: summary({ hours: Array(168).fill(0), by_day: [], by_agent: [] }) }));
   click(none.nodes["#controls"], "시간대");
   assert.match(text(none.nodes["#detail"]), /기록 없음/);
+});
+
+test("결정 tab sums the server's decision counts per kind and reason over the range (#466)", async () => {
+  const rows = [
+    { period: "2026-09-01", kind: "skill_trashed", reason_code: "", count: 2 },
+    { period: "2026-10-01", kind: "skill_trashed", reason_code: "", count: 3 },
+    { period: "2026-10-01", kind: "merge_dismiss", reason_code: "same_meaning", count: 4 },
+    { period: "2026-10-01", kind: "skill_route_loaded", reason_code: "pick", count: 1 },
+    { period: "2026-10-01", kind: "new_kind", reason_code: "x", count: 1 },
+  ];
+  let reply = { authority: "data_only_untrusted", period: "month", from: "2026-09-30", rows };
+  const calls = [];
+  const request = async (path) => {
+    calls.push(path);
+    if (!path.startsWith("/v1/decisions/summary")) return summary();
+    if (reply instanceof Error) throw reply;
+    return reply;
+  };
+  const v = await open(mk({ menu: "memory", extra: { request } }));
+  v.calls = calls;
+  click(v.nodes["#controls"], "결정");
+  for (let i = 0; i < 4; i++) await flush();
+  assert.ok(v.calls.some((c) => c === "/v1/decisions/summary?period=month&days=30"), v.calls.join(" "));
+  const rowsText = v.table.querySelectorAll(".v4u-req").map((r) => text(r));
+  assert.deepEqual(rowsText, ["스킬을 휴지통으로이유 없음5", "병합 제안 넘김same_meaning4", "new_kindx1", "고른 스킬을 불러옴라우터가 고른 것1"]);
+  assert.doesNotMatch(text(v.table), /^결정/); // no title repeating the tab name
+  assert.match(v.u.views.usage.sub(), /종류·이유별로/);
+  click(v.nodes["#controls"], "7일");
+  for (let i = 0; i < 4; i++) await flush();
+  assert.ok(v.calls.includes("/v1/decisions/summary?period=month&days=7"));
+
+  reply = { ...reply, rows: [] };
+  click(v.nodes["#controls"], "90일");
+  for (let i = 0; i < 4; i++) await flush();
+  assert.match(text(v.table), /이 기간에 센 결정이 없어요/);
+
+  reply = new Error("HTTP 404");
+  click(v.nodes["#controls"], "30일");
+  for (let i = 0; i < 4; i++) await flush();
+  assert.match(text(v.table), /아직 결정 집계를 지원하지 않아요/);
+  reply = { rows: [] };
+  click(v.nodes["#controls"], "전체");
+  for (let i = 0; i < 4; i++) await flush();
+  assert.match(text(v.table), /결정 수를 불러오지 못했어요 \(invalid_response\)/);
 });
 
 test("errors: an old server is unsupported, others can retry, bad replies are invalid", async () => {

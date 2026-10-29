@@ -8,7 +8,8 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
     panel.append(summary, body);
     const identity = () => JSON.stringify([state.server, state.token, state.scope, sk.id]);
     const owner = identity(), scope = { ...state.scope };
-    let epoch = 0, busy = false, storageKey;
+    let busy = false, storageKey;
+    const draws = globalThis.ArkismKeep.latest();
     const digest = async value => Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value))), byte => byte.toString(16).padStart(2, "0")).join("");
     const key = digest(JSON.stringify([state.server, state.token, ...["workspace_id", "project_id", "user_id", "agent_id"].map(k => scope[k] || ""), sk.id])).then(hash => storageKey = `arkism.skill-generation.v1.${hash}`);
     function forget() { localStorage.removeItem(storageKey); pending.delete(owner); }
@@ -30,7 +31,7 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
           !(plan.min_score_gain > 0 && plan.min_score_gain <= 1 && Number.isFinite(plan.min_score_gain) && Number.isFinite(plan.max_cost) && plan.max_cost >= 0 && Number.isSafeInteger(plan.max_duration_ms) && plan.max_duration_ms > 0)) throw new Error("invalid_pending");
       pending.set(owner, input);
     }
-    const live = ticket => panel.isConnected && panel.open && ticket === epoch && identity() === owner && state.view === "skills" && state.selected === `skill:${sk.id}`;
+    const live = ticket => panel.isConnected && panel.open && ticket.live() && identity() === owner && state.view === "skills" && state.selected === `skill:${sk.id}`;
     const sameScope = value => ["workspace_id", "project_id", "user_id", "agent_id"].every(k => (value?.[k] || "") === (scope[k] || ""));
     const validRef = ref => ref?.collection === "memory_candidates" && typeof ref.id === "string" && ref.id.length > 0 && ref.id.length <= 256 && ![".", ".."].includes(ref.id) && Number.isInteger(ref.revision) && ref.revision > 0;
     function field(form, label, type, value = "") {
@@ -61,7 +62,7 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
       note.setAttribute("role", "status"); body.replaceChildren(note, retry); return { note, retry };
     }
     async function draw() {
-      const ticket = ++epoch;
+      const ticket = draws.begin();
       if (state.caps?.role !== "human") { body.replaceChildren(el("p", "meta", "개선안 생성은 관리 계정에서 시작할 수 있어요.")); return; }
       try { await key; if (!live(ticket)) return; recover(); }
       catch (_) { if (live(ticket)) body.replaceChildren(el("p", "meta", "보류 요청을 읽지 못했어요. 중복 생성을 막기 위해 새 요청을 시작하지 않아요. 앱 저장 공간을 확인해 주세요.")); return; }
@@ -79,17 +80,18 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
         gain.min = "0.000001"; gain.max = "1"; gain.step = cost.step = "any"; cost.min = "0"; duration.min = "1"; duration.step = "1";
         const generate = button("개선안 생성", "primary small"); generate.type = "submit";
         form.prepend(files); form.append(el("p", "meta", "선택한 교훈과 기존 스킬이 모델에 전달되며 생성 비용이 발생해요. 비교 파일은 실행하거나 전송하지 않아요. 같은 파일을 보관해 주세요."), generate);
-        let refs = [], searchEpoch = 0, selected = [];
+        let refs = [], selected = [];
+        const searches = globalThis.ArkismKeep.latest();
         body.replaceChildren(el("p", "meta", "같은 교훈의 관측 3~16개로 개선안을 만들어요. 생성 후 별도의 평가·승인·적용이 필요해요."), search, choices, form, note);
-        const clearChoices = () => { searchEpoch++; refs = []; selected = []; choices.replaceChildren(); };
+        const clearChoices = () => { searches.cancel(); refs = []; selected = []; choices.replaceChildren(); };
         topic.addEventListener("input", clearChoices);
         search.addEventListener("submit", async event => {
-          event.preventDefault(); if (busy) return; clearChoices(); const lookup = searchEpoch, subject = topic.value.trim();
+          event.preventDefault(); if (busy) return; clearChoices(); const lookup = searches.begin(), subject = topic.value.trim();
           if (!subject || new TextEncoder().encode(subject).length > 128) { note.textContent = "작업 주제를 128바이트 이내로 입력해 주세요."; return; }
           find.disabled = true; note.textContent = "교훈을 찾는 중…";
           try {
             const page = await request(`/v1/reflections?${query({ subject })}`);
-            if (!live(ticket) || lookup !== searchEpoch) return;
+            if (!live(ticket) || !lookup.live()) return;
             if (page.authority !== "data_only_untrusted" || !Array.isArray(page.items) || page.items.some(item => !sameScope(item.scope) || item.subject !== subject || typeof item.interpretation !== "string" || !Array.isArray(item.candidate_refs) || item.candidate_refs.some(ref => !validRef(ref)) || new Set(item.candidate_refs.map(ref => ref.id)).size !== item.candidate_refs.length)) throw new Error("invalid_lessons");
             const groups = page.items.filter(item => item.status === "candidate" && item.candidate_refs.length >= 3);
             note.textContent = groups.length ? "교훈을 선택한 뒤 사용할 관측을 골라 주세요." : "관측이 3개 이상인 검토 대기 교훈이 없어요.";
@@ -105,7 +107,7 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
                 check.addEventListener("change", () => { selected = [...evidence.querySelectorAll("input")].flatMap((input, index) => input.checked ? [refs[index]] : []); }); evidence.append(label);
               });
             });
-          } catch (_) { if (live(ticket) && lookup === searchEpoch) note.textContent = "교훈을 읽지 못했어요. 권한과 서버 버전을 확인하고 다시 찾아 주세요."; }
+          } catch (_) { if (live(ticket) && lookup.live()) note.textContent = "교훈을 읽지 못했어요. 권한과 서버 버전을 확인하고 다시 찾아 주세요."; }
           finally { if (live(ticket)) find.disabled = false; }
         });
         form.addEventListener("submit", async event => {
@@ -128,7 +130,7 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload }) => 
         });
       } catch (_) { if (live(ticket)) body.replaceChildren(el("p", "meta", "현재 기준 버전을 읽지 못했어요. 접었다 다시 펼쳐 주세요.")); }
     }
-    panel.addEventListener("toggle", () => { if (panel.open) void draw(); else { epoch++; body.replaceChildren(); } });
+    panel.addEventListener("toggle", () => { if (panel.open) void draw(); else { draws.cancel(); body.replaceChildren(); } });
     return panel;
   };
 };

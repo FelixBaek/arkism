@@ -116,6 +116,9 @@ func (s *Service) StopFlow(ctx context.Context, token, id string, in FlowStopInp
 			return e
 		}
 		out = s.flowStopResponse(ctx, token, r, tx)
+		if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "flow_cancelled", id, decidedBy(d), ""); e != nil {
+			return e
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "cancel:"+colCrewRuns, id)
 	})
 	return out, err

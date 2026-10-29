@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
-const { extract } = require("./i18n-extract.js");
+const { extract, stale } = require("./i18n-extract.js");
 const { makeTranslator, HANGUL } = require("./i18n.js");
 
 function loadDict() {
@@ -33,6 +33,15 @@ test("every template string has a pattern", () => {
   console.log(`i18n: ${templates.size} template strings, ${missing.length} without a pattern`);
   if (missing.length) console.log("  no pattern:\n" + missing.slice(0, 40).map((s) => `   - ${s} (${templates.get(s)[0]})`).join("\n"));
   assert.equal(missing.length, 0, `${missing.length} of ${templates.size} templates have no pattern`);
+});
+
+test("no English entry outlives its Korean", () => {
+  // Keys are the Korean sentences themselves: rewording one in the code leaves its old entry behind and the new text
+  // untranslated. The test above catches the new text; this one catches the old entry, so the two move together.
+  const old = stale(dict, __dirname);
+  console.log(`i18n: ${Object.keys(dict.strings).length} strings, ${old.strings.length} stale; ${Object.keys(dict.patterns).length} patterns, ${old.patterns.length} stale`);
+  for (const [kind, keys] of Object.entries(old)) if (keys.length) console.log(`  stale ${kind}:\n` + keys.slice(0, 40).map((k) => `   - ${k}`).join("\n"));
+  assert.deepEqual(old, { strings: [], patterns: [] }, "remove these from i18n-en.js, or put the English on the reworded Korean");
 });
 
 test("each pattern keeps its placeholders and translates a sample", () => {
@@ -86,4 +95,17 @@ test("one API key is singular", () => {
 
 test("each runner setting that was not applied is translated", () => {
   assert.equal(translate("외부 실행기 r · 실패 · 못 쓴 것: 고른 모델 / 도구 제한 · 비용 모름"), "Agent runner r · Failed · Not applied: chosen model / tool restriction · cost unknown");
+});
+
+test("a reworded Korean sentence leaves its old entry stale (8c845bab, e6adecdf)", () => {
+  const os = require("os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "i18n-stale-"));
+  try {
+    fs.writeFileSync(path.join(dir, "a.js"), 'say("쓰임 확인 보기"); say("첫 줄\\n둘째 줄"); say(`${n}개를 지웠어요`);\n');
+    const old = stale({
+      strings: { "쓰임 확인 보기": "View use check", "검증 보기": "View verification", "첫 줄\n둘째 줄": "Line\nline" },
+      patterns: { "{0}개를 지웠어요": "Deleted {0}", "{0}개 지웠어요": "Deleted {0}" }
+    }, dir);
+    assert.deepEqual(old, { strings: ["검증 보기"], patterns: ["{0}개 지웠어요"] });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

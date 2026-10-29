@@ -117,7 +117,7 @@ func (s *Service) SetSkillAvailability(ctx context.Context, token, id string, in
 		if skill.PrivacyQuarantined || skill.Status != statusActive && skill.Status != skillStatusDeprecated {
 			return ErrConflict
 		}
-		prev := skill.Revision
+		prev, was := skill.Revision, skill.Status
 		skill.Status, skill.SkillCompatibility = in.Status, in.Compatibility
 		skill.Revision++
 		skill.UpdatedAt = time.Now().UTC()
@@ -125,6 +125,12 @@ func (s *Service) SetSkillAvailability(ctx context.Context, token, id string, in
 			return e
 		}
 		result = skill
+		if was != in.Status {
+			kind := map[string]string{skillStatusDeprecated: "skill_trashed", statusActive: "skill_restored"}[in.Status]
+			if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, kind, id, "", ""); e != nil {
+				return e
+			}
+		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "availability:skills", id)
 	})
 	return result, e

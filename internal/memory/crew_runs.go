@@ -648,6 +648,11 @@ func (s *Service) DecideCrewRun(ctx context.Context, token, id string, in CrewRu
 		if err := s.authorizeFlowSourcesFrom(ctx, token, r, tx); err != nil {
 			return err
 		}
+		if r.CrewRun.Waiting != nil {
+			if err := recordDecision(ctx, tx, in.Scope, d.PrincipalID, map[bool]string{true: "flow_approved", false: "flow_rejected"}[in.Approve], id, r.CrewRun.Waiting.Kind, in.Note); err != nil {
+				return err
+			}
+		}
 		if r.CrewRun.InvocationMode == "flow" && r.CrewRun.Waiting != nil && r.CrewRun.Waiting.Kind == "child" {
 			out, err = s.decideFlowChild(ctx, tx, token, r, in, d, 0, r.CrewRun.Trigger == "discord")
 			return err

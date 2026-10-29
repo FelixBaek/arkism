@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"reflect"
 	"regexp"
@@ -102,7 +103,9 @@ func (s *Service) SetRoleModel(ctx context.Context, token string, in ProviderRol
 	if err != nil {
 		return Record{}, err
 	}
+	var before string
 	out, err := s.updateProviders(ctx, in.Scope, func(p *Providers, _ time.Time) error {
+		before = p.Roles[in.Role].Model
 		roles := map[string]ProviderRole{}
 		for k, v := range p.Roles {
 			roles[k] = v
@@ -114,7 +117,13 @@ func (s *Service) SetRoleModel(ctx context.Context, token string, in ProviderRol
 		}
 		p.Roles = roles
 		return nil
-	}, "set:role_model", d.PrincipalID)
+	}, "set:role_model", d.PrincipalID, func(ctx context.Context, tx Tx) error {
+		if before == in.Model {
+			return nil // only the off list changed
+		}
+		// The reason keeps the model before and after: the only history of this setting.
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, "role_model_changed", providersID(in.Scope), in.Role, cmp.Or(before, "-")+" -> "+cmp.Or(in.Model, "-"))
+	})
 	if err == nil && out.Providers != nil {
 		s.addRoleDefaults(out.Providers) // the screen redraws from this reply
 	}

@@ -15,6 +15,7 @@ type CandidateReviewInput struct {
 	Action           string                   `json:"action"`
 	Content          string                   `json:"content,omitempty"`
 	Reason           string                   `json:"reason,omitempty"`
+	ReasonCode       string                   `json:"reason_code,omitempty"`
 }
 type ReviewDecision struct {
 	ReceiptID string    `json:"receipt_id,omitempty" bson:"receipt_id,omitempty"`
@@ -24,6 +25,8 @@ type ReviewDecision struct {
 	By        string    `json:"by" bson:"by"`
 	At        time.Time `json:"at" bson:"at"`
 	Reason    string    `json:"reason,omitempty" bson:"reason,omitempty"`
+	// ReasonCode is the quick reason picked for a rejection (see removalReasons).
+	ReasonCode string `json:"reason_code,omitempty" bson:"reason_code,omitempty"`
 	// Person is a legacy classifier-measurement flag, not proof of physical human presence. AIRisk is the candidate's risk call
 	// when the person decided; Overturned marks a decision against it.
 	Person     bool   `json:"person,omitempty" bson:"person,omitempty"`
@@ -53,6 +56,9 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 }
 
 func candidateReviewStatus(in CandidateReviewInput) (string, error) {
+	if in.ReasonCode != "" && (in.Action != "reject" || !removalReasons[in.ReasonCode]) {
+		return "", ErrInvalid
+	}
 	switch in.Action {
 	case "approve":
 		if in.Content != "" || in.Reason != "" {
@@ -63,7 +69,7 @@ func candidateReviewStatus(in CandidateReviewInput) (string, error) {
 			return "", ErrInvalid
 		}
 	case "reject":
-		if strings.TrimSpace(in.Reason) == "" || len(in.Reason) > 2000 || in.Content != "" {
+		if strings.TrimSpace(in.Reason) == "" && in.ReasonCode == "" || len(in.Reason) > 2000 || in.Content != "" {
 			return "", ErrInvalid
 		}
 		return "rejected", nil
@@ -82,6 +88,7 @@ type CandidateReviewBatchItem struct {
 	Action           string                   `json:"action"`
 	Content          string                   `json:"content,omitempty"`
 	Reason           string                   `json:"reason,omitempty"`
+	ReasonCode       string                   `json:"reason_code,omitempty"`
 }
 type CandidateReviewBatchInput struct {
 	Scope Scope                      `json:"scope"`
@@ -116,7 +123,7 @@ func (s *Service) ReviewCandidates(ctx context.Context, token string, in Candida
 		var r Record
 		e = ctx.Err()
 		if e == nil {
-			r, e = s.ReviewCandidate(ctx, token, item.ID, CandidateReviewInput{Automated: item.Automated, Conflict: item.Conflict, OperationID: item.OperationID, Scope: in.Scope, ExpectedRevision: item.ExpectedRevision, Action: item.Action, Content: item.Content, Reason: item.Reason})
+			r, e = s.ReviewCandidate(ctx, token, item.ID, CandidateReviewInput{Automated: item.Automated, Conflict: item.Conflict, OperationID: item.OperationID, Scope: in.Scope, ExpectedRevision: item.ExpectedRevision, Action: item.Action, Content: item.Content, Reason: item.Reason, ReasonCode: item.ReasonCode})
 		}
 		if e != nil {
 			result.Code, result.Status = errorResponse(e)

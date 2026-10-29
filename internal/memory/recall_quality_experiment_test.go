@@ -187,9 +187,9 @@ func TestPostgresRecallQualityExperimentExport(t *testing.T) {
 		if chars > 6000 {
 			t.Fatal("fixture requires final max_chars truncation")
 		}
-		kept, low, cap := budget.Apply(finalInput, true)
+		kept, low, overBudget := budget.Apply(finalInput, true)
 		hostEnd := time.Now()
-		out := recallExperimentStage{MaxDistance: distance, ServerLimit: limit, ServerMaxChars: maxChars, FinalLimit: 6, Candidates: []map[string]any{}, FinalIDs: []string{}, DroppedScore: low, DroppedBudget: cap, SearchMS: float64(searchEnd.Sub(start)) / 1e6, JSONMS: float64(jsonEnd.Sub(searchEnd)) / 1e6, HostMS: float64(hostEnd.Sub(jsonEnd)) / 1e6, TotalMS: float64(hostEnd.Sub(start)) / 1e6}
+		out := recallExperimentStage{MaxDistance: distance, ServerLimit: limit, ServerMaxChars: maxChars, FinalLimit: 6, Candidates: []map[string]any{}, FinalIDs: []string{}, DroppedScore: low, DroppedBudget: overBudget, SearchMS: float64(searchEnd.Sub(start)) / 1e6, JSONMS: float64(jsonEnd.Sub(searchEnd)) / 1e6, HostMS: float64(hostEnd.Sub(jsonEnd)) / 1e6, TotalMS: float64(hostEnd.Sub(start)) / 1e6}
 		for _, item := range items {
 			hit, ok := item.(map[string]any)
 			if !ok {

@@ -522,11 +522,13 @@ test("in a popout window: Esc closes its popup, the next popup it opens stays th
     <div class="field"><span>이름</span><input id="kn"></div><select id="ks"><option>가</option><option>나</option></select></dialog>`);
   const w1 = $("#w1");
   const dressed = [];
-  window.addEventListener("arkism-popout", (e) => dressed.push(e.detail));
+  window.ArkismPopoutSetup.probe = (d) => dressed.push(d);
   w1.showModal(); await flush(); await timers.tick(20);
+  delete window.ArkismPopoutSetup.probe;
   const kd = w1.ownerDocument, label = opened.at(-1)[1];
   assert.notEqual(kd, document);
-  assert.deepEqual(dressed, [kd], "other scripts hear of the new popout document");
+  assert.deepEqual(dressed, [kd], "other scripts' wiring runs on the new popout document");
+  assert.deepEqual(window.ArkismPopout.setups(kd), ["zoomKeys", "combo", "contextMenu", "probe"]);
   assert.equal(kd.title, "Arkism");
   assert.equal(window.ArkismPopout.current(), document, "the app, while that window has no focus");
   kd._focus = true; // the user is in that window now
@@ -625,6 +627,11 @@ test("window buttons minimize, maximize, close (asking a popout popup first) and
   $("#small").showModal();
   await flush();
   assert.ok(bar.classList.contains("under-modal"));
+  // a popout window marks its popup popout-root (full window) only after it opened: the strip moves in then (beb626a6)
+  $("#small")._rect = { left: 0, top: 0, width: 1280, height: 800 };
+  $("#small").classList.add("popout-root");
+  await flush();
+  assert.equal(bar.parentNode, $("#small"));
   $("#small").close();
   fire(window, "resize");
   assert.equal(bar.classList.contains("under-modal"), false);

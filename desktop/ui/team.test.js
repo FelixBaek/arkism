@@ -1,6 +1,7 @@
 // Behavior tests for the team pages (team.js): teams, the team window, meetings, Discord and usage.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom, iso } = require("./testdata/crew-harness.cjs");
 
 const skipClose = (n) => n.matches(".crew-popup-close") || /^(취소|닫기)$/.test(n.textContent.trim());
@@ -393,4 +394,13 @@ test("usage: retrying failed runs, refused, partly failed and done", async () =>
   if (again) { again.click(); await h.settle(); }
   assert.ok(h.notices.some((n) => /실행을 맡겼어요/.test(n)), h.notices.join(" / "));
   assert.deepEqual(clean(), []);
+});
+
+test("#465 usage: failed run and meeting reads are said under the numbers, not shown as no failures", async () => {
+  const h = await bootTeams("crewUsage", {});
+  h.routes.unshift(["GET", /^\/v1\/crew\/runs\?/, () => new Error("boom")], ["GET", /^\/v1\/crew\/meetings\?/, () => new Error("boom")]);
+  await h.click(document, "새로고침");
+  await h.settle();
+  assert.match(table().textContent, /성공률/);
+  assert.match(table().textContent, /실행·회의 기록을 불러오지 못해/);
 });

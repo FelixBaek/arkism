@@ -2,6 +2,7 @@
 // TOOLS › 지식 (knowledge.js): sources, document chunks, test search and wiki pages against a fake server.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { create: createPager } = require("./memory-pages.js");
 const dom = require("./testdata/fake-dom.cjs");
 

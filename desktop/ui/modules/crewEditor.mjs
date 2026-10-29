@@ -1,7 +1,8 @@
 // Owns canvas state and graph editing. Dependencies are explicit live ports, never a global scope.
 export function createCrewEditor(deps) {
-  // Bumped on every open and leave, so a save that returns after the user left (or reopened) leaves the editor alone.
-  let session = 0;
+  // A new turn on every open, dropped on leave, so a save that returns after the user left (or reopened) leaves the editor alone.
+  const sessions = globalThis.ArkismKeep.latest();
+  let session = null;
 
   // ---------------------------------------------------------------- editor (03a · 03c · 03d) and run view (03b)
   const ed = { rec: null, graph: null, sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", tab: "AI", menu: false,
@@ -9,7 +10,7 @@ export function createCrewEditor(deps) {
 
   function openGraph(rec, opts = {}) {
     if (!rec) return;
-    session++;
+    session = sessions.begin();
     deps.stopPolling();
     ed.rec = rec;
     ed.graph = structuredClone(rec.crew.graph || deps.defaultGraph("blank", rec.crew));
@@ -32,7 +33,7 @@ export function createCrewEditor(deps) {
 
   async function leaveGraph() {
     if (ed.dirty && !await ask("저장하지 않은 변경이 있어요. 나갈까요?")) return;
-    session++;
+    sessions.cancel();
     deps.stopPolling();
     const rec = ed.rec;
     ed.rec = null;
@@ -55,7 +56,7 @@ export function createCrewEditor(deps) {
       }
       const sent = snap(), at = session;
       const saved = await deps.save(ed.rec, crew);
-      if (at !== session) { await deps.reload(); return false; } // saved, but the editor it was for is gone: callers (실행) must not go on
+      if (!at?.live()) { await deps.reload(); return false; } // saved, but the editor it was for is gone: callers (실행) must not go on
       if (snap() === sent) {
         ed.trigger = undefined;
         ed.dirty = false;
@@ -69,7 +70,7 @@ export function createCrewEditor(deps) {
         markDirty();
       }
       await deps.reload();
-      if (at !== session) return false; // left or reopened while the list reloaded
+      if (!at?.live()) return false; // left or reopened while the list reloaded
       ed.rec = deps.byId(saved.id) || saved;
       deps.render();
       deps.notice(ed.fromPopup ? "저장했어요. '창으로 돌아가기'를 눌러 마무리해요." : "워크플로우를 저장했어요.");

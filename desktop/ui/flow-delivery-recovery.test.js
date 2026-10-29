@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom } = require("./testdata/crew-harness.cjs");
 const delivery = () => ({ id: "delivery-1", revision: 17, delivery: { status: "unknown", part: 1, message_ids: ["123456789012345678"] } });
 async function ready(post, status = "unknown") {

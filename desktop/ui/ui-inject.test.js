@@ -3,6 +3,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/dom.js");
 
 const { window, document, timers } = dom.install();

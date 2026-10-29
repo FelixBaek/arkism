@@ -22,6 +22,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
   const openSession = (ev, quote) => wide("sessions", ev.split(":")[1], quote); // the 세션 기록 window, that session's dialogue open
   const D = () => state.data;
+  const DR = () => window.ArkismDeleteReason;
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const usage = (id) => state.usage?.get(id);
   // read: memories outside the loaded first page (most-used ones are often older), fetched once each; false = gone or unreadable
@@ -81,7 +82,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return d;
   }
   // how a separate window reopens this one when it is dragged out of the app (popup-drag.js; overview.js listens)
-  const recipe = (d, detail) => { if (d) { Object.assign(d.dataset, { popout: JSON.stringify({ event: "arkism:open-overview-window", detail }), popoutTitle: tr("기억 처리") }); d.setAttribute("aria-keyshortcuts", "Alt+Shift+O"); } };
+  const recipe = (d, detail) => { if (d) { Object.assign(d.dataset, { popout: JSON.stringify({ event: "arkism:open-overview-window", detail }), popoutTitle: tr("기억 처리") }); } };
   const row = (tagText, title, meta, right, btns = []) => {
     const r = el("div", "ov-win-item"), t = el("div", "ov-win-item-t"), left = el("div", "ov-win-item-l");
     if (tagText) t.append(tagEl(tagText));
@@ -100,11 +101,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const pages = ctx.remoteCollection((body, page) => sessions
       ? request(`${path}?${query({ ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) })}`)
       : request(path, { method: "POST", body: JSON.stringify({ scope: state.scope, ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }) }));
-    let active = "", ticket = 0;
+    let active = "";
+    const loads = globalThis.ArkismKeep.latest();
     async function load(more = false) {
-      const epoch = ++ticket;
+      const epoch = loads.begin();
       try { await pages.load(filters(), more); } catch { /* snapshot retains the rows and retry state */ }
-      if (epoch === ticket && d.isConnected && generation === state.connection.generation) paint();
+      if (epoch.live() && d.isConnected && generation === state.connection.generation) paint();
     }
     function snapshot() {
       const body = filters(), key = JSON.stringify(body);
@@ -117,7 +119,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!snap.loading || snap.items.length) host.append(el("p", "ov-wide-foot-note", snap.loading ? "불러오는 중…" : snap.error ? `불러오지 못했어요 (${snap.error}).` : `${num(snap.items.length)} / ${num(snap.total ?? 0)} · 전체에서 검색·정렬`));
       if (snap.cursor || snap.error) { const b = button(snap.error ? "다시 시도" : "더 보기", "small", null, () => load(true)); b.disabled = snap.loading; host.append(b); }
     }
-    d.addEventListener("close", () => { ticket++; pages.reset(); });
+    d.addEventListener("close", () => { loads.cancel(); pages.reset(); });
     return { snapshot, footer };
   }
 
@@ -186,11 +188,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
     } catch (e) { if (e.message === "revision_conflict") await reload(); return { error: e.message === "revision_conflict" ? "이미 처리됐거나 다른 곳에서 바뀌었어요. 개요를 새로 고쳐 주세요." : `처리하지 못했어요: ${e.message}` }; }
     finally { reviewing.delete(c.id); }
   }
-  function askReason(title, onOk) {
-    const d = el("dialog", "crew-dialog ov-ask"), body = el("div", "dialog-body"), why = el("textarea"); why.rows = 3; why.placeholder = "버리는 이유 (버릴 때만 필요해요)"; why.setAttribute("aria-label", "버리는 이유");
-    const err = el("p", "meta", ""), foot = el("div", "ov-win-foot");
-    foot.append(button("취소", "ghost small", null, () => d.close()), button("버리기", "primary small", null, () => { if (!why.value.trim()) { err.textContent = "버리는 이유를 적어 주세요."; why.focus(); return; } d.close(); onOk(why.value.trim()); }));
-    body.append(el("h2", "", title), why, err); d.append(body, foot); d.addEventListener("close", () => d.remove()); document.body.append(d); d.showModal(); why.focus();
+  // Whether the person followed the AI help's advice: only the desktop sees it, so it tells the server (#466).
+  // Counting is best effort; the review itself has already gone through.
+  function followedAI(c, pick, action) {
+    if (!pick) return;
+    void request("/v1/decisions", { method: "POST", body: JSON.stringify({ scope: state.scope, kind: pick === action ? "ai_help_accepted" : "ai_help_discarded", target_id: c.id }) }).catch(() => {});
   }
   const waiting = () => [...D().candidates, ...(D().conflicted || [])].sort((a, b) => time(a.created_at) - time(b.created_at));
 
@@ -220,9 +222,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
       judge: () => toCheck().slice(0, cap).map(([m, u]) => keepRow(m, () => {
         const r = row("안 쓰임", m.text, u.unused ? `쓰였다는 보고 없이 ${num(u.unreceipted)}번 건넸어요` : `${w.days}일 동안 ${num(u.injected)}번 건넸는데 답에 쓰였다는 표시가 없어요`, ""), err = el("small", "ov-win-err", "");
         r.lastChild.append(button("맞아요, 유지", "small", null, () => { ctx.keepMemory?.(m.id); r.remove(); }),
-          button("고치기", "small", null, () => editMemory(m, m.id)), button("잊기", "small", null, () => askConfirm("이 기억을 잊을까요?", "에이전트에게 더는 건네지 않아요. 바뀐 이력에는 남아요.", async () => {
-            try { await deleteMemory(m); r.remove(); await reload(); } catch (e) { err.textContent = `잊지 못했어요: ${e.message}`; }
-          }, "잊기"))); r.firstChild.append(err);
+          button("고치기", "small", null, () => editMemory(m, m.id)), button("잊기", "small", null, () => DR().openAfter(err, { title: "왜 잊나요?", confirmLabel: "잊기", reason: "unused", onConfirm: async (why) => {
+            await removeMemory(m, why); r.remove(); await reload();
+          } }))); r.firstChild.append(err);
         return r;
       })),
       dream: () => dreamItems().slice(0, cap).map((c) => keepRow(c.dream, () => {
@@ -245,15 +247,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
     });
   }
   const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
-  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (the 승인 대기 detail)
+  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (that candidate in 승인 대기, selected with its detail)
   function reviewRow(c) {
     const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
     const r = row(kind(c.kind), c.text, [dupText ? `“${clip(dupText, 40)}”와 같은 뜻` : c.conflict_id ? "충돌 중" : c.classification?.risk_reasons?.[0] || "", c.summary ? `요약: ${c.summary}` : "", ago(c.created_at)].filter(Boolean).join(" · "), "");
     if (confusing(c)) r.querySelector(".ov-win-item-t").prepend(tagEl("헷갈림", "ov-tag-r"));
     const side = r.lastChild, note = el("small", "ov-win-err", ""), advice = el("div", "ov-verdict"); advice.hidden = true;
     const lock = (on) => { for (const b of [ok, no, ai]) b.disabled = on; };
-    const ok = button("승인", "small", null, async () => { lock(true); const res = await decide(c, "approve"); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); });
-    const no = button("버리기", "small", null, () => askReason("후보를 버릴까요?", async (reason) => { lock(true); const res = await decide(c, "reject", { reason }); if (res?.error) { note.textContent = res.error; lock(false); } else r.remove(); }));
+    let aiPick = "";
+    const ok = button("승인", "small", null, async () => { lock(true); const res = await decide(c, "approve"); if (res?.error) { note.textContent = res.error; lock(false); } else { followedAI(c, aiPick, "approve"); r.remove(); } });
+    const no = button("버리기", "small", null, () => DR().openAfter(note, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: async (why) => {
+      lock(true); const res = await decide(c, "reject", DR().rejectFields(why)); if (res?.error) { lock(false); return res; } followedAI(c, aiPick, "reject"); r.remove();
+    } }));
     const ai = button("AI 도움", "small", "sparkle", async () => {
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
       lock(true); note.textContent = "AI가 읽는 중…";
@@ -262,12 +267,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } } });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!["approve", "reject"].includes(j?.pick)) throw new Error(tr("AI가 고르지 못했어요."));
-        ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
+        aiPick = j.pick; ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
         advice.replaceChildren(el("strong", "", `AI 추천 · ${j.pick === "approve" ? "승인" : "버리기"}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 300))] : [])); advice.hidden = false; note.textContent = "";
       } catch (e) { note.textContent = `AI 도움을 받지 못했어요: ${e.message}`; }
       finally { lock(false); }
     });
     side.append(ok, no, ai, button("자세히", "ghost small", null, () => wide("review", c.id))); r.firstChild.append(advice, note);
+    if (DR().maybeStale(c, [D().memories.find((m) => m.id === c.classification?.dup_hint)])) side.append(DR().staleHint());
     return r;
   }
 
@@ -511,15 +517,19 @@ window.ArkismOverviewWindows = (ctx, env) => {
     else { card("diff-add", "남길 기억", x.keep?.id); card("diff-del", "이력으로 넘길 기억", x.retire?.id); }
     const why = { same_meaning: "두 기억이 같은 말을 해요.", more_specific: "남길 기억이 더 자세해요. 다른 하나의 내용이 거기에 들어 있다고 봤어요.", newer_replaces_older: "새 기억이 예전 기억과 반대예요. 지금 생각은 새 기억이라고 봤어요." }[x.reason];
     const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
-    const go2 = async (decision) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true));
-      try { await request(`/v1/maintenance_proposals/${encodeURIComponent(p.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, decision }) }); await reload(); done(); }
-      catch (er) { st.textContent = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : `처리하지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } };
+    const go2 = async (decision, extra = {}) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      try { await request(`/v1/maintenance_proposals/${encodeURIComponent(p.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, decision, ...extra }) }); await reload(); done(); }
+      catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
     if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")));
     else act.append(button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => go2("accept")), button("반대로 남기기", "small", null, () => go2("swap")), button("둘 다 두기", "small", null, () => go2("dismiss")));
-    if (!signal && !merge) act.append(button("둘 다 지우기", "small danger", null, () => askConfirm("두 기억을 다 지울까요?", "둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", () => go2("forget_both"))));
-    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "어느 쪽을 골라도 기억은 그대로예요. 다시 볼게요를 누르면 사람이 보기로 한 것만 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
+    // 지우기: either memory or both, with a reason; each removed memory keeps it in its history
+    act.append(button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
+      target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) })));
+    if (DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id)))) act.append(DR().staleHint());
+    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }
+  const proposalRefs = (x) => (x.memory ? [x.memory] : [x.keep, x.retire]).filter(Boolean);
   // 승인 대기 (580:49518 + improvements 592:51366 / 764:61615)
   // 드리밍 정리 제안 (maintenance proposals) wait here too, as [정리] rows with their own decide
   const DREAM_LABEL = { duplicate: "합치기", contradiction: "고치기" };
@@ -531,6 +541,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // AI 제안 only lights one button and says why, the person still clicks
   const CONFLICT_PICK = { new: "새 내용으로 바꾸기", both: "둘 다 남기기", keep_old: "기존 것 유지" };
   function conflictPanel(c, into, act, st, sec, done) { // done: after a choice, once resolveConflict has reloaded
+    // 지우기 in a conflict: the new candidate alone (the old memory stays) or both, with a reason
     const cmp = el("div", "ov-detail-list"), oldCard = el("div", "ov-cmp diff-del"), newCard = el("div", "ov-cmp diff-add"), oldFrom = el("div", "ov-detail-sec");
     oldCard.append(el("small", "", "기존 기억"), el("span", "", "불러오는 중…"));
     const agentOf = (m) => tag(m, "event_id:").split(":")[0];
@@ -566,7 +577,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
       } catch (e) { st.textContent = `AI 제안을 받지 못했어요: ${e.message}`; }
       finally { ai.disabled = false; }
     });
-    into.append(advice); act.append(...picks, ai);
+    const drop = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: [["keep_old", "새 후보"], ["drop", "둘 다"]], target: "keep_old",
+      onConfirm: async ({ code, note, target }) => (await ctx.resolveConflict(c, target, { code, note }) ? done() : { error: "지우지 못했어요. 위 알림을 확인해 주세요." }) }));
+    into.append(advice); act.append(...picks, ai, drop);
   }
   function wideReview(focusId, startKind) {
     const all = waiting(), dreams = dreamItems(), d = shell("승인 대기", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", "review");
@@ -596,7 +609,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
       : order === "risk" ? rank(a) - rank(b) || time(a.created_at) - time(b.created_at)
       : time(a.created_at) - time(b.created_at);
     const remote = pagedWindow(d, "/v1/memory_candidates/query", () => ({ q, state: "all", category: ["new", "confusing"].includes(kindF) ? kindF : "", kind: typeF, sort: order === "new" ? "recent" : order }), paint);
-    const filtered = () => [...(kindF === "dream" ? [] : remote.snapshot().items), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
+    // 자세히 on a card opens that candidate even when it is not on the loaded page (the list pages 50 oldest first)
+    const focus = focusId && all.find((c) => c.id === focusId);
+    const pinned = (items) => (focus && kindF !== "dream" && !q && !typeF && !items.some((c) => c.id === focusId) ? [focus, ...items] : items);
+    const filtered = () => [...(kindF === "dream" ? [] : pinned(remote.snapshot().items)), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
     const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}, sum = Object.values(counts).reduce((a, b) => a + b, 0);
       const every = (Object.keys(counts).length ? sum : snap.total ?? 0) + dreamItems().length; // 전체 = what the title counts: every waiting item and the proposals
       // a state with nothing in it is not offered, unless it is the one picked
@@ -642,7 +658,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!drafts.has(c.id)) drafts.set(c.id, { text: null, talk: {} });
       const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "";
       const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? (fixText || c.text); edit.rows = 3; edit.hidden = dr.text == null && !fixText; edit.setAttribute("aria-label", "고쳐서 저장할 내용");
-      // the heading shows what 승인 would save once the person (or the AI sparkle, which types into the box) changed it
+      // the heading shows what 승인 would save once the person (or the AI sparkle's 저장, which types into the box) changed it
       const title = el("h3", "", dr.text ?? c.text), head = el("div", "ov-detail-group"); head.append(h, title); detail.append(head);
       edit.addEventListener("input", () => { dr.text = edit.value; title.textContent = edit.value.trim() ? edit.value : c.text; });
       const decide1 = el("div", "ov-detail-group"), basisG = el("div", "ov-detail-group ov-detail-group-sub"), metaG = el("div", "ov-detail-group ov-detail-group-sub");
@@ -684,7 +700,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
         const choices = [...act.children, mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
-          mk("fix", "고쳐서 승인", () => editing(true)), button("버리기", "small", null, () => askReason("후보를 버릴까요?", (reason) => go1("reject", { reason })))];
+          mk("fix", "고쳐서 승인", () => editing(true)), button("버리기", "small", null, () => DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) })),
+          ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : [])];
         const save = button("고친 내용으로 승인", "primary small", null, () => { if (edit.value.trim()) go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); });
         const cancel = button("취소", "small", null, () => { edit.value = c.text; dr.text = null; title.textContent = c.text; editing(false); });
         editing = (on) => { editSec.hidden = !on; act.replaceChildren(...(on ? [save, cancel] : choices)); if (on) edit.focus(); };
@@ -750,16 +767,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const ev = tag(m, "event_id:"); if (ev) { const b = el("div", "ov-detail-from"); b.append(el("span", "", ev.split(":")[0]), button("세션 보기 ›", "ghost small", null, () => openSession(ev, m.text))); sec("어디서 왔나요", b); }
       const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       act.append(button("고치기", "primary small", null, () => editMemory(m, m.id)),
-        button("지우기", "small", null, () => askConfirm("이 기억을 지울까요?", "지운 기억은 이력에 남지만 더는 쓰이지 않아요.", async () => {
-          try { await deleteMemory(m); sel = null; await reload(); wideActive(filter); }
-          catch (e) { st.textContent = `지우지 못했어요: ${e.message}`; }
-        })));
+        button("지우기", "small", null, () => DR().openAfter(act, { onConfirm: async (why) => { await removeMemory(m, why); sel = null; await reload(); wideActive(filter); } })));
       detail.append(st, act);
     }
     twoPane(d, bar, list, detail); paint();
   }
-  async function deleteMemory(m) {
-    await request(`/v1/memories/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }); D().memories = D().memories.filter((x) => x.id !== m.id);
+  async function removeMemory(m, why) {
+    await DR().removeMemory(request, state.scope, m, why); D().memories = D().memories.filter((x) => x.id !== m.id);
   }
   function askConfirm(title, text, onOk, ok = "지우기") {
     const d = el("dialog", "crew-dialog ov-ask"), body = el("div", "dialog-body"), foot = el("div", "ov-win-foot");
@@ -784,7 +798,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const RANGES = [["today", "오늘"], ["7d", "최근 7일"], ["30d", "최근 30일"], ["all", "전체 기간"]];
   const inRange = (x, r) => r === "all" || time(x.ended_at || x.started_at) >= (r === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - (r === "7d" ? 7 : 30) * 24 * HOUR);
   const when = (v) => (time(v) ? new Date(v).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : SL.NONE);
-  const copyText = (text, from, done) => { Promise.resolve().then(() => from.ownerDocument.defaultView.navigator.clipboard.writeText(text)).then(() => done(true), () => done(false)); }; // a popout copies in its own window
+  const copyText = async (text, from, done) => { let ok = true; try { await from.ownerDocument.defaultView.navigator.clipboard.writeText(text); } catch (_) { ok = false; } done(ok); }; // a popout copies in its own window
   // stage: opened as the 대화 저장 step, which adds the pipeline summary and each session's archive state to the same list
   function wideSessions(focus = "", quote = "", stage = false) {
     const cached = env.sessions(); // the overview's last 7 days: shown at once while the window's own page loads
@@ -892,7 +906,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const cmd = SL.continueCommand(target, h);
       if (!cmd) { say(x.id, "넘겨줄 작업 상태나 보관된 대화가 없어요."); return; }
       const what = h.work ? `저장된 작업 "${h.work.title || h.work.id}"` : "보관된 대화";
-      copyText(cmd, from, (ok) => say(x.id, ok ? `${SL.label(target)} 시작 명령을 복사했어요. ${what}를 읽고 이어가요.` : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd));
+      void copyText(cmd, from, (ok) => say(x.id, ok ? `${SL.label(target)} 시작 명령을 복사했어요. ${what}를 읽고 이어가요.` : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd));
     }
     function continueMenu(x, seen) {
       const m = el("div", "cat-menu ss-menu"); m.setAttribute("role", "menu");
@@ -980,7 +994,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (x.tokens > 0) tok.title = SL.split(x);
       const keep = stage && archiveOf(x.id);
       rr.append(tok, el("span", `ov-pill ov-pill-${st.tone}`, st.label), ...(keep ? [el("span", "ss-num", keep.short)] : []));
-      const cmd = SL.resumeCommand(x), resume = button("재개", "small", "copy", (ev) => { ev.stopPropagation(); copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "재개 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
+      const cmd = SL.resumeCommand(x), resume = button("재개", "small", "copy", (ev) => { ev.stopPropagation(); void copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "재개 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
       resume.disabled = !cmd; resume.title = cmd || "이 에이전트의 재개 명령은 몰라요.";
       const more = button("handoff", "small ss-more", "caret-down", (ev) => { ev.stopPropagation(); menuFor = menuFor === x.id ? "" : x.id; paint(); });
       more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", String(menuFor === x.id));
@@ -1170,9 +1184,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const sk = el("div", "ov-map-sidehead"); sk.append(el("h4", "", "지도 요약")); right.append(sk, ...Array.from({ length: 4 }, () => el("div", "skeleton ov-map-sk")));
     body.append(left, right); d.append(body);
     let graph, topics;
-    try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], () => [])]); }
+    try { [graph, topics] = await Promise.all([request(`/v1/memory-graph?${query({ mode: "all" })}`), request(`/v1/digests?${query({ kind: "topic", status: "active" })}`).then((r) => r.items || [], (e) => (e?.status === 404 ? [] : null))]); } // null: topics failed (an older server without topics is [])
     catch (e) { if (!d.isConnected) return; status.classList.add("off"); msg.textContent = /access_denied/.test(e?.message || "") ? "지도를 볼 권한이 없어요." : "지도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; status.append(button("다시 시도", "small", null, () => { d.close(); void wideMap(); })); right.replaceChildren(); return; }
     if (!d.isConnected) return;
+    const topicsFailed = topics === null; topics ||= []; // the map still draws; it says the topic view is missing instead of hiding it (#465)
     const nodes = graph.nodes || [], edges = graph.edges || [];
     if (!nodes.length) { status.classList.add("off"); msg.textContent = "지도에 그릴 기억이 아직 없어요."; right.replaceChildren(); return; }
     status.remove();
@@ -1188,7 +1203,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // node labels come with the map (first 40 characters); the full record is read when a memory is picked
     const fetched = new Map(), memRec = (id) => fetched.get(id) || memOf(id);
     const label = (id) => clip(byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
-    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => { fetched.set(id, r); }, () => { fetched.set(id, false); }).then(() => { if (d.isConnected && sel === id) drawSide(); }); };
+    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); const got = (r) => { fetched.set(id, r); if (d.isConnected && sel === id) drawSide(); }; request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then(got, () => got(false)); };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString(loc(), { year: "numeric", month: "numeric", day: "numeric" });
     // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
@@ -1208,7 +1223,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const mapEdges = edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })); // one array: the map skips relinking while it is the same
     // a cut map says so on the canvas; older servers send only truncated
     const cut = "nodes_truncated" in graph ? [graph.nodes_truncated && `기억이 많아 ${num(nodes.length)}개까지만 그렸어요`, graph.edges_truncated && "선이 많아 일부 선은 빠졌어요"].filter(Boolean).join(" · ") : graph.truncated ? "기억이 많아 일부만 그렸어요." : "";
-    if (cut) canvas.append(el("p", "ov-map-cut", cut));
+    const note = [cut, topicsFailed && tr("주제를 불러오지 못해 주제별 보기가 빠졌어요. 지도를 다시 열면 다시 불러와요.")].filter(Boolean).join(" · ");
+    if (note) canvas.append(el("p", "ov-map-cut", note));
     function drawMap() {
       const qq = q.toLowerCase(), topicHit = new Set(qq ? topics.filter((t) => (t.title || "").toLowerCase().includes(qq)).flatMap((t) => (t.members || []).map((r) => r.id)) : []);
       const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!qq || (n.label || label(n.id)).toLowerCase().includes(qq) || topicHit.has(n.id));

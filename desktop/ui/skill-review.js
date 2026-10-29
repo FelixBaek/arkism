@@ -6,8 +6,8 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
   const opened = (part) => { part.open = true; return part; };
   panel.append(summary, body);
   const owner = JSON.stringify([state.server, state.token, state.scope, state.view, state.selected]);
-  let epoch = 0;
-  const live = ticket => panel.isConnected && panel.open && ticket === epoch && owner === JSON.stringify([state.server, state.token, state.scope, state.view, state.selected]);
+  const loads = globalThis.ArkismKeep.latest(); // the skill read and each version pick share one turn
+  const live = ticket => panel.isConnected && panel.open && ticket.live() && owner === JSON.stringify([state.server, state.token, state.scope, state.view, state.selected]);
   const status = { candidate: "검토 대기", approved: "승인됨", active: "사용 중", superseded: "과거 버전", rejected: "제외됨", deprecated: "중단됨" };
   async function read(collection, id, revision) {
     if (typeof id !== "string" || !id || id === "." || id === ".." || id.length > 256) throw new Error("invalid_reference");
@@ -21,7 +21,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
     d.append(el("summary", "", label), p); return d;
   };
   async function load(preferred) {
-    const ticket = ++epoch;
+    const ticket = loads.begin();
     body.replaceChildren(el("p", "meta", "버전과 평가를 불러오는 중…"));
     try {
       const skill = await read("skills", sk.id);
@@ -35,7 +35,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
       label.append(select);
       body.replaceChildren(el("p", "meta", "스킬 원문과 평가는 검토 자료예요. 조회만으로 승인되거나 실행되지 않아요."), label, trials, detail);
       const show = async () => {
-        const versionTicket = ++epoch, id = select.value;
+        const versionTicket = loads.begin(), id = select.value;
         if (mode === "trial") { trials.replaceChildren(opened(trial(skill.id, id))); detail.replaceChildren(); return; }
         trials.replaceChildren(mode ? "" : trial(skill.id, id));
         detail.replaceChildren(el("p", "meta", "평가를 읽는 중…"));
@@ -109,7 +109,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
       select.addEventListener("change", show); await show();
     } catch (_) { if (live(ticket)) body.replaceChildren(el("p", "meta", "버전 목록을 읽지 못했어요. 접었다 다시 펼쳐 주세요.")); }
   }
-  panel.addEventListener("toggle", () => { if (panel.open) void load(); else { epoch++; body.replaceChildren(); } });
+  panel.addEventListener("toggle", () => { if (panel.open) void load(); else { loads.cancel(); body.replaceChildren(); } });
   if (mode) panel.open = true;
   return panel;
 };

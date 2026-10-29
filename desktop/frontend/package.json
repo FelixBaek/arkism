@@ -7,15 +7,17 @@
     "build": "node build.cjs",
     "check": "node check.cjs",
     "test:browser": "node ../tests/memory-pages.browser.cjs && node ../tests/ui-structure.browser.cjs && node ../tests/list-loading.browser.cjs && node ../tests/virtual-list.browser.cjs && node ../tests/catalog-lists.browser.cjs && node ../tests/popup-drag.browser.cjs && node ../tests/crew-popup-fit.browser.cjs && node ../tests/home-load.browser.cjs && node ../tests/team-cover.browser.cjs && node ../tests/flow.browser.cjs",
-    "lint": "cd .. && eslint -c frontend/eslint.config.js",
+    "lint": "cd .. && eslint -c frontend/eslint.config.js && stylelint -c frontend/stylelint.config.cjs \"ui/**/*.css\"",
     "typecheck": "tsc -p jsconfig.json"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "esbuild": "0.28.2",
     "eslint": "10.12.0",
+    "eslint-plugin-promise": "7.3.0",
     "globals": "17.13.0",
     "playwright-core": "1.63.0",
+    "stylelint": "17.16.0",
     "typescript": "6.0.3"
   }
 }

@@ -371,9 +371,9 @@ export function createAppConnection(deps) {
     const ready = deps.tauri.invoke("local_location").then((l) => {
       loc = l;
       if (!touched) { custom = l.next !== l.default; if (custom) input.value = l.next; }
-      const typing = document.activeElement === input;
+      const restore = globalThis.ArkismKeep.view(row);
       draw();
-      if (typing) input.focus();
+      restore();
       return l;
     }, () => { err.textContent = "저장 위치를 읽지 못했어요."; return null; });
     const wanted = () => (custom ? input.value.trim() : null);

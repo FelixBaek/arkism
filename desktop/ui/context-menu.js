@@ -85,5 +85,5 @@
     d.addEventListener("scroll", close, true);
   };
   wire(document);
-  addEventListener("arkism-popout", (e) => wire(e.detail));
+  (window.ArkismPopoutSetup ||= {}).contextMenu = wire;
 })();

@@ -60,6 +60,10 @@ func TestConflictMarkAndResolve(t *testing.T) {
 			if _, e = f.svc.Conflict(testCtx, f.human, resolve); !errors.Is(e, ErrConflict) {
 				t.Fatal("double resolution", e)
 			}
+			// #466: counted by the chosen resolution, not by the app's constant reason text; marking is not a decision.
+			if d := requireDecision(t, f.repo, "conflict_resolved", tc.resolution); d.Audit.Reason != resolve.Reason {
+				t.Fatalf("conflict reason = %q", d.Audit.Reason)
+			}
 		})
 	}
 }

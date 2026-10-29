@@ -183,6 +183,6 @@
     d.addEventListener("close", hide, true); // a window closing takes its list with it
   };
   wire(document);
-  addEventListener("arkism-popout", (e) => wire(e.detail));
+  (window.ArkismPopoutSetup ||= {}).combo = wire;
   window.ArkismCombo = { open: (ctl) => { if (adopt(ctl)) { ctl.dataset.comboTyped = "0"; show(ctl); } } }; // a button that opens a list input's list
 })();

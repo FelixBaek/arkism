@@ -369,8 +369,8 @@ func newFlowMeeting(parent Record, target FlowDefinition, input string) (*CrewMe
 	}
 	records := map[string]Record{}
 	for id, c := range agents {
-		copy := c
-		records[id] = Record{ID: id, Crew: &copy}
+		crew := c
+		records[id] = Record{ID: id, Crew: &crew}
 	}
 	estimate := estimateTeam(target.Crew, records)
 	m := &CrewMeeting{CostEstimateUSD: estimate.CostUSD, RootID: parent.CrewRun.RootID, ParentID: parent.ID, TeamID: target.ID, TeamRevision: target.Revision, TeamSnapshot: &MeetingSnapshot{Team: target.Crew, Agents: agents}, Status: "pending", Trigger: "workflow", Title: target.Crew.Name, Topic: topic, MaxRounds: end.MaxRounds, TokenCap: end.TokenCap, Turns: []MeetingTurn{}, NotesPending: []MeetingNote{}}

@@ -14,6 +14,12 @@
   const kids = new Map(); // popout window label → { w, root }
   let seq = Date.now() % 1e8;
   const docOf = (w) => { try { return w.closed ? null : w.document; } catch { return null; } };
+  // Every popout window is set up here and only here, whatever popup goes there: dress() gives it this window's look,
+  // styles, icons, title, Esc and the head as its title bar, then runs each script's own wiring for a document
+  // (window.ArkismPopoutSetup: { name: (doc) => … }, kept on window so look.js, loaded before this file, can add to it).
+  // A script that listens on `document` for keys, clicks or menus adds its listeners there too, or a popup that moved
+  // into a window loses them (popout-setup.test.js checks every such script and every kind of popout).
+  const setupOf = new WeakMap(); // popout document → names of the wirings it got
   // A child's document as this one's: same stylesheets, theme and font attributes, marked popout (app.css).
   function dress(d, kid) {
     const html = document.documentElement;
@@ -42,7 +48,11 @@
       e.preventDefault();
       void tauri()?.invoke(e.detail === 2 ? "plugin:window|toggle_maximize" : "plugin:window|start_dragging", { label: kid.label }).catch(() => {});
     });
-    window.dispatchEvent(new CustomEvent("arkism-popout", { detail: d })); // other scripts set up their listeners there (ArkismPopout below)
+    const done = [];
+    for (const [name, wire] of Object.entries(window.ArkismPopoutSetup || {})) {
+      try { wire(d); done.push(name); } catch (err) { console.error(`popout setup ${name}:`, err); } // one broken wiring must not cost the others
+    }
+    setupOf.set(d, done);
   }
   // A stylesheet this window already read goes over as text: a <link> fetched again in the fresh blank window can be
   // dropped while that window is still being set up, which left a popup unstyled in Chrome.
@@ -118,17 +128,20 @@
   // The window the user is in: a popup or menu that code opens from there (a confirm, the next stage) goes there too.
   const FLOAT = (n) => n.tagName === "DIALOG" || n.hasAttribute("popover") || /^(menu|listbox|tooltip)$/.test(n.getAttribute("role") || "") || /menu/.test(n.className || "");
   const focusedKid = () => [...kids.values()].find((k) => docOf(k.w)?.hasFocus());
-  // For other scripts: the popout documents open now, and the one the user is in (else this one). A new one comes as
-  // an "arkism-popout" event on this window (detail: its document), so a listener set on `document` goes there too.
+  // For other scripts: the popout documents open now, the one the user is in (else this one), and which wirings
+  // (ArkismPopoutSetup) a popout document got.
   window.ArkismPopout = {
     docs: () => [...kids.values()].map((k) => docOf(k.w)).filter((d) => d?.documentElement.classList.contains("popout")),
-    current: () => docOf(focusedKid()?.w) || document
+    current: () => docOf(focusedKid()?.w) || document,
+    setups: (d) => [...setupOf.get(d) || []]
   };
 
   // 처음부터 창으로: a popup that can live alone opens in its own window at once, where it would have appeared here.
   new MutationObserver((list) => {
     for (const m of list) {
       const n = m.type === "attributes" ? m.target : null;
+      // a popup that can go names the keyboard's way out (Alt+Shift+O below), whichever script made it poppable
+      if (n?.tagName === "DIALOG") { if (n.dataset.popout) n.setAttribute("aria-keyshortcuts", "Alt+Shift+O"); else if (m.attributeName === "data-popout") n.removeAttribute("aria-keyshortcuts"); }
       const kid = focusedKid();
       if (kid) {
         for (const a of m.addedNodes || []) if (a.nodeType === 1 && a.parentNode === document.body && FLOAT(a)) place(kid, a);

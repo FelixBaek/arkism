@@ -483,13 +483,13 @@ export function createImageViews(deps) {
     });
   }
 
-  let nameSeq = 0;
+  const naming = globalThis.ArkismKeep.latest(); // reopening the dialog drops an AI name still on its way
 
   async function nameWithAI() {
     const text = deps.$("#p-prompt").value.trim();
     if (!text) { autoNote("프롬프트를 먼저 넣어 주세요."); deps.$("#p-prompt").focus(); return; }
     const btn = deps.$("#p-title-ai");
-    const seq = ++nameSeq, titleBefore = deps.$("#p-title").value, firstImage = dialogImages[0];
+    const seq = naming.begin(), titleBefore = deps.$("#p-title").value, firstImage = dialogImages[0];
     btn.disabled = true;
     autoNote("AI가 이름을 정하는 중이에요…");
     const v = (id) => deps.$(id).value.trim();
@@ -503,7 +503,7 @@ export function createImageViews(deps) {
         deps.crew.assist("json", ask, { persona: { crew: { instructions: "You keep an image prompt library tidy. Read the prompt and fill only the fields to save." } } }),
         firstImage && empty("#p-size") ? imageSize(firstImage) : ""
       ]);
-      if (seq !== nameSeq || !promptDialog.open) return; // the dialog was closed or reopened meanwhile
+      if (!seq.live() || !promptDialog.open) return; // the dialog was closed or reopened meanwhile
       if (deps.$("#p-prompt").value.trim() !== text) { autoNote("기다리는 동안 프롬프트가 바뀌어 답을 쓰지 않았어요. 다시 눌러 주세요."); return; }
       const out = a.status === "done" ? deps.crew.parseJSON(a.output) : null;
       if (!out?.title) { autoNote(a.status === "done" ? "AI가 이름을 정하지 못했어요. 직접 넣어 주세요." : deps.crew.assistError(a)); return; }
@@ -514,9 +514,9 @@ export function createImageViews(deps) {
       put("#p-size", (dialogImages[0] === firstImage && size) || out.size); // the first image changed meanwhile: not its shape
       autoNote("AI가 이름과 빈 칸을 채웠어요. 맞게 고쳐서 저장하세요.");
     } catch (e) {
-      if (seq === nameSeq) autoNote(`AI가 답하지 못했어요 (${e.message}). 직접 넣어 주세요.`);
+      if (seq.live()) autoNote(`AI가 답하지 못했어요 (${e.message}). 직접 넣어 주세요.`);
     } finally {
-      if (seq === nameSeq) btn.disabled = false;
+      if (seq.live()) btn.disabled = false;
     }
   }
 
@@ -561,7 +561,7 @@ export function createImageViews(deps) {
     set("#p-size", ip.size); set("#p-count", ip.count || ""); set("#p-seed", ip.seed); set("#p-script-name", ip.script_name); set("#p-script", ip.script);
     set("#p-experts", (ip.experts || []).join(", "));
     deps.$("#prompt-error").textContent = "";
-    nameSeq++; autoNote(""); deps.$("#p-title-ai").disabled = false;
+    naming.cancel(); autoNote(""); deps.$("#p-title-ai").disabled = false;
     drawKindPills(); drawEnginePills();
     promptDialog.showModal();
   }

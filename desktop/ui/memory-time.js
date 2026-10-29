@@ -5,10 +5,11 @@ window.ArkismMemoryTime = (ctx) => {
   const active = () => state.view === "memories" && state.memTab === "past";
   const date = (value) => new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
   const localNow = () => { const now = new Date(); return new Date(now - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
-  let key = "", epoch = 0, rows = [], next = "", busy = false, error = "", selected = null;
+  const loads = globalThis.ArkismKeep.latest();
+  let key = "", rows = [], next = "", busy = false, error = "", selected = null;
   let when = localNow(), term = "", asOf = "", searched = false;
   function reset() {
-    epoch++; key = ""; rows = []; next = ""; busy = false; error = ""; selected = null;
+    loads.cancel(); key = ""; rows = []; next = ""; busy = false; error = ""; selected = null;
     when = localNow(); term = ""; asOf = ""; searched = false;
   }
   function detail() {
@@ -52,8 +53,8 @@ window.ArkismMemoryTime = (ctx) => {
     const requested = more ? next : "";
     if (!asOf) return;
     if (!more) { rows = []; next = ""; selected = null; detail(); }
-    const ticket = ++epoch, current = identity(); busy = true; error = ""; paint();
-    const live = () => active() && ticket === epoch && current === identity();
+    const turn = loads.begin(), current = identity(); busy = true; error = ""; paint();
+    const live = () => active() && turn.live() && current === identity();
     try {
       const page = await request("/v1/memories/at", { method: "POST", body: JSON.stringify({ scope: state.scope, as_of: asOf, q: term, limit: 20, cursor: requested }) });
       if (!live()) return;

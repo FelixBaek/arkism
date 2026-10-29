@@ -1,4 +1,5 @@
 // @ts-check
+import { serverCount } from "./collectionPaging.mjs";
 // Owns memory cursors and refresh. Dependencies are explicit live ports, never a global scope.
 export function createMemoryPaging(deps) {
 
@@ -34,8 +35,8 @@ export function createMemoryPaging(deps) {
 
   const partialMemories = () => !!memoryPages.snapshot().cursor;
 
-  // The server total when known; otherwise the loaded rows, marked "+" while more pages remain.
-  const memoryCount = () => String(deps.state.memoryTotals?.active ?? `${deps.state.data.memories.length}${partialMemories() ? "+" : ""}`);
+  // The server total when known; otherwise the loaded rows, marked "+" while more pages remain; "—" after a failed load (#465).
+  const memoryCount = () => serverCount(deps.state.loadError ? null : deps.state.data.memories, { more: partialMemories(), total: deps.state.memoryTotals?.active }).text;
 
   const filteredMemories = () => deps.state.memTab === "active" && (!!deps.state.query || deps.state.kind !== "all");
 

@@ -45,6 +45,8 @@ type RouteResult struct {
 	Judgments  []SkillJudgment `json:"judgments"`
 	Degraded   []string        `json:"degraded,omitempty"`
 	Authority  string          `json:"authority"`
+	// RouteID names the kept decision so the router can report the load and outcome on it.
+	RouteID string `json:"route_id,omitempty"`
 	// Jev answered but was unsure which candidate to pick: keep the
 	// judgments, withhold the selection (jev_uncertain).
 	lowSelection bool
@@ -153,7 +155,7 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	candidates, known := appendRouteExtras(candidates, records, extras)
 	defer func() { // registered first so it runs after the revocation check below
 		if err == nil {
-			s.recordSkillRoute(ctx, in.Scope, actor, newSkillRoute(out, candidates, in.Runtime))
+			out.RouteID = s.recordSkillRoute(ctx, in.Scope, actor, newSkillRoute(out, candidates, in.Runtime))
 		}
 	}()
 	defer func() {

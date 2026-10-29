@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"strings"
 	"time"
@@ -198,11 +199,13 @@ type ClassificationReport struct {
 	// ones a person decided against the risk call. Error rate = Overturned[risk] / Decided[risk].
 	Decided    map[string]int `json:"decided"`
 	Overturned map[string]int `json:"overturned"`
+	// RejectReasons counts person rejections by quick reason code ("none" when only a note was given).
+	RejectReasons map[string]int `json:"reject_reasons"`
 }
 
 // shortcut: tallies the newest 1000 approved and 1000 rejected candidates; page through them if the queue grows past that.
 func (s *Service) ClassificationReport(ctx context.Context, token string, scope Scope) (ClassificationReport, error) {
-	out := ClassificationReport{Decided: map[string]int{}, Overturned: map[string]int{}}
+	out := ClassificationReport{Decided: map[string]int{}, Overturned: map[string]int{}, RejectReasons: map[string]int{}}
 	if _, e := s.authorize(ctx, token, "review:memory_candidates", scope, "", ""); e != nil {
 		return out, e
 	}
@@ -222,6 +225,9 @@ func (s *Service) ClassificationReport(ctx context.Context, token string, scope 
 			out.Decided[risk]++
 			if r.Review.Overturned {
 				out.Overturned[risk]++
+			}
+			if status == "rejected" {
+				out.RejectReasons[cmp.Or(r.Review.ReasonCode, "none")]++
 			}
 		}
 	}

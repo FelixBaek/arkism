@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom, simpleGraph, crewRecords } = require("./testdata/crew-harness.cjs");
 // 리서치 개선안 검토 lives in 새 워크플로우 › 리서치 (the existing research itself opens from its card).
 async function reviewResearch(h) {
