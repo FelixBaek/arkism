@@ -60,7 +60,8 @@ class CompareTests(unittest.TestCase):
         self.directory = Path(self.temp.name)
         self.registry = json.loads(REGISTRY_PATH.read_bytes())
         self.registry_path = self.directory / 'registry.json'
-        self.registry_path.write_bytes(raw(self.registry))
+        with self.registry_path.open('wb') as stream:
+            stream.write(raw(self.registry))
         self.runs = [run_fixture(self.registry, 0), run_fixture(self.registry, 1)]
         self.paths = [self.directory / 'first.json', self.directory / 'second.json']
         self.save()
@@ -138,7 +139,8 @@ class CompareTests(unittest.TestCase):
 
     def test_duplicate_paths_hashes_and_objects(self):
         self.error('snapshot_conflict', C.compare_runs, [self.paths[0], self.paths[0]], self.registry_path)
-        self.paths[1].write_bytes(self.paths[0].read_bytes())
+        with self.paths[1].open('wb') as stream:
+            stream.write(self.paths[0].read_bytes())
         self.error('snapshot_conflict', C.compare_runs, self.paths, self.registry_path)
         self.runs[1] = copy.deepcopy(self.runs[0])
         self.runs[1]['cost']['elapsed_wall_ns'] = 1
@@ -155,12 +157,14 @@ class CompareTests(unittest.TestCase):
 
     def test_registry_association_and_ablation(self):
         self.registry['entries'][0]['ranker']['registry_sha256'] = sha('foreign')
-        self.registry_path.write_bytes(raw(self.registry))
+        with self.registry_path.open('wb') as stream:
+            stream.write(raw(self.registry))
         self.error('config_mismatch', C.compare_runs, self.paths, self.registry_path)
 
     def test_wrong_constant_returns_fixed_error(self):
         self.registry['entries'][0]['ranker']['outer_offset'] = 59
-        self.registry_path.write_bytes(raw(self.registry))
+        with self.registry_path.open('wb') as stream:
+            stream.write(raw(self.registry))
         self.error('invalid_value', C.compare_runs, self.paths, self.registry_path)
 
     def test_raw_JSON_boundaries(self):
@@ -231,6 +235,27 @@ class CanonicalBoundaryTests(unittest.TestCase):
         with self.assertRaises(C.ContractErrorV2) as caught:
             C.canonical('ScopeV2', value)
         self.assertEqual('unknown_field', caught.exception.code)
+
+
+    def test_pinned_schema_matches_unchanged_contract_declarations(self):
+        contract = json.loads(C.SCHEMA_PATH.read_bytes())
+        types = {**contract['models'], **contract['closed_inline_records'], **contract['hash_projections']}
+        self.assertEqual(C.MODELS, {name: types[name] for name in C.MODELS})
+        self.assertEqual(C.ENUMS, {name: contract['enums'][name] for name in C.ENUMS})
+        self.assertEqual(C.PRIMITIVES, {name: contract['primitives'][name] for name in C.PRIMITIVES})
+
+    def test_pinned_schema_rejects_tampered_bytes(self):
+        with mock.patch.object(C.IO, '_read_regular', return_value=b'{}'):
+            with self.assertRaises(C.ContractErrorV2) as caught:
+                C._schema()
+        self.assertEqual(caught.exception.code, 'hash_mismatch')
+
+    def test_pinned_schema_read_failure_is_fixed_error(self):
+        with mock.patch.object(C.IO, '_read_regular', side_effect=OSError('private detail')):
+            with self.assertRaises(C.ContractErrorV2) as caught:
+                C._schema()
+        self.assertEqual(caught.exception.code, 'io_error')
+        self.assertNotIn('private detail', str(caught.exception))
 
 
 if __name__ == '__main__':
