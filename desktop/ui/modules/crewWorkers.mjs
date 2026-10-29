@@ -617,7 +617,8 @@ export function createCrewWorkers(deps) {
   function loadBots() {
     if (wk.bots !== undefined) return;
     wk.bots = null;
-    deps.request(`/v1/discord?${deps.query()}`).then((d) => { wk.bots = (d.bots || []).map(botOf); }, () => { wk.bots = []; }).then(() => wk.pop?.dialog.open && wk.redraw());
+    const got = (bots) => { wk.bots = bots; if (wk.pop?.dialog.open) wk.redraw(); };
+    deps.request(`/v1/discord?${deps.query()}`).then((d) => got((d.bots || []).map(botOf)), () => got([]));
   }
 
   async function saveBotChannels(b, channels, okText) {
@@ -655,8 +656,8 @@ export function createCrewWorkers(deps) {
       const known = wk.chKnown?.[b.id];
       if (known === undefined) {
         wk.chKnown = { ...(wk.chKnown || {}), [b.id]: null };
-        deps.request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${deps.query()}`).then((r) => r.items || [], () => [])
-          .then((items) => { wk.chKnown[b.id] = items; wk.redraw(); });
+        const got = (items) => { wk.chKnown[b.id] = items; wk.redraw(); };
+        deps.request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${deps.query()}`).then((r) => got(r.items || []), () => got([]));
       }
       const row = deps.el("div", "ex-ch-add");
       const botSel = deps.select(bots.map((x) => [x.id, x.name || x.id]), b.id);
@@ -1255,7 +1256,8 @@ export function createCrewWorkers(deps) {
     const vbox = deps.el("div", "tm-hist");
     if (wk.versions === undefined) {
       wk.versions = null;
-      deps.request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${deps.query()}`).then((r) => { wk.versions = r.items || []; }, () => { wk.versions = []; }).then(() => { if (wk.tab === "history") wk.redraw(); });
+      const got = (v) => { wk.versions = v; if (wk.tab === "history") wk.redraw(); };
+      deps.request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${deps.query()}`).then((r) => got(r.items || []), () => got([]));
     }
     const list = wk.versions || [];
     list.forEach((h, i) => {

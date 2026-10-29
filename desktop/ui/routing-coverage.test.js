@@ -244,6 +244,15 @@ test("agent link buttons connect, reconnect and report each failure", async () =
   delete window.__TAURI__;
 });
 
+test("agent links say the relay state is unknown when gateway_info fails, not that it is off", async () => {
+  window.__TAURI__ = { core: { invoke: async () => { throw new Error("down"); } } };
+  const v = mk();
+  v.state.view = "settings"; v.draw(); await settle();
+  assert.match(text(v.nodes.main), /중계기 상태를 확인하지 못했어요/);
+  assert.doesNotMatch(text(v.nodes.main), /중계기 꺼짐/);
+  delete window.__TAURI__;
+});
+
 test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered group, try a route and save", async () => {
   globalThis.ask = async () => true;
   const v = mk({ mode: "server" });

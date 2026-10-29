@@ -478,8 +478,9 @@ window.ArkismHome = function (ctx) {
       extra = { g: generation, runs: undefined, route: undefined };
       const g = generation;
       const again = () => { if (extra.g === g && state.view === "todo" && !state.selected && !state.todoAll) render(false); };
-      request(`/v1/crew/runs?${query({ limit: 30 })}`).then((r) => r.items || [], () => null).then((v) => { if (extra.g === g) { extra.runs = v; again(); } });
-      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => (d?.kpi ? d : null), () => null).then((v) => { if (extra.g === g) { extra.route = v; again(); } });
+      const runs = (v) => { if (extra.g === g) { extra.runs = v; again(); } }, route = (v) => { if (extra.g === g) { extra.route = v; again(); } };
+      request(`/v1/crew/runs?${query({ limit: 30 })}`).then((r) => runs(r.items || []), () => runs(null));
+      request(`/v1/routing/overview?${query({ range: "30d" })}`).then((d) => route(d?.kpi ? d : null), () => route(null));
     }
     const rows = [];
     if (extra.runs) {

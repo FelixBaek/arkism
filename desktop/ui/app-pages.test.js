@@ -492,6 +492,10 @@ test("고급: ComfyUI address, settings transfer, doctor, backups and erase", as
   app.fake.local_backups = { backups: [] };
   await settings("advanced");
   assert.match(table(), /아직 백업이 없어요/);
+  app.fake.search_mode = new Error("x"); // a failed check says so instead of staying on "확인하는 중…"
+  await settings("advanced");
+  assert.match(table(), /검색 방식을 확인하지 못했어요/);
+  assert.doesNotMatch(table(), /확인하는 중…/);
   const clear = find("기록 지우기");
   if (clear) { clear.click(); await app.settle(); assert.match(notice(), /속도 기록을 지웠어요/); }
   answers.push(false); await press("가져오기");

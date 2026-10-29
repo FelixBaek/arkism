@@ -215,7 +215,8 @@ window.ArkismTeams = (ctx) => {
   function loadStats(id) {
     if (S.stats.has(id)) return;
     S.stats.set(id, null);
-    request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`).then((r) => S.stats.set(id, r), () => S.stats.set(id, { error: true })).then(() => popRedraw("overview"));
+    const got = (r) => { S.stats.set(id, r); popRedraw("overview"); };
+    request(`/v1/crew/teams/${encodeURIComponent(id)}/stats?${query({ days: 30 })}`).then(got, () => got({ error: true }));
   }
   const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
   // Daily bars for the last 30 days from this team's meetings (the stats endpoint only sends totals).

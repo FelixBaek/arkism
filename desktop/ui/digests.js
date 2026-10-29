@@ -69,8 +69,8 @@ window.ArkismDigests = (ctx) => {
     const local = collection === "memories" ? state.data.memories.find((m) => m.id === id) : collection === "memory_candidates" ? state.data.candidates.find((m) => m.id === id) : null;
     if (local) { texts.set(k, local); return local; }
     texts.set(k, undefined);
-    request(`/v1/${collection}/${encodeURIComponent(id)}?${query()}`).then((r) => { texts.set(k, r?.id === id ? r : null); }, () => texts.set(k, null))
-      .then(() => { if (state.view === "memories" && ["digests", "merge"].includes(state.memTab) && !document.querySelector("#detail [data-sync-dirty]")) { paintList(); detail(true); } });
+    const got = (v) => { texts.set(k, v); if (state.view === "memories" && ["digests", "merge"].includes(state.memTab) && !document.querySelector("#detail [data-sync-dirty]")) { paintList(); detail(true); } };
+    request(`/v1/${collection}/${encodeURIComponent(id)}?${query()}`).then((r) => got(r?.id === id ? r : null), () => got(null));
     return undefined;
   }
 
@@ -424,8 +424,8 @@ window.ArkismDigests = (ctx) => {
     const v = views.get(r.id);
     if (v === undefined) {
       views.set(r.id, null);
-      request(`/v1/merge_proposals/${encodeURIComponent(r.id)}?${query()}`).then((x) => views.set(r.id, x?.proposal?.id === r.id ? x : false), () => views.set(r.id, false))
-        .then(() => { if (state.selected === `merge:${r.id}` && !document.querySelector("#detail [data-sync-dirty]")) mergeDetail(); });
+      const got = (x) => { views.set(r.id, x); if (state.selected === `merge:${r.id}` && !document.querySelector("#detail [data-sync-dirty]")) mergeDetail(); };
+      request(`/v1/merge_proposals/${encodeURIComponent(r.id)}?${query()}`).then((x) => got(x?.proposal?.id === r.id ? x : false), () => got(false));
     }
     const cand = v?.candidate || record("memory_candidates", p.candidate?.id);
     const targets = v?.targets?.length ? v.targets : (p.targets || []).map((t) => record("memories", t.id)).filter(Boolean);

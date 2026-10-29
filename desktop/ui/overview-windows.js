@@ -784,7 +784,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const RANGES = [["today", "오늘"], ["7d", "최근 7일"], ["30d", "최근 30일"], ["all", "전체 기간"]];
   const inRange = (x, r) => r === "all" || time(x.ended_at || x.started_at) >= (r === "today" ? new Date().setHours(0, 0, 0, 0) : Date.now() - (r === "7d" ? 7 : 30) * 24 * HOUR);
   const when = (v) => (time(v) ? new Date(v).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : SL.NONE);
-  const copyText = (text, from, done) => { Promise.resolve().then(() => from.ownerDocument.defaultView.navigator.clipboard.writeText(text)).then(() => done(true), () => done(false)); }; // a popout copies in its own window
+  const copyText = async (text, from, done) => { let ok = true; try { await from.ownerDocument.defaultView.navigator.clipboard.writeText(text); } catch (_) { ok = false; } done(ok); }; // a popout copies in its own window
   // stage: opened as the 대화 저장 step, which adds the pipeline summary and each session's archive state to the same list
   function wideSessions(focus = "", quote = "", stage = false) {
     const cached = env.sessions(); // the overview's last 7 days: shown at once while the window's own page loads
@@ -1188,7 +1188,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // node labels come with the map (first 40 characters); the full record is read when a memory is picked
     const fetched = new Map(), memRec = (id) => fetched.get(id) || memOf(id);
     const label = (id) => clip(byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
-    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => { fetched.set(id, r); }, () => { fetched.set(id, false); }).then(() => { if (d.isConnected && sel === id) drawSide(); }); };
+    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); const got = (r) => { fetched.set(id, r); if (d.isConnected && sel === id) drawSide(); }; request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then(got, () => got(false)); };
     const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString(loc(), { year: "numeric", month: "numeric", day: "numeric" });
     // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area

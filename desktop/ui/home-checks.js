@@ -59,8 +59,8 @@ window.ArkismHomeChecks = (ctx) => {
     if (S.g !== generation) S = { g: generation, sessions: null, at: 0 };
     S.at = Date.now();
     const g = generation;
-    request(`/v1/usage/sessions?${query({ range: "7d", limit: 300 })}`).then((d) => (Array.isArray(d?.items) ? d.items : []), () => [])
-      .then((items) => { if (S.g !== g) return; S.sessions = items; if (live()) render(false); });
+    const got = (items) => { if (S.g !== g) return; S.sessions = items; if (live()) render(false); };
+    request(`/v1/usage/sessions?${query({ range: "7d", limit: 300 })}`).then((d) => got(Array.isArray(d?.items) ? d.items : []), () => got([]));
   }
   function stall(sessions, lastExtract, now = Date.now()) {
     const ends = sessions.map((s) => time(s.ended_at || s.started_at)).filter(Boolean);

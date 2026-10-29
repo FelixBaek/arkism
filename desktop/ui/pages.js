@@ -1307,7 +1307,7 @@ window.ArkismPages = (ctx) => {
         ? "뜻과 키워드로 함께 찾아요."
         : "키워드로 찾아요. Ollama를 설치하고 'ollama pull qwen3-embedding:0.6b'를 실행한 뒤 앱을 다시 열면 의미 검색이 켜져요.";
       search.lastChild.replaceWith(el("span", on ? "pill on" : "pill", on ? "의미 검색" : "키워드 검색"));
-    }, () => {});
+    }, () => { search.querySelector("small").textContent = "검색 방식을 확인하지 못했어요."; });
     g.append(search);
     // 쓰던 에이전트의 기억 파일(CLAUDE.md·Claude 메모리·AGENTS.md·GEMINI.md)을 검토 대기로 가져온다.
     g.append(line("에이전트 기억 가져오기", "CLAUDE.md·AGENTS.md·GEMINI.md의 규칙을 검토 대기로 가져와요",

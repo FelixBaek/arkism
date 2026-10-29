@@ -644,10 +644,10 @@ window.ArkismRouting = (ctx) => {
   function agentLinks() {
     const tauri = window.__TAURI__?.core;
     if (!tauri || state.mode !== "local") return null;
-    if (!S.links) { S.links = { agents: {} }; tauri.invoke("gateway_info").then((r) => { S.links = r; render(false); }, () => {}); }
+    if (!S.links) { S.links = { agents: {} }; tauri.invoke("gateway_info").then((r) => { S.links = r; render(false); }, () => { S.links = { agents: {}, failed: true }; render(false); }); }
     const c = el("div", "rt-card pad rt-links");
     const head = el("div", "rt-card-head");
-    head.append(el("strong", "", "에이전트 연결"), el("span", "", S.links.url ? `중계기 ${S.links.url.replace("http://", "")} · 켜짐` : "중계기 꺼짐"));
+    head.append(el("strong", "", "에이전트 연결"), el("span", "", S.links.url ? `중계기 ${S.links.url.replace("http://", "")} · 켜짐` : S.links.failed ? "중계기 상태를 확인하지 못했어요" : "중계기 꺼짐"));
     c.append(head, el("p", "dim", "연결한 에이전트는 이 PC의 Arkism 중계기로 요청을 보내고, 설정 › 에이전트에서 켠 모델 중에서 자동으로 골라 답해요. 각자 로그인은 그대로 써요."));
     for (const [id, logo, name, hint] of AGENT_LINKS) {
       const a = S.links.agents?.[id] || {};
