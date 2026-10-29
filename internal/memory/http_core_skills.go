@@ -1,7 +1,10 @@
 package memory
 
 import (
+	"encoding/base64"
+	"mime"
 	"net/http"
+	"strconv"
 )
 
 func registerSkillsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
@@ -15,6 +18,33 @@ func registerSkillsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 	mux.HandleFunc("GET /v1/skills/trash", s.coreHTTPGetV1SkillsTrash)
 	mux.HandleFunc("POST /v1/skills/route", s.coreHTTPPostV1SkillsRoute)
 	mux.HandleFunc("POST /v1/skills/{id}/availability", s.coreHTTPPostV1SkillsIdAvailability)
+	mux.HandleFunc("GET /v1/skill_versions/{id}/zip", s.coreHTTPGetV1SkillVersionsIdZip)
+}
+
+// coreHTTPGetV1SkillVersionsIdZip serves the zip; format=json wraps it as {filename, content_base64}
+// for the desktop app, whose API bridge reads every answer as JSON text.
+func (s *Service) coreHTTPGetV1SkillVersionsIdZip(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	format := q.Get("format")
+	q.Del("format")
+	scope, err := parseSourceTraceQuery(q.Encode())
+	if err == nil && format != "" && format != "json" {
+		err = ErrInvalid
+	}
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	data, name, err := s.ExportSkillZip(r.Context(), bearer(r), scope, r.PathValue("id"))
+	if err != nil || format == "json" {
+		respond(w, SkillZipExport{Filename: name, ContentBase64: base64.StdEncoding.EncodeToString(data)}, err)
+		return
+	}
+	w.Header().Set(headerContentType, "application/zip")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func registerSkilltrialsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {

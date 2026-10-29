@@ -107,6 +107,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/wiki/jobs/{id}":                               {action: "read:wiki_pages", scope: routeQuery},
 	"GET /v1/wiki/pages":                                   {action: "read:wiki_pages", scope: routeQuery},
 	"GET /v1/wiki/pages/{id}":                              {action: "read:wiki_pages", scope: routeQuery},
+	"GET /v1/skill_versions/{id}/zip":                      {action: "read:skill_versions", scope: routeQuery},
 	"GET /v1/{collection}/{id}":                            {action: "read:{collection}", scope: routeQuery},
 	"GET /{$}":                                             {},
 	"POST /v1/agent_runs/{id}/finish":                      {action: "finish:agent_runs", scope: routeJSON, limit: 256 << 10},

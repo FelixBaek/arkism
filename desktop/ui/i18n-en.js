@@ -2263,7 +2263,7 @@ window.ArkismI18nEN = {
   "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.": "Just enter the server address, like connecting over SSH. No token or login needed.",
   "github.com/owner/repo 또는 owner/repo/경로": "github.com/owner/repo or owner/repo/path",
   "불러오기": "Load",
-  "owner/repo, owner/repo/경로 또는 GitHub 주소를 넣어요. 서버가 저장소를 내려받아 SKILL.md를 찾아요. 받은 파일은 실행하지 않아요.": "Enter owner/repo, owner/repo/path or a GitHub URL. The server downloads the repository and finds SKILL.md files. Downloaded files are never run.",
+  "owner/repo, owner/repo/경로 또는 GitHub 주소를 넣거나 zip 파일을 골라요. 서버가 SKILL.md를 찾아요. 받은 파일은 실행하지 않아요.": "Enter owner/repo, owner/repo/path or a GitHub URL, or pick a zip file. The server finds the SKILL.md files. Received files are never run.",
   "파일": "Files",
   "이미 있음": "Already there",
   "설치 전 확인": "Check before installing",
@@ -6415,3 +6415,12 @@ Object.assign(window.ArkismI18nEN.strings, {
   "프로젝트 밖": "Outside a project", "저장소 없는 폴더": "Folder without a repository"
 });
 Object.assign(window.ArkismI18nEN.patterns, { "세션 {0}개 · {1}번 불러옴, 한 번에 평균": "{0} sessions · {1} recalls, average per recall", "이 세션에 {0}번, 기억 {1}개를 넣어 줬어요": "Recalled {0} times in this session, {1} memories", "세션 {0}": "Session {0}", "{0}번 · 기억 {1}개": "{0} times · {1} memories", "{0} · {1} · 기억 {2}개": "{0} · {1} · {2} memories" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "zip으로 내보내기": "Export as zip", "zip을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.": "Couldn't make the zip. Try again in a moment.",
+  "zip 파일": "Zip file", "zip이 160KB보다 커요. GitHub에 올려 주소로 설치해 주세요.": "The zip is larger than 160KB. Put it on GitHub and install it from the address.",
+  "서버가 zip을 확인하고 있어요. 1분쯤 걸려요…": "The server is checking the zip. This takes about a minute…"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0} 다운로드를 시작했어요.": "{0} download started.",
+  "스킬 {0}개 찾음 · {1} · SHA-256 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · SHA-256 {2} · {3} files · {4}"
+});

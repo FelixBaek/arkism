@@ -4,11 +4,16 @@ package skills
 // A request that is not enabled is a preview (what would be installed, at which commit); an enabled one
 // installs the same commit into the chosen agents' skill folders. No git binary: the repository tarball
 // at a pinned commit, read in memory, with size, file-count, link and path checks. Nothing is run.
+// A request carrying a zip (base64) installs from that archive instead, with the same checks.
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -55,9 +60,16 @@ var (
 	errSkillLink = runtimeError{"링크(심볼릭·하드 링크)가 들어 있어서 설치하지 않아요"}
 )
 
-type skillSource struct{ owner, repo, path, ref string }
+// skillSource is a GitHub repository, or with zip set an uploaded archive named repo.
+type skillSource struct {
+	owner, repo, path, ref string
+	zip                    []byte
+}
 
 func (s skillSource) String() string {
+	if s.zip != nil {
+		return s.repo + ".zip"
+	}
 	out := s.owner + "/" + s.repo
 	if s.path != "" {
 		out += "/" + s.path
@@ -237,6 +249,49 @@ func readTarball(raw []byte, dir string) (map[string]repoFile, error) {
 	return files, nil
 }
 
+// readZip keeps the regular files of an uploaded archive, refusing it whole on a link,
+// an escaping path, a non-regular entry or more than one install's worth of bytes.
+func readZip(raw []byte) (map[string]repoFile, error) {
+	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	if err != nil {
+		return nil, runtimeError{"zip 파일을 읽지 못했어요"}
+	}
+	files, total := map[string]repoFile{}, 0
+	for _, f := range zr.File {
+		rel := strings.TrimSuffix(f.Name, "/")
+		if rel == "" || strings.HasPrefix(rel, "/") || strings.Contains(rel, "\\") || path.Clean(rel) != rel || slicesHas(strings.Split(rel, "/"), "..") {
+			return nil, runtimeError{"zip 밖을 가리키는 경로가 있어서 설치하지 않아요"}
+		}
+		mode := f.Mode()
+		switch {
+		case mode.IsDir():
+			continue
+		case mode&os.ModeSymlink != 0:
+			return nil, errSkillLink
+		case !mode.IsRegular():
+			return nil, runtimeError{"일반 파일이 아닌 항목이 있어서 설치하지 않아요"}
+		}
+		if _, dup := files[rel]; dup {
+			return nil, runtimeError{"같은 경로의 파일이 두 번 들어 있어서 설치하지 않아요"}
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, runtimeError{"zip 파일을 읽지 못했어요"}
+		}
+		// The declared size can lie: count what is actually read.
+		data, err := io.ReadAll(io.LimitReader(rc, int64(skillMaxBytes-total)+1))
+		rc.Close()
+		if err != nil {
+			return nil, runtimeError{"zip 파일을 읽지 못했어요"}
+		}
+		if total += len(data); total > skillMaxBytes || len(files) >= skillMaxFiles {
+			return nil, runtimeError{fmt.Sprintf("zip이 너무 커요. 한 번에 파일 %d개, 5MB까지만 설치해요", skillMaxFiles)}
+		}
+		files[rel] = repoFile{data: data, exec: mode&0o111 != 0}
+	}
+	return files, nil
+}
+
 func slicesHas(list []string, s string) bool {
 	for _, x := range list {
 		if x == s {
@@ -311,16 +366,21 @@ func findSkills(files map[string]repoFile, repo string) ([]foundSkill, error) {
 }
 
 // loadSkillSource downloads and checks one source: the pinned commit and its skills, within the limits.
+// A zip stands in for its SHA-256 where a repository has its commit.
 func loadSkillSource(src skillSource) (string, []foundSkill, map[string]repoFile, error) {
-	commit, err := resolveCommit(src)
-	if err != nil {
-		return "", nil, nil, err
+	var commit string
+	var files map[string]repoFile
+	var err error
+	if src.zip != nil {
+		sum := sha256.Sum256(src.zip)
+		commit = hex.EncodeToString(sum[:])
+		files, err = readZip(src.zip)
+	} else if commit, err = resolveCommit(src); err == nil {
+		var raw []byte
+		if raw, err = githubFetch(githubAPI+"/repos/"+src.owner+"/"+src.repo+"/tarball/"+commit, "application/vnd.github+json", tarballMaxBytes); err == nil {
+			files, err = readTarball(raw, src.path)
+		}
 	}
-	raw, err := githubFetch(githubAPI+"/repos/"+src.owner+"/"+src.repo+"/tarball/"+commit, "application/vnd.github+json", tarballMaxBytes)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	files, err := readTarball(raw, src.path)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -416,8 +476,11 @@ func writeSkill(sk foundSkill, files map[string]repoFile, src skillSource, commi
 			return err
 		}
 	}
-	meta := host.Obj{{Key: "repo", Value: src.owner + "/" + src.repo}, {Key: "path", Value: sk.dir}, {Key: "commit", Value: commit},
-		{Key: "installed_at", Value: installNow().Format(time.RFC3339)}}
+	meta := host.Obj{{Key: "repo", Value: src.owner + "/" + src.repo}, {Key: "path", Value: sk.dir}, {Key: "commit", Value: commit}}
+	if src.zip != nil {
+		meta = host.Obj{{Key: "zip", Value: src.String()}, {Key: "path", Value: sk.dir}, {Key: "sha256", Value: commit}}
+	}
+	meta.Set("installed_at", installNow().Format(time.RFC3339))
 	if err := os.WriteFile(filepath.Join(tmp, skillSourceFile), []byte(host.MustDumps(meta, host.DumpOpts{})+"\n"), 0o644); err != nil {
 		return err
 	}
@@ -437,7 +500,7 @@ func writeSkill(sk foundSkill, files map[string]repoFile, src skillSource, commi
 
 // installSkills writes the skills into each target; every target is checked before anything is written.
 func installSkills(src skillSource, targets []string, update bool) (string, error) {
-	if !shaRx.MatchString(src.ref) {
+	if src.zip == nil && !shaRx.MatchString(src.ref) {
 		return "", runtimeError{"미리보기에서 확인한 커밋이 없어요. 다시 미리보기해 주세요"}
 	}
 	if len(targets) == 0 {
@@ -491,7 +554,7 @@ func installSkills(src skillSource, targets []string, update bool) (string, erro
 
 // applySkillInstall runs one skill_install request: a preview when not enabled, otherwise the install.
 func applySkillInstall(req map[string]any) (string, error) {
-	src, err := parseSkillSource(str(req["name"]))
+	src, err := requestSkillSource(req)
 	if err != nil {
 		return "", err
 	}
@@ -511,6 +574,19 @@ func applySkillInstall(req map[string]any) (string, error) {
 		startSkillSync() // the skill list picks it up now rather than in ten minutes
 	}
 	return detail, err
+}
+
+// requestSkillSource is the request's zip when it carries one, otherwise its GitHub address.
+func requestSkillSource(req map[string]any) (skillSource, error) {
+	z := str(req["zip"])
+	if z == "" {
+		return parseSkillSource(str(req["name"]))
+	}
+	raw, err := base64.StdEncoding.DecodeString(z)
+	if err != nil || len(raw) == 0 {
+		return skillSource{}, runtimeError{"zip 파일을 읽지 못했어요"}
+	}
+	return skillSource{repo: strings.TrimSuffix(str(req["name"]), ".zip"), zip: raw}, nil
 }
 
 // mcpCommandWarning: a stdio server whose program is not on this host's PATH is still added,
