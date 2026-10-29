@@ -55843,6 +55843,12 @@
           },
           "runtime": {
             "type": "string"
+          },
+          "loaded": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
