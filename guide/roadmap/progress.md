@@ -312,3 +312,16 @@ SYS02 A는 현행 독립 평가·현재 참조·checker·trace 경계에 맞춘 
 - [독립 결과 변환 계약·미학습 보존 검증](../work-records/2026-10-30-roadmap-outcome-conversion-contract.md)
 
 앞선 기록은 공개 메타데이터를 정리한 대체 PR487로 이어진다. 새47deb175의 파일 트리는 기존2fe18ddf와 정확히 같고, 기존6워크플로/15체크 성공은 같은 트리의 증거로 보존했다. 새 PR의 원격 결과는 별도로 추적하며 기존 PR486은 대체로 닫았다. 공유 이력은 보존했다.
+
+
+## DYN05 p1 실제 실행·비교와 순위 예외 수용
+
+필수7정책의 순수 adapter·registry·prefix replay/read 기반 runner·Go CLI와 Python compare_runs를 구현했다. 실제 CLI가 게시한7파일을 그대로 비교했으며, 실패·대체·빈 일정과 각 비용 분모를 보존한다. snapshot은 수치 seed가 아닌 consistency witness로만 읽고 state는 원 사건열로 재생한다.
+
+사용자가 기존순위 우선 규칙을 선택해6개 non-B0 정책을 p1-zeroaux-order-v1으로 구분했다. 모든 보조 가중치가0이면 원 상태/feature 검증과 binary64 점수를 유지한 채 B0 순서·포장을 보존한다. 원 버전의 등록 반례와 실패는 실제 재현해 보관했다. 새 버전은 같은 minsubnormal/score0 반례에서 B0와 일치했다.
+
+독립 포함208메서드894세부 일반/race·실제7정책/Python비교 통과. 고정42자산·9source·69입력 검증. 최신 clean 부모a3cd67de에 소스9개를 그대로 통합하고 기본수집380/857·전체92315 종료0(Python624·Go복잡도/vet/race·UI532)을 확인했다.
+
+- [실제 정책 실행기·비교·수치 예외 검증](../work-records/2026-10-30-roadmap-native-policy-runner.md)
+
+원 v4 정의상 p1은 전체 DYN05/capture 완료가 아니다. 선택적 fastslow/capture를 자동 필수화하지 않았으며 전체21/63을 유지한다. 실제 서비스·native producer·실험과 채택은 후속이다.
