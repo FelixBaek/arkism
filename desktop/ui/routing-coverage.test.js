@@ -42,8 +42,8 @@ function mk({ replies = {}, mode = "local" } = {}) {
   const R = {
     "/v1/routing/overview": () => overview(), "/v1/routing/models": () => modelsDoc(), "/v1/routing/groups": () => groupsDoc(),
     "/v1/routing/skills": () => ({ items: [
-      { at, selected: "skill-a", selected_name: "PDF 읽기", confirmed: true, provider: "clef-flash", candidates: 3, loaded: "skill-a", outcome: "failure" },
-      { at, selected: "skill-b", loaded: "skill-x", confirmed: false, provider: "jev-1.13.0", degraded: ["jev_uncertain"], candidates: 2 },
+      { at, selected: "skill-a", selected_name: "PDF 읽기", confirmed: true, provider: "clef-flash", candidates: 3, loaded: "skill-a", outcome: "failure", rival: "skill-b" },
+      { at, selected: "skill-b", loaded: "skill-x", confirmed: false, provider: "jev-1.13.0", degraded: ["jev_uncertain"], candidates: 2, rival: "skill-a", rival_name: "PDF 읽기" },
       { at, selected: "skill-c", selected_name: "검색", confirmed: false, provider: "rules", degraded: ["jev_unavailable"], candidates: 1 },
       { at, confirmed: false, provider: "rules", degraded: ["odd"], candidates: 0 }] }),
     "/v1/routing/policy": () => ({}), "/v1/routing/decide": () => ({ id: "a", decision: "clef", classifier_ms: 200, fallbacks: ["c", "q"] }), ...replies,
@@ -79,6 +79,8 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   assert.match(t, /스킬 판정/); assert.match(t, /PDF 읽기/); assert.match(t, /Clef/); assert.match(t, /skill-b/); assert.match(t, /확신 낮음/);
   // what the agent did with the pick
   assert.match(t, /실패/); assert.match(t, /다른 후보 · 불러옴/); assert.match(t, /불러오지 않음/);
+  // the two skills the judge found fitting the same questions twice, each picked once
+  assert.match(t, /겹치는 스킬/); assert.match(t, /PDF 읽기↔skill-b2번 겹침1 : 1/);
   assert.match(t, /판정 모델 없음/); assert.match(t, /규칙 2/); assert.match(t, /고른 스킬 없음/); assert.match(t, /odd/);
   assert.match(v.r.views.routing.sub(), /실시간/);
   // a turn opens and closes

@@ -83,6 +83,25 @@ window.ArkismRoutingTurns = (ctx) => {
       el("span", "rtg-num", tr(`후보 ${d.candidates}`)), el("span", "rtg-num", used(d)), el("span", "rtg-num", ago ? ago(d.at) : ""));
     return r;
   }
+  // Pairs the judge found both fitting the same question (d.rival), seen twice or more, most frequent first.
+  function overlaps(items) {
+    const pairs = new Map();
+    for (const d of items) {
+      if (!d.rival || !d.selected) continue;
+      const [a, b] = [[d.selected, d.selected_name], [d.rival, d.rival_name]].sort((x, y) => (x[0] < y[0] ? -1 : 1));
+      const p = pairs.get(a[0] + "|" + b[0]) || { a, b, n: 0, wins: 0 };
+      p.n++; if (d.selected === a[0]) p.wins++;
+      pairs.set(a[0] + "|" + b[0], p);
+    }
+    return [...pairs.values()].filter((p) => p.n > 1).sort((x, y) => y.n - x.n).slice(0, 5);
+  }
+  function overlapRow(p) {
+    const r = el("div", "rtg-call rtg-skill");
+    const name = ([id, n]) => { const s = raw(el("span", "rtg-model", n || id)); s.title = id; return s; };
+    r.append(name(p.a), el("span", "rtg-num", "↔"), name(p.b), el("span", "rtg-num", tr(`${num(p.n)}번 겹침`)),
+      el("span", "rtg-num", tr(`${num(p.wins)} : ${num(p.n - p.wins)}`)));
+    return r;
+  }
   // null when the server keeps no decisions yet.
   function skillCard(items) {
     if (!items?.length) return null;
@@ -96,6 +115,12 @@ window.ArkismRoutingTurns = (ctx) => {
     const list = el("div", "rtg-calls rtg-skills");
     list.append(...items.slice(0, SKILLS_SHOWN).map(skillRow));
     c.append(head, el("small", "", "route_skills가 고른 스킬과 판정기예요. 규칙은 판정 모델 없이 검색 1위를 고른 것이고, 확신 낮음은 판정기가 고르지 않은 것이에요."), by, list);
+    const pairs = overlaps(items);
+    if (pairs.length) {
+      const o = el("div", "rtg-calls rtg-skills");
+      o.append(...pairs.map(overlapRow));
+      c.append(el("p", "rtg-label", "겹치는 스킬"), el("small", "", "같은 질문에 둘 다 맞다고 판정된 스킬이에요. 숫자는 각각 뽑힌 횟수예요. 자주 겹치면 설명에서 쓰는 때를 나누거나 하나로 합치세요."), o);
+    }
     return c;
   }
   return { card, skillCard };

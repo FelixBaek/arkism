@@ -7619,7 +7619,7 @@
           }}}
     },
     "/v1/routing/skills": {
-      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{id, at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?, loaded?, outcome?}}: newest 200, skill ids and names only, never the query. loaded is the version the agent then loaded; outcome is its skill.usage status.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{id, at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?, loaded?, outcome?, rival?, rival_name?}}: newest 200, skill ids and names only, never the query. loaded is the version the agent then loaded; outcome is its skill.usage status. rival is another judged candidate that also fit (suitability 2+, confidence 0.5+) but was not picked.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -56030,6 +56030,12 @@
             "type": "string"
           },
           "outcome": {
+            "type": "string"
+          },
+          "rival": {
+            "type": "string"
+          },
+          "rival_name": {
             "type": "string"
           }
         },
