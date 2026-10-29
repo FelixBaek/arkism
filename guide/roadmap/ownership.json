@@ -3541,7 +3541,7 @@
       "id": "CRW-05",
       "issue": 154,
       "owner": "CRW-05",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
