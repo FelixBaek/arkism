@@ -109,3 +109,21 @@ not the card's name in a log. A substage pass, green general CI or a worker's
 completion statement does not establish full-card, product or research-effect
 acceptance. Continue recording actual commands, failures, unknowns and remaining
 limits as implementation progresses.
+
+CRW-02 first freezes and independently reviews its owned helper API at
+`CRW-02.modules`. The single INTEGRATION writer then connects the observer
+to calls, existing FLOW reservations, meeting turns, trace delivery and host
+usage transport. This substage resolves the former circular interpretation
+of waiting for full CRW-02 acceptance before its own wiring. The CRW-02
+completion gate still requires the integrated card criteria. Host producer
+and corresponding test paths are explicitly registered as shared files;
+worker file ownership is unchanged. Frozen private CRW-01 artifacts retain
+their accepted bytes; a private dispatch overlay records this later ownership
+revision. No external-call or build authorization is granted by this change.
+
+`CRW-01.execution_refs_v2` is a separate preparation extension owned by R0.
+Its five private artifact paths preserve the accepted crew v1 registry and
+consumer pins. The extension must distinguish actual workflow, meeting and
+assist record collections, require explicit verified roots, and keep effect
+approval bound to crew_runs. Full CRW-02 acceptance and meeting/host wiring
+also require this gate; v1 helper review does not satisfy it.
