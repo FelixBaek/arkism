@@ -3632,7 +3632,7 @@
             }
           }
         },
-        "description": " Direct memories transition to superseded is invalid; use /v1/memories/{id}/supersede to create atomic replacement links. Evaluations used as verification evidence must have current valid sources and direct relations. Deleted, stale, inactive or expired supporting records invalidate the evaluation for this use; summaries return no partial result. Target identity/revision and evaluator independence checks remain unchanged. This is not recursive graph validation or physical cascade deletion."
+        "description": "Body {scope, expected_revision, status, reason_code, reason}. reason_code (stale|changed|unused|wrong|duplicate) with an optional reason note is allowed only for memories moving to rejected; it is stored as removal {code, note, by, at} and the memory leaves recall but stays in history. Direct memories transition to superseded is invalid; use /v1/memories/{id}/supersede to create atomic replacement links. Evaluations used as verification evidence must have current valid sources and direct relations. Deleted, stale, inactive or expired supporting records invalidate the evaluation for this use; summaries return no partial result. Target identity/revision and evaluator independence checks remain unchanged. This is not recursive graph validation or physical cascade deletion."
       }
     },
     "/v1/skills/{id}/apply": {
@@ -5173,7 +5173,7 @@
               }
             }
           }}}},
-    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss|forget_both}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing, forget_both (contradiction only, 400 otherwise) rejects both and keeps them as history (status forgotten). A signal proposal takes accept or dismiss only (swap 400) and neither changes the memory. accept, swap and forget_both run the conflict path's mark and resolve (second_supersedes_first, or reject_both) with the proposal close in one transaction and need transition:memories on both memories. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
+    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss|forget_keep|forget_retire|forget_both|forget, reason_code, reason}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. forget_keep, forget_retire and forget_both (pair proposals) and forget (signal proposals) reject the named memories with a removal {code, note, by, at} and keep them as history (status forgotten); they require reason_code stale|changed|unused|wrong|duplicate, which every other decision must leave empty (400). A signal proposal takes accept, dismiss or forget (swap 400); accept and dismiss do not change the memory. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction; every decision that changes memories needs transition:memories on each of them. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -8685,7 +8685,7 @@
     "/v1/memory_candidates/{id}/review": {
       "post": {
         "summary": "Human approve, edit-and-approve or reject",
-        "description": "Requires transition:memory_candidates and human role, with ContentSafe policy decision. Approval atomically updates candidate, inserts active memory with same ID and next candidate revision, queues embedding and writes audit. Edit preserves original proposal and sources; drops stale summary/keywords/embedding on new memory. Reject requires reason and can dispose of candidates with broken sources. Already reviewed or revision conflict returns 409. Input secrets return 422. Legacy /transition remains a separate two-step client contract backed by the same transition engine. Policy content_safe=true is mandatory; false returns 403; omitted decision fields return 503. Review/list permission alone does not grant transition permission. Legacy records may lack review metadata.",
+        "description": "Requires transition:memory_candidates and human role, with ContentSafe policy decision. Approval atomically updates candidate, inserts active memory with same ID and next candidate revision, queues embedding and writes audit. Edit preserves original proposal and sources; drops stale summary/keywords/embedding on new memory. Reject requires reason or reason_code (stale|changed|unused|wrong|duplicate; reject only) and can dispose of candidates with broken sources. Already reviewed or revision conflict returns 409. Input secrets return 422. Legacy /transition remains a separate two-step client contract backed by the same transition engine. Policy content_safe=true is mandatory; false returns 403; omitted decision fields return 503. Review/list permission alone does not grant transition permission. Legacy records may lack review metadata.",
         "parameters": [
           {
             "name": "id",
@@ -8882,7 +8882,7 @@
           }}}
     },
     "/v1/memory_candidates/classification_report": {
-      "get": {"summary": "How often people decided against the AI risk call", "description": "Needs review:memory_candidates. Counts the newest 1000 approved and 1000 rejected candidates per AI risk at decision time (none when unclassified), skipping decisions no person made (service review policies, capture auto-approval). overturned = approved while high, or rejected while low. Error rate per risk = overturned / decided.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{decided: {risk: n}, overturned: {risk: n}}"}, "403": {"description": "No review:memory_candidates permission"},
+      "get": {"summary": "How often people decided against the AI risk call", "description": "Needs review:memory_candidates. Counts the newest 1000 approved and 1000 rejected candidates per AI risk at decision time (none when unclassified), skipping decisions no person made (service review policies, capture auto-approval). overturned = approved while high, or rejected while low. reject_reasons counts rejected candidates by reason_code (none when absent). Error rate per risk = overturned / decided.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{decided: {risk: n}, overturned: {risk: n}}"}, "403": {"description": "No review:memory_candidates permission"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -44755,6 +44755,9 @@
           },
           "reject_score": {
             "type": "number"
+          },
+          "removal": {
+            "$ref": "#/components/schemas/WireResponseRemoval"
           }
         },
         "additionalProperties": false,
@@ -47162,6 +47165,9 @@
           },
           "overturned": {
             "type": "boolean"
+          },
+          "reason_code": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -52781,6 +52787,12 @@
           },
           "version_id": {
             "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -58000,6 +58012,33 @@
         "x-go-type": "memory.MemoryWorkCounts",
         "x-go-source": "internal/memory/memory_signal.go",
         "description": "MemoryWorkCounts are the host-observed work results of the sessions a memory\nwas delivered to: one session counts once, by the last test and CI result the\nhost saw in it (#356). Counts only, never commands or output."
+      },
+      "WireResponseRemoval": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "by",
+          "at"
+        ],
+        "x-go-type": "memory.Removal",
+        "x-go-source": "internal/memory/removal.go",
+        "description": "Removal is why a person removed a memory: it stays in history (status rejected) with this note."
       }
     },
     "headers": {

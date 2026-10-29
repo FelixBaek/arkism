@@ -7,6 +7,7 @@ const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
 const h = dom.helpers(document);
 require("./session-list.js");
+require("./delete-reason.js"); // the reason picker the review rows share
 require("./overview-windows.js");
 
 function windows(memories, memoryUse, read) {

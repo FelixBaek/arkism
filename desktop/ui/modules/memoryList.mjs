@@ -306,14 +306,15 @@ export function createMemoryList(deps) {
     } finally { reviewing.delete(id); }
   }
 
-  function resolveConflict(c, choice) {
+  // why ({code, note}, from the 지우기 picker) is stored on the rejected candidate and, for drop, on the removed memory.
+  function resolveConflict(c, choice, why) {
     return reviewOnce(c.id, async () => {
       const rel = await deps.request(`/v1/memory_relations/${encodeURIComponent(c.conflict_id)}?${deps.query()}`);
       const memory = rel.relations?.find((r) => r.collection === "memories");
       if (!memory) throw new Error("revision_conflict");
       const payload = { scope: deps.state.scope, expected_revision: c.revision,
         action: choice === "keep_old" || choice === "drop" ? "reject" : "approve",
-        ...(choice === "keep_old" || choice === "drop" ? { reason: CONFLICT_REASON } : {}),
+        ...(choice === "keep_old" || choice === "drop" ? { reason: why?.note || CONFLICT_REASON, ...(why ? { reason_code: why.code } : {}) } : {}),
         conflict: { id: rel.id, expected_revision: rel.revision, memory,
           resolution: { keep_old: "keep_old", drop: "keep_old", both: "keep_both", new: "replace_old" }[choice], reason: CONFLICT_REASON } };
       await deps.request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
@@ -322,7 +323,7 @@ export function createMemoryList(deps) {
         // Resolving the conflict moved the old memory exactly one revision; anyone else's edit after that makes the delete refuse.
         // The review already committed, so a failed delete must say the old memory is still there.
         try {
-          await deps.request(`/v1/memories/${encodeURIComponent(memory.id)}`, { method: "DELETE", body: JSON.stringify({ scope: deps.state.scope, expected_revision: memory.revision + 1 }) });
+          await window.ArkismDeleteReason.removeMemory(deps.request, deps.state.scope, { id: memory.id, revision: memory.revision + 1 }, why || { code: "wrong" });
         } catch {
           deps.notice("고친 내용은 버렸지만 지금 기억은 지우지 못했어요. 기억 목록에서 직접 지워 주세요.");
           deps.state.selected = null;
@@ -336,10 +337,12 @@ export function createMemoryList(deps) {
     });
   }
 
+  // reason: a note, or {reason_code, reason} from the 지우기 picker
   function decide(item, action, reason) {
+    const extra = typeof reason === "object" ? reason : reason ? { reason } : {};
     return reviewOnce(item.id, async () => {
       await deps.request(`/v1/memory_candidates/${encodeURIComponent(item.id)}/review`, {
-        method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(item.id, { scope: deps.state.scope, expected_revision: item.revision, action, ...(reason ? { reason } : {}) }))
+        method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(item.id, { scope: deps.state.scope, expected_revision: item.revision, action, ...extra }))
       });
       deps.notice(action === "approve" ? "기억으로 저장했어요." : "후보를 버렸어요.");
       deps.state.selected = null;

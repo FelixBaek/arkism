@@ -83,28 +83,73 @@ func TestMaintenanceSwapAndDismiss(t *testing.T) {
 	requireDecision(t, f.repo, "dreaming_dismiss", "same_meaning")
 }
 
-func TestMaintenanceForgetBothKeepsBothAsHistory(t *testing.T) {
+func TestMaintenanceForgetKeepsMemoriesAsHistoryWithReason(t *testing.T) {
 	f, older, newer, in := maintenanceFixture(t)
 	p, _ := f.svc.ProposeMaintenance(testCtx, f.human, in)
-	if _, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both"}); !errors.Is(err, ErrInvalid) {
-		t.Fatal("forget_both on a duplicate", err)
+	for _, bad := range []MaintenanceDecision{
+		{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both"},                        // no reason
+		{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both", ReasonCode: "someday"}, // unknown reason
+		{Scope: scopeA, ExpectedRevision: 1, Decision: "dismiss", ReasonCode: "stale"},       // reason without forgetting
+		{Scope: scopeA, ExpectedRevision: 1, Decision: "forget", ReasonCode: "stale"},        // signal-only decision
+	} {
+		if _, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal(bad, err)
+		}
 	}
-
-	f, older, newer, in = maintenanceFixture(t)
-	in.Proposal.Type, in.Proposal.Reason = "contradiction", "newer_replaces_older"
-	p, _ = f.svc.ProposeMaintenance(testCtx, f.human, in)
-	d, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both"})
+	if out, e := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "한국어"}); e != nil || len(out.Items) == 0 {
+		t.Fatal("the pair is not recalled before forgetting", e)
+	}
+	// A duplicate pair can lose both: each keeps the reason, who and when, and leaves recall.
+	d, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_both", ReasonCode: "stale", Reason: "디자인을 새 파일로 옮김"})
 	if err != nil || d.Status != "forgotten" || d.Maintenance.Decision != "forget_both" {
 		t.Fatal("forget_both", d.Status, err)
 	}
 	for _, id := range []string{older.ID, newer.ID} {
-		// Not deleted: the record stays, rejected and out of any conflict.
-		if got := f.get(f.human, "memories", scopeA, id); got.Status != "rejected" || got.ConflictID != "" {
-			t.Fatal("forgotten memory", id, got.Status, got.ConflictID)
+		got := f.get(f.human, "memories", scopeA, id)
+		if got.Status != "rejected" || got.ConflictID != "" || got.Removal == nil || got.Removal.Code != "stale" || got.Removal.Note != "디자인을 새 파일로 옮김" || got.Removal.By == "" || got.Removal.At.IsZero() {
+			t.Fatal("forgotten memory", id, got.Status, got.Removal)
 		}
+	}
+	if out, e := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "한국어"}); e != nil || len(out.Items) != 0 {
+		t.Fatal("a forgotten memory is still recalled", out.Items, e)
 	}
 	if done, _ := f.svc.ListMaintenance(testCtx, f.human, scopeA, "forgotten"); len(done.Items) != 1 {
 		t.Fatal("forgotten list")
+	}
+
+	// Forgetting one side leaves the other active.
+	f, older, newer, in = maintenanceFixture(t)
+	in.Proposal.Type, in.Proposal.Reason = "contradiction", "newer_replaces_older"
+	p, _ = f.svc.ProposeMaintenance(testCtx, f.human, in)
+	if _, err := f.svc.DecideMaintenance(testCtx, f.human, p.ID, MaintenanceDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "forget_retire", ReasonCode: "wrong"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.get(f.human, "memories", scopeA, older.ID); got.Status != "rejected" || got.Removal.Code != "wrong" {
+		t.Fatal("retire side", got.Status)
+	}
+	if got := f.get(f.human, "memories", scopeA, newer.ID); got.Status != "active" || got.Removal != nil {
+		t.Fatal("keep side changed", got.Status)
+	}
+}
+
+func TestMemoryTransitionStoresRemovalReason(t *testing.T) {
+	f := newFixture(t)
+	m := f.activeMemory("오래된 리디자인 계획")
+	for _, bad := range []ChangeInput{
+		{Scope: scopeA, ExpectedRevision: m.Revision, Status: "rejected", ReasonCode: "someday"},
+		{Scope: scopeA, ExpectedRevision: m.Revision, Status: "rejected", Reason: "note without a code"},
+		{Scope: scopeA, ExpectedRevision: m.Revision, Status: "expired", ReasonCode: "stale"},
+	} {
+		if _, err := f.svc.Transition(testCtx, f.human, "memories", m.ID, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal(bad, err)
+		}
+	}
+	got, err := f.svc.Transition(testCtx, f.human, "memories", m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision, Status: "rejected", ReasonCode: "changed", Reason: "계획이 바뀜"})
+	if err != nil || got.Status != "rejected" || got.Removal == nil || got.Removal.Code != "changed" || got.Removal.Note != "계획이 바뀜" || got.Removal.By == "" {
+		t.Fatal(got.Removal, err)
+	}
+	if stored := f.get(f.human, "memories", scopeA, m.ID); stored.Removal == nil || stored.Removal.Code != "changed" {
+		t.Fatal("removal not stored", stored.Removal)
 	}
 }
 

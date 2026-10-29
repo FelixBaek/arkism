@@ -10,6 +10,7 @@ import "./popup-drag.js";
 import "./context-menu.js";
 import "./window-controls.js";
 import "./field-need.js";
+import "./delete-reason.js";
 import "./i18n.js";
 import "./preference-transfer.js";
 import "./agent-memory-import.js";

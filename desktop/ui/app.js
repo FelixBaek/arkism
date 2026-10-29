@@ -992,16 +992,18 @@ export function startApp() {
     const ul = el("ul", "home-bullets");
     [`‘${t.keep.text}’를 계속 써요`, `‘${t.retire.text}’는 기억 이력으로 넘어가요`, "이력에서 언제든 다시 볼 수 있어요"].forEach((x) => ul.append(raw(el("li", "", x))));
     plan.append(ul);
-    const decide = (decision, done) => memoryList.reviewOnce(t.p.id, async () => {
+    const decide = (decision, done, extra = {}) => memoryList.reviewOnce(t.p.id, async () => {
       await appApi.request(`/v1/maintenance_proposals/${encodeURIComponent(t.p.id)}/decide`, { method: "POST",
-        body: JSON.stringify({ scope: state.scope, expected_revision: t.p.revision, decision }) });
+        body: JSON.stringify({ scope: state.scope, expected_revision: t.p.revision, decision, ...extra }) });
       await memoryList.reloadMemories();
       notice(done);
     });
     const foot = el("div", "actions");
-    if (!merge) foot.append(button("둘 다 지우기", "ghost danger tidy-forget", null, async () => { // both wrong: both go to history, not deleted
-      if (await ask("두 기억을 다 지울까요?\n\n둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", "둘 다 지우기")) await decide("forget_both", "둘 다 지웠어요. 기억 이력에는 남아요.");
-    }));
+    // 지우기: either memory or both, with a reason; removed memories go to history, not deleted
+    const DR = window.ArkismDeleteReason;
+    foot.append(button("지우기", "ghost danger tidy-forget", null, () => DR.openAfter(foot, { targets: [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]], target: "forget_retire",
+      onConfirm: async (why) => (await decide(why.target, "지웠어요. 지운 이유와 함께 기억 이력에 남아요.", DR.rejectFields(why)) ? undefined : { error: "지우지 못했어요." }) })));
+    if (DR.maybeStale(t.p, [t.keep, t.retire])) foot.append(DR.staleHint());
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
       button("반대로 남기기", "", null, () => decide("swap", "반대쪽 기억을 남겼어요. 다른 하나는 이력에 남아요.")),
       button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "primary", null, () => decide("accept", merge ? "합쳤어요. 옛 기억은 이력에 남아요." : "바꿨어요. 예전 기억은 이력에 남아요.")));
