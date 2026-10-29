@@ -2255,7 +2255,7 @@ export function startApp() {
     const heading = $("#detail h2");
     if (heading) { heading.tabIndex = -1; heading.focus(); }
   }
-  const skillGenerate = window.ArkismSkillGenerate({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll });
+  const skillGenerate = window.ArkismSkillGenerate({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, tauri });
   const catalog = window.ArkismCatalog({ state, el, button, request: appApi.request, notice, agentLogo, reload: loadAll, pollTools: toolViews.pollTools });
   const skillExecution = window.ArkismSkillExecution({ state, el, button, tauri });
   const skillTrial = window.ArkismSkillTrial({ state, el, button, request: appApi.request, query: appApi.query });

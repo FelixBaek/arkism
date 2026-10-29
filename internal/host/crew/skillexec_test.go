@@ -126,6 +126,14 @@ func TestSkillExecutionRealJobRetryPublishesWithoutRerun(t *testing.T) {
 	if profile["dataset_sha256"] != f.plan["dataset_sha256"] || strings.Contains(mustCanonical(profile), "argv") {
 		t.Fatal(profiles)
 	}
+	cases, _ := num(profile["cases"])
+	plan := obj(profile["default_plan"])
+	duration, _ := num(plan["max_duration_ms"])
+	gain, _ := num(plan["min_score_gain"])
+	cost, _ := num(plan["max_cost"])
+	if cases < 1 || duration != cases*5000 || gain != 0.05 || cost != defaultMaxCost {
+		t.Fatal(profile)
+	}
 	first := f.call(f.request)
 	job, _ := first["job_id"].(string)
 	if first["status"] != "running" || f.call(f.request)["job_id"] != job {
