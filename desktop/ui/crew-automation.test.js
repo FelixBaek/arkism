@@ -331,3 +331,53 @@ test("#465 automation: failed channel and destination reads say so, with a retry
   assert.equal(chan(), "채널 고르기");
   assert.doesNotMatch(d.textContent, /보낼 곳을 불러오지 못했어요/);
 });
+
+test("cards ring by their latest run: waiting amber, running green, failed red, idle none", async () => {
+  const h = await boot();
+  h.render(); await h.settle();
+  const ring = (id) => [...document.querySelector(`[data-id="crew:${id}"]`).classList].filter((c) => c.startsWith("run-"));
+  assert.deepEqual(ring("wf1"), ["run-waiting"]);
+  assert.deepEqual(ring("wf2"), ["run-failed"]);
+  h.data.runs = h.data.runs.filter((r) => r.id !== "run3");
+  h.render(); await h.settle();
+  assert.deepEqual(ring("wf2"), ["run-running"]);
+  h.data.runs = [];
+  h.render(); await h.settle();
+  assert.deepEqual(ring("wf1"), []);
+  assert.deepEqual(clean(), []);
+});
+
+test("기록·사용량: one workflow's numbers, periods, failing steps and retry", async () => {
+  const usage = { kpi: { runs: 4, cost_usd: 1.2 }, by_day: [{ date: "2026-10-27", ok: 2, workflow: 2, failed: 1 }, { date: "2026-10-28", ok: 1, workflow: 1, failed: 0 }],
+    workflows: [{ id: "wf1", runs: 4, success_rate: 75, tokens: 8100000, avg_ms: 190000, max_ms: 362000 }], failing_nodes: [{ workflow_id: "wf1", node_id: "code", failures: 1 }] };
+  const failed = { id: "runf", revision: 1, created_at: new Date().toISOString(), crew_run: { crew_id: "wf1", status: "failed", input: "{}", nodes: { code: { status: "failed", error: "exit 1" }, ai1: { status: "done", output: "x" } } } };
+  const asked = [];
+  const h = await boot({ routes: [["GET", /^\/v1\/crew\/usage\?/, (_, url) => { asked.push(url); return usage; }]] });
+  h.data.runs.push(failed);
+  const d = await openAuto(h, "wf1", "history");
+  await h.settle();
+  assert.equal(d.querySelector(".crew-popup-tab.on").textContent, "기록·사용량");
+  const sec = d.querySelector(".flow-usage");
+  assert.ok(sec, "사용량 sits in the tab");
+  const heads = [...d.querySelectorAll(".auto-history > section")].map((s) => s.querySelector("strong")?.textContent);
+  assert.deepEqual(heads.slice(0, 3), ["사용량", "버전 기록", "최근 실행"]);
+  assert.match(sec.textContent, /75\.0%/);
+  assert.match(sec.textContent, /3분 10초/);
+  assert.match(sec.textContent, /가장 긴 실행 6분 02초/);
+  assert.match(sec.textContent, /토큰 8\.1M/);
+  assert.equal(sec.querySelectorAll(".tm-col").length, 2);
+  assert.match(sec.textContent, /실패가 많은 단계/);
+  // retry: refused, then sent with the done step kept
+  h.answer = false; exact(sec, "다시 실행").click(); await h.settle();
+  assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)).length, 0);
+  h.answer = true; exact(sec, "다시 실행").click(); await h.settle();
+  const sent = h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)).pop();
+  assert.ok(sent, "a retry run was sent");
+  assert.equal(sent.body.run.nodes.ai1.status, "done");
+  // periods reload; an empty answer shows the error line
+  usage.kpi = undefined;
+  exact(sec, "7일").click(); await h.settle();
+  assert.match(sec.textContent, /사용량을 불러오지 못했어요/);
+  assert.ok(asked.every((u) => /workflow_id=wf1/.test(u)), asked.join(" "));
+  assert.deepEqual(clean(), []);
+});

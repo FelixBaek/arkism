@@ -21,9 +21,8 @@ window.ArkismShell = (ctx) => {
       ["overview", "한눈에", () => go("overview"), () => state.view === "overview"]
     ] },
     agent: { label: "FLOW", tabs: [
-      ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph", "workers", "teams", "teamNew", "meetings"].includes(state.view), count("crew")],
-      // 디스코드 tab hidden: bots live in 설정 › 메신저 (Figma 1012:60790); the view code stays in team.js.
-      ["crew-usage", "사용량", () => go("crewUsage"), () => state.view === "crewUsage"]
+      // One page, so no tab is drawn; usage sits in each workflow's 기록·사용량 tab. 디스코드 bots live in 설정 › 메신저.
+      ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph", "workers", "teams", "teamNew", "meetings"].includes(state.view), count("crew")]
     ] },
     router: { label: "ROUTER", tabs: [
       // 라우팅 설정 has no tab of its own (Figma 1303:79879): the policy card's 「라우팅 설정」 button opens it, and 라우팅 현황 stays lit.
@@ -69,8 +68,15 @@ window.ArkismShell = (ctx) => {
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     const box = $("#area-tabs");
-    const tabs = MENUS[key].tabs;
+    // FLOW has one page, so no tab line
+    const tabs = key === "agent" ? [] : MENUS[key].tabs;
+    box.parentElement.hidden = key === "agent"; // FLOW (1424:2375) starts with its filters, no empty tab line
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
+    // 현재 위치 (shown while the rail is folded): the menu, then the open tab when the menu has more than one
+    const where = [el("span", "", $(`.nav-item[data-menu="${key}"] span`)?.textContent || MENUS[key].label)];
+    const tab = MENUS[key].tabs.length > 1 && MENUS[key].tabs.find((t) => t[3]());
+    if (tab) where.push(el("span", "sep", "›"), window.ArkismI18n.bindMessage(el("span"), "navigation." + key + "." + tab[0]));
+    $("#location-bar").replaceChildren(...where);
     box.replaceChildren(...tabs.map(([id, , open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);
       t.type = "button";
@@ -91,6 +97,28 @@ window.ArkismShell = (ctx) => {
     state.menu = key;
     MENUS[key].tabs[0][2]();
   }));
+  // 메뉴 접기: the rail folds to icons (remembered on this PC). Narrow windows always get the folded rail, without the button.
+  const FOLD = "arkism.rail.folded";
+  const narrow = window.matchMedia?.("(max-width: 1000px)");
+  const toggle = $("#rail-toggle");
+  let folded = false;
+  try { folded = localStorage.getItem(FOLD) === "1"; } catch (_) { /* storage off: start open */ }
+  const fold = () => {
+    const small = !!narrow?.matches;
+    document.documentElement.classList.toggle("rail-collapsed", folded || small);
+    toggle.hidden = small;
+    const label = folded ? "메뉴 펼치기" : "메뉴 접기";
+    toggle.setAttribute("aria-expanded", String(!folded));
+    toggle.setAttribute("aria-label", label);
+    toggle.title = label;
+  };
+  toggle.addEventListener("click", () => {
+    folded = !folded;
+    try { localStorage.setItem(FOLD, folded ? "1" : "0"); } catch (_) { /* this window only */ }
+    fold();
+  });
+  narrow?.addEventListener?.("change", fold);
+  fold();
   // The dot next to the logo is the server connection; clicking it shows the details.
   const card = $("#status-card");
   $("#status-toggle").addEventListener("click", (e) => {
