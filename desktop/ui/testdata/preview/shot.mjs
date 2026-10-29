@@ -16,7 +16,7 @@ await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKE
   if (remote) { localStorage.setItem("arkism.mode", "remote"); localStorage.setItem("arkism.ssh", JSON.stringify({ host: "my-server", user: "me" })); }
   localStorage.setItem("arkism.look", JSON.stringify({ theme: theme || "dark", lang: lang || "ko" }));
   // Stand-in for the desktop app: the built-in Arkism is the read-only preview server.
-  window.__TAURI__ = { core: { invoke: async (cmd, a = {}) => {
+  window.__TAURI__ = { app: { getVersion: async () => "0.1.1" }, core: { invoke: async (cmd, a = {}) => {
     if (cmd === "app_defaults") return { local: !remote };
     if (cmd === "ssh_connect") return { server: origin, token: "preview", workspace_id: "default", project_id: "default", ssh_host: "my-server" };
     if (cmd === "local_start") return { server: origin, token: "preview" };

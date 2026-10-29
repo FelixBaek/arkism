@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/buildinfo"
 )
 
 // SetRecoveryMode (postgres.go) restricts job claims to erasure jobs. Recovery
@@ -31,7 +33,9 @@ func RecoveryHandler(s *Service) http.Handler {
 		mux.Handle(pattern, normal)
 	}
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "recovery"})
+		h := buildinfo.Current()
+		h.Status = "recovery"
+		writeJSON(w, http.StatusOK, h)
 	})
 	mux.HandleFunc("GET /recovery-identity", func(w http.ResponseWriter, r *http.Request) {
 		store, ok := s.Repo.(interface {

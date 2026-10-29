@@ -430,6 +430,25 @@ test("overview: a contradiction can drop both memories after a confirm; a duplic
   await closeAll();
 });
 
+test("an older server: one banner, and 둘 다 지우기 stays visible but off with the reason", async () => {
+  const off = route("GET", "/healthz", () => ok({ status: "ok" })); // a server from before /healthz named its version
+  try {
+    await app.click("#local-retry", 50); // reconnecting reads /healthz again
+    assert.equal(app.$("#server-banner").hidden, false);
+    assert.match(text(app.$("#server-banner")), /서버가 앱보다 오래됐어요 · 서버 \(이전 버전\)/);
+    await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+    for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+    const drop = btn("둘 다 지우기", win());
+    assert.equal(drop.disabled, true);
+    assert.match(drop.title, /서버 업데이트가 필요해요/);
+    await closeAll();
+  } finally {
+    off();
+    await app.click("#local-retry", 50);
+  }
+  assert.equal(app.$("#server-banner").hidden, true);
+});
+
 test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", async () => {
   await openWindow({ wide: "active" }); await app.settle(50); let d = win();
   assert.match(text(d), /쓰는 중인 기억/);

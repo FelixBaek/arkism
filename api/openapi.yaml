@@ -2652,10 +2652,27 @@
     "/healthz": {
       "get": {
         "summary": "Process liveness only; not Atlas index readiness",
+        "description": "Also names the build so the desktop app can tell an older server before calling it: version (release number, dev for unstamped builds), commit and built (the build's VCS revision and its time), api_level (raised only when the app needs an API older servers lack; absent on older servers, read as 0) and features (API additions the app disables when missing). Recovery mode answers status recovery with the same fields.",
         "security": [],
         "responses": {
           "200": {
             "description": "Alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["status", "version", "api_level", "features"],
+                  "properties": {
+                    "status": { "type": "string", "enum": ["ok", "recovery"] },
+                    "version": { "type": "string" },
+                    "commit": { "type": "string", "description": "VCS revision the binary was built from; empty when unstamped." },
+                    "built": { "type": "string", "description": "Commit time (RFC 3339) of that revision; empty when unstamped." },
+                    "api_level": { "type": "integer", "minimum": 0 },
+                    "features": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            },
             "headers": {
               "X-Request-ID": {
                 "$ref": "#/components/headers/RequestID"

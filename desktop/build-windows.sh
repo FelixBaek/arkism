@@ -62,13 +62,13 @@ ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemTyp
 
 WORK="$(mktemp -d)"; trap 'rm -rf -- "$WORK"' EXIT
 # The client embeds the Windows task helpers; both packaging paths ship the same payload.
-GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/arkism.exe" ./cmd/arkism
+GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -ldflags "-X github.com/FelixBaek/arkism/internal/buildinfo.Version=$VERSION" -o "$WORK/arkism.exe" ./cmd/arkism
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/integration' | Out-Null\""
 run scp -q -o BatchMode=yes "$WORK/arkism.exe" "$HOST:$REMOTE/stage/integration/"
 
 # Built-in Arkism: the server programs (built here) and the database roles. The build PC adds
 # Postgres and pgvector (installer/prepare-runtime.ps1) because pgvector needs its C compiler.
-GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memoryd.exe" ./cmd/memoryd
+GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -ldflags "-X github.com/FelixBaek/arkism/internal/buildinfo.Version=$VERSION" -o "$WORK/memoryd.exe" ./cmd/memoryd
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -o "$WORK/memory-principal.exe" ./cmd/memory-principal
 GOOS=windows GOARCH=amd64 go build -C "$DIR/.." -ldflags=-H=windowsgui -o "$WORK/arkism-installer.exe" ./cmd/arkism-installer
 run ssh -o BatchMode=yes "$HOST" "powershell -NoProfile -Command \"New-Item -ItemType Directory '$REMOTE/stage/runtime' | Out-Null\""

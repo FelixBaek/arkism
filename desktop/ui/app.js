@@ -17,6 +17,7 @@ import { createDesignViews } from "./modules/designViews.mjs";
 import { createToolViews } from "./modules/toolViews.mjs";
 import { createMemoryDetail } from "./modules/memoryDetail.mjs";
 import { createAppConnection } from "./modules/appConnection.mjs";
+import { serverNeeded } from "./modules/serverVersion.mjs";
 export function startApp() {
   "use strict";
 
@@ -1001,6 +1002,7 @@ export function startApp() {
     if (!merge) foot.append(button("둘 다 지우기", "ghost danger tidy-forget", null, async () => { // both wrong: both go to history, not deleted
       if (await ask("두 기억을 다 지울까요?\n\n둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", "둘 다 지우기")) await decide("forget_both", "둘 다 지웠어요. 기억 이력에는 남아요.");
     }));
+    if (!merge && state.serverLacks?.has("forget_both")) serverNeeded(foot.lastChild); // older server: answers forget_both with invalid_request
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
       button("반대로 남기기", "", null, () => decide("swap", "반대쪽 기억을 남겼어요. 다른 하나는 이력에 남아요.")),
       button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "primary", null, () => decide("accept", merge ? "합쳤어요. 옛 기억은 이력에 남아요." : "바꿨어요. 예전 기억은 이력에 남아요.")));
@@ -2201,7 +2203,7 @@ export function startApp() {
   window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request: appApi.request, query: appApi.query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop: toolViews.confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, serverBanner: appConnection.serverBanner, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
     request: appApi.request, query: appApi.query, reloadTools: async () => { await toolViews.refreshTools(); toolViews.pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";

@@ -888,6 +888,8 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .zoom-control { display: flex; align-items: center; gap: 6px; }
 .zoom-control output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .notice[hidden] { display: none; }
+.server-banner { margin: 12px 24px 0; }
+.server-banner > .server-banner-text { flex: 1; min-width: 0; }
 .notice > span { flex: 1; min-width: 0; }
 .notice-close { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--text-2); cursor: pointer; }
 .notice-close:hover { background: var(--bg-selected); color: var(--text-1); }

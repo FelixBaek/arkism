@@ -180,15 +180,16 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-side .cat-foot { justify-content: flex-start; gap: 8px; }
 
 /* 업데이트 */
-.v4-version { display: flex; align-items: center; gap: 16px; }
-.v4-version-text { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.v4-version-top { display: flex; align-items: center; gap: 8px; font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
+.v4-version { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.v4-version-text { flex: 1 1 220px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.v4-version-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
 .v4-version-top .tag.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
-.v4-version-num { display: flex; align-items: baseline; gap: 8px; color: var(--nc-muted); font-size: calc(14px * var(--fs, 1)); }
+.v4-version-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; color: var(--nc-muted); font-size: calc(14px * var(--fs, 1)); }
 .v4-version-num strong { font: 400 calc(22px * var(--fs, 1)) var(--mono); color: var(--nc-text); }
 .v4-version-text small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .v4-version-actions { display: flex; gap: 8px; }
 .v4-version-actions .btn { height: auto; padding: 7px 14px; }
+.v4-version + .v4-version { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--nc-line); } /* 앱 줄 · 서버 줄 */
 
 /* 역할별 모델 */
 .v4-roles-body { display: flex; flex-direction: column; }

@@ -517,6 +517,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")));
     else act.append(button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => go2("accept")), button("반대로 남기기", "small", null, () => go2("swap")), button("둘 다 두기", "small", null, () => go2("dismiss")));
     if (!signal && !merge) act.append(button("둘 다 지우기", "small danger", null, () => askConfirm("두 기억을 다 지울까요?", "둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요.", () => go2("forget_both"))));
+    if (!signal && !merge && state.serverLacks?.has("forget_both")) Object.assign(act.lastChild, { disabled: true, title: "서버 업데이트가 필요해요 · 이 서버는 이 기능을 아직 몰라요." }); // older server answers invalid_request
     g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "어느 쪽을 골라도 기억은 그대로예요. 다시 볼게요를 누르면 사람이 보기로 한 것만 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }
