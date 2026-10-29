@@ -1,0 +1,89 @@
+{
+  "protocol": "dynamics-scalar-replay-probe-semantics-v1",
+  "task": "DYN-03.scalar",
+  "status": "selected_implementation_semantics_not_runtime_acceptance",
+  "base_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "scalar_semantics_sha256": "fd81476b36dddf784e49b7613b1ac4b3adf9e808630a84b07cb9941646d089f5",
+  "exact_signatures": [
+    "ReplayPrefix(SnapshotV2, []EventV2, int64, DynamicsConfigV2) (SnapshotV2, ReplayStatsV2, error)",
+    "ReadAt(SnapshotV2, int64, RefV2, DynamicsConfigV2) (StateViewV2, error)"
+  ],
+  "scope": "Pure synthetic scalar replay and read-only probes. No operational restore authorization, scientific effect or product integration claim.",
+  "decisions": {
+    "D03-01": {
+      "selection": "Prefix-local payload evaluation in supplied physical order, no sorting. Validate initial snapshot/config/container resource bounds first. For each row inspect only EventID and AcceptedSeq to distinguish known historical ID from NEW future row.",
+      "known_id": "A known receipt ID is a prefix retry candidate even if its supplied acceptedseq was changed above cutoff; fully validate and enforce original payload/coordinates via ApplyEvent, so changing header cannot hide a conflict.",
+      "new_future": "For NEW ID with seq>cutoff stop before body/key/evidence/outcome hashing/validation; do not inspect later rows. Do not count this future header. If cursor has not reached cutoff, return incomplete_prefix. Valid future horizon header with corrupted future body cannot alter past snapshot.",
+      "limits": "Whole-file DecodeStrict may reject an invalid raw artifact before ReplayPrefix is called. This API guarantee concerns passed event array evaluation, not a claim that the parent loader never reads disk bytes or that the whole future file was validated."
+    },
+    "D03-02": {
+      "selection": "Support suffix arrays and full retransmitted history through receipt-aware ApplyEvent. Do not wrap suffix in EventFileV2, rebase sequence or normalize order.",
+      "cutoff": "Inclusive accepted_seq, not time. Require initial.cursor<=cutoff and final.cursor==cutoff. Historical exact retries before first NEW future row may still be visited after cutoff is reached; they never advance cursor. Missing step/unreachable cutoff is incomplete_prefix; malformed visited row uses fixed existing error."
+    },
+    "D03-03": {
+      "selection": "Persisted snapshots contain active/invalidated only. Create a private explicit pending template only for an actual first activate of a full key with matching preexisting current catalog entry. Value=cfg.initial/rev0/sixnull, no clock/event coordinates invented.",
+      "reuse": "For first actual activate of an unseen fullkey, use highest lower-revision prior state of same logical identity through ResetRevision when it exists; otherwise use a private fixed pending initializer, even if a higher fullref already exists and this older exact fullref is explicitly catalog-current. Never reset backward or transfer evidence/value; keep old states. Same logicalID/revision different contenthash remains contradiction.",
+      "old_declared_fullref": "An explicitly catalog-current older fullRef that never had state may receive its own first activation as a separate full key; this is not rollback/reset of the newer state. Never infer exclusion solely from greater revision or Supersedes/tag assumptions. No outcome transfers between keys.",
+      "alias_collision": "Same scope/origin/collection/id/revision with different content hash is revision_mismatch, not an independent revision. Detect contradictory aliases in supplied states/catalog and visited target without inventing CAS authority.",
+      "nonactivation": "Unknown exact state for outcome/exposure/invalidation is missing_state; never query-initialize or create successful virtual neutral state."
+    },
+    "D03-04": {
+      "selection": "Use exactly caller-pinned initial synthetic catalog and deterministic ApplyEvent invalidation updates. Catalog may predeclare dormant fullRefs, but does not create state/value before activation. No catalog insertion event/API exists, so do not invent entries/source_refs/epoch/availability from EventV2.",
+      "missing": "Missing exact target current entry is source_unavailable. Catalog expansion requires a separate future accepted parent preparation contract, outside this implementation.",
+      "equivalence": "Full/resume equivalence assumes same declared catalog history and an accepted checkpoint from that history. Unknown external lifecycle facts cannot be discovered from selfhash."
+    },
+    "D03-05": {
+      "selection": "Retain every activated full key, including older/invalidated audit rows. Eligibility is exact declared lifecycle status plus valid full-key history. Newer revision does not automatically invalidate an older active tag/view. Only explicit lifecycle invalidation changes its status.",
+      "limit": "These are synthetic declared catalog semantics, not proof a real product reader currently includes a historical revision."
+    },
+    "D03-06": {
+      "selection": "Only synthetic accepted-prefix checkpoints supported. Validate prefixchain, all structural receipt histories, state bindings, cursor/minimum bounds and required supplied lifecycle steps. No compaction/pruning or real backup erasure-authorization proof.",
+      "unsupported": "When validation identifies explicit nonempty non-synthetic lifecycle namespace, map that unsupported domain to unsupported_restore at $.receipts.lifecycle_fence.namespace; preserve other earlier structural/hash errors. No new restore mode/authority DTO.",
+      "honesty": "A forged old snapshot and omitted real-world event can look like a consistent declared synthetic checkpoint; this API cannot detect caller intent or authenticate current operational erasure. Do not claim it can."
+    },
+    "D03-07": {
+      "selection": "ReadAt validates whole supported snapshot/config coherence and exact target/fullkey. No state creation. Missing exact target missing_state; valid invalidated target invalid_state. Pure view preserves source state reason/revision/activation and prefix.",
+      "time": "atNS<0 invalid_time $.at_ns; atNS<snapshot.cursor.accepted_at time_regression $.at_ns. Valid at>=cursor permits future-time extrapolation, not claim unseen events absent. Exact int64 subtraction before existing scalarDecay; decay disabled returns stored value.",
+      "pending_boundary": "Keep real ValidateTyped validation order. Only translate its specific invalid_state failure caused by the first otherwise individually typed-valid pending row when that first row is exactly requested target to pending_activation $.states[*]. If first pending belongs to another target, or earlier state/field/hash/namespace failure exists, retain that earlier error. Never return a view. Current Snapshot validation bans pending before its parent selfhash check. Do not claim parent hash was already verified. A row hash/shape failure caught earlier is not translated. Raw Snapshot decoder behavior remains unchanged. Narrow rejection-error presentation for direct ReadAt, never successful pending-snapshot acceptance.",
+      "FD_boundary": "ReadAt is generic scalar stored-last decay, not policy-ID inference from config flags. Do not confuse NOOUT and separately registered FD policy; FD-specific anchor semantics remain DYN05 responsibility with its full policy context."
+    },
+    "D03-08": {
+      "selection": "Stats count visited/attempted prefix delivery rows only, not unvisited future data or caller planned denominators. AppliedCount means accepted state-changing steps, including activation/outcome/invalidation. NonLearningCount includes exposure/newIDduplicateevidence/invalidated audit; DuplicateEvidenceCount overlaps tagged subset, do not add it twice. Exact historical retry increments DuplicateEventCount.",
+      "partition": "InputCount=AppliedCount+NonLearningCount+DuplicateEventCount+RejectedCount for visited attempts. First rejected row increments Input/Rejected once and stops. Prevalidation or unreachable cutoff has Error but no fabricated rejected row.",
+      "error_return": "On error return zero SnapshotV2 (not a usable target prefix), actual accumulated stats with fixed ContractErrorV2 and nonnil Go error. Inputs/initial/row objects unchanged. Counts describe local attempted computation, not published/DB commits. On success return deeply owned exact cutoff snapshot.",
+      "resources": "Reuse selected original caps: max100000 supplied events/states, max200000 receipts, existing byte/depth/string limits. Container size bound is allowed envelope inspection before prefix payload processing."
+    },
+    "D03-09": {
+      "selection": "Every receipt full key requires exactly one retained active/invalidated state; every supplied state requires its valid activation/history. Dormant catalog entry without receipt has no state. No omission/pruning of historical invalidated rows in this supported no-compaction subset.",
+      "validation": "Reuse DYN02 all-key structural receipt validation and per-state revision/reason/activation/last/value-initial context checks, existing Snapshot hash/prefix/fence checks and deterministic canonical fullkey order.",
+      "efficiency": "Group read-only receipt/fence references by fullkey to avoid repeated whole-ledger scans; do not mutate inputs or create a second transition engine/cache/framework.",
+      "limits": "Without original earlier event payloads or an authenticated parent manifest, valid resealed checkpoint hashes do not prove every historical numeric value. Only direct activation-only values are derivable. Full/resume tests use genuinely generated accepted checkpoints, no unsupported authenticity claim."
+    }
+  },
+  "minimal_header": {
+    "selection": "Minimal header must have existing LegacyID EventID and positive accepted_seq before deciding a future horizon. Inspect only these two fields, no future protocol/key/evidence/outcome/body hashing. Reuse exact existing primitive grammar/UTF8/string bounds, not a second permissive ID regex.",
+    "order": "Validate EventID first (invalid_unicode/resource_limit/invalid_value at $.event_id per existing primitive rules), then seq>0 (invalid_value $.accepted_seq). Known receipt-ID lookup after header validity always processes original-retry/conflict even if supplied seq>cutoff. NEW valid-header seq>cutoff stops before payload and is not counted.",
+    "malformed_header": "First invalid minimal header is one attempted/rejected row: InputCount+1,RejectedCount+1,Stats.Error and Goerror set, zeroSnapshot returned; no fabricated applied count. This applies even if its seq field purports to be future, because the horizon envelope itself is malformed.",
+    "causal_limit": "A valid horizon header with corrupted future body cannot affect earlier snapshot. Malformed structural header may reject the stream; do not broaden the promise to ignore every malformed future delimiter. Parent whole-file decoder may reject before this API."
+  },
+  "cost_scope": "Grouping initial validation avoids unnecessary repeated scans, but ApplyEvent clones/hashes/validates a growing receipt index. No total linear-time/throughput guarantee for ReplayPrefix. Reuse original engineering bounds and report actual unmeasured cost honestly. No new cache/framework/coefficients.",
+  "implementation_allowlist": [
+    "internal/memoryharness/dynamicsv2/replay.go",
+    "internal/memoryharness/dynamicsv2/replay_test.go",
+    "internal/memoryharness/dynamicsv2/probe.go",
+    "internal/memoryharness/dynamicsv2/probe_test.go"
+  ],
+  "required_oracles": [
+    "originalnamed TestReplayPrefix/TestReadAt actualcollectionnormal/race0skip",
+    "full/resume exactsnapshotbytes/hash and stats partition/overlap",
+    "100probes hash/input/receipt/cursorunchanged",
+    "futurebodypoison isolated beyondvalid horizon, knownIDforgedfutureheaderconflictnothidden",
+    "same-time acceptedseqcutoff excludeslaterinvalidation",
+    "new/dormant/olderdeclaredactivefullref noimplicitSupersedes exclusion",
+    "missing/predeclaredcatalog/fullhashalias contradictions",
+    "snapshotcompletekeyset/forgedhistory/reason/value-initial guards",
+    "largeabsoluteint1ns/rootR4adapter reuse/zero-tolerancelimitretained",
+    "unsupportedoperationalnamespace and no deletion-safe restoreclaim"
+  ],
+  "forbidden": "No product Search/DB/API/network/time.Now/model/provider/human/build/deploy/Claude changes. No changes to accepted DYN01/DYN02/R4 source or golden/holdout. No automatic commit/push by author."
+}
