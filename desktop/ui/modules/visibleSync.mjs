@@ -80,6 +80,8 @@ export function publishRefresh(state, reads, results, invalidateVersions) {
   let changed = false;
   for (let i = 0; i < reads.length; i++) {
     const { key, old } = reads[i], result = results[i];
+    // a list that failed at load and now answers is loaded again: its counts stop reading "—" (#465)
+    if (result.status === "fulfilled" && result.value != null && state.listErrors?.[key] && state.data[key] === old) { delete state.listErrors[key]; changed = true; }
     if (result.status !== "fulfilled" || result.value == null || state.data[key] !== old || comparable(old) === comparable(result.value)) continue;
     if (key === "skills") {
       const previous = new Map((old || []).map(row => [row.id, row]));

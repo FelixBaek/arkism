@@ -50,6 +50,10 @@ function setup(overrides = {}) {
     memoryPages: { refresh: async () => state.data.memories }, memoryKey: () => "k",
     loadMaintenance: async () => "maint", memoryResults: { reset: () => log.push("resetResults") },
     hydrateMaintenance: () => log.push("hydrate"), loadMemoryTotals: () => log.push("totals"),
+    // app.js listCount/idleCount: every row is loaded here, so a count is the rows' length
+    listCount: (name) => { const n = state.data[name].length; return { state: "loaded", n, min: n, text: String(n) }; },
+    idleCount: () => { const n = state.usageDone ? state.data.memories.filter(deps.idle).length : null; return { state: n === null ? "loading" : "loaded", n, min: n ?? 0, text: n === null ? "…" : String(n) }; },
+    partialMemories: () => false,
     ...overrides
   };
   return { document, h, deps, state, snaps, snap, calls, notices, gone, log };
@@ -74,7 +78,7 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memory.memTab = "digests"; assert.deepEqual(api.memTitle()[2], "주제 3개");
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");
   env.state.usageDone = false; env.deps.memory.memTab = "conflicted"; env.snap("memories").total = undefined;
-  assert.equal(api.memTitle()[2], "3개");
+  assert.equal(api.memTitle()[2], "3+개"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
 });
 
 test("the main list draws check card, filters, chips, badges, paging and empty state", async () => {

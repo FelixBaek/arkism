@@ -6084,6 +6084,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "일부 목록을 불러오지 못했어요": "Some lists didn't load",
   "기억 후보 목록을 불러오지 못했어요": "Couldn't load the memory candidates",
   "스킬 목록을 불러오지 못했어요": "Couldn't load the skill list",
+  "부딪히는 기억 목록을 불러오지 못했어요": "Couldn't load the conflicting memories",
+  "프롬프트 목록을 불러오지 못했어요": "Couldn't load the prompt list",
   "크루 목록을 불러오지 못했어요": "Couldn't load the crew list",
   "불러오지 못한 목록": "Lists not loaded",
   "확인할 일을 불러오지 못했어요": "Couldn't load what to check"
@@ -6091,6 +6093,8 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "목록 {0}개를 불러오지 못했어요": "Couldn't load {0} lists",
   "기억 후보 {0}개 이상 검토": "Review {0}+ memory candidates",
+  "부딪히는 기억 {0}개 이상": "{0}+ conflicting memories",
+  "검토할 기억 {0}개 이상": "{0}+ memories to review",
   "{0}일째 멈춤": "Stopped {0}d",
   "기억 추출이 {0}일째 멈췄어요": "Memory extraction has been stalled for {0} days",
   "{0}일 전 확인": "Checked {0} d ago"
