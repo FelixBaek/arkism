@@ -1,6 +1,6 @@
 # 로드맵 진행 기록
 
-기준: 2026-10-29. 로컬 카드 수용14/63(R1~R7, CRW-01~04, RTE-01~02, CAP-01). 제품·연구·전체 로드맵 완료가 아니다.
+기준: 2026-10-29. 로컬 카드 수용15/63(R1~R8, CRW-01~04, RTE-01~02, CAP-01). 제품·연구·전체 로드맵 완료가 아니다.
 `verified`는 해당 카드의 실제 로컬 검증과 독립 검토를 마쳤다는 뜻이다.
 원격 검사·PR 병합·실험·제품 통합은 각각 따로 기록한다.
 
@@ -14,7 +14,7 @@
 | R5 RRF·합성 예산 선택 | 로컬 카드 수용 | 70leaf/3API coverage100%, 원본16golden·제품 산식의 제한된300대조. PR419 |
 | R6 예정 분모·실패 보존 지표 | 로컬 카드 수용 | 39methods/64leaf+독립30. stream macro0.625/query weighted0.5, null·실패·음성 분모 유지. PR419 |
 | R7 파일 전용 CLI | 로컬 카드 수용 | 17주검사/16하위+독립13, race·Win/Darwin vet·고정lint 통과. Go test에서 run() 직접 검증. PR419 |
-| R8 CSV·인수·인계 | 구현·검증 중 | report23·acceptance40methods/48leaf·collector168 및 독립 검증 통과. 최종 Python412/Go/UI532 통과, 기본 builtbinary 완주 미실행 |
+| R8 CSV·인수·인계 | 로컬 카드 수용 | 기존 구현·독립 검토 뒤 사용자 검산 CLI 전용 허용으로 실제 standalone14check 통과. Go328leaf/Python128methods·7query/CSV·30artifact hash 독립 대조. 제품/연구 실험 준비와 구분 |
 | CRW-01 현재 엔진·연구 계약 | 로컬 계약 수용 | [PR421](https://github.com/FelixBaek/arkism/pull/421). R0 뒤 독립 착수 가능. private 계약3파일, 정적29/독립 변조12·효과 양성7/음성25, 근거53파일·55행 확인. 제품 실행 검사는 아님 |
 | CRW-02 호출·사용량 관측 | 로컬 카드 수용 | 기존 helper 검증 뒤 실제 호출·회의·host 연결. 독립 core11/host19 일반·race, 회의20/하위10 race 및 최종 Python412/Go/UI532 통과. 실제 provider·전체 청구 증명은 미수용 |
 | CRW-05.spec 공정 비교 자료 | 로컬 명세 하위 단계 수용 | 소유46+독립16검사,162개 literal oracle·공정 입력 대조·20파일 hash 확인. 연구용 holdout·실행 adapter·전체 CRW-05는 미완료 |
@@ -35,7 +35,7 @@ PR417~421은 병합하지 않았다. 고정 계약1개는 사용자가 명시적
 공개 예외를 승인했으며 바이트와 SHA256은 유지했다.
 
 실제 제품/설치 빌드·릴리스·배포·유료 호출·참여자 수집은 실행하지 않았다.
-standalone go build를 요구하는 마지막 인수 경로도 아직 미실행이다.
+사용자의 검산 CLI 전용 빌드·인수 검사 예외 허용 뒤 마지막 standalone 경로도 실제 통과했다. 제품 빌드 금지는 유지한다.
 0개 검사·필수 skip·누락 hash를 완료로 처리하지 않는다.
 
 변경 이유·검증·한계의 상세 기록:
@@ -47,7 +47,7 @@ standalone go build를 요구하는 마지막 인수 경로도 아직 미실행�
 진행에 맞춰 이 기록과 소유권 manifest의 상태를 함께 갱신한다.
 상태 문자열 자체는 실행 증거나 승인 권한이 아니다.
 
-- [R8 구현·검증과 미실행 인수 관문](../work-records/2026-10-29-roadmap-baseline-reporting.md)
+- [R8 구현 당시 검증 기록(standalone 미실행)](../work-records/2026-10-29-roadmap-baseline-reporting.md)
 
 - [CRW-01 계약·근거와 검증 범위](../work-records/2026-10-29-roadmap-crew-contract.md)
 
@@ -125,7 +125,19 @@ native24methods/29raceleaf, adapter독립일반/race9leaf, 판정기21methods/46
 18개는 기대한 안전 경계를 유지했고 target-only 정책 경쟁1개는 의도한 실패 반례로
 별도 기록했다. 이 수치는 모델 성능이나 업무 성공률이 아니다. 최초 규약 교정 전 소스는
 SHA·실패로그만 남아 그 최초 판정의 완전 재실행이 불가하며, 최종11소스는 바이트를 보관했다.
-로컬 완료14/63. 실제 provider 원자성·인증·운영DB·제품 빌드·배포·R8 standalone은 미검증이다.
+위 CRW-04 수용 시점은 로컬14/63이고 R8 standalone은 미실행이었다. 아래 R8 후속 검증으로15/63에 갱신했다. 실제 provider 원자성·인증·운영DB·제품 빌드·배포는 미검증이다.
 PR426도 원격6워크플로 통과·검토 가능 상태이며 병합하지 않았다.
 
 - [CRW-04 복구·효과 경계·실제 중단 시험](../work-records/2026-10-29-roadmap-crew-recovery.md)
+
+사용자가 검산 CLI `./cmd/memory-harness-baseline`의 빌드·인수 검사만 별도로 허용했다.
+기존 고정07ed 소스에서 실제 기본 인수 경로14check가 통과했고,
+Go328leaf/Python128methods·음성CLI4검사(exit2)·7query/순위·선택·지표·CSV를
+독립 산술로 대조했다. 실제 ELF·bundle·30산출물의 hash와 source clean을 확인했다.
+산출물의 requires_independent_review 표시는 수정하지 않고 별도 상위 수용 기록을 남겼다.
+R8까지 로컬15/63이며, 강한 선행 대조·새 holdout·실제 서비스/DB 동등성·연구 본실험 준비는
+수용하지 않았다. 제품/설치 빌드·릴리스·배포·Claude 수정은 실행하지 않았다.
+CRW-05 실제 fake 비교 실행기·독립 평가기 구현은 계속 진행 중이다.
+PR427의6d571859는 원격6워크플로를 통과해 검토 가능 상태이며 병합하지 않았다.
+
+- [R8 실제 검산 CLI·인수 경로와 독립 수용](../work-records/2026-10-29-roadmap-baseline-runtime-acceptance.md)
