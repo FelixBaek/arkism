@@ -11,7 +11,6 @@ import argparse
 import datetime
 import json
 import os
-import sys
 import time
 import urllib.parse
 import urllib.request
@@ -150,35 +149,29 @@ def score(labels, runs):
 
 
 def main(argv=None):
+    # Paths are fixed: labels and runs stay in PRIVATE_DIR, only the aggregate lands in results/.
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=("label", "run", "score"))
-    parser.add_argument("--queries", type=Path, default=QUERIES)
-    parser.add_argument("--labels", type=Path, default=PRIVATE_DIR / "labels.jsonl")
-    parser.add_argument("--runs", type=Path, help="score: the runs file (default: newest runs-*.jsonl beside the labels)")
-    parser.add_argument("--out", type=Path, help="score: where to write the aggregate (default: results/<date>.json here)")
     parser.add_argument("--labeler", default=os.environ.get("USER", "owner"))
     parser.add_argument("--limit", type=int, default=20, help="questions to label in this sitting")
     parser.add_argument("--runtime", default=os.environ.get("ARKISM_RUNTIME", ""))
-    parser.add_argument("--url", default=os.environ.get("ARKISM_URL", "http://127.0.0.1:8091"))
-    parser.add_argument("--token-file", default=os.environ.get("ARKISM_TOKEN_FILE", "/srv/arkism/config/owner.token"))
-    parser.add_argument("--workspace", default=os.environ.get("ARKISM_WORKSPACE", "default"))
-    parser.add_argument("--project", default=os.environ.get("ARKISM_PROJECT", "default"))
-    parser.add_argument("--user", default=os.environ.get("ARKISM_USER", "management:owner"))
     args = parser.parse_args(argv)
+    args.queries, args.labels = QUERIES, PRIVATE_DIR / "labels.jsonl"
     if args.command == "score":
-        runs = args.runs or max(args.labels.parent.glob("runs-*.jsonl"), default=None)
-        if runs is None:
-            parser.error("no runs file: run `route_eval.py run` first or pass --runs")
-        result = {"labels": args.labels.name, "runs": runs.name, **score(read_jsonl(args.labels), read_jsonl(runs))}
-        out = args.out or Path(__file__).resolve().parent / "results" / f"{datetime.date.today().isoformat()}.json"
+        runs = sorted(PRIVATE_DIR.glob("runs-*.jsonl"))
+        if not runs:
+            parser.error("no runs file: run `route_eval.py run` first")
+        result = {"labels": args.labels.name, "runs": runs[-1].name, **score(read_jsonl(args.labels), read_jsonl(runs[-1]))}
+        out = Path(__file__).resolve().parent / "results" / f"{datetime.date.today().isoformat()}.json"
         out.parent.mkdir(exist_ok=True)
         out.write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         print(json.dumps(result, ensure_ascii=False, indent=1))
-        return 0
-    router = Router(args.url, args.token_file, {"workspace_id": args.workspace, "project_id": args.project, "user_id": args.user}, args.runtime)
+        return
+    scope = {"workspace_id": os.environ.get("ARKISM_WORKSPACE", "default"), "project_id": os.environ.get("ARKISM_PROJECT", "default"),
+             "user_id": os.environ.get("ARKISM_USER", "management:owner")}
+    router = Router(os.environ.get("ARKISM_URL", "http://127.0.0.1:8091"), os.environ.get("ARKISM_TOKEN_FILE", "/srv/arkism/config/owner.token"), scope, args.runtime)
     (label if args.command == "label" else run)(args, router)
-    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
