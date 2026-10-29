@@ -147,6 +147,9 @@ func filterMemoryCatalog(rows []Record, in CatalogQueryInput, candidates bool, u
 		}
 		category := memoryCatalogCategory(row)
 		facets.States[category]++
+		if candidates && row.Classification == nil {
+			facets.Unclassified++
+		}
 		if candidates && in.Category != "" && category != in.Category {
 			continue
 		}

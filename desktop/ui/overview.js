@@ -55,6 +55,9 @@ window.ArkismOverview = (ctx) => {
     const extracted = [...waiting, ...(d.memories || [])].map((m) => time(m.created_at)).filter(Boolean);
     const classified = waiting.map((m) => time(m.classification?.at)).filter(Boolean);
     const unclassified = waiting.filter((m) => !m.classification);
+    // the server totals when only the first page of candidates is loaded (#188); the loaded rows otherwise
+    const wt = state.waitingTotals, paged = wt && wt.total > waiting.length;
+    const nWait = paged ? wt.total : waiting.length, nUnclassified = paged && wt.unclassified !== null ? wt.unclassified : unclassified.length;
     const recalls = [...(state.usage?.values?.() || [])];
     const recallTimes = recalls.map((u) => time(u.last)).filter(Boolean);
     const w = d.tools?.memory_use || null, reported = time(d.tools?.collected_at);
@@ -84,13 +87,13 @@ window.ArkismOverview = (ctx) => {
     const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
     const stallWords = window.ArkismState.stallFor(stalledHours);
     const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [stallWords.stopped, "r"] : ["정상", "n"],
-      classify: [unclassified.length ? `대기 ${unclassified.length}` : "모두 분류됨", "n"], review: [waiting.length ? `${waiting.length}건` : "비어 있음", waiting.length ? "a" : "n"],
+      classify: [nUnclassified ? `대기 ${num(nUnclassified)}` : "모두 분류됨", "n"], review: [nWait ? `${num(nWait)}건` : "비어 있음", nWait ? "a" : "n"],
       recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
       collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(S.total)}건`, "최근 7일"]],
       extract: [[stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
-      classify: [[`${num(unclassified.length)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
-      review: [[`${num(waiting.length)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
+      classify: [[`${num(nUnclassified)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
+      review: [[`${num(nWait)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
       recall: [[`${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, "최근 7일 불러오기"], [recallTimes.length ? ago(latest(recallTimes)) : "—", "마지막"], [`${num(recalls.filter((u) => u.d7 > 0).length)}개`, "7일 안에 불러온 기억"]],
       trace: [[reported ? ago(reported) : "—", "마지막 기록"], [w ? `${num(w.sessions)}` : "—", w ? `세션 · ${w.days}일` : "보고 없음"], [rate === null ? "—" : `${rate}%`, "쓰인 비율"]],
       judge: [[`${num(tidy)}건`, "확인할 기억"], [rate === null ? "—" : `${rate}%`, "답에 쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "건넨 횟수"]],
@@ -115,8 +118,8 @@ window.ArkismOverview = (ctx) => {
         step: stalled ? stallWords.stopped : lastExtract ? ago(lastExtract) : "기록 없음",
         row: extractRow, counts: slots(extracted), open: () => openWide("sessions") },
       { key: "classify", group: "save", label: "분류", region: "측두엽", tone: "n",
-        big: `${num(unclassified.length)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
-        step: unclassified.length ? `대기 ${num(unclassified.length)}` : "모두 분류됨", row: classRow, counts: slots(classified), open: () => go("memories", "candidate") },
+        big: `${num(nUnclassified)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
+        step: nUnclassified ? `대기 ${num(nUnclassified)}` : "모두 분류됨", row: classRow, counts: slots(classified), open: () => go("memories", "candidate") },
       { key: "recall", group: "use", label: "불러오기", region: "운동 피질", tone: "n",
         big: `${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, bigSub: "최근 7일", small: recallTimes.length ? ago(latest(recallTimes)) : "—", smallSub: "마지막",
         step: recallTimes.length ? ago(latest(recallTimes)) : "기록 없음", row: row(recallTimes, "n"), counts: slots(recallTimes), open: () => go("usage") },
@@ -129,9 +132,9 @@ window.ArkismOverview = (ctx) => {
       { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
         big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
         step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") },
-      { key: "review", group: "approve", label: "승인 대기", region: "안와전두엽", tone: waiting.length ? "a" : "n",
-        big: `${num(waiting.length)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
-        step: `${num(waiting.length)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") }
+      { key: "review", group: "approve", label: "승인 대기", region: "안와전두엽", tone: nWait ? "a" : "n",
+        big: `${num(nWait)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
+        step: `${num(nWait)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") }
     ]);
   }
 

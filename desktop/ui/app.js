@@ -68,6 +68,8 @@ export function startApp() {
     usageFailed: false, // GET /v1/memory_usage failed: screens show — instead of 0 (A2)
     memoryTotals: null, // { active, idle, kinds } over every memory on the server, not the loaded first page
     candidateTotal: null, // every candidate on the server, read apart from memoryTotals (#188)
+    waitingTotals: null, // { total, unclassified } over every candidate and conflict on the server, for 개요
+    skillTotal: null, // every skill on the server, while the list shows only its first page
     listErrors: {}, // list name -> loadFailure() for a list that failed while the memories loaded (#186)
     loading: true,
     ready: null,
@@ -409,7 +411,7 @@ export function startApp() {
     const items = [
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
-      ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}개`, !skillsUnknown],
+      ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${skillCount()}개`, !skillsUnknown],
       ["lock-simple", "로그인", state.email || "토큰", true]
     ];
     const failedLists = Object.keys(state.listErrors).length;
@@ -567,6 +569,8 @@ export function startApp() {
     state.usageFailed = false;
     state.memoryTotals = null;
     state.candidateTotal = null;
+    state.waitingTotals = null;
+    state.skillTotal = null;
     state.listErrors = {};
     state.versions = new Map();
     state.versionsDone = false;
@@ -613,6 +617,8 @@ export function startApp() {
       stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached && state.view !== "todo" ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." }); // Home's card already says the reason
     }
   }
+  // the server total while more skill pages wait, else the loaded rows; "N+" only when the total is unknown
+  const skillCount = () => collectionPaging.snapshot("skills").cursor ? state.skillTotal ?? `${state.data.skills.length}+` : state.data.skills.length;
   // Server-wide totals (POST /v1/memories/query, one row each): every active memory and the idle ones, with kinds.
   // A server without the query keeps memoryTotals null and screens say "loaded so far" instead.
   async function loadMemoryTotals(g) {
@@ -620,9 +626,15 @@ export function startApp() {
       .then((r) => (Number.isSafeInteger(r?.total) ? r : null), () => null);
     const candidates = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "candidate", limit: 1 }) })
       .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null) : null;
-    const [active, idleRows, candidateTotal] = await Promise.all([read("active"), read("idle"), candidates]);
+    const waiting = state.caps?.actions?.review_list ? appApi.request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "all", limit: 1 }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? { total: r.total, unclassified: Number.isSafeInteger(r.facets?.unclassified) ? r.facets.unclassified : null } : null), () => null) : null;
+    const skills = appApi.request("/v1/skills/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "all", limit: 1 }) })
+      .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null);
+    const [active, idleRows, candidateTotal, waitingTotals, skillTotal] = await Promise.all([read("active"), read("idle"), candidates, waiting, skills]);
     if (g !== state.connection.generation) return;
     state.candidateTotal = candidateTotal; // kept even when the memory totals failed
+    state.waitingTotals = waitingTotals;
+    state.skillTotal = skillTotal;
     if (active) state.memoryTotals = { active: active.total, idle: idleRows?.total ?? null, kinds: active.facets?.kinds || null };
     render(false);
   }
@@ -1138,7 +1150,7 @@ export function startApp() {
     c.textContent = state.loading ? "" : String(todo.length);
     c.className = todo.some((t) => t.warn) ? "warn" : "";
     $("#count-memories").textContent = state.loading ? "" : memoryPaging.memoryCount();
-    $("#count-skills").textContent = state.loading ? "" : state.listErrors.skills || state.loadError ? "—" : `${d.skills.length}${collectionPaging.snapshot("skills").cursor ? "+" : ""}`;
+    $("#count-skills").textContent = state.loading ? "" : state.listErrors.skills || state.loadError ? "—" : skillCount();
     const promptsOf = (kind) => d.prompts.filter((p) => p.image_prompt.kind === kind).length;
     $("#count-image").textContent = state.loading ? "" : String(promptsOf("image"));
     $("#count-slide").textContent = state.loading ? "" : String(promptsOf("slide"));

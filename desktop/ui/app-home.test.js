@@ -1104,3 +1104,26 @@ test("home: a lost connection shows why, how to retry and the way back to this P
   await home();
   assert.equal(app.$(".home-lost"), null);
 });
+
+// 분류 대기·승인 대기 and the skill count showed the first page (50) while 100+ waited on the server: they now show the server totals.
+test("overview and skills: counts are the server totals while more pages wait", async () => {
+  let asked = 0;
+  const reload = async () => { const n = asked; app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); for (let i = 0; i < 100 && asked === n; i++) await app.settle(100); await app.settle(100); };
+  const cand = { id: "cx1", text: "first page", status: "candidate", kind: "user", created_at: ago(1) };
+  const page = (total, facets = {}) => ok({ items: [], total, next_cursor: "", authority: "data_only", facets: { kinds: {}, repositories: {}, categories: {}, states: {}, ...facets } });
+  const offs = [
+    route("GET", "/v1/memory_usage", () => { asked++; return ok({ items: [] }); }),
+    route("GET", "/v1/memory_candidates", (a) => ok({ items: /conflicted/.test(a.path) ? [] : [cand], next_cursor: /conflicted/.test(a.path) ? "" : "more", authority: "data_only_untrusted" })),
+    route("POST", "/v1/memory_candidates/query", (a) => JSON.parse(a.body).state === "all" ? page(123, { unclassified: 77 }) : page(120)),
+    route("GET", "/v1/skills?", (a) => ok({ items: [{ id: "s1", name: "one", status: "approved" }], next_cursor: "more", authority: "data_only_untrusted" })),
+    route("POST", "/v1/skills/query", () => page(137))
+  ];
+  await reload();
+  await openWindow({ key: "collect" }); await closeAll(); await app.settle(50);
+  const steps = text(app.$(".ov-steps"));
+  assert.match(steps, /대기 77/, steps);
+  assert.match(steps, /123건/, steps);
+  assert.equal(text(app.$("#count-skills")), "137");
+  offs.forEach((off) => off());
+  await reload();
+});

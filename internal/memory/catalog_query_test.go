@@ -347,3 +347,19 @@ func TestMemoryUsageSummaryRunsOneScanForConcurrentCallers(t *testing.T) {
 		t.Fatal("three callers at once should share one scan, ran", n)
 	}
 }
+
+// 개요 counts 분류 대기 over every candidate, not the loaded page: the facet counts rows without a classification
+// before the category filter, and memory pages never count it.
+func TestCatalogCandidateUnclassifiedFacet(t *testing.T) {
+	rows := []Record{{ID: "a", Text: "x"}, {ID: "b", Text: "x", Classification: &CandidateClassification{Risk: "low"}}, {ID: "c", Text: "x", Status: "conflicted"}}
+	facets := newCatalogFacets()
+	items := filterMemoryCatalog(rows, CatalogQueryInput{State: "all", Category: "confusing"}, true, nil, nil, &facets)
+	if facets.Unclassified != 2 || len(items) != 1 {
+		t.Fatal(facets.Unclassified, len(items))
+	}
+	facets = newCatalogFacets()
+	filterMemoryCatalog(rows, CatalogQueryInput{State: "active"}, false, nil, nil, &facets)
+	if facets.Unclassified != 0 {
+		t.Fatal("memories counted", facets.Unclassified)
+	}
+}
