@@ -77,8 +77,14 @@ func TestAgentsUseTheAppsApprovedSSHKey(t *testing.T) {
 			t.Errorf("missing %s", required)
 		}
 	}
-	if !slices.Contains(argv, "UserKnownHostsFile=\""+strings.ReplaceAll(filepath.ToSlash(c.SSHKnownHosts), "%", "%%")+"\"") {
+	if !slices.Contains(argv, "UserKnownHostsFile="+sshConfigPath(filepath.ToSlash(c.SSHKnownHosts))) {
 		t.Fatal("pin path was not quoted/escaped")
+	}
+	if got := sshConfigPath("C:/Users/a b/100%/kh"); got != `"C:/Users/a b/100%%/kh"` {
+		t.Fatalf("spaced path %s", got)
+	}
+	if got := sshConfigPath("C:/Users/ab/kh"); got != "C:/Users/ab/kh" {
+		t.Fatalf("plain path %s", got)
 	}
 	if strings.Contains(strings.Join(argv, " "), "accept-new") {
 		t.Fatal("TOFU enabled")
