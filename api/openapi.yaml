@@ -7441,7 +7441,31 @@
           }}}
     },
     "/v1/routing/skills": {
-      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?}}: newest 200, skill ids and names only, never the query.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{id, at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?, loaded?, outcome?}}: newest 200, skill ids and names only, never the query. loaded is the version the agent then loaded; outcome is its skill.usage status.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
+    "/v1/routing/skills/{id}/use": {
+      "post": {"summary": "Report the load and outcome of a route_skills decision (search:skill_versions, the principal that routed)", "description": "Body {scope, event, version_id}. event loaded records the loaded skill version; then one skill.usage status (success, failure, cancelled, validation_failed) for that same version ends the decision. Returns the decision item.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Decision item"}, "400": {"description": "invalid_request"}, "403": {"description": "Not the principal that routed"}, "404": {"description": "No such decision"}, "409": {"description": "Outcome already reported or not loaded"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -38392,6 +38416,10 @@
           },
           "authority": {
             "const": "data_only_untrusted"
+          },
+          "route_id": {
+            "type": "string",
+            "description": "The kept decision; report its load and outcome at /v1/routing/skills/{id}/use. Absent when the decision could not be kept."
           }
         },
         "required": [

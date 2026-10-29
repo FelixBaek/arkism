@@ -6306,6 +6306,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "보관 중": "Kept", "원문 없음": "No transcript", "오늘 지워지는 원문이 있어요.": "A transcript expires today.",
   "답에 쓰인 순": "Most used in answers", "넣은 순": "Most included", "최근 불러온 순": "Recently recalled", "요즘 늘어난 순": "Rising lately",
   "안 불러옴": "Not recalled", "새로 쓰임": "Newly used", "늘었어요 ↑": "Rising ↑", "줄었어요 ↓": "Falling ↓", "비슷해요": "Steady",
+  "불러오지 않음": "Not loaded", "불러옴": "Loaded", "다른 후보 ·": "Another candidate ·", "검증 실패": "Validation failed",
   "기억이 실제로 답에 도움이 됐는지 봐요": "See whether memories actually helped answers", "답에 쓰임": "Used in answers", "이 조건에 맞는 기억이 없어요.": "No memories match.",
   "최근 불러온 기록 없음": "Not recalled recently", "답에 넣은 횟수": "Times included", "답에 쓰였다고 남긴 횟수": "Times reported used", "답 내용과 겹침 (추정)": "Overlaps the answer (estimate)",
   "그전 주 평균": "Earlier weekly average", "넣었는데 답에 안 쓰였어요": "Included but not used",
