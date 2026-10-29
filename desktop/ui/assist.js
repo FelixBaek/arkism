@@ -39,7 +39,7 @@ window.ArkismAssist = (ctx) => {
     if (["install_skill", "fix", "comfy", "json", "review", "build"].includes(kind) && prompt.length > 20000) throw new Error("내용이 너무 길어요 (2만 자까지)");
     const body = { kind, prompt: prompt.slice(0, 20000), lang: window.ArkismI18n?.lang() === "en" ? "en" : "ko", persona: (opts.persona || personaFor(opts.purpose || "workflow")).crew.instructions, ...(opts.model ? { model: opts.model } : {}), ...(opts.expert ? { expert: opts.expert } : {}) }; // try: the agent's @이름
     const r = await request("/v1/crew/assists", { method: "POST", body: JSON.stringify({ scope: state.scope, assist: body }) })
-      .catch((e) => { stop(); throw passing(e) ? new Error("서버에 닿지 못했어요. 연결을 확인하고 다시 시도해 주세요.") : e; });
+      .catch((e) => { stop(); throw passing(e) ? new Error("서버에 닿지 못했어요. 연결을 확인하고 다시 시도해 주세요.", { cause: e }) : e; });
     stop();
     // Waits are summed as well as timed, so a clock that does not move still ends the loop.
     const start = Date.now();
@@ -54,7 +54,7 @@ window.ArkismAssist = (ctx) => {
         if (!passing(e)) throw e;
         // One slow or failed check is not the answer: keep asking until the server has been silent too long.
         failingFrom ||= waited;
-        if (waited - failingFrom >= OUTAGE_MS) throw new Error("서버가 1분 넘게 답하지 않아요. 잠시 뒤 다시 시도해 주세요.");
+        if (waited - failingFrom >= OUTAGE_MS) throw new Error("서버가 1분 넘게 답하지 않아요. 잠시 뒤 다시 시도해 주세요.", { cause: e });
         continue;
       }
       stop(); failingFrom = 0;

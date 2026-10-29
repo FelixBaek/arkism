@@ -719,7 +719,6 @@ window.ArkismI18nEN = {
   "프롬프트 작가": "Prompt writer",
   "카테고리 분류가": "Category classifier",
   "내용이 너무 길어요 (2만 자까지)": "Content is too long (20,000 characters max)",
-  "너무 오래 걸려요. 잠시 뒤 다시 해 주세요.": "This is taking too long. Try again shortly.",
   "서버의 모델 실행기가 꺼져 있어요. arkism-providers 서비스를 켜 주세요.": "The server's model runner is off. Start the arkism-providers service.",
   "직접 부름": "Called directly",
   "일정·웹훅": "Schedule & webhook",
