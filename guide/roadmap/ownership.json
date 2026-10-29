@@ -1423,7 +1423,7 @@
       "id": "SYS-02",
       "issue": 152,
       "owner": "SYS-02",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
