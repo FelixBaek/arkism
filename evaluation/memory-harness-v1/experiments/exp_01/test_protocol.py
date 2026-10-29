@@ -572,3 +572,12 @@ print(unittest.defaultTestLoader.loadTestsFromModule(module).countTestCases())
         before = copy.deepcopy(value)
         V.validate_protocol(G.compact(value), 'draft')
         self.assertEqual(value, before)
+
+    def test_reservation_rejects_non_basename_before_any_filesystem_call(self):
+        for name in ('', '.', '..', 'nested/child', '/absolute-invalid-error-path'):
+            with self.subTest(name=name):
+                with patch.object(G.os, 'mkdir', side_effect=AssertionError('unsafe path reached mkdir')) as mkdir:
+                    with self.assertRaises(G.ExpError) as caught:
+                        G._reserve(None, name, None)
+                    self.assertEqual(caught.exception.code, 'unsafe_path')
+                    mkdir.assert_not_called()
