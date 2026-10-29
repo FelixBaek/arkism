@@ -3470,7 +3470,7 @@
       "id": "CRW-04",
       "issue": 154,
       "owner": "CRW-04",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
