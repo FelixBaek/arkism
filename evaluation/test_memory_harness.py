@@ -1,4 +1,4 @@
-"""Collect the fixed baseline and system harness tests for outer discovery."""
+"""Collect the fixed baseline, system and experiment harness tests."""
 import importlib.util
 from pathlib import Path
 import sys
@@ -7,6 +7,7 @@ import unittest
 _MODULES = ('test_contract_io.py', 'test_fixture_gen.py', 'test_metrics.py',
             'test_report.py', 'test_acceptance.py')
 _SYSTEM_MODULES = ('system/sys_01/test_shadow_contract.py',)
+_EXPERIMENT_MODULES = ('experiments/exp_01/test_protocol.py',)
 _DIRECTORY = Path(__file__).parent / 'memory-harness-v1'
 
 
@@ -37,7 +38,7 @@ def load_tests(loader, standard_tests, pattern):
     original_path = list(sys.path)
     try:
         sys.path.insert(0, str(_DIRECTORY))
-        for filename in _MODULES + _SYSTEM_MODULES:
+        for filename in _MODULES + _SYSTEM_MODULES + _EXPERIMENT_MODULES:
             path = _DIRECTORY / filename
             if not path.is_file() or path.is_symlink():
                 raise AssertionError('required harness test module missing')
