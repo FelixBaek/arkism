@@ -240,7 +240,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     });
   }
   const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
-  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (the 승인 대기 detail)
+  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (that candidate in 승인 대기, selected with its detail)
   function reviewRow(c) {
     const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
     const r = row(kind(c.kind), c.text, [dupText ? `“${clip(dupText, 40)}”와 같은 뜻` : c.conflict_id ? "충돌 중" : c.classification?.risk_reasons?.[0] || "", c.summary ? `요약: ${c.summary}` : "", ago(c.created_at)].filter(Boolean).join(" · "), "");
@@ -601,7 +601,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
       : order === "risk" ? rank(a) - rank(b) || time(a.created_at) - time(b.created_at)
       : time(a.created_at) - time(b.created_at);
     const remote = pagedWindow(d, "/v1/memory_candidates/query", () => ({ q, state: "all", category: ["new", "confusing"].includes(kindF) ? kindF : "", kind: typeF, sort: order === "new" ? "recent" : order }), paint);
-    const filtered = () => [...(kindF === "dream" ? [] : remote.snapshot().items), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
+    // 자세히 on a card opens that candidate even when it is not on the loaded page (the list pages 50 oldest first)
+    const focus = focusId && all.find((c) => c.id === focusId);
+    const pinned = (items) => (focus && kindF !== "dream" && !q && !typeF && !items.some((c) => c.id === focusId) ? [focus, ...items] : items);
+    const filtered = () => [...(kindF === "dream" ? [] : pinned(remote.snapshot().items)), ...((kindF === "all" && !typeF) || kindF === "dream" ? dreamItems().filter(c => !q || c.text.toLowerCase().includes(q.toLowerCase())).sort(byOrder) : [])];
     const drawChips = () => { const snap = remote.snapshot(), counts = snap.facets.states || {}, sum = Object.values(counts).reduce((a, b) => a + b, 0);
       const every = (Object.keys(counts).length ? sum : snap.total ?? 0) + dreamItems().length; // 전체 = what the title counts: every waiting item and the proposals
       // a state with nothing in it is not offered, unless it is the one picked
