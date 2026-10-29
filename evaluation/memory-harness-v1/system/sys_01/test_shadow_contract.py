@@ -1145,7 +1145,7 @@ class TestStrictBoundary(unittest.TestCase):
         self.assert_code('input_limit',lambda:decode_typed(b'['*40+b'0'+b']'*40,'Scope'))
 
     def test_no_arbitrary_error_path(self):
-        for path in ['$.private_body','$.metrics[0].stage','$.__dict__','/tmp/private']:
+        for path in ['$.private_body','$.metrics[0].stage','$.__dict__','/absolute-invalid-error-path']:
             with self.subTest(path=path):
                 self.assert_code('invalid_value',lambda:validate_typed('SYSContractError',{'code':'invalid_value','path':path}))
         validate_typed('SYSContractError',{'code':'invalid_value','path':'$.metrics[*].stage'})
