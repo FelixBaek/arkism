@@ -827,7 +827,7 @@
       "id": "R8",
       "issue": 151,
       "owner": "R8",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
