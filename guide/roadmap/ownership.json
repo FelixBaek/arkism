@@ -3672,7 +3672,7 @@
       "id": "CRW-07",
       "issue": 154,
       "owner": "CRW-07",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
