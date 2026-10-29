@@ -62,11 +62,12 @@ window.ArkismHomeChecks = (ctx) => {
     request(`/v1/usage/sessions?${query({ range: "7d", limit: 300 })}`).then((d) => (Array.isArray(d?.items) ? d.items : []), () => [])
       .then((items) => { if (S.g !== g) return; S.sessions = items; if (live()) render(false); });
   }
-  function stall(sessions, lastExtract, now = Date.now()) {
+  // lastDone: the host's last finished analysis job (analysis_run), which restarts the clock even without a candidate (#449)
+  function stall(sessions, lastExtract, lastDone = 0, now = Date.now()) {
     const ends = sessions.map((s) => time(s.ended_at || s.started_at)).filter(Boolean);
-    const lastSession = Math.max(0, ...ends);
-    const pending = lastExtract ? ends.filter((t) => t > lastExtract) : ends;
-    const since = pending.length ? Math.min(...pending) : lastExtract;
+    const lastSession = Math.max(0, ...ends), mark = Math.max(lastExtract, lastDone);
+    const pending = mark ? ends.filter((t) => t > mark) : ends;
+    const since = pending.length ? Math.min(...pending) : mark;
     const stalled = ends.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
     return { stalled, hours: Math.floor((now - since) / HOUR), lastExtract, pending: pending.length };
   }
@@ -78,7 +79,7 @@ window.ArkismHomeChecks = (ctx) => {
     const d = state.data;
     let lastExtract = 0;
     for (const list of [d.candidates, d.conflicted, d.memories]) for (const m of list) lastExtract = Math.max(lastExtract, time(m.created_at));
-    const r = stall(S.sessions, lastExtract);
+    const r = stall(S.sessions, lastExtract, time(d.tools?.analysis_run?.last_done_at));
     if (!r.stalled) return null;
     const words = window.ArkismState.stallFor(r.hours);
     return { id: "stalled", n: 1, icon: "warning-circle", label: "기억 처리 멈춤", title: words.sentence, warn: true,

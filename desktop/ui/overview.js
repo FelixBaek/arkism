@@ -63,8 +63,10 @@ window.ArkismOverview = (ctx) => {
     const lastSession = latest(sessions), lastExtract = latest(extracted);
     // the stall clock starts at the first session that ended after the last extraction (the oldest session if never extracted);
     // extraction runs on finished sessions, so a session that ended after it is still unprocessed even if it started before
-    const pending = lastExtract ? sessions.filter((t) => t > lastExtract) : sessions;
-    const since = pending.length ? Math.min(...pending) : lastExtract;
+    // a finished analysis run counts as progress even with no candidate: reading every session and keeping nothing is not a stall (#449)
+    const mark = Math.max(lastExtract, time(d.tools?.analysis_run?.last_done_at));
+    const pending = mark ? sessions.filter((t) => t > mark) : sessions;
+    const since = pending.length ? Math.min(...pending) : mark;
     // 분석 stops when sessions keep coming but nothing new became a candidate for 6 hours.
     const stalled = sessions.length > 0 && since > 0 && lastSession - since > 6 * HOUR && now - since > 6 * HOUR;
     const stalledHours = Math.floor((now - since) / HOUR);

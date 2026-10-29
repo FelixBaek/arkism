@@ -235,6 +235,26 @@ func TestPCLinksAreStoredKeptAndValidated(t *testing.T) {
 	}
 }
 
+func TestAnalysisRunIsStoredKeptAndValidated(t *testing.T) {
+	f := newFixture(t)
+	at := time.Now().UTC()
+	run := AnalysisRun{At: at, Jobs: 3, Done: 2, Waiting: 1, Reason: "session_batch_wait", LastDoneAt: &at}
+	got, err := f.svc.ReportAgentTools(testCtx, f.human, AgentToolsReport{Scope: scopeA, AnalysisRun: &run})
+	if err != nil || got.AgentTools.AnalysisRun == nil || got.AgentTools.AnalysisRun.Done != 2 || got.AgentTools.AnalysisRun.Reason != "session_batch_wait" {
+		t.Fatal("analysis run not stored", got.AgentTools, err)
+	}
+	if got, _ = f.svc.ReportAgentTools(testCtx, f.human, AgentToolsReport{Scope: scopeA}); got.AgentTools.AnalysisRun == nil {
+		t.Fatal("a report without an analysis run dropped the last one")
+	}
+	neg := -1
+	for _, bad := range []AnalysisRun{{Jobs: 1}, {At: at, Done: -1}, {At: at, Reason: " x"}, {At: at, Error: "a\nb"}, {At: at, LastDoneCandidates: &neg}} {
+		bad := bad
+		if _, err = f.svc.ReportAgentTools(testCtx, f.human, AgentToolsReport{Scope: scopeA, AnalysisRun: &bad}); !errors.Is(err, ErrInvalid) {
+			t.Fatal("invalid analysis run accepted", bad, err)
+		}
+	}
+}
+
 func TestSkillReposAreStoredKeptAndValidated(t *testing.T) {
 	f := newFixture(t)
 	repos := []SkillRepo{{Repo: "~/skills/example-skill", Remote: "github.com/example/example-skill", Head: "2f3d943", Behind: 0, CheckedAt: time.Now().UTC()}}

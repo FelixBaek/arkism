@@ -6398,7 +6398,6 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
-  "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요.": "Conversations come in but no new candidates appear. Check the server's analysis sign-in and connection.",
   "글을 다 읽고 골라요": "Read the whole text, then choose",
   "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요.": "AI help suggests approve or discard with a reason. A person makes the choice.",
   "건넸는데 답에 안 쓰인 기억이에요": "Memories handed out but not used in an answer",
@@ -6421,6 +6420,31 @@ Object.assign(window.ArkismI18nEN.strings, {
   "zip으로 내보내기": "Export as zip", "zip을 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.": "Couldn't make the zip. Try again in a moment.",
   "zip 파일": "Zip file", "zip이 160KB보다 커요. GitHub에 올려 주소로 설치해 주세요.": "The zip is larger than 160KB. Put it on GitHub and install it from the address.",
   "서버가 zip을 확인하고 있어요. 1분쯤 걸려요…": "The server is checking the zip. This takes about a minute…"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "마지막 분석": "Last analysis",
+  "복사했어요": "Copied",
+  "복사하지 못했어요": "Could not copy",
+  "마지막 실행": "Last run",
+  "본 대화": "Conversations seen",
+  "건너뜀·보류·실패": "Skipped \u00b7 held \u00b7 failed",
+  "이유": "Reason",
+  "마지막으로 분석을 끝낸 때": "Last finished analysis",
+  "그때 나온 후보": "Candidates then",
+  "서버가 아직 분석 결과를 보고하지 않았어요.": "The server has not reported an analysis run yet.",
+  "명령 복사": "Copy command",
+  "에이전트 설정 열기": "Open agent settings",
+  "대화가 끝나고 5분 쉬면 분석해요": "Analyzed once a conversation has been idle for 5 minutes",
+  "대화 원문이 보관되기를 기다려요": "Waiting for the conversation text to be archived",
+  "비공개로 표시한 대화라 건너뛰었어요": "Skipped: the conversation is marked private",
+  "저장 정책 승인을 기다려요": "Waiting for the capture policy to be approved",
+  "같은 대화의 앞 묶음을 기다려요": "Waiting for the earlier batch of the same conversation",
+  "모델 사용 한도에 걸려 1시간 뒤 다시 해요": "Hit the model usage limit; retrying in an hour",
+  "서버가 분석 요청을 거부했어요 (로그인 만료)": "The server refused the analysis request (sign-in expired)",
+  "서버가 분석 요청을 거부했어요 (권한 없음)": "The server refused the analysis request (no permission)",
+  "서버가 분석 요청을 거부했어요. 에이전트 로그인을 확인해 주세요.": "The server refused the analysis request. Check the agent sign-in.",
+  "최근 2시간 동안 서버의 분석이 돌지 않았어요. 서버에서 분석 타이머를 켜 주세요.": "The server has not run an analysis in the last 2 hours. Start the analysis timer on the server.",
+  "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.": "Analysis is running, but conversations are still going or waiting.",
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",

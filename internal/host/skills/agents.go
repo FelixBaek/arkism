@@ -902,6 +902,10 @@ func syncAgents() error {
 		body.Set("skill_repos", repos)
 	}
 	body.Set("pc_links", pcReport(nowFloat())) // which agents on the PC reached this server (skill screen PC icon)
+	// the last capture drain that touched a job (분석 window, #449)
+	if run := readOrdered(filepath.Join(host.CaptureState, "analysis.json")); run != nil {
+		body.Set("analysis_run", run)
+	}
 	// Scores from the last skill-checks scan; left out before the first one so the server keeps its copy.
 	if checks, tools := checksReport(); checks != nil {
 		body.Set("skill_checks", checks)

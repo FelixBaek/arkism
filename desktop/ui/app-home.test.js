@@ -997,6 +997,37 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
   offs2.forEach((off) => off());
 });
 
+test("home: a finished analysis run with no candidate is not a stall, and the 분석 window says why", async () => {
+  const run = (at, extra) => route("GET", "/v1/agent_tools", () => ok({ agent_tools: { servers: [], plugins: [], requests: [], analysis_run: { at, jobs: 2, done: 1, candidates: 0, waiting: 1, dropped: 0, parked: 0, failed: 0, reason: "session_batch_wait", error: "", last_done_at: at, last_done_candidates: 0, ...extra } } }));
+  const offs = [route("GET", "/v1/usage/sessions", () => ok({ authority: "data_only_untrusted", items: [{ id: "u1", ended_at: ago(70) }, { id: "u2", ended_at: ago(1) }], next_cursor: "" })), run(ago(0.5))];
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  assert.ok(!/기억 추출이 .*멈췄어요/.test(text(app.$("#table"))), "the run finished a job after the sessions ended");
+  let d = await openWindow({ key: "extract" });
+  assert.match(text(d), /마지막 분석/);
+  assert.match(text(d), /대화가 끝나고 5분 쉬면 분석해요/);
+  assert.ok(!d.querySelector(".ov-win-note-r"), "no stall note");
+  await closeAll(); offs.pop()();
+  // no run for 80 hours: a real stall, and the window names the server command
+  offs.push(run(ago(80), { last_done_at: ago(80) }));
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  d = await openWindow({ key: "extract" });
+  assert.match(text(d.querySelector(".ov-win-note-r")), /분석 타이머를 켜 주세요/);
+  assert.match(text(d), /sudo systemctl start arkism-reflect.service/);
+  await closeAll(); offs.pop()();
+  // the server refused the run: the action is the agent sign-in
+  offs.push(run(ago(0.2), { done: 0, failed: 1, error: "401", last_done_at: ago(80) }));
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  d = await openWindow({ key: "extract" });
+  assert.match(text(d), /로그인 만료/);
+  await press("에이전트 설정 열기", d, 50);
+  assert.ok(!app.$("dialog.ov-win-extract[open]"), "the window closes"); assert.match(text(app.$("#table")), /Gemini CLI/, "agent settings are shown");
+  await closeAll();
+  offs.forEach((off) => off());
+});
+
 test("home: a prompt turns up in search once the gallery menu shows", async () => {
   const off = route("GET", "/v1/prompts", () => ok({ items: [{ id: "pp1", title: "썸네일 슬라이드", prompt: "표지", kind: "slide", image_prompt: { kind: "slide", title: "썸네일 슬라이드", prompt: "표지 {제목}", engine: "gpt" } }] }));
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(1500);
