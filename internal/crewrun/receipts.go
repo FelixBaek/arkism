@@ -58,7 +58,9 @@ func shortHash(parts ...string) string {
 var eventKinds = map[string]string{"code": "tool_result", "http": "tool_result", "github": "tool_result",
 	"ai": "message", "ai_once": "message", "subflow": "message", "expert": "message", "team": "message", "n8n": "tool_result"}
 
-// traceInput is the deterministic trace of a finished run, so a retry replays the same request.
+// traceInput is the deterministic final-node projection of a finished run, so a
+// retry replays the same request. Its 64-event cap is not an attempt ledger or
+// proof that every model call was captured.
 func traceInput(scope Scope, run Run, nodes map[string]Node) (map[string]any, bool) {
 	var started, finished time.Time
 	ids := make([]string, 0, len(run.State.Nodes))
@@ -106,19 +108,36 @@ func traceInput(scope Scope, run Run, nodes map[string]Node) (map[string]any, bo
 // shortcut: a failed trace or sink write is logged, not retried; add a journal when outcomes go live.
 func (e *Engine) recordFinished(ctx context.Context, run Run, nodes map[string]Node) {
 	if e.Traces == nil || len(e.Sinks) == 0 {
+		if AttemptObserverEnabled(ctx) && traceObservationApplicable(run, nodes) {
+			MarkAttemptObservationIncomplete(ctx, "trace_missing")
+		}
 		return
 	}
 	body, ok := traceInput(e.Traces.Scope, run, nodes)
 	if !ok {
 		return
 	}
+	completed := observationDeliveryPending(ctx)
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()
+		defer completed()
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute) // a shutdown still records the end
 		defer cancel()
 		e.storeTrace(ctx, run.ID, body)
 	}()
+}
+
+// Empty/start-only runs have no final event eligible for this producer. They are
+// not missing traces, and never become personal-memory outcome evidence.
+func traceObservationApplicable(run Run, nodes map[string]Node) bool {
+	for id, state := range run.State.Nodes {
+		if state.StartedAt != nil && state.FinishedAt != nil && eventKinds[nodes[id].Type] != "" &&
+			(state.Status == "done" || state.Status == "failed") {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Engine) storeTrace(ctx context.Context, runID string, body map[string]any) {
@@ -128,17 +147,26 @@ func (e *Engine) storeTrace(ctx context.Context, runID string, body map[string]a
 		SourceEvents []Ref `json:"source_events"`
 	}
 	if err := e.Traces.do(ctx, "POST", "/v1/execution_traces/completed", body, &stored); err != nil {
+		MarkAttemptObservationIncomplete(ctx, "trace_store_failed")
 		e.log().Warn("crew run trace", "run_id", runID, "error", err.Error())
 		return
 	}
 	if stored.Trace.Collection != "execution_traces" || stored.Trace.Revision < 1 {
+		MarkAttemptObservationIncomplete(ctx, "trace_receipt_invalid")
 		e.log().Warn("crew run trace", "run_id", runID, "error", "trace_receipt_invalid")
 		return
+	}
+	if AttemptObserverEnabled(ctx) {
+		expectedID, _ := body["trace_id"].(string)
+		if stored.Trace.ID == "" || (expectedID != "" && stored.Trace.ID != expectedID) {
+			MarkAttemptObservationIncomplete(ctx, "trace_receipt_invalid")
+		}
 	}
 	receipt := TraceReceipt{Scope: scopeMap(e.Traces.Scope), SessionID: body["thread_id"].(string), Trace: stored.Trace, Run: stored.Run,
 		SourceEvents: stored.SourceEvents, OccurredAt: body["agent_run"].(map[string]any)["finished_at"].(string)}
 	for _, sink := range e.Sinks {
 		if err := sink(receipt); err != nil {
+			MarkAttemptObservationIncomplete(ctx, "sink_failed")
 			e.log().Warn("crew run receipt", "run_id", runID, "error", err.Error())
 		}
 	}

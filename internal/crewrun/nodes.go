@@ -358,8 +358,9 @@ type aiSpec struct {
 	Origin map[string]string `json:"origin,omitempty"`
 	// Backend sends the step to that agent-runner connection instead of a local CLI; Run then names the step
 	// (kind, id, key, workflow_id, step_id, expert_id). key stays the same when an interrupted step is resumed.
-	Backend string            `json:"backend,omitempty"`
-	Run     map[string]string `json:"run,omitempty"`
+	Backend     string                       `json:"backend,omitempty"`
+	Run         map[string]string            `json:"run,omitempty"`
+	Observation *ObservationTransportRequest `json:"observation,omitempty"`
 }
 
 // aiUsage is run-node's estimated token use of one call.
@@ -389,7 +390,10 @@ type aiAnswer struct {
 	Usage  *aiUsage `json:"usage,omitempty"`
 	Rules  string   `json:"rules,omitempty"` // short sha256 of the shared record rules the runner added
 	// Backend is the agent-runner trace when the step ran on a connection, failed or not.
-	Backend map[string]any `json:"backend,omitempty"`
+	Backend            map[string]any `json:"backend,omitempty"`
+	observationID      string
+	observationCallKey string
+	observationUsage   *UsageObservation
 }
 
 var traceLabel = regexp.MustCompile(`^[A-Za-z0-9._:@/ -]{1,128}$`)
@@ -430,20 +434,29 @@ func runTrace(t map[string]any) map[string]any {
 func (e *Engine) callAI(ctx context.Context, s aiSpec, limit time.Duration, retries int) (aiAnswer, error) {
 	s.TimeoutS = max(1, int((limit-5*time.Second)/time.Second))
 	var err error
+	var last aiAnswer
 	for try := 0; try <= retries && ctx.Err() == nil; try++ {
 		var res aiAnswer
-		res, err = e.budgetedAI(ctx, s, try, func() (aiAnswer, error) { return e.callAIOnce(ctx, s, limit) })
+		attemptCtx := observationAnswerParent(ctx, last, false)
+		res, err = e.budgetedAIContext(attemptCtx, s, try, func(callCtx context.Context) (aiAnswer, error) {
+			return e.callAIOnce(callCtx, s, limit)
+		})
+		last = res
 		if err == nil || res.Backend != nil || flowCallControl(err) {
 			return res, err // an external task or denied dispatch is never retried
 		}
 	}
 	if ctx.Err() != nil {
-		return aiAnswer{}, ctx.Err()
+		return observationAnswerOnly(last), ctx.Err()
 	}
-	return aiAnswer{}, err
+	return observationAnswerOnly(last), err
 }
 
 func (e *Engine) callAIOnce(ctx context.Context, s aiSpec, limit time.Duration) (aiAnswer, error) {
+	s.Observation = nil
+	if request, ok := ctx.Value(observationRequestKey{}).(ObservationTransportRequest); ok && AttemptObserverEnabled(ctx) {
+		s.Observation = &request
+	}
 	in, _ := json.Marshal(s)
 	args := append(append([]string{}, e.Runner...), "run-node", "--json")
 	out, err := runCmd(ctx, cmdSpec{args: args, env: os.Environ(), stdin: in, timeout: limit})
@@ -455,6 +468,16 @@ func (e *Engine) callAIOnce(ctx context.Context, s aiSpec, limit time.Duration) 
 		return res, err
 	}
 	res.Backend = runTrace(res.Backend)
+	if AttemptObserverEnabled(ctx) {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(bytes.TrimSpace(out), &fields) == nil && fields["usage_observation"] != nil {
+			if usage, decodeErr := DecodeUsageObservation(fields["usage_observation"]); decodeErr == nil {
+				res.observationUsage = &usage
+			} else {
+				MarkAttemptObservationIncomplete(ctx, "usage_invalid")
+			}
+		}
+	}
 	if !res.OK {
 		return res, failf("ai_failed", "%s", clip(res.Error, 300))
 	}
@@ -637,6 +660,7 @@ func (e *Engine) runCollab(ctx context.Context, c map[string]string, s aiSpec, l
 	if err != nil {
 		return result{}, err
 	}
+	ctx = observationAnswerParent(ctx, planned, false)
 	var used atomic.Int64
 	used.Add(planned.tokens())
 	var subs []struct {

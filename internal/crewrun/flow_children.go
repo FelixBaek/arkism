@@ -150,6 +150,9 @@ func (x *runExec) runFlowChild(ctx context.Context, n Node, input any) (result, 
 	if ref.Kind != in.Kind || ref.CrewID != in.CrewID || ref.NodeID != n.ID || ref.ID == "" {
 		return result{}, failf("child_reference_invalid", "stored child does not match this node attempt")
 	}
+	if AttemptObserverEnabled(ctx) {
+		ctx = x.callContext(ctx, n.ID)
+	}
 	return x.driveChild(ctx, ref)
 }
 
@@ -164,14 +167,172 @@ func (x *runExec) childCreateError(err error) (result, error) {
 	return result{}, flowChildUnavailable(err)
 }
 
-func (x *runExec) childCallContext(ctx context.Context, ref FlowChild) context.Context {
-	return context.WithValue(ctx, flowCallScopeKey{}, flowCallScope{
-		run: Run{ID: x.run.ID, LeaseToken: x.run.LeaseToken}, nodeID: ref.NodeID, attempt: ref.Attempt,
-		definitions: x.run.State.Definitions,
-	})
+// observationCallContextLocked uses the run snapshot already held by the caller.
+// It adds no store reads, and never substitutes revision1 for missing evidence.
+func (x *runExec) observationCallContextLocked(ctx context.Context, nodeID string) context.Context {
+	if !AttemptObserverEnabled(ctx) {
+		return ctx
+	}
+	st := x.state(nodeID)
+	if x.e == nil || st == nil || st.Runs < 1 || x.run.ID == "" || x.run.Revision < 1 || x.run.State.CrewID == "" || x.run.State.CrewRevision < 1 {
+		return unavailableObservationContext(ctx)
+	}
+	definition := x.item
+	if x.run.State.Definition != nil {
+		definition = CrewItem{ID: x.run.State.CrewID, Revision: x.run.State.CrewRevision, Crew: *x.run.State.Definition}
+	}
+	if definition.ID != x.run.State.CrewID || definition.Revision != x.run.State.CrewRevision || (x.run.State.SourceType != "" && x.run.State.SourceType != definition.Crew.Type) {
+		return unavailableObservationContext(ctx)
+	}
+	client, _ := x.e.Store.(*Client)
+	scope, ok := observationScopeFrom(ctx, client)
+	digest, err := observationDigest(definition.Crew)
+	if !ok || err != nil {
+		return unavailableObservationContext(ctx)
+	}
+	mode := x.run.State.InvocationMode
+	if mode == "" {
+		mode = "legacy"
+	}
+	run := ObservationRun{Scope: scope, RunRef: ObservationRef{Collection: "crew_runs", ID: x.run.ID, Revision: x.run.Revision},
+		Definition:    ObservationDefinition{Ref: ObservationRef{Collection: "crew", ID: definition.ID, Revision: definition.Revision}, SourceType: definition.Crew.Type, DefinitionSHA256: &digest, HashState: "recorded"},
+		ExecutionPath: map[string]string{"workflow": "workflow", "agent": "single", "team": "crew"}[definition.Crew.Type], InvocationMode: mode}
+	if !x.observationRunParent(ctx, &run) {
+		return unavailableObservationContext(ctx)
+	}
+	return observationExecutionContext(ctx, run, x.run.State.Input, definition.Crew, nodeID, int64(st.Runs))
 }
 
-func (x *runExec) driveChild(ctx context.Context, ref FlowChild) (result, error) {
+func (x *runExec) observationRunParent(ctx context.Context, run *ObservationRun) bool {
+	previous, hasPrevious := AttemptContextFrom(ctx)
+	if x.run.State.ParentID == "" {
+		return x.observationSelfRoot(ctx, run, previous, hasPrevious)
+	}
+	if !hasPrevious || previous.ParentAttemptID == nil {
+		return false
+	}
+	parent, ok := observationLatest(ctx, *previous.ParentAttemptID)
+	if !ok || parent.Identity.Run.Scope != run.Scope || parent.Task != previous.Task || parent.Identity.Run.RunRef.Collection != "crew_runs" || parent.Identity.Run.RunRef.ID != x.run.State.ParentID ||
+		parent.Identity.Run.RootRunID == nil || parent.Identity.Run.RootRunCollection == nil || !observationParentContextMatches(previous.Run, parent.Identity.Run, *run) {
+		return false
+	}
+	if x.run.State.RootID != "" && x.run.State.RootID != *parent.Identity.Run.RootRunID || x.run.State.ParentNodeID != "" && x.run.State.ParentNodeID != parent.Identity.NodeID {
+		return false
+	}
+	collection, id := "crew_runs", x.run.State.ParentID
+	run.ParentRunCollection, run.ParentRunID = &collection, &id
+	run.RootRunCollection, run.RootRunID = parent.Identity.Run.RootRunCollection, parent.Identity.Run.RootRunID
+	if x.run.State.ParentNodeID != "" {
+		node := x.run.State.ParentNodeID
+		run.ParentNodeID = &node
+	}
+	return true
+}
+
+// A second binding in the same child node may already carry the child's own
+// identity. Both forms require the independently observed delegation parent.
+func observationParentContextMatches(previous, parent, child ObservationRun) bool {
+	if previous.RunRef.Collection != "crew_runs" || previous.RunRef.Revision < 1 {
+		return false
+	}
+	if previous.RunRef.ID == parent.RunRef.ID {
+		return true
+	}
+	return previous.RunRef.ID == child.RunRef.ID && previous.ParentRunID != nil && *previous.ParentRunID == parent.RunRef.ID && previous.ParentRunCollection != nil && *previous.ParentRunCollection == parent.RunRef.Collection && observationRoot(previous) == observationRoot(parent)
+}
+
+func (x *runExec) observationSelfRoot(ctx context.Context, run *ObservationRun, previous AttemptContext, hasPrevious bool) bool {
+	if x.run.State.RootID != "" && x.run.State.RootID != x.run.ID {
+		return false
+	}
+	collection, id := "crew_runs", x.run.ID
+	run.RootRunCollection, run.RootRunID = &collection, &id
+	if !hasPrevious || previous.ParentAttemptID == nil {
+		return true
+	}
+	parent, ok := observationLatest(ctx, *previous.ParentAttemptID)
+	return ok && parent.Identity.Run.Scope == run.Scope && parent.Identity.Run.RunRef.Collection == collection && parent.Identity.Run.RunRef.ID == id && parent.Task == previous.Task
+}
+
+func (x *runExec) childCallContext(ctx context.Context, ref FlowChild) context.Context {
+	// Normal calls already carry the snapshot acquired by callContext. Resume
+	// calls without that scope hold x.mu while reading these same fields.
+	scope, ok := ctx.Value(flowCallScopeKey{}).(flowCallScope)
+	if !AttemptObserverEnabled(ctx) || !ok {
+		scope = flowCallScope{run: Run{ID: x.run.ID, LeaseToken: x.run.LeaseToken}, definitions: x.run.State.Definitions}
+	}
+	scope.nodeID, scope.attempt = ref.NodeID, ref.Attempt
+	return context.WithValue(ctx, flowCallScopeKey{}, scope)
+}
+
+// A delegation is a real non-model transport parent. It is not a provider leaf,
+// financial reservation, or synthetic FLOW jobs receipt. Partial coverage is
+// intentional until a separate accepted end-to-end child ledger proves more.
+func (x *runExec) childObservationContext(ctx context.Context, ref FlowChild) (context.Context, *AttemptObservation) {
+	if !AttemptObserverEnabled(ctx) {
+		return ctx, nil
+	}
+	identity, err := AttemptIdentityFromContext(ctx, "tool", "delegate/"+ref.Kind+"/"+ref.ID, 0, nil)
+	if err != nil || identity.NodeID != ref.NodeID || identity.NodeAttempt != int64(ref.Attempt) {
+		return unavailableObservationContext(ctx), nil
+	}
+	current, _ := AttemptContextFrom(ctx)
+	record, exists := observationLatest(ctx, identity.AttemptID)
+	if !exists {
+		record = AttemptObservation{ContractID: CrewObservationContractID, Identity: identity, Task: current.Task, Status: "reserved", DispatchState: "unknown", Usage: UnknownUsageObservation(), ObservationRevision: 1, UsageRole: "transport_aggregate", LeafCoverage: "partial"}
+		started := childObservationStart(ctx, identity.AttemptID, time.Now())
+		ns := started.UnixNano()
+		record.Usage.StartedAtNS = &ns
+		var accepted bool
+		record, accepted = observationRecord(ctx, record)
+		if !accepted {
+			return unavailableObservationContext(ctx), nil
+		}
+	}
+	id := record.Identity.AttemptID
+	current.ParentAttemptID, current.FallbackParentCallKey = &id, nil
+	return WithAttemptContext(ctx, current), &record
+}
+
+func childObservationStart(ctx context.Context, key string, now time.Time) time.Time {
+	runtime := observationRuntimeFor(ctx)
+	if runtime == nil {
+		return now
+	}
+	runtime.mu.Lock()
+	defer runtime.mu.Unlock()
+	if started, ok := runtime.starts[key]; ok {
+		return started
+	}
+	runtime.starts[key] = now
+	return now
+}
+
+func (x *runExec) finishChildObservation(ctx context.Context, record *AttemptObservation, res result, err error) {
+	if record == nil || record.Status != "reserved" || res.wait != nil || errors.Is(err, errFlowChildUnavailable) || ctx.Err() != nil {
+		return
+	}
+	finished := time.Now()
+	started := childObservationStart(ctx, record.Identity.AttemptID, finished)
+	ns, duration := finished.UnixNano(), finished.Sub(started).Nanoseconds()
+	if ns < started.UnixNano() {
+		ns = started.UnixNano()
+	}
+	if duration < 0 {
+		MarkAttemptObservationIncomplete(ctx, "host_attempts_incomplete")
+		return
+	}
+	record.Usage.FinishedAtNS, record.Usage.DurationNS, record.Usage.DurationBasis = &ns, &duration, "observed_monotonic"
+	record.Status, record.DispatchState, record.ObservationRevision = "succeeded", "dispatched", record.ObservationRevision+1
+	if err != nil {
+		record.Status, record.ErrorCode = "failed", "failed"
+	}
+	observationRecord(ctx, *record)
+}
+
+func (x *runExec) driveChild(ctx context.Context, ref FlowChild) (out result, resultErr error) {
+	ctx, observed := x.childObservationContext(ctx, ref)
+	defer func() { x.finishChildObservation(ctx, observed, out, resultErr) }()
 	var err error
 	switch ref.Kind {
 	case "workflow":
@@ -259,6 +420,10 @@ func (x *runExec) resumeChildLocked(ctx context.Context, nodeID string) (bool, e
 	ref, ok := x.waitingChild(nodeID)
 	if !ok {
 		return false, failf("child_reference_missing", "waiting child is not linked")
+	}
+	if AttemptObserverEnabled(ctx) {
+		ctx = x.observationCallContextLocked(ctx, nodeID)
+		ctx = context.WithValue(ctx, flowCallScopeKey{}, flowCallScope{run: Run{ID: x.run.ID, LeaseToken: x.run.LeaseToken}, nodeID: ref.NodeID, attempt: ref.Attempt, definitions: x.run.State.Definitions})
 	}
 	res, err := x.driveChild(ctx, ref)
 	if x.expireFlowLocked() {
