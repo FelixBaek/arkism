@@ -1,4 +1,5 @@
-"""Sign and independently verify a Windows release. Never publishes or generates keys.
+"""Sign and independently verify a release: the Windows installer and the Linux server
+bundles the app installs over SSH. Never publishes or generates keys.
 
 ARKISM_UPDATE_PUBLIC_KEY is base64 of the complete minisign public-key file,
 matching Tauri's public-key encoding. Secret keys are local files; the optional
@@ -12,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 import tempfile
 from urllib.parse import urlsplit
 
@@ -20,6 +22,8 @@ SIG = ".minisig"
 TAURI_MANIFEST = "latest-tauri.json"
 SUMS = "SHA256SUMS"
 SUMS_SIG = SUMS + SIG
+SERVER_ARCHES = ("amd64", "arm64")
+SERVER_FILES = {"arkism", "arkism-crew", "memoryd", "memory-principal"}
 
 
 class ReleaseError(Exception):
@@ -63,6 +67,22 @@ def names(version, channel):
     installer = f"Arkism-{version}-setup.exe"
     manifest = "latest.json" if channel == "stable" else "latest-beta.json"
     return installer, manifest, f"Arkism-{version}-windows.sbom.spdx.json"
+
+
+def server_bundles(version):
+    return [f"arkism-server-{version}-linux-{arch}.tar.gz" for arch in SERVER_ARCHES]
+
+
+def check_server_bundle(path):
+    # The app's remote installer accepts exactly these regular files (server_update.sh).
+    require_file(path)
+    try:
+        with tarfile.open(path, "r:gz") as tar:
+            members = tar.getmembers()
+    except (tarfile.TarError, OSError, EOFError) as exc:
+        raise ReleaseError(f"unreadable server bundle: {path.name}") from exc
+    if sorted(m.name for m in members) != sorted(SERVER_FILES) or not all(m.isreg() for m in members):
+        raise ReleaseError(f"server bundle must hold only {sorted(SERVER_FILES)}: {path.name}")
 
 
 def digest(path):
@@ -119,6 +139,8 @@ def sign(directory, version, feed, channel, key):
         raise ReleaseError("private signing key must have mode 0600")
     require_file(directory / installer)
     check_sbom(directory / sbom)
+    for bundle in server_bundles(version):
+        check_server_bundle(directory / bundle)
     with tempfile.TemporaryDirectory(prefix="arkism-verify-key-") as tmp:
         public = Path(tmp) / "public.key"
         public.write_bytes(public_key())
@@ -134,7 +156,7 @@ def sign(directory, version, feed, channel, key):
         tauri = {"version": version, "platforms": {"windows-x86_64": {
             "url": f"{feed}/{installer}", "signature": wrapped}}}
         (directory / TAURI_MANIFEST).write_text(json.dumps(tauri, separators=(",", ":")) + "\n", encoding="utf-8")
-        for name in (manifest, TAURI_MANIFEST, sbom):
+        for name in (manifest, TAURI_MANIFEST, sbom, *server_bundles(version)):
             sign_file(directory / name, key, version, public)
         files = sorted(p for p in directory.iterdir() if p.name not in (SUMS, SUMS_SIG))
         for path in files:
@@ -172,6 +194,8 @@ def verify(directory, version, feed, channel):
     required = {installer, installer + ".sha256", installer + SIG, installer + ".sig",
                 manifest, manifest + SIG, TAURI_MANIFEST, TAURI_MANIFEST + SIG,
                 sbom, sbom + SIG}
+    for bundle in server_bundles(version):
+        required |= {bundle, bundle + SIG}
     # Provenance (a Sigstore bundle; the .intoto.jsonl name is what OpenSSF
     # Scorecard recognizes), when present, is checked by `gh attestation verify` in CI and
     # is signed into SHA256SUMS too. Never accept arbitrary extra release assets.
@@ -181,7 +205,7 @@ def verify(directory, version, feed, channel):
         public = Path(tmp) / "public.key"
         public.write_bytes(public_key())
         sums = verify_inventory(directory, required, public, version)
-        for name in (installer, manifest, TAURI_MANIFEST, sbom):
+        for name in (installer, manifest, TAURI_MANIFEST, sbom, *server_bundles(version)):
             verify_signature(directory / name, directory / (name + SIG), public, version)
         document = json.loads((directory / manifest).read_bytes())
         signature = base64.b64encode((directory / (installer + SIG)).read_bytes()).decode("ascii")
@@ -194,6 +218,8 @@ def verify(directory, version, feed, channel):
                 "url": f"{feed}/{installer}", "signature": signature}}}:
             raise ReleaseError("Tauri manifest does not describe the release")
         check_sbom(directory / sbom)
+        for bundle in server_bundles(version):
+            check_server_bundle(directory / bundle)
 
 
 def main():
@@ -230,8 +256,8 @@ def main():
             verify(args.directory, args.version, args.feed, args.channel)
     except (ReleaseError, OSError, ValueError) as exc:
         # Do not print subprocess output, key material, or parsed manifest data.
-        parser.exit(1, f"Windows release verification failed: {type(exc).__name__}\n")
-    print("Windows release verification passed.")
+        parser.exit(1, f"Release verification failed: {type(exc).__name__}\n")
+    print("Release verification passed.")
 
 
 if __name__ == "__main__":

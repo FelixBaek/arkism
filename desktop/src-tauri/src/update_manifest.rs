@@ -79,17 +79,23 @@ impl Latest {
     pub fn verify_installer(&self, bytes: &[u8], key: &str) -> Result<(), String> {
         let signature = STANDARD.decode(&self.signature).map_err(|_| "update_signature_invalid")?;
         let signature = std::str::from_utf8(&signature).map_err(|_| "update_signature_invalid")?;
-        verify(bytes, signature, key)?;
-        // Inspect comments only after the global minisign signature passed.
-        let signature = Signature::decode(signature).map_err(|_| "update_signature_invalid")?;
-        let fields: Vec<_> = signature.trusted_comment().split('\t').collect();
-        if fields.iter().filter(|v| v.starts_with("version:")).count() != 1
-            || !fields.contains(&format!("version:{}", self.version).as_str())
-            || fields.iter().filter(|v| v.starts_with("file:")).count() != 1
-            || !fields.contains(&format!("file:{}", self.file).as_str())
-        { return Err("update_signed_version_mismatch".into()); }
-        Ok(())
+        verify_signed_file(bytes, signature, key, &self.file, &self.version)
     }
+}
+
+/// A signed release file whose trusted comment names exactly this file and version
+/// (the installer, and the server bundle the app sends to an SSH server).
+pub fn verify_signed_file(bytes: &[u8], signature: &str, key: &str, file: &str, version: &str) -> Result<(), String> {
+    verify(bytes, signature, key)?;
+    // Inspect comments only after the global minisign signature passed.
+    let signature = Signature::decode(signature).map_err(|_| "update_signature_invalid")?;
+    let fields: Vec<_> = signature.trusted_comment().split('\t').collect();
+    if fields.iter().filter(|v| v.starts_with("version:")).count() != 1
+        || !fields.contains(&format!("version:{version}").as_str())
+        || fields.iter().filter(|v| v.starts_with("file:")).count() != 1
+        || !fields.contains(&format!("file:{file}").as_str())
+    { return Err("update_signed_version_mismatch".into()); }
+    Ok(())
 }
 
 pub fn parse_version(value: &str) -> Option<(u32, u32, u32)> {

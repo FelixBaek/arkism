@@ -1,7 +1,8 @@
 name: Release
 
-# A tag vX.Y.Z builds and checks the Windows installer, then puts it and the
-# update file (latest.json) in a draft release. Publishing the draft is a person's
+# A tag vX.Y.Z builds and checks the Windows installer and the Linux server bundles
+# (the app's 서버 업데이트 installs the bundle with its own version over SSH), then puts
+# them and the update file (latest.json) in a draft release. Publishing the draft is a person's
 # step. Manual and pull request builds produce artifacts without a release.
 # Pull requests validate workflow metadata only; no installer is built automatically.
 #
@@ -31,6 +32,7 @@ on:
       - "tools/test_check_release_quality.py"
       - "tools/release_artifacts.py"
       - "tools/test_release_artifacts.py"
+      - "internal/buildinfo/**"
       - "tools/install-minisign.sh"
       - "desktop/installer/**"
       - "desktop/src-tauri/**"
@@ -229,13 +231,53 @@ jobs:
             desktop/dist/provenance.intoto.jsonl
           if-no-files-found: error
 
+  server:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Build the Linux server bundles
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          epoch="$(git log -1 --format=%ct)"
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            out="$RUNNER_TEMP/server-$arch"
+            mkdir -p "$out"
+            for cmd in arkism arkism-crew memoryd memory-principal; do
+              CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build -trimpath \
+                -ldflags "-X github.com/FelixBaek/arkism/internal/buildinfo.Version=$version" \
+                -o "$out/$cmd" "./cmd/$cmd"
+            done
+            # Same bytes for the same commit: fixed order, owner and time, no gzip timestamp.
+            tar -C "$out" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$epoch" \
+              -cf - arkism arkism-crew memoryd memory-principal | gzip -n9 > "dist/arkism-server-$version-linux-$arch.tar.gz"
+          done
+          [ "$("$RUNNER_TEMP/server-amd64/arkism" version)" = "$version" ]
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: server
+          path: dist/arkism-server-*-linux-*.tar.gz
+          if-no-files-found: error
+
   release:
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
       (github.event_name == 'workflow_dispatch' && inputs.publish_initial &&
        inputs.version == '0.1.0' && github.ref == 'refs/heads/main' &&
        github.repository == 'FelixBaek/arkism')
-    needs: [windows]
+    needs: [windows, server]
     environment: release-signing
     runs-on: ubuntu-24.04
     permissions:
@@ -252,6 +294,10 @@ jobs:
         with:
           path: dist
           name: windows
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          name: server
       - name: Install pinned minisign verification tool
         run: |
           bash tools/install-minisign.sh "$RUNNER_TEMP/release-tools"
@@ -266,7 +312,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" \
               --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           done
-      - name: Sign and verify Windows release assets
+      - name: Sign and verify release assets
         env:
           ARKISM_UPDATE_SIGNING_KEY: ${{ secrets.ARKISM_UPDATE_SIGNING_KEY }}
           ARKISM_UPDATE_SIGNING_PASSWORD: ${{ secrets.ARKISM_UPDATE_SIGNING_PASSWORD }}

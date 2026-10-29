@@ -1,10 +1,12 @@
 """Real minisign round trips and release refusal under tampering. No product executes."""
 import base64
+import io
 import json
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -35,6 +37,16 @@ class WindowsReleaseTests(unittest.TestCase):
         self.exe.write_bytes(b"inert Windows installer fixture\n")
         (self.dist / "Arkism-1.2.3-windows.sbom.spdx.json").write_text(json.dumps({
             "spdxVersion": "SPDX-2.3", "packages": [{"name": "inert Windows fixture"}]}))
+        for name in release.server_bundles("1.2.3"):
+            self.server_bundle(self.dist / name, release.SERVER_FILES)
+
+    @staticmethod
+    def server_bundle(path, files):
+        with tarfile.open(path, "w:gz") as tar:
+            for name in sorted(files):
+                info = tarfile.TarInfo(name)
+                info.size = len(b"inert\n")
+                tar.addfile(info, io.BytesIO(b"inert\n"))
 
     def sign(self):
         release.sign(self.dist, "1.2.3", "https://example.test/feed", "stable", self.key)
@@ -62,6 +74,26 @@ class WindowsReleaseTests(unittest.TestCase):
                     self.verify()
                 path.write_bytes(original)
         self.verify()
+
+    def test_server_bundles_are_signed_for_their_own_name_and_checked_for_contents(self):
+        self.sign()
+        amd64, arm64 = (self.dist / n for n in release.server_bundles("1.2.3"))
+        release.verify_signature(amd64, amd64.with_name(amd64.name + ".minisig"), self.pub, "1.2.3")
+        # A signed amd64 bundle cannot stand in for the arm64 one.
+        shutil.copy(amd64.with_name(amd64.name + ".minisig"), arm64.with_name(arm64.name + ".minisig"))
+        shutil.copy(amd64, arm64)
+        with self.assertRaises(release.ReleaseError):
+            self.verify()
+        for files in (release.SERVER_FILES | {"evil"}, release.SERVER_FILES - {"memoryd"}):
+            with self.subTest(files=sorted(files)):
+                for p in self.dist.glob("*.minisig"):
+                    p.unlink()
+                self.server_bundle(arm64, files)
+                with self.assertRaises(release.ReleaseError):
+                    self.sign()
+        arm64.unlink()
+        with self.assertRaises(release.ReleaseError):
+            self.sign()
 
     def test_feed_and_installer_replacement_cannot_forge_publisher(self):
         self.sign()

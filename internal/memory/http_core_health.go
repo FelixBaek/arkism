@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/buildinfo"
 )
 
 func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
@@ -51,7 +53,8 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 	})
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
+	// Unauthenticated on purpose: the app reads the version before it trusts a feature exists.
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, buildinfo.Current()) })
 	mux.HandleFunc("POST /v1/context/build", func(w http.ResponseWriter, r *http.Request) {
 		var in ContextBuildInput
 		if !decode(w, r, &in) {

@@ -570,7 +570,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
       try { await request(`/v1/maintenance_proposals/${encodeURIComponent(p.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, decision, ...extra }) }); await reload(); done(); }
       catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : er.message === "invalid_request" ? "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
     // 지우기: either memory or both, with a reason; each removed memory keeps it in its history
-    const forget = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
+    // an older server answers forget_both with invalid_request, so 둘 다 is left out there (the banner asks for an update)
+    const pairTargets = [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]].filter(([v]) => v !== "forget_both" || !state.serverLacks?.has("forget_both"));
+    const forget = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : pairTargets,
       target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) }));
     const stale = DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id))) ? [DR().staleHint()] : [];
     if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")), forget, ...stale);
