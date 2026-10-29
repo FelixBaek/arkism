@@ -186,6 +186,9 @@ func runNodeCLI(raw string) map[string]any {
 	if err != nil || !ok {
 		return failed("", "표준입력이 JSON 객체가 아니에요")
 	}
+	observedSpec, observationSession := openHostObservation(spec, rawHostObservationRequest(raw))
+	defer closeHostObservation(observationSession)
+	spec = observedSpec
 	out, err := runNodeFn(spec)
 	if err != nil {
 		// Python lets a non-Crew failure end the process; the engine reads a result either way.
