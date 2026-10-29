@@ -1,0 +1,26 @@
+type(scope): explain the changed behavior
+
+Why:
+Task: none
+Verified:
+Limits:
+Research: none
+Design: none
+Relation: none
+Deviation: none
+
+제목:
+이유:
+검증:
+한계:
+
+# Fill actual reasons, commands/results and limitations in both languages.
+# Research-linked changes replace Research: none with the protocol/research link.
+# Design records the choice, alternatives and assumptions.
+# Relation is faithful, adapted, partial, or unsupported, not an effect claim.
+# Deviation records differences from the prior method and their consequences.
+# Ordinary changes may keep Research/Design/Relation/Deviation as none.
+# Do not put private hypotheses, source paper/card text or participant data here.
+# New research details apply from author date 2026-10-29T06:25:00+09:00.
+# The cutoff preserves existing history across rebase; it is not a trusted clock.
+# Use per commit: git -c commit.template=.github/commit_template.txt commit

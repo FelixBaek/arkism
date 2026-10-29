@@ -1,0 +1,5077 @@
+{
+  "schema_version": 1,
+  "plan_id": "arkism-roadmap-150-158-v1",
+  "baseline_contract": {
+    "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json",
+    "sha256": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+    "publication": "private-source-publication-pending"
+  },
+  "roots": {
+    "repo": {
+      "kind": "repository",
+      "path": "."
+    },
+    "crew_lab": {
+      "kind": "external-private",
+      "dispatch_required": true
+    },
+    "routing_lab": {
+      "kind": "external-private",
+      "dispatch_required": true
+    },
+    "capability_lab": {
+      "kind": "external-private",
+      "dispatch_required": true
+    },
+    "development_lab": {
+      "kind": "external-private",
+      "dispatch_required": true
+    }
+  },
+  "preparation": {
+    "owner": "R0",
+    "writes": [
+      {
+        "root": "repo",
+        "path": "guide/roadmap/ownership.json"
+      },
+      {
+        "root": "repo",
+        "path": "guide/roadmap/ownership.md"
+      },
+      {
+        "root": "repo",
+        "path": "tools/check_roadmap_plan.py"
+      },
+      {
+        "root": "repo",
+        "path": "tools/test_check_roadmap_plan.py"
+      },
+      {
+        "root": "repo",
+        "path": "tools/check_work_record.py"
+      },
+      {
+        "root": "repo",
+        "path": "tools/test_check_work_record.py"
+      },
+      {
+        "root": "repo",
+        "path": ".github/pull_request_template.md"
+      },
+      {
+        "root": "repo",
+        "path": ".github/workflows/checks.yml"
+      },
+      {
+        "root": "repo",
+        "path": "tools/check_local.py"
+      },
+      {
+        "root": "repo",
+        "path": ".github/commit_template.txt"
+      },
+      {
+        "root": "repo",
+        "path": "guide/work-records/2026-10-29-roadmap-preparation.md"
+      }
+    ]
+  },
+  "shared_files": [
+    {
+      "root": "repo",
+      "path": "internal/memory/search.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-05",
+        "SYS-06"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/memory_outcome.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02",
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/memory_outcome_read.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/memory_signal.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/model.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/store_common.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/deletion_preview.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/digest_erasure.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/memory_erasure.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/memory_time.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/service.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-06"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "cmd/memoryd/main.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-05",
+        "SYS-06"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/recall_budget.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-06"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/memory_outcomes.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/nodes.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02",
+        "CRW-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/receipts.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/meeting.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-03",
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/store.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/engine.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/cost.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/routing.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-02",
+        "RTE-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/routing.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-03",
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/gateway/lanes.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/gateway/gateway.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/skills/toolinfo.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CAP-07"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/skills/toolinfo_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CAP-07"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/cost_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/routing_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-02",
+        "RTE-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/routing_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "RTE-03",
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/meeting_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-03",
+        "RTE-05"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/nodes_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02",
+        "CRW-04"
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "id": "R1",
+      "issue": 151,
+      "owner": "R1",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R1"
+      ],
+      "completion_gates": [
+        "R1"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/codec.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/codec_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/canonical_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R2",
+      "issue": 151,
+      "owner": "R2",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R2"
+      ],
+      "completion_gates": [
+        "R2"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contract_io.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_contract_io.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R3",
+      "issue": 151,
+      "owner": "R3",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R3"
+      ],
+      "completion_gates": [
+        "R3"
+      ],
+      "depends_on": [
+        "R1",
+        "R2"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/fixture_gen.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/fixtures_spec.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_fixture_gen.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R2",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contract_io.py"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R4",
+      "issue": 151,
+      "owner": "R4",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R4"
+      ],
+      "completion_gates": [
+        "R4"
+      ],
+      "depends_on": [
+        "R1"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/decay.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/decay_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R5",
+      "issue": 151,
+      "owner": "R5",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R5"
+      ],
+      "completion_gates": [
+        "R5"
+      ],
+      "depends_on": [
+        "R1"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/rrf.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/packing.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/rrf_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/packing_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R6",
+      "issue": 151,
+      "owner": "R6",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R6"
+      ],
+      "completion_gates": [
+        "R6"
+      ],
+      "depends_on": [
+        "R1",
+        "R2"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/metrics.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_metrics.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R2",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contract_io.py"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R7",
+      "issue": 151,
+      "owner": "R7",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R7"
+      ],
+      "completion_gates": [
+        "R7"
+      ],
+      "depends_on": [
+        "R1",
+        "R3",
+        "R5"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-baseline/main.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-baseline/main_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R3",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/fixtures_spec.json"
+        },
+        {
+          "owner": "R5",
+          "root": "repo",
+          "path": "internal/memoryharness/packing.go"
+        },
+        {
+          "owner": "R5",
+          "root": "repo",
+          "path": "internal/memoryharness/rrf.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "R8",
+      "issue": 151,
+      "owner": "R8",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "R8"
+      ],
+      "completion_gates": [
+        "R8"
+      ],
+      "depends_on": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/report.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_report.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/acceptance.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_acceptance.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/test_memory_harness.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R2",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contract_io.py"
+        },
+        {
+          "owner": "R3",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/fixture_gen.py"
+        },
+        {
+          "owner": "R6",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/metrics.py"
+        },
+        {
+          "owner": "R7",
+          "root": "repo",
+          "path": "cmd/memory-harness-baseline/main.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "DYN-01",
+      "issue": 152,
+      "owner": "DYN-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "DYN-01"
+      ],
+      "completion_gates": [
+        "DYN-01"
+      ],
+      "depends_on": [
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_decisions.md"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/p1_feature_contract_v1.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/validate.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/validate_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "DYN-02",
+      "issue": 152,
+      "owner": "DYN-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "DYN-02.scalar"
+      ],
+      "completion_gates": [
+        "DYN-02"
+      ],
+      "depends_on": [
+        "DYN-01",
+        "R4"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/transition.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/transition_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/revision.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/revision_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "R4",
+          "root": "repo",
+          "path": "internal/memoryharness/decay.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "DYN-03",
+      "issue": 152,
+      "owner": "DYN-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "DYN-03.scalar"
+      ],
+      "completion_gates": [
+        "DYN-03"
+      ],
+      "depends_on": [
+        "DYN-02.scalar",
+        "R5",
+        "R7"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/replay.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/replay_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/probe.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/probe_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "DYN-02",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/transition.go"
+        },
+        {
+          "owner": "R5",
+          "root": "repo",
+          "path": "internal/memoryharness/packing.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "DYN-04",
+      "issue": 152,
+      "owner": "DYN-04",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision before capture extension",
+      "entry_gates": [
+        "DYN-04"
+      ],
+      "completion_gates": [
+        "DYN-04"
+      ],
+      "depends_on": [
+        "DYN-05.fastslow",
+        "EXP-02.early_pilot"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/capture_policy_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/capture_types_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/capture_validate_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/capture.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/capture_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "DYN-05",
+      "issue": 152,
+      "owner": "DYN-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "core p1 acceptance; fast/slow and capture extensions need separate selection and acceptance",
+      "entry_gates": [
+        "DYN-05.p1"
+      ],
+      "completion_gates": [
+        "DYN-05.p1"
+      ],
+      "depends_on": [
+        "DYN-03.scalar",
+        "EXP-01.draft",
+        "EXP-02.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy_capture_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy_capture_v1_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/main.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/main_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/dynamics_compare.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_dynamics_compare.py"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/policy_registry.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy_p1_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy_p1_v1_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/dynamics_policy_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "DYN-03",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/probe.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-01",
+      "issue": 152,
+      "owner": "SYS-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-01.spec"
+      ],
+      "completion_gates": [
+        "SYS-01.integration"
+      ],
+      "depends_on": [
+        "DYN-01",
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/race_cases.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/test_shadow_contract.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/dynamics_shadow.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/dynamics_shadow_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        },
+        {
+          "owner": "DYN-05",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/policy.go"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/search.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-02",
+      "issue": 152,
+      "owner": "SYS-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-02.spec"
+      ],
+      "completion_gates": [
+        "SYS-02.integration"
+      ],
+      "depends_on": [
+        "DYN-01",
+        "SYS-01.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_02/outcome_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_02/outcome_cases.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_02/test_outcome_contract.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_02/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json"
+        },
+        {
+          "owner": "DYN-01",
+          "root": "repo",
+          "path": "internal/memoryharness/dynamicsv2/types.go"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_outcome.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_outcome_read.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_signal.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/memory_outcomes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-03",
+      "issue": 152,
+      "owner": "SYS-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-03.spec"
+      ],
+      "completion_gates": [
+        "SYS-03.integration"
+      ],
+      "depends_on": [
+        "DYN-05.p1",
+        "SYS-02.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/atomicity_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/fault_schedules.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/validate_ledger.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/test_atomicity.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "SYS-02",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_02/outcome_contract.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_outcome.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/model.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/store_common.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-04",
+      "issue": 152,
+      "owner": "SYS-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-04.spec"
+      ],
+      "completion_gates": [
+        "SYS-04.integration"
+      ],
+      "depends_on": [
+        "DYN-01",
+        "SYS-01.spec",
+        "SYS-03.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/lifecycle_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/dependency_cases.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/restore_cases.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/test_lifecycle.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/atomicity_contract.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/deletion_preview.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/digest_erasure.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_erasure.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/memory_time.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-04.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-05",
+      "issue": 152,
+      "owner": "SYS-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-05.spec"
+      ],
+      "completion_gates": [
+        "SYS-05.integration"
+      ],
+      "depends_on": [
+        "SYS-03.integration",
+        "SYS-04.integration"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/load_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/generate_workload.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/summarize_load.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/test_load.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_03/atomicity_contract.json"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_04/lifecycle_contract.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/search.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-05.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memoryd/main.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-05.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "SYS-06",
+      "issue": 152,
+      "owner": "SYS-06",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "SYS-06.spec"
+      ],
+      "completion_gates": [
+        "SYS-06.integration"
+      ],
+      "depends_on": [
+        "SYS-01.spec",
+        "SYS-02.spec",
+        "SYS-03.spec",
+        "SYS-04.spec",
+        "SYS-05.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/integration_plan.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/flag_matrix.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/system_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/validate_integration.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/test_integration_report.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_06/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json"
+        },
+        {
+          "owner": "SYS-05",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/system/sys_05/load_contract.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/search.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-06.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/service.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-06.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memoryd/main.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-06.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/recall_budget.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-06.spec"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "EXP-01",
+      "issue": 153,
+      "owner": "EXP-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "EXP-01.draft"
+      ],
+      "completion_gates": [
+        "EXP-01.final_lock"
+      ],
+      "depends_on": [
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/dataset_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/protocol.template.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/generate_streams.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/validate_splits.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/test_protocol.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "EXP-02",
+      "issue": 153,
+      "owner": "EXP-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "EXP-02.spec"
+      ],
+      "completion_gates": [
+        "EXP-02.confirmatory"
+      ],
+      "depends_on": [
+        "DYN-01",
+        "EXP-01.draft"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/policy_matrix.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/controls.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/build_run_plan.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/test_run_plan.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "EXP-03",
+      "issue": 153,
+      "owner": "EXP-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "EXP-03.final_analysis"
+      ],
+      "completion_gates": [
+        "EXP-03.final_analysis"
+      ],
+      "depends_on": [
+        "EXP-02.confirmatory"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/analysis_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/analyze_paired.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/hand_examples.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_analysis.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "EXP-04",
+      "issue": 153,
+      "owner": "EXP-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "EXP-04.offline"
+      ],
+      "completion_gates": [
+        "EXP-04.offline",
+        "EXP-04.product"
+      ],
+      "depends_on": [
+        "EXP-03.final_analysis"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/decision_template.json"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/build_evidence_index.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/test_decision_gate.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/README.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ASSOC-01",
+      "issue": 158,
+      "owner": "ASSOC-01",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ASSOC-01"
+      ],
+      "completion_gates": [
+        "ASSOC-01"
+      ],
+      "depends_on": [
+        "EXP-01.draft",
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/association/types.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/association/validate.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/association/types_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/association_contract.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ASSOC-02",
+      "issue": 158,
+      "owner": "ASSOC-02",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ASSOC-02"
+      ],
+      "completion_gates": [
+        "ASSOC-02"
+      ],
+      "depends_on": [
+        "ASSOC-01"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/association/reader.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/association/reader_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "ASSOC-01",
+          "root": "repo",
+          "path": "internal/memoryharness/association/types.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ASSOC-03",
+      "issue": 158,
+      "owner": "ASSOC-03",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ASSOC-03"
+      ],
+      "completion_gates": [
+        "ASSOC-03"
+      ],
+      "depends_on": [
+        "ASSOC-02"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/association_eval.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_association_eval.py"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/association_decision.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "ASSOC-02",
+          "root": "repo",
+          "path": "internal/memoryharness/association/reader.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "STRUCT-01",
+      "issue": 158,
+      "owner": "STRUCT-01",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "STRUCT-01"
+      ],
+      "completion_gates": [
+        "STRUCT-01"
+      ],
+      "depends_on": [
+        "EXP-01.draft",
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "structure-v1/relation_contract.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/relation_spec.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/generate_relations.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/rules.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/graph_features.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/test_rules.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/test_graph_features.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/baseline.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "STRUCT-02",
+      "issue": 158,
+      "owner": "STRUCT-02",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "STRUCT-02"
+      ],
+      "completion_gates": [
+        "STRUCT-02"
+      ],
+      "depends_on": [
+        "STRUCT-01"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "structure-v1/diagnostic_contract.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/diagnostic.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/test_diagnostic.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/method_note.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "STRUCT-03",
+      "issue": 158,
+      "owner": "STRUCT-03",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "STRUCT-03"
+      ],
+      "completion_gates": [
+        "STRUCT-03"
+      ],
+      "depends_on": [
+        "STRUCT-02"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "structure-v1/evaluation_plan.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/evaluate.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/test_evaluate.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/diagnosis_report.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "structure-v1/review_queue.csv"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ADAPT-01",
+      "issue": 158,
+      "owner": "ADAPT-01",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ADAPT-01"
+      ],
+      "completion_gates": [
+        "ADAPT-01"
+      ],
+      "depends_on": [
+        "EXP-01.draft",
+        "EXP-02.spec",
+        "R8"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/frozen_ranker.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_frozen_ranker.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/ranker_features.json"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/ranker_label_contract.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ADAPT-02",
+      "issue": 158,
+      "owner": "ADAPT-02",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ADAPT-02"
+      ],
+      "completion_gates": [
+        "ADAPT-02"
+      ],
+      "depends_on": [
+        "ADAPT-01"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/types.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/update.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/checkpoint.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/update_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/checkpoint_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/adaptation_contract.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "ADAPT-01",
+          "root": "repo",
+          "path": "docs/research/memory-harness/ranker_label_contract.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ADAPT-03",
+      "issue": 158,
+      "owner": "ADAPT-03",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ADAPT-03"
+      ],
+      "completion_gates": [
+        "ADAPT-03"
+      ],
+      "depends_on": [
+        "ADAPT-02",
+        "SYS-04.spec"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/recovery_types_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/recovery_validate_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/rebuild.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/rebuild_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/rollback.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/rollback_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/adaptation_recovery_contract.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "ADAPT-02",
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/types.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "ADAPT-04",
+      "issue": 158,
+      "owner": "ADAPT-04",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "ADAPT-04"
+      ],
+      "completion_gates": [
+        "ADAPT-04"
+      ],
+      "depends_on": [
+        "ADAPT-03"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/adaptation_eval.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/test_adaptation_eval.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/adaptation_protocol.json"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/adaptation_decision.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/types.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "internal/memoryharness/canonical.go"
+        },
+        {
+          "owner": "R1",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+        },
+        {
+          "owner": "R8",
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "owner": "ADAPT-03",
+          "root": "repo",
+          "path": "internal/memoryharness/adaptation/recovery_types_v1.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "PSY-01",
+      "issue": 157,
+      "owner": "PSY-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "PSY-01"
+      ],
+      "completion_gates": [
+        "PSY-01"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/concepts.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/measure_registry.csv"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/protocol_draft.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/ethics_documents_checklist.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/analysis_contract.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/measurement_spec.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/construct_measure_claim_map.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/scale_permission_register.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/nearest_prior_B.md"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "PSY-02",
+      "issue": 157,
+      "owner": "PSY-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "PSY-02"
+      ],
+      "completion_gates": [
+        "PSY-02"
+      ],
+      "depends_on": [
+        "PSY-01"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/stimulus_registry.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/assignment.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/test_assignment.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/stimulus_validator.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/test_stimulus_validator.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/render_static.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/preview.html"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/stimulus_information_equivalence.csv"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/b_probe_fixture.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/ui_state_contract_map.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/cognitive_interview_plan.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-01",
+          "root": "development_lab",
+          "path": "psychology-v1/measurement_spec.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "PSY-03",
+      "issue": 157,
+      "owner": "PSY-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "PSY-03.simulation"
+      ],
+      "completion_gates": [
+        "PSY-03.readiness"
+      ],
+      "depends_on": [
+        "PSY-01"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/simulate.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/analyze.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/test_analysis.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/power_sensitivity.py"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/pilot_readiness.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/simulation_spec.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/analysis_spec.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/synthetic_only_dataset.csv"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/synthetic_score_checks.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/sample_size_sensitivity.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-01",
+          "root": "development_lab",
+          "path": "psychology-v1/analysis_contract.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "PSY-04",
+      "issue": 157,
+      "owner": "PSY-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "preparation acceptance only; collection and analysis are deferred to separately authorized future work",
+      "entry_gates": [
+        "PSY-04.preparation"
+      ],
+      "completion_gates": [
+        "PSY-04.preparation"
+      ],
+      "depends_on": [
+        "PSY-03.readiness"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/research_readiness_gate.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/preregistration_draft.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/recruitment_and_data_plan.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-03",
+          "root": "development_lab",
+          "path": "psychology-v1/pilot_readiness.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true,
+      "future_owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/collection_runbook.md",
+          "requires_gate": "PSY-04.execution_authorized"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/dataset_validator.py",
+          "requires_gate": "PSY-04.execution_authorized"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/test_dataset_validator.py",
+          "requires_gate": "PSY-04.execution_authorized"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/analysis_run_record.json",
+          "requires_gate": "PSY-04.execution_authorized"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/results_draft.md",
+          "requires_gate": "PSY-04.execution_authorized"
+        }
+      ]
+    },
+    {
+      "id": "PSY-05",
+      "issue": 157,
+      "owner": "PSY-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "conditional design without claiming actual participant results or demonstrated UX improvement",
+      "entry_gates": [
+        "PSY-05.conditional_design"
+      ],
+      "completion_gates": [
+        "PSY-05.conditional_design"
+      ],
+      "depends_on": [
+        "PSY-04.preparation"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/product_decision.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/interaction_spec.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/prototype.html"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/interaction_checks.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/conditional_product_decisions.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/claim_evidence_limits.csv"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-04",
+          "root": "development_lab",
+          "path": "psychology-v1/research_readiness_gate.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-01",
+      "issue": 154,
+      "owner": "CRW-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-01"
+      ],
+      "completion_gates": [
+        "CRW-01"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "crew_lab",
+          "path": "contracts/crew_contract_v1.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "contracts/ownership.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "contracts/current_delta.md"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-02",
+      "issue": 154,
+      "owner": "CRW-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-02"
+      ],
+      "completion_gates": [
+        "CRW-02"
+      ],
+      "depends_on": [
+        "CRW-01"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/attempt_observer.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/attempt_observer_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/usage.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/usage_test.go"
+        },
+        {
+          "root": "crew_lab",
+          "path": "fixtures/usage/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CRW-01",
+          "root": "crew_lab",
+          "path": "contracts/crew_contract_v1.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/nodes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/receipts.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/nodes_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-03",
+      "issue": 154,
+      "owner": "CRW-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-03"
+      ],
+      "completion_gates": [
+        "CRW-03"
+      ],
+      "depends_on": [
+        "CRW-01",
+        "CRW-02"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/context_receipt.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/context_receipt_test.go"
+        },
+        {
+          "root": "crew_lab",
+          "path": "fixtures/context/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CRW-01",
+          "root": "crew_lab",
+          "path": "contracts/crew_contract_v1.json"
+        },
+        {
+          "owner": "CRW-02",
+          "root": "repo",
+          "path": "internal/crewrun/attempt_observer.go"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-03"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/store.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-03"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-03"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-04",
+      "issue": 154,
+      "owner": "CRW-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-04"
+      ],
+      "completion_gates": [
+        "CRW-04"
+      ],
+      "depends_on": [
+        "CRW-01",
+        "CRW-02",
+        "CRW-03"
+      ],
+      "owns": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/recovery_contract.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/recovery_contract_test.go"
+        },
+        {
+          "root": "crew_lab",
+          "path": "fixtures/recovery/**"
+        },
+        {
+          "root": "crew_lab",
+          "path": "adapters/local_effect.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CRW-03",
+          "root": "repo",
+          "path": "internal/crewrun/context_receipt.go"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/nodes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-04"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/engine.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-04"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/nodes_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-04"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-05",
+      "issue": 154,
+      "owner": "CRW-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-05.spec"
+      ],
+      "completion_gates": [
+        "CRW-05"
+      ],
+      "depends_on": [
+        "CRW-01"
+      ],
+      "owns": [
+        {
+          "root": "crew_lab",
+          "path": "datasets/**"
+        },
+        {
+          "root": "crew_lab",
+          "path": "evaluators/**"
+        },
+        {
+          "root": "crew_lab",
+          "path": "adapters/baselines/**"
+        },
+        {
+          "root": "crew_lab",
+          "path": "manifests/**"
+        },
+        {
+          "root": "crew_lab",
+          "path": "tests/test_evaluation_contract.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CRW-01",
+          "root": "crew_lab",
+          "path": "contracts/crew_contract_v1.json"
+        },
+        {
+          "owner": "CRW-04",
+          "root": "repo",
+          "path": "internal/crewrun/recovery_contract.go"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-06",
+      "issue": 154,
+      "owner": "CRW-06",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-06"
+      ],
+      "completion_gates": [
+        "CRW-06"
+      ],
+      "depends_on": [
+        "CRW-02",
+        "CRW-05"
+      ],
+      "owns": [
+        {
+          "root": "crew_lab",
+          "path": "analysis/failure_taxonomy.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "analysis/attribution.py"
+        },
+        {
+          "root": "crew_lab",
+          "path": "analysis/annotation_protocol.md"
+        },
+        {
+          "root": "crew_lab",
+          "path": "tests/test_attribution.py"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "FLOW-01",
+      "issue": 154,
+      "owner": "FLOW-01",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "FLOW-01"
+      ],
+      "completion_gates": [
+        "FLOW-01"
+      ],
+      "depends_on": [
+        "CRW-02",
+        "CRW-05"
+      ],
+      "owns": [
+        {
+          "root": "crew_lab",
+          "path": "optimization/policies.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "optimization/select.py"
+        },
+        {
+          "root": "crew_lab",
+          "path": "optimization/search_manifest.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "tests/test_selection.py"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CRW-07",
+      "issue": 154,
+      "owner": "CRW-07",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CRW-07"
+      ],
+      "completion_gates": [
+        "CRW-07"
+      ],
+      "depends_on": [
+        "CRW-01",
+        "CRW-02",
+        "CRW-03",
+        "CRW-04",
+        "CRW-05",
+        "CRW-06"
+      ],
+      "owns": [
+        {
+          "root": "crew_lab",
+          "path": "reports/adoption.md"
+        },
+        {
+          "root": "crew_lab",
+          "path": "reports/novelty_matrix.json"
+        },
+        {
+          "root": "crew_lab",
+          "path": "reports/preregistration.md"
+        },
+        {
+          "root": "crew_lab",
+          "path": "reports/evidence_index.json"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-01",
+      "issue": 155,
+      "owner": "RTE-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-01"
+      ],
+      "completion_gates": [
+        "RTE-01"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "contracts/**"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-02",
+      "issue": 155,
+      "owner": "RTE-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-02"
+      ],
+      "completion_gates": [
+        "RTE-02"
+      ],
+      "depends_on": [
+        "RTE-01"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "costs/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-01",
+          "root": "routing_lab",
+          "path": "contracts/**"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/cost.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-02"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/routing.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-02"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/cost_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-02"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/routing_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-02"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-03",
+      "issue": 155,
+      "owner": "RTE-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-03"
+      ],
+      "completion_gates": [
+        "RTE-03"
+      ],
+      "depends_on": [
+        "RTE-01"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "features/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-01",
+          "root": "routing_lab",
+          "path": "contracts/**"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/memory/routing.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-03"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-03"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/routing_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-03"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-03"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-04",
+      "issue": 155,
+      "owner": "RTE-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-04"
+      ],
+      "completion_gates": [
+        "RTE-04"
+      ],
+      "depends_on": [
+        "RTE-01",
+        "RTE-02",
+        "RTE-03"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "policies/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-01",
+          "root": "routing_lab",
+          "path": "contracts/**"
+        },
+        {
+          "owner": "RTE-02",
+          "root": "routing_lab",
+          "path": "costs/**"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-05",
+      "issue": 155,
+      "owner": "RTE-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-05"
+      ],
+      "completion_gates": [
+        "RTE-05"
+      ],
+      "depends_on": [
+        "RTE-01",
+        "RTE-02",
+        "RTE-03"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "acceptance/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-01",
+          "root": "routing_lab",
+          "path": "contracts/**"
+        },
+        {
+          "owner": "RTE-03",
+          "root": "routing_lab",
+          "path": "features/**"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/gateway/lanes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/gateway/gateway.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "RTE-05"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-06",
+      "issue": 155,
+      "owner": "RTE-06",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-06"
+      ],
+      "completion_gates": [
+        "RTE-06"
+      ],
+      "depends_on": [
+        "RTE-01",
+        "RTE-02"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "outcomes/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-01",
+          "root": "routing_lab",
+          "path": "contracts/**"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-07",
+      "issue": 155,
+      "owner": "RTE-07",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-07"
+      ],
+      "completion_gates": [
+        "RTE-07"
+      ],
+      "depends_on": [
+        "RTE-04",
+        "RTE-06"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "analysis/**"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-04",
+          "root": "routing_lab",
+          "path": "policies/**"
+        },
+        {
+          "owner": "RTE-06",
+          "root": "routing_lab",
+          "path": "outcomes/**"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "RTE-08",
+      "issue": 155,
+      "owner": "RTE-08",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "RTE-08"
+      ],
+      "completion_gates": [
+        "RTE-08"
+      ],
+      "depends_on": [
+        "RTE-05",
+        "RTE-06",
+        "RTE-07"
+      ],
+      "owns": [
+        {
+          "root": "routing_lab",
+          "path": "pilot/**"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/routing_pilot_test.go"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "RTE-05",
+          "root": "routing_lab",
+          "path": "acceptance/**"
+        },
+        {
+          "owner": "RTE-07",
+          "root": "routing_lab",
+          "path": "analysis/**"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-01",
+      "issue": 156,
+      "owner": "CAP-01",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-01"
+      ],
+      "completion_gates": [
+        "CAP-01"
+      ],
+      "depends_on": [],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_01/capability_inventory.csv"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_01/capability_states.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_01/gap_report.txt"
+        }
+      ],
+      "consumes": [],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-02",
+      "issue": 156,
+      "owner": "CAP-02",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-02"
+      ],
+      "completion_gates": [
+        "CAP-02"
+      ],
+      "depends_on": [
+        "CAP-01"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_02/schema.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_02/fixtures/**"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_02/oracle_spec.txt"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_02/validation_report.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-01",
+          "root": "capability_lab",
+          "path": "cap_01/capability_states.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-03",
+      "issue": 156,
+      "owner": "CAP-03",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-03"
+      ],
+      "completion_gates": [
+        "CAP-03"
+      ],
+      "depends_on": [
+        "CAP-02"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_03/adapter.py"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_03/result.jsonl"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_03/coverage.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_03/README.md"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_03/test_replay.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-02",
+          "root": "capability_lab",
+          "path": "cap_02/schema.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-04",
+      "issue": 156,
+      "owner": "CAP-04",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-04"
+      ],
+      "completion_gates": [
+        "CAP-04"
+      ],
+      "depends_on": [
+        "CAP-03"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_04/adapters/**"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_04/fidelity.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_04/cost_ledger.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_04/paired_results.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_04/test_adapters.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-03",
+          "root": "capability_lab",
+          "path": "cap_03/adapter.py"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-05",
+      "issue": 156,
+      "owner": "CAP-05",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-05"
+      ],
+      "completion_gates": [
+        "CAP-05"
+      ],
+      "depends_on": [
+        "CAP-04"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_05/shadow.py"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_05/mechanism_evidence.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_05/decision.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_05/test_shadow.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-04",
+          "root": "capability_lab",
+          "path": "cap_04/fidelity.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-06",
+      "issue": 156,
+      "owner": "CAP-06",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-06"
+      ],
+      "completion_gates": [
+        "CAP-06"
+      ],
+      "depends_on": [
+        "CAP-04"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_06/analyze.py"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_06/tables/**"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_06/decision.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_06/test_analysis.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-04",
+          "root": "capability_lab",
+          "path": "cap_04/paired_results.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "CAP-07",
+      "issue": 156,
+      "owner": "CAP-07",
+      "status": "planned",
+      "conditional": false,
+      "condition": "substage conditions still apply",
+      "entry_gates": [
+        "CAP-07"
+      ],
+      "completion_gates": [
+        "CAP-07"
+      ],
+      "depends_on": [
+        "CAP-01"
+      ],
+      "owns": [
+        {
+          "root": "capability_lab",
+          "path": "cap_07/protocol_matrix.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_07/fake_servers/**"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_07/observations.json"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_07/change_proposal.md"
+        },
+        {
+          "root": "capability_lab",
+          "path": "cap_07/test_protocol.py"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "CAP-01",
+          "root": "capability_lab",
+          "path": "cap_01/capability_states.json"
+        }
+      ],
+      "shared_updates": [
+        {
+          "root": "repo",
+          "path": "internal/host/skills/toolinfo.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CAP-07"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/skills/toolinfo_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CAP-07"
+          ]
+        }
+      ],
+      "dispatch_required": true
+    },
+    {
+      "id": "MEAS-WL",
+      "issue": 157,
+      "owner": "MEAS-WL",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "MEAS-WL"
+      ],
+      "completion_gates": [
+        "MEAS-WL"
+      ],
+      "depends_on": [
+        "PSY-01"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/optional_workload_spec.json"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-01",
+          "root": "development_lab",
+          "path": "psychology-v1/measurement_spec.json"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    },
+    {
+      "id": "PSY-TEAM-01",
+      "issue": 157,
+      "owner": "PSY-TEAM-01",
+      "status": "planned",
+      "conditional": true,
+      "condition": "recorded selection or hold/reject decision",
+      "entry_gates": [
+        "PSY-TEAM-01"
+      ],
+      "completion_gates": [
+        "PSY-TEAM-01"
+      ],
+      "depends_on": [
+        "PSY-05"
+      ],
+      "owns": [
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/optional_team_research_question.md"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/synthetic_team_revision_trace.json"
+        },
+        {
+          "root": "development_lab",
+          "path": "psychology-v1/team_nearest_prior_counterarguments.md"
+        }
+      ],
+      "consumes": [
+        {
+          "owner": "PSY-05",
+          "root": "development_lab",
+          "path": "psychology-v1/conditional_product_decisions.md"
+        }
+      ],
+      "shared_updates": [],
+      "dispatch_required": true
+    }
+  ],
+  "gates": [
+    {
+      "id": "R0.acceptance",
+      "depends_on": [],
+      "condition": "preparation acceptance, not product acceptance",
+      "kind": "preparation"
+    },
+    {
+      "id": "R1",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R2",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R3",
+      "depends_on": [
+        "R1",
+        "R2"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R4",
+      "depends_on": [
+        "R1"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R5",
+      "depends_on": [
+        "R1"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R6",
+      "depends_on": [
+        "R1",
+        "R2"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R7",
+      "depends_on": [
+        "R1",
+        "R3",
+        "R5"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "R8",
+      "depends_on": [
+        "R1",
+        "R2",
+        "R3",
+        "R4",
+        "R5",
+        "R6",
+        "R7"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PAPER-01",
+      "depends_on": [],
+      "condition": "recorded review required",
+      "kind": "external_review"
+    },
+    {
+      "id": "PSY-01",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-01",
+      "depends_on": [
+        "R8"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-02",
+      "depends_on": [
+        "DYN-02.scalar",
+        "DYN-02.fastslow"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-03",
+      "depends_on": [
+        "DYN-03.scalar",
+        "DYN-03.fastslow"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-01.draft",
+      "depends_on": [
+        "R8"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-02.spec",
+      "depends_on": [
+        "EXP-01.draft",
+        "DYN-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-05.pre",
+      "depends_on": [
+        "DYN-05.fastslow"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-02.early_pilot",
+      "depends_on": [
+        "DYN-05.p1",
+        "EXP-02.spec"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-04",
+      "depends_on": [
+        "DYN-05.fastslow",
+        "EXP-02.early_pilot"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-05.capture",
+      "depends_on": [
+        "DYN-05.fastslow",
+        "DYN-04"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ADAPT-01",
+      "depends_on": [
+        "R8",
+        "EXP-01.draft",
+        "EXP-02.spec"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-02.full_pilot",
+      "depends_on": [
+        "EXP-02.early_pilot"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance",
+      "requires_if_selected": [
+        {
+          "selection": "capture-extension",
+          "gate": "DYN-05.capture"
+        },
+        {
+          "selection": "frozen-learned-baseline",
+          "gate": "ADAPT-01"
+        }
+      ]
+    },
+    {
+      "id": "EXP-01.final_lock",
+      "depends_on": [
+        "EXP-02.full_pilot",
+        "V7-A-LITERATURE",
+        "V7-A-BASELINES"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-02.confirmatory",
+      "depends_on": [
+        "EXP-01.final_lock"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-03.final_analysis",
+      "depends_on": [
+        "EXP-02.confirmatory"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-04.offline",
+      "depends_on": [
+        "EXP-03.final_analysis"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-01.spec",
+      "depends_on": [
+        "R8",
+        "DYN-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-01.integration",
+      "depends_on": [
+        "SYS-01.spec",
+        "DYN-05.p1"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-02.spec",
+      "depends_on": [
+        "SYS-01.spec",
+        "DYN-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-02.integration",
+      "depends_on": [
+        "SYS-02.spec"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-03.spec",
+      "depends_on": [
+        "SYS-02.spec",
+        "DYN-05.p1"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-03.integration",
+      "depends_on": [
+        "SYS-03.spec",
+        "SYS-02.integration"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-04.spec",
+      "depends_on": [
+        "SYS-01.spec",
+        "SYS-03.spec",
+        "DYN-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-04.integration",
+      "depends_on": [
+        "SYS-04.spec",
+        "SYS-01.integration",
+        "SYS-03.integration"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-05.spec",
+      "depends_on": [
+        "SYS-03.integration",
+        "SYS-04.integration"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-05.integration",
+      "depends_on": [
+        "SYS-05.spec"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-06.spec",
+      "depends_on": [
+        "SYS-01.spec",
+        "SYS-02.spec",
+        "SYS-03.spec",
+        "SYS-04.spec",
+        "SYS-05.spec"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "SYS-06.integration",
+      "depends_on": [
+        "SYS-06.spec",
+        "SYS-01.integration",
+        "SYS-02.integration",
+        "SYS-03.integration",
+        "SYS-04.integration",
+        "SYS-05.integration"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "EXP-04.product",
+      "depends_on": [
+        "EXP-04.offline",
+        "SYS-06.integration"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ASSOC-01",
+      "depends_on": [
+        "R8",
+        "EXP-01.draft"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ASSOC-02",
+      "depends_on": [
+        "ASSOC-01"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ASSOC-03",
+      "depends_on": [
+        "ASSOC-02"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "STRUCT-01",
+      "depends_on": [
+        "R8",
+        "EXP-01.draft"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "STRUCT-02",
+      "depends_on": [
+        "STRUCT-01"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "STRUCT-03",
+      "depends_on": [
+        "STRUCT-02"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ADAPT-02",
+      "depends_on": [
+        "ADAPT-01"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ADAPT-03",
+      "depends_on": [
+        "ADAPT-02",
+        "SYS-04.spec"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "ADAPT-04",
+      "depends_on": [
+        "ADAPT-03"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-02",
+      "depends_on": [
+        "PSY-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-03.simulation",
+      "depends_on": [
+        "PSY-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-03.readiness",
+      "depends_on": [
+        "PSY-02",
+        "PSY-03.simulation"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-04",
+      "depends_on": [
+        "PSY-03.readiness",
+        "V7-B-LITERATURE",
+        "V7-B-STATE-ORACLE",
+        "V7-B-MEASUREMENT-READINESS",
+        "PSY-04.preparation",
+        "PSY-04.execution_authorized"
+      ],
+      "condition": "future collection acceptance only; not required to finish the current preparation package",
+      "kind": "external_review"
+    },
+    {
+      "id": "PSY-05",
+      "depends_on": [
+        "PSY-04"
+      ],
+      "condition": "future result-based design acceptance; not a claim supported by preparation-only work",
+      "kind": "external_review"
+    },
+    {
+      "id": "DYN-02.scalar",
+      "depends_on": [
+        "DYN-01",
+        "R4"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-03.scalar",
+      "depends_on": [
+        "DYN-02.scalar",
+        "R5",
+        "R7"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-05.p1",
+      "depends_on": [
+        "DYN-03.scalar",
+        "EXP-01.draft",
+        "EXP-02.spec"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-02.fastslow",
+      "depends_on": [
+        "DYN-02.scalar",
+        "EXP-02.early_pilot"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-03.fastslow",
+      "depends_on": [
+        "DYN-02.fastslow",
+        "DYN-03.scalar"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "DYN-05.fastslow",
+      "depends_on": [
+        "DYN-03.fastslow",
+        "DYN-05.p1"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "V7-A-LITERATURE",
+      "depends_on": [
+        "PAPER-01"
+      ],
+      "condition": "recorded review required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "V7-A-BASELINES",
+      "depends_on": [
+        "EXP-02.spec",
+        "DYN-05.p1"
+      ],
+      "condition": "recorded review required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "V7-B-LITERATURE",
+      "depends_on": [
+        "PSY-01"
+      ],
+      "condition": "recorded review required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "V7-B-MEASUREMENT-READINESS",
+      "depends_on": [
+        "PSY-01",
+        "PSY-03.readiness"
+      ],
+      "condition": "recorded review required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "V7-B-STATE-ORACLE",
+      "depends_on": [
+        "PSY-02"
+      ],
+      "condition": "recorded review required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-05.spec",
+      "depends_on": [
+        "CRW-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-01",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-02",
+      "depends_on": [
+        "CRW-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-03",
+      "depends_on": [
+        "CRW-01",
+        "CRW-02"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-04",
+      "depends_on": [
+        "CRW-01",
+        "CRW-02",
+        "CRW-03"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-05",
+      "depends_on": [
+        "CRW-05.spec",
+        "CRW-02",
+        "CRW-03",
+        "CRW-04"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-06",
+      "depends_on": [
+        "CRW-02",
+        "CRW-05"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "FLOW-01",
+      "depends_on": [
+        "CRW-05",
+        "CRW-02"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CRW-07",
+      "depends_on": [
+        "CRW-01",
+        "CRW-02",
+        "CRW-03",
+        "CRW-04",
+        "CRW-05",
+        "CRW-06"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-01",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-02",
+      "depends_on": [
+        "RTE-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-03",
+      "depends_on": [
+        "RTE-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-04",
+      "depends_on": [
+        "RTE-01",
+        "RTE-02",
+        "RTE-03"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-05",
+      "depends_on": [
+        "RTE-01",
+        "RTE-02",
+        "RTE-03"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-06",
+      "depends_on": [
+        "RTE-01",
+        "RTE-02"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-07",
+      "depends_on": [
+        "RTE-04",
+        "RTE-06"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "RTE-08",
+      "depends_on": [
+        "RTE-05",
+        "RTE-06",
+        "RTE-07"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-01",
+      "depends_on": [
+        "R0.acceptance"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-02",
+      "depends_on": [
+        "CAP-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-03",
+      "depends_on": [
+        "CAP-02"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-04",
+      "depends_on": [
+        "CAP-03"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-05",
+      "depends_on": [
+        "CAP-04"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-06",
+      "depends_on": [
+        "CAP-04"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "CAP-07",
+      "depends_on": [
+        "CAP-01"
+      ],
+      "condition": "required before acceptance",
+      "kind": "acceptance"
+    },
+    {
+      "id": "MEAS-WL",
+      "depends_on": [
+        "PSY-01"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-TEAM-01",
+      "depends_on": [
+        "PSY-05"
+      ],
+      "condition": "recorded selection required",
+      "kind": "acceptance"
+    },
+    {
+      "id": "PSY-04.preparation",
+      "depends_on": [
+        "PSY-03.readiness"
+      ],
+      "condition": "readiness package only; no participant recruitment, collection, translation execution or contact",
+      "kind": "preparation"
+    },
+    {
+      "id": "PSY-04.execution_authorized",
+      "depends_on": [
+        "PSY-04.preparation",
+        "V7-B-LITERATURE",
+        "V7-B-MEASUREMENT-READINESS",
+        "V7-B-STATE-ORACLE"
+      ],
+      "condition": "future work only after separately recorded institutional, consent, researcher and access authorization",
+      "kind": "external_review"
+    },
+    {
+      "id": "PSY-05.conditional_design",
+      "depends_on": [
+        "PSY-04.preparation"
+      ],
+      "condition": "conditional decision package only when actual research results are unavailable",
+      "kind": "preparation"
+    }
+  ],
+  "handoff_rules": [
+    "One file has one writer at a time, including tests and contracts.",
+    "A consumer never edits a producer-owned shared type; send the change to its named owner.",
+    "INTEGRATION edits shared product files only after the card contract and current source are reviewed.",
+    "Substage acceptance is not full-card or product acceptance. Conditional substages require a recorded selection or hold/reject decision.",
+    "Private roots require an absolute binding in a private dispatch record before work. Public files do not contain those bindings.",
+    "The fixed v1 contract is immutable. A publication conflict never permits redaction or a new hash under the same contract ID.",
+    "Existing Claude work and release/build paths are not owned by this plan."
+  ],
+  "dispatch_contract": {
+    "required_fields": [
+      "task_id",
+      "assigned_agent",
+      "source_commit",
+      "owned_paths",
+      "root_bindings",
+      "accepted_predecessor_evidence"
+    ],
+    "private_root_rules": [
+      "Bindings must be absolute ordinary directories and must not overlap one another or the repository root.",
+      "A private root alias cannot be rebound while a task holds files under it."
+    ],
+    "writer_rules": [
+      "Resolve root aliases before checking physical path overlap.",
+      "One active assignment per owned file, including shared files and tests.",
+      "Existing Claude work is outside the assignment even when a relative filename matches."
+    ]
+  }
+}

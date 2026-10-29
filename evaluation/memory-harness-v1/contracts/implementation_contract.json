@@ -1,0 +1,1473 @@
+{
+  "contract_id": "arkism-offline-b0-v1",
+  "status": "specification_ready",
+  "execution_status": "execution_not_started",
+  "is_product_contract": false,
+  "format": "custom_typed_contract_not_json_schema",
+  "notice": "사용자 요청에 따라 첫 개발 묶음의 인터페이스와 완료 기준을 확정한 명세다. 제품 구현·워커 실행·검수·제품 통합 완료를 뜻하지 않는다.",
+  "target_repository": "/home/felix/110-arkism",
+  "reference_commit": "27bb41807ff48d47559ba2cfc30feb300caacecf",
+  "first_deliverable": "offline static B0 RRF + synthetic context packing + metric report; scalar decay independently tested and not used in baseline score",
+  "schema_rules": {
+    "all_declared_fields_required": true,
+    "additional_fields": "reject",
+    "duplicate_json_keys": "reject",
+    "invalid_utf8_or_unpaired_surrogate": "reject",
+    "automatic_unicode_normalization": "none",
+    "automatic_trim_or_case_fold": "none",
+    "int_lexical_form": "-?(0|[1-9][0-9]*)",
+    "int64_min": 0,
+    "int64_max_decimal": "9223372036854775807",
+    "uint64_max_decimal": "18446744073709551615",
+    "int_decode": "exact integer; never intermediate binary64",
+    "float_decode": "finite IEEE754 binary64 using field type",
+    "float_negative_zero": "normalize_to_positive_zero",
+    "id_pattern": "^[a-z][a-z0-9_-]{0,63}$",
+    "sha256_pattern": "^[0-9a-f]{64}$",
+    "null_arrays": "reject; empty array must encode [] not null",
+    "const_number_types": "const_int uses exact integer lexical form; const_float uses finite binary64"
+  },
+  "objects": {
+    "Scope": {
+      "fields": {
+        "workspace": {
+          "type": "id",
+          "empty": "reject"
+        },
+        "project": {
+          "type": "id",
+          "empty": "reject"
+        },
+        "user": {
+          "type": "id",
+          "empty": "reject"
+        },
+        "agent": {
+          "type": "id",
+          "empty": "reject"
+        }
+      }
+    },
+    "Ref": {
+      "fields": {
+        "origin": {
+          "type": "enum",
+          "values": [
+            "memory",
+            "fixture_alt"
+          ]
+        },
+        "collection": {
+          "type": "enum",
+          "values": [
+            "memories"
+          ]
+        },
+        "id": {
+          "type": "id"
+        },
+        "revision": {
+          "type": "int64",
+          "min": 1
+        },
+        "content_sha256": {
+          "type": "sha256"
+        }
+      }
+    },
+    "Candidate": {
+      "fields": {
+        "scope": {
+          "type": "object",
+          "object": "Scope"
+        },
+        "ref": {
+          "type": "object",
+          "object": "Ref"
+        },
+        "reasons": {
+          "type": "array",
+          "items_enum": [
+            "exact_keyword",
+            "text_search",
+            "vector"
+          ],
+          "min_items": 0,
+          "unique": true
+        },
+        "trust": {
+          "type": "float64",
+          "min": 0,
+          "max": 1
+        },
+        "updated_at_ns": {
+          "type": "int64",
+          "min": 0
+        },
+        "observed_seq": {
+          "type": "int64",
+          "min": 1
+        },
+        "effective_at_ns": {
+          "type": "int64",
+          "min": 0
+        },
+        "context_cost_units": {
+          "type": "int64",
+          "min": 1,
+          "max": 1000000
+        },
+        "approved": {
+          "type": "bool"
+        },
+        "active": {
+          "type": "bool"
+        },
+        "deleted": {
+          "type": "bool"
+        },
+        "source_verified": {
+          "type": "bool"
+        },
+        "authority": {
+          "type": "const_string",
+          "value": "data_only_untrusted"
+        }
+      },
+      "semantic_rules": [
+        "lane and ordinal come only from enclosing arrays",
+        "flags are synthetic fixture fields, not product authorization results",
+        "context_cost_units is not measured tokenizer cost"
+      ]
+    },
+    "CandidateSnapshot": {
+      "fields": {
+        "snapshot_id": {
+          "type": "id"
+        },
+        "stream_id": {
+          "type": "id"
+        },
+        "scope": {
+          "type": "object",
+          "object": "Scope"
+        },
+        "as_of_ns": {
+          "type": "int64",
+          "min": 0
+        },
+        "as_of_seq": {
+          "type": "int64",
+          "min": 0
+        },
+        "lanes": {
+          "type": "array_of_arrays",
+          "items_object": "Candidate",
+          "outer_items": 3
+        }
+      },
+      "semantic_rules": [
+        "lane order is exact, fts, vector; preserve empty arrays",
+        "candidate scope must equal snapshot scope except explicit invalid-fixture tests",
+        "candidate observed_seq <= as_of_seq and effective_at_ns <= as_of_ns",
+        "same origin/collection/id with conflicting revision or hash is invalid",
+        "metadata differences on the same valid Ref preserve first occurrence in RRF",
+        "same RRF key across all occurrences requires identical scope, Ref, approved, active, deleted, source_verified, context_cost_units, observed_seq, effective_at_ns",
+        "trust, updated_at_ns and reasons may differ; first occurrence metadata is preserved",
+        "any scope/revision/hash/visibility/conflicting metadata violation rejects the entire input, not a per-query execution_error",
+        "updated_at_ns <= as_of_ns",
+        "eligibility false is valid data and excluded before fusion, retaining original lane ordinal"
+      ]
+    },
+    "ContextBudget": {
+      "fields": {
+        "unit": {
+          "type": "const_string",
+          "value": "fixture_units_v0"
+        },
+        "limit": {
+          "type": "int64",
+          "min": 0,
+          "max": 1000000
+        }
+      }
+    },
+    "Probe": {
+      "fields": {
+        "query_id": {
+          "type": "id"
+        },
+        "stream_id": {
+          "type": "id"
+        },
+        "scope": {
+          "type": "object",
+          "object": "Scope"
+        },
+        "at_ns": {
+          "type": "int64",
+          "min": 0
+        },
+        "cutoff_accepted_seq": {
+          "type": "int64",
+          "min": 0
+        },
+        "candidate_snapshot_id": {
+          "type": "id"
+        },
+        "final_k": {
+          "type": "int64",
+          "min": 0,
+          "max": 64
+        },
+        "context_budget": {
+          "type": "object",
+          "object": "ContextBudget"
+        },
+        "policy_id": {
+          "type": "const_string",
+          "value": "b0-rrf-synthetic-v1"
+        }
+      },
+      "semantic_rules": [
+        "snapshot stream_id, scope, as_of_ns, as_of_seq must equal probe fields",
+        "no gold, split, category, event, query text, or reinforcement field",
+        "all probes in this baseline are independent reads of supplied immutable snapshots"
+      ]
+    },
+    "Gold": {
+      "fields": {
+        "query_id": {
+          "type": "id"
+        },
+        "stream_id": {
+          "type": "id"
+        },
+        "scope": {
+          "type": "object",
+          "object": "Scope"
+        },
+        "at_ns": {
+          "type": "int64",
+          "min": 0
+        },
+        "cutoff_accepted_seq": {
+          "type": "int64",
+          "min": 0
+        },
+        "temporal_kind": {
+          "type": "enum",
+          "values": [
+            "current",
+            "historical",
+            "order",
+            "none"
+          ]
+        },
+        "label_status": {
+          "type": "enum",
+          "values": [
+            "relevant",
+            "clear_negative",
+            "ambiguous"
+          ]
+        },
+        "relevant_refs": {
+          "type": "array",
+          "items_object": "Ref",
+          "min_items": 0,
+          "unique": true
+        }
+      },
+      "semantic_rules": [
+        "relevant requires one or more relevant_refs",
+        "clear_negative and ambiguous require empty relevant_refs",
+        "ambiguous is excluded from relevance and negative primary denominators",
+        "gold stream/scope/time/cutoff must match scheduled probe",
+        "historical means versioned synthetic evidence exists; never infer unavailable product body"
+      ]
+    },
+    "Prediction": {
+      "fields": {
+        "query_id": {
+          "type": "id"
+        },
+        "stream_id": {
+          "type": "id"
+        },
+        "scope": {
+          "type": "object",
+          "object": "Scope"
+        },
+        "status": {
+          "type": "enum",
+          "values": [
+            "success",
+            "timeout",
+            "error"
+          ]
+        },
+        "selected_refs": {
+          "type": "array",
+          "items_object": "Ref",
+          "min_items": 0
+        },
+        "error_code": {
+          "type": "enum",
+          "values": [
+            "none",
+            "timeout",
+            "execution_error"
+          ]
+        }
+      },
+      "semantic_rules": [
+        "success requires error_code=none",
+        "timeout requires error_code=timeout",
+        "error requires error_code=execution_error",
+        "timeout/error partial selected_refs are ignored by primary recall",
+        "each scheduled probe requires exactly one row; absent rows are missing-output errors",
+        "successful raw selected_refs length above final_k is a run format error",
+        "successful duplicate refs within k are deduplicated for metrics"
+      ]
+    },
+    "Policy": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "policy_id": {
+          "type": "const_string",
+          "value": "b0-rrf-synthetic-v1"
+        },
+        "rank_offset": {
+          "type": "const_int",
+          "value": 60
+        },
+        "exact_reason_weight": {
+          "type": "const_float",
+          "value": 2.0
+        },
+        "other_weight": {
+          "type": "const_float",
+          "value": 1.0
+        },
+        "context_unit": {
+          "type": "const_string",
+          "value": "fixture_units_v0"
+        },
+        "eligibility_order": {
+          "type": "const_string",
+          "value": "validate-filter-preserve-ordinal-fuse-pack"
+        }
+      },
+      "semantic_rules": [
+        "all values fixed; no configurable dynamic weight, decay contribution, or fallback"
+      ]
+    },
+    "ProbeFile": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "probes": {
+          "type": "array",
+          "items_object": "Probe",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "query_id globally unique; array order is execution order; empty arrays permitted",
+        "each stream_id binds exactly one scope throughout file"
+      ]
+    },
+    "CandidateFile": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "snapshots": {
+          "type": "array",
+          "items_object": "CandidateSnapshot",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "snapshot_id globally unique",
+        "every snapshot is referenced by at least one probe; every probe reference exists"
+      ]
+    },
+    "GoldFile": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "labels": {
+          "type": "array",
+          "items_object": "Gold",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "exact scheduled query coverage; no additional or missing query"
+      ]
+    },
+    "ArtifactEntry": {
+      "fields": {
+        "logical_path": {
+          "type": "enum",
+          "values": [
+            "implementation_contract.json",
+            "policy.json",
+            "probes.json",
+            "candidates.json",
+            "input_manifest.json",
+            "gold.json",
+            "split_map.json"
+          ]
+        },
+        "sha256": {
+          "type": "sha256"
+        },
+        "byte_length": {
+          "type": "int64",
+          "min": 0
+        }
+      },
+      "semantic_rules": [
+        "raw bytes hash, no canonical conversion; relative fixed basename only",
+        "reject symlinks and non-regular files; file must be directly inside manifest directory"
+      ]
+    },
+    "InputManifest": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "manifest_kind": {
+          "type": "const_string",
+          "value": "baseline_input"
+        },
+        "dataset_role": {
+          "type": "const_string",
+          "value": "unit_fixture"
+        },
+        "seed": {
+          "type": "uint64",
+          "min": 0
+        },
+        "source_commit": {
+          "type": "hex40"
+        },
+        "files": {
+          "type": "array",
+          "items_object": "ArtifactEntry",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "files exactly implementation_contract.json, policy.json, probes.json, candidates.json, in lexicographic logical_path order",
+        "no gold, split, labels, category, source texts, event/state files or arbitrary paths",
+        "source_commit is 27bb41807ff48d47559ba2cfc30feb300caacecf for the initial fixture",
+        "manifest hash is raw bytes; implementation_contract.json is opaque at Go CLI runtime; compiled codec supplies schema",
+        "contract file hash must equal codec's compiled ContractFileSHA256, not merely a caller-provided manifest hash"
+      ]
+    },
+    "EvaluationManifest": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "manifest_kind": {
+          "type": "const_string",
+          "value": "baseline_evaluation"
+        },
+        "dataset_role": {
+          "type": "const_string",
+          "value": "unit_fixture"
+        },
+        "files": {
+          "type": "array",
+          "items_object": "ArtifactEntry",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "files exactly gold.json, input_manifest.json, split_map.json in lexicographic logical_path order",
+        "verify input_manifest transitively; baseline CLI must never read this file"
+      ]
+    },
+    "SplitEntry": {
+      "fields": {
+        "stream_id": {
+          "type": "id"
+        },
+        "root_stream_id": {
+          "type": "id"
+        },
+        "split_role": {
+          "type": "const_string",
+          "value": "unit_fixture"
+        }
+      },
+      "semantic_rules": []
+    },
+    "SplitMap": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "streams": {
+          "type": "array",
+          "items_object": "SplitEntry",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "unique stream_id; exact ProbeFile stream coverage; stream_id lexicographic order",
+        "this bundle has no research holdout and cannot provide generalization estimates"
+      ]
+    },
+    "RankedCandidate": {
+      "fields": {
+        "candidate": {
+          "type": "object",
+          "object": "Candidate"
+        },
+        "score": {
+          "type": "float64",
+          "min": 0
+        },
+        "lanes": {
+          "type": "array",
+          "items_type": "int64",
+          "min_items": 1,
+          "max_items": 3,
+          "unique": true,
+          "item_min": 0,
+          "item_max": 2
+        }
+      },
+      "semantic_rules": [
+        "lanes are encounter-order zero-based lane indexes, each appearing once"
+      ]
+    },
+    "BaselineSelection": {
+      "fields": {
+        "selected": {
+          "type": "array",
+          "items_object": "RankedCandidate",
+          "min_items": 0
+        },
+        "used_context_units": {
+          "type": "int64",
+          "min": 0
+        },
+        "eligible_unique_count": {
+          "type": "int64",
+          "min": 0
+        }
+      },
+      "semantic_rules": [
+        "selected in ranking order after packing; score is finite; used cost <= budget; selected length <= final_k"
+      ]
+    },
+    "PredictionRun": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "run_id": {
+          "type": "id"
+        },
+        "policy_id": {
+          "type": "const_string",
+          "value": "b0-rrf-synthetic-v1"
+        },
+        "input_manifest_sha256": {
+          "type": "sha256"
+        },
+        "policy_sha256": {
+          "type": "sha256"
+        },
+        "predictions": {
+          "type": "array",
+          "items_object": "Prediction",
+          "min_items": 0
+        }
+      },
+      "semantic_rules": [
+        "predictions in ProbeFile order; exactly one per scheduled query",
+        "offline baseline emits success only; any invalid input or runtime failure aborts entire publication",
+        "timeout/error statuses are exercised using synthetic metric unit-test records only",
+        "no wall-clock timestamps, latency claims, source text, gold or event-state hashes"
+      ]
+    },
+    "Statistic": {
+      "fields": {
+        "numerator": {
+          "type": "float64",
+          "min": 0
+        },
+        "denominator": {
+          "type": "int64",
+          "min": 0
+        },
+        "value": {
+          "type": "nullable_float64",
+          "min": 0,
+          "max": 1
+        },
+        "null_reason": {
+          "type": "enum",
+          "values": [
+            "none",
+            "no_denominator"
+          ]
+        }
+      },
+      "semantic_rules": [
+        "denominator zero requires numerator=0, value=null, null_reason=no_denominator",
+        "otherwise value=numerator/denominator within tolerance, null_reason=none"
+      ]
+    },
+    "QueryMetric": {
+      "fields": {
+        "query_id": {
+          "type": "id"
+        },
+        "stream_id": {
+          "type": "id"
+        },
+        "label_status": {
+          "type": "enum",
+          "values": [
+            "relevant",
+            "clear_negative",
+            "ambiguous"
+          ]
+        },
+        "status": {
+          "type": "enum",
+          "values": [
+            "success",
+            "timeout",
+            "error"
+          ]
+        },
+        "raw_selected_count": {
+          "type": "int64",
+          "min": 0
+        },
+        "unique_selected_count": {
+          "type": "int64",
+          "min": 0
+        },
+        "relevant_count": {
+          "type": "int64",
+          "min": 0
+        },
+        "matched_count": {
+          "type": "int64",
+          "min": 0
+        },
+        "recall_at_k": {
+          "type": "nullable_float64",
+          "min": 0,
+          "max": 1
+        },
+        "hit_any": {
+          "type": "nullable_int64",
+          "min": 0,
+          "max": 1
+        }
+      },
+      "semantic_rules": [
+        "relevant timeout/error has matched_count=0, recall=0 and hit_any=0 regardless of partial return",
+        "clear_negative and ambiguous recall/hit_any are null; matched_count=0",
+        "raw/unique counts describe actual prediction even when failed; they are not successful service counts"
+      ]
+    },
+    "StreamMetric": {
+      "fields": {
+        "stream_id": {
+          "type": "id"
+        },
+        "scheduled_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "relevant_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "recall_at_k": {
+          "type": "object",
+          "object": "Statistic"
+        }
+      },
+      "semantic_rules": [
+        "numerator is sum of relevant query recalls, denominator is scheduled relevant query count including failed",
+        "streams in lexicographic stream_id order"
+      ]
+    },
+    "MetricCounts": {
+      "fields": {
+        "scheduled_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "streams": {
+          "type": "int64",
+          "min": 0
+        },
+        "relevant_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "clear_negative_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "ambiguous_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "successful_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "failed_queries": {
+          "type": "int64",
+          "min": 0
+        },
+        "streams_without_relevant": {
+          "type": "int64",
+          "min": 0
+        }
+      },
+      "semantic_rules": []
+    },
+    "MetricSummary": {
+      "fields": {
+        "stream_macro_recall_at_k": {
+          "type": "object",
+          "object": "Statistic"
+        },
+        "query_weighted_recall_at_k": {
+          "type": "object",
+          "object": "Statistic"
+        },
+        "query_hit_any_rate": {
+          "type": "object",
+          "object": "Statistic"
+        },
+        "all_query_failure_rate": {
+          "type": "object",
+          "object": "Statistic"
+        },
+        "observed_negative_false_positive_rate": {
+          "type": "object",
+          "object": "Statistic"
+        },
+        "negative_service_failure_rate": {
+          "type": "object",
+          "object": "Statistic"
+        }
+      },
+      "semantic_rules": []
+    },
+    "MetricRun": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "run_id": {
+          "type": "id"
+        },
+        "policy_id": {
+          "type": "const_string",
+          "value": "b0-rrf-synthetic-v1"
+        },
+        "input_manifest_sha256": {
+          "type": "sha256"
+        },
+        "policy_sha256": {
+          "type": "sha256"
+        },
+        "predictions_sha256": {
+          "type": "sha256"
+        },
+        "evaluation_manifest_sha256": {
+          "type": "sha256"
+        },
+        "counts": {
+          "type": "object",
+          "object": "MetricCounts"
+        },
+        "queries": {
+          "type": "array",
+          "items_object": "QueryMetric",
+          "min_items": 0
+        },
+        "streams": {
+          "type": "array",
+          "items_object": "StreamMetric",
+          "min_items": 0
+        },
+        "summary": {
+          "type": "object",
+          "object": "MetricSummary"
+        }
+      },
+      "semantic_rules": [
+        "queries in scheduled ProbeFile order; streams sorted lexicographically",
+        "all raw hash bindings verified before scoring; exact schedule and Gold key coverage",
+        "0 and null distinct; no significance tests, claims of improvement, or confidence intervals in this bundle"
+      ]
+    },
+    "ReportSummary": {
+      "fields": {
+        "contract_id": {
+          "type": "const_string",
+          "value": "arkism-offline-b0-v1"
+        },
+        "run_id": {
+          "type": "id"
+        },
+        "policy_id": {
+          "type": "const_string",
+          "value": "b0-rrf-synthetic-v1"
+        },
+        "input_manifest_sha256": {
+          "type": "sha256"
+        },
+        "predictions_sha256": {
+          "type": "sha256"
+        },
+        "evaluation_manifest_sha256": {
+          "type": "sha256"
+        },
+        "metrics_sha256": {
+          "type": "sha256"
+        },
+        "dataset_role": {
+          "type": "const_string",
+          "value": "unit_fixture"
+        },
+        "status": {
+          "type": "const_string",
+          "value": "offline_contract_measurement"
+        },
+        "counts": {
+          "type": "object",
+          "object": "MetricCounts"
+        },
+        "summary": {
+          "type": "object",
+          "object": "MetricSummary"
+        }
+      },
+      "semantic_rules": []
+    }
+  },
+  "canonical_encoding": {
+    "name": "harness-typed-c14n-v0",
+    "input": "validated typed value; numeric type from objects definitions",
+    "null": "ASCII n",
+    "bool": "ASCII t or f",
+    "integer": "ASCII i + canonical decimal + semicolon",
+    "float64": "ASCII d + 16 lowercase hexadecimal digits of IEEE754 binary64 bits + semicolon",
+    "string": "ASCII s + UTF8 byte length decimal + colon + exact UTF8 bytes",
+    "array": "ASCII a + item count decimal + [ + ordered encodings + ]",
+    "object": "ASCII o + field count decimal + { + ascending ASCII key/value encodings + }",
+    "object_key_encoding": "same as string",
+    "object_key_order": "ascending ASCII field names",
+    "array_order": "preserve",
+    "float_negative_zero": "encode positive zero",
+    "invalid_numeric": "reject",
+    "hash": "SHA256 of encoded bytes",
+    "integer_object_example": {
+      "typed_value": {
+        "a": 1
+      },
+      "types": {
+        "a": "int64"
+      },
+      "canonical_utf8": "o1{s1:ai1;}"
+    }
+  },
+  "decay_reference": {
+    "function": "Decay(value, dtSeconds, halfLifeSeconds) (float64,error)",
+    "formula": "value * exp(-ln(2)*dtSeconds/halfLifeSeconds)",
+    "evaluation_order": "validate finite inputs; ratio=dtSeconds/halfLifeSeconds; if positive ratio overflow then return zero; otherwise exponent=-ln(2)*ratio",
+    "ratio_overflow": "derived positive infinity from valid finite inputs means zero decay result, not invalid input",
+    "tau_relation": "tau=halfLifeSeconds/ln(2); halfLifeSeconds=tau*ln(2)",
+    "value_range": [
+      0,
+      1
+    ],
+    "dt_seconds_min": 0,
+    "half_life_seconds": "finite and strictly positive",
+    "underflow_to_zero": "allowed_for_valid_large_positive_dt",
+    "input_clamping": "forbidden",
+    "absolute_tolerance": 1e-12,
+    "relative_tolerance": 1e-10,
+    "comparison": "abs(actual-expected)<=absolute_tolerance+relative_tolerance*abs(expected)",
+    "examples": [
+      {
+        "input": [
+          0.8,
+          10,
+          10
+        ],
+        "expected": 0.4
+      },
+      {
+        "input": [
+          0.8,
+          20,
+          10
+        ],
+        "expected": 0.2
+      },
+      {
+        "input": [
+          0.8,
+          0,
+          10
+        ],
+        "expected": 0.8
+      },
+      {
+        "input": [
+          0.8,
+          5e-324,
+          5e-324
+        ],
+        "expected": 0.4
+      },
+      {
+        "input": [
+          0.8,
+          -1,
+          10
+        ],
+        "expected_error": "invalid_time"
+      },
+      {
+        "input": [
+          -0.01,
+          10,
+          10
+        ],
+        "expected_error": "invalid_state"
+      },
+      {
+        "input": [
+          0.8,
+          10,
+          0
+        ],
+        "expected_error": "invalid_half_life"
+      }
+    ]
+  },
+  "rrf_reference": {
+    "policy_id": "b0-rrf-synthetic-v1",
+    "rank_offset": 60,
+    "exact_reason": "exact_keyword",
+    "exact_reason_weight": 2,
+    "other_weight": 1,
+    "weight_selection": "reason membership on that hit, not lane name",
+    "position": "original zero-based index within lane",
+    "merge_key": "ref.origin + ':' + ref.collection + ':' + ref.id",
+    "same_lane_duplicate": "skip both score and reasons from subsequent same-key hits; do not renumber later candidates",
+    "metadata": "preserve first occurrence",
+    "reasons": "union without duplicates in encounter order",
+    "tie_break": [
+      "score_desc",
+      "trust_desc",
+      "updated_at_ns_desc",
+      "merge_key_asc"
+    ],
+    "authority": "data_only_untrusted",
+    "limit_nonpositive": "empty_array",
+    "score_examples": [
+      {
+        "case": "first_exact",
+        "expected_fraction": "2/61"
+      },
+      {
+        "case": "first_ordinary",
+        "expected_fraction": "1/61"
+      },
+      {
+        "case": "same_ref_first_exact_and_first_ordinary_lanes",
+        "expected_fraction": "3/61"
+      }
+    ],
+    "baseline_pipeline": "validate snapshot/bindings; exclude ineligible hits preserving original lane ordinal; fuse all eligible unique keys; pack",
+    "ineligible": "not approved or not active or deleted or not source_verified",
+    "pure_reference": "RRFReference has no eligibility filtering; use all-clean candidates for product FuseScored comparison",
+    "no_early_final_k_cap": true
+  },
+  "packing_reference": {
+    "status": "new_synthetic_reference_not_product_packContext",
+    "unit": "fixture_units_v0",
+    "cost_source": "candidate.context_cost_units",
+    "text_or_tokenizer_inference": "forbidden",
+    "algorithm": "scan ranked candidates; skip duplicates; select only if entire cost fits remaining budget; skip oversized candidate and continue; stop after k selected or exhaustion",
+    "truncate_body": false,
+    "zero_budget_or_zero_k": "empty_array",
+    "example": {
+      "ranked_ids": [
+        "a",
+        "b",
+        "c"
+      ],
+      "costs": [
+        4,
+        2,
+        1
+      ],
+      "budget": 3,
+      "k": 2,
+      "expected_ids": [
+        "b",
+        "c"
+      ]
+    }
+  },
+  "metric_contract": {
+    "required_inputs": [
+      "ProbeFile",
+      "PredictionRun",
+      "GoldFile",
+      "InputManifest",
+      "EvaluationManifest"
+    ],
+    "schedule_checks": [
+      "exact_query_coverage",
+      "final_k",
+      "stream_id",
+      "scope",
+      "at_ns",
+      "cutoff_accepted_seq",
+      "manifest_hash"
+    ],
+    "match_identity": [
+      "scope.workspace",
+      "scope.project",
+      "scope.user",
+      "scope.agent",
+      "ref.origin",
+      "ref.collection",
+      "ref.id",
+      "ref.revision",
+      "ref.content_sha256"
+    ],
+    "query_recall": "size(unique_selected_refs intersect relevant_refs)/size(relevant_refs)",
+    "query_hit_any": "1 if intersection nonempty else 0",
+    "timeout_or_error_relevant_query": "recall=0, hit_any=0, keep scheduled denominator",
+    "failed_partial_result": "ignored_by_primary_recall",
+    "successful_more_than_k_raw_refs": "run_format_error",
+    "duplicate_query_row": "run_format_error",
+    "missing_scheduled_query_row": "run_format_error",
+    "duplicate_selected_ref_within_k": "deduplicate",
+    "ambiguous": "exclude_from_relevance_and_negative_primary_denominators; report separately",
+    "stream_recall": "mean over all scheduled relevant queries in the stream including failed queries",
+    "primary_macro_recall": "mean stream_recall over streams with at least one relevant query",
+    "stream_without_relevant": "null_with_reason_and_count",
+    "query_weighted_recall": "separate_secondary_metric",
+    "all_query_failure_rate": "timeout/error count divided by all scheduled queries",
+    "observed_negative_false_positive_rate": "successful clear_negative queries with any returned ref divided by successful clear_negative queries",
+    "negative_service_failure_rate": "clear_negative queries with timeout/error or successful nonempty return divided by all scheduled clear_negative queries",
+    "zero_denominator": "null_with_reason",
+    "missing_gold_or_manifest_mismatch": "data_error_not_performance_zero",
+    "hand_calculated_example": {
+      "stream_1_relevant_query_recalls": [
+        0.5,
+        0
+      ],
+      "stream_1_mean": 0.25,
+      "stream_2_relevant_query_recalls": [
+        1
+      ],
+      "stream_2_mean": 1,
+      "primary_macro_recall": 0.625,
+      "query_weighted_recall": 0.5,
+      "second_query_of_stream_1_status": "timeout"
+    },
+    "split_map_usage": "evaluation-only unit_fixture provenance; not a ranker input"
+  },
+  "file_ownership": {
+    "R1": [
+      "internal/memoryharness/types.go",
+      "internal/memoryharness/codec.go",
+      "internal/memoryharness/canonical.go",
+      "internal/memoryharness/codec_test.go",
+      "internal/memoryharness/canonical_test.go",
+      "evaluation/memory-harness-v1/contracts/implementation_contract.json"
+    ],
+    "R2": [
+      "evaluation/memory-harness-v1/contract_io.py",
+      "evaluation/memory-harness-v1/test_contract_io.py"
+    ],
+    "R3": [
+      "evaluation/memory-harness-v1/fixture_gen.py",
+      "evaluation/memory-harness-v1/fixtures_spec.json",
+      "evaluation/memory-harness-v1/test_fixture_gen.py"
+    ],
+    "R4": [
+      "internal/memoryharness/decay.go",
+      "internal/memoryharness/decay_test.go"
+    ],
+    "R5": [
+      "internal/memoryharness/rrf.go",
+      "internal/memoryharness/packing.go",
+      "internal/memoryharness/rrf_test.go",
+      "internal/memoryharness/packing_test.go"
+    ],
+    "R6": [
+      "evaluation/memory-harness-v1/metrics.py",
+      "evaluation/memory-harness-v1/test_metrics.py"
+    ],
+    "R7": [
+      "cmd/memory-harness-baseline/main.go",
+      "cmd/memory-harness-baseline/main_test.go"
+    ],
+    "R8": [
+      "evaluation/memory-harness-v1/report.py",
+      "evaluation/memory-harness-v1/test_report.py",
+      "evaluation/memory-harness-v1/acceptance.py",
+      "evaluation/memory-harness-v1/test_acceptance.py",
+      "evaluation/memory-harness-v1/handoff.md",
+      "evaluation/test_memory_harness.py"
+    ]
+  },
+  "dependencies": {
+    "R1": [],
+    "R2": [],
+    "R3": [
+      "R1",
+      "R2"
+    ],
+    "R4": [
+      "R1"
+    ],
+    "R5": [
+      "R1"
+    ],
+    "R6": [
+      "R1",
+      "R2"
+    ],
+    "R7": [
+      "R1",
+      "R3",
+      "R5"
+    ],
+    "R8": [
+      "R1",
+      "R2",
+      "R3",
+      "R4",
+      "R5",
+      "R6",
+      "R7"
+    ]
+  },
+  "go_interfaces": [
+    "type ContractError struct { Code string; Path string; Detail string }; func (*ContractError) Error() string",
+    "func DecodeStrict(data []byte, typeName string) (any, error)",
+    "func ValidateTyped(typeName string, value any) error",
+    "func CanonicalBytes(typeName string, value any) ([]byte, error)",
+    "func CanonicalSHA256(typeName string, value any) (string, error)",
+    "func ValidateBaselineInputs(probes ProbeFile, candidates CandidateFile, policy Policy) error",
+    "func Decay(value, dtSeconds, halfLifeSeconds float64) (float64, error)",
+    "func RRFReference(lanes [][]Candidate, limit int) ([]RankedCandidate, error)",
+    "func PackContext(ranked []RankedCandidate, finalK int64, budget ContextBudget) (BaselineSelection, error)",
+    "func RankAndPack(snapshot CandidateSnapshot, probe Probe, policy Policy) (BaselineSelection, error)",
+    "func run(args []string, stdout, stderr io.Writer) int"
+  ],
+  "python_interfaces": [
+    "def decode_typed(data: bytes, type_name: str) -> dict",
+    "def validate_typed(type_name: str, value: dict) -> None",
+    "def canonical_bytes(type_name: str, value: dict) -> bytes",
+    "def canonical_sha256(type_name: str, value: dict) -> str",
+    "def sha256_bytes(data: bytes) -> str",
+    "def load_input_bundle(manifest_path: pathlib.Path) -> dict",
+    "def load_evaluation_bundle(manifest_path: pathlib.Path) -> dict",
+    "def write_json_new(path: pathlib.Path, value: dict) -> None",
+    "def generate_fixture(seed: int, output_dir: pathlib.Path, contract_path: pathlib.Path) -> dict",
+    "def calculate_metrics(prediction_run: dict, probe_file: dict, gold_file: dict, bindings: dict) -> dict",
+    "def make_report(metric_run: dict, metrics_sha256: str, output_dir: pathlib.Path) -> dict",
+    "def run_acceptance(repo_root: pathlib.Path, work_dir: pathlib.Path) -> dict"
+  ],
+  "error_codes": [
+    "invalid_json",
+    "invalid_type",
+    "missing_field",
+    "unknown_field",
+    "duplicate_key",
+    "invalid_unicode",
+    "invalid_value",
+    "unsupported_version",
+    "unsupported_type",
+    "snapshot_conflict",
+    "snapshot_binding",
+    "schedule_mismatch",
+    "hash_mismatch",
+    "unsafe_path",
+    "io_error",
+    "output_exists",
+    "invalid_state",
+    "invalid_time",
+    "invalid_half_life"
+  ],
+  "unsupported_in_first_bundle": [
+    "Event/Receipt/State decoding or state transition/replay/checkpoint recovery",
+    "dynamic ranking, learning, outcome reinforcement, revision migration or failure penalties",
+    "service Search/DB/API/network/credentials/real user data",
+    "real tokenizer/context packing or measured product task outcome",
+    "production authorization/deletion/freshness guarantees",
+    "research holdout performance, statistical significance, or publication acceptance"
+  ],
+  "cli": {
+    "fixture": {
+      "cwd": "/home/felix/110-arkism",
+      "argv": [
+        "python3",
+        "evaluation/memory-harness-v1/fixture_gen.py",
+        "--seed",
+        "17",
+        "--contract",
+        "evaluation/memory-harness-v1/contracts/implementation_contract.json",
+        "--out",
+        "/tmp/arkism-harness-r1/fixture"
+      ],
+      "outputs": [
+        "implementation_contract.json",
+        "policy.json",
+        "probes.json",
+        "candidates.json",
+        "input_manifest.json",
+        "gold.json",
+        "split_map.json",
+        "evaluation_manifest.json"
+      ]
+    },
+    "baseline": {
+      "cwd": "/home/felix/110-arkism",
+      "argv": [
+        "/tmp/arkism-harness-r1/baseline",
+        "-manifest",
+        "/tmp/arkism-harness-r1/fixture/input_manifest.json",
+        "-run-id",
+        "baseline-seed17",
+        "-output",
+        "/tmp/arkism-harness-r1/predictions.json"
+      ],
+      "output_type": "PredictionRun",
+      "build_argv": [
+        "go",
+        "build",
+        "-o",
+        "/tmp/arkism-harness-r1/baseline",
+        "./cmd/memory-harness-baseline"
+      ]
+    },
+    "metrics": {
+      "cwd": "/home/felix/110-arkism",
+      "argv": [
+        "python3",
+        "evaluation/memory-harness-v1/metrics.py",
+        "--evaluation-manifest",
+        "/tmp/arkism-harness-r1/fixture/evaluation_manifest.json",
+        "--predictions",
+        "/tmp/arkism-harness-r1/predictions.json",
+        "--out",
+        "/tmp/arkism-harness-r1/metrics.json"
+      ],
+      "output_type": "MetricRun"
+    },
+    "report": {
+      "cwd": "/home/felix/110-arkism",
+      "argv": [
+        "python3",
+        "evaluation/memory-harness-v1/report.py",
+        "--metrics",
+        "/tmp/arkism-harness-r1/metrics.json",
+        "--out",
+        "/tmp/arkism-harness-r1/report"
+      ],
+      "outputs": [
+        "queries.csv",
+        "streams.csv",
+        "summary.csv",
+        "summary.json"
+      ]
+    },
+    "acceptance": {
+      "cwd": "/home/felix/110-arkism",
+      "argv": [
+        "python3",
+        "evaluation/memory-harness-v1/acceptance.py",
+        "--repo-root",
+        "/home/felix/110-arkism",
+        "--work-dir",
+        "/tmp/arkism-harness-acceptance"
+      ],
+      "outputs": [
+        "acceptance.json",
+        "baseline_bundle.json"
+      ],
+      "execution_rules": [
+        "Build baseline into fresh work_dir with GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off; record build and binary execution as separate commands with exit codes and log hashes.",
+        "Check exact exit codes and stderr against run() or built binary, never go run wrapper.",
+        "Child checks must not recursively invoke acceptance; preserve test names and counts, zero tests is not completion."
+      ]
+    },
+    "exit_codes": {
+      "0": "success",
+      "1": "I/O or unexpected execution failure",
+      "2": "usage/contract/data/hash/output-exists failure"
+    },
+    "common": [
+      "unknown/missing/duplicate flags and positional args rejected; all flags required; help exits 0",
+      "no inferred paths, network, environment secrets, gold flag or event flag",
+      "input parse/validation completes before any final output is published",
+      "output file/directory must not already exist; no force flag; caller chooses a fresh run directory",
+      "temporary outputs created only in output parent, final publication must not overwrite an existing target",
+      "CLI stdout is one compact JSON status line; stderr is error JSON {code,path,detail}; no secrets or full payloads",
+      "Go baseline status {status:success,output:absolute_path,queries:count}; Python tools analogous artifact/count only",
+      "raw output JSON UTF8, indent=2, trailing LF; Python sorts keys; Go uses fixed declared struct field order and encoding/json escaping; cross-language logical equality uses typed-c14n, not raw JSON byte equality; raw file hashes bind actual written bytes",
+      "acceptance stdout may include child check logs followed by one summary status line; acceptance captures exact commands and exit codes",
+      "Go application exit/stdout/stderr contract applies to the built binary or run(); go build tool logs are separate. go run is success-demo only."
+    ]
+  },
+  "report_columns": {
+    "queries.csv": [
+      "run_id",
+      "policy_id",
+      "input_manifest_sha256",
+      "predictions_sha256",
+      "query_id",
+      "stream_id",
+      "label_status",
+      "status",
+      "raw_selected_count",
+      "unique_selected_count",
+      "relevant_count",
+      "matched_count",
+      "recall_at_k",
+      "hit_any"
+    ],
+    "streams.csv": [
+      "run_id",
+      "policy_id",
+      "input_manifest_sha256",
+      "stream_id",
+      "scheduled_queries",
+      "relevant_queries",
+      "numerator",
+      "denominator",
+      "recall_at_k",
+      "null_reason"
+    ],
+    "summary.csv": [
+      "run_id",
+      "policy_id",
+      "input_manifest_sha256",
+      "metric",
+      "numerator",
+      "denominator",
+      "value",
+      "null_reason"
+    ]
+  },
+  "report_rules": {
+    "csv_encoding": "UTF-8 without BOM; RFC4180 escaping; CRLF rows; header always present",
+    "null": "empty CSV cell; distinguish by denominator/null_reason where present",
+    "float_format": "Python format(value,'.17g'); no percent conversion or rounding-to-presentation precision",
+    "summary_order": [
+      "stream_macro_recall_at_k",
+      "query_weighted_recall_at_k",
+      "query_hit_any_rate",
+      "all_query_failure_rate",
+      "observed_negative_false_positive_rate",
+      "negative_service_failure_rate"
+    ],
+    "json": "ReportSummary with complete validated metric summary; never auto-generate improvement claims"
+  },
+  "baseline_bundle_contract": {
+    "version": "baseline-bundle-v1",
+    "required_fields": [
+      "bundle_version",
+      "contract_id",
+      "status",
+      "review_status",
+      "repository",
+      "contract_sha256",
+      "policy_sha256",
+      "input_manifest_sha256",
+      "evaluation_manifest_sha256",
+      "artifacts",
+      "checks",
+      "limitations"
+    ],
+    "status": "checks_passed or checks_failed; never product_integrated",
+    "review_status": "requires_independent_review; a worker never self-assigns accept",
+    "repository": {
+      "required_fields": [
+        "reference_commit",
+        "observed_commit",
+        "dirty_files_sha256",
+        "dirty_files"
+      ],
+      "reference_commit": "27bb41807ff48d47559ba2cfc30feb300caacecf",
+      "observed_commit": "git rev-parse HEAD at acceptance time, 40 lowercase hex characters",
+      "dirty_files": "sorted repository-relative paths modified by this bundle, status and raw SHA256; deleted file uses sha256=null; include allowed untracked files",
+      "dirty_files_sha256": "SHA256 of deterministic UTF8 JSON array dirty_files: sort_keys=true,separators=(',',':'),ensure_ascii=false, no trailing newline",
+      "scope": "record dirty paths from git status, hash file bytes only within R1..R8 allowlist; outside dirty paths recorded with sha256=null and not read; never stage or reset"
+    },
+    "artifact_entry": {
+      "required_fields": [
+        "logical_name",
+        "relative_path",
+        "sha256",
+        "byte_length"
+      ],
+      "relative_path": "beneath acceptance work_dir, no symlink/traversal"
+    },
+    "check_entry": {
+      "required_fields": [
+        "check_id",
+        "argv",
+        "cwd",
+        "exit_code",
+        "status",
+        "evidence_path",
+        "evidence_sha256"
+      ],
+      "status": "passed/failed/not_run; exit_code is null only for not_run; evidence_path/hash null only for not_run"
+    },
+    "limitations": [
+      "offline synthetic baseline only",
+      "no production API/DB integration",
+      "no dynamic state or real token budget",
+      "no new holdout performance",
+      "no independent review yet"
+    ]
+  }
+}
