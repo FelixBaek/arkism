@@ -205,3 +205,11 @@ CRW-07은 실행·평가 저자와 분리한 보고 담당자 및 독립 검토�
 현재 작업 검증 완료19/63이다.
 
 - [CRW-07 채택 보고·검산과 연구 준비 한계](../work-records/2026-10-29-roadmap-crew-adoption.md)
+
+DYN-01의 후속 전이 구현 준비 중 늦게 도착한 원사건 재시도가
+단독 DTO의 arrival 상한 검사에서 먼저 거절되는 문제를 발견했다.
+원 검증본과 실제 RED를 보존하고, transport arrival와 원 accepted 좌표를 분리했다.
+새 사건의 arrival 상한은 EventFile 첫 ID와 후속 ApplyEvent의 신규 사건 경계에서 유지한다.
+이 변경은 기존 DYN-01 카드의 좁은 후속 수정이며 완료 수19/63을 늘리지 않는다.
+
+- [DYN-01 transport arrival 후속 수정](../work-records/2026-10-29-roadmap-transport-arrival.md)
