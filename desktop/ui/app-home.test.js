@@ -85,6 +85,21 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.equal(win(), null);
 });
 
+test("overview: 자세히 on a 분류 card opens that candidate's own detail, even off the loaded page", async () => {
+  const d = await openWindow({ key: "classify" });
+  const items = [...d.querySelectorAll(".ov-win-list .ov-win-item")];
+  assert.ok(items.length > 1);
+  // the newest card, with a first page that does not carry it (the 승인 대기 list loads oldest first)
+  const card = items.at(-1), title = text(card.querySelector(".ov-win-item-title"));
+  const off = route("POST", "/v1/memory_candidates/query", () => ok({ items: [], total: 0, facets: {} }));
+  await press("자세히", card, 80);
+  off();
+  const w = win(), head = title.replace(/…$/, "").slice(0, 20);
+  assert.ok(text(w.querySelector(".ov-wide-row.on")).includes(head), "the clicked candidate is the selected row");
+  assert.ok(text(w.querySelector(".ov-wide-detail")).includes(head), "and its detail is open");
+  await closeAll();
+});
+
 test("overview: 분류 groups its waiting candidates by kind inside the window", async () => {
   const d = await openWindow({ key: "classify" });
   const list = d.querySelector(".ov-win-list"), heads = [...list.querySelectorAll(".ov-win-group")];
