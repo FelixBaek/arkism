@@ -826,3 +826,354 @@ func TestMeetingObservationUnknownReadRevisionCannotBorrowPersistedRevision(t *t
 		t.Fatal("unknown actual read revision borrowed old persisted revision")
 	}
 }
+
+// contextMeetingStore exercises the real driver with an optional rich reader.
+// Its source and policy facts are explicit synthetic local inputs, never APIs.
+type contextMeetingStore struct {
+	*fakeMeetings
+	factsMu     sync.Mutex
+	gone        bool
+	revision    int64
+	richReads   int
+	legacyReads int
+}
+
+func (f *contextMeetingStore) ContextText(ctx context.Context, collection, id string) (string, error) {
+	f.factsMu.Lock()
+	f.legacyReads++
+	f.factsMu.Unlock()
+	return f.fakeMeetings.ContextText(ctx, collection, id)
+}
+func (f *contextMeetingStore) ContextReceipt(ctx context.Context, ref TeamContext) (ContextReceiptRead, error) {
+	f.factsMu.Lock()
+	defer f.factsMu.Unlock()
+	f.richReads++
+	actual, _ := AttemptContextFrom(ctx)
+	scope := actual.Run.Scope
+	if validateObservation(scope) != nil {
+		prior, _ := AttemptContextFrom(observerTestContext())
+		scope = prior.Run.Scope
+	}
+	at := int64(100)
+	revision := f.revision
+	if revision == 0 {
+		revision = 11
+	}
+	source := SourceObservation{Scope: scope, Collection: ref.Collection, ID: ref.ID, Revision: &revision, ReadAtNS: &at, ObservedAtNS: &at, ProvenanceStatus: "pinned", ReadAuthorization: "confirmed", Sharing: ref.Share, Authority: "data_only_untrusted"}
+	text := f.fakeMeetings.context[ref.Collection+"/"+ref.ID]
+	digest, _ := ContextTextSHA256(text)
+	source.ContentSHA256 = &digest
+	key := ContextSourceKey{Scope: scope, Collection: ref.Collection, ID: ref.ID}
+	guard, _ := ContextTextSHA256("synthetic-native-premise:" + text)
+	policy := ObservationRef{Collection: "crew", ID: "team", Revision: 3}
+	facts := ContextUseFacts{Source: key, Ref: ObservationRef{Collection: ref.Collection, ID: ref.ID, Revision: revision}, ContentSHA256: digest, GuardSHA256: guard, ReadState: "confirmed", Lifecycle: "active", Sharing: ref.Share, CheckedAtNS: &at, PolicyScope: scope, PolicyRef: &policy, PolicyReadAtNS: &at, PolicyState: "confirmed"}
+	if f.gone {
+		source.Revision = nil
+		source.ContentSHA256 = nil
+		source.ReadAtNS = nil
+		source.ProvenanceStatus = "unavailable"
+		source.ReadAuthorization = "not_recorded"
+		facts.ReadState = "unavailable"
+		facts.Lifecycle = "unknown"
+		return ContextReceiptRead{Observation: source, Facts: facts}, &APIError{404, "not_found"}
+	}
+	return ContextReceiptRead{Observation: source, Facts: facts, Text: text}, nil
+}
+func contextMeetingRig(t *testing.T) (meetingRig, *contextMeetingStore) {
+	t.Helper()
+	team := teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...)
+	team.Crew.Context = []TeamContext{{Collection: "memories", ID: "m1", Share: "team"}}
+	rig := newMeetingRig(t, baseItems(team)...)
+	store := &contextMeetingStore{fakeMeetings: rig.store, revision: 11}
+	rig.e.Meetings = store
+	rig.add("context-meeting", Meeting{MaxRounds: 1})
+	return rig, store
+}
+func contextMeetingSession(t *testing.T, mode ContextReceiptMode, sink func(ContextObservation) error) (context.Context, *ContextReceiptSession) {
+	t.Helper()
+	session, err := NewContextReceiptSession(mode, sink)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := WithAttemptObserver(observerTestContext(), NewAttemptObserver(nil))
+	return WithContextReceiptSession(ctx, session), session
+}
+func TestMeetingContextGateDeletionAfterSavedBrief(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	store.onWrite = func(_ *fakeMeetings, rec MeetingRecord) {
+		for _, turn := range rec.Meeting.Turns {
+			if turn.Kind == "brief" {
+				store.factsMu.Lock()
+				store.gone = true
+				store.factsMu.Unlock()
+				return
+			}
+		}
+	}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	if err == nil || len(rig.ai.specs) != 1 || len(rig.store.captured) != 0 {
+		t.Fatalf("deleted source reused by downstream driver: calls=%d captures=%d err=%v", len(rig.ai.specs), len(rig.store.captured), err)
+	}
+	if store.richReads == 0 {
+		t.Fatal("optional rich reader never used")
+	}
+}
+func TestMeetingContextGateDeletionDuringModelReturn(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	rig.ai.answer = func(s aiSpec) (string, error) {
+		store.factsMu.Lock()
+		store.gone = true
+		store.factsMu.Unlock()
+		return defaultAnswer(s)
+	}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	if err == nil || len(rig.ai.specs) != 1 || len(rig.store.recs["context-meeting"].Meeting.Turns) != 0 || len(rig.store.captured) != 0 {
+		t.Fatal("stale returned result persisted or consumed", err)
+	}
+}
+func TestMeetingContextGateMissingRichReaderBlocksBeforeDispatch(t *testing.T) {
+	rig, _ := contextMeetingRig(t)
+	rig.e.Meetings = rig.store
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	if err == nil || len(rig.ai.specs) != 0 || len(rig.store.captured) != 0 {
+		t.Fatal("missing provenance permitted model dispatch", err)
+	}
+}
+func TestMeetingContextGateDisplayChangeContinuesAndOffNoRichReads(t *testing.T) {
+	for _, mode := range []ContextReceiptMode{ContextReceiptOff, ContextReceiptEnforceCurrentUse} {
+		t.Run(string(mode), func(t *testing.T) {
+			rig, store := contextMeetingRig(t)
+			store.onWrite = func(_ *fakeMeetings, rec MeetingRecord) {
+				if len(rec.Meeting.Turns) > 0 {
+					store.factsMu.Lock()
+					store.revision = 12
+					store.factsMu.Unlock()
+				}
+			}
+			ctx, _ := contextMeetingSession(t, mode, nil)
+			if err := rig.e.DriveMeeting(ctx, "context-meeting"); err != nil {
+				t.Fatal(err)
+			}
+			if len(rig.ai.specs) != 4 || rig.store.recs["context-meeting"].Meeting.Status != "concluded" {
+				t.Fatal("irrelevant metadata caused rerun/block")
+			}
+			if mode == ContextReceiptOff && store.richReads != 0 {
+				t.Fatal("off introduced new current reads")
+			}
+			if mode == ContextReceiptEnforceCurrentUse && store.richReads == 0 {
+				t.Fatal("enforce failed to use current metadata")
+			}
+		})
+	}
+}
+func TestMeetingContextGateObserveSinkFailurePreservesBusiness(t *testing.T) {
+	rig, _ := contextMeetingRig(t)
+	ctx, session := contextMeetingSession(t, ContextReceiptObserve, func(ContextObservation) error { return errors.New("synthetic sink failure") })
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err != nil {
+		t.Fatal(err)
+	}
+	if len(rig.ai.specs) != 4 || rig.store.recs["context-meeting"].Meeting.Status != "concluded" {
+		t.Fatal("observer changed work")
+	}
+	if session.Snapshot().Complete || !slices.Contains(session.Snapshot().Issues, "sink_error") {
+		t.Fatal("failed delivery was hidden")
+	}
+}
+
+func TestMeetingContextGateKnownEmptySourcesNeedNoRichReader(t *testing.T) {
+	team := teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...)
+	team.Crew.Context = nil
+	rig := newMeetingRig(t, baseItems(team)...)
+	rig.add("context-meeting", Meeting{MaxRounds: 1})
+	ctx, session := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err != nil {
+		t.Fatal("known empty source set treated as missing evidence", err)
+	}
+	if len(rig.ai.specs) != 4 || !session.Snapshot().Complete {
+		t.Fatal("known-empty meeting changed")
+	}
+}
+func TestMeetingContextGateBlocksRevokedFallback(t *testing.T) {
+	worker := agentItem("s", "서기", func(c *Crew) { c.FallbackModel = "fallback-model" })
+	team := teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...)
+	team.Crew.Context = []TeamContext{{Collection: "memories", ID: "m1", Share: "team"}}
+	rig := newMeetingRig(t, baseItems(worker, team)...)
+	rig.add("context-meeting", Meeting{MaxRounds: 1})
+	store := &contextMeetingStore{fakeMeetings: rig.store, revision: 11}
+	rig.e.Meetings = store
+	rig.ai.answer = func(aiSpec) (string, error) {
+		store.factsMu.Lock()
+		store.gone = true
+		store.factsMu.Unlock()
+		return "", errors.New("synthetic failed paid call")
+	}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err == nil || len(rig.ai.specs) != 1 {
+		t.Fatal("revoked source allowed fallback", err, len(rig.ai.specs))
+	}
+}
+func TestMeetingContextGateResumedBriefCannotAcquireNewLineage(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	if err := rig.e.DriveMeeting(context.Background(), "context-meeting"); err != nil {
+		t.Fatal(err)
+	}
+	rig.store.person("context-meeting", func(m *Meeting) {
+		m.Status = "running"
+		m.EndedReason = ""
+		m.Round = 0
+		m.Conclusion = nil
+		m.Turns = m.Turns[:1]
+	})
+	rig.ai.specs = nil
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err == nil || len(rig.ai.specs) != 0 || store.richReads != 0 {
+		t.Fatal("historical summary rebound to new current reads", err)
+	}
+}
+func TestMeetingContextGateExactTaskHashesAndSavedSummaryCAS(t *testing.T) {
+	rig, _ := contextMeetingRig(t)
+	snapshots := map[int64]MeetingRecord{}
+	rig.store.onWrite = func(_ *fakeMeetings, rec MeetingRecord) { snapshots[rec.Revision] = cloneRec(rec) }
+	ctx, session := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err != nil {
+		t.Fatal(err)
+	}
+	inputHashes := map[string]bool{}
+	for _, spec := range rig.ai.specs {
+		hash, _ := ContextTextSHA256(spec.Task)
+		inputHashes[hash] = true
+	}
+	stages := map[string]int{}
+	for _, record := range session.Snapshot().Records {
+		if err := ValidateContextObservation(record); err != nil {
+			t.Fatal(err)
+		}
+		stages[record.ContextStage]++
+		if record.ContextStage == "briefing" || record.ContextStage == "turn_input" {
+			if record.ContextSHA256 == nil || !inputHashes[*record.ContextSHA256] {
+				t.Fatal("receipt hashes partial or unsent task")
+			}
+		}
+		if record.ContextStage == "summary_handoff" {
+			if record.SummaryRef == nil || record.SummaryRef.Collection != "crew_meetings" || record.SummaryRef.ID != "context-meeting" {
+				t.Fatal("summary identity missing")
+			}
+			snapshot, ok := snapshots[record.SummaryRef.Revision]
+			if !ok {
+				t.Fatal("summary CAS was not actually returned")
+			}
+			valid := false
+			for _, turn := range snapshot.Meeting.Turns {
+				hash, _ := ContextTextSHA256(turn.Text)
+				if turn.Kind == "brief" && turn.OK && record.ContextSHA256 != nil && hash == *record.ContextSHA256 {
+					valid = true
+				}
+			}
+			if !valid {
+				t.Fatal("claimed summary snapshot did not contain exact stored body")
+			}
+		}
+	}
+	if stages["source_read"] != 1 || stages["briefing"] != 1 || stages["summary_handoff"] != 1 || stages["turn_input"] != 3 {
+		t.Fatal("source/summary/consumption stages conflated", stages)
+	}
+}
+
+type mergingContextMeetingStore struct {
+	*contextMeetingStore
+	injected bool
+}
+
+func (f *mergingContextMeetingStore) UpdateMeeting(ctx context.Context, record MeetingRecord, lease string) (MeetingRecord, error) {
+	if !f.injected && len(record.Meeting.Turns) > 0 && record.Meeting.Turns[len(record.Meeting.Turns)-1].Kind == "turn" {
+		f.injected = true
+		f.fakeMeetings.person(record.ID, func(m *Meeting) {
+			now := time.Now().UTC().Truncate(time.Millisecond)
+			m.Turns = append(m.Turns, MeetingTurn{Seq: len(m.Turns) + 1, Round: 1, AgentID: "r", Speaker: "검토자", Kind: "turn", Text: "synthetic untracked derived material", StartedAt: &now, FinishedAt: &now, OK: true})
+		})
+	}
+	return f.fakeMeetings.UpdateMeeting(ctx, record, lease)
+}
+func TestMeetingContextGateDoesNotProtectUntrackedMergedTurn(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	rig.e.Meetings = &mergingContextMeetingStore{contextMeetingStore: store}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	if err == nil || len(rig.ai.specs) != 2 || len(rig.store.captured) != 0 {
+		t.Fatalf("untracked concurrent turn became trusted lineage: calls=%d capture=%d err=%v", len(rig.ai.specs), len(rig.store.captured), err)
+	}
+}
+
+func TestMeetingContextGateRechecksBeforeCandidateCapture(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	rig.store.onWrite = func(_ *fakeMeetings, rec MeetingRecord) {
+		if len(rec.Meeting.Turns) > 0 && rec.Meeting.Turns[len(rec.Meeting.Turns)-1].Kind == "conclusion" {
+			store.factsMu.Lock()
+			store.gone = true
+			store.factsMu.Unlock()
+		}
+	}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	if err == nil || len(rig.ai.specs) != 4 || len(rig.store.captured) != 0 {
+		t.Fatal("revoked material released to candidate capture", err, len(rig.store.captured))
+	}
+}
+
+type scrubbingContextMeetingStore struct {
+	*contextMeetingStore
+	scrubbed bool
+}
+
+func (f *scrubbingContextMeetingStore) UpdateMeeting(ctx context.Context, record MeetingRecord, lease string) (MeetingRecord, error) {
+	if !f.scrubbed && len(record.Meeting.Turns) > 0 && record.Meeting.Turns[len(record.Meeting.Turns)-1].Kind == "brief" {
+		f.scrubbed = true
+		return MeetingRecord{}, &APIError{409, "secret_detected"}
+	}
+	return f.fakeMeetings.UpdateMeeting(ctx, record, lease)
+}
+func TestMeetingContextGateHashesNativeScrubbedSummary(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	rig.e.Meetings = &scrubbingContextMeetingStore{contextMeetingStore: store}
+	ctx, session := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	if err := rig.e.DriveMeeting(ctx, "context-meeting"); err != nil {
+		t.Fatal("native scrub changed context admission", err)
+	}
+	stored := rig.store.recs["context-meeting"].Meeting.Turns[0].Text
+	if stored != "(비밀값처럼 보이는 내용이 있어 저장하지 않았어요)" {
+		t.Fatal("fixture did not scrub")
+	}
+	hash, _ := ContextTextSHA256(stored)
+	found := false
+	for _, record := range session.Snapshot().Records {
+		if record.ContextStage == "summary_handoff" {
+			found = true
+			if record.ContextSHA256 == nil || *record.ContextSHA256 != hash {
+				t.Fatal("raw answer falsely claimed persisted summary")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("scrubbed summary receipt missing")
+	}
+}
+func TestMeetingContextGatePreservesNativeFlowControlFailure(t *testing.T) {
+	rig, store := contextMeetingRig(t)
+	calls := 0
+	rig.e.MeetingAI = func(context.Context, aiSpec) (aiAnswer, error) {
+		calls++
+		store.factsMu.Lock()
+		store.gone = true
+		store.factsMu.Unlock()
+		return aiAnswer{}, failf("flow_budget_limit", "synthetic budget refusal")
+	}
+	ctx, _ := contextMeetingSession(t, ContextReceiptEnforceCurrentUse, nil)
+	err := rig.e.DriveMeeting(ctx, "context-meeting")
+	var native *nodeError
+	if !errors.As(err, &native) || native.code != "flow_budget_limit" || calls != 1 || store.richReads != 2 {
+		t.Fatal("native budget control replaced by a later freshness diagnostic", err, calls, store.richReads)
+	}
+}
