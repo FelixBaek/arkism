@@ -2,6 +2,7 @@
 // Behavior of the shared list modules: the collection footer, the visible-page sync, the virtual list and catalog ensure.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/fake-dom.cjs");
 const { create: createPager } = require("./memory-pages.js");
 

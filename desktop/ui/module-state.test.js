@@ -1,4 +1,5 @@
 const test = require("node:test"), assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 
 test("screen filters and connection identity have one owner", async () => {
   const { createAppState } = await import("./modules/state.mjs");

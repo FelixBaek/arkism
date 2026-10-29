@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 
 // Real crypto.subtle resolves on the thread pool, so under load it can land after the test looks; hash in-process instead.

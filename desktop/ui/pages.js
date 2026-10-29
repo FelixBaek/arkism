@@ -849,7 +849,7 @@ window.ArkismPages = (ctx) => {
     const hint = Object.fromEntries(rows);
     async function save(role, patch, done) {
       try {
-        state.data.providers = (await request("/v1/providers/role_model", { method: "POST", body: JSON.stringify({ scope: state.scope, role, ...patch }) })).providers;
+        models.publish((await request("/v1/providers/role_model", { method: "POST", body: JSON.stringify({ scope: state.scope, role, ...patch }) })).providers); // a providers read still out cannot undo the pick
         notice(done);
       } catch (e) { notice(e.message === "access_denied" ? "이 계정은 역할별 모델을 바꿀 수 없어요." : "저장하지 못했어요."); }
       draw();

@@ -255,11 +255,8 @@ export function createSkillViews(deps) {
     return wrap;
   }
 
-  function keepFocus(sel) {
-    const was = document.activeElement?.closest?.(sel);
-    const input = was?.querySelector("input"), start = input?.selectionStart, end = input?.selectionEnd;
-    return () => { if (!was) return; const n = deps.$(`${sel} input`); if (n) { n.focus({ preventScroll: true }); n.setSelectionRange(start, end); } };
-  }
+  // The list's search box sits in #controls, which the list redraw rebuilds: take the snapshot before clearing it.
+  const keepFocus = () => globalThis.ArkismKeep.view(deps.$("#controls"));
 
   function skillRow({ sk, copies, open, copyIndex: i }) {
     const cell = deps.el("div", "v4s-text");
@@ -301,7 +298,7 @@ export function createSkillViews(deps) {
     // The first page failed: one message in the list, no 0개 and no empty-filter text beside it.
     const failed = !!catalogState.error && !skills.length;
     deps.$("#title-count").textContent = deps.$("#title")?.classList.contains("sr-only") || failed || catalogState.total === null && !catalogState.ready ? "" : `${catalogState.total ?? live.length}개`; // no 0개 before the first page
-    const restore = keepFocus(".v4s-search");
+    const restore = keepFocus();
     // 확인해 주세요: what needs a look, the first kind with any opens with 하나씩 확인하기.
     const parts = [];
     const todo = [["caution", "보안 주의"], ["update", "업데이트"], ["adapter", "어댑터 필요"]].filter(([k]) => n[k]);

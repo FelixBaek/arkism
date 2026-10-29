@@ -98,6 +98,7 @@ class Element {
   close(v) { this.open = false; if (v !== undefined) this.returnValue = v; this.dispatchEvent(makeEvent("close", { bubbles: false })); }
   closest(sel) { const m = matcher(sel); let n = this; while (n && n.nodeType === 1) { if (m(n)) return n; n = n.parentNode; } return null; }
   matches(sel) { return matcher(sel)(this); }
+  contains(n) { for (; n; n = n.parentNode) if (n === this) return true; return false; }
   _walk(out = []) { for (const c of this.childNodes) if (c.nodeType === 1) { out.push(c); c._walk(out); } return out; }
   querySelectorAll(sel) { const m = matcher(sel); return this._walk().filter(m); }
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }

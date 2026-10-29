@@ -9,8 +9,9 @@ window.ArkismOriginals = (ctx) => {
   const valid = (value) => value?.authority === authority;
   const originalView = () => state.view === "memories" && state.memTab === "originals";
   const date = (value) => value ? new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR") : "시각 없음";
-  let key = "", rows = null, next = "", term = "", error = "", busy = false, run = 0, selection = null, omitted = false;
-  function reset() { $("#table").removeAttribute("aria-busy"); key = ""; rows = null; next = ""; term = ""; error = ""; busy = false; selection = null; omitted = false; run++; }
+  let key = "", rows = null, next = "", term = "", error = "", busy = false, selection = null, omitted = false;
+  const loads = globalThis.ArkismKeep.latest();
+  function reset() { $("#table").removeAttribute("aria-busy"); key = ""; rows = null; next = ""; term = ""; error = ""; busy = false; selection = null; omitted = false; loads.cancel(); }
   function messageReader(host, ref, live) {
     let offset = 0, current = ref, loading = false, text = "";
     const content = el("pre", "original-text");
@@ -136,18 +137,18 @@ window.ArkismOriginals = (ctx) => {
   }
   async function load(more = false) {
     if (busy) return;
-    const owner = identity(), current = ++run; busy = true; error = "";
+    const owner = identity(), current = loads.begin(); busy = true; error = "";
     if (!more) { rows = []; next = ""; selection = null; omitted = false; state.selected = null; detail(); }
     paint();
     try {
       const page = await post(term ? "search" : "list", { ...(term ? { q: term } : {}), after: more ? next : "", limit: 20 });
-      if (!originalView() || owner !== identity() || current !== run) return;
+      if (!originalView() || owner !== identity() || !current.live()) return;
       if (!valid(page) || !Array.isArray(page.items) || (page.next_cursor && page.next_cursor === next)) throw new Error("invalid_response");
       rows = [...rows, ...page.items]; next = page.next_cursor || "";
       omitted ||= hasSkipped(page);
     } catch (_) {
-      if (originalView() && owner === identity() && current === run) error = "원문을 불러오지 못했어요. 연결과 접근 권한을 확인하세요.";
-    } finally { if (current === run) { busy = false; paint(); } }
+      if (originalView() && owner === identity() && current.live()) error = "원문을 불러오지 못했어요. 연결과 접근 권한을 확인하세요.";
+    } finally { if (current.live()) { busy = false; paint(); } }
   }
   function draw() {
     if (key !== identity()) { reset(); key = identity(); }

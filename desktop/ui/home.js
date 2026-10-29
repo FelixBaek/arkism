@@ -11,7 +11,8 @@ window.ArkismHome = function (ctx) {
 
   // ------------------------------------------------------------ 전체 검색
   const MAX_EACH = 4;
-  let box = null, hits = [], active = 0, serverHits = [], serverQ = "", timer = 0, ticket = 0;
+  let box = null, hits = [], active = 0, serverHits = [], serverQ = "", timer = 0;
+  const searches = globalThis.ArkismKeep.latest(); // a slower search for an older query never replaces a newer one
   const has = (text, q) => String(text || "").toLowerCase().includes(q);
   function popover() {
     if (box) return box;
@@ -57,13 +58,13 @@ window.ArkismHome = function (ctx) {
     clearTimeout(timer);
     if (q.length < 2) { serverHits = []; serverQ = q; return; }
     timer = setTimeout(async () => {
-      const t = ++ticket;
+      const t = searches.begin();
       const body = { scope: state.scope, query: q, modes: ["exact", "fts", "vector"], purpose: "answer", destination: "internal", limit: MAX_EACH };
       let items;
-      try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify(body) }))?.items || []; } catch (_) {
-        try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify({ ...body, modes: ["exact", "fts"] }) }))?.items || []; } catch (_) { items = []; }
+      try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify(body), signal: t.signal }))?.items || []; } catch (_) {
+        try { items = (await request("/v1/search", { method: "POST", body: JSON.stringify({ ...body, modes: ["exact", "fts"] }), signal: t.signal }))?.items || []; } catch (_) { items = []; }
       }
-      if (t !== ticket) return;
+      if (!t.live()) return;
       serverHits = items; serverQ = q;
       if (!box?.hidden) paint();
       if (pal?.open) paintPal();

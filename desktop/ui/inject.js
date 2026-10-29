@@ -117,7 +117,8 @@
   window.ArkismInject = (ctx) => {
     const { state, el, button, request, query, section, facts } = ctx;
     const raw = (node) => { node.setAttribute("data-no-i18n", ""); return node; };
-    let repo = "", session = null, prompt = null, busy = "", error = "", promptText = "", tokens = {}, ticket = 0;
+    let repo = "", session = null, prompt = null, busy = "", error = "", promptText = "", tokens = {};
+    const loads = globalThis.ArkismKeep.latest(); // the session preview and the prompt preview share one busy slot
     const identity = () => JSON.stringify([state.server, state.token, state.scope]);
     let key = "", host = null; // host: the body of the open popup (no page of its own: 설정 and 기억 both open it in place)
     const use7 = () => effect(state.data.tools?.memory_use);
@@ -154,27 +155,27 @@
       }
     }
     async function loadSession() {
-      const t = ++ticket; busy = "session"; error = ""; paint();
+      const t = loads.begin(); busy = "session"; error = ""; paint();
       try {
         const res = sessionPreview(await standing(), repo);
         res.count = await countTokens(res.text).catch(() => null);
-        if (t !== ticket) return;
+        if (!t.live()) return;
         session = res;
-      } catch (e) { if (t === ticket) error = `불러오지 못했어요 (${e.message}).`; }
-      if (t === ticket) { busy = ""; paint(); }
+      } catch (e) { if (t.live()) error = `불러오지 못했어요 (${e.message}).`; }
+      if (t.live()) { busy = ""; paint(); }
     }
     async function tryPrompt(text) {
       promptText = text;
       const clean = text.trim();
       if (len(clean) < 8) { prompt = { text: "", chars: 0, included: [], short: true }; paint(); return; }
-      const t = ++ticket; busy = "prompt"; error = ""; paint();
+      const t = loads.begin(); busy = "prompt"; error = ""; paint();
       try {
         const res = promptPreview(await recall(clean), repo);
         res.count = await countTokens(res.text).catch(() => null);
-        if (t !== ticket) return;
+        if (!t.live()) return;
         prompt = res;
-      } catch (e) { if (t === ticket) error = `찾지 못했어요 (${e.message}).`; }
-      if (t === ticket) { busy = ""; paint(); }
+      } catch (e) { if (t.live()) error = `찾지 못했어요 (${e.message}).`; }
+      if (t.live()) { busy = ""; paint(); }
     }
 
     function codeBox(name, text) {

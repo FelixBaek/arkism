@@ -1,6 +1,7 @@
 // modules/skillSimilarity.mjs: small catalogs answer at once and cache; a newer read retires an older chunked one.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 
 test("small catalogs answer synchronously, skip deprecated skills and reuse the same answer", async () => {
   const { createSkillSimilarity } = await import("./modules/skillSimilarity.mjs");

@@ -1,6 +1,7 @@
 // 라우팅 현황 (routing.js + routing-turns.js) and 설정 › 라우팅 설정: drawn into a DOM stand-in from fixed server replies.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();

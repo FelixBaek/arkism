@@ -19,7 +19,7 @@ window.ArkismUsage = (ctx) => {
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
   const DECISIONS = { clef: "판정 모델이 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;
-  let epoch = 0;
+  const loads = globalThis.ArkismKeep.latest();
 
   const num = (n) => {
     n = Number(n || 0);
@@ -47,13 +47,13 @@ window.ArkismUsage = (ctx) => {
     const quiet = silent === true;
     if (!quiet) DEC.key = ""; // 새로고침 also asks for the decision counts again
     if (quiet && S.state !== "ready") return;
-    const ticket = ++epoch, key = loadKey();
+    const ticket = loads.begin(), key = loadKey();
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
     try {
       const router = menu() === "router", ovRange = OV_RANGE[S.range];
       const [doc, ov] = await Promise.all([request(`/v1/usage/summary?${query({ range: S.range, ...(S.source && !router ? { source: S.source } : {}) })}`),
         router && ovRange ? request(`/v1/routing/overview?${query({ range: ovRange })}`).catch(() => null) : Promise.resolve(null)]);
-      if (ticket !== epoch || (quiet && ctx.canRefresh?.() === false)) return;
+      if (!ticket.live() || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
       const next = ov?.authority === "data_only_untrusted" ? ov : null;
       const same = JSON.stringify(S.doc) === JSON.stringify(doc) && JSON.stringify(S.ov) === JSON.stringify(next);
@@ -61,7 +61,7 @@ window.ArkismUsage = (ctx) => {
       if (quiet && same) return;
       S.doc = doc; S.ov = next; S.state = "ready";
     } catch (e) {
-      if (ticket !== epoch || quiet) return;
+      if (!ticket.live() || quiet) return;
       S.doc = null; S.state = unsupported(e) ? "unsupported" : "error"; S.error = e.message;
     }
     paint();
@@ -583,7 +583,7 @@ window.ArkismUsage = (ctx) => {
     agents: () => (S.doc?.agents || []).map((a) => a.name),
     agentCounts: () => (S.doc?.agents || []).map((a) => [a.name, a.all_sessions]),
     load, refresh: () => load(true), count: () => (S.doc?.requests?.count ? num(S.doc.requests.count) : ""), // only the ROUTER 사용량 tab shows it
-    reset: () => { epoch++; Object.assign(S, { doc: null, state: "idle", session: null }); },
+    reset: () => { loads.cancel(); Object.assign(S, { doc: null, state: "idle", session: null }); },
     leave: () => { S.session = null; },
     views: { usage: { title: () => (S.session ? S.session.title || "(제목 없음)" : "사용량"), sub, render: renderView,
       get keepDetail() { return !!S.session || S.tab !== "overview"; },

@@ -182,9 +182,9 @@ export function createMemoryList(deps) {
     const q = deps.el("input"); q.type = "search"; q.placeholder = "기억 검색"; q.setAttribute("aria-label", "기억 검색"); q.value = deps.$("#search").value;
     q.addEventListener("input", () => {
       deps.$("#search").value = q.value; deps.memory.query = q.value.trim().toLowerCase();
-      const at = q.selectionStart;
+      const restore = globalThis.ArkismKeep.view(document.body);
       deps.render(false);
-      const again = deps.$(".panel-search input"); again?.focus(); again?.setSelectionRange(at, at);
+      restore();
     });
     search.append(deps.icon("magnifying-glass"), q);
     return search;

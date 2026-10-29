@@ -2,6 +2,7 @@
 // MEMORY › 개요 stage windows on a small DOM stand-in.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
 const h = dom.helpers(document);

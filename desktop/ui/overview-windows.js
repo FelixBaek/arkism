@@ -100,11 +100,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const pages = ctx.remoteCollection((body, page) => sessions
       ? request(`${path}?${query({ ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) })}`)
       : request(path, { method: "POST", body: JSON.stringify({ scope: state.scope, ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }) }));
-    let active = "", ticket = 0;
+    let active = "";
+    const loads = globalThis.ArkismKeep.latest();
     async function load(more = false) {
-      const epoch = ++ticket;
+      const epoch = loads.begin();
       try { await pages.load(filters(), more); } catch { /* snapshot retains the rows and retry state */ }
-      if (epoch === ticket && d.isConnected && generation === state.connection.generation) paint();
+      if (epoch.live() && d.isConnected && generation === state.connection.generation) paint();
     }
     function snapshot() {
       const body = filters(), key = JSON.stringify(body);
@@ -117,7 +118,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!snap.loading || snap.items.length) host.append(el("p", "ov-wide-foot-note", snap.loading ? "불러오는 중…" : snap.error ? `불러오지 못했어요 (${snap.error}).` : `${num(snap.items.length)} / ${num(snap.total ?? 0)} · 전체에서 검색·정렬`));
       if (snap.cursor || snap.error) { const b = button(snap.error ? "다시 시도" : "더 보기", "small", null, () => load(true)); b.disabled = snap.loading; host.append(b); }
     }
-    d.addEventListener("close", () => { ticket++; pages.reset(); });
+    d.addEventListener("close", () => { loads.cancel(); pages.reset(); });
     return { snapshot, footer };
   }
 

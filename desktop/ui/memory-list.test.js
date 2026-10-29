@@ -2,6 +2,7 @@
 // Memory list (modules/memoryList.mjs), candidate groups (candidateGroups.mjs) and focus retention (listFocus.mjs).
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/fake-dom.cjs");
 
 const DAY = 86400000;

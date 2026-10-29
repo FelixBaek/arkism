@@ -1,6 +1,7 @@
 // Behavior tests for the automation window (crew-automation.js), the shared popup (crew-popup.js) and the cover picker (team-cover.js).
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom } = require("./testdata/crew-harness.cjs");
 
 const skipClose = (n) => n.matches(".crew-popup-close") || /^(취소|닫기)$/.test(n.textContent.trim());
@@ -109,6 +110,24 @@ test("cover picker: search, more, pick, clear, upload and errors", async () => {
   assert.ok(picks.some((p) => p?.id === "mine"));
   assert.equal(notices.length, 2);
   assert.deepEqual(clean(), []);
+});
+
+test("cover picker: an older search that fails late does not wipe the newer results (team-cover seq guard)", async () => {
+  const h = await boot();
+  const out = [];
+  const request = (url) => new Promise((resolve, reject) => out.push({ url, resolve, reject }));
+  const picker = window.ArkismCoverPicker({ el: (t, c, x) => { const n = document.createElement(t); if (c) n.className = c; if (x) n.textContent = x; return n; }, icon: () => document.createElement("i"),
+    request, query: (o) => new URLSearchParams(o).toString(), state: { scope: { project_id: "p1" } }, notice() {} });
+  picker.open({ current: null, onPick() {} }); await h.settle();
+  const d = document.querySelector("dialog.tp-cover");
+  const q = d.querySelector("input[type=search]");
+  q.value = "old"; dom.key(q, "Enter");
+  q.value = "new"; dom.key(q, "Enter");
+  const older = out.find((c) => /q=old/.test(c.url)), newer = out.find((c) => /q=new/.test(c.url));
+  newer.resolve({ items: [{ id: "n1", url: "u", thumb: "tn", author: "가" }], total_pages: 1 }); await h.settle();
+  older.reject(new Error("boom")); await h.settle();
+  assert.deepEqual([...d.querySelectorAll(".tp-cover-ph img")].map((i) => i.src), ["tn"]);
+  assert.doesNotMatch(d.textContent, /찾지 못했어요/);
 });
 
 const exact = (root, text) => [...root.querySelectorAll("button")].find((b) => b.textContent.trim() === text);

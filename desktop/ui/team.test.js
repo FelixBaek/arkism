@@ -1,6 +1,7 @@
 // Behavior tests for the team pages (team.js): teams, the team window, meetings, Discord and usage.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom, iso } = require("./testdata/crew-harness.cjs");
 
 const skipClose = (n) => n.matches(".crew-popup-close") || /^(취소|닫기)$/.test(n.textContent.trim());

@@ -15,6 +15,7 @@ let want = "ko";
 window.ArkismLook = { get: () => ({ lang: want }) };
 const confirmed = [];
 window.confirm = (m) => { confirmed.push(m); return true; };
+require("./keep.js");
 require("./i18n.js");
 const I = window.ArkismI18n;
 const { $, flush } = dom;

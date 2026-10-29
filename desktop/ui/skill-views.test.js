@@ -1,6 +1,7 @@
 // 스킬 (modules/skillViews.mjs): checks, the list and its filters, staged agent changes, the detail and the in-view pages.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 const mod = import("./modules/skillViews.mjs");
 

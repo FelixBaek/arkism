@@ -15,15 +15,15 @@ window.ArkismOverview = (ctx) => {
 
   // ---------------------------------------------------------------- data
   const S = { sessions: null, total: 0, cursor: "", at: 0, g: -1, loading: false, failed: false };
-  let sessionEpoch = 0;
+  const sessionLoads = globalThis.ArkismKeep.latest();
   async function loadSessions() {
     // the minute cache holds within one load; a reload (new generation) reads again, so a failed read is retried (#187)
     if (S.loading || (S.g === state.connection.generation && Date.now() - S.at < 60000)) return;
     S.loading = true;
-    const ticket = ++sessionEpoch, generation = state.connection.generation;
+    const ticket = sessionLoads.begin(), generation = state.connection.generation;
     let doc = null, failed = false;
     try { doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`); } catch { failed = true; }
-    if (ticket !== sessionEpoch) return; // reset() cleared S meanwhile
+    if (!ticket.live()) return; // reset() cleared S meanwhile
     S.loading = false;
     if (generation !== state.connection.generation) { void loadSessions(); return; } // reloaded meanwhile: read for the new load
     if (failed) { S.sessions = S.sessions || []; S.failed = true; }
@@ -334,7 +334,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
-    reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
+    reset() { sessionLoads.cancel(); Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     usageChanged: () => win?.usageChanged(), // app.js loadUsage: an open 사용량 window shows the result
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }

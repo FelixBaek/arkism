@@ -1022,7 +1022,8 @@ export function createCrewWorkers(deps) {
       if (isNew) return;
       acts.append(estimateNode()); // no on/off switch here (user request); 켜기 and 전문가 삭제 sit at the end of 개요
     };
-    wk.redraw = () => { const sc = wk.scrollKeep ?? pop.body.scrollTop; wk.scrollKeep = sc; pop.select(wk.tab); pop.body.scrollTop = sc; requestAnimationFrame(() => { pop.body.scrollTop = sc; wk.scrollKeep = null; }); };
+    // redraws within one frame keep what the first one saw; the frame after puts the scroll back once layout settles
+    wk.redraw = () => { const restore = wk.held ??= globalThis.ArkismKeep.view(pop.body, pop.body); pop.select(wk.tab); restore(); requestAnimationFrame(() => { restore(); wk.held = null; }); };
     if (isNew) names.replaceChildren(deps.el("h2", ""), deps.el("p", ""));
     wk.paintHead();
     wk.paintAct();

@@ -26,7 +26,8 @@ window.ArkismKnowledge = (ctx) => {
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: PROFILES[0][0], q: "", busy: false, result: null, error: "" },
     busy: false, notice: "", remove: null, upload: null
   };
-  let epoch = 0, typing = 0;
+  let typing = 0;
+  const loads = globalThis.ArkismKeep.latest(); // "sources" and "wiki": a newer read or reset() drops the older answer
   const live = () => state.view === "knowledge";
   // Last heading of "A › B / C": split, then trim beside each separator — the same pieces as /\s*[›>/]\s*/ without its backtracking.
   const leafOf = (path) => { const p = path.split(/[›>/]/); return p.map((x, i) => (i ? x.trimStart() : x)).map((x, i) => (i < p.length - 1 ? x.trimEnd() : x)).filter(Boolean).pop() || "(제목 없음)"; };
@@ -41,24 +42,24 @@ window.ArkismKnowledge = (ctx) => {
 
   const sourceFilters = () => ({ q: K.src.q, state: K.src.status || "all", sort: K.src.sort, format: K.src.format });
   const sourcePages = ctx.remoteCollection((filters, page) => post("/v1/knowledge/sources/query", { ...filters, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }));
-  let sourceBusy = false, sourceError = "", sourceEpoch = 0;
+  let sourceBusy = false, sourceError = "";
   async function loadSources(more = false) {
-    const ticket = ++sourceEpoch, filters = sourceFilters(); sourceBusy = true; sourceError = "";
+    const ticket = loads.begin("sources"), filters = sourceFilters(); sourceBusy = true; sourceError = "";
     if (!more && !sourcePages.snapshot(filters).ready) { K.sources = []; K.total = 0; }
     paint();
     try {
       const page = await sourcePages.load(filters, more);
-      if (ticket !== sourceEpoch || !page) return;
+      if (!ticket.live() || !page) return;
       K.sources = page.items; K.total = page.total; K.facets = page.facets; K.state = "ready";
-    } catch (e) { if (ticket === sourceEpoch) { sourceError = e.message; if (!K.sources.length) K.state = off(e) ? "off" : "error"; K.error = e.message; } }
-    if (ticket === sourceEpoch) { sourceBusy = false; paint(); }
+    } catch (e) { if (ticket.live()) { sourceError = e.message; if (!K.sources.length) K.state = off(e) ? "off" : "error"; K.error = e.message; } }
+    if (ticket.live()) { sourceBusy = false; paint(); }
   }
   // ---------------------------------------------------------------- load
   async function load() {
-    const ticket = ++epoch;
+    const ticket = loads.begin("wiki");
     K.state = K.state === "ready" ? "ready" : "loading"; paint();
     const [, p, g, j] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
-    if (ticket !== epoch) return;
+    if (!ticket.live()) return;
     if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = p.value.items; K.wiki = "ready"; }
     else { K.pages = []; K.wiki = p.status === "rejected" && off(p.reason) ? "off" : "error"; }
     K.links = g.status === "fulfilled" && Array.isArray(g.value?.links) ? g.value.links : [];
@@ -631,7 +632,7 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   return {
-    reset: () => { sourcePages.reset(); sourceEpoch++; sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; epoch++; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
+    reset: () => { sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
     views: { knowledge: {
       title: () => (K.doc ? K.sources.find((x) => x.id === K.doc)?.display_name || "지식" : "지식"),
       sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 조각 단위로 찾아 써요. 새 버전은 다시 검토해야 검색에 나와요." : "올려 둔 자료를 잘게 나눠 AI가 찾아 써요. 위키는 AI가 자료를 묶어 쓴 문서이고, 검토한 뒤에 쓰여요."),

@@ -330,9 +330,9 @@ window.ArkismTeams = (ctx) => {
     const pop = S.pop;
     if (!pop?.h?.dialog.isConnected || pop.tab !== tab) return;
     // every box that may be the one scrolling (the body, the dialog in a short window, the page in a 새 창으로 window)
-    const kept = [pop.h.body, pop.h.dialog, document.scrollingElement].filter(Boolean).map((e) => [e, e.scrollTop]);
+    const restore = globalThis.ArkismKeep.view(pop.h.body, pop.h.dialog, document.scrollingElement);
     pop.h.select(tab);
-    for (const [e, top] of kept) e.scrollTop = top;
+    restore();
   }
   // 판 이력 from the server (GET /v1/crew/versions/{id}): the live definition first, then the ones each save replaced.
   async function loadVersions(pop) {
@@ -1288,10 +1288,9 @@ window.ArkismTeams = (ctx) => {
   }
   // Re-draw the meeting screen without losing what the person is typing in the note box.
   function repaintMeetings() {
-    const focused = document.activeElement?.classList?.contains("tm-note-input");
-    const pos = focused ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
+    const restore = globalThis.ArkismKeep.view(document.body);
     render(false);
-    if (focused) { const n = $(".tm-note-input"); if (n) { n.focus(); try { n.setSelectionRange(...pos); } catch { /* number input */ } } }
+    restore();
   }
   function renderMeetings() {
     ctx.headExtras?.({ aside: [button("팀 보기", "tm-outline", null, () => go("teams")), button("새 회의", "primary", null, () => { S.newMeeting = { team_id: S.meeting?.team_id || teams()[0]?.id || "" }; render(false); })] });
@@ -1854,20 +1853,21 @@ window.ArkismTeams = (ctx) => {
   // Everything the usage API does not sum up is worked out here from the same data: runs and meetings are read once more
   // (newest 200 / 50) for each table's 시작·평균 시간·마지막 실패·마지막 회의; 쓰는 곳 comes from the crew records.
   const USAGE_FILTERS = [["all", "전체"], ["agent", "전문가"], ["team", "팀"], ["workflow", "자동화"]];
+  const usageLoads = globalThis.ArkismKeep.latest(); // a 기간 change while a read is out: the older answer is dropped
   async function loadUsage() {
     S.uState = "loading"; paintUsage();
-    const ticket = (S.uTicket = (S.uTicket || 0) + 1);
+    const ticket = usageLoads.begin();
     try {
       const [doc, runs, meets] = await Promise.all([
         request(`/v1/crew/usage?${query({ range: S.uRange })}`),
         request(`/v1/crew/runs?${query({ limit: 200 })}`).catch(() => null),
         request(`/v1/crew/meetings?${query({ status: "all", limit: 50 })}`).catch(() => null)]);
       if (!S.discord) await loadDiscord(true);
-      if (ticket !== S.uTicket) return;
+      if (!ticket.live()) return;
       if (!doc || !doc.kpi) throw new Error("invalid_response");
       S.usage = doc; S.uRuns = runs?.items || []; S.uMeets = meets?.items || []; S.uState = "ready";
     } catch (e) {
-      if (ticket !== S.uTicket) return;
+      if (!ticket.live()) return;
       S.usage = null; S.uState = unsupported(e) ? "unsupported" : "error"; S.uErr = e.message;
     }
     paintUsage();

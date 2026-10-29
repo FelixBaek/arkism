@@ -15,7 +15,7 @@ window.ArkismRouting = (ctx) => {
   const S = { range: "24h", doc: null, state: "idle", error: "", eventKind: "all", eventsAll: false, settings: null, settingsState: "idle", selected: "", draft: {}, busy: "",
     groups: null, groupDraft: null, group: "", trial: { text: "", out: null, busy: false } };
   const EVENTS_SHOWN = 5;
-  let epoch = 0;
+  const loads = globalThis.ArkismKeep.latest(); // "overview" (ROUTER screens) and "settings" (설정 › 라우팅 설정)
 
   const num = (n) => (n == null ? "—" : Number(n).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR"));
   const sec1 = (ms) => (ms == null ? "—" : (ms / 1000).toFixed(1));
@@ -28,24 +28,24 @@ window.ArkismRouting = (ctx) => {
   async function load(silent = false) {
     const quiet = silent === true;
     if (quiet && S.state !== "ready") return;
-    const ticket = ++epoch;
+    const ticket = loads.begin("overview");
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
     // The skill decision log fills its card when it lands; a server without it (or a failed read) only hides that card.
     const skills = request(`/v1/routing/skills?${query({})}`).then((r) => (Array.isArray(r?.items) ? r.items : undefined), () => undefined);
     try {
       const doc = await request(`/v1/routing/overview?${query({ range: S.range })}`);
-      if (ticket !== epoch || (quiet && ctx.canRefresh?.() === false)) return;
+      if (!ticket.live() || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
       doc.skill_routes = S.doc?.skill_routes; // keep the card until the new list lands
       if (!quiet || JSON.stringify(S.doc) !== JSON.stringify(doc)) { S.doc = doc; S.state = "ready"; S.at = new Date(); paint(); }
     } catch (e) {
-      if (ticket !== epoch || quiet) return;
+      if (!ticket.live() || quiet) return;
       S.doc = null; S.state = unsupported(e) ? "unsupported" : "error"; S.error = e.message;
       paint();
       return;
     }
     const items = await skills;
-    if (ticket !== epoch || !S.doc || JSON.stringify(S.doc.skill_routes) === JSON.stringify(items)) return;
+    if (!ticket.live() || !S.doc || JSON.stringify(S.doc.skill_routes) === JSON.stringify(items)) return;
     S.doc.skill_routes = items; paint();
   }
   const paint = () => { if (state.view === "routing") render(false); };
@@ -374,20 +374,19 @@ window.ArkismRouting = (ctx) => {
   }
 
   // ------------------------------------------------------------------ 설정 › 라우팅 설정
-  let settingsEpoch = 0;
   async function loadSettings() {
-    const ticket = ++settingsEpoch;
+    const ticket = loads.begin("settings");
     S.settingsState = "loading";
     try {
       const [doc, ov, groups] = await Promise.all([request(`/v1/routing/models?${query()}`), request(`/v1/routing/overview?${query({ range: "1h" })}`),
         request(`/v1/routing/groups?${query()}`).catch((e) => (unsupported(e) ? null : Promise.reject(e)))]); // older servers have no groups
-      if (ticket !== settingsEpoch) return; // left the tab meanwhile
+      if (!ticket.live()) return; // left the tab meanwhile
       if (doc?.authority !== "data_only_untrusted" || !Array.isArray(doc.items) || !ov?.policy) throw new Error("invalid_response");
       S.settings = doc; S.policy = ov.policy; S.failoverDraft = null; S.settingsState = "ready";
       S.groups = groups && Array.isArray(groups.items) ? groups : null; S.groupDraft = null;
       if (!S.groups?.items.some((g) => g.id === S.group)) S.group = "";
       if (!doc.items.some((m) => m.id === S.selected)) S.selected = doc.items[0]?.id || "";
-    } catch (e) { if (ticket !== settingsEpoch) return; S.settings = null; S.settingsState = unsupported(e) ? "unsupported" : "error"; S.error = e.message; }
+    } catch (e) { if (!ticket.live()) return; S.settings = null; S.settingsState = unsupported(e) ? "unsupported" : "error"; S.error = e.message; }
     if (state.view === "settings" && state.settingsTab === "routing") render(false);
   }
   async function savePolicySettings(patch) {
@@ -681,10 +680,10 @@ window.ArkismRouting = (ctx) => {
   return {
     refresh: () => load(true),
     render: renderView, detail, tab, load, loadSettings, count: () => S.doc?.models?.length || "",
-    reset: () => { epoch++; Object.assign(S, { doc: null, state: "idle", settings: null, settingsState: "idle", draft: {} }); },
-    leave: () => { if (S.state !== "idle") { epoch++; Object.assign(S, { doc: null, state: "idle" }); } }, // read again next time the screen opens
+    reset: () => { loads.cancel(); Object.assign(S, { doc: null, state: "idle", settings: null, settingsState: "idle", draft: {} }); },
+    leave: () => { if (S.state !== "idle") { loads.cancel("overview"); Object.assign(S, { doc: null, state: "idle" }); } }, // read again next time the screen opens
     // 라우팅 설정 lists the models turned on in 설정 › 에이전트: read them again every time the tab opens.
-    leaveSettings: () => { if (S.settingsState !== "idle") { settingsEpoch++; Object.assign(S, { settings: null, settingsState: "idle", draft: {}, failoverDraft: null }); } },
+    leaveSettings: () => { if (S.settingsState !== "idle") { loads.cancel("settings"); Object.assign(S, { settings: null, settingsState: "idle", draft: {}, failoverDraft: null }); } },
     views: { routing: { title: "라우팅 현황", render: renderView, keepDetail: true,
       sub: () => (S.state === "ready" && S.at ? `실시간 · 10초마다 갱신 · 마지막 ${S.at.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour12: false })}` : "판정 모델이 요청을 나누고, 막히면 다음 모델로 넘겨요"),
       head: () => {

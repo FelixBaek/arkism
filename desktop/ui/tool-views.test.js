@@ -58,7 +58,7 @@ function setup({ handler, data = tools(), tauri = null } = {}) {
     renderStatusCard: () => log.push("status"), render: (x) => log.push(["render", x]), renderDetail: () => log.push("detail"), openDetail: () => log.push("open"),
     notice: (t) => notices.push(t),
     headExtras: (x) => log.push(["head", x]),
-    keepFocus: (sel) => { log.push(["keep", sel]); return () => log.push("restored"); },
+    keepFocus: () => { log.push(["keep"]); return () => log.push("restored"); },
     shownAgents: () => AGENTS.slice(0, 3),
     panelSearch: (ph) => { const w = h.el("div", "v4s-search"), i = h.el("input"); i.placeholder = ph; w.append(i); return w; },
     filterMenu: (key, groups) => Object.assign(h.el("div", "v4s-filter"), { key, groups }),

@@ -1190,7 +1190,7 @@ export function startApp() {
       return;
     }
     if (state.view === "skills" && !state.versionsDone) void loadVersions(state.connection.generation);
-    const scroll = table.scrollTop;
+    const keepView = globalThis.ArkismKeep.view(table, table); // scroll, open sections and the field being typed in
     const page = pages.views[state.view] || crew.pages[state.view];
     $("#app").classList.toggle("wide", (!!page && !page.keepDetail) || popupDetail()); // TOOLS lists take the full width; an item opens in a popup
     if (!popupDetail()) itemPop?.dialog.close();
@@ -1210,7 +1210,7 @@ export function startApp() {
       ["#chips", "#stats", "#controls"].forEach((q) => $(q).replaceChildren()); // a page that wants controls draws them in render()
       page.render();
       if (state.view === "overview") appendLoadedNote(table);
-      table.scrollTop = scroll;
+      keepView();
       return;
     }
     if (state.view === "todo") { renderTodo(); appendLoadedNote(table); }
@@ -1221,7 +1221,7 @@ export function startApp() {
     if (state.view === "design") designViews.renderLibrary();
     if (state.view === "tools") toolViews.renderTools();
     if (state.view === "reviews") reviews.render();
-    table.scrollTop = scroll;
+    keepView();
     if (resetDetail || !state.selected) renderDetail();
   }
   function appendLoadedNote(table) {

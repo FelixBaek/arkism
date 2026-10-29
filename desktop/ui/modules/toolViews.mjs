@@ -296,7 +296,7 @@ export function createToolViews(deps) {
   function renderTools() {
     const t = deps.state.data.tools;
     const plugin = deps.state.toolTab === "plugin";
-    const table = deps.$("#table");
+    const table = deps.$("#table"), restore = deps.keepFocus();
     ["#controls", "#chips"].forEach((sel) => deps.$(sel).replaceChildren());
     if (!t) {
       deps.headExtras();
@@ -324,7 +324,6 @@ export function createToolViews(deps) {
     const all = plugin ? t.plugins : t.servers;
     const cats = (plugin ? TOOL_CATS.plugin : TOOL_CATS.mcp).map(([id, label, test]) => [id, label, test, all.filter(test).length]).filter(([, , , c]) => c);
     if (!cats.some(([id]) => id === deps.state.toolCat)) deps.state.toolCat = "all";
-    const restore = deps.keepFocus(".v4s-search");
     const pick = (field, v) => () => { deps.state[field] = v; deps.state.selected = null; deps.render(); };
     const bar = deps.el("div", "v4s-bar");
     bar.append(deps.panelSearch(plugin ? "플러그인 검색" : "MCP 검색"), deps.filterMenu(plugin ? "plugin" : "mcp", [

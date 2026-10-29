@@ -1,3 +1,4 @@
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 // The stock preview server (testdata/preview/serve.py) must pass the same page checks the app runs on load.
 const {test,before,after}=require('node:test');const assert=require('node:assert/strict');
 const {spawn}=require('node:child_process');const net=require('node:net');const path=require('node:path');

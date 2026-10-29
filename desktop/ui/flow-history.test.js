@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot } = require("./testdata/crew-harness.cjs");
 const result = (extra = {}) => ({ run_id: "run1", revision: 8, status: "succeeded", source_type: "agent", invocation_mode: "flow", result: "최종 결과", children: {}, ...extra });
 // A FLOW run's result lives in its workflow's 기록: open wf1's 기록 and pick its first run (run1).

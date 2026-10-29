@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush, Element } = require("./testdata/views-dom.js");
 Element.prototype.select = function () { this.selectionStart = 0; this.selectionEnd = this.value.length; };
 

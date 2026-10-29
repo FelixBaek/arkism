@@ -3,14 +3,15 @@
 (function (root) {
   "use strict";
   function create(read, size = 50) {
-    let serial = 0, key = "", items = [], cursor = "", ready = false, pending = null, error = "", failedRefresh = false, pageCount = 0, history = new Set(), metadata = null;
+    const loads = globalThis.ArkismKeep.latest(); // reset() drops a page read still on its way
+    let key = "", items = [], cursor = "", ready = false, pending = null, error = "", failedRefresh = false, pageCount = 0, history = new Set(), metadata = null;
     const snapshot = () => ({ key, items, cursor, ready, loading: !!pending, error, metadata });
-    function reset(next = "") { serial++; key = next; items = []; cursor = ""; ready = false; pending = null; error = ""; failedRefresh = false; pageCount = 0; history = new Set(); metadata = null; }
+    function reset(next = "") { loads.cancel(); key = next; items = []; cursor = ""; ready = false; pending = null; error = ""; failedRefresh = false; pageCount = 0; history = new Set(); metadata = null; }
     function load(next, refresh = false) {
       if (next !== key) reset(next);
       if (pending) return pending;
       if (ready && !cursor && !refresh) return Promise.resolve(items);
-      const epoch = serial, initial = refresh || !ready;
+      const epoch = loads.begin(), initial = refresh || !ready;
       const pages = refresh ? Math.max(1, pageCount) : 1;
       const task = (async () => {
         let after = initial ? "" : cursor, merged = initial ? [] : [...items];
@@ -18,7 +19,7 @@
         let readCount = initial ? 0 : pageCount, nextMetadata = metadata;
         for (let n = 0; n < pages; n++) {
           const page = await read(next, { limit: size, cursor: after });
-          if (epoch !== serial) return items;
+          if (!epoch.live()) return items;
           readCount++;
           if (!page || page.authority !== "data_only_untrusted" || !Array.isArray(page.items) || page.items.length > size || typeof page.next_cursor !== "string" || page.next_cursor.length > 2048) throw new Error("memory_page_invalid");
           for (const row of page.items) {
@@ -30,11 +31,11 @@
           visited.add(tail); after = tail; nextMetadata = page.metadata ?? null;
           if (!after) break;
         }
-        if (epoch === serial) { items = merged; cursor = after; ready = true; error = ""; failedRefresh = false; pageCount = readCount; history = visited; metadata = nextMetadata; }
+        if (epoch.live()) { items = merged; cursor = after; ready = true; error = ""; failedRefresh = false; pageCount = readCount; history = visited; metadata = nextMetadata; }
         return items;
       })();
       pending = task;
-      task.then(() => { if (epoch === serial) pending = null; }, e => { if (epoch === serial) { pending = null; error = String(e.message || e); failedRefresh = refresh; } });
+      task.then(() => { if (epoch.live()) pending = null; }, e => { if (epoch.live()) { pending = null; error = String(e.message || e); failedRefresh = refresh; } });
       return task;
     }
     return { snapshot, reset, load, retry: key => load(key, failedRefresh), refresh: key => load(key, true) };

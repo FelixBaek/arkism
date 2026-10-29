@@ -14,18 +14,18 @@ export function createCrewRunView(deps) {
   }
 
   // ---------------------------------------------------------------- run view (03b)
-  let pollEpoch = 0;
+  const polls = globalThis.ArkismKeep.latest();
   const sessionKey = () => JSON.stringify([deps.state.server, deps.state.scope, deps.state.token, deps.state.connection?.generation]);
   function stopPolling() {
-    pollEpoch++;
+    polls.cancel();
     if (deps.ed.timer) { clearTimeout(deps.ed.timer); deps.ed.timer = null; }
   }
   async function pollRun() {
     stopPolling();
-    const epoch = pollEpoch, session = sessionKey(), record = deps.ed.rec;
+    const epoch = polls.begin(), session = sessionKey(), record = deps.ed.rec;
     const key = deps.ed.run ? "run" : "test";
     const id = deps.ed[key]?.id;
-    const current = () => epoch === pollEpoch && session === sessionKey() && record === deps.ed.rec && deps.ed[key]?.id === id;
+    const current = () => epoch.live() && session === sessionKey() && record === deps.ed.rec && deps.ed[key]?.id === id;
     if (!id || !deps.ed.rec) return;
     try {
       const response = await deps.request(`/v1/crew/runs/${encodeURIComponent(id)}?${deps.query()}`);

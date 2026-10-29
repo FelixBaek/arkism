@@ -52,16 +52,17 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     foot.append(el("small", "", "Unsplash 무료 사진 · 찍은 사람 이름이 카드 구석에 같이 보여요"), more);
     dlg.append(head, box, chips, status, grid, foot);
 
-    let page = 1, query0 = "", seq = 0;
+    let page = 1, query0 = "";
+    const searches = globalThis.ArkismKeep.latest();
     const pick = (c) => { dlg.close(); onPick(c); };
     async function find(text, n) {
       query0 = text.trim();
       if (!query0) return;
-      const mine = ++seq;
+      const mine = searches.begin();
       status.textContent = "찾는 중…";
       try {
         const res = await request(`/v1/unsplash/search?${query({ q: query0, page: n })}`);
-        if (mine !== seq) return;
+        if (!mine.live()) return;
         page = n;
         if (n === 1) grid.replaceChildren();
         for (const ph of res.items || []) {
@@ -79,6 +80,7 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
         status.textContent = grid.childElementCount ? "" : "맞는 사진이 없어요. 다른 말로 찾아 보세요.";
         more.hidden = page >= Math.min(res.total_pages || 1, 50);
       } catch (e) {
+        if (!mine.live()) return; // an older search that failed late must not wipe the newer results
         grid.replaceChildren(); more.hidden = true;
         status.textContent = e.message === "dependency_unavailable"
           ? "Unsplash 키가 없어요. 서버에 ARKISM_UNSPLASH_KEY를 넣으면 검색할 수 있어요. 내 사진 올리기는 그대로 쓸 수 있어요."

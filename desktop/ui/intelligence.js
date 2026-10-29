@@ -11,9 +11,10 @@ window.ArkismIntelligence = (ctx, tab) => {
   const active = () => state.view === "memories" && state.memTab === tab;
   const identity = () => JSON.stringify([state.server, state.token, state.scope]);
   const labels = edges ? { candidate: "관측됨", inferred: "추정됨", confirmed: "확인됨" } : twin ? { candidate: "검토 대기", inferred: "추정됨", confirmed: "확인됨", superseded: "대체됨", rejected: "제외됨" } : { candidate: "검토 대기", validated: "검증됨", rejected: "제외됨", expired: "만료됨" };
-  let key = "", epoch = 0, subject = "", rows = [], selected = null, busy = false, error = "", searched = false;
+  const loads = globalThis.ArkismKeep.latest();
+  let key = "", subject = "", rows = [], selected = null, busy = false, error = "", searched = false;
   let detailHost = null, detailItem = null, detailOwner = "";
-  function reset() { detailHost = null; epoch++; key = ""; subject = ""; rows = []; selected = null; busy = false; error = ""; searched = false; }
+  function reset() { detailHost = null; loads.cancel(); key = ""; subject = ""; rows = []; selected = null; busy = false; error = ""; searched = false; }
   const evidenceCollections = new Set(["agent_runs", "execution_traces", "evaluations", "reflections", "sources", "memories", "memory_candidates", "tool_calls", "skill_versions"]);
   async function readRecord(collection, id, revision) {
     if (!evidenceCollections.has(collection) || typeof id !== "string" || !id || id.length > 256 || id === "." || id === "..") throw new Error("invalid_reference");
@@ -27,13 +28,13 @@ window.ArkismIntelligence = (ctx, tab) => {
   function reader(title, fetchContent) {
     const panel = el("details", "original-reader evidence-reader"), summary = el("summary", "", title), content = el("div");
     const owner = identity(), item = selected;
-    let version = 0;
+    const reads = globalThis.ArkismKeep.latest();
     panel.append(summary, content);
     panel.addEventListener("toggle", async () => {
-      const ticket = ++version;
+      const ticket = reads.begin();
       content.replaceChildren(); content.setAttribute("aria-busy", "false");
       if (!panel.open) return;
-      const live = () => panel.isConnected && panel.open && version === ticket && active() && identity() === owner && selected === item;
+      const live = () => panel.isConnected && panel.open && ticket.live() && active() && identity() === owner && selected === item;
       content.setAttribute("aria-busy", "true");
       const notice = el("p", "meta", "근거를 불러오는 중…"); notice.setAttribute("role", "status"); content.append(notice);
       try {
@@ -157,11 +158,11 @@ window.ArkismIntelligence = (ctx, tab) => {
     const quiet = silent === true;
     if (quiet && !searched) return;
     if (busy || !active() || (!twin && !edges && !subject)) return;
-    const ticket = ++epoch, current = identity();
+    const ticket = loads.begin(), current = identity();
     let changed = !quiet;
     busy = true;
     if (!quiet) { rows = []; selected = null; error = ""; detail(); paint(); }
-    const live = () => active() && ticket === epoch && current === identity();
+    const live = () => active() && ticket.live() && current === identity();
     try {
       const page = await request(edges ? `/v1/tacit/edges?${query()}` : twin ? `/v1/twin/claims?${query()}` : `/v1/reflections?${query({ subject })}`);
       if (!live() || (quiet && ctx.canRefresh?.() === false)) return;
