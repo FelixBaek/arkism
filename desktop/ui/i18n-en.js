@@ -6426,3 +6426,17 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",
   "스킬 {0}개 찾음 · {1} · SHA-256 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · SHA-256 {2} · {3} files · {4}"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요.": "The server doesn't know this choice yet. Update the server, then try again."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "이대로 적용": "Apply this"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "적용하면 이렇게 돼요. 아직 바뀌지 않았어요.": "This is what applying does. Nothing has changed yet."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요.": "The memory that stays is kept in use; the other one moves to memory history.",
+  "두 기억을 다 그대로 써요. 같은 제안은 다시 하지 않아요.": "Both memories stay in use. The same suggestion won't come back.",
+  "두 기억 다 더는 쓰이지 않아요. 기억 이력에는 남아요.": "Neither memory is used anymore. Both stay in memory history."
+});

@@ -249,6 +249,22 @@ test("기억 정리 제안: a contradiction's 둘 다 지우기 asks first, then
   await home();
 });
 
+test("기억 정리 제안: an older server's invalid_request on 둘 다 지우기 reads as plain Korean", async () => {
+  const fixture = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "testdata/preview/v1/maintenance_proposals.json"), "utf8"));
+  const only = { items: fixture.items.filter((p) => p.maintenance.type === "contradiction") };
+  hook = (a) => (a.method === "GET" && a.path.startsWith("/v1/maintenance_proposals") ? json(200, only) : null);
+  await openAll(/정리 제안/);
+  if (!/서로 다른 말을 하고 있어요/.test(t(app.$("#detail")))) { await press(/둘 다 두기/, 1000); await openAll(/정리 제안/); }
+  hook = (a) => a.method === "POST" && /\/decide$/.test(a.path) ? json(400, { code: "invalid_request" })
+    : a.method === "GET" && a.path.startsWith("/v1/maintenance_proposals") ? json(200, only) : null;
+  await press(/^둘 다 지우기$/, 50);
+  rows("dialog.cn-confirm[open] button").find((b) => b.value === "ok").click(); await app.settle(1000);
+  hook = () => null;
+  assert.match(t(app.$("#notice")), /서버를 최신 판으로 올린 뒤/);
+  assert.doesNotMatch(t(app.$("#notice")), /invalid_request/);
+  await home();
+});
+
 test("기억 검토 한 번에: apply sends the batch and counts what was skipped", async () => {
   await home();
   const r = byText(".todo-item", /기억 후보/);
