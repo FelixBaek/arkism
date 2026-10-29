@@ -78,6 +78,26 @@
       {
         "root": "repo",
         "path": "guide/roadmap/progress.md"
+      },
+      {
+        "root": "crew_lab",
+        "path": "contracts/crew_contract_v2.json"
+      },
+      {
+        "root": "crew_lab",
+        "path": "contracts/crew_contract_v2_validation.py"
+      },
+      {
+        "root": "crew_lab",
+        "path": "contracts/test_crew_contract_v2.py"
+      },
+      {
+        "root": "crew_lab",
+        "path": "contracts/crew_contract_v2_vectors.json"
+      },
+      {
+        "root": "crew_lab",
+        "path": "contracts/crew_contract_v2_delta.md"
       }
     ]
   },
@@ -221,7 +241,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "CRW-03",
-        "RTE-05"
+        "RTE-05",
+        "CRW-02"
       ]
     },
     {
@@ -263,7 +284,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "RTE-03",
-        "RTE-05"
+        "RTE-05",
+        "CRW-02"
       ]
     },
     {
@@ -321,7 +343,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "RTE-03",
-        "RTE-05"
+        "RTE-05",
+        "CRW-02"
       ]
     },
     {
@@ -330,7 +353,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "CRW-03",
-        "RTE-05"
+        "RTE-05",
+        "CRW-02"
       ]
     },
     {
@@ -340,6 +364,54 @@
       "requesters": [
         "CRW-02",
         "CRW-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/flow_attempts.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/flow_attempts_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/crewmain.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/crewmain_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/runnode.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/runnode_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
       ]
     }
   ],
@@ -3037,7 +3109,7 @@
       "id": "CRW-02",
       "issue": 154,
       "owner": "CRW-02",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3084,7 +3156,7 @@
           "path": "internal/crewrun/nodes.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-02"
+            "CRW-02.modules"
           ]
         },
         {
@@ -3092,7 +3164,7 @@
           "path": "internal/crewrun/receipts.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-02"
+            "CRW-02.modules"
           ]
         },
         {
@@ -3100,7 +3172,95 @@
           "path": "internal/crewrun/nodes_test.go",
           "owner": "INTEGRATION",
           "after": [
-            "CRW-02"
+            "CRW-02.modules"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/flow_attempts.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/flow_attempts_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/meeting_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/crewmain.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/crewmain_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/routing_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/runnode.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/runnode_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
           ]
         }
       ],
@@ -3252,7 +3412,7 @@
       "id": "CRW-05",
       "issue": 154,
       "owner": "CRW-05",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3426,7 +3586,7 @@
       "id": "RTE-01",
       "issue": 155,
       "owner": "RTE-01",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3450,7 +3610,7 @@
       "id": "RTE-02",
       "issue": 155,
       "owner": "RTE-02",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -4812,7 +4972,9 @@
     {
       "id": "CRW-02",
       "depends_on": [
-        "CRW-01"
+        "CRW-01",
+        "CRW-02.modules",
+        "CRW-01.execution_refs_v2"
       ],
       "condition": "required before acceptance",
       "kind": "acceptance"
@@ -5048,6 +5210,22 @@
       ],
       "condition": "conditional decision package only when actual research results are unavailable",
       "kind": "preparation"
+    },
+    {
+      "id": "CRW-02.modules",
+      "depends_on": [
+        "CRW-01"
+      ],
+      "kind": "acceptance",
+      "condition": "Owned helper API frozen, independently reviewed and handed off before serialized INTEGRATION edits; this is not CRW-02 card acceptance."
+    },
+    {
+      "id": "CRW-01.execution_refs_v2",
+      "depends_on": [
+        "CRW-01"
+      ],
+      "kind": "acceptance",
+      "condition": "Separately versioned execution-reference contract and canonical vectors independently reviewed. Preserve all accepted v1 bytes. Verified own roots are explicit collection/id pairs; null pairs remain unknown. Effect authority remains crew_runs only."
     }
   ],
   "handoff_rules": [
