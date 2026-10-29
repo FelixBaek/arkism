@@ -92,7 +92,7 @@ func (f *childStoreFake) CreateFlowChild(_ context.Context, parent Run, in FlowC
 		for id, item := range parent.State.Definitions {
 			snapshot.Agents[id] = item.Crew
 		}
-		f.meetings.recs[ref.ID] = MeetingRecord{ID: ref.ID, Revision: 1, Meeting: Meeting{Status: f.meetingStatus, TeamID: in.CrewID,
+		f.meetings.recs[ref.ID] = MeetingRecord{ID: ref.ID, Revision: 1, Meeting: Meeting{Status: f.meetingStatus, TeamID: in.CrewID, TeamRevision: parent.State.Definitions[in.CrewID].Revision,
 			Topic: in.Input, MaxRounds: 1, TeamSnapshot: snapshot, RootID: parent.State.RootID, ParentID: parent.ID, ParentNodeID: in.NodeID}}
 		f.meetings.mu.Unlock()
 	}
@@ -468,5 +468,193 @@ func TestFlowChildClientCarriesLeaseAndAttempt(t *testing.T) {
 	}
 	if err := c.CancelFlowChildren(context.Background(), parent); err != nil || calls != 2 {
 		t.Fatal("cancel request", calls, err)
+	}
+}
+
+// These are local typed/fake-store observations, never provider or child processes.
+func childObserverContext() (context.Context, *AttemptObserver) {
+	observer := NewAttemptObserver(nil)
+	scope := AttemptContext{Run: ObservationRun{Scope: ObservationScope{WorkspaceID: "w", ProjectID: "p"}}}
+	return WithAttemptContext(WithAttemptObserver(context.Background(), observer), scope), observer
+}
+func TestFlowObservationCallContextUsesActualLegacyRun(t *testing.T) {
+	ctx, _ := childObserverContext()
+	definition := Crew{Type: "workflow", Name: "actual definition"}
+	x := &runExec{e: &Engine{}, item: CrewItem{ID: "crew-definition", Revision: 11, Crew: definition}, run: Run{ID: "real-run", Revision: 27, State: RunState{CrewID: "crew-definition", CrewRevision: 11, Nodes: map[string]*NodeState{"n": {Runs: 3}}}}}
+	got, ok := AttemptContextFrom(x.callContext(ctx, "n"))
+	if !ok || got.Run.RunRef != (ObservationRef{Collection: "crew_runs", ID: "real-run", Revision: 27}) || got.NodeAttempt != 3 || got.Run.Definition.Ref.Revision != 11 || got.Run.InvocationMode != "legacy" || *got.Run.RootRunID != "real-run" || *got.Run.RootRunCollection != "crew_runs" || got.Run.Definition.DefinitionSHA256 == nil {
+		t.Fatalf("actual identity unavailable or fabricated: %+v", got)
+	}
+	if _, flow := x.callContext(ctx, "n").Value(flowCallScopeKey{}).(flowCallScope); flow {
+		t.Fatal("legacy observer invented FLOW scope")
+	}
+	if got := x.callContext(context.Background(), "n"); got != context.Background() {
+		t.Fatal("observer off changed legacy context")
+	}
+}
+func TestFlowObservationCallContextRefusesMissingActualVersions(t *testing.T) {
+	for _, part := range []string{"run", "definition", "node", "root"} {
+		t.Run(part, func(t *testing.T) {
+			ctx, observer := childObserverContext()
+			x := &runExec{e: &Engine{}, item: CrewItem{ID: "definition", Revision: 5, Crew: Crew{Type: "workflow"}}, run: Run{ID: "run", Revision: 8, State: RunState{CrewID: "definition", CrewRevision: 5, Nodes: map[string]*NodeState{"n": {Runs: 2}}}}}
+			switch part {
+			case "run":
+				x.run.Revision = 0
+			case "definition":
+				x.run.State.CrewRevision = 0
+			case "node":
+				x.run.State.Nodes["n"].Runs = 0
+			case "root":
+				x.run.State.RootID = "unproved-root"
+			}
+			actual, _ := AttemptContextFrom(x.callContext(ctx, "n"))
+			if actual.Run.RunRef.ID != "" || !strings.Contains(strings.Join(observer.Snapshot().Issues, " "), "identity_unavailable") {
+				t.Fatal("missing real version/root silently accepted", actual)
+			}
+		})
+	}
+}
+func TestFlowDelegationObservationWaitRemainsReservedAndReusesIdentity(t *testing.T) {
+	e, store, root := childFixture(t, node("call", "subflow", "workflow", "child"), waitingChild())
+	ctx, observer := childObserverContext()
+	if err := e.Drive(ctx, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	var first AttemptObservation
+	for _, r := range observer.Snapshot().Latest {
+		if r.Identity.Phase == "tool" {
+			first = r
+		}
+	}
+	if first.Identity.AttemptID == "" || first.Status != "reserved" || first.UsageRole != "transport_aggregate" || first.Identity.CanonicalAttemptID != nil || first.Identity.AttemptRef != nil {
+		t.Fatalf("delegation missing or masquerades as provider FLOW call: %+v", observer.Snapshot())
+	}
+	if err := e.Drive(ctx, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	before := observer.Snapshot()
+	if len(before.Records) != 1 || before.Latest[0].Identity.AttemptID != first.Identity.AttemptID || before.Latest[0].Status != "reserved" {
+		t.Fatal("inflight delegation revised to terminal", before)
+	}
+	_, ref := childRun(t, store, root.ID)
+	store.decide(t, ref.ID, "ask", true)
+	if err := e.Drive(ctx, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	after := observer.Snapshot()
+	if len(after.Records) != 2 || len(after.Latest) != 1 || after.Latest[0].Identity.AttemptID != first.Identity.AttemptID || after.Latest[0].Status != "succeeded" || after.Latest[0].ObservationRevision != 2 {
+		t.Fatalf("terminal child did not settle original transport: %+v", after)
+	}
+	if after.Latest[0].Usage.DurationNS == nil || after.Latest[0].Usage.CostUSD != nil || after.Latest[0].LeafCoverage != "partial" {
+		t.Fatal("delegation invented monetary leaf coverage", after.Latest[0])
+	}
+}
+
+func TestFlowDelegationObservationNestedChildUsesRealExecutionAndParent(t *testing.T) {
+	child := wf("child", &Graph{Nodes: []Node{node("nested", "subflow", "workflow", "grand"), node("end", "end")}, Edges: []Edge{edge("nested", "end")}})
+	grand := wf("grand", &Graph{Nodes: []Node{node("end", "end")}})
+	e, store, root := childFixture(t, node("call", "subflow", "workflow", "child"), child)
+	root.State.Definitions[grand.ID] = grand
+	store.runs[root.ID] = clone(root)
+	ctx, observer := childObserverContext()
+	if err := e.Drive(ctx, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	latest := observer.Snapshot().Latest
+	if len(latest) != 2 {
+		t.Fatal("nested delegation not captured", observer.Snapshot())
+	}
+	var outer, inner AttemptObservation
+	for _, record := range latest {
+		if record.Identity.Run.RunRef.ID == root.ID {
+			outer = record
+		} else {
+			inner = record
+		}
+	}
+	_, childRef := childRun(t, store, root.ID)
+	if outer.Status != "succeeded" || inner.Status != "succeeded" || inner.Identity.Run.RunRef.ID != childRef.ID || inner.Identity.Run.RunRef.Revision < 1 || inner.Identity.Run.ParentRunID == nil || *inner.Identity.Run.ParentRunID != root.ID || inner.Identity.ParentAttemptID == nil || *inner.Identity.ParentAttemptID != outer.Identity.AttemptID || inner.Task != outer.Task || inner.Identity.Run.Definition.Ref.ID != "child" {
+		t.Fatalf("child identity borrowed parent or invented root: outer=%+v inner=%+v", outer, inner)
+	}
+	evidence := ObservationEvidenceFromContext(ctx)
+	if len(evidence.ParentLinks) != 1 || qualifyObservationParents(map[string]AttemptObservation{outer.Identity.AttemptID: outer, inner.Identity.AttemptID: inner}, evidence) != nil {
+		t.Fatal("actual subflow provenance missing", evidence)
+	}
+	if observer.Snapshot().ProviderLeafTotals.DispatchedAttempts != 0 {
+		t.Fatal("delegation counted as provider leaf")
+	}
+}
+func TestFlowDelegationObservationLinkedMeetingRetainsActualMeeting(t *testing.T) {
+	team := teamItem("round_robin", &TeamEnding{MaxRounds: 1}, threeMembers()...)
+	items := baseItems(team)
+	e, store, root := childFixture(t, node("call", "team", "team", "team"), team)
+	for _, item := range items {
+		root.State.Definitions[item.ID] = item
+	}
+	store.runs[root.ID] = clone(root)
+	store.meetingStatus = "pending"
+	calls := 0
+	e.MeetingAI = func(ctx context.Context, s aiSpec) (aiAnswer, error) {
+		calls++
+		observed, ok := AttemptContextFrom(ctx)
+		if !ok || observed.Run.RunRef.Collection != "crew_meetings" || observed.Run.RunRef.Revision < 1 || observed.Run.ParentRunID == nil || *observed.Run.ParentRunID != root.ID || observed.ParentAttemptID == nil || observed.Run.Definition.Ref.Revision != team.Revision {
+			t.Errorf("linked meeting missing actual execution/parent: %+v", observed)
+		}
+		if ok && observed.ParentAttemptID != nil {
+			parent, found := observationLatest(ctx, *observed.ParentAttemptID)
+			if !found || parent.Identity.Phase != "tool" || parent.UsageRole != "transport_aggregate" {
+				t.Error("linked meeting lacks real delegation parent", parent)
+			}
+		}
+		out, err := defaultAnswer(s)
+		return aiAnswer{OK: err == nil, Output: out, Model: s.Model}, err
+	}
+	ctx, observer := childObserverContext()
+	if err := e.Drive(ctx, root.ID); err != nil {
+		t.Fatal(err)
+	}
+	if calls == 0 {
+		t.Fatal("fake meeting did not run")
+	}
+	parent, _ := store.GetRun(context.Background(), root.ID)
+	if parent.State.Status != "succeeded" {
+		t.Fatal("observation changed meeting outcome", parent.State)
+	}
+	for _, record := range observer.Snapshot().Latest {
+		if record.Identity.Phase == "tool" && (record.Identity.CanonicalAttemptID != nil || record.Status != "succeeded") {
+			t.Fatal("delegation is fake model reservation or never completed", record)
+		}
+	}
+}
+func TestFlowObservationActualClientScopeAndForeignParent(t *testing.T) {
+	ctx := WithAttemptObserver(context.Background(), NewAttemptObserver(nil))
+	x := &runExec{e: &Engine{Store: &Client{Scope: Scope{WorkspaceID: "actual-w", ProjectID: "actual-p"}}}, item: CrewItem{ID: "definition", Revision: 7, Crew: Crew{Type: "workflow"}}, run: Run{ID: "actual", Revision: 9, State: RunState{CrewID: "definition", CrewRevision: 7, Nodes: map[string]*NodeState{"n": {Runs: 4}}}}}
+	current, _ := AttemptContextFrom(x.callContext(ctx, "n"))
+	if current.Run.Scope.WorkspaceID != "actual-w" || current.Run.Scope.ProjectID != "actual-p" {
+		t.Fatal("did not use actual bound Client scope", current)
+	}
+	x.run.State.ParentID = "unproved-parent"
+	x.run.State.RootID = "unproved-root"
+	invalid, _ := AttemptContextFrom(x.callContext(ctx, "n"))
+	if invalid.Run.RunRef.ID != "" {
+		t.Fatal("unproved parent accepted", invalid)
+	}
+}
+
+func TestFlowDelegationObservationClockIndependentFromBusinessNow(t *testing.T) {
+	ctx, observer := childObserverContext()
+	x := &runExec{e: &Engine{Now: func() time.Time { t.Error("observer called business clock"); return time.Unix(0, 0) }}}
+	parent := AttemptContext{Run: ObservationRun{Scope: ObservationScope{WorkspaceID: "w", ProjectID: "p"}, RunRef: ObservationRef{Collection: "crew_runs", ID: "actual", Revision: 9}, RootRunCollection: observationString("crew_runs"), RootRunID: observationString("actual"), Definition: ObservationDefinition{Ref: ObservationRef{Collection: "crew", ID: "definition", Revision: 4}, SourceType: "workflow", HashState: "not_recorded"}, ExecutionPath: "workflow", InvocationMode: "flow"}, Task: ObservationTask{Namespace: "crew_experiment", TaskID: "task", TaskVersion: "v1", InputSHA256: strings.Repeat("a", 64), SpecSHA256: strings.Repeat("b", 64)}, NodeID: "n", NodeAttempt: 2}
+	ctx = WithAttemptContext(ctx, parent)
+	before := time.Now().UnixNano()
+	_, record := x.childObservationContext(ctx, FlowChild{Kind: "workflow", ID: "child", NodeID: "n", Attempt: 2})
+	if record == nil {
+		t.Fatal("missing transport record")
+	}
+	x.finishChildObservation(ctx, record, result{}, nil)
+	after := time.Now().UnixNano()
+	latest := observer.Snapshot().Latest
+	if len(latest) != 1 || latest[0].Usage.StartedAtNS == nil || *latest[0].Usage.StartedAtNS < before || latest[0].Usage.FinishedAtNS == nil || *latest[0].Usage.FinishedAtNS > after || latest[0].Usage.DurationNS == nil || latest[0].Usage.DurationBasis != "observed_monotonic" {
+		t.Fatalf("business clock corrupted observational time: %+v", latest)
 	}
 }

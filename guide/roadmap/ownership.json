@@ -413,6 +413,46 @@
       "requesters": [
         "CRW-02"
       ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/receipts_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/assists.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/crew/assists_observation_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/flow_children.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/crewrun/flow_children_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "CRW-02"
+      ]
     }
   ],
   "cards": [
@@ -3109,7 +3149,7 @@
       "id": "CRW-02",
       "issue": 154,
       "owner": "CRW-02",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3141,6 +3181,34 @@
         {
           "root": "crew_lab",
           "path": "fixtures/usage/**"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/observation_runtime.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/observation_runtime_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/observation_transport.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/observation_transport_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/observation_integration_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/observation.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/observation_test.go"
         }
       ],
       "consumes": [
@@ -3257,6 +3325,51 @@
         {
           "root": "repo",
           "path": "internal/host/crew/runnode_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/receipts_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/assists.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/crew/assists_observation_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/flow_children.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "CRW-02.modules",
+            "CRW-01.execution_refs_v2"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/flow_children_test.go",
           "owner": "INTEGRATION",
           "after": [
             "CRW-02.modules",
@@ -5235,7 +5348,8 @@
     "Substage acceptance is not full-card or product acceptance. Conditional substages require a recorded selection or hold/reject decision.",
     "Private roots require an absolute binding in a private dispatch record before work. Public files do not contain those bindings.",
     "The fixed v1 contract is immutable. A publication conflict never permits redaction or a new hash under the same contract ID.",
-    "Existing Claude work and release/build paths are not owned by this plan."
+    "Existing Claude work and release/build paths are not owned by this plan.",
+    "Root may delegate disjoint INTEGRATION file sets after accepted contracts. Every actual path retains exactly one active writer; crossing a dispatch boundary requires a fresh handoff."
   ],
   "dispatch_contract": {
     "required_fields": [

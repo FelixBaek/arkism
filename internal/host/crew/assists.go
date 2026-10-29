@@ -6,6 +6,7 @@ package crew
 import (
 	"errors"
 	"fmt"
+	"github.com/FelixBaek/arkism/internal/crewrun"
 	"io"
 	"io/fs"
 	"os"
@@ -562,6 +563,12 @@ func syncInstalls(manifest string) (int, error) {
 // model (auto: 라우팅 picks; its fallback model when the first fails). The call is counted for the agent. An agent that
 // works by a workflow runs that workflow instead, with the access its steps were given (the only way it runs live).
 func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
+	return tryAgentWithObservation(rec, a, runner, nil)
+}
+
+// tryAgentWithObservation is programmatic opt-in only. Queue/UI/config paths
+// continue to use tryAgent with no observation request.
+func tryAgentWithObservation(rec, a map[string]any, runner runFn, request *crewrun.ObservationTransportRequest) (map[string]any, error) {
 	handle := strings.TrimPrefix(strings.TrimSpace(sOr(a["expert"])), "@")
 	res, err := runnerCall("/v1/crew/resolve?"+scopeQuery("handle", "@"+handle), nil, 15*time.Second)
 	item := obj(res["item"])
@@ -569,7 +576,12 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 	if err != nil || c["type"] != "agent" {
 		return failedResult("@" + handle + " 작업 에이전트를 찾지 못했어요"), nil
 	}
+	observationSession := assistObservationSession(rec, item, request)
+	defer closeHostObservation(observationSession)
 	if wf := strings.TrimPrefix(strings.TrimSpace(sOr(c["workflow"])), "$"); wf != "" {
+		if observationSession != nil {
+			observationSession.writer.MarkIncomplete()
+		}
 		return agentWorkflow(wf, sOr(a["prompt"])), nil
 	}
 	model := strings.TrimSpace(sOr(c["model"]))
@@ -601,9 +613,10 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 		}
 		onBackend(spec, rec, item, b)
 	}
+	spec, runner = assistObservedRunner(spec, runner, observationSession, b)
 	out, err := runAgentSpec(spec, runner)
 	if b == "" && (err != nil || out["ok"] != true) && truthy(c["fallback_model"]) {
-		out, err = runAgentSpec(withKey(spec, "model", sOr(c["fallback_model"])), runner)
+		out, err = runAgentSpec(observationFallbackSpec(withKey(spec, "model", sOr(c["fallback_model"]))), runner)
 	}
 	if err != nil {
 		if isCrewErr(err) {
@@ -717,4 +730,22 @@ func traceBody(t map[string]any) host.Obj {
 		}
 	}
 	return out
+}
+
+func assistObservedRunner(spec map[string]any, runner runFn, session *hostObservationSession, backend string) (map[string]any, runFn) {
+	if session == nil {
+		return spec, runner
+	}
+	spec = withKey(spec, hostObservationKey, session)
+	original := runner
+	runner = func(input map[string]any) (map[string]any, error) {
+		if selected := strings.ToLower(sOr(input["model"])); selected == "auto" || strings.HasPrefix(selected, "group/") {
+			return original(input)
+		}
+		return observedInjectedRun(input, original)
+	}
+	if backend != "" {
+		session.writer.MarkIncomplete()
+	}
+	return spec, runner
 }
