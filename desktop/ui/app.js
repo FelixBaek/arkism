@@ -1026,7 +1026,7 @@ export function startApp() {
     const foot = el("div", "actions");
     // 지우기: either memory or both, with a reason; removed memories go to history, not deleted
     const DR = window.ArkismDeleteReason;
-    foot.append(button("지우기", "ghost danger tidy-forget", null, () => DR.openAfter(foot, { targets: [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]], target: "forget_retire",
+    foot.append(button("지우기", "ghost danger tidy-forget", null, () => DR.openAfter(foot, { targets: [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]].filter(([v]) => v !== "forget_both" || !state.serverLacks?.has("forget_both")), target: "forget_retire",
       onConfirm: async (why) => (await decide(why.target, "지웠어요. 지운 이유와 함께 기억 이력에 남아요.", DR.rejectFields(why)) ? undefined : { error: "지우지 못했어요." }) })));
     if (DR.maybeStale(t.p, [t.keep, t.retire])) foot.append(DR.staleHint());
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
@@ -2268,7 +2268,7 @@ export function startApp() {
   window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request: appApi.request, query: appApi.query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop: toolViews.confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
+  const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, serverBanner: appConnection.serverBanner, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
     request: appApi.request, query: appApi.query, reloadTools: async () => { await toolViews.refreshTools(); toolViews.pollTools(); }, assist: (...a) => crew.assist(...a), privacyGroup: () => privacy.settingsGroup() });
   function openIntelligenceRecord(record) {
     const list = record.status === "active" ? "memories" : record.conflict_id ? "conflicted" : "candidates";
