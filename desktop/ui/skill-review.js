@@ -69,7 +69,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
           if (baseline) detail.append(passage("기존 버전 원문", baseline.text));
           if (version.comparison_plan) {
             const plan = version.comparison_plan;
-            detail.append(el("p", "meta", `고정 비교 조건 · 점수 향상 ${plan.min_score_gain} 이상 · 비용 ${plan.max_cost} 이하 · 시간 ${plan.max_duration_ms}ms 이하`));
+            detail.append(el("p", "meta", `통과 기준 · 점수 ${+(plan.min_score_gain * 100).toFixed(2)}점 이상 향상 · ${plan.max_cost >= 1e6 ? "비용 제한 없음" : `비용 ${plan.max_cost} 이하`} · ${+(plan.max_duration_ms / 60000).toFixed(1)}분 이하`));
           }
           const note = el("p", "meta", records.length ? "평가를 선택해 검토하세요. 승인과 적용은 서버가 근거와 현재 상태를 다시 검사해요." : "이 버전에 연결된 평가가 없어요."); note.setAttribute("role", "status"); detail.append(note);
           for (const ev of records) {
