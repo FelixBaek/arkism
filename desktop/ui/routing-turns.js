@@ -71,13 +71,16 @@ window.ArkismRoutingTurns = (ctx) => {
   const DEGRADED = { jev_unavailable: "판정 모델 없음", jev_uncertain: "확신 낮음", transfer_denied: "보낼 수 없는 스킬" };
   const judge = (p) => (p === "rules" ? "규칙" : /^clef/i.test(p) ? "Clef" : /^jev/i.test(p) ? "Jev" : p);
   const SKILLS_SHOWN = 10;
+  // What the agent did with the pick: the run's outcome once reported, else whether it loaded one.
+  const OUTCOME = { success: "성공", failure: "실패", cancelled: "취소됨", validation_failed: "검증 실패" };
+  const used = (d) => !d.loaded ? "불러오지 않음" : `${d.loaded === d.selected ? "" : "다른 후보 · "}${OUTCOME[d.outcome] || "불러옴"}`;
   function skillRow(d) {
     const r = el("div", `rtg-call rtg-skill${d.confirmed ? "" : " bad"}`);
     const why = (d.degraded || []).map((k) => DEGRADED[k] || k).join(" · ");
     const name = raw(el("span", "rtg-model", d.selected_name || d.selected || tr("고른 스킬 없음")));
     if (d.selected) name.title = d.selected;
     r.append(el("span", "rtg-tag", judge(d.provider)), name, el("span", "rtg-ok", d.selected ? (why || "확정") : why || "후보 없음"),
-      el("span", "rtg-num", tr(`후보 ${d.candidates}`)), el("span", "rtg-num", ago ? ago(d.at) : ""));
+      el("span", "rtg-num", tr(`후보 ${d.candidates}`)), el("span", "rtg-num", used(d)), el("span", "rtg-num", ago ? ago(d.at) : ""));
     return r;
   }
   // null when the server keeps no decisions yet.

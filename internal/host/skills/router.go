@@ -47,8 +47,10 @@ var (
 	sessionThread = "skill-session-" + randHex(16)
 	// ref -> resolved item and load time; usage needs the exact version and hash that were served.
 	loadedSkills = map[string]loadedSkill{}
-	versionIDRx  = regexp.MustCompile(`^skill-[0-9a-f]{64}$`)
-	archiveIDRx  = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// version id -> the route decision that offered it, so load and outcome are reported on that decision.
+	routeOf     = map[string]string{}
+	versionIDRx = regexp.MustCompile(`^skill-[0-9a-f]{64}$`)
+	archiveIDRx = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
 type loadedSkill struct {
@@ -236,6 +238,9 @@ func routeSkills(query any) (host.Obj, error) {
 			return t.item(), nil
 		}
 		v, err := skillVersion(id)
+		if rid := pyStr(getOr(routed, "route_id", "")); err == nil && rid != "" {
+			routeOf[id] = rid
+		}
 		return append(v, host.KV{Key: "kind", Value: "skill"}, host.KV{Key: "state", Value: "enabled"}), err
 	}
 	skills := []any{}
@@ -578,11 +583,25 @@ func loadSkillResolvedHub(skillID, trialID string) (host.Obj, error) {
 		listing = append(local, host.KV{Key: "mode", Value: "unversioned_local"})
 	}
 	loadedSkills[loadedRef] = loadedSkill{item, time.Now().UTC()}
+	markRoute(pyStr(item["version_id"]), "loaded")
 	return host.Obj{{Key: "id", Value: item["skill_id"]}, {Key: "name", Value: item["name"]}, {Key: "path", Value: getOr(provenance, "source_path", "")},
 		{Key: "ref", Value: loadedRef}, {Key: "version", Value: item["resolved_version"]}, {Key: "content_hash", Value: item["content_hash"]},
 		{Key: "validation_status", Value: item["validation_status"]}, {Key: "requirements", Value: item["requirements"]}, {Key: "provenance", Value: provenance},
 		{Key: "resolution_mode", Value: getOr(item, "resolution_mode", "hub")}, {Key: "trial_id", Value: item["trial_id"]},
 		{Key: "trial_status", Value: item["trial_status"]}, {Key: "bundle", Value: listing}, {Key: "content", Value: item["instructions"]}}, nil
+}
+
+// markRoute reports a load or a run's status on the route decision that offered this version.
+// Best effort: a failed report never fails the load or the usage record.
+func markRoute(versionID, event string) {
+	rid := routeOf[versionID]
+	if rid == "" {
+		return
+	}
+	_, _ = routerRequest("/v1/routing/skills/"+rid+"/use", map[string]any{"scope": host.Scope(), "event": event, "version_id": versionID})
+	if event != "loaded" {
+		delete(routeOf, versionID)
+	}
 }
 
 func isoMillis(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
@@ -624,6 +643,7 @@ func recordSkillUsage(ref, status, taskType, errorCode string) (host.Obj, error)
 	if trace == nil || run == nil {
 		return nil, keyErr("trace")
 	}
+	markRoute(pyStr(loaded.item["version_id"]), status)
 	out := host.Obj{{Key: "trace_id", Value: trace["id"]}, {Key: "run_id", Value: run["id"]}, {Key: "ref", Value: ref}, {Key: "status", Value: status},
 		{Key: "duration_ms", Value: finished.Sub(loaded.started).Milliseconds()}}
 	// The hub turns a failed usage into evaluation + lesson candidate itself.
