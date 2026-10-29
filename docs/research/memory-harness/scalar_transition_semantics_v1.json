@@ -1,0 +1,64 @@
+{
+  "protocol": "dynamics-scalar-transition-semantics-v1",
+  "task": "DYN-02.scalar",
+  "status": "root_selected_scalar_implementation_semantics_not_functional_acceptance",
+  "base_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "scope": "Separate scalar implementation semantics supplement; original contract bytes, wire types, canonical projections and v1 baseline remain unchanged. No product/experiment default or scientific effect claim.",
+  "precedence": "This supplement resolves u binding, synthetic lifecycle catalog mutation, same-ref config validation, historical exact-retry context, R4 tau adaptation, state-history coherence and contextual transport-arrival guards for scalar ApplyEvent/ResetRevision. All other original exact field, qualification, order, error and transition rules remain required.",
+  "provenance": "Clean engineering decisions for the existing contract extension, not quoted prior-paper algorithms or biological reproduction. The global unit-strength multiplier overlaps mathematically with eta; any future tuning/comparison must bind the full config and account for this redundant parameterization. No tuning or outcome evidence is claimed.",
+  "strength": {
+    "u": "cfg.unit_strength * event.strength; both explicit independently validated UnitFloat. No default/null conversion.",
+    "operation_order": "u=unit_strength*strength; a=eta_positive*u or eta_negative*u; passed=m_minus+a*(1-m_minus), failed=m_minus*(1-a). Validate finite/range; no clamp. Qualified predicate separate from numeric zero.",
+    "scope": "Numeric u used only for qualified known outcomes with enabled jump; unqualified/unknown/unattributable/exposure never gain qualification via strength.",
+    "literal_distinguishing_oracles": {
+      "dt0_m0.5_etaPos0.25_cfgUnit0.25_event0.5": "0.515625",
+      "dt0_m0.5_etaNeg0.5_cfgUnit0.25_event0.5": "0.46875"
+    }
+  },
+  "fence": {
+    "input": "Existing matching exact scope/full target entry required. A transition does not fabricate an authoritative operational witness. Synthetic namespace only.",
+    "active_invalidate": "Copy entire fence. Change only matching entry.status=current→invalidated and entry.reason=event.reason. Preserve exact source_refs and other entries/order. Increment epoch by1 only for this semantic catalog mutation. Preserve minimum_accepted_seq: no compaction/history deletion. Rehash fence, then receipt index, then transition. No cycle because receipt has no fence hash.",
+    "already_invalidated": "New invalidate audit changes only new receipt/index/cursor; entire fence bytes unchanged including epoch,minimum,reason,source_refs. Same-ID retry changes nothing.",
+    "other_events": "Fence unchanged. Activation requires preexisting current entry; new revision catalog supplied explicitly in receipt index by caller, not created by ResetRevision.",
+    "missing_entry": "source_unavailable at $.lifecycle_fence.entries",
+    "epoch_overflow": "resource_limit at $.lifecycle_fence.epoch; zero partial mutation; no wrap/reset",
+    "invalid_status_for_new_event": "invalidated_target at $.lifecycle_fence.entries except already-invalidated invalidate audit. Historical exact retry has separate unchanged-output branch."
+  },
+  "reset": {
+    "same_full_ref": "Validate typed state/config/ref and original key.config_sha256==cfg.config_sha256 first. Mismatch=config_mismatch at $.key.config_sha256. Same valid fullRef+config returns deep-owned unchanged state.",
+    "new_revision": "Same origin/collection/id, strictly higher revision, exactly supplied new content hash; cfg.initial pending0 and six null anchors/last. No old value or receipt/evidence/cursor migration.",
+    "no_new_identity": "Different identity target_mismatch; lower revision revision_regression; equal revision different content revision_mismatch. Paths $.target."
+  },
+  "historical_retry": {
+    "exact_receipt": "event.key==original receipt.key, semantic SHA/original acceptedtime+seq exact; transport/arrival allowed changes only.",
+    "current_state_context": "Same complete scope, target origin/collection/id, dimension, contractSHA, configSHA, stream and clock. Current ref may be the same fullref or strictly newer revision. Equal revision different hash/different identity/config/domain reject. Never return an old scalar state.",
+    "output": "Original receipt exact bytes; current supplied state/index/cursor unchanged and deep-owned; duplicate_event branch only. No lifecycle resurrection or migration. NEW old-revision event cannot use this exemption.",
+    "current_authority_limit": "Synthetic history integrity only; no real deletion/authorization restore guarantee."
+  },
+  "reuse": {
+    "decay": "Use existing R4 Decay; exact int64 dt subtraction before float conversion. Explicit ns→seconds dt and halfLifeSeconds=(float64(tauNS)/1e9)*Ln2. Existing binary64 divide-first R4 operations retained; compare independent high precision tau-equation oracles under explicit cfg.atol/rtol. No source R4 edit/duplicated primitive.",
+    "limits": "If fixed tolerance cannot cover adapter rounding, report actual failure; do not alter oracle/tolerance silently."
+  },
+  "acceptance": "DYN02.scalar only; full card partially_accepted per technical_v4 until optional fastslow decision is explicitly evidenced. Fastslow unsupported/no successful stub, pilot not_run.",
+  "state_history_coherence": {
+    "scope": "Contextual consistency of individually valid StateV2/ReceiptIndexV2/config inputs, before exact-retry or new transition return. This is not authentication or complete event replay.",
+    "domain": "Inspect receipts for the exact current state full key only, including scope,fulltargetrevision/hash,dimension,contract/config. Global cursor advancement for other keys is permitted.",
+    "pending": "No existing receipt for this exact full key may be combined with pending state. Pending value remains cfg.initial with revision0/sixnull fields. Higher-revision pending state may coexist with historical receipts for older full keys; never migrate them.",
+    "active_invalidated": "Supplied current state revision/status must agree with latest same-key state-changing receipt while nonlearning receipts preserve it. Reason follows the explicit reason_sources mapping. Last scalar application coordinates come from latest same-key scalar-applied receipt, excluding exposure/duplicate/invalidation. Activation coordinates/id/logicalpayload bind original same-key activation receipt.",
+    "initial_only": "If latest same-key scalar-applied receipt is activation, value must exactly equal cfg.initial, including after only exposure/nonlearning or invalidation. No invented decay/update from read/probe.",
+    "error": "When each DTO is independently valid but these contextual bindings fail: snapshot_binding at $.state. Existing malformed-StateDTO invalid_state and other typed validation errors remain unchanged.",
+    "retry": "Stale supplied current state is not legitimized by historical event-ID lookup. A valid current state with its own prefix binding may return an original exact historical receipt without changing state/index/cursor.",
+    "limits": "Receipts do not store all prior outcome strengths/raw event payloads or resulting scalar values. Beyond directly derivable activation-only values, these checks do not establish numeric history replay or authenticity of caller-resealed artifacts. Full numeric reconstruction belongs to DYN03 ReplayPrefix with explicit original events and manifest/source validation.",
+    "reason_sources": {
+      "pending": "No same-key accepted receipt exists, so no accepted-history reason is inferred or authenticated. Keep the explicit pending-template field semantics; an actual activation sets reason=activation only when accepted.",
+      "active": "Original activation reason=activation, or latest same-key scalar-applied outcome receipt.reason. Exposure/duplicate/nonlearning receipts do not replace State.reason.",
+      "invalidated": "Matching exact-fullkey LifecycleFenceEntry.reason preserves actual original invalidation event.reason. ReceiptV2.reason=invalidated is a disposition marker, not the original lifecycle cause; do not compare those two raw strings as equal. Later invalidated audit/nonlearning events preserve original state/fence reason.",
+      "mismatch": "Individually valid state/hash with inconsistent derived reason rejects snapshot_binding at $.state, including historical exact retry with a stale/forged current state."
+    }
+  },
+  "transport_semantics": {
+    "supplement": "event_transport_semantics_v1.json",
+    "sha256": "91becd33b9e987bbd69e081dad9b780c509e64912d754680527b5d09bc206bd2",
+    "new_event_guard": "After original receipt-ID lookup, known NEW arrival must be <=accepted_at_ns, exact int64 comparison; future_event at $.arrived_at_ns. Historical retry delivery arrival may be later than original acceptance."
+  }
+}
