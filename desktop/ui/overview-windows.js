@@ -543,18 +543,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const g = el("div", "ov-detail-group"), cmp = el("div", "ov-detail-list");
     const card = (cls, label, id) => { const b = el("div", `ov-cmp ${cls}`); b.append(el("small", "", label), el("span", "", memText(id))); cmp.append(b); };
     if (signal) { card("", "대상 기억", x.memory.id); const ev = x.evidence; if (ev) cmp.append(el("p", "", `최근 ${num(ev.samples)}번 중 ${num(ev.passed)}번만 지켜졌어요 (통과율 ${Math.round((ev.pass_rate || 0) * 100)}%).`)); }
-    else { card("diff-add", "남길 기억", x.keep?.id); card("diff-del", "이력으로 넘길 기억", x.retire?.id); }
+    // the pair as it would end up: + stays, − goes to history; the proposal itself and each preview draw through it
+    const pair = (stay, gone) => { cmp.replaceChildren(); stay.forEach((r) => card("diff-add", "남길 기억", r?.id)); gone.forEach((r) => card("diff-del", "이력으로 넘길 기억", r?.id)); };
+    if (!signal) pair([x.keep], [x.retire]);
     const why = { same_meaning: "두 기억이 같은 말을 해요.", more_specific: "남길 기억이 더 자세해요. 다른 하나의 내용이 거기에 들어 있다고 봤어요.", newer_replaces_older: "새 기억이 예전 기억과 반대예요. 지금 생각은 새 기억이라고 봤어요." }[x.reason];
     const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
+    // invalid_request here means an older server without this decision (forget_both)
     const go2 = async (decision, extra = {}) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true));
       try { await request(`/v1/maintenance_proposals/${encodeURIComponent(p.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, decision, ...extra }) }); await reload(); done(); }
-      catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
-    if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")));
-    else act.append(button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => go2("accept")), button("반대로 남기기", "small", null, () => go2("swap")), button("둘 다 두기", "small", null, () => go2("dismiss")));
+      catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : er.message === "invalid_request" ? "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
     // 지우기: either memory or both, with a reason; each removed memory keeps it in its history
-    act.append(button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
-      target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) })));
-    if (DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id)))) act.append(DR().staleHint());
+    const forget = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
+      target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) }));
+    const stale = DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id))) ? [DR().staleHint()] : [];
+    if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")), forget, ...stale);
+    else {
+      // a choice first shows its result in place; only 이대로 적용 sends it, 취소 puts the proposal back
+      const RESULT = { accept: [[x.keep], [x.retire], "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요."], swap: [[x.retire], [x.keep], "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요."],
+        dismiss: [[x.keep, x.retire], [], "두 기억을 다 그대로 써요. 같은 제안은 다시 하지 않아요."] };
+      const choices = [button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => preview("accept")), button("반대로 남기기", "small", null, () => preview("swap")), button("둘 다 두기", "small", null, () => preview("dismiss")), forget, ...stale];
+      const back = () => { pair([x.keep], [x.retire]); act.replaceChildren(...choices); st.textContent = ""; };
+      const preview = (decision) => { const [stay, gone, note] = RESULT[decision]; pair(stay, gone); cmp.prepend(el("p", "", "적용하면 이렇게 돼요. 아직 바뀌지 않았어요."), el("p", "", note));
+        act.replaceChildren(button("이대로 적용", "small primary", null, () => go2(decision)), button("취소", "small", null, back)); };
+      act.append(...choices);
+    }
     g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }

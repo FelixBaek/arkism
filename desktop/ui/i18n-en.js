@@ -5551,6 +5551,17 @@ Object.assign(window.ArkismI18nEN.strings, {
   "AI가 읽는 중… 최대 11분 걸려요.": "AI is reading… This can take up to 11 minutes.",
   "AI 도움을 취소했어요. 후보는 그대로예요.": "AI help cancelled. The candidate is unchanged.",
   "AI 제안을 취소했어요. 기억은 그대로예요.": "AI advice cancelled. The memory is unchanged.",
+  "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요.": "The server doesn't know this choice yet. Update the server, then try again."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "이대로 적용": "Apply this"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "적용하면 이렇게 돼요. 아직 바뀌지 않았어요.": "This is what applying does. Nothing has changed yet."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요.": "The memory that stays is kept in use; the other one moves to memory history.",
+  "두 기억을 다 그대로 써요. 같은 제안은 다시 하지 않아요.": "Both memories stay in use. The same suggestion won't come back.",
   "넘길 기억": "The one to retire",
   "둘 다": "Both",
   "지웠어요. 지운 이유와 함께 기억 이력에 남아요.": "Removed. It stays in memory history with the reason.",

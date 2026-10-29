@@ -132,7 +132,8 @@ test("overview: 드리밍 decides each proposal in its own row, with the 승인 
   await press("접기 ⌃", wrap); assert.ok(panel.hidden);
   await press("결정하기 ⌄", wrap);
   const pick = btn("둘 다 두기", panel) ? "둘 다 두기" : "괜찮아요";
-  await press(pick, panel, 80);
+  await press(pick, panel, 30);
+  if (pick === "둘 다 두기") await press("이대로 적용", panel, 80); // a pair choice previews first
   assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"dismiss"/.test(String(b))));
   assert.match(text(win()), /드리밍/, "it stays in the 드리밍 window");
   await closeAll();
@@ -422,13 +423,13 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   assert.match(text(d), /비슷한 기억 2개/);
   assert.ok(d.querySelectorAll(".ov-wide-row-dream").length >= 2);
   let off = route("POST", "/v1/maintenance_proposals/", () => fail(409, "revision_conflict"));
-  await press("제안대로 합치기", d, 30);
+  await press("제안대로 합치기", d); await press("이대로 적용", d, 30);
   assert.match(text(d), /이 제안은 낡았어요/);
   off(); off = route("POST", "/v1/maintenance_proposals/", () => fail(500, "boom"));
-  await press("반대로 남기기", d, 30);
+  await press("취소", d); await press("반대로 남기기", d); await press("이대로 적용", d, 30);
   assert.match(text(d), /처리하지 못했어요/);
   off();
-  await press("둘 다 두기", d, 60);
+  await press("취소", d); await press("둘 다 두기", d); await press("이대로 적용", d, 60);
   assert.ok(app.apiCalls.some(([, p]) => /\/v1\/maintenance_proposals\/.+\/decide/.test(p)));
   // the signal proposal (rule often broken) has its own two choices
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
@@ -467,6 +468,41 @@ test("overview: a dreaming proposal's 지우기 picks which memory and why; 취�
   await press("지우기", pick, 60);
   assert.equal(sent().length, before + 1);
   assert.match(String(sent().at(-1)[2]), /"reason_code":"wrong".*"reason":"둘 다 예전 일정"/);
+  await closeAll();
+});
+
+test("overview: each pair choice previews its result and sends nothing before 이대로 적용", async () => {
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+  const sent = () => app.apiCalls.filter(([m, p]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p)).length;
+  const side = (cls) => [...win().querySelectorAll(`.ov-cmp.${cls} span`)].map(text);
+  const [keep, retire] = [side("diff-add")[0], side("diff-del")[0]];
+  const before = sent();
+  for (const [label, add, del] of [["제안대로 바꾸기", [keep], [retire]], ["반대로 남기기", [retire], [keep]], ["둘 다 두기", [keep, retire], []]]) {
+    await press(label, win(), 30);
+    assert.deepEqual([side("diff-add"), side("diff-del")], [add, del], label);
+    assert.ok(btn("이대로 적용", win()), label);
+    await press("취소", win(), 30);
+    assert.deepEqual([side("diff-add"), side("diff-del")], [[keep], [retire]], `${label} 취소 puts the proposal back`);
+  }
+  assert.equal(sent(), before, "nothing is sent before 이대로 적용");
+  await press("반대로 남기기", win()); await press("이대로 적용", win(), 60);
+  const last = app.apiCalls.filter(([m, p]) => m === "POST" && /\/decide$/.test(p)).pop();
+  assert.equal(JSON.parse(last[2]).decision, "swap");
+  await closeAll();
+});
+
+test("overview: an older server's invalid_request on 둘 다 지우기 reads as plain Korean", async () => {
+  const off = route("POST", "/v1/maintenance_proposals/", () => fail(400, "invalid_request"));
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+  await press("지우기", win());
+  const pick = win().querySelector(".del-reason");
+  await press("둘 다", pick); await press("사실과 다름", pick);
+  await press("지우기", pick, 60);
+  off();
+  assert.match(text(win()), /서버를 최신 판으로 올린 뒤/);
+  assert.doesNotMatch(text(win()), /invalid_request/);
   await closeAll();
 });
 

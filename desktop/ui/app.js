@@ -1003,8 +1003,14 @@ export function startApp() {
     [`‘${t.keep.text}’를 계속 써요`, `‘${t.retire.text}’는 기억 이력으로 넘어가요`, "이력에서 언제든 다시 볼 수 있어요"].forEach((x) => ul.append(raw(el("li", "", x))));
     plan.append(ul);
     const decide = (decision, done, extra = {}) => memoryList.reviewOnce(t.p.id, async () => {
-      await appApi.request(`/v1/maintenance_proposals/${encodeURIComponent(t.p.id)}/decide`, { method: "POST",
-        body: JSON.stringify({ scope: state.scope, expected_revision: t.p.revision, decision, ...extra }) });
+      try {
+        await appApi.request(`/v1/maintenance_proposals/${encodeURIComponent(t.p.id)}/decide`, { method: "POST",
+          body: JSON.stringify({ scope: state.scope, expected_revision: t.p.revision, decision, ...extra }) });
+      } catch (e) { // invalid_request: an older server without this decision (forget_both)
+        if (e.message !== "invalid_request") throw e;
+        notice("서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요.");
+        return;
+      }
       await memoryList.reloadMemories();
       notice(done);
     });
