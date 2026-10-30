@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createHash } = require("node:crypto");
 require("./keep.js"); // the shared stale-reply and redraw guards the screens use
-const { createDocument, house, flush, Element } = require("./testdata/views-dom.js");
+const { createDocument, house, improveSide, flush, Element } = require("./testdata/views-dom.js");
 Element.prototype.select = function () { this.selectionStart = 0; this.selectionEnd = this.value.length; };
 
 // Real crypto.subtle resolves on the thread pool, so under load it can land after the test looks; hash in-process instead.
@@ -53,35 +53,41 @@ function setup(routes = {}, caps = { role: "human" }) {
     return r[name](body);
   };
   const make = window.ArkismSkillTrial({ state, el: h.el, button: h.button, request, query: () => "q=1" });
-  const panel = make("sk1", "v1");
-  doc.body.append(panel);
-  return { doc, panel, state, calls, make, h, request };
+  // The left card, the 시험 기록 card and the page's right panel sit under one root so a lookup sees all three.
+  const side = improveSide(h), panel = make("sk1", "v1", side), root = h.el("div");
+  root.append(panel, side.extra, side.box); doc.body.append(root);
+  return { doc, panel, root, side, state, calls, make, h, request };
 }
 const idle = () => flush(16);
 const open = async p => { p.open = true; await p.fire("toggle"); await idle(); };
 const journalKey = () => "arkism.skill-trial.v1." + createHash("sha256").update(JSON.stringify(["s", "t", scope, "sk1", "v1"])).digest("hex");
 const pendingInput = (extra = {}) => ({ scope, skill_id: "sk1", candidate: { collection: "skill_versions", id: "v1", revision: 1 }, runtime: "codex", ends_at: future, event_id: "ev-1", ...extra });
 
+const stoppedList = () => ({ authority: "data_only_untrusted", items: [view({ status: "stopped", record: record({ status: "stopped" }) })] });
+
 test("history, detail, copy and stop", async () => {
   store.clear();
-  const { panel, calls } = setup();
+  const { panel, root, calls } = setup();
   await open(panel);
-  assert.match(text(panel), /Codex · .* · 시험 가능/);
-  await btn(panel, "Codex").click(); await idle();
-  assert.match(text(panel), /현재 반환: 버전 1 · 시험 후보/);
-  assert.match(text(panel), /시험 진행 중/);
-  await btn(panel, "시험 요청 복사").click(); await idle();
-  assert.match(text(panel), /복사했어요/);
+  assert.match(text(root), /Codex · .* · 시험 가능/);
+  // the active trial is picked on its own, and a new one waits until it ends
+  assert.match(text(root), /종료 .* · 버전 1/);
+  assert.match(text(root), /지금 버전 1 시험이 진행 중이에요/);
+  assert.equal(btn(root, "시험 시작").disabled, true);
+  await btn(root, "Codex").click(); await idle();
+  assert.match(text(root), /시험 진행 중/);
+  await btn(root, "요청 복사").click(); await idle();
+  assert.match(text(root), /복사했어요/);
   clip = async () => { throw new Error("denied"); };
-  await btn(panel, "시험 요청 복사").click(); await idle();
-  assert.match(text(panel), /직접 복사해 주세요/);
-  await btn(panel, "처리 상태 다시 조회").click(); await idle();
-  await btn(panel, "시험 상태 새로고침").click(); await idle();
-  await btn(panel, "시험 종료").click(); await idle();
-  assert.match(text(panel), /시험을 종료하고/);
-  await btn(panel, "다음 기록").click(); await idle();
+  await btn(root, "요청 복사").click(); await idle();
+  assert.match(text(root), /직접 복사해 주세요/);
+  await btn(root, "처리 상태 다시 조회").click(); await idle();
+  await btn(root, "새로고침").click(); await idle();
+  await btn(root, "시험 종료").click(); await idle();
+  assert.match(text(root), /시험을 종료하고/);
+  await btn(root, "더 보기").click(); await idle();
   assert.ok(calls.some(([p, b]) => p.endsWith("/list") && b.after === "c2"));
-  await btn(panel, "첫 기록으로").click(); await idle();
+  await btn(root, "첫 기록으로").click(); await idle();
   panel.open = false; await panel.fire("toggle");
   assert.equal(panel.querySelector("p"), null);
 });
@@ -92,69 +98,70 @@ test("expired copy, unresolved versions, failed stop, refresh and page", async (
   let inspect = () => past;
   const ctx = setup({ inspect: () => inspect(), stop: () => ({}), list: () => ({ authority: "data_only_untrusted", items: [] }) }, { role: "human" });
   await open(ctx.panel);
-  assert.match(text(ctx.panel), /표시할 시험 기록이 없어요/);
-  // reach a trial through a fresh draw with a selected id via start's success path is covered elsewhere; here use refresh by hand
+  assert.match(text(ctx.root), /표시할 시험 기록이 없어요/);
+  assert.match(text(ctx.root), /정한 기간만 시험해요/);
   const a = setup({ inspect: () => inspect(), stop: () => ({}) });
-  await open(a.panel); await btn(a.panel, "Codex").click(); await idle();
-  await btn(a.panel, "시험 요청 복사").click();
-  assert.match(text(a.panel), /종료 시각이 지났어요/);
-  await btn(a.panel, "시험 종료").click(); await idle();
-  assert.match(text(a.panel), /종료 결과를 확인하지 못했어요/);
+  await open(a.panel); await btn(a.root, "Codex").click(); await idle();
+  await btn(a.root, "요청 복사").click();
+  assert.match(text(a.root), /종료 시각이 지났어요/);
+  await btn(a.root, "시험 종료").click(); await idle();
+  assert.match(text(a.root), /종료 결과를 확인하지 못했어요/);
   inspect = () => view({ status: "stopped", record: record({ status: "stopped" }), resolution_error: "skill_not_found", resolved_version_id: undefined });
-  await btn(a.panel, "시험 상태 새로고침").click(); await idle();
-  assert.match(text(a.panel), /불러올 수 있는 버전이 없어요/);
+  await btn(a.root, "새로고침").click(); await idle();
+  assert.match(text(a.root), /불러올 수 있는 버전이 없어요/);
   inspect = () => ({ nope: 1 });
-  await btn(a.panel, "시험 상태 새로고침").click(); await idle();
-  assert.match(text(a.panel), /현재 상태를 읽지 못했어요/);
+  await btn(a.root, "새로고침").click(); await idle();
+  assert.match(text(a.root), /현재 상태를 읽지 못했어요/);
   const bad = setup({ list: () => ({ authority: "x" }) }, null);
   await open(bad.panel);
-  await btn(bad.panel, "기록 다시 조회").click(); await idle();
-  assert.match(text(bad.panel), /시험 기록을 읽지 못했어요/);
+  await btn(bad.root, "기록 다시 조회").click(); await idle();
+  assert.match(text(bad.root), /시험 기록을 읽지 못했어요/);
 });
 
 test("a new trial is journaled, started and shown", async () => {
   store.clear();
-  const ctx = setup();
+  const ctx = setup({ list: stoppedList });
   await open(ctx.panel);
   const form = ctx.panel.querySelector("form");
   const ends = form.querySelector("input");
   assert.ok(ends.value);
+  assert.equal(btn(ctx.root, "시험 시작").disabled, false);
   ends.value = "2000-01-01T00:00";
   await form.fire("submit");
-  assert.match(text(ctx.panel), /미래의 종료 시각/);
+  assert.match(text(ctx.root), /미래의 종료 시각/);
   ends.value = future.slice(0, 16);
   await form.fire("submit"); await idle();
   assert.ok(ctx.calls.some(([p]) => p === "/v1/skill-trials"));
   assert.equal(store.size, 0);
-  assert.match(text(ctx.panel), /서버에서 현재 상태를 확인했어요/);
+  assert.match(text(ctx.side.box), /시험 가능 · Codex/);
   // storage that cannot hold the request stops before sending
-  const full = setup();
+  const full = setup({ list: stoppedList });
   await open(full.panel);
   storageBroken = true;
   full.panel.querySelector("input").value = future.slice(0, 16);
   await full.panel.querySelector("form").fire("submit");
   storageBroken = false;
-  assert.match(text(full.panel), /요청을 보관하지 못했어요/);
+  assert.match(text(full.root), /요청을 보관하지 못했어요/);
 });
 
 test("a rejected start offers retry and a fresh choice", async () => {
   store.clear();
   let fail = "revision_conflict";
-  const ctx = setup({ create: () => { throw new Error(fail); } });
+  const ctx = setup({ list: stoppedList, create: () => { throw new Error(fail); } });
   await open(ctx.panel);
   ctx.panel.querySelector("input").value = future.slice(0, 16);
   await ctx.panel.querySelector("form").fire("submit"); await flush();
-  assert.match(text(ctx.panel), /준비 결과를 확인하지 못했어요/);
+  assert.match(text(ctx.root), /준비 결과를 확인하지 못했어요/);
   fail = "boom";
-  await btn(ctx.panel, "같은 시험 요청 다시 확인").click(); await idle();
-  assert.equal(btn(ctx.panel, "시험 입력 다시 선택"), undefined);
+  await btn(ctx.root, "같은 시험 요청 다시 확인").click(); await idle();
+  assert.equal(btn(ctx.root, "시험 입력 다시 선택"), undefined);
   fail = "access_denied";
-  await btn(ctx.panel, "같은 시험 요청 다시 확인").click(); await idle();
+  await btn(ctx.root, "같은 시험 요청 다시 확인").click(); await idle();
   storageBroken = true;
-  await btn(ctx.panel, "시험 입력 다시 선택").click();
+  await btn(ctx.root, "시험 입력 다시 선택").click();
   storageBroken = false;
-  assert.match(text(ctx.panel), /앱 저장 공간을 확인해 주세요/);
-  await btn(ctx.panel, "시험 입력 다시 선택").click(); await idle();
+  assert.match(text(ctx.root), /앱 저장 공간을 확인해 주세요/);
+  await btn(ctx.root, "시험 입력 다시 선택").click(); await idle();
   assert.equal(store.size, 0);
 });
 

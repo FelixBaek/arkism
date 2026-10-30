@@ -341,6 +341,12 @@ func (s *Service) reuseSkillGeneration(ctx context.Context, token string, in Gen
 		return out, err
 	}
 	if err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if version.Status == "rejected" {
+			var e error
+			if version, e = reopenDiscardedDraft(ctx, tx, version, Decision{PrincipalID: receipt.CreatedBy, Role: receipt.CreatedByType}); e != nil {
+				return e
+			}
+		}
 		return audit(ctx, tx, in.Scope, receipt.CreatedBy, "generate:skills:reuse", version.ID)
 	}); err != nil {
 		return out, err
@@ -349,7 +355,27 @@ func (s *Service) reuseSkillGeneration(ctx context.Context, token string, in Gen
 }
 
 func reusedSkillVersionConflicts(version, receipt Record, in GenerateSkillInput) bool {
-	return version.Scope != in.Scope || version.SkillID != in.SkillID || version.Kind != proposedSkillKind || version.CreatedBy != receipt.CreatedBy || version.CreatedByType != receipt.CreatedByType || version.ContentErased || version.PrivacyQuarantined || version.Revision < receipt.Target.Revision || version.Analysis == nil || comparisonPlanHash(version.ComparisonPlan) != comparisonPlanHash(in.ComparisonPlan) || !slices.Contains([]string{"candidate", "approved", "active"}, version.Status)
+	return version.Scope != in.Scope || version.SkillID != in.SkillID || version.Kind != proposedSkillKind || version.CreatedBy != receipt.CreatedBy || version.CreatedByType != receipt.CreatedByType || version.ContentErased || version.PrivacyQuarantined || version.Revision < receipt.Target.Revision || version.Analysis == nil || comparisonPlanHash(version.ComparisonPlan) != comparisonPlanHash(in.ComparisonPlan) || !slices.Contains([]string{"candidate", "approved", "active"}, version.Status) && (version.Status != "rejected" || receipt.CreatedByType != roleHuman)
+}
+
+// reopenDiscardedDraft makes a draft the owner discarded a candidate again when the owner asks for it once
+// more. It is only a candidate: approval needs a new comparison of this revision, and apply is unchanged.
+func reopenDiscardedDraft(ctx context.Context, tx Tx, version Record, d Decision) (Record, error) {
+	parent, e := tx.Get(ctx, colSkills, version.Scope, version.SkillID)
+	if e != nil {
+		return version, e
+	}
+	if d.Role != roleHuman || !live(parent) || version.Status != "rejected" || version.Kind != proposedSkillKind || version.BaseVersion != parent.ActiveVersion || !slices.Contains(skillHistory(parent), version.ID) {
+		return version, ErrConflict
+	}
+	prev := version.Revision
+	version.Status, version.ApprovedBy, version.ValidationID = "candidate", "", ""
+	version.Revision++
+	version.UpdatedAt = time.Now().UTC()
+	if e = tx.Replace(ctx, colSkillVersions, version, prev); e != nil {
+		return version, e
+	}
+	return version, audit(ctx, tx, version.Scope, d.PrincipalID, "reopen:skill_versions", version.ID)
 }
 
 func saveSkillGenerationReceipt(ctx context.Context, tx Tx, proposal *ProposeSkillInput, version Record) error {

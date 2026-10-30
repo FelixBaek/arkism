@@ -1836,6 +1836,7 @@ export function startApp() {
     get setSkillStatus() { return setSkillStatus; },
     get shownAgents() { return shownAgents; },
     get skillGenerate() { return skillGenerate; },
+    get skillImprove() { return skillImprove; },
     get skillReview() { return skillReview; },
     get state() { return state; },
     get store() { return store; },
@@ -2268,6 +2269,7 @@ export function startApp() {
     if (heading) { heading.tabIndex = -1; heading.focus(); }
   }
   const skillGenerate = window.ArkismSkillGenerate({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, tauri });
+  const skillImprove = window.ArkismSkillImprove({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, tauri, generate: skillGenerate });
   const catalog = window.ArkismCatalog({ state, el, button, request: appApi.request, notice, agentLogo, reload: loadAll, pollTools: toolViews.pollTools });
   const skillExecution = window.ArkismSkillExecution({ state, el, button, tauri });
   const skillTrial = window.ArkismSkillTrial({ state, el, button, request: appApi.request, query: appApi.query });

@@ -460,6 +460,7 @@ export function createSkillViews(deps) {
   }
   const skillTalk = new Map(); // AI talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
+    const openBetter = () => { openSkillPage({ kind: "better", id: sk.id }); focusPage(); };
     const cat = deps.pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = deps.detailShell(cat);
     const top = deps.el("div", "v4s-head");
@@ -471,14 +472,16 @@ export function createSkillViews(deps) {
     const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI", title: "AI", sub: sk.name,
       greeting: "무엇이 궁금하세요?\n쉽게 설명하거나, 바로 고쳐 볼 수 있어요.",
       placeholder: "궁금한 것을 물어보세요", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
-      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: () => { openSkillPage({ kind: "improve", id: sk.id, step: 0 }); focusPage(); } },
+      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: openBetter },
       ask: async (q, history) => ({ say: await deps.crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     titleRow.append(aiBtn);
+    // 개선하기 sits beside AI so a first-time owner sees where to start (Figma 「제안 · 스킬 개선 쉬운 흐름 · 10-30」).
+    if (sk.status !== "deprecated") titleRow.append(deps.button("개선하기", "small", null, openBetter));
     const c = skillChecks(sk), u = useOf(sk);
     const chips = deps.el("div", "v4s-chips");
     if (c) chips.append(deps.el("span", `v4s-pill${c.quality.cls === "ok" ? "" : " amber"}`, `품질 ${c.quality.grade}${c.quality.score === null ? "" : ` · ${c.quality.score}`}`), deps.el("span", `v4s-pill${c.security.cls === "ok" ? "" : " amber"}`, `보안 ${c.security.label}`));
     if (deps.state.data.skillUse) chips.append(deps.el("span", "v4s-pill muted", u ? `${u.count}번 사용 · ${deps.ago(u.last_used_at)}` : "최근 60일 안 씀"));
-    top.append(chips);
+    top.append(chips, deps.skillImprove.status(sk, openBetter));
     const parts = [top];
     if (c && ["warn", "bad"].includes(c.security.cls)) parts.push(securityCard(c));
     if (sk.status === "deprecated") {
@@ -567,17 +570,23 @@ export function createSkillViews(deps) {
     deps.pageBack("스킬", () => deps.go("skills"));
     const key = skillPageKey();
     const fresh = !skillPageCache || skillPageCache.key !== key;
-    if (p.kind === "improve") {
+    if (p.kind === "improve" || p.kind === "better") {
       const sk = deps.catalogQuery.record(`skill:${p.id}`) || deps.state.data.skills.find((x) => x.id === p.id);
       if (!sk) { deps.state.skillPage = null; return renderSkills(); }
-      if (fresh) skillPageCache = { key, main: improveMain(sk, p.step) };
+      if (fresh) {
+        const side = deps.el("div", "v4s-side");
+        const main = p.kind === "improve" ? improveMain(sk, p.step, side)
+          : deps.skillImprove.page(sk, { box: side, section: skSection, facts: skFacts, table: improveTable }, (step) => openSkillPage({ kind: "improve", id: sk.id, step }));
+        skillPageCache = { key, side, main };
+      }
     } else if (p.kind === "install") {
       if (fresh) { const side = deps.el("div", "v4s-side"); skillPageCache = { key, side, main: deps.catalog.installPage(side, () => skillPageCache?.key === key && deps.state.view === "skills") }; }
     }
     table.replaceChildren(skillPageCache.main);
   }
 
-  function improveMain(sk, step) {
+  // The step's module fills the right panel (side.box) with its live status and actions, and may add a second card (side.extra).
+  function improveMain(sk, step, box) {
     const wrap = deps.el("div", "v4s-improve");
     const steps = deps.el("ol", "v4s-steps");
     IMPROVE_STEPS.forEach(([label], i) => {
@@ -592,32 +601,45 @@ export function createSkillViews(deps) {
     const [, title, lead] = IMPROVE_STEPS[step];
     const card = deps.el("section", "v4s-card");
     card.append(deps.el("h3", "", title), deps.el("p", "v4s-card-lead", lead));
-    const part = step === 0 ? deps.skillGenerate(sk) : deps.skillReview(sk, ["compare", "review", "trial"][step - 1]);
+    const [, sideTitle, sideLead] = IMPROVE_SIDE[step];
+    box.replaceChildren(deps.el("h2", "", sideTitle), deps.el("p", "v4s-lead", sideLead));
+    const side = { box, extra: deps.el("div", "v4s-improve-extra"), go: (i) => openSkillPage({ kind: "improve", id: sk.id, step: i }), section: skSection, facts: skFacts, table: improveTable };
+    const part = step === 0 ? deps.skillGenerate(sk, side) : deps.skillReview(sk, ["compare", "review", "trial"][step - 1], side);
     part.open = true;
     card.append(part);
     const next = deps.el("div", "v4s-actions");
     if (step > 0) next.append(deps.button(`← ${IMPROVE_STEPS[step - 1][0]}`, "ghost", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step - 1 })));
     if (step < 3) next.append(deps.button(`다음: ${IMPROVE_STEPS[step + 1][0]}`, "", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step + 1 })));
-    wrap.append(steps, card, next);
+    wrap.append(steps, card, side.extra, next);
     return wrap;
   }
 
+  // The step cards' read-only grid (실행 기록 · 평가 결과 · 시험 기록): rows are [cells, onPick?, on?]; a cell is text or [text, cls].
+  // A row with onPick is a button; the picked one gets a light background, not an accent bar.
+  function improveTable(head, rows) {
+    const t = deps.el("div", "v4s-table"), top = deps.el("div", "v4s-tr head");
+    head.forEach((h) => top.append(deps.el("span", "", h)));
+    t.append(top);
+    for (const [cells, onPick, on] of rows) {
+      const row = deps.el(onPick ? "button" : "div", `v4s-tr${on ? " on" : ""}`);
+      if (onPick) { row.type = "button"; row.setAttribute("aria-pressed", on ? "true" : "false"); row.addEventListener("click", onPick); }
+      cells.forEach((c) => { const [text, cls] = Array.isArray(c) ? c : [c, ""]; row.append(deps.el("span", cls, text)); });
+      t.append(row);
+    }
+    return t;
+  }
+
+  // Shown until the step's module paints its live status (Figma 198:4328 · 198:4242 · 198:4070 · 198:4156).
   const IMPROVE_SIDE = [
-    ["개선 목표", "이만큼 좋아지면 통과예요", "통과 기준은 평가 서버의 기본값으로 채워요. 바꾸려면 고급 설정을 여세요. 아직 검토하지 않은 교훈은 관측이 3개 이상일 때만 써요.", "생성 결과는 ‘검토·승인’에서 확인해요."],
-    ["지금 상태", "평가 서버에서 비교해요", "앱의 API 연결과 같은 평가 서버에서, 등록된 고정 과제와 실행 조건만 써요. 실행만으로 승인·적용되지는 않아요.", "저장된 평가로 다음 단계에서 후보를 검토해요."],
-    ["결정", "후보 버전을 승인할까요?", "다른 사람이 만든 통과 평가가 있어야 승인할 수 있어요. 승인한 뒤 ‘이 버전 적용’으로 바꿔요.", "관리 계정에서만 쓸 수 있어요."],
-    ["시험 상태", "정한 기간만 시험해요", "기본 버전은 그대로 두고, 고른 프로그램에서만 승인된 후보를 써요. 끝나는 시각이 지나면 기본 버전으로 돌아가요.", "연결이 끊겨도 요청은 보관돼요. 다시 연결한 뒤 상태를 확인하세요."]];
+    ["개선 목표", "이만큼 좋아지면 통과예요", "통과 기준은 평가 서버의 기본값으로 채워요. 바꾸려면 고급 설정을 여세요."],
+    ["지금 상태", "평가 서버에서 비교해요", "앱의 API 연결과 같은 평가 서버에서, 등록된 고정 과제와 실행 조건만 써요. 실행만으로 승인·적용되지는 않아요."],
+    ["결정", "후보 버전을 승인할까요?", "다른 사람이 만든 통과 평가가 있어야 승인할 수 있어요."],
+    ["시험 상태", "정한 기간만 시험해요", "기본 버전은 그대로 두고, 고른 프로그램에서만 승인된 후보를 써요. 끝나는 시각이 지나면 기본 버전으로 돌아가요."]];
 
   function skillPageDetail() {
     const p = deps.state.skillPage;
-    if (p.kind === "install") { const body = deps.detailShell("GitHub에서 설치"); body.append(skillPageCache?.side || ""); return; }
-    const sk = deps.catalogQuery.record(`skill:${p.id}`) || deps.state.data.skills.find((x) => x.id === p.id);
-    const [label, title, text, foot] = IMPROVE_SIDE[p.step];
-    const body = deps.detailShell(label);
-    body.append(deps.el("h2", "", title), deps.el("p", "v4s-lead", text));
-    const s = skSection("이 스킬");
-    if (sk) s.append(skFacts([["이름", sk.name, "mono"], ["버전", sk.version || "", "mono"], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"]]));
-    body.append(s, deps.el("p", "meta", foot));
+    const body = deps.detailShell(p.kind === "install" ? "GitHub에서 설치" : p.kind === "better" ? "개선하기" : IMPROVE_SIDE[p.step][0]);
+    body.append(skillPageCache?.side || "");
   }
 
   const firstSentence = (t) => (t || "").split(/(?<=[.다요])\s/)[0];

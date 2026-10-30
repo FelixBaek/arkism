@@ -137,6 +137,16 @@ function house(doc) {
   return { el, button, $, section, raw: n => n, icon: name => el("i", "icon", name), tr: t => t };
 }
 
+// A stand-in for the 개선하기 page's right panel (skillViews.mjs improveMain): box, extra card slot and its helpers.
+// Rows are buttons with the cell texts joined by " · " so tests can click a row by its text; a row carries its cells' classes.
+function improveSide(h, go = () => {}) {
+  const facts = rows => { const dl = h.el("dl"); rows.forEach(([k, v]) => dl.append(h.el("dt", "", k), h.el("dd", "", v))); return dl; };
+  const section = t => { const s = h.el("section"); s.append(h.el("h3", "", t)); return s; };
+  const table = (head, rows) => { const t = h.el("div", "table"); t.append(h.el("div", "", head.join(" · ")));
+    rows.forEach(([cells, pick, on]) => { const line = cells.map(c => Array.isArray(c) ? c[0] : c).join(" · "), cls = cells.map(c => Array.isArray(c) ? c[1] : "").join(" ").trim(), r = pick ? h.button(line, on ? "on" : "", null, pick) : h.el("div", cls, line); t.append(r); }); return t; };
+  return { box: h.el("div", "side"), extra: h.el("div", "extra"), go, section, facts, table };
+}
+
 const flush = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise(r => setImmediate(r)); };
 
-module.exports = { createDocument, house, makeEvent, flush, Element };
+module.exports = { createDocument, house, improveSide, makeEvent, flush, Element };

@@ -50,7 +50,7 @@ function setup({ skills = [], snapshot = {}, handler, wide = true } = {}) {
     query: () => "q=1",
     pageBack: (label, fn) => { const b = h.el("button", "page-back", label); b.addEventListener("click", fn); doc.body.prepend(b); },
     catalog: { installPage: (side, alive) => { side.append("설치 안내"); const m = h.el("div", "install"); m.alive = alive; return m; } },
-    skillGenerate: () => h.el("details", "generate"), skillReview: (sk, part) => h.el("details", `review-${part}`),
+    skillGenerate: () => h.el("details", "generate"), skillImprove: { status: () => h.el("div", "better-status"), page: () => h.el("div", "better-page") }, skillReview: (sk, part) => h.el("details", `review-${part}`),
     request: async (path, opt) => { const body = opt?.body && JSON.parse(opt.body); calls.push([path, body]); return handler ? handler(path, body) : {}; },
   };
   return { doc, h, deps, state, snap, calls, notices, log, keys, chats };
@@ -331,7 +331,12 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.match(chat.greeting, /무엇이 궁금하세요\?\n/);
   assert.equal(chat.footer.label, "이 스킬 개선하기");
   chat.footer.onClick();
-  assert.deepEqual(s.state.skillPage, { kind: "improve", id: "a", step: 0 });
+  assert.deepEqual(s.state.skillPage, { kind: "better", id: "a" });
+  // 개선하기 beside AI opens the same one-click page; the watch or the lesson hint sits under the chips.
+  s.state.skillPage = null;
+  btn(d.querySelector(".v4s-namebar"), "개선하기").click();
+  assert.deepEqual(s.state.skillPage, { kind: "better", id: "a" });
+  assert.ok(d.querySelector(".v4s-head .better-status"));
   // 버전과 기록: 언제 쓰나요 comes before it, history opens step 2, 검사·사용 reveals the folded checks and usage.
   assert.ok(d.textContent.indexOf("언제 쓰나요") < d.textContent.indexOf("버전과 기록"));
   btn(d, "지난 버전 2개 ›").click(); // three in the history, one of them in use
@@ -467,6 +472,18 @@ test("improve pages walk the four steps and their side text", async () => {
   assert.equal(s.state.skillPage, null);
   s.v.openSkillPage({ kind: "install" });
   assert.equal(s.state.selected, null);
+  // 개선하기: the one-click page, its expert steps reached through the page's own callback.
+  let opened = null;
+  s.deps.skillImprove = { status: () => s.h.el("div", ""), page: (sk, side, openStep) => { opened = { sk, side, openStep }; return s.h.el("section", ""); } };
+  s.v.openSkillPage({ kind: "better", id: "a" });
+  s.v.renderSkills();
+  assert.equal(opened.sk.id, "a");
+  assert.equal(typeof opened.side.facts, "function");
+  opened.openStep(1);
+  assert.deepEqual(s.state.skillPage, { kind: "improve", id: "a", step: 1 });
+  s.state.skillPage = { kind: "better", id: "a" };
+  s.v.skillPageDetail();
+  assert.equal(s.doc.querySelectorAll(".detail").at(-1).heading, "개선하기");
 });
 
 test("install page: the catalog install form in the list, its guide in the side", async () => {
