@@ -48,7 +48,7 @@
 
 /* ---------------------------------------------------------------- content */
 .main { padding: var(--nc-page-pad); gap: 24px; background: var(--nc-canvas); }
-.area-bar { display: flex; align-items: center; gap: 8px; padding-bottom: 24px; border-bottom: 1px solid var(--nc-line); flex: none; }
+.area-bar { display: flex; align-items: center; gap: 8px; flex: none; }
 .area-tabs { display: flex; gap: 8px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .area-tab { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border: 0; border-radius: var(--nc-radius-control); background: none; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); white-space: nowrap; }
 .area-tab:hover { color: var(--nc-text); }
@@ -67,6 +67,8 @@
 @media (min-width: 1181px) {
   .main > .page-head:is(.bare, :has(#title.sr-only)):not(:has(> :not(.title-line, .home-back, .home-all))) { position: absolute; top: var(--nc-page-pad); right: var(--nc-page-pad); height: 40px; justify-content: center; }
 }
+/* a head with nothing to show (hidden title, no buttons) leaves the flow, so it never adds a second 24px gap under the tabs */
+.app:not(.home-mode) .main > .page-head:is(.bare, :has(#title.sr-only)):not(:has(> :not(.title-line, .home-back, .home-all))):not(:has(#head-actions > *)) { position: absolute; }
 /* a narrow window keeps the title on one line and moves the actions under it, never squeezing the title a letter per line */
 .title-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
 .main > .page-head h1 { flex: 0 1 auto; min-width: min(100%, max-content); font: 500 calc(22px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
@@ -119,7 +121,7 @@
 /* Below 1180 the head actions leave too little room for every tab, so tabs own the first line; search and the
    page's own actions share the second. A clipped tab row hides its last tabs with no visible scrollbar (#179). */
 @media (max-width: 1180px) {
-  .area-bar { flex-wrap: wrap; row-gap: 12px; padding-bottom: 16px; }
+  .area-bar { flex-wrap: wrap; row-gap: 12px; }
   .area-tabs { flex: 1 0 100%; gap: 4px; flex-wrap: wrap; }
   .area-tab { padding: 0 12px; }
   .area-bar .search { width: auto; flex: 1 1 160px; min-width: 120px; }
