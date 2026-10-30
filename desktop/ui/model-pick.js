@@ -23,7 +23,10 @@
       if (off && !all) hidden += p.models.length - models.length;
       if (models.length) shown.push({ ...p, models, off });
     }
-    shown.sort((a, b) => Number(a.off) - Number(b.off)); // the not connected ones last, under the connected
+    // subscriptions (MAX, Pro …) first, then API keys, the not connected ones last (asked: 구독/API 구분)
+    const rank = (p) => (p.off ? 2 : (p.badges || []).some((b) => b !== "API") ? 0 : 1); // no badge (a hand-added endpoint) counts as API
+    for (const p of shown) p.via = ["sub", "api", "off"][rank(p)];
+    shown.sort((a, b) => rank(a) - rank(b));
     return { shown, hidden, currentOff };
   }
 
@@ -39,7 +42,9 @@
       for (const n of added) n.remove();
       added = [];
       const { shown, hidden, currentOff } = plan(groups, current, valueFor, all);
-      for (const p of shown) {
+      const both = shown.some((p) => p.via === "sub") && shown.some((p) => p.via === "api");
+      for (const [i, p] of shown.entries()) {
+        if (both && p.via !== "off" && p.via !== shown[i - 1]?.via) { const h = opt(p.via === "sub" ? "구독으로 쓰는 모델" : "API 키로 쓰는 모델", `\u0000${p.via}`); h.disabled = true; h.dataset.section = ""; added.push(h); }
         const g = group(p, (m) => valueFor(p, m));
         if (p.off) {
           g.label = `${g.label} · ${OFF}`;

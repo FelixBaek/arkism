@@ -84,3 +84,14 @@ test("fill: a saved not connected pick stays picked with a warning; an unknown s
   assert.equal(gone.selectedOptions[0].textContent, "glm");
   assert.ok(!values(gone).includes(CONNECT), "no onConnect: no jump");
 });
+
+// 구독/API 구분: subscription providers first under one heading, API-key providers under another, unconnected last.
+test("subscriptions and API keys are listed apart", () => {
+  const groups = [
+    { id: "openai", name: "OpenAI", badges: ["API"], models: ["gpt"] },
+    { id: "anthropic", name: "Anthropic", badges: ["MAX", "API"], models: ["opus"] },
+    { id: "zai", name: "Z", badges: [], usable: false, models: ["glm"] }
+  ];
+  const { shown } = plan(groups, "", undefined, true);
+  assert.deepEqual(shown.map((p) => [p.id, p.via]), [["anthropic", "sub"], ["openai", "api"], ["zai", "off"]]);
+});

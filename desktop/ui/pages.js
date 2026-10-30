@@ -900,6 +900,17 @@ window.ArkismPages = (ctx) => {
     if (secret) { i.type = "password"; i.autocomplete = "off"; }
     return i;
   };
+  // A model is picked from this PC's Ollama list (asked: no typed model names); with Ollama off there is no list, so it is typed.
+  const EMBEDDING = /embed|bge|minilm|e5-|gte|arctic/i;
+  const ollamaPick = (value, label, placeholder, models) => {
+    if (!models.length) return roleField(value, label, placeholder);
+    const s = el("select", "ag-select mono");
+    s.setAttribute("aria-label", label);
+    const now = value || placeholder; // what runs today stays picked, so opening the page never changes a model by itself
+    for (const m of models.includes(now) ? models : [now, ...models]) { const o = el("option", "", m); o.value = m; s.append(o); }
+    s.value = now;
+    return s;
+  };
   const roleSub = (label, input) => { const r = el("label", "v4-subfield"); r.append(el("span", "", label), input); return r; };
   const roleBlock = (row, ...extra) => { const b = el("div", "v4-role"); b.append(row, ...extra); return b; };
   const pick = (list, value, label, onChange) => {
@@ -934,7 +945,8 @@ window.ArkismPages = (ctx) => {
     const token = roleField("", "Cloudflare API 토큰", savedHint("cloudflare_token", "API token"), true);
     const jevKey = roleField("", "Jev API 키", savedHint("jev_key", "API key"), true);
     const pickerUrl = roleField(cur.picker_url, "판별 모델 주소", "http://127.0.0.1:11434/v1");
-    const pickerModel = roleField(cur.picker_model, "판별 모델", "qwen3:4b");
+    const local = !cur.picker_url || /^http:\/\/(127\.0\.0\.1|localhost):11434\b/.test(cur.picker_url); // the list is this PC's Ollama
+    const pickerModel = ollamaPick(cur.picker_model, "판별 모델", "qwen3:4b", local ? (cur.ollama_models || []).filter((m) => !EMBEDDING.test(m)) : []);
     const pickerKey = roleField("", "판별 모델 API 키", savedHint("picker_key", "없으면 비워 두기"), true);
     // Only the selected judge's settings are shown; the others keep their saved values.
     const judgeFields = {
@@ -1137,8 +1149,8 @@ window.ArkismPages = (ctx) => {
       const next = {};
       const judge = judgeBlock(cur);
       const skill = skillBlocks(cur);
-      const embedModel = roleField(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b");
-      const embedSub = roleSub("Ollama 모델 이름", embedModel);
+      const embedModel = ollamaPick(cur.embed_model, "임베딩 모델", "qwen3-embedding:0.6b", (cur.ollama_models || []).filter((m) => EMBEDDING.test(m)));
+      const embedSub = roleSub("Ollama 임베딩 모델", embedModel);
       embedSub.hidden = cur.embedder === "none";
       // A new embedder re-indexes every memory on save, so it asks first.
       const embedPick = pick(EMBED, cur.embedder || "auto", "임베딩", async (k) => {
