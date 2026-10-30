@@ -91,3 +91,54 @@ func TestDynamicsLoadCancelDuringEmbeddingStopsNativePG(t *testing.T) {
 		t.Fatalf("native ran after shutdown: head %d -> %d", head, after)
 	}
 }
+
+// Lock contention: while another transaction holds the dynamics coordinator lock,
+// a worker round must still advance the other background work, and the native step
+// must give up within its bound without a hold; after the lock is released the
+// native backlog drains in order.
+func TestDynamicsLoadCoordinatorLockDoesNotStarveOthersPG(t *testing.T) {
+	p, svc, fixture, token := dynamicsFairnessSetup(t)
+	start := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
+	if start.Count == 0 {
+		t.Fatal("no native backlog to hold behind the lock")
+	}
+	before, phase := dynamicsStarvationDue(t, p, fixture.nextID)
+	locked, release, held := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		held <- p.admin.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+			_, e := dynamicsLockCoordinator(ctx, tx, scopeA)
+			close(locked)
+			<-release
+			return e
+		})
+	}()
+	select {
+	case <-locked:
+	case e := <-held:
+		t.Fatal("lock holder ended before locking:", e)
+	}
+	// A generous deadline, so the other work is never cut short by it; the native
+	// step gives up on its own substep bound.
+	ctx, cancel := context.WithTimeout(testCtx, 10*time.Second)
+	began := time.Now()
+	err := svc.WorkOnce(ctx, token)
+	cancel()
+	took := time.Since(began)
+	close(release)
+	dynamicsRebindExpect(t, <-held, nil, "lock holder")
+	after, nextPhase := dynamicsStarvationDue(t, p, fixture.nextID)
+	q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
+	t.Logf("locked round: %v, err %v, due %v -> %v, privacy %s -> %s, head %d -> %d", took, err, before, after, phase, nextPhase, start.Head, q.Head)
+	if after["embedding"] >= before["embedding"] || nextPhase == phase {
+		t.Fatal("embedding and privacy did not both advance while the coordinator was locked")
+	}
+	limits := dynamicsFixtureConfig().Limits
+	bound := time.Duration(limits.WorkerSubstepTimeoutNS+limits.FinishTimeoutNS) + time.Second
+	if !errors.Is(err, ErrUnavailable) || q.Head != start.Head || q.Withheld || q.Count != start.Count || took > bound {
+		t.Fatalf("native step did not give up cleanly under the lock: %+v in %v", q, took)
+	}
+	dynamicsOverloadDrain(t, p)
+	if final := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; final.Withheld || final.Head != start.Head+start.Count || final.Head != final.Tail {
+		t.Fatalf("native backlog not reconciled after release: %+v", final)
+	}
+}
