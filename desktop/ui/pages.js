@@ -1389,6 +1389,17 @@ window.ArkismPages = (ctx) => {
     const body = el("div");
     g.append(body);
     let current = { paused: false, exclude: [] };
+    // 대화 원문 보관 기간: the server's per-project retention window (7 · 30 · 90 days), off until it answers.
+    let days = "7";
+    const keep = pick([["7", "7일"], ["30", "30일"], ["90", "90일"]], days, "대화 원문 보관 기간", async (v) => {
+      try {
+        await request("/v1/session-archives/settings", { method: "POST", body: JSON.stringify({ scope: state.scope, days: Number(v) }) });
+        days = v; notice("보관 기간을 바꿨어요. 다음에 저장하거나 쓰는 대화부터 적용돼요.");
+      } catch (_) { keep.value = days; notice("보관 기간을 저장하지 못했어요."); }
+    });
+    keep.disabled = true;
+    request(`/v1/session-archives/settings?${new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== ""))}`)
+      .then((r) => { days = String(r.days); keep.value = days; keep.disabled = false; }, () => { keep.title = "서버가 보관 기간 바꾸기를 아직 지원하지 않아요."; });
     const save = async (next, done) => {
       try { await tauri.invoke("set_capture_settings", { settings: next }); current = next; draw(); if (done) notice(done); }
       catch (_) { notice("수집 설정을 저장하지 못했어요."); }
@@ -1396,8 +1407,7 @@ window.ArkismPages = (ctx) => {
     function draw() {
       const rows = [line("수집 켜기", current.paused ? "멈춰 있어요. 다시 켜면 다음 대화부터 저장해요." : "에이전트 대화를 저장하고 기억을 넣어요",
         sw(!current.paused, "수집", (on) => save({ ...current, paused: !on }, on ? "수집을 다시 켰어요." : "수집을 멈췄어요."))),
-        // The server keeps originals 7 days (SessionArchiveTTL), longer while memories use them; not a setting.
-        line("대화 원문 보관", "원문은 7일 뒤 지워져요. 기억에 쓰인 원문은 쓸 때마다 7일 늘어나요.", el("output", "", "7일"))];
+        line("대화 원문 보관", "고른 기간이 지나면 원문을 지워요. 기억에 쓰인 원문은 쓸 때마다 그만큼 늘어나요.", keep)];
       for (const folder of current.exclude) {
         rows.push(line(folder, "", button("삭제", "", null, () => save({ ...current, exclude: current.exclude.filter((f) => f !== folder) }, "폴더를 다시 수집해요."))));
       }
