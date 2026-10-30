@@ -34,13 +34,18 @@ func TestSearchKnowledgeToolProfileDefaultsAndValidation(t *testing.T) {
 	swapRouter(t)
 	t.Setenv(knowledgeToolProfileEnv, "")
 	calls := fakeRequest(t, `{}`)
-	for _, args := range []string{`{"query":"x"}`, `{"query":"  ","specialist_profile_id":"illustrator"}`, `{"query":"x","specialist_profile_id":"illustrator","limit":9}`, `{"query":"x","specialist_profile_id":"illustrator","max_tokens":100}`, `{"query":"x","specialist_profile_id":"illustrator","mode":"magic"}`} {
+	for _, args := range []string{`{"query":"  ","specialist_profile_id":"illustrator"}`, `{"query":"x","specialist_profile_id":"illustrator","limit":9}`, `{"query":"x","specialist_profile_id":"illustrator","max_tokens":100}`, `{"query":"x","specialist_profile_id":"illustrator","mode":"magic"}`} {
 		if _, err := callTool("search_knowledge", j(t, args)); err == nil {
 			t.Fatal("accepted", args)
 		}
 	}
 	if len(*calls) != 0 {
 		t.Fatal("invalid call reached the server", *calls)
+	}
+	// No profile anywhere: the knowledge every agent shares.
+	call(t, "search_knowledge", `{"query":"x"}`)
+	if len(*calls) != 1 || asMap((*calls)[0].payload)["specialist_profile_id"] != "default" {
+		t.Fatal("no profile did not search the shared knowledge", *calls)
 	}
 	t.Setenv(knowledgeToolProfileEnv, "listing_reviewer")
 	calls = fakeRequest(t, `{"authority":"data_only_untrusted","binding_ids":[],"reason":"no_active_binding"}`)

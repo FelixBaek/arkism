@@ -211,6 +211,8 @@ dialog.mcp-add .dialog-head h2 { font: 500 calc(20px * var(--fs, 1))/1.5 var(--s
 dialog.mcp-add .dialog-head p { font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 dialog.mcp-add .dialog-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; padding: 0; margin: 12px 24px 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-panel); max-height: calc(100vh - 230px); overflow: auto; }
 .mcp-main { display: flex; flex-direction: column; gap: 20px; padding: 24px; min-width: 0; }
+.mcp-more > summary { cursor: pointer; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.mcp-more > :not(summary) { margin-top: 16px; }
 .mcp-side { display: flex; flex-direction: column; gap: 10px; padding: 24px 20px; border-left: 1px solid var(--nc-line); min-width: 0; }
 .mcp-side .cn-sec-head + * { margin-bottom: 0; }
 .mcp-side .cn-note { margin-bottom: 18px; }

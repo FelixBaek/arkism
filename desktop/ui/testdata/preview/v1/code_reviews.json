@@ -56,7 +56,8 @@
     ],
     "findings": [],
     "url": "https://github.com",
-    "quality": "success"
+    "quality": "success",
+    "commits": 3
    },
    {
     "repo": "acme/arkism",
@@ -111,7 +112,8 @@
       "text": "카테고리를 삭제해도 선택 상태(skillCat)가 남아, 스킬 표가 빈 화면이 돼요."
      }
     ],
-    "url": "https://github.com"
+    "url": "https://github.com",
+    "commits": 5
    },
    {
     "repo": "acme/arkism",
@@ -153,7 +155,8 @@
      }
     ],
     "findings": [],
-    "url": "https://github.com"
+    "url": "https://github.com",
+    "commits": 2
    },
    {
     "repo": "acme/orbit-app",
@@ -195,7 +198,8 @@
      }
     ],
     "findings": [],
-    "url": "https://github.com"
+    "url": "https://github.com",
+    "commits": 8
    },
    {
     "repo": "acme/orbit-app",
@@ -244,7 +248,8 @@
       "text": "캐시 키에 계정 ID가 빠져 있어요."
      }
     ],
-    "url": "https://github.com"
+    "url": "https://github.com",
+    "commits": 4
    },
    {
     "repo": "acme/arkism",
@@ -286,7 +291,8 @@
      }
     ],
     "findings": [],
-    "url": "https://github.com"
+    "url": "https://github.com",
+    "commits": 6
    }
   ],
   "reruns": []

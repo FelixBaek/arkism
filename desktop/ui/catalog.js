@@ -46,7 +46,10 @@
   const size = (n) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)}MB` : n >= 1024 ? `${Math.round(n / 1024)}KB` : `${n}B`);
   const readDetail = (q) => { try { return JSON.parse(q?.detail || "null"); } catch (_) { return null; } };
 
-  function factory({ state, el, button, request, notice, agentLogo, reload, pollTools }) {
+  // The built-in scan's verdict on a previewed skill (skillinstall.go previewDetail): [badge, line] or null when safe.
+  const SCAN = { DO_NOT_INSTALL: ["보안 위험", "위험한 내용이 있어요. 설치해도 직접 켜기 전까지 Arkism이 추천하지 않아요."], CAUTION: ["보안 주의", "조심할 내용이 있어요. 아래 이유를 확인해 주세요."] };
+
+  function factory({ state, el, button, request, notice, agentLogo, reload, pollTools, shownAgents, findingText = (x) => x }) {
     const post = (body) => request("/v1/agent_tools/requests", { method: "POST", body: JSON.stringify({ scope: state.scope, enabled: true, ...body }) });
     // settle waits for the host (it applies requests about once a minute) until every id is finished; null on timeout.
     async function settle(ids, alive, tries = 30) {
@@ -184,14 +187,24 @@
       const list = el("div", "v4s-list"); list.hidden = true;
       const updateL = el("label", "v4s-check"); const update = el("input"); update.type = "checkbox";
       updateL.append(update, " 이미 있는 스킬은 이 버전으로 바꾸기 (업데이트)"); updateL.hidden = true;
+      // A risky skill needs the person to say so before it is written (stricter than the scan alone).
+      const riskL = el("label", "v4s-check"); const risk = el("input"); risk.type = "checkbox";
+      riskL.append(risk, " 보안 위험이 있는 스킬인 걸 알고 설치할게요"); riskL.hidden = true;
       const foot = el("div", "v4s-install-foot"); foot.hidden = true;
       const count = el("strong", "");
-      const cancel = button("취소", "ghost", null, () => { found = null; pick = 0; update.checked = false; list.hidden = foot.hidden = updateL.hidden = true; status.textContent = ""; list.replaceChildren(); drawSide(); });
+      const cancel = button("취소", "ghost", null, () => { found = null; pick = 0; update.checked = risk.checked = false; list.hidden = foot.hidden = updateL.hidden = riskL.hidden = true; status.textContent = ""; list.replaceChildren(); drawSide(); });
       const ok = button("설치", "primary");
       foot.append(count, cancel, ok);
-      page.append(top, status, list, updateL, foot);
+      page.append(top, status, list, updateL, riskL, foot);
+      const risky = () => !!found?.skills?.some((s) => s.verdict === "DO_NOT_INSTALL");
+      // fail: a plain sentence; the server's own words sit under 자세히.
+      const fail = (text, code) => {
+        status.replaceChildren(text);
+        if (code) { const d = el("details", "meta"); d.append(el("summary", "", "자세히"), el("span", "mono", code)); status.append(d); }
+      };
       let found = null, pick = 0;
-      const picked = new Set(["claude_code"]);
+      const own = (shownAgents?.() || []).map(([k]) => k).filter((k) => k !== "agents" && TARGETS.some(([t]) => t === k));
+      const picked = new Set(own.length ? own : ["claude_code"]);
       const where = (k) => TARGETS.find(([t]) => t === k);
       function drawSide() {
         const s = found?.skills?.[pick];
@@ -204,6 +217,12 @@
         const facts = el("dl", "v4s-facts");
         for (const [k, v] of [["파일", `${s.files}개 · ${size(s.bytes)}`], [zip ? "SHA-256" : "커밋", found.commit.slice(0, 7)], ["이미 있음", (s.installed || []).map((k) => where(k)?.[1] || k).join(", ") || "없음"]]) facts.append(el("dt", "", k), el("dd", "", v));
         const check = el("section", "v4s-sec"); check.append(el("h3", "", "설치 전 확인"), facts);
+        const scan = SCAN[s.verdict];
+        if (scan) {
+          const why = el("ul", "");
+          for (const f of s.findings || []) why.append(el("li", "", findingText(f)));
+          check.append(el("p", "v4s-lead", `${scan[0]} · ${scan[1]}`), why);
+        } else if (s.verdict) check.append(el("p", "meta", "보안 검사에서 걸린 것이 없어요."));
         const agents = el("div", "v4s-agent-chips");
         for (const [k, n] of TARGETS) {
           const b = el("button", `v4s-agent${picked.has(k) ? " on" : " off"}`); b.type = "button"; b.title = where(k)[2];
@@ -212,7 +231,7 @@
           b.addEventListener("click", () => { picked.has(k) ? picked.delete(k) : picked.add(k); drawSide(); });
           agents.append(b);
         }
-        const to = el("section", "v4s-sec"); to.append(el("h3", "", "설치할 에이전트"), agents, el("p", "meta", "저장소에 든 스킬을 모두 같은 곳에 넣어요."));
+        const to = el("section", "v4s-sec"); to.append(el("h3", "", "설치할 에이전트"), agents, el("p", "meta", "저장소에 든 스킬을 모두 같은 곳에 넣어요. 공유 폴더(~/.agents/skills)는 그 폴더를 읽는 에이전트가 함께 써요."));
         const loc = el("section", "v4s-sec"); loc.append(el("h3", "", "위치"));
         for (const k of TARGETS.map(([t]) => t).filter((t) => picked.has(t))) loc.append(el("p", "mono v4s-loc", `${where(k)[2]}/${s.name}`));
         side.replaceChildren(head, check, to, loc);
@@ -225,12 +244,14 @@
           const r = el("button", `row v4s-row${i === pick ? " selected" : ""}`); r.type = "button";
           const text = el("div", "v4s-text");
           text.append(el("div", "v4s-title v4s-name", s.name), el("div", "v4s-meta", s.description || "설명 없음"));
-          r.append(text, s.installed?.length ? el("span", "v4s-uses", "이미 있음") : el("span", "v4s-badge", "새 스킬"));
+          const scan = SCAN[s.verdict];
+          r.append(text, ...(scan ? [el("span", "v4s-badge amber", scan[0])] : []), s.installed?.length ? el("span", "v4s-uses", "이미 있음") : el("span", "v4s-badge", "새 스킬"));
           r.addEventListener("click", () => { pick = i; drawList(); drawSide(); });
           return r;
         }));
         list.hidden = foot.hidden = false;
         updateL.hidden = !found.skills.some((s) => s.installed?.length);
+        riskL.hidden = !risky();
         count.textContent = `스킬 ${found.skills.length}개`;
       }
       top.addEventListener("submit", (e) => {
@@ -243,7 +264,7 @@
       async function preview() {
         const name = zip ? zip.name : parseSource(src.value);
         if (!name) { window.ArkismNeed(src, "GitHub 주소를 owner/repo 또는 owner/repo/경로 형태로 넣어 주세요."); return; }
-        look.disabled = pickZip.disabled = true; found = null; pick = 0; update.checked = false; list.hidden = foot.hidden = updateL.hidden = true; drawSide();
+        look.disabled = pickZip.disabled = true; found = null; pick = 0; update.checked = risk.checked = false; list.hidden = foot.hidden = updateL.hidden = riskL.hidden = true; drawSide();
         status.textContent = zip ? "서버가 zip을 확인하고 있어요. 1분쯤 걸려요…" : "서버가 저장소를 내려받아 확인하고 있어요. 1분쯤 걸려요…";
         try {
           const r = await post({ agent: "shared", kind: "skill_install", name, enabled: false, ...(zip ? { zip: zip.data } : {}) });
@@ -251,17 +272,18 @@
           const q = mine && (await settle([mine.id], alive))?.[0];
           if (!alive()) return;
           if (!q) { status.textContent = "아직 답이 없어요. 에이전트 동기화가 켜져 있는지 확인해 주세요."; return; }
-          if (q.status === "failed") { status.textContent = `확인하지 못했어요: ${q.error || ""}`; return; }
+          if (q.status === "failed") { fail("저장소를 확인하지 못했어요. 주소가 맞는지 보고 다시 불러와 주세요.", q.error); return; }
           found = readDetail(q);
           if (!found?.skills?.length) { found = null; status.textContent = "이 경로에서 SKILL.md를 찾지 못했어요."; return; }
           drawList(); drawSide();
         } catch (err) {
-          status.textContent = `요청하지 못했어요 (${err.message}).`;
+          fail("요청하지 못했어요. 잠시 뒤 다시 불러와 주세요.", err.message);
         } finally { look.disabled = pickZip.disabled = false; }
       }
       ok.addEventListener("click", async () => {
         if (!found) return;
         if (!picked.size) { notice("넣을 에이전트를 골라 주세요."); return; }
+        if (risky() && !risk.checked) { window.ArkismNeed(risk, "보안 위험이 있는 스킬이에요. 알고 설치하려면 체크해 주세요."); return; }
         const name = zip ? zip.name : `${found.source}@${found.commit}`;
         ok.disabled = true;
         status.textContent = "설치를 요청했어요. 서버가 1분 안에 설치해요…";
@@ -270,12 +292,12 @@
           const mine = latest(r, "skill_install", name);
           const q = mine && (await settle([mine.id], () => true))?.[0];
           if (!q) { notice("설치 결과를 아직 받지 못했어요. 잠시 뒤 스킬 목록을 확인해 주세요."); return; }
-          if (q.status === "failed") { if (alive()) status.textContent = `설치하지 못했어요: ${q.error || ""}`; else notice(`설치하지 못했어요: ${q.error || ""}`); return; }
+          if (q.status === "failed") { if (alive()) fail("설치하지 못했어요. 다시 설치를 눌러 주세요.", q.error); else notice("설치하지 못했어요. 스킬 › 설치에서 다시 해 주세요."); return; }
           const done = readDetail(q)?.installed || [];
           notice(`스킬을 설치했어요: ${done.join(", ")}. 목록에는 몇 분 안에 보여요.`);
           reload?.();
         } catch (err) {
-          status.textContent = `요청하지 못했어요 (${err.message}).`;
+          fail("요청하지 못했어요. 잠시 뒤 다시 설치를 눌러 주세요.", err.message);
         } finally { ok.disabled = false; }
       });
       drawSide();

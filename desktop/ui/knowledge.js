@@ -1,6 +1,6 @@
-// TOOLS › 지식 (Figma 384:30031 자료 · 384:30671 조각 · 384:31269 위키).
+// TOOLS › 지식 (Figma 384:30031 자료 · 384:30671 부분 · 384:31269 위키).
 // 자료 = uploaded knowledge sources (GET /v1/knowledge/sources, …/documents). A new version puts the source back
-// to draft: a person reviews it before search sees it. 조각 = the current document's heading paths, its versions and
+// to draft: a person reviews it before search sees it. 부분 = the current document's heading paths, its versions and
 // a test search (POST /v1/knowledge/search) — chunk text is never listed, only search evidence shows it.
 // 위키 = pages an AI drafted from sources (GET /v1/wiki/pages): draft → a person approves → reviewed; edited pages lock.
 // Removing a source from the wiki asks the server for a dry-run preview first (…/remove?dry_run=1); a server that
@@ -9,21 +9,24 @@ window.ArkismKnowledge = (ctx) => {
   "use strict";
   const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
-  const FORMATS = [["", "전체"], [".md", "Markdown"], [".txt", "텍스트"], [".json", "JSON"]];
-  const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json" };
+  const SHARED = "default"; // the server's default scope: every agent of this person searches it
+  const FORMATS = [["", "전체"], [".docx", "Word"], [".md", "Markdown"], [".txt", "텍스트"], [".json", "JSON"]];
+  const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".docx": DOCX };
+  const KINDS = "Word·Markdown·텍스트·JSON";
   const REJECT = {
     path_outside_wiki: "위키 밖 경로", path_identity_mismatch: "경로와 제목이 다름", forbidden_field: "금지된 머리말", unknown_attribute: "모르는 속성",
     not_planned: "계획에 없던 페이지", not_in_source: "원문에 없는 주제", type_mismatch: "종류가 다름", duplicate_block: "같은 블록 반복",
     secret_detected: "비밀값이 들어 있음", content_refused: "내용 거부", bad_body: "본문 형식 오류", unterminated_block: "끝나지 않은 블록"
   };
   const MERGE = { create: "새로 만듦", append: "덧붙임", "replace-section": "한 절 바꿈", rewrite: "다시 씀", human_edit: "사람이 고침" };
-  const EXCLUDE = { superseded_version: "예전 버전", duplicate_chunk: "같은 조각", result_limit: "개수 제한", context_budget: "토큰 한도", no_text_match: "글자가 안 맞음", embedding_unavailable: "벡터 없음" };
+  const EXCLUDE = { superseded_version: "예전 버전", duplicate_chunk: "같은 부분", result_limit: "개수 제한", context_budget: "토큰 한도", no_text_match: "글자가 안 맞음", embedding_unavailable: "벡터 없음" };
   const JOB = { pending: "대기", running: "실행 중", done: "끝남", failed: "실패" };
   const K = {
     tab: "sources", state: "idle", error: "", sources: [], total: 0, facets: {}, wiki: "idle", pages: [], links: [], jobs: [],
     src: { q: "", status: "", sort: "recent", format: "" }, srcSel: "", docs: {},
     pg: { q: "", type: "", sort: "recent", chip: "all" }, pageSel: "", compare: false, edit: null,
-    doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: PROFILES[0][0], q: "", busy: false, result: null, error: "" },
+    doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: SHARED, q: "", busy: false, result: null, error: "" },
     busy: false, notice: "", remove: null, upload: null
   };
   let typing = 0;
@@ -35,8 +38,9 @@ window.ArkismKnowledge = (ctx) => {
   const get = (path, extra) => request(`${path}?${query(extra)}`);
   const post = (path, body = {}) => request(path, { method: "POST", body: JSON.stringify({ scope: state.scope, ...body }) });
   const off = (e) => /HTTP 404|access_denied|HTTP 403/.test(e?.message || "");
+  // A plain sentence first; an unknown server code stays out of the main line.
   const errText = (e) => ({ revision_conflict: "그새 바뀌었어요. 새로고침했어요.", access_denied: "권한이 없어요. 사람만 할 수 있는 동작이에요.", secret_detected: "비밀값이 들어 있어 받지 않았어요.",
-    invalid_request: "요청이 맞지 않아요.", payload_too_large: "파일이 너무 커요 (64KB까지)." }[e?.message] || `실패했어요 (${e?.message || "오류"}).`);
+    invalid_request: "파일을 읽지 못했어요. 내용과 형식을 확인하고 다시 올려 주세요.", payload_too_large: "파일이 너무 커요.", artifact_too_large: "파일이 너무 커요." }[e?.message] || "잠시 문제가 생겼어요. 다시 시도해 주세요.");
   const noI18n = (n) => { n.dataset.noI18n = ""; return n; };
   const num = (n) => Number(n || 0).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
 
@@ -90,9 +94,11 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   // ---------------------------------------------------------------- states
-  const srcState = (s) => s.lifecycle_status === "failed" ? ["실패", "amber"] : s.lifecycle_status === "draft" || s.trust_level !== "reviewed" ? ["검토 대기", "amber"] : ["사용 중", ""];
+  const srcState = (s) => s.lifecycle_status === "failed" ? ["실패", "amber"] : s.lifecycle_status === "draft" || s.trust_level !== "reviewed" ? ["확인 전", "amber"] : ["사용 중", ""];
   const needs = (s) => s.lifecycle_status === "failed" || s.lifecycle_status === "draft" || s.trust_level !== "reviewed";
-  const profileName = (id) => PROFILES.find(([k]) => k === id)?.[1] || id;
+  const profileName = (id) => (id === SHARED ? "모든 AI" : PROFILES.find(([k]) => k === id)?.[1] || id);
+  const sharedBind = (s) => s.bindings.find((b) => b.specialist_profile_id === SHARED);
+  const inUse = (s) => !needs(s) && sharedBind(s)?.lifecycle_status === "active_synthetic";
   const bindState = (b) => b.lifecycle_status === "active_synthetic" ? "켜짐" : b.lifecycle_status === "suspended" ? "꺼짐" : "후보";
   const sourceName = (id) => K.sources.find((s) => s.id === id)?.display_name || id;
   const pageState = (p) => p.review_state === "draft" ? ["초안", "amber"] : p.stale_sources?.length ? ["출처 바뀜", "amber"] : p.locked ? ["잠금", "line"]
@@ -179,21 +185,82 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   // ---------------------------------------------------------------- 올리기 (new source or a new version)
+  // The uploader's own check is the human review: one dialog asks it before anything is sent.
+  function askUse(name, note) {
+    return new Promise((resolve) => {
+      const dlg = el("dialog", "cn-confirm v4k-ask"), form = el("form"), btns = el("div", "cn-confirm-btns");
+      form.method = "dialog";
+      const opt = (label, cls, value) => { const b = button(label, cls); b.type = "submit"; b.value = value; return b; };
+      const no = opt("취소", "", "no");
+      btns.append(no, opt("올리기만", "", "only"), opt("확인했어요 · 쓰게 하기", "primary", "use"));
+      form.append(el("h2", "", "내 AI가 이 자료를 쓰게 할까요?"), noI18n(el("p", "mono", name)), ...(note ? [el("p", "", note)] : []),
+        el("p", "", "내용이 맞는지 확인했다면 '쓰게 하기'를 눌러 주세요. 내 모든 AI가 이 자료를 찾아 써요. 나중에 자료 상세에서 끌 수 있어요."), btns);
+      dlg.append(form);
+      dlg.addEventListener("close", () => { resolve(["use", "only"].includes(dlg.returnValue) ? dlg.returnValue : ""); dlg.remove(); });
+      document.body.append(dlg);
+      dlg.showModal();
+      no.focus();
+    });
+  }
+  // Reviewed + bound to the shared scope + on: the same three server steps a person did by hand before.
+  async function useEverywhere(id, revision, reviewed, bindings) {
+    if (!reviewed) await post(`/v1/knowledge/sources/${encodeURIComponent(id)}/review`, { expected_revision: revision, status: "active", trust_level: "reviewed" });
+    const b = bindings.find((x) => x.specialist_profile_id === SHARED) || await post("/v1/knowledge/bindings", { binding_key: `${id}:${SHARED}`, knowledge_source_id: id,
+      specialist_profile_id: SHARED, specialist_profile_version_id: "v1", skill_id: `${SHARED}.v1`, trust_requirement: "reviewed", access_mode: "cite_required" });
+    if ((b?.lifecycle_status || b?.knowledge?.lifecycle_status || b?.status) !== "active_synthetic") await post(`/v1/knowledge/bindings/${encodeURIComponent(b.id)}/state`, { expected_revision: b.revision, status: "active_synthetic" });
+  }
+  const b64 = (buf) => { let bin = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(bin); };
   function pickFile(source) {
-    const input = el("input"); input.type = "file"; input.accept = ".md,.txt,.json";
+    const input = el("input"); input.type = "file"; input.accept = ".docx,.md,.txt,.json,.pdf";
     input.addEventListener("change", async () => {
       const f = input.files?.[0];
       if (!f) return;
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
-      if (!MIME[ext]) { K.notice = "Markdown·텍스트·JSON 파일만 올릴 수 있어요."; paint(); return; }
-      if (f.size > 64 << 10) { K.notice = "파일이 너무 커요 (64KB까지)."; paint(); return; }
-      const content = await f.text();
+      const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase(), word = ext === ".docx";
+      if (ext === ".pdf") { K.notice = "PDF는 아직 읽지 못해요. Word(.docx)나 텍스트(.txt)로 저장해서 올려 주세요."; paint(); return; }
+      if (!MIME[ext]) { K.notice = `${KINDS} 파일을 올릴 수 있어요. 다른 파일은 텍스트로 저장해서 올려 주세요.`; paint(); return; }
+      if (word && f.size > 4 << 20) { K.notice = "파일이 너무 커요. Word 파일은 4MB까지 올릴 수 있어요."; paint(); return; }
+      const data = word ? { content_base64: b64(await f.arrayBuffer()) } : { content: await f.text() };
+      const parts = word ? [] : window.ArkismKnowledge.splitText(data.content);
+      if (parts.length > 1) {
+        // The server takes 64KB of text per file: a bigger text goes up as several sources, one per part.
+        if (ext === ".json") { K.notice = "JSON 파일은 나누면 깨져서 64KB까지만 올릴 수 있어요."; paint(); return; }
+        if (source) { K.notice = "새 버전은 64KB까지 올릴 수 있어요. 더 큰 파일은 '+ 파일 올리기'로 올리면 나눠서 올려요."; paint(); return; }
+        const choice = await askUse(f.name, `64KB가 넘어서 문단 단위로 ${parts.length}개로 나눠 올려요.`);
+        if (choice) uploadParts(f.name, ext, parts, choice);
+        return;
+      }
       const same = source || K.sources.find((s) => s.display_name === f.name);
-      void act(() => post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext], content, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) }),
-        (r) => r?.duplicate ? "같은 내용이라 새 버전을 만들지 않았어요." : same ? "새 버전을 올렸어요. 다시 검토해야 검색에 나와요." : "올렸어요. 검토하면 검색에 나와요.");
+      const choice = await askUse(f.name);
+      if (!choice) return;
       if (same) delete K.docs[same.id];
+      void act(async () => {
+        const r = await post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext], ...data, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) });
+        const src = r?.source;
+        if (choice === "use" && src?.id) await useEverywhere(src.id, src.revision, r.duplicate && same && !needs(same), same?.bindings || []);
+        return r;
+      }, (r) => choice === "use" ? (r?.duplicate ? "같은 내용이에요. 이제 내 모든 AI가 이 자료를 찾아 써요." : "올렸어요. 이제 내 모든 AI가 이 자료를 찾아 써요.")
+        : r?.duplicate ? "같은 내용이라 새 버전을 만들지 않았어요." : "올렸어요. 자료를 열어 확인하고 '쓰게 하기'를 눌러 주세요.");
     });
     input.click();
+  }
+  // One progress line while the parts go up; a part that fails does not stop the rest, and the end says which failed.
+  // A name holds no "/" (the server refuses it), so "(1／3)" uses the full-width slash.
+  function uploadParts(name, ext, parts, choice) {
+    const base = name.slice(0, name.length - ext.length), n = parts.length;
+    void act(async () => {
+      const failed = [];
+      for (const [i, content] of parts.entries()) {
+        const part = `${base} (${i + 1}／${n})${ext}`, same = K.sources.find((s) => s.display_name === part);
+        K.notice = `나눠서 올리는 중… ${i + 1}/${n}`; paint();
+        try {
+          if (same) delete K.docs[same.id];
+          const r = await post("/v1/knowledge/ingest", { source_key: part, filename: part, mime_type: MIME[ext], content, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) });
+          if (choice === "use" && r?.source?.id) await useEverywhere(r.source.id, r.source.revision, r.duplicate && same && !needs(same), same?.bindings || []);
+        } catch (e) { if (failed.length === n - 1) throw e; failed.push([i + 1, errText(e)]); }
+      }
+      return failed;
+    }, (failed) => failed.length ? `${n}개 중 ${n - failed.length}개를 올렸어요. 못 올린 부분은 ${failed.map(([i]) => i).join(", ")}번째예요. ${failed[0][1]} 고친 뒤 같은 파일을 다시 올리면 바뀐 부분만 새로 올라가요.`
+      : choice === "use" ? `${n}개로 나눠 올렸어요. 이제 내 모든 AI가 이 자료를 찾아 써요.` : `${n}개로 나눠 올렸어요. 자료를 열어 확인하고 '쓰게 하기'를 눌러 주세요.`);
   }
 
   // ---------------------------------------------------------------- 자료 (384:30031)
@@ -201,12 +268,12 @@ window.ArkismKnowledge = (ctx) => {
     const parts = [];
     const pending = K.sources.filter((s) => s.lifecycle_status === "draft" || (s.lifecycle_status !== "failed" && s.trust_level !== "reviewed")).length;
     const failed = K.sources.filter((s) => s.lifecycle_status === "failed").length;
-    if (pending + failed) parts.push(attn(pending + failed, [pending && `검토 대기 ${pending}`, failed && `추출 실패 ${failed}`].filter(Boolean).join(" · "), "하나씩 확인하기",
+    if (pending + failed) parts.push(attn(pending + failed, [pending && `확인 전 ${pending}`, failed && `읽기 실패 ${failed}`].filter(Boolean).join(" · "), "하나씩 확인하기",
       () => { const s = K.sources.find(needs); if (s) openSource(s.id); }));
     const bar = el("div", "v4s-bar");
     bar.append(searchBox("문서·목차 검색", K.src.q, (v) => { K.src.q = v; void loadSources(); }),
-      select("상태", [["", "상태: 모두"], ["검토 대기", "검토 대기"], ["사용 중", "사용 중"], ["실패", "실패"]], K.src.status, (v) => { K.src.status = v; void loadSources(); }),
-      select("정렬", [["recent", "최근 올린 순"], ["name", "이름 순"], ["chunks", "조각 많은 순"]], K.src.sort, (v) => { K.src.sort = v; void loadSources(); }));
+      select("상태", [["", "상태: 모두"], ["검토 대기", "확인 전"], ["사용 중", "사용 중"], ["실패", "실패"]], K.src.status, (v) => { K.src.status = v; void loadSources(); }),
+      select("정렬", [["recent", "최근 올린 순"], ["name", "이름 순"], ["chunks", "긴 자료 순"]], K.src.sort, (v) => { K.src.sort = v; void loadSources(); }));
     parts.push(bar);
     if (noticeLine()) parts.push(noticeLine());
     const cols = el("div", "v4k-cols");
@@ -223,20 +290,25 @@ window.ArkismKnowledge = (ctx) => {
       g.addEventListener("click", () => { K.src.format = k; void loadSources(); });
       side.append(g);
     }
-    side.append(button("+ 파일 올리기", "v4k-add", null, () => pickFile(null)));
+    side.append(el("p", "v4k-kinds", `올릴 수 있는 파일: ${KINDS}`));
     const main = el("div", "v4k-main");
     const items = K.sources;
     const list = el("div", "v4s-list");
     const sourceRow = (s) => {
-      const meta = [s.lifecycle_status === "failed" ? "추출 실패" : `조각 ${num(s.chunk_count)}개`, `버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`];
-      if (s.bindings.length) meta.push(s.bindings.map((b) => profileName(b.specialist_profile_id)).join(", "));
-      const st = srcState(s);
-      const node = row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), st[0] === "사용 중" ? el("span", "v4s-uses v4k-uses", `${num(s.chunk_count)}조각`) : badge(st)], () => openSource(s.id)); node.dataset.id = s.id; return node;
+      const meta = [s.lifecycle_status === "failed" ? "읽기 실패" : `버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`];
+      if (inUse(s)) meta.push("모든 AI가 씀");
+      else if (!needs(s) && s.lifecycle_status !== "failed") meta.push("AI가 안 씀");
+      const node = row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), badge(inUse(s) || needs(s) ? srcState(s) : ["꺼짐", "line"])], () => openSource(s.id)); node.dataset.id = s.id; return node;
     };
     ctx.virtualList.mount({ container: list, scrollport: $("#table"), items, row: sourceRow, key: JSON.stringify(sourceFilters()) });
-    if (!items.length) list.append(el("div", "empty", K.sources.length ? "조건에 맞는 자료가 없어요." : "아직 올린 자료가 없어요. Markdown·텍스트·JSON 파일을 올려 보세요."));
+    if (!items.length) {
+      const filtered = K.src.q || K.src.status || K.src.format, box = el("div", "empty");
+      box.append(el("p", "", filtered ? "조건에 맞는 자료가 없어요." : `아직 올린 자료가 없어요. ${KINDS} 파일을 올리면 내 AI가 찾아 써요.`),
+        filtered ? button("조건 지우기", "", null, () => { Object.assign(K.src, { q: "", status: "", format: "" }); void loadSources(); }) : button("파일 올리기", "primary", null, () => pickFile(null)));
+      list.append(box);
+    }
     main.append(list, el("p", "v4s-foot", sourceBusy ? "불러오는 중…" : `전체 ${K.total}개 중 ${items.length}개 표시 · 전체에서 검색·정렬`));
-    if (sourceError) main.append(el("p", "ss-note", `불러오지 못했어요 (${sourceError}).`));
+    if (sourceError) main.append(el("p", "ss-note", "자료를 더 불러오지 못했어요."));
     if (sourcePages.snapshot(sourceFilters()).cursor || sourceError) { const b = button(sourceError ? "다시 시도" : "자료 더 보기", "", null, () => loadSources(true)); b.disabled = sourceBusy; main.append(b); }
     cols.append(side, main);
     parts.push(cols);
@@ -253,14 +325,26 @@ window.ArkismKnowledge = (ctx) => {
     const d = current(s.id);
     const box = detailShell(`문서 · ${s.format || "파일"}`);
     const head = el("div", "v4s-head");
-    head.append(noI18n(el("h2", "mono v4k-h2", s.display_name)), el("p", "v4s-lead", [`버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`, `조각 ${num(s.chunk_count)}개`].join(" · ")));
+    head.append(noI18n(el("h2", "mono v4k-h2", s.display_name)), el("p", "v4s-lead", [`버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`].join(" · ")));
     box.append(head);
+    const use = (reviewed) => act(() => useEverywhere(s.id, s.revision, reviewed, s.bindings), "이제 내 모든 AI가 이 자료를 찾아 써요.");
     // action card first
-    if (s.lifecycle_status === "failed") box.append(card(`글을 꺼내지 못했어요${d?.error_code ? ` (${d.error_code})` : ""}. 파일을 고쳐 다시 올려 주세요.`, [button("다시 올리기", "primary", null, () => pickFile(s))]));
-    else if (needs(s)) box.append(card(s.document_count > 1 ? "새 버전이 올라왔어요. 다시 검토해야 검색에 나와요." : "올린 자료예요. 검토해야 검색에 나와요.",
-      [button("검토 완료로 표시", "primary", null, () => act(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/review`, { expected_revision: s.revision, status: "active", trust_level: "reviewed" }), "검토했어요. 이제 검색에 나와요.")),
-        button("조각 보기", "", null, () => openDoc(s.id)), link("나중에", () => { const n = K.sources.find((x) => x.id !== s.id && needs(x)); if (n) openSource(n.id); })]));
-    // 조각
+    if (s.lifecycle_status === "failed") box.append(card("파일에서 글을 읽지 못했어요. 파일을 고쳐 다시 올려 주세요.", [button("다시 올리기", "primary", null, () => pickFile(s))]));
+    else if (needs(s)) box.append(card(s.document_count > 1 ? "새 버전이 올라왔어요. 내용을 확인하기 전까지 AI가 쓰지 않아요." : "아직 AI가 쓰지 않는 자료예요. 내용이 맞는지 확인했다면 쓰게 해 주세요.",
+      [button("확인했어요 · 내 AI가 쓰게 하기", "primary", null, () => use(false)),
+        button("내용 보기", "", null, () => openDoc(s.id)), link("나중에", () => { const n = K.sources.find((x) => x.id !== s.id && needs(x)); if (n) openSource(n.id); })]));
+    // 내 AI가 쓰기: one switch for every agent
+    if (!needs(s)) {
+      const sb = sharedBind(s), on = inUse(s);
+      const r = el("div", "v4k-bind");
+      r.append(el("span", "", on ? "내 모든 AI가 이 자료를 찾아 써요." : "지금은 AI가 이 자료를 쓰지 않아요."),
+        button(on ? "그만 쓰게 하기" : "쓰게 하기", on ? "ghost" : "primary", null, () => on
+          ? act(() => post(`/v1/knowledge/bindings/${encodeURIComponent(sb.id)}/state`, { expected_revision: sb.revision, status: "suspended" }), "이제 AI가 이 자료를 쓰지 않아요.")
+          : use(true)));
+      r.lastChild.disabled = K.busy;
+      box.append(sec("내 AI가 쓰기", null, r));
+    }
+    // 내용: the headings search uses
     const secs = d?.sections || [];
     const chunkList = el("div", "v4k-chunks");
     if (K.docs[s.id]?.state === "loading" && !secs.length) chunkList.append(el("p", "meta", "불러오는 중…"));
@@ -271,15 +355,25 @@ window.ArkismKnowledge = (ctx) => {
       c.addEventListener("click", () => { openDoc(s.id); K.secSel = i; paint(); });
       chunkList.append(c);
     });
-    box.append(sec("조각", s.chunk_count ? link(`조각 ${num(s.chunk_count)}개 보기`, () => openDoc(s.id)) : null, chunkList));
-    // 전문가 연결
+    box.append(sec("내용", s.chunk_count ? link(`검색에 쓰는 부분 ${num(s.chunk_count)}개 보기`, () => openDoc(s.id)) : null, chunkList));
+    // 위키
+    box.append(wikiSection(s));
+    box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["확인한 사람", s.approved_by || "", true], ["올린 때", ago(s.created_at)]])));
+    const tools = el("div", "v4s-actions");
+    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)));
+    tools.lastChild.disabled = K.busy;
+    box.append(sec("관리", null, tools, noticeLine(), el("p", "meta", "AI는 자료를 지시가 아닌 참고로만 읽어요.")));
+    // 자세히: specialist bindings and index facts for people who need them
+    const more = el("details", "v4k-more");
+    more.append(el("summary", "", "자세히"));
     const binds = el("div", "v4k-binds");
-    for (const b of s.bindings) {
+    binds.append(el("p", "meta", "특정 전문가에게만 따로 켤 수도 있어요."));
+    for (const b of s.bindings.filter((x) => x.specialist_profile_id !== SHARED)) {
       const on = b.lifecycle_status === "active_synthetic";
       const r = el("div", "v4k-bind");
       r.append(el("span", "", profileName(b.specialist_profile_id)), el("small", "", bindState(b)),
         button(on ? "끄기" : "켜기", on ? "ghost" : "", null, () => act(() => post(`/v1/knowledge/bindings/${encodeURIComponent(b.id)}/state`, { expected_revision: b.revision, status: on ? "suspended" : "active_synthetic" }), on ? "껐어요." : "켰어요. 이 전문가가 검색할 때 써요.")));
-      if (!on && needs(s)) { r.lastChild.disabled = true; r.lastChild.title = "검토한 자료만 켤 수 있어요"; }
+      if (!on && needs(s)) { r.lastChild.disabled = true; r.lastChild.title = "확인한 자료만 켤 수 있어요"; }
       else r.lastChild.disabled = K.busy;
       binds.append(r);
     }
@@ -292,18 +386,13 @@ window.ArkismKnowledge = (ctx) => {
       add.lastChild.disabled = K.busy;
       binds.append(add);
     }
-    if (!s.bindings.length) binds.prepend(el("p", "meta", "연결된 전문가가 없어요. 연결해야 검색에 써요."));
-    box.append(sec("전문가 연결", null, binds));
-    // 위키
-    box.append(wikiSection(s));
-    // 정보
-    box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["신뢰", s.trust_level === "reviewed" ? "검토됨" : "사용자가 올림"], ["검토한 사람", s.approved_by || "", true],
-      ["색인", d ? `${num(d.indexed_chunks)} / ${num(d.chunk_count)}` : ""], ["나누는 법", d ? `제목 기준 · ${d.chunker_version}` : ""], ["올린 때", ago(s.created_at)]])));
-    const tools = el("div", "v4s-actions");
-    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("벡터 색인", "ghost", null, () => act(() => post("/v1/knowledge/index", { knowledge_source_id: s.id }),
+    const idx = el("div", "v4s-actions");
+    idx.append(button("벡터 색인", "ghost", null, () => act(() => post("/v1/knowledge/index", { knowledge_source_id: s.id }),
       (r) => `색인했어요 (새로 ${r?.embedded ?? 0} · 그대로 ${r?.reused ?? 0} · 실패 ${r?.failed ?? 0}).`)));
-    for (const b of tools.querySelectorAll("button")) b.disabled = K.busy;
-    box.append(sec("관리", null, tools, noticeLine(), el("p", "meta", "AI는 원문을 지시가 아닌 자료로만 읽어요.")));
+    idx.lastChild.disabled = K.busy;
+    more.append(sec("전문가 연결", null, binds), facts([["검색에 쓰는 부분", `${num(s.chunk_count)}개`], ["색인", d ? `${num(d.indexed_chunks)} / ${num(d.chunk_count)}` : ""], ["나누는 법", d ? `제목 기준 · ${d.chunker_version}` : ""],
+      ["읽은 오류", d?.error_code || "", true]]), idx);
+    box.append(more);
   }
 
   function wikiSection(s) {
@@ -311,32 +400,40 @@ window.ArkismKnowledge = (ctx) => {
     const last = jobs[0];
     const kids = [];
     const pages = K.pages.filter((p) => p.knowledge_source_ids?.includes(s.id) && p.review_state !== "deleted");
+    kids.push(el("p", "meta", "위키는 AI가 자료를 주제별로 정리한 글이에요. 검토하면 검색에도 쓰여요."));
     kids.push(el("p", "meta", pages.length ? `이 자료에서 나온 위키 ${pages.length}쪽` : "아직 이 자료로 만든 위키가 없어요."));
+    const more = el("details", "v4k-more");
+    more.append(el("summary", "", "자세히"));
     if (last) {
       const j = last.job || {}, r = j.result;
-      const line = [JOB[last.status] || last.status, `호출 ${j.calls || 0}번`, `토큰 ${num(j.tokens)}`, j.generator?.model, ago(last.updated_at)].filter(Boolean).join(" · ");
+      kids.push(el("p", "meta", `마지막 작업: ${JOB[last.status] || last.status} · ${ago(last.updated_at)}`));
+      if (j.error) kids.push(el("p", "meta", j.error === "wiki_budget_exceeded" ? "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." : j.error === "revision_conflict" ? "자료가 바뀌어 멈췄어요. 다시 만들어 주세요." : "만들지 못했어요. 다시 시도해 주세요."));
+      const line = [`호출 ${j.calls || 0}번`, `토큰 ${num(j.tokens)}`, j.generator?.model, j.error && !["wiki_budget_exceeded", "revision_conflict"].includes(j.error) ? j.error : ""].filter(Boolean).join(" · ");
       const box = el("div", "v4k-job");
       box.append(el("p", "v4k-job-line", line)); // fixed words translate piece by piece; the model id has no Hangul
-      if (j.error) box.append(el("p", "meta", j.error === "wiki_budget_exceeded" ? "오늘 쓸 수 있는 모델 호출을 다 썼어요." : j.error === "revision_conflict" ? "자료가 바뀌어 멈췄어요. 다시 만들어 주세요." : `오류: ${j.error}`));
       if (r) {
         box.append(el("p", "meta", `새 ${r.created?.length || 0} · 고침 ${r.updated?.length || 0} · 그대로 ${r.unchanged?.length || 0} · 잠겨서 건너뜀 ${r.skipped_locked?.length || 0} · 거부 ${r.rejected?.length || 0}`));
         if ((r.rejected || []).length) {
           const ul = el("ul", "v4k-rejects");
           for (const x of r.rejected.slice(0, 6)) { const li = el("li"); li.append(noI18n(el("span", "mono", x.path)), " · ", REJECT[x.reason] || x.reason); ul.append(li); }
           box.append(ul);
-          if (r.rejected.length >= 3) box.append(el("p", "v4k-warn", "거부가 많아요. 원문이 모델을 조종하려 했을 수 있어요."));
+          if (r.rejected.length >= 3) kids.push(el("p", "v4k-warn", "AI가 쓴 글을 여러 번 거부했어요. 자료에 AI를 속이려는 문장이 있을 수 있어요."));
         }
       }
-      kids.push(box);
+      more.append(box);
     }
     const acts = el("div", "v4s-actions");
     const cap = el("input", "v4s-input v4k-cap"); cap.type = "number"; cap.min = "1000"; cap.max = "120000"; cap.step = "1000"; cap.placeholder = "40000"; cap.setAttribute("aria-label", "토큰 상한");
     acts.append(button("위키 만들기", "", null, () => act(() => post("/v1/wiki/jobs", { knowledge_source_id: s.id, ...(cap.value ? { max_total_tokens: Number(cap.value) } : {}) }),
-      (r) => r?.duplicate ? "이 버전으로 만든 작업이 이미 있어요." : "위키 작업을 대기열에 넣었어요.")), cap);
+      (r) => r?.duplicate ? "이 버전으로 만든 작업이 이미 있어요." : "위키 작업을 대기열에 넣었어요.")));
+    const capRow = el("label", "v4k-caprow");
+    capRow.append(el("span", "meta", "한 번에 쓸 토큰 (비우면 기본값)"), cap);
+    more.append(capRow);
     if (last && ["pending", "failed"].includes(last.status)) acts.append(button("지금 실행", "ghost", null, () => act(() => post(`/v1/wiki/jobs/${encodeURIComponent(last.id)}/run`), "실행했어요. 초안은 위키 탭에서 검토해요.")));
     acts.append(button("위키에서 빼기", "ghost danger", null, () => previewRemove(s)));
     for (const b of acts.querySelectorAll("button")) b.disabled = K.busy || (needs(s) && b.textContent === "위키 만들기");
-    kids.push(acts);
+    if (needs(s)) acts.append(el("small", "meta", "확인한 자료로 만들 수 있어요."));
+    kids.push(acts, more);
     if (K.remove?.id === s.id) kids.push(removeCard(s));
     return sec("위키", null, ...kids);
   }
@@ -358,7 +455,7 @@ window.ArkismKnowledge = (ctx) => {
   function removeCard(s) {
     const R = K.remove;
     if (R.state === "loading") return card("미리 세어 보는 중…", []);
-    if (R.state === "error") return card(`미리 보지 못했어요 (${R.error}).`, [link("닫기", () => { K.remove = null; paint(); })]);
+    if (R.state === "error") return card("미리 보지 못했어요. 잠시 뒤 다시 시도해 주세요.", [button("다시 시도", "", null, () => previewRemove(s)), link("닫기", () => { K.remove = null; paint(); })]);
     const go = async () => {
       if (R.state === "plain" && !(await confirmPop("위키에서 뺄까요?", `${s.display_name}만 근거인 위키 페이지는 지워지고, 다른 페이지는 이 출처만 빠져요. 잠긴 페이지는 지우지 않아요. 되돌릴 수 없어요.`, "빼기"))) return;
       K.remove = null;
@@ -371,7 +468,7 @@ window.ArkismKnowledge = (ctx) => {
     return card(line, [button("빼기", "danger", null, go), link("취소", () => { K.remove = null; paint(); })]);
   }
 
-  // ---------------------------------------------------------------- 조각 (384:30671)
+  // ---------------------------------------------------------------- 부분 (384:30671)
   function openDoc(id) { K.doc = id; K.docTab = "sections"; K.secSel = 0; K.verSel = ""; K.search.result = null; K.search.error = ""; K.notice = ""; void docs(id); paint(); }
   function renderDoc(table) {
     const s = K.sources.find((x) => x.id === K.doc);
@@ -382,7 +479,7 @@ window.ArkismKnowledge = (ctx) => {
     parts.push(chips(tabs, K.docTab, (k) => { K.docTab = k; paint(); }));
     if (noticeLine()) parts.push(noticeLine());
     if (!dl || dl.state === "loading") { parts.push(el("div", "empty", "불러오는 중…")); table.replaceChildren(...parts); $("#detail").replaceChildren(); return; }
-    if (dl.state === "error") { parts.push(el("div", "empty", `문서를 불러오지 못했어요 (${dl.error}).`)); table.replaceChildren(...parts); $("#detail").replaceChildren(); return; }
+    if (dl.state === "error") { const e = el("div", "empty"); e.append(el("p", "", "문서를 불러오지 못했어요."), button("다시 시도", "", null, () => docs(s.id, true))); parts.push(e); table.replaceChildren(...parts); $("#detail").replaceChildren(); return; }
     if (K.docTab === "sections") {
       const list = el("div", "v4s-list");
       (d?.sections || []).forEach((path, i) => {
@@ -391,17 +488,17 @@ window.ArkismKnowledge = (ctx) => {
         list.append(row("v4k-row", K.secSel === i, [n, text(leaf, path || "본문", false)], () => { K.secSel = i; paint(); }));
       });
       if (!d?.sections.length) list.append(el("div", "empty", "목차가 없어요. 제목 없는 글은 길이로 나눠요."));
-      parts.push(list, el("p", "v4s-foot", d ? `조각 ${num(d.chunk_count)}개 · 제목 ${d.sections.length}개 · 조각 본문은 시험 검색에서 보여요` : ""));
+      parts.push(list, el("p", "v4s-foot", d ? `부분 ${num(d.chunk_count)}개 · 제목 ${d.sections.length}개 · 부분 본문은 시험 검색에서 보여요` : ""));
       table.replaceChildren(...parts);
       return sectionDetail(s, d);
     }
     if (K.docTab === "versions") {
       const list = el("div", "v4s-list");
       for (const v of dl.items) {
-        const meta = [v.extraction_status === "failed" ? `추출 실패${v.error_code ? ` · ${v.error_code}` : ""}` : `조각 ${num(v.chunk_count)}개`, ago(v.created_at), v.chunker_version].filter(Boolean).join(" · ");
+        const meta = [v.extraction_status === "failed" ? "읽기 실패" : `부분 ${num(v.chunk_count)}개`, ago(v.created_at)].join(" · ");
         list.append(row("v4k-row", (K.verSel || d?.id) === v.id, [text(v.filename, meta, true), v.current ? badge(["지금 버전", "amber"]) : el("span", "v4s-uses v4k-uses", v.source_version.slice(0, 8))], () => { K.verSel = v.id; paint(); }));
       }
-      parts.push(list, el("p", "v4s-foot", "새 버전을 올리면 다시 검토해야 검색에 나와요."));
+      parts.push(list, el("p", "v4s-foot", "새 버전을 올리면 다시 확인해야 AI가 써요."));
       table.replaceChildren(...parts);
       return versionDetail(s, dl.items.find((v) => v.id === (K.verSel || d?.id)));
     }
@@ -412,12 +509,12 @@ window.ArkismKnowledge = (ctx) => {
   function sectionDetail(s, d) {
     const secs = d?.sections || [], i = Math.min(K.secSel, Math.max(secs.length - 1, 0)), path = secs[i];
     if (path === undefined) { $("#detail").replaceChildren(); return; }
-    const box = detailShell(`조각 #${i + 1}`);
+    const box = detailShell(`부분 #${i + 1}`);
     const head = el("div", "v4s-head");
     head.append(noI18n(el("h2", "", leafOf(path))), noI18n(el("p", "v4s-lead", path)));
     box.append(head);
-    if (needs(s)) box.append(card("이 자료는 아직 검토 전이라 검색에 나오지 않아요.", [button("검토 완료로 표시", "primary", null, () => act(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/review`, { expected_revision: s.revision, status: "active", trust_level: "reviewed" }), "검토했어요."))]));
-    box.append(sec("원문", null, el("p", "meta", "조각 본문은 목록에 싣지 않아요. 이 제목으로 시험 검색하면 근거로 보여요."), button("이 제목으로 시험 검색", "", null, () => { K.search.q = path; K.docTab = "search"; void runSearch(); })));
+    if (needs(s)) box.append(card("아직 확인 전이라 AI가 쓰지 않아요.", [button("확인했어요 · 내 AI가 쓰게 하기", "primary", null, () => act(() => useEverywhere(s.id, s.revision, false, s.bindings), "이제 내 모든 AI가 이 자료를 찾아 써요."))]));
+    box.append(sec("원문", null, el("p", "meta", "부분 본문은 목록에 싣지 않아요. 이 제목으로 시험 검색하면 근거로 보여요."), button("이 제목으로 시험 검색", "", null, () => { K.search.q = path; K.docTab = "search"; void runSearch(); })));
     const near = el("div", "v4k-near");
     for (const j of [i - 1, i + 1]) if (secs[j] !== undefined) {
       const b = el("button", "v4k-chunk"); b.type = "button";
@@ -425,8 +522,10 @@ window.ArkismKnowledge = (ctx) => {
       b.addEventListener("click", () => { K.secSel = j; paint(); });
       near.append(b);
     }
-    if (near.childElementCount) box.append(sec("앞뒤 조각", null, near));
-    box.append(sec("색인", null, facts([["벡터", `${num(d.indexed_chunks)} / ${num(d.chunk_count)} 조각`], ["나누는 법", d.chunker_version], ["파서", d.parser_version]])));
+    if (near.childElementCount) box.append(sec("앞뒤 부분", null, near));
+    const more = el("details", "v4k-more");
+    more.append(el("summary", "", "자세히"), facts([["벡터", `${num(d.indexed_chunks)} / ${num(d.chunk_count)} 부분`], ["나누는 법", d.chunker_version], ["파서", d.parser_version]]));
+    box.append(more);
   }
   function versionDetail(s, v) {
     if (!v) { $("#detail").replaceChildren(); return; }
@@ -434,9 +533,12 @@ window.ArkismKnowledge = (ctx) => {
     const head = el("div", "v4s-head");
     head.append(noI18n(el("h2", "mono v4k-h2", v.filename)), el("p", "v4s-lead", `${ago(v.created_at)} 올림`));
     box.append(head);
-    if (v.extraction_status === "failed") box.append(card(`글을 꺼내지 못했어요${v.error_code ? ` (${v.error_code})` : ""}.`, [button("다시 올리기", "primary", null, () => pickFile(s))]));
-    box.append(sec("정보", null, facts([["형식", v.mime_type], ["추출", v.extraction_status], ["조각", num(v.chunk_count)], ["색인", v.current ? `${num(v.indexed_chunks)} / ${num(v.chunk_count)}` : ""],
-      ["원본 버전", v.source_version], ["파서", v.parser_version], ["나누는 법", v.chunker_version], ["내용 해시", v.content_hash]])));
+    if (v.extraction_status === "failed") box.append(card("파일에서 글을 읽지 못했어요. 고쳐서 다시 올려 주세요.", [button("다시 올리기", "primary", null, () => pickFile(s))]));
+    box.append(sec("정보", null, facts([["부분", num(v.chunk_count)], ["올린 때", ago(v.created_at)]])));
+    const more = el("details", "v4k-more");
+    more.append(el("summary", "", "자세히"), facts([["형식", v.mime_type], ["추출", v.extraction_status], ["읽은 오류", v.error_code || "", true], ["색인", v.current ? `${num(v.indexed_chunks)} / ${num(v.chunk_count)}` : ""],
+      ["원본 버전", v.source_version], ["파서", v.parser_version], ["나누는 법", v.chunker_version], ["내용 해시", v.content_hash]]));
+    box.append(more);
   }
   async function runSearch() {
     const S = K.search;
@@ -456,12 +558,12 @@ window.ArkismKnowledge = (ctx) => {
     const input = el("input"); input.type = "search"; input.placeholder = "찾을 내용을 적어 보세요"; input.value = S.q; input.setAttribute("aria-label", "시험 검색");
     box.append(icon("magnifying-glass"), input);
     const go = button(S.busy ? "찾는 중…" : "찾기", "primary"); go.type = "submit"; go.disabled = S.busy;
-    bar.append(box, select("전문가", PROFILES, S.profile, (v) => { S.profile = v; }), go);
+    bar.append(box, select("누가 찾나요", [[SHARED, "모든 AI"], ...PROFILES], S.profile, (v) => { S.profile = v; }), go);
     bar.addEventListener("submit", (e) => { e.preventDefault(); S.q = input.value.trim(); void runSearch(); });
-    wrap.append(bar, el("p", "ss-note", "전문가에 켜진 검토된 자료만 찾아요. 결과는 자료일 뿐 지시가 아니에요."));
+    wrap.append(bar, el("p", "ss-note", "AI가 쓰게 켠 자료만 찾아요. 결과는 참고 자료일 뿐 지시가 아니에요."));
     if (S.error) wrap.append(el("div", "empty", S.error));
     const r = S.result;
-    if (r?.reason === "no_active_binding") wrap.append(el("div", "empty", "이 전문가에 켜진 자료가 없어요. 자료 상세에서 전문가를 연결하고 켜 주세요."));
+    if (r?.reason === "no_active_binding") wrap.append(el("div", "empty", S.profile === SHARED ? "AI가 쓰게 켠 자료가 없어요. 자료 상세에서 '쓰게 하기'를 눌러 주세요." : "이 전문가에 켜진 자료가 없어요. 자료 상세의 자세히에서 켜 주세요."));
     else if (r?.receipt) {
       const items = r.receipt.context?.items || [];
       const list = el("div", "v4k-evidence");
@@ -472,7 +574,7 @@ window.ArkismKnowledge = (ctx) => {
         c.append(top, noI18n(el("p", "", ev.content)), noI18n(el("small", "mono", ev.citation)));
         list.append(c);
       }
-      if (!items.length) list.append(el("div", "empty", "맞는 조각이 없어요."));
+      if (!items.length) list.append(el("div", "empty", "맞는 부분이 없어요."));
       wrap.append(list);
     }
     return wrap;
@@ -581,7 +683,7 @@ window.ArkismKnowledge = (ctx) => {
       const s = K.sources.find((x) => x.id === sid);
       const r = el("button", "v4k-src"); r.type = "button";
       const t = el("span", "v4k-src-text");
-      t.append(noI18n(el("b", "", `문서 · ${s?.display_name || sid}`)), el("small", "", s ? `조각 ${num(s.chunk_count)}개 · ${srcState(s)[0]}` : "목록에 없는 자료"));
+      t.append(noI18n(el("b", "", `문서 · ${s?.display_name || sid}`)), el("small", "", s ? `부분 ${num(s.chunk_count)}개 · ${srcState(s)[0]}` : "목록에 없는 자료"));
       r.append(t);
       if (s) r.addEventListener("click", () => { K.tab = "sources"; K.srcSel = s.id; K.doc = ""; paint(); });
       srcs.append(r);
@@ -611,11 +713,14 @@ window.ArkismKnowledge = (ctx) => {
     const doc = K.doc && K.sources.find((x) => x.id === K.doc);
     if (doc) {
       const d = current(doc.id);
-      headExtras({ count: `조각 ${num(d?.chunk_count ?? doc.chunk_count)}개`, back: [`자료 · ${doc.display_name}`, () => { K.doc = ""; K.notice = ""; paint(); }] });
+      headExtras({ count: `부분 ${num(d?.chunk_count ?? doc.chunk_count)}개`, back: [`자료 · ${doc.display_name}`, () => { K.doc = ""; K.notice = ""; paint(); }] });
     } else headExtras({ count: K.state === "ready" ? `자료 ${K.total} · 위키 ${K.pages.filter((p) => p.review_state !== "deleted").length}` : "" });
     if (K.state === "loading") { table.replaceChildren(el("div", "empty", "불러오는 중…")); $("#detail").replaceChildren(); return; }
     if (K.state === "off" || K.state === "error") {
-      table.replaceChildren(el("div", "empty", K.state === "off" ? "이 서버에서는 지식 기능이 꺼져 있거나 아직 없어요." : `지식을 불러오지 못했어요 (${K.error}).`));
+      const e = el("div", "empty");
+      e.append(el("p", "", K.state === "off" ? "이 서버에서는 지식 기능이 꺼져 있거나 아직 없어요." : "지식을 불러오지 못했어요."));
+      if (K.state === "error") e.append(button("다시 시도", "", null, () => { K.state = "loading"; void load(); }));
+      table.replaceChildren(e);
       $("#detail").replaceChildren(); return;
     }
     if (doc) return renderDoc(table);
@@ -635,11 +740,32 @@ window.ArkismKnowledge = (ctx) => {
     reset: () => { sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
     views: { knowledge: {
       title: () => (K.doc ? K.sources.find((x) => x.id === K.doc)?.display_name || "지식" : "지식"),
-      sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 조각 단위로 찾아 써요. 새 버전은 다시 검토해야 검색에 나와요." : "올려 둔 자료를 잘게 나눠 AI가 찾아 써요. 위키는 AI가 자료를 묶어 쓴 문서이고, 검토한 뒤에 쓰여요."),
+      sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 부분 단위로 찾아 써요. 새 버전은 다시 확인해야 AI가 써요." : "올려 둔 문서를 내 AI가 찾아 써요. 올릴 때 내용을 확인하면 바로 쓰여요."),
       render: renderView, keepDetail: true,
       head: () => K.doc
-        ? [button("새 버전 올리기", "", null, () => { const s = K.sources.find((x) => x.id === K.doc); if (s) pickFile(s); }), button("다시 색인", "", null, () => act(() => post("/v1/knowledge/index", { knowledge_source_id: K.doc }), (r) => `색인했어요 (새로 ${r?.embedded ?? 0} · 그대로 ${r?.reused ?? 0} · 실패 ${r?.failed ?? 0}).`))]
-        : [button("+ 자료 추가", "primary", null, () => pickFile(null))]
+        ? [button("새 버전 올리기", "", null, () => { const s = K.sources.find((x) => x.id === K.doc); if (s) pickFile(s); })]
+        : [button("+ 파일 올리기", "primary", null, () => pickFile(null))]
     } }
   };
+};
+// Cuts text into parts of at most max UTF-8 bytes (the server's per-file cap): at blank lines first,
+// then at line ends, then between characters. Parts that hold only spaces are dropped.
+window.ArkismKnowledge.splitText = (text, max = 64 << 10) => {
+  const enc = new TextEncoder(), size = (s) => enc.encode(s).length;
+  const cuts = [/(?<=\n[ \t]*\n)/, /(?<=\n)/, /(?<=[\s\S])/u];
+  const pack = (str, level) => {
+    if (size(str) <= max) return [str];
+    const out = [];
+    let cur = "", bytes = 0;
+    for (const piece of str.split(cuts[level])) {
+      for (const p of size(piece) > max ? pack(piece, level + 1) : [piece]) {
+        const b = size(p);
+        if (cur && bytes + b > max) { out.push(cur); cur = ""; bytes = 0; }
+        cur += p; bytes += b;
+      }
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+  return pack(String(text), 0).filter((p) => p.trim());
 };

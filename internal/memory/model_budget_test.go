@@ -242,3 +242,18 @@ func TestModelBudgetDailyTargetIsSoftAndLegacyHardIsOptional(t *testing.T) {
 		t.Fatal("negative target", e)
 	}
 }
+
+// Without an active budget a human reader is told there is none; anyone else is still denied.
+func TestModelBudgetStatusWithoutPolicy(t *testing.T) {
+	f, _ := modelBudgetFixture(t)
+	f.svc.ModelBudgetPolicy = nil
+	if _, e := f.svc.ModelBudgetStatus(testCtx, f.human, scopeA); !errors.Is(e, ErrNotFound) {
+		t.Fatal(e)
+	}
+	if _, e := f.svc.ModelBudgetStatus(testCtx, "budget", scopeA); !errors.Is(e, ErrDenied) {
+		t.Fatal("service reader", e)
+	}
+	if _, e := f.svc.ModelBudgetStatus(testCtx, "nobody", scopeA); !errors.Is(e, ErrDenied) {
+		t.Fatal("unknown token", e)
+	}
+}

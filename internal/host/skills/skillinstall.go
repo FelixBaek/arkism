@@ -407,7 +407,7 @@ func installDir(target string) string {
 	return expand(d)
 }
 
-func previewDetail(src skillSource, commit string, skills []foundSkill) string {
+func previewDetail(src skillSource, commit string, skills []foundSkill, files map[string]repoFile) string {
 	list := []any{}
 	for _, sk := range skills {
 		var have []any
@@ -421,6 +421,18 @@ func previewDetail(src skillSource, commit string, skills []foundSkill) string {
 		if have != nil {
 			row.Set("installed", have)
 		}
+		// The same built-in safety scan the skill list runs, on the files before they are written.
+		findings := previewScan(sk, files)
+		risk, verdict := builtinVerdict(findings)
+		row.Set("verdict", verdict)
+		row.Set("risk", risk)
+		if len(findings) > 0 {
+			var top []any
+			for _, f := range findings[:min(len(findings), 3)] {
+				top = append(top, f.label())
+			}
+			row.Set("findings", top)
+		}
 		list = append(list, row)
 	}
 	src.ref = ""
@@ -430,6 +442,7 @@ func previewDetail(src skillSource, commit string, skills []foundSkill) string {
 		for i, r := range list {
 			row := r.(host.Obj)
 			row.Set("description", "")
+			row.Del("findings")
 			list[i] = row
 		}
 		out.Set("skills", list)
@@ -552,6 +565,22 @@ func installSkills(src skillSource, targets []string, update bool) (string, erro
 	return host.MustDumps(host.Obj{{Key: "commit", Value: commit}, {Key: "installed", Value: done}}, host.DumpOpts{Compact: true, NoASCII: true}), nil
 }
 
+// previewScan scans one found skill's files from memory, paths relative to the skill folder.
+func previewScan(sk foundSkill, files map[string]repoFile) []builtinFinding {
+	inner := map[string]string{}
+	var rels []string
+	for _, rel := range sk.files {
+		in := rel
+		if sk.dir != "" {
+			in = strings.TrimPrefix(rel, sk.dir+"/")
+		}
+		inner[in] = rel
+		rels = append(rels, in)
+	}
+	sortPaths(rels)
+	return builtinScan(rels[:min(len(rels), builtinMaxFiles)], func(in string) []byte { return builtinText(files[inner[in]].data) })
+}
+
 // applySkillInstall runs one skill_install request: a preview when not enabled, otherwise the install.
 func applySkillInstall(req map[string]any) (string, error) {
 	src, err := requestSkillSource(req)
@@ -559,11 +588,11 @@ func applySkillInstall(req map[string]any) (string, error) {
 		return "", err
 	}
 	if !truthy(req["enabled"]) {
-		commit, skills, _, err := loadSkillSource(src)
+		commit, skills, files, err := loadSkillSource(src)
 		if err != nil {
 			return "", err
 		}
-		return previewDetail(src, commit, skills), nil
+		return previewDetail(src, commit, skills, files), nil
 	}
 	var targets []string
 	for _, t := range asList(req["targets"]) {

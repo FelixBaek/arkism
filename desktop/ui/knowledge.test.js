@@ -58,6 +58,7 @@ function server(over = {}) {
     if (path === "/v1/knowledge/index") return { embedded: 3 };
     if (path === "/v1/wiki/jobs") return { duplicate: false };
     if (path === "/v1/knowledge/ingest") return {};
+    if (path === "/v1/knowledge/bindings") return { id: "nb", revision: 1, status: "candidate" };
     return { ok: true };
   }
   return { calls, db, request };
@@ -108,7 +109,7 @@ const file = (name, content, size = content.length) => ({ name, size, text: asyn
 test("first render loads sources, wiki, graph and jobs, then lists sources with review attention", async () => {
   const k = await setup();
   const v = k.view.views.knowledge;
-  assert.equal(v.title(), "지식"); assert.match(v.sub(), /위키/); assert.equal(v.keepDetail, true);
+  assert.equal(v.title(), "지식"); assert.match(v.sub(), /내 AI가 찾아 써요/); assert.equal(v.keepDetail, true);
   v.render();
   assert.match(k.table().textContent, /불러오는 중/);
   await dom.flush();
@@ -116,7 +117,7 @@ test("first render loads sources, wiki, graph and jobs, then lists sources with 
   for (const p of ["/v1/knowledge/sources/query", "/v1/wiki/pages", "/v1/wiki/graph", "/v1/wiki/jobs"]) assert.ok(paths.includes(p), p);
   assert.deepEqual(k.srv.calls[0].body.scope, { workspace_id: "w" });
   const t = k.table().textContent;
-  assert.match(t, /검토 대기 1 · 추출 실패 1/);
+  assert.match(t, /확인 전 1 · 읽기 실패 1/);
   assert.match(t, /전체 3개 중 3개 표시/);
   assert.match(t, /Markdown/); assert.match(t, /JSON/);
   assert.equal(k.heads.at(-1).count, "자료 3 · 위키 5");
@@ -125,17 +126,18 @@ test("first render loads sources, wiki, graph and jobs, then lists sources with 
   assert.match(k.detail().textContent, /새 버전이 올라왔어요/);
   assert.match(k.detail().textContent, /#1A › B \/ C/);
   assert.match(k.detail().textContent, /오늘 쓸 수 있는 모델 호출을 다 썼어요/);
-  assert.match(k.detail().textContent, /비밀값이 들어 있음/); assert.match(k.detail().textContent, /odd_reason/); assert.match(k.detail().textContent, /거부가 많아요/);
+  assert.match(k.detail().textContent, /비밀값이 들어 있음/); assert.match(k.detail().textContent, /odd_reason/); assert.match(k.detail().textContent, /여러 번 거부했어요/);
   // review attention opens the first source needing review, then 나중에 goes to the next one
   await k.press(k.table(), "하나씩 확인하기");
   await k.press(k.detail(), "나중에");
   assert.equal(k.detail().firstChild.dataset.label, "문서 · 파일");
-  assert.match(k.detail().textContent, /글을 꺼내지 못했어요 \(parse\)/);
-  assert.match(k.detail().textContent, /연결된 전문가가 없어요/);
+  assert.match(k.detail().textContent, /글을 읽지 못했어요/);
+  assert.match(k.detail().textContent, /읽은 오류parse/); // the code only under 자세히
+  assert.doesNotMatch(k.detail().textContent, /내 AI가 쓰기/);
   // a reviewed source shows bindings that turn off, on, and a disabled candidate is not the case here
   const rows = k.table().querySelectorAll(".v4k-row");
   rows[1].click(); await dom.flush();
-  assert.match(k.detail().textContent, /검토한 사람owner/);
+  assert.match(k.detail().textContent, /확인한 사람owner/);
   await k.press(k.detail(), "끄기");
   assert.deepEqual(k.posted("/v1/knowledge/bindings/b2/state")[0].body, { scope: { workspace_id: "w" }, expected_revision: 3, status: "suspended" });
   assert.match(k.detail().textContent, /껐어요/);
@@ -143,6 +145,18 @@ test("first render loads sources, wiki, graph and jobs, then lists sources with 
   await dom.flush();
   await k.press(k.detail(), "켜기");
   assert.equal(k.posted("/v1/knowledge/bindings/b3/state")[0].body.status, "active_synthetic");
+  // a reviewed source turns on for every agent with one switch, and off again
+  k.table().querySelectorAll(".v4k-row")[1].click(); await dom.flush();
+  assert.match(k.detail().textContent, /지금은 AI가 이 자료를 쓰지 않아요/);
+  await k.press(k.detail(), "쓰게 하기");
+  assert.equal(k.posted("/v1/knowledge/sources/s2/review").length, 0);
+  assert.equal(k.posted("/v1/knowledge/bindings")[0].body.specialist_profile_id, "default");
+  assert.equal(k.posted("/v1/knowledge/bindings/nb/state")[0].body.status, "active_synthetic");
+  k.srv.db.sources[1].bindings.push(bind("b9", "default", "active_synthetic"));
+  await k.press(k.detail(), "켜기");
+  assert.match(k.detail().textContent, /내 모든 AI가 이 자료를 찾아 써요/);
+  await k.press(k.detail(), "그만 쓰게 하기");
+  assert.deepEqual(k.posted("/v1/knowledge/bindings/b9/state")[0].body, { scope: { workspace_id: "w" }, expected_revision: 3, status: "suspended" });
 });
 
 test("source actions: review, connect a specialist, index, wiki job, run now and section chips", async () => {
@@ -150,14 +164,16 @@ test("source actions: review, connect a specialist, index, wiki job, run now and
   await k.start();
   const d = () => k.detail();
   // a draft source cannot turn a binding on
-  const on = k.btn(d(), "켜기"); assert.equal(on.disabled, true); assert.equal(on.title, "검토한 자료만 켤 수 있어요");
+  const on = k.btn(d(), "켜기"); assert.equal(on.disabled, true); assert.equal(on.title, "확인한 자료만 켤 수 있어요");
   assert.equal(k.btn(d(), "위키 만들기").disabled, true);
-  await k.press(d(), "검토 완료로 표시");
+  await k.press(d(), "확인했어요 · 내 AI가 쓰게 하기");
   assert.deepEqual(k.posted("/v1/knowledge/sources/s1/review")[0].body, { scope: { workspace_id: "w" }, expected_revision: 1, status: "active", trust_level: "reviewed" });
-  assert.match(d().textContent, /검토했어요. 이제 검색에 나와요/);
+  assert.equal(k.posted("/v1/knowledge/bindings")[0].body.binding_key, "s1:default");
+  assert.equal(k.posted("/v1/knowledge/bindings/nb/state")[0].body.status, "active_synthetic");
+  assert.match(d().textContent, /이제 내 모든 AI가 이 자료를 찾아 써요/);
   d().querySelector("select").value = "listing_reviewer";
   await k.press(d(), "연결");
-  assert.equal(k.posted("/v1/knowledge/bindings")[0].body.binding_key, "s1:listing_reviewer");
+  assert.equal(k.posted("/v1/knowledge/bindings").at(-1).body.binding_key, "s1:listing_reviewer");
   await k.press(d(), "벡터 색인");
   assert.match(d().textContent, /색인했어요 \(새로 3 · 그대로 0 · 실패 0\)/);
   d().querySelector(".v4k-cap").value = "5000";
@@ -169,7 +185,7 @@ test("source actions: review, connect a specialist, index, wiki job, run now and
   assert.equal(k.posted("/v1/wiki/jobs/j1/run").length, 1);
   // errors from the server become plain notices
   k.srv.db.sources[0].lifecycle_status = "active"; k.srv.db.sources[0].trust_level = "reviewed";
-  for (const [msg, line] of [["revision_conflict", /그새 바뀌었어요/], ["nope", /실패했어요 \(nope\)/]]) {
+  for (const [msg, line] of [["revision_conflict", /그새 바뀌었어요/], ["nope", /다시 시도해 주세요/]]) {
     const k2 = await setup({ "/v1/knowledge/index": () => { throw new Error(msg); } });
     await k2.start();
     await k2.press(k2.detail(), "벡터 색인");
@@ -178,31 +194,31 @@ test("source actions: review, connect a specialist, index, wiki job, run now and
   // the third section chip opens the document view on that section
   d().querySelectorAll(".v4k-chunk")[2].click(); await dom.flush();
   assert.equal(k.view.views.knowledge.title(), "a.md");
-  assert.match(k.view.views.knowledge.sub(), /조각 단위/);
-  assert.match(k.detail().firstChild.dataset.label, /조각 #3/);
+  assert.match(k.view.views.knowledge.sub(), /부분 단위/);
+  assert.match(k.detail().firstChild.dataset.label, /부분 #3/);
 });
 
 test("document view: sections with neighbours, versions and a test search with its receipt", async () => {
   const k = await setup();
   await k.start();
-  await k.press(k.detail(), "조각 보기");
+  await k.press(k.detail(), "내용 보기");
   const v = k.view.views.knowledge;
-  const head = k.heads.at(-1); assert.equal(head.count, "조각 4개"); assert.equal(head.back[0], "자료 · a.md");
+  const head = k.heads.at(-1); assert.equal(head.count, "부분 4개"); assert.equal(head.back[0], "자료 · a.md");
   assert.match(k.table().textContent, /목차4/);
   assert.match(k.table().textContent, /#1C/); // leaf of "A › B / C"
-  assert.match(k.table().textContent, /조각 4개 · 제목 4개/);
-  assert.equal(k.detail().firstChild.dataset.label, "조각 #1");
-  assert.match(k.detail().textContent, /아직 검토 전이라/);
-  assert.match(k.detail().textContent, /앞뒤 조각#2Intro/);
+  assert.match(k.table().textContent, /부분 4개 · 제목 4개/);
+  assert.equal(k.detail().firstChild.dataset.label, "부분 #1");
+  assert.match(k.detail().textContent, /아직 확인 전이라/);
+  assert.match(k.detail().textContent, /앞뒤 부분#2Intro/);
   k.detail().querySelector(".v4k-near button").click(); await dom.flush();
-  assert.equal(k.detail().firstChild.dataset.label, "조각 #2");
+  assert.equal(k.detail().firstChild.dataset.label, "부분 #2");
   k.table().querySelectorAll(".v4k-row")[3].click(); await dom.flush();
-  assert.equal(k.detail().firstChild.dataset.label, "조각 #4");
-  await k.press(k.detail(), "검토 완료로 표시");
+  assert.equal(k.detail().firstChild.dataset.label, "부분 #4");
+  await k.press(k.detail(), "확인했어요 · 내 AI가 쓰게 하기");
   assert.equal(k.posted("/v1/knowledge/sources/s1/review").length, 1);
   // versions
   k.table().querySelectorAll(".chip")[1].click(); await dom.flush();
-  assert.match(k.table().textContent, /지금 버전/); assert.match(k.table().textContent, /추출 실패 · bad_utf8/); assert.match(k.table().textContent, /00000000/);
+  assert.match(k.table().textContent, /지금 버전/); assert.match(k.table().textContent, /읽기 실패/); assert.match(k.table().textContent, /00000000/);
   assert.equal(k.detail().firstChild.dataset.label, "버전 · 지금");
   assert.match(k.detail().textContent, /내용 해시hash/);
   k.table().querySelectorAll(".v4k-row")[1].click(); await dom.flush();
@@ -212,9 +228,9 @@ test("document view: sections with neighbours, versions and a test search with i
   // search tab from a section title
   k.table().querySelectorAll(".chip")[0].click(); await dom.flush();
   await k.press(k.detail(), "이 제목으로 시험 검색");
-  assert.deepEqual(k.posted("/v1/knowledge/search")[0].body, { scope: { workspace_id: "w" }, specialist_profile_id: "design_consultant", query: "Fourth", limit: 8 });
+  assert.deepEqual(k.posted("/v1/knowledge/search")[0].body, { scope: { workspace_id: "w" }, specialist_profile_id: "default", query: "Fourth", limit: 8 });
   assert.match(k.table().textContent, /chunk text/); assert.match(k.table().textContent, /a.md12 토큰/);
-  assert.match(k.detail().textContent, /후보5/); assert.match(k.detail().textContent, /같은 조각1건/); assert.match(k.detail().textContent, /mystery/);
+  assert.match(k.detail().textContent, /후보5/); assert.match(k.detail().textContent, /같은 부분1건/); assert.match(k.detail().textContent, /mystery/);
   // a typed search with another specialist
   const form = k.table().querySelector("form");
   form.querySelector("select").value = "illustrator"; dom.fire(form.querySelector("select"), "change");
@@ -228,9 +244,7 @@ test("document view: sections with neighbours, versions and a test search with i
   assert.match(k.detail().textContent, /후보5/); // an empty query keeps the last receipt
   // head buttons in the document view
   const hb = v.head();
-  assert.equal(hb.length, 2);
-  hb[1].click(); await dom.flush();
-  assert.equal(k.posted("/v1/knowledge/index").at(-1).body.knowledge_source_id, "s1");
+  assert.equal(hb.length, 1);
   hb[0].click(); assert.equal(k.files.length, 2);
   // back to sources
   k.heads.at(-1).back[1](); await dom.flush();
@@ -240,14 +254,14 @@ test("document view: sections with neighbours, versions and a test search with i
 
 test("search answers: no binding, empty receipt, invalid response and failure", async () => {
   for (const [answer, want] of [
-    [{ authority: "data_only_untrusted", reason: "no_active_binding" }, /켜진 자료가 없어요/],
-    [{ authority: "data_only_untrusted", receipt: { candidate_count: 0, selected_count: 0, excluded_count: 0, retrieval_mode: "hybrid" } }, /맞는 조각이 없어요/],
-    [{ receipt: {} }, /요청이 맞지 않아요|실패했어요 \(invalid_response\)/],
+    [{ authority: "data_only_untrusted", reason: "no_active_binding" }, /켠 자료가 없어요/],
+    [{ authority: "data_only_untrusted", receipt: { candidate_count: 0, selected_count: 0, excluded_count: 0, retrieval_mode: "hybrid" } }, /맞는 부분이 없어요/],
+    [{ receipt: {} }, /다시 시도해 주세요/],
     [new Error("access_denied"), /권한이 없어요/]
   ]) {
     const k = await setup({ "/v1/knowledge/search": () => { if (answer instanceof Error) throw answer; return answer; } });
     await k.start();
-    await k.press(k.detail(), "조각 보기");
+    await k.press(k.detail(), "내용 보기");
     k.table().querySelectorAll(".chip")[2].click(); await dom.flush();
     assert.match(k.detail().textContent, /검색하면 몇 개를/);
     const form = k.table().querySelector("form");
@@ -261,7 +275,7 @@ test("document loading and errors, a source without sections and a source that v
   const k = await setup({ "/v1/knowledge/documents": (path) => (path.includes("s2") ? { items: "bad" } : new Promise((r) => { release = r; })) });
   await k.start();
   assert.match(k.detail().textContent, /불러오는 중…/);
-  await k.press(k.detail(), "조각 보기");
+  await k.press(k.detail(), "내용 보기");
   assert.match(k.table().textContent, /불러오는 중…/);
   assert.equal(k.detail().childNodes.length, 0);
   release({ items: [{ id: "d9", current: false, sections: [], chunk_count: 0, indexed_chunks: 0, filename: "a.md", source_version: "1234567890", created_at: T }] });
@@ -272,40 +286,71 @@ test("document loading and errors, a source without sections and a source that v
   k.heads.at(-1).back[1](); await dom.flush();
   k.table().querySelectorAll(".v4k-row")[1].click(); await dom.flush();
   assert.match(k.detail().textContent, /목차가 없어요/);
-  await k.press(k.detail(), "조각 2개 보기");
-  assert.match(k.table().textContent, /문서를 불러오지 못했어요 \(invalid_response\)/);
+  await k.press(k.detail(), "검색에 쓰는 부분 2개 보기");
+  assert.match(k.table().textContent, /문서를 불러오지 못했어요/);
   // the opened document disappears from the server list: back to sources
   k.srv.db.sources = k.srv.db.sources.filter((s) => s.id !== "s2");
-  await k.view.views.knowledge.head()[1].click(); await dom.flush();
+  k.view.views.knowledge.head()[0].click();
+  k.files.at(-1).files = [file("b2.txt", "x")]; dom.fire(k.files.at(-1), "change"); await dom.flush();
+  k.document.body.querySelector("dialog").close("only"); await dom.flush();
   assert.equal(k.view.views.knowledge.title(), "지식");
   assert.match(k.table().textContent, /전체 2개 중 2개/);
 });
 
-test("upload: wrong type, too large, new source, new version and a duplicate", async () => {
-  const k = await setup({ "/v1/knowledge/ingest": (_, body) => (body.content === "same" ? { duplicate: true } : {}) });
+test("upload: wrong type, PDF, too large, Word, the uploader's check and a duplicate", async () => {
+  const k = await setup({ "/v1/knowledge/ingest": (_, body) => (body.content === "same" ? { duplicate: true, source: { id: "s2", revision: 2 } } : { source: { id: body.source_key === "a.md" ? "s1" : "new", revision: 4 } }) });
   await k.start();
   const add = k.view.views.knowledge.head()[0];
-  const pick = async (f) => { add.click(); const input = k.files.at(-1); input.files = f ? [f] : []; dom.fire(input, "change"); await dom.flush(); };
+  const pick = async (f, choice) => {
+    add.click(); const input = k.files.at(-1); input.files = f ? [f] : []; dom.fire(input, "change"); await dom.flush();
+    if (choice === undefined) return;
+    const dlg = k.document.body.querySelector("dialog.v4k-ask"); assert.ok(dlg, "the uploader is asked");
+    assert.match(dlg.textContent, /내 AI가 이 자료를 쓰게 할까요/);
+    dlg.close(choice); await dom.flush();
+  };
   await pick(null);
   assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
   await pick(file("x.pdf", "pdf"));
-  assert.match(k.table().textContent, /Markdown·텍스트·JSON 파일만/);
-  await pick(file("big.md", "x", 65 * 1024));
-  assert.match(k.table().textContent, /파일이 너무 커요/);
-  await pick(file("new.txt", "hello"));
+  assert.match(k.table().textContent, /PDF는 아직 읽지 못해요/);
+  await pick(file("x.hwp", "hwp"));
+  assert.match(k.table().textContent, /Word·Markdown·텍스트·JSON 파일을 올릴 수 있어요/);
+  await pick(file("big.json", "x".repeat(65 * 1024)));
+  assert.match(k.table().textContent, /JSON 파일은 나누면 깨져서/);
+  assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
+  await pick(file("big.docx", "x", 5 << 20));
+  assert.match(k.table().textContent, /Word 파일은 4MB까지/);
+  // 취소 sends nothing
+  await pick(file("new.txt", "hello"), "no");
+  assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
+  // 올리기만: ingested, still waiting for a person
+  await pick(file("new.txt", "hello"), "only");
   const first = k.posted("/v1/knowledge/ingest")[0].body;
-  assert.equal(first.mime_type, "text/plain"); assert.equal(first.source_key, "new.txt"); assert.equal(first.expected_revision, undefined);
-  assert.match(k.table().textContent, /올렸어요. 검토하면/);
-  await pick(file("a.md", "v2"));
+  assert.equal(first.mime_type, "text/plain"); assert.equal(first.source_key, "new.txt"); assert.equal(first.expected_revision, undefined); assert.equal(first.content, "hello");
+  assert.equal(k.posted("/v1/knowledge/bindings").length, 0);
+  assert.match(k.table().textContent, /'쓰게 하기'를 눌러/);
+  // the uploader's check: reviewed, shared with every agent and turned on
+  await pick(file("a.md", "v2"), "use");
   const second = k.posted("/v1/knowledge/ingest")[1].body;
   assert.equal(second.expected_revision, 1); assert.equal(second.mime_type, "text/markdown");
-  assert.match(k.table().textContent, /새 버전을 올렸어요/);
-  await pick(file("A.JSON", "same"));
-  assert.match(k.table().textContent, /같은 내용이라/);
-  // the side button and "새 버전 올리기" pick files too
-  await k.press(k.table(), "+ 파일 올리기");
+  assert.deepEqual(k.posted("/v1/knowledge/sources/s1/review")[0].body, { scope: { workspace_id: "w" }, expected_revision: 4, status: "active", trust_level: "reviewed" });
+  assert.deepEqual(k.posted("/v1/knowledge/bindings")[0].body, { scope: { workspace_id: "w" }, binding_key: "s1:default", knowledge_source_id: "s1", specialist_profile_id: "default",
+    specialist_profile_version_id: "v1", skill_id: "default.v1", trust_requirement: "reviewed", access_mode: "cite_required" });
+  assert.deepEqual(k.posted("/v1/knowledge/bindings/nb/state")[0].body, { scope: { workspace_id: "w" }, expected_revision: 1, status: "active_synthetic" });
+  assert.match(k.table().textContent, /이제 내 모든 AI가/);
+  // a Word file travels as base64 with its own type
+  await pick({ name: "guide.docx", size: 3, arrayBuffer: async () => new Uint8Array([80, 75, 3]).buffer }, "only");
+  const word = k.posted("/v1/knowledge/ingest")[2].body;
+  assert.equal(word.mime_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); assert.equal(word.content_base64, "UEsD"); assert.equal(word.content, undefined);
+  // the same text again on a reviewed source: no second review, only the shared switch
+  await pick(file("b.txt", "same"), "use");
+  assert.match(k.table().textContent, /같은 내용이에요/);
+  assert.equal(k.posted("/v1/knowledge/sources/s2/review").length, 0);
+  assert.equal(k.posted("/v1/knowledge/bindings")[1].body.knowledge_source_id, "s2");
+  // one upload button: the side panel only says which files work
+  assert.equal(dom.buttons(k.table(), "+ 파일 올리기").length, 0);
+  assert.match(k.table().textContent, /올릴 수 있는 파일: Word/);
   await k.press(k.detail(), "새 버전 올리기");
-  assert.equal(k.files.length, 8);
+  assert.equal(k.files.length, 11);
 });
 
 test("source filters, search typing, format groups and paging with a retry", async () => {
@@ -323,7 +368,7 @@ test("source filters, search typing, format groups and paging with a retry", asy
   // a failing next page keeps the list and offers a retry
   fail = true;
   await k.press(k.table(), "자료 더 보기");
-  assert.match(k.table().textContent, /불러오지 못했어요 \(HTTP 500\)/);
+  assert.match(k.table().textContent, /자료를 더 불러오지 못했어요/);
   assert.match(k.table().textContent, /전체 3개 중 2개 표시/);
   fail = false;
   await k.press(k.table(), "다시 시도");
@@ -344,7 +389,7 @@ test("source filters, search typing, format groups and paging with a retry", asy
 });
 
 test("server states: off, error, wiki off and empty lists", async () => {
-  for (const [msg, want] of [["HTTP 404", /지식 기능이 꺼져/], ["boom", /지식을 불러오지 못했어요 \(boom\)/]]) {
+  for (const [msg, want] of [["HTTP 404", /지식 기능이 꺼져/], ["boom", /지식을 불러오지 못했어요/]]) {
     const k = await setup({ "/v1/knowledge/sources/query": () => { throw new Error(msg); }, "/v1/wiki/pages": () => { throw new Error(msg); }, "/v1/wiki/graph": () => ({}), "/v1/wiki/jobs": () => { throw new Error("x"); } });
     await k.start();
     assert.match(k.table().textContent, want);
@@ -403,7 +448,7 @@ test("remove from wiki: dry-run preview, plain confirm on an old server, error a
   assert.match(k2.detail().textContent, /뺐어요 · 지움 0/);
   for (mode of ["bad", "err"]) {
     await k2.press(k2.detail(), "위키에서 빼기");
-    assert.match(k2.detail().textContent, mode === "bad" ? /미리 보지 못했어요 \(invalid_response\)/ : /미리 보지 못했어요 \(HTTP 500\)/);
+    assert.match(k2.detail().textContent, /미리 보지 못했어요/);
     await k2.press(k2.detail(), "닫기");
     assert.doesNotMatch(k2.detail().textContent, /미리 보지 못했어요/);
   }
@@ -562,14 +607,14 @@ test("a busy action ignores a second click and job lines cover pending, done and
   assert.equal(k.btn(k.detail(), "새 버전 올리기").disabled, true);
   const calls = k.posted("/v1/knowledge/index").length;
   // a second action while busy does nothing
-  k.btn(k.detail(), "검토 완료로 표시").disabled = false;
-  k.btn(k.detail(), "검토 완료로 표시").click(); await dom.flush();
+  k.btn(k.detail(), "확인했어요 · 내 AI가 쓰게 하기").disabled = false;
+  k.btn(k.detail(), "확인했어요 · 내 AI가 쓰게 하기").click(); await dom.flush();
   assert.equal(k.posted("/v1/knowledge/sources/s1/review").length, 0);
   release({}); await dom.flush();
   assert.equal(calls, 1);
   assert.match(k.detail().textContent, /색인했어요 \(새로 0 · 그대로 0 · 실패 0\)/);
   k.table().querySelectorAll(".v4k-row")[1].click(); await dom.flush();
-  assert.match(k.detail().textContent, /weird/); assert.match(k.detail().textContent, /오류: other/);
+  assert.match(k.detail().textContent, /weird/); assert.match(k.detail().textContent, /만들지 못했어요/);
   k.table().querySelectorAll(".v4k-row")[0].click(); await dom.flush();
   k.btn(k.detail(), "위키 만들기").disabled = false;
   await k.press(k.detail(), "위키 만들기");
@@ -579,4 +624,67 @@ test("a busy action ignores a second click and job lines cover pending, done and
   row.dispatchEvent(Object.assign(new dom.Event("keydown"), { key: "x" }));
   row.dispatchEvent(Object.assign(new dom.Event("keydown"), { key: " " })); await dom.flush();
   assert.equal(k.detail().firstChild.dataset.label, "문서 · 파일");
+});
+
+test("splitText: parts stay under the byte cap, cut at blank lines, then lines, then characters", () => {
+  require("./knowledge.js");
+  const split = window.ArkismKnowledge.splitText, bytes = (x) => Buffer.byteLength(x);
+  assert.deepEqual(split("short"), ["short"]);
+  // paragraphs pack greedily and are never cut inside when they fit
+  const para = (c) => c.repeat(40) + "\n\n";
+  const parts = split(para("a") + para("b") + para("c"), 90);
+  assert.deepEqual(parts, [para("a") + para("b"), para("c")]);
+  // a paragraph too big for one part falls back to line ends
+  const lines = "l1".repeat(20) + "\n" + "l2".repeat(20) + "\n";
+  assert.deepEqual(split(lines, 50), ["l1".repeat(20) + "\n", "l2".repeat(20) + "\n"]);
+  // one huge line is cut between characters, never inside a multi-byte one (한글 3 bytes, emoji 4)
+  const wide = "가😀".repeat(30);
+  const cut = split(wide, 20);
+  assert.equal(cut.join(""), wide);
+  for (const c of cut) { assert.ok(bytes(c) <= 20); assert.equal(Buffer.from(c).toString(), c); }
+  // nothing is lost, only space-only parts are dropped; 64KB is the default cap
+  const big = Array.from({ length: 300 }, (_, i) => `문단 ${i} ` + "내용".repeat(80)).join("\n\n");
+  const def = split(big);
+  assert.ok(def.length > 1);
+  assert.equal(def.join(""), big);
+  for (const c of def) assert.ok(bytes(c) <= 64 << 10);
+  assert.deepEqual(split("a".repeat(10) + "\n\n   \n\n", 12), ["a".repeat(10) + "\n\n"]);
+});
+
+test("upload: text over 64KB goes up in parts with one progress line and a plain partial failure", async () => {
+  const seen = [];
+  const k = await setup({ "/v1/knowledge/ingest": (_, body) => {
+    seen.push(k.table().textContent.match(/나눠서 올리는 중… \d\/\d/)?.[0]);
+    if (body.content.startsWith("bad")) throw new Error("secret_detected");
+    return { source: { id: "p" + body.filename, revision: 1 } };
+  } });
+  await k.start();
+  const add = k.view.views.knowledge.head()[0];
+  const para = (c) => c + "x".repeat((40 << 10) - c.length) + "\n\n";
+  const pick = async (content, choice) => {
+    add.click(); const input = k.files.at(-1); input.files = [file("big.md", content)]; dom.fire(input, "change"); await dom.flush();
+    const dlg = k.document.body.querySelector("dialog.v4k-ask");
+    assert.match(dlg.textContent, /64KB가 넘어서 문단 단위로 3개로 나눠 올려요/);
+    dlg.close(choice); await dom.flush(); await dom.flush();
+  };
+  await pick(para("a") + para("b") + para("c"), "only");
+  const sent = k.posted("/v1/knowledge/ingest").map((c) => c.body);
+  assert.deepEqual(sent.map((b) => [b.source_key, b.filename, b.mime_type]), [1, 2, 3].map((i) => [`big (${i}／3).md`, `big (${i}／3).md`, "text/markdown"]));
+  assert.deepEqual(seen, ["나눠서 올리는 중… 1/3", "나눠서 올리는 중… 2/3", "나눠서 올리는 중… 3/3"]);
+  assert.match(k.table().textContent, /3개로 나눠 올렸어요. 자료를 열어 확인하고/);
+  assert.equal(k.posted("/v1/knowledge/bindings").length, 0);
+  // one part refused: the rest still go up and the end says which part and why
+  await pick(para("a") + para("bad") + para("c"), "use");
+  assert.equal(k.posted("/v1/knowledge/ingest").length, 6);
+  assert.match(k.table().textContent, /3개 중 2개를 올렸어요. 못 올린 부분은 2번째예요. 비밀값이 들어 있어 받지 않았어요./);
+  assert.equal(k.posted("/v1/knowledge/bindings").length, 2);
+  // every part refused: one plain error, no count line
+  await pick(para("bad") + para("bad") + para("bad"), "only");
+  assert.match(k.table().textContent, /비밀값이 들어 있어 받지 않았어요/);
+  assert.doesNotMatch(k.table().textContent, /개를 올렸어요/);
+  // a new version of one source cannot be split
+  await k.press(k.detail(), "새 버전 올리기");
+  const input = k.files.at(-1); input.files = [file("big.md", para("a") + para("b"))]; dom.fire(input, "change"); await dom.flush();
+  assert.match(k.table().textContent, /새 버전은 64KB까지/);
+  assert.equal(k.document.body.querySelector("dialog.v4k-ask"), null);
 });
