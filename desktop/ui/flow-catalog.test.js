@@ -117,6 +117,7 @@ test("a new workflow is drafted by 노드 짜기 only on the button, can be undo
   h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click(); await h.settle();
   const win = () => document.querySelector("dialog.graph-win[open]");
   assert.match(win().textContent, /새 워크플로우/);
+  assert.deepEqual(JSON.parse(win().dataset.popout), { detail: { new: true } }, "a new workflow opens in its own window too");
   assert.equal(h.btn(win(), /^실행$/).disabled, false, "실행 saves first (asking only for the name), then runs");
   const q = win().querySelector("input[aria-label='AI에게 맡길 일']");
   dom.type(q, "매일 PR 요약");
