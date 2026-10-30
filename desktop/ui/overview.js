@@ -14,7 +14,7 @@ window.ArkismOverview = (ctx) => {
   const time = (v) => { const t = new Date(v || 0).getTime(); return Number.isNaN(t) ? 0 : t; };
 
   // ---------------------------------------------------------------- data
-  const S = { sessions: null, total: 0, cursor: "", at: 0, g: -1, loading: false, failed: false };
+  const S = { sessions: null, total: 0, sums: null, cursor: "", at: 0, g: -1, loading: false, failed: false };
   const sessionLoads = globalThis.ArkismKeep.latest();
   async function loadSessions() {
     // the minute cache holds within one load; a reload (new generation) reads again, so a failed read is retried (#187)
@@ -27,7 +27,7 @@ window.ArkismOverview = (ctx) => {
     S.loading = false;
     if (generation !== state.connection.generation) { void loadSessions(); return; } // reloaded meanwhile: read for the new load
     if (failed) { S.sessions = S.sessions || []; S.failed = true; }
-    else { S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc?.total || 0; S.cursor = doc?.next_cursor || ""; S.failed = false; }
+    else { S.sessions = Array.isArray(doc?.items) ? doc.items : []; S.total = doc?.total || 0; S.sums = doc?.sums || null; S.cursor = doc?.next_cursor || ""; S.failed = false; }
     S.at = Date.now(); S.g = generation;
     if (state.view === "overview") render();
     ctx.onSessions?.(); // 연결 상태 card shows the same stages
@@ -51,6 +51,7 @@ window.ArkismOverview = (ctx) => {
   function stages() {
     const d = state.data, now = Date.now();
     const sessions = (S.sessions || []).map((s) => time(s.ended_at || s.started_at)).filter(Boolean);
+    const savedToday = S.sums?.today ?? sessions.filter(today).length; // the server counts every session, not the 50 loaded
     const waiting = [...(d.candidates || []), ...(d.conflicted || [])];
     const extracted = [...waiting, ...(d.memories || [])].map((m) => time(m.created_at)).filter(Boolean);
     const classified = waiting.map((m) => time(m.classification?.at)).filter(Boolean);
@@ -94,7 +95,7 @@ window.ArkismOverview = (ctx) => {
       classify: [nUnclassified ? `대기 ${num(nUnclassified)}` : "모두 분류됨", "n"], review: [nWait ? `${num(nWait)}건` : "비어 있음", nWait ? "a" : "n"],
       recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
-      collect: [[`${num(sessions.filter(today).length)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(S.total)}건`, "최근 7일"]],
+      collect: [[`${num(savedToday)}건`, "오늘 저장"], [lastSession ? ago(lastSession) : "—", "마지막 저장"], [`${num(S.total)}건`, "최근 7일"]],
       extract: [[stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, stalled ? "멈춘 시간" : "오늘 추출"], [`${n24(extracted)}건`, "최근 24시간 추출"], [lastExtract ? ago(lastExtract) : "—", "마지막 추출"]],
       classify: [[`${num(nUnclassified)}건`, "대기"], [classified.length ? ago(latest(classified)) : "—", "마지막 처리"], [`${n24(classified)}건`, "최근 24시간 분류"]],
       review: [[`${num(nWait)}건`, "대기"], [oldest ? (days ? `${days}일` : ago(oldest)) : "—", "제일 오래된 것"], [`${num(todayCount(waiting))}건`, "오늘 들어온 것"]],
@@ -114,7 +115,7 @@ window.ArkismOverview = (ctx) => {
       .map((s) => (NEEDS[s.key].some((n) => gone.has(n)) ? unknownStage(s) : s));
     return withItems([
       { key: "collect", group: "save", label: "대화 저장", tone: "n", note: ago(lastSession),
-        big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
+        big: `${num(savedToday)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
         row: row(sessions, "n"), counts: slots(sessions), open: () => openWide("sessions") },
       { key: "extract", group: "save", label: "분석", tone: stalled ? "r" : "n",
         big: stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, bigSub: stalled ? "멈춘 시간" : "오늘 추출",
@@ -252,7 +253,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   let win = null;
-  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], sessionsTotal: () => S.total || 0, reloadSessions: () => { S.at = 0; return loadSessions(); } }));
+  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], sessionsTotal: () => S.total || 0, sessionsSums: () => S.sums, reloadSessions: () => { S.at = 0; return loadSessions(); } }));
   const openStage = (key) => windows().open(key);
   const openWide = (kind) => windows().wide(kind);
   // A separate window (popup-drag.js) reopens the stage or wide window that was dragged out of the app.
@@ -293,7 +294,7 @@ window.ArkismOverview = (ctx) => {
     ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : list.every((s) => s.health === "n" || s.health === "g") && list.some((s) => s.health === "n") ? "아직 시작 전" : "모두 움직임";
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
-    const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
+    const todaySessions = S.sums?.today ?? (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
     // every active memory on the server (the map draws them all), not the loaded first page
     const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
     const sess = ctx.count(S.failed || state.loadError ? null : S.sessions ? todaySessions : undefined); // not "오늘 0" while it loads
@@ -344,7 +345,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
-    reset() { sessionLoads.cancel(); Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
+    reset() { sessionLoads.cancel(); Object.assign(S, { sessions:null,total:0,sums:null,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     usageChanged: () => win?.usageChanged(), // app.js loadUsage: an open 사용량 window shows the result
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }

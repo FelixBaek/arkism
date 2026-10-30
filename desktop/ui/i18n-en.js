@@ -5283,7 +5283,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
-  "기억 {0}": "memories {0}", "{0}, 메시지 {1}개를 봤어요.": "Read {0}, {1} messages.", "최근 7일 대화 {0}개 중 최근 {1}개": "the latest {1} of {0} conversations from the last 7 days", "최근 대화 {0}개": "the latest {0} conversations", "{0}, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved {0}: {1} messages, {2} tokens.",
+  "기억 {0}": "memories {0}", "{0}, 메시지 {1}개를 봤어요.": "Read {0}, {1} messages.", "최근 7일 대화 {0}개 중 최근 {1}개": "the latest {1} of {0} conversations from the last 7 days", "최근 대화 {0}개": "the latest {0} conversations", "최근 7일 대화 {0}개": "{0} conversations from the last 7 days", "막대는 최근 대화 {0}개 기준이에요.": "The bars count the latest {0} conversations.", "{0}, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved {0}: {1} messages, {2} tokens.",
   "보관 상태를 읽지 못했어요 ({0}).": "Could not read retention ({0}).", "가장 먼저 지워지는 원문은 {0}일 남았어요.": "The next transcript expires in {0} days.",
   "원문은 저장 뒤 7일 동안만 보관돼요.{0}": "Transcripts are kept for 7 days after saving.{0}", "{0}일 · 넣음 {1}번": "{0} days · included {1} times",
   "마지막 불러옴 {0}": "last recalled {0}", "넣음 {0}": "included {0}", "쓰임 {0}": "used {0}", "불러온 횟수 · {0}": "Recalls · {0}"
