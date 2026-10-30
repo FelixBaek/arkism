@@ -11,7 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
-- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 조건 부하 비교·9비용 측정은 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 계획으로 동기·비동기 개발 파일럿(원장·9비용 수집 확인)을 돌렸다(비교 아님). 잠근 같은 조건 부하 비교·9비용 실측은 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -441,3 +441,7 @@ A candidate wires the bounded dynamics worker, durable snapshot publication, a r
 ## SYS-05 B restore rebind
 
 A restored copy's load queue still names the original storage identity and stays refused. An offline step now rebinds it only when the current original is paused, the copy is open and still under general restore review, and the copy's whole ledger (terminal history, active entries and captures) equals the original. Copied leases are fenced; no hold is cleared. With an actual dump/restore in an isolated PostgreSQL, refusals left the copy unchanged, a matching copy rebound once and drained only after the existing review released it. This is integration evidence, not acceptance: same-condition load comparison and the nine-cost measurement remain. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See [delivery and recovery boundaries](native-delivery-lifecycle.md) and the [work record](../work-records/2026-10-30-roadmap-sys05-b-restore-rebind.md).
+
+## SYS-05 B5 development pilot
+
+One new test runs the same small synthetic plan (five updates, a replay, a changed retry, one Search) through the real Handler on a loopback server, once in async and once in sync mode, against an isolated PostgreSQL. Ingress is recorded before the Service sees each request; durable, applied and visible witnesses come from serial canonical readback and a Search that consumed the published snapshot; nine cost fields are filled or left null with reasons. Async refused the fifth update as queue full and drained; sync applied all five in-request; both counted one learning and treated the rest as duplicates. Ten altered copies of the real runs were refused, and an independent review's six findings were fixed. This is a development pilot, not a comparison: N=1 per cell, no restart, burst, cold/warm, delete race or repair window, no A-v2 projection, comparison_ready false. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b5-dev-pilot.md).
