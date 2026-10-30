@@ -422,6 +422,7 @@ export const createCrew = (ctx) => {
     for (const [key, label] of [["all", `모든 카테고리 ${all.length}`], ...cats.map(([c, n]) => [c, `${c} ${n}`])]) {
       const option = el("option", "", label);
       option.value = key;
+      if (key !== "all") option.dataset.noI18n = ""; // the category is the user's own word
       option.selected = key === state.crewCat;
       cat.append(option);
     }
