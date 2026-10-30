@@ -17,7 +17,7 @@ STORY = re.compile(r'^(ST|FR|TC)-\d{3,4}$', re.ASCII)
 REPORT = {'protocol', 'claimed_state', 'story_ids', 'product_diff', 'code_sha256', 'config_sha256', 'fixture_sha256',
           'system_contract_sha256', 'independent_review', 'commands', 'cases'}
 RECHECKS = ('scope_checked', 'approval_checked', 'source_checked', 'permission_checked', 'deletion_checked',
-            'revision_checked', 'fence_rechecked')
+            'revision_checked', 'correction_checked', 'fence_rechecked')
 OBSERVED = {'returned', 'baseline_equal', 'receipts_delta', 'reinforcement_delta', 'fallback_reason', 'fallback_count',
             'revived_ref', 'rolled_back_to_snapshot', 'error_hidden', *RECHECKS}
 COMMAND = {'cmd', 'exit_code', 'tests_run', 'skipped', 'failed'}
@@ -121,6 +121,8 @@ def _integration_links(report, stage):
         hold.append('no_product_diff')
     elif any(d['path'] not in stage['candidate_files'] for d in diff):
         hold.append('product_diff_outside_allowlist')
+    elif len({d['path'] for d in diff}) != len(diff):
+        hold.append('duplicate_product_diff')
     return hold
 
 
