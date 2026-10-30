@@ -240,6 +240,39 @@ func dynamicsHumanCorrection(t *testing.T, p *nativePGFixture, fixture *fixture)
 	}
 }
 func TestDynamicsLoadFunctionalWorkOnceFairnessPG(t *testing.T) {
+	p, svc, fixture, token := dynamicsFairnessSetup(t)
+	if err := svc.WorkOnce(context.Background(), token); err != nil {
+		t.Fatal(err)
+	}
+	privacy, err := p.admin.Get(testCtx, colJobs, scopeA, fixture.nextID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if privacy.PrivacyDeletion.State != privacyVerifying {
+		t.Fatal("native work starved privacy")
+	}
+	done := 0
+	for _, row := range pgCollection(t, p.admin, colJobs) {
+		if row.Kind == "embedding" && row.Status == JobStatusDone {
+			done++
+		}
+	}
+	if done < 1 {
+		t.Fatal("native work starved embedding")
+	}
+	observation, err := p.worker.ObserveDynamicsLoad(testCtx, p.workerToken, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observation.QueueCount != 0 {
+		t.Fatal("privacy/embedding starved native", observation)
+	}
+}
+
+// dynamicsFairnessSetup shares the real WorkOnce between existing privacy and
+// embedding work and one queued native update.
+func dynamicsFairnessSetup(t *testing.T) (*nativePGFixture, *Service, *privacyAdvanceRepo, string) {
+	t.Helper()
 	p := dynamicsPG(t)
 	// Keep the unrelated initial live-memory embedding outside this round. The
 	// two due stale-target jobs below exercise real lease/finish without changing
@@ -270,32 +303,7 @@ func TestDynamicsLoadFunctionalWorkOnceFairnessPG(t *testing.T) {
 	svc.NativeDynamics = p.worker.NativeDynamics
 	fake := svc.Auth.(*fakeAuth)
 	fake.actors[token] = actor("load-worker", roleService, true, append(append([]string{}, allVerbs...), "purge")...)
-	if err := svc.WorkOnce(context.Background(), token); err != nil {
-		t.Fatal(err)
-	}
-	privacy, err := p.admin.Get(testCtx, colJobs, scopeA, fixture.nextID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if privacy.PrivacyDeletion.State != privacyVerifying {
-		t.Fatal("native work starved privacy")
-	}
-	done := 0
-	for _, row := range pgCollection(t, p.admin, colJobs) {
-		if row.Kind == "embedding" && row.Status == JobStatusDone {
-			done++
-		}
-	}
-	if done < 1 {
-		t.Fatal("native work starved embedding")
-	}
-	observation, err := p.worker.ObserveDynamicsLoad(testCtx, p.workerToken, scopeA)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if observation.QueueCount != 0 {
-		t.Fatal("privacy/embedding starved native", observation)
-	}
+	return p, svc, fixture, token
 }
 
 func TestDynamicsLoadFunctionalQueueRepairWithholdsPG(t *testing.T) {
