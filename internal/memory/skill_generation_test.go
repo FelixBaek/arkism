@@ -400,3 +400,46 @@ func checkSkillGenerationBundle(t *testing.T, f *fixture) {
 		t.Fatal("report bound to another bundle accepted")
 	}
 }
+
+// Pressing 시작 again after 버리기 brings the discarded draft back as a candidate instead of failing.
+func TestSkillGenerationAfterDiscard(t *testing.T) {
+	f := newFixture(t)
+	in, calls := generationFixture(t, f)
+	page, _ := f.svc.ListReflections(testCtx, f.human, scopeA, "review")
+	in.Lessons = page.Items[0].CandidateRefs
+	reject := func(v Record) {
+		t.Helper()
+		if _, e := f.svc.Transition(testCtx, f.human, colSkillVersions, v.ID, ChangeInput{Scope: scopeA, ExpectedRevision: v.Revision, Status: "rejected"}); e != nil {
+			t.Fatal(e)
+		}
+	}
+	first, err := f.svc.GenerateSkill(testCtx, f.human, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reject(first.Record)
+	same, err := f.svc.GenerateSkill(testCtx, f.human, in)
+	if err != nil || same.Record.ID != first.Record.ID || same.Record.Status != "candidate" || same.Record.Revision <= first.Record.Revision || calls.Load() != 1 {
+		t.Fatal("same request after discard", err, same.Record.Status, calls.Load())
+	}
+	reject(same.Record)
+	in.EventID = "generate-2"
+	again, err := f.svc.GenerateSkill(testCtx, f.human, in)
+	if err != nil || again.Record.ID != first.Record.ID || again.Record.Status != "candidate" || again.Record.ApprovedBy != "" || again.Record.ValidationID != "" || calls.Load() != 2 {
+		t.Fatal("new request after discard", err, again.Record.Status)
+	}
+	skill, _ := f.repo.Get(testCtx, colSkills, scopeA, in.SkillID)
+	if len(skill.VersionHistory) != 1 {
+		t.Fatal("discarded draft duplicated in history", skill.VersionHistory)
+	}
+	// An agent's draft the owner discarded stays discarded.
+	in.EventID = "generate-agent"
+	byAgent, err := f.svc.GenerateSkill(testCtx, f.agent, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reject(byAgent.Record)
+	if _, err = f.svc.GenerateSkill(testCtx, f.agent, in); !errors.Is(err, ErrConflict) {
+		t.Fatal("an agent revived a discarded draft", err)
+	}
+}

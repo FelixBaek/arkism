@@ -54,6 +54,7 @@ import "./skill-trial-status.js";
 import "./skill-trial.js";
 import "./skill-review.js";
 import "./skill-generate.js";
+import "./skill-improve.js";
 import "./catalog.js";
 import "./messenger.js";
 import "./alerts.js";

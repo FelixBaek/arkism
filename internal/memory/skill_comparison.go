@@ -23,8 +23,11 @@ type SkillComparisonReport struct {
 	CandidateScore      float64 `json:"candidate_score" bson:"candidate_score"`
 	CandidateCost       float64 `json:"candidate_cost" bson:"candidate_cost"`
 	CandidateDurationMS int64   `json:"candidate_duration_ms" bson:"candidate_duration_ms"`
-	RegressionPassed    bool    `json:"regression_passed" bson:"regression_passed"`
-	SafetyPassed        bool    `json:"safety_passed" bson:"safety_passed"`
+	// The baseline run's totals, measured from its cases by the server like the candidate's; absent on older reports.
+	BaselineCost       float64 `json:"baseline_cost,omitempty" bson:"baseline_cost,omitempty"`
+	BaselineDurationMS int64   `json:"baseline_duration_ms,omitempty" bson:"baseline_duration_ms,omitempty"`
+	RegressionPassed   bool    `json:"regression_passed" bson:"regression_passed"`
+	SafetyPassed       bool    `json:"safety_passed" bson:"safety_passed"`
 	// Companion binding: the pinned bundle hash of each variant ("" when unpinned) and whether
 	// the adapter was given the files (materialized), only some (partial) or just SKILL.md.
 	BundleSHA256      map[string]string `json:"bundle_sha256,omitempty" bson:"bundle_sha256,omitempty"`
@@ -51,7 +54,7 @@ func validComparisonReport(r *SkillComparisonReport) bool {
 			return false
 		}
 	}
-	return sourceHashPattern.MatchString(r.PlanSHA256) && finiteNonnegative(r.BaselineScore) && r.BaselineScore <= 1 && finiteNonnegative(r.CandidateScore) && r.CandidateScore <= 1 && finiteNonnegative(r.CandidateCost) && r.CandidateDurationMS >= 0
+	return sourceHashPattern.MatchString(r.PlanSHA256) && finiteNonnegative(r.BaselineScore) && r.BaselineScore <= 1 && finiteNonnegative(r.CandidateScore) && r.CandidateScore <= 1 && finiteNonnegative(r.CandidateCost) && r.CandidateDurationMS >= 0 && finiteNonnegative(r.BaselineCost) && r.BaselineDurationMS >= 0
 }
 
 // A body-only measurement cannot vouch for changed companion files.
