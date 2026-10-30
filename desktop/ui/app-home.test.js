@@ -934,9 +934,9 @@ test("home search: the popover finds memories, skills, crew, tools and settings 
   app.dom.type(s, "설정"); await app.settle(300);
   const setting = [...gs().querySelectorAll(".gs-row")].find((r) => /설정/.test(text(r.querySelector("small"))));
   setting.click(); await app.settle(50);
-  // the first settings tab (일반) opens: 설정 and 일반 are the picked menu and tab, and its 수집 group is on screen
+  // the first settings tab (일반) opens: Settings and 일반 are the picked menu and tab, and its 수집 group is on screen
   const picked = [...app.$$("[aria-selected=true], [aria-current]")].map(text);
-  assert.ok(picked.includes("설정") && picked.includes("일반"), picked.join(" | "));
+  assert.ok(picked.includes("Settings") && picked.includes("일반"), picked.join(" | "));
   assert.match(text(app.$("#table")), /수집 켜기/);
   // 기억 목록에서 걸러 보기 › moves the query to the memory list
   await home();
