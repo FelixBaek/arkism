@@ -206,12 +206,19 @@ type MemoryUseStats struct {
 	// sessions that got any; absent from hosts that do not log it yet.
 	InjectSessions int `json:"inject_sessions,omitempty"`
 	InjectChars    int `json:"inject_chars,omitempty"`
+	// Hosts that count record_memory_usage receipts as Used send the text overlap here,
+	// and the number of unreceipted injections after which an item is marked Unused.
+	Estimated   int `json:"estimated,omitempty"`
+	UnusedAfter int `json:"unused_after,omitempty"`
 }
 
 type MemoryUseStat struct {
-	ID       string `json:"id"`
-	Injected int    `json:"injected"`
-	Used     int    `json:"used"`
+	ID          string `json:"id"`
+	Injected    int    `json:"injected"`
+	Used        int    `json:"used"`
+	Estimated   int    `json:"estimated,omitempty"`
+	Unreceipted int    `json:"unreceipted,omitempty"`
+	Unused      bool   `json:"unused,omitempty"`
 }
 
 type AgentToolSwitch struct {

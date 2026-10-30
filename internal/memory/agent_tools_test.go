@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -313,5 +314,28 @@ func TestAgentFoldersAcceptWindowsPaths(t *testing.T) {
 		if err := validAgentToolSwitch(AgentToolSwitch{Agent: "shared", Kind: "shared", Name: d, Enabled: true}); !errors.Is(err, ErrInvalid) {
 			t.Errorf("shared %q must be refused, got %v", d, err)
 		}
+	}
+}
+
+// The host's memory_use window (internal/host/skills/agents.go) must pass the strict
+// decoder: an unknown field turned every agents sync into a 400 and stalled installs.
+func TestHostMemoryUseReportDecodesAndIsKept(t *testing.T) {
+	body := `{"scope":{"workspace_id":"` + scopeA.WorkspaceID + `","project_id":"` + scopeA.ProjectID + `"},"servers":[],"plugins":[],"results":[],
+		"memory_use":{"days":7,"sessions":2,"injections":1,"used":2,"estimated":1,"unused_after":5,"inject_sessions":2,"inject_chars":900,
+		"items":[{"id":"m1","injected":1,"used":2,"estimated":1,"unreceipted":0,"unused":false},{"id":"m2","injected":0,"used":0,"estimated":0,"unreceipted":6,"unused":true}]}}`
+	d := json.NewDecoder(strings.NewReader(body))
+	d.DisallowUnknownFields()
+	var in AgentToolsReport
+	if err := d.Decode(&in); err != nil {
+		t.Fatal("host report refused by the strict decoder", err)
+	}
+	f := newFixture(t)
+	got, err := f.svc.ReportAgentTools(testCtx, f.human, in)
+	if err != nil {
+		t.Fatal("host report refused", err)
+	}
+	u := got.AgentTools.MemoryUse
+	if u == nil || u.Estimated != 1 || u.UnusedAfter != 5 || len(u.Items) != 2 || u.Items[0].Used != 2 || !u.Items[1].Unused || u.Items[1].Unreceipted != 6 {
+		t.Fatal("memory use not kept", u)
 	}
 }

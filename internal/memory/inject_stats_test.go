@@ -63,8 +63,9 @@ func TestValidMemoryUseWindows(t *testing.T) {
 	}
 	for name, mut := range map[string]func(*MemoryUseStats){
 		"days":           func(u *MemoryUseStats) { u.Days = 91 },
-		"used>injected":  func(u *MemoryUseStats) { u.Used = 4 },
-		"item used":      func(u *MemoryUseStats) { u.Items[0].Used = 4 },
+		"negative used":  func(u *MemoryUseStats) { u.Items[0].Used = -1 },
+		"estimated":      func(u *MemoryUseStats) { u.Estimated = -1 },
+		"unreceipted":    func(u *MemoryUseStats) { u.Items[0].Unreceipted = -1 },
 		"chars no sess":  func(u *MemoryUseStats) { u.InjectSessions = 0 },
 		"negative chars": func(u *MemoryUseStats) { u.InjectChars = -1 },
 	} {
@@ -80,7 +81,7 @@ func TestValidMemoryUseWindows(t *testing.T) {
 		t.Fatal("report with a 30-day window refused")
 	}
 	bad := ok
-	bad.Used = 9
+	bad.Used = -1
 	report.MemoryUse30 = &bad
 	if validAgentToolsReport(report) {
 		t.Fatal("bad 30-day window accepted")
