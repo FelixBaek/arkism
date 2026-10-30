@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // SYS-05 B5 condition cells: each mode runs the same synthetic plan with a cold
@@ -101,7 +102,7 @@ func dynamicsMeasureRestart(t *testing.T, p *nativePGFixture, mode string) map[s
 
 // dynamicsMeasureDelete queues one update, deletes its target as a human, then
 // drains; the deleted memory must not come back and publication is withheld.
-func dynamicsMeasureDelete(h *dynamicsMeasureHarness, base MemoryOutcomeInput) map[string]any {
+func dynamicsMeasureDelete(h *dynamicsMeasureHarness, base MemoryOutcomeInput) (map[string]any, time.Time) {
 	h.t.Helper()
 	in := base
 	in.EventID = "delete-race"
@@ -111,6 +112,7 @@ func dynamicsMeasureDelete(h *dynamicsMeasureHarness, base MemoryOutcomeInput) m
 	fixture.svc.Repo = h.p.admin
 	target, err := h.p.admin.Get(testCtx, colMemories, scopeA, base.Target.ID)
 	dynamicsRebindExpect(h.t, err, nil, "target before delete")
+	start := time.Now()
 	dynamicsRebindExpect(h.t, fixture.svc.Delete(testCtx, fixture.human, colMemories, target.ID, ChangeInput{Scope: scopeA, ExpectedRevision: target.Revision}), nil, "human delete")
 	h.drain()
 	_, err = h.p.admin.Get(testCtx, colMemories, scopeA, base.Target.ID)
@@ -118,6 +120,39 @@ func dynamicsMeasureDelete(h *dynamicsMeasureHarness, base MemoryOutcomeInput) m
 		"update_status": row.HTTPStatus, "update_code": row.Code, "pending_at_delete": pending,
 		"target_after_drain":   dynamicsErrName(err),
 		"publish_after_delete": dynamicsErrName(h.p.worker.PublishDynamicsSnapshot(testCtx, h.p.workerToken, scopeA)),
+	}, start
+}
+
+// dynamicsMeasureRepair runs the existing purge step, then the explicit
+// verify-then-republish step, and records the serving outage since the delete.
+func dynamicsMeasureRepair(h *dynamicsMeasureHarness, deleted time.Time) map[string]any {
+	h.t.Helper()
+	purges := 0
+	for _, purge := range h.p.rows(h.t, "purge") {
+		for done := false; !done && purges < 64; purges++ {
+			var err error
+			done, err = h.p.worker.ProcessNativeDynamicsPurge(testCtx, h.p.workerToken, scopeA, Ref{Collection: colJobs, ID: purge.ID, Revision: purge.Revision}, 64)
+			dynamicsRebindExpect(h.t, err, nil, "purge step")
+		}
+	}
+	repair := dynamicsErrName(h.p.worker.RepairDynamicsPublication(testCtx, h.p.workerToken, scopeA))
+	publish := repair
+	if repair == "conflict" {
+		// Nothing was withheld (sync applied before the delete); only the purge held publication.
+		publish = dynamicsErrName(h.p.worker.PublishDynamicsSnapshot(testCtx, h.p.workerToken, scopeA))
+	}
+	outage := time.Since(deleted).Nanoseconds()
+	observation, err := h.p.worker.ObserveDynamicsLoad(testCtx, h.p.workerToken, scopeA)
+	dynamicsRebindExpect(h.t, err, nil, "observe after repair")
+	var span *int64
+	if observation.LastRepairStartNS != nil && observation.LastRepairEndNS != nil {
+		v := *observation.LastRepairEndNS - *observation.LastRepairStartNS
+		span = &v
+	}
+	return map[string]any{
+		"purge_steps": purges, "repair_result": repair, "publish_after_repair": publish,
+		"withheld_after": observation.Withheld, "repair_start_after": observation.RepairStartNS,
+		"repair_ns": span, "outage_ns": outage,
 	}
 }
 
@@ -129,6 +164,8 @@ func dynamicsErrName(err error) string {
 		return "not_found"
 	case errors.Is(err, ErrDynamicsSnapshotUnavailable):
 		return "snapshot_unavailable"
+	case errors.Is(err, ErrConflict):
+		return "conflict"
 	}
 	return "error"
 }
@@ -181,19 +218,24 @@ func dynamicsMeasureConditions(t *testing.T, mode, runID string) map[string]any 
 	h.drain()
 	h.publish()
 	warm := searchAt("warm")
-	deleted := dynamicsMeasureDelete(h, p.in)
+	deleted, deletedAt := dynamicsMeasureDelete(h, p.in)
 	after := searchAt("after_delete")
-	final := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
+	// Costs are read before the purge, which scrubs the stored receipts.
 	ledger, err := json.Marshal(map[string]any{"ingress": h.ingress, "requests": h.rows})
 	dynamicsRebindExpect(t, err, nil, "ledger")
+	costs := dynamicsSliceCosts(t, p, dynamicsCosts(t, p, int64(len(ledger))))
+	repaired := dynamicsMeasureRepair(h, deletedAt)
+	afterRepair := searchAt("after_repair")
+	final := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
 	return map[string]any{
 		"run_id": runID, "mode": mode, "ingress": h.ingress, "requests": h.rows,
 		"cold_search": cold.SearchStatus, "warm_search": warm.SearchStatus, "after_delete_search": after.SearchStatus,
 		"warm_serves_target": served["warm"], "after_delete_serves_target": served["after_delete"],
+		"after_repair_search": afterRepair.SearchStatus, "after_repair_serves_target": served["after_repair"], "repair": repaired,
 		"burst_statuses": dynamicsMeasureStatuses(burst),
 		"restart":        restart, "delete_race": deleted,
 		"queue_final": map[string]int64{"head": final.Head, "tail": final.Tail, "count": final.Count},
-		"costs":       dynamicsSliceCosts(t, p, dynamicsCosts(t, p, int64(len(ledger)))),
+		"costs":       costs,
 	}
 }
 
@@ -252,7 +294,7 @@ func TestDynamicsMeasurementConditionsPG(t *testing.T) {
 	}
 	report := map[string]any{
 		"protocol": "sys05-b5-conditions-v1", "classification": "development_condition_cells_not_locked_comparison", "comparison_ready": false,
-		"limits": "N=1 per cell, same in-process synthetic plan, burst of 6 concurrent updates on one trace (duplicates, not independent learning); sync burst on one target is refused by revision conflicts, recorded as observed; restart is an in-process runtime swap with an expired lease, not a separate process, and in sync nothing is pending so no stale claim is fenced; in sync the update applies before the delete, so there is no queued race; the delete race leaves a pending repair, so no repair interval is closed or reported; no sustained overload; receipt_bytes and replay_bytes are logical stored slices, not additive with other costs",
+		"limits": "N=1 per cell, same in-process synthetic plan, burst of 6 concurrent updates on one trace (duplicates, not independent learning); sync burst on one target is refused by revision conflicts, recorded as observed; restart is an in-process runtime swap with an expired lease, not a separate process, and in sync nothing is pending so no stale claim is fenced; in sync the update applies before the delete, so there is no queued race; only async withholds, so only async closes a repair interval, measured server-side, while the outage is measured by this harness; no sustained overload; receipt_bytes and replay_bytes are logical stored slices, not additive with other costs",
 		"runs":   runs,
 	}
 	raw, err := json.MarshalIndent(report, "", "  ")
@@ -264,7 +306,7 @@ func TestDynamicsMeasurementConditionsPG(t *testing.T) {
 	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-conditions.json"), raw, 0o600), nil, "write report")
 }
 
-var dynamicsConditionPlan = []string{"cold", "b1", "b2", "b3", "b4", "b5", "b6", "d1", "warm", "after_delete"}
+var dynamicsConditionPlan = []string{"cold", "b1", "b2", "b3", "b4", "b5", "b6", "d1", "warm", "after_delete", "after_repair"}
 
 // dynamicsConditionCheck reconciles the full denominator and the condition outcomes.
 func dynamicsConditionCheck(run map[string]any) error {
@@ -297,12 +339,43 @@ func dynamicsConditionCheck(run map[string]any) error {
 	if pending > 0 && restart["stale_claim_fenced"] != true || mode == "async" && pending == 0 {
 		return fmt.Errorf("restart did not fence a stale claim: %v", restart)
 	}
-	for _, c := range run["costs"].([]dynamicsCost) {
+	if err = dynamicsSliceCheck(run["costs"].([]dynamicsCost)); err != nil {
+		return err
+	}
+	if err = dynamicsDeleteCheck(run["delete_race"].(map[string]any), mode); err != nil {
+		return err
+	}
+	return dynamicsRepairCheck(run, mode)
+}
+
+// After the purge and the explicit repair, publication resumes without the
+// deleted memory. Only async withheld, so only async closes a repair interval.
+func dynamicsRepairCheck(run map[string]any, mode string) error {
+	r := run["repair"].(map[string]any)
+	want := map[string]string{"async": "ok", "sync": "conflict"}[mode]
+	span, _ := r["repair_ns"].(*int64)
+	if r["repair_result"] != want || r["publish_after_repair"] != "ok" || r["withheld_after"] != false || r["repair_start_after"] != (*int64)(nil) {
+		return fmt.Errorf("repair: %v", r)
+	}
+	if mode == "async" && (span == nil || *span <= 0) || mode == "sync" && span != nil {
+		return fmt.Errorf("repair interval: %v", r)
+	}
+	if outage, _ := r["outage_ns"].(int64); outage <= 0 || span != nil && *span > outage {
+		return fmt.Errorf("serving outage: %v", r)
+	}
+	if run["after_repair_search"] != "selected" || run["after_repair_serves_target"] != false {
+		return fmt.Errorf("after repair: %v served=%v", run["after_repair_search"], run["after_repair_serves_target"])
+	}
+	return nil
+}
+
+func dynamicsSliceCheck(costs []dynamicsCost) error {
+	for _, c := range costs {
 		if (c.Name == "receipt_bytes" || c.Name == "replay_bytes") && (c.Bytes == nil || *c.Bytes <= 0) {
 			return fmt.Errorf("%s not measured", c.Name)
 		}
 	}
-	return dynamicsDeleteCheck(run["delete_race"].(map[string]any), mode)
+	return nil
 }
 
 // In async the update must still be queued when the human deletes its target.
@@ -358,13 +431,17 @@ func dynamicsConditionSet(key string, value any) func(map[string]any) {
 }
 
 func dynamicsConditionDelete(key string, value any) func(map[string]any) {
+	return dynamicsConditionNested("delete_race", key, value)
+}
+
+func dynamicsConditionNested(section, key string, value any) func(map[string]any) {
 	return func(r map[string]any) {
 		d := map[string]any{}
-		for k, v := range r["delete_race"].(map[string]any) {
+		for k, v := range r[section].(map[string]any) {
 			d[k] = v
 		}
 		d[key] = value
-		r["delete_race"] = d
+		r[section] = d
 	}
 }
 
@@ -382,6 +459,22 @@ func dynamicsConditionNegatives(t *testing.T, run map[string]any) {
 		"published through repair":  dynamicsConditionDelete("publish_after_delete", "ok"),
 		"publish failed otherwise":  dynamicsConditionDelete("publish_after_delete", "error"),
 		"raced update refused":      dynamicsConditionDelete("update_status", http.StatusTooManyRequests),
+		"repair left the hold":      dynamicsConditionNested("repair", "withheld_after", true),
+		"repair not republished":    dynamicsConditionNested("repair", "publish_after_repair", "snapshot_unavailable"),
+		"repair interval swapped": func(r map[string]any) {
+			dynamicsConditionNested("repair", "repair_ns", map[string]*int64{"async": nil, "sync": new(int64(1))}[r["mode"].(string)])(r)
+		},
+		"no serving outage": dynamicsConditionNested("repair", "outage_ns", int64(0)),
+		"repair longer than outage": func(r map[string]any) { // only async has an interval to compare
+			if r["mode"] == "sync" {
+				dynamicsConditionNested("repair", "repair_ns", new(int64(2)))(r)
+			}
+			dynamicsConditionNested("repair", "outage_ns", int64(1))(r)
+		},
+		"repair result altered":       dynamicsConditionNested("repair", "repair_result", "snapshot_unavailable"),
+		"repair origin left":          dynamicsConditionNested("repair", "repair_start_after", new(int64(1))),
+		"deleted served after repair": dynamicsConditionSet("after_repair_serves_target", true),
+		"no selection after repair":   dynamicsConditionSet("after_repair_search", "fallback"),
 		"receipt cost null": func(r map[string]any) {
 			costs := append([]dynamicsCost{}, r["costs"].([]dynamicsCost)...)
 			for i := range costs {

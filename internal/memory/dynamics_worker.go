@@ -148,6 +148,8 @@ type DynamicsLoadPayload struct {
 	Attempts              int64  `bson:"attempts"`
 	Reason                string `bson:"reason"`
 	RepairStartNS         *int64 `bson:"repair_start_ns"`
+	LastRepairStartNS     *int64 `bson:"last_repair_start_ns,omitempty"`
+	LastRepairEndNS       *int64 `bson:"last_repair_end_ns,omitempty"`
 	QueueDigest           string `bson:"queue_digest"`
 }
 
@@ -249,6 +251,11 @@ func finishDynamicsTx(ctx context.Context, tx Tx, c, row Record, success bool, r
 		p.AsOfNS = ep.AcceptedNS
 	} else {
 		row.Status = JobStatusFailed
+		if !p.Withheld {
+			// The worker knows when it withheld; an older marker without origin stays nil.
+			start := dynamicsNowNS()
+			p.RepairStartNS = &start
+		}
 		p.Withheld = true
 	}
 	p.Head++
