@@ -337,6 +337,10 @@ func TestDynamicsIntegrationOffShadowSameAnswerPG(t *testing.T) {
 	daemonSearchSettledGeneration(t, shadowAPI, in.Scope)
 	daemonSearchOffShadowOff(t, db, offCfg.Listen, shadowCfg.Listen, in.Target.ID, in.Scope)
 	obs := shadowAPI.NativeSearchShadow.Observations()
+	// A lagging cache may only fall back as snapshot_unavailable, never compute on stale state.
+	if len(obs) == 2 && obs[0].Status != "selected" && (obs[0].Status != "fallback" || obs[0].Reason != "snapshot_unavailable") {
+		t.Fatal("shadow under republishing", obs[0])
+	}
 	if len(obs) != 2 || !obs[0].BaselineReturned || !obs[1].BaselineReturned || obs[1].Status != "selected" || obs[1].SourceCount != 1 {
 		t.Fatal("shadow diagnostic", obs)
 	}

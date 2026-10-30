@@ -189,6 +189,11 @@ func nativeSearchSourceError(ctx context.Context, err error) string {
 	if errors.Is(err, ErrConflict) {
 		return "stale_source"
 	}
+	// A cache behind the coordinator, a withheld or broken publication: the
+	// shadow cannot read state, which is not a malformed source.
+	if errors.Is(err, ErrDynamicsSnapshotUnavailable) {
+		return "snapshot_unavailable"
+	}
 	return "invalid_source"
 }
 
