@@ -100,8 +100,7 @@ func dynamicsCrashDrain(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig
 	return ""
 }
 
-// dynamicsCrashFixture is dynamicsRefreshFixture with an explicit lease length, so
-// both sides of the queue wait limit can be run.
+// dynamicsCrashFixture is dynamicsRefreshFixture with an explicit lease length.
 func dynamicsCrashFixture(t *testing.T, leaseNS int64) (*nativePGFixture, DynamicsLoadConfig) {
 	t.Helper()
 	p, shadow, _ := nativeSearchPGFixture(t)
@@ -152,25 +151,26 @@ func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig,
 
 // A worker process killed with SIGKILL while it holds a lease must neither lose nor
 // double-apply the accepted update. A new process cannot claim before the lease
-// expires. If the lease ends inside the queue wait limit, a new process takes a new
-// lease after the dead one and applies once; if it ends after, the entry fails closed as
-// queue_wait_exhausted and publication stays withheld until an explicit repair. A
+// expires. The config keeps the lease shorter than the queue wait limit, so a new process
+// draining right after the dead lease takes a new lease and applies once; a drain that
+// only comes after the wait limit fails the entry closed as queue_wait_exhausted and
+// publication stays withheld until an explicit repair. A
 // process killed inside its apply transaction, after all writes and before commit,
 // must leave nothing applied, and the next process applies once.
 func TestDynamicsWorkerProcessCrashPG(t *testing.T) {
 	report := map[string]any{"protocol": "sys05-b-worker-crash-v1", "killed_signal": "SIGKILL"}
 	for _, c := range []struct {
-		name, role string
-		leaseNS    int64
-	}{{"lease_within_wait", "claim", int64(2 * time.Second)}, {"lease_beyond_wait", "claim", int64(10 * time.Second)}, {"killed_inside_apply_transaction", "apply", int64(2 * time.Second)}} {
-		t.Run(c.name, func(t *testing.T) { report[c.name] = dynamicsCrashCase(t, c.leaseNS, c.role) })
+		name, role      string
+		leaseNS, lateNS int64
+	}{{"lease_within_wait", "claim", int64(2 * time.Second), 0}, {"drained_after_wait", "claim", int64(4 * time.Second), int64(1500 * time.Millisecond)}, {"killed_inside_apply_transaction", "apply", int64(2 * time.Second), 0}} {
+		t.Run(c.name, func(t *testing.T) { report[c.name] = dynamicsCrashCase(t, c.leaseNS, c.lateNS, c.role) })
 	}
 	out, err := json.Marshal(report)
 	dynamicsRebindExpect(t, err, nil, "report")
 	t.Logf("%s", out)
 }
 
-func dynamicsCrashCase(t *testing.T, leaseNS int64, role string) map[string]any {
+func dynamicsCrashCase(t *testing.T, leaseNS, lateNS int64, role string) map[string]any {
 	t.Helper()
 	p, cfg := dynamicsCrashFixture(t, leaseNS)
 	events := len(p.rows(t, "event"))
@@ -178,16 +178,17 @@ func dynamicsCrashCase(t *testing.T, leaseNS int64, role string) map[string]any 
 		t.Fatalf("fixture did not queue one update: %d", q.Count)
 	}
 	held, killedAt, early := dynamicsCrashKill(t, p, cfg, events, role)
+	time.Sleep(time.Duration(lateNS))
 	late := dynamicsCrashDrain(t, p, cfg)
 	after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
 	entry, err := p.admin.Get(testCtx, colJobs, scopeA, dynamicsEntryID(scopeA, held.Head+1))
 	dynamicsRebindExpect(t, err, nil, "entry row")
 	applied := len(p.rows(t, "event")) - events
-	row := map[string]any{"killed_in": role, "lease_ns": leaseNS, "max_wait_ns": cfg.Limits.MaxWaitNS, "lease_left_at_kill_ns": held.LeaseUntilNS - killedAt,
+	row := map[string]any{"killed_in": role, "lease_ns": leaseNS, "max_wait_ns": cfg.Limits.MaxWaitNS, "drain_delay_after_lease_ns": lateNS, "lease_left_at_kill_ns": held.LeaseUntilNS - killedAt,
 		"early_drain": early, "late_drain": late, "applied_events": applied, "withheld_after": after.Withheld,
 		"lease_generation_before": held.LeaseGeneration, "lease_generation_after": after.LeaseGeneration,
 		"entry_status": entry.Status, "entry_reason": entry.DynamicsLoad.Reason, "entry_attempts": entry.DynamicsLoad.Attempts}
-	if leaseNS < cfg.Limits.MaxWaitNS {
+	if lateNS == 0 {
 		if late != "ok" || after.Count != 0 || after.Withheld || after.LeaseGeneration <= held.LeaseGeneration || applied != 1 || entry.Status != JobStatusDone || entry.DynamicsLoad.Attempts != 2 {
 			t.Fatalf("recovery inside the wait limit: %v %+v", row, after)
 		}
@@ -201,7 +202,7 @@ func dynamicsCrashCase(t *testing.T, leaseNS int64, role string) map[string]any 
 		return row
 	}
 	if after.Count != 0 || !after.Withheld || applied != 0 || late == "ok" || entry.Status != JobStatusFailed || entry.DynamicsLoad.Reason != "queue_wait_exhausted" || entry.DynamicsLoad.Attempts != 1 {
-		t.Fatalf("lease beyond the wait limit did not fail closed: %v %+v", row, after)
+		t.Fatalf("drain after the wait limit did not fail closed: %v %+v", row, after)
 	}
 	// The failed entry is terminal: repair releases the hold and nothing is applied later.
 	dynamicsRebindExpect(t, p.worker.RepairDynamicsPublication(testCtx, p.workerToken, scopeA), nil, "repair")

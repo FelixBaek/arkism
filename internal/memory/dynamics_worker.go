@@ -95,7 +95,8 @@ func validDynamicsLoadConfig(c DynamicsLoadConfig) bool {
 		}
 	}
 	// This implementation serializes one scope coordinator. Wider parallelism is unsupported.
-	if l.QueueCountLimit > 500 || l.ConcurrencyLimit != 1 || l.BatchLimit > 500 || l.SnapshotMaxItems >= 500 || int64(len(c.Scopes)) > l.MaxConfiguredScopes || len(c.Scopes) == 0 {
+	// A lease at least as long as the wait limit lets one crashed claim exhaust its entry and withhold the scope.
+	if l.LeaseNS >= l.MaxWaitNS || l.QueueCountLimit > 500 || l.ConcurrencyLimit != 1 || l.BatchLimit > 500 || l.SnapshotMaxItems >= 500 || int64(len(c.Scopes)) > l.MaxConfiguredScopes || len(c.Scopes) == 0 {
 		return false
 	}
 	seen := map[Scope]bool{}
