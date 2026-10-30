@@ -71,7 +71,7 @@ export function createMemoryList(deps) {
     const badge = (text, cls = "") => deps.el("span", `mem-badge${cls ? ` ${cls}` : ""}`, text);
     if (deps.reviewOverdue(m)) return badge("재검토 예정일 지남", "warn");
     if (deps.standing(m)) return badge("항상 적용");
-    if (deps.state.usageDone && deps.idle(m)) return badge("검토 필요", "warn");
+    if (deps.state.usageDone && deps.idle(m)) return badge("안 쓰임", "warn");
     const fresh = Date.now() - new Date(m.created_at).getTime() < deps.DAY;
     const s = deps.memStat(m.id);
     if (s) return s.injected ? badge(`답에 보임 ${s.used}번`) : badge(fresh ? "새 기억" : "—", fresh ? "new" : "");

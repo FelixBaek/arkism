@@ -25,3 +25,12 @@ test("the rail triangle swings past -90 to fold and past 90 to open (Figma 198:7
   assert.match(rule(s, ".rail-toggle:is(:hover, :focus-visible) .rail-tri"), /rotate\(-90deg\)/);
   assert.match(rule(s, ":root.rail-collapsed .rail-toggle:is(:hover, :focus-visible) .rail-tri"), /rotate\(90deg\)/);
 });
+
+test("dreaming stays purple and diff lines keep their green and red fills (undone once by a Figma pass)", () => {
+  assert.match(rule(css("v4-overview.css"), ".ov-win-tag.ov-tag-p"), /var\(--ov-p\)/);
+  assert.match(rule(css("v4-overview.css"), ".ov-group-dream .ov-group-head"), /var\(--ov-p\)/);
+  const d = css("v4-digests.css");
+  assert.match(rule(d, ".dg-line.add, .dg-line.add .dg-op"), /background: var\(--nc-diff-add-bg\)/);
+  assert.match(rule(d, ".dg-words ins"), /background: var\(--nc-diff-add-bg\)/);
+  assert.match(rule(d, ".dg-words del"), /background: var\(--nc-diff-del-bg\)/);
+});
