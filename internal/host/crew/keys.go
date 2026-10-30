@@ -227,26 +227,34 @@ func addKey(provider, name, key, baseURL string, budget any, keyID string) (host
 	return addKeyWith(provider, name, key, baseURL, budget, keyID, nil)
 }
 
+// checkNewKey validates a new key row before anything is read or stored.
+func checkNewKey(provider, name, key, baseURL string, headers map[string]any) error {
+	if !in(providers, provider) {
+		return crewErr("제공자는 " + strings.Join(providers, "·") + " 중 하나여야 해요")
+	}
+	if strings.TrimSpace(name) == "" || host.Len(name) > 60 {
+		return crewErr("이름은 1~60자여야 해요")
+	}
+	if !(provider == "custom" && key == "") && (host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0) {
+		return crewErr("키가 비었거나 올바르지 않아요")
+	}
+	if len(headers) > 0 && provider != "custom" {
+		return crewErr("요청 헤더는 직접 추가한 제공자에만 넣을 수 있어요")
+	}
+	if err := checkBaseURL(provider, baseURL); err != nil {
+		return err
+	}
+	if provider == "custom" && baseURL == "" {
+		return crewErr("직접 추가한 제공자는 주소가 필요해요")
+	}
+	return nil
+}
+
 // addKeyWith also stores a custom endpoint's extra headers ({name: value}); a custom endpoint may have no key.
 func addKeyWith(provider, name, key, baseURL string, budget any, keyID string, headers map[string]any) (host.Obj, error) {
 	key = strings.TrimSpace(key)
-	if !in(providers, provider) {
-		return nil, crewErr("제공자는 " + strings.Join(providers, "·") + " 중 하나여야 해요")
-	}
-	if strings.TrimSpace(name) == "" || host.Len(name) > 60 {
-		return nil, crewErr("이름은 1~60자여야 해요")
-	}
-	if !(provider == "custom" && key == "") && (host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0) {
-		return nil, crewErr("키가 비었거나 올바르지 않아요")
-	}
-	if len(headers) > 0 && provider != "custom" {
-		return nil, crewErr("요청 헤더는 직접 추가한 제공자에만 넣을 수 있어요")
-	}
-	if err := checkBaseURL(provider, baseURL); err != nil {
+	if err := checkNewKey(provider, name, key, baseURL, headers); err != nil {
 		return nil, err
-	}
-	if provider == "custom" && baseURL == "" {
-		return nil, crewErr("직접 추가한 제공자는 주소가 필요해요")
 	}
 	keys, err := loadKeys()
 	if err != nil {

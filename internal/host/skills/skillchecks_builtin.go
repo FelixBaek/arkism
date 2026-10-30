@@ -202,11 +202,7 @@ func builtinScan(rels []string, read func(string) []byte) []builtinFinding {
 				line = line[:8192]
 			}
 			for _, r := range builtinRules {
-				if r.skillMDOnly && !isSkillMD {
-					continue
-				}
-				m := r.re.FindStringSubmatchIndex(line)
-				if m == nil || r.ok != nil && !r.ok(line, m) {
+				if !builtinMatches(r, line, isSkillMD) {
 					continue
 				}
 				f := builtinFinding{r.category, r.pattern, r.severity, rel, i + 1}
@@ -219,6 +215,15 @@ func builtinScan(rels []string, read func(string) []byte) []builtinFinding {
 	}
 	sort.SliceStable(out, func(a, b int) bool { return severityRank[out[a].Severity] < severityRank[out[b].Severity] })
 	return out
+}
+
+// builtinMatches reports whether rule r fires on line of a file (SKILL.md or not).
+func builtinMatches(r lineRule, line string, isSkillMD bool) bool {
+	if r.skillMDOnly && !isSkillMD {
+		return false
+	}
+	m := r.re.FindStringSubmatchIndex(line)
+	return m != nil && (r.ok == nil || r.ok(line, m))
 }
 
 // builtinVerdict maps findings to the SkillSpector vocabulary the app already shows.
