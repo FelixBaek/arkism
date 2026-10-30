@@ -134,3 +134,10 @@ off existing meeting/store paths to INTEGRATION. This prevents waiting for full
 card acceptance before its own wiring. Observe-only receipt delivery and an
 explicit current-use gate remain distinct; original contracts and server schemas
 are not widened. The full card still requires its integrated acceptance checks.
+
+SYS-05 A owns the offline workload generator, summary validator, contract and
+regression corpus. Its reviewed default-collector registration is an exact-file
+R8 handoff; SYS-05 consumes that file and does not become its writer. A preparation
+and registration do not satisfy SYS-05.integration. Actual service/daemon,
+restore, queue fairness and same-condition performance evidence remain required.
+The SYS-05 status is in_progress; whole-card completion counts remain unchanged.

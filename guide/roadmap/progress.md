@@ -11,6 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. 실제 B 서비스·작업 대기열·복원·같은 조건 부하 비교는 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -409,3 +410,15 @@ The final candidate combines verified public main f86b95f with the native change
 The incoming public-main Go12/UI17 files are preserved inheritance. API semantics retain the independent6 native changes and4 main changes. No UI or daemon feature enablement is introduced by this native implementation. Legacy standalone-product helpers, full check_local and unrestricted all-Go testing remain explicitly unexecuted. This is local integration, not release/deployment or scientific performance validation. Source protection and latest-main compatibility checks are complete locally; PR browser/remote checks are tracked separately.
 
 See [delivery and recovery boundaries](native-delivery-lifecycle.md) and the [integration work record](../work-records/2026-10-30-roadmap-native-system-integration.md). SYS-05 A workload/summary preparation has separate passing evidence; its B service/load implementation and SYS-06 mode/fallback integration remain unfinished.
+
+## SYS-05 A offline load preparation and default registration
+
+The request generator and summary validator are preparation tools: they plan deterministic synthetic requests and reconcile an independently supplied received ledger, outcomes, freshness, repair coverage, background work and nine separate storage/memory costs. They do not run a service, manufacture observations or establish performance superiority. Caller-supplied limits are required; no product defaults are introduced.
+
+The corrected v2 contract distinguishes queue delay, full repair duration and witnessed-window overlap. Missing repair origins/coverage remain null or incomplete. The explicit v1 profile retains supported older within-window observations; it is not an automatic fallback for incomplete v2. Original source and failed chronology tests remain preserved: a shared old fixture applied an update before processing ended. The old40 corpus actually produced2failures and11errors under stricter validation; its expected values were not rewritten to claim success. The new corpus is41methods116leaf, and independent checks replayed the locked12/60 plus new11/68 separately.
+
+R8 adds exactly one module registration, preserving old510 test IDs and executing new41 exactly once:551methods1599leaf passed in both author and independent default-collector checks. The existing8 negative guards and1 valid control remain unchanged; duplicate registration and partial nonempty method omission were rejected by an external inventory in2 additional controls, not by a newly claimed permanent collector guarantee. The original baseline contract, DTOs, fixtures and315 arithmetic outputs are unchanged.
+
+SYS-05 remains in_progress and the whole-card count remains25/63, with24 required cards remaining and14 conditional cards held. This publishes A preparation/default registration only. Native B service integration, authenticated runtime observation binding, bounded-worker recovery, mode wiring and locked same-condition load/quality/freshness/cost comparisons remain separate requirements. See the [SYS-05 tool contract](../../evaluation/memory-harness-v1/system/sys_05/README.md) and [work record](../work-records/2026-10-30-roadmap-load-preparation.md).
+
+This b8-based publication candidate also passed Python tools173 + evaluation577 + reuse49 =799 methods. Its separate default collector replay confirmed551/1599 with0failure/error/skip; those551 overlap evaluation577 and are not added to799. Initial tools socket-permission errors2 are retained; the same173 methods passed with authorized own-loopback execution. No product build, standalone acceptance, operating data, provider call or deployment ran. Final composed/staged/history publication and remote CI remain Root's next checks.
