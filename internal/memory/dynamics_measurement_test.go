@@ -61,6 +61,7 @@ type dynamicsMeasureHarness struct {
 	t       *testing.T
 	p       *nativePGFixture
 	mode    string
+	runID   string
 	server  *httptest.Server
 	mu      sync.Mutex
 	ingress []dynamicsIngress
@@ -104,7 +105,7 @@ func (h *dynamicsMeasureHarness) post(id, op, path, token string, body any) (*dy
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Measure-Request", id)
-	row := &dynamicsMeasureRow{RunID: "pilot-" + h.mode, Mode: h.mode, RequestID: id, Op: op, SentNS: time.Now().UnixNano()}
+	row := &dynamicsMeasureRow{RunID: h.runID, Mode: h.mode, RequestID: id, Op: op, SentNS: time.Now().UnixNano()}
 	resp, err := h.server.Client().Do(req)
 	if err != nil {
 		h.t.Fatal("transport", err) // the pilot treats a lost response as a failed run, not a rejection
@@ -310,13 +311,15 @@ func dynamicsCosts(t *testing.T, p *nativePGFixture, ledgerBytes int64) []dynami
 	}
 }
 
-func dynamicsMeasureMode(t *testing.T, mode string) map[string]any {
+func dynamicsMeasureMode(t *testing.T, mode, runID string) map[string]any {
 	t.Helper()
 	p, shadow, search := nativeSearchPGFixture(t)
 	dynamicsUseLogin(t, p)
 	config := dynamicsFixtureConfig()
 	config.Mode = mode
 	runtime := dynamicsFixtureRuntime(t, config)
+	configRaw, err := json.Marshal(config)
+	dynamicsRebindExpect(t, err, nil, "config")
 	p.checker.DynamicsLoad, p.worker.DynamicsLoad, p.worker.NativeSearchShadow = runtime, runtime, shadow
 	callerAuthority := []string{"db:read", "db:write", "read:evaluations", "read:agent_runs", "read:execution_traces", "read:sources", "read:memories", "write:evaluations"}
 	if mode == "sync" {
@@ -324,9 +327,9 @@ func dynamicsMeasureMode(t *testing.T, mode string) map[string]any {
 		callerAuthority = append(callerAuthority, "read:jobs", "write:jobs")
 		dynamicsRebindExpect(t, p.admin.ProvisionPrincipal(testCtx, PrincipalGrant{PrincipalID: "native-pg-checker", Role: roleService, Token: p.checkerToken, OrganizationID: scopeA.WorkspaceID, ProjectID: scopeA.ProjectID, Actions: callerAuthority}), nil, "sync caller authority")
 	}
-	h := &dynamicsMeasureHarness{t: t, p: p, mode: mode}
+	h := &dynamicsMeasureHarness{t: t, p: p, mode: mode, runID: runID}
 	h.serve(p.checker)
-	searchServer := &dynamicsMeasureHarness{t: t, p: p, mode: mode}
+	searchServer := &dynamicsMeasureHarness{t: t, p: p, mode: mode, runID: runID}
 	searchServer.serve(p.worker)
 	base := p.in
 	for i := 1; i <= 5; i++ {
@@ -354,7 +357,7 @@ func dynamicsMeasureMode(t *testing.T, mode string) map[string]any {
 	dynamicsRebindExpect(t, err, nil, "ledger")
 	final := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
 	return map[string]any{
-		"run_id": "pilot-" + mode, "mode": mode, "caller_authority": callerAuthority,
+		"run_id": runID, "mode": mode, "caller_authority": callerAuthority, "runtime_config_sha256": dynamicsSHA(configRaw),
 		"ingress": h.ingress, "requests": h.rows,
 		"queue_final": map[string]int64{"head": final.Head, "tail": final.Tail, "count": final.Count},
 		"costs":       dynamicsCosts(t, p, int64(len(ledger))),
@@ -481,7 +484,7 @@ func dynamicsMeasureNegatives(t *testing.T, rows []*dynamicsMeasureRow, ingress 
 func TestDynamicsMeasurementPilotSyncAsyncPG(t *testing.T) {
 	runs := []map[string]any{}
 	for _, mode := range []string{"async", "sync"} {
-		run := dynamicsMeasureMode(t, mode)
+		run := dynamicsMeasureMode(t, mode, "pilot-"+mode)
 		rows, ingress := run["requests"].([]*dynamicsMeasureRow), run["ingress"].([]dynamicsIngress)
 		if err := dynamicsMeasureCheck(rows, ingress); err != nil {
 			t.Fatal(mode, err)
@@ -505,4 +508,76 @@ func TestDynamicsMeasurementPilotSyncAsyncPG(t *testing.T) {
 		root = t.TempDir()
 	}
 	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-dev-pilot.json"), raw, 0o600), nil, "write report")
+}
+
+func dynamicsSHA(raw []byte) string {
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// dynamicsMeasureLock is written before the locked run from the pilot evidence;
+// the run refuses any lock whose conditions differ from this code.
+type dynamicsMeasureLock struct {
+	Protocol         string            `json:"protocol"`
+	PilotReportSHA   string            `json:"pilot_report_sha256"`
+	Plan             []string          `json:"plan"`
+	Orders           [][]string        `json:"mode_orders"`
+	AttemptBudget    int               `json:"attempt_budget"`
+	RuntimeConfigSHA map[string]string `json:"runtime_config_sha256"`
+	SelectionRule    string            `json:"selection_rule"`
+	Analysis         string            `json:"analysis"`
+}
+
+func TestDynamicsMeasurementLockedSyncAsyncPG(t *testing.T) {
+	path := os.Getenv("SYS05_MEASUREMENT_LOCK")
+	if path == "" {
+		t.Skip("SYS05_MEASUREMENT_LOCK is not set; locked comparison not run")
+	}
+	raw, err := os.ReadFile(path)
+	dynamicsRebindExpect(t, err, nil, "lock")
+	var lock dynamicsMeasureLock
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	dynamicsRebindExpect(t, decoder.Decode(&lock), nil, "lock decode")
+	plan := []string{"u1", "u2", "u3", "u4", "u5", "r1", "c1", "s1"}
+	if lock.Protocol != "sys05-b5-locked-v1" || strings.Join(lock.Plan, ",") != strings.Join(plan, ",") || len(lock.Orders) != 2 || len(lock.Orders)*2*len(plan) > lock.AttemptBudget || lock.AttemptBudget > dynamicsMeasureAttemptBudget {
+		t.Fatal("lock does not match the coded plan or budget")
+	}
+	for _, mode := range []string{"async", "sync"} {
+		config := dynamicsFixtureConfig()
+		config.Mode = mode
+		c, err := json.Marshal(config)
+		dynamicsRebindExpect(t, err, nil, "config")
+		if lock.RuntimeConfigSHA[mode] != dynamicsSHA(c) {
+			t.Fatal("lock runtime config differs:", mode, dynamicsSHA(c))
+		}
+	}
+	runs := []map[string]any{}
+	for o, order := range lock.Orders {
+		if len(order) != 2 || order[0] == order[1] {
+			t.Fatal("unbalanced order", order)
+		}
+		for _, mode := range order {
+			// Each mode run builds its own fresh database through the fixture.
+			run := dynamicsMeasureMode(t, mode, "locked-o"+strconv.Itoa(o+1)+"-"+mode)
+			rows, ingress := run["requests"].([]*dynamicsMeasureRow), run["ingress"].([]dynamicsIngress)
+			if err := dynamicsMeasureCheck(rows, ingress); err != nil {
+				t.Fatal(mode, err) // after the lock a failed run is reported, never replaced
+			}
+			run["order"] = o + 1
+			runs = append(runs, run)
+		}
+	}
+	report := map[string]any{
+		"protocol": lock.Protocol, "lock_sha256": dynamicsSHA(raw), "classification": "locked_small_functional_comparison_not_performance_claim", "comparison_ready": false,
+		"limits": "N=2 per mode (one per order), same in-process synthetic plan, same trace with distinct EventIDs; no restart, burst, sustained overload, cold/warm, delete race or repair window; A-v2 projection not produced",
+		"runs":   runs,
+	}
+	out, err := json.MarshalIndent(report, "", "  ")
+	dynamicsRebindExpect(t, err, nil, "report")
+	root := os.Getenv("SYS05_MEASUREMENT_DIR")
+	if root == "" {
+		root = t.TempDir()
+	}
+	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-locked.json"), out, 0o600), nil, "write report")
 }
