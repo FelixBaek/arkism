@@ -124,7 +124,7 @@ test("a changed connection starts fresh; failures, missing stats and empty memor
   await settle();
   t = text(dlg());
   assert.equal(document.querySelectorAll("dialog.inject-dialog").length, 1);
-  assert.match(t, /아직 서버가 답에 보였는지 기록를 보내지 않았어요/);
+  assert.match(t, /아직 서버가 답에 보였는지 기록을 보내지 않았어요/);
   assert.match(t, /새 세션에 들어갈 기억이 없어요/);
   // an answer that arrives after the popup closed is dropped quietly
   let release;

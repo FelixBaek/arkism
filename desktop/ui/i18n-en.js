@@ -3979,7 +3979,7 @@ Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand",
 Object.assign(window.ArkismI18nEN.patterns, {"아바타 {0}": "Avatar {0}"});
 Object.assign(window.ArkismI18nEN.strings, {
   "답에 보였는지": "Whether answer text overlaps with memories",
-  "아직 서버가 답에 보였는지 기록를 보내지 않았어요.": "The server has not sent text-overlap statistics yet.",
+  "아직 서버가 답에 보였는지 기록을 보내지 않았어요.": "The server has not sent text-overlap statistics yet.",
   "질문할 때 찾아 넣은 기억의 문구가 답에 보였는지만 세요. 실제 활용 여부는 측정하지 않았고, 읽지 못한 대화 수는 이 통계에서 알 수 없어요.": "Counts text overlap for memories retrieved for prompts. Actual use is not measured; this report does not include the count of unread conversations.",
   "답에 보인 기억이 아직 없어요.": "No memories with observed text overlap yet.",
   "답에 안 보여 확인할 기억": "Memories to review for text overlap",
