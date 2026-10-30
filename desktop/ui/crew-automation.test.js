@@ -407,3 +407,12 @@ test("redrawing the open popup tab keeps its scroll", async () => {
   pop.body.scrollTop = 0;
   pop.dialog.close();
 });
+
+test("automation 취소 with nothing changed closes the window", async () => {
+  const h = await boot();
+  const d = await openAuto(h, "wf1");
+  assert.ok(d.open);
+  exact(d.querySelector(".auto-bar"), "취소").click(); await h.settle();
+  assert.equal(d.open, false);
+  assert.equal([...document.querySelectorAll("dialog[open] .auto-bar")].length, 0); // not closed and opened again
+});
