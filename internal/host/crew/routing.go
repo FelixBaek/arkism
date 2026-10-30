@@ -3,6 +3,7 @@ package crew
 // 라우팅 (model routing): Arkism picks the model; a failed pick hands the task to the fallbacks.
 
 import (
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -78,7 +79,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 		decide = decideRoute
 	}
 	if run == nil {
-		run = func(s map[string]any) (map[string]any, error) { return runNodeFn(s) }
+		run = runAttempt
 	}
 	if report == nil {
 		report = host.ReportCall
@@ -110,27 +111,11 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	for _, f := range list(d["fallbacks"]) {
 		ids = append(ids, pyStr(f))
 	}
-	var res map[string]any
-	var i int
-	var mid string
-	for i, mid = range ids {
-		provider, model, found := strings.Cut(mid, "/")
-		if !found {
-			return nil, crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
-		}
-		attempt := withKey(withKey(spec, "model", model), "provider", provider)
-		res, err = run(attempt)
-		if err != nil {
-			if !isCrewErr(err) {
-				return nil, err
-			}
-			res = result(false, "", model, "", "", time.Time{}, err.Error())
-		}
-		report(routedCall(spec, d, ids, i, attempt, res))
-		if res["ok"] == true {
-			break
-		}
+	res, i, stopped, err := tryRoutes(spec, d, ids, run, report)
+	if err != nil {
+		return nil, err
 	}
+	mid := ids[i]
 	decision := d["decision"]
 	if i > 0 {
 		decision = "failover"
@@ -139,8 +124,89 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if group != "" {
 		routed = append(routed, host.KV{Key: "group", Value: group})
 	}
+	if stopped != "" { // effect_unknown: the attempt that ran may have changed things (also when it was the last candidate); budget_spent: no time left for the next one
+		routed = append(routed, host.KV{Key: "stopped", Value: stopped})
+	}
 	res["routed"] = append(routed, viewHash...)
 	return res, nil
+}
+
+// tryRoutes runs the task on each model in turn until one succeeds or a failed attempt may have changed things.
+// The step's timeout is one budget for the whole chain: a later attempt gets only the time left, and none starts
+// once it is spent. The attempt count is bounded by the candidate list. It returns the last result, its index and
+// why it stopped early ("" when it did not).
+func tryRoutes(spec, d map[string]any, ids []string, run runFn, report reportFunc) (map[string]any, int, string, error) {
+	var res map[string]any
+	budget, budgeted := chainBudget(spec)
+	deadline := routeNow().Add(budget)
+	for i, mid := range ids {
+		provider, model, found := strings.Cut(mid, "/")
+		if !found {
+			return nil, 0, "", crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
+		}
+		attempt := withKey(withKey(spec, "model", model), "provider", provider)
+		if i > 0 && budgeted {
+			left := deadline.Sub(routeNow())
+			if left < time.Second {
+				return res, i - 1, "budget_spent", nil
+			}
+			attempt = withKey(attempt, "timeout_s", int64((left+time.Second-1)/time.Second))
+		}
+		var err error
+		res, err = run(attempt)
+		ran := err == nil // a *CrewError is refused before anything runs
+		free := res[toolFree] == true
+		delete(res, toolFree)
+		if err != nil {
+			if !isCrewErr(err) {
+				return nil, 0, "", err
+			}
+			res = result(false, "", model, "", "", time.Time{}, err.Error())
+		}
+		report(routedCall(spec, d, ids, i, attempt, res))
+		if res["ok"] == true {
+			return res, i, "", nil
+		}
+		if ran && !free && mayHaveChanged(attempt, res) {
+			return res, i, "effect_unknown", nil
+		}
+	}
+	return res, len(ids) - 1, "", nil
+}
+
+var routeNow = time.Now // a test clock
+
+// chainBudget is the step's timeout as the chain's one wall-time budget, the same default runAttempt would use.
+// An invalid, zero-or-negative or overflowing timeout_s gets no budget: each attempt keeps its own limit and
+// runNode refuses what it cannot run, as before.
+func chainBudget(spec map[string]any) (time.Duration, bool) {
+	_, budget, err := nodeLimits(spec)
+	if b := strings.TrimSpace(sOr(spec["backend"])); b != "" && b != "local" && !truthy(spec["timeout_s"]) {
+		budget = backendTimeout // an agent-runner step without timeout_s runs up to this long
+	}
+	if n, ok := pyIntArg(spec["timeout_s"]); truthy(spec["timeout_s"]) && (!ok || n <= 0 || n > (math.MaxInt64-int64(time.Second))/int64(time.Second)) { // leaves room for the round-up in tryRoutes
+		return 0, false // runNode does not refuse these: a negative one just times out at once
+	}
+	return budget, err == nil
+}
+
+// toolFree marks a result from a call that had no tools (a chat completion); runNode and tryRoutes drop it.
+const toolFree = "\x00tool_free"
+
+// mayHaveChanged says a failed attempt may already have changed files or run commands, so no fallback may run
+// the task again: a step that may write (write or full access, the default) failed after its CLI started. A CLI
+// exit, a timeout or a limit hit mid-run proves nothing about tool calls already made. Only a CLI that never
+// started or an account refused before the start (no start time) falls over, as does any read-only step.
+func mayHaveChanged(attempt, res map[string]any) bool {
+	access, _ := nodeAccess(attempt) // an invalid access was refused before the run
+	notStarted := res["error"] == "cli_not_found" || res["error"] == "quota_exhausted" && neverStarted(res)
+	return access != "read" && !notStarted
+}
+
+// neverStarted reads the zero duration a run without a start time reports, whatever number type carries it.
+func neverStarted(res map[string]any) bool {
+	ms, ok := num(res["duration_ms"])
+	return ok && ms == 0
 }
 
 // withWorkContext reads the selected work once before the choice: the decision sees its metadata view and

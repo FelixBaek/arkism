@@ -36,7 +36,7 @@ func skillCache() string {
 func result(ok bool, output, model, effort, cli string, started time.Time, errText string) map[string]any {
 	ms := int64(0)
 	if !started.IsZero() {
-		ms = time.Since(started).Milliseconds()
+		ms = max(1, time.Since(started).Milliseconds()) // 0 is kept for a run that never started
 	}
 	return map[string]any{"ok": ok, "output": output, "model": model, "effort": effort, "cli": cli, "duration_ms": ms, "error": errText}
 }
@@ -146,7 +146,9 @@ func runChat(key map[string]any, model, effort, instructions, task string, timeo
 		if secret != "" {
 			out = strings.ReplaceAll(out, secret, "***")
 		}
-		return result(ok, out, model, effort, "custom", started, errText)
+		res := result(ok, out, model, effort, "custom", started, errText)
+		res[toolFree] = true // a chat call has no tools, so 라우팅 may fall over after it
+		return res
 	}
 	body := host.MustDumps(host.Obj{{Key: "model", Value: model}, {Key: "messages", Value: messages}}, host.DumpOpts{})
 	// OpenCode Go refuses a request without a per-conversation id (MissingSessionID); others ignore it.
@@ -261,6 +263,13 @@ func stringList(v any) []string {
 // A *host.CrewError is for what the caller must fix (no task, an unknown effort or access, a write step without cwd,
 // no CLI for the model, no working folder).
 func runNode(spec map[string]any) (map[string]any, error) {
+	res, err := runAttempt(spec)
+	delete(res, toolFree) // only 라우팅 reads it
+	return res, err
+}
+
+// runAttempt is runNode for 라우팅: a chat result keeps its toolFree marker.
+func runAttempt(spec map[string]any) (map[string]any, error) {
 	if b := strings.TrimSpace(sOr(spec["backend"])); b != "" && b != "local" {
 		if truthy(spec["research"]) {
 			return nil, researchUnsupported("외부 실행기 " + b)
@@ -333,8 +342,8 @@ func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 		return nil, err
 	}
 	env, profile, reason := accountEnv(row, model, env)
-	if reason == "quota_exhausted" {
-		return result(false, "", model, effort, row.Name, started, reason), nil
+	if reason == "quota_exhausted" { // refused before the CLI starts: no start time, so 라우팅 may fall over
+		return result(false, "", model, effort, row.Name, time.Time{}, reason), nil
 	}
 	env, workdir, cleanup, err := isolatedNodeEnvironment(spec, row, env, workdir)
 	if err != nil {
