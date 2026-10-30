@@ -100,8 +100,9 @@ func dynamicsCrashDrain(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig
 	return ""
 }
 
-// dynamicsCrashFixture is dynamicsRefreshFixture with an explicit lease length.
-func dynamicsCrashFixture(t *testing.T, leaseNS int64) (*nativePGFixture, DynamicsLoadConfig) {
+// dynamicsCrashFixture is dynamicsRefreshFixture with an explicit lease length and
+// queue wait limit (0 keeps the fixture's).
+func dynamicsCrashFixture(t *testing.T, leaseNS, maxWaitNS int64) (*nativePGFixture, DynamicsLoadConfig) {
 	t.Helper()
 	p, shadow, _ := nativeSearchPGFixture(t)
 	dynamicsUseLogin(t, p)
@@ -109,6 +110,9 @@ func dynamicsCrashFixture(t *testing.T, leaseNS int64) (*nativePGFixture, Dynami
 	cfg.Profile = "readonly-process-fixture-v1"
 	cfg.Limits.AllowedFreshnessNS = int64(30 * time.Second)
 	cfg.Limits.LeaseNS = leaseNS
+	if maxWaitNS > 0 {
+		cfg.Limits.MaxWaitNS = maxWaitNS
+	}
 	runtime := dynamicsFixtureRuntime(t, cfg)
 	p.checker.DynamicsLoad, p.worker.DynamicsLoad, p.worker.NativeSearchShadow = runtime, runtime, shadow
 	p.accept(t)
@@ -172,7 +176,7 @@ func TestDynamicsWorkerProcessCrashPG(t *testing.T) {
 
 func dynamicsCrashCase(t *testing.T, leaseNS, lateNS int64, role string) map[string]any {
 	t.Helper()
-	p, cfg := dynamicsCrashFixture(t, leaseNS)
+	p, cfg := dynamicsCrashFixture(t, leaseNS, 0)
 	events := len(p.rows(t, "event"))
 	if q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; q.Count != 1 {
 		t.Fatalf("fixture did not queue one update: %d", q.Count)
@@ -220,7 +224,9 @@ func dynamicsCrashCase(t *testing.T, leaseNS, lateNS int64, role string) map[str
 // transaction and an admission is tried while its lease is held.
 func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
 	t.Helper()
-	p, cfg := dynamicsCrashFixture(t, int64(2*time.Second))
+	// The wait limit leaves room for the dead lease plus several drain processes on a
+	// slow race runner; this test is about the full queue, not the wait limit.
+	p, cfg := dynamicsCrashFixture(t, int64(2*time.Second), int64(30*time.Second))
 	for i := 1; i < int(cfg.Limits.QueueCountLimit); i++ {
 		p.in.EventID = fmt.Sprintf("crash-load-%d", i)
 		p.accept(t)
