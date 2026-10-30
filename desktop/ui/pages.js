@@ -791,7 +791,7 @@ window.ArkismPages = (ctx) => {
     if (dirty()) {
       const bar = el("div", "pg-save");
       bar.append(el("span", "", "저장하지 않은 변경이 있어요."),
-        button("되돌리기", "ghost", null, () => { draft = null; render(false); }),
+        button("취소", "ghost", null, () => { draft = null; render(false); }),
         button("저장", "primary", null, () => {
           draft.forEach((c) => { c.rules = c.rules.filter(([, v]) => v.trim()); c.name = c.name.trim() || "이름 없음"; });
           prefs.categories = draft; draft = null; savePrefs();

@@ -181,7 +181,7 @@ window.ArkismAIChat = (() => {
       const acts = el("div", "acts");
       if (p.applied) {
         acts.append(el("small", "done", "적용함 · 저장하면 반영돼요"));
-        if (p.undo) acts.append(btn("되돌리기", "ghost small", async () => { await apply(p, false); repaint(); }));
+        if (p.undo) acts.append(btn("취소", "ghost small", async () => { await apply(p, false); repaint(); }));
       } else {
         const ok = btn("적용", "ghost small", async () => { ok.disabled = true; try { await apply(p, true); } finally { ok.disabled = false; repaint(); } }); // a slow apply (a commit) can't run twice
         acts.append(ok,

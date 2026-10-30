@@ -482,7 +482,7 @@ export const createCrew = (ctx) => {
     for (const p of participants(x)) faces.append(avatarMark(p));
     // 실행 방식: an agent that works by its own workflow starts the way that workflow does.
     const w = x.type === "workflow" ? x : x.type === "agent" && x.workflow ? allWorkflows().find((r) => r.crew.handle === x.workflow.replace(/^\$/, ""))?.crew : null;
-    const kind = w?.trigger?.kind === "schedule" ? "일정" : w?.trigger ? "웹훅" : "직접 실행";
+    const kind = w?.trigger?.kind === "schedule" ? "스케줄" : w?.trigger ? "웹훅" : "직접 실행";
     const when = w?.trigger && !w.enabled ? `${kind} · 꺼짐` : kind;
     const badge = el("span", `wf-card-when${w && crewSchedule.triggered(w) && w.trigger.kind === "schedule" ? " on" : ""}`);
     badge.title = w?.trigger ? crewSchedule.triggerText(w) : when;

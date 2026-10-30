@@ -49,7 +49,7 @@ test("bubble: open, quick ask, proposals of every shape, apply, undo, drop, appl
   assert.equal(st.props[1].applied, false);
   byText(q(root, ".ex-prop")[0], "적용").click(); await flush();
   assert.ok(root.querySelector(".ex-prop.applied").textContent.includes("적용함"));
-  byText(root.querySelector(".ex-prop.applied"), "되돌리기").click(); await flush();
+  byText(root.querySelector(".ex-prop.applied"), "취소").click(); await flush();
   assert.deepEqual(undone, ["list"]);
   byText(q(root, ".ex-prop")[1], "빼기").click(); await flush();
   assert.deepEqual(dropped, ["순서"]);

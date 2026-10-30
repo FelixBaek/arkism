@@ -350,7 +350,8 @@ window.ArkismAutomation = (h) => {
       t.lastChild.append(el("span", "", wait.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"), " ", el("span", "", "승인하면 다음 단계가 이어지고, 거절하면 여기서 끝나요."));
       const acts = el("div", "wf-attn-actions");
       const after = async () => { await h.refreshRuns(); pop.select("overview"); };
-      acts.append(button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
+      // 그래프에서 보기 goes straight to the step that asks (amber) on the graph (owner request)
+      acts.append(button("그래프에서 보기", "ghost", null, () => leave(() => h.openGraph(rec, { run: wait, select: wait.crew_run.waiting.node_id }))), button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
         button("거절", "", null, async () => { await h.decide(wait, false); void after(); }), button("승인", "primary", null, async () => { await h.decide(wait, true); void after(); }));
       card.append(t, acts);
       return card;

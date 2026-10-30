@@ -273,13 +273,14 @@
 /* Edges: back edges dashed over the top with a label; a used one turns amber in the run view */
 .g-labels { position: absolute; inset: 0; pointer-events: none; }
 .g-edge-label { position: absolute; transform: translate(-50%, -50%); padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-sidebar); color: var(--text-3); font-size: calc(11px * var(--fs, 1)); white-space: nowrap; pointer-events: auto; cursor: pointer; }
-.g-edge-label.used { border-color: var(--warn); color: var(--warn); }
+.g-edge-label.used { border-color: var(--g-human, #61cc8f); color: var(--g-human, #61cc8f); }
 .g-edge.back { stroke-dasharray: 5 4; }
-.g-edge.used { stroke: var(--warn); stroke-dasharray: none; }
+.g-edge.used { stroke: var(--g-human, #61cc8f); stroke-dasharray: none; } /* a path the run took: green */
 .g-edge.selected { stroke: var(--text-1); stroke-width: 2; }
 .g-node.flagged { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
 .graph-page.run { grid-template-columns: minmax(0, 1fr) 320px; }
-.g-node.st-running { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
+.g-node.st-running { border-color: var(--text-1); box-shadow: 0 0 0 1px var(--text-1); } /* running is white, done green, failed red (owner request) */
+.g-node.st-done { border-color: color-mix(in srgb, var(--g-human, #61cc8f) 70%, transparent); }
 .g-node.st-pending, .g-node.st-skipped { opacity: .55; }
 .g-node.st-failed { border-color: var(--status-danger); }
 .g-node-head .dot { margin-left: auto; flex: none; }

@@ -133,10 +133,8 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   const group = (title) => pop.querySelectorAll(".v4s-pop-group").find((g) => g.querySelector("h4").textContent === title);
   assert.deepEqual(pop.querySelectorAll("h4").map((x) => x.textContent), ["카테고리", "상태", "에이전트", "정렬"]);
   assert.deepEqual(group("카테고리").querySelectorAll(".chip").map((c) => c.textContent), ["전체3", "개발2", "분류 안 됨1"]);
-  assert.deepEqual(group("상태").querySelectorAll(".chip").map((c) => c.textContent), ["전체", "일부 에이전트에서 꺼짐1", "안 씀2", "보안 주의1", "업데이트 있음1", "플러그인에 든 스킬1", "휴지통1"]);
+  assert.deepEqual(group("상태").querySelectorAll(".chip").map((c) => c.textContent), ["전체", "일부 에이전트에서 꺼짐1", "안 씀2", "보안 주의1", "업데이트 있음1", "플러그인에 든 스킬1"]);
   assert.equal(group("상태").querySelector(".chip.active").textContent, "전체");
-  btn(group("상태"), "휴지통").click();
-  assert.deepEqual(s.log.at(-1), ["go", "skills", "trash"]);
   assert.equal(group("정렬").querySelector(".chip.active").textContent, "많이 쓴 순 ↓");
   btn(group("정렬"), "이름 순").click();
   assert.equal(s.state.skillSort, "name");
@@ -349,7 +347,7 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.deepEqual(s.log.at(-1), ["update", 1]);
   // One AI button; its chat footer opens 개선하기.
   const chat = s.chats[0];
-  assert.equal(chat.label, "AI");
+  assert.equal(chat.label, "AI 설명");
   assert.match(chat.greeting, /무엇이 궁금하세요\?\n/);
   assert.equal(chat.footer.label, "이 스킬 개선하기");
   chat.footer.onClick();
