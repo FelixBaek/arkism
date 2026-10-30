@@ -2,11 +2,13 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"math"
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,13 +64,34 @@ type SkillAnalysis struct {
 // inspection. Reject the whole payload rather than silently corrupting facts.
 var sensitivePattern = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|bearer\s+[a-z0-9._~-]+|\b(?:sk|al)-[a-z0-9_-]{12,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{8,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b|\b\d{6}-[1-4]\d{6}\b|\b(?:tool_output|raw_output|raw_conversation)\b)`)
 
+// The secret patterns are fixed, so a verdict depends only on the text: listing 600 skills
+// re-scanned every unchanged analysis with them (most of a 3 s catalog request).
+var safeTransferSeen struct {
+	sync.Mutex
+	verdict map[[32]byte]bool
+}
+
 func safeTransfer(text string) bool {
 	if len(text) > 64000 {
 		return false
 	}
+	key := sha256.Sum256([]byte(text))
+	safeTransferSeen.Lock()
+	ok, known := safeTransferSeen.verdict[key]
+	safeTransferSeen.Unlock()
+	if known {
+		return ok
+	}
 	// Inspect JSON string content too, not only the outer serialization.
-	text = strings.ReplaceAll(text, `\"`, `"`)
-	return !containsSecret(text) && !sensitivePattern.MatchString(text)
+	plain := strings.ReplaceAll(text, `\"`, `"`)
+	ok = !containsSecret(plain) && !sensitivePattern.MatchString(plain)
+	safeTransferSeen.Lock()
+	if len(safeTransferSeen.verdict) >= 20000 || safeTransferSeen.verdict == nil {
+		safeTransferSeen.verdict = map[[32]byte]bool{}
+	}
+	safeTransferSeen.verdict[key] = ok
+	safeTransferSeen.Unlock()
+	return ok
 }
 func structuredText(v any) string { b, _ := json.Marshal(v); return string(b) }
 func reflectionEligible(r Record) bool {
