@@ -1862,7 +1862,8 @@ func (x *exchange) runGroup(body host.Obj, group string) error {
 	if candidates, ok = pinGroup(candidates, resumed, googleResumed); !ok {
 		return x.inputError(409, "conversation_mismatch")
 	}
-	return x.tryGroup(body, candidates, choice, ms)
+	rule, _ := decision["rule"].(string)
+	return x.tryGroup(body, candidates, choice, rule, ms)
 }
 
 // groupGoogleResume is the model a native Gemini history continues; done means a response was sent.
@@ -1948,7 +1949,7 @@ type groupFailure struct {
 }
 
 // tryGroup runs the candidates in turn until one answers.
-func (x *exchange) tryGroup(body host.Obj, candidates []string, choice string, ms int64) error {
+func (x *exchange) tryGroup(body host.Obj, candidates []string, choice, rule string, ms int64) error {
 	last := groupFailure{503, "group_target_unavailable", ""}
 	var first *groupFailure // the first member actually refused: its error is the caller's when none answers
 	var limitErr error
@@ -1988,6 +1989,9 @@ func (x *exchange) tryGroup(body host.Obj, candidates []string, choice string, m
 		}
 		i++
 		x.group = map[string]any{"model": mid, "decision": kind, "replaced": previous, "classifier_ms": classifier}
+		if kind != "failover" && rule != "" {
+			x.group["rule"] = rule
+		}
 		x.attemptAt, x.attemptErr, x.status, x.retryAfter = time.Now(), "", 0, 0
 		before := last
 		done, skipped, err := x.groupAttempt(body, mid, release, &last)

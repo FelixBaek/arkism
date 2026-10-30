@@ -77,6 +77,9 @@ type ModelBudgetSettleInput struct {
 	CacheCreation1hInputTokens int64  `json:"cache_creation_1h_input_tokens"`
 }
 type ModelBudgetStatus struct {
+	// Configured is false when this server has no deployment budget for the scope: a human reader then gets
+	// "no budget" (zero limits) plus the owner's 월 예산 for routed requests, instead of a denial.
+	Configured              bool   `json:"configured"`
 	Month                   string `json:"month"`
 	Day                     string `json:"day"`
 	MonthlyLimit            int64  `json:"monthly_limit_pico_usd"`
@@ -94,6 +97,11 @@ type ModelBudgetStatus struct {
 	SubscriptionInputTokens  int64 `json:"subscription_input_tokens"`
 	SubscriptionOutputTokens int64 `json:"subscription_output_tokens"`
 	SubscriptionEstimated    int64 `json:"subscription_estimated_pico_usd"`
+	// Without a deployment budget only: the 월 예산 set in 라우팅 (0 = none), this UTC month's routed cost and
+	// the routing revision a change to it must name (POST /v1/routing/policy monthly_budget_usd).
+	RoutingBudgetUSD    float64 `json:"routing_budget_usd,omitempty"`
+	RoutingMonthCostUSD float64 `json:"routing_month_cost_usd,omitempty"`
+	RoutingRevision     int64   `json:"routing_revision,omitempty"`
 }
 
 func ParseModelBudgetPolicy(raw string) (*ModelBudgetPolicy, error) {
@@ -384,12 +392,8 @@ func settleBudgetCounters(ctx context.Context, tx Tx, scope Scope, state ModelBu
 }
 
 func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Scope) (ModelBudgetStatus, error) {
-	// No active budget for this scope: a person allowed to read it learns there is none (not_found) instead of a denial.
 	if p := s.ModelBudgetPolicy; p == nil || p.Scope != scope || !p.ExpiresAt.After(time.Now()) {
-		if d, e := s.authorize(ctx, token, "read:model_budget", scope, "", ""); e != nil || d.Role != roleHuman {
-			return ModelBudgetStatus{}, ErrDenied
-		}
-		return ModelBudgetStatus{}, ErrNotFound
+		return s.noModelBudget(ctx, token, scope)
 	}
 	d, e := s.budgetActor(ctx, token, scope, "read")
 	if e != nil {
@@ -398,7 +402,7 @@ func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Sco
 	ctx = bindRequestActor(ctx, d)
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	p := s.ModelBudgetPolicy
-	out := ModelBudgetStatus{Month: now.Format("2006-01"), Day: now.Format("2006-01-02"), MonthlyLimit: p.MonthlyPicoUSD, GeneralLimit: p.GeneralPicoUSD, DailyLimit: p.DailyPicoUSD, DailySoftTarget: p.dailySoftTarget(), PricingRevision: "anthropic-2026-10-14"}
+	out := ModelBudgetStatus{Configured: true, Month: now.Format("2006-01"), Day: now.Format("2006-01-02"), MonthlyLimit: p.MonthlyPicoUSD, GeneralLimit: p.GeneralPicoUSD, DailyLimit: p.DailyPicoUSD, DailySoftTarget: p.dailySoftTarget(), PricingRevision: "anthropic-2026-10-14"}
 	e = s.modelBudgetTransaction(ctx, func(ctx context.Context, tx Tx) error {
 		for i, period := range []string{out.Month, out.Day} {
 			row, err := tx.Get(ctx, "jobs", scope, budgetCounterID(scope, period))
@@ -425,6 +429,34 @@ func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Sco
 	})
 	out.DailySoftTargetExceeded = out.DailyCommitted > out.DailySoftTarget
 	return out, e
+}
+
+// noModelBudget answers a human reader when no deployment budget applies; services stay denied, as reserve and settle do.
+func (s *Service) noModelBudget(ctx context.Context, token string, scope Scope) (ModelBudgetStatus, error) {
+	if !validScope(scope) {
+		return ModelBudgetStatus{}, ErrInvalid
+	}
+	d, e := s.authorize(ctx, token, "read:model_budget", scope, "", "")
+	if e != nil {
+		return ModelBudgetStatus{}, e
+	}
+	if d.Role != roleHuman {
+		return ModelBudgetStatus{}, ErrDenied
+	}
+	if _, e = s.authorize(ctx, token, "read:"+colRouting, scope, routingID(scope), ""); e != nil {
+		return ModelBudgetStatus{}, e
+	}
+	doc, rev, e := s.routingDoc(ctx, scope)
+	if e != nil {
+		return ModelBudgetStatus{}, e
+	}
+	rows, e := s.Repo.ListRecords(ctx, scope, colRoutingCalls, routingCallsRead)
+	if e != nil {
+		return ModelBudgetStatus{}, e
+	}
+	now := time.Now().UTC()
+	return ModelBudgetStatus{Month: now.Format("2006-01"), Day: now.Format("2006-01-02"), RoutingBudgetUSD: doc.MonthlyBudgetUSD,
+		RoutingMonthCostUSD: routingMonthCost(rows, now), RoutingRevision: rev}, nil
 }
 
 func modelBudgetRoutes(mux routeRegistrar, s *Service) {

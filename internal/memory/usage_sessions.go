@@ -287,8 +287,15 @@ func counted(m map[string][2]int, limit int) []map[string]any {
 	return out
 }
 
-func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, rangeKey, agent string) (map[string]any, error) {
+// zone is the reader's day and month boundary (nil: Asia/Seoul, the collector's day).
+func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, rangeKey, agent string, zone *time.Location) (map[string]any, error) {
+	if zone == nil {
+		zone = usageZone()
+	}
 	days, ok := usageRanges[rangeKey]
+	if rangeKey == "month" { // 이번 달: from the 1st in the reader's zone
+		days, ok = time.Now().In(zone).Day(), true
+	}
 	if !validScope(scope) || !ok || agent != "" && !usageNameRe.MatchString(agent) {
 		return nil, ErrInvalid
 	}
@@ -299,7 +306,7 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	if err != nil {
 		return nil, err
 	}
-	seoul := usageZone()
+	seoul := zone
 	now := time.Now().In(seoul)
 	from, prevFrom := "", ""
 	if days > 0 {
@@ -638,6 +645,19 @@ func pairs(m map[string]int) map[string][2]int {
 	return out
 }
 
+// usageTZ reads ?tz=<minutes east of UTC> (the browser's -getTimezoneOffset()); empty keeps the default zone.
+// shortcut: a fixed offset ignores a DST change inside the range, fine for day and month boundaries.
+func usageTZ(v string) (*time.Location, bool) {
+	if v == "" {
+		return nil, true
+	}
+	m, err := strconv.Atoi(v)
+	if err != nil || m < -14*60 || m > 14*60 {
+		return nil, false
+	}
+	return time.FixedZone("", m*60), true
+}
+
 func usageZone() *time.Location {
 	if z, err := time.LoadLocation("Asia/Seoul"); err == nil {
 		return z
@@ -694,7 +714,7 @@ func (s *Service) usageRequests(ctx context.Context, scope Scope, days int, now 
 			total += *c.CostUSD
 		}
 		if len(items) < 200 {
-			items = append(items, map[string]any{"at": r.CreatedAt, "model": c.Model, "replaced": c.Replaced, "decision": c.Decision,
+			items = append(items, map[string]any{"at": r.CreatedAt, "model": c.Model, "replaced": c.Replaced, "decision": c.Decision, "rule": c.Rule,
 				"ok": c.OK, "latency_ms": c.LatencyMS, "input": c.InputTokens, "output": c.OutputTokens, "cost_usd": cost(c.CostUSD), "error": c.Error})
 		}
 	}
@@ -708,7 +728,12 @@ func usageRoutes(mux routeRegistrar, s *Service) {
 		if rg == "" {
 			rg = "30d"
 		}
-		out, e := s.UsageSummary(r.Context(), bearer(r), scopeQuery(r), rg, r.URL.Query().Get("source"))
+		zone, ok := usageTZ(r.URL.Query().Get("tz"))
+		if !ok {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		out, e := s.UsageSummary(r.Context(), bearer(r), scopeQuery(r), rg, r.URL.Query().Get("source"), zone)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {
