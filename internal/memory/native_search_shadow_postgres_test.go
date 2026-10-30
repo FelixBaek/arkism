@@ -160,12 +160,14 @@ type nativeSearchTwoTxRepo struct {
 	calls         int
 }
 
+// Only the shadow read runs under its deadline. Keying on that, not on call
+// order, keeps the final baseline transaction from waiting on the test's own
+// lock when a slow runner expires the deadline before the shadow's first read.
 func (r *nativeSearchTwoTxRepo) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
 	r.calls++
-	if r.calls == 1 {
+	if _, shadow := ctx.Deadline(); shadow {
 		r.first()
-	}
-	if r.calls == 2 {
+	} else {
 		r.second()
 	}
 	return r.Repository.Transaction(ctx, fn)
@@ -176,6 +178,9 @@ func TestNativeSearchShadowPostgresDeadlineKeepsBaseline(t *testing.T) {
 	p.worker.NativeSearchShadow = r
 	var release func()
 	repo := &nativeSearchTwoTxRepo{Repository: p.workerRepo, first: func() {
+		if release != nil {
+			return
+		}
 		tx, e := p.admin.pool.Begin(testCtx)
 		if e != nil {
 			t.Fatal(e)
@@ -190,7 +195,12 @@ func TestNativeSearchShadowPostgresDeadlineKeepsBaseline(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-	}, second: func() { release(); release = nil }}
+	}, second: func() {
+		if release != nil {
+			release()
+			release = nil
+		}
+	}}
 	defer func() {
 		if release != nil {
 			release()
@@ -199,7 +209,8 @@ func TestNativeSearchShadowPostgresDeadlineKeepsBaseline(t *testing.T) {
 	p.worker.Repo = repo
 	before := len(pgCollection(t, p.admin, colJobs))
 	out, e := p.worker.Search(testCtx, p.workerToken, in)
-	if e != nil || len(out.Items) != 1 || repo.calls != 2 || len(pgCollection(t, p.admin, colJobs)) != before+1 {
+	// One call when the deadline expires before the shadow's first read.
+	if e != nil || len(out.Items) != 1 || repo.calls < 1 || repo.calls > 2 || len(pgCollection(t, p.admin, colJobs)) != before+1 {
 		t.Fatal("deadline changed baseline", e)
 	}
 	got := r.Observations()
