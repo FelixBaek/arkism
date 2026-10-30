@@ -98,6 +98,10 @@
       {
         "root": "crew_lab",
         "path": "contracts/crew_contract_v2_delta.md"
+      },
+      {
+        "root": "repo",
+        "path": "guide/roadmap/optional-decisions.md"
       }
     ]
   },
@@ -2304,7 +2308,7 @@
       "id": "ASSOC-01",
       "issue": 158,
       "owner": "ASSOC-01",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2364,7 +2368,7 @@
       "id": "ASSOC-02",
       "issue": 158,
       "owner": "ASSOC-02",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2420,7 +2424,7 @@
       "id": "ASSOC-03",
       "issue": 158,
       "owner": "ASSOC-03",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2480,7 +2484,7 @@
       "id": "STRUCT-01",
       "issue": 158,
       "owner": "STRUCT-01",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2556,7 +2560,7 @@
       "id": "STRUCT-02",
       "issue": 158,
       "owner": "STRUCT-02",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2615,7 +2619,7 @@
       "id": "STRUCT-03",
       "issue": 158,
       "owner": "STRUCT-03",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2678,7 +2682,7 @@
       "id": "ADAPT-01",
       "issue": 158,
       "owner": "ADAPT-01",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2739,7 +2743,7 @@
       "id": "ADAPT-02",
       "issue": 158,
       "owner": "ADAPT-02",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2811,7 +2815,7 @@
       "id": "ADAPT-03",
       "issue": 158,
       "owner": "ADAPT-03",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -2888,7 +2892,7 @@
       "id": "ADAPT-04",
       "issue": 158,
       "owner": "ADAPT-04",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -3775,7 +3779,7 @@
       "id": "FLOW-01",
       "issue": 154,
       "owner": "FLOW-01",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -4577,7 +4581,7 @@
       "id": "MEAS-WL",
       "issue": 157,
       "owner": "MEAS-WL",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
@@ -4609,7 +4613,7 @@
       "id": "PSY-TEAM-01",
       "issue": 157,
       "owner": "PSY-TEAM-01",
-      "status": "planned",
+      "status": "held",
       "conditional": true,
       "condition": "recorded selection or hold/reject decision",
       "entry_gates": [
