@@ -96,6 +96,13 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 		samples = append(samples, dynamicsProjectionSample{time.Now().UnixNano(), dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.Count})
 	}
 	deleted, faulted := false, false
+	costSamples := []map[string]any{}
+	costSample := func() {
+		ledger, err := json.Marshal(map[string]any{"ingress": h.ingress, "requests": h.rows})
+		dynamicsRebindExpect(t, err, nil, "ledger")
+		at := time.Now().UnixNano()
+		costSamples = append(costSamples, map[string]any{"at_unix_ns": at, "costs": dynamicsSliceCosts(t, p, dynamicsCosts(t, p, int64(len(ledger))))})
+	}
 	repairs := []dynamicsProjectionRepair{}
 	anchor := time.Now()
 	for _, line := range strings.Split(strings.TrimSpace(string(workloadRaw)), "\n") {
@@ -103,6 +110,7 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 		dynamicsRebindExpect(t, json.Unmarshal([]byte(line), &req), nil, "workload line")
 		if fault := 700 * int64(time.Millisecond); !faulted && req.ScheduledNS >= fault {
 			faulted = true
+			costSample() // the purge after the delete scrubs stored receipts, so sample before it
 			time.Sleep(time.Until(anchor.Add(time.Duration(fault))))
 			repairs = dynamicsProjectionFault(h, &deleted)
 			sample()
@@ -130,15 +138,12 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 	h.witness()
 	sample()
 	time.Sleep(time.Until(anchor.Add(2 * time.Second)))
-	ledger, err := json.Marshal(map[string]any{"ingress": h.ingress, "requests": h.rows})
-	dynamicsRebindExpect(t, err, nil, "ledger")
-	costsAt := time.Now().UnixNano()
-	costs := dynamicsCosts(t, p, int64(len(ledger)))
+	costSample()
 	return map[string]any{
 		"protocol": "sys05-b5-raw-run-v1", "mode": mode, "config_sha256": dynamicsSHA(configRaw), "workload_sha256": dynamicsSHA(workloadRaw),
 		"runtime_config_load_sha256": runtimeConfig.LoadConfigSHA256, "anchor_unix_ns": anchor.UnixNano(),
 		"observed_until_unix_ns": time.Now().UnixNano(), "ingress": h.ingress, "requests": h.rows,
-		"queue_samples": samples, "costs": costs, "costs_at_unix_ns": costsAt, "repairs": repairs,
+		"queue_samples": samples, "cost_samples": costSamples, "repairs": repairs,
 	}
 }
 
@@ -383,25 +388,42 @@ func TestDynamicsMeasurementProjectionPG(t *testing.T) {
 		dynamicsRebindExpect(t, os.MkdirAll(dir, 0o700), nil, "dir")
 		raw := dynamicsProjectionRun(t, dir, mode)
 		summary := dynamicsProjectionSummary(t, dir, raw)
-		if rec := summary["reconciliation"].(map[string]any); rec["complete"] != true {
-			t.Fatalf("%s reconciliation: %v", mode, rec)
-		}
-		repair := summary["repair"].(map[string]any)
-		if ready := summary["comparison_input_ready"]; ready != (mode == "async") {
-			t.Fatalf("%s comparison_input_ready: %v", mode, ready)
-		}
-		if mode == "async" && (summary["v2_repair_coverage_ready"] != true || repair["reported_events"] != float64(1)) {
-			t.Fatalf("async repair coverage: %v", repair)
-		}
-		if mode == "sync" && (summary["v2_repair_coverage_ready"] != false || repair["reported_events"] != float64(0)) {
-			t.Fatalf("sync repair coverage: %v", repair)
-		}
+		dynamicsProjectionAssert(t, mode, summary)
 		dynamicsProjectionNegatives(t, dir, raw)
 		report[mode] = map[string]any{"summary": summary, "raw_run_sha256": dynamicsSHA(mustJSON(t, raw))}
 	}
 	out, err := json.MarshalIndent(report, "", "  ")
 	dynamicsRebindExpect(t, err, nil, "report")
 	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-av2-projection.json"), out, 0o600), nil, "write report")
+}
+
+// dynamicsProjectionAssert checks one mode's summary: reconciled, all nine costs known, the
+// stored receipt and replay slices seen at least once, and readiness as each mode allows.
+func dynamicsProjectionAssert(t *testing.T, mode string, summary map[string]any) {
+	t.Helper()
+	if rec := summary["reconciliation"].(map[string]any); rec["complete"] != true {
+		t.Fatalf("%s reconciliation: %v", mode, rec)
+	}
+	repair := summary["repair"].(map[string]any)
+	for name, cost := range summary["costs"].(map[string]any) {
+		if c := cost.(map[string]any); c["last"] == nil || c["unknown_samples"] != float64(0) {
+			t.Fatalf("%s cost %s has unknown samples: %v", mode, name, c)
+		}
+	}
+	for _, name := range []string{"receipt_bytes", "replay_bytes"} {
+		if top := summary["costs"].(map[string]any)[name].(map[string]any)["distribution"].(map[string]any)["maximum"]; top == nil || top.(float64) <= 0 {
+			t.Fatalf("%s %s never measured a stored slice: %v", mode, name, top)
+		}
+	}
+	if ready := summary["comparison_input_ready"]; ready != (mode == "async") {
+		t.Fatalf("%s comparison_input_ready: %v", mode, ready)
+	}
+	if mode == "async" && (summary["v2_repair_coverage_ready"] != true || repair["reported_events"] != float64(1)) {
+		t.Fatalf("async repair coverage: %v", repair)
+	}
+	if mode == "sync" && (summary["v2_repair_coverage_ready"] != false || repair["reported_events"] != float64(0)) {
+		t.Fatalf("sync repair coverage: %v", repair)
+	}
 }
 
 func mustJSON(t *testing.T, v any) []byte {

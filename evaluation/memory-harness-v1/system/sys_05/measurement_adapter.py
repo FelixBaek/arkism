@@ -72,6 +72,12 @@ def _outcome(row, received, anchor):
     return out
 
 
+def _costs(sample, anchor):
+    # A cost the run did not measure stays null; extra measurements (DB backend RSS) are not projected.
+    measured = {c["name"]: c["bytes"] for c in sample["costs"]}
+    return dict({"at_ns": sample["at_unix_ns"] - anchor}, **{k: measured.get(k) for k in COSTS})
+
+
 def _repairs(raw, anchor):
     rows = []
     for item in raw["repairs"]:
@@ -107,14 +113,13 @@ def project(raw_config, raw_workload, raw):
         # Background operations have no projection yet; refuse rather than read them as updates.
         G.require(row["op"] in ("read", "update"), "not_applicable", "$/requests/op")
         outcomes.append(_outcome(row, received[row["request_id"]], anchor))
-    costs = {c["name"]: c["bytes"] for c in raw["costs"]}
     observations = {
         "protocol": "sys05-observations-v2", "config_sha256": G.sha(raw_config),
         "origin": "reported_isolated_service", "observed_until_ns": raw["observed_until_unix_ns"] - anchor,
         "outcomes": outcomes,
         "queue_samples": [{"at_ns": s["at_unix_ns"] - anchor, "depth": s["depth"], "oldest_age_ns": None if s["depth"] else 0}
                           for s in raw["queue_samples"]],
-        "cost_samples": [dict({"at_ns": raw["costs_at_unix_ns"] - anchor}, **{k: costs.get(k) for k in COSTS})],
+        "cost_samples": [_costs(sample, anchor) for sample in raw["cost_samples"]],
         "repair_intervals": _repairs(raw, anchor),
         "background_coverage": [{"kind": k, "eligible": None, "completed": None, "max_wait_ns": None,
                                  "starvation_observed": None} for k in ("privacy", "embedding")],
