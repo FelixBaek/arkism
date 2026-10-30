@@ -277,7 +277,7 @@ func geminiPath(target string) (string, map[string]string, error) {
 
 // where is a model's destination: kind "anthropic", "google" (model), "codex" (model), "direct"
 // (base, key, name) or "chat" (base, key, name).
-type where struct{ kind, model, base, key, name string }
+type where struct{ kind, model, base, key, name, headers string } // headers: a custom row's "Name: Value" lines
 
 func zaiKey() string {
 	raw, err := os.ReadFile(ZAIEnv)
@@ -296,7 +296,7 @@ func customKey(pid string) (map[string]any, error) {
 		return nil, err
 	}
 	for _, k := range keys {
-		if k["provider"] == "custom" && truthy(k["key"]) && host.CustomPID(k) == pid {
+		if k["provider"] == "custom" && host.KeyUsable(k) && host.CustomPID(k) == pid {
 			return k, nil
 		}
 	}
@@ -344,10 +344,11 @@ func resolve(model string) (*where, error) {
 		}
 		secret, _ := key["key"].(string)
 		base, _ := key["base_url"].(string)
+		headers, _ := key["headers"].(string)
 		if info["api"] == "anthropic" {
-			return &where{kind: "direct", base: host.AnthropicURL(base), key: secret, name: name}, nil
+			return &where{kind: "direct", base: host.AnthropicURL(base), key: secret, name: name, headers: headers}, nil
 		}
-		return &where{kind: "chat", base: strings.TrimRight(base, "/"), key: secret, name: name}, nil
+		return &where{kind: "chat", base: strings.TrimRight(base, "/"), key: secret, name: name, headers: headers}, nil
 	}
 	return nil, nil
 }
@@ -595,7 +596,7 @@ func mediaType(h http.Header) string {
 
 // chatStream is _chat_stream: a Messages body sent to a provider's Chat API, answered in
 // Messages form. A rejection is a *statusError before the first chunk.
-func chatStream(parent context.Context, base, key string, body host.Obj) byteSeq {
+func chatStream(parent context.Context, base, key string, body host.Obj, extra ...[2]string) byteSeq {
 	return func(yield func([]byte, error) bool) {
 		raw, err := pyDumps(body)
 		if err != nil {
@@ -612,7 +613,12 @@ func chatStream(parent context.Context, base, key string, body host.Obj) byteSeq
 		session := make([]byte, 16)
 		rand.Read(session)
 		req.Header.Set("content-type", "application/json")
-		req.Header.Set("authorization", "Bearer "+key)
+		for _, h := range extra {
+			req.Header.Set(h[0], h[1])
+		}
+		if key != "" { // a custom endpoint saved without a key gets no Authorization
+			req.Header.Set("authorization", "Bearer "+key)
+		}
 		req.Header.Set("x-opencode-session", hex.EncodeToString(session))
 		resp, err := direct.Do(req)
 		if err != nil {
@@ -1676,8 +1682,7 @@ func (x *exchange) execute(body host.Obj, w *where) error {
 		if err != nil {
 			return x.inputError(400, "invalid_request")
 		}
-		return x.forward(w.base+"/chat/completions", data,
-			map[string]string{"content-type": "application/json", "authorization": "Bearer " + w.key}, w.key)
+		return x.forward(w.base+"/chat/completions", data, w.auth(map[string]string{"content-type": "application/json"}, "authorization", "Bearer "), w.key)
 	}
 	var err error
 	if x.chat {
@@ -1690,10 +1695,21 @@ func (x *exchange) execute(body host.Obj, w *where) error {
 		if err != nil {
 			return x.inputError(400, "invalid_request")
 		}
-		return x.forward(w.base+"/v1/messages", data, map[string]string{"content-type": "application/json",
-			"anthropic-version": "2023-06-01", "x-api-key": w.key, "authorization": "Bearer " + w.key}, w.key)
+		return x.forward(w.base+"/v1/messages", data, w.auth(map[string]string{"content-type": "application/json",
+			"anthropic-version": "2023-06-01"}, "x-api-key", "", "authorization", "Bearer "), w.key)
 	}
-	return x.chatAPI(w.base, w.key, body, hostChatAPI)
+	return x.chatAPI(w.base, w.key, body, hostChatAPI, host.HeaderPairs(map[string]any{"headers": w.headers})...)
+}
+
+// auth adds the target's extra headers, then its key under each (name, prefix) pair; no key, no auth header.
+func (w *where) auth(headers map[string]string, pairs ...string) map[string]string {
+	for _, h := range host.HeaderPairs(map[string]any{"headers": w.headers}) {
+		headers[h[0]] = h[1]
+	}
+	for i := 0; w.key != "" && i+1 < len(pairs); i += 2 {
+		headers[pairs[i]] = pairs[i+1] + w.key
+	}
+	return headers
 }
 
 // executeClaude runs a request on an anthropic target: the Claude CLI runner or the Messages API.
@@ -2568,7 +2584,7 @@ func (x *exchange) relay(resp *http.Response, secret string) error {
 }
 
 // chatAPI sends a Messages body to a provider's Chat API (Messages entrance).
-func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) error {
+func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool, extra ...[2]string) error {
 	streaming := truthy(get(body, "stream"))
 	request, err := MessagesToChat(body)
 	if err != nil {
@@ -2586,7 +2602,7 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool) er
 		request.Del("max_tokens")
 		request.Set("max_completion_tokens", limit)
 	}
-	next, stop := iter.Pull2(chatStream(x.r.Context(), base, key, request))
+	next, stop := iter.Pull2(chatStream(x.r.Context(), base, key, request, extra...))
 	defer stop()
 	first, err, ok := next()
 	if !ok {

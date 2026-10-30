@@ -326,6 +326,20 @@ window.ArkismRouting = (ctx) => {
     c.append(el("h3", "", "라우팅 정책"), kv("자동 라우팅", auto), kv("실패하면 다음 모델로", fail), kv("마지막 판정", lastPick(p.last_decision, d.models)), go2);
     return c;
   }
+  // The routing models as the shared picker draws them (model-pick.js): one group per provider; a provider the server marks
+  // 로그인 필요 (connection.state "key") is not connected, so its models wait behind 「연결 안 된 모델도 보기」.
+  function fillModels(sel, items, current) {
+    const groups = [];
+    for (const m of items) {
+      const usable = m.connection?.state !== "key", name = m.provider || m.family || "";
+      let g = groups.find((x) => x.name === name && x.usable === usable);
+      if (!g) groups.push(g = { name, usable, models: [] });
+      g.models.push(m);
+    }
+    const group = (p) => { const og = el("optgroup"); og.label = p.name; for (const m of p.models) og.append(new Option(m.name, m.id)); return og; };
+    globalThis.ArkismModelPick.fill(sel, groups, { current, valueFor: (p, m) => m.id, group,
+      onConnect: () => { state.settingsTab = "agents"; go("settings"); } });
+  }
   // 설정 › 라우팅 설정 (Figma 198:458): 자동 라우팅 and 실패하면 다음 모델로 as cards; switches and picks save at once,
   // the failover order saves with 저장 and stays as a draft (with a bar) until then, also across tabs.
   function policyCards(items) {
@@ -335,8 +349,7 @@ window.ArkismRouting = (ctx) => {
       const f2 = el("label", "rt-field"); f2.append(el("span", "", label));
       const sel = el("select");
       sel.append(new Option(none, ""));
-      for (const m of on) sel.append(new Option(m.name, m.id, false, m.id === value));
-      sel.value = value || "";
+      fillModels(sel, on, value || "");
       sel.addEventListener("change", () => onPick(sel.value));
       f2.append(sel);
       return f2;
@@ -704,7 +717,7 @@ window.ArkismRouting = (ctx) => {
       const left = items.filter((m) => cur(m).enabled !== false && !g.members.includes(m.id));
       const sel = el("select", "rt-add-member"); sel.setAttribute("aria-label", "모델 넣기");
       sel.append(new Option(left.length ? "+ 모델 넣기" : "넣을 수 있는 모델이 없어요", ""));
-      for (const m of left) sel.append(new Option(m.name, m.id));
+      fillModels(sel, left, "");
       sel.disabled = !left.length;
       sel.addEventListener("change", () => { if (sel.value) { mine().members.push(sel.value); render(false); } });
       sec.append(sel);

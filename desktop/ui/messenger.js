@@ -38,6 +38,8 @@ window.ArkismMessenger = (ctx) => {
     const t = el("div", "mg-title");
     const logo = window.ArkismBrand?.mark(name, "mg-logo"); // 디스코드·텔레그램·슬랙 logo before the name
     t.append(...(logo ? [logo] : []), el("strong", "", name));
+    // 디스코드 bots answer in chat; 텔레그램·슬랙 only receive notices (one-way), so each card says which.
+    t.append(el("span", "tag", name === "디스코드" ? "대화 가능" : "알림만"));
     if (st) t.append(el("span", `mg-state ${st[1]}`, st[0]));
     head.append(t);
     if (right) head.append(right);
@@ -78,7 +80,7 @@ window.ArkismMessenger = (ctx) => {
     if (!b) {
       return card("디스코드", ["연결 안 됨", ""], null,
         tokenRow("discord", "", "디스코드 봇 토큰을 붙여 넣으세요", (t) => act(() => request("/v1/discord/bots", { method: "POST", body: body({ bot: { name: "Arkism", token: t } }) }), "토큰을 넘겼어요. 서버가 디스코드에 붙는 중이에요."), "저장하고 연결"),
-        el("p", "mg-note", "토큰은 서버에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 봇을 만들고 Message Content Intent를 켠 뒤 토큰을 넣어 주세요."));
+        el("p", "mg-note", "토큰은 Arkism에 암호화해 저장하고, 화면에는 끝 4자리만 보여요. 디스코드 개발자 포털에서 봇을 만들고 Message Content Intent를 켠 뒤 토큰을 넣어 주세요."));
     }
     const st = STATE[b.state] || [b.state, ""];
     const parts = [b.guild_name && `서버 ${b.guild_name}`, b.channels?.length ? `채널 ${b.channels.length}개` : "", ago(b.last_seen_at)].filter(Boolean);
@@ -135,16 +137,16 @@ window.ArkismMessenger = (ctx) => {
       if (!chat) { notice("채팅 ID를 먼저 넣어 주세요."); return; }
       void act(() => saveDest("telegram", { bot_token: t, chat_id: chat }), "텔레그램을 연결했어요.");
     }, d ? "저장" : "저장하고 연결");
-    return messengerCard("telegram", "텔레그램", d, el("p", "mg-note", "토큰은 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요."), [row, chatRow(d)]);
+    return messengerCard("telegram", "텔레그램", d, el("p", "mg-note", "토큰은 Arkism에 저장하고, 화면에는 끝 4자리만 보여요. @BotFather로 만든 봇을 그룹이나 DM에 먼저 추가해 두세요."), [row, chatRow(d)]);
   }
   function slackCard() {
     const d = dest("slack");
     const row = tokenRow("slack", d?.last4, "https://hooks.slack.com/services/…", (t) => act(() => saveDest("slack", { webhook_url: t }), "슬랙을 연결했어요."), d ? "저장" : "저장하고 연결", "웹훅 주소");
-    return messengerCard("slack", "슬랙", d, el("p", "mg-note", "웹훅 주소는 이 PC에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요."), [row]);
+    return messengerCard("slack", "슬랙", d, el("p", "mg-note", "웹훅 주소는 Arkism에 저장하고, 화면에는 끝 4자리만 보여요. 슬랙의 Incoming Webhooks에서 만들어요."), [row]);
   }
   function channelsPanel() {
     const sec = el("section", "v4-side-sec");
-    sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 팀·전문가 상세의 채널 연결에서 해요."));
+    sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 Flow › 워크플로우를 열어 채널 연결에서 해요."));
     // one group per messenger, each under its logo; telegram and slack have one destination each
     const groups = [["디스코드", S.bots.flatMap((b) => (b.channels || []).map((c) => [`#${c.name || c.channel_id}`, c.label || "", (b.missing || []).some((m) => m.channel_id === c.channel_id)]))],
       ["텔레그램", dest("telegram") ? [[dest("telegram").chat_id || "채팅 ID 없음", "알림을 보내는 곳", false, true]] : []],

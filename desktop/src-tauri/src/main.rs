@@ -13,6 +13,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 mod agent_link;
+mod agent_login;
 mod agent_backends;
 mod gateway_token;
 mod general;
@@ -250,6 +251,14 @@ fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
     for (key, secret) in [("cloudflare_token", &roles.cloudflare_token), ("jev_key", &roles.jev_key), ("picker_key", &roles.picker_key), ("summary_key", &roles.summary_key)] {
         v[key] = serde_json::Value::String(String::new());
         v[format!("{key}_saved")] = serde_json::Value::Bool(!secret.is_empty());
+    }
+    // 스킬 보안 검사: which optional engines this PC has, where the host looks by default (~/.local/bin).
+    // shortcut: ignores ARKISM_SKILL_TOOLS_BIN and the per-engine overrides; read them if someone sets them.
+    if let Some(home) = rt.home() {
+        let bin = home.join(".local").join("bin");
+        let found = |name: &str| bin.join(name).is_file() || bin.join(format!("{name}.exe")).is_file();
+        v["scanners_installed"] = serde_json::json!([("spector", "skillspector"), ("evaluator", "skillevaluator"), ("cisco", "skill-scanner")]
+            .into_iter().filter(|(_, n)| found(n)).map(|(k, _)| k).collect::<Vec<_>>());
     }
     v
 }
@@ -517,6 +526,49 @@ async fn gateway_token_regenerate(rt: tauri::State<'_, Arc<runtime::Runtime>>) -
 async fn providers_refresh(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<(), String> {
     let rt = Arc::clone(&rt);
     tauri::async_runtime::spawn_blocking(move || rt.refresh_providers()).await.map_err(|e| e.to_string())?
+}
+
+/// 계정 추가 › 로그인 (this PC): a terminal window runs the CLI's own sign-in; this waits up to ten minutes for its
+/// login file, then reads the accounts again. `another`: sign in to a new folder and add it as one more account.
+#[tauri::command]
+async fn agent_login(rt: tauri::State<'_, Arc<runtime::Runtime>>, cli: String, another: bool, label: Option<String>) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        let (_, file) = agent_login::known(&cli).ok_or("login_cli_unknown")?;
+        let (folder, env) = {
+            let _activity = rt.activity()?;
+            let home = rt.home().ok_or("local_unavailable")?;
+            if another {
+                let env = agent_login::folder_env(&cli).ok_or("login_another_unsupported")?;
+                let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+                let folder = rt.data_dir().join("accounts").join(format!("{cli}-{stamp}"));
+                std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+                (folder, Some(env))
+            } else {
+                (agent_login::default_folder(home, &cli), None)
+            }
+        };
+        let since = std::time::SystemTime::now();
+        agent_login::open(&cli, env.map(|k| (k, folder.as_path())))?;
+        // No activity lease while waiting: an update may go ahead; the terminal is not the app's child.
+        if !agent_login::wait(&folder.join(file), since, Duration::from_secs(600)) {
+            return Err("login_timeout".into());
+        }
+        if another {
+            rt.register_account(&cli, label.as_deref().filter(|l| !l.trim().is_empty()).unwrap_or(&cli), &folder)?;
+        }
+        let _ = rt.refresh_providers();
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 에이전트 › Arkism 연결 › 지금 연결: puts Arkism's hooks and MCP server in the PC agents' settings again.
+#[tauri::command]
+async fn agents_install(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<(), String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || run_agent_setup(&rt, "install-arkism").map(|_| ())).await.map_err(|e| e.to_string())?
 }
 
 fn show_main(app: &tauri::AppHandle) {
@@ -1101,7 +1153,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

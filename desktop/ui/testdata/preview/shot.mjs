@@ -21,11 +21,13 @@ await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKE
     if (cmd === "ssh_connect") return { server: origin, token: "preview", workspace_id: "default", project_id: "default", ssh_host: "my-server" };
     if (cmd === "local_start") return { server: origin, token: "preview" };
     // settings pages (router worker): sample answers so 역할별 모델·고급 draw like the design mockups
-    const fake = { model_roles: { embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet", cloudflare_account: "", cloudflare_token_saved: false },
+    const fake = { model_roles: { embedder: "auto", embed_model: "qwen3-embedding:0.6b", judge: "fixed", extract_model: "haiku", reflect_model: "sonnet", cloudflare_account: "", cloudflare_token_saved: false, scanners_installed: ["skillspector"] },
       autostart_get: true, capture_settings: { paused: false, exclude: ["~/private", "~/work/client-a"], instructions: "" }, search_mode: "ollama:qwen3-embedding:0.6b",
       local_backups: { backups: [] }, gateway_token_status: { state: gw || "set", updated_ms: Date.UTC(2026, 9, 13, 3), from_env: false },
       gateway_token_regenerate: { status: { state: "set", updated_ms: Date.now(), from_env: false }, agents_updated: true }, update_check: { current: "0.1.1", latest: "0.1.2", newer: true }, ssh_host_key_check: { state: "trusted" }, general_get: { keep_running: true, shortcut: "Ctrl+Shift+Space", shortcut_error: "" },
       gateway_info: { url: "http://127.0.0.1:8099", agents: { claude_code: { installed: true }, codex: { installed: true }, gemini: { installed: false } } } }; // a fresh install: no agent connected yet
+    if (cmd === "agent_login") { await new Promise((r) => setTimeout(r, 1500)); return null; } // the CLI's sign-in window, finished after a moment
+    if (cmd === "agents_install") return null;
     if (cmd in fake) return fake[cmd];
     if (cmd === "api") { const r = await fetch(a.base + a.path, { method: a.method, body: a.body == null ? undefined : (typeof a.body === "string" ? a.body : JSON.stringify(a.body)) }); return { status: r.status, body: await r.text() }; }
     throw new Error("preview: " + cmd);

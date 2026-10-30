@@ -2315,6 +2315,8 @@ export function startApp() {
   void (async () => {
     const defaults = tauri ? await tauri.invoke("app_defaults").catch(() => null) : null;
     if (defaults) Object.assign(state.defaults, defaults);
+    // A new version is looked for at start and once a day; it shows as a dot on 설정 and one notice (pages.js checkUpdate).
+    if (tauri) { setTimeout(() => void pages.checkUpdate(true), 8000); setInterval(() => void pages.checkUpdate(true), 24 * 3600 * 1000); }
     // 처음 실행이면(고른 적 없음) 이 PC / SSH를 고르게 한다. 연결 끊기도 고른 것을 지워 이 화면으로 돌아온다.
     let picked = stored("arkism.mode");
     // 예전 판은 이 PC를 쓸 때 아무것도 저장하지 않았다: 기본 폴더에 데이터가 있으면 이미 이 PC를 고른 것.

@@ -570,3 +570,11 @@ span.wk-chip { cursor: default; }
 .wk-face-opt.art img { display: block; width: 100%; height: 100%; mix-blend-mode: multiply; }
 .wk-face-opt.art:has(:checked) { box-shadow: inset 0 0 0 3px var(--nc-accent); }
 .dialog-foot .wk-face-clear { margin-right: auto; }
+
+/* 설정 › 에이전트: models of a provider with no login or key yet, the switch's meaning, 기억 연결, AI 연결하기 */
+.mp-unusable .mp-models { opacity: .55; }
+.ag-switch-hint { display: block; margin: -4px 0 4px; color: var(--text-2); font-size: calc(11.5px * var(--fs, 1)); }
+.ag-link .v4-kv .btn, .ag-link .v4-kv button { margin-left: auto; }
+.ag-link-more { margin-top: 6px; }
+.ag-start { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.ag-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--text-1); }

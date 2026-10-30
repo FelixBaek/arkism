@@ -229,6 +229,7 @@ async function boot(opts = {}) {
   });
   delete globalThis.ArkismI18n;
   if (opts.search) globalThis.location.search = opts.search;
+  loadScript("model-pick.js");
   loadScript("crew-popup.js");
   loadScript("team-cover.js");
   loadScript("crew-automation.js");

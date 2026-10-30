@@ -8,6 +8,7 @@ class El {
       add: (...c) => { self.className = [...new Set([...self.className.split(" ").filter(Boolean), ...c])].join(" "); },
       remove: (...c) => { self.className = self.className.split(" ").filter((x) => x && !c.includes(x)).join(" "); },
       contains: (c) => self.className.split(" ").includes(c),
+      toggle: (c, on = !self.classList.contains(c)) => { if (on) self.classList.add(c); else self.classList.remove(c); return on; },
     };
   }
   get childNodes() { return this.children; }
@@ -24,8 +25,8 @@ class El {
   addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }
   // Events bubble to the parents unless a listener stops them.
   fire(t, ev = {}) {
-    const e = { target: this, preventDefault() { e.prevented = true; }, stopPropagation() { e.stopped = true; }, ...ev };
-    for (let n = this; n && !e.stopped; n = n.parent) for (const f of n.listeners[t] || []) f(e);
+    const e = { target: this, preventDefault() { e.prevented = true; }, stopPropagation() { e.stopped = true; }, stopImmediatePropagation() { e.stopped = e.now = true; }, ...ev };
+    for (let n = this; n && !e.stopped; n = n.parent) for (const f of n.listeners[t] || []) { f(e); if (e.now) break; }
     return e;
   }
   click() { return this.fire("click"); }

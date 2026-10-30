@@ -959,6 +959,14 @@ impl Runtime {
         self.host_status(quiet(&mut cmd),"providers_refresh_failed")
     }
 
+    /// 계정 추가 › 다른 계정: a folder the CLI just signed in to becomes one more account of this PC's Arkism.
+    pub fn register_account(&self, cli: &str, label: &str, folder: &Path) -> Result<(), String> {
+        let _activity = self.activity()?;
+        let folder = folder.to_str().ok_or("account_folder_invalid")?;
+        let mut cmd = self.host_command(&["crew", "accounts", "add", "--cli", cli, "--name", label, "--config-dir", folder]).ok_or("local_unavailable")?;
+        self.host_status(quiet(&mut cmd), "account_register_failed")
+    }
+
     pub fn background_work(&self, tick: u64) {
         let Ok(_activity) = self.activity() else { return };
         if self.host_command(&[]).is_none() {

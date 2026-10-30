@@ -452,7 +452,7 @@ func TestKeyReachesOnlyTheChildEnvInAPIMode(t *testing.T) {
 
 // fakeCustom answers the 직접 추가 keys' /models and endpoint probe without the network.
 func fakeCustom(t *testing.T, models map[string][]string, api map[string]string) {
-	patch(t, &testKeyFn, func(_, _, base string, _ time.Duration) ([]string, error) { return models[base], nil })
+	patch(t, &testKeyFn, func(_, _, base, _ string, _ time.Duration) ([]string, error) { return models[base], nil })
 	patch(t, &probeAPIFn, func(key map[string]any, _ string) string { return api[sOr(key["base_url"])] })
 }
 
@@ -600,13 +600,13 @@ func TestHandoffRequestsStoreTestAndRemoveWithoutLeakingTheKey(t *testing.T) {
 	if again, _ := carryOut(add, nil, nil); again["status"] != "failed" {
 		t.Fatal(again)
 	}
-	tester := func(_, key, _ string) ([]string, error) { return nil, crewErr("bad " + key) }
+	tester := func(_, key, _, _ string) ([]string, error) { return nil, crewErr("bad " + key) }
 	bad, _ := carryOut(map[string]any{"request": map[string]any{"id": "r2", "kind": "key_test", "provider": "zai"}, "key": secret}, tester, nil)
 	if bad["status"] != "failed" || strings.Contains(dumpLine(bad), secret) {
 		t.Fatal(bad)
 	}
 	ok, _ := carryOut(map[string]any{"request": map[string]any{"id": "r3", "kind": "key_test", "provider": "zai"}, "key": secret},
-		func(string, string, string) ([]string, error) { return []string{"glm-5.1"}, nil }, nil)
+		func(string, string, string, string) ([]string, error) { return []string{"glm-5.1"}, nil }, nil)
 	eq(t, ok["models"], []string{"glm-5.1"})
 	if rm, _ := carryOut(map[string]any{"request": map[string]any{"id": "r4", "kind": "key_remove", "key_id": "key_abc"}}, nil, nil); rm["status"] != "done" {
 		t.Fatal(rm)
@@ -1299,7 +1299,7 @@ func TestAutoModelInAWorkflowStepGoesThroughRouting(t *testing.T) {
 func TestProviderCallsNameThisRunnerNotGo(t *testing.T) {
 	agent := ""
 	fakeProvider(t, `{"data": []}`, func(r *http.Request, _ []byte) { agent = r.Header.Get("User-Agent") })
-	if _, err := testKey("openai", "sk-x", "https://example.invalid/v1", time.Second); err != nil {
+	if _, err := testKey("openai", "sk-x", "https://example.invalid/v1", "", time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if agent != providerAgent {
@@ -1310,7 +1310,7 @@ func TestProviderCallsNameThisRunnerNotGo(t *testing.T) {
 func TestKeyTestRefusesPlainHTTPZAI(t *testing.T) {
 	called := 0
 	fakeProvider(t, `{"data": []}`, func(*http.Request, []byte) { called++ })
-	_, err := testKey("zai", "zai-test-key", "http://example.invalid/api/paas/v4", time.Second)
+	_, err := testKey("zai", "zai-test-key", "http://example.invalid/api/paas/v4", "", time.Second)
 	mustCrewErr(t, err, "https://")
 	if called != 0 {
 		t.Fatal("the key was sent over http")

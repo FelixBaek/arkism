@@ -95,6 +95,7 @@ window.ArkismShell = (ctx) => {
   document.querySelectorAll(".nav-item[data-menu]").forEach((b) => b.addEventListener("click", () => {
     const key = b.dataset.menu;
     state.menu = key;
+    if (key === "settings" && b.classList.contains("has-update")) { settings("info"); return; } // the dot means a new version: open where it installs
     MENUS[key].tabs[0][2]();
   }));
   // 메뉴 접기: the rail folds to icons (remembered on this PC). Narrow windows always get the folded rail, without the button.
