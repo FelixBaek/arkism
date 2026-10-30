@@ -281,3 +281,12 @@ CAP02는48개입력과체커의기술구현을검증했으며원카드필수사�
 - [호환성 관측 schema·48개 개발 사례 검증](../work-records/2026-10-30-roadmap-capability-evidence-fixtures.md)
 
 이번공개기록의parent f5aebd07과문서상태는전체53294 종료0(Python567·Go복잡도/vet/race·UI532)이다. 다른작업트리의미발행DYN05소스는이검사에포함하지않았으며,그별도전체167메서드의규칙충돌1FAIL을통과로바꾸지않는다.
+
+
+## RTE03 격리 구현 독립 후속
+
+RTE03은 결정 시점과 receipt 가용 시각, 정확한 ref/revision/content hash, history 누락과 알려진 빈값, 후선택 packing 대사를 검증한 격리 메타데이터 구현이다. FIFO 입력이 파일 검사 전에 멈추는 실제 결함을 고쳐 작성52/89세부·독립37/99를 통과했다. 실제 호스트/API·native reader/fence 연결은 남아 있어 전체 카드 완료는 아니다.
+
+- [선택 전 메타데이터·FIFO 수정 검증](../work-records/2026-10-30-roadmap-routing-feature-preparation.md)
+
+두 하위 구현만 수용했으며 전체21/63은 유지한다. 원 실패와 수정 전 소스는 별도로 보존했다. 공개 기록은 전체55678 종료0(Python567·Go복잡도/vet/race·UI532)과 공개 검사를 통과했다. 최초 샌드박스 소켓 오류는 원본 보존 후 동일 검사를 재실행했다. 별도 DYN05 작업트리의 수치 규범 충돌1FAIL은 미해결로 유지한다. SYS02는 기존 수락 API와 변환 계약을 대조해 다음 격리 구현을 준비 중이다. 빌드·배포·Claude 변경 없음.
