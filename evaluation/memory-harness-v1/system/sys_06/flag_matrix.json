@@ -1,0 +1,415 @@
+{
+  "protocol": "arkism-sys06-flag-matrix-v1",
+  "default_mode": "off",
+  "unknown_mode": "startup_error",
+  "modes": [
+    "off",
+    "shadow",
+    "dynamic",
+    "emergency_fallback"
+  ],
+  "conditions": [
+    "normal",
+    "stale_state",
+    "corrupt_state",
+    "timeout",
+    "nan_score",
+    "version_error",
+    "delete_race",
+    "correction_race"
+  ],
+  "rules": [
+    "off keeps the current baseline result, budget, permissions and use receipts.",
+    "shadow returns the baseline and adds no delivery, receipt or reinforcement side effect; diagnostics stay separate.",
+    "dynamic runs verified candidates, the fixed policy, packing and the final fence in that order.",
+    "A policy fault falls back to the baseline with a recorded reason and count, after rechecking the current canonical state (scope, approval, source, deletion, revision).",
+    "delete_race and correction_race never revive deleted or superseded memories; they are excluded by the final fence in every mode.",
+    "No rollback restores an older snapshot over a newer deletion or correction boundary."
+  ],
+  "cells": [
+    {
+      "mode": "off",
+      "condition": "normal",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "stale_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "corrupt_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "timeout",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "nan_score",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "version_error",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "delete_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "off",
+      "condition": "correction_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "normal",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "stale_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "corrupt_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "timeout",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "nan_score",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "version_error",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "delete_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "shadow",
+      "condition": "correction_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "normal",
+      "expect": {
+        "returned": "policy",
+        "baseline_equal": null,
+        "receipts_delta": null,
+        "reinforcement_delta": null,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "stale_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "stale_state",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "corrupt_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "corrupt_state",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "timeout",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "policy_timeout",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "nan_score",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "invalid_score",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "version_error",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "version_mismatch",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "delete_race",
+      "expect": {
+        "returned": "policy",
+        "baseline_equal": null,
+        "receipts_delta": null,
+        "reinforcement_delta": null,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "dynamic",
+      "condition": "correction_race",
+      "expect": {
+        "returned": "policy",
+        "baseline_equal": null,
+        "receipts_delta": null,
+        "reinforcement_delta": null,
+        "fallback_reason": null,
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "normal",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "stale_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "corrupt_state",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "timeout",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "nan_score",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "version_error",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "delete_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    },
+    {
+      "mode": "emergency_fallback",
+      "condition": "correction_race",
+      "expect": {
+        "returned": "baseline",
+        "baseline_equal": true,
+        "receipts_delta": 0,
+        "reinforcement_delta": 0,
+        "fallback_reason": "emergency_fallback",
+        "fence_rechecked": true
+      }
+    }
+  ]
+}
