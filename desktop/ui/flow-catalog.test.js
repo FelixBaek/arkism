@@ -136,7 +136,8 @@ test("a new workflow is drafted by 노드 짜기 only on the button, can be undo
   assert.deepEqual([...win().querySelectorAll(".g-node.drafted")].map((n) => n.dataset.id).sort(), ["ai1", "sum"]);
   assert.ok(win().querySelector('.g-node[data-id="sum"]').classList.contains("ai"), "AI steps come in as AI 작업 nodes");
   assert.doesNotMatch(win().textContent, /처음이라면/, "the guide leaves once the graph changed");
-  h.btn(win(), "되돌리기").click(); await h.settle();
+  assert.equal(h.btn(win().querySelector(".g-draft"), "되돌리기"), undefined, "no second 되돌리기 menu under the AI line");
+  win().querySelector(".g-undo").click(); await h.settle(); // the toolbar's ← takes the draft back
   assert.equal(win().querySelectorAll(".g-node").length, 3);
   // 노드 짜기 also sets when it starts; a new schedule is saved switched on
   const drafted = JSON.parse(h.assistReply().output);
