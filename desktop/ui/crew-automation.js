@@ -353,7 +353,7 @@ window.ArkismAutomation = (h) => {
       t.append(el("strong", "", `확인해 주세요${node ? ` · ${h.nodeTitle(node)}` : ""}`), el("p", "", wait.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"));
       const acts = el("div", "wf-attn-actions");
       const after = async () => { await h.refreshRuns(); pop.select("overview"); };
-      acts.append(button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
+      acts.append(button("그래프에서 보기", "ghost", null, () => leave(() => h.openGraph(rec, { run: wait, select: wait.crew_run.waiting.node_id }))), button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
         button("거절", "", null, async () => { await h.decide(wait, false); void after(); }), button("승인", "primary", null, async () => { await h.decide(wait, true); void after(); }));
       card.append(t, acts);
       return card;
@@ -1106,7 +1106,8 @@ window.ArkismAutomation = (h) => {
         const nodeName = (id) => { const n = (rec.crew.graph?.nodes || []).find((x) => x.id === id); return n ? h.nodeTitle(n) : ""; };
         void h.openRunResult(r.id, box, () => { body.replaceChildren(); historyTab(body); }, {
           when: isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`,
-          kind: TRIGGERS[cr.trigger] || "", nodeName, steps: () => leave(() => h.openGraph(rec, { run: r })) });
+          kind: TRIGGERS[cr.trigger] || "", nodeName, failed: Object.entries(cr.nodes || {}).find(([, st]) => st.status === "failed")?.[0],
+          steps: (select) => leave(() => h.openGraph(rec, { run: r, select })) });
       };
       let all = false;
       const load = async () => {

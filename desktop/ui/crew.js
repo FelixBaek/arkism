@@ -1163,6 +1163,7 @@ export const createCrew = (ctx) => {
     get ownerOf() { return ownerOf; },
     get parseCron() { return crewSchedule.parseCron; },
     get personas() { return personas; },
+    get plainRunError() { return plainRunError; },
     get pollRun() { return crewRunView.pollRun; },
     get PORTS() { return crewVocabulary.PORTS; },
     get portsOf() { return crewModel.portsOf; },

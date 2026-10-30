@@ -114,7 +114,7 @@ export function createCrewRunView(deps) {
     }
     if (cr.status === "failed") {
       const n = failedNode(cr);
-      const a = deps.el("div", "wf-attn small");
+      const a = deps.el("div", "wf-attn small err");
       const t = deps.el("div", "");
       const err = cr.nodes?.[n?.id]?.error || "";
       t.append(deps.el("strong", "", n ? `${deps.nodeTitle(n)} 단계가 실패했어요` : "실행이 멈췄어요"), deps.el("p", "", deps.readable(cr.summary) || plainRunError(err) || "이유가 남지 않았어요."));

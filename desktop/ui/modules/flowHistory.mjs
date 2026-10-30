@@ -59,7 +59,7 @@ export function createFlowHistory({ state, el, button, request, query, notice, a
   // info (from 기록): when·kind for the title, steps() for 단계 보기, nodeName(id) for the step a run stopped at or a child ran from.
   async function openResult(id, container, back, info = {}) {
     const again = () => void openResult(id, container, back, info);
-    const extra = info.steps ? [button("단계 보기", "ghost", "tree-structure", info.steps)] : [];
+    const extra = info.steps ? [button("단계 보기", "ghost", "tree-structure", () => info.steps())] : [];
     const title = ["실행 결과", info.when, info.kind].filter(Boolean).join(" · ");
     const { current, body, h } = detailShell(container, title, back, again, extra);
     try {
@@ -69,7 +69,7 @@ export function createFlowHistory({ state, el, button, request, query, notice, a
       if (result.run_id !== id) { failure(body); return; }
       if (!["succeeded", "concluded"].includes(result.status)) h.textContent = `${title} · ${STATUS[result.status] || result.status}`;
       body.replaceChildren();
-      resultActions(body, result, again, current, info.nodeName);
+      resultActions(body, result, again, current, info);
       section(body, "최종 결과", "마지막 단계가 낸 글이에요");
       body.append(raw(el("pre", "flow-result-text", result.result || "아직 최종 결과가 없어요.")));
       delivery(body, result.delivery?.delivery);
@@ -99,8 +99,10 @@ export function createFlowHistory({ state, el, button, request, query, notice, a
     return [mark(ok, bad), raw(el("small", "", stamp(child.started_at))), el("small", "", meeting ? "회의 결과" : "하위 실행"), name, el("span", "grow"), el("small", "", end)];
   }
   // 확인해 주세요 (1480:7861): where it stopped and what it asks, with 중단 요청 · 거절 · 승인 in one row.
-  function resultActions(box, result, reload, current, nodeName) {
+  // info.steps(id) opens the run on the graph with that step picked: amber where it waits, red where it failed.
+  function resultActions(box, result, reload, current, { nodeName, steps, failed } = {}) {
     const actions = el("div", "flow-history-actions");
+    const onGraph = (id) => (steps ? [button("그래프에서 보기", "ghost small", "tree-structure", () => steps(id))] : []);
     const waiting = result.waiting;
     const deciding = result.status === "waiting" && flowNeedsDecision(waiting);
     if (["running", "waiting"].includes(result.status) && result.invocation_mode === "flow") {
@@ -112,11 +114,19 @@ export function createFlowHistory({ state, el, button, request, query, notice, a
       const step = nodeName?.(waiting.node_id);
       const banner = el("div", "flow-decide");
       const text = el("div", "");
-      text.append(raw(el("strong", "", step ? `확인해 주세요 · ${step} 단계에서 멈췄어요` : "확인해 주세요 · 사람의 결정이 필요해요")), raw(paragraph(waiting.question || "다음 단계로 갈까요?")));
+      text.append(raw(el("strong", "", step ? `확인해 주세요 · ${step} 단계에서 멈췄어요` : "확인해 주세요 · 사람의 결정이 필요해요")), raw(paragraph(waiting.question || "다음 단계로 갈까요?")), ...onGraph(waiting.node_id));
       actions.append(button("거절", "", null, () => current() && void changeRun(result, "decision", { node_id: waiting.node_id, approve: false }, reload, current)), button("승인", "primary", null, () => current() && void changeRun(result, "decision", { node_id: waiting.node_id, approve: true }, reload, current)));
       banner.append(text, actions);
       box.append(banner);
     } else if (actions.childElementCount) box.append(actions);
+    const broke = result.status === "failed" && failed && nodeName?.(failed);
+    if (broke) {
+      const banner = el("div", "flow-decide err");
+      const text = el("div", "");
+      text.append(raw(el("strong", "", `${broke} 단계가 실패했어요`)));
+      banner.append(text, ...onGraph(failed));
+      box.append(banner);
+    }
   }
   async function changeRun(result, action, fields, reload, current) {
     if (!Number.isInteger(result.revision) || result.revision < 1) { notice("최신 실행을 다시 열어 주세요."); return; }
