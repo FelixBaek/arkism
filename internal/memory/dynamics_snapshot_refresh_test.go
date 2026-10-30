@@ -139,6 +139,10 @@ func TestDynamicsSnapshotRefreshWorkerProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	svc := &Service{Repo: bound, Auth: auth, NativeDynamics: &NativeDynamicsRuntime{Enabled: true}, DynamicsLoad: runtime}
+	if os.Getenv("SYS05_CRASH_CHILD_ROLE") != "" {
+		dynamicsCrashChild(t, svc, token, runtime.config.Scopes[0])
+		return
+	}
 	if err = svc.WorkDynamicsOnce(testCtx, token); err != nil {
 		t.Fatal(err)
 	}
@@ -154,13 +158,16 @@ func dynamicsRefreshRunWorker(t *testing.T, p *nativePGFixture, cfg DynamicsLoad
 		t.Fatal(err)
 	}
 	command := exec.Command(binary, "-test.run=^TestDynamicsSnapshotRefreshWorkerProcess$", "-test.count=1", "-test.timeout=20s")
-	command.Env = []string{"PATH=/usr/bin:/bin", "TZ=UTC", "SYS05_REFRESH_CHILD_CONFIG=" + string(raw), "SYS05_REFRESH_CHILD_DSN=" + sys04DatabaseDSN(p.app), "SYS05_REFRESH_CHILD_TOKEN=" + p.workerToken}
+	command.Env = dynamicsRefreshChildEnv(p, raw)
 	var output bytes.Buffer
 	command.Stdout = &output
 	command.Stderr = &output
 	if err = command.Run(); err != nil {
 		t.Fatalf("owned worker test subprocess: %v %s", err, output.String())
 	}
+}
+func dynamicsRefreshChildEnv(p *nativePGFixture, raw []byte) []string {
+	return []string{"PATH=/usr/bin:/bin", "TZ=UTC", "SYS05_REFRESH_CHILD_CONFIG=" + string(raw), "SYS05_REFRESH_CHILD_DSN=" + sys04DatabaseDSN(p.app), "SYS05_REFRESH_CHILD_TOKEN=" + p.workerToken}
 }
 func TestDynamicsSnapshotRefreshSeparateWorkerHTTPPG(t *testing.T) {
 	p, shadow, in, cfg := dynamicsRefreshFixture(t)
