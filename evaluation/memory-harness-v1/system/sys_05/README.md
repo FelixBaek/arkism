@@ -61,8 +61,11 @@ Use explicit absolute input/output paths. On POSIX, files/ancestors must not be 
 ```sh
 python3 generate_workload.py --config /absolute/config.json --out /absolute/workload.jsonl
 python3 summarize_load.py --config /absolute/config.json --workload /absolute/workload.jsonl --ledger /absolute/external-ledger.jsonl --observations /absolute/observations.json --out /absolute/summary.json
+python3 measurement_adapter.py --config /absolute/config.json --workload /absolute/workload.jsonl --raw /absolute/raw-run.json --ledger-out /absolute/ledger.jsonl --observations-out /absolute/observations.json
 python3 -m unittest discover -s evaluation/memory-harness-v1/system/sys_05 -p 'test_*.py'
 ```
+
+`measurement_adapter.py` projects one raw B run (`sys05-b5-raw-run-v1`, written by the Go measurement test) onto this unchanged ledger and observation format. Times move to the run anchor; only observed stage prefixes are kept; background operations are refused; a repair interval needs a harness hold witness inside it. It changes none of the files above.
 
 Error codes include `invalid_cli`, `invalid_json`, `invalid_unicode`, `duplicate_key`, `invalid_integer`, `invalid_number`, `invalid_type`, `invalid_value`, `invalid_fields`, `limit_exceeded`, `unsafe_path`, `io_error`, `contract_mismatch`, `time_overflow`, `invalid_schedule`, `missing_fault`, `invalid_cache`, `invalid_jsonl`, `invalid_time`, `invalid_attempts`, `conflicting_result`, `stage_gap`, `not_applicable`, `invalid_snapshot`, `duplicate_record`, `extra_record`, `request_mismatch`, `incomplete`, `invalid_backlog`, `missing_validation`, `incomplete_background`, `conflicting_coverage`, `workload_mismatch`, `missing_ledger`, `config_mismatch`, `comparison_profile_mismatch`, and `internal_error`. Parse/shape/binding checks precede metric calculation; no partial success file is published after an error.
 

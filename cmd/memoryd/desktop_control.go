@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host/desktopcontrol"
@@ -76,13 +77,19 @@ func runMemoryWorker(ctx context.Context, control *desktopcontrol.Controller, in
 	return ctx.Err()
 }
 
-func serveMemoryServer(ctx context.Context, server *http.Server, listener net.Listener, control *desktopcontrol.Controller) error {
+func serveMemoryServer(ctx context.Context, server *http.Server, listener net.Listener, control *desktopcontrol.Controller, backgrounds ...*memoryServerBackground) (result error) {
+	background := firstMemoryServerBackground(backgrounds)
+	defer func() {
+		stop, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		result = errors.Join(result, background.stop(stop))
+	}()
 	if control != nil {
 		// Both the outer request and the actual mux work inside TimeoutHandler
 		// retain admission; a timed-out response is not proof of idle model work.
 		server.Handler = memory.WithRequestWork(server.Handler, control.Admission().Middleware)
 		if err := control.Start(func(ctx context.Context) error {
-			if err := server.Shutdown(ctx); err != nil {
+			if err := shutdownMemoryServer(ctx, server, background); err != nil {
 				return desktopcontrol.ErrStop
 			}
 			return nil
@@ -90,6 +97,7 @@ func serveMemoryServer(ctx context.Context, server *http.Server, listener net.Li
 			return errors.Join(err, listener.Close())
 		}
 	}
+	background.start()
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -97,7 +105,7 @@ func serveMemoryServer(ctx context.Context, server *http.Server, listener net.Li
 		case <-ctx.Done():
 			shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			_ = server.Shutdown(shutdown)
+			_ = shutdownMemoryServer(shutdown, server, background)
 		case <-done:
 		}
 	}()
@@ -110,4 +118,41 @@ func serveMemoryServer(ctx context.Context, server *http.Server, listener net.Li
 		return errors.Join(err, control.AwaitShutdown())
 	}
 	return err
+}
+
+// A background producer starts only after control has registered its synchronous
+// stop callback. The nil producer preserves the existing server lifecycle.
+type memoryServerBackground struct {
+	stopMu      sync.Mutex
+	stopFailure error
+	startWork   func()
+	stopWork    func(context.Context) error
+}
+
+func firstMemoryServerBackground(backgrounds []*memoryServerBackground) *memoryServerBackground {
+	if len(backgrounds) > 0 {
+		return backgrounds[0]
+	}
+	return nil
+}
+func (b *memoryServerBackground) start() {
+	if b != nil && b.startWork != nil {
+		b.startWork()
+	}
+}
+func (b *memoryServerBackground) stop(ctx context.Context) error {
+	if b == nil || b.stopWork == nil {
+		return nil
+	}
+	err := b.stopWork(ctx)
+	b.stopMu.Lock()
+	defer b.stopMu.Unlock()
+	if b.stopFailure == nil {
+		b.stopFailure = err
+	}
+	return b.stopFailure
+}
+func shutdownMemoryServer(ctx context.Context, server *http.Server, b *memoryServerBackground) error {
+	backgroundErr := b.stop(ctx)
+	return errors.Join(backgroundErr, server.Shutdown(ctx))
 }

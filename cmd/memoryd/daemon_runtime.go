@@ -38,8 +38,12 @@ func serveDaemonHTTP(ctx context.Context, svc *memory.Service, cfg daemonOptions
 	if err != nil {
 		return err
 	}
+	background, err := newDaemonDynamicsBackground(ctx, svc, cfg, control)
+	if err != nil {
+		return errors.Join(err, listener.Close())
+	}
 	slog.Info("memory API starting", "address", listener.Addr().String(), "recovery", cfg.Recovery)
-	return serveMemoryServer(ctx, server, listener, control)
+	return serveMemoryServer(ctx, server, listener, control, background)
 }
 
 type daemonWorkerStep struct {
@@ -61,7 +65,11 @@ func serveDaemonWorker(ctx context.Context, svc *memory.Service, cfg daemonOptio
 		return err
 	}
 	worker := &daemonWorkerStep{service: svc, token: token, recovery: cfg.Recovery, noAgentRuntime: os.Getenv("MEMORY_PRIVACY_NO_AGENT_RUNTIME") == "true", expiryScope: scope, expiryDays: days}
-	return runMemoryWorker(ctx, control, 2*time.Second, worker.run)
+	interval := 2 * time.Second
+	if cfg.dynamicsPlan != nil {
+		interval = time.Duration(cfg.dynamicsPlan.config.Limits.PollIntervalNS)
+	}
+	return runMemoryWorker(ctx, control, interval, worker.run)
 }
 
 func (w *daemonWorkerStep) run(ctx context.Context) {

@@ -99,6 +99,7 @@ type ProviderCost struct {
 // Record keeps original text independent of replaceable embeddings. References
 // bind evidence to a specific immutable content/version revision.
 type Record struct {
+	DynamicsLoad              *DynamicsLoadPayload       `json:"-" bson:"sys05_load,omitempty"`
 	NativeDynamics            *NativeDynamicsPayload     `json:"-" bson:"native_dynamics,omitempty"`
 	NativeOutcomeCaptureStamp *NativeOutcomeCaptureStamp `json:"-" bson:"native_outcome_capture_stamp,omitempty"`
 	MemoryContext             *MemoryContext             `json:"memory_context,omitempty" bson:"memory_context,omitempty"`

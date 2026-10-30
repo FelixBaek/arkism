@@ -10,30 +10,35 @@ import (
 )
 
 type daemonOptions struct {
-	ReceiptCauses      bool
-	WriteGate          string
-	ExpectedStorage    string
-	ExpectedGeneration string
-	InspectRestore     bool
-	ExportSnapshot     bool
-	AdoptBlobs         bool
-	BackupExpiry       string
-	AuditExpiry        string
-	CollectBlobs       bool
-	InitDB             bool
-	SemanticIndex      string
-	CheckIndexes       bool
-	Recovery           bool
-	Worker             bool
-	MemoryReach        string
-	Reindex            bool
-	TrainReview        string
-	TrainReviewExclude string
-	RecallBaseline     string
-	BaselineScope      string
-	LogLevel           string
-	Pprof              string
-	Listen             string
+	DynamicsRuntimeConfig string
+	DynamicsLoadConfig    string
+	dynamicsPlan          *daemonDynamicsPlan
+	dynamicsReaderToken   string
+	DynamicsRepair        bool
+	ReceiptCauses         bool
+	WriteGate             string
+	ExpectedStorage       string
+	ExpectedGeneration    string
+	InspectRestore        bool
+	ExportSnapshot        bool
+	AdoptBlobs            bool
+	BackupExpiry          string
+	AuditExpiry           string
+	CollectBlobs          bool
+	InitDB                bool
+	SemanticIndex         string
+	CheckIndexes          bool
+	Recovery              bool
+	Worker                bool
+	MemoryReach           string
+	Reindex               bool
+	TrainReview           string
+	TrainReviewExclude    string
+	RecallBaseline        string
+	BaselineScope         string
+	LogLevel              string
+	Pprof                 string
+	Listen                string
 }
 
 func daemonFlags() daemonOptions {
@@ -62,6 +67,9 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.LogLevel, "log-level", envLogLevel(), "debug|info|warn|error")
 	flag.StringVar(&cfg.Pprof, "pprof", "", "optional loopback diagnostics listener; MEMORY_DIAGNOSTICS_TOKEN required")
 	flag.StringVar(&cfg.Listen, "listen", host.DefaultListen, "HTTP listen address")
+	flag.StringVar(&cfg.DynamicsRuntimeConfig, "dynamics-runtime-config", "", "explicit bounded dynamics runtime config; requires paired load config")
+	flag.StringVar(&cfg.DynamicsLoadConfig, "dynamics-load-config", "", "exact offline load config bound by the dynamics runtime config")
+	flag.BoolVar(&cfg.DynamicsRepair, "dynamics-repair", false, "verify and release a withheld dynamics publication in every configured scope, then exit; requires both dynamics configs")
 	flag.Parse()
 	return cfg
 }
@@ -136,10 +144,10 @@ func validateDaemonRuntimeOptions(cfg daemonOptions, standalone string) error {
 	if cfg.Recovery && (!daemonLoopback(cfg.Listen) || cfg.InitDB || cfg.CheckIndexes) {
 		return memory.ErrInvalid
 	}
-	return nil
+	return validateDaemonDynamicsOptions(cfg)
 }
 func (cfg daemonOptions) usesWorkerToken() bool {
-	return cfg.TrainReview != "" || cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != ""
+	return cfg.TrainReview != "" || cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != "" || cfg.DynamicsRepair
 }
 func snapshotDaemonMode(mode string) bool {
 	return mode == "WriteGate" || mode == "ExportSnapshot" || mode == "InspectRestore"
@@ -163,6 +171,7 @@ func daemonMode(cfg daemonOptions) (string, error) {
 		{"CollectBlobs", cfg.CollectBlobs},
 		{"AdoptBlobs", cfg.AdoptBlobs},
 		{"Reindex", cfg.Reindex},
+		{"DynamicsRepair", cfg.DynamicsRepair},
 		{"Worker", cfg.Worker},
 	}
 	selected := "HTTP"

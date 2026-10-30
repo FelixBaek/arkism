@@ -684,6 +684,18 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 			result = ErrUnavailable
 		}
 	}()
+	if s.DynamicsLoad != nil {
+		defer func() {
+			// A hung embedding can spend the iteration deadline; native work then keeps
+			// its own bounded substep (plus its finish timeout). A cancellation before
+			// the deadline (shutdown) still stops it; one after it waits for that bound.
+			dynamicsCtx := ctx
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				dynamicsCtx = context.WithoutCancel(ctx)
+			}
+			result = errors.Join(result, s.WorkDynamicsOnce(dynamicsCtx, workerToken))
+		}()
+	}
 	if pg, recovery := s.Repo.(*Postgres); !recovery || !pg.erasureOnly {
 		if err := s.CheckRestorePublication(ctx); err != nil {
 			return err

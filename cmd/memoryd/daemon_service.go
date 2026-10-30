@@ -51,6 +51,9 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err := configureDaemonPolicies(svc); err != nil {
 		return nil, err
 	}
+	if err := configureDaemonDynamics(ctx, svc, cfg); err != nil {
+		return nil, err
+	}
 	if err := configureDaemonStorage(ctx, svc, cfg, store); err != nil {
 		return nil, err
 	}

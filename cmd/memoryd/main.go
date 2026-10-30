@@ -33,6 +33,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	cfg, err = prepareDaemonDynamics(cfg)
+	if err != nil {
+		return err
+	}
 	store, err := configuredStore()
 	if err != nil {
 		return err
