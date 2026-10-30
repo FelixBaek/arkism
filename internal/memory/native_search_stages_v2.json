@@ -1,0 +1,235 @@
+{
+  "protocol": "sys-native-service-stages-v2",
+  "old_v1_relation": "Original selected_scoped_ref_sha256 is unchanged fullRanked, never prepack/emitted/reader inclusion.",
+  "stages": "shadow full ranked C; limit prepack; actual purebridge packing emitted_current and emitted_history; actual baseline returned_current/history; existing final failed per-ref branch with fixed code. Unknown/unrun arrays null, computed empty arrays [].",
+  "candidate_view": "Explicit invocation context_view filters cleaned lanes before snapshot/both policies, preserving remainingrelativeorder; originalwindow/oneSearch unchanged.",
+  "final": "Per-ref reject is recorded only where original verify loop identifies actual failed hit. Context-wide transaction error not assigned to guessed refs. Retried Tx clears prior-attempt diagnostic; final_success has knownemptyrejections.",
+  "observations": "All ref IDs/scopes hashed; no body/query/plain identifiers. Actual baseline separate from shadow. Bounded in-memory capacity; no source/usage/outcome/state writes by shadow. Reader/use/task/causal unknown.",
+  "output_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract_sha256",
+      "arithmetic_result_sha256",
+      "actual_baseline_response_sha256",
+      "published_read_sha256",
+      "baseline_pre_final_current_scoped_ref_sha256",
+      "baseline_pre_final_history_scoped_ref_sha256",
+      "protocol",
+      "scope_sha256",
+      "candidate_sha256",
+      "shadow_full_ranked_scoped_ref_sha256",
+      "shadow_prepack_scoped_ref_sha256",
+      "shadow_emitted_current_scoped_ref_sha256",
+      "shadow_emitted_history_scoped_ref_sha256",
+      "actual_baseline_current_scoped_ref_sha256",
+      "actual_baseline_history_scoped_ref_sha256",
+      "actual_baseline_returned",
+      "final_transaction_entered",
+      "final_rejected",
+      "final_error_code",
+      "shadow_status",
+      "shadow_reason",
+      "reader_acknowledgement",
+      "actual_use",
+      "task_success",
+      "causal_attribution"
+    ],
+    "properties": {
+      "contract_sha256": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "arithmetic_result_sha256": {
+        "type": "string",
+        "pattern": "^([a-f0-9]{64})?$",
+        "description": "Empty means unobserved, not SHA256(empty) or numeric zero."
+      },
+      "actual_baseline_response_sha256": {
+        "type": "string",
+        "pattern": "^([a-f0-9]{64})?$",
+        "description": "Empty means unobserved, not SHA256(empty) or numeric zero."
+      },
+      "published_read_sha256": {
+        "type": "string",
+        "pattern": "^([a-f0-9]{64})?$",
+        "description": "Empty means unobserved, not SHA256(empty) or numeric zero."
+      },
+      "baseline_pre_final_current_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "baseline_pre_final_history_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "protocol": {
+        "const": "sys-native-service-stages-v2"
+      },
+      "scope_sha256": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      },
+      "candidate_sha256": {
+        "type": "string",
+        "pattern": "^([a-f0-9]{64})?$",
+        "description": "Empty means unobserved, not SHA256(empty) or numeric zero."
+      },
+      "context_view_sha256": {
+        "type": "string"
+      },
+      "baseline_context_id_sha256": {
+        "type": "string"
+      },
+      "shadow_full_ranked_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "shadow_prepack_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "shadow_emitted_current_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "shadow_emitted_history_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "actual_baseline_current_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "actual_baseline_history_scoped_ref_sha256": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "actual_baseline_returned": {
+        "type": "boolean"
+      },
+      "final_transaction_entered": {
+        "type": "boolean"
+      },
+      "final_rejected": {
+        "type": [
+          "array",
+          "null"
+        ],
+        "maxItems": 200,
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "scoped_ref_sha256",
+            "stage",
+            "code",
+            "underlying_cause_ref_sha256"
+          ],
+          "properties": {
+            "scoped_ref_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "stage": {
+              "enum": [
+                "current",
+                "history"
+              ]
+            },
+            "code": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]*$"
+            },
+            "underlying_cause_ref_sha256": {
+              "type": "null",
+              "description": "Selected checked ref is known; underlying source/canonical mutation root is not inferred."
+            }
+          }
+        }
+      },
+      "final_error_code": {
+        "type": "string"
+      },
+      "shadow_status": {
+        "enum": [
+          "selected",
+          "fallback",
+          "computed_not_returned"
+        ]
+      },
+      "shadow_reason": {
+        "type": "string"
+      },
+      "reader_acknowledgement": {
+        "const": "unknown"
+      },
+      "actual_use": {
+        "const": "unknown"
+      },
+      "task_success": {
+        "const": "unknown"
+      },
+      "causal_attribution": {
+        "const": "unknown"
+      }
+    }
+  },
+  "final_ref_meaning": "final_rejected.scoped_ref_sha256 identifies the selected item whose existing verifier actually failed, not an inferred underlying mutated source. underlying_cause_ref_sha256 is always null; transaction-wide abort without checked-ref failure has no guessed ref."
+}

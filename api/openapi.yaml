@@ -2837,7 +2837,7 @@
             }
           }
         },
-        "description": " Skill 검색·라우팅 최종 확인·임베딩 호출 전/최종 저장은 같은 로컬 활성 검사를 사용한다: 같은 scope의 활성·미만료 상위/버전, 일치하는 활성 연결, 유효한 두 출처·버전 직접 관계·독립 평가 근거. Selected local memory/skill/reflection results are reloaded and compared against their pre-truncation public-hit digest in the context-usage transaction. Recheck active/unexpired state, memory approval, source spans and existing skill/reflection evidence validators; fence every local record/source read by these checks. Committed deletion/update before response confirmation fails without items/context_id/context_data or usage/search audit. Policy calls stay outside the transaction; post-commit revocation of delivered bytes is not guaranteed. Semantic revisions are unchanged by internal fences. Evidence/fence retry cost is bounded by the request deadline, not a latency guarantee. For external destinations, repeat existing source-sensitivity/declassification checks inside this transaction without moving external policy calls into it. Successful run-read and per-item context-read/export decisions must retain the principal and role from the initial search decision. A mismatch fails the whole request 403 without items/context_id/context_data or usage/search receipt. Ordinary per-item denials are unchanged. Previously authorized parallel embedding calls/cost records cannot be rolled back, and policy identity is not locked against future changes. Local memories are eligible only at or after effective_at and before expires_at; legacy missing/null start times impose no start bound. Explicit history listing and single-record reads may include future memories. Approved future memories can be embedded in advance, without making them searchable early."
+        "description": "Existing context build plus optional versioned per-invocation exact exclusion. Default omitted keeps original behavior. This is an optional API extension, not persistent withdrawal."
       }
     },
     "/v1/search": {
@@ -36171,6 +36171,10 @@
           "approval_origin": {
             "type": "string",
             "description": "Recorded review provenance; historical human confirmation may be unproven. Does not change ranking or trust."
+          },
+          "created_by": {
+            "type": "string",
+            "description": "Existing creator principal display metadata, optional; does not establish human presence, independent evaluation or current permission."
           }
         },
         "required": [
@@ -36841,6 +36845,17 @@
               }
             ],
             "description": "Exact scoped anchor revision. Requires explicit relation mode, answer purpose and internal destination. One-hop stored source, supersession or evaluation references only; target memories retain normal policy, filters, history separation and final transaction checks."
+          },
+          "context_view": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContextInvocationViewV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted/null keeps original nil behavior; an explicit versioned object selects this invocation only."
           }
         },
         "required": [
@@ -36955,6 +36970,9 @@
           },
           "notice": {
             "type": "string"
+          },
+          "context_view": {
+            "$ref": "#/components/schemas/ContextViewObservationV1"
           }
         },
         "required": [
@@ -58122,6 +58140,125 @@
         "x-go-type": "memory.AnalysisRun",
         "x-go-source": "internal/memory/agent_tools.go",
         "description": "AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,\nwith the most common waiting or failure code. LastDoneAt is the last time any job finished, kept\nacross runs, so a stretch without candidates can be told from a stretch without processing (#449)."
+      },
+      "ContextInvocationViewV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "protocol",
+          "context_scope",
+          "exclude"
+        ],
+        "properties": {
+          "protocol": {
+            "const": "context-view-exclusion-v1"
+          },
+          "context_scope": {
+            "$ref": "#/components/schemas/Scope",
+            "description": "Must exactly equal this ContextBuildInput scope, all four fields; no scope normalization or authority extension."
+          },
+          "exclude": {
+            "type": "array",
+            "maxItems": 128,
+            "uniqueItems": true,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "collection",
+                "id",
+                "revision"
+              ],
+              "properties": {
+                "collection": {
+                  "const": "memories"
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256,
+                  "description": "Server enforces1..256 UTF8 bytes, unchanged Go TrimSpace, no Cc."
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9223372036854775807
+                }
+              }
+            }
+          }
+        },
+        "description": "Optional exact one-invocation exclusion. Applied after authorized/current candidate cleaning and pin resolution, before shared view-C ranking/packing/usage. No extra retrieval. Remaining order is preserved; ordinals are view-local. Does not remove retained/prior paths, durable records or future unmasked invocations."
+      },
+      "ContextViewObservationV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "protocol": {
+            "const": "context-view-exclusion-v1"
+          },
+          "view_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "prior_path_removed": {
+            "const": false
+          },
+          "excluded_cleaned_search_scoped_ref_sha256": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "excluded_pinned_scoped_ref_sha256": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "emitted_current_scoped_ref_sha256": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "emitted_history_scoped_ref_sha256": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "reader_acknowledgement": {
+            "const": "unknown"
+          },
+          "actual_use": {
+            "const": "unknown"
+          },
+          "task_success": {
+            "const": "unknown"
+          },
+          "causal_attribution": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "protocol",
+          "view_sha256",
+          "prior_path_removed",
+          "excluded_cleaned_search_scoped_ref_sha256",
+          "excluded_pinned_scoped_ref_sha256",
+          "emitted_current_scoped_ref_sha256",
+          "emitted_history_scoped_ref_sha256",
+          "reader_acknowledgement",
+          "actual_use",
+          "task_success",
+          "causal_attribution"
+        ],
+        "description": "Current server context-pack observations only. Digests are not reader acknowledgement/model delivery/use/causal proof."
       }
     },
     "headers": {

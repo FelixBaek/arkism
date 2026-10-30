@@ -1,0 +1,100 @@
+{
+  "protocol": "sys-native-context-receipt-chain-v1",
+  "authority": "data_only_untrusted",
+  "meaning": "Observed producer/consumer boundaries, never permission, semantic memory use, independent task verdict or causal credit.",
+  "stages": [
+    "server_return",
+    "final_render",
+    "transport_accepted",
+    "reader_bytes_acknowledged",
+    "source_read",
+    "answer_observed",
+    "prior_path"
+  ],
+  "closed_record": [
+    "protocol",
+    "cycle_id",
+    "scope",
+    "reader_sha256",
+    "run",
+    "path",
+    "sequence",
+    "event_id",
+    "stage",
+    "parents",
+    "context_id",
+    "source_relation",
+    "sources",
+    "bytes_sha256",
+    "observed_at_ns",
+    "status",
+    "reason",
+    "actual_use",
+    "task_success",
+    "causal_contribution",
+    "record_sha256"
+  ],
+  "closed_source": [
+    "scope",
+    "ref",
+    "content_sha256",
+    "provenance_sha256",
+    "form"
+  ],
+  "unknown": "All unsupported actual_use/task_success/causal_contribution facts remain null; prior_path never establishes current-cycle delivery. Reader byte acknowledgement means explicit exact-byte receipt, not cognitive reading.",
+  "sequence": "Bounded local cycle record ordinal, not durable accepted sequence or chronology from sorted timestamps.",
+  "publication": "Existing completed trace/source API stores metadata; existing TraceReceipt and reference-only spool carry canonical pointers. New payload has no retrieved claim and cannot create memory qualification.",
+  "packing": "Only fresh final selected full/meta refs enter current cycle delivery. Dropped items and previous receipts never become same-reader current-cycle inclusion. Other paths separately observed.",
+  "retry": "same cycle/event_id + identical sealed payload is no-op; conflicting payload rejected; new cycle cannot inherit prior completion",
+  "limits": {
+    "records_per_cycle": 256,
+    "sources_per_record": 200,
+    "raw_record_bytes": 131072,
+    "parents_per_record": 256,
+    "runner_cycles": "Explicit MaxCycles 1..256 mandatory when runner collector enabled; pending reservations and in-flight boundaries count; no premature Freeze."
+  },
+  "source_relation": [
+    "returned",
+    "included",
+    "read",
+    "lineage_only",
+    "unknown"
+  ],
+  "path_enum": [
+    "prompt",
+    "stable",
+    "crew_runner_input",
+    "reader_direct",
+    "readback",
+    "spool"
+  ],
+  "closed_transport_request": [
+    "protocol",
+    "cycle_id",
+    "reader_sha256"
+  ],
+  "closed_transport_ack": [
+    "protocol",
+    "cycle_id",
+    "reader_sha256",
+    "input_sha256"
+  ],
+  "source_hash_meaning": "content_sha256 is exact text bytes at that stage when recorded (null if absent), provenance_sha256 fingerprints the actual returned record/response or prior typed receipt. A returned snippet and a later full-body read remain separate representations.",
+  "stage_meaning": "server_return=context_usage/Search response; final_render=actual emitted input envelope; reader_bytes_acknowledged=exact-byte transport receipt; source_read=separate actual reader HTTP body read (not cognitive use); answer_observed=separately observed output bytes. Separate ChainPublication canonical_receipt_stored/canonical_receipt_readback fields acknowledge audit-receipt persistence, never relabelled memory store/model read.",
+  "canonical_time_codec": "Existing trace transport-container timestamps are exact milliseconds as required by traceTime; original source ObservedAtNS remains unchanged inside the metadata payload.",
+  "storage_envelope": {
+    "protocol": "sys-native-context-receipt-chain-storage-v1",
+    "closed_fields": [
+      "protocol",
+      "receipt_chain",
+      "bundle_sha256",
+      "page",
+      "page_count",
+      "record_count"
+    ],
+    "identity": "canonical trace key is stable(scope,reader,cycle,page), never payload hash; first durable page binds entire frozen bundle SHA/count to reject changed-payload replay or append. Existing trace RequestHash/CAS refusal is reused unchanged."
+  },
+  "collection_complete": "No local admission/sink errors or pending boundaries. It is not lifecycle completion; Assess reports each missing stage unknown and all unsupported semantic verdicts null.",
+  "source_read_paths": "prompt reads require same-reader delivered ref/revision. reader_direct is separate evidence and cannot become prompt inclusion; other hidden paths remain unmeasured.",
+  "canonical_acknowledgements": "The existing TraceReceipt pointers are returned in ChainPublication, outside immutable runtime observation records. No self-claimed storage stages or duplicate authority DTO."
+}

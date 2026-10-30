@@ -1,0 +1,303 @@
+{
+  "protocol": "sys-lifecycle-model-v1",
+  "verification_scope": "synthetic_model",
+  "native_lifecycle_producer_implemented": false,
+  "product_schema_modified": false,
+  "owner": "SYS-04.spec",
+  "issue": 152,
+  "relation": "adapted",
+  "why": "Model exact source/ref/revision dependencies, invalidation closure and current-ledger restore plans before product store integration. Do not duplicate product erasure saga or DYN reducer.",
+  "fixed_dependencies": {
+    "docs/research/memory-harness/dynamics_policy_contract.json": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+    "evaluation/memory-harness-v1/contracts/implementation_contract.json": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+    "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json": "82936159380c3d34720ea80822db0b8c10c3242dba8bb493876c7a8895bad5f0",
+    "evaluation/memory-harness-v1/system/sys_03/atomicity_contract.json": "4c849e0d4778fe9311223cb8fba1e21da6c8d458a31218ee819d52e2b366274d"
+  },
+  "entry_gates": {
+    "DYN-01": "fixed952d revision reset/invalidation/replay rules consumed read-only",
+    "SYS-01.spec": "accepted synthetic fence contract; actual canonical authorization/fence implementation not inferred",
+    "SYS-03.spec": "accepted synthetic atomicity model; no durable native storage producer yet"
+  },
+  "input_fields": [
+    "protocol",
+    "scope",
+    "now_ns",
+    "operation",
+    "query",
+    "as_of_ns",
+    "snapshot",
+    "current",
+    "nodes",
+    "fact_withdrawals",
+    "deletion_evidence",
+    "restore_fields"
+  ],
+  "scope_fields": [
+    "workspace_id",
+    "project_id",
+    "user_id",
+    "agent_id"
+  ],
+  "root_ref_fields": [
+    "namespace",
+    "collection",
+    "id",
+    "revision",
+    "content_sha256"
+  ],
+  "namespace": "fixture only; separate SYS04 DTO, not DYN EvidenceRef or native Ref wire format",
+  "graph": {
+    "source": "exact current source/ref/revision metadata",
+    "memory_revision": "exact memory ref plus mandatory source dependency groups",
+    "fact": "synthetic explicit fact identifier bound to a single memory revision; native fact withdrawal producer not implemented",
+    "derived_kinds": [
+      "state",
+      "receipt",
+      "cache",
+      "snapshot",
+      "checkpoint",
+      "pending_event",
+      "usage_receipt",
+      "crew_receipt",
+      "compressed"
+    ],
+    "dependency_groups": "DNF: each group contains mandatory dependencies; groups are alternative provenance. Any changed/invalid branch taints original artifact. A wholly live alternative allows only a new rebuild request, not reuse of old bytes. All nodes must be traceable to current roots.",
+    "cycle": "hold cycle and downstream; no circular self-support",
+    "missing": "hold object and downstream; missing provenance blocks product integration",
+    "multi_source": "all required sources must remain current; erasing one invalidates dependent composite",
+    "invalidation_unavailable": "affected unsupported/unknown invalidator becomes explicit hold and propagates; planner never pretends it removed bytes",
+    "scope_isolation": "exact four fields; same hash/text in other scope out_of_scope and never cascaded; foreign dependency holds"
+  },
+  "revision": {
+    "default": "content revision change invalidates old state and requests separate DYN ResetRevision pending template. No old values/receipts/evidence/cursor transfer, no activation grant. Same body newer revision still separate. Lower current revision held as regression.",
+    "same_revision_different_hash": "invalidate snapshot as conflict; never migrate numeric state",
+    "correction_pending": "existing active memory continues, held candidate does not win by proposal metadata",
+    "correction_confirmed": "current status/ref/revision governs, old superseded revision cannot serve as current",
+    "withdraw_a_keep_b": "fact_a and fact_b are separate synthetic nodes within same exact memory revision. Withdrawing a invalidates a dependents; b stays only if its independent origin remains current. Whole-revision/source erasure still invalidates both. Composite a+b invalidated; valid alternative requires rebuild, not implicit logical inverse or AGM claim."
+  },
+  "history": {
+    "eligibility": "memoryAt metadata semantics: as_of observed timeline/current authorization/withheld checks/effective window; empty or missing timeline history_not_recorded, known creation before requested time yields not_created",
+    "body": "old hash timeline is not old body archive; different current body hash content_unavailable",
+    "execution": "historical_only never becomes fresh dynamic/current/publish/restore evidence; current source refs rechecked"
+  },
+  "restore": {
+    "required_fields": [
+      "state",
+      "receipt",
+      "consumption",
+      "event_cursor",
+      "checkpoint",
+      "dependency_index"
+    ],
+    "readback": "every snapshot field digest must be known and equal readback digest. Store success alone is insufficient; missing/unknown/unequal blocks all keep candidates",
+    "current_check": "current authorization, ledger, exact scope/source/ref/revision/lifecycle checked at/after snapshot. Missing deletion ledger distinct from known empty. Changed ledger does not erase unrelated valid scopes; revalidation always required.",
+    "publication": "only candidate plan; actual_publication_authorized always false. CheckRestorePublication/write gate/current erasure must be fenced by actual owner immediately before publication",
+    "new_process": "byte serialization then independent new Python process yields same pure plan; no assertion of actual persistence recovery",
+    "rollback": "no body reconstruction, cursor advancement, inverse jump, reactivation or old revision resurrection; numeric_state_updates=0",
+    "requested_not_performed": "This planner neither resets DYN state nor rebuilds alternative artifacts. DYN ResetRevision request never creates a persisted pending snapshot, receipt, accepted time or cursor; integration owner must validate separately."
+  },
+  "deletion_facets": [
+    "serving_blocked",
+    "derived_invalidated",
+    "runtime_purged",
+    "physical_purged",
+    "artifacts_purged",
+    "backup_expired",
+    "verified"
+  ],
+  "evidence_statuses": [
+    "observed_complete",
+    "observed_incomplete",
+    "unknown",
+    "held"
+  ],
+  "evidence": "per exact scoped collection/id, each facet separately supplied. observed statuses need jobs fullref metadata; no receipt authenticity proven by this model. Unknown is not zero/false/completed. Legal hold/runtime partial/backup wait are kept separate. Synthetic closure is NOT actual physical erasure proof even when supplied receipts all claim complete.",
+  "output": "objects with action/reason; planned invalidations, held/rebuild lists, separate revision requests, restore field comparison/candidate set, per-target evidence vector; no source writes or numeric reducer",
+  "source_inventory": [
+    {
+      "path": "internal/memory/memory_time.go",
+      "reuse": "MemoryState has hashes/status/revision/times, no old body copy; memoryAt historical eligibility and content_unavailable"
+    },
+    {
+      "path": "internal/memory/candidate_conflict_hold.go",
+      "reuse": "HoldCandidateConflict leaves corrected memory active while candidate awaits human"
+    },
+    {
+      "path": "internal/memory/memory_erasure.go",
+      "reuse": "deleteMemoryAndProposal/enqueueMemoryErasure deletes signal, proposal and queues downstream jobs"
+    },
+    {
+      "path": "internal/memory/source_erasure.go",
+      "reuse": "source fence, source-backed record tracing, durable erasure jobs; not new dynamic store coverage"
+    },
+    {
+      "path": "internal/memory/digest_erasure.go",
+      "reuse": "digest copying a removed member is cleared/stale/erased, not kept because another member survives"
+    },
+    {
+      "path": "internal/memory/privacy_deletion.go",
+      "reuse": "distinct PrivacyDeletion.State vs job status; PrivacyPurgeReport facets and backup boundary; legal hold and runtime receipt remain external evidence"
+    },
+    {
+      "path": "internal/memory/deletion_preview.go",
+      "reuse": "direct_references bounded inventory, not transitive/full coverage"
+    },
+    {
+      "path": "internal/memory/deletion_ledger.go",
+      "reuse": "scoped collection/id ledger, bounded complete export fails rather than truncates"
+    },
+    {
+      "path": "internal/memory/recovery_deletion_ledger.go",
+      "reuse": "recovery requests are evidence not erasure commands/proof"
+    },
+    {
+      "path": "internal/memory/recovery_snapshot.go",
+      "reuse": "consistent snapshot inventory is not publication authority/future fence"
+    },
+    {
+      "path": "internal/memory/restore_publication.go",
+      "reuse": "pending restore marker/write gate prevents canonical publish; model cannot clear it"
+    },
+    {
+      "path": "internal/memory/recovery_receipt_causes.go",
+      "reuse": "missing/ambiguous causal links unresolved, not guessed"
+    },
+    {
+      "path": "internal/memory/usage.go",
+      "reuse": "jobs context_usage stores returned IDs/revisions, actual use not_measured; receipt is not a current read/fact"
+    },
+    {
+      "path": "internal/crewrun/receipts.go",
+      "reuse": "trace/run/source refs plus spool payload scope+trace; durable local receipt cannot authorize resurrected source"
+    },
+    {
+      "path": "internal/crewrun/context_receipt.go",
+      "reuse": "historical receipt/reader capture not a permission grant; current lifecycle/policy recheck, no read/use atomicity claim"
+    },
+    {
+      "path": "internal/memory/crew_usage.go",
+      "reuse": "aggregate usage missing denominator uses null; no lifecycle authority"
+    },
+    {
+      "path": "internal/memory/usage_reflection.go",
+      "reuse": "usage reflection copies trace/source refs into evaluation; pass/failure observation is separate from current source lifetime"
+    },
+    {
+      "path": "internal/memory/model.go",
+      "reuse": "Seven closed collection identities in ordinary Eval metadata profile; no native DTO alias.",
+      "observed_public_main": "a389082b77cc57f45c174a561cb443a2d533e83f"
+    },
+    {
+      "path": "internal/memory/eval_records.go",
+      "reuse": "eval_trials task/run required AND and typed optional Eval refs.",
+      "observed_public_main": "a389082b77cc57f45c174a561cb443a2d533e83f"
+    },
+    {
+      "path": "internal/memory/evaluation.go",
+      "reuse": "Exact Eval refs/currentness; llm_judge is not independent evaluation qualification.",
+      "observed_public_main": "a389082b77cc57f45c174a561cb443a2d533e83f"
+    },
+    {
+      "path": "internal/memory/service.go",
+      "reuse": "Separate explicit read grants and same-scope current direct relations; profile observations do not authenticate.",
+      "observed_public_main": "a389082b77cc57f45c174a561cb443a2d533e83f"
+    },
+    {
+      "path": "internal/memory/removal.go",
+      "reuse": "Reason history only; map rejected/current revision without raw Note/By or physical erasure inference.",
+      "observed_public_main": "a389082b77cc57f45c174a561cb443a2d533e83f"
+    }
+  ],
+  "bounds": {
+    "nodes": 512,
+    "dependency_groups_per_node": 32,
+    "nodes_per_group": 64,
+    "input_bytes": 2097152,
+    "time_unit": "integer nanoseconds, signed int64; product timeline timestamps are millisecond-truncated and must be converted faithfully",
+    "no_external_dependencies": true
+  },
+  "unresolved_B": [
+    "Separate private native storage candidates exist, but this synthetic metadata profile neither implements an authenticated metadata exporter nor accepts actual native lifecycle/store integration. Public integration and actual B acceptance remain separate.",
+    "Wire source→revision→state/receipt/cache/snapshot/checkpoint dependency index to actual erasure jobs and privacy facets.",
+    "Register actual typed fact provenance if desired; no native fact-withdrawal command or complete logical belief revision inferred.",
+    "Actual simultaneous reader/delete/revision, worker retry, checkpoint restore and serializable commit/refencing in isolated storage.",
+    "Actual backup retention/deletion/readback, restore gate release and source-specific receipt authenticity/coverage verification.",
+    "Actual new-process database restore/rollback equality of all required fields; model process replay is insufficient."
+  ],
+  "not_claimed": [
+    "full SYS04/B acceptance",
+    "operational erasure",
+    "automatic inverse learning",
+    "AGM rollback or complete belief revision",
+    "body archival from hash history",
+    "all persistent filesystem/backend coverage",
+    "research performance/causal/scientific results"
+  ],
+  "fixture_provenance": "Handwritten expected action sets and reason strings; generated wire fixtures do not import or execute planner. First alias preparation error fixed in INPUT only; original expected action sets unchanged.",
+  "actions": {
+    "keep": "unchanged model candidate only, not actual serving grant",
+    "out_of_scope": "no lifecycle mutation; separate scope",
+    "invalidate": "plan discard/invalidate original object, not evidence bytes erased",
+    "rebuild": "original object also planned invalidated, new reconstruction request from current alternate provenance only; no old bytes retained by OR",
+    "hold": "explicit unresolved/unsupported/missing/cycle/reconciliation; no read/retry/restore eligibility",
+    "skip": "known ineligible; not a failure observation or numeric zero",
+    "historical_only": "metadata permits historical body from same current hash, never fresh state/execution"
+  },
+  "metadata_profiles": [
+    {
+      "Task": "SYS04 ordinary Eval metadata profile author followup003",
+      "status": "root_selected_scope_engineering_design_before_implementation",
+      "old_protocol": "sys-lifecycle-model-v1 unchanged behavior and fixtures",
+      "new_protocol": "sys-lifecycle-metadata-v2",
+      "profile": "sys04-main-eval-roots-v1",
+      "source_commit": "a389082b77cc57f45c174a561cb443a2d533e83f",
+      "collections": [
+        "sources",
+        "memories",
+        "evaluations",
+        "eval_tasks",
+        "eval_runs",
+        "eval_trials",
+        "judge_calibrations"
+      ],
+      "schema": {
+        "top": "All original fields plus metadata_profile and root_metadata. Original current.records per-record fields retained; accepted collection set extends to seven only under v2. New metadata_root nodes require exact ref, fact_id=null, ordinary required-AND dependencies; v2 permits only metadata_root+original derived kinds, no historical query or fact withdrawal until separate profile.",
+        "metadata_profile": [
+          "id",
+          "source_commit",
+          "collections",
+          "coverage_status",
+          "expected_roots",
+          "snapshot_coverage_sha256",
+          "readback_coverage_sha256",
+          "extraction_sha256"
+        ],
+        "expected_root": "closed {scope,ref}; full scoped fixture ref tuples of all roots covered by external metadata inventory, exactly matching graph roots and root_metadata descriptors; no omitted roots.",
+        "root_metadata": "closed {scope,ref,sources,target,relations,evaluation}; sources/ref arrays and optional target all exact pinned refs. evaluation is null for non-evaluation records; otherwise closed {eval_type,spec_ref,trial_ref,calibration_ref}. No raw native DTO, body, Removal.Note or By.",
+        "current_records": "Current observation fields kept exact original shape. approved remains boolean but used only for memories. Ordinary eval currentness is exact scope/ref/revision/hash + nonerased/nonquarantined/active, no approval or task success assertion. Nullable history remains no native timeline extraction claim.",
+        "v2_external_string_domain": "Workspace/project: Go scopeName nonempty UTF8bytes<256, no dot/dotdot, slash/backslash or Cc. User/agent: UTF8bytes<256 only, empty/Cc/Cf/path-like values allowed as actual native validScope. Ref ID: Go validRunLabel1..256 UTF8bytes, Go TrimSpace unchanged and no Cc; Cf not prohibited. Invalid Unicode cannot round-trip UTF8 and rejects. No normalization/alias. Node IDs stay fixture labels; legacy strict domain unchanged."
+      },
+      "mapping": {
+        "required_edges": "All Sources, optional Target, Relations, Evaluation spec/trial/calibration refs form one AND group, never alternative. Trial has at least one task and one run relation; all present required refs consumed, no first-match selection.",
+        "source_projection": "Native Sources carry SourceID; future authorized metadata producer must resolve current exact scoped revision/hash. No alias to native Ref or fake hash. Producers absent; model input is explicitly synthetic metadata observations.",
+        "source_and_memory": "New-profile metadata roots allow source-free ordinary records as observed roots; declared edges still mandatory. No fake source prerequisite. Legacy source/memory profile remains identical.",
+        "unknown": "Absent current records hold. Unknown coverage holds all current-scope nodes. Unsupported refs/schema, missing topology/extraction edge or coverage root reject. Stale/hash-conflict ordinary and memory metadata roots hold. Explicit deletion/erasure invalidates. Nonactive known record skips; no history or physical-erasure inference.",
+        "cycles": "Reuse original dependency topological cycle hold; no separate state/reducer."
+      },
+      "coverage": {
+        "domain": "sys04-main-eval-roots-v1\\0",
+        "value": "SHA256(profile domain + raw({id,source_commit,collections,expected_roots,extraction_sha256})); raw sorts keys, compact UTF8+newline; supplied list order preserved.",
+        "binding": "Graph root+descriptor full scoped tuple sets must equal independently supplied expected_roots; required edges exactly match each descriptor. Thus six hashes equal cannot mask missing declared roots or edges.",
+        "restore": "Six required restore field names/meanings unchanged. Separate profile snapshot/readback coverage digests must both equal computed coverage binding for restoration; unknown/different holds with metadata_profile_readback reason. Digests/confirmed observations do not authenticate source or actual DB readback.",
+        "extraction": "Explicit extraction_sha256=SHA256(sys04-main-eval-roots-v1:extraction\\0+raw(root_metadata)); coverage binding includes this field. Projection is still externally supplied metadata, not authenticated source/body extraction."
+      },
+      "output": "Original output keys plus metadata_profile sidecar only under v2; explicit coverage binding/reconciliation and learning_qualification=not_established. Legacy output byte semantics unchanged.",
+      "hash": "Legacy digest domain unchanged; v2 uses sys-lifecycle-metadata-v2\\0; input raw sorted compact representation from original raw helper. No fixed DYN/v1/SYS01 contract mutation.",
+      "source_inventory": "Append current model/service/evaluation/eval_records/removal anchors with main/source profile binding. Distinguish main from combined private native hooks and roadmap CRW ancestry.",
+      "preservation": "Original candidate5/report+47 fixture input/expected and signed48th remain immutable. Original fixture arrays prefix exact; new hand-authored cases appended only. Native canonical nilrefs/implementation unchanged.",
+      "limits": "Current-only metadata A synthetic profile; no native DTO/DB producer/auth/qualified learning/backup/runtime erasure/restore/publication B acceptance. Seven facets/six fields unchanged.",
+      "root_semantic_decisions_needed": [],
+      "source_basis_drift": "Root observed newer66997f, but relevant functions unchanged; a389 remains fixed basis per explicit root decision."
+    }
+  ]
+}

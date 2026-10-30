@@ -1,0 +1,98 @@
+{
+  "comparison_families": [
+    "fixed_candidate_mechanism",
+    "native_full_system"
+  ],
+  "controls": [
+    {
+      "condition_binding": null,
+      "control_id": "time_removal",
+      "native_policy_id": "V3-P1-NOTIME",
+      "requirement": "required_core",
+      "rule": "disable_decay_only",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "outcome_removal",
+      "native_policy_id": "V3-P1-NOOUT",
+      "requirement": "required_core",
+      "rule": "disable_outcome_jumps_only",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "unknown_duplicate_checks",
+      "native_policy_id": null,
+      "requirement": "required_engineering",
+      "rule": "keep_unknown_and_unique_event_denominators",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "delay_lifecycle",
+      "native_policy_id": null,
+      "requirement": "required_specification",
+      "rule": "same_external_stream_with_arrival_lifecycle_conditions",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "elapsed_interference",
+      "native_policy_id": null,
+      "requirement": "required_specification",
+      "rule": "time_only_and_event_density_only_controls",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "oracle_exposed_actual",
+      "native_policy_id": null,
+      "requirement": "required_specification",
+      "rule": "separate_information_and_observation_regimes",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "original_current",
+      "native_policy_id": null,
+      "requirement": "required_specification",
+      "rule": "same_stream_original_target_vs_current_target",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "exposure_replacement",
+      "native_policy_id": null,
+      "requirement": "claim_conditional_unsupported",
+      "rule": "future_explicit_signal_policy_contract_required",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "matched_write",
+      "native_policy_id": null,
+      "requirement": "claim_conditional_unsupported",
+      "rule": "validation_threshold_or_prefix_quota_no_future_selection",
+      "support_acceptance": null
+    },
+    {
+      "condition_binding": null,
+      "control_id": "equal_tau_tag_resource",
+      "native_policy_id": null,
+      "requirement": "claim_conditional_unsupported",
+      "rule": "future_fastslow_capture_contract_required",
+      "support_acceptance": null
+    }
+  ],
+  "cost_rule": "separate_units_observed_shared_incremental_and_missing",
+  "denominator_rule": "planned_scheduled_rows_preserve_failure_unknown_notrun",
+  "operating_plan": null,
+  "protocol": "exp02-controls-v1",
+  "scope": "specification_only",
+  "signal_regimes": [
+    "synthetic_all_candidate_oracle",
+    "exposure_conditioned_observed",
+    "actual_api_accepted"
+  ]
+}

@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/receiptchain"
 )
 
 // Claude Code / Codex / ZCode -> Arkism automatic memory capture.
@@ -139,13 +140,19 @@ func budgetMetric(reason string, n int) {
 // project is host.ProjectKey of the session: the server leaves out other projects' memories.
 // vectorRan is host.VectorRan of the answer it returns.
 func searchMemories(query, project string, limit int, timeout float64) (items []any, vectorRan bool, err error) {
+	return searchMemoriesObserved(query, project, limit, timeout, nil)
+}
+func searchMemoriesObserved(query, project string, limit int, timeout float64, observe searchResponseObserver) (items []any, vectorRan bool, err error) {
 	deadline := monotonic() + timeout
 	body := map[string]any{"scope": capScope(), "query": head(query, 1000), "modes": []any{"exact", "fts", "vector"},
 		"purpose": "answer", "destination": "internal", "limit": limit, "max_chars": 6000}
 	if project != "" { // older servers reject unknown fields; no key already means personal and general only
 		body["project_key"] = project
 	}
-	res, err := capPost("/v1/search", body, secs(timeout))
+	return recallPostObserved("/v1/search", body, timeout, deadline, observe)
+}
+func recallPostObserved(path string, body map[string]any, timeout, deadline float64, observe searchResponseObserver) (items []any, vectorRan bool, err error) {
+	res, err := capPost(path, body, secs(timeout))
 	if err != nil {
 		if host.HTTPCode(err) != 503 {
 			return nil, false, err
@@ -155,24 +162,28 @@ func searchMemories(query, project string, limit int, timeout float64) (items []
 			return nil, false, err
 		}
 		body["modes"] = []any{"exact", "fts"} // embedder outage: keep lexical recall instead of none
-		res, err = capPost("/v1/search", body, secs(remaining))
+		res, err = capPost(path, body, secs(remaining))
 		if err != nil {
 			return nil, false, err
 		}
+		observe.emit(res, true)
 		return listOf(res["items"]), false, nil
 	}
+	observe.emit(res, false)
 	if degraded, _ := res["degraded"].([]any); containsAny(degraded, "memory_vector_unavailable") {
 		// Retry within the caller's budget; never double a foreground hook's wait.
 		metric(kv("event", "recall_degraded"), kv("reason", "memory_vector_unavailable"))
 		if remaining := deadline - monotonic(); remaining > 0 {
-			retry, err := capPost("/v1/search", body, secs(remaining))
+			retry, err := capPost(path, body, secs(remaining))
 			if err == nil {
+				observe.emit(retry, false)
 				res = retry
 			} else if code := host.HTTPCode(err); code != 503 && (code != 0 || !networkish(err) || pyType(err) == "RuntimeError") {
 				return nil, false, err
 			} // HTTP 503 or a network error: the first response still has usable lexical results
 		}
 	}
+	observe.emit(res, true)
 	return listOf(res["items"]), host.VectorRan(body["modes"].([]any), res), nil
 }
 
@@ -822,11 +833,14 @@ func promptContext(prompt, sid, cwd string) (string, error) {
 // block already shows are left out, and so are those an earlier turn showed unless revised since.
 // delivery is committed by markShown only after the final output has been assembled.
 func promptParts(prompt, sid, cwd string) (part host.Part, delivery *promptDelivery, err error) {
+	return promptPartsUsing(prompt, sid, cwd, recallSearch)
+}
+func promptPartsUsing(prompt, sid, cwd string, recall func(string, string, int, float64) ([]any, error)) (part host.Part, delivery *promptDelivery, err error) {
 	text := clean(prompt)
 	if host.Len(text) < 8 {
 		return host.Part{}, nil, nil
 	}
-	list, err := recallSearch(head(text, 2000), host.ProjectKey(cwd), 6, 8)
+	list, err := recall(head(text, 2000), host.ProjectKey(cwd), 6, 8)
 	if err != nil {
 		return host.Part{}, nil, err
 	}
@@ -866,6 +880,7 @@ func promptParts(prompt, sid, cwd string) (part host.Part, delivery *promptDeliv
 }
 
 type promptDelivery struct {
+	receipt   *receiptPromptFacts
 	Revisions map[string]int64
 	Items     []map[string]any
 	Previous  []host.MemoryDelivery
@@ -1096,6 +1111,12 @@ func hookMain(stdin io.Reader, stdout io.Writer) int {
 
 // hookInject answers SessionStart and UserPromptSubmit with recall, work and crew context.
 func hookInject(data map[string]any, name any, stdout io.Writer, accepted *bool) error {
+	return hookInjectWithReceiptChain(data, name, stdout, accepted, nil)
+}
+func hookInjectWithReceiptChain(data map[string]any, name any, stdout io.Writer, accepted *bool, chain *receiptchain.Session) error {
+	return hookInjectWithReceiptView(data, name, stdout, accepted, chain, nil)
+}
+func hookInjectWithReceiptView(data map[string]any, name any, stdout io.Writer, accepted *bool, chain *receiptchain.Session, view *ContextViewRecall) error {
 	if name == "UserPromptSubmit" && capOnPrompt {
 		skipped, err := promptCapture(data)
 		if err != nil {
@@ -1128,7 +1149,10 @@ func hookInject(data map[string]any, name any, stdout io.Writer, accepted *bool)
 			defer lock.Close()
 		}
 	} else {
-		part, revs, err = hookPromptPart(data, sid)
+		part, revs, err = hookPromptPartSelected(data, sid, chain, view)
+	}
+	if err != nil && view != nil {
+		return err
 	}
 	if err != nil { // recall failed: the crew and work context still go in
 		if crew == "" && work == "" && name != "SessionStart" {
@@ -1141,19 +1165,9 @@ func hookInject(data map[string]any, name any, stdout io.Writer, accepted *bool)
 	if err != nil {
 		return err
 	}
-	if name == "SessionStart" {
-		if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
-			if ctx != "" {
-				ctx += "\n\n"
-			}
-			ctx += recent
-		}
-	}
-	if ctx != "" {
-		if _, err := fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "hookSpecificOutput", Value: host.Obj{
-			{Key: "hookEventName", Value: name}, {Key: "additionalContext", Value: ctx}}}}, host.DumpOpts{NoASCII: true})); err != nil {
-			return err
-		}
+	ctx = appendReceiptRecentContext(data, name, ctx)
+	if err := writeHookReceiptOutput(stdout, name, ctx, revs, chain); err != nil {
+		return err
 	}
 	markShown(sid, ctx, revs, str(or(data["cwd"], "")))
 	markStableShown(sid, ctx, stableDelivery, str(or(data["cwd"], "")))
@@ -1215,4 +1229,16 @@ func hookFinish(data map[string]any, name any, stdout io.Writer, accepted bool) 
 	if os.Getenv("ARKISM_CAPTURE_ACK") == "1" && name == "UserPromptSubmit" {
 		fmt.Fprintln(stdout, host.MustDumps(host.Obj{{Key: "arkismDelivery", Value: host.Obj{{Key: "accepted", Value: accepted}}}}, host.DumpOpts{}))
 	}
+}
+
+func appendReceiptRecentContext(data map[string]any, name any, ctx string) string {
+	if name == "SessionStart" {
+		if recent := recentSessionContext(data, host.ContextMaxChars-host.Len(ctx)-2); recent != "" {
+			if ctx != "" {
+				ctx += "\n\n"
+			}
+			ctx += recent
+		}
+	}
+	return ctx
 }

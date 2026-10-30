@@ -343,7 +343,13 @@ func (s *Service) eraseSourceMemories(ctx context.Context, token string, job Rec
 		lease.SourceMemoryErasure = &progress
 		lease.Status = JobStatusPending
 		if len(rows) == 0 {
-			lease.Status = JobStatusDone
+			pending, e := nativePurgePendingTx(ctx, tx, job.Scope)
+			if e != nil {
+				return e
+			}
+			if !pending {
+				lease.Status = JobStatusDone
+			}
 		}
 		lease.LeaseToken = ""
 		lease.LeaseUntil = time.Time{}
@@ -446,6 +452,9 @@ func eraseErasureRow(ctx context.Context, tx Tx, job Record, ref Ref, currentPar
 	}
 	if !found {
 		return ErrConflict
+	}
+	if e = invalidateNativeDynamicsDependencyTx(ctx, tx, job.Scope, ref, "dependency_erased"); e != nil {
+		return e
 	}
 	redacted, e := redactSurvivingConflict(ctx, tx, job, ref, r)
 	if e != nil {

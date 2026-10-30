@@ -1,0 +1,427 @@
+{
+  "protocol": "dynamics-policy-registry-v2",
+  "entries": [
+    {
+      "policy_id": "B0",
+      "version": "v",
+      "implemented_mode": "none",
+      "uses_outcomes": false,
+      "uses_elapsed_decay": false,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": null,
+      "ranker": {
+        "policy_id": "B0",
+        "policy_version": "v",
+        "dynamics_config_sha256": null,
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": null,
+        "ablation": "none",
+        "config_sha256": "6cd9c87453d9580ae04335c2f5b0501ea145a6bde44befcce8041922fa8528b2",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "B1",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "none",
+      "uses_outcomes": false,
+      "uses_elapsed_decay": false,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": null,
+      "ranker": {
+        "policy_id": "B1",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": null,
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "recency",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": null,
+        "ablation": "none",
+        "config_sha256": "6267714892a5053c35576888cdba6535911565e7c0a7c027deacf7bbc265b7ac",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "B2",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "scalar",
+      "uses_outcomes": true,
+      "uses_elapsed_decay": true,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": {
+        "protocol": "dynamics-config-v2",
+        "version": "v",
+        "mode": "scalar",
+        "clock": "accepted_time",
+        "clock_domain": "c",
+        "initial": 0.5,
+        "tau_ns": 1000000000,
+        "eta_positive": 0.25,
+        "eta_negative": 0.5,
+        "unit_strength": 1,
+        "negative_policy": "only_memory_attributable_independent",
+        "decay_enabled": true,
+        "outcome_jump_enabled": true,
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "evidence_rule_sha256": "7369949b47ef2c6ba26fbbee659cedc76123a75c17d321a52d8d1ef35e948042",
+        "config_sha256": "d451041eab828abe2ca9daca6769aeb50a25b1558b2fd6d36a303d95f979c9b0"
+      },
+      "ranker": {
+        "policy_id": "B2",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": "d451041eab828abe2ca9daca6769aeb50a25b1558b2fd6d36a303d95f979c9b0",
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "state",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": null,
+        "ablation": "none",
+        "config_sha256": "04c9ec456b8d6747420b3fcb978223ef3f65d0ba3c8a9b3cf28cc4c67d1b8391",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "V3-P1-FD",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "scalar",
+      "uses_outcomes": false,
+      "uses_elapsed_decay": true,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": {
+        "protocol": "dynamics-config-v2",
+        "version": "v",
+        "mode": "scalar",
+        "clock": "accepted_time",
+        "clock_domain": "c",
+        "initial": 0.5,
+        "tau_ns": 1000000000,
+        "eta_positive": 0.25,
+        "eta_negative": 0.5,
+        "unit_strength": 1,
+        "negative_policy": "only_memory_attributable_independent",
+        "decay_enabled": true,
+        "outcome_jump_enabled": false,
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "evidence_rule_sha256": "7369949b47ef2c6ba26fbbee659cedc76123a75c17d321a52d8d1ef35e948042",
+        "config_sha256": "584b94dfde3f6daaf7cf2aa042ed4af368e0495128012e7777ed0db8f4dd3acd"
+      },
+      "ranker": {
+        "policy_id": "V3-P1-FD",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": "584b94dfde3f6daaf7cf2aa042ed4af368e0495128012e7777ed0db8f4dd3acd",
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "state",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": null,
+        "ablation": "none",
+        "config_sha256": "56b0e31cb8e23310c8231eb94f7282e119ac6fe248c3eda71195e6e6af113fc7",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "V3-P1-IR",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "none",
+      "uses_outcomes": false,
+      "uses_elapsed_decay": false,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": null,
+      "ranker": {
+        "policy_id": "V3-P1-IR",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": null,
+        "feature_contract_sha256": "b6e965bbfecb4a0f20365d11709ff168043293fe1c5b848b06bc886e95f5f0d8",
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "importance",
+            "weight": 1
+          },
+          {
+            "kind": "recency",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": null,
+        "ablation": "none",
+        "config_sha256": "1dbc5b9e2dbdb57405927aa17aa0f377f76cff19b317fc98094c3732bb9d5f5e",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "V3-P1-NOTIME",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "scalar",
+      "uses_outcomes": true,
+      "uses_elapsed_decay": false,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": {
+        "protocol": "dynamics-config-v2",
+        "version": "v",
+        "mode": "scalar",
+        "clock": "accepted_time",
+        "clock_domain": "c",
+        "initial": 0.5,
+        "tau_ns": 1000000000,
+        "eta_positive": 0.25,
+        "eta_negative": 0.5,
+        "unit_strength": 1,
+        "negative_policy": "only_memory_attributable_independent",
+        "decay_enabled": false,
+        "outcome_jump_enabled": true,
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "evidence_rule_sha256": "7369949b47ef2c6ba26fbbee659cedc76123a75c17d321a52d8d1ef35e948042",
+        "config_sha256": "cbc11863c3e017f07ab962545389600be046f3341a1a05953e36802e779ea1c5"
+      },
+      "ranker": {
+        "policy_id": "V3-P1-NOTIME",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": "cbc11863c3e017f07ab962545389600be046f3341a1a05953e36802e779ea1c5",
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "state",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": "04c9ec456b8d6747420b3fcb978223ef3f65d0ba3c8a9b3cf28cc4c67d1b8391",
+        "ablation": "disable_decay",
+        "config_sha256": "1366224d0526707af4233fa88116add153f951b7c8ac5323c9d3509839e2502a",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    },
+    {
+      "policy_id": "V3-P1-NOOUT",
+      "version": "p1-zeroaux-order-v1",
+      "implemented_mode": "scalar",
+      "uses_outcomes": false,
+      "uses_elapsed_decay": true,
+      "allowed_roles": [
+        "events",
+        "probes",
+        "candidates",
+        "snapshot",
+        "registry",
+        "features"
+      ],
+      "dynamics": {
+        "protocol": "dynamics-config-v2",
+        "version": "v",
+        "mode": "scalar",
+        "clock": "accepted_time",
+        "clock_domain": "c",
+        "initial": 0.5,
+        "tau_ns": 1000000000,
+        "eta_positive": 0.25,
+        "eta_negative": 0.5,
+        "unit_strength": 1,
+        "negative_policy": "only_memory_attributable_independent",
+        "decay_enabled": true,
+        "outcome_jump_enabled": false,
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "evidence_rule_sha256": "7369949b47ef2c6ba26fbbee659cedc76123a75c17d321a52d8d1ef35e948042",
+        "config_sha256": "584b94dfde3f6daaf7cf2aa042ed4af368e0495128012e7777ed0db8f4dd3acd"
+      },
+      "ranker": {
+        "policy_id": "V3-P1-NOOUT",
+        "policy_version": "p1-zeroaux-order-v1",
+        "dynamics_config_sha256": "584b94dfde3f6daaf7cf2aa042ed4af368e0495128012e7777ed0db8f4dd3acd",
+        "feature_contract_sha256": null,
+        "outer_offset": 60,
+        "lanes": [
+          {
+            "kind": "relevance",
+            "weight": 1
+          },
+          {
+            "kind": "state",
+            "weight": 1
+          }
+        ],
+        "missing_state": "error",
+        "missing_feature": "error",
+        "recency_anchor": "updated_at_ns",
+        "recency_tau_ns": 1000000000,
+        "base_equal_rank": "exact_score_dense",
+        "feature_equal_rank": "exact_value_dense",
+        "final_tie": "trust_updated_key",
+        "fallback": "error",
+        "atol": 1e-12,
+        "rtol": 1e-12,
+        "inherited_b2_config_sha256": "04c9ec456b8d6747420b3fcb978223ef3f65d0ba3c8a9b3cf28cc4c67d1b8391",
+        "ablation": "disable_outcome_jumps",
+        "config_sha256": "d73bc41b42f7f1a2b44b9bd14f2ec4e410d99ea681d1db0354c1e6a779f239b1",
+        "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+      },
+      "rule_sha256": "a726a92bca51ea3fb2029fd58ce7ffbf95ccf3a08f8f412985b77b0042bd1c10",
+      "parameter_provenance": "engineering_regression_only"
+    }
+  ],
+  "resource_limits": {
+    "max_array_items": 200000,
+    "max_events": 100000,
+    "max_features": 100000,
+    "max_file_bytes": 67108864,
+    "max_json_depth": 32,
+    "max_probes": 100000,
+    "max_receipts": 200000,
+    "max_states": 100000,
+    "max_string_bytes": 4096
+  },
+  "registry_sha256": "17c58cf192536dc7f7fe7d3987cde09ea42265cb92982e3d811649def989b4f5"
+}

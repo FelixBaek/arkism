@@ -1,0 +1,13 @@
+{
+  "protocol": "dynamics-event-transport-semantics-v1",
+  "task": "DYN-01 arrival followup",
+  "base_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "scope": "Clarify existing retry transport fields without changing wire types, logical projections, hashes, observed-time constraints or immutable baseline. No runtime transition or operational authentication acceptance.",
+  "logical_event": "Original semantic payload, accepted_at_ns and accepted_seq are unchanged for exact same-ID retry. Arrival time and transport attempt ID describe the delivery attempt and are excluded from logical payload hash.",
+  "standalone_event": "Strict EventV2 structural/type/hash validation permits nonnegative arrival later than original accepted time because a standalone event has no receipt/stream history. This does not prove a valid first acceptance. ObservedAtNS remains logical and must not exceed accepted_at_ns.",
+  "first_acceptance": "For the first occurrence of an event ID in EventFileV2, arrival null remains unknown; known arrival must be <=accepted_at_ns. Reject future_event at $.events[*].arrived_at_ns. Check this after same-ID lookup, before new sequence/time acceptance.",
+  "retries": "A later same-ID occurrence with same payload and original accepted coordinates may have later arrival. Changed original accepted coordinates or payload is event_conflict; do not replace a semantic conflict with fresh-transport ordering.",
+  "transition_obligation": "ApplyEvent must perform the analogous receipt lookup before enforcing known arrival<=accepted on NEW logical event IDs. A decoded standalone EventV2 is not permission to bypass this contextual guard.",
+  "replay_obligation": "EventFileV2 validates complete ordered file first-ID acceptance and exact repeated deliveries. Resumed partial-history inputs require receipt-aware validation at transition/replay boundary; do not claim standalone validation authenticated a prior delivery.",
+  "limits": "Pure synthetic metadata only. No product, provider, database, deletion authorization, physical delivery authentication or clock synchronization guarantee."
+}

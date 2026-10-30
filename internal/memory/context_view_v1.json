@@ -1,0 +1,9 @@
+{
+  "protocol": "context-view-exclusion-v1",
+  "input": "Optional ContextBuildInput.context_view only; no Search wire field. Exact context_scope4 and positive-revision memories refs, unique, max128; explicit [] allowed, null excluded array invalid. Omitted or null context_view is nil/legacy; exclude itself must be a nonnull array.",
+  "stage": "Existing pin resolution/currentness and cleaned Search lanes first. Filter exact scoped ref/revision before pins packing or shared baseline/shadow C/RRF. Remaining relative order retained; positions after view filtering are that invocation view ordinals. Existing original3xretrieval window unchanged and no refill.",
+  "default": "nil retains old behavior and omits response context_view. Current-view behavior is explicit per-invocation, no canonical/native/session retained-state mutation.",
+  "scope": "Other scopes/revisions/tags unaffected; all matching exact refs in cleaned lanes and current pins removed. Independent InjectPins/retained/prior/history calls without view can reintroduce them.",
+  "authority": "Existing current grants/fences only; no new grant, approval or model role. Response observation is current server pack only; reader/use/task success/causal unknown.",
+  "persistence": "Existing transition/delete/capture/conflict APIs separately govern persistent correction/withdrawal. This filter never implements persistent removal or fact erasure."
+}
