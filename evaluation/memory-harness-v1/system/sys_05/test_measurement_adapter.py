@@ -34,8 +34,8 @@ def inputs():
                 "applied_witness_ns": at(30), "visible_witness_ns": at(35)},
                {"request_id": read["request_id"], "op": "read", "http_status": 200, "completed_ns": at(150),
                 "search_observation_status": "selected", "snapshot_as_of_ns": at(35), "quality_passed": True}],
-           "queue_samples": [{"at_unix_ns": at(900), "depth": 0}], "costs_at_unix_ns": at(900),
-           "costs": [{"name": n, "bytes": 1} for n in A.COSTS], "repairs": [], "observed_until_unix_ns": at(1000)}
+           "queue_samples": [{"at_unix_ns": at(900), "depth": 0}],
+           "cost_samples": [{"at_unix_ns": at(900), "costs": [{"name": n, "bytes": 1} for n in A.COSTS[1:]]}], "repairs": [], "observed_until_unix_ns": at(1000)}
     return raw_config, workload, raw
 
 
@@ -51,6 +51,7 @@ class AdapterTests(unittest.TestCase):
         update = observations["outcomes"][0]
         self.assertEqual((update["accepted_ns"], update["durable_ns"], update["visible_ns"]), (10, 20, 35))
         self.assertEqual(observations["outcomes"][1]["snapshot_ns"], 35)
+        self.assertIsNone(observations["cost_samples"][0][A.COSTS[0]])  # unmeasured stays unknown
 
     def test_missing_durable_readback_keeps_only_the_admission_prefix(self):
         raw_config, workload, raw = inputs()
