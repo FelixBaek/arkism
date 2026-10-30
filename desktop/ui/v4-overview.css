@@ -188,6 +188,7 @@
 .ov-stage-list .ov-win-item-t > span.ov-win-item-title { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; line-height: 1.55; }
 .ov-stage-list .ov-win-item-r { grid-column: 2; grid-row: 2; flex-wrap: wrap; justify-content: flex-end; } .ov-stage-list .ov-win-item-r:empty { display: none; }
 .ov-stage-list .ov-verdict { margin-top: 8px; }
+.ov-stage-list .ov-class-more { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--nc-line); color: var(--text-2); }
 .ov-stage-what { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
 .ov-kind-share { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .ov-kind-share > small { color: var(--text-2); font-size: 12px; }

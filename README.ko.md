@@ -1,5 +1,8 @@
 # Arkism
 
+> [!WARNING]
+> 아직 테스트 개발중이므로 사용하기에 많은 제약이 따릅니다.
+
 [![English](https://img.shields.io/badge/lang-English-blue)](README.md) [![한국어](https://img.shields.io/badge/lang-%ED%95%9C%EA%B5%AD%EC%96%B4-red)](README.ko.md)
 
 [![Release](https://img.shields.io/github/v/release/FelixBaek/arkism)](https://github.com/FelixBaek/arkism/releases/latest)
@@ -11,7 +14,7 @@
 
 Claude Code, Codex, Gemini CLI를 오갈 때 쓸 맥락을 잇기 위해, 대화에서 남길 내용을 모으고 지금 하는 일에 맞는 승인된 기억을 건넵니다. 실제 에이전트 시험에서 기억은 작업에 전달됐지만, 정적 지침 문서보다 낫다는 증거는 아직 없습니다([보고서](evaluation/reuse-20261015/REPORT.ko.md)). 기억과 도구, 모델 선택, 팀 워크플로를 한곳에서 관리합니다.
 
-> 현재 테스트·개발 중입니다. 아래의 제품 소개와 [앞으로의 로드맵](ROADMAP.ko.md)을 구분해 읽어 주세요.
+> 아래의 제품 소개와 [앞으로의 로드맵](ROADMAP.ko.md)을 구분해 읽어 주세요.
 
 ---
 

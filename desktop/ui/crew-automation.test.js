@@ -387,3 +387,23 @@ test("기록·사용량: one workflow's numbers, periods, failing steps and retr
   assert.ok(asked.every((u) => /workflow_id=wf1/.test(u)), asked.join(" "));
   assert.deepEqual(clean(), []);
 });
+
+// A click inside a popup redraws its open tab; that must not throw the reader back to the top (asked twice).
+test("redrawing the open popup tab keeps its scroll", async () => {
+  await boot();
+  const doc = document;
+  const el = (tag, cls = "", text) => { const n = doc.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  const button = (text, cls) => { const b = el("button", cls, text); b.type = "button"; return b; };
+  let draws = 0;
+  const pop = globalThis.ArkismCrewPopup({ el, button }).open({ title: "t", tabs: [
+    { key: "a", label: "A", render: (box) => { draws++; box.scrollTop = 0; box.append(el("p", "", "a")); } }, // a browser clamps an emptied box to the top
+    { key: "b", label: "B", render: (box) => box.append(el("p", "", "b")) }
+  ] });
+  pop.body.scrollTop = 240;
+  pop.select("a");
+  assert.equal(draws, 2);
+  assert.equal(pop.body.scrollTop, 240, "same tab: scroll kept");
+  pop.select("b");
+  pop.body.scrollTop = 0;
+  pop.dialog.close();
+});

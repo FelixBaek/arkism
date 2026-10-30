@@ -1,5 +1,8 @@
 # Arkism
 
+> [!WARNING]
+> Arkism is still in test development, so using it comes with many limitations.
+
 [![English](https://img.shields.io/badge/lang-English-blue)](README.md) [![한국어](https://img.shields.io/badge/lang-%ED%95%9C%EA%B5%AD%EC%96%B4-red)](README.ko.md)
 
 [![Release](https://img.shields.io/github/v/release/FelixBaek/arkism)](https://github.com/FelixBaek/arkism/releases/latest)
@@ -11,7 +14,7 @@
 
 Carry context between Claude Code, Codex and Gemini CLI. Arkism collects what is worth keeping from your conversations and hands over approved memories that match the current job. A test with real agents showed memories reaching the task, but no gain over a static instructions file yet ([report](evaluation/reuse-20261015/REPORT.ko.md), Korean). Manage memory, tools, model selection and team workflows in one place.
 
-> Arkism is still in testing and development. The product overview below and the [future roadmap](ROADMAP.md) describe different stages of the work.
+> The product overview below and the [future roadmap](ROADMAP.md) describe different stages of the work.
 
 ---
 
