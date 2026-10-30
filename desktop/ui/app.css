@@ -528,6 +528,9 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .tidy-cards .sim-card p { font-size: calc(13px * var(--fs, 1)); color: var(--text-1); }
 .tidy-cards .sim-card.off { border-style: dashed; background: transparent; }
 .tidy-cards .sim-card.off p { color: var(--text-2); }
+.batch-head { position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.25rem 0 0.75rem; background: var(--nc-canvas, var(--bg-surface)); border-bottom: 0.0625rem solid var(--nc-line, var(--border)); }
+.batch-head h2, .batch-head p { margin: 0; }
+.sim-pick { display: flex; gap: 0.375rem; margin-top: 0.25rem; }
 .tidy-why { padding: 12px; border-radius: 10px; background: var(--bg-muted); margin: 10px 0; }
 .tidy-why p { margin: 4px 0 0; font-size: calc(12px * var(--fs, 1)); color: var(--text-2); }
 .batch-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }

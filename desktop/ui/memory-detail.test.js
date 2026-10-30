@@ -23,7 +23,7 @@ const click = button => button.onClick({currentTarget: button});
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
 async function setup({caps = {}, routes = {}, ...overrides} = {}) {
-  const calls = [], notices = [], decisions = [], conflicts = [], sources = [];
+  const calls = [], notices = [], decisions = [], conflicts = [], sources = [], restored = [];
   let reloads = 0, renders = 0, needs = 0;
   const shell = el("section");
   const ctx = {
@@ -42,7 +42,7 @@ async function setup({caps = {}, routes = {}, ...overrides} = {}) {
     privacy: {memorySections: () => [el("section", "", "privacy")]},
     originals: {sourceDetails: (box, record, response) => sources.push([record.id, response])},
     query: () => "scope=w", reviewOnce: (key, fn) => fn(),
-    notice: text => notices.push(text), failNotice: (error, denied, other) => notices.push(other),
+    notice: (text, action) => { notices.push(text); notices.action = action; }, restore: m => restored.push(m), failNotice: (error, denied, other) => notices.push(other),
     render: () => renders++, renderDetail: () => {}, reloadMemories: async () => { reloads++; },
     decide: async (c, action, reason) => decisions.push([action, reason]),
     resolveConflict: async (c, choice, why) => conflicts.push(why ? [choice, why] : choice),
@@ -70,7 +70,7 @@ async function setup({caps = {}, routes = {}, ...overrides} = {}) {
   globalThis.askText = async () => "고친 문장";
   const { createMemoryDetail } = await moduleTask;
   Object.assign(ctx, createMemoryDetail(ctx));
-  return {ctx, shell, calls, notices, decisions, conflicts, sources, stored, picks,
+  return {ctx, shell, calls, notices, restored, decisions, conflicts, sources, stored, picks,
     reloads: () => reloads, renders: () => renders, needs: () => needs};
 }
 
@@ -88,7 +88,7 @@ test("memory detail lists history, offers revert, and hands sources to the evide
   }});
   await h.ctx.memoryDetail(memory);
   assert.deepEqual(h.sources, [["m1", {items: ["src"]}]]);
-  const summary = all(h.shell).find(node => node.tag === "summary");
+  const summary = all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent));
   assert.equal(summary.textContent, "변경 이력 4건");
   assert.match(texts(h.shell), /다른 기억과 부딪힘/);
   assert.doesNotMatch(texts(h.shell), /ignored/);
@@ -105,7 +105,7 @@ test("memory detail stops when the selection changed while reading", async () =>
   h.ctx.state.selected = "other";
   await h.ctx.memoryDetail(memory);
   assert.deepEqual(h.sources, []);
-  assert.equal(all(h.shell).find(node => node.tag === "summary").textContent, "변경 이력 1건");
+  assert.equal(all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent)).textContent, "변경 이력 1건");
 });
 
 test("an unconfirmed memory can be kept or forgotten", async () => {
@@ -123,7 +123,9 @@ test("an unconfirmed memory can be kept or forgotten", async () => {
   const [route, body] = h.calls.at(-1);
   assert.equal(route, "/v1/memories/m1/transition");
   assert.deepEqual(body, {scope: {workspace_id: "w"}, expected_revision: 4, status: "rejected", reason_code: "unused", reason: "안 씀"});
-  assert.equal(h.notices.at(-1), "지웠어요. 기억 이력에 지운 이유와 함께 남아요.");
+  assert.equal(h.notices.at(-1), "지웠어요. 「지운 기억」에서 언제든 되살릴 수 있어요.");
+  assert.equal(h.notices.action[0], "되돌리기", "the delete notice offers one-click undo");
+  h.notices.action[1](); assert.equal(h.restored[0].id, "m1"); assert.equal(h.restored[0].revision, 5, "undo sends the revision after the delete");
   assert.equal(h.ctx.state.selected, null);
   assert.equal(h.reloads(), 1);
 });
@@ -255,7 +257,7 @@ test("candidate sources load on request and failures are not treated as evidence
   const h = await setup({routes: {"/v1/memory_candidates/c1/sources": {items: ["quote"]}}});
   h.ctx.state.selected = "c1";
   await h.ctx.candidateDetail(candidate);
-  const read = find(h.shell, "근거 확인");
+  const read = find(h.shell, "원문 보기");
   await click(read);
   assert.deepEqual(h.sources, [["c1", {items: ["quote"]}]]);
   h.ctx.request = async () => { throw new Error("offline"); };

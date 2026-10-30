@@ -8,7 +8,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
   function spec(name) {
     const base = { scope: state.scope, q: state.query || "" };
     if (["skills", "skillTrash"].includes(name)) return { ...base, state: name === "skillTrash" ? "trash" : state.skillTab, sort: state.skillSort, direction: state.skillDir || 0, model: state.skillModel, category: state.skillCat, categories: preferences().categories.map(({ id, rules }) => ({ id, rules })), agents: preferences().agents };
-    return { ...base, state: name === "candidates" ? "candidate" : name === "conflicted" ? "conflicted" : ["idle", "provenance"].includes(state.memTab) ? state.memTab : "active", kind: state.kind === "all" ? "" : state.kind, repository: state.repo || "", sort: name === "candidates" ? "risk" : name === "conflicted" ? "recent" : state.sort, kept_ids: preferences().kept, collect_unused: preferences().collectUnused };
+    return { ...base, state: name === "candidates" ? "candidate" : name === "conflicted" ? "conflicted" : ["idle", "provenance", "removed"].includes(state.memTab) ? state.memTab : "active", kind: state.kind === "all" ? "" : state.kind, repository: state.repo || "", sort: name === "candidates" ? "risk" : name === "conflicted" ? "recent" : state.sort, kept_ids: preferences().kept, collect_unused: preferences().collectUnused };
   }
   const key = name => JSON.stringify({ identity: identity(), body: spec(name) });
   function entry(name) {
@@ -35,7 +35,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
     return current;
   }
   const currentName = () => state.view === "skills" ? state.skillTab === "trash" ? "skillTrash" : "skills" : ({ candidate: "candidates", conflicted: "conflicted" }[state.memTab] || "memories");
-  const visible = () => state.view === "skills" && !state.skillPage || state.view === "memories" && ["active", "idle", "provenance", "candidate", "conflicted"].includes(state.memTab);
+  const visible = () => state.view === "skills" && !state.skillPage || state.view === "memories" && ["active", "idle", "provenance", "removed", "candidate", "conflicted"].includes(state.memTab);
   async function read(name, refresh = false) {
     const value = entry(name), serialized = key(name);
     try { await (refresh ? value.pager.refresh(serialized) : snapshot(name).error ? value.pager.retry(serialized) : value.pager.load(serialized)); }

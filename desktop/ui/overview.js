@@ -103,40 +103,40 @@ window.ArkismOverview = (ctx) => {
       judge: [[`${num(tidy)}건`, "확인할 기억"], [rate === null ? "—" : `${rate}%`, "답에 쓰인 비율"], [w ? `${num(w.injections)}회` : "—", "건넨 횟수"]],
       dream: [[`${num(nProp)}건`, "정리 제안"], [nProp ? ago(latest(proposals)) : "—", "마지막 제안"], [`${num((d.maintenance || []).filter((p) => p.maintenance?.type === "contradiction").length)}건`, "충돌 제안"]]
     };
-    // dot health — g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: last event <24h g, <3d y, older/none o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 쓰임 확인·드리밍 y; 분석 멈춤 r
-    const age = (t, yMax = 3 * 24 * HOUR) => !t ? "o" : now - t < 24 * HOUR ? "g" : now - t < yMax ? "y" : "o";
+    // dot health — n 아직 시작 전 (grey) · g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: none yet n, last event <24h g, <3d y, older o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 쓰임 확인·드리밍 y; 분석 멈춤 r
+    const age = (t, yMax = 3 * 24 * HOUR) => !t ? "n" : now - t < 24 * HOUR ? "g" : now - t < yMax ? "y" : "o";
     const oldestUnclassified = unclassified.length ? Math.min(...unclassified.map((m) => time(m.created_at) || now)) : 0;
     const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : runFailed ? "o" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
       review: !waiting.length ? "g" : now - oldest < 3 * 24 * HOUR ? "y" : "o", recall: age(latest(recallTimes), 7 * 24 * HOUR), trace: age(reported),
-      judge: !w ? "o" : tidy ? "y" : "g", dream: nProp ? "y" : "g" };
+      judge: !w ? "n" : tidy ? "y" : "g", dream: nProp ? "y" : "g" };
     const gone = missing();
     const withItems = (list) => list.map((s) => ({ ...s, tiles: TILES[s.key], badge: BADGE[s.key], health: HEALTH[s.key] }))
       .map((s) => (NEEDS[s.key].some((n) => gone.has(n)) ? unknownStage(s) : s));
     return withItems([
-      { key: "collect", group: "save", label: "대화 저장", region: "두정엽", tone: "n", note: ago(lastSession),
+      { key: "collect", group: "save", label: "대화 저장", tone: "n", note: ago(lastSession),
         big: `${num(sessions.filter(today).length)}건`, bigSub: "오늘", step: lastSession ? ago(lastSession) : "기록 없음",
         row: row(sessions, "n"), counts: slots(sessions), open: () => openWide("sessions") },
-      { key: "extract", group: "save", label: "분석", region: "전전두엽", tone: stalled ? "r" : "n",
+      { key: "extract", group: "save", label: "분석", tone: stalled ? "r" : "n",
         big: stalled ? stallWords.span : `${num(extracted.filter(today).length)}건`, bigSub: stalled ? "멈춘 시간" : "오늘 추출",
         small: stalled ? `${num(slots(extracted).reduce((a, b) => a + b, 0))}건` : ago(lastExtract), smallSub: stalled ? "최근 24시간" : "마지막 추출",
         step: stalled ? stallWords.stopped : lastExtract ? ago(lastExtract) : "기록 없음",
         row: extractRow, counts: slots(extracted), open: () => openWide("sessions") },
-      { key: "classify", group: "save", label: "분류", region: "측두엽", tone: "n",
+      { key: "classify", group: "save", label: "분류", tone: "n",
         big: `${num(nUnclassified)}건`, bigSub: "대기", small: classified.length ? ago(latest(classified)) : "—", smallSub: "마지막 처리",
         step: nUnclassified ? `대기 ${num(nUnclassified)}` : "모두 분류됨", row: classRow, counts: slots(classified), open: () => go("memories", "candidate") },
-      { key: "recall", group: "use", label: "불러오기", region: "운동 피질", tone: "n",
+      { key: "recall", group: "use", label: "불러오기", tone: "n",
         big: `${num(recalls.reduce((a, u) => a + (u.d7 || 0), 0))}회`, bigSub: "최근 7일", small: recallTimes.length ? ago(latest(recallTimes)) : "—", smallSub: "마지막",
         step: recallTimes.length ? ago(latest(recallTimes)) : "기록 없음", row: row(recallTimes, "n"), counts: slots(recallTimes), open: () => go("usage") },
-      { key: "trace", group: "use", label: "사용 기록", region: "해마", tone: "n",
+      { key: "trace", group: "use", label: "사용 기록", tone: "n",
         big: reported ? ago(reported) : "—", bigSub: "마지막 기록", small: w ? `${num(w.sessions)}` : "—", smallSub: w ? `세션 · ${w.days}일` : "보고 없음",
         step: reported ? ago(reported) : "보고 없음", row: reportRow, counts: slots(reported ? [reported] : []), open: () => go("usage") },
-      { key: "judge", group: "use", label: "쓰임 확인", region: "소뇌", tone: "n",
+      { key: "judge", group: "use", label: "잘 쓰이나 확인", tone: "n",
         big: `${num(tidy)}건`, bigSub: "확인할 기억", small: rate === null ? "—" : `${rate}%`, smallSub: "답에 쓰인 비율",
         step: tidy ? `대기 ${num(tidy)}` : "확인 끝", row: new Array(24).fill(""), counts: new Array(24).fill(0), open: () => go("memories", "idle") },
-      { key: "dream", group: "dream", label: "드리밍", region: "뇌간", tone: "n",
+      { key: "dream", group: "dream", label: "정리하는 중", tone: "n",
         big: `${num(nProp)}건`, bigSub: "정리 제안", small: nProp ? ago(latest(proposals)) : "—", smallSub: "마지막 제안",
         step: nProp ? `제안 ${num(nProp)}` : "제안 없음", row: row(proposals, "n"), counts: slots(proposals), open: () => go("memories", "merge") },
-      { key: "review", group: "approve", label: "승인 대기", region: "안와전두엽", tone: nWait ? "a" : "n",
+      { key: "review", group: "approve", label: "새 기억 확인", tone: nWait ? "a" : "n",
         big: `${num(nWait)}건`, bigSub: "대기 중", small: oldest ? (days ? `${days}일` : ago(oldest)) : "—", smallSub: "제일 오래된 것",
         step: `${num(nWait)}건`, row: waitRow, counts: slots(waiting.map((m) => time(m.created_at))), open: () => go("memories", "candidate") }
     ]);
@@ -164,7 +164,7 @@ window.ArkismOverview = (ctx) => {
 
     // top stepper: 저장 ─ 사용 ─ 드리밍 ─ 승인 (the human step both 분류 and 드리밍 feed, 2026-10-25)
     const top = el("div", "ov-steps");
-    for (const [g, label] of [["save", "저장"], ["use", "사용"], ["dream", "드리밍"], ["approve", "승인"]]) {
+    for (const [g, label] of [["save", "저장"], ["use", "사용"], ["dream", "정리"], ["approve", "승인"]]) {
       const grp = el("div", `ov-group ov-group-${g}`), head = el("div", "ov-group-head"); head.append(el("span", "", label), el("i"));
       const line = el("div", "ov-group-line"); grp.append(head, line); top.append(grp); ui.steps[g] = line;
     }
@@ -206,13 +206,13 @@ window.ArkismOverview = (ctx) => {
       ui.links[key] = { line, pt, node };
 
       const card = el("button", `ov-card ov-card-${side}`); card.type = "button"; card.style.top = `${top}px`;
-      const head = el("div", "ov-card-head"), name = el("span", "ov-card-name"), note = el("span", "ov-card-note"), region = el("span", "ov-card-region");
-      const dot = el("i", "ov-dot"); dot.setAttribute("role", "img"); head.append(dot, name, note, region);
+      const head = el("div", "ov-card-head"), name = el("span", "ov-card-name"), note = el("span", "ov-card-note");
+      const dot = el("i", "ov-dot"); dot.setAttribute("role", "img"); head.append(dot, name, note);
       const body = el("div", "ov-card-body"), big = el("div", "ov-big"), small = el("div", "ov-small"), chart = el("div", "ov-chart");
       big.append(el("strong"), el("small")); small.append(el("strong"), el("small"));
       for (let k = 0; k < 7; k++) chart.append(el("i"));
       body.append(big, small, chart); card.append(head, body); stage.append(card);
-      ui.cards[key] = { card, dot, name, note, region, big, small, chart };
+      ui.cards[key] = { card, dot, name, note, big, small, chart };
     });
     const mid = el("div", "ov-node ov-node-white"); Object.assign(mid.style, { left: "624px", top: "692px" });
     mid.append(el("i", "ov-ring"), el("i", "ov-halo"), el("i", "ov-frame"), el("i", "ov-core")); stage.append(mid);
@@ -221,7 +221,7 @@ window.ArkismOverview = (ctx) => {
     const grid = el("div", "ov-grid"), gh = el("div", "ov-grid-head");
     ui.badge = el("span", "ov-badge"); gh.append(el("i", "ov-dot"), el("strong", "", "기억 처리"), ui.badge);
     const body = el("div", "ov-grid-body");
-    for (const [, label, keys] of [["save", "저장", ["collect", "extract", "classify"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "드리밍", ["dream"]], ["approve", "승인", ["review"]]]) {
+    for (const [, label, keys] of [["save", "저장", ["collect", "extract", "classify"]], ["use", "사용", ["recall", "trace", "judge"]], ["dream", "정리", ["dream"]], ["approve", "승인", ["review"]]]) {
       body.append(el("div", "ov-grid-sec", label));
       for (const k of keys) { const r = el("div", "ov-grid-row"), name = el("span", "ov-grid-name"), cells = el("div", "ov-cells"); for (let c = 0; c < 24; c++) cells.append(el("i")); r.append(name, cells); body.append(r); ui.rows[k] = { name, cells }; }
     }
@@ -263,7 +263,7 @@ window.ArkismOverview = (ctx) => {
     const b = el("button", "ov-chip"); b.type = "button"; const i = el("i", "ov-dot");
     b.append(i, el("strong", "", label), el("span", "", value), el("span", "ov-chev", "›")); b.addEventListener("click", open); return b;
   }
-  const HEALTH_WORD = { g: "정상", y: "곧 확인", o: "확인 필요", r: "멈춤" };
+  const HEALTH_WORD = { n: "아직 시작 전", g: "정상", y: "곧 확인", o: "확인 필요", r: "멈춤" };
   const healthDot = (dot, h) => { dot.setAttribute("aria-label", HEALTH_WORD[h]); dot.title = HEALTH_WORD[h]; };
   function paint() {
     const list = stages(), by = Object.fromEntries(list.map((s) => [s.key, s]));
@@ -280,7 +280,7 @@ window.ArkismOverview = (ctx) => {
       const c = ui.cards[s.key];
       c.card.className = `ov-card ov-card-${PLACE.find((p) => p[0] === s.key)[1]} ov-t-${s.tone} ov-h-${s.health}`; healthDot(c.dot, s.health);
       c.card.onclick = () => openStage(s.key);
-      c.name.textContent = s.label; c.note.textContent = s.note || ""; c.region.textContent = s.region;
+      c.name.textContent = s.label; c.note.textContent = s.note || "";
       c.big.firstChild.textContent = s.big; c.big.lastChild.textContent = s.bigSub;
       c.small.hidden = !s.small; c.small.firstChild.textContent = s.small || ""; c.small.lastChild.textContent = s.smallSub || "";
       const last7 = s.counts.slice(-7), max = Math.max(1, ...last7);
@@ -290,7 +290,7 @@ window.ArkismOverview = (ctx) => {
       [...r.cells.children].forEach((cell, k) => { cell.className = s.row[k] ? `ov-c-${s.row[k]}` : ""; });
     }
     const stopped = list.filter((s) => s.tone === "r").length;
-    ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : "모두 움직임";
+    ui.badge.className = `ov-badge${stopped ? " r" : ""}`; ui.badge.textContent = stopped ? `${stopped}곳 멈춤` : list.some((s) => s.unknown) ? "알 수 없음" : list.every((s) => s.health === "n" || s.health === "g") && list.some((s) => s.health === "n") ? "아직 시작 전" : "모두 움직임";
     const h = new Date().getHours();
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;

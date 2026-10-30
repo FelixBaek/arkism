@@ -109,10 +109,10 @@ test("모아보기 lists topics with their waiting candidates, filters, sorts an
   assert.match(t.h.$("#table").textContent, /최대 2개 · 최대 개수에 닿아서/);
   assert.match(t.h.$("#table").textContent, /바탕 기억이 수정됨/);
   const chips = t.h.$("#chips").querySelectorAll("button");
-  assert.deepEqual(chips.map((c) => c.textContent), ["전체4", "뜨거움0", "새 후보3", "잠잠함1"]);
+  assert.deepEqual(chips.map((c) => c.textContent), ["전체4", "요즘 자주 씀", "새 후보3", "한동안 안 씀1"]);
   chips[3].click();
   assert.equal(rows(t).length, 1);
-  assert.match(rows(t)[0].textContent, /가나 주제.*잠잠함/);
+  assert.match(rows(t)[0].textContent, /가나 주제.*한동안 안 씀/);
   t.h.$("#chips button").click();
   const [status, sort] = t.h.$("#controls").querySelectorAll("select");
   for (const v of ["recent", "name", "heat"]) { sort.value = v; dom.fire(sort, "change"); }
@@ -142,7 +142,7 @@ test("a topic detail shows the candidate diff, members and approves or rejects w
   rows(t)[0].click();
   await dom.flush();
   let d = detailText(t);
-  assert.match(d, /주제 · 열기 10/);
+  assert.doesNotMatch(d, /열기 \d/);
   assert.match(d, /지시처럼 보이는 문장 포함/);
   assert.match(d, /응답 습관 → 응답 습관 v2/);
   assert.match(d, /새 기억 2개가 들어와서/);
@@ -279,7 +279,7 @@ test("counts for the memory screen and HOME menu rows", async () => {
   assert.deepEqual(t.view.digestCounts(), { topic: 3, user: 1 });
   const menu = [["MEMORY", "기억", [{ label: "x", n: 1 }], ["memories", "active"]], ["TOOLS", "스킬", [], ["skills"]]];
   t.view.menuRows(menu);
-  assert.deepEqual(menu[0][2].at(-1), { label: "병합 제안 3", n: 3 });
+  assert.deepEqual(menu[0][2].at(-1), { label: "합치기 제안 3", n: 3 });
   assert.deepEqual(menu[1], ["MEMORY", "모아보기", [{ label: "주제 요약 바뀜 3", n: 3 }, { label: "나에 대한 요약 바뀜 1", n: 1 }], ["memories", "digests"]]);
   const noMemory = [];
   t.view.menuRows(noMemory);
@@ -410,10 +410,10 @@ test("merge decisions report success for store, skip and dismiss, and the list w
   t.view.reset();
   const none = setup({ noMerge: true });
   none.state.memTab = "merge"; none.view.drawMerge(); await dom.flush();
-  assert.match(none.h.$("#table").textContent, /병합 제안을 지원하지 않아요/);
+  assert.match(none.h.$("#table").textContent, /합치기 제안을 지원하지 않아요/);
   const empty = setup({ routes: { "/v1/merge_proposals?": () => ({ items: [] }) } });
   empty.state.memTab = "merge"; empty.view.drawMerge(); await dom.flush();
-  assert.match(empty.h.$("#table").textContent, /확인할 병합 제안이 없어요/);
+  assert.match(empty.h.$("#table").textContent, /확인할 합치기 제안이 없어요/);
   empty.state.memTab = "digests"; empty.state.view = "skills"; empty.view.drawMerge();
 });
 
@@ -426,10 +426,10 @@ test("#465 digests: a failed read says it could not load; only a missing route r
   assert.match(down.h.$("#table").textContent, /요약을 불러오지 못했어요/);
   assert.doesNotMatch(down.h.$("#table").textContent, /아직 주제 요약이 없어요/);
   down.state.memTab = "merge"; down.view.drawMerge(); await dom.flush();
-  assert.match(down.h.$("#table").textContent, /병합 제안을 불러오지 못했어요/);
+  assert.match(down.h.$("#table").textContent, /합치기 제안을 불러오지 못했어요/);
   assert.doesNotMatch(down.h.$("#table").textContent, /지원하지 않아요/);
   const old = setup({ routes: { "/v1/merge_proposals?": () => { const e = new Error("not_found"); e.status = 404; throw e; } } });
   old.state.memTab = "merge"; old.view.drawMerge(); await dom.flush();
-  assert.match(old.h.$("#table").textContent, /병합 제안을 지원하지 않아요/);
+  assert.match(old.h.$("#table").textContent, /합치기 제안을 지원하지 않아요/);
   assert.equal(old.view.mergeCount(), 0);
 });

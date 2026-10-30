@@ -8,13 +8,13 @@
   function approval(record) {
     const review = record?.review;
     if (review?.receipt_id && review.actor_role === "human" && review.channel === "explicit_review_api" && review.by === record.approved_by && ["approve", "edit_approve"].includes(review.action)) {
-      return { state: "review_recorded", label: "사람 계정의 검토 기록", detail: "검토 요청과 처리 계정이 기록돼 있어요." };
+      return { state: "review_recorded", label: "사람이 확인하고 저장했어요", detail: "누가 언제 확인했는지 기록이 남아 있어요." };
     }
     if (["candidate", "conflicted"].includes(record?.status)) return { state: "pending", label: "검토 대기", detail: "사람이 저장 여부를 결정해 주세요." };
     if (record?.approved_by || review?.by || record?.trust_level === "user_verified") {
-      return { state: "legacy_unknown", label: "과거 승인 기록 · 직접 확인 미입증", detail: "계정 이름과 기존 점수만으로 직접 사용자 확인을 증명하지 않아요." };
+      return { state: "legacy_unknown", label: "예전 방식으로 저장됨", detail: "예전에 저장돼 사람이 직접 확인했다는 기록이 없어요. 쓰는 데는 문제없어요." };
     }
-    return { state: "unknown", label: "승인 경로 미확인", detail: "누가 어떤 경로로 확인했는지 기록이 부족해요." };
+    return { state: "unknown", label: "확인 기록 없음 (예전 방식)", detail: "누가 확인했는지 기록이 남지 않았어요. 쓰는 데는 문제없어요." };
   }
   // Qualifiers must agree before any presentation-only similarity comparison.
   function boundary(r) {

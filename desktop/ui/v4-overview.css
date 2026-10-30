@@ -1,6 +1,7 @@
 /* MEMORY › 개요 (overview.js). The stage is drawn in Figma units (1157 × 930) and scaled to the window. */
 .app.overview-mode .main { overflow: auto; }
-.app.overview-mode .area-bar, .app.overview-mode .page-head, .app.overview-mode #controls, .app.overview-mode #chips, .app.overview-mode #stats { display: none; }
+/* the area tabs stay: 한눈에 is one of the MEMORY tabs */
+.app.overview-mode .page-head, .app.overview-mode #controls, .app.overview-mode #chips, .app.overview-mode #stats { display: none; }
 .app.overview-mode .panel { flex: none; overflow: visible; border: 0; }
 .app.overview-mode .panel-main { padding: 0; }
 .app.overview-mode .panel-main > .table-wrap { flex: none; display: block; padding: 0; }
@@ -27,7 +28,7 @@
 .ov-t-a { --tone: var(--ov-a); --halo: rgba(245,185,85,.4); }
 .ov-t-n .ov-dot, .ov-t-r .ov-dot, .ov-t-a .ov-dot { background: var(--tone); }
 /* dot health (overview.js HEALTH): card and strip dots, and the brain node where the card's line starts */
-.ov-h-g { --h: var(--ov-g); } .ov-h-y { --h: var(--ov-y); } .ov-h-o { --h: var(--ov-o); } .ov-h-r { --h: var(--ov-r); }
+.ov-h-n { --h: rgba(var(--ov-fg-rgb),.35); } .ov-h-g { --h: var(--ov-g); } .ov-h-y { --h: var(--ov-y); } .ov-h-o { --h: var(--ov-o); } .ov-h-r { --h: var(--ov-r); }
 .ov-stage [class*="ov-h-"] .ov-dot { background: var(--h); }
 .ov-node[class*="ov-h-"] { --tone: var(--h); --halo: color-mix(in srgb, var(--h) 45%, transparent); }
 

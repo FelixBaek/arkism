@@ -8,7 +8,8 @@ export function createMemoryList(deps) {
   // ---------------------------------------------------------------- 기억
   // Figma v4 Brain › 기억 (198:630): 확인해 주세요 card → search + dropdowns → kind chips → list.
   // 확인할 것 (검토 대기·확인 필요·안 쓰임) and 모아보기 (작업 관계·사용자 특성·반성 교훈·과거 시점·대화) are sub-screens with "← 기억".
-  const MEM_CHECK = [["candidate", "승인 대기"], ["provenance", "승인 경로"], ["conflicted", "헷갈림"], ["idle", "호출과 문구 검토"], ["merge", "병합 제안"]];
+  // One name per review concept across the app: 새 기억 확인 · 서로 다른 기억 · 합치기 제안. 승인 경로 has nothing to decide, so it is a 모아보기 view.
+  const MEM_CHECK = [["candidate", "새 기억 확인"], ["conflicted", "서로 다른 기억"], ["merge", "합치기 제안"], ["idle", "다시 볼 기억"]];
  // merge: digests.js
   const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"]];
 
@@ -31,9 +32,12 @@ export function createMemoryList(deps) {
   // [title, one line under it, count next to the title]
   function memTitle() {
     const t = deps.memory.memTab;
-    const check = { provenance: "과거 처리 계정만으로 직접 사용자 확인을 증명할 수 없는 기억이에요. 기존 내용이나 상태는 자동으로 바꾸지 않아요.", candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
-      idle: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적은 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
-    if (check) return ["확인해 주세요", check, `${deps.catalogQuery.snapshot(catalogName()).total ?? checkTotal().text}개`];
+    const check = { candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
+      idle: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보이는 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
+    // the open sub-tab's own count, never the whole memory list's (catalogName() is "memories" for merge and idle)
+    if (check) return ["확인해 주세요", check, `${(catalogName() !== "memories" ? deps.catalogQuery.snapshot(catalogName()).total : null) ?? checkCounts()[t].text}개`];
+    if (t === "provenance") return ["승인 기록", "예전 방식으로 저장돼 사람이 승인한 기록이 남지 않은 기억이에요. 할 일은 없고, 내용도 바꾸지 않아요.", `${deps.catalogQuery.snapshot("memories").total ?? checkCounts().provenance.text}개`];
+    if (t === "removed") return ["지운 기억", "지운 기억은 에이전트가 쓰지 않아요. 되살리면 다시 써요.", `${deps.catalogQuery.snapshot("memories").total ?? "…"}개`];
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", deps.digests.title()];
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
       reflections: "작업하면서 얻은 해석이에요. 사실이나 실행 승인으로 쓰지 않아요.", past: "정한 시각에 쓰이던 기억을 그대로 보여 줘요. 지금 지시로는 쓰지 않아요.",
@@ -41,7 +45,7 @@ export function createMemoryList(deps) {
     if (look) return [MEM_LOOK.find(([k]) => k === t)[1], look, ""];
     const w = deps.memUse();
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
-    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 답변 문구 겹침이 확인됐어요. 실제 활용 여부는 측정하지 않았어요.`}`, `${deps.catalogQuery.snapshot("memories").total ?? deps.memoryCount()}개`];
+    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 기억이 답에 보였어요. 실제 활용 여부는 측정하지 않았어요.`}`, `${deps.catalogQuery.snapshot("memories").total ?? deps.memoryCount()}개`];
   }
 
   const catalogName = () => ({ candidate: "candidates", conflicted: "conflicted" }[deps.memory.memTab] || "memories");
@@ -56,8 +60,11 @@ export function createMemoryList(deps) {
       b.addEventListener("click", () => deps.go("memories", "active"));
       deps.$(".main > .page-head").prepend(b);
     }
-    b.hidden = deps.memory.memTab === "active";
+    b.hidden = deps.memory.memTab === "active" || isCheck(deps.memory.memTab); // 확인해 주세요 has its own area tab
   }
+  const isCheck = (tab) => MEM_CHECK.some(([k]) => k === tab);
+  // 확인해 주세요 tab: the first list with something waiting, and the total next to the open tab.
+  const firstCheck = () => { const n = checkCounts(); return MEM_CHECK.find(([k]) => n[k].min)?.[0] || "candidate"; };
 
   // One badge per row: how often it is used, or why it needs a look.
   function memBadge(m) {
@@ -67,7 +74,7 @@ export function createMemoryList(deps) {
     if (deps.state.usageDone && deps.idle(m)) return badge("검토 필요", "warn");
     const fresh = Date.now() - new Date(m.created_at).getTime() < deps.DAY;
     const s = deps.memStat(m.id);
-    if (s) return s.injected ? badge(`문구 겹침 ${s.used}번`) : badge(fresh ? "새 기억" : "—", fresh ? "new" : "");
+    if (s) return s.injected ? badge(`답에 보임 ${s.used}번`) : badge(fresh ? "새 기억" : "—", fresh ? "new" : "");
     const u = deps.usageOf(m.id);
     if (!u) return badge("…");
     if (!u.d30) return badge(fresh ? "새 기억" : "안 불림", fresh ? "new" : "");
@@ -98,7 +105,8 @@ export function createMemoryList(deps) {
       deps.$("#controls").replaceChildren(seg);
       panel.draw(); return;
     }
-    if (MEM_CHECK.some(([k]) => k === deps.memory.memTab)) { renderMemoryCheck(); return; }
+    if (isCheck(deps.memory.memTab) || deps.memory.memTab === "provenance") { renderMemoryCheck(); return; }
+    if (deps.memory.memTab === "removed") { renderRemoved(); return; }
 
     const source = memorySource();
     // 확인해 주세요: what is waiting, and one button that starts with the first non-empty list.
@@ -108,10 +116,9 @@ export function createMemoryList(deps) {
       const card = deps.el("div", "mem-check");
       const txt = deps.el("div", "mem-check-text");
       const line = deps.el("p", "mem-check-title"); line.append("확인해 주세요", deps.el("strong", "", total.text));
-      txt.append(line, deps.el("p", "mem-check-sub", `승인 대기 ${n.candidate.text} · 내용이 헷갈림 ${n.conflicted.text} · 검토 필요 ${n.idle.text}`));
-      if (n.merge.min) txt.lastChild.append(` · 병합 제안 ${n.merge.text}`);
-      const first = MEM_CHECK.find(([k]) => k !== "provenance" && n[k].min)?.[0] || "candidate";
-      card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", first)));
+      txt.append(line, deps.el("p", "mem-check-sub", `새 기억 확인 ${n.candidate.text} · 서로 다른 기억 ${n.conflicted.text} · 다시 볼 기억 ${n.idle.text}`));
+      if (n.merge.min) txt.lastChild.append(` · 합치기 제안 ${n.merge.text}`);
+      card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", firstCheck())));
       top.push(card);
     }
     const tools = deps.el("div", "mem-tools");
@@ -124,17 +131,21 @@ export function createMemoryList(deps) {
       tools.append(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
         deps.memory.repo || "", (v) => { deps.memory.repo = v; deps.render(false); }));
     }
-    tools.append(memSelect("모아보기", [["", "모아보기: 전체"], ...[["provenance", "승인 경로"], ...MEM_LOOK].map(([k, l]) => [k, `모아보기: ${l}`])], "", (v) => { if (v) deps.go("memories", v); }));
     tools.append(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
     tools.append(deps.inject.button());
-    deps.$("#controls").replaceChildren(...top, tools);
+    if (deps.state.caps?.actions?.review_decide) tools.append(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
+    tools.append(deps.button("기억 추가", "primary small", null, deps.openMemoryAdd)); // in the toolbar, not alone above the panel
+    // 모아보기: one chip per view, one tap opens it (was a select that hid the choices)
+    const look = deps.el("div", "mem-look");
+    look.append(deps.el("small", "meta", "모아보기"), ...[["provenance", "승인 기록"], ...MEM_LOOK].map(([k, l]) => { const c = deps.el("button", "chip", l); c.type = "button"; c.addEventListener("click", () => deps.go("memories", k)); return c; }));
+    deps.$("#controls").replaceChildren(...top, tools, look);
 
     // An older server sends no kind facets: 전체 shows the total, the kinds no number rather than 0.
     const snap = deps.catalogQuery.snapshot("memories"), counts = snap.facets.kinds;
     const chips = [["all", "전체", counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : snap.total ?? ""], ...Object.keys(deps.KINDS).map((k) => [k, deps.kindLabel(k), counts ? counts[k] || 0 : ""])];
     deps.$("#chips").replaceChildren(...chips.map(([k, label, num]) => {
       const c = deps.el("button", `chip mem-kind${deps.memory.kind === k ? " active" : ""}`); c.type = "button";
-      c.append(deps.el("span", "", label), deps.el("output", "", String(num)));
+      c.append(deps.el("span", "", label)); if (num !== 0) c.append(deps.el("output", "", String(num))); // no 0 next to an empty kind
       c.addEventListener("click", () => { deps.memory.kind = k; deps.render(false); });
       return c;
     }));
@@ -144,8 +155,51 @@ export function createMemoryList(deps) {
     const tpl = "minmax(0,1fr) auto";
     const shown = memPage(items);
     drawRows(shown, (m) => deps.row(m.id, tpl, [memCell(m, [deps.kindLabel(m.kind), deps.originOf(m), deps.ago(m.created_at), deps.memRepo(m).split("/").pop()]), memBadge(m)], deps.renderDetail));
-    if (!items.length) deps.$("#table").append(deps.el("div", "empty", deps.memory.query ? "검색과 맞는 기억이 없어요." : "여기에 표시할 기억이 없어요."));
+    // a failed or loading list says so in #stats; only a list that answered empty is a fresh start
+    if (!items.length && !snap.error && !snap.loading) deps.$("#table").append(deps.memory.query || (deps.memory.kind && deps.memory.kind !== "all") || deps.memory.repo ? deps.el("div", "empty", "검색과 맞는 기억이 없어요.") : emptyMemories());
+    else if (!items.length && deps.memory.query) deps.$("#table").append(deps.el("div", "empty", "검색과 맞는 기억이 없어요."));
     memMore(items.length, shown.length);
+  }
+
+  // A fresh install: say where memories come from and offer the one thing to do now.
+  function emptyMemories() {
+    const box = deps.el("div", "empty");
+    box.append(deps.el("p", "", "아직 기억이 없어요. AI와 대화하면 기억할 만한 내용이 「확인해 주세요」에 올라와요. 직접 적어 둘 수도 있어요."));
+    if (deps.state.caps?.actions?.propose) box.append(deps.button("기억 직접 추가", "primary small", null, () => deps.openMemoryAdd()));
+    return box;
+  }
+
+  // 지운 기억: memories a person deleted. They stay on the server (status rejected) until someone restores them here.
+  function renderRemoved() {
+    const tools = deps.el("div", "mem-tools"); tools.append(memSearch());
+    deps.$("#controls").replaceChildren(tools);
+    deps.$("#chips").replaceChildren();
+    deps.$("#stats").replaceChildren(catalogNote());
+    const items = memorySource(), shown = memPage(items), canRestore = !!deps.state.caps?.actions?.review_decide;
+    drawRows(shown, (m) => {
+      const line = deps.el("div", "mem-removed-line");
+      const why = window.ArkismDeleteReason.describe(m);
+      line.append(deps.row(m.id, "minmax(0,1fr)", [memCell(m, [deps.kindLabel(m.kind), (m.removal?.at || m.updated_at) ? `${deps.ago(m.removal?.at || m.updated_at)} 지움` : "", why])], deps.renderDetail));
+      if (canRestore) line.append(deps.button("되살리기", "small", null, (e) => restore(m, e.currentTarget)));
+      return line;
+    });
+    if (!items.length) deps.$("#table").append(deps.el("div", "empty", deps.memory.query ? "검색과 맞는 기억이 없어요." : "지운 기억이 없어요."));
+    memMore(items.length, shown.length);
+  }
+
+  // 되살리기 / 되돌리기: the memory comes back as it was; the server checks the same permission as the delete.
+  async function restore(m, trigger) {
+    if (trigger) trigger.disabled = true;
+    try {
+      await window.ArkismDeleteReason.restoreMemory(deps.request, deps.state.scope, m);
+      deps.notice("되살렸어요. 에이전트가 다시 써요.");
+      if (deps.state.selected === m.id) deps.state.selected = null;
+      await reloadMemories();
+    } catch (e) {
+      deps.failNotice(e, "이 계정은 기억을 되살릴 수 없어요.", e.message === "revision_conflict" ? "그새 바뀐 기억이에요. 목록을 새로 불러왔어요." : "되살리지 못했어요. 다시 시도해 주세요.");
+      if (trigger) trigger.disabled = false;
+      await reloadMemories().catch(() => {});
+    }
   }
 
   // "380개 중 50개 표시 · 더 보기" (Figma 198:630): long lists draw 50 rows at a time; a new filter starts over.
@@ -199,8 +253,9 @@ export function createMemoryList(deps) {
 
   function renderMemoryCheck() {
     const d = deps.state.data, n = checkCounts();
-    const seg = deps.segment(MEM_CHECK.map(([k, l]) => [k, l, n[k], true]), deps.memory.memTab, (k) => deps.go("memories", k)); seg.classList.add("mem-seg");
-    deps.$("#controls").replaceChildren(seg);
+    // a known 0 shows no number: an empty list is not news; … (loading) and — (failed) stay
+    const seg = deps.segment(MEM_CHECK.map(([k, l]) => [k, l, n[k].state === "loaded" && n[k].n === 0 ? undefined : n[k], true]), deps.memory.memTab, (k) => deps.go("memories", k)); seg.classList.add("mem-seg");
+    deps.$("#controls").replaceChildren(...(deps.memory.memTab === "provenance" ? [] : [seg]));
     if (deps.memory.memTab === "merge") { deps.digests.drawMerge(); return; }
     const tools = deps.el("div", "mem-tools"); tools.append(memSearch());
     deps.$("#controls").append(tools);
@@ -210,11 +265,12 @@ export function createMemoryList(deps) {
     if (deps.memory.memTab === "candidate" && items.length) {
       const hint = deps.el("div", "mem-hint");
       const p = deps.el("p", "");
-      p.append(`${items.length}개 후보 · 비슷한 내용은 묶어서 보여줘요. 펼쳐서 항목별로 결정해 주세요.`);
+      const grouped = window.ArkismMemoryManagement.groups(items).some((g) => g.items.length > 1);
+      p.append(grouped ? `새 기억 ${items.length}개 · 비슷한 것은 한 줄로 묶여 있어요. 펼쳐서 하나씩 저장하거나 버려 주세요.` : `새 기억 ${items.length}개 · 하나씩 눌러 저장하거나 버려 주세요.`);
       hint.append(p);
-      if (canDecide && d.candidates.length > 1) hint.append(deps.button("여러 개 한 번에 처리", "small", null, () => { deps.state.selected = "batch"; deps.markSelected(); deps.renderDetail(); deps.openDetail(); }));
+      if (canDecide && d.candidates.length > 1) hint.append(deps.button("한 번에 확인", "small", null, () => { deps.state.selected = "batch"; deps.markSelected(); deps.renderDetail(); deps.openDetail(); }));
       const stale = canDecide ? staleCandidates() : [];
-      if (stale.length) hint.append(deps.button(`30일 지난 후보 정리 ${stale.length}`, "ghost small", null, (e) => expireStale(stale.length, e.currentTarget)));
+      if (stale.length) hint.append(deps.button(`30일 지난 것 정리 ${stale.length}`, "ghost small", null, (e) => expireStale(stale.length, e.currentTarget)));
       deps.$("#chips").replaceChildren(hint);
     } else deps.$("#chips").replaceChildren();
     const table = deps.$("#table");
@@ -226,20 +282,20 @@ export function createMemoryList(deps) {
         deps.el("span", "mem-badge", "확인하기")
       ], deps.renderDetail);
       drawRows(shownGroups, group => candidateGroup(group, { el: deps.el, button: deps.button, row: candidateRow, request: deps.request, query: deps.query }));
-      if (!groups.length) table.append(deps.el("div", "empty", deps.memory.query ? "검색과 맞는 기억이 없어요." : "확인할 기억이 없어요."));
+      if (!groups.length) table.append(deps.el("div", "empty", deps.memory.query ? "검색과 맞는 기억이 없어요." : "확인할 새 기억이 없어요. AI와 대화하면 기억할 만한 내용이 여기에 올라와요."));
       memMore(groups.length, shownGroups.length);
       return;
     }
     const shown = memPage(items);
     if (deps.memory.memTab === "provenance") {
-      drawRows(shown, m => deps.row(m.id, "minmax(0,1fr) auto", [memCell(m, [deps.kindLabel(m.kind), deps.savedHow(m)]), deps.el("span", "mem-badge warn", "승인 경로 확인")], deps.renderDetail));
+      drawRows(shown, m => deps.row(m.id, "minmax(0,1fr) auto", [memCell(m, [deps.kindLabel(m.kind), deps.savedHow(m)]), deps.el("span", "mem-badge warn", "확인 기록 없음")], deps.renderDetail));
     } else if (deps.memory.memTab === "idle") {
       const w = deps.memUse();
       drawRows(shown, (m) => {
         const s = deps.memStat(m.id), often = deps.overlapReview(m);
         const due = deps.reviewOverdue(m);
-        const use = due ? "재검토 예정일이 지났어요" : often && w ? `최근 ${w.days}일 ${s.injected}번 전달 · 문구 겹침 ${s.used}번` : "30일 넘게 참고 안 됨";
-        return deps.row(m.id, "minmax(0,1fr) auto", [memCell(m, [deps.kindLabel(m.kind), use]), deps.el("span", `mem-badge${often ? " warn" : ""}`, due ? "재검토 예정일 지남" : often ? "문구 겹침 미확인" : "최근 호출 없음")], deps.renderDetail);
+        const use = due ? "재검토 예정일이 지났어요" : often && w ? `최근 ${w.days}일 ${s.injected}번 전달 · 답에 보임 ${s.used}번` : "30일 넘게 참고 안 됨";
+        return deps.row(m.id, "minmax(0,1fr) auto", [memCell(m, [deps.kindLabel(m.kind), use]), deps.el("span", `mem-badge${often ? " warn" : ""}`, due ? "재검토 예정일 지남" : often ? "답에 안 보임" : "최근 호출 없음")], deps.renderDetail);
       });
     } else {
       drawRows(shown, c => {
@@ -317,8 +373,10 @@ export function createMemoryList(deps) {
         ...(choice === "keep_old" || choice === "drop" ? { reason: why?.note || CONFLICT_REASON, ...(why ? { reason_code: why.code } : {}) } : {}),
         conflict: { id: rel.id, expected_revision: rel.revision, memory,
           resolution: { keep_old: "keep_old", drop: "keep_old", both: "keep_both", new: "replace_old" }[choice], reason: CONFLICT_REASON } };
-      await deps.request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
+      const send = () => deps.request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/review`, {
         method: "POST", body: JSON.stringify(window.ArkismMemoryEvaluation.reviewPayload(c.id, payload)) });
+      // no answer at all (status unset): send the same choice once more; the same operation_id makes it safe
+      await send().catch((e) => { if (e.status !== undefined) throw e; return send(); });
       if (choice === "drop") {
         // Resolving the conflict moved the old memory exactly one revision; anyone else's edit after that makes the delete refuse.
         // The review already committed, so a failed delete must say the old memory is still there.
@@ -352,6 +410,10 @@ export function createMemoryList(deps) {
 
   return {
     get decide() { return decide; },
+    get checkTotal() { return checkTotal; },
+    get firstCheck() { return firstCheck; },
+    get isCheck() { return isCheck; },
+    get restore() { return restore; },
     get memSelect() { return memSelect; },
     get memTitle() { return memTitle; },
     get reloadMemories() { return reloadMemories; },

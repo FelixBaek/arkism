@@ -98,7 +98,7 @@ func normalizeCatalog(in CatalogQueryInput, domain string) (CatalogQueryInput, e
 // normalizeCatalogChoice fills and checks the domain's sort and state.
 func normalizeCatalogChoice(in CatalogQueryInput, domain string) (CatalogQueryInput, error) {
 	sorts := map[string][]string{"memories": {"recent", "old", "used"}, "candidates": {"risk", "recent", "old"}, "skills": {"used", "recent", "name", "updated", "quality", "security", "agents"}, "knowledge": {"recent", "name", "chunks"}}
-	states := map[string][]string{"memories": {"active", "idle", "provenance"}, "candidates": {"candidate", "conflicted", "all"}, "skills": {"all", "trash", "unused", "plugin", "update", "missing", "caution"}, "knowledge": {"all", "검토 대기", "사용 중", "실패"}}
+	states := map[string][]string{"memories": {"active", "idle", "provenance", "removed"}, "candidates": {"candidate", "conflicted", "all"}, "skills": {"all", "trash", "unused", "plugin", "update", "missing", "caution"}, "knowledge": {"all", "검토 대기", "사용 중", "실패"}}
 	if len(sorts[domain]) == 0 || len(states[domain]) == 0 {
 		return in, ErrInvalid
 	}

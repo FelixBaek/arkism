@@ -57,7 +57,11 @@ func (s *Service) memoryCatalogRows(ctx context.Context, token string, in Catalo
 			page, err := s.ListCandidates(ctx, token, ReviewInput{omitAdvice: true, Scope: in.Scope, Status: in.State, Limit: 100, Cursor: cursor})
 			return page.Items, page.NextCursor, err
 		}
-		page, err := s.ListMemories(ctx, token, MemoryListInput{Scope: in.Scope, Status: statusActive, Query: in.Query, FoldQuery: true, Limit: 100, Cursor: cursor})
+		list := MemoryListInput{Scope: in.Scope, Status: statusActive, Query: in.Query, FoldQuery: true, Limit: 100, Cursor: cursor}
+		if in.State == "removed" { // 지운 기억: deleted by a person and still restorable
+			list.Status, list.IncludeInactive = "rejected", true
+		}
+		page, err := s.ListMemories(ctx, token, list)
 		return page.Items, page.NextCursor, err
 	})
 }

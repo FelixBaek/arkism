@@ -1,0 +1,25 @@
+{
+ "id": "g1",
+ "text": "Orbit 스테이징 서버는 매주 월요일에 초기화한다.",
+ "kind": "decision",
+ "status": "rejected",
+ "revision": 3,
+ "scope": {
+  "workspace_id": "default",
+  "project_id": "default",
+  "user_id": "management:owner"
+ },
+ "created_at": "2026-10-02T09:10:00Z",
+ "updated_at": "2026-10-29T08:00:00Z",
+ "approved_by": "management:owner",
+ "removal": {
+  "code": "changed",
+  "note": "이제 수요일에 초기화해요",
+  "by": "management:owner",
+  "at": "2026-10-29T08:00:00Z"
+ },
+ "tags": [
+  "basis:explicit_user"
+ ],
+ "created_by_type": "agent"
+}
