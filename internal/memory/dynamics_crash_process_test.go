@@ -3,6 +3,7 @@ package memory
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -29,6 +30,21 @@ func dynamicsCrashChild(t *testing.T, svc *Service, token string, scope Scope) {
 		}
 		fmt.Printf("claimed %s pid=%d\n", claim.ID, os.Getpid())
 		select {}
+	case "apply":
+		// The apply transaction does all its writes and then waits, uncommitted, to be killed.
+		pg := svc.Repo.(*Postgres)
+		hold := &dynamicsCrashInApply{Postgres: pg}
+		svc.Repo = hold
+		ctx, err := svc.nativeActor(testCtx, token, scope, "write:jobs")
+		if err != nil {
+			t.Fatal(err)
+		}
+		claim, err := svc.claimDynamics(ctx, scope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hold.armed = true
+		t.Fatal("apply returned instead of waiting:", svc.applyDynamicsClaim(ctx, token, scope, claim))
 	case "drain":
 		result := "ok"
 		if err := svc.WorkDynamicsOnce(testCtx, token); err != nil {
@@ -38,6 +54,24 @@ func dynamicsCrashChild(t *testing.T, svc *Service, token string, scope Scope) {
 	default:
 		t.Fatal("unknown crash child role")
 	}
+}
+
+// dynamicsCrashInApply passes transactions through until armed; the armed one runs
+// its body and then reports and blocks before commit.
+type dynamicsCrashInApply struct {
+	*Postgres
+	armed bool
+}
+
+func (r *dynamicsCrashInApply) Transaction(ctx context.Context, fn func(context.Context, Tx) error) error {
+	return r.Postgres.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		err := fn(ctx, tx)
+		if err == nil && r.armed {
+			fmt.Printf("in-apply pid=%d\n", os.Getpid())
+			select {}
+		}
+		return err
+	})
 }
 
 func dynamicsCrashCommand(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, role string) *exec.Cmd {
@@ -83,16 +117,16 @@ func dynamicsCrashFixture(t *testing.T, leaseNS int64) (*nativePGFixture, Dynami
 
 // dynamicsCrashKill starts a claiming worker process, kills it with SIGKILL once it
 // holds the lease and checks that the dead lease still blocks a new process.
-func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, events int) (*DynamicsLoadPayload, int64, string) {
+func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, events int, role string) (*DynamicsLoadPayload, int64, string) {
 	t.Helper()
-	claim := dynamicsCrashCommand(t, p, cfg, "claim")
+	claim := dynamicsCrashCommand(t, p, cfg, role)
 	var stderr bytes.Buffer
 	claim.Stderr = &stderr
 	stdout, err := claim.StdoutPipe()
 	dynamicsRebindExpect(t, err, nil, "claim pipe")
 	dynamicsRebindExpect(t, claim.Start(), nil, "claim process")
 	line, err := bufio.NewReader(stdout).ReadString('\n')
-	if err != nil || !strings.HasPrefix(line, "claimed ") {
+	if err != nil || !strings.HasPrefix(line, map[string]string{"claim": "claimed ", "apply": "in-apply "}[role]) {
 		_ = claim.Process.Kill()
 		_ = claim.Wait()
 		t.Fatalf("claim process did not report a claim: %q %v %s", line, err, stderr.String())
@@ -118,31 +152,36 @@ func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig,
 // double-apply the accepted update. A new process cannot claim before the lease
 // expires. If the lease ends inside the queue wait limit, a new process takes a new
 // lease after the dead one and applies once; if it ends after, the entry fails closed as
-// queue_wait_exhausted and publication stays withheld until an explicit repair.
+// queue_wait_exhausted and publication stays withheld until an explicit repair. A
+// process killed inside its apply transaction, after all writes and before commit,
+// must leave nothing applied, and the next process applies once.
 func TestDynamicsWorkerProcessCrashPG(t *testing.T) {
 	report := map[string]any{"protocol": "sys05-b-worker-crash-v1", "killed_signal": "SIGKILL"}
-	for name, leaseNS := range map[string]int64{"lease_within_wait": int64(2 * time.Second), "lease_beyond_wait": int64(10 * time.Second)} {
-		t.Run(name, func(t *testing.T) { report[name] = dynamicsCrashCase(t, leaseNS) })
+	for _, c := range []struct {
+		name, role string
+		leaseNS    int64
+	}{{"lease_within_wait", "claim", int64(2 * time.Second)}, {"lease_beyond_wait", "claim", int64(10 * time.Second)}, {"killed_inside_apply_transaction", "apply", int64(2 * time.Second)}} {
+		t.Run(c.name, func(t *testing.T) { report[c.name] = dynamicsCrashCase(t, c.leaseNS, c.role) })
 	}
 	out, err := json.Marshal(report)
 	dynamicsRebindExpect(t, err, nil, "report")
 	t.Logf("%s", out)
 }
 
-func dynamicsCrashCase(t *testing.T, leaseNS int64) map[string]any {
+func dynamicsCrashCase(t *testing.T, leaseNS int64, role string) map[string]any {
 	t.Helper()
 	p, cfg := dynamicsCrashFixture(t, leaseNS)
 	events := len(p.rows(t, "event"))
 	if q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; q.Count != 1 {
 		t.Fatalf("fixture did not queue one update: %d", q.Count)
 	}
-	held, killedAt, early := dynamicsCrashKill(t, p, cfg, events)
+	held, killedAt, early := dynamicsCrashKill(t, p, cfg, events, role)
 	late := dynamicsCrashDrain(t, p, cfg)
 	after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
 	entry, err := p.admin.Get(testCtx, colJobs, scopeA, dynamicsEntryID(scopeA, held.Head+1))
 	dynamicsRebindExpect(t, err, nil, "entry row")
 	applied := len(p.rows(t, "event")) - events
-	row := map[string]any{"lease_ns": leaseNS, "max_wait_ns": cfg.Limits.MaxWaitNS, "lease_left_at_kill_ns": held.LeaseUntilNS - killedAt,
+	row := map[string]any{"killed_in": role, "lease_ns": leaseNS, "max_wait_ns": cfg.Limits.MaxWaitNS, "lease_left_at_kill_ns": held.LeaseUntilNS - killedAt,
 		"early_drain": early, "late_drain": late, "applied_events": applied, "withheld_after": after.Withheld,
 		"lease_generation_before": held.LeaseGeneration, "lease_generation_after": after.LeaseGeneration,
 		"entry_status": entry.Status, "entry_reason": entry.DynamicsLoad.Reason, "entry_attempts": entry.DynamicsLoad.Attempts}
