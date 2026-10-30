@@ -1269,6 +1269,28 @@ func TestUnconfirmedWorkViewStopsExecution(t *testing.T) {
 	}
 }
 
+// RTE-03: the checkpoint is observed before the selector, and the selector receives only the task.
+func TestCheckpointIsReadBeforeSelectionAndNeverReachesSelector(t *testing.T) {
+	var order []string
+	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (host.Obj, string, error) {
+		order = append(order, "checkpoint")
+		return nil, "과거 상태 · data_only_untrusted", nil
+	})
+	var selectorTask string
+	_, err := runRouted(map[string]any{"task": "x", "work_id": "work-one"},
+		func(task, _ string, _ host.Obj) (map[string]any, error) {
+			order, selectorTask = append(order, "decide"), task
+			return map[string]any{"id": "xai/grok-5", "decision": "default"}, nil
+		},
+		func(map[string]any) (map[string]any, error) {
+			order = append(order, "run")
+			return result(true, "", "grok-5", "", "", time.Time{}, ""), nil
+		}, func(map[string]any) {})
+	if err != nil || strings.Join(order, ",") != "checkpoint,decide,run" || selectorTask != "x" {
+		t.Fatal(err, order, selectorTask)
+	}
+}
+
 func TestGroupDecisionCannotSilentlyUseGlobalRoute(t *testing.T) {
 	ran := 0
 	run := func(map[string]any) (map[string]any, error) { ran++; return nil, nil }
