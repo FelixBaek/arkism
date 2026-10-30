@@ -3,22 +3,14 @@ package memory
 import (
 	"context"
 	"net/http"
-	"os"
-	"path/filepath"
 
-	"github.com/FelixBaek/arkism/internal/host"
 	"github.com/FelixBaek/arkism/internal/notifycfg"
 )
 
-// Telegram and Slack destinations live in the host notify file the crew runner reads (ARKISM_CREW_NOTIFY).
+// Telegram and Slack destinations live in the host notify file the crew runner reads (notifycfg.Path).
 // shortcut: this edits the file on the machine running this server, so it only reaches a runner on the same
 // machine (the desktop's own server); a remote runner needs the provider-key style handoff.
-func notifyPath() string {
-	if v := os.Getenv("ARKISM_CREW_NOTIFY"); v != "" {
-		return v
-	}
-	return filepath.Join(host.AgentsState, "notify.json")
-}
+func notifyPath() string { return notifycfg.Path() }
 
 type MessengerSave struct {
 	Scope    Scope  `json:"scope"`

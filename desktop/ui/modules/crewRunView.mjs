@@ -1,4 +1,40 @@
 // Owns run polling and history. Dependencies are explicit live ports, never a global scope.
+
+// The engine's node errors are "code: message" (crewrun failf), often in English. The screen says what happened in plain
+// words; the raw text stays in the tooltip and under 자세히.
+const PLAIN_ERRORS = {
+  key: "모델 키를 찾지 못했어요. 설정 › 모델에서 키를 확인해 주세요.",
+  http: "주소에 연결하지 못했어요. 주소와 인터넷 연결을 확인해 주세요.",
+  http_status: "상대 서버가 오류로 답했어요. 주소와 권한을 확인해 주세요.",
+  read: "상대 서버의 답을 끝까지 읽지 못했어요.",
+  too_large: "받은 답이 너무 커요 (1MB 넘음).",
+  timeout: "정해진 시간 안에 끝나지 않았어요.",
+  exec: "명령을 시작하지 못했어요.",
+  exit: "실행한 명령이 실패했어요.",
+  bad_config: "노드 설정을 확인해 주세요.",
+  bad_expr: "조건 식을 확인해 주세요.",
+  ai_failed: "AI가 답하지 못했어요. 모델 연결을 확인해 주세요.",
+  too_many: "목록이 너무 길어요 (최대 1000개).",
+  not_a_list: "반복할 목록을 찾지 못했어요. 목록 위치를 확인해 주세요.",
+  unknown_node: "이 Arkism이 모르는 노드가 있어요. 앱을 업데이트해 주세요.",
+  child_failed: "하위 실행이 실패했어요.",
+  attempt_replay_blocked: "앞선 호출 결과가 없어 자동으로 다시 하지 않았어요. 실패한 곳부터 다시 눌러 주세요."
+};
+export function plainRunError(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const m = s.match(/^([a-z_]+): ([\s\S]*)$/);
+  const code = m?.[1] || "", msg = m ? m[2] : s;
+  if (/[\uac00-\ud7a3]/.test(msg)) return msg; // already written for people
+  if (code === "notify") {
+    if (/destination/.test(msg)) return "받는 곳을 찾지 못했어요. 알림 노드에서 받는 곳을 다시 골라 주세요.";
+    if (/notify\.json/.test(msg)) return "알림 설정을 읽지 못했어요. 설정 › 메신저에서 다시 연결해 주세요.";
+    return "알림을 보내지 못했어요. 설정 › 메신저에서 연결을 확인해 주세요.";
+  }
+  if (/(^|_)(unsupported|store_required)$/.test(code)) return "이 실행 방식에서는 할 수 없는 단계예요.";
+  return PLAIN_ERRORS[code] || "단계가 실패했어요.";
+}
+
 export function createCrewRunView(deps) {
 
 
@@ -51,7 +87,7 @@ export function createCrewRunView(deps) {
     if (st.status === "done") return [port && port !== "통과" && port !== "승인" ? `${port}` : deps.NODE_LABEL.done, nodeDur(st)].filter(Boolean).join(" · ");
     if (st.status === "running") return "실행 중";
     if (st.status === "waiting") return n.type === "approval" ? "확인 대기" : "기다리는 중";
-    if (st.status === "failed") return st.error ? `실패 · ${st.error.slice(0, 24)}` : "실패";
+    if (st.status === "failed") return st.error ? `실패 · ${plainRunError(st.error).slice(0, 24)}` : "실패";
     return deps.NODE_LABEL[st.status] || st.status;
   }
 
@@ -80,7 +116,9 @@ export function createCrewRunView(deps) {
       const n = failedNode(cr);
       const a = deps.el("div", "wf-attn small");
       const t = deps.el("div", "");
-      t.append(deps.el("strong", "", n ? `${deps.nodeTitle(n)} 단계가 실패했어요` : "실행이 멈췄어요"), deps.el("p", "", deps.readable(cr.summary) || cr.nodes?.[n?.id]?.error || "이유가 남지 않았어요."));
+      const err = cr.nodes?.[n?.id]?.error || "";
+      t.append(deps.el("strong", "", n ? `${deps.nodeTitle(n)} 단계가 실패했어요` : "실행이 멈췄어요"), deps.el("p", "", deps.readable(cr.summary) || plainRunError(err) || "이유가 남지 않았어요."));
+      if (err) { const more = deps.el("details", "wf-adv"); more.append(deps.el("summary", "", "자세히"), deps.el("code", "mono", err)); t.append(more); }
       a.append(t);
       return a;
     }
@@ -218,7 +256,7 @@ export function createCrewRunView(deps) {
       const row = deps.el("div", `wf-steprow st-${st.status}`);
       const name = deps.el("span", "");
       name.append(deps.el("strong", "", `${i + 1} · ${deps.nodeTitle(n)}${st.runs > 1 ? ` · ${st.runs}회째` : ""}`));
-      if (st.error) name.append(deps.el("small", "", st.error));
+      if (st.error) { const e = deps.el("small", "", plainRunError(st.error)); e.title = st.error; name.append(e); }
       else if (again && st.status === "done" && !st.started_at) name.append(deps.el("small", "", "앞선 실행 결과를 사용해요."));
       else if (again && st.status === "running") name.append(deps.el("small", "", "같은 설정으로 다시 실행하고 있어요."));
       else if (again && st.status === "pending" && i) name.append(deps.el("small", "", `${deps.nodeTitle(all[i - 1])}가 끝나면 이어서 실행해요.`));
@@ -242,7 +280,7 @@ export function createCrewRunView(deps) {
       const dlg = deps.el("dialog", "crew-dialog wf-dialog ask-dialog");
       const form = deps.el("form");
       form.method = "dialog";
-      const q = deps.input("", { maxLength: 4000, placeholder: `$${rec.crew.handle}에게 맡길 일 (비워도 돼요)` });
+      const q = deps.input("", { maxLength: 4000, placeholder: `${deps.alias(rec.crew)}에게 맡길 일 (비워도 돼요)` });
       const body = deps.el("div", "dialog-body");
       body.append(deps.el("h2", "", `${rec.crew.name} 실행`), q);
       const foot = deps.el("div", "dialog-foot");

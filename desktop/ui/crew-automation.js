@@ -7,7 +7,6 @@ window.ArkismAutomation = (h) => {
   const NOTIFY_KINDS = [["discord", "디스코드"], ["telegram", "텔레그램"], ["slack", "슬랙"]];
   const MOMENTS = [["start", "시작"], ["step", "단계마다"], ["approval", "확인 필요"], ["fail", "실패"], ["end", "끝"]];
   const DEFAULT_MOMENTS = ["start", "approval", "fail", "end"];
-  const DEFAULT_CRON = "0 9 * * 1-5";
   // 일정 in plain words → cron, for the common Korean shapes ("평일 아침 9시", "매주 월·수 오후 3시 반", "매일 18:30").
   // null when it can't tell; the caller then asks the AI.
   function whenToCron(text) {
@@ -33,25 +32,13 @@ window.ArkismAutomation = (h) => {
     if (/오전|새벽|밤|am/i.test(t) && hour === 12) hour = 0;
     return `${min} ${hour} * * ${dow ?? "*"}`;
   }
-  // "m h * * dow" with plain numbers is what the picker edits; anything else stays a raw cron line.
-  function simpleCron(cron) {
-    const f = String(cron || "").trim().split(/\s+/);
-    if (f.length !== 5 || !/^\d+$/.test(f[0]) || !/^\d+$/.test(f[1]) || f[2] !== "*" || f[3] !== "*") return null;
-    const days = f[4] === "*" ? [0, 1, 2, 3, 4, 5, 6] : f[4] === "1-5" ? [1, 2, 3, 4, 5] : /^[0-7](,[0-7])*$/.test(f[4]) ? f[4].split(",").map((x) => Number(x) % 7) : null;
-    return days ? { min: Number(f[0]), hour: Number(f[1]), days } : null;
-  }
-  const cronOf = ({ min, hour, days }) => {
-    const ds = [...new Set(days)].sort((a, b) => a - b);
-    const dow = ds.length === 7 || !ds.length ? "*" : ds.join(",") === "1,2,3,4,5" ? "1-5" : ds.join(",");
-    return `${min} ${hour} * * ${dow}`;
-  };
   const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const flat = (g) => h.levels(g).flat();
   const goalKey = (n) => (n.type === "ai_once" ? "prompt" : "goal");
   const kindText = (n) => (n.type === "ai_once" ? "한 번 묻기" : n.config?.collab === "on" ? `전문가 · 워커 최대 ${n.config.max_workers || 5}` : IS_AI(n) ? "전문가" : h.NODES[n.type]?.label || n.type);
   const IS_AI = (n) => h.IS_AI(n.type);
   const fmtTokens = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
-  const TRIGGERS = { manual: "직접", schedule: "일정", webhook: "웹훅", call: "$이름", discord: "디스코드", agent: "에이전트", test: "테스트" };
+  const TRIGGERS = { manual: "직접", schedule: "일정", webhook: "웹훅", call: "@이름", discord: "디스코드", agent: "에이전트", test: "테스트" };
 
   // 판 이력: what differs between two saved definitions, value by value ("조사 워커 3 → 5"). a = older, b = newer.
   const short = (v) => { const t = String(v ?? "").trim(); return t.length > 24 ? "" : t; };
@@ -60,7 +47,7 @@ window.ArkismAutomation = (h) => {
   function diffLines(a, b) {
     const out = [];
     const sub = (k, label, f = (v) => v) => { if (!same(a[k], b[k])) out.push(k === "name" || k === "handle" ? `${label} ${f(a[k]) || "없음"} → ${f(b[k]) || "없음"}` : change(label, f(a[k]), f(b[k]))); };
-    sub("name", "이름"); sub("handle", "$이름", (v) => (v ? `$${v}` : "")); sub("role", "설명"); sub("category", "카테고리");
+    sub("name", "이름"); sub("handle", "@이름", (v) => (v ? `@${v}` : "")); sub("role", "설명"); sub("category", "카테고리");
     for (const [k, label] of [["task", "하려는 일"], ["done", "끝난 기준"], ["output", "결과물"]]) if (!same(a.goal?.[k], b.goal?.[k])) out.push(change(label, a.goal?.[k], b.goal?.[k]));
     if (!same(a.trigger, b.trigger)) out.push(`일정·웹훅 ${a.trigger?.kind === "schedule" ? h.cronText(a.trigger.cron) : a.trigger?.kind === "webhook" ? "웹훅" : "없음"} → ${b.trigger?.kind === "schedule" ? h.cronText(b.trigger.cron) : b.trigger?.kind === "webhook" ? "웹훅" : "없음"}`);
     if (!!a.enabled !== !!b.enabled) out.push(`켜기 ${a.enabled ? "켬" : "끔"} → ${b.enabled ? "켬" : "끔"}`);
@@ -163,13 +150,13 @@ window.ArkismAutomation = (h) => {
     const live = { run: null, timer: null };
     const stopLive = () => { if (live.timer) { clearTimeout(live.timer); live.timer = null; } };
 
-    const CHANGE = [["name", "이름"], ["handle", "$이름"], ["role", "설명"], ["category", "카테고리"], ["goal", "목표"], ["trigger", "일정·웹훅"], ["enabled", "켜기"], ["model", "모델"], ["limits", "멈추는 조건"], ["notify", "진행 알림"], ["cover", "배경 사진"], ["graph", "단계"]];
+    const CHANGE = [["name", "이름"], ["handle", "@이름"], ["role", "설명"], ["category", "카테고리"], ["goal", "목표"], ["trigger", "일정·웹훅"], ["enabled", "켜기"], ["model", "모델"], ["limits", "멈추는 조건"], ["notify", "진행 알림"], ["cover", "배경 사진"], ["graph", "단계"]];
     const changed = () => (creating ? [] : CHANGE.filter(([k]) => !same(d[k], base[k])));
     const updateBar = () => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
       bar.querySelector(".primary").disabled = !creating && !n; // the bar stays for AI 제안
-      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 테스트 탭에서 전체를 시험해요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록·사용량 탭에서 되돌릴 수 있어요`;
+      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 지금 실행 탭에서 돌려 봐요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록·사용량 탭에서 되돌릴 수 있어요`;
     };
     const touch = () => { updateBar(); paintHead(); };
     const dirty = () => !creating && changed().length > 0;
@@ -210,7 +197,7 @@ window.ArkismAutomation = (h) => {
       const callAlias = () => d.handle ? h.flowAlias(d) : "@이름";
       inlineText(hv, callAlias, (v) => {
         v = v.replace(/^[@$]/, "");
-        if (v && !/^[\p{L}\p{N}_-]{1,40}$/u.test(v)) { notice("$이름은 띄어쓰기 없이 글자·숫자·_·-만 써요."); return; }
+        if (v && !/^[\p{L}\p{N}_-]{1,40}$/u.test(v)) { notice("@이름은 띄어쓰기 없이 글자·숫자·_·-만 써요."); return; }
         if (v && h.workflows().some((r) => r.crew.handle === v && r.id !== rec?.id)) { notice("이미 쓰는 이름이에요. 다른 이름을 써 주세요."); return; }
         d.handle = v;
         handleTouched = true;
@@ -244,7 +231,7 @@ window.ArkismAutomation = (h) => {
         est.replaceChildren();
         const avg = stats?.avgMs;
         estRow("예상 토큰", stats?.tokens && stats.runs ? `약 ${fmtTokens(stats.tokens / stats.runs)}` : "—");
-        estRow("예상 비용", stats?.cost != null && stats.runs ? `약 $${(stats.cost / stats.runs).toFixed(2)}` : "—");
+        estRow("예상 비용 (API 요금 기준)", stats?.cost != null && stats.runs ? `약 $${(stats.cost / stats.runs).toFixed(2)}` : "—");
         estRow("예상 시간", avg ? `약 ${h.spanText(avg)}` : "—");
       }
       head.paintEst = paintEst;
@@ -255,7 +242,7 @@ window.ArkismAutomation = (h) => {
       const dlg = el("dialog", "crew-dialog wf-dialog");
       const form = el("form");
       form.method = "dialog";
-      const cover = h.coverPicker(d.cover, d.category || "", () => ({ name: d.name, role: d.role, category: d.category, meta: d.handle ? `$${d.handle}` : "" }));
+      const cover = h.coverPicker(d.cover, d.category || "", () => ({ name: d.name, role: d.role, category: d.category, meta: d.handle ? `@${d.handle}` : "" }));
       const hd = el("div", "dialog-head");
       hd.append(el("h2", "", "배경 사진"));
       const body = el("div", "dialog-body wf-cover-body");
@@ -317,7 +304,7 @@ window.ArkismAutomation = (h) => {
     };
 
     function statCells() {
-      const cells = [["runs", "최근 30일 실행"], ["done", "끝까지 마친 실행"], ["cost", "추정 비용"]].map(([k, label]) => {
+      const cells = [["runs", "최근 30일 실행"], ["done", "끝까지 마친 실행"], ["cost", "API 요금으로 쳤을 때"]].map(([k, label]) => {
         const c = el("div", "auto-stat");
         const v = el("div", "");
         const val = el("strong", "");
@@ -486,7 +473,6 @@ window.ArkismAutomation = (h) => {
         };
         item("일정", on("schedule") ? "켜져 있어요" : "정해 둔 요일·시간에 시작", () => turn("schedule", "webhook"), on("schedule") ? "on" : "");
         item("웹훅", on("webhook") ? "켜져 있어요" : "주소로 요청이 오면 시작", () => turn("webhook", "schedule"), on("webhook") ? "on" : "");
-        item("이벤트", "GitHub·메일·폴더 · 준비 중", () => notice("이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요."), "soon");
         s.querySelector(".auto-sec-head").append(m);
         setTimeout(() => doc.addEventListener("click", away, true));
       }
@@ -494,17 +480,16 @@ window.ArkismAutomation = (h) => {
       const trig = () => d.trigger?.kind;
       const on = (k) => trig() === k && !!d.enabled;
       function setTrigger(kind, v) {
-        if (v) { d.trigger = kind === "schedule" ? { kind, cron: d.trigger?.kind === "schedule" ? d.trigger.cron : DEFAULT_CRON } : { kind, label: d.trigger?.kind === "webhook" ? d.trigger.label || "" : "" }; d.enabled = true; } else d.enabled = false;
+        if (v) { d.trigger = kind === "schedule" ? { kind, cron: d.trigger?.kind === "schedule" ? d.trigger.cron : h.DEFAULT_CRON } : { kind, label: d.trigger?.kind === "webhook" ? d.trigger.label || "" : "" }; d.enabled = true; } else d.enabled = false;
         touch();
       }
       function draw() {
         list.replaceChildren();
-        list.append(valueRow("직접 부르기", el("span", "", `$${d.handle || "이름"}으로 부르거나 화면의 실행 버튼`), h.switchEl(true, "직접 부르기는 항상 켜져 있어요", () => notice("직접 부르기는 항상 켜져 있어요."))));
+        list.append(valueRow("직접 부르기", el("span", "", `${d.handle ? h.flowAlias(d) : "@이름"}으로 부르거나 화면의 실행 버튼`), h.switchEl(true, "직접 부르기는 항상 켜져 있어요", () => notice("직접 부르기는 항상 켜져 있어요."))));
         const cronWrap = el("span", "auto-sched");
         const paintCron = () => {
           cronWrap.replaceChildren();
           if (trig() !== "schedule") { cronWrap.append(creating ? "요일·시간 고르기 · 예: 월·수·금 09:00" : "정해 둔 시간에 시작해요"); return; }
-          const n = h.nextRun(d.trigger.cron);
           const put = (cron) => { d.trigger.cron = cron; touch(); draw(); };
           // 평소 말로: simple shapes are read here, the rest goes to the AI once.
           const say = h.input("", { maxLength: 80, placeholder: "평소 말로 적어요 · 예: 평일 아침 9시, 매주 월·목 오후 3시 반", cls: "auto-sched-say" });
@@ -520,52 +505,22 @@ window.ArkismAutomation = (h) => {
               if (j?.cron && h.parseCron(j.cron)) put(j.cron); else notice("언제인지 알아듣지 못했어요. 요일과 시간을 넣어 다시 적어 주세요.");
             } catch (err) { notice(`AI가 답하지 못했어요 (${err?.message || err}).`); } finally { say.disabled = false; }
           });
-          const sc = simpleCron(d.trigger.cron);
-          const pick = el("div", "auto-sched-pick");
-          if (sc) {
-            const days = el("div", "auto-days");
-            ["일", "월", "화", "수", "목", "금", "토"].forEach((label, i) => {
-              const b = pill(label, () => { const next = sc.days.includes(i) ? sc.days.filter((x) => x !== i) : [...sc.days, i]; if (next.length) put(cronOf({ ...sc, days: next })); });
-              b.classList.add("toggle"); b.classList.toggle("on", sc.days.includes(i)); b.setAttribute("aria-pressed", String(sc.days.includes(i)));
-              days.append(b);
-            });
-            const pm = sc.hour >= 12;
-            const ampm = el("div", "auto-ampm");
-            [["오전", false], ["오후", true]].forEach(([label, isPm]) => {
-              const b = pill(label, () => { if (pm !== isPm) put(cronOf({ ...sc, hour: (sc.hour + 12) % 24 })); });
-              b.classList.add("toggle"); b.classList.toggle("on", pm === isPm); b.setAttribute("aria-pressed", String(pm === isPm));
-              ampm.append(b);
-            });
-            const num = (v, max, label, fn) => { const i = h.input(String(v).padStart(2, "0"), { maxLength: 2, cls: "auto-num" }); i.inputMode = "numeric"; i.setAttribute("aria-label", label); i.addEventListener("change", () => { const x = Number(i.value); if (Number.isInteger(x) && x >= 0 && x <= max) fn(x); else i.value = String(v).padStart(2, "0"); }); return i; };
-            const h12 = sc.hour % 12 || 12;
-            const hh = num(h12, 12, "시", (x) => { if (x < 1) return draw(); put(cronOf({ ...sc, hour: (x % 12) + (pm ? 12 : 0) })); });
-            const mm = num(sc.min, 59, "분", (x) => put(cronOf({ ...sc, min: x })));
-            const time = el("div", "auto-time");
-            time.append(hh, el("span", "auto-dim", ":"), mm);
-            pick.append(days, ampm, time);
-          } else {
-            const raw = el("span", "");
-            inlineText(raw, () => d.trigger.cron, (v) => { if (!h.parseCron(v)) { notice("언제 칸의 형식을 확인해 주세요. 분 시 일 월 요일 (예: 0 9 * * 1-5)"); return; } put(v); }, { maxLength: 64, cls: "mono" });
-            pick.append(raw);
-          }
-          const label = el("span", "auto-dim auto-sched-next", `${h.cronText(d.trigger.cron)}${d.enabled && n ? ` · 다음 실행 ${h.when(n)}` : ""}`);
-          cronWrap.append(say, pick, label);
+          // The same 요일·시간 picker as the settings window and the start node; cron sits under 자세히.
+          const pick = h.schedulePicker(d.trigger.cron, (v) => { d.trigger.cron = v; touch(); });
+          cronWrap.append(say, pick);
         };
         paintCron();
         list.append(valueRow("일정", cronWrap, h.switchEl(on("schedule"), "일정 켜기", async (v) => { if (v && trig() === "webhook" && d.enabled && !await ask("웹훅을 끄고 일정으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("schedule", v); draw(); })));
-        list.append(valueRow("이벤트", el("span", "auto-dim", "GitHub·메일·폴더에서 일이 생기면 · 준비 중이에요"), (() => { const b = h.switchEl(false, "이벤트 (준비 중)", () => notice("이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요.")); b.classList.add("soon"); return b; })()));
         const hook = el("span", "");
-        if (!creating && trig() === "webhook") {
-          const cmd = `arkism-crew hook-url ${rec.id}`;
-          hook.append("주소와 토큰은 서버에서 이 명령으로 받아요 · ", el("code", "mono", cmd), h.copyButton(cmd));
-        } else hook.append(creating ? "만들고 나면 주소가 생겨요" : "이 주소로 요청이 오면 시작해요");
+        if (!creating && trig() === "webhook" && rec.crew.trigger?.kind === "webhook") hook.append(h.hookPanel(rec));
+        else if (!creating && trig() === "webhook") hook.append("저장하고 나면 주소와 토큰이 생겨요");
+        else hook.append(creating ? "만들고 나면 주소가 생겨요" : "이 주소로 요청이 오면 시작해요");
         list.append(valueRow("웹훅", hook, h.switchEl(on("webhook"), "웹훅 켜기", async (v) => { if (v && trig() === "schedule" && d.enabled && !await ask("일정을 끄고 웹훅으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.")) return; setTrigger("webhook", v); draw(); })));
         if (trig() === "webhook") {
           const name = el("span", "");
           inlineText(name, () => d.trigger.label || "", (v) => { d.trigger.label = v; touch(); }, { maxLength: 60, placeholder: "예: GitHub PR 열림" });
           list.append(valueRow("웹훅 이름", name, el("span", "")));
         }
-        if (!creating && d.trigger?.kind === "webhook") list.append(el("p", "auto-hint", "웹훅 토큰은 Arkism에 저장하지 않아요."));
       }
       draw();
       s.append(list);
@@ -784,7 +739,7 @@ window.ArkismAutomation = (h) => {
         const mine = bots.flatMap((b) => (b.channels || []).filter((c) => c.action?.kind === "workflow" && c.action.id === rec?.id).map((c) => ({ c, b })));
         const rows = mine.map(({ c, b }) => {
           const r = el("div", "auto-row notify");
-          const mode = pill(c.auto_start ? "글이 올라오면 시작" : `$${rec.crew.handle}로 부를 때만`, () => saveBot(b, b.channels.map((x) => (x === c ? { ...x, auto_start: !x.auto_start } : x)), "바꿨어요."));
+          const mode = pill(c.auto_start ? "글이 올라오면 시작" : `${h.flowAlias(rec.crew)}로 부를 때만`, () => saveBot(b, b.channels.map((x) => (x === c ? { ...x, auto_start: !x.auto_start } : x)), "바꿨어요."));
           mode.title = "눌러서 바꿔요";
           const warn = ["needs_permission", "token_invalid"].includes(b.state);
           r.append(el("span", "auto-key chan", `디스코드 · #${c.name || c.channel_id}`), el("small", "auto-dim", b.name || ""), ...(warn ? [el("span", "wf-badge small warn", "확인 필요")] : []), el("span", "grow"), mode,
@@ -793,7 +748,7 @@ window.ArkismAutomation = (h) => {
         });
         if (!creating && bots.length) {
           const r = el("div", "auto-row");
-          r.append(el("span", "auto-key", "부르기"), el("span", "auto-dim", `채널에서 $${rec.crew.handle}로 이 자동화를 부르게 연결해요`), pill(st.add ? "닫기" : "채널 추가", () => { st.add = st.add ? null : { bot: bots[0].id }; paint(); }));
+          r.append(el("span", "auto-key", "부르기"), el("span", "auto-dim", `채널에서 ${h.flowAlias(rec.crew)}로 이 자동화를 부르게 연결해요`), pill(st.add ? "닫기" : "채널 추가", () => { st.add = st.add ? null : { bot: bots[0].id }; paint(); }));
           rows.push(r);
         }
         if (st.add && bots.length) {
@@ -831,7 +786,7 @@ window.ArkismAutomation = (h) => {
         const bot = botRows();
         if (!channels().length) {
           const empty = el("div", "auto-row");
-          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 디스코드·텔레그램·슬랙"), pill("연결하기", addChannel));
+          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 텔레그램·슬랙"), pill("연결하기", addChannel));
           list.append(empty);
         }
         const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
@@ -848,7 +803,7 @@ window.ArkismAutomation = (h) => {
           del.addEventListener("click", () => { setNotify((n) => { n.channels = channels().filter((_, j) => j !== i); if (!n.channels.length) delete n.channels; }); editing = -1; paint(); });
           const when = pill(whenText(c), () => { c.when = NEXT[c.when] || "approval"; touch(); paint(); });
           when.title = "눌러서 바꿔요 · 알림 시점마다 / 확인 필요할 때만 / 끝나면 보고서";
-          const note = c.kind === "discord" ? [el("small", "auto-dim", "디스코드 알림은 준비 중")] : [];
+          const note = c.kind === "discord" ? [el("small", "auto-dim", "디스코드로는 아직 보내지 않아요")] : [];
           if (editing !== i) {
             const label = el("button", "auto-chan", `${kindName} · ${c.channel ? `#${c.channel.replace(/^#/, "")}` : (c.kind === "telegram" ? "나에게 (기본)" : "기본 채널")}`);
             label.type = "button";
@@ -856,7 +811,8 @@ window.ArkismAutomation = (h) => {
             label.addEventListener("click", () => { editing = i; paint(); });
             r.append(label, el("span", "grow"), ...note, when, del);
           } else {
-            const kind = h.select(NOTIFY_KINDS, c.kind);
+            // 디스코드 progress notices are not sent yet: offered only to a channel that already has it.
+            const kind = h.select(c.kind === "discord" ? NOTIFY_KINDS : NOTIFY_KINDS.filter(([k]) => k !== "discord"), c.kind);
             kind.setAttribute("aria-label", "메신저");
             kind.addEventListener("change", () => { c.kind = kind.value; const m = (st.dests || []).find((x) => x.channel === c.kind); c.channel = m && m.name !== "default" ? m.name : ""; touch(); paint(); }); // the old kind's place is not valid here: take the first one the picker shows
             // 보낼 곳 = a destination already set up in 설정 › 메신저 (GET /v1/messengers), picked, never typed.
@@ -940,17 +896,16 @@ window.ArkismAutomation = (h) => {
       return s;
     }
 
-    // 관리 (993:60224): one row each, label · what it does · its button. 지우기 and 예전 설정 창 are not in Figma but keep their jobs.
+    // 관리 (993:60224): one row each, label · what it does · its button. 지우기 is not in Figma but keeps its job;
+    // the old settings window is no longer offered here: this window edits everything it did.
     function manageSection() {
       const s = section("gear-six", "관리");
-      // One row: the four used to take a row each, and 예전 설정 창 repeats what this window already edits.
       const acts = [
         ["복제", "같은 단계로 새 자동화를 만들어요", () => leave(() => h.duplicate(rec))],
-        ["보관", `목록에서 숨기고 $${base.handle} 부르기를 멈춰요`, async () => { if (dirty() && !await ask("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
-        ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }],
-        ["예전 설정 창", "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요", () => leave(() => h.openSettings(rec))]
+        ["보관", `목록에서 숨기고 ${h.flowAlias(base)} 부르기를 멈춰요`, async () => { if (dirty() && !await ask("저장하지 않은 변경은 사라져요. 계속할까요?")) return; await h.archive(rec); if (!h.byId(rec.id) || h.byId(rec.id).archived) leaveSilently(); }],
+        ["지우기", "정의를 영구히 지워요 · 지난 실행 기록은 남아요", async () => { if (await h.remove(rec)) leaveSilently(); }]
       ];
-      s.append(box(...acts.map(([label, sub, fn]) => valueRow(label, el("span", "", sub), pill(label === "예전 설정 창" ? "열기" : label, fn)))));
+      s.append(box(...acts.map(([label, sub, fn]) => valueRow(label, el("span", "", sub), pill(label, fn)))));
       return s;
     }
 
@@ -977,7 +932,7 @@ window.ArkismAutomation = (h) => {
         const saved = await h.save(rec, out);
         leaveSilently();
         await h.reload(saved.id);
-        notice(creating ? "만들었어요. 테스트 탭에서 시험해 보세요." : "저장했어요.");
+        notice(creating ? "만들었어요. 지금 실행 탭에서 돌려 보세요." : "저장했어요.");
         h.openAutomation(saved.id);
       } catch (x) {
         notice(h.errorText(x));
@@ -990,11 +945,15 @@ window.ArkismAutomation = (h) => {
       body.classList.remove("auto-body");
       body.classList.add("auto-test");
       const owned = h.ownerOf(rec);
-      body.append(el("p", "auto-hint", "여기서 돌린 실행도 실제 실행이에요. 기록과 이번 달 한도에 남아요."));
+      body.append(el("p", "auto-hint", "연습이 아니라 실제로 돌아요. 기록과 이번 달 한도에 남아요."));
+      // Steps that reach outside (메시지·HTTP·GitHub·n8n) really send: say so before the first run, not after.
+      const OUT = { notify: "알림", http: "HTTP 요청", github: "GitHub", n8n: "n8n" };
+      const outs = [...new Set((rec.crew.graph?.nodes || []).map((n) => OUT[n.type]).filter(Boolean))];
+      if (outs.length) body.append(el("p", "auto-hint warn", `${outs.join("·")} 단계가 있어 실행하면 실제로 밖으로 보내요.`));
       const stage = el("div", "auto-chat");
       body.append(stage);
       const row = el("div", "auto-ask");
-      const q = h.input("", { maxLength: 4000, placeholder: `$${base.handle}에게 맡길 주제…` });
+      const q = h.input("", { maxLength: 4000, placeholder: `${h.flowAlias(base)}에게 맡길 주제…` });
       const go = button("실행", "primary", null, async () => {
         go.disabled = true;
         const r = await h.startRun(rec, q.value.trim());
@@ -1048,7 +1007,7 @@ window.ArkismAutomation = (h) => {
       for (const n of work) {
         const st = nodes[n.id] || { status: "pending" };
         const r = el("div", `auto-run-step st-${st.status}`);
-        const detail = st.status === "done" ? [h.nodeDur(st), st.runs > 1 ? `${st.runs}회째` : ""].filter(Boolean).join(" · ") : st.status === "running" ? "하는 중…" : st.status === "waiting" ? "확인 대기" : st.status === "failed" ? (st.error || "실패").slice(0, 40) : st.status === "skipped" ? "건너뜀" : "대기";
+        const detail = st.status === "done" ? [h.nodeDur(st), st.runs > 1 ? `${st.runs}회째` : ""].filter(Boolean).join(" · ") : st.status === "running" ? "하는 중…" : st.status === "waiting" ? "확인 대기" : st.status === "failed" ? (h.plainRunError(st.error) || "실패").slice(0, 40) : st.status === "skipped" ? "건너뜀" : "대기";
         r.append(el("span", "auto-run-mark", mark[st.status] || "○"), el("span", "", h.nodeTitle(n)), el("small", "", detail));
         steps.append(r);
       }
@@ -1120,7 +1079,7 @@ window.ArkismAutomation = (h) => {
       const count = el("small", "", "불러오는 중…");
       const title = el("strong", "", "최근 실행");
       head2.append(title, count, el("span", "grow"), pick);
-      head2.append(el("small", "auto-dim", "테스트 탭에서 돌린 것도 여기 남아요"));
+      head2.append(el("small", "auto-dim", "지금 실행 탭에서 돌린 것도 여기 남아요"));
       const list = el("div", "wf-runs");
       sec.append(head2, list);
       body.append(sec);
@@ -1133,7 +1092,7 @@ window.ArkismAutomation = (h) => {
         row.type = "button";
         const tokens = Object.values(cr.nodes || {}).reduce((n, x) => n + (x.tokens || 0), 0);
         const bad = ["failed", "stopped"].includes(cr.status);
-        const err = bad ? (Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error || h.readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "";
+        const err = bad ? (h.plainRunError(Object.values(cr.nodes || {}).find((n) => n.status === "failed")?.error) || h.readable(cr.summary).split(/[.。]/)[0]).slice(0, 40) : "";
         const end = bad ? [h.RUN_LABEL[cr.status], err].filter(Boolean).join(" · ") : cr.status === "running" || cr.status === "waiting" ? h.RUN_LABEL[cr.status] : [h.runTookText(r), tokens ? `${fmtTokens(tokens)} 토큰` : ""].filter(Boolean).join(" · ");
         row.append(el("span", "auto-runline-mark", MARK[cr.status] ?? "○"), el("time", "", isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`), el("small", "", TRIGGERS[cr.trigger] || ""), el("span", "auto-runline-title", h.runRequest(cr) || h.readable(cr.summary) || rec.crew.name), el("small", "auto-runline-end", end));
         row.addEventListener("click", () => showRun(r));
@@ -1141,11 +1100,13 @@ window.ArkismAutomation = (h) => {
       };
       // 실행 결과: final text, decision·stop, delivery and its recovery, child runs and meetings (flowHistory.mjs)
       const showRun = (r) => {
-        const steps = el("div", "flow-history-actions");
-        steps.append(button("단계 보기", "ghost", "tree-structure", () => leave(() => h.openGraph(rec, { run: r }))));
         const box = el("div", "flow-history");
-        body.replaceChildren(steps, box);
-        void h.openRunResult(r.id, box, () => { body.replaceChildren(); historyTab(body); });
+        body.replaceChildren(box);
+        const at = new Date(r.created_at), cr = r.crew_run || {};
+        const nodeName = (id) => { const n = (rec.crew.graph?.nodes || []).find((x) => x.id === id); return n ? h.nodeTitle(n) : ""; };
+        void h.openRunResult(r.id, box, () => { body.replaceChildren(); historyTab(body); }, {
+          when: isNaN(at) ? "" : `${pad2(at.getMonth() + 1)}-${pad2(at.getDate())} ${pad2(at.getHours())}:${pad2(at.getMinutes())}`,
+          kind: TRIGGERS[cr.trigger] || "", nodeName, steps: () => leave(() => h.openGraph(rec, { run: r })) });
       };
       let all = false;
       const load = async () => {
@@ -1166,7 +1127,7 @@ window.ArkismAutomation = (h) => {
     // -------------------------------------------------------------- open
     const tabs = creating ? [{ key: "overview", label: "개요", render: overview }] : [
       { key: "overview", label: "개요", render: (b) => { b.className = "dialog-body crew-popup-body"; overview(b); } },
-      { key: "test", label: "테스트", render: (b) => { b.className = "dialog-body crew-popup-body"; testTab(b); } },
+      { key: "test", label: "지금 실행", render: (b) => { b.className = "dialog-body crew-popup-body"; testTab(b); } },
       { key: "history", label: "기록·사용량", render: (b) => { b.className = "dialog-body crew-popup-body"; historyTab(b, run); run = null; } }
     ];
     pop = popup.open({ title: d.name, sub: "", tabs, initial: startTab, cls: `v4-auto${creating ? " v4-auto-new" : ""}`, popout: creating ? null : { event: "arkism:open-automation", detail: { id: rec.id } }, onClose: () => { stopLive(); pop.dialog.querySelector(".auto-menu")?.remove(); state.selected = null; h.afterClose(); } });

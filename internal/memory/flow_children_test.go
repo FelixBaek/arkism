@@ -72,6 +72,29 @@ func TestFlowChildrenNestedSingleCapacityPinsAndResumesApproval(t *testing.T) {
 	}
 }
 
+func TestFlowResultChildrenCarrySummary(t *testing.T) {
+	f, h, run, _, engine := nestedFlowFixture(t)
+	if e := engine.Drive(testCtx, run.ID); e != nil {
+		t.Fatal(e)
+	}
+	var result FlowResultView
+	h.call("GET", "/v1/crew/runs/"+run.ID+"/result"+flowHTTPQuery, f.human, nil, 200, &result)
+	child, ok := result.Children["delegate:1"]
+	if !ok || child.ID == "" || child.Name != "fixture-middle" || child.Status != "waiting" || child.StartedAt == nil || child.FinishedAt != nil {
+		t.Fatal("waiting child summary is wrong", result.Children)
+	}
+	decision := CrewRunDecisionInput{Scope: scopeA, ExpectedRevision: result.Revision, NodeID: result.Waiting.NodeID, Approve: true}
+	h.call("POST", "/v1/crew/runs/"+run.ID+"/decision", f.human, decision, 200, nil)
+	if e := engine.Drive(testCtx, run.ID); e != nil {
+		t.Fatal(e)
+	}
+	h.call("GET", "/v1/crew/runs/"+run.ID+"/result"+flowHTTPQuery, f.human, nil, 200, &result)
+	child = result.Children["delegate:1"]
+	if child.Status != "succeeded" || child.StartedAt == nil || child.FinishedAt == nil || child.FinishedAt.Before(*child.StartedAt) {
+		t.Fatal("finished child summary is wrong", child)
+	}
+}
+
 func TestFlowChildrenCancelWaitsForDescendantsAndCannotApproveAfterStop(t *testing.T) {
 	f, h, run, _, engine := nestedFlowFixture(t)
 	if e := engine.Drive(testCtx, run.ID); e != nil {

@@ -23,11 +23,17 @@ for (const tab of ["overview", "test", "history"]) {
   }
 }
 
+// 「+ 새 워크플로우」 opens the graph editor now (#481); the automation creator stays behind an agent's 새 워크플로우 만들기.
+async function openCreator(h) {
+  h.state.view = "crew"; h.render(); await h.settle();
+  document.querySelector('[data-id="crew:ag2"]').click(); await h.settle();
+  h.btn(h.top(), "새 워크플로우 만들기").click(); await h.settle();
+}
+
 test("new automation window", async () => {
   const h = await boot();
   h.render(); await h.settle();
-  h.btn(document, /새 워크플로우/).click(); await h.settle();
-  h.btn(h.top(), /단계 구성/).click(); await h.settle();
+  await openCreator(h);
   const d = h.top();
   assert.match(d.className, /v4-auto-new/);
   await sweep(h, d);
@@ -166,8 +172,7 @@ test("automation AI proposals: steps, goal and trigger, and the errors", async (
 test("a new automation drafted by AI, given steps and created", async () => {
   const h = await boot();
   h.render(); await h.settle();
-  h.btn(document, /새 워크플로우/).click(); await h.settle();
-  h.btn(h.top(), /단계 구성/).click(); await h.settle();
+  await openCreator(h);
   const d = h.top();
   const chat = h.chats.filter((c) => c.label === "AI로 초안").at(-1);
   // saving with no name asks for one
@@ -198,19 +203,19 @@ test("when it runs: the start menu, plain words and the raw cron", async () => {
   const item = async (label) => { const m = await menu(); [...m.querySelectorAll("button")].find((b) => b.firstChild.textContent === label).click(); await h.settle(); };
   await item("일정");
   assert.ok(h.notices.some((n) => /이미 켜져/.test(n)));
-  await item("이벤트");
   h.answer = false; await item("웹훅");
   h.answer = true; await item("웹훅");
   await item("웹훅");
   await item("일정");
   await menu(); await menu();
-  // the day, half-day and hour pickers
-  for (const label of ["토", "오후", "오전"]) { exact(d.querySelector(".auto-sched-pick"), label).click(); await h.settle(); }
-  const hour = d.querySelector('.auto-sched-pick [aria-label="시"]');
-  dom.type(hour, "0"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="시"]'), "7"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="분"]'), "99"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="분"]'), "15"); await h.settle();
+  // the shared day and time picker
+  const day = (label) => [...d.querySelectorAll(".sched-day")].find((b) => b.textContent === label);
+  day("토").click(); await h.settle();
+  assert.equal(day("토").getAttribute("aria-pressed"), "false");
+  day("토").click(); await h.settle();
+  assert.equal(day("토").getAttribute("aria-pressed"), "true");
+  dom.type(d.querySelector(".sched-time"), "07:15"); await h.settle();
+  assert.match(d.querySelector(".sched-next").textContent, /07:15|7:15/);
   // plain words, read here or asked of the AI
   const say = () => d.querySelector(".auto-sched-say");
   for (const text of ["평일 아침 9시", "주말 오후 3시 반", "월·수 18:30", "매일 밤 2시", "매일 밤 9시", "화요일 점심", "목 저녁", "금 밤", "오전 12시", "매일 25시", "아무 말"]) {
@@ -222,7 +227,8 @@ test("when it runs: the start menu, plain words and the raw cron", async () => {
   h.assistReply = () => ({ status: "done", output: "{\"cron\":\"0 9 1 * *\"}" });
   say().value = "매월 1일 9시"; dom.key(say(), "Enter"); await h.settle();
   // a cron the picker cannot show stays a raw line
-  assert.equal(d.querySelector(".auto-days"), null);
+  assert.equal(d.querySelector(".sched-days"), null);
+  assert.ok(d.querySelector(".sched-more").open);
   assert.ok(h.notices.some((n) => /알아듣지 못했어요/.test(n)));
   assert.ok(h.notices.some((n) => /끊김/.test(n)));
   assert.deepEqual(clean(), []);

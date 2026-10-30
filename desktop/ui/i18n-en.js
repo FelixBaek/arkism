@@ -208,7 +208,6 @@ window.ArkismI18nEN = {
   "1회 실행 상한": "Per-run cap",
   "예: 릴리스 팀": "e.g. Release team",
   "만들기를 누르면 이 전문가를 넣은 팀이 같이 만들어져요": "Creating the expert also creates this team with the expert in it",
-  "이름과 @이름(띄어쓰기 없이)을 채워 주세요.": "Fill in the name and @name (no spaces).",
   "적용 맥락 확인": "Check the memory's full context",
   "로 불러요": "to call it",
   "같은 @이름이 이미 있어요. 전문가와 팀은 이름을 함께 써요.": "That @name is taken. Experts and teams share one set of names.",
@@ -521,8 +520,6 @@ window.ArkismI18nEN = {
   "새로고침": "Refresh",
   "다시 불러오기": "Reload",
   "진행 알림 바꿈": "Progress notices changed",
-  "첫 전문가": "First expert",
-  "팀 화면에서 더 넣거나 고칠 수 있어요.": "You can add more or edit it on the team screen.",
   "상태 모름": "Status unknown",
   "설정": "Settings",
   "기억 찾기": "Search memories",
@@ -712,6 +709,7 @@ window.ArkismI18nEN = {
   "MCP 서버": "MCP servers",
   "· 켜는 중": "· Turning on",
   "· 끄는 중": "· Turning off",
+  "· 결론 남": "· Concluded",
   "· 로그인 필요": "· Sign-in required",
   "· 지원 안 함": "· Not supported",
   "이 에이전트는 아직 켜고 끌 수 없어요": "This agent can't be toggled yet",
@@ -866,13 +864,11 @@ window.ArkismI18nEN = {
   "Arkism 라우터": "Arkism router",
   "호스트 CLI": "Host CLI",
   "시작": "Start",
-  "$이름·화면에서 부르면": "When called by $name or from the app",
   "일정 시작": "Schedule trigger",
   "정한 시간마다": "At set times",
   "웹훅 받기": "Receive webhook",
   "주소로 요청이 오면": "When a request hits the URL",
   "AI 에이전트": "AI agent",
-  "도구를 쓰며 스스로 일해요": "Works on its own using tools",
   "AI 한 번 호출": "Single AI call",
   "질문 한 번 · 빠르고 싸요": "One question · fast and cheap",
   "코드": "Code",
@@ -895,7 +891,6 @@ window.ArkismI18nEN = {
   "하위 워크플로우": "Sub-workflow",
   "다른 워크플로우를 노드로": "Use another workflow as a node",
   "알림 보내기": "Send notification",
-  "텔레그램·슬랙·메일": "Telegram, Slack, email",
   "알림·끝": "Notify & end",
   "보고하고 끝": "Report and end",
   "부른 자리에 결과 돌려주기": "Return the result to the caller",
@@ -929,7 +924,6 @@ window.ArkismI18nEN = {
   "끝나면 알려줌 (오래 걸리는 일)": "Notify when done (long tasks)",
   "기다릴 최대 시간": "Max wait time",
   "키나 토큰처럼 보이는 값이 있어 저장하지 않았어요. 키는 설정 › 에이전트에 넣어 주세요.": "Not saved because a value looks like a key or token. Put keys in Settings › Agents.",
-  "빈 칸이나 형식을 확인해 주세요. $이름은 띄어쓰기 없이 글자·숫자·_·-만 써요. 앞으로 가는 선이 원을 이루면 저장되지 않아요(되돌아가는 선은 횟수를 정해요).": "Check for empty fields or formatting. $name may only use letters, numbers, _ and -, with no spaces. It won't save if forward lines form a cycle (loop-back lines set a repeat count).",
   "지웠어요.": "Deleted.",
   "이 워크플로우": "this workflow",
   "보관했어요. 기록은 남아 있어요.": "Archived. History is kept.",
@@ -946,7 +940,7 @@ window.ArkismI18nEN = {
   "쓰기 노드끼리는 갈래가 나뉘어도 차례로 돌아요": "Write nodes run one at a time even across branches",
   "아직 할 일이 없어요. 편집에서 노드를 넣어 주세요.": "Nothing to do yet. Add nodes in the editor.",
   "이 노드만 실행을 맡겼어요. 최근 실행에서 볼 수 있어요.": "Queued a run of this node only. See it in recent runs.",
-  "실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Run queued. The server runner will start within 10 seconds.",
+  "실행을 맡겼어요. 곧 시작해요.": "Run queued. It starts shortly.",
   "완료": "Done",
   "확인 대기": "Awaiting approval",
   "도는 중": "Running",
@@ -970,7 +964,6 @@ window.ArkismI18nEN = {
   "단계 1개": "1 step",
   "새 워크플로우": "New workflow",
   "워크플로우": "Workflows",
-  "어느 에이전트에서든 $이름으로 불러요. 부르면 서버 실행기가 그래프대로 돌리고, 부른 자리에는 진행과 결과를 보고해요. AI 칸은 칸마다 정한 모델이 맡아요.": "Call it from any agent with $name. The server runner runs the graph and reports progress and results back to the caller. Each AI block uses the model set for it.",
   "지금": "Now",
   "페르소나": "Personas",
   "복제": "Duplicate",
@@ -1021,30 +1014,23 @@ window.ArkismI18nEN = {
   "AI 하나로 간단히": "Simple, with one AI",
   "빈 그래프": "Blank graph",
   "어떻게 시작할까요": "How do you want to start?",
-  "단계가 하나면 간단한 입력 칸으로, 단계를 더하면 그래프로 바뀌어요": "With one step it's a simple form; add steps and it becomes a graph",
-  "없음 — $이름·화면에서만": "None — only via $name or the app",
   "일정": "Schedule",
-  "웹훅": "Webhook", "스케줄": "Schedule",
-  "GitHub PR 열림": "GitHub PR opened",
+  "웹훅": "Webhook",  "GitHub PR 열림": "GitHub PR opened",
   "형식: 분 시 일 월 요일 (예: 0 9 * * 1-5)": "Format: min hour day month weekday (e.g. 0 9 * * 1-5)",
   "웹훅 이름": "Webhook name",
-  "주소와 토큰은 서버에서 받아요": "Get the URL and token on the server",
   "워커 기본 모델": "Worker default model",
   "AI 노드에 모델을 안 정하면 이 모델로 돌아요": "AI nodes without a model use this one",
   "최대 시간 (분)": "Max time (minutes)",
   "최대 단계 수": "Max steps",
   "되돌아가기까지 합친 노드 실행 횟수": "Total node runs, including loop-backs",
-  "멈추는 조건 — 비워 두면 정하지 않아요. 되돌아가는 선은 선마다 횟수를 정해요.": "Stop conditions — leave blank for none. Loop-back lines each set their own repeat count.",
   "배경 사진": "Background photo",
   "고른 사진은 카드 뒤에 깔리고, 아래쪽 그라데이션으로 글씨가 보여요 · 사진: Unsplash": "The chosen photo sits behind the card, with a bottom gradient to keep text readable · Photos: Unsplash",
   "지우기": "Clear",
-  "언제 칸의 형식을 확인해 주세요.": "Check the format of the When field.",
   "워크플로우 설정과 그래프를 저장했어요.": "Saved workflow settings and graph.",
   "만들었어요.": "Created.",
   "저장하지 않은 변경이 있어요. 나갈까요?": "You have unsaved changes. Leave anyway?",
   "워크플로우를 저장했어요.": "Workflow saved.",
   "저장한 페르소나": "Saved personas",
-  "AI 에이전트로 넣어요": "Add as AI agent",
   "노드 찾기": "Find nodes",
   "맞는 노드가 없어요.": "No matching nodes.",
   "목표": "Goal",
@@ -1065,7 +1051,6 @@ window.ArkismI18nEN = {
   "바로 응답": "Respond immediately",
   "형식": "Format",
   "받는 것": "Receives",
-  "부를 때 쓴 문장": "The sentence used to call it",
   "코드 · 토큰 0": "Code · 0 tokens",
   "끌어서 다음 노드에 이어요": "Drag to connect to the next node",
   "노드 추가": "Add node",
@@ -1088,12 +1073,10 @@ window.ArkismI18nEN = {
   "노드 지우기": "Delete node",
   "추론": "Reasoning",
   "직접 쓰기": "Write my own",
-  "설정 › 워크플로우에서 만든 페르소나를 고르거나 아래에 직접 써요": "Pick a persona made in Settings › Workflows, or write one below",
   "더할 지시": "Additional instructions",
   "페르소나 지시": "Persona instructions",
   "너는 ○○다. …한다.": "You are ○○. You ….",
   "완료 기준": "Done when",
-  "하는 일": "Task",
   "실패하면 다시": "Retry on failure",
   "안 함": "Off",
   "1번": "1×",
@@ -1143,7 +1126,6 @@ window.ArkismI18nEN = {
   "돌아가기": "Go back",
   "되돌리기": "Undo",
   "저장된 워크플로우로 지금 한 번 돌려요": "Run the saved workflow once now",
-  "이름·$이름·워커 기본 모델·멈추는 조건·일정·웹훅·배경 사진": "Name · $name · default worker model · stop conditions · schedule · webhook · background image",
   "아직 저장한 페르소나가 없어요.": "No saved personas yet.",
   "새 페르소나": "New persona",
   "꼼꼼한 검토자": "Meticulous reviewer",
@@ -2004,7 +1986,6 @@ window.ArkismI18nEN = {
   "선택한 워크플로우": "Selected workflow",
   "켜져 있어요": "On",
   "꺼져 있어요": "Off",
-  "$이름·화면에서만 돌아요": "Runs only via $name or this screen",
   "규칙 검사를 모두 통과했어요 ·": "Passed all rule checks ·",
   "✓ 고름": "✓ Picked",
   "노드를 직접 이어 그려요.": "Draw and connect nodes yourself.",
@@ -2304,7 +2285,6 @@ window.ArkismI18nEN = {
   "AI로 초안 만들기": "Draft with AI",
   "빈 칸에서": "From blank",
   "비슷한 것에서 시작": "Start from a similar one",
-  "웹훅 주소와 토큰은 서버에서 이 명령으로 받아요. 토큰은 Arkism에 저장하지 않아요.": "Get the webhook address and token on the server with this command. Arkism doesn't store the token.",
   "한 줄 소개": "One-line intro",
   "+ 스킬 추가": "+ Add skill",
   "+ 도구 추가": "+ Add tool",
@@ -2681,7 +2661,6 @@ window.ArkismI18nEN = {
   "변경 이력 1건": "1 change in history",
   "수동 실행": "Manual run",
   "단계 하나로 시작해요.": "Starts with a single step.",
-  "AI 하나로 시작하면 간단 편집에서 모델·목표만 정하면 돼요. 단계를 더하면 그래프 편집기로 바뀌어요.": "Start with one AI and just set the model and goal in simple editing. Adding steps switches to the graph editor.",
   "규칙 검사": "Rule check",
   "이번 실행": "This run",
   "협업 워커": "Team workers",
@@ -3223,7 +3202,6 @@ window.ArkismI18nEN = {
   "되돌아가기 {0}번": "Loop back {0}×",
   "단계 {0}번": "{0} steps max",
   "{0}분": "{0} min",
-  "어느 에이전트에서 ${0}로 부르든 그래프대로 돌고, 부른 자리에는 진행과 결과를 보고해요.": "Whichever agent calls it with ${0}, it runs the graph and reports progress and results back to the caller.",
   "· 다음 {0}": "· next {0}",
   "${0}에게 맡길 일…": "Task for ${0}…",
   "되돌아감 {0}번": "Looped back {0}×",
@@ -3479,7 +3457,6 @@ window.ArkismI18nEN = {
   "{0}% 사용": "{0}% used",
   "· {0}회째": "· run {0}",
   "되돌아가는 선을 {0}번 따라가 앞 단계를 다시 돌았어요.": "Followed a loop-back line {0} times and reran earlier steps.",
-  "어느 에이전트에서든 $이름으로 불러요. {0}": "Call it from any agent with $name. {0}",
   "교훈 · {0}": "Lesson · {0}",
   "독립 {0}회 · {1} {2}%": "{0} independent runs · {1} {2}%",
   "{0}예요. 정확도를 뜻하지 않아요.": "{0}. It doesn't mean accuracy.",
@@ -3505,6 +3482,7 @@ window.ArkismI18nEN = {
   "입력 {0} · 출력 {1}": "Input {0} · output {1}",
   "최근 {0}": "Last {0}",
   "{0} 토큰": "{0} tokens",
+  "라운드 {0}": "Round {0}",
   "하루 평균 {0}": "Daily average {0}",
   "{0} 읽기": "{0} read",
   "가장 바쁜 때: {0}요일 {1}시": "Busiest time: {0} {1}:00",
@@ -3627,7 +3605,6 @@ window.ArkismI18nEN = {
   "'{0}' 봇 연결을 끊을까요? 디스코드 서버에서 봇이 나가지는 않아요.": "Disconnect bot '{0}'? It won't leave the Discord server.",
   "실패 {0}번": "{0} failed",
   "기록 {0}번 중": "of {0} recorded",
-  "실행당 평균 {0}": "{0} per run on average",
   "{0} · 성공 {1} · 실패 {2}": "{0} · {1} ok · {2} failed",
   "실패 {0}번이 {1}곳에서": "{0} failures in {1} places",
   "{0}번 호출": "{0} calls",
@@ -3719,7 +3696,6 @@ window.ArkismI18nEN = {
   "되돌아가는 선 {0} 최대 {1}번": "Loop-back {0}, up to {1} times",
   "되돌아가는 선 {0} {1} → {2}번": "Loop-back {0} {1} → {2} times",
   "되돌아가는 선 {0} 뺌": "Loop-back {0} removed",
-  "채널에서 ${0}로 이 자동화를 부르게 연결해요": "Connect a channel so ${0} calls this automation",
   "쓰임 {0}회": "Used {0} times",
   "{0}회 쓰임": "Used {0} times",
   "나머지 {0}개 펼치기": "Show {0} more"
@@ -3734,7 +3710,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "모든 실행 방식": "All execution types",
   "실행 방식": "Execution type",
   "딥리서치": "Deep research",
-  "기존 $이름 호출도 계속 쓸 수 있어요": "Existing $handle calls continue to work",
   "단독 실행": "Solo task",
   "협업·회의": "Collaboration & meetings",
   "단계 구성": "Build steps",
@@ -3976,7 +3951,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "제목없음": "Untitled"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "AI가 제목을 '{0}'(으)로, 부르는 이름을 ${1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and set its call name to ${1}. You can change both in settings."
 });
 Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety"});
 Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand", "황토": "Tan", "장미": "Rose", "라일락": "Lilac", "하늘": "Sky", "민트": "Mint", "세이지": "Sage",
@@ -4093,7 +4067,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "점검하지 못했어요. 삭제 완료로 간주하지 않아요.": "The check failed. Deletion completion is not assumed.",
   "삭제 요청을 접수했어요. 정리와 백업 처리 상태는 삭제 처리 내역에서 확인해 주세요.": "Deletion requested. Check cleanup and backup status in deletion history.",
   "페르소나·모델이 정해진 채로 들어가요": "Comes in with its persona and model set",
-  "여럿이 회의해 결론을 내요": "Several members meet and reach a conclusion",
   "n8n으로 보내기": "Send to n8n",
   "그 밖의 연동": "Other integrations",
   "흐름 노드": "Flow nodes",
@@ -4110,16 +4083,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기다릴 시간": "Time to wait",
   "예: 30m, 2h": "e.g. 30m, 2h",
   "넘길 일": "Work to hand over",
-  "{{input}}에 앞 결과가 들어가요": "{{input}} receives the previous result",
-  "받는 곳 이름": "Recipient name",
-  "서버 notify.json에 적은 이름": "A name listed in the server's notify.json",
   "부른 대화나 화면에 이 형식으로 돌려줘요.": "Returned to the calling chat or screen in this format.",
   "n8n 웹훅 주소": "n8n webhook URL",
   "오래 걸리는 일은 n8n이 끝나면 결과를 보내 줘요.": "For long jobs, n8n sends the result when it finishes.",
   "모델 자동": "Model: auto",
-  "전문가 · 협업": "Expert · collaboration",
-  "팀 · 회의": "Team · meeting",
-  "시작·끝": "Start/End",
   "아직 실행 안 함": "Not run yet",
   "저장한 뒤에 실행할 수 있어요.": "You can run it after saving.",
   "시작 조건": "Start condition"
@@ -4246,7 +4213,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "배경 사진 고르기": "Choose background photo",
   "자동화 이름을 적어 주세요": "Enter an automation name",
   "무엇을 하는 자동화인가요?": "What does this automation do?",
-  "$이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.": "$name uses letters, digits, _ and - only, no spaces.",
   "이미 쓰는 이름이에요. 다른 이름을 써 주세요.": "That name is taken. Choose another.",
   "예상 시간": "Est. time",
   "카테고리 없음": "No category",
@@ -4270,18 +4236,12 @@ Object.assign(window.ArkismI18nEN.strings, {
   "직접 부르기는 항상 켜져 있어요.": "Calling directly is always on.",
   "요일·시간 고르기 · 예: 월·수·금 09:00": "Pick days and time · e.g. Mon, Wed, Fri 09:00",
   "정해 둔 시간에 시작해요": "Starts at the set time",
-  "언제 칸의 형식을 확인해 주세요. 분 시 일 월 요일 (예: 0 9 * * 1-5)": "Check the format of the schedule: min hour day month weekday (e.g. 0 9 * * 1-5)",
   "일정 켜기": "Turn on schedule",
   "웹훅을 끄고 일정으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.": "Turn off the webhook and use a schedule? Only one of schedule and webhook can be on.",
-  "GitHub·메일·폴더에서 일이 생기면 · 준비 중이에요": "When something happens in GitHub, mail or folders · coming soon",
-  "이벤트 (준비 중)": "Event (coming soon)",
-  "이벤트로 시작하기는 아직 준비 중이에요. 웹훅으로 받을 수 있어요.": "Starting from events is not ready yet. You can receive them with a webhook.",
-  "주소와 토큰은 서버에서 이 명령으로 받아요 ·": "Get the address and token on the server with this command ·",
   "만들고 나면 주소가 생겨요": "An address appears once created",
   "이 주소로 요청이 오면 시작해요": "Starts when a request arrives at this address",
   "웹훅 켜기": "Turn on webhook",
   "일정을 끄고 웹훅으로 바꿀까요? 일정과 웹훅 중 하나만 켤 수 있어요.": "Turn off the schedule and use a webhook? Only one of schedule and webhook can be on.",
-  "웹훅 토큰은 Arkism에 저장하지 않아요.": "Arkism does not store the webhook token.",
   "그래프로 만들기 →": "Build as graph →",
   "그래프로 편집 →": "Edit as graph →",
   "먼저 자동화를 만든 뒤 그래프로 이어요.": "Create the automation first, then connect it as a graph.",
@@ -4305,7 +4265,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "이 단계만 시험": "Test this step only",
   "+ 채널 연결": "+ Connect channel",
   "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요": "Choose where progress goes · connect bots in Settings › Messengers",
-  "아직 연결한 채널이 없어요 · 디스코드·텔레그램·슬랙": "No channel connected yet · Discord, Telegram, Slack",
   "메신저": "Messenger",
   "나에게": "To me",
   "알림 시점": "Alert moments",
@@ -4314,31 +4273,25 @@ Object.assign(window.ArkismI18nEN.strings, {
   "같은 단계로 새 자동화를 만들어요": "Create a new automation with the same steps",
   "정의를 영구히 지워요 · 지난 실행 기록은 남아요": "Delete the definition permanently · past runs remain",
   "자동화 이름을 적어 주세요.": "Enter an automation name.",
-  "만들었어요. 테스트 탭에서 시험해 보세요.": "Created. Try it in the Test tab.",
-  "여기서 돌린 실행도 실제 실행이에요. 기록과 이번 달 한도에 남아요.": "Runs here are real runs. They count in history and this month's limit.",
   "실행 기록 보기": "View run history",
   "맡길 주제를 적고 실행하면 단계별 진행과 중간 결과가 여기에 보여요.": "Enter a topic and run to see step progress and interim results here.",
   "(맡긴 주제 없음)": "(no topic given)",
   "하는 중…": "Working…",
   "중간 결과가 생기면 여기에 보여요.": "Interim results appear here.",
   "그래프로 보기": "View as graph",
-  "테스트 탭에서 돌린 것도 여기 남아요": "Runs from the Test tab are kept here too",
   "이 자동화는 아직 실행한 적이 없어요.": "This automation has not run yet.",
   "테스트": "Test",
-  "여기까지 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.": "Run requested. The server runner starts within 10 seconds.",
+  "여기까지 실행을 맡겼어요. 곧 시작해요.": "Run up to here queued. It starts shortly.",
   "실행 방식": "Run mode",
   "모든 실행 방식": "All run modes",
   "+ 새 워크플로우": "+ New workflow",
   "직접": "Direct",
   "이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?": "This channel is already connected elsewhere. Switch it to this automation?",
-  "준비 중": "Coming soon",
   "예: GitHub PR 열림": "e.g. GitHub PR opened",
-  "템플릿·실행 방식·웹훅을 예전 설정 창에서 바꿔요": "Change the template, run mode and webhook in the classic settings window",
   "판 이력": "Version history"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "전문가 · 워커 최대 {0}": "Expert · up to {0} workers",
-  "단계 {0}개 · 만든 뒤 테스트 탭에서 전체를 시험해요": "{0} steps · test them all in the Test tab after creating",
   "약 ${0}": "About ${0}",
   "확인해 주세요{0}": "Please confirm{0}",
   "${0}으로 부르거나 화면의 실행 버튼": "Call with ${0} or the Run button",
@@ -4352,7 +4305,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "전문가 · {0}": "Expert · {0}",
   "최대 {0}분": "Up to {0} min",
   "되돌아가는 선은 {0}번까지": "Loop-back edges up to {0} times",
-  "목록에서 숨기고 ${0} 부르기를 멈춰요": "Hide from the list and stop calling ${0}",
   "${0}에게 맡길 주제…": "Topic to give ${0}…",
   "{0}단계 중 {1}단계 · {2}": "Step {1} of {0} · {2}"
 });
@@ -4556,7 +4508,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "끝나면 알려줌을 고르면 n8n이 callback_url로 결과를 돌려줄 때까지 멈춰요. 서버에 공개 주소가 있어야 해요.": "With notify-when-done, the run waits until n8n posts the result to callback_url. The server needs a public address.",
-  "팀 노드": "Team node",
   "누가 맡나": "Who does it",
   "노드 종류": "Node type",
   "무엇을 하나": "What it does",
@@ -4568,11 +4519,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "허용 범위": "Allowed scope",
   "웹 검색과 자료 읽기만 허용": "Web search and reading only",
   "질문마다 출처 3개와 요약": "3 sources and a summary per question",
-  "읽기만 · 동시": "Read only · parallel",
-  "쓰기 · 차례로": "Write · in turn",
   "나눠서 맡기기": "Split the work",
   "나눠서 맡기기 켜기": "Turn on split work",
-  "켜면 이 노드가 일을 나눠 워커에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.": "When on, this node splits the work across workers and merges the results. Use it when you can't tell in advance how many sub-questions there are.",
   "전문가 고르기": "Choose an expert",
   "워커 전문가": "Worker expert",
   "워커 — 전문가": "Workers — experts",
@@ -4720,16 +4668,13 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.strings, {
   "정해 둔 요일·시간에 시작": "Starts on the days and times you set",
   "주소로 요청이 오면 시작": "Starts when a request hits the address",
-  "GitHub·메일·폴더 · 준비 중": "GitHub · mail · folders · coming soon",
   "AI 에이전트 (직접 쓰기)": "AI agent (write it yourself)",
   "보낼 곳": "Send to",
   "보낼 곳 빼기": "Remove destination",
-  "디스코드 알림은 준비 중": "Discord notices coming soon",
   "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요": "Call from a channel · connect bots in Settings › Messengers",
   "단계마다 정해요": "Set per step",
   "모델을 비워 둔 AI 단계가 이걸 써요": "AI steps with no model use this",
-  "단계마다 바꿀 수 있어요": "Each step can change it",
-  "예전 설정 창": "Old settings window"
+  "단계마다 바꿀 수 있어요": "Each step can change it"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}은 이미 켜져 있어요.": "{0} is already on.",
@@ -4872,7 +4817,6 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} · 다음 실행 {1}": "{0} · next run {1}",
-  "${0}로 부르거나 실행을 눌렀을 때 시작해요.": "Starts when called as ${0} or when you press Run.",
   "{0}단계 (앞선 실행)": "{0} steps (earlier run)",
   "{0}가 끝나면 이어서 실행해요.": "Runs after {0} finishes."
 });
@@ -5226,6 +5170,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
   "검토할 기억이 생겼어요": "New memories to review", "Arkism 연결이 끊겼어요": "Arkism lost its connection", "연결을 확인해 주세요.": "Check the connection.",
   "작업이 끝났어요": "A job finished", "작업이 실패했어요": "A job failed",
+  "확인이 필요해요": "Your answer is needed", "Arkism에서 승인하거나 거절해 주세요.": "Approve or decline it in Arkism.",
   "에이전트가 모델 중계기를 쓸 때 필요한 토큰이에요. 다시 만들면 예전 토큰은 막혀요.": "Agents need this token to use the model gateway. Making a new one blocks the old token.",
   "모델 라우터": "Model router", "라우터 토큰": "Router token",
   "다른 앱이 이미 쓰는 키예요. 다른 조합을 골라 주세요.": "Another app already uses this key. Pick another combination.", "이 조합은 단축키로 쓸 수 없어요.": "This combination can't be a shortcut.",
@@ -5383,7 +5328,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "부른 실행 결과": "Called run results",
   "@이름으로 부른 실행의 최종 결과와 전달 상태": "Final results and delivery status of runs called by @name",
   "아직 @이름으로 부른 실행이 없어요.": "No runs called by @name yet.",
-  "함께 실행한 작업": "Related executions",
   "회의 결과": "Meeting result",
   "하위 실행": "Child run",
   "사람의 결정이 필요해요": "A human decision is needed",
@@ -5394,7 +5338,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "대화로 전달": "Conversation delivery",
   "보냈는지 확인되지 않아 자동으로 다시 보내지 않아요. 원래 대화와 저장된 메시지 영수증을 먼저 확인해 주세요.": "Delivery is uncertain, so it is not resent automatically. Check the original conversation and stored message receipts first.",
   "권한이나 대화 상태를 확인해 주세요. 전달을 복구하려고 작업을 다시 실행하지 마세요.": "Check permissions and the conversation state. Do not rerun the task to recover delivery.",
-  "서비스가 메시지 접수를 확인했어요. 사람이 읽었다는 뜻은 아니에요.": "The service confirmed message receipt. This does not mean a person read it.",
   "아직 결론이 없어요.": "There is no conclusion yet.",
   "전체 회의 기록": "Full meeting history"
 });
@@ -5423,12 +5366,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "복구 요청을 저장했어요. 실제 전달 상태를 다시 확인해 주세요.": "Recovery requested. Check the actual delivery state again.",
   "복구 요청 결과를 확인하지 못했어요. 새로고침해 현재 상태와 권한을 확인해 주세요.": "The recovery outcome could not be confirmed. Refresh to check the current state and permissions."
 });
-Object.assign(window.ArkismI18nEN.patterns, { "확인한 메시지: {0}": "Confirmed messages: {0}" });
+Object.assign(window.ArkismI18nEN.patterns, { });
 Object.assign(window.ArkismI18nEN.strings, {
-  "이 PC에서는 만들고 저장만 돼요. 실행은 서버에 연결하면 돼요.": "On this PC you can only create and save. Connect to a server to run.",
-  "역할·모델·도구를 정해 혼자 일해요": "Set a role, model and tools; it works alone",
-  "여러 역할이 회의해요": "Several roles meet together",
-  "일정·분기·승인 순서를 정해요": "Set the order: schedule, branches, approvals"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
@@ -5945,5 +5884,113 @@ Object.assign(window.ArkismI18nEN.strings, {
   "다시 돌릴 실패 기록을 찾지 못했어요.": "No failed run to retry.", "마지막 실패 실행을 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry the last failed run from where it failed? Finished steps keep their results."
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "실행당 평균 {0} · 토큰 {1}": "{0} per run · {1} tokens", "가장 긴 실행 {0}": "Longest run {0}"
+"가장 긴 실행 {0}": "Longest run {0}"
+});
+// #481 one workflow: new workflow editor, AI task node, meeting node, run result
+Object.assign(window.ArkismI18nEN.strings, {
+  "이름은 저장할 때 정해요": "Name it when you save", "전문가 불러오기": "Load an expert",  "무엇을 할지 한 줄 적기": "Write one line on what to do", "돌려줄 것": "Returns", "앞 노드 결과": "Previous node's result", "부르는 법": "How to call",
+  "여기부터 눌러 보세요": "Start here", "AI 작업": "AI task", "비우면 앞 단계 결과로 일해요": "Leave empty to work on the previous step's result",
+  "고르지 않음": "None", "고르면 그 전문가의 지시·모델을 채워요": "Picking one fills in that expert's instructions and model",
+  "이름, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요.": "Set the name, scope, splitting and skills in Details.",
+  "이 노드를 전문가로 저장": "Save this node as an expert", "전문가 불러오기 ›": "Load an expert ›",
+  "하고 싶은 일을 한 줄로 적으면 AI가 노드를 짜 줘요 · 예: 매일 아침 열린 PR을 모아 요약해서 보내 줘": "Write what you want in one line and AI lays out the nodes · e.g. every morning, summarize open PRs and send it",
+  "AI에게 맡길 일": "What to ask the AI", "짜는 중…": "Laying out…", "노드 짜기": "Lay out nodes", "무엇을 할지 한 줄 적어 주세요.": "Write one line on what to do.",
+  "AI 작업 · 전문가 불러옴": "AI task · expert loaded", "전문가로 저장": "Save as expert", "저장할 때 정해요": "Set when you save",
+  "「AI 작업」 노드에 무엇을 할지 한 줄 적어요.": "Write one line on what to do in the “AI task” node.","처음이라면": "Getting started",
+  "만들어 둔 전문가가 있으면 노드에서 「전문가 불러오기」로 골라요. 잘 되는 노드는 전문가로 저장해 다시 써요.": "If you have experts, pick one with “Load an expert” on a node. Save a node that works well as an expert to reuse it.",
+  "노드를 더하려면 아래 「+ 노드 추가」나 출력 점을 끌어요. 회의도 노드 종류에서 골라요.": "To add nodes, use “+ Add node” below or drag an output dot. Pick a meeting from the node kind too.",
+  "모델·추론·스킬은 이 노드 그대로 넣어요. 다른 워크플로우에서 「전문가 불러오기」로 쓰고 @이름으로 불러요.": "The model, reasoning and skills come from this node. Use it in other workflows with “Load an expert” and call it by @name.",
+  "참여자 빼기": "Remove participant", "+ 참여자 넣기": "+ Add participant", "참여자 넣기": "Add participant",
+  "위에서부터 말해요. 처음 넣은 사람이 진행자예요.": "They speak top to bottom. The first one added leads.", "참여자는 전문가예요. 먼저 전문가를 만들어 주세요.": "Participants are experts. Create an expert first.",
+  "회의에 참여할 전문가를 한 명 이상 넣어 주세요.": "Add at least one expert to the meeting.", "불러온 전문가 · 안 골라도 돼요": "Loaded expert · optional",
+  "auto면 할 일에 맞는 모델을 골라요": "auto picks a model that fits the task", "할 일 한 줄 · 모델은 자동": "One-line task · model on auto",
+  "여러 AI가 의논해 결론 내요": "Several AIs discuss and conclude", "최종 결과": "Final result", "마지막 단계가 낸 글이에요": "What the last step wrote",
+  "하위 실행 · 회의 결과": "Child runs · meeting results", "눌러서 그 실행의 결과를 열어요": "Click to open that run's result", "열기 →": "Open →",
+  "확인해 주세요 · 사람의 결정이 필요해요": "Please check · a person needs to decide", "전달 상태": "Delivery", "결과를 보낸 곳과 성공 여부": "Where the result went and whether it arrived", "원래 대화": "Original conversation"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "${0} · 실행 버튼": "${0} · Run button", "{0} · 바꾸기": "{0} · change", "AI가 노드 {0}개를 바꿨어요. 바뀐 노드에 표시했어요.": "AI changed {0} nodes and marked them.",
+  "@{0} 전문가로 저장했어요. 다른 워크플로우에서 불러올 수 있어요.": "Saved as expert @{0}. Other workflows can load it.", "{0} 회의": "{0} meeting",
+  "확인해 주세요 · {0} 단계에서 멈췄어요": "Please check · stopped at {0}"
+});
+// Flow first-use fixes (2026-10-30): one 요일·시간 picker, webhook address, 받는 곳 picker, @이름 everywhere.
+Object.assign(window.ArkismI18nEN.strings, {
+  "@이름은 띄어쓰기 없이 글자·숫자·_·-만 써요.": "An @name uses letters, digits, _ and - only, with no spaces.",
+  "저장하고 나면 주소와 토큰이 생겨요": "The address and token appear once you save", "저장하고 나면 주소와 토큰이 생겨요.": "The address and token appear once you save.",
+  "빈 칸이나 형식을 확인해 주세요. @이름은 띄어쓰기 없이 글자·숫자·_·-만 써요. 앞으로 가는 선이 원을 이루면 저장되지 않아요(되돌아가는 선은 횟수를 정해요).": "Check for empty fields or formats. An @name uses letters, digits, _ and - only. Forward lines that form a loop cannot be saved (lines going back set a count).",
+  "주소·토큰 보기": "Show address and token", "주소 (POST)": "Address (POST)",
+  "이 주소는 이 PC 안에서만 열려요. 다른 서비스에서 부르려면 서버에 연결해 주세요.": "This address only works on this PC. Connect to a server to call it from another service.",
+  "토큰은 비밀번호처럼 다뤄 주세요. 보낼 때 위 헤더에 넣어요.": "Treat the token like a password. Send it in the header above.",
+  "주소와 토큰은 이 Arkism의 주인만 볼 수 있어요.": "Only the owner of this Arkism can see the address and token.",
+  "주소를 받지 못했어요. 잠시 뒤 다시 눌러 주세요.": "Couldn't get the address. Try again in a moment.",
+  "코딩 에이전트 채팅에 @이름을 치면 불러요. 부르면 실행기가 그래프대로 돌리고, 부른 자리에는 진행과 결과를 보고해요. AI 칸은 칸마다 정한 모델이 맡아요.": "Type @name in a coding agent chat to call it. The runner follows the graph and reports progress and results back where you called it. Each AI block uses the model set for it.",
+  "@이름·화면에서만 돌아요": "Runs only from @name or this screen",
+  "코딩 에이전트 채팅에 @이름을 치면 이 워크플로우를 불러요": "Type @name in a coding agent chat to call this workflow",
+  "직접 — @이름·실행 버튼으로만": "By hand — @name or the Run button only", "정한 요일·시간마다": "On chosen days and times", "웹훅 — 주소로 요청이 오면": "Webhook — when a request reaches the address",
+  "언제 시작할까요": "When should it start", "제한 없음": "No limit",
+  "AI 노드에 모델을 안 정하면 이 모델로 돌아요. 비워 두면 자동으로 골라요": "AI nodes without a model use this one. Leave it empty to pick automatically",
+  "멈추는 조건 — 비워 두면 제한 없이 끝날 때까지 돌아요.": "Stop conditions — leave empty to run until it finishes.",
+  "만들면 그래프 편집기가 열려요. 노드를 누르면 할 일을 적을 수 있어요.": "Creating it opens the graph editor. Click a node to write its task.",
+  "이름·@이름·언제 시작·배경 사진·자세히(모델·멈추는 조건)": "Name, @name, when it starts, cover photo, more (model, stop conditions)",
+  "웹훅으로 시작": "Starts by webhook", "서버의 알림 설정에 적은 이름이에요.": "The name in the server's notification settings.",
+  "메신저 연결하기": "Connect a messenger", "정한 요일·시간": "Chosen days and times", "주소와 토큰": "Address and token",
+  "저장하고 나면 여기서 주소와 토큰을 볼 수 있어요.": "Once you save, the address and token show here.",
+  "저장하면 바로 켜져요. 목록의 스위치로 끌 수 있어요.": "It turns on when you save. Turn it off with the switch in the list.",
+  "언제 시작": "Starts", "실행을 누르면 이름만 정하고 바로 돌려 봐요.": "Press Run, name it and try it right away.",
+  "저장하면 @이름으로 부를 수 있어요.": "Once saved, call it by @name.", "요일": "Days", "cron (분 시 일 월 요일)": "cron (min hour day month weekday)",
+  "분 시 일 월 요일 순서예요 · 예: 0 9 * * 1-5 는 평일 09:00": "Order: min hour day month weekday · e.g. 0 9 * * 1-5 is weekdays 09:00",
+  "형식이 맞지 않아요 · 예: 0 9 * * 1-5": "That format doesn't work · e.g. 0 9 * * 1-5",
+  "텔레그램·슬랙": "Telegram, Slack", "비워 두면 앞 단계 결과를 그대로 넘겨요": "Leave empty to pass the previous step's result as is",
+  "앞 단계 결과": "Previous step's result"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}으로 부르거나 화면의 실행 버튼": "Call it with {0} or the Run button on screen", "{0}로 부를 때만": "Only when called with {0}",
+  "채널에서 {0}로 이 자동화를 부르게 연결해요": "Connect a channel to call this automation with {0}", "목록에서 숨기고 {0} 부르기를 멈춰요": "Hide it from the list and stop {0} calls",
+  "{0}에게 맡길 주제…": "A topic for {0}…", "토큰 · 헤더 {0}": "Token · header {0}",
+  "AI가 제목을 '{0}'(으)로, 부르는 이름을 @{1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and called it @{1}. You can change both in settings.",
+  "코딩 에이전트 채팅에 {0}를 치면 그래프대로 돌고, 부른 자리에는 진행과 결과를 보고해요.": "Type {0} in a coding agent chat to run the graph; progress and results come back where you called it.",
+  "{0}에게 맡길 일…": "A task for {0}…", "{0} · 실행 버튼": "{0} · Run button", "아직 연결한 {0}이 없어요.": "No {0} connected yet.",
+  "{0} · 설정 › 메신저에 없어요": "{0} · not in Settings › Messenger", "코딩 에이전트 채팅에 {0}를 치거나 실행을 눌렀을 때 시작해요.": "Starts when you type {0} in a coding agent chat or press Run.",
+  "{0}에게 맡길 일 (비워도 돼요)": "A task for {0} (optional)"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "예상 비용 (API 요금 기준)": "Estimated cost (at API rates)", "아직 연결한 채널이 없어요 · 텔레그램·슬랙": "No channel connected yet · Telegram, Slack",
+  "디스코드로는 아직 보내지 않아요": "Sending to Discord is not supported yet", "만들었어요. 지금 실행 탭에서 돌려 보세요.": "Created. Run it from the Run now tab.",
+  "연습이 아니라 실제로 돌아요. 기록과 이번 달 한도에 남아요.": "This is a real run, not practice. It counts toward history and this month's limit.",
+  "지금 실행 탭에서 돌린 것도 여기 남아요": "Runs from the Run now tab show up here too", "모두 보기": "Show all",
+  "AI 하나가 혼자 맡아요": "One AI handles it alone", "정한 단계를 차례로 돌아요": "Runs the set steps in order", "여러 AI가 회의로 정해요": "Several AIs decide in a meeting",
+  "조건에 맞는 워크플로우가 없어요": "No workflows match", "필터 지우기": "Clear filters",
+  "예: 매일 아침 9시에 열린 PR을 요약해서 텔레그램으로 보내 줘": "e.g. Every morning at 9, summarize open PRs and send them to Telegram",
+  "하고 싶은 일": "What you want done", "아직 워크플로우가 없어요": "No workflows yet",
+  "하고 싶은 일을 한 줄 적으면 AI가 단계를 짜요. 비워 두고 누르면 빈 편집기가 열려요.": "Write one line about what you want and AI drafts the steps. Leave it empty to open a blank editor.",
+  "직접 실행": "Run by hand", "저장하고 바로 한 번 돌려요": "Saves, then runs it once", "저장한 역할": "Saved role", "생각하는 깊이": "Thinking depth",
+  "앞 단계 결과는 알아서 뒤에 붙여요": "The previous step's result is added at the end", "{{input}}이라고 쓴 자리에 앞 단계 결과가 들어가요": "The previous step's result goes where you write {{input}}",
+  "파일 바꾸기": "Change files", "안 함 · 읽기만": "No · read only", "함 · 한 번에 하나씩": "Yes · one at a time",
+  "켜면 이 노드가 일을 나눠 다른 전문가에게 맡기고 결과를 합쳐요. 하위 질문이 몇 개일지 미리 모를 때 써요.": "When on, this node splits the work across other experts and merges the results. Use it when you can't tell in advance how many sub-questions there are.",
+  "모델 키를 찾지 못했어요. 설정 › 모델에서 키를 확인해 주세요.": "No model key found. Check the key in Settings › Models.",
+  "주소에 연결하지 못했어요. 주소와 인터넷 연결을 확인해 주세요.": "Could not reach the address. Check the address and your internet connection.",
+  "상대 서버가 오류로 답했어요. 주소와 권한을 확인해 주세요.": "The other server answered with an error. Check the address and permissions.",
+  "상대 서버의 답을 끝까지 읽지 못했어요.": "Could not read the other server's whole answer.", "받은 답이 너무 커요 (1MB 넘음).": "The answer is too large (over 1 MB).",
+  "정해진 시간 안에 끝나지 않았어요.": "It did not finish in time.", "명령을 시작하지 못했어요.": "Could not start the command.", "실행한 명령이 실패했어요.": "The command failed.",
+  "노드 설정을 확인해 주세요.": "Check the node settings.", "조건 식을 확인해 주세요.": "Check the condition.",
+  "AI가 답하지 못했어요. 모델 연결을 확인해 주세요.": "The AI did not answer. Check the model connection.", "목록이 너무 길어요 (최대 1000개).": "The list is too long (1000 at most).",
+  "반복할 목록을 찾지 못했어요. 목록 위치를 확인해 주세요.": "Could not find the list to repeat over. Check where the list is.",
+  "이 Arkism이 모르는 노드가 있어요. 앱을 업데이트해 주세요.": "This Arkism does not know one of the nodes. Update the app.",
+  "하위 실행이 실패했어요.": "A sub-run failed.", "앞선 호출 결과가 없어 자동으로 다시 하지 않았어요. 실패한 곳부터 다시 눌러 주세요.": "No earlier call result, so it was not retried automatically. Press retry from the failed step.",
+  "받는 곳을 찾지 못했어요. 알림 노드에서 받는 곳을 다시 골라 주세요.": "Recipient not found. Pick the recipient again in the notify node.",
+  "알림 설정을 읽지 못했어요. 설정 › 메신저에서 다시 연결해 주세요.": "Could not read the notification settings. Reconnect in Settings › Messenger.",
+  "알림을 보내지 못했어요. 설정 › 메신저에서 연결을 확인해 주세요.": "Could not send the notification. Check the connection in Settings › Messenger.",
+  "이 실행 방식에서는 할 수 없는 단계예요.": "This step can't run in this run mode.", "단계가 실패했어요.": "The step failed.",
+  "@이름·화면에서 부르면": "When called by @name or on screen", "API 요금으로 쳤을 때": "At API rates"
+});
+Object.assign(window.ArkismI18nEN.patterns, {
+  "단계 {0}개 · 만든 뒤 지금 실행 탭에서 돌려 봐요": "{0} steps · run it from the Run now tab after creating",
+  "{0} 단계가 있어 실행하면 실제로 밖으로 보내요.": "It has {0} steps, so running it really sends messages out.",
+  "실제 청구액이 아니에요 · 실행당 {0} · 토큰 {1}": "Not the actual bill · {0} per run · {1} tokens", "실제 청구액이 아니에요 · 토큰 {0}": "Not the actual bill · {0} tokens"
+});
+Object.assign(window.ArkismI18nEN.strings, { "자세히 · 모델과 멈추는 조건": "More · model and stop limits" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "이 워크플로우 이름을 정해 주세요\n목록에 크게 보이고, 코딩 에이전트 채팅에서 @이름으로 불러요. 나머지는 나중에 설정에서 바꿀 수 있어요.": "Name this workflow\nIt shows large in the list, and coding agent chats call it by @name. You can change the rest later in settings.",
+  "저장하고 실행": "Save and run",
+  "만들었어요. 설명·모델·배경 사진은 워크플로우 설정에서 바꿔요.": "Created. Change the description, model and cover photo in workflow settings."
 });

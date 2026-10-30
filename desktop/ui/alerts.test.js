@@ -85,3 +85,17 @@ test("runs that finished before 작업 완료 알림 was turned on are not sent"
   await tick();
   assert.deepEqual(sent, ["작업이 실패했어요"]);
 });
+
+test("a run that starts waiting for an answer is sent once, before finished runs", async () => {
+  const { server, sent, tick } = load();
+  server.runs = [{ id: "old-wait", crew_run: { status: "waiting", crew_id: "c", waiting: { node_id: "a" } } }];
+  await tick(); // baseline: a run already waiting is not news
+  await tick(); // the list read after the baseline
+  server.runs = [
+    { id: "old-wait", crew_run: { status: "waiting", crew_id: "c", waiting: { node_id: "a" } } },
+    { id: "new-wait", crew_run: { status: "waiting", crew_id: "c", waiting: { node_id: "b" } } }
+  ];
+  await tick();
+  await tick();
+  assert.deepEqual(sent, ["확인이 필요해요"]);
+});

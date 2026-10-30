@@ -89,6 +89,7 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .auto-pill.toggle.on { color: var(--nc-accent); border-color: var(--nc-accent); background: none; }
 .auto-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .auto-hint { margin: 6px 14px; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); }
+.v4-auto .auto-hint.warn, .auto-hint.warn { color: var(--warn); }
 .auto-switch-soon, .switch.soon { opacity: .45; }
 .auto-flow { padding: 14px 0 6px; }
 .auto-strip { display: flex; align-items: center; gap: 8px; padding: 0 14px 4px; overflow-x: auto; } /* one line across the full width: the arrows stretch between the steps */
@@ -223,10 +224,27 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .auto-goal-input { width: 100%; min-height: 32px; max-height: calc(4.5em + 14px); padding-top: 6px; padding-bottom: 6px; line-height: 1.5; field-sizing: content; overflow-y: auto; resize: none; }
 .v4-auto .auto-body > .ex-ai, .auto-sec > .ex-ai { margin-bottom: 4px; }
 .auto-sec > .auto-box + .ex-ai { margin-top: 10px; }
-/* 일정: words on top, then 요일 · 오전/오후 · 시:분 as buttons and two small number fields. */
+/* 일정: words on top, then the shared 요일·시간 picker (crewSchedule.picker). */
 .auto-sched { display: flex; flex-direction: column; align-items: stretch; gap: 8px; flex: 1; min-width: 0; padding: 4px 0; }
-.auto-sched-pick, .auto-days, .auto-ampm, .auto-time { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.auto-sched-pick { gap: 12px; }
 .auto-sched-say { width: 100%; }
-.auto-num { width: calc(44px * var(--fs, 1)); height: 30px; padding: 0 6px; box-sizing: border-box; text-align: center; font-size: calc(14px * var(--fs, 1)); font-variant-numeric: tabular-nums; field-sizing: fixed; }
-.auto-sched-next { font-size: calc(12px * var(--fs, 1)); }
+/* The one 요일·시간 picker: popup, settings window and start node. cron sits under 자세히. */
+.sched-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.sched-days { display: flex; flex-wrap: wrap; gap: 4px; }
+.sched-day { min-width: 32px; height: 32px; padding: 0 8px; border: 1px solid var(--nc-line); border-radius: 999px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.sched-day.on { color: var(--nc-accent); border-color: var(--nc-accent); }
+.sched-day:focus-visible, .sched-more > summary:focus-visible { outline: 2px solid var(--nc-accent); outline-offset: 2px; }
+.sched-time { height: 32px; padding: 0 8px; font-size: calc(14px * var(--fs, 1)); font-variant-numeric: tabular-nums; }
+.sched-next { font-size: calc(12px * var(--fs, 1)); }
+.sched-more { width: 100%; }
+.sched-more > summary, .wf-adv > summary { cursor: pointer; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.sched-more[open] { display: flex; flex-direction: column; gap: 4px; }
+.sched-more input { width: 100%; max-width: 240px; }
+.wf-adv { display: flex; flex-direction: column; gap: 10px; }
+.wf-adv[open] > summary { margin-bottom: 4px; }
+/* 웹훅 주소·토큰: one row each, the value wraps instead of pushing the copy button away. */
+.wf-hook { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.wf-hook-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 8px; width: 100%; }
+.wf-hook-row > small { grid-column: 1 / -1; }
+.wf-hook-row > code { min-width: 0; overflow-wrap: anywhere; font-size: calc(12px * var(--fs, 1)); }
+/* 확인 필요: a run waits for a person; said in words next to the ring. */
+.flow-need { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); font: 600 calc(12px * var(--fs, 1))/1 var(--sans); white-space: nowrap; }

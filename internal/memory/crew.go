@@ -810,6 +810,7 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 func crewRoutes(mux routeRegistrar, s *Service) {
 	unsplashRoutes(mux, s)
 	crewVersionRoutes(mux, s)
+	crewHookRoutes(mux, s)
 	mux.HandleFunc("GET /v1/crew", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.ListCrew(r.Context(), bearer(r), scopeQuery(r))
 		respond(w, out, e)
