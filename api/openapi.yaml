@@ -48478,6 +48478,12 @@
           },
           "inject_chars": {
             "type": "integer"
+          },
+          "estimated": {
+            "type": "integer"
+          },
+          "unused_after": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -48503,6 +48509,15 @@
           },
           "used": {
             "type": "integer"
+          },
+          "estimated": {
+            "type": "integer"
+          },
+          "unreceipted": {
+            "type": "integer"
+          },
+          "unused": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
