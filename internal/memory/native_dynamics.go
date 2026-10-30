@@ -119,30 +119,7 @@ func (s *Service) ProcessNativeDynamicsCapture(ctx context.Context, token string
 	if err != nil {
 		return NativeDynamicsReceipt{}, err
 	}
-	row, err := s.Repo.Get(ctx, colJobs, scope, capture.ID)
-	if err != nil {
-		return NativeDynamicsReceipt{}, err
-	}
-	p, err := nativeCapturePreview(row, scope, capture)
-	if err != nil {
-		return NativeDynamicsReceipt{}, err
-	}
-	if _, err := s.authorize(ctx, token, "read:agent_runs", scope, "", ""); err != nil {
-		return NativeDynamicsReceipt{}, err
-	}
-	deps, err := s.nativeAuthorizeProof(ctx, token, scope, nativeRoots(p.Evaluation, *p.Input))
-	if err != nil {
-		return NativeDynamicsReceipt{}, err
-	}
-	statePreview, err := s.Repo.Get(ctx, colJobs, scope, nativeStateID(p.Key))
-	if err != nil {
-		return NativeDynamicsReceipt{}, err
-	}
-	if statePreview.NativeDynamics == nil {
-		return NativeDynamicsReceipt{}, ErrConflict
-	}
-	// Every previous contributing source remains a publication/admission dependency.
-	priorDeps, err := s.nativeAuthorizeProof(ctx, token, scope, nativeDepRefs(statePreview.NativeDynamics.Dependencies))
+	prepared, err := s.prepareNativeCapture(ctx, token, scope, capture)
 	if err != nil {
 		return NativeDynamicsReceipt{}, err
 	}
@@ -152,10 +129,13 @@ func (s *Service) ProcessNativeDynamicsCapture(ctx context.Context, token string
 		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
 			return err
 		}
+		if e := dynamicsCoordinatedCaptureTx(ctx, tx, scope); e != nil {
+			return e
+		}
 		result = NativeDynamicsReceipt{}
 		blocked = nil
 		var transactionErr error
-		result, blocked, transactionErr = nativeProcessCaptureTx(ctx, tx, scope, capture, p, deps, priorDeps, statePreview)
+		result, blocked, transactionErr = nativeProcessCaptureTx(ctx, tx, scope, capture, prepared.payload, prepared.deps, prepared.priorDeps, prepared.statePreview)
 		return transactionErr
 	})
 	if err != nil {
@@ -168,6 +148,43 @@ func (s *Service) ProcessNativeDynamicsCapture(ctx context.Context, token string
 		return NativeDynamicsReceipt{}, err
 	}
 	return result, nil
+}
+
+type nativeCapturePreparation struct {
+	payload         *NativeDynamicsPayload
+	deps, priorDeps []NativeDynamicsDependency
+	statePreview    Record
+}
+
+func (s *Service) prepareNativeCapture(ctx context.Context, token string, scope Scope, capture Ref) (nativeCapturePreparation, error) {
+	row, err := s.Repo.Get(ctx, colJobs, scope, capture.ID)
+	if err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	p, err := nativeCapturePreview(row, scope, capture)
+	if err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	if _, err := s.authorize(ctx, token, "read:agent_runs", scope, "", ""); err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	deps, err := s.nativeAuthorizeProof(ctx, token, scope, nativeRoots(p.Evaluation, *p.Input))
+	if err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	statePreview, err := s.Repo.Get(ctx, colJobs, scope, nativeStateID(p.Key))
+	if err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	if statePreview.NativeDynamics == nil {
+		return nativeCapturePreparation{}, ErrConflict
+	}
+	// Every previous contributing source remains a publication/admission dependency.
+	priorDeps, err := s.nativeAuthorizeProof(ctx, token, scope, nativeDepRefs(statePreview.NativeDynamics.Dependencies))
+	if err != nil {
+		return nativeCapturePreparation{}, err
+	}
+	return nativeCapturePreparation{p, deps, priorDeps, statePreview}, nil
 }
 func nativeDepRefs(deps []NativeDynamicsDependency) []Ref {
 	refs := make([]Ref, 0, len(deps))

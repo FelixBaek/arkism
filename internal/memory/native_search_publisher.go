@@ -201,6 +201,9 @@ func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, 
 		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
 			return err
 		}
+		if e := s.dynamicsSnapshotReadTx(ctx, tx, in.Scope, previews); e != nil {
+			return e
+		}
 		if len(previews) == 0 {
 			return ctx.Err()
 		}
