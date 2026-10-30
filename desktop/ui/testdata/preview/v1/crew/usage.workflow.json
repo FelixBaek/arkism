@@ -1,0 +1,223 @@
+{
+ "kpi": {
+  "runs": 212,
+  "success_rate": 96.2,
+  "cost_usd": 68.4,
+  "cost_estimated": true,
+  "waiting": 0,
+  "oldest_waiting_at": null
+ },
+ "by_day": [
+  {
+   "date": "2026-09-30",
+   "ok": 7,
+   "failed": 0,
+   "workflow": 7
+  },
+  {
+   "date": "2026-10-01",
+   "ok": 3,
+   "failed": 0,
+   "workflow": 3
+  },
+  {
+   "date": "2026-10-02",
+   "ok": 6,
+   "failed": 0,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-03",
+   "ok": 5,
+   "failed": 1,
+   "workflow": 5
+  },
+  {
+   "date": "2026-10-04",
+   "ok": 10,
+   "failed": 0,
+   "workflow": 10
+  },
+  {
+   "date": "2026-10-05",
+   "ok": 9,
+   "failed": 0,
+   "workflow": 9
+  },
+  {
+   "date": "2026-10-06",
+   "ok": 6,
+   "failed": 1,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-07",
+   "ok": 6,
+   "failed": 0,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-08",
+   "ok": 5,
+   "failed": 0,
+   "workflow": 5
+  },
+  {
+   "date": "2026-10-09",
+   "ok": 9,
+   "failed": 1,
+   "workflow": 9
+  },
+  {
+   "date": "2026-10-10",
+   "ok": 4,
+   "failed": 1,
+   "workflow": 4
+  },
+  {
+   "date": "2026-10-11",
+   "ok": 10,
+   "failed": 1,
+   "workflow": 10
+  },
+  {
+   "date": "2026-10-12",
+   "ok": 3,
+   "failed": 0,
+   "workflow": 3
+  },
+  {
+   "date": "2026-10-13",
+   "ok": 3,
+   "failed": 1,
+   "workflow": 3
+  },
+  {
+   "date": "2026-10-14",
+   "ok": 6,
+   "failed": 0,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-15",
+   "ok": 5,
+   "failed": 0,
+   "workflow": 5
+  },
+  {
+   "date": "2026-10-16",
+   "ok": 7,
+   "failed": 0,
+   "workflow": 7
+  },
+  {
+   "date": "2026-10-17",
+   "ok": 6,
+   "failed": 0,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-18",
+   "ok": 6,
+   "failed": 1,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-19",
+   "ok": 6,
+   "failed": 0,
+   "workflow": 6
+  },
+  {
+   "date": "2026-10-20",
+   "ok": 9,
+   "failed": 0,
+   "workflow": 9
+  },
+  {
+   "date": "2026-10-21",
+   "ok": 8,
+   "failed": 0,
+   "workflow": 8
+  },
+  {
+   "date": "2026-10-22",
+   "ok": 5,
+   "failed": 0,
+   "workflow": 5
+  },
+  {
+   "date": "2026-10-23",
+   "ok": 8,
+   "failed": 0,
+   "workflow": 8
+  },
+  {
+   "date": "2026-10-24",
+   "ok": 3,
+   "failed": 0,
+   "workflow": 3
+  },
+  {
+   "date": "2026-10-25",
+   "ok": 8,
+   "failed": 1,
+   "workflow": 8
+  },
+  {
+   "date": "2026-10-26",
+   "ok": 8,
+   "failed": 0,
+   "workflow": 8
+  },
+  {
+   "date": "2026-10-27",
+   "ok": 10,
+   "failed": 0,
+   "workflow": 10
+  },
+  {
+   "date": "2026-10-28",
+   "ok": 5,
+   "failed": 0,
+   "workflow": 5
+  },
+  {
+   "date": "2026-10-29",
+   "ok": 5,
+   "failed": 1,
+   "workflow": 5
+  }
+ ],
+ "workflows": [
+  {
+   "id": "wf-release",
+   "name": "릴리스 점검",
+   "runs": 212,
+   "success_rate": 96.2,
+   "cost_usd": 68.4,
+   "tokens": 8100000,
+   "avg_ms": 190000,
+   "max_ms": 362000
+  }
+ ],
+ "failing_nodes": [
+  {
+   "workflow_id": "wf-research",
+   "node_id": "tags",
+   "failures": 5
+  },
+  {
+   "workflow_id": "wf-research",
+   "node_id": "ok",
+   "failures": 2
+  },
+  {
+   "workflow_id": "wf-research",
+   "node_id": "ship",
+   "failures": 1
+  }
+ ],
+ "agents": [],
+ "teams": []
+}

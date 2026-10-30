@@ -98,6 +98,15 @@ func migrateKeys(keys []map[string]any) {
 		k["secret_ref"], k["storage"] = ref, keystore.StorageKeyring
 		moved = true
 	}
+	for _, k := range keys { // a custom endpoint's extra headers move the same way, under their own entry
+		id, _ := k["id"].(string)
+		if ref, _ := k["headers_ref"].(string); ref != "" || id == "" || sOr(k["headers"]) == "" || !keystore.Available() {
+			continue
+		}
+		if ref, err := keystore.Put(id+".headers", str(k["headers"])); err == nil {
+			k["headers_ref"], moved = ref, true
+		}
+	}
 	if moved {
 		_ = saveKeys(keys) // on failure the file still holds the plaintext; the verified stored copies stand
 	}
@@ -123,7 +132,11 @@ func saveKeys(keys []map[string]any) error {
 			delete(row, "secret_ref")
 			row["storage"] = keystore.StorageFile
 		}
-		rows[i] = ordered(row, "id", "provider", "name", "key", "secret_ref", "storage", "base_url", "monthly_budget_usd", "created_at")
+		if ref, _ := row["headers_ref"].(string); ref != "" {
+			delete(row, "headers") // the header values are in the credential store too
+		}
+		rows[i] = ordered(row, "id", "provider", "name", "key", "secret_ref", "storage", "base_url", "monthly_budget_usd", "header_names",
+			"headers", "headers_ref", "created_at")
 	}
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -147,10 +160,46 @@ func publicKey(k map[string]any) host.Obj {
 	if len(r) > 4 {
 		r = r[len(r)-4:]
 	}
-	return host.Obj{{Key: "id", Value: k["id"]}, {Key: "provider", Value: k["provider"]}, {Key: "name", Value: k["name"]},
+	pub := host.Obj{{Key: "id", Value: k["id"]}, {Key: "provider", Value: k["provider"]}, {Key: "name", Value: k["name"]},
 		{Key: "last4", Value: string(r)}, {Key: "base_url", Value: sOr(k["base_url"])},
 		{Key: "monthly_budget_usd", Value: k["monthly_budget_usd"]}, {Key: "created_at", Value: k["created_at"]},
 		{Key: "storage", Value: keyStorage(k)}}
+	if names := headerNames(k); len(names) > 0 {
+		pub = append(pub, host.KV{Key: "header_names", Value: names})
+	}
+	return pub
+}
+
+// headerNames is what may be shown about a custom endpoint's extra headers: their names, never the values.
+func headerNames(k map[string]any) []any {
+	names := []any{}
+	for _, n := range list(k["header_names"]) {
+		if s, ok := n.(string); ok {
+			names = append(names, s)
+		}
+	}
+	return names
+}
+
+// headerLines turns the handoff's {name: value} into the stored "Name: Value" lines (host.HeaderPairs), sorted.
+func headerLines(m map[string]any) (string, []any) {
+	lines, names := []string{}, []any{}
+	for _, name := range sortedKeys(m) {
+		if v, ok := m[name].(string); ok && v != "" {
+			lines, names = append(lines, name+": "+v), append(names, name)
+		}
+	}
+	return strings.Join(lines, "\n"), names
+}
+
+// withHeaders adds a row's extra headers to a request's own; the request's own (its key) win.
+func withHeaders(headers map[string]string, k map[string]any) map[string]string {
+	for _, h := range host.HeaderPairs(k) {
+		if _, set := headers[h[0]]; !set {
+			headers[h[0]] = h[1]
+		}
+	}
+	return headers
 }
 
 // keyStorage is where a row's secret lives: "keyring" or "file".
@@ -175,21 +224,37 @@ func checkBaseURL(provider, baseURL string) error {
 }
 
 func addKey(provider, name, key, baseURL string, budget any, keyID string) (host.Obj, error) {
-	key = strings.TrimSpace(key)
+	return addKeyWith(provider, name, key, baseURL, budget, keyID, nil)
+}
+
+// checkNewKey validates a new key row before anything is read or stored.
+func checkNewKey(provider, name, key, baseURL string, headers map[string]any) error {
 	if !in(providers, provider) {
-		return nil, crewErr("제공자는 " + strings.Join(providers, "·") + " 중 하나여야 해요")
+		return crewErr("제공자는 " + strings.Join(providers, "·") + " 중 하나여야 해요")
 	}
 	if strings.TrimSpace(name) == "" || host.Len(name) > 60 {
-		return nil, crewErr("이름은 1~60자여야 해요")
+		return crewErr("이름은 1~60자여야 해요")
 	}
-	if host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0 {
-		return nil, crewErr("키가 비었거나 올바르지 않아요")
+	if !(provider == "custom" && key == "") && (host.Len(key) < 8 || strings.IndexFunc(key, unicode.IsSpace) >= 0) {
+		return crewErr("키가 비었거나 올바르지 않아요")
+	}
+	if len(headers) > 0 && provider != "custom" {
+		return crewErr("요청 헤더는 직접 추가한 제공자에만 넣을 수 있어요")
 	}
 	if err := checkBaseURL(provider, baseURL); err != nil {
-		return nil, err
+		return err
 	}
 	if provider == "custom" && baseURL == "" {
-		return nil, crewErr("직접 추가한 제공자는 주소가 필요해요")
+		return crewErr("직접 추가한 제공자는 주소가 필요해요")
+	}
+	return nil
+}
+
+// addKeyWith also stores a custom endpoint's extra headers ({name: value}); a custom endpoint may have no key.
+func addKeyWith(provider, name, key, baseURL string, budget any, keyID string, headers map[string]any) (host.Obj, error) {
+	key = strings.TrimSpace(key)
+	if err := checkNewKey(provider, name, key, baseURL, headers); err != nil {
+		return nil, err
 	}
 	keys, err := loadKeys()
 	if err != nil {
@@ -205,12 +270,22 @@ func addKey(provider, name, key, baseURL string, budget any, keyID string) (host
 	}
 	row := map[string]any{"id": keyID, "provider": provider, "name": strings.TrimSpace(name), "key": key, "base_url": baseURL,
 		"monthly_budget_usd": budget, "created_at": nowZ(), "storage": keystore.StorageFile}
-	if ref, err := keystore.Put(keyID, key); err == nil { // no store (or it failed): the file keeps the secret
-		row["secret_ref"], row["storage"] = ref, keystore.StorageKeyring
+	if key != "" {
+		if ref, err := keystore.Put(keyID, key); err == nil { // no store (or it failed): the file keeps the secret
+			row["secret_ref"], row["storage"] = ref, keystore.StorageKeyring
+		}
+	}
+	if lines, names := headerLines(headers); lines != "" {
+		row["headers"], row["header_names"] = lines, names
+		if ref, err := keystore.Put(keyID+".headers", lines); err == nil {
+			row["headers_ref"] = ref
+		}
 	}
 	if err := saveKeys(append(keys, row)); err != nil {
-		if ref, _ := row["secret_ref"].(string); ref != "" {
-			_ = keystore.Delete(ref)
+		for _, f := range []string{"secret_ref", "headers_ref"} {
+			if ref, _ := row[f].(string); ref != "" {
+				_ = keystore.Delete(ref)
+			}
 		}
 		return nil, err
 	}
@@ -226,8 +301,12 @@ func removeKey(keyID string) error {
 	for _, k := range keys {
 		if k["id"] != keyID {
 			kept = append(kept, k)
-		} else if ref, _ := k["secret_ref"].(string); ref != "" {
-			refs = append(refs, ref)
+		} else {
+			for _, f := range []string{"secret_ref", "headers_ref"} {
+				if ref, _ := k[f].(string); ref != "" {
+					refs = append(refs, ref)
+				}
+			}
 		}
 	}
 	if len(kept) == len(keys) {
@@ -268,7 +347,16 @@ func customEnv(env map[string]string, model string, key map[string]any) (map[str
 		return nil, crewErr(model + "에 맞는 직접 추가 키가 없어요")
 	}
 	delete(env, "ANTHROPIC_API_KEY")
-	for k, v := range map[string]string{"ANTHROPIC_BASE_URL": host.AnthropicURL(sOr(key["base_url"])), "ANTHROPIC_AUTH_TOKEN": str(key["key"]),
+	token := sOr(key["key"])
+	if token == "" {
+		// A keyless endpoint: Claude Code with no token would fall back to the owner's own login and send it there.
+		token = "no-key"
+	}
+	delete(env, "ANTHROPIC_CUSTOM_HEADERS")
+	if lines := sOr(key["headers"]); lines != "" {
+		env["ANTHROPIC_CUSTOM_HEADERS"] = lines
+	}
+	for k, v := range map[string]string{"ANTHROPIC_BASE_URL": host.AnthropicURL(sOr(key["base_url"])), "ANTHROPIC_AUTH_TOKEN": token,
 		"ANTHROPIC_MODEL": model, "ANTHROPIC_DEFAULT_OPUS_MODEL": model, "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
 		"ANTHROPIC_DEFAULT_HAIKU_MODEL": model, "CLAUDE_CODE_SUBAGENT_MODEL": model, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"} {
 		env[k] = v
@@ -358,6 +446,16 @@ func redact(text string, env map[string]string) string {
 			text = strings.ReplaceAll(text, v, "***")
 		}
 	}
+	return redactHeaders(text, map[string]any{"headers": env["ANTHROPIC_CUSTOM_HEADERS"]})
+}
+
+// redactHeaders masks a row's extra header values (secrets like its key) in text.
+func redactHeaders(text string, k map[string]any) string {
+	for _, h := range host.HeaderPairs(k) {
+		if len(h[1]) >= 4 {
+			text = strings.ReplaceAll(text, h[1], "***")
+		}
+	}
 	return text
 }
 
@@ -437,7 +535,8 @@ func keyTestErr(err error) error {
 	return crewErr("연결 실패 (" + strconv.Itoa(he.Code) + ")")
 }
 
-func testKey(provider, key, baseURL string, timeout time.Duration) ([]string, error) {
+// extra is the endpoint's stored "Name: Value" lines (custom only), sent beside the key.
+func testKey(provider, key, baseURL, extra string, timeout time.Duration) ([]string, error) {
 	if err := checkBaseURL(provider, baseURL); err != nil { // the key must not reach an address addKey would refuse (#169)
 		return nil, err
 	}
@@ -455,10 +554,10 @@ func testKey(provider, key, baseURL string, timeout time.Duration) ([]string, er
 		headers["x-api-key"], headers["anthropic-version"] = key, "2023-06-01"
 	case provider == "google" && baseURL == "":
 		headers["x-goog-api-key"] = key
-	default:
+	case key != "": // a custom endpoint saved without a key gets no Authorization at all
 		headers["Authorization"] = bearer + key
 	}
-	raw, err := providerDo(http.MethodGet, base+"/models", nil, headers, timeout, 2<<20)
+	raw, err := providerDo(http.MethodGet, base+"/models", nil, withHeaders(headers, map[string]any{"headers": extra}), timeout, 2<<20)
 	if err != nil {
 		return nil, keyTestErr(err)
 	}
@@ -507,8 +606,11 @@ func probeAPI(key map[string]any, model string) string {
 	}
 	body := host.MustDumps(host.Obj{{Key: "model", Value: model}, {Key: "max_tokens", Value: 1},
 		{Key: "messages", Value: []any{host.Obj{{Key: "role", Value: "user"}, {Key: "content", Value: "hi"}}}}}, host.DumpOpts{})
-	_, err = providerDo(http.MethodPost, url, []byte(body), map[string]string{"x-api-key": str(key["key"]), "Authorization": bearer + str(key["key"]),
-		"anthropic-version": "2023-06-01", "content-type": jsonType}, 15*time.Second, 1<<20)
+	headers := map[string]string{"anthropic-version": "2023-06-01", "content-type": jsonType}
+	if secret := sOr(key["key"]); secret != "" {
+		headers["x-api-key"], headers["Authorization"] = secret, bearer+secret
+	}
+	_, err = providerDo(http.MethodPost, url, []byte(body), withHeaders(headers, key), 15*time.Second, 1<<20)
 	var he *host.HTTPError
 	switch {
 	case err == nil:
@@ -548,7 +650,7 @@ func customInfo(key map[string]any, refresh bool) (map[string]any, error) {
 			return hit, nil
 		}
 	}
-	names, err := testKeyFn("custom", str(key["key"]), sOr(key["base_url"]), 10*time.Second)
+	names, err := testKeyFn("custom", sOr(key["key"]), sOr(key["base_url"]), sOr(key["headers"]), 10*time.Second)
 	if err != nil {
 		if !isCrewErr(err) {
 			return nil, err
@@ -602,7 +704,7 @@ func customKeyFor(model string, keys []map[string]any, provider string) (map[str
 	}
 	mine := []map[string]any{}
 	for _, k := range keys {
-		if k["provider"] == "custom" && truthy(k["key"]) && (provider == "" || host.CustomPID(k) == provider) {
+		if k["provider"] == "custom" && host.KeyUsable(k) && (provider == "" || host.CustomPID(k) == provider) {
 			mine = append(mine, k)
 		}
 	}

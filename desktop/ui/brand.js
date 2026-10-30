@@ -1,4 +1,4 @@
-// Brand marks for models, providers and messengers (img/brand: LobeHub icons + Phosphor logos, both MIT), and what
+// Brand marks for models, providers, messengers and MCP servers (img/brand: LobeHub icons + Phosphor logos, both MIT), and what
 // kind of input a model takes. One place, so every picker and row shows the same logo for the same name.
 (() => {
   // [pattern on a model / provider / messenger name, file, coloured?]
@@ -21,7 +21,11 @@
     [/^opencode/, "opencode", false],
     [/^(discord|디스코드)/, "discord-color", true],
     [/^(telegram|텔레그램)/, "telegram-color", true],
-    [/^(slack|슬랙)/, "slack-logo", false]
+    [/^(slack|슬랙)/, "slack-logo", false],
+    [/^github(?!.*copilot)/, "github", false],
+    [/^figma/, "figma-color", true],
+    [/^notion/, "notion", false],
+    [/^cloudflare/, "cloudflare-color", true]
   ];
   const find = (name) => {
     const n = String(name || "").trim().toLowerCase().replace(/^antigravity-/, "");

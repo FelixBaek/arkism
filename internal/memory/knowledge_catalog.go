@@ -201,8 +201,9 @@ func (s *Service) ListKnowledgeDocuments(ctx context.Context, token string, scop
 }
 
 // KnowledgeSearchInput is RetrieveKnowledge without binding IDs: the active
-// bindings of the profile are resolved here. Omitted profile version and
-// skill fields take the profile's v1 defaults.
+// bindings of the profile are resolved here. An omitted profile is the default
+// scope every agent shares; omitted profile version and skill fields take the
+// profile's v1 defaults.
 type KnowledgeSearchInput struct {
 	Scope          Scope  `json:"scope"`
 	ProfileID      string `json:"specialist_profile_id"`
@@ -226,6 +227,9 @@ type KnowledgeSearchResult struct {
 
 func (s *Service) SearchKnowledge(ctx context.Context, token string, in KnowledgeSearchInput) (KnowledgeSearchResult, error) {
 	out := KnowledgeSearchResult{Authority: "data_only_untrusted", BindingIDs: []string{}}
+	if in.ProfileID == "" {
+		in.ProfileID = knowledgeDefaultProfile
+	}
 	if in.ProfileVersion == "" {
 		in.ProfileVersion = "v1"
 	}

@@ -42,8 +42,7 @@ var defaultModels = map[string][]string{
 }
 
 // logins is where each CLI keeps its login; present means logged in.
-var logins = map[string]string{"claude": ".claude/.credentials.json", "codex": ".codex/auth.json", "gemini": ".gemini/oauth_creds.json",
-	"grok": ".grok/auth.json", "agy": ".gemini/antigravity-cli/antigravity-oauth-token"}
+var logins = host.CLILogins
 
 func stateFile(name string) string { return filepath.Join(host.AgentsState, name) }
 
@@ -484,6 +483,9 @@ func keyRow(pub host.Obj) host.Obj {
 	if b := get("monthly_budget_usd"); b != nil {
 		row = append(row, host.KV{Key: "monthly_budget_usd", Value: b})
 	}
+	if names, _ := get("header_names").([]any); len(names) > 0 { // only then: an older server would refuse the field
+		row = append(row, host.KV{Key: "header_names", Value: names})
+	}
 	created := get("created_at")
 	if !truthy(created) {
 		created = "1970-01-01T00:00:00Z"
@@ -686,7 +688,7 @@ func testModel(model string, runner runFn, provider string) (string, error) {
 }
 
 type (
-	keysTester  func(provider, key, baseURL string) ([]string, error)
+	keysTester  func(provider, key, baseURL, headers string) ([]string, error)
 	modelTester func(model, provider string) (string, error)
 )
 
@@ -695,21 +697,23 @@ func strField(q map[string]any, k string) string { s, _ := q[k].(string); return
 // carryOut turns one handoff request into a result row for Arkism. It never puts the key in the result.
 func carryOut(item map[string]any, testKeys keysTester, testModels modelTester) (map[string]any, error) {
 	if testKeys == nil {
-		testKeys = func(p, k, b string) ([]string, error) { return testKeyFn(p, k, b, 10*time.Second) }
+		testKeys = func(p, k, b, h string) ([]string, error) { return testKeyFn(p, k, b, h, 10*time.Second) }
 	}
 	if testModels == nil {
 		testModels = func(m, p string) (string, error) { return testModel(m, nil, p) }
 	}
 	q := obj(item["request"])
 	key := sOr(item["key"])
+	headers, _ := item["headers"].(map[string]any)
+	lines, _ := headerLines(headers)
 	res := map[string]any{"id": getOr(q, "id", ""), "status": "done"}
 	var err error
 	switch q["kind"] {
 	case "key_add":
-		_, err = addKey(strField(q, "provider"), strField(q, "name"), key, strField(q, "base_url"), q["monthly_budget_usd"], strField(q, "key_id"))
+		_, err = addKeyWith(strField(q, "provider"), strField(q, "name"), key, strField(q, "base_url"), q["monthly_budget_usd"], strField(q, "key_id"), headers)
 	case "key_test":
 		var models []string
-		if models, err = testKeys(strField(q, "provider"), key, strField(q, "base_url")); err == nil {
+		if models, err = testKeys(strField(q, "provider"), key, strField(q, "base_url"), lines); err == nil {
 			res["models"] = toAny(models)
 		}
 	case "key_remove":
@@ -745,6 +749,7 @@ func carryOut(item map[string]any, testKeys keysTester, testModels modelTester) 
 		if key != "" {
 			msg = strings.ReplaceAll(msg, key, "***")
 		}
+		msg = redactHeaders(msg, map[string]any{"headers": lines})
 		res["status"], res["error"] = "failed", msg
 	}
 	return res, nil

@@ -7,6 +7,7 @@ window.ArkismGatewayToken = (ctx) => {
   const { el, button, tauri, notice } = ctx;
   if (!tauri) return null;
   let later = false; // 나중에: the 확인해 주세요 card stays hidden until the app restarts
+  let tried = false; // a missing or broken token is made again once without asking; the card shows only if that fails
   const when = (ms) => new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric" }).format(new Date(ms));
   const TEXT = {
     set: ["설정됨", "", "에이전트가 모델 중계기를 쓸 때 필요한 토큰이에요. 다시 만들면 예전 토큰은 막혀요."],
@@ -23,19 +24,20 @@ window.ArkismGatewayToken = (ctx) => {
     const sec = sideSec("모델 라우터", line, note);
     sec.classList.add("gw-sec");
     let busy = false;
-    async function regenerate(st) {
+    async function regenerate(st, silent) {
       if (busy) return;
       if (st?.state === "set" && !await ask("중계기 토큰을 다시 만들까요? 에이전트 설정에 새 토큰을 넣어요.")) return;
       busy = true;
       try {
         const r = await tauri.invoke("gateway_token_regenerate");
-        notice(r.agents_updated ? "새 토큰을 만들고 에이전트 설정에 넣었어요. 중계기를 다시 켜면 예전 토큰은 막혀요."
+        if (!silent || !r.agents_updated) notice(r.agents_updated ? "새 토큰을 만들고 에이전트 설정에 넣었어요. 중계기를 다시 켜면 예전 토큰은 막혀요."
           : "새 토큰을 만들었어요. 에이전트 설정에는 못 넣었어요 — 진단에서 고치기를 눌러 주세요.");
+        busy = false;
         draw(r.status);
-      } catch (_) { notice("토큰을 만들지 못했어요."); }
-      busy = false;
+      } catch (_) { busy = false; if (!silent) notice("토큰을 만들지 못했어요."); else draw({ ...st, failed: true }); }
     }
     function draw(st) {
+      if (st && st.state !== "set" && !st.from_env && !tried) { tried = true; void regenerate(st, true); return; }
       if (!st) { line.replaceChildren(el("span", "gw-label", "라우터 토큰"), el("span", "gw-when", "확인하지 못했어요")); note.textContent = ""; return; }
       const [label, cls, text] = TEXT[st.state] || TEXT.invalid;
       const remake = el("button", "gw-remake", "다시 만들기");

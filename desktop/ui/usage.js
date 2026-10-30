@@ -8,7 +8,7 @@ window.ArkismUsage = (ctx) => {
   const { state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago } = ctx;
 
   const TABS = [["overview", "개요"], ["requests", "요청"], ["sessions", "세션"], ["hours", "시간대"], ["decisions", "결정"]];
-  const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
+  const RANGES = [["today", "오늘"], ["7d", "7일"], ["month", "이번 달"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const DAY_METRICS = [["tokens", "토큰"], ["cost_usd", "비용"], ["sessions", "세션"], ["output", "출력"], ["messages", "메시지"]];
   const TOP_BY = [["tokens", "토큰"], ["cost_usd", "비용"], ["active_seconds", "활동"]];
   const SHAPE = ["1~5", "6~15", "16~30", "31~60", "61~120", "121개 넘음"];
@@ -17,8 +17,15 @@ window.ArkismUsage = (ctx) => {
   // ROUTER counts only calls that went through the Arkism router (routing_calls: /v1/usage/summary .requests and
   // /v1/routing/overview). Agent sessions read from transcripts are MEMORY·CREW·TOOLS usage, never router usage.
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
-  const DECISIONS = { clef: "판정 모델이 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
+  const DECISIONS = { clef: "판정 모델이 고름", default: "판정 모델이 고르지 않음", fixed: "고정 모델", rule: "규칙으로", failover: "장애 때 넘김", manual: "직접 고름", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;
+  // An owner rule keeps decision "fixed" on the wire (older runners), so the flow card gives it its own lane by the rule.
+  const lane = (it) => (it.rule && it.decision === "fixed" ? "rule" : it.decision);
+  // One plain line per routed call: why it went to that model ({decision, rule, replaced} as the server records them).
+  const RULE_KIND = { code: "코딩", writing: "글쓰기", quick: "짧은 질문" };
+  const reasonLine = (it, m) => (RULE_KIND[it.rule] ? `${RULE_KIND[it.rule]} 요청이라 → ${m}` : it.decision === "clef" ? `판정 모델이 골라서 → ${m}`
+    : it.decision === "default" ? `판정 모델이 고르지 않아서 → ${m}` : it.decision === "failover" ? (it.replaced ? `${modelLabel(it.replaced)}에서 실패해 넘김 → ${m}` : `앞 모델이 실패해 넘김 → ${m}`)
+    : it.decision === "manual" ? `직접 고른 모델 → ${m}` : `기본 모델이라 → ${m}`);
   const loads = globalThis.ArkismKeep.latest();
 
   const num = (n) => {
@@ -38,10 +45,10 @@ window.ArkismUsage = (ctx) => {
   // 화면 문구가 데이터와 한 줄에 섞여 raw()로 감쌀 때: 만들 때 번역한다 (한국어 화면이면 그대로).
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
   const menu = () => (["memory", "agent", "router", "connect"].includes(state.menu) ? state.menu : "router");
-  const tabs = () => (menu() === "router" ? TABS.filter(([k]) => k === "overview" || k === "requests" || k === "decisions") : TABS.filter(([k]) => k !== "requests"));
+  const tabs = () => (menu() === "router" ? TABS.filter(([k]) => k === "overview" || k === "requests") : TABS.filter(([k]) => k !== "requests"));
   const loadKey = () => (menu() === "router" ? `router|${S.range}` : `sessions|${S.range}|${S.source}`);
-  const modelLabel = (id) => S.ov?.models?.find((m) => m.id === id)?.name || String(id || "").replace(/^[^/]+\//, "");
-  const days = () => Math.max(1, { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.range] || S.doc?.by_day?.length || 1);
+  const modelLabel = (id) => (S.ov?.models || S.names || []).find((m) => m.id === id)?.name || String(id || "").replace(/^[^/]+\//, "");
+  const days = () => Math.max(1, { today: 1, "7d": 7, month: new Date().getDate(), "30d": 30, "90d": 90 }[S.range] || S.doc?.by_day?.length || 1);
 
   async function load(silent = false) {
     const quiet = silent === true;
@@ -51,8 +58,10 @@ window.ArkismUsage = (ctx) => {
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
     try {
       const router = menu() === "router", ovRange = OV_RANGE[S.range];
-      const [doc, ov] = await Promise.all([request(`/v1/usage/summary?${query({ range: S.range, ...(S.source && !router ? { source: S.source } : {}) })}`),
+      const [doc, ov] = await Promise.all([request(`/v1/usage/summary?${query({ range: S.range, tz: -new Date().getTimezoneOffset(), ...(S.source && !router ? { source: S.source } : {}) })}`),
         router && ovRange ? request(`/v1/routing/overview?${query({ range: ovRange })}`).catch(() => null) : Promise.resolve(null)]);
+      // Ranges the overview has no numbers for still show models by their screen names (GET /v1/routing/models).
+      if (router && !ovRange && !S.names) S.names = await request(`/v1/routing/models?${query()}`).then((r) => (r?.authority === "data_only_untrusted" && Array.isArray(r.items) ? r.items : null), () => null);
       if (!ticket.live() || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
       const next = ov?.authority === "data_only_untrusted" ? ov : null;
@@ -160,23 +169,145 @@ window.ArkismUsage = (ctx) => {
         ["비용", usd(k.cost_usd, k.priced), `세션당 ${usd(k.cost_usd / Math.max(1, k.sessions), k.priced)}`], ["활동 시간", dur(k.active_seconds), `${k.active_days}일 동안`]]),
         dayCard(d), card("에이전트별", `${d.by_agent.length}개`, list)];
     }
-    if (menu() === "connect") {
-      const calls = d.tools.reduce((a, s) => a + s.count, 0);
-      const servers = [...new Set(d.tools.map((t) => toolServer(t.name)).filter(Boolean))];
-      const t = el("div", "v4u-table v4u-tools");
-      const head = el("div", "v4u-tr th"); ["도구", "서버", "", "호출", "세션"].forEach((h) => head.append(el("span", "", h))); t.append(head);
-      const max = Math.max(1, ...d.tools.map((x) => x.count));
-      for (const x of d.tools) {
-        const row = el("div", "v4u-tr"), bar = el("span", "v4u-bar"), fill = el("i"); fill.style.width = `${(x.count / max) * 100}%`; bar.append(fill);
-        row.append(raw(el("span", "v4u-mono", toolName(x.name))), el("span", "", toolServer(x.name) || "내장"), bar, el("span", "v4u-num", num(x.count)), el("span", "v4u-num", num(x.sessions)));
-        t.append(row);
-      }
-      if (!d.tools.length) t.append(el("p", "v4u-empty", "이 기간에 기록된 도구 호출이 없어요."));
-      return [kpiRow([["도구 호출", num(calls), `도구 ${d.tools.length}개`], ["MCP 서버", num(servers.length), servers.slice(0, 3).join(" · ") || "기록 없음"],
-        ["세션", num(k.sessions), `하루 평균 ${num(k.sessions / days())}`], ["많이 쓴 도구", d.tools[0] ? toolName(d.tools[0].name) : "—", d.tools[0] ? `${num(d.tools[0].count)}회` : ""]]),
-        card("많이 쓴 도구", `상위 ${d.tools.length}개 · 세션에서 센 호출 수`, t)];
-    }
+    if (menu() === "connect") return toolsOverview(d);
     return routerOverview(d);
+  }
+
+  // ------------------------------------------------------------------ TOOLS 개요 (325:34690): MCP 호출의 응답 시간·실패 (tool_health, Claude Code 기록에서
+  // tool_use와 그 결과를 짝지은 것), 서버 상태 (agent_tools 보고), 많이 쓴 도구, 최근 실패, 저장소 활동 (code_reviews 보고).
+  const SLOW_MS = 1500;
+  const CALL_ERRS = { timeout: "시간 초과", permission: "권한 없음", auth: "인증 만료", not_found: "찾을 수 없음", conflict: "충돌", rate_limit: "한도 초과", error: "오류" };
+  const sec = (ms) => (ms == null ? "—" : `${(ms / 1000).toFixed(1)}초`);
+  const normServer = (n) => String(n || "").replace(/[^A-Za-z0-9_-]/g, "_");
+  // 지난달보다 +6%: the same count over the window of equal length just before (tool_calls_change_pct, nil when it is empty)
+  const PREV_WINDOW = { today: (p) => `어제보다 ${p}`, "7d": (p) => `지난주보다 ${p}`, "30d": (p) => `지난달보다 ${p}`, "90d": (p) => `이전 90일보다 ${p}` };
+  const median = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  // The chart's one-line reading (325:34690): the slowest day, the server that slowed most against its own usual p95, and the usual day.
+  function healthNote(days) {
+    const timed = days.filter((p) => p.p95_ms != null);
+    if (timed.length < 2) return null;
+    const peak = timed.reduce((a, b) => (b.p95_ms > a.p95_ms ? b : a)), rest = timed.filter((p) => p !== peak);
+    const usualMs = median(rest.map((p) => p.p95_ms)), usual = Math.max(0.5, Math.round(usualMs / 500) / 2);
+    if (peak.p95_ms < usualMs * 1.5) return [`날마다 ${usual}초 안팎이에요.`];
+    const date = peak.date.slice(5), moreFails = peak.failed > 2 * Math.max(1, median(rest.map((p) => p.failed)));
+    const slow = (peak.servers || []).filter((x) => x.p95_ms != null)
+      .map((x) => [x.name, x.p95_ms / (median(rest.map((p) => p.servers?.find((y) => y.name === x.name)?.p95_ms)) || x.p95_ms)])
+      .sort((a, b) => b[1] - a[1]).find(([, r]) => r >= 1.5)?.[0];
+    const head = slow ? (moreFails ? `${date} ${slow} 서버가 느려지며 실패가 함께 늘었어요.` : `${date} ${slow} 서버가 느려졌어요.`)
+      : moreFails ? `${date}에 응답이 가장 느렸고 실패도 많았어요.` : `${date}에 응답이 가장 느렸어요.`;
+    return [head, `나머지 날은 ${usual}초 안팎이에요.`];
+  }
+  const rangeLabel = () => RANGES.find(([x]) => x === S.range)?.[1] || "";
+  const stamp = (t) => { const x = new Date(t), p2 = (n) => String(n).padStart(2, "0"); return `${p2(x.getMonth() + 1)}-${p2(x.getDate())} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
+  // One row per MCP server: what agent_tools lists (login state) joined with the calls tool_health measured.
+  function mcpServers(h) {
+    const listed = state.data?.tools?.servers || [], rows = new Map();
+    for (const s of listed) rows.set(normServer(s.name), { name: s.name, id: s.name, login: Object.values(s.login || {}).includes("needed"), calls: 0, failed: 0, p95_ms: null });
+    for (const x of h?.servers || []) rows.set(x.name, { ...(rows.get(x.name) || { name: x.name, login: false }), calls: x.calls, failed: x.failed, p95_ms: x.p95_ms });
+    return [...rows.values()].sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
+  }
+  const serverState = (r) => (r.login ? ["로그인 필요", "amber"] : r.p95_ms != null && r.p95_ms >= SLOW_MS ? ["느림", "amber"] : r.calls ? ["정상", ""] : ["호출 없음", "soft"]);
+  const openServer = (r) => { state.toolTab = "mcp"; ctx.go?.("tools"); if (r.id) { state.selected = `tool:${r.id}`; render(); } };
+  function toolsOverview(d) {
+    const h = d.tool_health || null, servers = mcpServers(h);
+    const calls = d.tool_calls ?? d.tools.reduce((a, s) => a + s.count, 0), kinds = d.tool_kinds ?? d.tools.length;
+    const change = d.tool_calls_change_pct, prev = PREV_WINDOW[S.range];
+    const rate = h?.calls ? (h.failed / h.calls) * 100 : null;
+    const slowest = servers.filter((r) => r.p95_ms != null).sort((a, b) => b.p95_ms - a.p95_ms)[0];
+    const login = servers.filter((r) => r.login);
+    const loginKpi = kpi("로그인 필요", `${login.length}개`, login.map((r) => r.name).join(" · ") || "없음", login.length ? "amber" : "");
+    if (login.length) { const go = link("로그인 →", () => openServer(login[0])); go.classList.add("v4u-kpi-link"); loginKpi.append(go); }
+    const kp = el("div", "v4u-kpis");
+    kp.append(kpi("도구 호출", `${num(calls)}회`, change != null && prev ? `${rangeLabel()} · ${prev(`${change > 0 ? "+" : ""}${change}%`)}` : `${rangeLabel()} · 도구 ${num(kinds)}개`),
+      kpi("실패율", rate === null ? "—" : `${Math.round(rate * 10) / 10}%`, !h?.calls ? "응답 시간을 잰 MCP 호출이 없어요" : rate > 1 ? `실패 ${num(h.failed)}회 · 기준 1% 넘음` : `실패 ${num(h.failed)}회 · MCP 호출 ${num(h.calls)}회 중`, rate > 1 ? "amber-text" : ""),
+      kpi("p95 응답", sec(h?.p95_ms), !h?.calls ? "응답 시간을 잰 MCP 호출이 없어요" : slowest ? `평균 ${sec(h.avg_ms)} · 가장 느림 ${slowest.name}` : `평균 ${sec(h.avg_ms)}`), loginKpi);
+    return [kp, timingCard(h), serverCard(servers), two(topToolsCard(d.tools, kinds), failsCard(h)), repoCard()];
+  }
+  // 응답 시간과 실패: p95 line per day over the failure count per day.
+  function timingCard(h) {
+    const days = h?.by_day || [];
+    const legend = el("span", "v4u-legend-line");
+    legend.append(el("span", "v4u-aside", days.length ? `${rangeLabel()} · ${days[0].date.slice(5)} ~ ${days[days.length - 1].date.slice(5)}` : rangeLabel()), el("i", "v4u-key-line"), el("span", "", "p95 응답"), el("i", "v4u-key-bar"), el("span", "", "실패 수"));
+    if (!days.some((p) => p.calls)) return card("응답 시간과 실패", legend, el("p", "v4u-empty", h ? "이 기간에 응답 시간을 잰 MCP 호출이 없어요." : "이 서버는 아직 도구 응답 시간을 보고하지 않아요."));
+    const n = days.length, top = Math.max(1, Math.ceil(Math.max(...days.map((p) => p.p95_ms || 0)) / 1000)), fmax = Math.max(1, ...days.map((p) => p.failed));
+    const x = (i) => ((i + 0.5) / n) * 100, y = (ms) => 100 - (ms / (top * 1000)) * 100;
+    // a day without calls breaks the line
+    let line = "", area = "", run = [];
+    const flush = () => { if (!run.length) return; line += run.map(([i, ms], k) => `${k ? "L" : "M"}${x(i).toFixed(2)} ${y(ms).toFixed(2)}`).join(" ") + " "; area += `M${x(run[0][0]).toFixed(2)} 100 ` + run.map(([i, ms]) => `L${x(i).toFixed(2)} ${y(ms).toFixed(2)}`).join(" ") + ` L${x(run[run.length - 1][0]).toFixed(2)} 100 Z `; run = []; };
+    days.forEach((p, i) => { if (p.p95_ms == null) flush(); else run.push([i, p.p95_ms]); });
+    flush();
+    const plot = el("div", "v4u-rt-plot");
+    for (const v of [top, top / 2, 0]) { const g = el("div", "v4u-rt-grid"); g.style.top = `${y(v * 1000)}%`; g.append(el("small", "", `${Math.round(v * 10) / 10}초`)); plot.append(g); }
+    const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100"); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
+    for (const [cls, dd] of [["v4u-rt-area", area], ["v4u-rt-line", line]]) { const path = document.createElementNS(ns, "path"); path.setAttribute("class", cls); path.setAttribute("d", dd); svg.append(path); }
+    const peak = days.reduce((b, p, i) => (p.p95_ms != null && (b < 0 || p.p95_ms > days[b].p95_ms) ? i : b), -1);
+    const box = el("div", "v4u-rt-area-box"); box.append(svg);
+    const dot = el("i", "v4u-rt-dot"); dot.style.left = `${x(peak)}%`; dot.style.top = `${y(days[peak].p95_ms)}%`;
+    const tag = el("small", "v4u-rt-tag", `${sec(days[peak].p95_ms)} · 실패 ${days[peak].failed} (${days[peak].date.slice(5)})`); tag.style.left = `${x(peak)}%`; tag.style.top = `${y(days[peak].p95_ms)}%`;
+    box.append(dot, tag); plot.append(box);
+    const bars = el("div", "v4u-rt-bars"), fails = el("div", "v4u-rt-fails");
+    fails.append(el("small", "v4u-rt-axis", String(fmax)), el("small", "v4u-rt-axis zero", "0"));
+    days.forEach((p, i) => { const b = el("i", i === peak ? "top" : ""); b.style.height = `${p.failed ? Math.max(4, (p.failed / fmax) * 100) : 0}%`; b.title = `${p.date} · 호출 ${p.calls} · 실패 ${p.failed} · p95 ${sec(p.p95_ms)}`; bars.append(b); });
+    fails.append(bars);
+    const xs = el("div", "v4u-rt-x"), step = Math.max(1, Math.ceil(n / 5));
+    days.forEach((p, i) => { if (i % step === 0) { const t = el("small", "", p.date.slice(5)); t.style.left = `${x(i)}%`; xs.append(t); } });
+    const note = el("p", "v4u-rt-note"); (healthNote(days) || []).forEach((t, i) => note.append(i ? " " : "", el("span", "", t)));
+    return card("응답 시간과 실패", legend, plot, fails, xs, note, el("p", "v4u-hint", "Claude Code 기록에서 MCP 도구를 부른 때부터 결과가 온 때까지 재요. 사용자가 거절한 호출은 세지 않아요."));
+  }
+  function serverCard(servers) {
+    const t = el("div", "v4u-table v4u-mcp");
+    const head = el("div", "v4u-tr th"); ["서버", "호출", "실패율", "p95 응답", "상태"].forEach((x) => head.append(el("span", "", x))); t.append(head);
+    for (const r of servers) {
+      const row = el("button", "v4u-tr v4u-row-btn"); row.type = "button"; row.title = "서버 설정으로 가요";
+      const name = el("span", "v4u-srv"); name.append(window.ArkismBrand?.mark(r.name, "v4u-srv-logo") || el("span", "v4u-srv-letter", r.name.slice(0, 1).toUpperCase()), raw(el("span", "v4u-mono", r.name)));
+      const fr = r.calls ? (r.failed / r.calls) * 100 : null, [label, tone] = serverState(r);
+      row.append(name, el("span", "v4u-num", r.calls.toLocaleString("en-US")), el("span", `v4u-num${fr > 2 ? " amber" : ""}`, fr === null ? "—" : `${fr.toFixed(1)}%`),
+        el("span", `v4u-num${r.p95_ms >= SLOW_MS ? " amber" : ""}`, sec(r.p95_ms)), el("span", ""));
+      row.children[row.children.length - 1].append(el("span", `v4u-badge${tone ? ` ${tone}` : ""}`, label));
+      row.addEventListener("click", () => openServer(r));
+      t.append(row);
+    }
+    if (!servers.length) t.append(el("p", "v4u-empty", "서버가 보고한 MCP 서버가 없어요."));
+    return card("MCP 서버 상태", `${servers.length}개 · 행을 누르면 서버 설정으로 가요`, t);
+  }
+  function topToolsCard(tools, kinds) {
+    const list = tools.filter((x) => toolServer(x.name)).slice(0, 6), box = el("div", "v4u-top"), max = Math.max(1, ...list.map((x) => x.count));
+    for (const x of list) {
+      const row = el("div", "v4u-top-row"), bar = el("span", "v4u-bar"), fill = el("i"); fill.style.width = `${(x.count / max) * 100}%`; bar.append(fill);
+      row.append(raw(el("span", "v4u-mono", toolName(x.name))), raw(el("span", "v4u-side-l", toolServer(x.name))), bar, el("span", "v4u-num", x.count.toLocaleString("en-US")));
+      box.append(row);
+    }
+    if (!list.length) box.append(el("p", "v4u-empty", "이 기간에 기록된 MCP 도구 호출이 없어요."));
+    return card("많이 쓴 도구", `상위 ${list.length} · 도구 ${num(kinds)}개`, box);
+  }
+  function failsCard(h) {
+    const box = el("div", "v4u-rows");
+    for (const f of h?.fails || []) {
+      const row = el("div", "v4u-fail"), t = el("div", "v4u-session-text");
+      const why = tr(CALL_ERRS[f.err] || f.err) + (f.err === "timeout" && f.ms ? ` (${tr(`${Math.round(f.ms / 1000)}초`)})` : "");
+      t.append(raw(el("b", "v4u-mono", toolName(f.tool))), raw(el("small", "", `${toolServer(f.tool)} · ${why}`)));
+      row.append(t, el("span", "v4u-time", stamp(f.at)));
+      box.append(row);
+    }
+    if (!h?.fails?.length) box.append(el("p", "v4u-empty", "이 기간에 실패한 MCP 호출이 없어요."));
+    return card("최근 실패", h?.failed ? `${rangeLabel()} 실패 ${num(h.failed)}회` : "", box);
+  }
+  // 저장소 활동: the PRs the code review collector reported (GET /v1/code_reviews), counted over the range by when the review ran.
+  function repoCard() {
+    const dayCount = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.range], since = dayCount ? Date.now() - dayCount * 864e5 : 0;
+    const items = (state.data?.reviews?.items || []).filter((it) => !since || new Date(it.started_at).getTime() >= since);
+    const aside = el("span", "v4u-legend-line");
+    aside.append(el("span", "v4u-aside", `${rangeLabel()} · 저장소 ${new Set(items.map((it) => it.repo)).size}개`), link("저장소로 →", () => ctx.go?.("reviews")));
+    if (!items.length) return card("저장소 활동", aside, el("p", "v4u-empty", "이 기간에 리뷰한 PR이 없어요."));
+    const merged = items.filter((it) => it.pr_state === "merged").length, reviewed = items.filter((it) => it.state === "done");
+    const tiles = el("div", "v4u-repo");
+    for (const [n, unit, sub] of [[items.length, "PR", `열림 ${items.filter((it) => it.pr_state === "open").length}`], [merged, "병합", `병합률 ${pct(merged, items.length)}`],
+      [items.reduce((a, it) => a + (it.commits || 0), 0), "커밋", "리뷰한 PR의 커밋"], [reviewed.length, "AI 리뷰", `고칠 점 ${reviewed.reduce((a, it) => a + it.findings.length, 0)}개`]]) {
+      const c = el("div", "v4u-repo-tile"), v = el("div", "");
+      v.append(el("strong", "", num(n)), el("span", "", unit)); c.append(v, el("small", "", sub)); tiles.append(c);
+    }
+    return card("저장소 활동", aside, tiles);
   }
 
   // ------------------------------------------------------------------ ROUTER 개요: routed calls only (198:1490 · 342:35440)
@@ -186,7 +317,7 @@ window.ArkismUsage = (ctx) => {
     act.append(button("라우팅 설정 열기", "primary small", null, () => ctx.openSettings?.("routing")), link("라우팅 현황 보기 ›", () => ctx.go?.("routing")));
     c.append(el("h3", "", "아직 라우터를 거친 요청이 없어요"),
       el("p", "v4u-hint", "여기에는 Arkism 라우터가 모델을 골라 보낸 요청만 쌓여요. 라우팅을 켜고 워크플로우·하위 작업이 라우터로 모델을 고르면 요청 수·토큰·비용이 보여요."),
-      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 MEMORY·FLOW의 사용량에서 봐요."), act);
+      el("p", "v4u-hint", "에이전트가 직접 쓴 토큰은 Memory·Flow 메뉴의 사용량에서 봐요."), act);
     return c;
   }
   function routerOverview(d) {
@@ -195,8 +326,8 @@ window.ArkismUsage = (ctx) => {
     const k = S.ov?.kpi;
     const replaced = r.items.filter((it) => it.replaced).length;
     const parts = [kpiRow([["요청", num(r.count), `성공 ${pct(r.count - r.failed, r.count)} · 실패 ${num(r.failed)}`], ["토큰", num(r.input + r.output), `${num(r.input)} 입력 · ${num(r.output)} 출력`],
-      ["비용", usd(r.cost_usd), "공시 단가로 계산"],
-      k && k.p95_ms != null ? ["응답 p95", `${(k.p95_ms / 1000).toFixed(1)}초`, `p50 ${((k.p50_ms || 0) / 1000).toFixed(1)}초`] : ["대신 받은 요청", num(replaced), "장애·한도 때 다른 모델로", replaced ? "amber" : ""]])];
+      ["비용", usd(r.cost_usd), "공개 가격으로 셈한 추정"],
+      k && k.p50_ms != null ? ["응답 시간", `${(k.p50_ms / 1000).toFixed(1)}초`, "보통 걸린 시간"] : ["대신 받은 요청", num(replaced), "장애·한도 때 다른 모델로", replaced ? "amber" : ""]])];
     const pts = S.ov?.series?.points || [];
     if (pts.length) {
       const seg = segment([["traffic", "요청"], ["cost", "비용"]], S.rday, (m) => { S.rday = m; render(false); }); seg.classList.add("v4u-seg");
@@ -249,7 +380,7 @@ window.ArkismUsage = (ctx) => {
     const kids = [chips];
     if (S.flowModel) {
       const mine = items.filter((it) => it.model === S.flowModel), agg = r.models.find((m) => m.name === S.flowModel);
-      const byDec = {}; mine.forEach((it) => { byDec[it.decision] = (byDec[it.decision] || 0) + 1; });
+      const byDec = {}; mine.forEach((it) => { byDec[lane(it)] = (byDec[lane(it)] || 0) + 1; });
       const top = Object.entries(byDec).sort((a, b) => b[1] - a[1])[0];
       const stood = mine.filter((it) => it.replaced).length, gaveUp = items.filter((it) => it.replaced === S.flowModel).length;
       const strip = el("div", "v4u-flow-pick");
@@ -262,7 +393,7 @@ window.ArkismUsage = (ctx) => {
       kids.push(strip);
     }
     const groups = {};
-    for (const it of items) (groups[it.decision] ||= []).push(it);
+    for (const it of items) (groups[lane(it)] ||= []).push(it);
     const rows = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
     const max = Math.max(1, ...rows.map(([, l]) => l.length));
     const table = el("div", "v4u-flow");
@@ -306,24 +437,24 @@ window.ArkismUsage = (ctx) => {
     const toolCard = card("많이 쓴 도구", `· ${d.tools.length}`, bars(d.tools.slice(0, 8), (s) => s.count, (s) => toolName(s.name), (s) => toolServer(s.name) || `${s.sessions}세션`, (s) => `${num(s.count)}회`));
     if (!w) {
       return [kpiRow([["세션", num(k.sessions), `하루 평균 ${num(k.sessions / days())}`], ["활동 시간", dur(k.active_seconds), `${k.active_days}일 동안`],
-        ["스킬 사용", num(skillUses), `스킬 ${d.skills.length}개`, "accent"], ["캐시 적중", `${k.cache_hit_pct}%`, `${num(k.cache_read)} 읽기`]]),
-        el("p", "v4u-hint", "답변과 기억의 문구 겹침은 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요."), heat, two(skillCard, toolCard)];
+        ["스킬 사용", num(skillUses), `스킬 ${d.skills.length}개`, "accent"], ["다시 쓴 입력", `${k.cache_hit_pct}%`, `${num(k.cache_read)} 토큰`]]),
+        el("p", "v4u-hint", "기억이 답에 보였는지는 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요."), heat, two(skillCard, toolCard)];
     }
     const byId = new Map((m.memories || []).map((x) => [x.id, x]));
     const injectedItems = w.items.filter((x) => x.injected > 0);
     const tidy = (m.memories || []).filter((x) => m.often?.(x));
     const rate = w.injections ? Math.round((w.used / w.injections) * 100) : null;
-    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "답변 문구 겹침 미확인 · 직접 검토", tidy.length ? "amber" : "");
+    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "답에 안 보임 · 직접 검토", tidy.length ? "amber" : "");
     if (tidy.length) { const go = link("정리하기 →", () => m.openIdle?.()); go.classList.add("v4u-kpi-link"); tidyKpi.append(go); }
     const kp = el("div", "v4u-kpis");
-    kp.append(kpi("답변 문구 겹침 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
+    kp.append(kpi("답에 보인 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
       kpi("들어간 기억", `${num(w.injections)}회`, `기억 ${num(injectedItems.length)}개 · 하루 ${(w.injections / Math.max(1, w.days)).toFixed(1)}회`), tidyKpi,
       kpi("세션", num(k.sessions), w.inject_sessions ? `기억을 받은 세션 ${num(w.inject_sessions)}` : `하루 평균 ${num(k.sessions / days())}`));
     // 기억 흐름: saved in the window → put into answers → used by the answer.
     const since = Date.now() - w.days * 86400000;
     const saved = (m.memories || []).filter((x) => new Date(x.created_at).getTime() >= since).length;
     const flow = [["저장", saved, `${num(saved)}개`, ""], ["답변에 들어감", injectedItems.length, `${num(w.injections)}회 · 기억 ${num(injectedItems.length)}개`, ""],
-      ["문구 겹침 확인", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 문구 겹침`]];
+      ["답에 보임", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 답에 보임`]];
     const fmax = Math.max(1, ...flow.map((f) => f[1]));
     const fbox = el("div", "v4u-bars v4u-flowbars");
     for (const [label, n, text, side] of flow) {
@@ -331,7 +462,7 @@ window.ArkismUsage = (ctx) => {
       row.append(el("span", "v4u-bar-name", label), bar, el("span", "v4u-num", text), el("span", "v4u-side", side)); fbox.append(row);
     }
     const flowCard = card("기억 흐름", `최근 ${w.days}일 · 실제 활용 여부는 미측정`, fbox);
-    // 종류별 문구 겹침: used / injected per kind.
+    // 종류별로 답에 보인 비율: used / injected per kind.
     const kinds = {};
     for (const x of injectedItems) { const kind = byId.get(x.id)?.kind; if (!kind) continue; const a = (kinds[kind] ||= { inj: 0, used: 0, n: 0 }); a.inj += x.injected; a.used += x.used; a.n++; }
     const kindRows = Object.entries(kinds).sort((a, b) => b[1].used / b[1].inj - a[1].used / a[1].inj);
@@ -342,18 +473,18 @@ window.ArkismUsage = (ctx) => {
       row.append(el("span", "v4u-bar-name", m.kindLabel ? m.kindLabel(kind) : kind), bar, el("span", `v4u-num${r < 20 ? " amber" : ""}`, `${r}%`), el("span", "v4u-side", `${a.n}개`)); kbox.append(row);
     }
     if (!kindRows.length) kbox.append(el("p", "v4u-empty", "아직 답변에 들어간 기억이 없어요."));
-    const kindCard = card("종류별 문구 겹침", "전달한 기억 중 문구 겹침이 확인된 비율", kbox);
+    const kindCard = card("종류별로 답에 보인 비율", "전달한 기억 중 답에 보인 비율", kbox);
     const tbox = el("div", "v4u-rows");
     for (const x of tidy.slice(0, 5)) {
       const s = w.items.find((y) => y.id === x.id) || { injected: 0, used: 0 };
       const row = el("button", "v4u-tidy"); row.type = "button";
-      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · 문구 겹침 ${s.used}번`));
+      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · 답에 보임 ${s.used}번`));
       row.append(t, el("span", "v4u-link", "정리"));
       row.addEventListener("click", () => m.openMemory?.(x.id));
       tbox.append(row);
     }
     if (!tidy.length) tbox.append(el("p", "v4u-empty", "정리할 기억이 없어요."));
-    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `문구 겹침 미확인 · ${tidy.length}개 · 실제 활용 여부는 미측정`), tbox);
+    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `답에 안 보임 · ${tidy.length}개 · 실제 활용 여부는 미측정`), tbox);
     return [kp, flowCard, heat, two(kindCard, tidyCard), two(skillCard, toolCard)];
   }
   // 많이 쓴 스킬 with the agents that ran it (GET /v1/skills/usage by_runtime) when the skill is known.
@@ -376,12 +507,12 @@ window.ArkismUsage = (ctx) => {
     const r = d.requests;
     const replaced = r.items.filter((it) => it.replaced).length;
     const parts = [kpiRow([["요청", num(r.count), r.count ? `성공 ${pct(r.count - r.failed, r.count)}` : ""], ["토큰", num(r.input + r.output), `${num(r.input)} 입력 · ${num(r.output)} 출력`],
-      ["비용", usd(r.cost_usd), "공시 단가로 계산"], ["대신 받은 요청", num(replaced), "장애·한도 때 다른 모델로", replaced ? "amber" : ""]])];
+      ["비용", usd(r.cost_usd), "공개 가격으로 셈한 추정"], ["대신 받은 요청", num(replaced), "장애·한도 때 다른 모델로", replaced ? "amber" : ""]])];
     const list = el("div", "v4u-list");
     for (const it of r.items) {
       const row = el("div", "v4u-req");
       const text = el("div", "v4u-session-text");
-      text.append(raw(el("b", "", it.replaced ? `${modelLabel(it.replaced)} → ${modelLabel(it.model)}` : modelLabel(it.model))), el("small", "", `${decisionLabel(it.decision)} · ${num(it.input)} / ${it.output ? num(it.output) : "—"} · ${(it.latency_ms / 1000).toFixed(1)}초`));
+      text.append(raw(el("b", "", reasonLine(it, modelLabel(it.model)))), el("small", "", `입력 ${num(it.input)} · 출력 ${it.output ? num(it.output) : "—"} · ${(it.latency_ms / 1000).toFixed(1)}초`));
       const badge = el("span", `v4u-badge${!it.ok ? " amber" : it.replaced ? " amber" : ""}`, !it.ok ? (it.error ? `실패 · ${it.error}` : "실패") : it.replaced ? "대신 받음" : "성공");
       row.append(el("span", "v4u-time", new Date(it.at).toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })), text, badge, el("span", "v4u-num", it.ok && it.cost_usd ? usd(it.cost_usd).replace("≈", "") : "—"));
       list.append(row);
@@ -390,6 +521,12 @@ window.ArkismUsage = (ctx) => {
     parts.push(list, el("p", "v4u-hint", `최근 ${r.items.length}건 표시 · 요청 원문은 저장하지 않아요.`));
     return parts;
   }
+  // The slow tail (p95) is for people tuning thresholds, so it waits under 자세히.
+  function slowMore(k) {
+    if (k.p95_ms == null) return null;
+    const m = el("details", "rt-more"); m.append(el("summary", "", "자세히"), facts([["느릴 때", `${(k.p95_ms / 1000).toFixed(1)}초`]]), el("p", "v4u-hint", "100건 중 가장 느린 5건이 걸린 시간이에요."));
+    return m;
+  }
   function requestsSide(d) {
     const r = d.requests;
     const fails = r.items.filter((it) => !it.ok), replaced = r.items.filter((it) => it.replaced);
@@ -397,9 +534,9 @@ window.ArkismUsage = (ctx) => {
     const f = most(fails, "model"), rp = most(replaced, "model");
     const o = (m) => S.ov?.models?.find((x) => x.id === m.name);
     const speed = S.ov?.kpi;
-    return [sideSection("모델별 요청", "", bars(r.models, (m) => m.requests, (m) => modelLabel(m.name), (m) => (o(m)?.p95_ms != null ? `p95 ${(o(m).p95_ms / 1000).toFixed(1)}초` : ""), (m) => num(m.requests))),
+    return [sideSection("모델별 요청", "", bars(r.models, (m) => m.requests, (m) => modelLabel(m.name), (m) => (o(m)?.p50_ms != null ? `보통 ${(o(m).p50_ms / 1000).toFixed(1)}초` : ""), (m) => num(m.requests))),
       sideSection("실패·대체", "", facts([["실패", `${num(r.failed)}건 · ${pct(r.failed, r.count)}${f ? ` · ${modelLabel(f[0])} ${f[1]}` : ""}`], ["대체", `${replaced.length}건${rp ? ` · 대부분 ${modelLabel(rp[0])}` : ""}`]]), el("p", "v4u-hint", "실패율은 기간 전체, 모델 이름은 최근 기록 기준이에요.")),
-      ...(speed && speed.requests ? [sideSection("응답 속도", { today: "오늘", "7d": "7일", "30d": "30일" }[S.range] || "", facts([["p50", speed.p50_ms != null ? `${(speed.p50_ms / 1000).toFixed(1)}초` : "—"], ["p95", speed.p95_ms != null ? `${(speed.p95_ms / 1000).toFixed(1)}초` : "—"], ["성공률", speed.success_rate != null ? `${speed.success_rate}%` : "—"]]))] : []),
+      ...(speed && speed.requests ? [sideSection("응답 속도", { today: "오늘", "7d": "7일", "30d": "30일" }[S.range] || "", facts([["보통", speed.p50_ms != null ? `${(speed.p50_ms / 1000).toFixed(1)}초` : "—"], ["성공률", speed.success_rate != null ? `${speed.success_rate}%` : "—"]]), ...[slowMore(speed)].filter(Boolean))] : []),
       link("라우팅 현황에서 보기 ›", () => ctx.go?.("routing")), button("새로고침", "", null, load)];
   }
 
@@ -455,7 +592,7 @@ window.ArkismUsage = (ctx) => {
     skill_version_rejected: "스킬 후보 제외", skill_improvement_rejected: "AI 스킬 개선 제외",
     candidate_approve: "후보 승인", candidate_edit_approve: "고쳐서 승인", candidate_reject: "후보 버림", candidate_expired: "후보 기한 지남",
     dreaming_accept: "정리 제안 받아들임", dreaming_swap: "정리 제안 반대로", dreaming_dismiss: "정리 제안 둘 다 둠", dreaming_forget_both: "정리 제안 둘 다 잊음",
-    merge_accept: "병합 제안 받아들임", merge_dismiss: "병합 제안 넘김", conflict_resolved: "충돌 정리",
+    merge_accept: "합치기 제안 받아들임", merge_dismiss: "합치기 제안 넘김", conflict_resolved: "서로 다른 기억 정리",
     wiki_approve: "위키 초안 승인", wiki_reject: "위키 초안 거절", flow_approved: "흐름 승인", flow_rejected: "흐름 거절", flow_cancelled: "흐름 중단",
     skill_routed: "스킬 골라 줌", skill_route_loaded: "고른 스킬을 불러옴", role_model_changed: "역할별 모델 바꿈",
     agent_tool_on: "도구 켜기·설치", agent_tool_off: "도구 끄기·제거", ai_help_accepted: "AI 도움대로 함", ai_help_discarded: "AI 도움과 다르게 함"
@@ -465,7 +602,7 @@ window.ArkismUsage = (ctx) => {
   const DEC = { key: "", rows: [], state: "idle", error: "" };
   async function loadDecisions(key) {
     try {
-      const doc = await request(`/v1/decisions/summary?${query({ period: "month", days: DEC_DAYS[key] || 30 })}`);
+      const doc = await request(`/v1/decisions/summary?${query({ period: "month", days: DEC_DAYS[key] || (key === "month" ? new Date().getDate() : 30) })}`);
       if (DEC.key !== key) return;
       if (doc?.authority !== "data_only_untrusted" || !Array.isArray(doc.rows)) throw new Error("invalid_response");
       Object.assign(DEC, { rows: doc.rows, state: "ready" });
@@ -497,7 +634,7 @@ window.ArkismUsage = (ctx) => {
 
   // ------------------------------------------------------------------ 세션 상세 (198:6822): one session's numbers, the dialogue opens in the 세션 기록 window
   function sessionPage(r) {
-    const kp = kpiRow([["토큰", num(r.tokens), `입력 ${num(r.input)} · 출력 ${num(r.output)}`], ["비용", usd(r.cost_usd, r.priced), r.priced ? "공시 단가로 계산" : "단가 없음"],
+    const kp = kpiRow([["토큰", num(r.tokens), `입력 ${num(r.input)} · 출력 ${num(r.output)}`], ["비용", usd(r.cost_usd, r.priced), r.priced ? "공개 가격으로 셈한 추정" : "단가 없음"],
       ["캐시", `${num(r.cached)} 읽기`, ""], ["메시지", num(r.messages), dur(r.active_seconds)]]);
     const used = card("쓴 것", "", facts([["모델", (r.models || []).join(", ") || "—"], ["프로젝트", r.project || "—"], ["장치", r.device || ""], ["에이전트", agentName(r.agent)]]));
     return [kp, used, el("p", "v4u-hint", "이 화면은 사용량만 보여 줘요. 대화 내용은 MEMORY › 개요 › 세션 기록에서 볼 수 있어요.")];
@@ -534,7 +671,12 @@ window.ArkismUsage = (ctx) => {
     const tabSeg = segment(tabs(), S.tab, (k) => { S.tab = k; render(); }); tabSeg.classList.add("v4u-box");
     const rangeSeg = segment(RANGES, S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }); rangeSeg.classList.add("v4u-box");
     controls.append(tabSeg, el("span", "v4u-gap"), rangeSeg);
-    if (S.doc?.agents?.length && S.tab !== "requests" && menu() !== "router") {
+    if (S.doc?.agents?.length && menu() === "connect") { // 325:34690: agent chips in place of the select
+      const agents = segment([["", "전체"], ...S.doc.agents.map((a) => [a.name, agentName(a.name)])], S.source, (v) => { if (S.source !== v) { S.source = v; void load(); } });
+      [...agents.children].slice(1).forEach((b, i) => b.prepend(logo(S.doc.agents[i].name)));
+      agents.classList.add("v4u-box", "v4u-agents"); agents.setAttribute("aria-label", "에이전트");
+      controls.append(agents);
+    } else if (S.doc?.agents?.length && S.tab !== "requests" && menu() !== "router") {
       const pick = el("select", "v4u-select"); pick.setAttribute("aria-label", "에이전트");
       for (const [v, l] of [["", "전체"], ...S.doc.agents.map((a) => [a.name, `${agentName(a.name)}${a.all_sessions ? ` ${num(a.all_sessions)}` : ""}`])]) { const o = el("option", "", l); o.value = v; o.selected = v === S.source; pick.append(o); }
       pick.addEventListener("change", () => { S.source = pick.value; void load(); });
@@ -555,7 +697,7 @@ window.ArkismUsage = (ctx) => {
     if (S.loadedFor && S.loadedFor !== loadKey()) queueMicrotask(() => load(true));
     const d = S.doc;
     const at = d.updated_at || d.collected_at;
-    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·FLOW 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
+    const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 Memory·Flow 메뉴의 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
     table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab, decisions: decisionsTab }[S.tab])(d));
     if (S.tab === "overview") window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
     if (S.tab === "requests") side("요청", requestsSide(d));

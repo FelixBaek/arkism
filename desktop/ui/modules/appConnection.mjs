@@ -1,5 +1,20 @@
 // Owns lock and server connections. Dependencies are explicit live ports, never a global scope.
+import { createServerBanner } from "./serverVersion.mjs";
+
 export function createAppConnection(deps) {
+  let appVersion = "";
+  const serverBanner = createServerBanner({
+    get $() { return deps.$; }, get el() { return deps.el; }, get state() { return deps.state; }, get request() { return deps.request; },
+    get tauri() { return deps.tauri; }, get notice() { return deps.notice; },
+    listen: (name, fn) => window.__TAURI__?.event?.listen?.(name, fn),
+    ask: (message, ok) => window.ask(message, ok),
+    reconnect: (b) => reconnect(b),
+    sshForm: () => ({ ...deps.state.ssh, password: sshPassword || null }),
+    appVersion: () => appVersion,
+    openInfo: () => { deps.state.settingsTab = "info"; deps.go("settings"); },
+    changed: () => { if (deps.state.view === "settings" && deps.state.settingsTab === "info") deps.render(false); }
+  });
+  void window.__TAURI__?.app?.getVersion?.().then((v) => { appVersion = v; serverBanner.draw(); }, () => {});
 
 
   // ---------------------------------------------------------------- auth, settings, keys
@@ -19,6 +34,9 @@ export function createAppConnection(deps) {
     deps.generation++;
     deps.state.token = "";
     deps.state.caps = null;
+    deps.state.serverInfo = null;
+    deps.state.serverLacks = new Set();
+    serverBanner.draw();
     deps.store("arkism.token", null);
     deps.store("arkism.email", null);
     unlocked(false);
@@ -29,6 +47,9 @@ export function createAppConnection(deps) {
 
   async function open() {
     deps.state.caps = await deps.request(`/v1/capabilities?${deps.query()}`);
+    firstRun = false;
+    deps.$("#unlock").classList.remove("first-run");
+    await serverBanner.check();
     unlocked(true);
     await deps.loadAll();
     deps.pages.checkUpdate(true);
@@ -54,6 +75,30 @@ export function createAppConnection(deps) {
     arkism_too_old: "서버의 Arkism이 오래돼서 이 연결 방식을 몰라요. 서버의 Arkism을 업데이트해 주세요."
   };
 
+  // 서버 설치 안내 (README와 같은 저장소의 guide/server.ko.md).
+  const SERVER_GUIDE = "https://github.com/FelixBaek/arkism/blob/main/guide/server.ko.md";
+
+  // 이 PC의 Arkism이 켜지지 않을 때의 쉬운 말. 원래 코드는 자세히 안에만 둔다.
+  const LOCAL_ERRORS = {
+    local_busy: "이미 켜는 중이에요. 잠시 뒤에 다시 시도하세요.",
+    local_unavailable: "이 PC용 Arkism 파일을 찾지 못했어요. 앱을 다시 설치하면 고쳐져요.",
+    local_database_create_failed: "기억을 저장할 곳을 만들지 못했어요. 저장 폴더에 쓸 수 있는지, 디스크가 꽉 차지 않았는지 확인하세요.",
+    local_database_start_failed: "기억 저장소를 켜지 못했어요. 앱을 모두 닫았다가 다시 열어 보세요.",
+    local_server_start_failed: "Arkism을 켜지 못했어요. 다른 Arkism 창이 열려 있으면 닫고 다시 시도하세요.",
+    local_token_status_failed: "이 PC의 접속 열쇠를 확인하지 못했어요.",
+    local_token_refresh_failed: "이 PC의 접속 열쇠를 새로 만들지 못했어요.",
+    local_token_revoked: "이 PC의 접속 열쇠가 취소됐어요. 다시 시도하면 새로 만들어요.",
+    gateway_start_failed: "모델 연결 기능을 켜지 못했어요."
+  };
+  const localErrorText = (code) => LOCAL_ERRORS[String(code || "").split(":")[0].trim()] || (String(code).startsWith("local_data_folder") ? "저장 폴더를 만들지 못했어요. 폴더 권한과 남은 디스크를 확인하세요." : "켜는 중에 문제가 생겼어요.");
+  const doctorText = (r) => {
+    const sum = r?.summary || {};
+    const left = (r?.checks || []).filter((c) => c.status === "fail").map((c) => c.message);
+    const fixed = (r?.fixes || []).length;
+    if (!left.length) return fixed ? `${fixed}가지를 고쳤어요. 다시 시도를 눌러 보세요.` : "점검에서 문제를 찾지 못했어요. 다시 시도를 눌러 보세요.";
+    return `남은 문제 ${sum.fail || left.length}개: ${left.slice(0, 2).join(" · ")}`;
+  };
+
   const sshErrorText = (code) => SSH_ERRORS[code] || (code.startsWith("arkism_connect_failed") ? `서버의 Arkism이 접속 정보를 주지 못했어요 (${code.split(": ")[1] || "알 수 없음"}).` : `연결하지 못했어요 (${code}).`);
 
   // 저장된 SSH 연결: {host, user, port, key, bin, auth}. 예전 판은 주소 문자열 하나만 저장했다.
@@ -75,6 +120,11 @@ export function createAppConnection(deps) {
   function sshFields(saved) {
     const box = deps.el("div", "ssh-rows");
     const f = saved || {};
+    // 호스트 한 칸만 먼저: 나머지는 비워 두면 ssh가 정하니 자세히 안에 둔다. 저장된 값이 있으면 펼쳐 둔다.
+    const more = deps.el("details", "ssh-more");
+    more.append(deps.el("summary", "", "자세히 (사용자·포트·인증 방식)"));
+    more.open = !!(f.user || f.port || f.key || f.bin || f.auth === "password");
+    let into = box;
     const row = (label, hint, ph, value) => {
       const r = deps.el("label", "ssh-row");
       const text = deps.el("span", "ssh-row-text");
@@ -82,10 +132,12 @@ export function createAppConnection(deps) {
       const i = deps.el("input");
       i.placeholder = ph; i.value = value || ""; i.autocomplete = "off"; i.spellcheck = false; i.setAttribute("autocapitalize", "off");
       r.append(text, i);
-      box.append(r);
+      into.append(r);
       return i;
     };
-    const host = row("호스트", "user@host 또는 ~/.ssh/config의 Host 별칭", "server.example.com", f.host);
+    const host = row("서버 주소", "user@서버주소 또는 ~/.ssh/config의 Host 별칭", "server.example.com", f.host);
+    box.append(more);
+    into = more;
     const user = row("사용자", "비우면 ~/.ssh/config 또는 지금 사용자", "root", f.user);
     const port = row("포트", "비우면 22 또는 ~/.ssh/config의 포트", "22", f.port ? String(f.port) : "");
     port.inputMode = "numeric";
@@ -93,7 +145,7 @@ export function createAppConnection(deps) {
     const authRow = deps.el("div", "ssh-row ssh-auth");
     authRow.setAttribute("role", "group");
     authRow.setAttribute("aria-label", "인증 방식");
-    box.append(authRow);
+    more.append(authRow);
     const key = row("키 파일", "개인 키 경로. 비우면 ssh-agent 또는 ~/.ssh/config", "~/.ssh/id_ed25519", f.key);
     const pass = row("비밀번호", "연결되면 이 PC의 키체인(자격 증명 관리자)에 저장해 다시 묻지 않아요. 비워 두면 저장된 비밀번호를 써요", "", "");
     pass.type = "password";
@@ -125,11 +177,12 @@ export function createAppConnection(deps) {
     };
     // 비밀번호 방식으로 저장된 연결이면 비밀번호 칸부터.
     const focus = () => (auth === "password" && f.host ? pass : host).focus();
+    into = box;
     return { node: box, read, focus };
   }
 
   function sshFormError(form) {
-    if (!form.host) return "호스트를 넣어 주세요.";
+    if (!form.host) return "서버 주소를 넣어 주세요.";
     if (form.port !== null && !(Number.isInteger(form.port) && form.port > 0 && form.port < 65536)) return "포트는 1~65535 사이 숫자예요.";
     return "";
   }
@@ -195,6 +248,8 @@ export function createAppConnection(deps) {
   }
 
   let unlockForm = null;
+  // 처음 실행(고르기 전·고른 뒤 첫 연결 전): 아직 쓸 메뉴가 없으니 사이드바를 덮는다.
+  let firstRun = false;
 
   function unlockSSH() {
     if (!unlockForm) {
@@ -251,15 +306,19 @@ export function createAppConnection(deps) {
     // 처음 실행(choose): 이 PC / SSH 두 카드. 이 PC를 고르면 카드 아래에 저장 위치가 펼쳐진다.
     // 내장 Arkism을 켜는 중이거나 켜지 못했을 때는 연결 칸 대신 진행 상태만 보여 준다.
     const choose = deps.state.mode === "choose", builtIn = deps.state.mode === "local";
+    const failed = builtIn && !!deps.state.localError;
+    if (choose) firstRun = true;
+    deps.$("#unlock").classList.toggle("first-run", firstRun);
     deps.$("#start-choice").hidden = !choose;
     deps.$("#unlock-box").hidden = choose;
-    deps.$("#unlock-title").textContent = choose ? "Arkism을 어디서 쓸까요?" : "서버의 Arkism에 연결";
+    deps.$("#unlock-title").textContent = choose ? "Arkism을 어디서 쓸까요?" : failed ? "이 PC의 Arkism을 켜지 못했어요" : builtIn ? "이 PC의 Arkism을 켜는 중" : "서버의 Arkism에 연결";
     for (const id of ["#ssh-form", "#ssh-actions", "#ssh-hint", "#ssh-test-result"]) deps.$(id).hidden = builtIn || choose;
-    deps.$("#local-retry").hidden = !builtIn || !deps.state.localError;
-    deps.$("#remote-link").hidden = !builtIn || !deps.state.localError;
+    for (const id of ["#local-retry", "#local-doctor", "#local-logs", "#remote-link", "#local-detail"]) deps.$(id).hidden = !failed;
+    if (!failed) deps.$("#local-doctor-result").hidden = true;
+    deps.$("#local-code").textContent = failed ? deps.state.localError : "";
     deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
     deps.$("#unlock-intro").textContent = choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
-      ? (deps.state.localError ? `이 PC의 Arkism을 켜지 못했어요 (${deps.state.localError}). 다시 시도하거나 서버에 연결할 수 있어요.` : "이 PC의 Arkism을 준비하고 있어요…")
+      ? (failed ? `${localErrorText(deps.state.localError)} 다시 시도해 보고, 그래도 안 되면 점검하고 고치기를 누르세요.` : "이 PC의 Arkism을 준비하고 있어요. 처음에는 1분쯤 걸릴 수 있어요.")
       : "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.";
   }
 
@@ -317,6 +376,27 @@ export function createAppConnection(deps) {
   }
 
   deps.$("#local-retry").addEventListener("click", startLocal);
+
+  // 시작 실패 화면의 점검: arkism doctor --fix. 결과는 고친 것과 남은 문제를 한 줄씩.
+  deps.$("#local-doctor").addEventListener("click", async (e) => {
+    const b = e.currentTarget, out = deps.$("#local-doctor-result");
+    b.disabled = true;
+    out.hidden = false;
+    out.classList.remove("warn");
+    out.textContent = "점검하고 고치는 중…";
+    try {
+      const r = await deps.tauri.invoke("doctor", { fix: true });
+      out.textContent = doctorText(r);
+      out.classList.toggle("warn", !!r?.summary?.fail);
+    } catch (_) {
+      out.textContent = "점검하지 못했어요. 기록 폴더의 파일을 문의할 때 같이 보내 주세요.";
+      out.classList.add("warn");
+    } finally { b.disabled = false; }
+  });
+
+  deps.$("#local-logs").addEventListener("click", () => deps.tauri?.invoke("open_logs").catch(() => deps.notice("기록 폴더를 열지 못했어요.")));
+
+  deps.$("#ssh-guide").addEventListener("click", () => window.open(SERVER_GUIDE, "_blank"));
 
   deps.$("#remote-link").addEventListener("click", useServer);
 
@@ -412,7 +492,12 @@ export function createAppConnection(deps) {
       const startBtn = deps.button("시작", "primary", null, startChosen);
       const acts = deps.el("div", "unlock-actions");
       acts.append(startBtn);
-      body.replaceChildren(startStorage.node, acts);
+      // 저장 위치는 바꿀 일이 드물다: 기본값으로 바로 시작하고, 바꾸려면 자세히를 연다.
+      const more = deps.el("details", "storage-more");
+      more.append(deps.el("summary", "", "자세히 (저장 위치)"), startStorage.node);
+      // 저장 폴더가 이미 다른 곳이면 숨기지 않는다.
+      void startStorage.ready.then((l) => { if (l && l.next !== l.default) more.open = true; });
+      body.replaceChildren(acts, more);
     }
     body.hidden = false;
   }
@@ -422,7 +507,8 @@ export function createAppConnection(deps) {
     if (b) b.disabled = true;
     const saved = await startStorage.save();
     if (b?.isConnected) b.disabled = false;
-    if (!saved) return;
+    // 저장 위치에 문제가 있으면 접힌 자세히를 열어 이유를 보여 준다.
+    if (!saved) { startStorage.node.closest("details")?.setAttribute("open", ""); return; }
     deps.store("arkism.mode", "local");
     void startLocal();
   }
@@ -453,9 +539,12 @@ export function createAppConnection(deps) {
     // eslint-disable-next-line no-func-assign -- live port: another module may swap this function
     set open(value) { open = value; },
     get readSSH() { return readSSH; },
+    get serverBanner() { return serverBanner; },
     get reconnect() { return reconnect; },
     get sshConnect() { return sshConnect; },
     get sshErrorText() { return sshErrorText; },
+    get localErrorText() { return localErrorText; },
+    get doctorText() { return doctorText; },
     get sshFields() { return sshFields; },
     get sshLabel() { return sshLabel; },
     get sshTest() { return sshTest; },

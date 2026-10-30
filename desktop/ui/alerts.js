@@ -1,5 +1,5 @@
 // 설정 › 일반 › 알림 (Figma 198:5962 카드/알림): desktop notifications for memories waiting for review, finished
-// workflow runs and a lost connection. app.js calls check() on its 10 s tick and the server is read every 30 s; the first
+// workflow runs, runs waiting for a person's answer and a lost connection. app.js calls check() on its 10 s tick and the server is read every 30 s; the first
 // read only learns what is already there, and nothing is sent while the window is in front (the screen shows it then).
 window.ArkismAlerts = (() => {
   "use strict";
@@ -9,7 +9,7 @@ window.ArkismAlerts = (() => {
   try { prefs = { ...DEF, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch (_) { /* defaults */ }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(prefs)); } catch (_) { /* per-viewer convenience only */ } };
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
-  let seen = null; // { owner, review, error (null = unknown), runs: Set of finished run ids, runsReady }
+  let seen = null; // { owner, review, error (null = unknown), runs: Set of finished run ids and waiting run:node keys, runsReady }
   let readAt = 0;
   let busy = false;
 
@@ -22,16 +22,20 @@ window.ArkismAlerts = (() => {
     try {
       // The window's own lists stop refreshing while it is hidden (visibleSync), so the review count and the
       // connection are read here. Runs are read only while 작업 완료 알림 is on.
-      const [counted, error, runs] = await Promise.all([
+      const [counted, error, runs, waits] = await Promise.all([
         state.caps?.actions?.review_list ? request("/v1/memory_candidates/query", { method: "POST", body: JSON.stringify({ scope: state.scope, state: "candidate", limit: 1 }) })
           .then((r) => (Number.isSafeInteger(r?.total) ? r.total : null), () => null) : null,
         request("/readyz").then(() => false, (e) => (e?.code === "api_context_changed" ? null : true)),
-        prefs.done ? request(`/v1/crew/runs?${query({ limit: 20 })}`).then((r) => r.items || [], () => null) : null
+        prefs.done ? request(`/v1/crew/runs?${query({ limit: 20 })}`).then((r) => r.items || [], () => null) : null,
+        // A run stopped at 승인 or 알림 waits for a person: it is news like a finished run (the approval itself stays in the app).
+        prefs.done ? request(`/v1/crew/runs?${query({ status: "waiting", limit: 50 })}`).then((r) => r.items || [], () => null) : null
       ]);
       // An older server has no count query; a failed count read stays null so seen.review is kept.
       const review = state.caps?.actions?.review_list ? counted : (state.candidateTotal ?? state.data?.candidates?.length ?? null);
       const finished = (runs || []).filter((x) => ["succeeded", "failed"].includes(x.crew_run?.status));
-      if (!seen) { seen = { owner, review, error, runs: new Set(finished.map((x) => x.id)), runsReady: !!runs }; return; }
+      const waitKey = (x) => `${x.id}:${x.crew_run.waiting?.node_id || ""}`;
+      const waiting = (waits || []).filter((x) => x.crew_run?.status === "waiting" && x.crew_run.waiting);
+      if (!seen) { seen = { owner, review, error, runs: new Set([...finished.map((x) => x.id), ...waiting.map(waitKey)]), runsReady: !!runs }; return; }
       const out = [];
       if (prefs.review && review != null && seen.review != null && review > seen.review) out.push([tr("검토할 기억이 생겼어요"), tr(`승인을 기다리는 기억이 ${review}개 있어요.`)]);
       if (prefs.error && error && seen.error === false) out.push([tr("Arkism 연결이 끊겼어요"), state.loadError?.text || tr("연결을 확인해 주세요.")]);
@@ -43,6 +47,11 @@ window.ArkismAlerts = (() => {
           if (seen.runs.has(x.id)) continue;
           seen.runs.add(x.id);
           if (fresh && prefs.done) out.push([x.crew_run.status === "succeeded" ? tr("작업이 끝났어요") : tr("작업이 실패했어요"), name(x.crew_run.crew_id)]);
+        }
+        for (const x of waiting) {
+          if (seen.runs.has(waitKey(x))) continue;
+          seen.runs.add(waitKey(x));
+          if (fresh && prefs.done) out.unshift([tr("확인이 필요해요"), `${name(x.crew_run.crew_id)} · ${tr("Arkism에서 승인하거나 거절해 주세요.")}`]);
         }
       }
       if (review != null) seen.review = review;

@@ -2,6 +2,7 @@
 // Explicit module dependency entry. The browser source entry and esbuild use the same graph.
 import "./ask.js";
 import "./keep.js";
+import "./model-pick.js";
 import "./ssh-trust.js";
 import "./text-diff.js";
 import "./brand.js";
@@ -54,12 +55,14 @@ import "./skill-trial-status.js";
 import "./skill-trial.js";
 import "./skill-review.js";
 import "./skill-generate.js";
+import "./skill-improve.js";
 import "./catalog.js";
 import "./messenger.js";
 import "./alerts.js";
 import "./shell.js";
 import "./home-checks.js";
 import "./home.js";
+import "./home-start.js";
 import { startApp } from "./app.js";
 await window.ArkismI18n.ready();
 startApp();

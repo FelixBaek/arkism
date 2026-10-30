@@ -23,11 +23,17 @@ for (const tab of ["overview", "test", "history"]) {
   }
 }
 
+// 「+ 새 워크플로우」 opens the graph editor now (#481); the automation creator stays behind an agent's 새 워크플로우 만들기.
+async function openCreator(h) {
+  h.state.view = "crew"; h.render(); await h.settle();
+  document.querySelector('[data-id="crew:ag2"]').click(); await h.settle();
+  h.btn(h.top(), "새 워크플로우 만들기").click(); await h.settle();
+}
+
 test("new automation window", async () => {
   const h = await boot();
   h.render(); await h.settle();
-  h.btn(document, /새 워크플로우/).click(); await h.settle();
-  h.btn(h.top(), /단계 구성/).click(); await h.settle();
+  await openCreator(h);
   const d = h.top();
   assert.match(d.className, /v4-auto-new/);
   await sweep(h, d);
@@ -166,8 +172,7 @@ test("automation AI proposals: steps, goal and trigger, and the errors", async (
 test("a new automation drafted by AI, given steps and created", async () => {
   const h = await boot();
   h.render(); await h.settle();
-  h.btn(document, /새 워크플로우/).click(); await h.settle();
-  h.btn(h.top(), /단계 구성/).click(); await h.settle();
+  await openCreator(h);
   const d = h.top();
   const chat = h.chats.filter((c) => c.label === "AI로 초안").at(-1);
   // saving with no name asks for one
@@ -198,19 +203,19 @@ test("when it runs: the start menu, plain words and the raw cron", async () => {
   const item = async (label) => { const m = await menu(); [...m.querySelectorAll("button")].find((b) => b.firstChild.textContent === label).click(); await h.settle(); };
   await item("일정");
   assert.ok(h.notices.some((n) => /이미 켜져/.test(n)));
-  await item("이벤트");
   h.answer = false; await item("웹훅");
   h.answer = true; await item("웹훅");
   await item("웹훅");
   await item("일정");
   await menu(); await menu();
-  // the day, half-day and hour pickers
-  for (const label of ["토", "오후", "오전"]) { exact(d.querySelector(".auto-sched-pick"), label).click(); await h.settle(); }
-  const hour = d.querySelector('.auto-sched-pick [aria-label="시"]');
-  dom.type(hour, "0"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="시"]'), "7"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="분"]'), "99"); await h.settle();
-  dom.type(d.querySelector('.auto-sched-pick [aria-label="분"]'), "15"); await h.settle();
+  // the shared day and time picker
+  const day = (label) => [...d.querySelectorAll(".sched-day")].find((b) => b.textContent === label);
+  day("토").click(); await h.settle();
+  assert.equal(day("토").getAttribute("aria-pressed"), "false");
+  day("토").click(); await h.settle();
+  assert.equal(day("토").getAttribute("aria-pressed"), "true");
+  dom.type(d.querySelector(".sched-time"), "07:15"); await h.settle();
+  assert.match(d.querySelector(".sched-next").textContent, /07:15|7:15/);
   // plain words, read here or asked of the AI
   const say = () => d.querySelector(".auto-sched-say");
   for (const text of ["평일 아침 9시", "주말 오후 3시 반", "월·수 18:30", "매일 밤 2시", "매일 밤 9시", "화요일 점심", "목 저녁", "금 밤", "오전 12시", "매일 25시", "아무 말"]) {
@@ -222,7 +227,8 @@ test("when it runs: the start menu, plain words and the raw cron", async () => {
   h.assistReply = () => ({ status: "done", output: "{\"cron\":\"0 9 1 * *\"}" });
   say().value = "매월 1일 9시"; dom.key(say(), "Enter"); await h.settle();
   // a cron the picker cannot show stays a raw line
-  assert.equal(d.querySelector(".auto-days"), null);
+  assert.equal(d.querySelector(".sched-days"), null);
+  assert.ok(d.querySelector(".sched-more").open);
   assert.ok(h.notices.some((n) => /알아듣지 못했어요/.test(n)));
   assert.ok(h.notices.some((n) => /끊김/.test(n)));
   assert.deepEqual(clean(), []);
@@ -330,4 +336,54 @@ test("#465 automation: failed channel and destination reads say so, with a retry
   for (let b; (b = exact(d, "다시 시도"));) { b.click(); await h.settle(); await h.settle(); }
   assert.equal(chan(), "채널 고르기");
   assert.doesNotMatch(d.textContent, /보낼 곳을 불러오지 못했어요/);
+});
+
+test("cards ring by their latest run: waiting amber, running green, failed red, idle none", async () => {
+  const h = await boot();
+  h.render(); await h.settle();
+  const ring = (id) => [...document.querySelector(`[data-id="crew:${id}"]`).classList].filter((c) => c.startsWith("run-"));
+  assert.deepEqual(ring("wf1"), ["run-waiting"]);
+  assert.deepEqual(ring("wf2"), ["run-failed"]);
+  h.data.runs = h.data.runs.filter((r) => r.id !== "run3");
+  h.render(); await h.settle();
+  assert.deepEqual(ring("wf2"), ["run-running"]);
+  h.data.runs = [];
+  h.render(); await h.settle();
+  assert.deepEqual(ring("wf1"), []);
+  assert.deepEqual(clean(), []);
+});
+
+test("기록·사용량: one workflow's numbers, periods, failing steps and retry", async () => {
+  const usage = { kpi: { runs: 4, cost_usd: 1.2 }, by_day: [{ date: "2026-10-27", ok: 2, workflow: 2, failed: 1 }, { date: "2026-10-28", ok: 1, workflow: 1, failed: 0 }],
+    workflows: [{ id: "wf1", runs: 4, success_rate: 75, tokens: 8100000, avg_ms: 190000, max_ms: 362000 }], failing_nodes: [{ workflow_id: "wf1", node_id: "code", failures: 1 }] };
+  const failed = { id: "runf", revision: 1, created_at: new Date().toISOString(), crew_run: { crew_id: "wf1", status: "failed", input: "{}", nodes: { code: { status: "failed", error: "exit 1" }, ai1: { status: "done", output: "x" } } } };
+  const asked = [];
+  const h = await boot({ routes: [["GET", /^\/v1\/crew\/usage\?/, (_, url) => { asked.push(url); return usage; }]] });
+  h.data.runs.push(failed);
+  const d = await openAuto(h, "wf1", "history");
+  await h.settle();
+  assert.equal(d.querySelector(".crew-popup-tab.on").textContent, "기록·사용량");
+  const sec = d.querySelector(".flow-usage");
+  assert.ok(sec, "사용량 sits in the tab");
+  const heads = [...d.querySelectorAll(".auto-history > section")].map((s) => s.querySelector("strong")?.textContent);
+  assert.deepEqual(heads.slice(0, 3), ["사용량", "버전 기록", "최근 실행"]);
+  assert.match(sec.textContent, /75\.0%/);
+  assert.match(sec.textContent, /3분 10초/);
+  assert.match(sec.textContent, /가장 긴 실행 6분 02초/);
+  assert.match(sec.textContent, /토큰 8\.1M/);
+  assert.equal(sec.querySelectorAll(".tm-col").length, 2);
+  assert.match(sec.textContent, /실패가 많은 단계/);
+  // retry: refused, then sent with the done step kept
+  h.answer = false; exact(sec, "다시 실행").click(); await h.settle();
+  assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)).length, 0);
+  h.answer = true; exact(sec, "다시 실행").click(); await h.settle();
+  const sent = h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/runs$/.test(c.url)).pop();
+  assert.ok(sent, "a retry run was sent");
+  assert.equal(sent.body.run.nodes.ai1.status, "done");
+  // periods reload; an empty answer shows the error line
+  usage.kpi = undefined;
+  exact(sec, "7일").click(); await h.settle();
+  assert.match(sec.textContent, /사용량을 불러오지 못했어요/);
+  assert.ok(asked.every((u) => /workflow_id=wf1/.test(u)), asked.join(" "));
+  assert.deepEqual(clean(), []);
 });

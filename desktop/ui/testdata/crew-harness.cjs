@@ -204,7 +204,7 @@ async function boot(opts = {}) {
   // prompts the screens ask through window.ask / askTyped
   globalThis.ask = async (msg) => { h.asks.push(msg); return typeof h.answer === "function" ? h.answer(msg) : h.answer; };
   globalThis.askTyped = async (msg) => { h.asks.push(msg); return h.typed; };
-  globalThis.askText = async (msg, v) => { h.asks.push(msg); return v; };
+  globalThis.askText = async (msg, v, o) => { h.asks.push(msg); h.askOpts = o; return v; };
   globalThis.ArkismNeed = (node, msg) => { h.needs.push(msg); };
   h.assistReply = (kind, prompt) => ({ status: "done", output: JSON.stringify({ name: "새 동료", role: "돕는 일", instructions: "## 역할\n돕기", file_name: "new-mate", skills: ["git-review", "nope"], tools: ["github", "nope"], effort: "high" }) });
   const kit = {
@@ -229,6 +229,7 @@ async function boot(opts = {}) {
   });
   delete globalThis.ArkismI18n;
   if (opts.search) globalThis.location.search = opts.search;
+  loadScript("model-pick.js");
   loadScript("crew-popup.js");
   loadScript("team-cover.js");
   loadScript("crew-automation.js");

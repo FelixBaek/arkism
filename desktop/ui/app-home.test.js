@@ -34,7 +34,10 @@ const closeAll = async () => { for (const d of app.$$("dialog[open]")) d.close()
 // opens 승인 대기 and picks the candidate whose text starts so (a focus id given before the page loads falls to the first item)
 async function reviewOf(start) {
   await openWindow({ wide: "review" }); await app.settle(50);
-  const row = [...win().querySelectorAll(".ov-wide-row")].find((r) => text(r.querySelector(".ov-win-item-title")).startsWith(start));
+  // the window shows one kind at a time: look through each kind's chip
+  const find = () => [...win().querySelectorAll(".ov-wide-row")].find((r) => text(r.querySelector(".ov-win-item-title")).startsWith(start));
+  for (const chip of [...win().querySelectorAll(".ov-wide-filter > .ov-wide-chips > .ov-wide-chip")]) { if (find()) break; chip.click(); await app.settle(50); }
+  const row = find();
   assert.ok(row, `row ${start}`); row.click(); await app.settle();
   return win();
 }
@@ -49,18 +52,14 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.ok(d.querySelectorAll(".ov-wide-row").length > 1, "the session list fills once /v1/usage/sessions answered");
   assert.match(text(d), /원문 보관/);
   assert.equal(btn("‹ 작게 보기", d), undefined, "no compact step first");
-  // ‹ › walk the compact stages in order and wrap around into the wide ones
-  d = await openWindow({ key: "dream" }); assert.match(text(d), /7 \/ 8 단계/);
-  await press("다음 단계", d); assert.match(text(win()), /8 \/ 8 단계/);
-  await press("다음 단계", win(), 30); assert.match(text(win().querySelector(".ov-win-title")), /대화 저장/);
-  // 승인 is its own group after 드리밍, in the top bar and the 기억 처리 grid; 승인 대기 is the last step
-  assert.deepEqual([...app.document.querySelectorAll(".ov-group-head span")].map(text), ["저장", "사용", "드리밍", "승인"]);
-  assert.deepEqual([...app.document.querySelectorAll(".ov-grid-sec")].map(text), ["저장", "사용", "드리밍", "승인"]);
-  d = await openWindow({ key: "review" }); assert.match(text(d), /8 \/ 8 단계/);
-  // no 다음 단계 card inside a stage window: ‹ › already step through the stages
+  // no ‹ n / N 단계 › walker: the overview cards already open each step
+  d = await openWindow({ key: "dream" }); assert.doesNotMatch(text(d), /\d \/ \d 단계/);
+  assert.equal(btn("다음 단계", d), undefined);
+  // 승인 is its own group after 정리, in the top bar and the 기억 처리 grid
+  assert.deepEqual([...app.document.querySelectorAll(".ov-group-head span")].map(text), ["저장", "사용", "정리", "승인"]);
+  assert.deepEqual([...app.document.querySelectorAll(".ov-grid-sec")].map(text), ["저장", "사용", "정리", "승인"]);
   d = await openWindow({ key: "review" });
   assert.equal(d.querySelector(".ov-win-next"), null);
-  assert.ok(!/다음 단계/.test(text(d.querySelector(".ov-win-cells"))));
   // every stage opens wide with its own list on the right; 분석 links to the session list
   for (const key of ["extract", "classify", "judge", "dream"]) {
     d = await openWindow({ key });
@@ -122,7 +121,7 @@ test("overview: 분류 groups its waiting candidates by kind inside the window",
   await closeAll();
 });
 
-test("overview: 드리밍 decides each proposal in its own row, with the 승인 대기 choices", async () => {
+test("overview: 정리하는 중 decides each proposal in its own row, with the 승인 대기 choices", async () => {
   let d = await openWindow({ key: "dream" });
   assert.equal(d.querySelector(".ov-win-foot button"), null, "no jump to 승인 대기");
   const wrap = d.querySelector(".ov-win-proposal"); assert.ok(wrap, "a proposal row");
@@ -135,7 +134,7 @@ test("overview: 드리밍 decides each proposal in its own row, with the 승인 
   await press(pick, panel, 30);
   if (pick === "둘 다 두기") await press("이대로 적용", panel, 80); // a pair choice previews first
   assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"dismiss"/.test(String(b))));
-  assert.match(text(win()), /드리밍/, "it stays in the 드리밍 window");
+  assert.match(text(win()), /정리하는 중/, "it stays in the 정리하는 중 window");
   await closeAll();
 });
 
@@ -227,7 +226,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   await openWindow({ wide: "review" });
   await app.settle(50);
   let d = win();
-  assert.match(text(d), /승인 대기/);
+  assert.match(text(d), /확인해 주세요/);
   // sort and search go to the server query
   const sorter = d.querySelector("select.ov-wide-sort");
   for (const v of ["new", "risk", "old"]) { sorter.value = v; app.dom.fire(sorter, "change"); await app.settle(20); }
@@ -235,8 +234,9 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   app.dom.type(search, "Orbit"); await app.settle(30);
   assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/query" && /Orbit/.test(String(b))));
   app.dom.type(search, ""); await app.settle(30);
-  // the chips: 새로 저장, 헷갈림, 정리 제안; a state with nothing in it has no chip
-  for (const label of ["새로 저장", "헷갈림", "정리 제안", "전체"]) {
+  // one kind at a time (no mixed 전체 list): 새 기억 확인, 서로 다른 기억, 정리 제안; a state with nothing in it has no chip
+  assert.ok(![...d.querySelectorAll(".ov-wide-chip")].some((c) => text(c).startsWith("전체")), "no 전체 chip");
+  for (const label of ["서로 다른 기억", "정리 제안", "새 기억 확인"]) {
     const chip = [...d.querySelectorAll(".ov-wide-chip")].find((c) => text(c).startsWith(label)); assert.ok(chip, label);
     chip.click(); await app.settle(30);
   }
@@ -268,7 +268,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   cb[1].checked = false; app.dom.fire(cb[1], "change");
   const batch = btn("선택 1개 승인", win()); assert.ok(batch && !batch.disabled);
   batch.click(); await app.settle(80);
-  assert.match(text(win()), /승인 대기/);
+  assert.match(text(win()), /확인해 주세요/);
   // a batch where the server refuses says how many failed
   d = win();
   const cb2 = d.querySelector(".ov-wide-row input[type=checkbox]");
@@ -278,7 +278,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   btn("선택 1개 승인", d).click(); await app.settle(80);
   // the failure count is written to the footer, which the page load that follows redraws
   assert.ok(app.apiCalls.slice(calls).some(([m, p]) => m === "POST" && p.endsWith("/review")));
-  assert.match(text(win()), /승인 대기/);
+  assert.match(text(win()), /확인해 주세요/);
   offRev();
   offMerge();
   await closeAll();
@@ -433,7 +433,7 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   assert.ok(app.apiCalls.some(([, p]) => /\/v1\/maintenance_proposals\/.+\/decide/.test(p)));
   // the signal proposal (rule often broken) has its own two choices
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
-  const sig = [...d.querySelectorAll(".ov-wide-row-dream")].find((r) => /통과율/.test(text(r)));
+  const sig = [...d.querySelectorAll(".ov-wide-row-dream")].find((r) => /지켜짐/.test(text(r)));
   assert.ok(sig, "signal proposal row");
   sig.click(); await app.settle();
   assert.match(text(win()), /자주 어겨요/);
@@ -442,7 +442,7 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
   app.dom.type(d.querySelector(".ov-wide-search"), "없는말"); await app.settle(30);
   assert.match(text(win()), /지금 보여 줄 후보가 없어요/);
-  assert.match(text(win()), /승인 대기/);
+  assert.match(text(win()), /확인해 주세요/);
   await closeAll();
 });
 
@@ -504,6 +504,26 @@ test("overview: an older server's invalid_request on 둘 다 지우기 reads as 
   assert.match(text(win()), /서버를 최신 판으로 올린 뒤/);
   assert.doesNotMatch(text(win()), /invalid_request/);
   await closeAll();
+});
+
+test("an older server: one banner, and 지우기 offers no 둘 다", async () => {
+  const off = route("GET", "/healthz", () => ok({ status: "ok" })); // a server from before /healthz named its version
+  try {
+    await app.click("#local-retry", 50); // reconnecting reads /healthz again
+    assert.equal(app.$("#server-banner").hidden, false);
+    assert.match(text(app.$("#server-banner")), /서버가 앱보다 오래됐어요 · 서버 \(이전 버전\)/);
+    await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+    for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+    await press("지우기", win().querySelector(".ov-detail-actions"));
+    const pick = win().querySelector(".del-reason");
+    assert.ok(pick && /넘길 기억/.test(text(pick)));
+    assert.doesNotMatch(text(pick.querySelector(".del-reason-chips")), /둘 다/);
+    await closeAll();
+  } finally {
+    off();
+    await app.click("#local-retry", 50);
+  }
+  assert.equal(app.$("#server-banner").hidden, true);
 });
 
 test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", async () => {
@@ -613,7 +633,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   assert.match(text(win()), /세션 기록/);
   // a waiting candidate links to 승인 대기; 새로고침 reads the list again
   const cand = win().querySelector(".ov-detail-cand.link");
-  if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /승인 대기/); }
+  if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /확인해 주세요/); }
   await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
   // 대화 보기 turns the window into the dialogue: the person on the right, the agent by name, each message's own time; ‹ 세션 정보 goes back
@@ -686,18 +706,18 @@ test("overview: 세션 기록 copies resume and continue-in commands, counts age
   assert.equal(d.querySelectorAll(".ss-row").length, 2);
   assert.match(text(d), /제목 없음[\s\S]*토큰 기록 없음/);
   // 재개 copies the session's own command; nothing runs
-  await press("재개", d.querySelector(".ss-row"), 20);
+  await press("이어서 하기", d.querySelector(".ss-row"), 20);
   assert.equal(app.clipboard.text, "cd /home/me/arkism; codex resume cx-1");
   // handoff ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
-  await press("handoff", d.querySelector(".ss-row"));
-  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 handoff"]);
-  await press("Claude Code(으)로 handoff", d, 30);
+  await press("넘기기", d.querySelector(".ss-row"));
+  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 넘기기"]);
+  await press("Claude Code(으)로 넘기기", d, 30);
   assert.match(app.clipboard.text, /^cd \/home\/me\/arkism; claude 'Arkism resume_work 도구로 작업 wk-1를/);
   assert.match(text(win()), /Claude Code 시작 명령을 복사했어요/);
   assert.ok(!app.calls.some((c) => /spawn|execute|run_command/.test(String(c?.[0] ?? c))), "no command is run");
   // the row opens its facts in place
   win().querySelector(".ov-wide-row").click(); await app.settle(); d = win();
-  assert.match(text(d.querySelector(".ss-facts")), /폴더\/home\/me\/arkism[\s\S]*세션 IDcx-1[\s\S]*재개 명령cd \/home\/me\/arkism; codex resume cx-1[\s\S]*gpt-x[\s\S]*파일\/home\/me\/.codex\/r.jsonl/);
+  assert.match(text(d.querySelector(".ss-facts")), /폴더\/home\/me\/arkism[\s\S]*세션 IDcx-1[\s\S]*이어서 하기 명령cd \/home\/me\/arkism; codex resume cx-1[\s\S]*gpt-x[\s\S]*파일\/home\/me\/.codex\/r.jsonl/);
   // a session without folder or tokens says 기록 없음 instead of guessing
   d.querySelectorAll(".ov-wide-row")[1].click(); await app.settle(); d = win();
   assert.match(text(d.querySelector(".ss-facts")), /폴더기록 없음[\s\S]*토큰기록 없음/);
@@ -719,8 +739,8 @@ test("overview: 사용량 window draws the counts and its two buttons", async ()
   await openWindow({ wide: "usage" }); await app.settle(30); let d = win();
   assert.match(text(d), /최근 사용 기록/);
   assert.match(text(d), /많이 쓰인 기억/);
-  await press("쓰임 확인 보기", d);
-  assert.match(text(win()), /쓰임 확인/);
+  await press("잘 쓰이나 확인 보기", d);
+  assert.match(text(win()), /잘 쓰이나 확인/);
   d = await openWindow({ wide: "usage" });
   await press("사용량 화면으로", d, 50);
   assert.equal(win(), null);
@@ -966,10 +986,10 @@ test("home palette: Ctrl K, tabs, keys, results by kind and the empty actions", 
   app.dom.key(app.document.body, "k", { ctrlKey: true }); await app.settle();
   assert.ok(pal()?.open);
   assert.match(text(pal()), /최근 기억/);
-  assert.match(text(pal()), /기억 후보 검토/);
+  assert.match(text(pal()), /새 기억 확인/);
   // the tabs by click and by keys (←→ only while empty, Tab / Shift Tab always)
   pal().querySelector('.pal-tab[data-tab="memory"]').click(); await app.settle();
-  assert.ok(!/기억 후보 검토/.test(text(pal())));
+  assert.ok(!/새 기억 확인/.test(text(pal())));
   await palKey("ArrowRight"); await palKey("ArrowLeft"); await palKey("ArrowLeft");
   await palKey("Tab"); await palKey("Tab", { shiftKey: true });
   await palKey("ArrowDown"); await palKey("ArrowUp"); await palKey("ArrowDown", { isComposing: true });
@@ -1007,7 +1027,7 @@ test("home palette: Ctrl K, tabs, keys, results by kind and the empty actions", 
   app.window.removeEventListener("arkism:open-expert", seen); app.window.removeEventListener("arkism:open-team", seen);
   await openBy("릴리스", /\$릴리스점검/);
   // the empty actions: 기억 후보 검토, 연결 상태 보기, 설정 열기; a backdrop click and ✕ close it
-  for (const label of ["기억 후보 검토", "연결 상태 보기", "설정 열기"]) {
+  for (const label of ["새 기억 확인", "연결 상태 보기", "설정 열기"]) {
     app.$("#search-toggle").click(); await app.settle();
     palRows().find((r) => text(r) === label).click(); await app.settle(50);
     assert.ok(!pal().open, label);
@@ -1107,6 +1127,48 @@ test("home: a finished analysis run with no candidate is not a stall, and the �
   offs.forEach((off) => off());
 });
 
+// A fresh install with only Claude Code: the other agents are grey and out of 주의, and a memory extractor that cannot
+// run says so in plain words with the way to fix it, on 홈 and in the status card.
+test("home: agents that are not installed stay grey, and a broken memory extractor gets one plain card", async () => {
+  const ids = ["claude_code", "codex", "zcode", "gemini", "grok", "opencode", "cursor"];
+  const tools = (extractor, run) => route("GET", "/v1/agent_tools", () => ok({ agent_tools: { collected_at: new Date().toISOString(), servers: [], plugins: [], requests: [],
+    agents: ids.map((id, i) => ({ id, name: id, found: i === 0, enabled: true })), extractor, analysis_run: run || null } }));
+  let off = tools({ model: "haiku", cli: "claude", state: "login_needed", clis: { claude: "login_needed", codex: "missing", gemini: "missing" } });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.match(text(app.$("#table")), /기억을 뽑으려면 로그인이 필요해요/);
+  assert.match(text(app.$("#table")), /로그인하기/);
+  for (const id of ids.slice(1, 5)) assert.equal(app.$(`#status-agents [data-agent="${id}"]`).hidden, true, id); // the tiles in index.html
+  assert.equal(app.$('#status-agents [data-agent="claude_code"]').hidden, false);
+  assert.match(text(app.$("#status-list")), /기억 뽑을 모델로그인 필요/);
+  assert.equal(text(app.$("#status-badge")), "주의 1", "only the extractor, not the six missing agents");
+  // the host picked a model but its last run failed: the code turns into words, never shown as the main text
+  off(); off = tools({ model: "codex", cli: "codex", state: "ready" }, { at: ago(0.1), jobs: 1, done: 0, failed: 1, reason: "extractor_no_json", error: "" });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.match(text(app.$("#table")), /기억을 뽑는 모델의 답을 읽지 못했어요/);
+  assert.doesNotMatch(text(app.$("#table")), /extractor_no_json/);
+  // the 분석 window: its status is the failed run (not 정상), and it names the extractor that runs, Codex, as 홈 does
+  let d = await openWindow({ key: "extract" });
+  const badge = d.querySelector(".ov-win-badge");
+  // a 6-hour stall (the preview's sessions, depending on the clock) outranks it and is red
+  if (badge.classList.contains("r")) assert.match(text(badge), /멈춤/);
+  else { assert.equal(text(badge), "답을 못 읽음"); assert.ok(badge.classList.contains("a"), "a warning tone"); }
+  assert.match(text(d.querySelector(".ov-stage-what")), /AI \(Codex\)/); assert.doesNotMatch(text(d), /서버 Claude/);
+  await closeAll();
+  // ready and nothing failed: no card, no status row
+  off(); off = tools({ model: "codex", cli: "codex", state: "ready" });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.doesNotMatch(text(app.$("#table")), /기억을 뽑/);
+  assert.doesNotMatch(text(app.$("#status-list")), /기억 뽑을 모델/);
+  d = await openWindow({ key: "extract" });
+  assert.ok(!d.querySelector(".ov-win-badge").classList.contains("a"), "no failure once the run is fine");
+  await closeAll();
+  off();
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+});
+
 test("home: a prompt turns up in search once the gallery menu shows", async () => {
   const off = route("GET", "/v1/prompts", () => ok({ items: [{ id: "pp1", title: "썸네일 슬라이드", prompt: "표지", kind: "slide", image_prompt: { kind: "slide", title: "썸네일 슬라이드", prompt: "표지 {제목}", engine: "gpt" } }] }));
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(1500);
@@ -1133,7 +1195,7 @@ test("home: a manual connection walks the start steps; SSH errors explain themse
   let pane = app.$("#ssh-error-side");
   assert.ok(pane && !pane.hidden);
   assert.match(text(pane), /연결하지 못했어요/);
-  assert.match(text(app.$("#unlock-error")), /호스트를 넣어 주세요/);
+  assert.match(text(app.$("#unlock-error")), /서버 주소를 넣어 주세요/);
   const [host, user, port, key] = app.$("#ssh-form").querySelectorAll("input");
   host.value = "my-server"; user.value = "me"; port.value = "2222"; key.value = "~/.ssh/id_ed25519";
   // a refused login names the kind and shows the ssh command to try

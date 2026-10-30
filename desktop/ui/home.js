@@ -43,7 +43,7 @@ window.ArkismHome = function (ctx) {
       .forEach((r) => out.push({ kind: "crew", type: r.crew.type, id: r.id, title: r.crew.type === "workflow" ? `$${r.crew.handle || r.crew.name}` : r.crew.name || r.crew.handle, where: `FLOW › ${CREW_WHERE[r.crew.type]}`, badge: CREW_WHERE[r.crew.type] }));
     const tools = d.tools || {};
     (tools.servers || []).filter((x) => has(x.name, q) || has(x.desc, q)).slice(0, each)
-      .forEach((x) => out.push({ kind: "mcp", id: x.name, title: x.name, mono: true, where: "TOOLS › MCP", badge: "MCP" }));
+      .forEach((x) => out.push({ kind: "mcp", id: x.name, title: x.name, mono: true, where: "TOOLS › 도구 서버(MCP)", badge: "MCP" }));
     (tools.plugins || []).filter((x) => has(x.name, q) || has(x.desc, q)).slice(0, each)
       .forEach((x) => out.push({ kind: "plugin", id: x.name, title: x.name, mono: true, where: "TOOLS › 플러그인", badge: "플러그인" }));
     ctx.settingsTabs().filter(([, name]) => has(name, q) || has("설정", q)).slice(0, each)
@@ -117,7 +117,7 @@ window.ArkismHome = function (ctx) {
 
   // ------------------------------------------------------------ 통합 검색 창 (설정 줄의 검색 아이콘 · Ctrl K)
   // One dialog over every screen: type tabs, results grouped by kind, recent memories and quick actions while empty.
-  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "FLOW"], ["mcp", "MCP"], ["plugin", "플러그인"], ["setting", "설정"]];
+  const TABS = [["all", "전체"], ["memory", "기억"], ["skill", "스킬"], ["crew", "FLOW"], ["mcp", "도구 서버(MCP)"], ["plugin", "플러그인"], ["setting", "설정"]];
   const KIND_ICON = { memory: "brain", skill: "puzzle-piece", crew: "users-three", prompt: "image", mcp: "plug", plugin: "stack", setting: "gear-six", action: "arrow-right" };
   let pal = null, palTab = "all", palHits = [], palActive = 0;
   const palQ = () => pal.querySelector(".pal-input").value.trim().toLowerCase();
@@ -141,7 +141,7 @@ window.ArkismHome = function (ctx) {
         .map((m) => ({ kind: "memory", id: m.id, title: m.text, where: "기억", item: m }));
       if (palTab === "all" || palTab === "memory") groups.push(["최근 기억", recent]);
       if (palTab === "all") groups.push(["작업", [
-        { kind: "action", title: "기억 후보 검토", run: () => { state.menu = "memory"; go("memories", "candidate"); } },
+        { kind: "action", title: "새 기억 확인", run: () => { state.menu = "memory"; go("memories", "candidate"); } },
         { kind: "action", title: "연결 상태 보기", run: () => { const t = $("#status-toggle"); if ($("#status-card").hidden) t.click(); } },
         { kind: "action", title: "설정 열기", run: () => ctx.openSettings() }]]);
     } else {
@@ -346,6 +346,8 @@ window.ArkismHome = function (ctx) {
     }
     const row = el("div", "unlock-actions");
     row.append(button("다시 시도", "primary", null, () => $("#unlock-form").requestSubmit($("#ssh-button"))), button("SSH 테스트", "", null, () => $("#ssh-test").click()));
+    // SSH는 됐지만 서버에 Arkism이 없거나 오래됨: 서버 설치 안내로 바로.
+    if (/^arkism_(not_found|too_old)/.test(code)) row.append(button("서버에 설치하는 방법", "", null, () => $("#ssh-guide").click()));
     parts.push(row);
     const list = el("details", "ssh-err-list");
     list.append(el("summary", "", "다른 오류 종류"));

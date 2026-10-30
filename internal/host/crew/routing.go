@@ -169,6 +169,9 @@ func routedCall(spec, d map[string]any, ids []string, i int, attempt, res map[st
 	}
 	call := map[string]any{"model": ids[i], "decision": decision, "replaced": replaced, "ok": res["ok"],
 		"latency_ms": res["duration_ms"], "classifier_ms": classifier, "error": code}
+	if rule, _ := d["rule"].(string); rule != "" && i == 0 {
+		call["rule"] = rule // the 늘 이 모델로 kind that chose the first model
+	}
 	if truthy(spec["origin"]) {
 		call["origin"] = spec["origin"]
 		addUsage(call, res)

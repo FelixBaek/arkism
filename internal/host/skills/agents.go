@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/host/capture"
 )
 
 const agentsUsage = `Sync this host's agent MCP servers and plugins with Arkism.
@@ -906,6 +907,7 @@ func syncAgents() error {
 	if run := readOrdered(filepath.Join(host.CaptureState, "analysis.json")); run != nil {
 		body.Set("analysis_run", run)
 	}
+	body.Set("extractor", capture.ExtractorStatus()) // 기억 추출: which CLI runs it and whether it can (home start checklist)
 	// Scores from the last skill-checks scan; left out before the first one so the server keeps its copy.
 	if checks, tools := checksReport(); checks != nil {
 		body.Set("skill_checks", checks)

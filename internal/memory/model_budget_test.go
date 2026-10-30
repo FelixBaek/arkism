@@ -242,3 +242,19 @@ func TestModelBudgetDailyTargetIsSoftAndLegacyHardIsOptional(t *testing.T) {
 		t.Fatal("negative target", e)
 	}
 }
+
+func TestModelBudgetStatusWithoutPolicyAnswersNoBudget(t *testing.T) {
+	f, _ := modelBudgetFixture(t)
+	f.svc.ModelBudgetPolicy = nil
+	if _, e := f.svc.ModelBudgetStatus(testCtx, "budget", scopeA); !errors.Is(e, ErrDenied) {
+		t.Fatal("a service read a missing budget", e)
+	}
+	budget := 15.0
+	if _, e := f.svc.SetRoutingPolicy(testCtx, f.human, RoutingPolicyInput{Scope: scopeA, MonthlyBudgetUSD: &budget}); e != nil {
+		t.Fatal(e)
+	}
+	out, e := f.svc.ModelBudgetStatus(testCtx, f.human, scopeA)
+	if e != nil || out.Configured || out.MonthlyLimit != 0 || out.RoutingBudgetUSD != 15 || out.RoutingRevision != 1 || out.Month == "" {
+		t.Fatal("no budget answer", out, e)
+	}
+}

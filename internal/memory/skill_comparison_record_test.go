@@ -22,6 +22,7 @@ func comparisonRecordFixture(t *testing.T, f *fixture) (RecordSkillComparisonInp
 			result.Cases = append(result.Cases, SkillComparisonCase{CaseSHA256: ContentHash(category), Category: category, Variant: variant, Passed: variant == "candidate" || category != "quality", OutputSHA256: ContentHash(category + variant), DurationMS: 10, StartedAt: end.Add(-10 * time.Millisecond), FinishedAt: end})
 		}
 	}
+	result.Cases[0].Cost = .25 // a baseline case: its run's cost is measured too, but never gates the candidate
 	return RecordSkillComparisonInput{Scope: scopeA, EventID: "measured-once", Result: result}, candidate
 }
 func TestSkillComparisonRecord(t *testing.T) { checkSkillComparisonRecord(t, newFixture(t)) }
@@ -54,6 +55,9 @@ func checkSkillComparisonRecord(t *testing.T, f *fixture) {
 	ev, e := f.svc.Get(testCtx, f.human, "evaluations", scopeA, summary.EvaluationRefs[0].ID)
 	if e != nil || ev.Revision != first.Evaluation.Revision || ev.Evaluation == nil || ev.Evaluation.ComparisonReport == nil {
 		t.Fatalf("review evaluation read: %+v %v", ev, e)
+	}
+	if r := ev.Evaluation.ComparisonReport; r.BaselineCost != .25 || r.BaselineDurationMS != 30 || r.CandidateCost != 0 || r.CandidateDurationMS != 30 {
+		t.Fatalf("baseline totals not measured from its cases: %+v", r)
 	}
 	approved, e := f.svc.Transition(testCtx, f.human, colSkillVersions, candidate.Record.ID, ChangeInput{Scope: scopeA, ExpectedRevision: 1, Status: "approved", ValidationID: summary.EvaluationRefs[0].ID})
 	if e != nil || approved.Status != "approved" {

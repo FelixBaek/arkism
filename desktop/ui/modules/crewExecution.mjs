@@ -4,7 +4,7 @@ export function createCrewExecution(deps) {
 
 
   // ---------------------------------------------------------------- runs
-  // 실행: a run the host engine picks up within ten seconds. The editor opens the run view (03b) on it.
+  // 실행: the workflow runner (on the server, or inside the desktop's watcher) picks the run up on its next poll. The editor opens the run view (03b) on it.
   async function startRun(rec, text, only, nodesFrom, until) {
     const g = rec.crew.graph;
     if (!deps.stepCount(g)) { deps.notice("아직 할 일이 없어요. 편집에서 노드를 넣어 주세요."); return null; }
@@ -19,7 +19,7 @@ export function createCrewExecution(deps) {
     const run = { crew_id: rec.id, crew_revision: rec.revision, trigger: "manual", status: "running", input: deps.runInput(text, only), nodes, ...(only ? { only } : {}), ...(loops ? { loops } : {}) };
     try {
       const r = await deps.request("/v1/crew/runs", { method: "POST", body: JSON.stringify({ scope: deps.state.scope, run }) });
-      deps.notice(only ? "이 노드만 실행을 맡겼어요. 최근 실행에서 볼 수 있어요." : until ? "여기까지 실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요." : "실행을 맡겼어요. 서버 실행기가 10초 안에 시작해요.");
+      deps.notice(only ? "이 노드만 실행을 맡겼어요. 최근 실행에서 볼 수 있어요." : until ? "여기까지 실행을 맡겼어요. 곧 시작해요." : "실행을 맡겼어요. 곧 시작해요.");
       return r;
     } catch (e) {
       if (nodesFrom) return startRun(rec, text, only);

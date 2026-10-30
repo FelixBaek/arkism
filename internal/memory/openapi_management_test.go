@@ -119,8 +119,8 @@ func managementHTTPResponses(t *testing.T) []apiContractCase {
 	contractHostAndSessions(c)
 	contractWikiAndKnowledge(c)
 	contractCatalogQueries(c)
-	if len(c.seen) != 70 {
-		t.Fatalf("management contract coverage: %d/70", len(c.seen))
+	if len(c.seen) != 71 {
+		t.Fatalf("management contract coverage: %d/71", len(c.seen))
 	}
 	t.Logf("all %d management operations exercised successfully and anonymously", len(c.seen))
 	return c.cases
@@ -216,6 +216,9 @@ func contractMessengers(c *contractHTTP) {
 	c.call("GET /v1/messengers", "", nil, nil)
 	c.call("POST /v1/messengers/test", "", MessengerRef{Scope: scopeA, Channel: "telegram"}, nil)
 	c.call("POST /v1/messengers/remove", "", MessengerRef{Scope: scopeA, Channel: "telegram"}, nil)
+	c.t.Setenv("ARKISM_CREW_HOOKS", filepath.Join(c.t.TempDir(), "crew-hooks.json"))
+	w := c.f.crew(crewWorkflow("Fixture hook", "fixture-hook"))
+	c.call("POST /v1/crew/{id}/hook", w.ID, CrewHookInput{Scope: scopeA}, nil)
 }
 
 // A provider fixture, never a real model call. Returning an empty plan exercises

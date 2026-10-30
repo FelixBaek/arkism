@@ -87,11 +87,11 @@ window.ArkismPrivacy = (ctx) => {
         for (const item of r?.items || []) if (item.id !== m.id) siblings.add(item.id);
       }
       const others = siblings.size;
-      const first = ids.size
-        ? `이 기억과 근거가 된 원본 기록 ${ids.size}개를 영구히 지울까요?\n\n“${m.text}”${others ? `\n\n같은 원본에서 나온 다른 기억 ${others}개도 함께 지워져요.` : ""}`
-        : `이 기억을 영구히 지울까요?\n\n“${m.text}”`;
-      if (!await ask(first)) return;
-      if (!await ask("정말 지울까요? 모든 에이전트가 더 이상 쓰지 못하고 되돌릴 수 없어요.")) return;
+      // What goes with it, said on both steps; the last button names the act (영구 삭제), never a plain 확인.
+      const withIt = !ids.size ? "" : others ? `원본 대화 기록 ${ids.size}개와 같은 원본에서 나온 다른 기억 ${others}개도 함께 지워져요.` : `원본 대화 기록 ${ids.size}개도 함께 지워져요.`;
+      const first = `이 기억을 영구 삭제할까요?\n\n“${m.text}”${withIt ? `\n\n${withIt}` : ""}\n\n「지우기」와 달리 「지운 기억」에서도 되살릴 수 없어요.`;
+      if (!await ask(first, "계속")) return;
+      if (!await ask(`정말 영구 삭제할까요?\n${withIt ? `${withIt} ` : ""}모든 에이전트가 더 이상 쓰지 못하고 되돌릴 수 없어요.`, "영구 삭제")) return;
       if (ids.size) await eraseSources(ids);
       else await deleteMemory(m);
       notice("삭제 요청을 접수했어요. 정리·백업 처리 상태는 설정의 삭제 처리 내역에서 확인해 주세요.");
@@ -164,7 +164,9 @@ window.ArkismPrivacy = (ctx) => {
     actions.append(find);
     g.append(form, status, deletionHistory());
     const auditResult = el("p", "pg-hint", "보관소 점검은 읽기 전용이며 외부 백업과 사용자 앱 사본은 별도 확인이 필요해요.");
-    g.append(button("보관소 잔여 점검", "ghost small", null, async event => {
+    const audit = el("details", "key-adv"); audit.append(el("summary", "", "자세히 · 보관소 점검"));
+    g.append(audit);
+    audit.append(button("보관소 잔여 점검", "ghost small", null, async event => {
       const trigger = event.currentTarget; trigger.disabled = true;
       try {
         const result = await request(`/v1/session-archives/storage-audit?${query()}`);
@@ -204,7 +206,7 @@ window.ArkismPrivacy = (ctx) => {
     async function run(go) {
       const p = preview;
       if (!p || p.owner !== identity()) return;
-      if (!await ask(`“${p.phrase}”가 들어간 기억 ${p.memories.length}개와 원본 기록 ${p.ids.size}개를 영구히 지울까요?\n\n같은 원본에서 나온 다른 기억도 함께 지워져요.`)) return;
+      if (!await ask(`“${p.phrase}”가 들어간 기억 ${p.memories.length}개와 원본 기록 ${p.ids.size}개를 영구히 지울까요?\n\n같은 원본에서 나온 다른 기억도 함께 지워져요.`, "영구 삭제")) return;
       const typed = await askText(`정말 지우려면 “${p.phrase}”를 그대로 입력하세요. 되돌릴 수 없어요.`);
       if (typed === null) return;
       if (typed.trim() !== p.phrase) { notice("입력한 말이 달라 지우지 않았어요."); return; }

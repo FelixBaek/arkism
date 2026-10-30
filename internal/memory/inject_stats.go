@@ -48,18 +48,19 @@ func (s *Service) CountTokens(ctx context.Context, token string, in TokenCountIn
 }
 
 // validMemoryUse checks one window of the host's memory-use report (memory_use, memory_use_30).
+// Used may exceed Injected: receipt-counting hosts also count memories the agent recalled itself.
 func validMemoryUse(u *MemoryUseStats) bool {
 	if u == nil {
 		return true
 	}
-	if u.Days < 1 || u.Days > 90 || u.Sessions < 0 || u.Injections < 0 || u.Used < 0 || u.Used > u.Injections || len(u.Items) > 5000 {
+	if u.Days < 1 || u.Days > 90 || u.Sessions < 0 || u.Injections < 0 || u.Used < 0 || len(u.Items) > 5000 {
 		return false
 	}
-	if u.InjectSessions < 0 || u.InjectChars < 0 || u.InjectChars > 0 && u.InjectSessions == 0 {
+	if u.InjectSessions < 0 || u.InjectChars < 0 || u.InjectChars > 0 && u.InjectSessions == 0 || u.Estimated < 0 || u.UnusedAfter < 0 {
 		return false
 	}
 	for _, it := range u.Items {
-		if !validRunLabel(it.ID, 256) || it.Injected < 0 || it.Used < 0 || it.Used > it.Injected {
+		if !validRunLabel(it.ID, 256) || it.Injected < 0 || it.Used < 0 || it.Estimated < 0 || it.Unreceipted < 0 {
 			return false
 		}
 	}

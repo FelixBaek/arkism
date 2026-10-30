@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net/http"
 	"regexp"
@@ -68,6 +69,25 @@ type UsageSession struct {
 	Hours         []int                             `json:"hours,omitempty" bson:"hours,omitempty"` // 168 = Mon 0시 … Sun 23시, Asia/Seoul
 	Tools         map[string]int                    `json:"tools,omitempty" bson:"tools,omitempty"`
 	Skills        map[string]int                    `json:"skills,omitempty" bson:"skills,omitempty"`
+	Calls         []UsageCall                       `json:"calls,omitempty" bson:"calls,omitempty"` // MCP calls paired with their results
+}
+
+// UsageCall is one MCP tool call the collector paired with its result: the tool, when it was asked,
+// how long the result took and a fixed error code when it failed. Never arguments or results.
+type UsageCall struct {
+	Tool string    `json:"tool" bson:"tool"`
+	At   time.Time `json:"at" bson:"at"`
+	MS   int64     `json:"ms" bson:"ms"`
+	Err  string    `json:"err,omitempty" bson:"err,omitempty"`
+}
+
+const usageCallsMax = 2000
+
+var usageCallErrs = []string{"timeout", "permission", "auth", "not_found", "conflict", "rate_limit", "error"}
+
+func validUsageCall(c UsageCall) bool {
+	return strings.HasPrefix(c.Tool, "mcp__") && usageNameRe.MatchString(c.Tool) && !c.At.IsZero() && c.MS >= 0 && c.MS <= 86400000 &&
+		(c.Err == "" || slices.Contains(usageCallErrs, c.Err))
 }
 
 type UsageSessionsInput struct {
@@ -94,6 +114,11 @@ func validUsageSession(u UsageSession) bool {
 			return false
 		}
 	}
+	for _, c := range u.Calls {
+		if !validUsageCall(c) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -102,7 +127,7 @@ func validUsageSessionHead(u UsageSession) bool {
 	return usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
 		len(u.Title) <= 300 && len(u.Project) <= 200 && usagePath(u.Folder) && usagePath(u.File) && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
 		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
-		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
+		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500 && len(u.Calls) <= usageCallsMax
 }
 
 // usagePath is an optional absolute-looking path: no control characters, at most 1 KiB.
@@ -262,8 +287,15 @@ func counted(m map[string][2]int, limit int) []map[string]any {
 	return out
 }
 
-func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, rangeKey, agent string) (map[string]any, error) {
+// zone is the reader's day and month boundary (nil: Asia/Seoul, the collector's day).
+func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, rangeKey, agent string, zone *time.Location) (map[string]any, error) {
+	if zone == nil {
+		zone = usageZone()
+	}
 	days, ok := usageRanges[rangeKey]
+	if rangeKey == "month" { // 이번 달: from the 1st in the reader's zone
+		days, ok = time.Now().In(zone).Day(), true
+	}
 	if !validScope(scope) || !ok || agent != "" && !usageNameRe.MatchString(agent) {
 		return nil, ErrInvalid
 	}
@@ -274,63 +306,124 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	if err != nil {
 		return nil, err
 	}
-	seoul := usageZone()
-	now := time.Now().In(seoul)
-	from := ""
+	now := time.Now().In(zone)
+	t := newUsageSummaryTally(zone, days)
 	if days > 0 {
-		from = now.AddDate(0, 0, 1-days).Format("2006-01-02")
+		t.from = now.AddDate(0, 0, 1-days).Format("2006-01-02")
+		t.prevFrom = now.AddDate(0, 0, 1-2*days).Format("2006-01-02")
 	}
-
-	var all usageAcc
-	byDay, byModel, byProject, byAgent, allAgents := map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]int{}
-	dayMsgs := map[string]int{}
-	tools, skills := map[string][2]int{}, map[string][2]int{}
-	hours := make([]int, 168)
-	shape := make([]int, 6)
-	sessions := []usageRow{}
-	var active int64
-	activeDays := map[string]bool{}
 	for _, r := range rows {
-		u := r.UsageSession
-		if u == nil {
-			continue
-		}
-		allAgents[u.Agent]++
-		if agent != "" && u.Agent != agent {
-			continue
-		}
-		row := usageRow{ID: r.ID, Title: u.Title, Agent: u.Agent, Device: u.Device, Project: u.Project, Messages: u.Messages,
-			Active: u.ActiveSeconds, Started: u.StartedAt, Ended: u.EndedAt}
-		sum, models := usageSessionTokens(r.ID, u, from, byDay, byModel)
-		inRange := from == "" || u.EndedAt.In(seoul).Format("2006-01-02") >= from
-		if !inRange && sum.total()+sum.CacheRead+sum.CacheWrite == 0 {
-			continue
-		}
-		row.Tokens, row.Input, row.Output, row.Cached = sum.total(), sum.Input, sum.Output, sum.CacheRead+sum.CacheWrite
-		row.CostUSD, row.Priced = cost(sum.CostUSD), sum.CostUSD != nil
-		row.Models = usageSortedModels(models)
-		sessions = append(sessions, row)
-		all.put(r.ID, sum)
-		project := u.Project
-		if project == "" {
-			project = "(없음)"
-		}
-		usageAccOf(byProject, project).put(r.ID, sum)
-		usageAccOf(byAgent, u.Agent).put(r.ID, sum)
-		active += u.ActiveSeconds
-		usageMarkActiveDays(activeDays, u, seoul, from)
-		dayMsgs[u.EndedAt.In(seoul).Format("2006-01-02")] += u.Messages
-		usageAddHours(hours, u.Hours)
-		usageAddCounts(tools, u.Tools)
-		usageAddCounts(skills, u.Skills)
-		shape[usageShapeBucket(u.Messages)]++
+		t.add(r, agent)
 	}
+	out := t.summary(rangeKey, agent, now)
+	req, err := s.usageRequests(ctx, scope, days, now)
+	if err != nil {
+		return nil, err
+	}
+	out["requests"] = req
+	return out, nil
+}
 
+// usageSummaryTally gathers UsageSummary's sums over the sessions in the range.
+type usageSummaryTally struct {
+	seoul          *time.Location
+	days           int
+	from, prevFrom string
+
+	all                                usageAcc
+	byDay, byModel, byProject, byAgent map[string]*usageAcc
+	allAgents, dayMsgs                 map[string]int
+	tools, skills                      map[string][2]int
+	calls                              []usageCallOf
+	callsNow, callsPrev                int // tool calls of sessions that ended in this window and in the one before it
+	hours, shape                       []int
+	sessions                           []usageRow
+	active                             int64
+	activeDays                         map[string]bool
+}
+
+func newUsageSummaryTally(seoul *time.Location, days int) *usageSummaryTally {
+	return &usageSummaryTally{
+		seoul: seoul, days: days,
+		byDay: map[string]*usageAcc{}, byModel: map[string]*usageAcc{}, byProject: map[string]*usageAcc{}, byAgent: map[string]*usageAcc{},
+		allAgents: map[string]int{}, dayMsgs: map[string]int{},
+		tools: map[string][2]int{}, skills: map[string][2]int{},
+		calls: []usageCallOf{}, hours: make([]int, 168), shape: make([]int, 6),
+		sessions: []usageRow{}, activeDays: map[string]bool{},
+	}
+}
+
+// add counts one usage record; agent, when set, keeps only that agent's sessions.
+func (t *usageSummaryTally) add(r Record, agent string) {
+	u := r.UsageSession
+	if u == nil {
+		return
+	}
+	t.allAgents[u.Agent]++
+	if agent != "" && u.Agent != agent {
+		return
+	}
+	t.countToolCalls(u)
+	sum, models := usageSessionTokens(r.ID, u, t.from, t.byDay, t.byModel)
+	inRange := t.from == "" || u.EndedAt.In(t.seoul).Format("2006-01-02") >= t.from
+	if !inRange && sum.total()+sum.CacheRead+sum.CacheWrite == 0 {
+		return
+	}
+	t.addSession(r, u, sum, models)
+}
+
+// countToolCalls adds the session's tool calls to this window or the one before it.
+func (t *usageSummaryTally) countToolCalls(u *UsageSession) {
+	end := u.EndedAt.In(t.seoul).Format("2006-01-02")
+	if t.days <= 0 || end < t.prevFrom {
+		return
+	}
+	n := 0
+	for _, c := range u.Tools {
+		n += c
+	}
+	if end >= t.from {
+		t.callsNow += n
+	} else {
+		t.callsPrev += n
+	}
+}
+
+func (t *usageSummaryTally) addSession(r Record, u *UsageSession, sum UsageTokens, models map[string]bool) {
+	row := usageRow{ID: r.ID, Title: u.Title, Agent: u.Agent, Device: u.Device, Project: u.Project, Messages: u.Messages,
+		Active: u.ActiveSeconds, Started: u.StartedAt, Ended: u.EndedAt}
+	row.Tokens, row.Input, row.Output, row.Cached = sum.total(), sum.Input, sum.Output, sum.CacheRead+sum.CacheWrite
+	row.CostUSD, row.Priced = cost(sum.CostUSD), sum.CostUSD != nil
+	row.Models = usageSortedModels(models)
+	t.sessions = append(t.sessions, row)
+	t.all.put(r.ID, sum)
+	project := u.Project
+	if project == "" {
+		project = "(없음)"
+	}
+	usageAccOf(t.byProject, project).put(r.ID, sum)
+	usageAccOf(t.byAgent, u.Agent).put(r.ID, sum)
+	t.active += u.ActiveSeconds
+	usageMarkActiveDays(t.activeDays, u, t.seoul, t.from)
+	t.dayMsgs[u.EndedAt.In(t.seoul).Format("2006-01-02")] += u.Messages
+	usageAddHours(t.hours, u.Hours)
+	usageAddCounts(t.tools, u.Tools)
+	usageAddCounts(t.skills, u.Skills)
+	for _, c := range u.Calls {
+		if t.from == "" || c.At.In(t.seoul).Format("2006-01-02") >= t.from {
+			t.calls = append(t.calls, usageCallOf{c, u.Agent})
+		}
+	}
+	t.shape[usageShapeBucket(u.Messages)]++
+}
+
+// summary is UsageSummary's response, without the requests.
+func (t *usageSummaryTally) summary(rangeKey, agent string, now time.Time) map[string]any {
 	// by day: every day of the range, empty ones included
-	series := usageDaySeries(byDay, dayMsgs, from, now, seoul)
+	series := usageDaySeries(t.byDay, t.dayMsgs, t.from, now, t.seoul)
 
-	tokensOf := make([]int64, 0, len(sessions))
-	for _, r := range sessions {
+	tokensOf := make([]int64, 0, len(t.sessions))
+	for _, r := range t.sessions {
 		tokensOf = append(tokensOf, r.Tokens)
 	}
 	slices.Sort(tokensOf)
@@ -340,39 +433,131 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		}
 		return tokensOf[int(math.Ceil(q*float64(len(tokensOf))))-1]
 	}
+	all := t.all
 	hit := usageCacheHit(all.UsageTokens)
-	top := slices.Clone(sessions)
+	top := slices.Clone(t.sessions)
 	sort.SliceStable(top, func(i, j int) bool { return top[i].Tokens > top[j].Tokens })
-	latest := slices.Clone(sessions)
+	latest := slices.Clone(t.sessions)
 	sort.SliceStable(latest, func(i, j int) bool { return latest[i].Ended.After(latest[j].Ended) })
 	agents := []map[string]any{}
-	for name, n := range allAgents {
+	for name, n := range t.allAgents {
 		agents = append(agents, map[string]any{"name": name, "all_sessions": n})
 	}
 	sort.Slice(agents, func(i, j int) bool { return agents[i]["all_sessions"].(int) > agents[j]["all_sessions"].(int) })
 	inRoot := 0
-	if a := byProject["root"]; a != nil {
+	if a := t.byProject["root"]; a != nil {
 		inRoot = len(a.sessions)
 	}
 
-	out := map[string]any{
+	toolCalls := 0
+	for _, v := range t.tools {
+		toolCalls += v[0]
+	}
+	var change any // nil when the window before has nothing to compare with
+	if t.callsPrev > 0 {
+		change = int(math.Round(float64(t.callsNow-t.callsPrev) / float64(t.callsPrev) * 100))
+	}
+	return map[string]any{
 		"range": rangeKey, "agent": agent, "agents": agents, "authority": AuthorityDataOnly,
 		"kpi": map[string]any{
-			"sessions": len(sessions), "tokens": all.total(), "input": all.Input, "output": all.Output, "cache_read": all.CacheRead,
+			"sessions": len(t.sessions), "tokens": all.total(), "input": all.Input, "output": all.Output, "cache_read": all.CacheRead,
 			"cache_write": all.CacheWrite, "cost_usd": cost(all.CostUSD), "priced": all.CostUSD != nil, "cache_hit_pct": hit,
-			"active_seconds": active, "active_days": len(activeDays), "projects": len(byProject), "root_sessions": inRoot,
+			"active_seconds": t.active, "active_days": len(t.activeDays), "projects": len(t.byProject), "root_sessions": inRoot,
 			"median_tokens": pick(0.5), "p90_tokens": pick(0.9),
 		},
-		"by_day": series, "projects": ranked(byProject, 0), "models": ranked(byModel, 0), "by_agent": ranked(byAgent, 0),
-		"hours": hours, "shape": shape, "tools": counted(tools, 12), "skills": counted(skills, 12),
+		"by_day": series, "projects": ranked(t.byProject, 0), "models": ranked(t.byModel, 0), "by_agent": ranked(t.byAgent, 0),
+		"hours": t.hours, "shape": t.shape, "tools": counted(t.tools, 12), "skills": counted(t.skills, 12),
 		"top_sessions": top[:min(len(top), 8)], "latest": latest[:min(len(latest), 50)],
+		"tool_kinds": len(t.tools), "tool_calls": toolCalls, "tool_calls_change_pct": change, "tool_health": usageToolHealth(t.calls, series, t.seoul),
 	}
-	req, err := s.usageRequests(ctx, scope, days, now)
-	if err != nil {
-		return nil, err
+}
+
+type usageCallOf struct {
+	UsageCall
+	agent string
+}
+
+// usageMS is the nearest-rank q-quantile of sorted response times, nil when there is none.
+func usageMS(sorted []int64, q float64) any {
+	if len(sorted) == 0 {
+		return nil
 	}
-	out["requests"] = req
-	return out, nil
+	return sorted[int(math.Ceil(q*float64(len(sorted))))-1]
+}
+
+// usageToolHealth is 도구 › 사용량's response time and failures (Figma 325:34690): every MCP call the
+// collectors paired with its result in the range, per server and per day, and the latest failures.
+func usageToolHealth(calls []usageCallOf, series []map[string]any, seoul *time.Location) map[string]any {
+	type acc struct {
+		ms     []int64
+		failed int
+	}
+	all, byServer, byDay, byDayServer := &acc{}, map[string]*acc{}, map[string]*acc{}, map[string]map[string]*acc{}
+	add := func(m map[string]*acc, k string, c usageCallOf) {
+		if m[k] == nil {
+			m[k] = &acc{}
+		}
+		m[k].ms = append(m[k].ms, c.MS)
+		if c.Err != "" {
+			m[k].failed++
+		}
+	}
+	var sum int64
+	fails := []usageCallOf{}
+	for _, c := range calls {
+		all.ms = append(all.ms, c.MS)
+		sum += c.MS
+		if c.Err != "" {
+			all.failed++
+			fails = append(fails, c)
+		}
+		server, day := strings.SplitN(c.Tool, "__", 3)[1], c.At.In(seoul).Format("2006-01-02")
+		add(byServer, server, c)
+		add(byDay, day, c)
+		if byDayServer[day] == nil {
+			byDayServer[day] = map[string]*acc{}
+		}
+		add(byDayServer[day], server, c)
+	}
+	for _, a := range byServer {
+		slices.Sort(a.ms)
+	}
+	slices.Sort(all.ms)
+	servers := []map[string]any{}
+	for name, a := range byServer {
+		servers = append(servers, map[string]any{"name": name, "calls": len(a.ms), "failed": a.failed, "p95_ms": usageMS(a.ms, .95)})
+	}
+	sort.Slice(servers, func(i, j int) bool {
+		a, b := servers[i], servers[j]
+		return a["calls"].(int) > b["calls"].(int) || a["calls"] == b["calls"] && a["name"].(string) < b["name"].(string)
+	})
+	days := []map[string]any{}
+	for _, p := range series {
+		k := p["date"].(string)
+		a := byDay[k]
+		if a == nil {
+			a = &acc{}
+		}
+		slices.Sort(a.ms)
+		perServer := []map[string]any{}
+		for _, name := range slices.Sorted(maps.Keys(byDayServer[k])) {
+			sa := byDayServer[k][name]
+			slices.Sort(sa.ms)
+			perServer = append(perServer, map[string]any{"name": name, "calls": len(sa.ms), "failed": sa.failed, "p95_ms": usageMS(sa.ms, .95)})
+		}
+		days = append(days, map[string]any{"date": k, "calls": len(a.ms), "failed": a.failed, "p95_ms": usageMS(a.ms, .95), "servers": perServer})
+	}
+	sort.SliceStable(fails, func(i, j int) bool { return fails[i].At.After(fails[j].At) })
+	recent := []map[string]any{}
+	for _, c := range fails[:min(len(fails), 8)] {
+		recent = append(recent, map[string]any{"tool": c.Tool, "at": c.At, "ms": c.MS, "err": c.Err, "agent": c.agent})
+	}
+	var avg any
+	if len(all.ms) > 0 {
+		avg = sum / int64(len(all.ms))
+	}
+	return map[string]any{"calls": len(all.ms), "failed": all.failed, "p50_ms": usageMS(all.ms, .5), "p95_ms": usageMS(all.ms, .95), "avg_ms": avg,
+		"servers": servers, "by_day": days, "fails": recent}
 }
 
 func usageAccOf(m map[string]*usageAcc, k string) *usageAcc {
@@ -497,6 +682,19 @@ func pairs(m map[string]int) map[string][2]int {
 	return out
 }
 
+// usageTZ reads ?tz=<minutes east of UTC> (the browser's -getTimezoneOffset()); empty keeps the default zone.
+// shortcut: a fixed offset ignores a DST change inside the range, fine for day and month boundaries.
+func usageTZ(v string) (*time.Location, bool) {
+	if v == "" {
+		return nil, true
+	}
+	m, err := strconv.Atoi(v)
+	if err != nil || m < -14*60 || m > 14*60 {
+		return nil, false
+	}
+	return time.FixedZone("", m*60), true
+}
+
 func usageZone() *time.Location {
 	if z, err := time.LoadLocation("Asia/Seoul"); err == nil {
 		return z
@@ -553,7 +751,7 @@ func (s *Service) usageRequests(ctx context.Context, scope Scope, days int, now 
 			total += *c.CostUSD
 		}
 		if len(items) < 200 {
-			items = append(items, map[string]any{"at": r.CreatedAt, "model": c.Model, "replaced": c.Replaced, "decision": c.Decision,
+			items = append(items, map[string]any{"at": r.CreatedAt, "model": c.Model, "replaced": c.Replaced, "decision": c.Decision, "rule": c.Rule,
 				"ok": c.OK, "latency_ms": c.LatencyMS, "input": c.InputTokens, "output": c.OutputTokens, "cost_usd": cost(c.CostUSD), "error": c.Error})
 		}
 	}
@@ -567,7 +765,12 @@ func usageRoutes(mux routeRegistrar, s *Service) {
 		if rg == "" {
 			rg = "30d"
 		}
-		out, e := s.UsageSummary(r.Context(), bearer(r), scopeQuery(r), rg, r.URL.Query().Get("source"))
+		zone, ok := usageTZ(r.URL.Query().Get("tz"))
+		if !ok {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		out, e := s.UsageSummary(r.Context(), bearer(r), scopeQuery(r), rg, r.URL.Query().Get("source"), zone)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/usage/sessions", func(w http.ResponseWriter, r *http.Request) {

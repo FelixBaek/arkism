@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 require("./keep.js"); // the shared stale-reply and redraw guards the screens use
+require("./model-pick.js"); // the shared model picker rule
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -21,7 +22,7 @@ function overview(over = {}) {
     series: { points: pts(6, 30), incident: { index: 1, label: "장애" } },
     models: [{ id: "a", name: "A", family: "CLAUDE", provider: "anthropic", status: "slow", requests: 5, p50_ms: 1, p95_ms: 2, success_rate: 99, cost_usd: 1 }, { id: "b", name: "B", family: "ZZ", status: "watch" }],
     families: [{ family: "CLAUDE", share: 60, requests: 6, note: "n" }, { family: "", share: 40, requests: 4 }], families_note: "주의",
-    policy: { auto_routing: true, classifier_ms: 300, failover: { order: ["a", "x"] }, last_decision: "결정" },
+    policy: { auto_routing: true, classifier_ms: 300, failover: { order: ["a", "x"] }, last_decision: { model: "a", decision: "fixed", rule: "code" } },
     events,
     gateway: {
       main: { requests: 3, failures: 1, input_tokens: 1, output_tokens: 2, cost_usd: 1, estimated: true }, side: { requests: 2, by_side: { fork: 1, weird: 2 } },
@@ -84,6 +85,10 @@ test("라우팅 현황 draws KPIs, charts, models, families, gateway turns and e
   assert.match(t, /겹치는 스킬/); assert.match(t, /PDF 읽기↔skill-b2번 겹침1 : 1/);
   assert.match(t, /판정 모델 없음/); assert.match(t, /규칙 2/); assert.match(t, /고른 스킬 없음/); assert.match(t, /odd/);
   assert.match(v.r.views.routing.sub(), /실시간/);
+  // the last pick says why, by screen name; each chip says what it compares with; no p50/p95 words
+  assert.match(text(v.nodes["#detail"]), /마지막 판정코딩 요청이라 → A/);
+  assert.match(t, /▲ 5%그 전 24시간보다/); assert.match(t, /응답 시간1\.2초▼ 0\.3초그 전 24시간보다/);
+  assert.doesNotMatch(t, /p50|p95|지연/);
   // a turn opens and closes
   const head = v.table.all((n) => n.classList.contains("rtg-turn-head"))[0];
   head.click();
@@ -138,7 +143,7 @@ test("auto routing off: every model but the fixed one dims and a callout points 
   assert.match(text(v.nodes["#detail"]), /최근 50건까지/);
   const nofix = mk({ replies: { "/v1/routing/overview": () => overview({ policy: { auto_routing: false, default_model: "q" } }) } });
   nofix.r.render(); await settle();
-  assert.match(text(nofix.table), /고정 모델로/);
+  assert.match(text(nofix.table), /모든 요청이 A로/); // the 기본 모델 is gone: the first model on
   const plain = mk({ replies: { "/v1/routing/overview": () => overview({ policy: { classifier: "X" } }) } });
   plain.r.render(); await settle();
   assert.match(text(plain.nodes["#detail"]), /켜짐 · X/);
@@ -190,13 +195,23 @@ test("라우팅 설정: policy cards, model list, model detail and saves", async
   assert.ok(v.calls.some(([p, b]) => p === "/v1/routing/policy" && b.auto_routing === true));
   const selects = () => main().all((n) => n.tagName === "SELECT");
   const s0 = selects()[0]; s0.value = "c"; s0.fire("change"); await settle();
-  const [, f1, f2] = selects(); f1.value = "c"; f1.fire("change"); f2.value = "a"; f2.fire("change");
+  // 늘 이 모델로: a pick saves at once, the rest of the rules stay
+  const rule = (label) => selects().find((n) => n.parent && text(n.parent).startsWith(label));
+  const r1 = rule("코딩"); r1.value = "c"; r1.fire("change"); await settle();
+  assert.deepEqual(v.calls.filter(([p]) => p === "/v1/routing/policy").pop()[1].rules, [{ kind: "code", model: "c" }]);
+  const slot = (i) => selects().find((n) => n.parent && text(n.parent).startsWith(`${i}번째로 넘길 모델`));
+  slot(1).value = "c"; slot(1).fire("change"); slot(2).value = "a"; slot(2).fire("change");
+  assert.match(text(main()), /넘기는 설정을 바꿨어요/);
   const inputs = main().all((n) => n.tagName === "INPUT" && n.parent?.tagName === "LABEL");
-  inputs[0].value = "7"; inputs[0].fire("input"); inputs[1].value = "30"; inputs[1].fire("input");
-  click(main(), "조건 저장"); await settle();
+  inputs[0].value = "7"; inputs[0].fire("input"); inputs[1].value = "30"; inputs[1].fire("input"); inputs[1].fire("change");
+  // an unsaved draft outlives leaving the tab: the bar is still there on the way back
+  v.r.leaveSettings(); v.draw(); await settle();
+  assert.match(text(main()), /넘기는 설정을 바꿨어요/);
+  click(main(), "넘기는 설정 저장"); await settle();
   const saved = v.calls.filter(([p]) => p === "/v1/routing/policy").pop()[1];
   assert.deepEqual(saved.failover, { error_rate_pct: 7, p95_ms: 30000, order: ["c", "a"] });
-  main().all((n) => n.getAttribute("aria-label") === "자동 페일오버")[0].click(); await settle();
+  assert.doesNotMatch(text(main()), /넘기는 설정을 바꿨어요/);
+  main().all((n) => n.getAttribute("aria-label") === "실패하면 다음 모델로")[0].click(); await settle();
   // the model list: open B, flip A, then edit A in the detail panel
   main().all((n) => n.classList.contains("rt-mcard"))[2].click();
   assert.match(text(side()), /B/);
@@ -204,6 +219,8 @@ test("라우팅 설정: policy cards, model list, model detail and saves", async
   main().all((n) => n.classList.contains("rt-mcard"))[0].click();
   const ta = side().all((n) => n.tagName === "TEXTAREA")[0]; ta.value = "새 설명"; ta.fire("input");
   for (const i of side().all((n) => n.tagName === "INPUT")) { i.value = "3"; i.fire("input"); }
+  ta.fire("change");
+  assert.match(text(side()), /이 모델을 바꿨어요/); assert.match(text(main()), /저장 안 함/);
   click(side(), "저장"); await settle();
   assert.ok(v.calls.some(([p, b]) => p === "/v1/routing/models" && b.when === "새 설명" && b.order === 3));
   click(side(), "저장"); // nothing staged: no request
@@ -266,7 +283,7 @@ test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered grou
   input().value = "테스트 써 줘"; input().fire("input");
   input().fire("keydown", { key: "a" });
   input().fire("keydown", { key: "Enter" }); await settle();
-  assert.match(text(main()), /판정 모델이 골랐어요 · 0\.2초/); assert.match(text(main()), /분류 담당없음/); assert.match(text(main()), /판정 모델이 없어서 그룹 밖 요청은 순서상 첫 모델로/); assert.match(text(main()), /C → q/);
+  assert.match(text(main()), /판정 모델이 골랐어요 · 0\.2초/); assert.match(text(main()), /판정 모델없음/); assert.match(text(main()), /판정 모델이 없어서 자동으로 고르지 못해요지금은 모든 요청이 A로 가요/); assert.match(text(main()), /C → q/);
   for (const reply of [{ id: "a", decision: "default" }, { id: "a", decision: "odd", fallbacks: [] }, {}, new Error("HTTP 503"), new Error("weird")]) {
     v.R["/v1/routing/decide"] = () => reply;
     click(main(), "어디로 가나 보기"); await settle();
@@ -303,6 +320,10 @@ test("라우팅 그룹: pick, edit, reorder, add, remove, keep a discovered grou
   v.R["/v1/routing/groups"] = (p, o) => (o ? new Error("not_found") : groupsDoc());
   click(side(), "그룹 지우기"); await settle();
   assert.ok(v.notes.some((m) => /그룹에 꺼진 모델이 있어요/.test(m)));
+  // the failed delete stays as an unsaved change, also after leaving the tab, until 되돌리기
+  v.r.leaveSettings(); v.draw(); await settle();
+  assert.match(text(main()), /그룹을 바꿨어요/);
+  click(main(), "되돌리기");
   globalThis.ask = async () => false;
   v.r.leaveSettings(); v.draw(); await settle();
   click(main(), "X"); click(side(), "그룹 지우기"); await settle();
@@ -365,4 +386,54 @@ test("reset drops a settings read still out: the old answer neither repaints nor
   v.R["/v1/routing/models"] = () => modelsDoc();
   v.draw(); await settle(); // the tab is still unloaded, so it reads again
   assert.equal(v.calls.filter(([p]) => p.startsWith("/v1/routing/models")).length, before + 1);
+});
+
+test("first use: nothing routed yet says what to do; no judge says where requests go; over budget warns", async () => {
+  const empty = mk({ replies: { "/v1/routing/overview": () => overview({ kpi: { requests: 0 }, policy: { auto_routing: true, rules: [{ kind: "code", model: "a" }] } }) } });
+  empty.r.render(); await settle();
+  assert.match(text(empty.table), /이 기간에는 라우터를 거친 요청이 없어요/);
+  assert.match(text(empty.table), /‘이런 일은 늘 이 모델로’에 맞지 않는 요청은 A로 가요/);
+  click(empty.table, "에이전트 연결하기"); assert.deepEqual([empty.went.pop(), empty.state.settingsTab], ["settings", "routing"]);
+  click(empty.table, "판정 모델 정하기"); assert.deepEqual([empty.went.pop(), empty.state.settingsTab], ["settings", "roles"]);
+  click(empty.table, "30일로 넓혀 보기"); await settle();
+  assert.match(text(empty.table), /아직 라우터를 거친 요청이 없어요/);
+  const over = mk({ replies: { "/v1/routing/overview": () => overview({ kpi: { ...overview().kpi, budget_usd: 10, month_cost_usd: 12 }, policy: { classifier: "clef-flash" } }) } });
+  over.r.render(); await settle();
+  assert.match(text(over.table), /이번 달 비용이 월 예산을 넘었어요/); assert.match(text(over.table), /요청을 막지는 않아요/);
+  assert.doesNotMatch(text(over.table), /판정 모델이 없어서/);
+  assert.match(text(over.nodes["#detail"]), /켜짐 · Clef/);
+});
+
+test("라우팅 설정 first use: connect an agent comes first, no models points to agents, a rule shows in the trial", async () => {
+  window.__TAURI__ = { core: { invoke: async () => ({ url: "http://127.0.0.1:8099", agents: { claude_code: { installed: true } } }) } };
+  const v = mk({ replies: { "/v1/routing/models": () => ({ authority: "data_only_untrusted", items: [] }), "/v1/routing/decide": () => ({ id: "a", decision: "fixed", rule: "code", fallbacks: [] }) } });
+  v.state.view = "settings"; v.draw(); await settle();
+  assert.ok(v.nodes.main.children[0].classList.contains("rt-links"));
+  assert.match(text(v.nodes.main), /켠 모델이 없어요/);
+  click(v.nodes.main, "에이전트 설정 열기"); assert.equal(v.state.settingsTab, "agents");
+  v.state.settingsTab = "routing";
+  const input = v.nodes.main.all((n) => n.getAttribute("aria-label") === "시험할 요청")[0];
+  input.value = "버그 고쳐 줘"; input.fire("input"); click(v.nodes.main, "어디로 가나 보기"); await settle();
+  assert.match(text(v.nodes.main), /늘 이 모델로 · 코딩/);
+  window.__TAURI__.core.invoke = async () => ({ agents: { claude_code: { connected: true, current: true } } });
+  const w = mk(); w.state.view = "settings"; w.draw(); await settle();
+  const kids = w.nodes.main.children;
+  assert.ok(kids[kids.length - 1].classList.contains("rt-links")); // connected: the card moves to the end
+  delete window.__TAURI__;
+});
+
+test("라우팅 설정's model picks keep a model whose provider is not connected behind the toggle, with a way to connect", async () => {
+  const items = [...modelsDoc().items, { id: "k", name: "K", family: "XAI", provider: "xai", connection: { state: "key", label: "로그인 필요" } }];
+  const v = mk({ replies: { "/v1/routing/models": () => ({ authority: "data_only_untrusted", items }), "/v1/routing/overview": () => overview({ policy: { revision: 1, default_model: "" } }) } });
+  v.state.view = "settings";
+  v.draw(); await settle();
+  const fixed = v.nodes.main.all((n) => n.tagName === "SELECT")[0];
+  const { MORE, CONNECT } = window.ArkismModelPick;
+  assert.deepEqual(fixed.options.map((o) => o.value), ["", "a", "c", MORE]);
+  fixed.value = MORE; fixed.fire("change");
+  assert.ok(!v.calls.some(([p]) => p === "/v1/routing/policy"), "showing more is not a pick");
+  assert.equal(fixed.options.find((o) => o.value === "k").disabled, true);
+  fixed.value = CONNECT; fixed.fire("change");
+  assert.equal(v.state.settingsTab, "agents");
+  assert.deepEqual(v.went, ["settings"]);
 });

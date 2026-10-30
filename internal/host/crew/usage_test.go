@@ -74,7 +74,7 @@ func tnum(t *testing.T, v any) float64 {
 func TestRoutedAttemptsCarryOrigin(t *testing.T) {
 	var got []map[string]any
 	decide := func(string, string) (map[string]any, error) {
-		return map[string]any{"id": "anthropic/opus", "decision": "clef", "fallbacks": []any{"openai/gpt-6.1-sol"}}, nil
+		return map[string]any{"id": "anthropic/opus", "decision": "fixed", "rule": "code", "fallbacks": []any{"openai/gpt-6.1-sol"}}, nil
 	}
 	run := func(s map[string]any) (map[string]any, error) {
 		if s["model"] == "opus" {
@@ -87,7 +87,8 @@ func TestRoutedAttemptsCarryOrigin(t *testing.T) {
 	if err != nil || res["ok"] != true || len(got) != 2 {
 		t.Fatal(res, err, got)
 	}
-	if obj(got[0]["origin"])["agent_id"] != "a1" || got[0]["input_tokens"] != nil || got[1]["decision"] != "failover" || got[1]["input_tokens"] == nil {
+	if obj(got[0]["origin"])["agent_id"] != "a1" || got[0]["input_tokens"] != nil || got[1]["decision"] != "failover" || got[1]["input_tokens"] == nil ||
+		got[0]["rule"] != "code" || got[1]["rule"] != nil { // the rule picked the first model only
 		t.Fatal(got)
 	}
 }

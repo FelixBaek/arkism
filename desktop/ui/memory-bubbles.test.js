@@ -102,7 +102,7 @@ test("selection fans related memories out with name cards, and clearing hides th
   const cards = b.el.querySelectorAll(".mm-card");
   assert.equal(cards[0].className, "mm-card main");
   assert.equal(cards[0].querySelector("b").textContent, "카드 m0");
-  assert.match(cards[1].textContent, /일반 · 지지/);
+  assert.match(cards[1].textContent, /일반 · 뒷받침/);
   assert.equal(b.el.querySelector(".mm-labels").style.visibility, "hidden");
   assert.match(b.el.querySelector(".mm-live").textContent, /기억 이름 0/);
   b.setSelected("m0"); // same: redraw only

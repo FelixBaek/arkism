@@ -19,7 +19,9 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 		{Scope: scopeA, Role: "skill_judge", Model: "chat"},
 		{Scope: scopeA, Role: "skill_candidates", Model: "9"},
 		{Scope: scopeA, Role: "skill_candidates", Model: "04"},
-		{Scope: scopeA, Role: "extract", Model: "gpt-6-sol", Provider: "openai"},
+		{Scope: scopeA, Role: "extract", Model: "gemini-3-flash", Provider: "openai"}, // the host would run it on Gemini
+		{Scope: scopeA, Role: "extract", Model: "grok-4", Provider: "xai"},
+		{Scope: scopeA, Role: "reflect", Model: "gpt-6-sol", Provider: "openai"},
 		{Scope: scopeA, Role: "extract", Model: "basic"},
 		{Scope: scopeA, Role: "skill_scan", Off: []string{"other"}},
 		{Scope: scopeA, Role: "skill_scan", Off: []string{"cisco", "cisco"}},
@@ -31,6 +33,8 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 		}
 	}
 	for _, ok := range []ProviderRoleModel{
+		{Scope: scopeA, Role: "extract", Model: "gpt-6-sol", Provider: "openai"}, // 기억 추출 also runs on Codex and Gemini
+		{Scope: scopeA, Role: "extract", Model: "gemini-3-flash", Provider: "google"},
 		{Scope: scopeA, Role: "extract", Model: "haiku 4.5", Provider: "anthropic"},
 		{Scope: scopeA, Role: "skill_summary", Model: "basic"},
 		{Scope: scopeA, Role: "skill_judge", Model: "fixed"},
@@ -60,7 +64,7 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 	if p.RoleDefaults["extract"] != "haiku" || p.RoleDefaults["skill_judge"] != "fixed" || p.RoleDefaults["skill_candidates"] != "6" || p.RoleDefaults["embed"] != f.emb.Space() {
 		t.Fatal("defaults", p.RoleDefaults)
 	}
-	if !slices.Equal(p.RoleOptions["route_judge"], []string{"fixed"}) || !slices.Equal(p.RoleOptions["embed"], []string{f.emb.Space()}) {
+	if !slices.Equal(p.RoleOptions["extract"], []string{"anthropic", "openai", "google"}) || !slices.Equal(p.RoleOptions["route_judge"], []string{"fixed"}) || !slices.Equal(p.RoleOptions["embed"], []string{f.emb.Space()}) {
 		t.Fatal("options", p.RoleOptions)
 	}
 	if r, err := f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "skill_scan"}); err != nil || len(r.Providers.Roles["skill_scan"].Off) != 0 {
@@ -77,7 +81,7 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 		}
 	}
 	slices.Sort(extract)
-	if len(changes) != 5 || !slices.Equal(extract, []string{"- -> haiku 4.5", "haiku 4.5 -> sonnet 5.5"}) {
+	if len(changes) != 7 || !slices.Equal(extract, []string{"- -> gpt-6-sol", "gemini-3-flash -> haiku 4.5", "gpt-6-sol -> gemini-3-flash", "haiku 4.5 -> sonnet 5.5"}) {
 		t.Fatalf("role model history: %d changes, extract %q", len(changes), extract)
 	}
 }

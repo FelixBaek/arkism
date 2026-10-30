@@ -1,0 +1,10 @@
+{
+  "run_id": "run-fail",
+  "revision": 6,
+  "crew_id": "wf-research",
+  "status": "failed",
+  "invocation_mode": "manual",
+  "source_type": "workflow",
+  "result": "최대 실행시간을 넘겨 멈췄어요. 앞 단계 결과는 남아 있어요.",
+  "children": {}
+}

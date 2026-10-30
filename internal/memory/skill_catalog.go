@@ -464,7 +464,7 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 			}
 		}
 		if existing, e := tx.Get(ctx, colSkillVersions, in.Scope, versionID); e == nil {
-			reused, e := reusedImportedSkill(ctx, tx, in, proposal, existing, contentHash)
+			reused, e := reusedImportedSkill(ctx, tx, in, proposal, existing, contentHash, decision)
 			if e != nil {
 				return e
 			}
@@ -517,20 +517,19 @@ func checkProposalEvidence(ctx context.Context, tx Tx, scope Scope, proposal *Pr
 	return nil
 }
 
-func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, proposal *ProposeSkillInput, existing Record, contentHash string) (ImportSkillResult, error) {
+func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, proposal *ProposeSkillInput, existing Record, contentHash string, decision Decision) (ImportSkillResult, error) {
+	// The owner asked again for a new version they had discarded: the same draft comes back as a candidate.
+	if proposal != nil && decision.Role == roleHuman && existing.Status == "rejected" && existing.Analysis != nil && existing.Analysis.ContentHash == contentHash {
+		var e error
+		if existing, e = reopenDiscardedDraft(ctx, tx, existing, decision); e != nil {
+			return ImportSkillResult{}, e
+		}
+	}
 	if existing.Analysis == nil || existing.Analysis.ContentHash != contentHash || (proposal == nil || existing.Status != "approved") && existing.Status != "candidate" && checkActiveSkill(ctx, tx, existing) != nil {
 		return ImportSkillResult{}, ErrConflict
 	}
 	if proposal != nil {
-		if existing.Status == "approved" {
-			if e := validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
-				return ImportSkillResult{}, e
-			}
-		}
-		if e := checkSources(ctx, tx, existing); e != nil {
-			return ImportSkillResult{}, e
-		}
-		if e := checkRelations(ctx, tx, existing); e != nil {
+		if e := checkReusedProposalVersion(ctx, tx, existing); e != nil {
 			return ImportSkillResult{}, e
 		}
 	}
@@ -544,6 +543,19 @@ func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, propos
 		return ImportSkillResult{}, e
 	}
 	return ImportSkillResult{ComparisonPlanSHA256: comparisonPlanHash(existing.ComparisonPlan), Skill: parent, Record: existing, Reused: true, Version: slices.Index(skillHistory(parent), existing.ID) + 1}, nil
+}
+
+// checkReusedProposalVersion re-checks a reused proposal's evaluation, sources and relations.
+func checkReusedProposalVersion(ctx context.Context, tx Tx, existing Record) error {
+	if existing.Status == "approved" {
+		if e := validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
+			return e
+		}
+	}
+	if e := checkSources(ctx, tx, existing); e != nil {
+		return e
+	}
+	return checkRelations(ctx, tx, existing)
 }
 
 func checkImportBaseline(ctx context.Context, tx Tx, scope Scope, activeVersion string) error {

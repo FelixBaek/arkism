@@ -419,6 +419,21 @@ fn connect_info(target: &Target, store: &Store, pin: &Pin) -> Result<Info, Strin
     Ok(info)
 }
 
+/// Runs one command on the server over the pinned login. Exit 3 is a remote script's own
+/// error code (its first stderr line); other failures read like the other SSH errors.
+pub fn run_remote(target: &Target, store: &Store, remote: &str, input: Vec<u8>, timeout: Duration) -> Result<Vec<u8>, String> {
+    let pin = store.required(target)?;
+    let mut command = store.command(target, &pin)?;
+    command.args(["-T", "-o", "ClearAllForwardings=yes"]).arg(&target.host).arg(remote);
+    let out = ssh_exec::run(command, input, 65536, timeout)?;
+    let err = String::from_utf8_lossy(&out.err);
+    match out.code {
+        0 => Ok(out.out),
+        3 => Err(err.lines().next().unwrap_or("server_update_failed").to_string()),
+        code => Err(ssh_error(target, Some(code), &err)),
+    }
+}
+
 /// The server-side `host:port` the API listens on, from connect-info's `http://host:port`.
 fn remote_endpoint(api: &str) -> Result<(String, u16), String> {
     let rest = api

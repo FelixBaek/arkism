@@ -99,7 +99,54 @@ type usageSession struct {
 	Days                               []usageDay
 	Stamps                             []int64 // microseconds
 	Tools, Skills                      []usagePair
+	Calls                              []usageCall // MCP calls paired with their results
 	Messages                           int64
+}
+
+// usageCall is one MCP tool call and its result: when it was asked (microseconds), how long the
+// result took and a fixed error code. The result text is read for the code and dropped.
+type usageCall struct {
+	Tool string
+	At   int64
+	MS   int64
+	Err  string
+}
+
+const usageCallsMax = 2000 // the server's limit per session; the newest are kept
+
+var usageErrCodes = []struct {
+	code string
+	re   *regexp.Regexp
+}{
+	{"timeout", regexp.MustCompile(`timed? ?out|deadline exceeded`)},
+	{"auth", regexp.MustCompile(`\b401\b|unauthori[sz]ed|unauthenticated|token (has )?expired|expired token|invalid[_ ]token|re-?authenticate|sign[ -]?in required|login required`)},
+	{"permission", regexp.MustCompile(`\b403\b|forbidden|permission|access denied|not allowed`)},
+	{"rate_limit", regexp.MustCompile(`\b429\b|rate[ _-]?limit|too many requests|quota`)},
+	{"not_found", regexp.MustCompile(`\b404\b|not found|does not exist`)},
+	{"conflict", regexp.MustCompile(`\b409\b|conflict`)},
+}
+
+// usageCallErr is a failed result's code, or "-" when the user turned the call down (not the server's failure).
+func usageCallErr(content any) string {
+	text := ""
+	switch c := content.(type) {
+	case string:
+		text = c
+	case []any:
+		for _, b := range c {
+			text += " " + sstr(obj(b)["text"])
+		}
+	}
+	text = strings.ToLower(head(text, 2000))
+	if strings.Contains(text, "doesn't want to proceed") || strings.Contains(text, "tool use was rejected") {
+		return "-"
+	}
+	for _, e := range usageErrCodes {
+		if e.re.MatchString(text) {
+			return e.code
+		}
+	}
+	return "error"
 }
 
 func usageAdd(list *[]usagePair, k string, n int64) {
@@ -172,6 +219,7 @@ func (s *usageSession) merge(o *usageSession) {
 	for _, p := range o.Skills {
 		usageAdd(&s.Skills, p.K, p.N)
 	}
+	s.Calls = append(s.Calls, o.Calls...)
 	for _, d := range o.Days {
 		for _, m := range d.Models {
 			t := s.model(d.Day, m.Model)
@@ -280,6 +328,19 @@ func (s *usageSession) row(settings captureSettings) host.Obj {
 		{Key: "ended_at", Value: isoformat(time.UnixMicro(stamps[len(stamps)-1]).UTC())},
 		{Key: "messages", Value: s.Messages}, {Key: "active_seconds", Value: usageActive(stamps)}, {Key: "days", Value: days},
 		{Key: "hours", Value: hours}, {Key: "tools", Value: pairs(s.Tools)}, {Key: "skills", Value: pairs(s.Skills)}}
+	if len(s.Calls) > 0 {
+		calls := append([]usageCall(nil), s.Calls...)
+		sort.SliceStable(calls, func(i, j int) bool { return calls[i].At < calls[j].At })
+		list := []any{}
+		for _, c := range calls[max(0, len(calls)-usageCallsMax):] {
+			item := host.Obj{{Key: "tool", Value: c.Tool}, {Key: "at", Value: isoformat(time.UnixMicro(c.At).UTC())}, {Key: "ms", Value: c.MS}}
+			if c.Err != "" {
+				item = append(item, host.KV{Key: "err", Value: c.Err})
+			}
+			list = append(list, item)
+		}
+		row = append(row, host.KV{Key: "calls", Value: list})
+	}
 	// paths only for a folder capture still covers; a paused or excluded one keeps the counts alone
 	if s.Folder != "" && len(s.Folder) <= 1024 && !captureSkippedWithSettings(s.Folder, settings) {
 		row = append(row, host.KV{Key: "folder", Value: s.Folder})
@@ -289,6 +350,8 @@ func (s *usageSession) row(settings captureSettings) host.Obj {
 	}
 	return row
 }
+
+var usageNameOK = regexp.MustCompile(`^[A-Za-z0-9_.:/@+-]{1,120}$`) // the server's name rule
 
 var usageSep = regexp.MustCompile(`[/\\]`)
 
@@ -377,9 +440,15 @@ type usageFile struct {
 }
 
 type usageParser struct {
-	f     *usageFile
-	index map[string]*usageSession
-	seen  map[string]int
+	f       *usageFile
+	index   map[string]*usageSession
+	seen    map[string]int
+	pending map[string]usagePend // Claude tool_use id → the MCP call waiting for its result
+}
+
+type usagePend struct {
+	tool string
+	at   int64
 }
 
 func (p *usageParser) get(sid string) *usageSession {
@@ -410,41 +479,81 @@ func (p *usageParser) claude(path string) error {
 		}
 		m := obj(d["message"])
 		if t == "user" {
+			p.claudeResults(s, m, when)
 			usageClaudeUser(s, d, m, when)
 			return
 		}
-		blocks, _ := m["content"].([]any)
-		for _, b := range blocks {
-			bm, ok := b.(map[string]any)
-			if !ok || bm["type"] != "tool_use" {
-				continue
-			}
-			name := usageText(bm["name"], "?")
-			skill := ""
-			if in, ok := bm["input"].(map[string]any); ok && name == "Skill" && truthy(in["skill"]) {
-				skill = head(str(in["skill"]), 200)
-			}
-			s.tool(name, skill)
-		}
+		p.claudeToolUses(s, m, when)
 		model := m["model"]
 		if model == "<synthetic>" || !truthy(m["usage"]) {
 			return
 		}
-		key := host.MustDumps(or(m["id"], d["uuid"]), host.DumpOpts{})
-		i, dup := p.seen[key]
-		if !dup || p.f.Seen[i].Sid == sid {
-			u := obj(m["usage"])
-			e := usageSeen{Key: key, Sid: sid, When: when, Model: usageText(model, ""), U: [4]int64{usageInt(u["input_tokens"]),
-				usageInt(u["output_tokens"]), usageInt(u["cache_read_input_tokens"]), usageInt(u["cache_creation_input_tokens"])}}
-			if dup {
-				p.f.Seen[i] = e
-			} else {
-				p.seen[key] = len(p.f.Seen)
-				p.f.Seen = append(p.f.Seen, e)
-			}
-		}
+		p.claudeUsage(sid, d, m, model, when)
 		s.stamp(when)
 	})
+}
+
+// claudeToolUses counts each tool_use and holds MCP ones for claudeResults to time.
+func (p *usageParser) claudeToolUses(s *usageSession, m map[string]any, when *int64) {
+	blocks, _ := m["content"].([]any)
+	for _, b := range blocks {
+		bm, ok := b.(map[string]any)
+		if !ok || bm["type"] != "tool_use" {
+			continue
+		}
+		name := usageText(bm["name"], "?")
+		if id := sstr(bm["id"]); id != "" && when != nil && strings.HasPrefix(name, "mcp__") && usageNameOK.MatchString(name) {
+			p.pending[id] = usagePend{name, *when}
+		}
+		skill := ""
+		if in, ok := bm["input"].(map[string]any); ok && name == "Skill" && truthy(in["skill"]) {
+			skill = head(str(in["skill"]), 200)
+		}
+		s.tool(name, skill)
+	}
+}
+
+// claudeUsage records one assistant message's token usage; a message seen again
+// replaces its earlier row only within the same session.
+func (p *usageParser) claudeUsage(sid string, d, m map[string]any, model any, when *int64) {
+	key := host.MustDumps(or(m["id"], d["uuid"]), host.DumpOpts{})
+	i, dup := p.seen[key]
+	if dup && p.f.Seen[i].Sid != sid {
+		return
+	}
+	u := obj(m["usage"])
+	e := usageSeen{Key: key, Sid: sid, When: when, Model: usageText(model, ""), U: [4]int64{usageInt(u["input_tokens"]),
+		usageInt(u["output_tokens"]), usageInt(u["cache_read_input_tokens"]), usageInt(u["cache_creation_input_tokens"])}}
+	if dup {
+		p.f.Seen[i] = e
+	} else {
+		p.seen[key] = len(p.f.Seen)
+		p.f.Seen = append(p.f.Seen, e)
+	}
+}
+
+// claudeResults pairs each MCP tool_result with its tool_use: response time and, on failure, a fixed code.
+func (p *usageParser) claudeResults(s *usageSession, m map[string]any, when *int64) {
+	blocks, _ := m["content"].([]any)
+	for _, b := range blocks {
+		bm, ok := b.(map[string]any)
+		if !ok || bm["type"] != "tool_result" {
+			continue
+		}
+		id := sstr(bm["tool_use_id"])
+		use, ok := p.pending[id]
+		if !ok || when == nil {
+			continue
+		}
+		delete(p.pending, id)
+		code := ""
+		if truthy(bm["is_error"]) {
+			if code = usageCallErr(bm["content"]); code == "-" {
+				continue
+			}
+		}
+		s.Calls = append(s.Calls, usageCall{Tool: use.tool, At: use.at, MS: max(0, (*when-use.at)/1000), Err: code})
+	}
 }
 
 // usageClaudeUser counts a human Claude prompt as a message; tool results and meta or
@@ -698,7 +807,7 @@ func (p *usageParser) generic(path string) error {
 
 func usageParse(origin, device, path string) (*usageFile, error) {
 	p := &usageParser{f: &usageFile{Origin: origin, Device: device, Sessions: []*usageSession{}, Seen: []usageSeen{}},
-		index: map[string]*usageSession{}, seen: map[string]int{}}
+		index: map[string]*usageSession{}, seen: map[string]int{}, pending: map[string]usagePend{}}
 	var err error
 	switch origin {
 	case "claude_code":
@@ -968,7 +1077,7 @@ func usageMain(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return 1
 	}
 	// A JSON cache beside the state (the Python tool kept a pickle, files.pickle).
-	cachePath := filepath.Join(dir, "files-v2.json") // v2 keeps each session's folder and file; the older cache is read again once
+	cachePath := filepath.Join(dir, "files-v3.json") // v3 keeps MCP call timings, v2 each session's folder and file; an older cache is read again once
 	cache := map[string]*usageFile{}
 	if raw, err := os.ReadFile(cachePath); err == nil && json.Unmarshal(raw, &cache) != nil {
 		cache = map[string]*usageFile{}

@@ -66,6 +66,9 @@ type UsageWorkflow struct {
 	SuccessRate *float64 `json:"success_rate"`
 	CostUSD     float64  `json:"cost_usd"`
 	Tokens      int64    `json:"tokens"`
+	// how long a succeeded run took, start to finish
+	AvgMS int64 `json:"avg_ms"`
+	MaxMS int64 `json:"max_ms"`
 }
 
 type UsageFailingNode struct {
@@ -148,8 +151,8 @@ func callKind(o *RoutingOrigin) string {
 	return "workflow"
 }
 
-// CrewUsage is the 사용량 tab of 작업 에이전트·팀·워크플로우.
-func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rangeKey, kind, agentID, teamID string) (CrewUsage, error) {
+// CrewUsage is the 기록·사용량 tab of a workflow (workflowID) and the usage of agents and teams.
+func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rangeKey, kind, agentID, teamID, workflowID string) (CrewUsage, error) {
 	span, ok := crewUsageRanges[rangeKey]
 	if rangeKey == "" {
 		span, ok = crewUsageRanges["30d"], true
@@ -157,7 +160,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	if kind == "" {
 		kind = "all"
 	}
-	if !validScope(scope) || !ok || !slices.Contains(crewUsageKinds, kind) || agentID != "" && !validRunLabel(agentID, 256) || teamID != "" && !validRunLabel(teamID, 256) {
+	if !validScope(scope) || !ok || !slices.Contains(crewUsageKinds, kind) || agentID != "" && !validRunLabel(agentID, 256) || teamID != "" && !validRunLabel(teamID, 256) || workflowID != "" && !validRunLabel(workflowID, 256) {
 		return CrewUsage{}, ErrInvalid
 	}
 	if _, err := s.authorize(ctx, token, "read:"+colCrew, scope, "", ""); err != nil {
@@ -176,10 +179,10 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 		from = now.Add(-span)
 	}
 	t := &crewUsageTally{
-		from: from, kind: kind, agentID: agentID, teamID: teamID,
+		from: from, kind: kind, agentID: agentID, teamID: teamID, workflowID: workflowID,
 		out:  CrewUsage{ByDay: []UsageDay{}, Workflows: []UsageWorkflow{}, FailingNodes: []UsageFailingNode{}, Agents: []UsageAgent{}, Teams: []UsageTeam{}},
 		days: map[string]*UsageDay{},
-		wf:   map[string]*UsageWorkflow{}, wfOK: map[string]int{}, wfDone: map[string]int{}, failing: map[[2]string]int{},
+		wf:   map[string]*UsageWorkflow{}, wfOK: map[string]int{}, wfDone: map[string]int{}, wfMS: map[string]int64{}, failing: map[[2]string]int{},
 		tm: map[string]*UsageTeam{}, tmRounds: map[string]int{}, tmCost: map[string]float64{}, tmConcluded: map[string]int{}, tmEnded: map[string]int{},
 		ag: map[string]*UsageAgent{},
 	}
@@ -193,12 +196,14 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 type crewUsageTally struct {
 	from                  time.Time
 	kind, agentID, teamID string
+	workflowID            string
 	out                   CrewUsage
 	days                  map[string]*UsageDay
 	okN, doneN            int
 	oldest                *time.Time
 	wf                    map[string]*UsageWorkflow
 	wfOK, wfDone          map[string]int
+	wfMS                  map[string]int64
 	failing               map[[2]string]int
 	tm                    map[string]*UsageTeam
 	tmRounds              map[string]int
@@ -234,7 +239,7 @@ func (t *crewUsageTally) addRuns(u crewUsageData) {
 	}
 	for _, r := range u.runs {
 		run := r.CrewRun
-		if run == nil || run.Trigger == "test" { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
+		if run == nil || run.Trigger == "test" || t.workflowID != "" && run.CrewID != t.workflowID { // 시험 실행 fakes AI steps: it would skew runs, rates and tokens per run
 			continue
 		}
 		if run.Status == "waiting" {
@@ -258,6 +263,9 @@ func (t *crewUsageTally) addRuns(u crewUsageData) {
 			t.okN, t.doneN = t.okN+1, t.doneN+1
 			t.wfOK[run.CrewID]++
 			t.wfDone[run.CrewID]++
+			ms := r.UpdatedAt.Sub(r.CreatedAt).Milliseconds()
+			t.wfMS[run.CrewID] += ms
+			w.MaxMS = max(w.MaxMS, ms)
 			t.day(r.UpdatedAt).OK++
 			t.day(r.UpdatedAt).Workflow++
 		case "failed":
@@ -275,7 +283,7 @@ func (t *crewUsageTally) addRuns(u crewUsageData) {
 
 // addMeetings counts team meetings.
 func (t *crewUsageTally) addMeetings(u crewUsageData) {
-	if !t.want("team") || t.agentID != "" {
+	if !t.want("team") || t.agentID != "" || t.workflowID != "" {
 		return
 	}
 	for _, r := range u.meetings {
@@ -320,7 +328,7 @@ func (t *crewUsageTally) addMeetings(u crewUsageData) {
 // addCalls adds cost for every kind, and fills the agents table.
 func (t *crewUsageTally) addCalls(u crewUsageData) {
 	for id, it := range u.crew {
-		if isAgent(it.Crew) && (t.agentID == "" || id == t.agentID) {
+		if isAgent(it.Crew) && t.workflowID == "" && (t.agentID == "" || id == t.agentID) {
 			a := &UsageAgent{ID: id, Name: it.Crew.Name}
 			if b := it.Crew.Budget; b != nil && b.MonthlyUSD > 0 {
 				limit := b.MonthlyUSD
@@ -336,11 +344,19 @@ func (t *crewUsageTally) addCalls(u crewUsageData) {
 		}
 		o := c.Origin
 		k := callKind(o)
-		if k == "" || !t.want(k) && !(t.kind == "agent" && o.AgentID != "") || t.agentID != "" && o.AgentID != t.agentID || t.teamID != "" && o.TeamID != t.teamID {
+		if !t.wantCall(o, k) {
 			continue
 		}
 		t.addCall(r, c, o, k)
 	}
+}
+
+// wantCall reports whether a call of kind k from origin o is in the filter.
+func (t *crewUsageTally) wantCall(o *RoutingOrigin, k string) bool {
+	if k == "" || !t.want(k) && !(t.kind == "agent" && o.AgentID != "") {
+		return false
+	}
+	return (t.agentID == "" || o.AgentID == t.agentID) && (t.teamID == "" || o.TeamID == t.teamID) && (t.workflowID == "" || o.WorkflowID == t.workflowID)
 }
 
 func (t *crewUsageTally) addCall(r Record, c *RoutingCall, o *RoutingOrigin, k string) {
@@ -383,6 +399,9 @@ func (t *crewUsageTally) finish() CrewUsage {
 	sort.Slice(out.ByDay, func(i, j int) bool { return out.ByDay[i].Date < out.ByDay[j].Date })
 	for id, w := range t.wf {
 		w.SuccessRate, w.CostUSD = rate(t.wfOK[id], t.wfDone[id]), roundUSD(w.CostUSD)
+		if t.wfOK[id] > 0 {
+			w.AvgMS = t.wfMS[id] / int64(t.wfOK[id])
+		}
 		out.Workflows = append(out.Workflows, *w)
 	}
 	sort.Slice(out.Workflows, func(i, j int) bool { return out.Workflows[i].Runs > out.Workflows[j].Runs })
@@ -608,7 +627,7 @@ func (s *Service) EstimateTeam(ctx context.Context, token string, in TeamEstimat
 func crewUsageRoutes(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("GET /v1/crew/usage", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		out, e := s.CrewUsage(r.Context(), bearer(r), scopeQuery(r), q.Get("range"), q.Get("kind"), q.Get("agent_id"), q.Get("team_id"))
+		out, e := s.CrewUsage(r.Context(), bearer(r), scopeQuery(r), q.Get("range"), q.Get("kind"), q.Get("agent_id"), q.Get("team_id"), q.Get("workflow_id"))
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/crew/agents/status", func(w http.ResponseWriter, r *http.Request) {

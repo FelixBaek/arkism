@@ -35,13 +35,17 @@ func desktopProvidersWatch(interval, every time.Duration, stdin io.Reader, stdou
 	if err != nil {
 		return err
 	}
+	// The watcher also runs this PC's workflows (startLocalRunner does nothing outside the desktop).
+	watch := func(stop <-chan struct{}) {
+		waitRunner := startLocalRunner(stop, os.Stderr)
+		providersWatchUntil(interval, every, os.Stderr, stop)
+		waitRunner()
+	}
 	if control == nil {
-		providersWatch(interval, every, os.Stderr)
+		watch(nil)
 		return nil
 	}
-	return runDesktopWatcher(control, func(stop <-chan struct{}) {
-		providersWatchUntil(interval, every, os.Stderr, stop)
-	}, poolJobs.Wait, host.AccountsWait)
+	return runDesktopWatcher(control, watch, poolJobs.Wait, host.AccountsWait)
 }
 
 func runDesktopWatcher(control *desktopcontrol.Controller, loop func(<-chan struct{}), waitPool, waitAccounts func()) error {

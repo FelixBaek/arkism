@@ -90,6 +90,8 @@ select.sort { height: 30px; padding: 0 10px; border-radius: 8px; border: 1px sol
 .kind .icon { width: 13px; height: 13px; }
 .num { font: 12px var(--mono); color: var(--text-1); }
 .warn-text { color: var(--warn); }
+/* a saved model whose provider is not connected (model-pick.js): kept picked, said in the warning colour over each screen's own select look */
+select.model-off { border-color: var(--warn) !important; color: var(--warn) !important; }
 .quick { display: flex; gap: 2px; }
 .icon-btn { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); background: none; color: var(--text-2); }
 .icon-btn:hover { background: var(--bg-muted); color: var(--text-1); }
@@ -509,6 +511,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .mp-model .icon-btn { margin-left: 4px; }
 .login-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; background: var(--bg-muted); margin-bottom: 8px; }
 .login-row code { font: 12.5px var(--mono); }
+.login-row > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 
 .sort-select { height: 26px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg-surface); color: var(--text-1); font-size: calc(12px * var(--fs, 1)); }
 .use-big { display: flex; align-items: baseline; gap: 4px; margin: 4px 0 8px; }
@@ -528,6 +531,9 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .tidy-cards .sim-card p { font-size: calc(13px * var(--fs, 1)); color: var(--text-1); }
 .tidy-cards .sim-card.off { border-style: dashed; background: transparent; }
 .tidy-cards .sim-card.off p { color: var(--text-2); }
+.batch-head { position: sticky; top: 0; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; padding: 0.25rem 0 0.75rem; background: var(--nc-canvas, var(--bg-surface)); border-bottom: 0.0625rem solid var(--nc-line, var(--border)); }
+.batch-head h2, .batch-head p { margin: 0; }
+.sim-pick { display: flex; gap: 0.375rem; margin-top: 0.25rem; }
 .tidy-why { padding: 12px; border-radius: 10px; background: var(--bg-muted); margin: 10px 0; }
 .tidy-why p { margin: 4px 0 0; font-size: calc(12px * var(--fs, 1)); color: var(--text-2); }
 .batch-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -888,6 +894,8 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .zoom-control { display: flex; align-items: center; gap: 6px; }
 .zoom-control output { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
 .notice[hidden] { display: none; }
+.server-banner { margin: 12px 24px 0; }
+.server-banner > .server-banner-text { flex: 1; min-width: 0; }
 .notice > span { flex: 1; min-width: 0; }
 .notice-close { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border: 0; border-radius: 6px; background: none; color: var(--text-2); cursor: pointer; }
 .notice-close:hover { background: var(--bg-selected); color: var(--text-1); }

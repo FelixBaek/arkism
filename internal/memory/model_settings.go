@@ -77,12 +77,14 @@ type ProviderAccount struct {
 
 // ProviderKey is what the screen may know about a stored key: never the key.
 type ProviderKey struct {
-	ID               string    `json:"id"`
-	Name             string    `json:"name"`
-	Last4            string    `json:"last4"`
-	BaseURL          string    `json:"base_url,omitempty"`
-	MonthlyBudgetUSD *float64  `json:"monthly_budget_usd,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name"`
+	Last4            string   `json:"last4"`
+	BaseURL          string   `json:"base_url,omitempty"`
+	MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
+	// The names of a custom endpoint's extra request headers; their values never leave the runner.
+	HeaderNames []string  `json:"header_names,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type Provider struct {
@@ -107,7 +109,8 @@ type ProviderRequest struct {
 	Last4            string     `json:"last4,omitempty"`
 	BaseURL          string     `json:"base_url,omitempty"`
 	MonthlyBudgetUSD *float64   `json:"monthly_budget_usd,omitempty"`
-	Status           string     `json:"status"` // pending | done | failed | expired
+	HeaderNames      []string   `json:"header_names,omitempty"` // names only; values travel like the key
+	Status           string     `json:"status"`                 // pending | done | failed | expired
 	Error            string     `json:"error,omitempty"`
 	Models           []string   `json:"models,omitempty"` // what a key test found
 	Model            string     `json:"model,omitempty"`  // model_test: the model the runner tries
@@ -174,6 +177,13 @@ type ProviderKeyInput struct {
 	BaseURL          string   `json:"base_url,omitempty"`
 	MonthlyBudgetUSD *float64 `json:"monthly_budget_usd,omitempty"`
 	TestOnly         bool     `json:"test_only,omitempty"`
+	// Headers a custom endpoint gets on every request (a company gateway's sign-in); secrets like the key.
+	Headers []ProviderHeader `json:"headers,omitempty"`
+}
+
+type ProviderHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
 
 type ProviderKeyRemoval struct {
@@ -184,8 +194,9 @@ type ProviderKeyRemoval struct {
 
 // ProviderHandoff is one request the runner must carry out, with the key when it has one.
 type ProviderHandoff struct {
-	Request ProviderRequest `json:"request"`
-	Key     string          `json:"key,omitempty"`
+	Request ProviderRequest   `json:"request"`
+	Key     string            `json:"key,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type ProviderHandoffPage struct {
@@ -231,9 +242,10 @@ type ProvidersReport struct {
 }
 
 type heldKey struct {
-	scope Scope
-	key   string
-	until time.Time
+	scope   Scope
+	key     string
+	headers map[string]string
+	until   time.Time
 }
 
 // providerKeyHold keeps typed keys in memory only, keyed by request ID.
@@ -243,6 +255,10 @@ type providerKeyHold struct {
 }
 
 func (h *providerKeyHold) put(id string, scope Scope, key string, now time.Time) {
+	h.putHeld(id, scope, key, nil, now)
+}
+
+func (h *providerKeyHold) putHeld(id string, scope Scope, key string, headers map[string]string, now time.Time) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.keys == nil {
@@ -253,19 +269,24 @@ func (h *providerKeyHold) put(id string, scope Scope, key string, now time.Time)
 			delete(h.keys, k)
 		}
 	}
-	h.keys[id] = heldKey{scope: scope, key: key, until: now.Add(providerKeyTTL)}
+	h.keys[id] = heldKey{scope: scope, key: key, headers: headers, until: now.Add(providerKeyTTL)}
 }
 
 // take hands a key out once; a second call, or one after the TTL, gets nothing.
 func (h *providerKeyHold) take(id string, scope Scope, now time.Time) (string, bool) {
+	v, ok := h.takeHeld(id, scope, now)
+	return v.key, ok
+}
+
+func (h *providerKeyHold) takeHeld(id string, scope Scope, now time.Time) (heldKey, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	v, ok := h.keys[id]
 	if !ok || v.scope != scope {
-		return "", false
+		return heldKey{}, false
 	}
 	delete(h.keys, id)
-	return v.key, !now.After(v.until)
+	return v, !now.After(v.until)
 }
 
 const providerRequestsKept = 100
@@ -284,6 +305,29 @@ func providerRequestExpired(q ProviderRequest, now time.Time) bool {
 
 func validProviderKey(k string) bool {
 	return len(k) >= 8 && len(k) <= 512 && strings.IndexFunc(k, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) < 0
+}
+
+var providerHeaderRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,63}$`)
+
+// Headers the request itself sets: the key travels in its own field, so a header cannot replace it.
+var reservedProviderHeaders = []string{"authorization", "x-api-key", "anthropic-version", "content-type", "content-length",
+	"host", "connection", "transfer-encoding", "user-agent", "accept", "accept-encoding"}
+
+func validProviderHeaderName(n string) bool {
+	return providerHeaderRe.MatchString(n) && !slices.Contains(reservedProviderHeaders, strings.ToLower(n))
+}
+
+// validProviderHeaders allows up to 8 distinct names; a value is one printable line (no CR/LF: it becomes a header).
+func validProviderHeaders(list []ProviderHeader) bool {
+	seen := map[string]bool{}
+	for _, h := range list {
+		if len(list) > 8 || !validProviderHeaderName(h.Name) || seen[strings.ToLower(h.Name)] || h.Value == "" || len(h.Value) > 2048 ||
+			strings.IndexFunc(h.Value, unicode.IsControl) >= 0 || strings.TrimSpace(h.Value) != h.Value {
+			return false
+		}
+		seen[strings.ToLower(h.Name)] = true
+	}
+	return true
 }
 
 func validProviderBaseURL(u string) bool {
@@ -335,7 +379,8 @@ func validProvider(p Provider) bool {
 		accounts[a.ID] = true
 	}
 	for _, k := range p.Keys {
-		if !validRunLabel(k.ID, 64) || !validRunLabel(k.Name, 60) || len(k.Last4) > 4 || !validProviderBaseURL(k.BaseURL) ||
+		if !validRunLabel(k.ID, 64) || !validRunLabel(k.Name, 60) || len(k.Last4) > 4 || !validProviderBaseURL(k.BaseURL) || len(k.HeaderNames) > 8 ||
+			slices.ContainsFunc(k.HeaderNames, func(n string) bool { return !validProviderHeaderName(n) }) ||
 			k.MonthlyBudgetUSD != nil && (*k.MonthlyBudgetUSD < 0 || *k.MonthlyBudgetUSD > 1e6) {
 			return false
 		}
@@ -562,9 +607,7 @@ func (s *Service) SwitchProviderModel(ctx context.Context, token string, in Prov
 // (or, with TestOnly, only tries it) on the host. The record keeps the last four.
 func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderKeyInput) (Record, error) {
 	in.Key = strings.TrimSpace(in.Key)
-	if !validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !validProviderKey(in.Key) || !validNewKeyBaseURL(in.Provider, in.BaseURL) ||
-		!in.TestOnly && !validRunLabel(in.Name, 60) || in.TestOnly && in.Name != "" && !validRunLabel(in.Name, 60) ||
-		in.MonthlyBudgetUSD != nil && (*in.MonthlyBudgetUSD < 0 || *in.MonthlyBudgetUSD > 1e6) {
+	if !validProviderKeyTarget(in) || !validProviderKeyLabel(in) {
 		return Record{}, ErrInvalid
 	}
 	// The key may look like a secret; the name and address must not.
@@ -579,8 +622,10 @@ func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderK
 	if in.TestOnly {
 		kind, action = "key_test", "test:provider_key"
 	}
-	req := ProviderRequest{ID: ID(), Kind: kind, Provider: in.Provider, Name: in.Name, Last4: in.Key[len(in.Key)-4:], BaseURL: in.BaseURL,
+	req := ProviderRequest{ID: ID(), Kind: kind, Provider: in.Provider, Name: in.Name, Last4: in.Key[max(len(in.Key)-4, 0):], BaseURL: in.BaseURL,
 		MonthlyBudgetUSD: in.MonthlyBudgetUSD, Status: "pending", RequestedBy: d.PrincipalID}
+	headers, names := heldProviderHeaders(in.Headers)
+	req.HeaderNames = names
 	if !in.TestOnly {
 		req.KeyID = "key_" + ID()
 	}
@@ -590,9 +635,37 @@ func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderK
 		return nil
 	}, action, d.PrincipalID)
 	if err == nil {
-		s.providerKeys.put(req.ID, in.Scope, in.Key, time.Now())
+		s.providerKeys.putHeld(req.ID, in.Scope, in.Key, headers, time.Now())
 	}
 	return out, err
+}
+
+// validProviderKeyTarget checks the provider, key, address and headers. A custom endpoint may need
+// no key (a local server) and may carry extra headers; a known provider needs its key.
+func validProviderKeyTarget(in ProviderKeyInput) bool {
+	custom := in.Provider == "custom"
+	return !(!validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !(custom && in.Key == "" || validProviderKey(in.Key)) ||
+		!validNewKeyBaseURL(in.Provider, in.BaseURL) || custom && in.BaseURL == "" || len(in.Headers) > 0 && (!custom || !validProviderHeaders(in.Headers)))
+}
+
+// validProviderKeyLabel checks the name (optional only for a test) and the monthly budget.
+func validProviderKeyLabel(in ProviderKeyInput) bool {
+	return !(!in.TestOnly && !validRunLabel(in.Name, 60) || in.TestOnly && in.Name != "" && !validRunLabel(in.Name, 60) ||
+		in.MonthlyBudgetUSD != nil && (*in.MonthlyBudgetUSD < 0 || *in.MonthlyBudgetUSD > 1e6))
+}
+
+// heldProviderHeaders returns the header values held for the runner and their names for the record; both nil when none.
+func heldProviderHeaders(hs []ProviderHeader) (map[string]string, []string) {
+	var headers map[string]string
+	var names []string
+	for _, h := range hs {
+		if headers == nil {
+			headers = map[string]string{}
+		}
+		headers[h.Name] = h.Value
+		names = append(names, h.Name)
+	}
+	return headers, names
 }
 
 // TestProviderModel queues a model test; no key travels, the runner uses what the host already has.
@@ -782,8 +855,8 @@ func (s *Service) ProviderHandoff(ctx context.Context, token string, scope Scope
 			page.Items = append(page.Items, ProviderHandoff{Request: q})
 			continue
 		}
-		if key, ok := s.providerKeys.take(q.ID, scope, now); ok {
-			page.Items = append(page.Items, ProviderHandoff{Request: q, Key: key})
+		if held, ok := s.providerKeys.takeHeld(q.ID, scope, now); ok {
+			page.Items = append(page.Items, ProviderHandoff{Request: q, Key: held.key, Headers: held.headers})
 		}
 	}
 	return page, nil

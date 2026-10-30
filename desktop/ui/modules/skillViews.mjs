@@ -6,8 +6,10 @@ export function createSkillViews(deps) {
   // ---------------------------------------------------------------- 스킬
   const compatOf = (sk) => sk.skill_compatibility || {};
 
-  // Only "unsupported" stops the router; no label means every agent gets the skill.
-  const allowed = (sk, key) => compatOf(sk)[key] !== "unsupported";
+  // Only "unsupported" stops the router; no label means every agent gets the skill. A skill the scan calls risky is
+  // paused until a person turns it on for that agent ("supported"), the same rule as the server's routing.
+  const paused = (sk) => hostChecks(sk)[0]?.verdict === "DO_NOT_INSTALL";
+  const allowed = (sk, key) => (paused(sk) ? compatOf(sk)[key] === "supported" : compatOf(sk)[key] !== "unsupported");
 
   const blockedAny = (sk) => deps.shownAgents().some(([k]) => !allowed(sk, k));
 
@@ -71,6 +73,16 @@ export function createSkillViews(deps) {
   const skillFolder = (sk) => (sk.source_path || "").split("/").slice(-2, -1)[0] || sk.name;
  // 표시 이름이 아니라 SKILL.md가 든 폴더 이름
   const updatesOf = (sk) => (deps.state.data.tools?.skill_updates || []).filter((u) => u.name === skillFolder(sk) && (sk.source_path || "").includes(`${(u.repo || "").replace(/^~/, "")}/`));
+
+  // stageAll: the 이 스킬 켜기/끄기 switch stages every shown agent at once; the change bar applies it.
+  function stageAll(sk, want) {
+    for (const [k] of deps.shownAgents()) {
+      const key = `${sk.id}|${k}`;
+      if ((want === "allow") === allowed(sk, k)) deps.state.pending.delete(key); else deps.state.pending.set(key, want);
+    }
+    deps.render(false);
+    deps.renderDetail();
+  }
 
   function stage(skillId, key, want) {
     const sk = deps.catalogQuery.record(`skill:${skillId}`) || deps.state.data.skills.find((x) => x.id === skillId);
@@ -143,7 +155,7 @@ export function createSkillViews(deps) {
 
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
   // state.skillPage opens a page inside the same view: 개선하기 (4 steps), GitHub에서 설치.
-  const SKILL_STATES = [["all", "전체"], ["missing", "빠진 곳 있음"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인 스킬"], ["trash", "휴지통"]];
+  const SKILL_STATES = [["all", "전체"], ["missing", "일부 에이전트에서 꺼짐"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인에 든 스킬"], ["trash", "휴지통"]];
 
   const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "이 스킬의 교훈과 평가 과제를 미리 채웠어요. 확인하고 만들기를 누르세요."],
     ["비교 평가", "기존 버전과 비교해요", "같은 평가 과제로 두 버전을 돌려 점수·비용·시간을 비교해요."],
@@ -275,7 +287,7 @@ export function createSkillViews(deps) {
     if (i) meta.append(deps.el("span", "mono copy-path", sk.source_path || ""));
     cell.append(meta);
     const u = useOf(sk);
-    const uses = deps.el("span", "v4s-uses", !deps.state.data.skillUse ? "…" : u ? `${u.count}번` : "안 씀");
+    const uses = deps.el("span", "v4s-uses", !deps.state.data.skillUse ? "…" : u ? `${u.count}번 씀` : "안 씀");
     const side = [skillBadge(sk), agentDots(sk), uses].filter(Boolean);
     const r = deps.row(`skill:${sk.id}`, "", [cell, ...side], deps.renderDetail);
     r.classList.add("v4s-row");
@@ -362,7 +374,13 @@ export function createSkillViews(deps) {
       restore();
       return;
     }
-    if (!items.length && catalogState.ready) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
+    const fresh = deps.state.skillTab === "all" && deps.state.skillCat === "all" && !deps.state.skillModel && !deps.state.query;
+    if (!items.length && catalogState.ready && fresh) {
+      // No skill at all yet: say so, with the one way to get the first.
+      const box = deps.el("div", "empty", "아직 스킬이 없어요. GitHub 주소나 zip 파일로 첫 스킬을 설치해 보세요. ");
+      box.append(deps.button("스킬 설치", "small", null, () => openSkillPage({ kind: "install" })));
+      list.append(box);
+    } else if (!items.length && catalogState.ready) list.append(deps.el("div", "empty", deps.state.query ? "검색과 맞는 스킬이 없어요." : "조건에 맞는 스킬이 없어요."));
     const more = collectionFooter({ document, name: collection, total: groups.length, shown: Math.min(limit, groups.length),
       snapshot: () => deps.catalogQuery.snapshot(collection),
       reveal: () => { deps.state.skillLimit = limit + 50; },
@@ -390,31 +408,31 @@ export function createSkillViews(deps) {
     return s;
   }
 
-  // 쓰는 에이전트: a chip per agent; clicking stages add/remove, the card under it applies or cancels.
+  // 쓰는 에이전트: one 이 스킬 켜기/끄기 switch; the per-agent chips sit under 자세히. Both only stage changes:
+  // the change bar at the bottom (renderChangeBar) is the one place that applies them.
   function skillAgentsSection(sk) {
     const shown = deps.shownAgents();
-    const sec = skSection("쓰는 에이전트", `${shown.filter(([k]) => allowed(sk, k)).length} / ${shown.length}`);
+    const now = (k) => { const w = deps.state.pending.get(`${sk.id}|${k}`); return w ? w === "allow" : allowed(sk, k); };
+    const on = shown.filter(([k]) => now(k)).length;
+    const sec = skSection("쓰는 에이전트", `${on} / ${shown.length}`);
+    const row = deps.el("div", "v4s-switch");
+    row.append(deps.button(on ? "이 스킬 끄기" : "이 스킬 켜기", on ? "" : "primary", null, () => stageAll(sk, on ? "block" : "allow")),
+      deps.el("p", "meta", on ? `${on}개 에이전트가 이 스킬을 받아요.` : paused(sk) ? "보안 위험이라 멈춰 있어요. 켜면 에이전트에게 다시 추천해요." : "지금은 어느 에이전트도 받지 않아요."));
+    sec.append(row);
+    if ([...deps.state.pending.keys()].some((key) => key.startsWith(`${sk.id}|`))) sec.append(deps.el("p", "meta", "아래 바에서 적용을 눌러야 바뀌어요."));
+    const more = deps.el("details", "v4s-pick");
+    more.append(deps.el("summary", "", "자세히 · 에이전트마다 고르기"));
     const grid = deps.el("div", "v4s-agent-chips");
     for (const [k, n, logo] of shown) {
       const staged = deps.state.pending.get(`${sk.id}|${k}`);
-      const on = allowed(sk, k);
-      const a = deps.el("button", `v4s-agent${on ? " on" : " off"}${staged ? " staged" : ""}`); a.type = "button";
+      const a = deps.el("button", `v4s-agent${allowed(sk, k) ? " on" : " off"}${staged ? " staged" : ""}`); a.type = "button";
       a.append(deps.agentLogo(logo, n), deps.el("span", "", n));
-      a.title = `${staged ? "누르면 예정을 취소해요" : on ? `${n}에서 써요 · 누르면 뺄 예정` : `${n}에서 못 써요 · 누르면 추가 예정`} · ${deps.pcLink(k).title}`;
+      a.title = `${staged ? "누르면 예정을 취소해요" : allowed(sk, k) ? `${n}에서 써요 · 누르면 뺄 예정` : `${n}에서 못 써요 · 누르면 추가 예정`} · ${deps.pcLink(k).title}`;
       a.addEventListener("click", () => toggleCell(sk, k));
       grid.append(a);
     }
-    sec.append(grid);
-    const mine = [...deps.state.pending.entries()].filter(([key]) => key.startsWith(`${sk.id}|`));
-    if (mine.length) {
-      const names = (want) => mine.filter(([, w]) => w === want).map(([key]) => deps.agentName(key.split("|")[1])).join("·");
-      const ask = [names("allow") && `${names("allow")}에 추가`, names("block") && `${names("block")}에서 빼기`].filter(Boolean).join(", ");
-      const card = deps.el("div", "v4s-confirm");
-      card.append(deps.el("p", "", `${ask}할까요?`),
-        deps.button("취소", "ghost", null, () => { mine.forEach(([key]) => deps.state.pending.delete(key)); deps.render(false); deps.renderDetail(); }),
-        deps.button("적용", "primary", null, applyChanges));
-      sec.append(card);
-    }
+    more.append(grid);
+    sec.append(more);
     return sec;
   }
 
@@ -453,13 +471,14 @@ export function createSkillViews(deps) {
     const list = deps.el("ul", "");
     for (const r of c.security.reasons.length ? c.security.reasons : ["검사 도구가 구체적인 이유를 보내지 않았어요"]) list.append(deps.el("li", "", findingText(r)));
     t.append(deps.el("strong", "", bad ? "보안 위험 · 쓰지 않는 걸 권해요" : "보안 주의 · 아래 내용을 확인해 주세요"),
-      deps.el("p", "", bad ? "검사에서 위험한 내용을 찾았어요. Arkism이 막지는 않아서 지금도 에이전트가 쓸 수 있어요. 믿을 수 없으면 휴지통으로 옮기세요." : "검사에서 조심할 내용을 찾았어요. 막지는 않아서 그대로 쓸 수 있어요."),
+      deps.el("p", "", bad ? "검사에서 위험한 내용을 찾았어요. 아래에서 직접 켜기 전까지 Arkism이 에이전트에게 추천하지 않아요. 파일은 에이전트 폴더에 남아 있으니, 믿을 수 없으면 휴지통으로 옮기세요." : "검사에서 조심할 내용을 찾았어요. 막지는 않아서 그대로 쓸 수 있어요."),
       list);
     card.append(t);
     return card;
   }
   const skillTalk = new Map(); // AI talks per skill, kept while the app is open
   async function skillDetailV4(sk) {
+    const openBetter = () => { openSkillPage({ kind: "better", id: sk.id }); focusPage(); };
     const cat = deps.pages.categoryOf(sk)?.name || "분류 안 됨";
     const body = deps.detailShell(cat);
     const top = deps.el("div", "v4s-head");
@@ -471,14 +490,16 @@ export function createSkillViews(deps) {
     const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI", title: "AI", sub: sk.name,
       greeting: "무엇이 궁금하세요?\n쉽게 설명하거나, 바로 고쳐 볼 수 있어요.",
       placeholder: "궁금한 것을 물어보세요", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
-      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: () => { openSkillPage({ kind: "improve", id: sk.id, step: 0 }); focusPage(); } },
+      footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: openBetter },
       ask: async (q, history) => ({ say: await deps.crew.explain(`Skill name: ${sk.name}\nDescription: ${sk.description || ""}\n${history.length ? `Conversation so far:\n${history.map((m) => `${m.who === "me" ? "User" : "You"}: ${m.text}`).join("\n")}\n` : ""}\nQuestion: ${q}\n\nAnswer in two or three plain Korean sentences about what this skill does and when to use it.`) }) });
     titleRow.append(aiBtn);
+    // 개선하기 sits beside AI so a first-time owner sees where to start (Figma 「제안 · 스킬 개선 쉬운 흐름 · 10-30」).
+    if (sk.status !== "deprecated") titleRow.append(deps.button("개선하기", "small", null, openBetter));
     const c = skillChecks(sk), u = useOf(sk);
     const chips = deps.el("div", "v4s-chips");
     if (c) chips.append(deps.el("span", `v4s-pill${c.quality.cls === "ok" ? "" : " amber"}`, `품질 ${c.quality.grade}${c.quality.score === null ? "" : ` · ${c.quality.score}`}`), deps.el("span", `v4s-pill${c.security.cls === "ok" ? "" : " amber"}`, `보안 ${c.security.label}`));
     if (deps.state.data.skillUse) chips.append(deps.el("span", "v4s-pill muted", u ? `${u.count}번 사용 · ${deps.ago(u.last_used_at)}` : "최근 60일 안 씀"));
-    top.append(chips);
+    top.append(chips, deps.skillImprove.status(sk, openBetter));
     const parts = [top];
     if (c && ["warn", "bad"].includes(c.security.cls)) parts.push(securityCard(c));
     if (sk.status === "deprecated") {
@@ -567,17 +588,23 @@ export function createSkillViews(deps) {
     deps.pageBack("스킬", () => deps.go("skills"));
     const key = skillPageKey();
     const fresh = !skillPageCache || skillPageCache.key !== key;
-    if (p.kind === "improve") {
+    if (p.kind === "improve" || p.kind === "better") {
       const sk = deps.catalogQuery.record(`skill:${p.id}`) || deps.state.data.skills.find((x) => x.id === p.id);
       if (!sk) { deps.state.skillPage = null; return renderSkills(); }
-      if (fresh) skillPageCache = { key, main: improveMain(sk, p.step) };
+      if (fresh) {
+        const side = deps.el("div", "v4s-side");
+        const main = p.kind === "improve" ? improveMain(sk, p.step, side)
+          : deps.skillImprove.page(sk, { box: side, section: skSection, facts: skFacts, table: improveTable }, (step) => openSkillPage({ kind: "improve", id: sk.id, step }));
+        skillPageCache = { key, side, main };
+      }
     } else if (p.kind === "install") {
       if (fresh) { const side = deps.el("div", "v4s-side"); skillPageCache = { key, side, main: deps.catalog.installPage(side, () => skillPageCache?.key === key && deps.state.view === "skills") }; }
     }
     table.replaceChildren(skillPageCache.main);
   }
 
-  function improveMain(sk, step) {
+  // The step's module fills the right panel (side.box) with its live status and actions, and may add a second card (side.extra).
+  function improveMain(sk, step, box) {
     const wrap = deps.el("div", "v4s-improve");
     const steps = deps.el("ol", "v4s-steps");
     IMPROVE_STEPS.forEach(([label], i) => {
@@ -592,32 +619,45 @@ export function createSkillViews(deps) {
     const [, title, lead] = IMPROVE_STEPS[step];
     const card = deps.el("section", "v4s-card");
     card.append(deps.el("h3", "", title), deps.el("p", "v4s-card-lead", lead));
-    const part = step === 0 ? deps.skillGenerate(sk) : deps.skillReview(sk, ["compare", "review", "trial"][step - 1]);
+    const [, sideTitle, sideLead] = IMPROVE_SIDE[step];
+    box.replaceChildren(deps.el("h2", "", sideTitle), deps.el("p", "v4s-lead", sideLead));
+    const side = { box, extra: deps.el("div", "v4s-improve-extra"), go: (i) => openSkillPage({ kind: "improve", id: sk.id, step: i }), section: skSection, facts: skFacts, table: improveTable };
+    const part = step === 0 ? deps.skillGenerate(sk, side) : deps.skillReview(sk, ["compare", "review", "trial"][step - 1], side);
     part.open = true;
     card.append(part);
     const next = deps.el("div", "v4s-actions");
     if (step > 0) next.append(deps.button(`← ${IMPROVE_STEPS[step - 1][0]}`, "ghost", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step - 1 })));
     if (step < 3) next.append(deps.button(`다음: ${IMPROVE_STEPS[step + 1][0]}`, "", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step + 1 })));
-    wrap.append(steps, card, next);
+    wrap.append(steps, card, side.extra, next);
     return wrap;
   }
 
+  // The step cards' read-only grid (실행 기록 · 평가 결과 · 시험 기록): rows are [cells, onPick?, on?]; a cell is text or [text, cls].
+  // A row with onPick is a button; the picked one gets a light background, not an accent bar.
+  function improveTable(head, rows) {
+    const t = deps.el("div", "v4s-table"), top = deps.el("div", "v4s-tr head");
+    head.forEach((h) => top.append(deps.el("span", "", h)));
+    t.append(top);
+    for (const [cells, onPick, on] of rows) {
+      const row = deps.el(onPick ? "button" : "div", `v4s-tr${on ? " on" : ""}`);
+      if (onPick) { row.type = "button"; row.setAttribute("aria-pressed", on ? "true" : "false"); row.addEventListener("click", onPick); }
+      cells.forEach((c) => { const [text, cls] = Array.isArray(c) ? c : [c, ""]; row.append(deps.el("span", cls, text)); });
+      t.append(row);
+    }
+    return t;
+  }
+
+  // Shown until the step's module paints its live status (Figma 198:4328 · 198:4242 · 198:4070 · 198:4156).
   const IMPROVE_SIDE = [
-    ["개선 목표", "이만큼 좋아지면 통과예요", "통과 기준은 평가 서버의 기본값으로 채워요. 바꾸려면 고급 설정을 여세요. 아직 검토하지 않은 교훈은 관측이 3개 이상일 때만 써요.", "생성 결과는 ‘검토·승인’에서 확인해요."],
-    ["지금 상태", "평가 서버에서 비교해요", "앱의 API 연결과 같은 평가 서버에서, 등록된 고정 과제와 실행 조건만 써요. 실행만으로 승인·적용되지는 않아요.", "저장된 평가로 다음 단계에서 후보를 검토해요."],
-    ["결정", "후보 버전을 승인할까요?", "다른 사람이 만든 통과 평가가 있어야 승인할 수 있어요. 승인한 뒤 ‘이 버전 적용’으로 바꿔요.", "관리 계정에서만 쓸 수 있어요."],
-    ["시험 상태", "정한 기간만 시험해요", "기본 버전은 그대로 두고, 고른 프로그램에서만 승인된 후보를 써요. 끝나는 시각이 지나면 기본 버전으로 돌아가요.", "연결이 끊겨도 요청은 보관돼요. 다시 연결한 뒤 상태를 확인하세요."]];
+    ["개선 목표", "이만큼 좋아지면 통과예요", "통과 기준은 평가 서버의 기본값으로 채워요. 바꾸려면 고급 설정을 여세요."],
+    ["지금 상태", "평가 서버에서 비교해요", "앱의 API 연결과 같은 평가 서버에서, 등록된 고정 과제와 실행 조건만 써요. 실행만으로 승인·적용되지는 않아요."],
+    ["결정", "후보 버전을 승인할까요?", "다른 사람이 만든 통과 평가가 있어야 승인할 수 있어요."],
+    ["시험 상태", "정한 기간만 시험해요", "기본 버전은 그대로 두고, 고른 프로그램에서만 승인된 후보를 써요. 끝나는 시각이 지나면 기본 버전으로 돌아가요."]];
 
   function skillPageDetail() {
     const p = deps.state.skillPage;
-    if (p.kind === "install") { const body = deps.detailShell("GitHub에서 설치"); body.append(skillPageCache?.side || ""); return; }
-    const sk = deps.catalogQuery.record(`skill:${p.id}`) || deps.state.data.skills.find((x) => x.id === p.id);
-    const [label, title, text, foot] = IMPROVE_SIDE[p.step];
-    const body = deps.detailShell(label);
-    body.append(deps.el("h2", "", title), deps.el("p", "v4s-lead", text));
-    const s = skSection("이 스킬");
-    if (sk) s.append(skFacts([["이름", sk.name, "mono"], ["버전", sk.version || "", "mono"], ["위치", (sk.source_path || "").replace(/\/SKILL\.md$/, ""), "mono"]]));
-    body.append(s, deps.el("p", "meta", foot));
+    const body = deps.detailShell(p.kind === "install" ? "GitHub에서 설치" : p.kind === "better" ? "개선하기" : IMPROVE_SIDE[p.step][0]);
+    body.append(skillPageCache?.side || "");
   }
 
   const firstSentence = (t) => (t || "").split(/(?<=[.다요])\s/)[0];

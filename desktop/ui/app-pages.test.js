@@ -13,7 +13,7 @@ let app, answers = [], nextFile = null, blobs = [], postFails = false, lastAssis
 // The server's agent list with an agent found but off, one more off, a pending request and a second shared folder.
 function agentTools() {
   const d = fixture("agent_tools.json"), t = d.agent_tools;
-  t.agents.push({ id: "opencode", name: "OpenCode", enabled: true, found: true }, { id: "cursor", name: "Cursor", enabled: true, found: true }, { id: "aider", name: "Aider", enabled: false, found: true, skills_dirs: ["~/.aider/skills"] }, { id: "cline", name: "Cline", enabled: false });
+  t.agents.push({ id: "opencode", name: "OpenCode", enabled: true, found: true }, { id: "cursor", name: "Cursor", enabled: true, found: false }, { id: "aider", name: "Aider", enabled: false, found: true, skills_dirs: ["~/.aider/skills"] }, { id: "cline", name: "Cline", enabled: false });
   t.shared_dirs = ["~/.agents/skills", "~/team/skills"];
   t.pc_links = [{ agent: "claude_code", last_seen: new Date().toISOString() }]; // Claude Code's hooks report in; Codex's never did
   t.requests.push({ id: "r2", kind: "agent", agent: "orbit", enabled: true, status: "pending" });
@@ -180,11 +180,18 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.equal(app.$(".ag-roles"), null);
   assert.ok(app.$$("#area-tabs button").some((b) => text(b) === "역할별 모델"));
   await settings("roles");
-  assert.match(text(app.$(".ag-roles")), /라우팅 판정.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*기억 추출.*반성·검토.*임베딩/);
+  // one card per kind of work, no page title under the tab that already names it
+  assert.deepEqual(app.$$(".ag-roles").map((g) => text(g.querySelector("h2"))), ["기억", "스킬", "요청 처리"]);
+  assert.match(app.$$(".ag-roles").map(text).join(" "), /기억 추출.*반성·검토.*임베딩.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*라우팅 판정/);
   await settings("agents");
   // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
   assert.ok(app.$(".ag-row.on"));
   assert.match(text(app.$(".ag-link")), /Arkism 연결/);
+  // an agent that is not installed starts off, its switch can't be pressed, and the row says why
+  const cursorRow = app.$$(".ag-row").find((r) => /Cursor/.test(text(r)));
+  assert.match(text(cursorRow), /설치 안 됨/);
+  const cursorSw = cursorRow.querySelector('[aria-label="Cursor 켜기"]') || cursorRow.querySelector("input,button[role=switch]");
+  assert.ok(cursorSw?.disabled, "the switch of an agent that is not installed is disabled");
   // Figma 1300:5254: the row line reads 기억 · 스킬 N · 훅 · MCP, and the link card opens with 훅 before MCP
   const rowSub = (name) => text(app.$$(".ag-row-main").find((b) => text(b).startsWith(name)).querySelector("small"));
   assert.match(rowSub("Claude Code"), /^기억 · 스킬 \d+ · 훅 · MCP$/);
@@ -211,15 +218,47 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.match(text(app.$(".v4-side")), /직접 추가한 제공자는 키로만 연결해요.*API 키.*모델/);
   assert.equal(app.$(".v4-side .ag-link"), null);
   assert.ok(app.$$("#area-tabs button").every((x) => text(x) !== "모델 설정"));
-  await press("공급자 추가");
+  // 에이전트 추가 → 제공자 추가 (Figma 1355:50848): 구독요금제 opens 구독 추가 (1361:3819), 엔드포인트 the address form (1361:3932)
+  await press("에이전트 추가");
+  assert.match(text(app.$("dialog.add-provider")), /제공자 추가.*구독요금제.*API 키.*엔드포인트/);
+  await press("다음", app.$("dialog.add-provider"));
+  let cli = app.$("dialog.add-cli");
+  assert.ok(cli.open);
+  const tile = (n) => cli.querySelectorAll(".agent-choice").find((b) => text(b.querySelector("strong")) === n);
+  assert.match(text(tile("Claude Code")), /로그인됨 · MAX/);
+  assert.match(text(tile("Cline")), /설치 안 됨/);
+  assert.ok(tile("Cline").classList.contains("dim"));
+  assert.match(text(tile("Aider")), /설치됨$/);
+  assert.match(text(cli.querySelector(".key-result")), /Claude Code 로그인을 확인했어요 · 모델 \d+개.*다른 Claude Code 계정 추가/);
+  tile("Gemini CLI").click(); await app.settle();
+  assert.match(text(cli.querySelector(".key-result")), /Gemini CLI에 로그인해 주세요/);
+  tile("Aider").click(); await app.settle();
+  assert.ok(cli.querySelector(".key-result").hidden);
+  app.dom.type(cli.querySelector('input[placeholder="이름으로 찾기 · 예: codex, cursor"]'), "codex");
+  assert.deepEqual(cli.querySelectorAll(".agent-choice").map((b) => text(b.querySelector("strong"))), ["Codex"]);
+  await press("다시 찾기", cli);
+  await press("추가", cli); // Aider is off: it is asked for like 에이전트 추가 does
+  assert.match(notice(), /Aider를 추가했어요/);
+  await press("에이전트 추가"); await press("다음", app.$("dialog.add-provider"));
+  cli = app.$("dialog.add-cli");
+  await press("추가", cli); // Claude Code is on already: its row opens
+  assert.equal(app.$("dialog.add-cli"), null);
+  assert.match(text(app.$(".ag-detail-head")), /^Claude Code/);
+  await press("에이전트 추가");
+  app.$$("dialog.add-provider .provider-way")[2].click(); await app.settle();
+  await press("다음", app.$("dialog.add-provider"));
   const keyDlg = app.$("dialog.key-dialog");
-  assert.match(text(keyDlg), /직접 추가한 제공자 API 키 추가/);
+  assert.match(text(keyDlg), /엔드포인트 추가.*주소.*API 키 \(선택\)/);
   keyDlg.close(); await app.settle();
-  for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = find(`${name} 켜기`); if (b) { b.click(); await app.settle(); } }
-  await press("Claude Code 켜기");
+  // built-in agents: the switch only shows or hides them in this app's skill tables; an added one: whether Arkism reads its skills and chats
+  const swOf = (name) => find(`${name} 스킬 표에 보이기`) || find(`${name} 스킬·대화 읽기`);
+  for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = swOf(name); if (b) { b.click(); await app.settle(); } }
+  await press("Claude Code 스킬 표에 보이기");
   assert.match(notice(), /하나는 켜져 있어야/);
-  await press("Codex 켜기");
-  await press("Orbit 켜기");
+  await press("Codex 스킬 표에 보이기");
+  assert.match(swOf("Codex").title, /스킬 표에 보여요.*대화 수집은 그대로/);
+  assert.match(swOf("Orbit").title, /스킬과 대화를 읽어요/);
+  await press("Orbit 스킬·대화 읽기");
   assert.match(notice(), /Orbit를 껐어요/);
   app.$$(".ag-row-main").find((b) => text(b).startsWith("Orbit")).click(); await app.settle();
   answers.push(false); await press("에이전트 제거");
@@ -247,8 +286,8 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   await press("Cline 추가", dlg);
   assert.match(notice(), /Cline를 추가했어요/);
 
-  await press("에이전트 추가");
-  dlg = app.$("dialog.add-agent");
+  await app.click(".found-bar");
+  dlg = app.$$("dialog.add-agent").at(-1);
   const name = dlg.querySelector('input[placeholder="예: Aider"]');
   app.dom.type(name, "My Tool!");
   await press("My Tool! 추가", dlg);
@@ -261,7 +300,7 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   const posted = app.apiCalls.filter(([m, p]) => m === "POST" && p === "/v1/agent_tools/requests").map(([, , b]) => JSON.parse(b));
   assert.ok(posted.some((b) => b.agent === "my-tool" && b.chats_dir === "~/.mytool/chats"));
   app.dom.type(name, ""); // name cleared: back to the choice, or nothing
-  await press("에이전트 추가");
+  await app.click(".found-bar");
   dlg = app.$$("dialog.add-agent").at(-1);
   app.dom.type(dlg.querySelector('input[placeholder="예: Aider"]'), "x");
   app.dom.type(dlg.querySelector('input[placeholder="예: Aider"]'), "");
@@ -273,7 +312,7 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   await settings("roles");
   app.fake.set_model_roles = null;
   const kit = () => app.$(".v4-kit-body");
-  const roles = () => app.$(".v4-roles-body");
+  const roles = () => app.$(".ag-roles").parentNode;
   const save = () => press("저장", kit());
   const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
   await choose("라우팅 판정 모델", "clef"); await save();
@@ -341,7 +380,7 @@ test("역할별 모델 reads the providers report again and shows how each model
 test("역할별 모델 › 스킬 요약·후보 찾기·판정·보안 검사를 고르고 저장한다", async () => {
   await settings("info"); await settings("roles"); // a fresh 역할별 모델 card
   app.fake.set_model_roles = null;
-  const roles = () => app.$(".v4-roles-body");
+  const roles = () => app.$(".ag-roles").parentNode;
   const save = () => press("저장", app.$(".v4-kit-body"));
   const choose = async (label, value) => { const sel = roles().querySelector(`[aria-label="${label}"]`); sel.value = value; app.dom.fire(sel, "change"); await app.settle(); };
   for (const t of ["스킬 요약", "스킬 후보 찾기", "스킬 판정", "스킬 보안 검사"]) assert.match(text(roles()), new RegExp(t));
@@ -421,14 +460,18 @@ test("고급: ComfyUI address, settings transfer, doctor, backups and erase", as
   comfy.value = "http://127.0.0.1:8188//"; app.dom.fire(comfy, "change"); await app.settle();
   assert.match(notice(), /ComfyUI 주소를 저장/);
 
-  await press("점검", side());
-  assert.match(text(side()), /정상 1 · 확인 필요 1 · 문제 1/);
-  assert.match(text(side()), /디스크 부족/);
-  await press("고치기", side());
-  assert.match(text(side()), /수집을 다시 시도했어요/);
+  // 문제 해결 sits at the top of 정보.
+  await settings("info");
+  assert.match(table(), /^문제 해결/);
+  await press("점검", app.$("#table"));
+  assert.match(table(), /정상 1 · 확인 필요 1 · 문제 1/);
+  assert.match(table(), /디스크 부족/);
+  await press("고치기", app.$("#table"));
+  assert.match(table(), /수집을 다시 시도했어요/);
   app.fake.doctor = new Error("x");
-  await press("점검", side());
-  assert.match(text(side()), /점검하지 못했어요/);
+  await press("점검", app.$("#table"));
+  assert.match(table(), /점검하지 못했어요/);
+  await settings("advanced");
 
   blobs = [];
   await press("PC 설정 내보내기", side());
@@ -531,7 +574,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   await mode("SSH로 연결");
   await press("SSH 테스트", app.$("#table"));
-  assert.match(text(app.$(".mode-out")), /호스트를 넣어 주세요/);
+  assert.match(text(app.$(".mode-out")), /서버 주소를 넣어 주세요/);
   await mode("이 PC");
   await press("저장하고 다시 연결");
   assert.match(text(app.$(".mode-out")), /이미 이 PC의 Arkism/);
@@ -554,7 +597,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   await settings("roles");
   // on a server every role is a pick saved per scope, starting from the server default
-  const roles = () => app.$(".ag-roles");
+  const roles = () => app.$(".ag-roles").parentNode;
   const sel = (label) => roles().querySelector(`[aria-label="${label}"]`);
   const choose = async (label, value) => { sel(label).value = value; app.dom.fire(sel(label), "change"); await app.settle(); };
   assert.doesNotMatch(text(roles()), /서버가 정함/);
@@ -563,6 +606,10 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.equal(sel("반성·검토 모델").options[0].textContent, "서버 기본값 · Claude Sonnet");
   assert.equal(sel("스킬 요약 모델").options[0].textContent, "서버 기본값 · 스킬 설명 그대로");
   assert.equal(sel("기억 추출 모델").value, "anthropic|claude-haiku-4-5"); // the preview's pick
+  // 기억 추출 offers every provider the server says it can run (role_options.extract); 반성·검토 only Anthropic
+  const groups = (label) => [...sel(label).querySelectorAll("optgroup")].map((g) => g.querySelector("option").value.split("|")[0]);
+  assert.ok(groups("기억 추출 모델").includes("openai"));
+  assert.deepEqual([...new Set(groups("반성·검토 모델"))], ["anthropic"]);
   assert.ok(sel("임베딩 모델").disabled);
   await choose("스킬 판정 모델", "jev");
   assert.deepEqual(rolePosts.at(-1), { scope: rolePosts.at(-1).scope, role: "skill_judge", model: "jev" });

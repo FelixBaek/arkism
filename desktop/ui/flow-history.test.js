@@ -33,14 +33,33 @@ test("a run detail in 기록 shows the final result text and delivery status", a
   h.closeAll();
 });
 
-test("실행 보기 on a waiting FLOW run opens that run in its workflow's 기록", async () => {
+test("a waiting FLOW run rings its card, and 실행 보기 in the popup opens it in 기록·사용량", async () => {
   const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "waiting", waiting: { kind: "approval", node_id: "ok", question: "보낼까요?" } })]] });
   h.data.runs[0].crew_run.invocation_mode = "flow";
   h.render(); await h.settle();
-  h.btn(document.querySelector("#stats"), "실행 보기").click(); await h.settle();
-  assert.equal(h.top().querySelector(".crew-popup-tab.on").textContent, "기록");
+  assert.equal(document.querySelector("#stats .wf-attn"), null, "no banner over the list");
+  const card = document.querySelector('[data-id="crew:wf1"]');
+  assert.ok(card.classList.contains("run-waiting"));
+  card.click(); await h.settle();
+  h.btn(h.top(), "실행 보기").click(); await h.settle();
+  assert.equal(h.top().querySelector(".crew-popup-tab.on").textContent, "기록·사용량");
   assert.ok(h.top().querySelector(".flow-history-detail"));
-  assert.match(h.top().textContent, /사람의 결정이 필요해요/);
+  assert.match(h.top().textContent, /확인해 주세요 · 확인 단계에서 멈췄어요/);
+  h.closeAll();
+});
+
+test("child rows show done state, duration, tokens and meeting rounds", async () => {
+  const children = {
+    "work:1": { id: "child-1", kind: "workflow", status: "succeeded", name: "출처확인", started_at: "2026-10-18T05:32:00Z", finished_at: "2026-10-18T05:33:12Z", tokens: 9100 },
+    "meet:1": { id: "m1", kind: "meeting", status: "concluded", name: "리서치 회의", started_at: "2026-10-18T05:33:00Z", finished_at: "2026-10-18T05:40:00Z", round: 3 },
+    "work:2": { id: "child-2", kind: "workflow", status: "running", started_at: "2026-10-18T05:34:00Z" },
+  };
+  const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ children })]] });
+  h.render(); await h.settle(); await firstResult(h);
+  const rows = [...box(h).querySelectorAll("button.flow-line")].map((b) => b.textContent);
+  assert.match(rows[0], /^✓10-18 \d\d:32하위 실행출처확인1분 · 9k 토큰 · 열기 →$/);
+  assert.match(rows[1], /^✓.*회의 결과리서치 회의 · 결론 남라운드 3 · 열기 →$/);
+  assert.match(rows[2], /^○.*하위 실행.*실행 중 · 열기 →$/);
   h.closeAll();
 });
 
@@ -51,7 +70,7 @@ test("FLOW results retain the full report, child refs and uncertain delivery wit
   assert.equal(document.querySelector(".flow-result-text").textContent, full);
   assert.match(box(h).textContent, /전달 여부 확인 필요/);
   assert.match(box(h).textContent, /receipt-1/);
-  h.btn(box(h), /^하위 실행/).click(); await h.settle();
+  h.btn(box(h), /하위 실행/).click(); await h.settle();
   assert.equal(document.querySelector(".flow-result-text").textContent, "자식의 최종 결과");
   assert.equal(h.calls.filter(x => x.method === "POST").length, 0);
   h.closeAll();
@@ -117,4 +136,44 @@ test("an agent's and a team's 기록 list their @이름 FLOW runs and open the r
     if (card === "ag1") assert.match(h.top().textContent, /전달 실패/);
     h.closeAll();
   }
+});
+
+test("그래프에서 보기 opens a waiting run on the graph with the waiting step amber, picked, and the answer buttons beside it", async () => {
+  const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "waiting", waiting: { kind: "approval", node_id: "ok", question: "보낼까요?" } })]] });
+  h.render(); await h.settle(); await firstResult(h);
+  h.btn(box(h).querySelector(".flow-decide"), "그래프에서 보기").click(); await h.settle();
+  const node = document.querySelector('.graph-page.run .g-node[data-id="ok"]');
+  assert.ok(node.classList.contains("ask") && node.classList.contains("selected"), "the waiting step is amber and picked");
+  assert.equal(node.querySelector(".g-node-flag.ask").textContent, "확인 필요");
+  assert.equal(document.querySelectorAll(".g-node-flag.ask").length, 1);
+  const code = document.querySelector('.g-node[data-id="code"]');
+  assert.equal(code.querySelector(".g-node-flag.err").textContent, "오류", "a failed step in the same run is red");
+  assert.ok(code.querySelector(".g-node-flag.err").title, "the short error sits in the tooltip");
+  const side = document.querySelector(".g-right.run");
+  assert.ok(h.btn(side, "승인") && h.btn(side, "거절"), "approve and reject stay where a person presses them");
+  h.closeAll();
+});
+
+test("a failed run says which step broke and 단계 보기 opens it on the graph with that step red", async () => {
+  const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "failed" })]] });
+  Object.assign(h.data.runs[0].crew_run, { status: "failed", waiting: null });
+  h.data.runs[0].crew_run.nodes.ok = { status: "pending" };
+  h.render(); await h.settle(); await firstResult(h);
+  const banner = box(h).querySelector(".flow-decide.err");
+  assert.match(banner.textContent, /다듬기 단계가 실패했어요/);
+  h.btn(box(h), "단계 보기").click(); await h.settle();
+  const node = document.querySelector('.graph-page.run .g-node[data-id="code"]');
+  assert.ok(node.classList.contains("st-failed") && node.classList.contains("selected"), "단계 보기 picks the failed step");
+  assert.equal(node.querySelector(".g-node-flag.err").textContent, "오류");
+  assert.equal(document.querySelector(".g-node-flag.ask"), null, "nothing waits");
+  h.closeAll();
+});
+
+test("the 확인 필요 card's popup goes straight to the waiting step on the graph", async () => {
+  const h = await boot({ view: "crew" });
+  h.render(); await h.settle();
+  document.querySelector('[data-id="crew:wf1"]').click(); await h.settle();
+  h.btn(h.top().querySelector(".wf-attn"), "그래프에서 보기").click(); await h.settle();
+  assert.ok(document.querySelector('.graph-page.run .g-node.ask.selected[data-id="ok"]'));
+  h.closeAll();
 });

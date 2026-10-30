@@ -35,12 +35,6 @@
 .g-node-run { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: 1px solid color-mix(in srgb, var(--nc-accent) 40%, transparent); border-radius: 5px; background: none; color: var(--nc-accent); font: 500 calc(11px * var(--fs, 1))/1.45 var(--sans); cursor: pointer; }
 .g-node-run:hover { background: var(--nc-amber-bg); }
 .g-node-run .icon { width: 11px; height: 11px; }
-.g-legend { position: absolute; left: 16px; bottom: 64px; display: flex; gap: 12px; padding: 6px 10px; border: 1px solid var(--nc-line); border-radius: 8px; background: var(--nc-surface); font: 400 calc(11px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-quiet); }
-.g-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.g-legend-item .g-port { width: 9px; height: 9px; border-width: 1.5px; }
-.g-legend-item[data-kind="ai"] .g-port { border-color: var(--g-ai); }
-.g-legend-item[data-kind="http"] .g-port { border-color: var(--g-http); }
-.g-legend-item[data-kind="human"] .g-port { border-color: var(--g-human); }
 
 /* 노드 설정 팝업 (1024:60724 … 1033:69906) */
 .node-dialog .dialog-head { padding: 20px 24px 16px; display: flex; align-items: center; gap: 12px; }
@@ -148,3 +142,27 @@ html.popout dialog.popout-root[open] > .graph-win-body { flex: 1; } /* over app.
 .g-kind.active { border-color: var(--nc-accent); background: var(--nc-amber-bg); color: var(--nc-accent); }
 .g-kind:disabled { cursor: default; color: var(--nc-quiet); }
 .g-kind small { font-size: calc(10.5px * var(--fs, 1)); font-weight: 400; }
+/* #481 새 워크플로우 (1511:4650): one line + 노드 짜기 floats over the canvas; the AI 작업 node without a task stands out with a bright border */
+.g-draft { position: absolute; z-index: 3; top: 24px; left: 50%; transform: translateX(-50%); width: min(680px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 6px; }
+.g-draft .g-draft-row { display: flex; flex-direction: row; max-height: none; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border: 1px solid var(--nc-line); border-radius: 10px; background: var(--nc-surface); }
+.g-draft .g-draft-row input { flex: 1; width: auto; min-width: 0; height: auto; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: none; text-align: left; color: var(--nc-text); font: 400 calc(12.5px * var(--fs, 1))/1.45 var(--sans); outline: none; }
+.g-draft-row:focus-within { border-color: var(--nc-text); }
+.g-draft-done { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 8px; background: var(--nc-amber-bg); color: var(--nc-text); }
+.g-node.needs-task { border-color: var(--nc-text); }
+.g-node.needs-task .g-node-sub { color: var(--nc-text); }
+.g-node.drafted { border-style: dashed; border-color: var(--nc-accent); }
+.g-node-load { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--nc-quiet); font: 400 calc(11px * var(--fs, 1))/1.45 var(--sans); cursor: pointer; }
+.g-node-load:hover { color: var(--nc-text); }
+.g-first-steps { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 4px; color: var(--nc-text); font-size: calc(12.5px * var(--fs, 1)); line-height: 1.6; }
+/* 회의 노드 (1436:8483): 참여자 rows */
+.g-worker .g-member-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-ends { display: grid; gap: 6px; }
+/* 실행 보기: 확인 필요 (amber) where the run waits for a person, 오류 (red) where it failed; outline + a small tag on the top edge, picked or not */
+.g-canvas .g-node.ask { border-color: var(--nc-amber); box-shadow: 0 0 0 1px var(--nc-amber), 0 0 16px color-mix(in srgb, var(--nc-amber) 28%, transparent); }
+.g-canvas .g-node.st-failed { border-color: var(--status-danger); box-shadow: 0 0 0 1px var(--status-danger), 0 0 16px color-mix(in srgb, var(--status-danger) 28%, transparent); opacity: 1; }
+.g-node-flag { position: absolute; top: -10px; right: 12px; height: 20px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; font: 600 calc(11px * var(--fs, 1))/1 var(--sans); white-space: nowrap; }
+.g-node-flag.ask { background: var(--nc-amber-bg); color: var(--nc-amber); border: 1px solid var(--nc-amber); }
+.g-node-flag.err { background: var(--status-danger-tint); color: var(--status-danger); border: 1px solid var(--status-danger); cursor: help; }
+.g-canvas .g-node.st-failed .g-node-head .dot { background: var(--status-danger); }
+.wf-attn.err { background: var(--status-danger-tint); }
+.wf-attn.err strong { color: var(--status-danger); }

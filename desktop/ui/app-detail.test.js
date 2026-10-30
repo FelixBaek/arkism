@@ -159,9 +159,22 @@ test("새 스킬 제안: a bad name is refused, 스킬 만들기 installs it and
   await home();
 });
 
-test("다시 분석 asks the AI for new skills, and a broken answer or failure is a notice", async () => {
+test("Home's 다시 불러오기 icon reads the lists again and leaves the sub-pages", async () => {
   await home();
-  const again = () => byText("#head-actions button", /다시 분석/);
+  const reload = app.$('#head-actions button[aria-label="다시 불러오기"]');
+  assert.ok(reload, "no reload icon on Home");
+  const reads = () => app.apiCalls.filter(([m, p]) => m === "GET" && /^\/v1\/memories(\?|$)/.test(p)).length;
+  const before = reads();
+  await app.click(reload, 1000);
+  assert.ok(reads() > before, "다시 불러오기 reads memories again");
+  await app.click("#home-all", 300);
+  assert.equal(app.$("#head-actions").children.length, 0, "전체 항목 has no Home-only buttons");
+  await home();
+});
+
+test("스킬 제안 받기 asks the AI for new skills, and a broken answer or failure is a notice", async () => {
+  await home();
+  const again = () => byText("#head-actions button", /스킬 제안 받기/);
   assert.ok(again());
   await app.click(again(), 0);
   await app.settle(61000); // past a minute the wait notice says it is slow
@@ -272,7 +285,7 @@ test("기억 정리 제안: an older server's invalid_request on 둘 다 지우�
 
 test("기억 검토 한 번에: apply sends the batch and counts what was skipped", async () => {
   await home();
-  const r = byText(".todo-item", /기억 후보/);
+  const r = byText(".todo-item", /새 기억/);
   if (!r) return;
   await app.click(r, 200);
   const apply = byText("#detail button", /한 번에 반영/);
@@ -481,7 +494,8 @@ test("설치 in the TOOLS toolbar lists every install flow, the tab's kind first
 test("a failed load shows the retry notice, and 다시 시도 loads again", async () => {
   await home();
   hook = (a) => (a.method === "GET" && /^\/v1\/(memories|skills)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);
-  await app.click(byText("#head-actions button", /다시 불러오기/), 1500);
+  // Home no longer has its own 다시 불러오기: a popout save reads everything again the same way
+  const saved = new app.window.Event("storage"); saved.key = "arkism.popout-saved"; app.window.dispatchEvent(saved); await app.settle(1500);
   hook = () => null;
   assert.equal(app.$("#notice").hidden, false);
   const retry = byText("#notice button", /다시/);

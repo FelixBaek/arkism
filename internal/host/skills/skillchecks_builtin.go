@@ -176,10 +176,23 @@ func builtinReadText(p string) []byte {
 
 // builtinSecurity scans every text file of the folder line by line.
 func builtinSecurity(folder string) []builtinFinding {
+	return builtinScan(builtinFiles(folder), func(rel string) []byte { return builtinReadText(filepath.Join(folder, filepath.FromSlash(rel))) })
+}
+
+// builtinText is data unless it is a binary or over 1 MB: the same rule as builtinReadText for files not on disk yet.
+func builtinText(raw []byte) []byte {
+	if len(raw) > builtinMaxFileBytes || bytes.IndexByte(raw[:min(len(raw), 8192)], 0) >= 0 {
+		return nil
+	}
+	return raw
+}
+
+// builtinScan runs the rules over the files read returns (nil skips one); rels are skill-relative.
+func builtinScan(rels []string, read func(string) []byte) []builtinFinding {
 	var out []builtinFinding
 	seen := map[builtinFinding]bool{}
-	for _, rel := range builtinFiles(folder) {
-		raw := builtinReadText(filepath.Join(folder, filepath.FromSlash(rel)))
+	for _, rel := range rels {
+		raw := read(rel)
 		if raw == nil {
 			continue
 		}
@@ -189,11 +202,7 @@ func builtinSecurity(folder string) []builtinFinding {
 				line = line[:8192]
 			}
 			for _, r := range builtinRules {
-				if r.skillMDOnly && !isSkillMD {
-					continue
-				}
-				m := r.re.FindStringSubmatchIndex(line)
-				if m == nil || r.ok != nil && !r.ok(line, m) {
+				if !builtinMatches(r, line, isSkillMD) {
 					continue
 				}
 				f := builtinFinding{r.category, r.pattern, r.severity, rel, i + 1}
@@ -206,6 +215,15 @@ func builtinSecurity(folder string) []builtinFinding {
 	}
 	sort.SliceStable(out, func(a, b int) bool { return severityRank[out[a].Severity] < severityRank[out[b].Severity] })
 	return out
+}
+
+// builtinMatches reports whether rule r fires on line of a file (SKILL.md or not).
+func builtinMatches(r lineRule, line string, isSkillMD bool) bool {
+	if r.skillMDOnly && !isSkillMD {
+		return false
+	}
+	m := r.re.FindStringSubmatchIndex(line)
+	return m != nil && (r.ok == nil || r.ok(line, m))
 }
 
 // builtinVerdict maps findings to the SkillSpector vocabulary the app already shows.

@@ -22,18 +22,23 @@
 
   // targets: [[value, label]] when more than one memory could go (a dreaming pair); onConfirm may be async and
   // return {error} to keep the picker open. 취소 removes the picker and changes nothing.
-  function picker({ title = "왜 지우나요?", targets = null, target = "", reason = "", confirmLabel = "지우기", onConfirm, onCancel } = {}) {
+  // optional: the reason may be left out (deleting a memory); a candidate reject still needs one (the server asks for it).
+  function picker({ title = "왜 지우나요?", targets = null, target = "", reason = "", confirmLabel = "지우기", optional = false, onConfirm, onCancel } = {}) {
     const box = node("div", "del-reason"); box.setAttribute("role", "group"); box.setAttribute("aria-label", title);
-    box.append(node("strong", "", title));
+    const head = node("strong", "", title);
+    if (optional) head.append(" ", node("small", "del-reason-opt", "고르지 않아도 돼요")); // the reason is optional on a memory delete
+    box.append(head);
     let pickTarget = () => target;
     if (targets?.length > 1) { const [row, get] = choices("무엇을 지울까요", targets, target || targets[0][0]); pickTarget = get; box.append(row); }
     const [codes, pickCode] = choices("지우는 이유", REASONS, reason);
     const note = node("textarea", "del-reason-note"); note.rows = 2; note.placeholder = "메모 (선택)"; note.setAttribute("aria-label", "메모 (선택)");
+    if (optional) codes.setAttribute("aria-label", "지우는 이유 (선택)");
     const err = node("p", "del-reason-err", ""); err.setAttribute("role", "status");
     const close = () => { box.remove(); onCancel?.(); };
     const cancel = btn("취소", "ghost", close);
     const ok = btn(confirmLabel, "danger", async () => {
-      if (!pickCode()) { err.textContent = "이유를 하나 골라 주세요."; codes.querySelector("button")?.focus(); return; }
+      // the server keeps a note only with a reason code
+      if (!pickCode() && (!optional || note.value.trim())) { err.textContent = optional ? "메모를 남기려면 이유를 하나 골라 주세요." : "이유를 하나 골라 주세요."; codes.querySelector("button")?.focus(); return; }
       ok.disabled = cancel.disabled = true; err.textContent = "";
       try {
         const res = await onConfirm?.({ code: pickCode(), note: note.value.trim(), target: pickTarget() });
@@ -73,10 +78,14 @@
   }
 
   // A removed memory leaves recall and stays in history as rejected, with the reason (POST …/transition).
+  // No code (an optional reason left out) sends none.
   const removeMemory = (request, scope, m, { code, note }) => request(`/v1/memories/${encodeURIComponent(m.id)}/transition`, { method: "POST",
-    body: JSON.stringify({ scope, expected_revision: m.revision, status: "rejected", reason_code: code, ...(note ? { reason: note } : {}) }) });
+    body: JSON.stringify({ scope, expected_revision: m.revision, status: "rejected", ...(code ? { reason_code: code } : {}), ...(code && note ? { reason: note } : {}) }) });
+  // 되살리기: a deleted memory goes back to active as it was (POST …/restore, a person only).
+  const restoreMemory = (request, scope, m) => request(`/v1/memories/${encodeURIComponent(m.id)}/restore`, { method: "POST",
+    body: JSON.stringify({ scope, expected_revision: m.revision }) });
   // The same reason on a candidate review: reason_code, plus the note when there is one.
   const rejectFields = ({ code, note }) => ({ reason_code: code, ...(note ? { reason: note } : {}) });
 
-  window.ArkismDeleteReason = { REASONS, label: (c) => LABEL[c] || c, picker, openAfter, maybeStale, staleHint, describe, removeMemory, rejectFields };
+  window.ArkismDeleteReason = { REASONS, label: (c) => LABEL[c] || c, picker, openAfter, maybeStale, staleHint, describe, removeMemory, restoreMemory, rejectFields };
 })();

@@ -52,7 +52,13 @@ class H(http.server.SimpleHTTPRequestHandler):
         return {"items": []} if not suffix else {}
     def do_GET(s):
         p = s.path.split("?")[0]
-        if p in ("/readyz", "/healthz"): return s._json(200, {"status": "ready"})
+        if p == "/readyz": return s._json(200, {"status": "ready"})
+        # a current server (internal/buildinfo); an older one is tested in server-version.test.js
+        if p == "/healthz":  # PREVIEW_SERVER=0.1.0 plays an older server build; "old" one from before /healthz named it
+            old = os.environ.get("PREVIEW_SERVER", "")
+            if old == "old": return s._json(200, {"status": "ok"})
+            if old: return s._json(200, {"status": "ok", "version": old, "commit": "ec057c47f757", "built": "2026-10-26T09:12:00Z", "api_level": 1, "features": ["role_model_picks"]})
+            return s._json(200, {"status": "ok", "version": "dev", "api_level": 1, "features": ["role_model_picks", "forget_both"]})
         key = p + ("?topic" if "kind=topic" in s.path and "status=active" in s.path else "")
         if key in MANY: return s._json(200, MANY[key])
         if p.startswith("/v1/"): return s._json(200, s._fixture())
@@ -102,7 +108,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": groups, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 
-QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
+QUERY = {"/v1/memories/query": lambda state: "/v1/memories?status=rejected" if state == "removed" else "/v1/memories",
          "/v1/memory_candidates/query": lambda state: "/v1/memory_candidates?status=" + state,
          "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills"}
 # The server's memory states, cut down to what the fixtures carry (internal/memory/catalog_memory.go memoryCatalogState).

@@ -618,11 +618,6 @@
    "sessions": 300
   },
   {
-   "name": "Read",
-   "count": 610,
-   "sessions": 120
-  },
-  {
    "name": "mcp__figma__use_figma",
    "count": 4310,
    "sessions": 80
@@ -638,9 +633,24 @@
    "sessions": 60
   },
   {
+   "name": "mcp__github__list_issues",
+   "count": 1630,
+   "sessions": 55
+  },
+  {
    "name": "mcp__arkism__memory_search",
    "count": 1523,
    "sessions": 200
+  },
+  {
+   "name": "mcp__notion__notion-fetch",
+   "count": 986,
+   "sessions": 40
+  },
+  {
+   "name": "Read",
+   "count": 610,
+   "sessions": 120
   }
  ],
  "skills": [
@@ -897,7 +907,7 @@
   "cost_usd": 24.1,
   "models": [
    {
-    "name": "openai/gpt-6.1-sol",
+    "name": "gpt-5-5",
     "tokens": 2000000,
     "input": 1700000,
     "output": 300000,
@@ -907,7 +917,7 @@
     "sessions": 0
    },
    {
-    "name": "anthropic/claude-sonnet-5-5",
+    "name": "claude-sonnet-5-5",
     "tokens": 900000,
     "input": 760000,
     "output": 140000,
@@ -917,7 +927,7 @@
     "sessions": 0
    },
    {
-    "name": "zai/glm-5",
+    "name": "glm-5",
     "tokens": 500000,
     "input": 440000,
     "output": 60000,
@@ -930,7 +940,7 @@
   "items": [
    {
     "at": "2026-10-13T05:02:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -942,9 +952,9 @@
    },
    {
     "at": "2026-10-13T04:55:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
-    "decision": "clef",
+    "decision": "fixed", "rule": "code",
     "ok": true,
     "latency_ms": 8913,
     "input": 15000,
@@ -954,9 +964,9 @@
    },
    {
     "at": "2026-10-13T04:48:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
-    "decision": "clef",
+    "decision": "fixed", "rule": "writing",
     "ok": true,
     "latency_ms": 4543,
     "input": 7000,
@@ -966,7 +976,7 @@
    },
    {
     "at": "2026-10-13T04:41:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -978,7 +988,7 @@
    },
    {
     "at": "2026-10-13T04:34:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -990,7 +1000,7 @@
    },
    {
     "at": "2026-10-13T04:27:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1002,7 +1012,7 @@
    },
    {
     "at": "2026-10-13T04:20:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1014,7 +1024,7 @@
    },
    {
     "at": "2026-10-13T04:13:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1026,7 +1036,7 @@
    },
    {
     "at": "2026-10-13T04:06:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1038,7 +1048,7 @@
    },
    {
     "at": "2026-10-13T03:59:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1050,7 +1060,7 @@
    },
    {
     "at": "2026-10-13T03:52:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1062,7 +1072,7 @@
    },
    {
     "at": "2026-10-13T03:45:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1074,7 +1084,7 @@
    },
    {
     "at": "2026-10-13T03:38:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1086,7 +1096,7 @@
    },
    {
     "at": "2026-10-13T03:31:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1098,7 +1108,7 @@
    },
    {
     "at": "2026-10-13T03:24:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1110,7 +1120,7 @@
    },
    {
     "at": "2026-10-13T03:17:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1122,7 +1132,7 @@
    },
    {
     "at": "2026-10-13T03:10:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1134,7 +1144,7 @@
    },
    {
     "at": "2026-10-13T03:03:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1146,7 +1156,7 @@
    },
    {
     "at": "2026-10-13T02:56:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1158,7 +1168,7 @@
    },
    {
     "at": "2026-10-13T02:49:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1170,7 +1180,7 @@
    },
    {
     "at": "2026-10-13T02:42:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1182,7 +1192,7 @@
    },
    {
     "at": "2026-10-13T02:35:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1194,8 +1204,8 @@
    },
    {
     "at": "2026-10-13T02:28:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 7404,
@@ -1206,8 +1216,8 @@
    },
    {
     "at": "2026-10-13T02:21:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 3072,
@@ -1218,7 +1228,7 @@
    },
    {
     "at": "2026-10-13T02:14:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1230,7 +1240,7 @@
    },
    {
     "at": "2026-10-13T02:07:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1242,7 +1252,7 @@
    },
    {
     "at": "2026-10-13T02:00:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1254,7 +1264,7 @@
    },
    {
     "at": "2026-10-13T01:53:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1266,7 +1276,7 @@
    },
    {
     "at": "2026-10-13T01:46:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1278,7 +1288,7 @@
    },
    {
     "at": "2026-10-13T01:39:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1290,7 +1300,7 @@
    },
    {
     "at": "2026-10-13T01:32:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1302,7 +1312,7 @@
    },
    {
     "at": "2026-10-13T01:25:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1314,7 +1324,7 @@
    },
    {
     "at": "2026-10-13T01:18:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1326,7 +1336,7 @@
    },
    {
     "at": "2026-10-13T01:11:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1338,7 +1348,7 @@
    },
    {
     "at": "2026-10-13T01:04:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1350,7 +1360,7 @@
    },
    {
     "at": "2026-10-13T00:57:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1362,7 +1372,7 @@
    },
    {
     "at": "2026-10-13T00:50:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1374,7 +1384,7 @@
    },
    {
     "at": "2026-10-13T00:43:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1386,7 +1396,7 @@
    },
    {
     "at": "2026-10-13T00:36:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1398,8 +1408,8 @@
    },
    {
     "at": "2026-10-13T00:29:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 4250,
@@ -1410,7 +1420,7 @@
    },
    {
     "at": "2026-10-13T00:22:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1422,7 +1432,7 @@
    },
    {
     "at": "2026-10-13T00:15:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1434,7 +1444,7 @@
    },
    {
     "at": "2026-10-13T00:08:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1446,7 +1456,7 @@
    },
    {
     "at": "2026-10-13T00:01:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1458,7 +1468,7 @@
    },
    {
     "at": "2026-10-12T23:54:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1470,7 +1480,7 @@
    },
    {
     "at": "2026-10-12T23:47:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1482,7 +1492,7 @@
    },
    {
     "at": "2026-10-12T23:40:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1494,7 +1504,7 @@
    },
    {
     "at": "2026-10-12T23:33:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1506,7 +1516,7 @@
    },
    {
     "at": "2026-10-12T23:26:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1518,7 +1528,7 @@
    },
    {
     "at": "2026-10-12T23:19:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1530,7 +1540,7 @@
    },
    {
     "at": "2026-10-12T23:12:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1542,7 +1552,7 @@
    },
    {
     "at": "2026-10-12T23:05:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1554,7 +1564,7 @@
    },
    {
     "at": "2026-10-12T22:58:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1566,7 +1576,7 @@
    },
    {
     "at": "2026-10-12T22:51:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1578,7 +1588,7 @@
    },
    {
     "at": "2026-10-12T22:44:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1590,7 +1600,7 @@
    },
    {
     "at": "2026-10-12T22:37:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1602,7 +1612,7 @@
    },
    {
     "at": "2026-10-12T22:30:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1614,7 +1624,7 @@
    },
    {
     "at": "2026-10-12T22:23:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1626,7 +1636,7 @@
    },
    {
     "at": "2026-10-12T22:16:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1638,7 +1648,7 @@
    },
    {
     "at": "2026-10-12T22:09:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1647,6 +1657,1413 @@
     "output": 2000,
     "cost_usd": 0.94,
     "error": ""
+   }
+  ]
+ },
+ "tool_kinds": 42,
+ "tool_calls": 27775,
+ "tool_calls_change_pct": 6,
+ "tool_health": {
+  "calls": 14650,
+  "failed": 238,
+  "p50_ms": 380,
+  "p95_ms": 900,
+  "avg_ms": 420,
+  "servers": [
+   {
+    "name": "github",
+    "calls": 8412,
+    "failed": 76,
+    "p95_ms": 600
+   },
+   {
+    "name": "figma",
+    "calls": 6905,
+    "failed": 166,
+    "p95_ms": 1800
+   },
+   {
+    "name": "arkism",
+    "calls": 4210,
+    "failed": 13,
+    "p95_ms": 200
+   },
+   {
+    "name": "notion",
+    "calls": 2236,
+    "failed": 69,
+    "p95_ms": 2400
+   },
+   {
+    "name": "slack",
+    "calls": 1402,
+    "failed": 17,
+    "p95_ms": 800
+   },
+   {
+    "name": "cloudflare",
+    "calls": 990,
+    "failed": 40,
+    "p95_ms": 1100
+   }
+  ],
+  "by_day": [
+   {
+    "date": "2026-09-14",
+    "calls": 460,
+    "failed": 5,
+    "p95_ms": 620,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 80,
+      "failed": 1,
+      "p95_ms": 140
+     },
+     {
+      "name": "cloudflare",
+      "calls": 19,
+      "failed": 0,
+      "p95_ms": 760
+     },
+     {
+      "name": "figma",
+      "calls": 131,
+      "failed": 1,
+      "p95_ms": 620
+     },
+     {
+      "name": "github",
+      "calls": 160,
+      "failed": 2,
+      "p95_ms": 410
+     },
+     {
+      "name": "notion",
+      "calls": 43,
+      "failed": 0,
+      "p95_ms": 960
+     },
+     {
+      "name": "slack",
+      "calls": 27,
+      "failed": 0,
+      "p95_ms": 550
+     }
+    ]
+   },
+   {
+    "date": "2026-09-15",
+    "calls": 480,
+    "failed": 7,
+    "p95_ms": 700,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 84,
+      "failed": 1,
+      "p95_ms": 160
+     },
+     {
+      "name": "cloudflare",
+      "calls": 20,
+      "failed": 0,
+      "p95_ms": 860
+     },
+     {
+      "name": "figma",
+      "calls": 137,
+      "failed": 2,
+      "p95_ms": 700
+     },
+     {
+      "name": "github",
+      "calls": 167,
+      "failed": 2,
+      "p95_ms": 470
+     },
+     {
+      "name": "notion",
+      "calls": 44,
+      "failed": 1,
+      "p95_ms": 1090
+     },
+     {
+      "name": "slack",
+      "calls": 28,
+      "failed": 0,
+      "p95_ms": 620
+     }
+    ]
+   },
+   {
+    "date": "2026-09-16",
+    "calls": 450,
+    "failed": 4,
+    "p95_ms": 640,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 78,
+      "failed": 1,
+      "p95_ms": 140
+     },
+     {
+      "name": "cloudflare",
+      "calls": 18,
+      "failed": 0,
+      "p95_ms": 780
+     },
+     {
+      "name": "figma",
+      "calls": 129,
+      "failed": 1,
+      "p95_ms": 640
+     },
+     {
+      "name": "github",
+      "calls": 157,
+      "failed": 1,
+      "p95_ms": 430
+     },
+     {
+      "name": "notion",
+      "calls": 42,
+      "failed": 0,
+      "p95_ms": 1000
+     },
+     {
+      "name": "slack",
+      "calls": 26,
+      "failed": 0,
+      "p95_ms": 570
+     }
+    ]
+   },
+   {
+    "date": "2026-09-17",
+    "calls": 500,
+    "failed": 8,
+    "p95_ms": 820,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 87,
+      "failed": 1,
+      "p95_ms": 180
+     },
+     {
+      "name": "cloudflare",
+      "calls": 20,
+      "failed": 0,
+      "p95_ms": 1000
+     },
+     {
+      "name": "figma",
+      "calls": 143,
+      "failed": 2,
+      "p95_ms": 820
+     },
+     {
+      "name": "github",
+      "calls": 174,
+      "failed": 3,
+      "p95_ms": 550
+     },
+     {
+      "name": "notion",
+      "calls": 46,
+      "failed": 1,
+      "p95_ms": 1280
+     },
+     {
+      "name": "slack",
+      "calls": 29,
+      "failed": 0,
+      "p95_ms": 730
+     }
+    ]
+   },
+   {
+    "date": "2026-09-18",
+    "calls": 540,
+    "failed": 12,
+    "p95_ms": 980,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 94,
+      "failed": 2,
+      "p95_ms": 220
+     },
+     {
+      "name": "cloudflare",
+      "calls": 22,
+      "failed": 0,
+      "p95_ms": 1200
+     },
+     {
+      "name": "figma",
+      "calls": 154,
+      "failed": 3,
+      "p95_ms": 980
+     },
+     {
+      "name": "github",
+      "calls": 188,
+      "failed": 4,
+      "p95_ms": 650
+     },
+     {
+      "name": "notion",
+      "calls": 50,
+      "failed": 1,
+      "p95_ms": 1520
+     },
+     {
+      "name": "slack",
+      "calls": 31,
+      "failed": 1,
+      "p95_ms": 870
+     }
+    ]
+   },
+   {
+    "date": "2026-09-19",
+    "calls": 470,
+    "failed": 6,
+    "p95_ms": 720,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 82,
+      "failed": 1,
+      "p95_ms": 160
+     },
+     {
+      "name": "cloudflare",
+      "calls": 19,
+      "failed": 0,
+      "p95_ms": 880
+     },
+     {
+      "name": "figma",
+      "calls": 134,
+      "failed": 2,
+      "p95_ms": 720
+     },
+     {
+      "name": "github",
+      "calls": 164,
+      "failed": 2,
+      "p95_ms": 480
+     },
+     {
+      "name": "notion",
+      "calls": 44,
+      "failed": 1,
+      "p95_ms": 1120
+     },
+     {
+      "name": "slack",
+      "calls": 27,
+      "failed": 0,
+      "p95_ms": 640
+     }
+    ]
+   },
+   {
+    "date": "2026-09-20",
+    "calls": 300,
+    "failed": 4,
+    "p95_ms": 660,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 150
+     },
+     {
+      "name": "cloudflare",
+      "calls": 12,
+      "failed": 0,
+      "p95_ms": 810
+     },
+     {
+      "name": "figma",
+      "calls": 86,
+      "failed": 1,
+      "p95_ms": 660
+     },
+     {
+      "name": "github",
+      "calls": 104,
+      "failed": 1,
+      "p95_ms": 440
+     },
+     {
+      "name": "notion",
+      "calls": 28,
+      "failed": 0,
+      "p95_ms": 1030
+     },
+     {
+      "name": "slack",
+      "calls": 17,
+      "failed": 0,
+      "p95_ms": 590
+     }
+    ]
+   },
+   {
+    "date": "2026-09-21",
+    "calls": 280,
+    "failed": 3,
+    "p95_ms": 600,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 49,
+      "failed": 1,
+      "p95_ms": 130
+     },
+     {
+      "name": "cloudflare",
+      "calls": 11,
+      "failed": 0,
+      "p95_ms": 730
+     },
+     {
+      "name": "figma",
+      "calls": 80,
+      "failed": 1,
+      "p95_ms": 600
+     },
+     {
+      "name": "github",
+      "calls": 98,
+      "failed": 1,
+      "p95_ms": 400
+     },
+     {
+      "name": "notion",
+      "calls": 26,
+      "failed": 0,
+      "p95_ms": 930
+     },
+     {
+      "name": "slack",
+      "calls": 16,
+      "failed": 0,
+      "p95_ms": 530
+     }
+    ]
+   },
+   {
+    "date": "2026-09-22",
+    "calls": 520,
+    "failed": 6,
+    "p95_ms": 780,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 91,
+      "failed": 1,
+      "p95_ms": 170
+     },
+     {
+      "name": "cloudflare",
+      "calls": 21,
+      "failed": 0,
+      "p95_ms": 950
+     },
+     {
+      "name": "figma",
+      "calls": 149,
+      "failed": 2,
+      "p95_ms": 780
+     },
+     {
+      "name": "github",
+      "calls": 181,
+      "failed": 2,
+      "p95_ms": 520
+     },
+     {
+      "name": "notion",
+      "calls": 48,
+      "failed": 1,
+      "p95_ms": 1210
+     },
+     {
+      "name": "slack",
+      "calls": 30,
+      "failed": 0,
+      "p95_ms": 690
+     }
+    ]
+   },
+   {
+    "date": "2026-09-23",
+    "calls": 560,
+    "failed": 7,
+    "p95_ms": 900,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 98,
+      "failed": 1,
+      "p95_ms": 200
+     },
+     {
+      "name": "cloudflare",
+      "calls": 23,
+      "failed": 0,
+      "p95_ms": 1100
+     },
+     {
+      "name": "figma",
+      "calls": 160,
+      "failed": 2,
+      "p95_ms": 900
+     },
+     {
+      "name": "github",
+      "calls": 195,
+      "failed": 2,
+      "p95_ms": 600
+     },
+     {
+      "name": "notion",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 1400
+     },
+     {
+      "name": "slack",
+      "calls": 33,
+      "failed": 0,
+      "p95_ms": 800
+     }
+    ]
+   },
+   {
+    "date": "2026-09-24",
+    "calls": 600,
+    "failed": 9,
+    "p95_ms": 760,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 105,
+      "failed": 2,
+      "p95_ms": 170
+     },
+     {
+      "name": "cloudflare",
+      "calls": 25,
+      "failed": 0,
+      "p95_ms": 930
+     },
+     {
+      "name": "figma",
+      "calls": 172,
+      "failed": 3,
+      "p95_ms": 760
+     },
+     {
+      "name": "github",
+      "calls": 209,
+      "failed": 3,
+      "p95_ms": 510
+     },
+     {
+      "name": "notion",
+      "calls": 56,
+      "failed": 1,
+      "p95_ms": 1180
+     },
+     {
+      "name": "slack",
+      "calls": 35,
+      "failed": 1,
+      "p95_ms": 680
+     }
+    ]
+   },
+   {
+    "date": "2026-09-25",
+    "calls": 480,
+    "failed": 5,
+    "p95_ms": 700,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 84,
+      "failed": 1,
+      "p95_ms": 160
+     },
+     {
+      "name": "cloudflare",
+      "calls": 20,
+      "failed": 0,
+      "p95_ms": 860
+     },
+     {
+      "name": "figma",
+      "calls": 137,
+      "failed": 1,
+      "p95_ms": 700
+     },
+     {
+      "name": "github",
+      "calls": 167,
+      "failed": 2,
+      "p95_ms": 470
+     },
+     {
+      "name": "notion",
+      "calls": 44,
+      "failed": 0,
+      "p95_ms": 1090
+     },
+     {
+      "name": "slack",
+      "calls": 28,
+      "failed": 0,
+      "p95_ms": 620
+     }
+    ]
+   },
+   {
+    "date": "2026-09-26",
+    "calls": 420,
+    "failed": 4,
+    "p95_ms": 1180,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 73,
+      "failed": 1,
+      "p95_ms": 260
+     },
+     {
+      "name": "cloudflare",
+      "calls": 17,
+      "failed": 0,
+      "p95_ms": 1440
+     },
+     {
+      "name": "figma",
+      "calls": 120,
+      "failed": 1,
+      "p95_ms": 1180
+     },
+     {
+      "name": "github",
+      "calls": 146,
+      "failed": 1,
+      "p95_ms": 790
+     },
+     {
+      "name": "notion",
+      "calls": 39,
+      "failed": 0,
+      "p95_ms": 1840
+     },
+     {
+      "name": "slack",
+      "calls": 24,
+      "failed": 0,
+      "p95_ms": 1050
+     }
+    ]
+   },
+   {
+    "date": "2026-09-27",
+    "calls": 640,
+    "failed": 16,
+    "p95_ms": 1450,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 112,
+      "failed": 3,
+      "p95_ms": 320
+     },
+     {
+      "name": "cloudflare",
+      "calls": 26,
+      "failed": 1,
+      "p95_ms": 1770
+     },
+     {
+      "name": "figma",
+      "calls": 183,
+      "failed": 5,
+      "p95_ms": 1450
+     },
+     {
+      "name": "github",
+      "calls": 223,
+      "failed": 6,
+      "p95_ms": 970
+     },
+     {
+      "name": "notion",
+      "calls": 59,
+      "failed": 1,
+      "p95_ms": 2260
+     },
+     {
+      "name": "slack",
+      "calls": 37,
+      "failed": 1,
+      "p95_ms": 1290
+     }
+    ]
+   },
+   {
+    "date": "2026-09-28",
+    "calls": 620,
+    "failed": 36,
+    "p95_ms": 1620,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 108,
+      "failed": 2,
+      "p95_ms": 360
+     },
+     {
+      "name": "cloudflare",
+      "calls": 25,
+      "failed": 0,
+      "p95_ms": 1980
+     },
+     {
+      "name": "figma",
+      "calls": 177,
+      "failed": 27,
+      "p95_ms": 4200
+     },
+     {
+      "name": "github",
+      "calls": 216,
+      "failed": 3,
+      "p95_ms": 1080
+     },
+     {
+      "name": "notion",
+      "calls": 57,
+      "failed": 1,
+      "p95_ms": 2520
+     },
+     {
+      "name": "slack",
+      "calls": 36,
+      "failed": 1,
+      "p95_ms": 1440
+     }
+    ]
+   },
+   {
+    "date": "2026-09-29",
+    "calls": 520,
+    "failed": 10,
+    "p95_ms": 1000,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 91,
+      "failed": 2,
+      "p95_ms": 220
+     },
+     {
+      "name": "cloudflare",
+      "calls": 21,
+      "failed": 0,
+      "p95_ms": 1220
+     },
+     {
+      "name": "figma",
+      "calls": 149,
+      "failed": 3,
+      "p95_ms": 1000
+     },
+     {
+      "name": "github",
+      "calls": 181,
+      "failed": 3,
+      "p95_ms": 670
+     },
+     {
+      "name": "notion",
+      "calls": 48,
+      "failed": 1,
+      "p95_ms": 1560
+     },
+     {
+      "name": "slack",
+      "calls": 30,
+      "failed": 1,
+      "p95_ms": 890
+     }
+    ]
+   },
+   {
+    "date": "2026-09-30",
+    "calls": 500,
+    "failed": 6,
+    "p95_ms": 780,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 87,
+      "failed": 1,
+      "p95_ms": 170
+     },
+     {
+      "name": "cloudflare",
+      "calls": 20,
+      "failed": 0,
+      "p95_ms": 950
+     },
+     {
+      "name": "figma",
+      "calls": 143,
+      "failed": 2,
+      "p95_ms": 780
+     },
+     {
+      "name": "github",
+      "calls": 174,
+      "failed": 2,
+      "p95_ms": 520
+     },
+     {
+      "name": "notion",
+      "calls": 46,
+      "failed": 1,
+      "p95_ms": 1210
+     },
+     {
+      "name": "slack",
+      "calls": 29,
+      "failed": 0,
+      "p95_ms": 690
+     }
+    ]
+   },
+   {
+    "date": "2026-10-01",
+    "calls": 320,
+    "failed": 4,
+    "p95_ms": 740,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 56,
+      "failed": 1,
+      "p95_ms": 160
+     },
+     {
+      "name": "cloudflare",
+      "calls": 13,
+      "failed": 0,
+      "p95_ms": 900
+     },
+     {
+      "name": "figma",
+      "calls": 91,
+      "failed": 1,
+      "p95_ms": 740
+     },
+     {
+      "name": "github",
+      "calls": 111,
+      "failed": 1,
+      "p95_ms": 490
+     },
+     {
+      "name": "notion",
+      "calls": 30,
+      "failed": 0,
+      "p95_ms": 1150
+     },
+     {
+      "name": "slack",
+      "calls": 19,
+      "failed": 0,
+      "p95_ms": 660
+     }
+    ]
+   },
+   {
+    "date": "2026-10-02",
+    "calls": 300,
+    "failed": 6,
+    "p95_ms": 820,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 180
+     },
+     {
+      "name": "cloudflare",
+      "calls": 12,
+      "failed": 0,
+      "p95_ms": 1000
+     },
+     {
+      "name": "figma",
+      "calls": 86,
+      "failed": 2,
+      "p95_ms": 820
+     },
+     {
+      "name": "github",
+      "calls": 104,
+      "failed": 2,
+      "p95_ms": 550
+     },
+     {
+      "name": "notion",
+      "calls": 28,
+      "failed": 1,
+      "p95_ms": 1280
+     },
+     {
+      "name": "slack",
+      "calls": 17,
+      "failed": 0,
+      "p95_ms": 730
+     }
+    ]
+   },
+   {
+    "date": "2026-10-03",
+    "calls": 560,
+    "failed": 7,
+    "p95_ms": 880,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 98,
+      "failed": 1,
+      "p95_ms": 200
+     },
+     {
+      "name": "cloudflare",
+      "calls": 23,
+      "failed": 0,
+      "p95_ms": 1080
+     },
+     {
+      "name": "figma",
+      "calls": 160,
+      "failed": 2,
+      "p95_ms": 880
+     },
+     {
+      "name": "github",
+      "calls": 195,
+      "failed": 2,
+      "p95_ms": 590
+     },
+     {
+      "name": "notion",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 1370
+     },
+     {
+      "name": "slack",
+      "calls": 33,
+      "failed": 0,
+      "p95_ms": 780
+     }
+    ]
+   },
+   {
+    "date": "2026-10-04",
+    "calls": 580,
+    "failed": 4,
+    "p95_ms": 760,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 101,
+      "failed": 1,
+      "p95_ms": 170
+     },
+     {
+      "name": "cloudflare",
+      "calls": 24,
+      "failed": 0,
+      "p95_ms": 930
+     },
+     {
+      "name": "figma",
+      "calls": 166,
+      "failed": 1,
+      "p95_ms": 760
+     },
+     {
+      "name": "github",
+      "calls": 202,
+      "failed": 1,
+      "p95_ms": 510
+     },
+     {
+      "name": "notion",
+      "calls": 54,
+      "failed": 0,
+      "p95_ms": 1180
+     },
+     {
+      "name": "slack",
+      "calls": 34,
+      "failed": 0,
+      "p95_ms": 680
+     }
+    ]
+   },
+   {
+    "date": "2026-10-05",
+    "calls": 560,
+    "failed": 5,
+    "p95_ms": 800,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 98,
+      "failed": 1,
+      "p95_ms": 180
+     },
+     {
+      "name": "cloudflare",
+      "calls": 23,
+      "failed": 0,
+      "p95_ms": 980
+     },
+     {
+      "name": "figma",
+      "calls": 160,
+      "failed": 1,
+      "p95_ms": 800
+     },
+     {
+      "name": "github",
+      "calls": 195,
+      "failed": 2,
+      "p95_ms": 530
+     },
+     {
+      "name": "notion",
+      "calls": 52,
+      "failed": 0,
+      "p95_ms": 1240
+     },
+     {
+      "name": "slack",
+      "calls": 33,
+      "failed": 0,
+      "p95_ms": 710
+     }
+    ]
+   },
+   {
+    "date": "2026-10-06",
+    "calls": 600,
+    "failed": 11,
+    "p95_ms": 1080,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 105,
+      "failed": 2,
+      "p95_ms": 240
+     },
+     {
+      "name": "cloudflare",
+      "calls": 25,
+      "failed": 0,
+      "p95_ms": 1320
+     },
+     {
+      "name": "figma",
+      "calls": 172,
+      "failed": 3,
+      "p95_ms": 1080
+     },
+     {
+      "name": "github",
+      "calls": 209,
+      "failed": 4,
+      "p95_ms": 720
+     },
+     {
+      "name": "notion",
+      "calls": 56,
+      "failed": 1,
+      "p95_ms": 1680
+     },
+     {
+      "name": "slack",
+      "calls": 35,
+      "failed": 1,
+      "p95_ms": 960
+     }
+    ]
+   },
+   {
+    "date": "2026-10-07",
+    "calls": 540,
+    "failed": 7,
+    "p95_ms": 960,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 94,
+      "failed": 1,
+      "p95_ms": 210
+     },
+     {
+      "name": "cloudflare",
+      "calls": 22,
+      "failed": 0,
+      "p95_ms": 1170
+     },
+     {
+      "name": "figma",
+      "calls": 154,
+      "failed": 2,
+      "p95_ms": 960
+     },
+     {
+      "name": "github",
+      "calls": 188,
+      "failed": 2,
+      "p95_ms": 640
+     },
+     {
+      "name": "notion",
+      "calls": 50,
+      "failed": 1,
+      "p95_ms": 1490
+     },
+     {
+      "name": "slack",
+      "calls": 31,
+      "failed": 0,
+      "p95_ms": 850
+     }
+    ]
+   },
+   {
+    "date": "2026-10-08",
+    "calls": 520,
+    "failed": 6,
+    "p95_ms": 900,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 91,
+      "failed": 1,
+      "p95_ms": 200
+     },
+     {
+      "name": "cloudflare",
+      "calls": 21,
+      "failed": 0,
+      "p95_ms": 1100
+     },
+     {
+      "name": "figma",
+      "calls": 149,
+      "failed": 2,
+      "p95_ms": 900
+     },
+     {
+      "name": "github",
+      "calls": 181,
+      "failed": 2,
+      "p95_ms": 600
+     },
+     {
+      "name": "notion",
+      "calls": 48,
+      "failed": 1,
+      "p95_ms": 1400
+     },
+     {
+      "name": "slack",
+      "calls": 30,
+      "failed": 0,
+      "p95_ms": 800
+     }
+    ]
+   },
+   {
+    "date": "2026-10-09",
+    "calls": 330,
+    "failed": 4,
+    "p95_ms": 1180,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 58,
+      "failed": 1,
+      "p95_ms": 260
+     },
+     {
+      "name": "cloudflare",
+      "calls": 14,
+      "failed": 0,
+      "p95_ms": 1440
+     },
+     {
+      "name": "figma",
+      "calls": 94,
+      "failed": 1,
+      "p95_ms": 1180
+     },
+     {
+      "name": "github",
+      "calls": 115,
+      "failed": 1,
+      "p95_ms": 790
+     },
+     {
+      "name": "notion",
+      "calls": 31,
+      "failed": 0,
+      "p95_ms": 1840
+     },
+     {
+      "name": "slack",
+      "calls": 19,
+      "failed": 0,
+      "p95_ms": 1050
+     }
+    ]
+   },
+   {
+    "date": "2026-10-10",
+    "calls": 300,
+    "failed": 7,
+    "p95_ms": 1000,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 220
+     },
+     {
+      "name": "cloudflare",
+      "calls": 12,
+      "failed": 0,
+      "p95_ms": 1220
+     },
+     {
+      "name": "figma",
+      "calls": 86,
+      "failed": 2,
+      "p95_ms": 1000
+     },
+     {
+      "name": "github",
+      "calls": 104,
+      "failed": 2,
+      "p95_ms": 670
+     },
+     {
+      "name": "notion",
+      "calls": 28,
+      "failed": 1,
+      "p95_ms": 1560
+     },
+     {
+      "name": "slack",
+      "calls": 17,
+      "failed": 0,
+      "p95_ms": 890
+     }
+    ]
+   },
+   {
+    "date": "2026-10-11",
+    "calls": 560,
+    "failed": 12,
+    "p95_ms": 880,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 98,
+      "failed": 2,
+      "p95_ms": 200
+     },
+     {
+      "name": "cloudflare",
+      "calls": 23,
+      "failed": 0,
+      "p95_ms": 1080
+     },
+     {
+      "name": "figma",
+      "calls": 160,
+      "failed": 3,
+      "p95_ms": 880
+     },
+     {
+      "name": "github",
+      "calls": 195,
+      "failed": 4,
+      "p95_ms": 590
+     },
+     {
+      "name": "notion",
+      "calls": 52,
+      "failed": 1,
+      "p95_ms": 1370
+     },
+     {
+      "name": "slack",
+      "calls": 33,
+      "failed": 1,
+      "p95_ms": 780
+     }
+    ]
+   },
+   {
+    "date": "2026-10-12",
+    "calls": 600,
+    "failed": 9,
+    "p95_ms": 1100,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 105,
+      "failed": 2,
+      "p95_ms": 240
+     },
+     {
+      "name": "cloudflare",
+      "calls": 25,
+      "failed": 0,
+      "p95_ms": 1340
+     },
+     {
+      "name": "figma",
+      "calls": 172,
+      "failed": 3,
+      "p95_ms": 1100
+     },
+     {
+      "name": "github",
+      "calls": 209,
+      "failed": 3,
+      "p95_ms": 730
+     },
+     {
+      "name": "notion",
+      "calls": 56,
+      "failed": 1,
+      "p95_ms": 1710
+     },
+     {
+      "name": "slack",
+      "calls": 35,
+      "failed": 1,
+      "p95_ms": 980
+     }
+    ]
+   },
+   {
+    "date": "2026-10-13",
+    "calls": 540,
+    "failed": 8,
+    "p95_ms": 960,
+    "servers": [
+     {
+      "name": "arkism",
+      "calls": 94,
+      "failed": 1,
+      "p95_ms": 210
+     },
+     {
+      "name": "cloudflare",
+      "calls": 22,
+      "failed": 0,
+      "p95_ms": 1170
+     },
+     {
+      "name": "figma",
+      "calls": 154,
+      "failed": 2,
+      "p95_ms": 960
+     },
+     {
+      "name": "github",
+      "calls": 188,
+      "failed": 3,
+      "p95_ms": 640
+     },
+     {
+      "name": "notion",
+      "calls": 50,
+      "failed": 1,
+      "p95_ms": 1490
+     },
+     {
+      "name": "slack",
+      "calls": 31,
+      "failed": 0,
+      "p95_ms": 850
+     }
+    ]
+   }
+  ],
+  "fails": [
+   {
+    "tool": "mcp__figma__use_figma",
+    "at": "2026-10-13T05:32:00Z",
+    "ms": 30000,
+    "err": "timeout",
+    "agent": "claude_code"
+   },
+   {
+    "tool": "mcp__notion__notion-fetch",
+    "at": "2026-10-13T02:08:00Z",
+    "ms": 900,
+    "err": "permission",
+    "agent": "claude_code"
+   },
+   {
+    "tool": "mcp__github__create_pull_request",
+    "at": "2026-10-12T13:41:00Z",
+    "ms": 1400,
+    "err": "conflict",
+    "agent": "claude_code"
+   },
+   {
+    "tool": "mcp__cloudflare__d1_database_query",
+    "at": "2026-10-12T08:15:00Z",
+    "ms": 700,
+    "err": "error",
+    "agent": "claude_code"
+   },
+   {
+    "tool": "mcp__slack__send_message",
+    "at": "2026-10-12T00:03:00Z",
+    "ms": 300,
+    "err": "auth",
+    "agent": "claude_code"
    }
   ]
  }

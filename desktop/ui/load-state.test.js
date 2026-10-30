@@ -80,24 +80,24 @@ test("#188: Home's review count is the server total while more pages wait, and a
   let total = () => ok({ items: [], total: 123, next_cursor: "", authority: "data_only", facets: {} });
   add("GET", "/v1/memory_candidates?", (a) => (/status=candidate/.test(a.path) ? page([cand], "more") : null));
   add("POST", "/v1/memory_candidates/query", () => total());
-  await reload(); await home(); await until(has("#table", /기억 후보 123/));
-  assert.match(text(app.$("#table")), /기억 후보 123/);
+  await reload(); await home(); await until(has("#table", /새 기억 123/));
+  assert.match(text(app.$("#table")), /새 기억 123/);
   total = () => fail(500, "boom");
-  await reload(); await home(); await until(has("#table", /기억 후보 1(개 이상|\+)/));
+  await reload(); await home(); await until(has("#table", /새 기억 1(개 이상|\+)/));
   const body = text(app.$("#table"));
-  assert.match(body, /기억 후보 (1개 이상|1\+)/, body);
-  assert.ok(!/기억 후보 1개 검토|기억 후보 1(?![+개])/.test(body), "the first page is not the whole");
+  assert.match(body, /새 기억 (1개 이상|1\+)/, body);
+  assert.ok(!/새 기억 1개 확인|새 기억 1(?![+개])/.test(body), "the first page is not the whole");
 }));
 
 test("#465 conflicted: a failed conflict list is named on Home, a partial one reads N+", withRoutes(async (add) => {
   let answer = () => fail(500, "boom");
   add("GET", "/v1/memory_candidates?", (a) => (/status=conflicted/.test(a.path) ? answer() : null));
   await reload(); await home();
-  assert.match(text(app.$("#table")), /불러오지 못한 목록|부딪히는 기억 목록을 불러오지 못했어요/);
-  assert.ok(!/부딪(힘|히는 기억) 0/.test(text(app.$("#table"))));
+  assert.match(text(app.$("#table")), /불러오지 못한 목록|서로 다른 기억 목록을 불러오지 못했어요/);
+  assert.ok(!/(부딪힘|서로 다른 기억) 0/.test(text(app.$("#table"))));
   answer = () => page([{ id: "k9", text: "two sides", status: "conflicted", kind: "user", created_at: ago(2) }], "more");
   await reload(); await home();
-  assert.match(text(app.$("#table")), /부딪(힘 1\+|히는 기억 1개 이상)/);
+  assert.match(text(app.$("#table")), /서로 다른 기억 1개 이상/);
 }));
 
 test("#187: a failed conflict list cannot prove an extraction stall", withRoutes(async (add) => {

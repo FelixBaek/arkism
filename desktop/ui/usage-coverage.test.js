@@ -29,7 +29,7 @@ function summary(over = {}) {
       items: [
         { model: "openai/gpt", decision: "clef", ok: true, input: 10, output: 5, latency_ms: 1200, at, cost_usd: 0.01 },
         { model: "b", replaced: "openai/gpt", decision: "failover", ok: true, input: 1, output: 1, latency_ms: 10, at },
-        { model: "b", decision: "fixed", ok: false, error: "boom", input: 1, output: 0, latency_ms: 10, at },
+        { model: "b", decision: "fixed", rule: "code", ok: false, error: "boom", input: 1, output: 0, latency_ms: 10, at },
         { model: "c", decision: "", ok: false, input: 1, output: 0, latency_ms: 10, at },
         { model: "openai/gpt", decision: "clef", ok: true, input: 1, output: 1, latency_ms: 1, at },
       ],
@@ -66,11 +66,23 @@ function mk({ menu = "router", doc = summary(), ov = overviewDoc(), fail = null,
 async function open(v) { v.u.views.usage.render(); for (let i = 0; i < 4; i++) await flush(); return v; }
 const click = (root, t) => { const all = byText(root, t), n = all.find((x) => x.tagName === "BUTTON") || all[0]; assert.ok(n, `no node with text ${t}`); n.click(); };
 
+test("ROUTER 라우팅 흐름 counts rule-routed calls in their own lane, not 고정 모델", async () => {
+  const it = (o) => ({ model: "b", ok: true, input: 1, output: 1, latency_ms: 1, at, ...o });
+  const items = [it({ decision: "fixed", rule: "code" }), it({ decision: "fixed", rule: "writing" }), it({ decision: "fixed" })];
+  const v = await open(mk({ doc: summary({ requests: { count: 3, failed: 0, input: 3, output: 3, cost_usd: 0, models: [{ name: "b", requests: 3, tokens: 6 }], items } }) }));
+  assert.match(text(v.table), /규칙으로2건 · 66\.7%/);
+  assert.match(text(v.table), /고정 모델1건 · 33\.3%/);
+  click(v.table, "b"); // one model: its main route is the rule lane
+  assert.match(text(v.table), /규칙으로 66\.7%주로 받은 경로/);
+});
+
 test("ROUTER 개요 shows routed calls, the flow card, model share and picks one model", async () => {
   const v = await open(mk());
   assert.match(text(v.table), /라우팅 흐름/);
   assert.match(text(v.table), /기타 1개/);
-  assert.match(text(v.table), /응답 p95/);
+  assert.match(text(v.table), /응답 시간1\.0초보통 걸린 시간/);
+  assert.doesNotMatch(text(v.table), /p95|p50|공시|MEMORY·FLOW/);
+  assert.doesNotMatch(text(v.nodes["#controls"]), /결정/); // ROUTER keeps routing only; decision counts live in the other menus
   assert.equal(v.u.count(), "10");
   assert.match(v.u.views.usage.sub(), /라우터가 보낸 요청/);
   assert.equal(v.u.views.usage.keepDetail, false);
@@ -105,6 +117,21 @@ test("ROUTER 개요 labels sub-day points by time, several days by date and time
   click(v.nodes["#controls"], "90일"); // same range: nothing reloads
 });
 
+test("이번 달 asks the server for the month in the reader's time zone", async () => {
+  const calls = [];
+  const request = async (path) => { calls.push(path); return path.startsWith("/v1/routing/models") ? { authority: "data_only_untrusted", items: [{ id: "openai/gpt", name: "GPT 화면 이름" }] } : summary(); };
+  const v = await open(mk({ extra: { request } }));
+  v.calls = calls;
+  click(v.nodes["#controls"], "이번 달");
+  for (let i = 0; i < 4; i++) await flush();
+  const tz = -new Date().getTimezoneOffset();
+  assert.ok(v.calls.includes(`/v1/usage/summary?range=month&tz=${tz}`), v.calls.join(" "));
+  assert.ok(!v.calls.some((c) => c.startsWith("/v1/routing/overview?range=month")), "the routing overview has no month range");
+  assert.ok(v.calls.some((c) => c.startsWith("/v1/routing/models")), "names come from the model list instead");
+  assert.match(text(v.table), /GPT 화면 이름/);
+  assert.match(text(v.table), /날짜별 그래프는 오늘·7일·30일/);
+});
+
 test("ROUTER with no routed calls points to the routing settings; a failed overview read is ignored", async () => {
   const doc = summary({ requests: { count: 0, failed: 0, input: 0, output: 0, cost_usd: 0, models: [], items: [] } });
   const v = await open(mk({ doc, ov: new Error("down") }));
@@ -121,7 +148,11 @@ test("요청 tab lists each call and the side panel sums failures, fallbacks and
   assert.match(text(v.table), /실패 · boom/);
   assert.match(text(v.table), /대신 받음/);
   assert.match(text(v.nodes["#detail"]), /응답 속도/);
-  assert.match(text(v.nodes["#detail"]), /p95 1\.5초/);
+  // one plain reason per request, tokens named; the slow tail waits under 자세히
+  for (const t of [/판정 모델이 골라서 → GPT입력 10 · 출력 5 · 1\.2초/, /GPT에서 실패해 넘김 → b/, /코딩 요청이라 → b/, /기본 모델이라 → c/]) assert.match(text(v.table), t);
+  assert.match(text(v.nodes["#detail"]), /보통1\.0초/);
+  assert.match(text(v.nodes["#detail"]), /자세히느릴 때2\.0초100건 중 가장 느린 5건/);
+  assert.doesNotMatch(text(v.nodes["#detail"]), /p95|p50/);
   assert.equal(v.u.views.usage.keepDetail, true);
   assert.match(v.u.views.usage.sub(), /라우터를 거친 요청의/);
   click(v.nodes["#detail"], "라우팅 현황에서 보기 ›");
@@ -146,7 +177,7 @@ test("MEMORY 개요 without memory_use keeps session numbers; with it shows the 
     often: (x) => x.id !== "m1", kindLabel: (k) => `종류 ${k}`, openIdle: () => opened.push("idle"), openMemory: (id) => opened.push(id),
   });
   const v = await open(mk({ menu: "memory", extra: { memory }, doc: summary({ hours: Array(168).fill(0), skills: [] }) }));
-  assert.match(text(v.table), /답변 문구 겹침 비율/);
+  assert.match(text(v.table), /답에 보인 비율/);
   assert.match(text(v.table), /30%/);
   assert.match(text(v.table), /종류 lesson/);
   click(v.table, "정리하기 →");
@@ -164,13 +195,29 @@ test("CREW and TOOLS 개요 put agents and tools first; empty periods say so", a
   assert.match(text(crew.table), /세션당/);
   const tools = await open(mk({ menu: "connect" }));
   assert.match(text(tools.table), /git_hub/);
-  assert.match(text(tools.table), /내장/);
+  assert.doesNotMatch(text(tools.table), /Read/, "많이 쓴 도구 lists MCP tools only (325:34690)");
+  const health = { calls: 100, failed: 3, p50_ms: 400, p95_ms: 2000, avg_ms: 600, servers: [{ name: "git_hub", calls: 100, failed: 3, p95_ms: 2000 }],
+    by_day: [{ date: "2026-09-30", calls: 0, failed: 0, p95_ms: null },
+      { date: "2026-10-01", calls: 40, failed: 0, p95_ms: 800, servers: [{ name: "git_hub", calls: 30, failed: 0, p95_ms: 700 }, { name: "notion", calls: 10, failed: 0, p95_ms: 900 }] },
+      { date: "2026-10-02", calls: 100, failed: 3, p95_ms: 2000, servers: [{ name: "git_hub", calls: 90, failed: 3, p95_ms: 2100 }, { name: "notion", calls: 10, failed: 0, p95_ms: 950 }] }],
+    fails: [{ tool: "mcp__git_hub__push", at: at, ms: 30000, err: "timeout", agent: "claude" }] };
+  const h = await open(mk({ menu: "connect", doc: summary({ tool_health: health }) }));
+  const ht = text(h.table);
+  assert.match(ht, /3\.0%/);
+  assert.match(ht, /느림/, "p95 over 1.5s marks the server slow");
+  assert.match(ht, /git_hub · 시간 초과 \(30초\)/);
+  assert.match(ht, /2\.0초 · 실패 3 \(10-02\)/, "the peak day is tagged");
+  assert.match(ht, /10-02 git_hub 서버가 느려지며 실패가 함께 늘었어요\. 나머지 날은 1초 안팎이에요\./, "the caption names the server that slowed against its own usual");
+  const up = await open(mk({ menu: "connect", doc: summary({ tool_health: health, tool_calls: 120, tool_calls_change_pct: 6 }) }));
+  assert.match(text(up.table), /120회30일 · 지난달보다 \+6%/);
+  assert.match(ht, /30일 · 도구 2개/, "no window before: no change shown");
   const emptyDoc = summary({ by_agent: [], tools: [], updated_at: "" });
   const e1 = await open(mk({ menu: "agent", doc: emptyDoc }));
   assert.match(text(e1.table), /기록된 세션이 없어요/);
   const e2 = await open(mk({ menu: "connect", doc: emptyDoc }));
-  assert.match(text(e2.table), /기록된 도구 호출이 없어요/);
-  assert.match(text(e2.table), /기록 없음/);
+  assert.match(text(e2.table), /기록된 MCP 도구 호출이 없어요/);
+  assert.match(text(e2.table), /서버가 보고한 MCP 서버가 없어요/);
+  assert.match(text(e2.table), /이 기간에 실패한 MCP 호출이 없어요/);
 });
 
 test("세션 tab sorts heavy sessions, opens one, and goes back", async () => {
@@ -236,7 +283,7 @@ test("결정 tab sums the server's decision counts per kind and reason over the 
   for (let i = 0; i < 4; i++) await flush();
   assert.ok(v.calls.some((c) => c === "/v1/decisions/summary?period=month&days=30"), v.calls.join(" "));
   const rowsText = v.table.querySelectorAll(".v4u-req").map((r) => text(r));
-  assert.deepEqual(rowsText, ["스킬을 휴지통으로이유 없음5", "병합 제안 넘김same_meaning4", "new_kindx1", "고른 스킬을 불러옴라우터가 고른 것1"]);
+  assert.deepEqual(rowsText, ["스킬을 휴지통으로이유 없음5", "합치기 제안 넘김same_meaning4", "new_kindx1", "고른 스킬을 불러옴라우터가 고른 것1"]);
   assert.doesNotMatch(text(v.table), /^결정/); // no title repeating the tab name
   assert.match(v.u.views.usage.sub(), /종류·이유별로/);
   click(v.nodes["#controls"], "7일");

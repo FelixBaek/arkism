@@ -74,11 +74,13 @@ type KnowledgeRecord struct {
 	ValidTo                    *time.Time        `json:"valid_to,omitempty" bson:"valid_to,omitempty"`
 }
 type KnowledgeIngestInput struct {
-	Scope            Scope  `json:"scope"`
-	SourceKey        string `json:"source_key"`
-	Filename         string `json:"filename"`
-	MIMEType         string `json:"mime_type"`
-	Content          string `json:"content"`
+	Scope     Scope  `json:"scope"`
+	SourceKey string `json:"source_key"`
+	Filename  string `json:"filename"`
+	MIMEType  string `json:"mime_type"`
+	Content   string `json:"content"`
+	// ContentBase64 carries a Word (.docx) file; the server reads its text into Content.
+	ContentBase64    string `json:"content_base64,omitempty"`
 	Synthetic        bool   `json:"synthetic"`
 	ExpectedRevision int64  `json:"expected_revision,omitempty"`
 }
@@ -142,8 +144,20 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		return out, ErrDenied
 	}
 	ext := strings.ToLower(path.Ext(in.Filename))
-	mime := map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json"}[ext]
-	if !validKnowledgeIngest(in, mime) {
+	mime := map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".docx": knowledgeDOCXMIME}[ext]
+	// chunkExt: a Word file's headings come out as Markdown headings.
+	chunkExt := ext
+	if ext == ".docx" {
+		if in.Content != "" {
+			return out, ErrInvalid
+		}
+		text, err := knowledgeDOCXText(in.ContentBase64)
+		if err != nil {
+			return out, err
+		}
+		in.Content, in.ContentBase64, chunkExt = text, "", ".md"
+	}
+	if in.ContentBase64 != "" || !validKnowledgeIngest(in, mime) {
 		return out, ErrInvalid
 	}
 	if containsSecret(in.Content) || containsSecret(in.Filename) || containsSecret(in.SourceKey) {
@@ -157,7 +171,7 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 	anchorID := "knowledge-source-" + ContentHash(id)
 	version := ContentHash(in.MIMEType + ":" + hash + ":" + knowledgeParserVersion + ":" + knowledgeChunkerVersion)
 	documentID := "knowledge-document-" + ContentHash(id+version)
-	normalized, failed := normalizeKnowledgeContent(in.Content, ext)
+	normalized, failed := normalizeKnowledgeContent(in.Content, chunkExt)
 	e = s.withHandoffArtifactWriter(ctx, func(write handoffArtifactWriter) error {
 		return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 			old, err := tx.Get(ctx, colKnowledgeSources, in.Scope, id)
@@ -185,6 +199,7 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 				if exists && len(old.Knowledge.DocumentIDs) >= 32 {
 					return ErrInvalid
 				}
+				// shortcut: a Word file keeps its extracted text, not the original bytes; store the file once the artifact store takes binaries.
 				artifact, err := write(ctx, tx, in.Scope, Ref{Collection: "sources", ID: anchor.ID, Revision: anchor.Revision}, in.Content, d)
 				if err != nil {
 					return err
@@ -197,7 +212,7 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 					doc.Knowledge.ExtractionStatus = "failed"
 					doc.Knowledge.ErrorCode = "extraction_failed"
 				} else {
-					chunks = knowledgeChunks(&doc, in.Scope, d.PrincipalID, refs, normalized, ext)
+					chunks = knowledgeChunks(&doc, in.Scope, d.PrincipalID, refs, normalized, chunkExt)
 				}
 			} else if err != nil {
 				return err
