@@ -6,6 +6,7 @@ retrieval metrics do not measure task success, learning, or user experience.
 import argparse
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sys
@@ -175,7 +176,10 @@ def _run(options):
                 'evaluation_manifest_sha256': evaluation['manifest_sha256']}
     result = calculate_metrics(predictions, inputs['probes'], evaluation['gold'], bindings)
     output = Path(options.out)
-    io.write_json_new(output, result)
+    name = os.path.basename(os.fspath(output))
+    if '..' in output.parts or any('\x00' in part for part in output.parts) or name in ('', '.', '..') or name != output.name:
+        _fail('unsafe_path')
+    io.write_json_new(output.parent / name, result)
     return {'status': 'success', 'output': str(output.absolute()), 'queries': len(result['queries'])}
 
 
