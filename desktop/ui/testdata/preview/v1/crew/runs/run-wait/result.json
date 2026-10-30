@@ -1,0 +1,11 @@
+{
+  "run_id": "run-wait",
+  "revision": 3,
+  "crew_id": "wf-release",
+  "status": "waiting",
+  "invocation_mode": "flow",
+  "source_type": "workflow",
+  "waiting": { "node_id": "ok", "kind": "approval", "question": "검토한 보고서를 전송할까요?" },
+  "result": "",
+  "children": {}
+}
