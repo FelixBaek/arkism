@@ -141,3 +141,6 @@ R8 handoff; SYS-05 consumes that file and does not become its writer. A preparat
 and registration do not satisfy SYS-05.integration. Actual service/daemon,
 restore, queue fairness and same-condition performance evidence remain required.
 The SYS-05 status is in_progress; whole-card completion counts remain unchanged.
+The SYS-05 B candidate owns the bounded dynamics worker, snapshot refresh and the
+daemon's paired dynamics flags. It reuses the existing worker token and read:jobs
+grants; native Search shadow stays off unless separately configured.
