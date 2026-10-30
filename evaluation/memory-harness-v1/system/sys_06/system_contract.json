@@ -1,0 +1,66 @@
+{
+  "protocol": "arkism-sys06-system-contract-v1",
+  "note": "Index of SYS-01~05 contract and case files; a changed hash means the integration evidence must be rechecked.",
+  "contracts": [
+    {
+      "card": "SYS-01",
+      "path": "sys_01/adapter_contract.json",
+      "sha256": "82936159380c3d34720ea80822db0b8c10c3242dba8bb493876c7a8895bad5f0",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-01",
+      "path": "sys_01/race_cases.json",
+      "sha256": "0e3133b31e8bfdf45ac50cf8720aee574bba5310833b1109e2247b9fa396e5e6",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-02",
+      "path": "sys_02/outcome_cases.json",
+      "sha256": "17e11a15ef970adfbe5bb723c51f52e73648092b685709f71eb9903803a4755d",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-02",
+      "path": "sys_02/outcome_contract.json",
+      "sha256": "0746994f05df55800a3fbbebddb3acb6b737518aa1fd93f764a0456eba236fd3",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-03",
+      "path": "sys_03/atomicity_contract.json",
+      "sha256": "4c849e0d4778fe9311223cb8fba1e21da6c8d458a31218ee819d52e2b366274d",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-03",
+      "path": "sys_03/fault_schedules.json",
+      "sha256": "03864092ed7ff14d70308354acd284c7a35abde92fe55656f606c5ac731997b5",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-04",
+      "path": "sys_04/dependency_cases.json",
+      "sha256": "9e536da779ee71128a3bfe2c35ee525daa6f15715e7addf00027747784178490",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-04",
+      "path": "sys_04/lifecycle_contract.json",
+      "sha256": "803b5e3ca60bbd4afac443909bde20cdd76d999d53f6f90c20389e8c839588e9",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-04",
+      "path": "sys_04/restore_cases.json",
+      "sha256": "5930b2120576d19598b9129b5171165485bc631eef965904fbd2fc0876b81be8",
+      "review_state": "accepted"
+    },
+    {
+      "card": "SYS-05",
+      "path": "sys_05/load_contract.json",
+      "sha256": "398df795b2eb03fc421158a10ca4094cdb199f3577545f28715b3d2d8c9ea2bc",
+      "review_state": "accepted"
+    }
+  ]
+}

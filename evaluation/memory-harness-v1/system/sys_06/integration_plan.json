@@ -1,0 +1,47 @@
+{
+  "protocol": "arkism-sys06-integration-plan-v1",
+  "card": "SYS-06",
+  "stages": {
+    "A": {
+      "scope": "integration plan, flag matrix, contract index and report validator",
+      "files": [
+        "integration_plan.json",
+        "flag_matrix.json",
+        "system_contract.json",
+        "validate_integration.py",
+        "test_integration_report.py",
+        "README.md"
+      ]
+    },
+    "B": {
+      "scope": "actual isolated integration in product code under a registered Story allowlist",
+      "prerequisites": [
+        "SYS-05 accepted (B1~B5 and repair)",
+        "the DYN policy to enable accepted",
+        "owner-assigned Story, file allowlist and run budget"
+      ],
+      "candidate_files": [
+        "internal/memory/service.go",
+        "cmd/memoryd/main.go",
+        "internal/memory/dynamics_shadow.go",
+        "internal/memory/dynamics_integration_test.go",
+        "internal/memory/dynamics_integration_postgres_test.go"
+      ],
+      "required_checks": [
+        "go test -race ./internal/memory ./internal/host ./cmd/memoryd -run '^TestDynamicsIntegration' -count=1",
+        "go test -race ./internal/memory -run '^TestDynamicsIntegration.*PG$' -count=1",
+        "python3 tools/check_local.py"
+      ],
+      "required_checks_note": "Each command must appear verbatim in the report with exit 0, no failure, no skip (the PostgreSQL run must not skip) and at least one test; product_diff paths must be in candidate_files."
+    }
+  },
+  "states": {
+    "synthetic_pass": "validator and fixtures only; not product evidence",
+    "accepted_local_integration": "actual isolated Go/HTTP/PostgreSQL evidence for every matrix cell, independent review and Story link",
+    "production": "out of scope for this card; never reported here"
+  },
+  "stop_conditions": [
+    "any off-mode difference from the baseline",
+    "any protection boundary regression (scope, approval, deletion, correction, revision)"
+  ]
+}
