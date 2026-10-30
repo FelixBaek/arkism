@@ -29,11 +29,13 @@ pub fn default_folder(home: &Path, cli: &str) -> PathBuf {
     home.join(format!(".{cli}"))
 }
 
+#[cfg(any(not(windows), test))]
 fn sh_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
 /// The shell line a macOS or Linux terminal runs: the sign-in, then a line saying the window can close.
+#[cfg(any(not(windows), test))]
 pub fn script(cli: &str, folder: Option<(&str, &Path)>) -> Option<String> {
     let (cmd, _) = known(cli)?;
     let env = folder.map(|(k, d)| format!("{k}={} ", sh_quote(&d.to_string_lossy()))).unwrap_or_default();
@@ -53,7 +55,7 @@ pub fn open(cli: &str, folder: Option<(&str, &Path)>) -> Result<(), String> {
             c.env(k, d);
         }
         c.creation_flags(0x0800_0000);
-        return c.spawn().map(|_| ()).map_err(|_| "login_terminal_missing".into());
+        c.spawn().map(|_| ()).map_err(|_| "login_terminal_missing".into())
     }
     #[cfg(not(windows))]
     {
