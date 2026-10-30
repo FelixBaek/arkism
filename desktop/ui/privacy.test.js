@@ -17,7 +17,8 @@ require("./memory-management.js");
 require("./privacy.js");
 
 let answers = [], texts = [];
-globalThis.ask = async () => answers.shift();
+const asked = [];
+globalThis.ask = async (message, ok) => { asked.push([message, ok]); return answers.shift(); };
 globalThis.askText = async () => texts.shift();
 
 function setup(handler) {
@@ -90,8 +91,11 @@ test("erasing one memory asks twice, erases its sources and keeps a receipt id",
   answers = [true, false];
   btn(danger, "영구 삭제").click(); await dom.flush();
   assert.equal(t.calls.filter((c) => c.opts?.method === "POST").length, 0);
-  answers = [true, true];
+  answers = [true, true]; asked.length = 0;
   btn(danger, "영구 삭제").click(); await dom.flush();
+  // both steps name the act and what goes with it; the last button says 영구 삭제, not a bare 확인
+  assert.match(asked[0][0], /영구 삭제할까요/); assert.match(asked[0][0], /원본 대화 기록 2개/); assert.match(asked[0][0], /되살릴 수 없어요/);
+  assert.match(asked[1][0], /원본 대화 기록 2개/); assert.equal(asked[1][1], "영구 삭제");
   const post = t.calls.find((c) => c.path === "/v1/privacy/deletions");
   assert.deepEqual(post.body.target_ids, ["s1", "s2"]);
   assert.equal(post.body.target_type, "source_event");

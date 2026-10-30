@@ -213,9 +213,9 @@ test("a memory's sources show their origin and open each linked message", async 
   const memory = { id: "m1", revision: 2 };
   t.state.selected = "m1";
   t.api.sourceDetails(host, memory, { authority: "x" });
-  assert.match(host.textContent, /출처를 불러오지 못했어요/);
+  assert.match(host.textContent, /어디서 왔는지 불러오지 못했어요/);
   t.api.sourceDetails(host, memory, { authority: A, memory: { id: "m1", revision: 2 }, sources: [] });
-  assert.match(host.textContent, /연결된 출처가 없어요/);
+  assert.match(host.textContent, /남아 있는 대화가 없어요/);
   t.api.sourceDetails(host, memory, { authority: A, memory: { id: "m1", revision: 2 }, sources: [
     { origin_product: "claude_code", collected_at: "2026-01-01T00:00:00Z", origin_agent_id: "agent-7", excerpt: "근거", archive_messages: [{ archive_id: "r1" }, { archive_id: "r1", seq: 2 }] },
     { origin_product: "other", state: "erased" },
@@ -224,17 +224,17 @@ test("a memory's sources show their origin and open each linked message", async 
   assert.match(host.textContent, /Claude · /);
   assert.match(host.textContent, /원래 실행 에이전트 {3}agent-7/);
   assert.match(host.textContent, /other · 시각 없음/);
-  assert.match(host.textContent, /출처 · 시각 없음/);
-  assert.match(host.textContent, /원문이 삭제됐어요/);
-  assert.match(host.textContent, /정확한 대화 위치가 연결되지 않은 출처예요/);
-  assert.match(host.textContent, /조회할 수 있는 근거 본문이 없어요/);
-  const first = btn(host, "연결된 원문 1 열기");
-  assert.ok(btn(host, "연결된 원문 2 열기"));
+  assert.match(host.textContent, /대화 · 시각 없음/);
+  assert.match(host.textContent, /대화 원문은 지워졌어요/);
+  assert.match(host.textContent, /대화 원문은 남아 있지 않아요/);
+  assert.match(host.textContent, /이 대화에서 이렇게 말했어요/);
+  const first = btn(host, "대화 보기 1");
+  assert.ok(btn(host, "대화 보기 2"));
   first.click(); await dom.flush();
   assert.match(host.textContent, /원문/);
   assert.equal(t.calls[0].body.ref.archive_id, "r1");
   first.click(); assert.equal(first.getAttribute("aria-expanded"), "false");
   t.api.sourceDetails(host, memory, { authority: A, memory: { id: "m1", revision: 2 }, sources: [{ origin_product: "codex", archive_messages: [{ archive_id: "r1" }] }] });
-  assert.ok(btn(host, "연결된 원문 열기"));
+  assert.ok(btn(host, "대화 보기"));
   host.remove();
 });

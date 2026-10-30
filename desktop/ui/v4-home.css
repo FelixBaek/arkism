@@ -28,7 +28,10 @@
 .app.home-mode .main > .page-head > :not(.home-all) { grid-column: 1; }
 .app.home-mode.home-sub .home-back { display: block; justify-self: start; border: 0; background: none; padding: 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .home-back:hover { color: var(--nc-text); }
-.app.home-mode:not(.home-sub) .home-all { display: inline-flex; grid-column: 2; grid-row: 1 / span 3; align-self: end; height: auto; padding: 7px 14px; line-height: 1.5; }
+.app.home-mode:not(.home-sub) .home-all { display: inline-flex; grid-column: 2; grid-row: 1; align-self: center; height: 36px; padding: 0 14px; line-height: 1.5; }
+/* 다시 불러오기 · 스킬 제안 받기 sit on the same line as 전체 항목 보기, same height */
+.app.home-mode:not(.home-sub) .title-line { align-items: center; }
+.app.home-mode .page-head .head-actions .btn.icon-btn { width: 36px; height: 36px; padding: 0; }
 
 /* ---------------------------------------------------------------- 홈 lists */
 .app.home-mode .todo-wrap { padding: 0; gap: 10px; overflow: visible; }

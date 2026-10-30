@@ -177,7 +177,7 @@ test("MEMORY 개요 without memory_use keeps session numbers; with it shows the 
     often: (x) => x.id !== "m1", kindLabel: (k) => `종류 ${k}`, openIdle: () => opened.push("idle"), openMemory: (id) => opened.push(id),
   });
   const v = await open(mk({ menu: "memory", extra: { memory }, doc: summary({ hours: Array(168).fill(0), skills: [] }) }));
-  assert.match(text(v.table), /답변 문구 겹침 비율/);
+  assert.match(text(v.table), /답에 보인 비율/);
   assert.match(text(v.table), /30%/);
   assert.match(text(v.table), /종류 lesson/);
   click(v.table, "정리하기 →");
@@ -283,7 +283,7 @@ test("결정 tab sums the server's decision counts per kind and reason over the 
   for (let i = 0; i < 4; i++) await flush();
   assert.ok(v.calls.some((c) => c === "/v1/decisions/summary?period=month&days=30"), v.calls.join(" "));
   const rowsText = v.table.querySelectorAll(".v4u-req").map((r) => text(r));
-  assert.deepEqual(rowsText, ["스킬을 휴지통으로이유 없음5", "병합 제안 넘김same_meaning4", "new_kindx1", "고른 스킬을 불러옴라우터가 고른 것1"]);
+  assert.deepEqual(rowsText, ["스킬을 휴지통으로이유 없음5", "합치기 제안 넘김same_meaning4", "new_kindx1", "고른 스킬을 불러옴라우터가 고른 것1"]);
   assert.doesNotMatch(text(v.table), /^결정/); // no title repeating the tab name
   assert.match(v.u.views.usage.sub(), /종류·이유별로/);
   click(v.nodes["#controls"], "7일");

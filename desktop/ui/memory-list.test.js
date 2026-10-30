@@ -73,15 +73,17 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memUse = () => ({ injections: 4, used: 1 }); env.snap("memories").total = 12;
   assert.match(api.memTitle()[1], /25%/); assert.equal(api.memTitle()[2], "12개");
   env.deps.memory.memTab = "candidate";
-  assert.equal(api.memTitle()[2], "4개"); // 1 candidate + 2 conflicted + 1 idle; provenance not counted
+  assert.equal(api.memTitle()[2], "1개", "the open check tab counts its own items, not every memory");
+  assert.deepEqual(api.checkTotal(), { sum: 4, text: "4" }); // 1 candidate + 2 conflicted + 1 idle; provenance not counted
   env.snap("candidates").total = 9; assert.equal(api.memTitle()[2], "9개");
-  env.deps.memory.memTab = "provenance"; assert.equal(api.memTitle()[0], "확인해 주세요");
+  env.deps.memory.memTab = "conflicted"; assert.equal(api.memTitle()[2], "2개");
+  env.deps.memory.memTab = "provenance"; assert.equal(api.memTitle()[0], "승인 기록");
   env.deps.memory.memTab = "digests"; assert.deepEqual(api.memTitle()[2], "주제 3개");
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");
-  env.state.usageDone = false; env.deps.memory.memTab = "conflicted"; env.snap("memories").total = undefined;
-  assert.equal(api.memTitle()[2], "3+개"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
+  env.state.usageDone = false; env.snap("memories").total = undefined; env.snap("candidates").total = undefined;
+  assert.equal(api.checkTotal().text, "3+"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
   env.state.usageDone = true; env.deps.digests.mergeCount = () => false; // the merge proposal read failed (#465)
-  assert.equal(api.memTitle()[2], "4+개", "a failed merge count makes the total open-ended, not +0");
+  assert.equal(api.checkTotal().text, "4+", "a failed merge count makes the total open-ended, not +0");
 });
 
 test("the main list draws check card, filters, chips, badges, paging and empty state", async () => {
@@ -110,21 +112,25 @@ test("the main list draws check card, filters, chips, badges, paging and empty s
   assert.deepEqual(env.log.slice(0, 1), ["ensure:memories"]);
   const controls = h.$("#controls");
   assert.match(controls.textContent, /확인해 주세요3/);
-  assert.match(controls.textContent, /병합 제안 2/);
+  assert.match(controls.textContent, /합치기 제안 2/);
   assert.equal(h.$("#mem-back").hidden, true);
   const badges = h.$("#table").querySelectorAll(".mem-badge").map((b) => b.textContent);
-  assert.deepEqual(badges, ["재검토 예정일 지남", "항상 적용", "검토 필요", "문구 겹침 2번", "새 기억", "—", "…", "새 기억", "안 불림", "5번 참고"]);
+  assert.deepEqual(badges, ["재검토 예정일 지남", "항상 적용", "검토 필요", "답에 보임 2번", "새 기억", "—", "…", "새 기억", "안 불림", "5번 참고"]);
   assert.match(h.$("#table .collection-more").textContent, /불러온 10개 중 10개 표시/);
   const chips = h.$("#chips").querySelectorAll("button");
-  assert.deepEqual(chips.map((c) => c.textContent), ["전체3", "사용자3", "프로젝트0"]);
+  assert.deepEqual(chips.map((c) => c.textContent), ["전체3", "사용자3", "프로젝트"]);
   chips[1].click(); assert.equal(deps.memory.kind, "user");
   // card button goes to the first non-empty check list
   dom.buttons(controls, "하나씩 확인하기")[0].click();
   assert.deepEqual(env.gone.at(-1), ["memories", "candidate"]);
-  const [repo, look, sort] = controls.querySelectorAll("select");
+  const [repo, sort] = controls.querySelectorAll("select");
   assert.deepEqual(repo.options.map((o) => o.textContent), ["저장소: 모두", "저장소: 공용 2", "저장소: r 4", "저장소: y 0"]);
   dom.input(repo, "o/r"); assert.equal(deps.memory.repo, "o/r");
-  dom.input(look, ""); dom.input(look, "traits"); assert.deepEqual(env.gone.at(-1), ["memories", "traits"]);
+  // 모아보기 is a row of chips: one tap opens that view
+  const look = controls.querySelector(".mem-look");
+  assert.deepEqual(look.querySelectorAll("button").map((c) => c.textContent), ["승인 기록", "주제 요약", "작업 관계", "사용자 특성", "반성 교훈", "과거 시점", "대화"]);
+  dom.buttons(look, "사용자 특성")[0].click(); assert.deepEqual(env.gone.at(-1), ["memories", "traits"]);
+  assert.equal(dom.buttons(controls, "기억 추가").length, 1); // in the toolbar, not alone above the panel
   dom.input(sort, "used"); assert.equal(deps.memory.sort, "used");
   // search box mirrors into #search and the memory query
   const q = controls.querySelector(".panel-search input");
@@ -148,7 +154,7 @@ test("an empty main list explains why and kinds show no numbers on an older serv
   const env = setup(); const api = await list(env);
   env.snap("memories").error = new Error("x");
   api.renderMemories();
-  assert.match(env.h.$("#table").textContent, /여기에 표시할 기억이 없어요/);
+  assert.doesNotMatch(env.h.$("#table").textContent, /아직 기억이 없어요/, "a failed list is not a fresh start");
   assert.match(env.h.$("#stats").textContent, /불러오지 못했어요/);
   assert.equal(env.h.$("#controls .mem-check"), null);
   assert.deepEqual(env.h.$("#chips").querySelectorAll("output").map((o) => o.textContent), ["", "", ""]);
@@ -166,13 +172,13 @@ test("check lists draw provenance, idle and conflicted rows with their reasons",
   deps.memory.memTab = "provenance";
   env.snap("memories").items = [{ id: "p1", text: "p", created_at: old }];
   api.renderMemories();
-  assert.match(h.$("#table").textContent, /승인 경로 확인/);
+  assert.match(h.$("#table").textContent, /확인 기록 없음/);
   assert.equal(h.$("#chips").children.length, 0);
   deps.memory.memTab = "idle"; deps.memUse = () => ({ days: 7 }); deps.memStat = () => ({ injected: 4, used: 0 });
   env.snap("memories").items = [{ id: "i1", text: "a", overdue: true }, { id: "i2", text: "b", often: true }, { id: "i3", text: "c" }];
   api.renderMemories();
-  assert.deepEqual(h.$("#table").querySelectorAll(".mem-badge").map((b) => b.textContent), ["재검토 예정일 지남", "문구 겹침 미확인", "최근 호출 없음"]);
-  assert.match(h.$("#table").textContent, /최근 7일 4번 전달 · 문구 겹침 0번/);
+  assert.deepEqual(h.$("#table").querySelectorAll(".mem-badge").map((b) => b.textContent), ["재검토 예정일 지남", "답에 안 보임", "최근 호출 없음"]);
+  assert.match(h.$("#table").textContent, /최근 7일 4번 전달 · 답에 보임 0번/);
   deps.memory.memTab = "conflicted";
   env.snap("conflicted").items = [{ id: "x1", text: "x", warn: true }, { id: "x2", text: "y" }];
   api.renderMemories();
@@ -183,7 +189,7 @@ test("check lists draw provenance, idle and conflicted rows with their reasons",
   assert.match(h.$("#table").textContent, /검색과 맞는 기억이 없어요/);
   deps.memory.query = ""; api.renderMemories();
   assert.match(h.$("#table").textContent, /확인할 기억이 없어요/);
-  dom.buttons(h.$("#controls"), "헷갈림")[0].click(); assert.deepEqual(env.gone.at(-1), ["memories", "conflicted"]);
+  dom.buttons(h.$("#controls"), "서로 다른 기억")[0].click(); assert.deepEqual(env.gone.at(-1), ["memories", "conflicted"]);
 });
 
 test("candidates group, offer batch and stale cleanup, and expire through the server", async () => {
@@ -194,10 +200,10 @@ test("candidates group, offer batch and stale cleanup, and expire through the se
   const items = [c("a", "응답은 짧게"), c("b", "응답은 짧게"), c("d", "다른 것", { conflict_id: "k" })];
   state.data.candidates = items; env.snap("candidates").items = items;
   api.renderMemories();
-  assert.match(h.$("#chips").textContent, /3개 후보/);
-  dom.buttons(h.$("#chips"), "여러 개 한 번에 처리")[0].click();
+  assert.match(h.$("#chips").textContent, /새 기억 3개/);
+  dom.buttons(h.$("#chips"), "한 번에 확인")[0].click();
   assert.equal(state.selected, "batch"); assert.deepEqual(env.log.slice(-3), ["mark", "renderDetail", "open"]);
-  const stale = dom.buttons(h.$("#chips"), "30일 지난 후보 정리 2")[0];
+  const stale = dom.buttons(h.$("#chips"), "30일 지난 것 정리 2")[0];
   assert.ok(h.$("#table details.candidate-group"));
   assert.equal(h.$("#table").querySelectorAll(".row").length, 1); // collapsed group draws no children; single draws a row
   // declined: nothing sent
@@ -225,7 +231,7 @@ test("candidates group, offer batch and stale cleanup, and expire through the se
   state.caps = {}; api.renderMemories();
   assert.equal(dom.buttons(h.$("#chips")).length, 0);
   env.snap("candidates").items = []; api.renderMemories();
-  assert.match(h.$("#table").textContent, /확인할 기억이 없어요/);
+  assert.match(h.$("#table").textContent, /확인할 새 기억이 없어요/);
   deps.memory.query = "q"; api.renderMemories();
   assert.match(h.$("#table").textContent, /검색과 맞는 기억이 없어요/);
 });
@@ -376,4 +382,49 @@ test("retainListFocus restores a row control, a filter input, or nothing", async
   other.focus(); retainListFocus(document)();
   assert.equal(document.activeElement, other);
   void window;
+});
+
+test("지운 기억 lists deleted memories and 되살리기 brings one back with its revision", async () => {
+  const env = setup(); const api = await list(env);
+  delete require.cache[require.resolve("./delete-reason.js")]; require("./delete-reason.js");
+  env.deps.memory.memTab = "removed";
+  assert.equal(api.memTitle()[0], "지운 기억");
+  env.snap("memories").items = [{ id: "g1", text: "지운 내용", status: "rejected", revision: 3, removal: { at: now, reason_code: "wrong" }, created_at: old }];
+  api.renderMemories();
+  assert.ok(env.log.includes("ensure:memories"));
+  const btn = [...env.h.$("#table").querySelectorAll("button")].find((b) => b.textContent === "되살리기");
+  assert.ok(btn, "each removed row has 되살리기");
+  btn.click(); await new Promise((r) => setTimeout(r, 0));
+  assert.equal(env.calls[0][0], "/v1/memories/g1/restore");
+  assert.deepEqual(JSON.parse(env.calls[0][1].body), { scope: { workspace_id: "w" }, expected_revision: 3 });
+  assert.equal(env.notices.at(-1), "되살렸어요. 에이전트가 다시 써요.");
+  env.deps.reply = () => { throw new Error("revision_conflict"); };
+  await api.restore({ id: "g1", revision: 3 });
+  assert.equal(env.notices.at(-1), "그새 바뀐 기억이에요. 목록을 새로 불러왔어요.");
+  env.state.caps.actions.review_decide = false; env.snap("memories").items = [];
+  api.renderMemories();
+  assert.match(env.h.$("#table").textContent, /지운 기억이 없어요/);
+});
+
+test("the main list says what to do when there are no memories yet", async () => {
+  const env = setup({ openMemoryAdd: () => env.log.push("add") }); const api = await list(env);
+  env.state.caps.actions.propose = true;
+  api.renderMemories();
+  assert.match(env.h.$("#table").textContent, /아직 기억이 없어요/);
+  const add = [...env.h.$("#table").querySelectorAll("button")].find((b) => /직접 추가/.test(b.textContent));
+  assert.ok(add); add.click(); assert.ok(env.log.includes("add"));
+  assert.ok(api.isCheck("merge") && !api.isCheck("active") && api.firstCheck());
+});
+
+test("a known 0 shows no number on the check sub-tabs and kind chips; other counts stay", async () => {
+  let seen = [];
+  const env = setup({ segment: (opts) => { seen = opts; const s = dom.helpers(globalThis.document).el("div", "segment"); return s; } });
+  const api = await list(env);
+  env.deps.memory.memTab = "candidate"; api.renderMemories();
+  assert.deepEqual(seen.map(([k, , n]) => [k, n]), [["candidate", undefined], ["conflicted", undefined], ["merge", undefined], ["idle", undefined]]);
+  env.state.data.candidates = [{ id: "c1", text: "a", created_at: now }]; env.state.usageDone = false; api.renderMemories();
+  assert.equal(seen[0][2].text, "1");
+  assert.equal(seen[3][2].text, "…", "a count still loading is not a 0");
+  env.deps.memory.memTab = "active"; env.snap("memories").facets = { kinds: { user: 2, project: 0 } }; api.renderMemories();
+  assert.deepEqual(env.h.$("#chips").querySelectorAll(".mem-kind").map((c) => c.textContent), ["전체2", "사용자2", "프로젝트"]);
 });

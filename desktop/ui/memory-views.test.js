@@ -59,9 +59,15 @@ test("the evaluation panel reads the current revision, shows a retry and ignores
   assert.match(panel.textContent, /독립된 관측1건/);
   const good = answer;
   answer = new Error("403");
-  dom.buttons(panel, "평가 다시 조회")[0].click(); await dom.flush();
-  assert.match(panel.textContent, /확인하지 못했어요/);
-  assert.equal(dom.buttons(panel, "평가 다시 조회").length, 1);
+  // a failure retries once without a word, then says so plainly with 다시 시도 (no permission guess)
+  const failing = window.ArkismMemoryEvaluation.mount({ container: c, record: { id: "m", revision: 2 }, scope: {}, request, el: h.el, section, facts, button: h.button });
+  const before = calls.length; await dom.flush();
+  assert.doesNotMatch(failing.textContent, /못했어요/);
+  await new Promise((r) => setTimeout(r, 1600)); await dom.flush();
+  assert.equal(calls.length, before + 1);
+  assert.match(failing.textContent, /평가를 불러오지 못했어요/);
+  assert.doesNotMatch(failing.textContent, /권한/);
+  assert.equal(dom.buttons(failing, "다시 시도").length, 1);
   // a panel closed before the answer stays as it was, for both outcomes
   for (const late of [answer, good]) {
     answer = late;

@@ -44,17 +44,17 @@ test("opens from its button, shows effect stats and the SessionStart preview wit
     "/v1/context/tokens": (_, o) => ({ tokens: JSON.parse(o.body).text.length * 2, token_encoding: "o200k_base" })
   };
   const b = inject.button();
-  assert.equal(b.textContent, "들어가는 기억");
+  assert.equal(b.textContent, "에이전트가 받는 기억");
   b.click();
   await settle();
   const d = dlg();
   assert.ok(d.open);
   const t = text(d);
-  assert.match(t, /최근 7일 4번 들어감 · 문구 겹침 3번 · 75% · 대화 10개/);
+  assert.match(t, /최근 7일 4번 들어감 · 답에 보임 3번 · 75% · 대화 10개/);
   assert.match(t, /세션당 평균 들어간 양 1,000자 · 약/);
   assert.match(t, /토큰은 아래 미리보기의 글자당 토큰 비율로/);
-  assert.match(t, /보고는 짧게 · 문구 겹침 2번 \/ 3번 들어감/);
-  assert.match(t, /gone · 문구 겹침 1번/); // an id the list does not hold shows as the id
+  assert.match(t, /보고는 짧게 · 답에 보임 2번 \/ 3번 들어감/);
+  assert.match(t, /gone · 답에 보임 1번/); // an id the list does not hold shows as the id
   assert.match(t, /o200k_base 기준/);
   assert.match(t, /들어가는 기억 1개/);
   assert.match(t, /다른 저장소 전용 기억 1개는 이 폴더에서 빠져요/);
@@ -114,7 +114,7 @@ test("a changed connection starts fresh; failures, missing stats and empty memor
   let t = text(dlg());
   assert.match(t, /불러오지 못했어요 \(offline\)/);
   assert.match(t, /들어간 기억 없음 · 대화 10개/);
-  assert.match(t, /문구 겹침이 확인된 기억이 아직 없어요/);
+  assert.match(t, /답에 보인 기억이 아직 없어요/);
   assert.equal(dlg().querySelector("textarea").value, ""); // the old question is gone
   state.data.tools = {};
   state.data.memories = [];
@@ -124,7 +124,7 @@ test("a changed connection starts fresh; failures, missing stats and empty memor
   await settle();
   t = text(dlg());
   assert.equal(document.querySelectorAll("dialog.inject-dialog").length, 1);
-  assert.match(t, /아직 서버가 문구 겹침 통계를 보내지 않았어요/);
+  assert.match(t, /아직 서버가 답에 보였는지 기록를 보내지 않았어요/);
   assert.match(t, /새 세션에 들어갈 기억이 없어요/);
   // an answer that arrives after the popup closed is dropped quietly
   let release;
@@ -142,8 +142,8 @@ test("memory page tiles show the overlap rate over 7 and 30 days and the review 
   const stat = (label, value, unit, warn) => ({ label, value, unit, warn: !!warn });
   state.data.tools = { memory_use: use(7, { injections: 0, used: 0 }), memory_use_30: use(30) };
   const tiles = inject.tiles(stat, 2);
-  assert.deepEqual(tiles.map((x) => [x.label, x.value]), [["최근 7일 문구 겹침 비율", "—"], ["최근 30일 문구 겹침 비율", "75"], ["세션당 평균 들어간 양", "1,000"], ["문구 겹침을 검토할 기억", "2"]]);
+  assert.deepEqual(tiles.map((x) => [x.label, x.value]), [["최근 7일 답에 보인 비율", "—"], ["최근 30일 답에 보인 비율", "75"], ["세션당 평균 들어간 양", "1,000"], ["답에 안 보여 확인할 기억", "2"]]);
   assert.equal(tiles[3].warn, true);
   state.data.tools = { memory_use: use(7, { inject_sessions: 0 }) };
-  assert.deepEqual(inject.tiles(stat, 0).map((x) => x.label), ["최근 7일 문구 겹침 비율", "문구 겹침을 검토할 기억"]);
+  assert.deepEqual(inject.tiles(stat, 0).map((x) => x.label), ["최근 7일 답에 보인 비율", "답에 안 보여 확인할 기억"]);
 });
