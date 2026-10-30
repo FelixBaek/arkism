@@ -173,15 +173,15 @@ test("일반: keep running, the open shortcut, language and the alerts", async (
 test("에이전트: switches, removal, shared folders and the add dialog", async () => {
   await settings("agents");
   assert.match(text(app.$("#table")), /적용 대기/);
-  // 에이전트 추가 and 공급자 추가, the last rows of the agent list (Figma 1300:5254); 역할별 모델 has its own tab now
-  const adds = app.$$("button").filter((b) => ["에이전트 추가", "공급자 추가"].includes(text(b)));
-  assert.deepEqual(adds.map((b) => [text(b), b.className]), [["에이전트 추가", "ag-add-agent"], ["공급자 추가", "ag-add-agent"]]);
+  // one 에이전트 추가 at the end of the agent list (the owner asked for a single entry); 역할별 모델 has its own tab now
+  const adds = app.$$("button").filter((b) => ["에이전트 추가"].includes(text(b)));
+  assert.deepEqual(adds.map((b) => [text(b), b.className]), [["에이전트 추가", "ag-add-agent"]]);
   assert.equal(app.$(".ag-roles"), null);
   assert.ok(app.$$("#area-tabs button").some((b) => text(b) === "역할별 모델"));
   await settings("roles");
-  // Figma 1378:5011: one card, 기억 추출 outside and the rest under 자세히 in the Figma order
-  assert.deepEqual(app.$$(".ag-roles").map((g) => text(g.querySelector("h2"))), ["역할별 모델"]);
-  assert.match(text(app.$(".ag-roles")), /기억 추출.*자세히.*라우팅 판정.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*반성·검토.*임베딩/);
+  // one card per kind of work, no page title under the tab that already names it (asked three times)
+  assert.deepEqual(app.$$(".ag-roles").map((g) => text(g.querySelector("h2"))), ["기억", "스킬", "요청 처리"]);
+  assert.match(app.$$(".ag-roles").map(text).join(" "), /기억 추출.*반성·검토.*임베딩.*스킬 요약.*스킬 후보 찾기.*스킬 판정.*스킬 보안 검사.*라우팅 판정/);
   await settings("agents");
   // the first row is chosen: its detail (계정, Arkism 연결) is in the right column
   assert.ok(app.$(".ag-row.on"));
@@ -218,7 +218,7 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   assert.equal(app.$(".v4-side .ag-link"), null);
   assert.ok(app.$$("#area-tabs button").every((x) => text(x) !== "모델 설정"));
   // 공급자 추가 → 제공자 추가 (Figma 1355:50848): 구독요금제 opens 구독 추가 (1361:3819), 엔드포인트 the address form (1361:3932)
-  await press("공급자 추가");
+  await press("에이전트 추가");
   assert.match(text(app.$("dialog.add-provider")), /제공자 추가.*구독요금제.*API 키.*엔드포인트/);
   await press("다음", app.$("dialog.add-provider"));
   let cli = app.$("dialog.add-cli");
@@ -238,12 +238,12 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   await press("다시 찾기", cli);
   await press("추가", cli); // Aider is off: it is asked for like 에이전트 추가 does
   assert.match(notice(), /Aider를 추가했어요/);
-  await press("공급자 추가"); await press("다음", app.$("dialog.add-provider"));
+  await press("에이전트 추가"); await press("다음", app.$("dialog.add-provider"));
   cli = app.$("dialog.add-cli");
   await press("추가", cli); // Claude Code is on already: its row opens
   assert.equal(app.$("dialog.add-cli"), null);
   assert.match(text(app.$(".ag-detail-head")), /^Claude Code/);
-  await press("공급자 추가");
+  await press("에이전트 추가");
   app.$$("dialog.add-provider .provider-way")[2].click(); await app.settle();
   await press("다음", app.$("dialog.add-provider"));
   const keyDlg = app.$("dialog.key-dialog");

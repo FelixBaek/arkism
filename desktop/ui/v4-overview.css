@@ -376,7 +376,12 @@ input.ov-wide-search { padding-left: 32px !important; background-image: url("dat
 .ov-win-tag.ov-tag-k { background: color-mix(in srgb, var(--tag) 16%, transparent); color: color-mix(in srgb, var(--tag) 82%, var(--text, #fff)); }
 .ov-win-tag.ov-tag-p, .ov-win-dream { --ov-p: #c58cff; }
 :root[data-theme="light"] :is(.ov-win-tag.ov-tag-p, .ov-win-dream) { --ov-p: #8a4fd1; }
-.ov-win-tag.ov-tag-p { background: var(--bg-muted); color: var(--text-2); } /* 정리 tags stay neutral (Figma 1542:73507) */
+.ov-win-tag.ov-tag-p { background: color-mix(in srgb, var(--ov-p) 16%, transparent); color: var(--ov-p); } /* dreaming is purple (owner request) */
+.ov-win-dream { --tone: var(--ov-p); }
+.ov-win-dream .ov-win-badge { color: var(--ov-p); background: color-mix(in srgb, var(--ov-p) 14%, transparent); }
+.ov-group-dream { border-color: color-mix(in srgb, var(--ov-p) 40%, transparent); background: color-mix(in srgb, var(--ov-p) 6%, transparent); }
+.ov-group-dream .ov-group-head { color: var(--ov-p); }
+.ov-group-dream .ov-step { border-color: color-mix(in srgb, var(--ov-p) 50%, var(--ov-step-line)); }
 /* 승인 대기 detail: [헷갈림] reason, the merge hint, the sparkle 다시 보기 */
 .ov-detail-why { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin: 0; }
 .ov-detail-hint { display: block; margin-top: 6px; color: var(--text-2); font-size: 12px; }
