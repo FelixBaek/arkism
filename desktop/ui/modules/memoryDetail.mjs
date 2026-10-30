@@ -314,7 +314,7 @@ export function createMemoryDetail(deps) {
     }
     deps.detailHead(body, `${deps.kindLabel(c.kind)} · 새 기억`, c.text, `${deps.withAgent(c)}에서 뽑음 · ${deps.ago(c.created_at)}`);
     const text = instructionLike ? "AI에게 명령하는 문장처럼 보여요. 저장하면 다른 에이전트가 이 말을 따를 수 있어요."
-      : `${why}. 저장하면 모든 에이전트가 자료로 써요.`;
+      : `${why ? why + ". " : ""}저장하면 모든 에이전트가 자료로 써요.`;
     if (canDecide) {
       const ok = deps.button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void deps.decide(c, "approve", ""); });
       const fix = deps.button("고쳐서 저장", "small", null, () => openCandidateFix(c));
