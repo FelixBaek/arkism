@@ -434,7 +434,8 @@ func daemonDynamicsActualSearch(t *testing.T, address, token string, scope memor
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: time.Second}
+	// The first search on a cold race runner can pass one second; this checks the result, not latency.
+	client := &http.Client{Timeout: 10 * time.Second}
 	response, err := client.Do(request)
 	if err != nil {
 		t.Fatal(err)
