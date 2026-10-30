@@ -19,7 +19,8 @@ import (
 )
 
 type Service struct {
-	NativeDynamics *NativeDynamicsRuntime
+	NativeSearchShadow *NativeSearchShadowRuntime
+	NativeDynamics     *NativeDynamicsRuntime
 	// usageWindows runs one memory-usage scan per scope at a time; the app asks for it up to three times at once.
 	usageWindows            singleflight.Group
 	ModelBudgetPolicy       *ModelBudgetPolicy
