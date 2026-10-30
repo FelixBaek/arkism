@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"math"
@@ -534,6 +536,22 @@ type RoutingDecideInput struct {
 	Exclude []string `json:"exclude,omitempty"`
 	// Providers keeps only these providers' models (a Claude Code subagent can run only "anthropic").
 	Providers []string `json:"providers,omitempty"`
+	// View is the work state the caller read once before this choice: identities and counts only, never bodies.
+	View *RoutingPrechoiceView `json:"view,omitempty"`
+}
+
+// RoutingPrechoiceView is metadata of one successful checkpoint read. A failed read is never sent as an empty view.
+type RoutingPrechoiceView struct {
+	Checkpoint   RoutingViewCheckpoint `json:"checkpoint"`
+	Refs         []Ref                 `json:"refs"`
+	History      string                `json:"history"` // known_empty | observed
+	HistoryCount int                   `json:"history_count"`
+}
+
+type RoutingViewCheckpoint struct {
+	ID        string    `json:"id"`
+	Revision  int64     `json:"revision"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type RoutingDecision struct {
@@ -545,6 +563,7 @@ type RoutingDecision struct {
 	Decision     string   `json:"decision"`
 	ClassifierMS int64    `json:"classifier_ms"`
 	Fallbacks    []string `json:"fallbacks"` // "provider/model", tried in order when the pick fails
+	ViewHash     string   `json:"view_hash,omitempty"`
 	Authority    string   `json:"authority"`
 }
 
@@ -628,6 +647,11 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	if len(models) == 0 {
 		return RoutingDecision{}, ErrUnavailable
 	}
+	// Checked once a choice can be made, so a refused decide leaves no work read audit behind.
+	viewHash, err := s.routingViewHash(ctx, token, in.Scope, in.View)
+	if err != nil {
+		return RoutingDecision{}, err
+	}
 	byID := func(id string) int { return slices.IndexFunc(models, func(m routingModel) bool { return m.ID == id }) }
 	pick, how, ms := byID(doc.DefaultModel), "fixed", int64(0)
 	if group != nil {
@@ -644,7 +668,7 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	}
 	chosen := models[pick]
 	out := RoutingDecision{Group: in.Group, ID: chosen.ID, Model: chosen.Model, Provider: strings.SplitN(chosen.ID, "/", 2)[0], Family: chosen.Family,
-		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, Authority: AuthorityDataOnly}
+		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, ViewHash: viewHash, Authority: AuthorityDataOnly}
 	if doc.AutoFailover {
 		out.Fallbacks = routeFallbacks(doc, group, models, chosen.ID, byID, out.Fallbacks)
 	}
@@ -655,12 +679,67 @@ func validRoutingDecideInput(in RoutingDecideInput) bool {
 	if !validScope(in.Scope) || in.Task == "" || len(in.Task) > 20000 || len(in.Exclude) > 40 || len(in.Providers) > 40 {
 		return false
 	}
+	if in.View != nil && !validRoutingPrechoiceView(*in.View) {
+		return false
+	}
 	for _, p := range in.Providers {
 		if !providerIDRe.MatchString(p) {
 			return false
 		}
 	}
 	return true
+}
+
+func validRoutingPrechoiceView(v RoutingPrechoiceView) bool {
+	c := v.Checkpoint
+	if !workCheckpointIDPattern.MatchString(c.ID) || c.Revision < 1 || c.UpdatedAt.IsZero() || len(v.Refs) > workCheckpointMaxArray {
+		return false
+	}
+	for _, ref := range v.Refs {
+		if !validWorkCheckpointRef(ref) {
+			return false
+		}
+	}
+	switch v.History {
+	case "known_empty":
+		return v.HistoryCount == 0
+	case "observed":
+		return v.HistoryCount > 0 && v.HistoryCount <= workCheckpointMaxArray
+	}
+	return false
+}
+
+// routingViewHash re-reads the checkpoint through the normal read path (scope, source-ref and deletion
+// fences included) and hashes the view only when the caller's metadata still matches it exactly.
+func (s *Service) routingViewHash(ctx context.Context, token string, scope Scope, v *RoutingPrechoiceView) (string, error) {
+	if v == nil {
+		return "", nil
+	}
+	cur, err := s.GetWorkCheckpoint(ctx, token, WorkCheckpointGetInput{Scope: scope, ID: v.Checkpoint.ID})
+	if err != nil {
+		return "", err
+	}
+	history := "known_empty"
+	if len(cur.ArchiveMessages) > 0 {
+		history = "observed"
+	}
+	refs := cur.Package.SourceRefs
+	if refs == nil {
+		refs = []Ref{}
+	}
+	got := RoutingPrechoiceView{Checkpoint: RoutingViewCheckpoint{ID: cur.ID, Revision: cur.Revision, UpdatedAt: cur.UpdatedAt.UTC()},
+		Refs: refs, History: history, HistoryCount: len(cur.ArchiveMessages)}
+	same := v.Checkpoint.ID == got.Checkpoint.ID && v.Checkpoint.Revision == got.Checkpoint.Revision &&
+		v.Checkpoint.UpdatedAt.Equal(got.Checkpoint.UpdatedAt) && slices.Equal(v.Refs, got.Refs) &&
+		v.History == got.History && v.HistoryCount == got.HistoryCount
+	// A view that no longer matches the stored work, or dated after this decision (beyond the same 5 s
+	// clock skew decide allows for usage), is stale.
+	if !same || got.Checkpoint.UpdatedAt.After(time.Now().Add(5*time.Second)) {
+		return "", ErrConflict
+	}
+	b, _ := json.Marshal(got)
+	h := sha256.Sum256(b)
+	return "sha256:" + hex.EncodeToString(h[:]), nil
 }
 
 // routeGroup resolves the requested group, including the implicit auto group

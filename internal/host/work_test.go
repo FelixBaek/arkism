@@ -3,6 +3,7 @@ package host
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -281,5 +282,33 @@ func TestRelatedWorkStateNamesHowTheWorkMoved(t *testing.T) {
 		if got := relatedWorkState(result, current(over), map[string]any{}); got != "work_changed" {
 			t.Fatal(over, got)
 		}
+	}
+}
+
+func TestWorkHookContextViewKeepsIdentitiesAndCountsOnly(t *testing.T) {
+	refs := []any{map[string]any{"collection": "sources", "id": "src-1", "revision": json.Number("2"), "text": "본문"}}
+	req := &fakeRequest{answer: map[string]any{"id": "task", "revision": int64(3), "updated_at": "2026-10-31T01:02:03.004Z",
+		"package": map[string]any{"goal": "비밀 목표", "source_refs": refs}}}
+	view, rendered, err := WorkHookContextView("task", req.do, map[string]any{}, 8000, nil)
+	if err != nil || !strings.Contains(rendered, "비밀 목표") || len(req.calls) != 1 {
+		t.Fatal(view, rendered, err, req.calls)
+	}
+	want := Obj{{Key: "checkpoint", Value: Obj{{Key: "id", Value: "task"}, {Key: "revision", Value: int64(3)}, {Key: "updated_at", Value: "2026-10-31T01:02:03.004Z"}}},
+		{Key: "refs", Value: []any{Obj{{Key: "collection", Value: "sources"}, {Key: "id", Value: "src-1"}, {Key: "revision", Value: int64(2)}}}},
+		{Key: "history", Value: "known_empty"}, {Key: "history_count", Value: 0}}
+	if !reflect.DeepEqual(view, want) {
+		t.Fatalf("%#v", view)
+	}
+	req.answer["archive_messages"] = []any{map[string]any{"id": "m1"}, map[string]any{"id": "m2"}}
+	if view, _, _ = WorkHookContextView("task", req.do, map[string]any{}, 8000, nil); view[2].Value != "observed" || view[3].Value != 2 {
+		t.Fatalf("%#v", view)
+	}
+	// Without a read time the view cannot be dated, so no choice may be built on it; the hook text still renders.
+	delete(req.answer, "updated_at")
+	if _, _, err := WorkHookContextView("task", req.do, map[string]any{}, 8000, nil); err == nil {
+		t.Fatal("undated view")
+	}
+	if _, err := WorkHookContext("task", req.do, map[string]any{}, 8000, nil); err != nil {
+		t.Fatal(err)
 	}
 }
