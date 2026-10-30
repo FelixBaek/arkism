@@ -29,9 +29,10 @@
       ],
       "required_checks": [
         "go test -race ./internal/memory ./internal/host ./cmd/memoryd -run '^TestDynamicsIntegration' -count=1",
-        "python3 tools/check_local.py",
-        "isolated PostgreSQL tests actually run (no skip)"
-      ]
+        "go test -race ./internal/memory -run '^TestDynamicsIntegration.*PG$' -count=1",
+        "python3 tools/check_local.py"
+      ],
+      "required_checks_note": "Each command must appear verbatim in the report with exit 0, no failure, no skip (the PostgreSQL run must not skip) and at least one test; product_diff paths must be in candidate_files."
     }
   },
   "states": {
