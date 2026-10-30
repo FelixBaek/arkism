@@ -32,17 +32,7 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 		return err
 	}
 	current := &Postgres{pool: source.pool, tx: lease}
-	if err = current.checkPausedRecoveryGate(ctx, sourceGeneration); err != nil {
-		return err
-	}
-	if _, err = current.recoverySnapshotManifest(ctx, false); err != nil {
-		return err
-	}
-	sourceIdentity, err := current.BlobStorageIdentity(ctx)
-	if err != nil {
-		return err
-	}
-	want, err := dynamicsLedgerDigestTx(ctx, current, scope, sourceIdentity)
+	sourceIdentity, want, err := dynamicsRecoverySourceLedger(ctx, current, scope, sourceGeneration)
 	if err != nil {
 		return err
 	}
@@ -55,22 +45,9 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 		return err
 	}
 	restored := &Postgres{pool: p.pool, tx: tx}
-	if _, err = restored.recoverySnapshotManifest(ctx, true); err != nil {
-		return err
-	}
-	identity, err := restored.BlobStorageIdentity(ctx)
+	identity, err := dynamicsRecoveryRestoredMatch(ctx, restored, scope, sourceIdentity, want)
 	if err != nil {
 		return err
-	}
-	if identity == sourceIdentity {
-		return ErrConflict
-	}
-	got, err := dynamicsLedgerDigestTx(ctx, restored, scope, sourceIdentity)
-	if err != nil {
-		return err
-	}
-	if got != want {
-		return ErrConflict
 	}
 	// No success is inferred if the current original became unreadable.
 	if again, e := current.BlobStorageIdentity(ctx); e != nil || again != sourceIdentity {
@@ -80,6 +57,45 @@ func (p *Postgres) ReconcileDynamicsLoadRecovery(ctx context.Context, source *Po
 		return err
 	}
 	return pgErr(tx.Commit(ctx))
+}
+
+// dynamicsRecoverySourceLedger reads the paused original's identity and ledger digest.
+func dynamicsRecoverySourceLedger(ctx context.Context, current *Postgres, scope Scope, generation string) (string, string, error) {
+	if err := current.checkPausedRecoveryGate(ctx, generation); err != nil {
+		return "", "", err
+	}
+	if _, err := current.recoverySnapshotManifest(ctx, false); err != nil {
+		return "", "", err
+	}
+	identity, err := current.BlobStorageIdentity(ctx)
+	if err != nil {
+		return "", "", err
+	}
+	want, err := dynamicsLedgerDigestTx(ctx, current, scope, identity)
+	return identity, want, err
+}
+
+// dynamicsRecoveryRestoredMatch returns the restored copy's own identity once its
+// ledger, still bound to the original identity, equals the original's digest.
+func dynamicsRecoveryRestoredMatch(ctx context.Context, restored *Postgres, scope Scope, sourceIdentity, want string) (string, error) {
+	if _, err := restored.recoverySnapshotManifest(ctx, true); err != nil {
+		return "", err
+	}
+	identity, err := restored.BlobStorageIdentity(ctx)
+	if err != nil {
+		return "", err
+	}
+	if identity == sourceIdentity {
+		return "", ErrConflict
+	}
+	got, err := dynamicsLedgerDigestTx(ctx, restored, scope, sourceIdentity)
+	if err != nil {
+		return "", err
+	}
+	if got != want {
+		return "", ErrConflict
+	}
+	return identity, nil
 }
 
 // dynamicsLedgerDigestTx commits the coordinator, every terminal entry and the
