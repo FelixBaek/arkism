@@ -193,7 +193,7 @@ window.ArkismKnowledge = (ctx) => {
       const opt = (label, cls, value) => { const b = button(label, cls); b.type = "submit"; b.value = value; return b; };
       const no = opt("취소", "", "no");
       btns.append(no, opt("올리기만", "", "only"), opt("확인했어요 · 쓰게 하기", "primary", "use"));
-      form.append(el("h2", "", "내 AI가 이 자료를 쓰게 할까요?"), noI18n(el("p", "mono", name)), ...(note ? [el("p", "", note)] : []),
+      form.append(el("h2", "", "내 AI가 이 자료를 쓰게 할까요?"), noI18n(el("p", "", name)), ...(note ? [el("p", "", note)] : []),
         el("p", "", "내용이 맞는지 확인했다면 '쓰게 하기'를 눌러 주세요. 내 모든 AI가 이 자료를 찾아 써요. 나중에 자료 상세에서 끌 수 있어요."), btns);
       dlg.append(form);
       dlg.addEventListener("close", () => { resolve(["use", "only"].includes(dlg.returnValue) ? dlg.returnValue : ""); dlg.remove(); });
@@ -298,7 +298,7 @@ window.ArkismKnowledge = (ctx) => {
       const meta = [s.lifecycle_status === "failed" ? "읽기 실패" : `버전 ${s.document_count}`, `${ago(s.updated_at)} 올림`];
       if (inUse(s)) meta.push("모든 AI가 씀");
       else if (!needs(s) && s.lifecycle_status !== "failed") meta.push("AI가 안 씀");
-      const node = row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), badge(inUse(s) || needs(s) ? srcState(s) : ["꺼짐", "line"])], () => openSource(s.id)); node.dataset.id = s.id; return node;
+      const node = row("v4k-row", K.srcSel === s.id, [text(s.display_name, meta.join(" · "), true), badge(inUse(s) || needs(s) ? srcState(s) : ["꺼짐", "off"])], () => openSource(s.id)); node.dataset.id = s.id; return node;
     };
     ctx.virtualList.mount({ container: list, scrollport: $("#table"), items, row: sourceRow, key: JSON.stringify(sourceFilters()) });
     if (!items.length) {
@@ -518,7 +518,7 @@ window.ArkismKnowledge = (ctx) => {
     const near = el("div", "v4k-near");
     for (const j of [i - 1, i + 1]) if (secs[j] !== undefined) {
       const b = el("button", "v4k-chunk"); b.type = "button";
-      b.append(el("small", "", `#${j + 1}`), noI18n(el("span", "", secs[j])));
+      b.append(noI18n(el("span", "", `#${j + 1} · ${secs[j]}`))); // one line per neighbour (Figma 384:30671)
       b.addEventListener("click", () => { K.secSel = j; paint(); });
       near.append(b);
     }

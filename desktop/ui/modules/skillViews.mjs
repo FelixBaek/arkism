@@ -157,7 +157,7 @@ export function createSkillViews(deps) {
   // state.skillPage opens a page inside the same view: 개선하기 (4 steps), GitHub에서 설치.
   const SKILL_STATES = [["all", "전체"], ["missing", "일부 에이전트에서 꺼짐"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인에 든 스킬"], ["trash", "휴지통"]];
 
-  const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "이 스킬의 교훈과 평가 과제를 미리 채웠어요. 확인하고 만들기를 누르세요."],
+  const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요."],
     ["비교 평가", "기존 버전과 비교해요", "같은 평가 과제로 두 버전을 돌려 점수·비용·시간을 비교해요."],
     ["검토·승인", "무엇이 바뀌었나요", "후보 버전의 원문과 평가를 보고 승인하거나 제외해요."],
     ["시험 적용", "실제 작업에 시험 적용해요", "정한 프로그램에서 일정 기간 새 버전을 써 보고 결과를 모아요."]];
@@ -618,17 +618,14 @@ export function createSkillViews(deps) {
     });
     const [, title, lead] = IMPROVE_STEPS[step];
     const card = deps.el("section", "v4s-card");
-    card.append(deps.el("h3", "", title), deps.el("p", "v4s-card-lead", lead));
+    card.append(deps.el("h3", "", title), ...(step === 2 ? [] : [deps.el("p", "v4s-card-lead", lead)])); // 검토·승인 has no lead (Figma 198:4070)
     const [, sideTitle, sideLead] = IMPROVE_SIDE[step];
     box.replaceChildren(deps.el("h2", "", sideTitle), deps.el("p", "v4s-lead", sideLead));
     const side = { box, extra: deps.el("div", "v4s-improve-extra"), go: (i) => openSkillPage({ kind: "improve", id: sk.id, step: i }), section: skSection, facts: skFacts, table: improveTable };
     const part = step === 0 ? deps.skillGenerate(sk, side) : deps.skillReview(sk, ["compare", "review", "trial"][step - 1], side);
     part.open = true;
     card.append(part);
-    const next = deps.el("div", "v4s-actions");
-    if (step > 0) next.append(deps.button(`← ${IMPROVE_STEPS[step - 1][0]}`, "ghost", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step - 1 })));
-    if (step < 3) next.append(deps.button(`다음: ${IMPROVE_STEPS[step + 1][0]}`, "", null, () => openSkillPage({ kind: "improve", id: sk.id, step: step + 1 })));
-    wrap.append(steps, card, side.extra, next);
+    wrap.append(steps, card, side.extra); // the step tabs move between steps (Figma 198:4328 has no 이전/다음 buttons)
     return wrap;
   }
 

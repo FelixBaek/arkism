@@ -321,8 +321,9 @@
 button.crew-list-row.member { width: 100%; color: inherit; font: inherit; cursor: pointer; }
 
 /* 크루 상세 팝업 틀 (crew-popup.js) */
-/* every FLOW window is wide; each pane scrolls on its own (the popout window takes this size too) */
-.crew-popup, .wf-settings, .node-dialog { width: min(1200px, calc(100vw - 32px)); }
+/* each pane scrolls on its own (the popout window takes this size too); the detail popup is 940 wide (1404:16784) */
+.wf-settings, .node-dialog { width: min(1200px, calc(100vw - 32px)); }
+.crew-popup { width: min(940px, calc(100vw - 32px)); }
 .crew-popup { padding: 0; }
 /* head and tabs keep their size; the body takes what is left of the window (dialog max-height) and scrolls, so the 저장 bar stays inside */
 .crew-popup[open] { display: flex; flex-direction: column; }

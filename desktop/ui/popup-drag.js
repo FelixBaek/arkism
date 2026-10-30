@@ -133,7 +133,8 @@
   window.ArkismPopout = {
     docs: () => [...kids.values()].map((k) => docOf(k.w)).filter((d) => d?.documentElement.classList.contains("popout")),
     current: () => docOf(focusedKid()?.w) || document,
-    setups: (d) => [...setupOf.get(d) || []]
+    setups: (d) => [...setupOf.get(d) || []],
+    labelOf: (d) => [...kids].find(([, k]) => docOf(k.w) === d)?.[0] || ""
   };
 
   // 처음부터 창으로: a popup that can live alone opens in its own window at once, where it would have appeared here.

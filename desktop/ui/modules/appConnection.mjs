@@ -112,7 +112,7 @@ export function createAppConnection(deps) {
     return { host: v };
   }
 
-  const sshLabel = (f) => f?.host ? (f.user && !f.host.includes("@") ? `${f.user}@${f.host}` : f.host) + (f.port ? `:${f.port}` : "") : "";
+  const sshLabel = (f) => f?.host ? (f.user && !f.host.includes("@") ? `${f.user}@${f.host}` : f.host) + (f.port && f.port !== 22 ? `:${f.port}` : "") : "";
 
   let sshFormSeq = 0;
 

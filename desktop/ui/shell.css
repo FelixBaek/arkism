@@ -7,23 +7,28 @@
 .app.wide { grid-template-columns: var(--nc-rail-w) minmax(0, 1fr); }
 
 /* ---------------------------------------------------------------- rail */
-.sidebar { position: relative; background: var(--nc-rail); border-right: 0; padding: 32px 20px 20px; gap: 24px; }
-/* Figma 198:110: the mark sits alone on top, the word below it with the status dot */
+.sidebar { position: relative; background: var(--nc-rail); border-right: 1px solid var(--nc-line); padding: 20px 20px 20px; gap: 24px; }
+/* Figma 1492:366: the triangle at the right end of the logo row is the fold button; the word sits below it */
 .sidebar .brand { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 53px; padding: 0; font-weight: 400; }
-.brand-mark { grid-column: 1; width: 21px; height: 19px; flex: none; }
-.brand-word { font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
+.sidebar .brand > .brand-mark { grid-row: 1; grid-column: 2; width: 22px; height: 19px; flex: none; }
+.sidebar .brand:has(> .rail-toggle:not([hidden])) > .brand-mark { display: none; } /* narrow windows hide the button; the plain mark stays */
+.brand-word { grid-row: 2; grid-column: 1 / -1; font: 400 40px/42px "Aleo", "Cormorant Garamond", "Noto Serif KR", Georgia, serif; color: var(--nc-text); letter-spacing: 0; }
 /* Figma 198:110: the status icon sits at the right end of the 설정 row, the drawing under it. */
 .rail-foot { display: flex; align-items: center; gap: 8px; flex: none; }
 .rail-foot .rail-settings { flex: 1; }
 .rail-tools { display: flex; gap: 2px; }
-.rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-quiet); }
-.rail-tool:hover, .rail-tool:not(.rail-toggle)[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
+.rail-tool { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: none; padding: 0; color: var(--nc-accent); }
+.rail-tool:hover, .rail-tool[aria-expanded="true"] { background: var(--nc-raised); color: var(--nc-text); }
 .rail-tool .icon { width: 16px; height: 16px; }
 .rail-tool.ok { color: var(--status-ok); }
 .rail-tool.warn { color: var(--warn); }
 .rail-tool.bad { color: var(--status-danger); }
-/* Search lives in the 통합 검색 dialog (home.js); the top-bar box stays as the hidden list filter. */
-.area-bar > .search { display: none; }
+/* Top-bar search (198:3468): the global search on 홈·설정, the list filter elsewhere. A list that draws its own box hides this one. */
+.app:has(.panel-main input[type="search"]) .area-bar > .search { display: none; }
+.area-bar .search input::-webkit-search-cancel-button { display: none; }
+.search-clear { display: grid; place-items: center; width: 20px; height: 20px; flex: none; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--nc-text); }
+.search-clear .icon { width: 14px; height: 14px; }
+.search input:placeholder-shown ~ .search-clear { display: none; }
 .rail-line { height: 1px; background: var(--nc-line); flex: none; }
 .sidebar .nav { gap: 6px; }
 .sidebar .nav-item { height: 44px; gap: 12px; padding: 0 16px 0 14px; border-radius: var(--nc-radius-control); color: var(--nc-muted); font: 400 calc(16px * var(--fs, 1))/20px "Aleo", "Noto Serif KR", Georgia, serif; }
@@ -32,7 +37,7 @@
 .sidebar .nav-ic { stroke-width: 1.125; }
 .ln { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .rail-space { flex: 1; min-height: 0; }
-.rail-art { width: 178px; height: 118px; opacity: .85; flex: none; }
+.rail-art { width: 178px; height: 118px; opacity: .65; flex: none; }
 .rail-art .ark-triangle { display: block; overflow: visible; }
 .rail-art .ark-line { stroke: rgb(236,235,230); }
 .rail-art .ark-accent { stroke: rgb(242,209,75); }
@@ -42,7 +47,7 @@
   :root:not([data-theme="dark"]) .rail-art .ark-line { stroke: rgb(117,117,112); }
   :root:not([data-theme="dark"]) .rail-art .ark-accent { stroke: rgb(125,98,0); }
 }
-.sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/20px var(--sans); }
+.sidebar .rail-settings { height: 40px; padding-left: 12px; color: var(--nc-text); font: 500 calc(16px * var(--fs, 1))/20px "Aleo", "Noto Serif KR", Georgia, serif; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* connection details: a small card under the logo */
@@ -135,8 +140,11 @@
 /* 메뉴 접기 (Figma 198:112): the rail folds to its icons, and a line on top of the page names where you are.
    Narrow windows (below 1000, app minimum 720) always get this rail (shell.js), so the content keeps its width;
    app.css's 760 top bar is never used. Labels stay for screen readers. */
-.rail-toggle { grid-row: 1; grid-column: 2; justify-self: end; }
+.rail-toggle { grid-row: 1; grid-column: 2; justify-self: end; display: grid; place-items: center; padding: 0; border: 0; background: none; }
 .rail-toggle[hidden] { display: none; }
+.rail-tri { width: 22px; height: 19px; overflow: visible; fill: var(--nc-action); stroke: var(--nc-accent); stroke-width: 1.5; stroke-linejoin: round; transition: transform .2s ease; }
+.rail-toggle:hover .rail-tri, .rail-toggle:focus-visible .rail-tri { transform: rotate(-90deg); }
+@media (prefers-reduced-motion: reduce) { .rail-tri { transition: none; } }
 .rail-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; flex: none; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-quiet); font: 400 calc(13px * var(--fs, 1))/20px var(--sans); text-align: left; }
 .rail-search:hover { color: var(--nc-text); }
 .rail-search .icon { width: 16px; height: 16px; flex: none; }
@@ -146,9 +154,10 @@
 :root.rail-collapsed { --nc-rail-w: 72px; }
 :root.rail-collapsed .location-bar { display: flex; align-items: center; flex: none; height: 53px; margin: calc(-1 * var(--nc-page-pad)) calc(-1 * var(--nc-page-pad)) 0; padding: 0 17px; border-bottom: 1px solid var(--nc-line); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .location-bar .sep { margin: 0 8px; color: var(--nc-quiet); }
-:root.rail-collapsed .sidebar { align-items: center; gap: 16px; padding: 24px 12px 16px; }
-:root.rail-collapsed .sidebar .brand { grid-template-columns: auto; row-gap: 16px; justify-items: center; }
-:root.rail-collapsed .rail-toggle { grid-row: 2; grid-column: 1; justify-self: center; }
+:root.rail-collapsed .sidebar { align-items: center; gap: 16px; padding: 14px 12px 16px; }
+:root.rail-collapsed .sidebar .brand { grid-template-columns: auto; justify-items: center; }
+:root.rail-collapsed :is(.rail-toggle, .sidebar .brand > .brand-mark) { grid-row: 1; grid-column: 1; justify-self: center; }
+:root.rail-collapsed .rail-tri { width: 21px; }
 :root.rail-collapsed :is(.sidebar .brand-word, .rail-art) { display: none; }
 :root.rail-collapsed .rail-line { align-self: stretch; }
 :root.rail-collapsed .rail-search { width: 44px; padding: 0; justify-content: center; }

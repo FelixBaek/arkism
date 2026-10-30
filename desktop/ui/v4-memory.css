@@ -64,7 +64,7 @@
 /* list: surface bg, line border, radius 8; row = body text 14 + one meta line 12 + one badge */
 .memory-mode .table { flex: 0 1 auto; align-self: flex-start; width: 100%; max-height: 100%; background: var(--nc-surface); border-color: var(--nc-line); border-radius: var(--nc-radius-control); }
 .memory-mode .table:has(> .empty:only-child) { flex: 1; }
-.memory-mode .row { gap: 1rem; padding: 0.75rem 1rem; border-color: var(--nc-line); }
+.memory-mode .row { gap: 1rem; min-height: 3.75rem; padding: 0.375rem 1rem; border-color: var(--nc-line); } /* 60px rows (Figma 02 Brain) */
 .memory-mode .row:last-child { border-bottom: 0; }
 .memory-mode .row:hover { background: var(--nc-raised); }
 .memory-mode .row.selected { background: var(--nc-raised); }
@@ -73,7 +73,8 @@
 .mem-meta, .memory-mode .original-row .meta { font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mem-badge { justify-self: end; padding: 0.125rem 0.5rem; border-radius: 62.4375rem; font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); white-space: nowrap; }
 .mem-badge.warn { background: var(--nc-amber-bg); color: var(--nc-amber); font-weight: 500; }
-.mem-badge.new, .mem-badge.strong { border: 0.0625rem solid var(--nc-line); color: var(--nc-text); font-weight: 500; }
+.mem-badge.new { border: 0.0625rem solid var(--nc-line); color: var(--nc-text); font-weight: 500; }
+.mem-badge.strong { background: var(--nc-subtle); color: var(--nc-text); font-weight: 500; } /* 저장: grey fill (Figma 383:29822) */
 .memory-mode .quick { gap: 0.75rem; }
 .memory-mode .quick .icon-btn { width: 1.75rem; height: 1.75rem; border-color: var(--nc-line); color: var(--nc-muted); }
 .memory-mode .quick .icon-btn:hover { color: var(--nc-text); background: var(--nc-subtle); }
@@ -188,12 +189,20 @@
 .memory-mode .detail-body .expiry-picks { flex-wrap: wrap; }
 
 /* 지운 기억: the row opens the memory, 되살리기 sits beside it (a button never nests in the row button) */
-.mem-removed-line { display: flex; align-items: center; gap: 0.75rem; padding-right: 0.75rem; border-bottom: 0.0625rem solid var(--nc-line); }
-.mem-removed-line > .row { flex: 1; min-width: 0; }
+/* one grid like the row's own (minmax(0,1fr) auto): the row and 되살리기 share its hover and selected fill */
+.mem-removed-line { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding-right: 1rem; border-bottom: 0.0625rem solid var(--nc-line); }
+.mem-removed-line > .row { min-width: 0; }
+.memory-mode .mem-removed-line > .row:hover, .memory-mode .mem-removed-line > .row.selected { background: none; }
+.memory-mode .mem-removed-line:has(> .row:hover), .memory-mode .mem-removed-line:has(> .row.selected) { background: var(--nc-raised); }
 .memory-mode .virtual-list > .virtual-item .mem-removed-line > .row { border-bottom: 0; }
 .mem-removed-line > .btn { flex: none; }
+.memory-mode .btn.d-wide { width: 100%; justify-content: center; } /* 원문 보기: full width, text centred */
 .memory-mode .empty > p { margin: 0; }
 .memory-mode .empty > .btn { margin-top: 0.75rem; }
 .del-reason-opt { font-size: var(--font-size-md); font-weight: var(--font-weight-regular, 400); color: var(--text-3); }
 /* phone width: the search takes its own line and the other tools wrap instead of running off the screen */
 @media (max-width: 640px) { .mem-tools { flex-wrap: wrap; } .mem-tools > .panel-search { flex: 1 0 100%; } }
+/* the list panel starts right under the area tabs (Figma 383:29822: tabs 32–72, panel 96) */
+.app.memory-mode .main > .page-head:has(#title.sr-only):not(:has(#head-actions > *)) { display: none; }
+/* the picked area tab: surface fill, a 1px line, accent text (Figma 02 Brain) */
+.app:is(.memory-mode, .overview-mode) .area-tab.active { background: var(--nc-surface); box-shadow: inset 0 0 0 0.0625rem var(--nc-line); color: var(--nc-accent); }

@@ -159,10 +159,12 @@ test("새 스킬 제안: a bad name is refused, 스킬 만들기 installs it and
   await home();
 });
 
-test("Home's 다시 불러오기 icon reads the lists again and leaves the sub-pages", async () => {
+test("Home's 다시 불러오기 link reads the lists again and leaves the sub-pages", async () => {
   await home();
-  const reload = app.$('#head-actions button[aria-label="다시 불러오기"]');
-  assert.ok(reload, "no reload icon on Home");
+  // Figma 1583:89751: 분석 상태 · 다시 분석 · 다시 불러오기 left of 전체 항목 보기
+  assert.match(t(app.$("#head-actions")), /아직 분석 안 함|분석 중…| 분석 · 다시 분석 · 다시 불러오기/);
+  const reload = byText("#head-actions button", /^다시 불러오기$/);
+  assert.ok(reload, "no 다시 불러오기 on Home");
   const reads = () => app.apiCalls.filter(([m, p]) => m === "GET" && /^\/v1\/memories(\?|$)/.test(p)).length;
   const before = reads();
   await app.click(reload, 1000);
@@ -172,9 +174,9 @@ test("Home's 다시 불러오기 icon reads the lists again and leaves the sub-p
   await home();
 });
 
-test("스킬 제안 받기 asks the AI for new skills, and a broken answer or failure is a notice", async () => {
+test("다시 분석 asks the AI for new skills, and a broken answer or failure is a notice", async () => {
   await home();
-  const again = () => byText("#head-actions button", /스킬 제안 받기/);
+  const again = () => byText("#head-actions button", /^다시 분석$/);
   assert.ok(again());
   await app.click(again(), 0);
   await app.settle(61000); // past a minute the wait notice says it is slow
@@ -241,7 +243,7 @@ test("기억 정리 제안 opens a proposal and sends its choice", async () => {
   await home();
 });
 
-test("기억 정리 제안: a contradiction's 지우기 asks which and why, then sends forget_both with the reason", async () => {
+test("기억 정리 제안: a contradiction's 둘 다 지우기 asks once, then sends forget_both", async () => {
   // only the contradiction stays open: deciding the duplicate first reloads the list
   const fixture = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "testdata/preview/v1/maintenance_proposals.json"), "utf8"));
   const only = { items: fixture.items.filter((p) => p.maintenance.type === "contradiction") };
@@ -252,16 +254,17 @@ test("기억 정리 제안: a contradiction's 지우기 asks which and why, then
   assert.match(t(app.$("#detail")), /넘기거나 지운 기억은 기억 이력에 남아요/);
   const sent = [];
   hook = (a) => { if (a.method === "POST") sent.push([a.path, a.body]); return a.method === "GET" && a.path.startsWith("/v1/maintenance_proposals") ? json(200, only) : null; };
-  await press(/^지우기$/, 50);
-  assert.match(t(app.$("#detail .del-reason")), /넘길 기억남길 기억둘 다/);
-  await press(/^둘 다$/, 20, "#detail .del-reason");
-  await press(/^이미 바뀜$/, 20, "#detail .del-reason");
-  await press(/^지우기$/, 1000, "#detail .del-reason");
+  await press(/^둘 다 지우기$/, 50);
+  assert.match(t(app.$("#detail .tidy-confirm")), /두 기억을 다 지울까요\?/);
+  await press(/^취소$/, 20, "#detail .tidy-confirm");
+  assert.equal(app.$("#detail .tidy-confirm"), null, "취소 closes it");
+  assert.equal(sent.length, 0, "취소 sends nothing");
+  await press(/^둘 다 지우기$/, 50);
+  await press(/^둘 다 지우기$/, 1000, "#detail .tidy-confirm");
   hook = () => null;
   const decide = sent.find(([p]) => /^\/v1\/maintenance_proposals\/[^/]+\/decide$/.test(p));
   assert.ok(decide, sent.map(([p]) => p).join(","));
   assert.equal(JSON.parse(decide[1]).decision, "forget_both");
-  assert.equal(JSON.parse(decide[1]).reason_code, "changed");
   await home();
 });
 
@@ -273,10 +276,8 @@ test("기억 정리 제안: an older server's invalid_request on 둘 다 지우�
   if (!/서로 다른 말을 하고 있어요/.test(t(app.$("#detail")))) { await press(/둘 다 두기/, 1000); await openAll(/정리 제안/); }
   hook = (a) => a.method === "POST" && /\/decide$/.test(a.path) ? json(400, { code: "invalid_request" })
     : a.method === "GET" && a.path.startsWith("/v1/maintenance_proposals") ? json(200, only) : null;
-  await press(/^지우기$/, 50);
-  await press(/^둘 다$/, 20, "#detail .del-reason");
-  await press(/^이미 바뀜$/, 20, "#detail .del-reason");
-  await press(/^지우기$/, 1000, "#detail .del-reason");
+  await press(/^둘 다 지우기$/, 50);
+  await press(/^둘 다 지우기$/, 1000, "#detail .tidy-confirm");
   hook = () => null;
   assert.match(t(app.$("#notice")), /서버를 최신 판으로 올린 뒤/);
   assert.doesNotMatch(t(app.$("#notice")), /invalid_request/);
@@ -492,11 +493,15 @@ test("설치 in the TOOLS toolbar lists every install flow, the tab's kind first
 });
 
 test("a failed load shows the retry notice, and 다시 시도 loads again", async () => {
+  const fail = (a) => (a.method === "GET" && /^\/v1\/(memories|skills)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);
+  // a popout save reads everything again the same way 다시 불러오기 does
+  const reloadAll = async () => { const saved = new app.window.Event("storage"); saved.key = "arkism.popout-saved"; app.window.dispatchEvent(saved); await app.settle(1500); };
   await home();
-  hook = (a) => (a.method === "GET" && /^\/v1\/(memories|skills)(\?|$)/.test(a.path) ? json(503, { error: "unavailable" }) : null);
-  // Home no longer has its own 다시 불러오기: a popout save reads everything again the same way
-  const saved = new app.window.Event("storage"); saved.key = "arkism.popout-saved"; app.window.dispatchEvent(saved); await app.settle(1500);
-  hook = () => null;
+  hook = fail; await reloadAll(); hook = () => null;
+  assert.equal(app.$("#notice").hidden, true, "Home's lost-connection card carries the retry: no second card");
+  assert.ok(app.$("#table .home-lost"));
+  deps.ArkismHome.go("memories", "active"); await app.settle(500);
+  hook = fail; await reloadAll(); hook = () => null;
   assert.equal(app.$("#notice").hidden, false);
   const retry = byText("#notice button", /다시/);
   assert.ok(retry, "no retry button");

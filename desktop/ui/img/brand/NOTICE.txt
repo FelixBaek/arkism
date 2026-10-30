@@ -1,6 +1,7 @@
 Brand marks in this folder
 
 - slack-logo.svg: Phosphor Icons 2.1.1 (@phosphor-icons/core), MIT, Copyright (c) 2023 Phosphor Icons.
+- slack-mark.svg: Simple Icons (simpleicons.org) Slack path, CC0 1.0.
 - Every other file: LobeHub Icons 1.95.1 (@lobehub/icons-static-svg, https://github.com/lobehub/lobe-icons), MIT, Copyright (c) 2023 LobeHub.
 
 The marks are trademarks of their owners and are shown only to name the model, provider or messenger.

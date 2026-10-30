@@ -171,6 +171,8 @@ window.ArkismPages = (ctx) => {
     c.append(line("내가 직접 말한 것", "“앞으로 ~해”처럼 말한 선호·결정·규칙", fixed("바로 저장")),
       line("AI가 추론한 교훈·결정", "내가 승인해야 쓰여요", fixed("검토 후 저장")),
       line("명령처럼 보이는 문장", "붙여 넣은 글이나 웹 문서에 섞인 지시", fixed("항상 내가 확인")));
+    toSide(sideSec("이 앱", ...(tauri ? [kvRow("버전", update.info?.current || update.current || "—")] : []), kvRow("연결", state.mode === "local" ? "이 PC" : state.mode === "remote" ? "SSH" : "서버 주소")),
+      sideNote("기억 규칙은 연결한 Arkism 서버가 정해요. 앱을 업데이트해도 저장한 기억은 그대로예요."));
     if (tauri) return [...doctorGroup(), updateGroup(), a, c];
     const server = group("업데이트"); // the browser cannot update, but still shows what the server runs
     if (ctx.serverBanner && state.serverInfo !== undefined) server.append(ctx.serverBanner.row());
@@ -256,7 +258,7 @@ window.ArkismPages = (ctx) => {
   }
 
   // 07 설정 › 에이전트: what the server found plus the owner's own switch for this app's tables.
-  const AGENT_LOGOS = { claude_code: "img:claude.svg", codex: "sym:a-codex", gemini: "sym:a-gemini", zcode: "sym:a-zcode", grok: "sym:i-x" };
+  const AGENT_LOGOS = { claude_code: "img:claude.svg", codex: "sym:a-codex", gemini: "sym:a-gemini", zcode: "sym:a-zcode", grok: "sym:a-grok" };
   function monogram(name) {
     const t = el("span", "agent-tile mono-tile");
     t.textContent = (name || "?").replace(/[^A-Za-z0-9가-힣]/g, "").slice(0, 2).toUpperCase();
@@ -342,7 +344,7 @@ window.ArkismPages = (ctx) => {
       const top = el("div", "ag-row-top");
       top.append(el("strong", "", a.name));
       const plan = e.api ? "API" : models.planName(src?.main?.plan);
-      if (plan) top.append(el("span", "ag-plan", plan));
+      if (plan) top.append(el("span", `ag-plan${e.api ? " api" : ""}`, plan));
       if (!e.api && src) top.append(...models.cliBadge(src));
       if (pendingAgent(a.id)) top.append(el("span", "tag warn", "적용 대기"));
       if (a.custom) top.append(el("span", "tag", "직접 추가"));
@@ -358,12 +360,10 @@ window.ArkismPages = (ctx) => {
       row.append(logoOf(a), info, agentSwitch(a, on, toggle), go);
       list.append(row);
     }
-    const add = el("button", "ag-add-agent");
-    add.type = "button";
-    add.append(icon("plus"), el("span", "", "에이전트 추가"));
-    add.title = "구독·API 키·엔드포인트 중 하나로 넣어요";
-    add.addEventListener("click", () => models.addProvider((pid) => { selAgent = `provider:${pid}`; }, openAddCLI));
-    list.append(add);
+    // Figma 1300:5254: two dim full-width rows at the end of the list.
+    const addRow = (label, title, onClick) => { const b = el("button", "ag-add-agent"); b.type = "button"; b.append(icon("plus"), el("span", "", label)); b.title = title; b.addEventListener("click", onClick); return b; };
+    list.append(addRow("에이전트 추가", "이 PC에 있는 에이전트를 넣어요", () => openAddAgent()),
+      addRow("공급자 추가", "구독·API 키·엔드포인트 중 하나로 넣어요", () => models.addProvider((pid) => { selAgent = `provider:${pid}`; }, openAddCLI)));
     const out = [...models.notices(), ...startCard(host), list];
     if (!tools?.agents) out.push(el("p", "pg-hint", "서버가 아직 에이전트 목록을 보내지 않았어요. 잠시 뒤 다시 열어 보세요."));
 
@@ -391,7 +391,7 @@ window.ArkismPages = (ctx) => {
     const dirIn = el("input");
     dirIn.placeholder = "~/team/skills";
     dirIn.className = "mono";
-    addDir.append(dirIn, button("폴더 추가", "ghost small", "plus", () => {
+    addDir.append(dirIn, button("폴더 추가", "small", "plus", () => {
       const d = dirIn.value.trim();
       if (!agentDirOk(d)) { notice("~/, / 또는 C:\\ 로 시작하는 폴더를 써 주세요."); return; }
       void agentRequest({ agent: "shared", kind: "shared", name: d, enabled: true }, "공용 폴더를 넣었어요. 1분 안에 반영돼요.");
@@ -480,7 +480,12 @@ window.ArkismPages = (ctx) => {
     // The same switch means two things: the built-in agents are only hidden from this app's tables.
     parts.push(el("small", "ag-switch-hint", a.found === false ? "설치되어 있지 않아 꺼 뒀어요. 설치하면 켤 수 있어요."
       : AGENTS.some(([k]) => k === a.id) ? "끄면 이 앱의 스킬 표에서만 숨겨요. 대화 수집은 그대로예요." : "끄면 Arkism이 이 에이전트의 스킬과 대화를 더 읽지 않아요."));
-    if (src) parts.push(e.api ? models.agentKeys(src) : models.agentAccounts(src, a.name), models.modelsCard(src.p, true));
+    if (src) {
+      const acc = e.api ? models.agentKeys(src) : models.agentAccounts(src, a.name);
+      // Figma 1583:88188: an agent that is not installed shows its account plainly, with nothing to rename.
+      if (a.found === false) acc.querySelectorAll('.icon-btn:has(use[href="#i-pencil-simple"])').forEach((b) => b.remove());
+      parts.push(acc, models.modelsCard(src.p, true));
+    }
     const link = el("section", "ag-card ag-link");
     link.append(el("strong", "", "Arkism 연결"));
     const age = tools?.collected_at ? Math.round((Date.now() - new Date(tools.collected_at).getTime()) / 60000) : null;
@@ -831,8 +836,10 @@ window.ArkismPages = (ctx) => {
     const now = el("div", "match");
     now.append(icon("check"), "지금 맞는 스킬:");
     if (!mine.length) now.append(el("span", "pg-hint", "없어요"));
-    for (const sk of mine.slice(0, 12)) now.append(el("code", "", sk.name));
-    if (mine.length > 12) now.append(el("span", "pg-hint", `외 ${mine.length - 12}개`));
+    // The same skill in two agents' folders is one name here.
+    const names = [...new Set(mine.map((sk) => sk.name))];
+    for (const n of names.slice(0, 12)) now.append(el("code", "", n));
+    if (names.length > 12) now.append(el("span", "pg-hint", `외 ${names.length - 12}개`));
     box.append(now);
     const foot = el("div", "cat-foot");
     const up = button("위로", "ghost", null, () => { if (i) { [draft[i - 1], draft[i]] = [draft[i], draft[i - 1]]; render(false); } });
@@ -847,14 +854,11 @@ window.ArkismPages = (ctx) => {
     const g = group("업데이트"); // a build without an update feed says so in the status line (checkUpdate)
     const row = el("div", "v4-version");
     const left = el("div", "v4-version-text");
-    const top = el("div", "v4-version-top");
-    // Same shape as the server line below: name and status, version, then the detail.
-    top.append(el("span", "", "앱"));
-    if (update.info) top.append(update.info.newer ? el("span", "tag warn", "업데이트 있음") : el("span", "tag", "최신"));
+    // Figma 1367:4224: the status line, then "Arkism 0.1.4"; the server line sits below in the same shape.
     const ver = el("div", "v4-version-num");
     const shown = update.info ? update.info.current : update.current;
-    ver.append(el("strong", "mono", shown ? `v${shown}` : "—"));
-    left.append(top, ver, el("small", "", update.text));
+    ver.append(el("span", "", "Arkism"), el("strong", "mono", shown || "—"));
+    left.append(el("small", "", update.text), ver);
     const acts = el("div", "v4-version-actions");
     const again = button(update.info?.newer ? "다시 확인" : update.label, update.info?.newer ? "" : "primary", null, () => checkUpdate(false));
     again.disabled = update.busy;
@@ -1079,13 +1083,21 @@ window.ArkismPages = (ctx) => {
     draw();
     kitRedraw.push(draw);
   }
-  // 역할별 모델: one card per kind of work (the tab already names the page). The AI 도구 row (assist) opens 요청 처리;
-  // kitRedraw replaces it where it sits.
+  // 역할별 모델 (Figma 1378:5011): one card; only 기억 추출 shows, the rest fold under 자세히 in the Figma order.
+  // The AI 도구 row (assist) opens the folded list; kitRedraw replaces it where it sits.
   let assistRow = null;
   function roleSections() {
-    const secs = ["기억", "스킬", "요청 처리"].map((t) => { const g = group(t); g.classList.add("ag-roles"); const b = el("div", "v4-roles-body"); g.append(b); return { g, b }; });
-    const fill = (memory, skill, request) => { secs[0].b.replaceChildren(...memory); secs[1].b.replaceChildren(...skill); secs[2].b.replaceChildren(...(assistRow ? [assistRow] : []), ...request); };
-    return { cards: secs.map((x) => x.g), fill, fail: (node) => { secs.slice(1).forEach((x) => { x.g.hidden = true; }); secs[0].b.replaceChildren(node); } };
+    const g = group("역할별 모델", "대부분은 Arkism이 알아서 골라요. 바꿀 일이 있을 때만 자세히를 열어요.");
+    g.classList.add("ag-roles");
+    const top = el("div", "v4-roles-body"), inner = el("div", "v4-roles-body");
+    g.append(top, more("자세히 · 판정·요약·검사·임베딩 모델", inner));
+    // memory: [기억 추출, 반성·검토, 임베딩] plus any note (older server); skill: [요약, 후보, 판정, 보안 검사]; request: [라우팅 판정]
+    const fill = (memory, skill, request) => {
+      const rows = memory.filter((n) => n.classList.contains("v4-role")), notes = memory.filter((n) => !rows.includes(n));
+      top.replaceChildren(...notes, ...rows.slice(0, 1));
+      inner.replaceChildren(...(assistRow ? [assistRow] : []), ...request, ...skill, ...rows.slice(1));
+    };
+    return { cards: [g], fill, fail: (node) => { top.replaceChildren(node); inner.parentElement.hidden = true; } };
   }
   function agentRoleCards() {
     // Rebuilt once the providers report arrives, so a card drawn before it does not keep the older-server rows.
@@ -1173,15 +1185,15 @@ window.ArkismPages = (ctx) => {
     // 연결 방식: 이 PC(내장) 또는 SSH. SSH는 서버의 Arkism을 터널로 잇는다 — 토큰·주소를 넣을 일이 없다.
     const g = group("연결 방식");
     const modes = [];
-    if (state.defaults.local) modes.push(["local", "desktop", "이 PC", "이 PC에서 Arkism을 실행해요. 인터넷 없이도 돼요."]);
-    modes.push(["ssh", "terminal", "SSH로 연결", "서버의 Arkism을 SSH로 이어요. 서버에서 따로 할 일은 없어요."]);
+    if (state.defaults.local) modes.push(["local", "이 PC", "이 PC에서 Arkism을 실행해요. 인터넷 없이도 돼요."]);
+    modes.push(["ssh", "SSH로 연결", "서버의 Arkism을 SSH로 이어요. 서버에서 따로 할 일은 없어요."]);
     let pick = state.mode === "local" ? "local" : "ssh";
     const cards = el("div", "mode-cards"), body = el("div", "mode-body"), actions = el("div", "pg-actions mode-actions");
     const form = sshFields(state.ssh);
     const out = el("p", "pg-hint mode-out");
     out.setAttribute("role", "status");
     const say = (text, bad) => { out.textContent = text; out.classList.toggle("warn", !!bad); };
-    const test = button("SSH 테스트", "ghost", null, async () => {
+    const test = button("SSH 테스트", "", null, async () => {
       test.disabled = true;
       say("확인하는 중…");
       const r = await sshTest(form.read());
@@ -1221,12 +1233,12 @@ window.ArkismPages = (ctx) => {
     });
     const off = button("연결 끊기", "ghost", null, disconnect);
     const draw = () => {
-      cards.replaceChildren(...modes.map(([key, ic, title, text]) => {
+      cards.replaceChildren(...modes.map(([key, title, text]) => {
         const c = el("button", `mode-card${key === pick ? " active" : ""}`);
         c.type = "button";
         c.setAttribute("aria-pressed", String(key === pick));
         const h = el("span", "mode-card-title");
-        h.append(icon(ic), el("span", "", title));
+        h.append(el("span", "", title)); // Figma 293:18786: no icons on the mode cards
         if (key === pick) h.append(icon("check"));
         c.append(h, el("span", "mode-card-text", text));
         c.addEventListener("click", () => { pick = key; say(""); draw(); });
@@ -1235,7 +1247,8 @@ window.ArkismPages = (ctx) => {
       // 고른 카드 아래에는 그 모드의 설정만: SSH 폼 또는 저장 위치.
       body.replaceChildren(...(pick === "ssh" ? [form.node, el("p", "pg-hint", "SSH 키 또는 비밀번호로 접속해요. 비밀번호는 이 PC의 키체인에 저장해 다시 묻지 않고, 연결 끊기를 누르면 지금 연결된 서버의 비밀번호를 지워요.")] : storage ? [storageMore] : []));
       // 연결 끊기: only while on a server; next launch goes back to the first-run choice.
-      actions.replaceChildren(...(pick === "ssh" ? [test, save] : [save]), ...(pick === "ssh" && state.mode !== "local" ? [off] : []));
+      // Figma 1282:82528: 연결 끊기 | 저장하고 다시 연결 | SSH 테스트
+      actions.replaceChildren(...(pick === "ssh" && state.mode !== "local" ? [off] : []), save, ...(pick === "ssh" ? [test] : []));
     };
     draw();
     g.append(cards, body, out, actions);
@@ -1371,7 +1384,6 @@ window.ArkismPages = (ctx) => {
     const body = el("div");
     g.append(body);
     let current = { paused: false, exclude: [] };
-    const memoTalk = {};
     const save = async (next, done) => {
       try { await tauri.invoke("set_capture_settings", { settings: next }); current = next; draw(); if (done) notice(done); }
       catch (_) { notice("수집 설정을 저장하지 못했어요."); }
@@ -1404,9 +1416,7 @@ window.ArkismPages = (ctx) => {
       note.setAttribute("aria-label", "기억할 것에 대한 메모");
       note.addEventListener("change", () => save({ ...current, instructions: note.value.trim() }, "메모를 저장했어요. 다음 수집부터 써요."));
       const nf = el("label", "field wide", "무엇을 기억할지 메모");
-      // The sparkle tidies the memo into what Arkism should (and should not) remember.
-      const memo = window.ArkismAIChat?.field(note, { state: memoTalk, title: "메모 정리", preset: "You tidy a user's note about what an AI memory service (Arkism) should and should not remember from their agent conversations. Turn it into short Korean rule lines: what to remember, what never to remember. Keep every name and path they wrote, add nothing they did not mean. At most 2000 characters." }) || note;
-      nf.append(memo, el("small", "", "Arkism이 기억을 고를 때 참고해요. 비밀값·개인정보 규칙보다 앞서지는 않아요."));
+      nf.append(note, el("small", "", "Arkism이 기억을 고를 때 참고해요. 비밀값·개인정보 규칙보다 앞서지는 않아요."));
       body.replaceChildren(...rows, f, nf, more("자세히 · 저장소 통째로 빼기", el("p", "pg-hint", "저장소 맨 위에 .arkism-ignore 파일을 두면 그 저장소의 대화도 수집하지 않아요.")));
     }
     tauri.invoke("capture_settings").then((r) => { current = { paused: !!r.paused, exclude: r.exclude || [], instructions: r.instructions || "" }; draw(); }, () => body.replaceChildren(el("p", "pg-hint", "수집 설정을 읽지 못했어요.")));

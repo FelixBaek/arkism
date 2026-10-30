@@ -1,3 +1,15 @@
+// 노드 짜기 (1511:4650): the request to the AI that rewrites the graph. flows: the saved workflows it may call as a
+// subflow node instead of building the same job again; a multi-step job never comes back as one AI node.
+export function draftPrompt(text, cur, flows = []) {
+  const g0 = JSON.stringify({ nodes: cur.nodes.map(({ id, type, title, config }) => ({ id, type, title, config })), edges: cur.edges }).slice(0, 12000);
+  const list = JSON.stringify(flows.filter((w) => w.crew?.handle).slice(0, 40).map((w) => ({ name: w.crew.name, handle: w.crew.handle, role: String(w.crew.role || "").slice(0, 120), steps: (w.crew.graph?.nodes || []).length }))).slice(0, 6000);
+  return "Change this Arkism workflow graph as the user asks. Keep node ids, types, titles and settings the request does not touch. " +
+    "Node types: start, ai, team, http, code, github, approval, condition, merge, loop, wait, subflow, notify, end. Every AI step is a node of type \"ai\" with config {\"goal\": one short Korean line, \"model\": \"auto\", \"access\": \"read\"}; for several AIs that discuss use \"team\"; do not use \"expert\" or \"ai_once\". " +
+    "Saved workflows are listed below. When the request is the job one of them already does (even said loosely, e.g. \"research this as a test\" and a research workflow), do not rebuild it: add one node of type \"subflow\" with config {\"workflow\": that workflow's handle, \"task\": the request in Korean} and keep the rest small. " +
+    "Otherwise build every step the job needs, each its own node in order, e.g. search or collect (http), analyse (ai), write (ai), review (ai or approval) where it fits; a job of several steps is never one single ai node. " +
+    "Keep one start node and end with an \"end\" node; edges are {\"from\": id, \"to\": id}. When the request says when it should start, also set \"trigger\": {\"kind\":\"schedule\",\"cron\":\"m h dom mon dow\" in local time, 1-5 = weekdays} or {\"kind\":\"webhook\",\"label\":\"short Korean note\"} or {\"kind\":\"manual\"}; otherwise leave \"trigger\" out. " +
+    `Answer only {"graph":{"nodes":[],"edges":[]},"trigger":...}.\nSaved workflows: ${list}\nWorkflow: ${g0}\nRequest: ${text}`;
+}
 // Owns canvas state and graph editing. Dependencies are explicit live ports, never a global scope.
 export function createCrewEditor(deps) {
   // A new turn on every open, dropped on leave, so a save that returns after the user left (or reopened) leaves the editor alone.
@@ -84,7 +96,7 @@ export function createCrewEditor(deps) {
       if (!at?.live()) return false; // left or reopened while the list reloaded
       ed.rec = deps.byId(saved.id) || saved;
       deps.render();
-      deps.notice(ed.fromPopup ? "저장했어요. '창으로 돌아가기'를 눌러 마무리해요." : "워크플로우를 저장했어요.");
+      deps.notice(ed.fromPopup ? "저장했어요. 닫으면 워크플로우 창으로 돌아가요." : "워크플로우를 저장했어요.");
       void deps.autoTitle(ed.rec);
       return true;
     } catch (e) {

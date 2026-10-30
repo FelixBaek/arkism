@@ -472,14 +472,12 @@ test("improve pages walk the four steps and their side text", async () => {
   s.v.renderSkills();
   assert.ok(s.doc.querySelector("#table .review-review"));
   assert.match(s.doc.querySelector("#table .v4s-steps").textContent, /✓/);
-  btn(s.doc.querySelector("#table .v4s-actions"), "← 비교 평가").click();
+  // 198:4328: only the step tabs move between steps, no 이전/다음 buttons
+  assert.equal(s.doc.querySelector("#table .v4s-actions"), null);
+  s.doc.querySelectorAll("#table .v4s-steps button")[1].click();
   assert.equal(s.state.skillPage.step, 1);
-  s.v.renderSkills();
-  btn(s.doc.querySelector("#table .v4s-actions"), "다음: 검토·승인").click();
-  assert.equal(s.state.skillPage.step, 2);
   s.state.skillPage = { kind: "improve", id: "a", step: 3 };
   s.v.renderSkills();
-  assert.equal(btn(s.doc.querySelector("#table .v4s-actions"), "다음"), undefined);
   // The same page key keeps the cached page (forms survive a refresh).
   const before = s.doc.querySelector("#table").firstChild;
   s.v.renderSkills();

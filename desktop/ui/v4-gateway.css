@@ -44,5 +44,15 @@
 
 /* ROUTER › 라우팅 현황 › 스킬 판정 */
 .rtg-skills { padding: 4px 12px; border: 1px solid var(--nc-line); border-radius: 8px; }
-.rtg-skill { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 120px) 52px 72px; }
+.rtg-skill { grid-template-columns: 44px minmax(0, 1fr) minmax(0, 120px) 52px 72px auto; }
+.rtg-chip.warn { background: var(--nc-amber-bg); color: var(--nc-amber); }
+
+/* ROUTER › 라우팅 현황: logos sit bare (no tile), sparklines fade out downward, the outage line on 응답 시간 */
+.rt-dist-row .brand-mark, .rt-model .brand-mark { width: 16px; height: 16px; }
+.rt-spark { color: var(--c); }
+.rt-spark .area { opacity: 1; }
+.rt-chart .incident-line { stroke: var(--nc-amber); stroke-width: 1; }
+.rt-field select { appearance: none; -webkit-appearance: none; padding-right: 26px; background-color: var(--nc-raised);
+  background-image: linear-gradient(45deg, transparent 50%, var(--nc-quiet) 50%), linear-gradient(135deg, var(--nc-quiet) 50%, transparent 50%);
+  background-position: calc(100% - 14px) 50%, calc(100% - 10px) 50%; background-size: 4px 4px; background-repeat: no-repeat; }
 .rtg-skill .rtg-ok { overflow-wrap: anywhere; }

@@ -38,8 +38,6 @@ window.ArkismMessenger = (ctx) => {
     const t = el("div", "mg-title");
     const logo = window.ArkismBrand?.mark(name, "mg-logo"); // 디스코드·텔레그램·슬랙 logo before the name
     t.append(...(logo ? [logo] : []), el("strong", "", name));
-    // 디스코드 bots answer in chat; 텔레그램·슬랙 only receive notices (one-way), so each card says which.
-    t.append(el("span", "tag", name === "디스코드" ? "대화 가능" : "알림만"));
     if (st) t.append(el("span", `mg-state ${st[1]}`, st[0]));
     head.append(t);
     if (right) head.append(right);
@@ -49,7 +47,7 @@ window.ArkismMessenger = (ctx) => {
   function tokenRow(key, last4, placeholder, onSave, saveLabel, label = "봇 토큰") {
     const row = el("div", "mg-token");
     const lab = el("span", "mg-label", label);
-    const input = el("input", "mono"); input.type = "password"; input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", label);
+    const input = el("input"); input.type = "password"; input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", label);
     const box = el("div", "mg-field");
     const editing = !last4 || S.changing[key];
     if (editing) {
@@ -60,7 +58,7 @@ window.ArkismMessenger = (ctx) => {
       row.children[1].append(box);
       if (last4) row.append(button("취소", "ghost", null, () => { S.changing[key] = false; render(false); }));
     } else {
-      const shown = el("div", "mg-masked mono"); shown.append(`${"•".repeat(24)}${last4}`, el("small", "", "저장됨"));
+      const shown = el("div", "mg-masked"); shown.append(`${"•".repeat(24)}${last4}`, el("small", "", "저장됨"));
       box.append(shown);
       const line = el("div", "mg-line"); line.append(box);
       row.append(lab, line, button("바꾸기", "", null, () => { S.changing[key] = true; render(false); }));
@@ -114,7 +112,7 @@ window.ArkismMessenger = (ctx) => {
   // Telegram needs a chat id besides the token; a saved destination can change the chat without the token.
   function chatRow(d) {
     const row = el("div", "mg-token");
-    const input = el("input", "mono"); input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", "채팅 ID");
+    const input = el("input"); input.autocomplete = "off"; input.spellcheck = false; input.setAttribute("aria-label", "채팅 ID");
     input.placeholder = "-1001234567890 또는 @채널이름"; input.value = S.draft.chat ?? d?.chat_id ?? "";
     input.addEventListener("input", () => { S.draft.chat = input.value; });
     const box = el("div", "mg-field"); box.append(input);
@@ -146,7 +144,7 @@ window.ArkismMessenger = (ctx) => {
   }
   function channelsPanel() {
     const sec = el("section", "v4-side-sec");
-    sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 Flow › 워크플로우를 열어 채널 연결에서 해요."));
+    sec.append(el("h3", "", "연결된 채널"), el("p", "mg-note", "바꾸려면 팀·전문가 상세의 채널 연결에서 해요."));
     // one group per messenger, each under its logo; telegram and slack have one destination each
     const groups = [["디스코드", S.bots.flatMap((b) => (b.channels || []).map((c) => [`#${c.name || c.channel_id}`, c.label || "", (b.missing || []).some((m) => m.channel_id === c.channel_id)]))],
       ["텔레그램", dest("telegram") ? [[dest("telegram").chat_id || "채팅 ID 없음", "알림을 보내는 곳", false, true]] : []],

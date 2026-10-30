@@ -234,7 +234,7 @@ test("a save that returns after leaving the editor does not reopen it", async ()
   dom.key(document, "Delete"); await h.settle();
   document.querySelector(".page-head .g-save").click(); await h.settle();
   h.answer = true;
-  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  await h.click(document.querySelector(".graph-win-head .win-close"));
   assert.ok(!graphOpen());
   release(); await h.settle();
   assert.ok(!graphOpen(), "the late save leaves the editor closed");
@@ -251,9 +251,9 @@ test("inline card edits change cron, model and text values", async () => {
   // model: a select that saves on change
   rowOf("ai1", "모델").click(); await h.settle();
   const sel = node("ai1").querySelector("select.g-inline");
-  // the 설정 › 역할별 모델 picker: 기본·자동 first, then one group per way a provider is connected, saving the plain model name
-  assert.deepEqual([...sel.querySelectorAll("optgroup")].map((g) => `${g.label}:${g.dataset.badges}`), ["Anthropic:MAX", "Anthropic:API", "OpenAI:"]);
-  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "sonnet", "haiku", "sonnet", "haiku", "gpt-5"]);
+  // the 설정 › 역할별 모델 picker: 기본·자동 first, then one group per provider with all its connection badges, saving the plain model name
+  assert.deepEqual([...sel.querySelectorAll("optgroup")].map((g) => `${g.label}:${g.dataset.badges}`), ["Anthropic:MAX,API", "OpenAI:"]);
+  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "sonnet", "haiku", "gpt-5"]);
   sel.value = sel.options[sel.options.length - 1].value; dom.fire(sel, "change"); await h.settle();
   rowOf("ai1", "모델").click(); await h.settle();
   const sel2 = node("ai1").querySelector("select.g-inline");
@@ -311,7 +311,7 @@ test("add, remove, delete keys, leave and save in the editor", async () => {
   assert.equal(document.querySelectorAll(".g-edge-hit").length, edges - 1);
   // leave with unsaved changes: refused, then accepted
   h.answer = false;
-  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  await h.click(document.querySelector(".graph-win-head .win-close"));
   assert.ok(graphOpen());
   // save failure then success
   h.routes.unshift(["POST", /^\/v1\/crew\/wf1$/, () => new Error("저장 실패")], ["POST", /\/v1\/crew$/, () => new Error("저장 실패")]);
@@ -321,7 +321,7 @@ test("add, remove, delete keys, leave and save in the editor", async () => {
   (document.querySelector(".page-head .g-save") || h.btn(document.querySelector(".graph-win-head"), "저장")).click(); await h.settle();
   assert.ok(h.notices.some((n) => /저장했어요/.test(n)));
   h.answer = true;
-  await h.click(document.querySelector(".graph-win-head"), /돌아가기/);
+  await h.click(document.querySelector(".graph-win-head .win-close"));
   assert.ok(!graphOpen());
   assert.deepEqual(clean(), []);
 });
@@ -706,15 +706,15 @@ test("graph editing always opens in its own window, from the detail, the workflo
   assert.equal(h.state.view, "crew", "this window keeps its own screen");
   assert.match(win.querySelector(".graph-win-head").textContent, /워크플로우 편집/);
   assert.ok(win.querySelector(".graph-win-body .graph-page, .graph-win-body .wf-simple"));
-  await h.click(win.querySelector(".graph-win-head"), /돌아가기/);
+  await h.click(win.querySelector(".graph-win-head .win-close"));
   assert.ok(!graphOpen());
 
-  // the workflow window's 그래프로 편집: the window gives way to the editor's, and 창으로 돌아가기 brings it back
+  // the workflow window's 그래프로 편집: the window gives way to the editor's, and 닫기 brings it back
   window.dispatchEvent(new CustomEvent("arkism:open-automation", { detail: { id: "wf1" } })); await h.settle();
   await h.click(h.top(), /그래프로 편집/);
   assert.ok(graphOpen());
   assert.equal(h.dialogs().length, 1, "only the editor's window is open");
-  await h.click(document.querySelector(".graph-win-head"), "창으로 돌아가기");
+  await h.click(document.querySelector(".graph-win-head .win-close"));
   assert.ok(!graphOpen());
   assert.ok(h.top()?.classList.contains("v4-auto"), "back in the workflow window");
   h.closeAll();

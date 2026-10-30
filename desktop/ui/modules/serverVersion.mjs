@@ -119,7 +119,7 @@ export function createServerBanner(deps) {
     const top = el("div", "v4-version-top");
     top.append(el("span", "", `서버 · ${where}`), el("span", `tag${status === "current" ? "" : " warn"}`, STATUS_TEXT[status]));
     const ver = el("div", "v4-version-num");
-    ver.append(el("strong", "mono", info?.version ? `v${info.version}` : info ? "이전 버전" : "—"));
+    ver.append(el("strong", info?.version === "dev" ? "" : "mono", info?.version === "dev" ? "개발 빌드" : info?.version ? `v${info.version}` : info ? "이전 버전" : "—"));
     const build = buildText(info);
     if (build) ver.append(el("small", "", build));
     left.append(top, ver);

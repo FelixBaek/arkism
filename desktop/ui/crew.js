@@ -2,13 +2,13 @@ import { createCrewVocabulary } from "./modules/crewVocabulary.mjs";
 import { createCrewModel } from "./modules/crewModel.mjs";
 import { createCrewExecution } from "./modules/crewExecution.mjs";
 import { createCrewSchedule } from "./modules/crewSchedule.mjs";
-import { createCrewEditor } from "./modules/crewEditor.mjs";
+import { createCrewEditor, draftPrompt } from "./modules/crewEditor.mjs";
 import { createCrewNodes } from "./modules/crewNodes.mjs";
 import { createCrewReview } from "./modules/crewReview.mjs";
 import { createCrewRunView, plainRunError } from "./modules/crewRunView.mjs";
 import { createCrewPersonas } from "./modules/crewPersonas.mjs";
 import { createCrewWorkers } from "./modules/crewWorkers.mjs";
-import { flowItems, flowAlias, flowKind } from "./modules/flowCatalog.mjs";
+import { flowItems, flowAlias } from "./modules/flowCatalog.mjs";
 import { createFlowHistory, flowNeedsDecision } from "./modules/flowHistory.mjs";
 import { createFlowUsage } from "./modules/flowUsage.mjs";
 // FLOW keeps role, team and workflow definitions intact and presents their existing editors in one catalogue.
@@ -358,7 +358,7 @@ export const createCrew = (ctx) => {
     list.forEach((r) => { if (r.crew.category) counts.set(r.crew.category, (counts.get(r.crew.category) || 0) + 1); });
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0], "ko"));
   }
-  const shownCards = () => flows().filter((r) => (!state.flowKind || state.flowKind === "all" || r.crew.type === state.flowKind) && (state.crewCat === "all" || r.crew.category === state.crewCat) &&
+  const shownCards = () => flows().filter((r) => (state.crewCat === "all" || r.crew.category === state.crewCat) &&
     (!state.query || `${r.crew.name} ${r.crew.handle || ""} ${r.crew.role || ""}`.toLowerCase().includes(state.query)));
   // 자동화 상세·새로 만들기 팝업 (crew-automation.js): built on first use, once every helper below exists.
   let autoKit = null;
@@ -395,31 +395,9 @@ export const createCrew = (ctx) => {
       drawCards();
     });
     search.append(icon("magnifying-glass"), q);
-    // 실행 방식: a tab group (Figma 1424:2375), short names in the user's order 전체 | 단독 | 단계 | 협업
-    const kind = el("div", "tm-seg wf-kinds");
-    kind.setAttribute("role", "tablist");
-    kind.setAttribute("aria-label", "실행 방식");
-    // Each tab says what it holds; with only one kind in the list (a fresh install) the tabs are left out.
-    const TIPS = { all: "모두 보기", agent: "AI 하나가 혼자 맡아요", workflow: "정한 단계를 차례로 돌아요", team: "여러 AI가 회의로 정해요" };
-    for (const [key, label, ic] of [["all", "전체", "squares-four"], ["agent", "단독", "user-plus"], ["workflow", "단계", "tree-structure"], ["team", "협업", "users-three"]]) {
-      const on = key === (state.flowKind || "all");
-      const t = el("button", `tm-seg-tab${on ? " active" : ""}`);
-      t.type = "button";
-      t.dataset.kind = key;
-      t.setAttribute("role", "tab");
-      t.setAttribute("aria-selected", String(on));
-      t.title = TIPS[key];
-      t.append(icon(ic), el("span", "", label));
-      t.addEventListener("click", () => {
-        state.flowKind = key; state.selected = null;
-        kind.querySelectorAll(".tm-seg-tab").forEach((b) => { const me = b === t; b.classList.toggle("active", me); b.setAttribute("aria-selected", String(me)); });
-        drawCards();
-      });
-      kind.append(t);
-    }
     const cat = el("select", "wf-select");
     cat.setAttribute("aria-label", "카테고리");
-    for (const [key, label] of [["all", `모든 카테고리 ${all.length}`], ...cats.map(([c, n]) => [c, `${c} ${n}`])]) {
+    for (const [key, label] of [["all", "모든 카테고리"], ...cats.map(([c, n]) => [c, `${c} ${n}`])]) {
       const option = el("option", "", label);
       option.value = key;
       if (key !== "all") option.dataset.noI18n = ""; // the category is the user's own word
@@ -427,10 +405,8 @@ export const createCrew = (ctx) => {
       cat.append(option);
     }
     cat.addEventListener("change", () => { state.crewCat = cat.value; state.selected = null; drawCards(); });
-    const kinds = new Set(flows().map((r) => r.crew.type));
-    if (kinds.size < 2 && (state.flowKind || "all") === "all") kind.hidden = true;
     if (!cats.length) cat.hidden = true; // no category yet: nothing to choose
-    bar.append(search, el("span", "grow"), kind, cat, button("+ 새 워크플로우", "primary", null, openFlowCreate));
+    bar.append(search, el("span", "grow"), cat, button("+ 새 워크플로우", "primary", null, openFlowCreate));
     $("#controls").replaceChildren(bar);
     $("#chips").replaceChildren();
     $("#stats").replaceChildren();
@@ -460,7 +436,7 @@ export const createCrew = (ctx) => {
   function emptyList() {
     const box = el("div", "wf-empty-list");
     if (flows().length) {
-      box.append(el("strong", "", "조건에 맞는 워크플로우가 없어요"), button("필터 지우기", "", null, () => { Object.assign(state, { query: "", crewCat: "all", flowKind: "all" }); render(false); }));
+      box.append(el("strong", "", "조건에 맞는 워크플로우가 없어요"), button("필터 지우기", "", null, () => { Object.assign(state, { query: "", crewCat: "all" }); render(false); }));
       return box;
     }
     const q = input("", { maxLength: 500, placeholder: "예: 매일 아침 9시에 열린 PR을 요약해서 텔레그램으로 보내 줘" });
@@ -483,30 +459,37 @@ export const createCrew = (ctx) => {
     if (rec.crew.type === "workflow") { getAuto().open(rec, run ? "history" : undefined, run); return; }
     window.dispatchEvent(new CustomEvent(rec.crew.type === "team" ? "arkism:open-team" : "arkism:open-expert", { detail: { id: rec.id, over: true, ...(run ? { tab: "history" } : {}) } }));
   }
+  // Card (1478:12809 · 1486:381): one card for an agent, a team and a workflow. A photo under a shade (the default one
+  // without a cover), who takes part top-left, how it starts and 확인 필요 top-right, @이름 above the name at the bottom.
+  const DEFAULT_COVER = "img/flow-cover.webp";
+  function participants(x) {
+    if (x.type === "agent") return [x];
+    const team = (t) => (t?.members || []).map((m) => m.agent_id);
+    const ids = x.type === "team" ? team(x) : (x.graph?.nodes || []).flatMap((n) => (n.type === "expert" ? [n.config?.expert] : n.type === "team" ? team(byId(n.config?.team)?.crew) : []));
+    return [...new Set(ids)].map((id) => byId(id)?.crew).filter((c) => c?.type === "agent").slice(0, 4);
+  }
   function flowCard(rec) {
-    if (rec.crew.type === "workflow") return workflowCard(rec);
     const x = rec.crew;
-    const card = raw(el("button", `crew-card workflow wf-card flow-card${x.cover?.url ? " has-cover" : ""}${x.enabled === false ? " flow-disabled" : ""}${runState(rec.id)}`));
+    const id = `crew:${rec.id}`;
+    const card = raw(el("button", `crew-card workflow wf-card flow-card has-cover${x.enabled === false ? " flow-disabled" : ""}${state.selected === id ? " selected" : ""}${runState(rec.id)}`));
     card.type = "button";
-    card.dataset.id = `crew:${rec.id}`;
+    card.dataset.id = id;
     card.dataset.flowKind = x.type;
-    card.title = x.enabled === false ? `${x.name} · ${tr("꺼짐")}` : x.name;
-    const top = el("div", "flow-card-top");
-    const alias = raw(el("code", "flow-alias", flowAlias(rec, items())));
-    if (x.cover?.url) {
-      // On a photo the card reads like a workflow card (name, @name); the avatar moves to the bottom-right corner.
-      // a photo that fails to load: the card is drawn again as one without a photo (role, category, avatar top-left)
-      coverImg(card, x.cover, () => card.replaceWith(flowCard({ ...rec, crew: { ...x, cover: undefined } })));
-      top.append(el("span", "flow-kind", tr(flowKind(rec))), ...waitBadge(rec.id));
-      const foot = el("div", "flow-card-foot");
-      foot.append(alias);
-      if (validAvatar(x.avatar)) foot.append(avatarMark(x));
-      card.append(top, raw(el("strong", "crew-cover-title", x.name)), foot);
-    } else {
-      top.append(avatarMark(x), el("span", "flow-kind", tr(flowKind(rec))), ...waitBadge(rec.id));
-      card.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("p", "flow-card-role", x.role || "")), raw(el("small", "flow-card-category", x.category || "")), alias);
-    }
-    card.addEventListener("click", () => openFlow(rec));
+    card.title = [x.name, flowAlias(rec, items()), x.enabled === false ? tr("꺼짐") : ""].filter(Boolean).join(" · ");
+    coverImg(card, x.cover?.url ? x.cover : { url: DEFAULT_COVER }, (img) => { if (!img.src.endsWith(DEFAULT_COVER)) img.src = DEFAULT_COVER; });
+    const top = el("div", "crew-cover-top");
+    const faces = el("div", "flow-faces");
+    for (const p of participants(x)) faces.append(avatarMark(p));
+    // 실행 방식: an agent that works by its own workflow starts the way that workflow does.
+    const w = x.type === "workflow" ? x : x.type === "agent" && x.workflow ? allWorkflows().find((r) => r.crew.handle === x.workflow.replace(/^\$/, ""))?.crew : null;
+    const kind = w?.trigger?.kind === "schedule" ? "일정" : w?.trigger ? "웹훅" : "직접 실행";
+    const when = w?.trigger && !w.enabled ? `${kind} · 꺼짐` : kind;
+    const badge = el("span", `wf-card-when${w && crewSchedule.triggered(w) && w.trigger.kind === "schedule" ? " on" : ""}`);
+    badge.title = w?.trigger ? crewSchedule.triggerText(w) : when;
+    badge.append(el("i"), el("span", "", when));
+    top.append(faces, badge, ...waitBadge(rec.id));
+    card.append(top, raw(el("code", "flow-alias", flowAlias(rec, items()))), raw(el("strong", "crew-cover-title", x.name)));
+    card.addEventListener("click", () => { state.selected = id; markSelected(); openFlow(rec); });
     card.ctxItems = () => [{ label: "열기", run: () => card.click() }, { label: "@이름 복사", off: !x.handle, run: () => Promise.resolve().then(() => card.ownerDocument.defaultView.navigator.clipboard.writeText(flowAlias(rec, items()))).then(() => notice("복사했어요."), () => notice("복사하지 못했어요.")) }];
     return card;
   }
@@ -516,15 +499,24 @@ export const createCrew = (ctx) => {
   }
   // 노드 짜기 (1511:4650): the AI rewrites the editor graph from one line. AI steps are AI 작업 nodes with the model on auto.
   async function draftGraph(text, cur) {
-    const g0 = JSON.stringify({ nodes: cur.nodes.map(({ id, type, title, config }) => ({ id, type, title, config })), edges: cur.edges }).slice(0, 12000);
-    const prompt = `Change this Arkism workflow graph as the user asks. Keep node ids, types, titles and settings the request does not touch. Every AI step is a node of type "ai" with config {"goal": one short Korean line, "model": "auto", "access": "read"}; for several AIs that discuss use "team"; do not use "expert" or "ai_once". Keep one start node and end with an "end" node. When the request says when it should start, also set "trigger": {"kind":"schedule","cron":"m h dom mon dow" in local time, 1-5 = weekdays} or {"kind":"webhook","label":"short Korean note"} or {"kind":"manual"}; otherwise leave "trigger" out. Answer only {"graph":{"nodes":[],"edges":[]},"trigger":...}.\nWorkflow: ${g0}\nRequest: ${text}`;
+    // the workflow being edited is not offered to itself (a subflow cannot call its own workflow)
+    const prompt = draftPrompt(text, cur, workflows().filter((w) => w.id !== crewEditor.ed.rec?.id));
     const a = await kit.assist("build", prompt, { purpose: "workflow" });
     if (a.status !== "done") throw new Error(kit.assistError(a));
     const j = kit.parseJSON(a.output);
     const g = j?.graph;
     if (!Array.isArray(g?.nodes) || !g.nodes.length) throw new Error(j?.ask ? String(j.ask).slice(0, 300) : "AI 답을 읽지 못했어요. 다시 눌러 주세요.");
     g.edges = Array.isArray(g.edges) ? g.edges : [];
-    for (const n of g.nodes) if (n?.type === "expert" || n?.type === "ai_once") n.type = "ai"; // the prompt asks for neither
+    const callable = workflows().filter((w) => w.id !== crewEditor.ed.rec?.id).map((w) => w.crew.handle);
+    for (const n of g.nodes) {
+      if (n?.type === "expert" || n?.type === "ai_once") n.type = "ai"; // the prompt asks for neither
+      // a subflow to a workflow that does not exist (or this one) cannot be saved: it becomes an AI step with its task
+      if (n?.type === "subflow") {
+        const h = String(n.config?.workflow || "").replace(/^[$@]/, "");
+        if (callable.includes(h)) n.config = { workflow: h, task: n.config?.task || "{{input}}" };
+        else Object.assign(n, { type: "ai", config: { goal: String(n.config?.task || n.title || "") } });
+      }
+    }
     const next = layoutGraph(g);
     for (const n of next.nodes) {
       const old = cur.nodes.find((o) => o.id === n.id);
@@ -544,29 +536,6 @@ export const createCrew = (ctx) => {
     img.src = cover.url;
     img.addEventListener("error", () => onFail(img));
     card.append(img);
-  }
-  // Card (198:286): photo, the 일정 badge and the name. The 일정·웹훅 switch, one line and $이름 · 단계 live in the popup.
-  // A cover photo (배경 사진) sits as a band on top of the card.
-  function workflowCard(r) {
-    const x = r.crew;
-    const c = el("button", `crew-card workflow wf-card${x.cover?.url ? " has-cover" : ""}${state.selected === `crew:${r.id}` ? " selected" : ""}${runState(r.id)}`);
-    c.type = "button";
-    c.dataset.id = `crew:${r.id}`;
-    c.dataset.flowKind = "workflow";
-    c.addEventListener("click", () => { state.selected = `crew:${r.id}`; markSelected(); getAuto().open(r); });
-    if (x.cover?.url) coverImg(c, x.cover);
-    const top = el("div", "crew-cover-top");
-    const kind = x.trigger?.kind === "schedule" ? "일정" : "웹훅";
-    const when2 = x.trigger ? (x.enabled ? kind : `${kind} · 꺼짐`) : "직접 실행";
-    const badge = el("span", `wf-card-when${crewSchedule.triggered(x) ? " on" : ""}`);
-    badge.title = x.trigger ? crewSchedule.triggerText(x) : when2;
-    badge.append(el("i"), el("span", "", when2));
-    top.prepend(badge);
-    top.append(...waitBadge(r.id));
-    c.title = [x.role, flowAlias(r, items())].filter(Boolean).join(" · ");
-    const aliases = [flowAlias(r, items()), x.research?.deep_alias ? `@${x.research.deep_alias}` : ""].filter(Boolean).join(" · ");
-    c.append(top, raw(el("strong", "crew-cover-title", x.name)), raw(el("code", "flow-alias", aliases)));
-    return c;
   }
   const headActions = () => []; // 새 워크플로우 sits in the list's own bar
 
@@ -1319,8 +1288,7 @@ export const createCrew = (ctx) => {
     if (crewEditor.ed.run) {
       const view = segment([["graph", "그래프"], ["list", "목록"]], crewEditor.ed.runList ? "list" : "graph", (k) => { crewEditor.ed.runList = k === "list"; drawGraph(); });
       view.classList.add("wf-view");
-      headTitle(line, button("돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
-      return [view];
+      return [view, winButtons()];
     }
     const save2 = button("저장", "primary g-save", null, crewEditor.saveGraph);
     save2.disabled = !crewEditor.ed.dirty && !!rec.id;
@@ -1338,8 +1306,7 @@ export const createCrew = (ctx) => {
     const settings = button("설정", "ghost", "gear-six", () => (rec.id ? openSettings(crewEditor.ed.rec, null, true) : crewEditor.saveGraph()));
     settings.title = "이름·@이름·언제 시작·배경 사진·자세히(모델·멈추는 조건)";
     // An owned workflow runs only through its agent (@); the server refuses a manual run.
-    headTitle(line, button(crewEditor.ed.fromPopup ? "창으로 돌아가기" : "돌아가기", "ghost", "arrow-left", crewEditor.leaveGraph));
-    return [settings, review, ...(ownerOf(rec) ? [] : [trial]), save2];
+    return [settings, review, ...(ownerOf(rec) ? [] : [trial]), save2, winButtons()];
   }
   // 그래프로 편집하기 always opens in its own window: a data-popout dialog that popup-drag.js moves into a separate OS
   // window as it opens. Where no window can open (the browser preview) the same dialog covers this window instead.
@@ -1374,7 +1341,7 @@ export const createCrew = (ctx) => {
     else if (!rec.id) title.append(el("span", "", "새 워크플로우"), el("small", "g-title-sub", "이름은 저장할 때 정해요"));
     else title.append(raw(el("span", "", rec.crew.name)), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
     const aside = el("div", "head-aside");
-    aside.append(...graphHead(line)); // graphHead puts ← 돌아가기 in the line
+    aside.append(...graphHead(line));
     line.append(title);
     graphWin.querySelector(".graph-win-head").replaceChildren(line, aside);
     crewEditor.renderGraph();
@@ -1385,10 +1352,24 @@ export const createCrew = (ctx) => {
     graphWin = null;
     if (w?.open) w.close(); else w?.remove();
   }
-  // 제목 줄: ← 돌아가기 at the far left, then the workflow's name with what this screen is on a smaller line under it.
-  function headTitle(line, back) {
-    back.classList.add("page-back", "g-head-back");
-    line.prepend(back);
+  // 최소화·최대화·닫기 at the right end, as on a window: in its own window they act on that window, over this one on
+  // the app window. 닫기 leaves the way Esc does (unsaved edits ask first). The icons are the window bar's (index.html).
+  function winButtons() {
+    const box = el("div", "g-win-ctl");
+    const label = () => window.ArkismPopout?.labelOf(graphWin?.ownerDocument) || "";
+    const act = (cmd, here) => { const l = label(); if (l) void window.__TAURI__?.core?.invoke(`plugin:window|${cmd}`, { label: l }).catch(() => {}); else void here?.()?.catch?.(() => {}); };
+    const win = () => window.__TAURI__?.window?.getCurrentWindow?.();
+    for (const [k, text, run] of [["min", "최소화", () => act("minimize", () => win()?.minimize())], ["max", "최대화", () => act("toggle_maximize", () => win()?.toggleMaximize())], ["close", "닫기", () => void crewEditor.leaveGraph()]]) {
+      const b = el("button", `win-btn${k === "close" ? " win-close" : ""}`);
+      b.type = "button";
+      b.setAttribute("aria-label", tr(text));
+      b.title = tr(text);
+      const icon = document.querySelector(`#window-bar [data-win="${k}"] svg`);
+      if (icon) b.append(icon.cloneNode(true));
+      b.addEventListener("click", run);
+      box.append(b);
+    }
+    return box;
   }
   // Keys reach the document of the window the editor is in: this one, or its popout window (popup-drag.js).
   const inGraph = (e) => !!crewEditor.ed.rec && !!graphWin && graphWin.ownerDocument === e.currentTarget;

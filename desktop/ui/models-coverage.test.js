@@ -70,7 +70,7 @@ function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
       }
       server.requests.push({ id: `q${++n}`, kind: body.cli ? "cli_update" : path === "/v1/providers/models_refresh" ? "models_refresh" : "x", cli: body.cli, provider: body.provider, model: body.model, status: "pending", key_id: "key_ABCDEF1234567890" });
       if (path === "/v1/providers/cli_update" && v.noProviders) return {};
-      return { providers: server };
+      return { providers: v.server };
     },
     render: () => draw(),
   };
@@ -319,6 +319,24 @@ test("AI 도구 기본 모델 saves the provider and model, falls back to the se
   assert.equal(sel().value, "openai|gpt-5");
   v.server.assist_model = "gone"; v.server.assist_provider = ""; mount();
   assert.ok(sel().options.some((o) => o.value === "|gone"));
+});
+
+test("a provider with a login and a key is one picker group with both badges, so picking another model saves it", async () => {
+  const v = mk();
+  v.server.providers[0].accounts[0].plan = "pro";
+  v.server.role_defaults = { extract: "haiku" };
+  await v.m.load();
+  const sel = v.m.assistPicker();
+  const heads = sel.children.filter((c) => c.tagName === "OPTGROUP" && c.label === "OpenAI");
+  assert.deepEqual(heads.map((g) => g.dataset.badges), ["PRO,API"]);
+  const vals = sel.options.map((o) => o.value).filter(Boolean);
+  assert.equal(new Set(vals).size, vals.length, "every option saves its own value");
+  assert.equal(sel.value, "openai|gpt-5");
+  // the POST answer leaves out role_defaults (the server adds them only on a read): the last read's stay
+  v.server = { ...v.server }; delete v.server.role_defaults; // mk's stand-in answers every POST with v.server
+  sel.value = "openai|hand"; sel.fire("change"); await settle();
+  assert.deepEqual(v.calls.at(-1), ["/v1/providers/assist_model", { scope: { project_id: "p" }, model: "hand", provider: "openai" }]);
+  assert.deepEqual(v.state.data.providers.role_defaults, { extract: "haiku" });
 });
 
 test("key dialog: peek, test, pick found models and save", async () => {
