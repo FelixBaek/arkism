@@ -1,6 +1,6 @@
 # 로드맵 진행 기록
 
-기준: 2026-10-30. 작업 검증 완료25/63(R1~R8, CRW-01~07, DYN-01, RTE-01~02, CAP-01·07, PSY-01, SYS-01~04). 필수49개 중25개 완료·24개 미완료이며 선택14개는 보류다. #150 준비는 별도 완료이며 63개 작업 분모에는 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
+기준: 2026-10-31. 작업 검증 완료26/63(R1~R8, CRW-01~07, DYN-01, RTE-01~02, CAP-01·07, PSY-01, SYS-01~05). 필수49개 중26개 완료·23개 미완료이며 선택14개는 보류다. #150 준비는 별도 완료이며 63개 작업 분모에는 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
 여기서 카드란 이슈 안의 개별 작업이다. “로컬 카드 수용”은 작업의 구현·실제 로컬 검사·독립 검토가 완료 기준을 충족했다는 과거 기록 용어이며, 앞으로 “작업 검증 완료”로 설명한다. `verified`도 이 뜻이다.
 원격 검사·PR 병합·실험·제품 통합은 각각 따로 기록한다.
 
@@ -11,7 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
-- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 계획으로 동기·비동기 개발 파일럿을 돌린 뒤, 조건을 잠그고 새 DB에서 순서를 균형 맞춘 작은 비교를 한 번 실행했다(기술 통계만, comparison_ready=false). 이어서 cold/warm 검색·동시 폭주·재시작·삭제 경쟁 칸을 두 방식에 같은 계획으로 돌리고 receipt·replay 바이트를 저장 조각으로 실측했다(개발 실행, 미수용). 보류된 대기열을 검증 뒤 다시 게시하는 명시적 repair를 더하고, 삭제 경쟁 뒤 repair 구간과 제공 중단 시간을 실측했다(개발 실행, 미수용). 실제 실행 기록을 바꾸지 않은 A-v2 요약기에 투영해, 비동기는 비교 입력 준비 true, 동기는 보류가 없어 false임을 확인했다(개발 실행, 미수용). 독립 수용은 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 계획으로 동기·비동기 개발 파일럿을 돌린 뒤, 조건을 잠그고 새 DB에서 순서를 균형 맞춘 작은 비교를 한 번 실행했다(기술 통계만, comparison_ready=false). 이어서 cold/warm 검색·동시 폭주·재시작·삭제 경쟁 칸을 두 방식에 같은 계획으로 돌리고 receipt·replay 바이트를 저장 조각으로 실측했다(개발 실행, 미수용). 보류된 대기열을 검증 뒤 다시 게시하는 명시적 repair를 더하고, 삭제 경쟁 뒤 repair 구간과 제공 중단 시간을 실측했다(개발 실행, 미수용). 실제 실행 기록을 바꾸지 않은 A-v2 요약기에 투영해, 비동기는 비교 입력 준비 true, 동기는 보류가 없어 false임을 확인했다(개발 실행, 미수용). 2026-10-31 소유자 결정으로 '같은 조건 비교 불가'를 결과로 받아들이고, 최신 커밋에서 카드 수용 명령(race 48 통과)과 카드 밖 시험을 다시 돌린 뒤 독립 검토로 작업 검증 완료했다. 우월성 결론은 없다. 전체 완료26개·필수23개 남음.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -458,3 +458,7 @@ A separate worker test process took the lease on a queued update and was killed 
 ## SYS-05 B privacy and embedding starvation
 
 Real worker rounds with four queued native updates, six embedding jobs and one privacy deletion: native applied in two rounds without a hold, embedding finished in six, privacy advanced in every round the product selected it, and no kind with eligible work stalled. Privacy then waited in partial because the fixture reports no runtime purge; a control run without the native round ended the same way. One small synthetic scenario; the native-side direction is weak because the worker always runs the native step. SYS-05 remains in_progress, and the counts stay 25/63 with 24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b-starvation.md).
+
+## SYS-05 acceptance
+
+The owner accepted on 2026-10-31 that the locked A-v2 rules cannot make a same-condition sync/async comparison ready, and that this is the card's result: comparison_ready false, superiority not evaluated, service_execution_authenticated false. At the acceptance head the card's own command passed under race (48 passed, 0 failed, 0 skipped); the tests outside its pattern passed under race (internal/memory 139, cmd/memoryd 43) except the locked comparison, which refuses the current fixture config because the lease bound added after the lock changed it, and fails closed as designed. An independent review found all five B criteria asserted by tests. SYS-05 is verified; the whole-card count becomes 26/63 with 23 required remaining. The feature stays off by default. See the [work record](../work-records/2026-10-31-roadmap-sys05-acceptance.md).
