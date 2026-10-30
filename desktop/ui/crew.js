@@ -1333,9 +1333,8 @@ export const createCrew = (ctx) => {
       });
       document.body.append(graphWin);
     }
-    // a new workflow has no id yet to reopen in its own window: it stays here until its first save
-    if (rec.id) Object.assign(graphWin.dataset, { popout: JSON.stringify({ detail: { id: rec.id } }), popoutTitle: rec.crew.name });
-    else { delete graphWin.dataset.popout; delete graphWin.dataset.popoutTitle; }
+    // a new workflow opens in its own window too: the dialog moves there with this window's JS, so its first save works the same
+    Object.assign(graphWin.dataset, { popout: JSON.stringify({ detail: rec.id ? { id: rec.id } : { new: true } }), popoutTitle: rec.id ? rec.crew.name : "새 워크플로우" });
     const line = el("div", "title-line"), title = el("h1", "graph-win-title");
     if (crewRunView.rerunOf()) title.textContent = "실패한 곳부터 재실행";
     else if (!rec.id) title.append(el("span", "", "새 워크플로우"), el("small", "g-title-sub", "이름은 저장할 때 정해요"));
