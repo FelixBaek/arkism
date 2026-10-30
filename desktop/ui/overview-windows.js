@@ -330,7 +330,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // what one recall hands out on average, by kind
     const count = {}; for (const x of receipts) for (const it of x.items) { const m = memOf(it.memory.id); if (m) count[m.kind] = (count[m.kind] || 0) + 1; }
     const kinds = el("div", "ov-kinds"); kinds.append(el("span", "", `세션 ${num(shown.length)}개 · ${num(receipts.length)}번 불러옴, 한 번에 평균`));
-    for (const [k2, n] of Object.entries(count)) { const t = el("span", "ov-win-tag", kind(k2)); t.textContent += ` ${num(Math.round(n / receipts.length * 10) / 10)}개`; kinds.append(t); }
+    for (const [k2, n] of Object.entries(count)) { const t = tagEl(kind(k2)); t.textContent += ` ${num(Math.round(n / receipts.length * 10) / 10)}개`; kinds.append(t); }
     top.append(kinds);
     if (!shown.length) { list.append(el("p", "ov-win-empty", "이 제공자의 기록이 없어요.")); return; }
     const title = (s) => `${clientName(s.client)} · ${s.session ? `세션 ${s.session.slice(0, 8)}` : "세션 정보 없음"}`;
@@ -355,7 +355,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const items = el("div", "ov-detail-list");
       for (const it of x.items) {
         const m = memOf(it.memory.id), b = el("div", "ov-recall-item");
-        b.append(el("b", "", `${num(it.rank || 0)}위`), el("p", "", clip(memText(it.memory.id).split("\n")[0], 160)), el("small", "", recallWhy(it)));
+        b.append(el("b", "", `${num(it.rank || 0)}위`), ...(m ? [tagEl(kind(m.kind))] : []), el("p", "", clip(memText(it.memory.id).split("\n")[0], 160)), el("small", "", recallWhy(it)));
         if (m) { b.classList.add("ov-win-click"); b.tabIndex = 0; b.setAttribute("role", "button"); b.title = "기억 열기"; b.addEventListener("click", () => editMemory(m, m.id)); }
         items.append(b);
       }

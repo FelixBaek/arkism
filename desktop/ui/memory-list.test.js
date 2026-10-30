@@ -115,7 +115,7 @@ test("the main list draws check card, filters, chips, badges, paging and empty s
   assert.match(controls.textContent, /합치기 제안 2/);
   assert.equal(h.$("#mem-back").hidden, true);
   const badges = h.$("#table").querySelectorAll(".mem-badge").map((b) => b.textContent);
-  assert.deepEqual(badges, ["재검토 예정일 지남", "항상 적용", "검토 필요", "답에 보임 2번", "새 기억", "—", "…", "새 기억", "안 불림", "5번 참고"]);
+  assert.deepEqual(badges, ["재검토 예정일 지남", "항상 적용", "안 쓰임", "답에 보임 2번", "새 기억", "—", "…", "새 기억", "안 불림", "5번 참고"]);
   assert.match(h.$("#table .collection-more").textContent, /불러온 10개 중 10개 표시/);
   const chips = h.$("#chips").querySelectorAll("button");
   assert.deepEqual(chips.map((c) => c.textContent), ["전체3", "사용자3", "프로젝트"]);

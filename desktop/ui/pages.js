@@ -171,8 +171,6 @@ window.ArkismPages = (ctx) => {
     c.append(line("내가 직접 말한 것", "“앞으로 ~해”처럼 말한 선호·결정·규칙", fixed("바로 저장")),
       line("AI가 추론한 교훈·결정", "내가 승인해야 쓰여요", fixed("검토 후 저장")),
       line("명령처럼 보이는 문장", "붙여 넣은 글이나 웹 문서에 섞인 지시", fixed("항상 내가 확인")));
-    toSide(sideSec("이 앱", ...(tauri ? [kvRow("버전", update.info?.current || update.current || "—")] : []), kvRow("연결", state.mode === "local" ? "이 PC" : state.mode === "remote" ? "SSH" : "서버 주소")),
-      sideNote("기억 규칙은 연결한 Arkism 서버가 정해요. 앱을 업데이트해도 저장한 기억은 그대로예요."));
     if (tauri) return [...doctorGroup(), updateGroup(), a, c];
     const server = group("업데이트"); // the browser cannot update, but still shows what the server runs
     if (ctx.serverBanner && state.serverInfo !== undefined) server.append(ctx.serverBanner.row());
@@ -360,10 +358,13 @@ window.ArkismPages = (ctx) => {
       row.append(logoOf(a), info, agentSwitch(a, on, toggle), go);
       list.append(row);
     }
-    // Figma 1300:5254: two dim full-width rows at the end of the list.
-    const addRow = (label, title, onClick) => { const b = el("button", "ag-add-agent"); b.type = "button"; b.append(icon("plus"), el("span", "", label)); b.title = title; b.addEventListener("click", onClick); return b; };
-    list.append(addRow("에이전트 추가", "이 PC에 있는 에이전트를 넣어요", () => openAddAgent()),
-      addRow("공급자 추가", "구독·API 키·엔드포인트 중 하나로 넣어요", () => models.addProvider((pid) => { selAgent = `provider:${pid}`; }, openAddCLI)));
+    // one 에이전트 추가 for every way in (subscription, API key, endpoint, CLI): the owner asked for a single entry
+    const add = el("button", "ag-add-agent");
+    add.type = "button";
+    add.append(icon("plus"), el("span", "", "에이전트 추가"));
+    add.title = "구독·API 키·엔드포인트 중 하나로 넣어요";
+    add.addEventListener("click", () => models.addProvider((pid) => { selAgent = `provider:${pid}`; }, openAddCLI));
+    list.append(add);
     const out = [...models.notices(), ...startCard(host), list];
     if (!tools?.agents) out.push(el("p", "pg-hint", "서버가 아직 에이전트 목록을 보내지 않았어요. 잠시 뒤 다시 열어 보세요."));
 
@@ -1083,21 +1084,13 @@ window.ArkismPages = (ctx) => {
     draw();
     kitRedraw.push(draw);
   }
-  // 역할별 모델 (Figma 1378:5011): one card; only 기억 추출 shows, the rest fold under 자세히 in the Figma order.
-  // The AI 도구 row (assist) opens the folded list; kitRedraw replaces it where it sits.
+  // 역할별 모델: one card per kind of work, no page title (the tab already names the page, asked three times).
+  // The AI 도구 row (assist) opens 요청 처리; kitRedraw replaces it where it sits.
   let assistRow = null;
   function roleSections() {
-    const g = group("역할별 모델", "대부분은 Arkism이 알아서 골라요. 바꿀 일이 있을 때만 자세히를 열어요.");
-    g.classList.add("ag-roles");
-    const top = el("div", "v4-roles-body"), inner = el("div", "v4-roles-body");
-    g.append(top, more("자세히 · 판정·요약·검사·임베딩 모델", inner));
-    // memory: [기억 추출, 반성·검토, 임베딩] plus any note (older server); skill: [요약, 후보, 판정, 보안 검사]; request: [라우팅 판정]
-    const fill = (memory, skill, request) => {
-      const rows = memory.filter((n) => n.classList.contains("v4-role")), notes = memory.filter((n) => !rows.includes(n));
-      top.replaceChildren(...notes, ...rows.slice(0, 1));
-      inner.replaceChildren(...(assistRow ? [assistRow] : []), ...request, ...skill, ...rows.slice(1));
-    };
-    return { cards: [g], fill, fail: (node) => { top.replaceChildren(node); inner.parentElement.hidden = true; } };
+    const secs = ["기억", "스킬", "요청 처리"].map((t) => { const g = group(t); g.classList.add("ag-roles"); const b = el("div", "v4-roles-body"); g.append(b); return { g, b }; });
+    const fill = (memory, skill, request) => { secs[0].b.replaceChildren(...memory); secs[1].b.replaceChildren(...skill); secs[2].b.replaceChildren(...(assistRow ? [assistRow] : []), ...request); };
+    return { cards: secs.map((x) => x.g), fill, fail: (node) => { secs.slice(1).forEach((x) => { x.g.hidden = true; }); secs[0].b.replaceChildren(node); } };
   }
   function agentRoleCards() {
     // Rebuilt once the providers report arrives, so a card drawn before it does not keep the older-server rows.
