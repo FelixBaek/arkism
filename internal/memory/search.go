@@ -684,6 +684,11 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 			result = ErrUnavailable
 		}
 	}()
+	if s.DynamicsLoad != nil {
+		defer func() {
+			result = errors.Join(result, s.WorkDynamicsOnce(ctx, workerToken))
+		}()
+	}
 	if pg, recovery := s.Repo.(*Postgres); !recovery || !pg.erasureOnly {
 		if err := s.CheckRestorePublication(ctx); err != nil {
 			return err

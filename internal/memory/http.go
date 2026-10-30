@@ -265,6 +265,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "not_found", 404
 	case errors.Is(e, ErrModelBudget):
 		return e.Error(), http.StatusTooManyRequests
+	case errors.Is(e, ErrDynamicsQueueFull):
+		code, status = "dynamics_queue_full", http.StatusTooManyRequests
 	case errors.Is(e, ErrCandidateQuota):
 		code, status = "candidate_daily_limit", 429
 	case errors.Is(e, ErrHandleTaken):

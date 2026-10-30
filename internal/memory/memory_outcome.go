@@ -59,6 +59,10 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 	id := "memory-outcome-" + ContentHash(structuredText(in.Scope)+"\n"+actor.PrincipalID+"\n"+in.EventID)
 	hash := ContentHash(structuredText(in))
 	result := Ref{Collection: "evaluations", ID: id, Revision: 1}
+	syncPrepared, e := s.prepareDynamicsSynchronous(ctx, token, in, result)
+	if e != nil {
+		return Ref{}, e
+	}
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		read := func(ref Ref) (Record, error) {
 			r, e := tx.Get(ctx, ref.Collection, in.Scope, ref.ID)
@@ -109,6 +113,10 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 		if e != nil {
 			return e
 		}
+		queueEntry, e := s.reserveDynamicsOutcomeTx(ctx, tx, in, result, stamp)
+		if e != nil {
+			return e
+		}
 		now := time.Now().UTC()
 		passed := in.Passed
 		record := Record{NativeOutcomeCaptureStamp: stamp, ID: id, Scope: in.Scope, Kind: "memory_outcome", Status: "active", Revision: 1, Text: "Independent pinned memory checker " + in.CheckerSHA256, Tags: []string{"dimension:" + in.Dimension}, Sources: sources, Relations: relations, Target: &in.Target, Evaluation: &Evaluation{EvalType: "automated_check", Passed: &passed}, Passed: passed, RequestHash: hash, CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
@@ -122,6 +130,12 @@ func (s *Service) RecordMemoryOutcome(ctx context.Context, token string, in Memo
 			return e
 		}
 		if e = stageNativeOutcomeCaptureTx(ctx, tx, actor, in, result, stamp); e != nil {
+			return e
+		}
+		if e = finalizeDynamicsOutcomeTx(ctx, tx, queueEntry); e != nil {
+			return e
+		}
+		if e = s.applyDynamicsSynchronousTx(ctx, tx, queueEntry, syncPrepared); e != nil {
 			return e
 		}
 		return audit(ctx, tx, in.Scope, actor.PrincipalID, "evaluate:memory_outcome", id)
