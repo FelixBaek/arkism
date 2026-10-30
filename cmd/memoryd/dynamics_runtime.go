@@ -42,7 +42,13 @@ func prepareDaemonDynamics(cfg daemonOptions) (daemonOptions, error) {
 	}
 	cfg.dynamicsPlan = plan
 	if plan == nil {
+		if cfg.DynamicsSearchConfig != "" {
+			return cfg, memory.ErrInvalid
+		}
 		return cfg, nil
+	}
+	if cfg.dynamicsSearch, err = loadDaemonSearchMode(cfg.DynamicsSearchConfig, cfg.Worker || cfg.DynamicsRepair); err != nil {
+		return cfg, err
 	}
 	if cfg.Worker || cfg.DynamicsRepair {
 		if strings.TrimSpace(os.Getenv("MEMORY_WORKER_TOKEN")) == "" {
@@ -82,6 +88,12 @@ func configureDaemonDynamics(ctx context.Context, svc *memory.Service, cfg daemo
 		}
 		if !decision.Allowed || decision.Role != "service" {
 			return memory.ErrDenied
+		}
+	}
+	// Wired only after the reader grant holds, so a refused start leaves no shadow behind.
+	if cfg.dynamicsSearch != nil {
+		if svc.NativeSearchShadow, err = memory.NewNativeSearchShadowRuntime(*cfg.dynamicsSearch); err != nil {
+			return err
 		}
 	}
 	return nil
