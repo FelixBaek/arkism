@@ -83,20 +83,21 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if err != nil {
 		return nil, err
 	}
+	if workID := spec["work_id"]; truthy(workID) {
+		// Read once, before the selector: a failed read stops before any routing decision, the selector
+		// sees only the task (never this checkpoint), and every fallback receives the same checkpoint as data.
+		context, err := workHookContext(pyStr(workID), requester, host.Scope())
+		if err != nil {
+			return nil, crewErr("선택한 작업 상태를 읽지 못해 실행하지 않았어요")
+		}
+		spec = withKey(spec, "task", task+"\n\n"+context)
+	}
 	d, err := decide(task, group)
 	if err != nil {
 		return nil, err
 	}
 	if group != "" && d["group"] != group {
 		return nil, crewErr("요청한 그룹의 라우팅 결과를 확인할 수 없어요")
-	}
-	if workID := spec["work_id"]; truthy(workID) {
-		// Read once for this execution so every fallback receives the same checkpoint as data.
-		context, err := workHookContext(pyStr(workID), requester, host.Scope())
-		if err != nil {
-			return nil, crewErr("선택한 작업 상태를 읽지 못해 실행하지 않았어요")
-		}
-		spec = withKey(spec, "task", task+"\n\n"+context)
 	}
 	first, ok := d["id"].(string)
 	if !ok {
