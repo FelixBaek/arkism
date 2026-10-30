@@ -384,6 +384,13 @@ func settleBudgetCounters(ctx context.Context, tx Tx, scope Scope, state ModelBu
 }
 
 func (s *Service) ModelBudgetStatus(ctx context.Context, token string, scope Scope) (ModelBudgetStatus, error) {
+	// No active budget for this scope: a person allowed to read it learns there is none (not_found) instead of a denial.
+	if p := s.ModelBudgetPolicy; p == nil || p.Scope != scope || !p.ExpiresAt.After(time.Now()) {
+		if d, e := s.authorize(ctx, token, "read:model_budget", scope, "", ""); e != nil || d.Role != roleHuman {
+			return ModelBudgetStatus{}, ErrDenied
+		}
+		return ModelBudgetStatus{}, ErrNotFound
+	}
 	d, e := s.budgetActor(ctx, token, scope, "read")
 	if e != nil {
 		return ModelBudgetStatus{}, e

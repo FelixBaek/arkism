@@ -44,7 +44,7 @@ func searchKnowledge(args map[string]any) (host.Obj, error) {
 		profile = strings.TrimSpace(v)
 	}
 	if profile == "" {
-		return nil, errors.New("specialist_profile_id is required (or set " + knowledgeToolProfileEnv + ")")
+		profile = "default" // the knowledge every agent shares
 	}
 	maxTokens, err := knowledgeToolInt(args, "max_tokens", knowledgeToolDefaultTokens, 256, 8192)
 	if err != nil {

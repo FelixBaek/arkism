@@ -19,7 +19,7 @@
 .v4k-group b { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
 .v4k-group small { font: 400 11px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4k-group output { font: 11px/1.5 var(--mono); color: var(--nc-quiet); }
-.btn.v4k-add { justify-content: flex-start; height: auto; margin-top: 4px; padding: 7px 10px; border: 1px solid var(--nc-line); background: none; font: 500 13px/1.5 var(--sans); color: var(--nc-text); }
+.v4k-kinds { margin: 6px 0 0; padding: 0 10px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }
 .v4k-main { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
 .row.v4s-row.v4k-row { cursor: pointer; padding: 10px 16px; }
 .v4k-row .v4s-text { gap: 2px; }
@@ -76,6 +76,12 @@
 .v4k-bind > small { font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4k-bind.add .v4s-select { flex: 1; height: 34px; max-width: none; }
 .v4k-cap { width: 96px; padding: 6px 8px; }
+.v4k-caprow { display: flex; align-items: center; gap: 8px; }
+.v4k-more { display: flex; flex-direction: column; gap: 10px; }
+.v4k-more > summary { cursor: pointer; font: 400 13px/1.5 var(--sans); color: var(--nc-muted); }
+.v4k-more[open] > summary { margin-bottom: 8px; }
+dialog.v4k-ask .cn-confirm-btns { flex-wrap: wrap; }
+dialog.v4k-ask .btn.primary { background: var(--nc-action); border-color: var(--nc-action); color: var(--nc-on-accent); }
 .v4k-job { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); }
 .v4k-job-line { margin: 0; font: 400 12px/1.5 var(--sans); color: var(--nc-text); }
 .v4k-rejects { margin: 0; padding-left: 16px; font: 400 12px/1.5 var(--sans); color: var(--nc-muted); }

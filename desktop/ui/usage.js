@@ -160,23 +160,145 @@ window.ArkismUsage = (ctx) => {
         ["비용", usd(k.cost_usd, k.priced), `세션당 ${usd(k.cost_usd / Math.max(1, k.sessions), k.priced)}`], ["활동 시간", dur(k.active_seconds), `${k.active_days}일 동안`]]),
         dayCard(d), card("에이전트별", `${d.by_agent.length}개`, list)];
     }
-    if (menu() === "connect") {
-      const calls = d.tools.reduce((a, s) => a + s.count, 0);
-      const servers = [...new Set(d.tools.map((t) => toolServer(t.name)).filter(Boolean))];
-      const t = el("div", "v4u-table v4u-tools");
-      const head = el("div", "v4u-tr th"); ["도구", "서버", "", "호출", "세션"].forEach((h) => head.append(el("span", "", h))); t.append(head);
-      const max = Math.max(1, ...d.tools.map((x) => x.count));
-      for (const x of d.tools) {
-        const row = el("div", "v4u-tr"), bar = el("span", "v4u-bar"), fill = el("i"); fill.style.width = `${(x.count / max) * 100}%`; bar.append(fill);
-        row.append(raw(el("span", "v4u-mono", toolName(x.name))), el("span", "", toolServer(x.name) || "내장"), bar, el("span", "v4u-num", num(x.count)), el("span", "v4u-num", num(x.sessions)));
-        t.append(row);
-      }
-      if (!d.tools.length) t.append(el("p", "v4u-empty", "이 기간에 기록된 도구 호출이 없어요."));
-      return [kpiRow([["도구 호출", num(calls), `도구 ${d.tools.length}개`], ["MCP 서버", num(servers.length), servers.slice(0, 3).join(" · ") || "기록 없음"],
-        ["세션", num(k.sessions), `하루 평균 ${num(k.sessions / days())}`], ["많이 쓴 도구", d.tools[0] ? toolName(d.tools[0].name) : "—", d.tools[0] ? `${num(d.tools[0].count)}회` : ""]]),
-        card("많이 쓴 도구", `상위 ${d.tools.length}개 · 세션에서 센 호출 수`, t)];
-    }
+    if (menu() === "connect") return toolsOverview(d);
     return routerOverview(d);
+  }
+
+  // ------------------------------------------------------------------ TOOLS 개요 (325:34690): MCP 호출의 응답 시간·실패 (tool_health, Claude Code 기록에서
+  // tool_use와 그 결과를 짝지은 것), 서버 상태 (agent_tools 보고), 많이 쓴 도구, 최근 실패, 저장소 활동 (code_reviews 보고).
+  const SLOW_MS = 1500;
+  const CALL_ERRS = { timeout: "시간 초과", permission: "권한 없음", auth: "인증 만료", not_found: "찾을 수 없음", conflict: "충돌", rate_limit: "한도 초과", error: "오류" };
+  const sec = (ms) => (ms == null ? "—" : `${(ms / 1000).toFixed(1)}초`);
+  const normServer = (n) => String(n || "").replace(/[^A-Za-z0-9_-]/g, "_");
+  // 지난달보다 +6%: the same count over the window of equal length just before (tool_calls_change_pct, nil when it is empty)
+  const PREV_WINDOW = { today: (p) => `어제보다 ${p}`, "7d": (p) => `지난주보다 ${p}`, "30d": (p) => `지난달보다 ${p}`, "90d": (p) => `이전 90일보다 ${p}` };
+  const median = (xs) => { const v = xs.filter((x) => x != null).sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  // The chart's one-line reading (325:34690): the slowest day, the server that slowed most against its own usual p95, and the usual day.
+  function healthNote(days) {
+    const timed = days.filter((p) => p.p95_ms != null);
+    if (timed.length < 2) return null;
+    const peak = timed.reduce((a, b) => (b.p95_ms > a.p95_ms ? b : a)), rest = timed.filter((p) => p !== peak);
+    const usualMs = median(rest.map((p) => p.p95_ms)), usual = Math.max(0.5, Math.round(usualMs / 500) / 2);
+    if (peak.p95_ms < usualMs * 1.5) return [`날마다 ${usual}초 안팎이에요.`];
+    const date = peak.date.slice(5), moreFails = peak.failed > 2 * Math.max(1, median(rest.map((p) => p.failed)));
+    const slow = (peak.servers || []).filter((x) => x.p95_ms != null)
+      .map((x) => [x.name, x.p95_ms / (median(rest.map((p) => p.servers?.find((y) => y.name === x.name)?.p95_ms)) || x.p95_ms)])
+      .sort((a, b) => b[1] - a[1]).find(([, r]) => r >= 1.5)?.[0];
+    const head = slow ? (moreFails ? `${date} ${slow} 서버가 느려지며 실패가 함께 늘었어요.` : `${date} ${slow} 서버가 느려졌어요.`)
+      : moreFails ? `${date}에 응답이 가장 느렸고 실패도 많았어요.` : `${date}에 응답이 가장 느렸어요.`;
+    return [head, `나머지 날은 ${usual}초 안팎이에요.`];
+  }
+  const rangeLabel = () => RANGES.find(([x]) => x === S.range)?.[1] || "";
+  const stamp = (t) => { const x = new Date(t), p2 = (n) => String(n).padStart(2, "0"); return `${p2(x.getMonth() + 1)}-${p2(x.getDate())} ${p2(x.getHours())}:${p2(x.getMinutes())}`; };
+  // One row per MCP server: what agent_tools lists (login state) joined with the calls tool_health measured.
+  function mcpServers(h) {
+    const listed = state.data?.tools?.servers || [], rows = new Map();
+    for (const s of listed) rows.set(normServer(s.name), { name: s.name, id: s.name, login: Object.values(s.login || {}).includes("needed"), calls: 0, failed: 0, p95_ms: null });
+    for (const x of h?.servers || []) rows.set(x.name, { ...(rows.get(x.name) || { name: x.name, login: false }), calls: x.calls, failed: x.failed, p95_ms: x.p95_ms });
+    return [...rows.values()].sort((a, b) => b.calls - a.calls || a.name.localeCompare(b.name));
+  }
+  const serverState = (r) => (r.login ? ["로그인 필요", "amber"] : r.p95_ms != null && r.p95_ms >= SLOW_MS ? ["느림", "amber"] : r.calls ? ["정상", ""] : ["호출 없음", "soft"]);
+  const openServer = (r) => { state.toolTab = "mcp"; ctx.go?.("tools"); if (r.id) { state.selected = `tool:${r.id}`; render(); } };
+  function toolsOverview(d) {
+    const h = d.tool_health || null, servers = mcpServers(h);
+    const calls = d.tool_calls ?? d.tools.reduce((a, s) => a + s.count, 0), kinds = d.tool_kinds ?? d.tools.length;
+    const change = d.tool_calls_change_pct, prev = PREV_WINDOW[S.range];
+    const rate = h?.calls ? (h.failed / h.calls) * 100 : null;
+    const slowest = servers.filter((r) => r.p95_ms != null).sort((a, b) => b.p95_ms - a.p95_ms)[0];
+    const login = servers.filter((r) => r.login);
+    const loginKpi = kpi("로그인 필요", `${login.length}개`, login.map((r) => r.name).join(" · ") || "없음", login.length ? "amber" : "");
+    if (login.length) { const go = link("로그인 →", () => openServer(login[0])); go.classList.add("v4u-kpi-link"); loginKpi.append(go); }
+    const kp = el("div", "v4u-kpis");
+    kp.append(kpi("도구 호출", `${num(calls)}회`, change != null && prev ? `${rangeLabel()} · ${prev(`${change > 0 ? "+" : ""}${change}%`)}` : `${rangeLabel()} · 도구 ${num(kinds)}개`),
+      kpi("실패율", rate === null ? "—" : `${Math.round(rate * 10) / 10}%`, !h?.calls ? "응답 시간을 잰 MCP 호출이 없어요" : rate > 1 ? `실패 ${num(h.failed)}회 · 기준 1% 넘음` : `실패 ${num(h.failed)}회 · MCP 호출 ${num(h.calls)}회 중`, rate > 1 ? "amber-text" : ""),
+      kpi("p95 응답", sec(h?.p95_ms), !h?.calls ? "응답 시간을 잰 MCP 호출이 없어요" : slowest ? `평균 ${sec(h.avg_ms)} · 가장 느림 ${slowest.name}` : `평균 ${sec(h.avg_ms)}`), loginKpi);
+    return [kp, timingCard(h), serverCard(servers), two(topToolsCard(d.tools, kinds), failsCard(h)), repoCard()];
+  }
+  // 응답 시간과 실패: p95 line per day over the failure count per day.
+  function timingCard(h) {
+    const days = h?.by_day || [];
+    const legend = el("span", "v4u-legend-line");
+    legend.append(el("span", "v4u-aside", days.length ? `${rangeLabel()} · ${days[0].date.slice(5)} ~ ${days[days.length - 1].date.slice(5)}` : rangeLabel()), el("i", "v4u-key-line"), el("span", "", "p95 응답"), el("i", "v4u-key-bar"), el("span", "", "실패 수"));
+    if (!days.some((p) => p.calls)) return card("응답 시간과 실패", legend, el("p", "v4u-empty", h ? "이 기간에 응답 시간을 잰 MCP 호출이 없어요." : "이 서버는 아직 도구 응답 시간을 보고하지 않아요."));
+    const n = days.length, top = Math.max(1, Math.ceil(Math.max(...days.map((p) => p.p95_ms || 0)) / 1000)), fmax = Math.max(1, ...days.map((p) => p.failed));
+    const x = (i) => ((i + 0.5) / n) * 100, y = (ms) => 100 - (ms / (top * 1000)) * 100;
+    // a day without calls breaks the line
+    let line = "", area = "", run = [];
+    const flush = () => { if (!run.length) return; line += run.map(([i, ms], k) => `${k ? "L" : "M"}${x(i).toFixed(2)} ${y(ms).toFixed(2)}`).join(" ") + " "; area += `M${x(run[0][0]).toFixed(2)} 100 ` + run.map(([i, ms]) => `L${x(i).toFixed(2)} ${y(ms).toFixed(2)}`).join(" ") + ` L${x(run[run.length - 1][0]).toFixed(2)} 100 Z `; run = []; };
+    days.forEach((p, i) => { if (p.p95_ms == null) flush(); else run.push([i, p.p95_ms]); });
+    flush();
+    const plot = el("div", "v4u-rt-plot");
+    for (const v of [top, top / 2, 0]) { const g = el("div", "v4u-rt-grid"); g.style.top = `${y(v * 1000)}%`; g.append(el("small", "", `${Math.round(v * 10) / 10}초`)); plot.append(g); }
+    const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100"); svg.setAttribute("preserveAspectRatio", "none"); svg.setAttribute("aria-hidden", "true");
+    for (const [cls, dd] of [["v4u-rt-area", area], ["v4u-rt-line", line]]) { const path = document.createElementNS(ns, "path"); path.setAttribute("class", cls); path.setAttribute("d", dd); svg.append(path); }
+    const peak = days.reduce((b, p, i) => (p.p95_ms != null && (b < 0 || p.p95_ms > days[b].p95_ms) ? i : b), -1);
+    const box = el("div", "v4u-rt-area-box"); box.append(svg);
+    const dot = el("i", "v4u-rt-dot"); dot.style.left = `${x(peak)}%`; dot.style.top = `${y(days[peak].p95_ms)}%`;
+    const tag = el("small", "v4u-rt-tag", `${sec(days[peak].p95_ms)} · 실패 ${days[peak].failed} (${days[peak].date.slice(5)})`); tag.style.left = `${x(peak)}%`; tag.style.top = `${y(days[peak].p95_ms)}%`;
+    box.append(dot, tag); plot.append(box);
+    const bars = el("div", "v4u-rt-bars"), fails = el("div", "v4u-rt-fails");
+    fails.append(el("small", "v4u-rt-axis", String(fmax)), el("small", "v4u-rt-axis zero", "0"));
+    days.forEach((p, i) => { const b = el("i", i === peak ? "top" : ""); b.style.height = `${p.failed ? Math.max(4, (p.failed / fmax) * 100) : 0}%`; b.title = `${p.date} · 호출 ${p.calls} · 실패 ${p.failed} · p95 ${sec(p.p95_ms)}`; bars.append(b); });
+    fails.append(bars);
+    const xs = el("div", "v4u-rt-x"), step = Math.max(1, Math.ceil(n / 5));
+    days.forEach((p, i) => { if (i % step === 0) { const t = el("small", "", p.date.slice(5)); t.style.left = `${x(i)}%`; xs.append(t); } });
+    const note = el("p", "v4u-rt-note"); (healthNote(days) || []).forEach((t, i) => note.append(i ? " " : "", el("span", "", t)));
+    return card("응답 시간과 실패", legend, plot, fails, xs, note, el("p", "v4u-hint", "Claude Code 기록에서 MCP 도구를 부른 때부터 결과가 온 때까지 재요. 사용자가 거절한 호출은 세지 않아요."));
+  }
+  function serverCard(servers) {
+    const t = el("div", "v4u-table v4u-mcp");
+    const head = el("div", "v4u-tr th"); ["서버", "호출", "실패율", "p95 응답", "상태"].forEach((x) => head.append(el("span", "", x))); t.append(head);
+    for (const r of servers) {
+      const row = el("button", "v4u-tr v4u-row-btn"); row.type = "button"; row.title = "서버 설정으로 가요";
+      const name = el("span", "v4u-srv"); name.append(window.ArkismBrand?.mark(r.name, "v4u-srv-logo") || el("span", "v4u-srv-letter", r.name.slice(0, 1).toUpperCase()), raw(el("span", "v4u-mono", r.name)));
+      const fr = r.calls ? (r.failed / r.calls) * 100 : null, [label, tone] = serverState(r);
+      row.append(name, el("span", "v4u-num", r.calls.toLocaleString("en-US")), el("span", `v4u-num${fr > 2 ? " amber" : ""}`, fr === null ? "—" : `${fr.toFixed(1)}%`),
+        el("span", `v4u-num${r.p95_ms >= SLOW_MS ? " amber" : ""}`, sec(r.p95_ms)), el("span", ""));
+      row.children[row.children.length - 1].append(el("span", `v4u-badge${tone ? ` ${tone}` : ""}`, label));
+      row.addEventListener("click", () => openServer(r));
+      t.append(row);
+    }
+    if (!servers.length) t.append(el("p", "v4u-empty", "서버가 보고한 MCP 서버가 없어요."));
+    return card("MCP 서버 상태", `${servers.length}개 · 행을 누르면 서버 설정으로 가요`, t);
+  }
+  function topToolsCard(tools, kinds) {
+    const list = tools.filter((x) => toolServer(x.name)).slice(0, 6), box = el("div", "v4u-top"), max = Math.max(1, ...list.map((x) => x.count));
+    for (const x of list) {
+      const row = el("div", "v4u-top-row"), bar = el("span", "v4u-bar"), fill = el("i"); fill.style.width = `${(x.count / max) * 100}%`; bar.append(fill);
+      row.append(raw(el("span", "v4u-mono", toolName(x.name))), raw(el("span", "v4u-side-l", toolServer(x.name))), bar, el("span", "v4u-num", x.count.toLocaleString("en-US")));
+      box.append(row);
+    }
+    if (!list.length) box.append(el("p", "v4u-empty", "이 기간에 기록된 MCP 도구 호출이 없어요."));
+    return card("많이 쓴 도구", `상위 ${list.length} · 도구 ${num(kinds)}개`, box);
+  }
+  function failsCard(h) {
+    const box = el("div", "v4u-rows");
+    for (const f of h?.fails || []) {
+      const row = el("div", "v4u-fail"), t = el("div", "v4u-session-text");
+      const why = tr(CALL_ERRS[f.err] || f.err) + (f.err === "timeout" && f.ms ? ` (${tr(`${Math.round(f.ms / 1000)}초`)})` : "");
+      t.append(raw(el("b", "v4u-mono", toolName(f.tool))), raw(el("small", "", `${toolServer(f.tool)} · ${why}`)));
+      row.append(t, el("span", "v4u-time", stamp(f.at)));
+      box.append(row);
+    }
+    if (!h?.fails?.length) box.append(el("p", "v4u-empty", "이 기간에 실패한 MCP 호출이 없어요."));
+    return card("최근 실패", h?.failed ? `${rangeLabel()} 실패 ${num(h.failed)}회` : "", box);
+  }
+  // 저장소 활동: the PRs the code review collector reported (GET /v1/code_reviews), counted over the range by when the review ran.
+  function repoCard() {
+    const dayCount = { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.range], since = dayCount ? Date.now() - dayCount * 864e5 : 0;
+    const items = (state.data?.reviews?.items || []).filter((it) => !since || new Date(it.started_at).getTime() >= since);
+    const aside = el("span", "v4u-legend-line");
+    aside.append(el("span", "v4u-aside", `${rangeLabel()} · 저장소 ${new Set(items.map((it) => it.repo)).size}개`), link("저장소로 →", () => ctx.go?.("reviews")));
+    if (!items.length) return card("저장소 활동", aside, el("p", "v4u-empty", "이 기간에 리뷰한 PR이 없어요."));
+    const merged = items.filter((it) => it.pr_state === "merged").length, reviewed = items.filter((it) => it.state === "done");
+    const tiles = el("div", "v4u-repo");
+    for (const [n, unit, sub] of [[items.length, "PR", `열림 ${items.filter((it) => it.pr_state === "open").length}`], [merged, "병합", `병합률 ${pct(merged, items.length)}`],
+      [items.reduce((a, it) => a + (it.commits || 0), 0), "커밋", "리뷰한 PR의 커밋"], [reviewed.length, "AI 리뷰", `고칠 점 ${reviewed.reduce((a, it) => a + it.findings.length, 0)}개`]]) {
+      const c = el("div", "v4u-repo-tile"), v = el("div", "");
+      v.append(el("strong", "", num(n)), el("span", "", unit)); c.append(v, el("small", "", sub)); tiles.append(c);
+    }
+    return card("저장소 활동", aside, tiles);
   }
 
   // ------------------------------------------------------------------ ROUTER 개요: routed calls only (198:1490 · 342:35440)
@@ -534,7 +656,12 @@ window.ArkismUsage = (ctx) => {
     const tabSeg = segment(tabs(), S.tab, (k) => { S.tab = k; render(); }); tabSeg.classList.add("v4u-box");
     const rangeSeg = segment(RANGES, S.range, (k) => { if (S.range !== k) { S.range = k; void load(); } }); rangeSeg.classList.add("v4u-box");
     controls.append(tabSeg, el("span", "v4u-gap"), rangeSeg);
-    if (S.doc?.agents?.length && S.tab !== "requests" && menu() !== "router") {
+    if (S.doc?.agents?.length && menu() === "connect") { // 325:34690: agent chips in place of the select
+      const agents = segment([["", "전체"], ...S.doc.agents.map((a) => [a.name, agentName(a.name)])], S.source, (v) => { if (S.source !== v) { S.source = v; void load(); } });
+      [...agents.children].slice(1).forEach((b, i) => b.prepend(logo(S.doc.agents[i].name)));
+      agents.classList.add("v4u-box", "v4u-agents"); agents.setAttribute("aria-label", "에이전트");
+      controls.append(agents);
+    } else if (S.doc?.agents?.length && S.tab !== "requests" && menu() !== "router") {
       const pick = el("select", "v4u-select"); pick.setAttribute("aria-label", "에이전트");
       for (const [v, l] of [["", "전체"], ...S.doc.agents.map((a) => [a.name, `${agentName(a.name)}${a.all_sessions ? ` ${num(a.all_sessions)}` : ""}`])]) { const o = el("option", "", l); o.value = v; o.selected = v === S.source; pick.append(o); }
       pick.addEventListener("change", () => { S.source = pick.value; void load(); });

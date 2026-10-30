@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"maps"
 	"math"
 	"net/http"
 	"regexp"
@@ -68,6 +69,25 @@ type UsageSession struct {
 	Hours         []int                             `json:"hours,omitempty" bson:"hours,omitempty"` // 168 = Mon 0시 … Sun 23시, Asia/Seoul
 	Tools         map[string]int                    `json:"tools,omitempty" bson:"tools,omitempty"`
 	Skills        map[string]int                    `json:"skills,omitempty" bson:"skills,omitempty"`
+	Calls         []UsageCall                       `json:"calls,omitempty" bson:"calls,omitempty"` // MCP calls paired with their results
+}
+
+// UsageCall is one MCP tool call the collector paired with its result: the tool, when it was asked,
+// how long the result took and a fixed error code when it failed. Never arguments or results.
+type UsageCall struct {
+	Tool string    `json:"tool" bson:"tool"`
+	At   time.Time `json:"at" bson:"at"`
+	MS   int64     `json:"ms" bson:"ms"`
+	Err  string    `json:"err,omitempty" bson:"err,omitempty"`
+}
+
+const usageCallsMax = 2000
+
+var usageCallErrs = []string{"timeout", "permission", "auth", "not_found", "conflict", "rate_limit", "error"}
+
+func validUsageCall(c UsageCall) bool {
+	return strings.HasPrefix(c.Tool, "mcp__") && usageNameRe.MatchString(c.Tool) && !c.At.IsZero() && c.MS >= 0 && c.MS <= 86400000 &&
+		(c.Err == "" || slices.Contains(usageCallErrs, c.Err))
 }
 
 type UsageSessionsInput struct {
@@ -94,6 +114,11 @@ func validUsageSession(u UsageSession) bool {
 			return false
 		}
 	}
+	for _, c := range u.Calls {
+		if !validUsageCall(c) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -102,7 +127,7 @@ func validUsageSessionHead(u UsageSession) bool {
 	return usageNameRe.MatchString(u.Agent) && usageNameRe.MatchString(u.Device) && usageNameRe.MatchString(u.SessionID) &&
 		len(u.Title) <= 300 && len(u.Project) <= 200 && usagePath(u.Folder) && usagePath(u.File) && u.Messages >= 0 && u.ActiveSeconds >= 0 &&
 		!u.StartedAt.IsZero() && !u.EndedAt.Before(u.StartedAt) && len(u.Days) <= 400 &&
-		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500
+		(len(u.Hours) == 0 || len(u.Hours) == 168) && len(u.Tools) <= 500 && len(u.Skills) <= 500 && len(u.Calls) <= usageCallsMax
 }
 
 // usagePath is an optional absolute-looking path: no control characters, at most 1 KiB.
@@ -276,15 +301,18 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	}
 	seoul := usageZone()
 	now := time.Now().In(seoul)
-	from := ""
+	from, prevFrom := "", ""
 	if days > 0 {
 		from = now.AddDate(0, 0, 1-days).Format("2006-01-02")
+		prevFrom = now.AddDate(0, 0, 1-2*days).Format("2006-01-02")
 	}
 
 	var all usageAcc
 	byDay, byModel, byProject, byAgent, allAgents := map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]*usageAcc{}, map[string]int{}
 	dayMsgs := map[string]int{}
 	tools, skills := map[string][2]int{}, map[string][2]int{}
+	calls := []usageCallOf{}
+	var callsNow, callsPrev int // tool calls of sessions that ended in this window and in the one before it
 	hours := make([]int, 168)
 	shape := make([]int, 6)
 	sessions := []usageRow{}
@@ -298,6 +326,17 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		allAgents[u.Agent]++
 		if agent != "" && u.Agent != agent {
 			continue
+		}
+		if end := u.EndedAt.In(seoul).Format("2006-01-02"); days > 0 && end >= prevFrom {
+			n := 0
+			for _, c := range u.Tools {
+				n += c
+			}
+			if end >= from {
+				callsNow += n
+			} else {
+				callsPrev += n
+			}
 		}
 		row := usageRow{ID: r.ID, Title: u.Title, Agent: u.Agent, Device: u.Device, Project: u.Project, Messages: u.Messages,
 			Active: u.ActiveSeconds, Started: u.StartedAt, Ended: u.EndedAt}
@@ -323,6 +362,11 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		usageAddHours(hours, u.Hours)
 		usageAddCounts(tools, u.Tools)
 		usageAddCounts(skills, u.Skills)
+		for _, c := range u.Calls {
+			if from == "" || c.At.In(seoul).Format("2006-01-02") >= from {
+				calls = append(calls, usageCallOf{c, u.Agent})
+			}
+		}
 		shape[usageShapeBucket(u.Messages)]++
 	}
 
@@ -355,6 +399,14 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		inRoot = len(a.sessions)
 	}
 
+	toolCalls := 0
+	for _, v := range tools {
+		toolCalls += v[0]
+	}
+	var change any // nil when the window before has nothing to compare with
+	if callsPrev > 0 {
+		change = int(math.Round(float64(callsNow-callsPrev) / float64(callsPrev) * 100))
+	}
 	out := map[string]any{
 		"range": rangeKey, "agent": agent, "agents": agents, "authority": AuthorityDataOnly,
 		"kpi": map[string]any{
@@ -366,6 +418,7 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 		"by_day": series, "projects": ranked(byProject, 0), "models": ranked(byModel, 0), "by_agent": ranked(byAgent, 0),
 		"hours": hours, "shape": shape, "tools": counted(tools, 12), "skills": counted(skills, 12),
 		"top_sessions": top[:min(len(top), 8)], "latest": latest[:min(len(latest), 50)],
+		"tool_kinds": len(tools), "tool_calls": toolCalls, "tool_calls_change_pct": change, "tool_health": usageToolHealth(calls, series, seoul),
 	}
 	req, err := s.usageRequests(ctx, scope, days, now)
 	if err != nil {
@@ -373,6 +426,94 @@ func (s *Service) UsageSummary(ctx context.Context, token string, scope Scope, r
 	}
 	out["requests"] = req
 	return out, nil
+}
+
+type usageCallOf struct {
+	UsageCall
+	agent string
+}
+
+// usageMS is the nearest-rank q-quantile of sorted response times, nil when there is none.
+func usageMS(sorted []int64, q float64) any {
+	if len(sorted) == 0 {
+		return nil
+	}
+	return sorted[int(math.Ceil(q*float64(len(sorted))))-1]
+}
+
+// usageToolHealth is 도구 › 사용량's response time and failures (Figma 325:34690): every MCP call the
+// collectors paired with its result in the range, per server and per day, and the latest failures.
+func usageToolHealth(calls []usageCallOf, series []map[string]any, seoul *time.Location) map[string]any {
+	type acc struct {
+		ms     []int64
+		failed int
+	}
+	all, byServer, byDay, byDayServer := &acc{}, map[string]*acc{}, map[string]*acc{}, map[string]map[string]*acc{}
+	add := func(m map[string]*acc, k string, c usageCallOf) {
+		if m[k] == nil {
+			m[k] = &acc{}
+		}
+		m[k].ms = append(m[k].ms, c.MS)
+		if c.Err != "" {
+			m[k].failed++
+		}
+	}
+	var sum int64
+	fails := []usageCallOf{}
+	for _, c := range calls {
+		all.ms = append(all.ms, c.MS)
+		sum += c.MS
+		if c.Err != "" {
+			all.failed++
+			fails = append(fails, c)
+		}
+		server, day := strings.SplitN(c.Tool, "__", 3)[1], c.At.In(seoul).Format("2006-01-02")
+		add(byServer, server, c)
+		add(byDay, day, c)
+		if byDayServer[day] == nil {
+			byDayServer[day] = map[string]*acc{}
+		}
+		add(byDayServer[day], server, c)
+	}
+	for _, a := range byServer {
+		slices.Sort(a.ms)
+	}
+	slices.Sort(all.ms)
+	servers := []map[string]any{}
+	for name, a := range byServer {
+		servers = append(servers, map[string]any{"name": name, "calls": len(a.ms), "failed": a.failed, "p95_ms": usageMS(a.ms, .95)})
+	}
+	sort.Slice(servers, func(i, j int) bool {
+		a, b := servers[i], servers[j]
+		return a["calls"].(int) > b["calls"].(int) || a["calls"] == b["calls"] && a["name"].(string) < b["name"].(string)
+	})
+	days := []map[string]any{}
+	for _, p := range series {
+		k := p["date"].(string)
+		a := byDay[k]
+		if a == nil {
+			a = &acc{}
+		}
+		slices.Sort(a.ms)
+		perServer := []map[string]any{}
+		for _, name := range slices.Sorted(maps.Keys(byDayServer[k])) {
+			sa := byDayServer[k][name]
+			slices.Sort(sa.ms)
+			perServer = append(perServer, map[string]any{"name": name, "calls": len(sa.ms), "failed": sa.failed, "p95_ms": usageMS(sa.ms, .95)})
+		}
+		days = append(days, map[string]any{"date": k, "calls": len(a.ms), "failed": a.failed, "p95_ms": usageMS(a.ms, .95), "servers": perServer})
+	}
+	sort.SliceStable(fails, func(i, j int) bool { return fails[i].At.After(fails[j].At) })
+	recent := []map[string]any{}
+	for _, c := range fails[:min(len(fails), 8)] {
+		recent = append(recent, map[string]any{"tool": c.Tool, "at": c.At, "ms": c.MS, "err": c.Err, "agent": c.agent})
+	}
+	var avg any
+	if len(all.ms) > 0 {
+		avg = sum / int64(len(all.ms))
+	}
+	return map[string]any{"calls": len(all.ms), "failed": all.failed, "p50_ms": usageMS(all.ms, .5), "p95_ms": usageMS(all.ms, .95), "avg_ms": avg,
+		"servers": servers, "by_day": days, "fails": recent}
 }
 
 func usageAccOf(m map[string]*usageAcc, k string) *usageAcc {

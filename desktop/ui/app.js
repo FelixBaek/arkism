@@ -716,7 +716,7 @@ export function startApp() {
       title: () => (state.promptRun ? `프롬프트 실행${(state.data.prompts.find((x) => x.id === state.promptRun)?.image_prompt.engine || "").startsWith("comfyui") ? " · ComfyUI" : ""}` : state.imageTab === "slide" ? "슬라이드 프롬프트" : "이미지 프롬프트"),
       sub: () => (state.promptRun ? "변수 값을 채우고 바로 만들거나, ComfyUI 워크플로우로 보내요." : state.imageTab === "slide" ? "발표·보고용 슬라이드 프롬프트와 만드는 스크립트를 모아 둬요. 카드를 고르면 오른쪽에서 고치고 바로 만들 수 있어요." : "자주 쓰는 이미지 프롬프트를 예시 이미지와 함께 모아 둬요. 모델과 카테고리로 골라 보세요.")
     },
-    tools: { title: () => (state.toolTab === "plugin" ? "플러그인" : "MCP"), sub: () => (state.toolTab === "plugin" ? "플러그인은 스킬 + MCP + 명령을 한 번에 설치하는 묶음이에요." : "에이전트가 쓰는 외부 도구 서버예요. 플러그인은 스킬·MCP를 묶어서 한 번에 설치해요.") }
+    tools: { title: () => (state.toolTab === "plugin" ? "플러그인" : "도구 서버(MCP)"), sub: () => (state.toolTab === "plugin" ? "플러그인은 스킬 + MCP + 명령을 한 번에 설치하는 묶음이에요." : "에이전트가 쓰는 외부 도구 서버예요. 플러그인은 스킬·MCP를 묶어서 한 번에 설치해요.") }
   };
   // Everything worth a look, most urgent first; the first three become "지금 할 일".
   // ---------------------------------------------------------------- 할 일: 새 스킬 제안 · 비슷한 스킬 · 안 쓰는 스킬
@@ -1592,7 +1592,7 @@ export function startApp() {
       const noted = tools.servers.filter((s) => s.note);
       const parts = [...login.map((s) => ({ label: `${s.name} 로그인 필요`, n: 1 })), ...noted.map((s) => ({ label: `${s.name} 설정 확인`, n: 1 }))];
       if (toolViews.pendingTool(tools)) parts.push({ label: "적용 대기", n: tools.requests.filter((q) => q.status === "pending").length });
-      rows.push(["TOOLS", "MCP", parts, ["tools"]]);
+      rows.push(["TOOLS", "도구 서버(MCP)", parts, ["tools"]]);
     }
     let any = false;
     for (const [menu, name, parts, target] of rows) {
@@ -2270,7 +2270,7 @@ export function startApp() {
   }
   const skillGenerate = window.ArkismSkillGenerate({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, tauri });
   const skillImprove = window.ArkismSkillImprove({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, tauri, generate: skillGenerate });
-  const catalog = window.ArkismCatalog({ state, el, button, request: appApi.request, notice, agentLogo, reload: loadAll, pollTools: toolViews.pollTools });
+  const catalog = window.ArkismCatalog({ state, el, button, request: appApi.request, notice, agentLogo, reload: loadAll, pollTools: toolViews.pollTools, shownAgents, findingText: skillViews.findingText });
   const skillExecution = window.ArkismSkillExecution({ state, el, button, tauri });
   const skillTrial = window.ArkismSkillTrial({ state, el, button, request: appApi.request, query: appApi.query });
   const skillReview = window.ArkismSkillReview({ state, el, button, request: appApi.request, query: appApi.query, reload: loadAll, execution: skillExecution, trial: skillTrial });
