@@ -55,3 +55,6 @@ button.flow-line:focus-visible { outline: .125rem solid var(--nc-accent); outlin
 .flow-decide p { margin: .25rem 0 0; color: var(--nc-text); }
 .flow-decide .flow-history-actions { margin: 0; }
 .flow-history-head h2 { font-size: calc(.9375rem * var(--fs, 1)); font-weight: 500; }
+.flow-decide.err { background: var(--status-danger-tint); }
+.flow-decide.err strong { color: var(--status-danger); }
+.flow-decide > div:first-child > .btn { margin-top: .5rem; padding-inline: 0; }

@@ -4279,6 +4279,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "하는 중…": "Working…",
   "중간 결과가 생기면 여기에 보여요.": "Interim results appear here.",
   "그래프로 보기": "View as graph",
+  "그래프에서 보기": "View on the graph",
   "이 자동화는 아직 실행한 적이 없어요.": "This automation has not run yet.",
   "테스트": "Test",
   "여기까지 실행을 맡겼어요. 곧 시작해요.": "Run up to here queued. It starts shortly.",

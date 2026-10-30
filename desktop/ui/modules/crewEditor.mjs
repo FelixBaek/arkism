@@ -19,6 +19,9 @@ export function createCrewEditor(deps) {
     Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false, drafting: false, drafted: null, draftText: "",
       graphMode: !!opts.graphMode || !rec.id, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, reviewAI: null, run: opts.run || null, test: null, trigger: undefined, runList: false, runAfterSave: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
+    // A run opens on the step that needs a person (확인 필요) or broke (오류), centred once it is drawn.
+    if (ed.run && !ed.sel) ed.sel = runFocus(ed.run.crew_run);
+    ed.center = ed.run ? ed.sel : null;
     Object.assign(hist, { past: [], future: [], base: snap(), saved: snap(), at: 0 });
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
@@ -30,6 +33,11 @@ export function createCrewEditor(deps) {
     }, () => {});
     deps.render(); // the editor's own window (crew.js drawGraph)
     if (ed.run) void deps.pollRun();
+  }
+
+  function runFocus(cr) {
+    const id = cr?.waiting?.node_id || Object.entries(cr?.nodes || {}).find(([, st]) => st.status === "failed")?.[0];
+    return id && ed.graph.nodes.some((n) => n.id === id) ? id : null;
   }
 
   async function leaveGraph() {
@@ -515,10 +523,12 @@ export function createCrewEditor(deps) {
     const W = 188;
     const nodeEls = new Map();
     const runNodes = (ed.run || ed.test)?.crew_run?.nodes || {};
+    const askAt = (ed.run || ed.test)?.crew_run?.waiting?.node_id;
     const flagged = new Set((ed.review && ed.suggestions || []).flatMap((s) => [s.action?.node, s.action?.from, s.action?.to]).filter(Boolean));
     for (const n of g.nodes) {
       const st = runNodes[n.id];
-      const box = deps.el("div", `g-node ${n.type}${ed.sel === n.id ? " selected" : ""}${st ? ` st-${st.status}` : ""}${flagged.has(n.id) ? " flagged" : ""}${!ed.run && needsTask(n) ? " needs-task" : ""}${ed.drafted?.changed.includes(n.id) ? " drafted" : ""}`);
+      const ask = st?.status === "waiting" && askAt === n.id;
+      const box = deps.el("div", `g-node ${n.type}${ed.sel === n.id ? " selected" : ""}${st ? ` st-${st.status}` : ""}${ask ? " ask" : ""}${flagged.has(n.id) ? " flagged" : ""}${!ed.run && needsTask(n) ? " needs-task" : ""}${ed.drafted?.changed.includes(n.id) ? " drafted" : ""}`);
       box.style.left = `${n.x}px`;
       box.style.top = `${n.y}px`;
       box.dataset.id = n.id;
@@ -539,6 +549,9 @@ export function createCrewEditor(deps) {
         if (st.status === "done" && st.started_at && st.finished_at) box.append(deps.el("small", "g-node-dur mono", secText(new Date(st.finished_at) - new Date(st.started_at))));
       } else if (st) head.append(deps.el("i", `dot ${{ done: "ready", running: "warn", waiting: "warn", failed: "error" }[st.status] || ""}`));
       box.append(head);
+      // 확인 필요 (amber) where the run waits for a person, 오류 (red) where it failed; the error itself is in the tooltip.
+      if (ask) box.append(deps.el("span", "g-node-flag ask", "확인 필요"));
+      if (st?.status === "failed") { const f = deps.el("span", "g-node-flag err", "오류"); f.title = deps.plainRunError(st.error) || "단계가 실패했어요."; box.append(f); }
       for (const [k, v] of nodeSummary(n)) {
         const s = deps.el("div", "g-node-field");
         s.append(deps.el("small", "dim", k), deps.el("span", k === "모델" ? "mono" : "", v));
@@ -698,6 +711,14 @@ export function createCrewEditor(deps) {
     deps.graphBody().replaceChildren(page);
     requestAnimationFrame(() => {
       drawEdges(svg, labels, nodeEls);
+      const focus = ed.center && nodeEls.get(ed.center);
+      if (focus && stage.isConnected) {
+        ed.center = null;
+        const r = stage.getBoundingClientRect();
+        ed.panX = r.width / 2 - (focus.offsetLeft + focus.offsetWidth / 2) * ed.zoom;
+        ed.panY = r.height / 2 - (focus.offsetTop + focus.offsetHeight / 2) * ed.zoom;
+        canvas.style.transform = `translate(${ed.panX}px, ${ed.panY}px) scale(${ed.zoom})`;
+      }
       window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
     });
   }
