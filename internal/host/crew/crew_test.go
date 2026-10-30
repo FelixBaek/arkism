@@ -534,7 +534,11 @@ func TestEachCustomKeyIsItsOwnProviderAndRunsItsModels(t *testing.T) {
 	if err != nil || len(*calls) != 0 {
 		t.Fatal(err, *calls)
 	}
-	eq(t, []any{out["ok"], out["cli"], out["output"]}, []any{true, "custom", "5 ***"})
+	_, leaked := out[toolFree]
+	eq(t, []any{out["ok"], out["cli"], out["output"], leaked}, []any{true, "custom", "5 ***", false})
+	if attempt, err := runAttempt(map[string]any{"model": "openai/gpt-6.1-sol", "task": "2+3", "instructions": "숫자만", "cwd": os.TempDir()}); err != nil || attempt[toolFree] != true {
+		t.Fatal(err, attempt) // 라우팅 sees that a chat call had no tools
+	}
 	if url != "https://inference-api.nousresearch.com/v1/chat/completions" || auth != "Bearer "+nous {
 		t.Fatal(url, auth)
 	}
@@ -697,6 +701,9 @@ func TestConfirmedCLIFailureRecordsLimitWithoutRawError(t *testing.T) {
 				if res["ok"] != false || res["error"] != "quota_exhausted" || res["output"] != "" || strings.Contains(dumpLine(res), "synthetic-private-error") {
 					t.Fatal(mc, message, stream, res)
 				}
+				if !mayHaveChanged(map[string]any{"access": "write"}, res) { // the CLI ran before it hit the limit
+					t.Fatal(mc, res)
+				}
 			}
 		}
 	}
@@ -736,6 +743,9 @@ func TestKnownExhaustedAccountsNeverStartCLI(t *testing.T) {
 	res, calls, _ := runWith(t, map[string]any{"model": "opus", "task": "synthetic", "access": "read"}, "", "", 0)
 	if res["ok"] != false || res["error"] != "quota_exhausted" || len(calls) != 0 {
 		t.Fatal(res, calls)
+	}
+	if mayHaveChanged(map[string]any{"access": "write"}, res) { // it never started, so 라우팅 may fall over
+		t.Fatal(res)
 	}
 }
 
@@ -1297,7 +1307,7 @@ func TestFailedPickHandsOverToTheFallbackAndEveryTryIsReported(t *testing.T) {
 		}
 		return result(true, "끝", pyStr(s["model"]), "", "", time.Time{}, ""), nil
 	}
-	out, err := runRouted(map[string]any{"task": "리뷰해 줘"}, func(string, string, host.Obj) (map[string]any, error) { return decision, nil }, run,
+	out, err := runRouted(map[string]any{"task": "리뷰해 줘", "access": "read"}, func(string, string, host.Obj) (map[string]any, error) { return decision, nil }, run,
 		func(c map[string]any) { reports = append(reports, c) })
 	if err != nil || out["ok"] != true {
 		t.Fatal(out, err)
@@ -1311,6 +1321,84 @@ func TestFailedPickHandsOverToTheFallbackAndEveryTryIsReported(t *testing.T) {
 	eq(t, got, [][]any{{"xai/grok-5", "clef", "", false, "exit_1"}, {"openai/gpt-6.1", "failover", "xai/grok-5", true, ""}})
 	if strings.Contains(dumpLine(reports), "리뷰") { // nothing of the task or the answer goes into the report
 		t.Fatal(reports)
+	}
+}
+
+func TestWriteStepThatMayHaveChangedThingsIsNeverRunAgainOnAFallback(t *testing.T) {
+	// A run that started within the same millisecond still counts as started.
+	if quick := result(false, "", "opus", "", "claude", time.Now(), "quota_exhausted"); !mayHaveChanged(map[string]any{"access": "write"}, quick) {
+		t.Fatal(quick)
+	}
+	if relayed := map[string]any{"error": "quota_exhausted", "duration_ms": float64(0)}; mayHaveChanged(map[string]any{}, relayed) { // decoded JSON
+		t.Fatal(relayed)
+	}
+	decision := map[string]any{"id": "xai/grok-5", "decision": "clef", "fallbacks": []any{"openai/gpt-6.1", "anthropic/opus"}}
+	decide := func(string, string, host.Obj) (map[string]any, error) { return decision, nil }
+	ranAt := time.Now().Add(-2 * time.Second) // the CLI started
+	for _, c := range []struct {
+		spec    map[string]any
+		errText string
+		started time.Time
+		runs    int
+		chat    bool
+	}{
+		{map[string]any{"access": "write"}, "timeout", ranAt, 1, false}, {map[string]any{"access": "full"}, "exit_1: 429 rate limited", ranAt, 1, false},
+		{map[string]any{}, "timeout", ranAt, 1, false},                                                                                                       // write is the default
+		{map[string]any{"access": "write"}, "quota_exhausted", ranAt, 1, false},                                                                              // a limit hit mid-run, after tool calls
+		{map[string]any{"access": "write"}, "http_503", ranAt, 1, false},                                                                                     // a CLI that failed after it started
+		{map[string]any{"access": "write"}, "http_503", ranAt, 2, true},                                                                                      // a chat call has no tools
+		{map[string]any{"access": "write"}, "cli_not_found", ranAt, 2, false}, {map[string]any{"access": "write"}, "quota_exhausted", time.Time{}, 2, false}, // never started
+		{map[string]any{"access": "read"}, "timeout", ranAt, 2, false}, {map[string]any{"access": "write", "once": true}, "timeout", ranAt, 2, false}, // nodeAccess runs a once step read-only
+	} {
+		var ran []any
+		var reports []map[string]any
+		run := func(s map[string]any) (map[string]any, error) {
+			ran = append(ran, s["model"])
+			if s["model"] != "gpt-6.1" {
+				res := result(false, "", pyStr(s["model"]), "", "grok", c.started, c.errText)
+				if c.chat {
+					res[toolFree] = true
+				}
+				return res, nil
+			}
+			return result(true, "끝", "gpt-6.1", "", "codex", time.Time{}, ""), nil
+		}
+		spec := withKey(c.spec, "task", "고쳐 줘")
+		out, err := runRouted(spec, decide, run, func(r map[string]any) { reports = append(reports, r) })
+		if _, leaked := out[toolFree]; err != nil || leaked || len(ran) != c.runs || len(reports) != c.runs {
+			t.Fatal(c, ran, err)
+		}
+		routed := out["routed"]
+		if c.runs == 1 && (out["ok"] != false || out["error"] != c.errText || field(routed, "stopped") != "effect_unknown" ||
+			field(routed, "id") != "xai/grok-5" || dumpLine(field(routed, "tried")) != `["xai/grok-5"]`) {
+			t.Fatal(c, out)
+		}
+		if c.runs == 2 && (out["ok"] != true || field(routed, "stopped") != nil || field(routed, "decision") != "failover") {
+			t.Fatal(c, out)
+		}
+	}
+	// One that never started falls over; the next that ran and failed stops before the third model.
+	var ran []any
+	run := func(s map[string]any) (map[string]any, error) {
+		ran = append(ran, s["model"])
+		if s["model"] == "grok-5" {
+			return result(false, "", "grok-5", "", "grok", time.Time{}, "cli_not_found"), nil
+		}
+		return result(false, "", pyStr(s["model"]), "", "codex", ranAt, "timeout"), nil
+	}
+	out, _ := runRouted(map[string]any{"task": "고쳐 줘"}, decide, run, func(map[string]any) {})
+	if eq(t, ran, []any{"grok-5", "gpt-6.1"}); field(out["routed"], "stopped") != "effect_unknown" || field(out["routed"], "id") != "openai/gpt-6.1" {
+		t.Fatal(out)
+	}
+	// All refused before running: every model is tried and nothing is marked stopped.
+	ran = nil
+	run = func(s map[string]any) (map[string]any, error) {
+		ran = append(ran, s["model"])
+		return nil, crewErr("직접 추가 키가 없어요")
+	}
+	out, _ = runRouted(map[string]any{"task": "고쳐 줘", "access": "full"}, decide, run, func(map[string]any) {})
+	if len(ran) != 3 || out["ok"] != false || field(out["routed"], "stopped") != nil {
+		t.Fatal(ran, out)
 	}
 }
 

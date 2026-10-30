@@ -79,7 +79,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	}
 	injected := run != nil
 	if run == nil {
-		run = func(s map[string]any) (map[string]any, error) { return runNodeFn(s) }
+		run = runAttempt
 	}
 	if report == nil {
 		report = host.ReportCall
@@ -111,27 +111,11 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	for _, f := range list(d["fallbacks"]) {
 		ids = append(ids, pyStr(f))
 	}
-	var res map[string]any
-	var i int
-	var mid string
-	for i, mid = range ids {
-		provider, model, found := strings.Cut(mid, "/")
-		if !found {
-			return nil, crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
-		}
-		attempt := withKey(withKey(spec, "model", model), "provider", provider)
-		res, err = observationRoutedRun(attempt, i, injected, run)
-		if err != nil {
-			if !isCrewErr(err) {
-				return nil, err
-			}
-			res = result(false, "", model, "", "", time.Time{}, err.Error())
-		}
-		report(routedCall(spec, d, ids, i, attempt, res))
-		if res["ok"] == true {
-			break
-		}
+	res, i, stopped, err := tryRoutes(spec, d, ids, injected, run, report)
+	if err != nil {
+		return nil, err
 	}
+	mid := ids[i]
 	decision := d["decision"]
 	if i > 0 {
 		decision = "failover"
@@ -140,8 +124,62 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if group != "" {
 		routed = append(routed, host.KV{Key: "group", Value: group})
 	}
+	if stopped { // the attempt that ran may have changed things; also set when it was the last candidate
+		routed = append(routed, host.KV{Key: "stopped", Value: "effect_unknown"})
+	}
 	res["routed"] = append(routed, viewHash...)
 	return res, nil
+}
+
+// tryRoutes runs the task on each model in turn until one succeeds or a failed attempt may have changed things.
+// It returns the last result, its index and whether it stopped early.
+func tryRoutes(spec, d map[string]any, ids []string, injected bool, run runFn, report reportFunc) (map[string]any, int, bool, error) {
+	var res map[string]any
+	for i, mid := range ids {
+		provider, model, found := strings.Cut(mid, "/")
+		if !found {
+			return nil, 0, false, crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
+		}
+		attempt := withKey(withKey(spec, "model", model), "provider", provider)
+		var err error
+		res, err = observationRoutedRun(attempt, i, injected, run)
+		ran := err == nil // a *CrewError is refused before anything runs
+		free := res[toolFree] == true
+		delete(res, toolFree)
+		if err != nil {
+			if !isCrewErr(err) {
+				return nil, 0, false, err
+			}
+			res = result(false, "", model, "", "", time.Time{}, err.Error())
+		}
+		report(routedCall(spec, d, ids, i, attempt, res))
+		if res["ok"] == true {
+			return res, i, false, nil
+		}
+		if ran && !free && mayHaveChanged(attempt, res) {
+			return res, i, true, nil
+		}
+	}
+	return res, len(ids) - 1, false, nil
+}
+
+// toolFree marks a result from a call that had no tools (a chat completion); runNode and tryRoutes drop it.
+const toolFree = "\x00tool_free"
+
+// mayHaveChanged says a failed attempt may already have changed files or run commands, so no fallback may run
+// the task again: a step that may write (write or full access, the default) failed after its CLI started. A CLI
+// exit, a timeout or a limit hit mid-run proves nothing about tool calls already made. Only a CLI that never
+// started or an account refused before the start (no start time) falls over, as does any read-only step.
+func mayHaveChanged(attempt, res map[string]any) bool {
+	access, _ := nodeAccess(attempt) // an invalid access was refused before the run
+	notStarted := res["error"] == "cli_not_found" || res["error"] == "quota_exhausted" && neverStarted(res)
+	return access != "read" && !notStarted
+}
+
+// neverStarted reads the zero duration a run without a start time reports, whatever number type carries it.
+func neverStarted(res map[string]any) bool {
+	ms, ok := num(res["duration_ms"])
+	return ok && ms == 0
 }
 
 // withWorkContext reads the selected work once before the choice: the decision sees its metadata view and
