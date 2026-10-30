@@ -660,8 +660,7 @@ def load_evaluation_bundle(manifest_path: Path) -> dict:
 
 def write_json_new(path: Path, value: dict) -> None:
     path = Path(path)
-    name = os.path.basename(os.fspath(path))
-    if '..' in path.parts or any('\x00' in part for part in path.parts) or name in ('', '.', '..') or name != path.name:
+    if '..' in path.parts or any('\x00' in part for part in path.parts) or path.name in ('', '.', '..'):
         _fail('unsafe_path')
     parent = _safe_absolute(path.parent)
     if type(value) is not dict:
@@ -675,7 +674,7 @@ def write_json_new(path: Path, value: dict) -> None:
     temporary = None
     try:
         try:
-            os.stat(name, dir_fd=directory, follow_symlinks=False)
+            os.stat(path.name, dir_fd=directory, follow_symlinks=False)
         except FileNotFoundError:
             pass
         else:
@@ -695,7 +694,7 @@ def write_json_new(path: Path, value: dict) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         # The completed inode becomes visible atomically, never replacing a name.
-        os.link(temporary, name, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
+        os.link(temporary, path.name, src_dir_fd=directory, dst_dir_fd=directory, follow_symlinks=False)
     except FileExistsError:
         _fail('output_exists')
     except OSError as error:
