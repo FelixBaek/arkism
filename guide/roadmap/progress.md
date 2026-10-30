@@ -11,7 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
-- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 실제 B 서비스·작업 대기열·복원·같은 조건 부하 비교는 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 조건 부하 비교·9비용 측정은 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -437,3 +437,7 @@ This b8-based publication candidate also passed Python tools173 + evaluation577 
 ## SYS-05 B bounded worker and daemon candidate
 
 A candidate wires the bounded dynamics worker, durable snapshot publication, a read-only snapshot refresh for a separate API process and explicit paired daemon flags (`-dynamics-runtime-config`, `-dynamics-load-config`). Absent flags keep the feature off. Both pinned config files reject JSON whose Unicode would be replaced during decoding (invalid UTF-8, encoded or escaped lone surrogates) through one shared check; valid U+FFFD, surrogate pairs and literal backslash text stay accepted. In an isolated PostgreSQL and loopback HTTP, a worker published, a separate API refreshed its own cache and served the target through actual Search, and a read-only reader could not publish. This is integration evidence, not acceptance: restore wiring, long-run fairness, same-condition load comparison and the nine-cost measurement remain. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b-daemon-candidate.md).
+
+## SYS-05 B restore rebind
+
+A restored copy's load queue still names the original storage identity and stays refused. An offline step now rebinds it only when the current original is paused, the copy is open and still under general restore review, and the copy's whole ledger (terminal history, active entries and captures) equals the original. Copied leases are fenced; no hold is cleared. With an actual dump/restore in an isolated PostgreSQL, refusals left the copy unchanged, a matching copy rebound once and drained only after the existing review released it. This is integration evidence, not acceptance: same-condition load comparison and the nine-cost measurement remain. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See [delivery and recovery boundaries](native-delivery-lifecycle.md) and the [work record](../work-records/2026-10-30-roadmap-sys05-b-restore-rebind.md).
