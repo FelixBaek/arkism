@@ -119,10 +119,15 @@ func TestRecallReceiptKeepsClientAndSessionHeaders(t *testing.T) {
 	if e != nil || len(page.Items) != 2 {
 		t.Fatal(page, e)
 	}
-	if got := page.Items[1]; got.Client != "codex" || got.SessionID != "019a-session" {
-		t.Fatal("labels lost", got)
+	// Both receipts can share a timestamp, so their order is not part of the contract.
+	kept, dropped := page.Items[1], page.Items[0]
+	if kept.Client == "" {
+		kept, dropped = dropped, kept
 	}
-	if got := page.Items[0]; got.Client != "" || got.SessionID != "" {
-		t.Fatal("unsafe labels kept", got)
+	if kept.Client != "codex" || kept.SessionID != "019a-session" {
+		t.Fatal("labels lost", kept)
+	}
+	if dropped.Client != "" || dropped.SessionID != "" {
+		t.Fatal("unsafe labels kept", dropped)
 	}
 }

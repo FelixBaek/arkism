@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -104,8 +105,20 @@ func catalogCategoryRule(item SkillListItem, rule []string) bool {
 	case "path":
 		text = item.ID + " " + item.SourcePath
 	}
-	ok, _ := regexp.MatchString(pattern, text)
-	return ok
+	return catalogRulePattern(pattern).MatchString(text)
+}
+
+// A rule is compiled once, not once per skill per request.
+// shortcut: never evicted; fine for a person's few saved categories, bound it if rules become free text.
+var catalogRules sync.Map
+
+func catalogRulePattern(pattern string) *regexp.Regexp {
+	if re, ok := catalogRules.Load(pattern); ok {
+		return re.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(pattern) // every user part is quoted, so it always compiles
+	catalogRules.Store(pattern, re)
+	return re
 }
 
 func skillCatalogMatches(entry catalogSkill, in CatalogQueryInput) bool {
