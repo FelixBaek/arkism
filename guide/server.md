@@ -32,10 +32,9 @@ The defaults are the API at `http://127.0.0.1:8091` and the token at `/srv/arkis
 
 On the PC:
 
-1. Make sure `ssh me@my-server` works without a password prompt (an SSH key or agent). The app never asks for or sees a password. Windows uses the built-in OpenSSH client.
-2. In the app, open **Settings › 연결 (Connection)**, type `me@my-server` (or a `~/.ssh/config` alias, optionally with `:port`) and connect.
-
-A new host key is accepted on first use, like answering "yes" once in `ssh`.
+1. Make sure `ssh me@my-server` works from a terminal on this PC. With an SSH key or agent there is no password prompt. A password works too: type it in the app, and after the login works it is kept in the OS credential store (Windows Credential Manager, macOS Keychain, Linux Secret Service), never in a file. Windows uses the built-in OpenSSH client.
+2. In the app, open **Settings › 연결 (Connection)**, type `me@my-server` (or a `~/.ssh/config` alias, optionally with `:port`) and connect. The port, key file and password are under **자세히 (Details)**.
+3. A server the app has not seen before shows its host key fingerprint first. Approve it only when it matches the one your server admin gave you; a password is sent only to an approved host.
 
 ## Install by hand
 

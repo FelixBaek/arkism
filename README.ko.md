@@ -81,14 +81,17 @@ Claude Code, Codex, Gemini CLI를 오갈 때 쓸 맥락을 잇기 위해, 대화
 
 ## 4. 시작하기
 
-1. [Releases](https://github.com/FelixBaek/arkism/releases/latest)에서 공개된 설치 파일을 받습니다. 현재 공개 저장소 안내 기준으로 Windows 설치 파일을 배포합니다.
-2. 앱을 열고 **내장 모드**로 시작합니다. 서버와 데이터베이스가 내 PC에서 실행됩니다.
-3. 사용할 에이전트를 연결하고 평소처럼 작업합니다. 연결 과정에서 변경하는 에이전트 설정은 먼저 백업합니다.
-4. **MEMORY**에서 기억 후보를 검토하고, 이후에도 사용할 내용만 승인합니다.
+1. [Releases](https://github.com/FelixBaek/arkism/releases/latest)에서 설치 파일을 받습니다. 지금은 Windows 설치 파일만 있습니다.
+2. 앱을 열고 **이 PC에서 쓰기**를 고른 뒤 **시작**을 누릅니다. 서버와 데이터베이스가 내 PC에서 실행됩니다.
+3. 앱이 Claude Code·Codex 같은 에이전트 설정에 Arkism을 자동으로 잇습니다. 바꾸기 전 파일은 먼저 백업하고, 홈의 **시작하기**에 그 경로를 보여 줍니다. 열려 있던 에이전트는 다시 시작하세요.
+4. 기억 후보를 뽑으려면 Claude Code, Codex, Gemini CLI 중 하나에 로그인돼 있어야 합니다. 홈의 **시작하기 › 기억 뽑을 모델**이 준비됐는지 알려 줍니다.
+5. 평소처럼 대화하고, 홈이나 **MEMORY**에서 기억 후보를 검토해 이후에도 쓸 내용만 승인합니다.
+
+처음 쓰는 순서는 [처음 시작하기](https://github.com/FelixBaek/arkism/blob/main/guide/start.ko.md)에 화면 이름 그대로 정리했습니다.
 
 현재 공개 Windows 설치 파일에는 Authenticode 게시자 서명이 없어 SmartScreen 경고가 표시될 수 있습니다. 앱 업데이트 검증 서명은 별개입니다. 설치·업데이트 확인 방법은 [보안 안내](https://github.com/FelixBaek/arkism/blob/main/guide/security-operations.md)를 참고하세요.
 
-여러 PC에서 하나의 Arkism을 쓰려면 [서버 모드](https://github.com/FelixBaek/arkism/blob/main/guide/server.md)를 사용할 수 있습니다. 서버의 데이터베이스와 SSH 연결을 별도로 설정합니다.
+여러 PC에서 하나의 Arkism을 쓰려면 앱에서 **서버에 SSH로 연결**을 고릅니다. 서버에 Arkism을 먼저 설치해야 합니다. [서버에 설치하기](https://github.com/FelixBaek/arkism/blob/main/guide/server.ko.md)를 참고하세요.
 
 ---
 

@@ -9,6 +9,7 @@ const h = dom.helpers(document);
 require("./session-list.js");
 require("./delete-reason.js"); // the reason picker the review rows share
 require("./overview-windows.js");
+require("./home-start.js"); // 분석's extractor failure words
 
 function windows(memories, memoryUse, read) {
   const state = { data: { memories, candidates: [], tools: { memory_use: memoryUse } }, scope: {}, connection: { generation: 1 } };
@@ -168,4 +169,27 @@ test("분류 AI 도움 can be cancelled, a late answer is ignored, and 다시 �
   assert.equal(state.data.candidates[0].text, "Keep PRs small");
   delete window.ArkismAIChat;
   win.reset();
+});
+
+test("분석 explains an extractor failure in plain words with one fix, the code only under 자세히", () => {
+  const cases = [["extractor_exit_1", "로그인하기", "agents"], ["extractor_no_json", "다른 모델 고르기", "roles"], ["TimeoutExpired", "다시 시도", null]];
+  for (const [code, label, tab] of cases) {
+    const state = { data: { memories: [], candidates: [], conflicted: [], tools: { extractor: { cli: "codex", state: "ready" }, analysis_run: { at: new Date().toISOString(), jobs: 1, failed: 1, error: code } } }, scope: {}, connection: { generation: 1 } };
+    let went = null, reloaded = 0;
+    const ctx = { state, ...h, query: (o = {}) => h.query(o), request: async () => ({ items: [] }), ago: () => "방금", go(v) { went = v; }, render() {}, reload: async () => { reloaded++; },
+      remoteCollection: () => ({ load: async () => {}, reset() {}, snapshot: () => ({ items: [], total: 0, loading: false }) }) };
+    const win = window.ArkismOverviewWindows(ctx, { stages: () => [{ key: "extract", label: "분석", tiles: [], badge: ["응답 없음", "a"] }], sessions: () => [] });
+    win.open("extract");
+    assert.ok(document.querySelector("dialog.ov-win-extract .ov-win-badge.a"), "the failed run's warning tone");
+    assert.match(document.querySelector("dialog.ov-win-extract .ov-stage-what").textContent, /AI \(Codex\)/, "the extractor that runs, not a fixed name");
+    const why = document.querySelector(".ov-sum-why");
+    assert.doesNotMatch(why.textContent, /extractor_|TimeoutExpired/, "no raw code as the main text");
+    const more = document.querySelector("details.ov-recall-more");
+    assert.match(more.textContent, /자세히/); assert.ok(more.textContent.includes(code));
+    const b = document.querySelectorAll("button").find((x) => x.textContent === label);
+    assert.ok(b, label);
+    b.click();
+    if (tab) { assert.equal(went, "settings"); assert.equal(state.settingsTab, tab); } else assert.equal(reloaded, 1);
+    win.reset();
+  }
 });

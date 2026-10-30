@@ -33,9 +33,9 @@ func useRoleModels() {
 	}
 }
 
-// claudeName is model as the generator records it: claude-<alias> or the full id as is.
+// claudeName is model as the generator records it: claude-<alias>, or the full id (or another CLI's model) as is.
 func claudeName(model string) string {
-	if strings.HasPrefix(model, "claude-") {
+	if strings.HasPrefix(model, "claude-") || extractorCLI(model) != "claude" {
 		return model
 	}
 	return "claude-" + model

@@ -1107,6 +1107,48 @@ test("home: a finished analysis run with no candidate is not a stall, and the �
   offs.forEach((off) => off());
 });
 
+// A fresh install with only Claude Code: the other agents are grey and out of 주의, and a memory extractor that cannot
+// run says so in plain words with the way to fix it, on 홈 and in the status card.
+test("home: agents that are not installed stay grey, and a broken memory extractor gets one plain card", async () => {
+  const ids = ["claude_code", "codex", "zcode", "gemini", "grok", "opencode", "cursor"];
+  const tools = (extractor, run) => route("GET", "/v1/agent_tools", () => ok({ agent_tools: { collected_at: new Date().toISOString(), servers: [], plugins: [], requests: [],
+    agents: ids.map((id, i) => ({ id, name: id, found: i === 0, enabled: true })), extractor, analysis_run: run || null } }));
+  let off = tools({ model: "haiku", cli: "claude", state: "login_needed", clis: { claude: "login_needed", codex: "missing", gemini: "missing" } });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.match(text(app.$("#table")), /기억을 뽑으려면 로그인이 필요해요/);
+  assert.match(text(app.$("#table")), /로그인하기/);
+  for (const id of ids.slice(1, 5)) assert.equal(app.$(`#status-agents [data-agent="${id}"]`).hidden, true, id); // the tiles in index.html
+  assert.equal(app.$('#status-agents [data-agent="claude_code"]').hidden, false);
+  assert.match(text(app.$("#status-list")), /기억 뽑을 모델로그인 필요/);
+  assert.equal(text(app.$("#status-badge")), "주의 1", "only the extractor, not the six missing agents");
+  // the host picked a model but its last run failed: the code turns into words, never shown as the main text
+  off(); off = tools({ model: "codex", cli: "codex", state: "ready" }, { at: ago(0.1), jobs: 1, done: 0, failed: 1, reason: "extractor_no_json", error: "" });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.match(text(app.$("#table")), /기억을 뽑는 모델의 답을 읽지 못했어요/);
+  assert.doesNotMatch(text(app.$("#table")), /extractor_no_json/);
+  // the 분석 window: its status is the failed run (not 정상), and it names the extractor that runs, Codex, as 홈 does
+  let d = await openWindow({ key: "extract" });
+  const badge = d.querySelector(".ov-win-badge");
+  // a 6-hour stall (the preview's sessions, depending on the clock) outranks it and is red
+  if (badge.classList.contains("r")) assert.match(text(badge), /멈춤/);
+  else { assert.equal(text(badge), "답을 못 읽음"); assert.ok(badge.classList.contains("a"), "a warning tone"); }
+  assert.match(text(d.querySelector(".ov-stage-what")), /AI \(Codex\)/); assert.doesNotMatch(text(d), /서버 Claude/);
+  await closeAll();
+  // ready and nothing failed: no card, no status row
+  off(); off = tools({ model: "codex", cli: "codex", state: "ready" });
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+  await home(); await app.settle(100);
+  assert.doesNotMatch(text(app.$("#table")), /기억을 뽑/);
+  assert.doesNotMatch(text(app.$("#status-list")), /기억 뽑을 모델/);
+  d = await openWindow({ key: "extract" });
+  assert.ok(!d.querySelector(".ov-win-badge").classList.contains("a"), "no failure once the run is fine");
+  await closeAll();
+  off();
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(150);
+});
+
 test("home: a prompt turns up in search once the gallery menu shows", async () => {
   const off = route("GET", "/v1/prompts", () => ok({ items: [{ id: "pp1", title: "썸네일 슬라이드", prompt: "표지", kind: "slide", image_prompt: { kind: "slide", title: "썸네일 슬라이드", prompt: "표지 {제목}", engine: "gpt" } }] }));
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(1500);
@@ -1133,7 +1175,7 @@ test("home: a manual connection walks the start steps; SSH errors explain themse
   let pane = app.$("#ssh-error-side");
   assert.ok(pane && !pane.hidden);
   assert.match(text(pane), /연결하지 못했어요/);
-  assert.match(text(app.$("#unlock-error")), /호스트를 넣어 주세요/);
+  assert.match(text(app.$("#unlock-error")), /서버 주소를 넣어 주세요/);
   const [host, user, port, key] = app.$("#ssh-form").querySelectorAll("input");
   host.value = "my-server"; user.value = "me"; port.value = "2222"; key.value = "~/.ssh/id_ed25519";
   // a refused login names the kind and shows the ssh command to try

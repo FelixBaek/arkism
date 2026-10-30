@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 // 설정 › 역할별 모델: the owner picks, per scope, what each background role runs. memoryd applies its own roles
@@ -37,7 +39,8 @@ var (
 	// Engines memoryd can be told to use per role ("fixed" is the rules / fixed model, no engine).
 	roleEngines = map[string][]string{"route_judge": {"fixed", "clef", "jev", "chat"}, "skill_judge": {"fixed", "clef", "jev"}}
 	scanEngines = []string{"spector", "evaluator", "cisco"}
-	// The host runs these through the Claude CLI, so only Anthropic models are accepted.
+	// The host runs these through the Claude CLI, so only Anthropic models are accepted; extract also runs
+	// on the other CLIs in host.Extractors (extractProviders).
 	cliRoles       = []string{"extract", "reflect", "skill_summary"}
 	roleDefaultRe  = regexp.MustCompile(`^[A-Za-z0-9._:/ ,-]{0,120}$`)
 	maxSkillPicked = 8
@@ -77,9 +80,36 @@ func validRolePick(in ProviderRoleModel) bool {
 		if in.Model == "" || in.Role == "skill_summary" && in.Model == "basic" {
 			return in.Provider == ""
 		}
-		return providerModelRe.MatchString(in.Model) && in.Provider == "anthropic"
+		if !providerModelRe.MatchString(in.Model) {
+			return false
+		}
+		if in.Role == "extract" && in.Provider != "anthropic" {
+			cli := extractCLI(in.Provider)
+			return cli != "" && host.ModelCLI(in.Model) == cli // the host picks the CLI by the model's name
+		}
+		return in.Provider == "anthropic"
 	}
 	return false
+}
+
+// extractCLI is the 기억 추출 CLI of provider, or "".
+func extractCLI(provider string) string {
+	for _, e := range host.Extractors {
+		if c, _ := host.CLIByName(e.CLI); c.Provider == provider {
+			return e.CLI
+		}
+	}
+	return ""
+}
+
+// extractProviders are the providers whose models 기억 추출 can run (role_options.extract).
+func extractProviders() []string {
+	out := []string{}
+	for _, e := range host.Extractors {
+		c, _ := host.CLIByName(e.CLI)
+		out = append(out, c.Provider)
+	}
+	return out
 }
 
 func validRoleDefaults(d map[string]string) bool {
@@ -201,7 +231,7 @@ func (s *Service) addRoleDefaults(p *Providers) {
 	if s.Embedder != nil {
 		defaults["embed"] = s.Embedder.Space()
 	}
-	options := map[string][]string{"embed": {defaults["embed"]}}
+	options := map[string][]string{"embed": {defaults["embed"]}, "extract": extractProviders()}
 	for role, all := range roleEngines {
 		have := []string{"fixed"}
 		for _, k := range all[1:] {

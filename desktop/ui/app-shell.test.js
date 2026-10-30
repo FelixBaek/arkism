@@ -16,7 +16,7 @@ test("boots unlocked on the built-in Arkism and fills home", async () => {
 });
 
 test("every menu and area tab draws", async () => {
-  const errors = [];
+  const errors = [], shown = [];
   process.on("unhandledRejection", (e) => errors.push(e));
   for (const nav of app.$$(".nav-item[data-menu]")) {
     await app.click(nav, 50);
@@ -27,8 +27,12 @@ test("every menu and area tab draws", async () => {
       // the tab names the screen: no repeated title or "15개" line under it, and a count only on the open tab
       const name = app.$("#area-tabs").dataset.active;
       assert.ok(!app.$$("#area-tabs .area-tab:not(.active) output").length, `${name}: a closed tab shows a count`);
+      const n = app.$("#area-tabs .area-tab.active output")?.textContent;
+      assert.notEqual(n, "0", `${name}: a zero count on the tab`);
+      if (n) shown.push(name);
       if (app.$("#title").textContent === name) assert.equal(app.$("#title-count").textContent, "", `${name}: count line under the tabs`);
     }
   }
   assert.deepEqual(errors, []);
+  assert.ok(shown.length >= 3, `non-zero counts still show: ${shown}`);
 });

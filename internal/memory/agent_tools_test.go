@@ -339,3 +339,16 @@ func TestHostMemoryUseReportDecodesAndIsKept(t *testing.T) {
 		t.Fatal("memory use not kept", u)
 	}
 }
+
+func TestValidExtractor(t *testing.T) {
+	ok := &Extractor{Model: "codex", CLI: "codex", State: "ready", CLIs: map[string]string{"claude": "missing", "codex": "ready"}}
+	if !validExtractor(nil) || !validExtractor(ok) {
+		t.Fatal("valid report refused")
+	}
+	for _, bad := range []*Extractor{{Model: "", CLI: "claude", State: "ready"}, {Model: "haiku", CLI: "Claude", State: "ready"},
+		{Model: "haiku", CLI: "claude", State: "broken"}, {Model: "haiku", CLI: "claude", State: "ready", CLIs: map[string]string{"codex": "?"}}} {
+		if validExtractor(bad) {
+			t.Fatalf("accepted %+v", bad)
+		}
+	}
+}

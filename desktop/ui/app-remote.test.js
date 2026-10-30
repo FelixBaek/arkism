@@ -30,6 +30,16 @@ const fill = (host, port = "") => { const [h, , p] = fields(); h.value = host; p
 const submit = async (ms = 1500) => { app.$("#unlock-form").dispatchEvent(new app.window.Event("submit", { bubbles: true, cancelable: true })); await app.settle(ms); };
 const locked = () => app.$("#unlock").hidden === false;
 
+test("the SSH form shows the server address first; the rest waits under 자세히", () => {
+  const box = pages.sshFields(null).node;
+  const more = box.querySelector("details.ssh-more");
+  assert.ok(more, "자세히");
+  assert.equal(more.open, false, "a new form keeps the rest folded");
+  assert.equal(box.querySelector(":scope > label.ssh-row strong").textContent, "서버 주소");
+  assert.equal(more.querySelectorAll("input").length, 5, "user, port, key, password and path sit inside");
+  assert.equal(pages.sshFields({ host: "h", user: "me" }).node.querySelector("details.ssh-more").open, true, "a saved user opens it");
+});
+
 test("a saved server connection reconnects at start", () => {
   assert.ok(ran("ssh_connect") >= 1);
   assert.equal(locked(), false);
@@ -50,7 +60,7 @@ test("연결 끊기 goes back to the address form, filled with the saved server"
 test("SSH 테스트 checks the fields first, then asks the server", async () => {
   const test1 = async () => { await app.click("#ssh-test", 300); return t(app.$("#ssh-test-result")); };
   fill("");
-  assert.match(await test1(), /호스트를 넣어 주세요/);
+  assert.match(await test1(), /서버 주소를 넣어 주세요/);
   assert.ok(app.$("#ssh-test-result").classList.contains("warn"));
   fill("my-server", "99999");
   assert.match(await test1(), /포트는 1~65535/);
@@ -82,7 +92,7 @@ test("연결하기 shows why a connection failed and keeps the form", async () =
   }
   fill("");
   await submit(200);
-  assert.match(t(app.$("#unlock-error")), /호스트를 넣어 주세요/);
+  assert.match(t(app.$("#unlock-error")), /서버 주소를 넣어 주세요/);
 });
 
 test("a server that logs in but does not answer keeps the old connection", async () => {
@@ -169,7 +179,25 @@ test("서버에 연결하기 and 이 PC에서 쓰기 switch between the server a
   await app.settle(200);
   assert.ok(locked());
   assert.equal(app.$("#local-retry").hidden, false);
-  assert.match(t(app.$("#unlock-intro")), /켜지 못했어요 \(port in use\)/);
+  // a plain sentence up front, the raw code only under 자세히, and the check and log buttons beside 다시 시도
+  assert.match(t(app.$("#unlock-title")), /이 PC의 Arkism을 켜지 못했어요/);
+  assert.match(t(app.$("#unlock-intro")), /켜는 중에 문제가 생겼어요/);
+  assert.doesNotMatch(t(app.$("#unlock-intro")), /port in use/);
+  assert.equal(t(app.$("#local-code")), "port in use");
+  assert.equal(app.$("#local-detail").hidden, false);
+  assert.equal(app.$("#local-doctor").hidden, false);
+  assert.equal(app.$("#local-logs").hidden, false);
+  // 점검하고 고치기 runs doctor --fix and says what it did in one line
+  app.fake.doctor = { summary: { ok: 4, warn: 0, fail: 0 }, checks: [], fixes: [{ message: "다시 연결" }] };
+  await app.click("#local-doctor", 200);
+  assert.ok(app.calls.some(([c, a]) => c === "doctor" && a.fix === true));
+  assert.match(t(app.$("#local-doctor-result")), /1가지를 고쳤어요/);
+  app.fake.doctor = { summary: { fail: 1 }, checks: [{ status: "fail", message: "기억 저장소가 꺼져 있어요" }], fixes: [] };
+  await app.click("#local-doctor", 200);
+  assert.match(t(app.$("#local-doctor-result")), /남은 문제 1개: 기억 저장소가 꺼져 있어요/);
+  app.fake.open_logs = null;
+  await app.click("#local-logs", 50);
+  assert.ok(app.calls.some(([c]) => c === "open_logs"));
   app.fake.local_start = { server: app.origin, token: "preview" };
   await app.click("#local-retry", 2000);
   await app.settle(3000); // let the maintenance records land before the next failed start empties the token
