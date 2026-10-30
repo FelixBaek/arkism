@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Explicit dynamics load runtime v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "profile",
+    "mode",
+    "load_contract_sha256",
+    "load_config_sha256",
+    "scopes",
+    "limits"
+  ],
+  "properties": {
+    "protocol": {
+      "const": "arkism-sys05-load-v1"
+    },
+    "profile": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "mode": {
+      "enum": [
+        "sync",
+        "async"
+      ]
+    },
+    "load_contract_sha256": {
+      "const": "398df795b2eb03fc421158a10ca4094cdb199f3577545f28715b3d2d8c9ea2bc"
+    },
+    "load_config_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "scopes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "project_id"
+        ],
+        "properties": {
+          "workspace_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "project_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "user_id": {
+            "type": "string",
+            "minLength": 0
+          },
+          "agent_id": {
+            "type": "string",
+            "minLength": 0
+          }
+        },
+        "$comment": "Absent optional user_id/agent_id decode to exact empty Scope4 fields; empty never means wildcard."
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queue_count_limit",
+        "queue_active_bytes_limit",
+        "max_wait_ns",
+        "batch_limit",
+        "concurrency_limit",
+        "retry_limit",
+        "retry_backoff_ns",
+        "deadline_ns",
+        "worker_substep_timeout_ns",
+        "lease_ns",
+        "finish_timeout_ns",
+        "poll_interval_ns",
+        "publish_interval_ns",
+        "allowed_freshness_ns",
+        "snapshot_max_items",
+        "snapshot_max_bytes",
+        "max_configured_scopes",
+        "telemetry_max_bytes",
+        "terminal_ledger_retention_budget"
+      ],
+      "properties": {
+        "queue_count_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "queue_active_bytes_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "max_wait_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "batch_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500
+        },
+        "concurrency_limit": {
+          "const": 1
+        },
+        "retry_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "retry_backoff_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "deadline_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "worker_substep_timeout_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "lease_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "finish_timeout_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "poll_interval_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "publish_interval_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "allowed_freshness_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "snapshot_max_items": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 499
+        },
+        "snapshot_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "max_configured_scopes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "telemetry_max_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        },
+        "terminal_ledger_retention_budget": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2305843009213693951
+        }
+      }
+    }
+  },
+  "$comment": "No numeric product defaults. All caller limits/profile/config hashes required. Runtime additionally validates Scope4, configured scope count and labels. Active bytes are conservative entry lifecycle reservations. Source/receipt/checkpoint/history is retained and measured separately. Same-Tx sync caller requires existing job permissions. Load-config bytes/hash verification belongs to explicit owner loader; performance comparison requires a separate locked measured manifest."
+}

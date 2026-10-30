@@ -15960,7 +15960,7 @@
     "/v1/memory-outcomes": {
       "post": {
         "summary": "Record independent actual memory-use outcome",
-        "description": "Service checker distinct from creator, approver and trace producer. Exact live memory must appear in canonical completed trace retrieved input; evidence sources belong to that trace. Personal compliance and work task outcomes remain separate. Idempotent event writes evaluation and settles tracking atomically. Unobserved checks must not submit a boolean success.",
+        "description": "Service checker distinct from creator, approver and trace producer. Exact live memory must appear in canonical completed trace retrieved input; evidence sources belong to that trace. Personal compliance and work task outcomes remain separate. Idempotent event writes evaluation and settles tracking atomically. Unobserved checks must not submit a boolean success. When explicitly configured dynamics admission is full, returns 429 dynamics_queue_full and rolls back the entire new outcome, native capture and queue admission. An identical stored event retry returns its existing Ref without another queue slot; conflicting event payload returns 409. No Retry-After is inferred.",
         "requestBody": {
           "required": true,
           "content": {
@@ -15993,6 +15993,10 @@
           },
           "409": {
             "description": "Revision, evidence or lease conflict"
+          },
+          "429": {
+            "description": "dynamics_queue_full: explicitly configured dynamics admission is full; no partial outcome or capture is committed",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
           },
           "401": {
             "description": "Missing bearer credentials.",
@@ -37801,6 +37805,7 @@
               "request_timeout",
               "secret_detected",
               "candidate_daily_limit",
+              "dynamics_queue_full",
               "payload_too_large",
               "digest_mismatch",
               "semantic_lane_unavailable",
