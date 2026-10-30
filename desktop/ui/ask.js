@@ -3,7 +3,7 @@
 // The first line of the message is the title; the rest is the body.
 (() => {
   "use strict";
-  function box(message, okLabel, field, match) {
+  function box(message, okLabel, field, match, okClass = "btn danger") {
     return new Promise((resolve) => {
       const [title, ...rest] = String(message).split("\n");
       const dlg = document.createElement("dialog");
@@ -20,7 +20,7 @@
       row.className = "cn-confirm-btns";
       const mk = (label, value, cls) => { const b = document.createElement("button"); b.type = "submit"; b.value = value; b.className = cls; b.textContent = label; return b; };
       const no = mk("취소", "cancel", "btn"); // "cancel": app.js's dialog Enter never picks it
-      const ok = mk(okLabel || "확인", "ok", "btn danger");
+      const ok = mk(okLabel || "확인", "ok", okClass);
       if (match != null) { // 확인 opens only once the field holds exactly this text (지우기처럼 되돌릴 수 없는 일)
         ok.disabled = true;
         field.addEventListener("input", () => { ok.disabled = field.value.trim() !== match; });
@@ -46,10 +46,11 @@
     input.autocomplete = "off";
     return box(message, okLabel, input, match);
   };
-  window.askText = async (message, value = "") => {
+  // opts.okLabel names the button; opts.primary draws it as the main action (저장) instead of the danger style.
+  window.askText = async (message, value = "", opts = {}) => {
     const input = document.createElement("input");
     input.className = "cn-confirm-input";
     input.value = value ?? "";
-    return (await box(message, "확인", input)) ? input.value : null;
+    return (await box(message, opts.okLabel || "확인", input, null, opts.primary ? "btn primary" : "btn danger")) ? input.value : null;
   };
 })();

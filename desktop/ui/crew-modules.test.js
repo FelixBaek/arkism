@@ -28,7 +28,7 @@ test("vocabulary names the CLI for each model family and the colour of each node
   assert.deepEqual(voc.FIELDS.n8n.map(([k]) => k), ["url", "mode", "timeout"]);
   assert.equal(voc.EFFORTS[0][0], "low");
   assert.equal(voc.MODES.round_robin, "정해진 순서대로");
-  assert.equal(voc.HUMAN_KIND.AI, "AI 노드");
+  assert.equal(voc.HUMAN_KIND.AI, "AI 작업");
   assert.deepEqual(voc.FIELDS.start, []);
 });
 
@@ -75,12 +75,26 @@ test("default graphs: template, one AI step, or empty", async () => {
   assert.equal(tpl.nodes[1].title, "틀");
   const bare = model.defaultGraph("tpl:bare", {});
   assert.deepEqual(bare.nodes[1].config, { model: "", goal: "{{input}}", access: "read" });
-  assert.equal(bare.nodes[1].title, "AI 에이전트");
+  assert.equal(bare.nodes[1].title, "AI 작업");
   assert.equal(model.defaultGraph("tpl:gone", {}).nodes.length, 2);
   const simple = model.defaultGraph("simple", { name: "요약", model: "m" });
   assert.equal(simple.nodes[1].title, "요약");
-  assert.equal(model.defaultGraph("simple", {}).nodes[1].title, "AI 에이전트");
+  assert.equal(model.defaultGraph("simple", {}).nodes[1].title, "AI 작업");
   assert.deepEqual(model.defaultGraph("blank", {}).edges, [{ from: "start", to: "end" }]);
+  // 새 워크플로우 (1511:4650): 직접 부르기 → AI 작업 (모델 auto, 할 일 비움) → 결과, and the 처음이라면 guide only while it is untouched
+  const fresh = model.defaultGraph("new", {});
+  assert.deepEqual(fresh.nodes.map((n) => [n.type, n.title]), [["start", "직접 부르기"], ["ai", "AI 작업"], ["end", "결과"]]);
+  assert.deepEqual(fresh.nodes[1].config, { model: "auto", goal: "", access: "read" });
+  assert.equal(model.isFresh(fresh), true);
+  const moved = structuredClone(fresh); moved.nodes[1].x += 50;
+  assert.equal(model.isFresh(moved), true, "moving a node is not an edit");
+  const told = structuredClone(fresh); told.nodes[1].config.goal = "PR 요약";
+  assert.equal(model.isFresh(told), false);
+  assert.equal(model.isFresh({ ...fresh, edges: [] }), false);
+  // 전문가 불러오기 copies the expert's instructions and model into an AI 작업 node
+  assert.deepEqual(model.expertConfig({ id: "ag1", crew: { role: "코드를 봐요", instructions: "꼼꼼히", model_mode: "fixed", model: "sonnet", effort: "high", skills: ["a", "b"] } }),
+    { from_expert: "ag1", instructions: "코드를 봐요\n\n꼼꼼히", model: "sonnet", effort: "high", skills: "a,b" });
+  assert.equal(model.expertConfig({ id: "ag2", crew: { model_mode: "auto", model: "gpt-5" } }).model, "auto");
 });
 
 test("rule checks report orphans, loops, self calls, missing models and risky steps", async () => {
@@ -188,4 +202,27 @@ test("run commands: start, resume from a past run, stop at a step, approve and s
   assert.match(notes.pop(), /멈췄어요/);
   assert.equal(ex.RUN_LABEL.waiting, "확인 대기");
   assert.equal(ex.NODE_LABEL.skipped, "건너뜀");
+});
+
+test("the one 요일·시간 picker reads simple crons and starts every day at 09:00", async () => {
+  const { createCrewSchedule } = await load();
+  const s = createCrewSchedule({});
+  assert.equal(s.DEFAULT_CRON, "0 9 * * *");
+  assert.deepEqual(s.simpleCron("30 18 * * 1-5"), { min: 30, hour: 18, days: [1, 2, 3, 4, 5] });
+  assert.deepEqual(s.simpleCron("0 7 * * 0,6").days, [0, 6]);
+  assert.equal(s.simpleCron("0 9 1 * *"), null); // stays a raw line under 자세히
+  assert.equal(s.cronOf({ min: 0, hour: 9, days: [5, 1, 2, 3, 4] }), "0 9 * * 1-5");
+  assert.equal(s.cronOf({ min: 15, hour: 7, days: [0, 1, 2, 3, 4, 5, 6] }), "15 7 * * *");
+  assert.equal(s.cronOf({ min: 0, hour: 9, days: [6, 0] }), "0 9 * * 0,6");
+});
+
+test("engine errors read as plain Korean, the raw text kept for 자세히", async () => {
+  const { plainRunError } = await import("./modules/crewRunView.mjs");
+  assert.equal(plainRunError(""), "");
+  assert.match(plainRunError('notify: no slack destination "team"'), /받는 곳/);
+  assert.match(plainRunError("notify: notify.json unavailable (missing, or not chmod 600)"), /설정 › 메신저/);
+  assert.match(plainRunError("http_status: https://x answered 502"), /오류로 답했어요/);
+  assert.equal(plainRunError("bad_config: 회의 주제가 비었어요"), "회의 주제가 비었어요");
+  assert.match(plainRunError("effect_unsupported: FLOW effects support existing Telegram and Slack notifications only"), /할 수 없는 단계/);
+  assert.equal(plainRunError("something odd"), "단계가 실패했어요.");
 });

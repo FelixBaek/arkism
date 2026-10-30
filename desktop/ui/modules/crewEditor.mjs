@@ -5,7 +5,7 @@ export function createCrewEditor(deps) {
   let session = null;
 
   // ---------------------------------------------------------------- editor (03a · 03c · 03d) and run view (03b)
-  const ed = { rec: null, graph: null, sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", tab: "AI", menu: false,
+  const ed = { rec: null, graph: null, sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
     graphMode: false, review: false, suggestions: null, reviewBusy: false, reviewAI: null, run: null, runList: false, timer: null };
 
   function openGraph(rec, opts = {}) {
@@ -13,15 +13,16 @@ export function createCrewEditor(deps) {
     session = sessions.begin();
     deps.stopPolling();
     ed.rec = rec;
-    ed.graph = structuredClone(rec.crew.graph || deps.defaultGraph("blank", rec.crew));
+    // A record with no id is 새 워크플로우 (1511:4650): not saved yet, it opens on the canvas with 직접 부르기 → AI 작업 → 결과.
+    ed.graph = structuredClone(rec.crew.graph || deps.defaultGraph(rec.id ? "blank" : "new", rec.crew));
     ed.graph.nodes.forEach((n) => { n.config ||= {}; });
-    Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false,
-      graphMode: !!opts.graphMode, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, reviewAI: null, run: opts.run || null, test: null, trigger: undefined, runList: false });
+    Object.assign(ed, { sel: null, selEdge: null, zoom: 1, panX: 0, panY: 0, dirty: false, filter: "", menu: false, drafting: false, drafted: null, draftText: "",
+      graphMode: !!opts.graphMode || !rec.id, review: !!opts.review, linking: null, fromPopup: !!opts.fromPopup, suggestions: null, reviewBusy: false, reviewAI: null, run: opts.run || null, test: null, trigger: undefined, runList: false, runAfterSave: false });
     if (opts.select && ed.graph.nodes.some((n) => n.id === opts.select)) ed.sel = opts.select;
     Object.assign(hist, { past: [], future: [], base: snap(), saved: snap(), at: 0 });
     // The newest run of this workflow: each selected node's bottom row shows how that node did there.
     ed.last = null;
-    if (!ed.run) deps.request(`/v1/crew/runs?${deps.query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
+    if (!ed.run && rec.id) deps.request(`/v1/crew/runs?${deps.query({ crew_id: rec.id, limit: 1 })}`).then((r) => {
       const last = (r.items || []).find((x) => x.crew_run?.crew_id === rec.id);
       if (ed.rec !== rec || !last) return;
       ed.last = last;
@@ -52,8 +53,10 @@ export function createCrewEditor(deps) {
       if (tr?.kind === "schedule" && !deps.parseCron(tr.cron)) { deps.notice("시작 노드의 언제 칸 형식을 확인해 주세요."); return false; }
       if (tr) {
         // A newly set schedule or webhook starts on; one that was already there keeps its on/off.
-        if (tr.kind) { crew.trigger = tr.kind === "schedule" ? { kind: "schedule", cron: tr.cron.trim() } : { kind: "webhook", label: tr.label.trim() }; crew.enabled = ed.rec.crew.trigger ? !!ed.rec.crew.enabled : true; } else { delete crew.trigger; crew.enabled = false; }
+        if (tr.kind) { crew.trigger = tr.kind === "schedule" ? { kind: "schedule", cron: tr.cron.trim() } : { kind: "webhook", label: tr.label.trim() }; crew.enabled = ed.rec.crew.trigger?.kind === tr.kind ? !!ed.rec.crew.enabled : true; } else { delete crew.trigger; crew.enabled = false; }
       }
+      // 이름은 저장할 때 정해요: the first save of a new workflow asks for its name and $이름 in the settings window, which creates it.
+      if (!ed.rec.id) { deps.openSettings(null, crew, true); return false; }
       const sent = snap(), at = session;
       const saved = await deps.save(ed.rec, crew);
       if (!at?.live()) { await deps.reload(); return false; } // saved, but the editor it was for is gone: callers (실행) must not go on
@@ -142,7 +145,9 @@ export function createCrewEditor(deps) {
     const anchor = g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
     const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || deps.NODES[type].label, x: (anchor?.x || 0) + 188 + 67, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
     for (const [k, , kind, opts] of deps.FIELDS[type] || []) if ((kind === "select" || kind === "radio") && n.config[k] === undefined) n.config[k] = opts[0][0];
-    if (type === "ai" || type === "expert") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
+    // A new AI 작업 starts with no task (it works on what comes in) and the router picking the model.
+    if (type === "ai") Object.assign(n.config, { goal: "", access: "read", model: "auto", ...preset.config });
+    if (type === "expert") Object.assign(n.config, { goal: "{{input}}", access: "read", ...preset.config });
     if (type === "team") Object.assign(n.config, { topic: "{{input}}", ...preset.config });
     if (type === "ai_once") Object.assign(n.config, { prompt: "{{input}}", ...preset.config });
     if (type === "subflow") n.config.task ||= "{{input}}";
@@ -173,44 +178,34 @@ export function createCrewEditor(deps) {
     deps.render(false);
   }
 
-  const TAB_NAMES = { "저장한 페르소나": "페르소나" };
+  const agents = () => deps.items().filter((r) => r.crew.type === "agent");
 
+  // 노드 추가 (1434:8834): AI 작업 · 회의 first, then 전문가 (saved experts, and personas saved before #481 that no expert
+  // repeats; both go in as an AI 작업), the rest. A workflow has one start, so the start kinds leave once it has one.
   function presetItems() {
     const out = [];
-    const order = ["전문가", "AI", "저장한 페르소나", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
-    for (const [type, n] of Object.entries(deps.NODES)) if (!n.hidden) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
-    for (const a of deps.items().filter((r) => r.crew.type === "agent")) out.push({ group: "전문가", type: "expert", title: a.crew.name, sub: a.crew.model || "모델 자동", expert: a, preset: { title: a.crew.name, config: { expert: a.id } } });
-    for (const p of deps.personas()) out.push({ group: "저장한 페르소나", type: "ai", title: p.crew.name, sub: "AI 에이전트로 넣어요", persona: p, preset: { title: p.crew.name, config: { persona: p.id } } });
+    const order = ["AI", "전문가", "시작", "처리", "흐름", "알림·끝", "그 밖의 연동"];
+    const STARTS = ["start", "schedule", "webhook"];
+    const hasStart = ed.graph.nodes.some((n) => STARTS.includes(n.type));
+    for (const [type, n] of Object.entries(deps.NODES)) if (!n.hidden && !(hasStart && STARTS.includes(type))) out.push({ group: n.group, type, title: n.label, sub: n.sub, preset: {} });
+    const named = new Set();
+    for (const a of agents()) { named.add(a.crew.name.toLocaleLowerCase()); out.push({ group: "전문가", type: "ai", title: a.crew.name, sub: a.crew.role || "전문가", expert: a, preset: { title: a.crew.name, config: deps.expertConfig(a) } }); }
+    for (const p of deps.personas()) if (!named.has(p.crew.name.toLocaleLowerCase())) out.push({ group: "전문가", type: "ai", title: p.crew.name, sub: "저장한 역할", persona: p, preset: { title: p.crew.name, config: { persona: p.id } } });
     return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
   }
 
-  // The add menu shows one category at a time; typing in the search looks through every category.
+  // The add menu is one list under group names; typing in the search narrows it.
   function presetList() {
     const box = deps.el("div", "g-menu");
-    const groups = [...new Set(presetItems().map((i) => i.group))];
-    if (!groups.includes(ed.tab)) ed.tab = groups[0];
     const search = deps.el("label", "search");
     const q = deps.el("input");
     q.type = "search";
     q.placeholder = "노드 찾기";
     q.value = ed.filter;
     q.setAttribute("aria-label", "노드 찾기");
-    const tabs = deps.el("div", "segment g-tabs");
-    const sync = () => {
-      tabs.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", !ed.filter.trim() && b.dataset.group === ed.tab));
-      box.querySelector(".g-presets").replaceWith(presetGroups());
-    };
-    for (const g of groups) {
-      const t = deps.el("button", "tab", TAB_NAMES[g] || g);
-      t.type = "button";
-      t.dataset.group = g;
-      t.addEventListener("click", () => { ed.tab = g; ed.filter = q.value = ""; sync(); });
-      tabs.append(t);
-    }
-    q.addEventListener("input", () => { ed.filter = q.value; sync(); });
+    q.addEventListener("input", () => { ed.filter = q.value; box.querySelector(".g-presets").replaceWith(presetGroups()); });
     search.append(deps.icon("magnifying-glass"), q);
-    box.append(search, tabs, deps.el("div", "g-presets"));
-    sync();
+    box.append(search, presetGroups());
     return box;
   }
 
@@ -239,7 +234,9 @@ export function createCrewEditor(deps) {
     const c = n.config || {};
     const x = ed.rec?.crew;
     if (n.type === "ai") {
-      const rows = [["모델", deps.modelOf(n, x)], ["목표", c.goal && c.goal !== "{{input}}" ? c.goal : "앞 단계 결과로 일해요"]];
+      // AI 작업 (1511:5757): the task line; the model only when one is set (자동 needs no row).
+      const rows = (c.model && c.model !== "auto") || (!c.model && x?.model) ? [["모델", deps.modelOf(n, x)]] : [];
+      rows.push(["할 일", !c.goal?.trim() ? "무엇을 할지 한 줄 적기" : c.goal === "{{input}}" ? "앞 단계 결과로 일해요" : c.goal]);
       if (c.collab === "on") rows.push(["협업", `워커 최대 ${c.max_workers || 5} · 동시 ${c.concurrency || 3}`]);
       return rows;
     }
@@ -250,7 +247,7 @@ export function createCrewEditor(deps) {
     if (n.type === "team") return [["팀", deps.byId(c.team)?.crew.name || "고르지 않았어요"], ["주제", c.topic && c.topic !== "{{input}}" ? c.topic : "앞 단계 결과"]];
     if (n.type === "n8n") return [["주소", (c.url || "").replace(/^https?:\/\//, "") || "—"]];
     if (n.type === "ai_once") return [["모델", deps.modelOf(n, x)], ["질문", c.prompt && c.prompt !== "{{input}}" ? c.prompt : "앞 단계 결과를 그대로 물어요"]];
-    if (n.type === "subflow") return [["부르는 것", c.workflow ? `$${c.workflow.replace(/^\$/, "")}` : "고르지 않았어요"]];
+    if (n.type === "subflow") return [["부르는 것", c.workflow ? deps.alias({ handle: c.workflow.replace(/^\$/, "") }) : "고르지 않았어요"]];
     if (n.type === "code") return [["코드", `${c.lang === "sh" ? "셸" : "Go"} · ${(c.code || "").split("\n").length}줄 · 토큰 0`]];
     if (n.type === "approval") return [["물어볼 것", c.question || "—"]];
     if (n.type === "condition") return [["조건", c.expr || "—"]];
@@ -260,15 +257,25 @@ export function createCrewEditor(deps) {
     if (n.type === "wait") return [["기다림", c.duration || "—"]];
     if (n.type === "loop") return [["목록", c.path || "—"]];
     if (n.type === "notify") return [["보내기", `${{ telegram: "텔레그램", slack: "슬랙", email: "메일" }[c.channel] || ""} ${c.to || ""}`]];
-    if (n.type === "end") return [["형식", c.message || "요약 + 링크"]];
-    if (n.type === "start") return [["받는 것", "부를 때 쓴 문장"]];
+    if (n.type === "end") return c.message ? [["형식", c.message]] : [["돌려줄 것", "앞 노드 결과"]];
+    if (n.type === "start") {
+      // The card follows the trigger being edited (its draft) before the saved one.
+      const t = ed.trigger || x?.trigger;
+      if (t?.kind === "schedule") return [["언제", deps.cronText(t.cron)]];
+      if (t?.kind === "webhook") return [["시작", "주소로 요청이 오면"]];
+      return [["부르는 법", `${x?.handle ? deps.alias(x) : "@이름"} · 실행 버튼`]];
+    }
     return [];
   }
 
+  // An AI 작업 with nothing to do yet stays marked on the canvas (1511:5757).
+  const needsTask = (n) => n.type === "ai" && !n.config?.goal?.trim() && !n.config?.instructions?.trim() && !n.config?.persona;
+
   function nodeSub(n) {
     const c = n.config || {};
-    if (n.type === "ai" || n.type === "expert") return [c.collab === "on" ? "전문가 · 협업" : "전문가", n.type === "ai" ? deps.byId(c.persona)?.crew.name : ""].filter(Boolean).join(" · ");
-    if (n.type === "team") return "팀 · 회의";
+    if (n.type === "ai" && needsTask(n)) return "여기부터 눌러 보세요";
+    if (n.type === "ai" || n.type === "expert") return [n.type === "ai" ? "AI 작업" : "전문가", c.collab === "on" ? "협업" : "", n.type === "ai" ? deps.byId(c.from_expert || c.persona)?.crew.name : ""].filter(Boolean).join(" · ");
+    if (n.type === "team") return "회의";
     if (n.type === "ai_once") return "한 번 묻기";
     if (n.type === "code") return "코드 · 토큰 0";
     return deps.NODES[n.type]?.label || n.type;
@@ -279,6 +286,8 @@ export function createCrewEditor(deps) {
   const INLINE = {
     모델: (n) => ["ai", "ai_once", "expert"].includes(n.type) && { key: "model", kind: "model" },
     목표: () => ({ key: "goal", area: true }),
+    "할 일": () => ({ key: "goal" }),
+    "돌려줄 것": () => ({ key: "message" }),
     질문: () => ({ key: "prompt", area: true }),
     주제: () => ({ key: "topic", area: true }),
     "물어볼 것": () => ({ key: "question", area: true }),
@@ -296,7 +305,7 @@ export function createCrewEditor(deps) {
   // The workflow's trigger draft that 저장 keeps (shared by the start node popup and the canvas schedule editor).
   const trigDraft = (n) => {
     const now = ed.rec.crew.trigger;
-    return (ed.trigger ||= { kind: now?.kind || "", cron: now?.cron || n.config.cron || "0 9 * * 1-5", label: now?.label || n.config.note || "" });
+    return (ed.trigger ||= { kind: now?.kind || "", cron: now?.cron || n.config.cron || deps.DEFAULT_CRON, label: now?.label || n.config.note || "" });
   };
 
   function setCron(n, v) {
@@ -375,6 +384,8 @@ export function createCrewEditor(deps) {
     const box = deps.graphBody()?.querySelector(`.g-node[data-id="${CSS.escape(n.id)}"]`);
     if (box) {
       box.querySelector(".g-node-head strong").textContent = deps.nodeTitle(n);
+      box.querySelector(".g-node-head small").textContent = nodeSub(n);
+      box.classList.toggle("needs-task", needsTask(n));
       const rows = box.querySelectorAll(".g-node-field > span");
       nodeSummary(n).forEach(([, v], i) => { if (rows[i]) rows[i].textContent = v; });
     }
@@ -413,7 +424,7 @@ export function createCrewEditor(deps) {
   // 노드를 누르면 오른쪽 패널에 기본 설정이 열리고, 자세히는 노드 설정 팝업을 열어요.
   // An expert or a saved persona shows its face; every other node the icon of its kind.
   const nodeMark = (n) => {
-    const who = deps.byId(n.type === "expert" ? n.config?.expert : n.type === "ai" ? n.config?.persona : null);
+    const who = deps.byId(n.type === "expert" ? n.config?.expert : n.type === "ai" ? n.config?.from_expert || n.config?.persona : null);
     return who ? deps.avatarMark(who.crew) : deps.icon(deps.NODES[n.type]?.icon || "stack");
   };
 
@@ -427,7 +438,8 @@ export function createCrewEditor(deps) {
     const close = closeX("노드 설정 닫기", () => selectOnCanvas(null));
     head.append(lead, t, close);
     box.append(head);
-    if (deps.IS_AI(n.type) || n.type === "team") basicAI(box, n);
+    if (n.type === "ai") basicTask(box, n);
+    else if (deps.IS_AI(n.type) || n.type === "team") basicAI(box, n);
     else deps.nodeBody(box, n);
     const acts = deps.el("div", "g-right-acts");
     acts.append(deps.button("자세히", "", "arrow-square-out", () => deps.openNodeDialog(n)), deps.button("노드 지우기", "ghost", null, async () => {
@@ -435,6 +447,33 @@ export function createCrewEditor(deps) {
     }));
     box.append(acts);
     return box;
+  }
+
+  // AI 작업의 기본 (1511:5757): 할 일 한 줄과 모델(기본 자동)뿐. 전문가 불러오기 shows once there is an expert; 전문가로 저장 at the bottom.
+  function basicTask(box, n) {
+    const c = n.config;
+    const task = deps.input(c.goal, { maxLength: 8000, placeholder: "무엇을 할지 한 줄 적기" });
+    task.addEventListener("input", () => { c.goal = task.value; touch(); syncCard(n); });
+    box.append(deps.field("할 일", aiField(task, n, "goal", "할 일"), "비우면 앞 단계 결과로 일해요"));
+    const model = deps.modelSelect(c.model, ed.rec.crew.model ? `기본 · ${ed.rec.crew.model}` : "기본");
+    model.addEventListener("change", () => { if (model.value) c.model = model.value; else delete c.model; touch(); deps.render(false); });
+    box.append(deps.field("모델", model));
+    const all = agents();
+    if (all.length) {
+      const from = deps.byId(c.from_expert);
+      const pick = deps.select([["", from ? `${from.crew.name} · 바꾸기` : "고르지 않음"], ...all.filter((a) => a !== from).map((a) => [a.id, a.crew.name])], "");
+      for (const o of pick.options) if (o.value) o.setAttribute("data-no-i18n", ""); // saved names stay as written
+      pick.addEventListener("change", () => {
+        const a = deps.byId(pick.value);
+        if (!a) return;
+        if (!n.title || n.title === deps.NODES.ai.label || n.title === from?.crew.name) n.title = a.crew.name;
+        Object.assign(c, deps.expertConfig(a));
+        touch();
+        deps.render(false);
+      });
+      box.append(deps.field("전문가 불러오기", pick, "고르면 그 전문가의 지시·모델을 채워요"));
+    }
+    box.append(deps.el("p", "meta", "이름, 실행 범위, 나눠서 맡기기, 스킬은 자세히에서 정해요."), deps.button("이 노드를 전문가로 저장", "ghost", "user-plus", () => deps.saveAsExpert(n)));
   }
 
   // AI·전문가·팀 노드의 기본: 이름 · 모델 · 무엇을 할지. 실행 범위·협업·스킬은 자세히에서.
@@ -479,7 +518,7 @@ export function createCrewEditor(deps) {
     const flagged = new Set((ed.review && ed.suggestions || []).flatMap((s) => [s.action?.node, s.action?.from, s.action?.to]).filter(Boolean));
     for (const n of g.nodes) {
       const st = runNodes[n.id];
-      const box = deps.el("div", `g-node ${n.type}${ed.sel === n.id ? " selected" : ""}${st ? ` st-${st.status}` : ""}${flagged.has(n.id) ? " flagged" : ""}`);
+      const box = deps.el("div", `g-node ${n.type}${ed.sel === n.id ? " selected" : ""}${st ? ` st-${st.status}` : ""}${flagged.has(n.id) ? " flagged" : ""}${!ed.run && needsTask(n) ? " needs-task" : ""}${ed.drafted?.changed.includes(n.id) ? " drafted" : ""}`);
       box.style.left = `${n.x}px`;
       box.style.top = `${n.y}px`;
       box.dataset.id = n.id;
@@ -510,6 +549,13 @@ export function createCrewEditor(deps) {
           s.addEventListener("click", (ev) => { if (ed.linking) return; ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); cardEdit(s, n, spec); });
         }
         box.append(s);
+      }
+      if (!ed.run && n.type === "ai" && !n.config.from_expert && agents().length) {
+        const load = deps.el("button", "g-node-load", "전문가 불러오기 ›");
+        load.type = "button";
+        load.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+        load.addEventListener("click", (ev) => { ev.stopPropagation(); if (ed.sel !== n.id) selectOnCanvas(n.id); deps.openNodeDialog(n); });
+        box.append(load);
       }
       if (!["start", "schedule", "webhook"].includes(n.type)) {
         // Several lines into one node: one named input point per line (GPT 의견 · Gemini 의견 …).
@@ -560,7 +606,7 @@ export function createCrewEditor(deps) {
       if (ed.sel || ed.selEdge !== null) selectOnCanvas(null);
     });
     // 화면 이동: 휠 클릭(가운데 버튼)으로 끌거나 스페이스를 누른 채 끌어요 (Figma와 같아요).
-    // Panels laid over the canvas (node picker, toolbar, legend) keep their own wheel and drag: the list must scroll, not zoom.
+    // Panels laid over the canvas (node picker, toolbar) keep their own wheel and drag: the list must scroll, not zoom.
     const onCanvas = (t) => t === stage || canvas.contains(t);
     // Capture phase, so a node under the pointer does not start its own drag.
     stage.addEventListener("pointerdown", (ev) => {
@@ -628,16 +674,8 @@ export function createCrewEditor(deps) {
     }
     tools.append(deps.button("−", "ghost small", null, () => z(-0.1)), zoomOut, deps.button("+", "ghost small", null, () => z(0.1)), deps.el("i", "g-sep"), deps.button("맞추기", "ghost small", null, fit));
     stage.append(tools);
-    if (!ed.menu) {
-      const legend = deps.el("div", "g-legend");
-      for (const [k, label] of [["ai", "AI"], ["http", "HTTP"], ["human", "사람 확인"], ["plain", "시작·끝"]]) {
-        const it = deps.el("span", "g-legend-item");
-        it.dataset.kind = k;
-        it.append(deps.el("i", "g-port"), label);
-        legend.append(it);
-      }
-      stage.append(legend);
-    }
+    if (!ed.run && !ed.menu && (!rec.id || ed.drafted)) stage.append(draftBar());
+    // No colour legend: every node already says what it is in words.
     if (ed.menu && !ed.run) {
       const menu = presetList();
       menu.addEventListener("click", (ev) => ev.stopPropagation());
@@ -662,6 +700,59 @@ export function createCrewEditor(deps) {
       drawEdges(svg, labels, nodeEls);
       window.ArkismPerf?.note("canvas.render", performance.now() - t0, g.nodes.length);
     });
+  }
+
+  // AI 한 줄로 짜기 (1512:4718): one line and 노드 짜기 (only on the button, never by itself); the nodes it changed stay marked with 되돌리기.
+  function draftBar() {
+    const bar = deps.el("div", "g-draft");
+    for (const t of ["click", "pointerdown", "wheel"]) bar.addEventListener(t, (ev) => ev.stopPropagation());
+    const row = deps.el("form", "g-draft-row");
+    const q = deps.input(ed.draftText, { maxLength: 500, placeholder: "하고 싶은 일을 한 줄로 적으면 AI가 노드를 짜 줘요 · 예: 매일 아침 열린 PR을 모아 요약해서 보내 줘" });
+    q.setAttribute("aria-label", "AI에게 맡길 일");
+    q.addEventListener("input", () => { ed.draftText = q.value; });
+    const go = deps.button(ed.drafting ? "짜는 중…" : "노드 짜기", "primary small");
+    go.type = "submit";
+    go.disabled = ed.drafting;
+    row.addEventListener("submit", (e) => { e.preventDefault(); void draftNodes(); });
+    row.append(q, go);
+    bar.append(row);
+    if (ed.drafted) {
+      const done = deps.el("div", "g-draft-done");
+      done.append(deps.el("small", "", `AI가 노드 ${ed.drafted.changed.length}개를 바꿨어요. 바뀐 노드에 표시했어요.`), deps.button("되돌리기", "ghost small", "arrow-counter-clockwise", () => {
+        ed.graph = ed.drafted.before;
+        Object.assign(ed, { drafted: null, sel: null, selEdge: null });
+        touch();
+        deps.render(false);
+      }));
+      bar.append(done);
+    }
+    return bar;
+  }
+
+  async function draftNodes() {
+    const text = ed.draftText.trim();
+    if (!text) { deps.notice("무엇을 할지 한 줄 적어 주세요."); return; }
+    if (ed.drafting) return;
+    const at = session, before = structuredClone(ed.graph);
+    ed.drafting = true;
+    deps.render(false);
+    try {
+      const { graph: next, trigger } = await deps.draftGraph(text, before);
+      if (at !== session) return;
+      if (trigger) {
+        const start = next.nodes.find((n) => n.type === "start") || next.nodes[0];
+        Object.assign(trigDraft(start), trigger);
+        if (start?.type === "start") start.title = trigger.kind === "schedule" ? deps.cronText(trigger.cron) : trigger.kind === "webhook" ? "웹훅으로 시작" : start.title;
+      }
+      const same = (a, b) => JSON.stringify([a.type, a.title, a.config || {}]) === JSON.stringify([b.type, b.title, b.config || {}]);
+      const changed = next.nodes.filter((n) => { const o = before.nodes.find((x) => x.id === n.id); return !o || !same(o, n); }).map((n) => n.id);
+      Object.assign(ed, { graph: next, drafted: { before, changed }, sel: null, selEdge: null });
+      touch();
+    } catch (e) {
+      if (at === session) deps.notice(e.message || "AI 답을 읽지 못했어요. 다시 눌러 주세요.");
+    } finally {
+      if (at === session) { ed.drafting = false; deps.render(false); }
+    }
   }
 
   // 실행 완료 · 5.0초 · 5단계 (859:63707): the pill on top of the stage once the editor's test run has ended.
@@ -942,11 +1033,13 @@ export function createCrewEditor(deps) {
     get aiField() { return aiField; },
     get closeX() { return closeX; },
     get confirmBox() { return confirmBox; },
+    get draftNodes() { return draftNodes; },
     get deselect() { return deselect; },
     get ed() { return ed; },
     get keepHistory() { return keepHistory; },
     get leaveGraph() { return leaveGraph; },
     get linkTo() { return linkTo; },
+    get needsTask() { return needsTask; },
     get nodeDlg() { return nodeDlg; },
     set nodeDlg(value) { nodeDlg = value; },
     get nodePanel() { return nodePanel; },

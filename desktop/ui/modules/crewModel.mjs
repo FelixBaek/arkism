@@ -31,6 +31,18 @@ export function createCrewModel(deps) {
 
   const modelOf = (n, x) => n.config?.model || (n.type === "expert" && deps.byId(n.config?.expert)?.crew.model) || x?.model || "기본 모델";
 
+  // The untouched 새 워크플로우 graph (positions aside): the editor shows 처음이라면 and the 노드 짜기 line while it stays so.
+  const shapeOf = (g) => JSON.stringify({ nodes: (g?.nodes || []).map(({ id, type, title, config }) => ({ id, type, title, config: config || {} })), edges: g?.edges || [] });
+  const isFresh = (g) => shapeOf(g) === shapeOf(defaultGraph("new", {}));
+
+  // 전문가 불러오기: an AI 작업 takes the expert's instructions·model·effort·skills as its own; from_expert only names where they came from
+  // (the engine does not read it, so a later change or removal of the expert leaves the node as it is).
+  const expertConfig = (a) => {
+    const x = a.crew;
+    return { from_expert: a.id, instructions: [x.role, x.instructions].filter((t) => t?.trim()).join("\n\n"), model: x.model_mode === "auto" || !x.model ? "auto" : x.model,
+      effort: x.effort || "medium", skills: (x.skills || []).join(",") };
+  };
+
   function levels(graph) {
     const g = graph || { nodes: [], edges: [] };
     const edges = fwd(g);
@@ -92,13 +104,20 @@ export function createCrewModel(deps) {
       const hub = deps.state.data.skills || [];
       if (tpl.skills?.length) config.skills = tpl.skills.map((n) => (hub.find((k) => k.id === n || k.name === n)?.id || n)).join(",");
       return { nodes: [{ id: "start", type: "start", title: "시작", x: 40, y: 160 },
-        { id: "ai1", type: "ai", title: tpl.name || "AI 에이전트", x: 320, y: 120, config },
+        { id: "ai1", type: "ai", title: tpl.name || "AI 작업", x: 320, y: 120, config },
         { id: "end", type: "end", title: "보고하고 끝", x: 620, y: 160, config: {} }],
+      edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "end" }] };
+    }
+    // 새 워크플로우 (1511:4650): 직접 부르기 → AI 작업 → 결과. The AI 작업 has no task yet, so the canvas points at it.
+    if (kind === "new") {
+      return { nodes: [{ id: "start", type: "start", title: "직접 부르기", x: 40, y: 160, config: {} },
+        { id: "ai1", type: "ai", title: "AI 작업", x: 310, y: 160, config: { model: "auto", goal: "", access: "read" } },
+        { id: "end", type: "end", title: "결과", x: 580, y: 160, config: {} }],
       edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "end" }] };
     }
     if (kind === "simple") {
       return { nodes: [{ id: "start", type: "start", title: "시작", x: 40, y: 160 },
-        { id: "ai1", type: "ai", title: x.name || "AI 에이전트", x: 320, y: 120, config: { model: x.model || "", goal: "{{input}}", access: "read" } },
+        { id: "ai1", type: "ai", title: x.name || "AI 작업", x: 320, y: 120, config: { model: x.model || "", goal: "{{input}}", access: "read" } },
         { id: "end", type: "end", title: "보고하고 끝", x: 620, y: 160, config: {} }],
       edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "end" }] };
     }
@@ -146,6 +165,8 @@ export function createCrewModel(deps) {
   return {
     get aiNodes() { return aiNodes; },
     get defaultGraph() { return defaultGraph; },
+    get expertConfig() { return expertConfig; },
+    get isFresh() { return isFresh; },
     get fwd() { return fwd; },
     get isBack() { return isBack; },
     get levels() { return levels; },

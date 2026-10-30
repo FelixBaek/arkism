@@ -52,6 +52,8 @@ type Engine struct {
 	TelegramAPI string
 	HTTP        *http.Client
 	CodeTimeout time.Duration
+	// Admit, when set, holds the desktop's update gate open while a run is driven; an error leaves the run for the next poll.
+	Admit func() (func(), error)
 
 	// Traces records each finished run as an execution trace with its own producer credential and
 	// hands the receipt to Sinks (see receipts.go); either unset leaves runs untraced.
@@ -205,9 +207,18 @@ func (e *Engine) release(id string) {
 
 // Go drives a run in the background; Wait waits for all of them.
 func (e *Engine) Go(ctx context.Context, id string) {
+	release := func() {}
+	if e.Admit != nil {
+		r, err := e.Admit()
+		if err != nil {
+			return
+		}
+		release = r
+	}
 	e.wg.Add(1)
 	go func() {
 		defer e.wg.Done()
+		defer release()
 		if err := e.Drive(ctx, id); err != nil && ctx.Err() == nil {
 			e.log().Warn("crew run", "run_id", id, "error", err.Error())
 		}

@@ -51,9 +51,15 @@ test("ask resolves true on 확인 and false on 취소, and Enter in the field su
   d = $("dialog.cn-confirm");
   const input = d.querySelector("input");
   assert.equal(input.value, "옛 이름");
+  assert.equal(d.querySelector("button[value=ok]").className, "btn danger", "callers without options keep the old look");
   input.value = "새 이름";
   d.querySelector("form").requestSubmit(); // Enter: no submitter
   assert.equal(await p, "새 이름");
+  p = window.askText("이름을 정할까요?", "", { okLabel: "저장", primary: true });
+  d = $("dialog.cn-confirm");
+  assert.deepEqual([d.querySelector("button[value=ok]").className, d.querySelector("button[value=ok]").textContent], ["btn primary", "저장"]);
+  d.querySelector("button[value=cancel]").click();
+  assert.equal(await p, null);
   p = window.askText("비워 둘까요?", null);
   assert.equal($("dialog.cn-confirm input").value, "");
   $("dialog.cn-confirm button[value=cancel]").click();

@@ -258,15 +258,15 @@ test("inline card edits change cron, model and text values", async () => {
   rowOf("ai1", "모델").click(); await h.settle();
   const sel2 = node("ai1").querySelector("select.g-inline");
   sel2.value = ""; dom.fire(sel2, "change"); await h.settle();
-  // goal textarea: Ctrl+Enter saves, Escape cancels, blur saves
-  rowOf("ai1", "목표").click(); await h.settle();
-  let ta = node("ai1").querySelector("textarea.g-inline");
+  // goal (할 일, one line): Enter saves, Escape cancels, blur saves
+  rowOf("ai1", "할 일").click(); await h.settle();
+  let ta = node("ai1").querySelector("input.g-inline");
   ta.value = "새 목표"; dom.key(ta, "Enter", { ctrlKey: true }); await h.settle();
   assert.match(node("ai1").textContent, /새 목표/);
-  rowOf("ai1", "목표").click(); await h.settle();
-  ta = node("ai1").querySelector("textarea.g-inline"); dom.key(ta, "Escape"); await h.settle();
-  rowOf("ai1", "목표").click(); await h.settle();
-  ta = node("ai1").querySelector("textarea.g-inline"); ta.value = "흐림 저장"; ta.blur(); await h.settle();
+  rowOf("ai1", "할 일").click(); await h.settle();
+  ta = node("ai1").querySelector("input.g-inline"); dom.key(ta, "Escape"); await h.settle();
+  rowOf("ai1", "할 일").click(); await h.settle();
+  ta = node("ai1").querySelector("input.g-inline"); ta.value = "흐림 저장"; ta.blur(); await h.settle();
   // cron editor on the schedule node
   const sch = [...document.querySelectorAll(".g-node")].find((b) => rowOf(b.dataset.id, "언제"));
   if (sch) {
@@ -335,8 +335,8 @@ test("settings dialog saves, validates and reports a failed save", async () => {
   const cron = [...d.querySelectorAll("input")].find((i) => /\*/.test(i.value));
   if (cron) { dom.type(cron, "never"); }
   const ok = h.btn(d, "저장");
-  ok.click(); await h.settle();
-  if (cron) { assert.match(d.textContent, /형식을 확인/); dom.type(cron, "0 9 * * *"); }
+  // a bad cron under 자세히 is said in place and never saved; the picker keeps the last good one
+  if (cron) { assert.match(d.textContent, /형식이 맞지 않아요/); dom.type(cron, "0 9 * * *"); }
   for (const i of d.querySelectorAll("input[type=number]")) dom.type(i, "9999");
   h.routes.unshift(["PUT", /\/v1\/crew\//, () => new Error("서버 오류")], ["POST", /\/v1\/crew/, () => new Error("서버 오류")]);
   ok.click(); await h.settle();
@@ -445,35 +445,32 @@ const nodeWindow = async (h, id) => {
 
 test("node window: kinds, picks, new experts and teams, workers and skills", async () => {
   const h = await openNodes();
-  // expert node: pick by chip, by select, then make a new expert (invalid, taken, ok)
+  // a saved expert node keeps its expert pick; the kind choice is only AI 작업 / 회의 (1436:8483), with no + 새 전문가
   let d = await nodeWindow(h, "ex");
   dom.byText(d, "button.node-chip", "기획자").click(); await h.settle();
   const change = d.querySelector(".node-pick-change"); change.value = "ag1"; dom.fire(change, "change"); await h.settle();
-  dom.byText(d, "button", "+ 새 전문가").click(); await h.settle();
-  let m = h.top();
-  h.btn(m, "만들기").click(); await h.settle();
-  assert.ok(h.notices.some((n) => /채워 주세요/.test(n)));
-  const [nm, hd] = m.querySelectorAll("input");
-  dom.type(nm, "리뷰어 둘"); dom.type(hd, "reviewer"); dom.type(m.querySelector("textarea"), "너는 리뷰어다.");
-  h.btn(m, "만들기").click(); await h.settle();
-  assert.ok(h.notices.some((n) => /이미 있어요/.test(n)));
-  dom.type(hd, "reviewer2");
-  h.routes.unshift(["POST", /^\/v1\/crew$/, () => new Error("save_failed")]);
-  h.btn(m, "만들기").click(); await h.settle();
-  h.routes.shift();
-  h.btn(m, "만들기").click(); await h.settle();
-  assert.equal(m.open, false);
-  // switch the kind through every option, then apply
-  for (const k of ["팀", "AI 에이전트", "AI에게 한 번 묻기", "전문가"]) { dom.byText(h.top(), "button", k).click(); await h.settle(); }
+  assert.equal(dom.byText(h.top(), "button", "+ 새 전문가"), undefined);
+  assert.deepEqual([...h.top().querySelector(".segment").querySelectorAll("button")].map((b) => b.textContent), ["AI 작업", "회의"]);
+  for (const k of ["회의", "AI 작업"]) { dom.byText(h.top(), "button", k).click(); await h.settle(); }
   h.btn(h.top(), "적용").click(); await h.settle();
-  // team node: new team
+  assert.ok(document.querySelector('.g-node[data-id="ex"]').classList.contains("ai"), "switching back to AI 작업 makes it an ai node");
+  // 회의 node: the team editor's 참여자 · 진행 방식 · 최대 라운드 · 결론 sit in the node; 적용 saves the team
   d = await nodeWindow(h, "tm");
-  dom.byText(d, "button", "+ 새 팀").click(); await h.settle();
-  m = h.top();
-  const [tn] = m.querySelectorAll("input"); dom.type(tn, "새 팀 하나");
-  h.btn(m, "만들기").click(); await h.settle();
-  assert.equal(m.open, false);
-  h.btn(h.top(), "취소").click(); await h.settle();
+  assert.equal(dom.byText(d, "button", "+ 새 팀"), undefined);
+  d.querySelector("button[aria-label='참여자 빼기']").click(); await h.settle();
+  d = h.top();
+  const join = d.querySelector("select[aria-label='참여자 넣기']");
+  join.value = [...join.options].find((o) => o.value)?.value || ""; dom.fire(join, "change"); await h.settle();
+  d = h.top();
+  const role = [...d.querySelectorAll("select[aria-label='역할']")].pop(); role.value = "reviewer"; dom.fire(role, "change"); await h.settle();
+  dom.type([...d.querySelectorAll("input[type=number]")].pop(), "6");
+  d.querySelector(".g-ends input[type=checkbox]").click(); await h.settle();
+  h.btn(d, "적용").click(); await h.settle();
+  const teamPut = h.calls.filter((x) => x.method === "POST" && /\/v1\/crew\/tm2$/.test(x.url)).pop();
+  assert.ok(teamPut, "적용 saves the meeting's team");
+  assert.equal(teamPut.body.crew.ending.max_rounds, 6);
+  assert.deepEqual(teamPut.body.crew.members.map((m) => [m.agent_id, m.role]), [["ag2", undefined], ["ag1", "reviewer"]]);
+  assert.equal(teamPut.body.crew.ending.end_on_all_approved, false);
   // AI node: collaboration workers, persona, skills
   d = await nodeWindow(h, "ai");
   const sel = d.querySelector("select[aria-label='워커 전문가']");
@@ -489,9 +486,29 @@ test("node window: kinds, picks, new experts and teams, workers and skills", asy
   if (sw) { sw.click(); await h.settle(); d = h.top(); const sw2 = d.querySelector(".g-collab-head [role=switch], .g-collab-head input[type=checkbox], .g-collab-head button"); sw2?.click(); await h.settle(); }
   await sweep(h, h.top(), 1);
   if (h.top()) { h.btn(h.top(), "적용")?.click(); await h.settle(); }
+  // 전문가로 저장: invalid, taken, a failed save, then saved and loaded on the node
+  d = await nodeWindow(h, "ai");
+  h.btn(d, "전문가로 저장").click(); await h.settle();
+  let m = h.top();
+  const [nm, hd] = m.querySelectorAll("input");
+  dom.type(nm, ""); dom.type(hd, "");
+  h.btn(m, "저장").click(); await h.settle();
+  assert.ok(h.notices.some((n) => /채워 주세요/.test(n)));
+  dom.type(nm, "리뷰어 둘"); dom.type(hd, "reviewer"); dom.type(m.querySelector("textarea"), "너는 리뷰어다.");
+  h.btn(m, "저장").click(); await h.settle();
+  assert.ok(h.notices.some((n) => /이미 있어요/.test(n)));
+  dom.type(hd, "reviewer2");
+  h.routes.unshift(["POST", /^\/v1\/crew$/, () => new Error("save_failed")]);
+  h.btn(m, "저장").click(); await h.settle();
+  h.routes.shift();
+  assert.equal(m.open, true, "a failed save keeps the window");
+  h.btn(m, "저장").click(); await h.settle();
+  assert.equal(m.open, false);
+  assert.match(h.top().querySelector(".dialog-head p, .node-dialog .dialog-head small")?.textContent || h.top().textContent, /전문가 불러옴/);
+  h.btn(h.top(), "적용").click(); await h.settle();
   // start node: schedule and webhook triggers
   d = await nodeWindow(h, "s");
-  dom.byText(d, "button", "일정").click(); await h.settle();
+  dom.byText(d, "button", "정한 요일·시간").click(); await h.settle();
   d = h.top(); dom.type(d.querySelector("input.mono"), "0 7 * * *");
   dom.byText(d, "button", "웹훅").click(); await h.settle();
   d = h.top(); dom.type([...d.querySelectorAll("input")].find((i) => i.placeholder === "GitHub PR 열림"), "PR 열림");
@@ -743,4 +760,12 @@ test("a save in the editor's window refreshes the list and cards in this one", a
   assert.ok(graphOpen(), "the editor stays open");
   assert.match(document.querySelector(".graph-win-title").textContent, /고친 워크플로우/);
   assert.deepEqual(clean(), []);
+});
+
+test("the auto model choice names the router, never its raw id", async () => {
+  const h = await openGraph("wf1", { routes: [["GET", /^\/v1\/routing\/overview/, () => ({ policy: { classifier: "clef-flash" } })]] });
+  node("ai1").click(); await h.settle();
+  const opts = [...document.querySelectorAll("option[data-router]")];
+  assert.ok(opts.length > 0);
+  for (const o of opts) assert.ok(/Clef/.test(o.label) && !/clef-flash/.test(o.label + o.textContent), o.label);
 });
