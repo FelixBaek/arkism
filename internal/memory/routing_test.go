@@ -325,21 +325,7 @@ func TestClefPickModelSendsPlainKeys(t *testing.T) {
 }
 
 func TestRoutingPrechoiceViewIsRecheckedAndHashedWithoutBodies(t *testing.T) {
-	f := newFixture(t)
-	runner := f.runner()
-	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
-	inv := []Provider{{ID: "openai", Name: "OpenAI", Kind: "api", Models: []string{"gpt-6.1"}}}
-	for _, scope := range []Scope{scopeA, scopeB} { // the other scope can route, so only the work fence refuses it
-		if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scope, Providers: &inv}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	src := f.source()
-	pkg := workCheckpointPackage()
-	pkg.SourceRefs = []Ref{{Collection: "sources", ID: src.ID, Revision: src.Revision}}
-	if _, err := workCheckpointSave(f, f.agent, "work-one", "evt-1", 0, pkg); err != nil {
-		t.Fatal(err)
-	}
+	f, runner, src, pkg := prechoiceRoutingFixture(t, nil, "work-one")
 	read, err := f.svc.GetWorkCheckpoint(testCtx, runner, WorkCheckpointGetInput{Scope: scopeA, ID: "work-one"})
 	if err != nil {
 		t.Fatal(err)
@@ -366,7 +352,7 @@ func TestRoutingPrechoiceViewIsRecheckedAndHashedWithoutBodies(t *testing.T) {
 	}
 
 	// A wrong history claim, an unknown history and a mismatched ref are not the stored work.
-	for name, v := range map[string]RoutingPrechoiceView{
+	expectViewErrors(t, decide, ErrConflict, map[string]RoutingPrechoiceView{
 		"observed": func() RoutingPrechoiceView { w := view; w.History, w.HistoryCount = "observed", 1; return w }(),
 		"ref": func() RoutingPrechoiceView {
 			w := view
@@ -379,22 +365,14 @@ func TestRoutingPrechoiceViewIsRecheckedAndHashedWithoutBodies(t *testing.T) {
 			w.Checkpoint.UpdatedAt = w.Checkpoint.UpdatedAt.Add(time.Millisecond)
 			return w
 		}(),
-	} {
-		if _, err := decide(scopeA, v); !errors.Is(err, ErrConflict) {
-			t.Fatal(name, err)
-		}
-	}
-	for name, v := range map[string]RoutingPrechoiceView{
+	})
+	expectViewErrors(t, decide, ErrInvalid, map[string]RoutingPrechoiceView{
 		"unknown":     func() RoutingPrechoiceView { w := view; w.History = "unknown"; return w }(),
 		"empty_count": func() RoutingPrechoiceView { w := view; w.HistoryCount = 1; return w }(),
 		"revision0":   func() RoutingPrechoiceView { w := view; w.Checkpoint.Revision = 0; return w }(),
 		"no_time":     func() RoutingPrechoiceView { w := view; w.Checkpoint.UpdatedAt = time.Time{}; return w }(),
 		"bad_id":      func() RoutingPrechoiceView { w := view; w.Checkpoint.ID = "../x"; return w }(),
-	} {
-		if _, err := decide(scopeA, v); !errors.Is(err, ErrInvalid) {
-			t.Fatal(name, err)
-		}
-	}
+	})
 	// Other scope keeps the existing privacy-preserving not-found fence.
 	if _, err := decide(scopeB, view); !errors.Is(err, ErrNotFound) {
 		t.Fatal("foreign", err)
@@ -427,4 +405,38 @@ func TestRoutingPrechoiceViewIsRecheckedAndHashedWithoutBodies(t *testing.T) {
 	if _, err := f.svc.DecideRoute(testCtx, "tok-route-only", RoutingDecideInput{Scope: scopeA, Task: "review", View: &view}); !errors.Is(err, ErrDenied) {
 		t.Fatal("route-only token", err)
 	}
+}
+
+func expectViewErrors(t *testing.T, decide func(Scope, RoutingPrechoiceView) (RoutingDecision, error), want error, cases map[string]RoutingPrechoiceView) {
+	t.Helper()
+	for name, v := range cases {
+		if _, err := decide(scopeA, v); !errors.Is(err, want) {
+			t.Fatal(name, err)
+		}
+	}
+}
+
+// prechoiceRoutingFixture saves work id with one live source ref; both scopes can route, so only the work
+// fences refuse a foreign view. A nil repo keeps the offline store.
+func prechoiceRoutingFixture(t *testing.T, repo Repository, id string) (*fixture, string, Record, WorkCheckpointPackage) {
+	t.Helper()
+	f := newFixture(t)
+	if repo != nil {
+		f.svc.Repo = repo
+	}
+	runner := f.runner()
+	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
+	inv := []Provider{{ID: "openai", Name: "OpenAI", Kind: "api", Models: []string{"gpt-6.1", "gpt-6.1-mini"}}}
+	for _, scope := range []Scope{scopeA, scopeB} {
+		if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scope, Providers: &inv}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := f.source()
+	pkg := workCheckpointPackage()
+	pkg.SourceRefs = []Ref{{Collection: "sources", ID: src.ID, Revision: src.Revision}}
+	if _, err := workCheckpointSave(f, f.agent, id, "evt-1", 0, pkg); err != nil {
+		t.Fatal(err)
+	}
+	return f, runner, src, pkg
 }
