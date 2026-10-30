@@ -11,7 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
-- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 계획으로 동기·비동기 개발 파일럿(원장·9비용 수집 확인)을 돌렸다(비교 아님). 잠근 같은 조건 부하 비교·9비용 실측은 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 복원본 대기열을 이력 일치 확인 뒤 새 저장소 신원으로 다시 연결하는 오프라인 단계를 실제 dump/restore로 검사했다(미수용). 같은 계획으로 동기·비동기 개발 파일럿을 돌린 뒤, 조건을 잠그고 새 DB에서 순서를 균형 맞춘 작은 비교를 한 번 실행했다(기술 통계만, comparison_ready=false). 재시작·폭주·삭제 경쟁·repair 구간을 넣은 비교는 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -445,3 +445,7 @@ A restored copy's load queue still names the original storage identity and stays
 ## SYS-05 B5 development pilot
 
 One new test runs the same small synthetic plan (five updates, a replay, a changed retry, one Search) through the real Handler on a loopback server, once in async and once in sync mode, against an isolated PostgreSQL. Ingress is recorded before the Service sees each request; durable, applied and visible witnesses come from serial canonical readback and a Search that consumed the published snapshot; nine cost fields are filled or left null with reasons. Async refused the fifth update as queue full and drained; sync applied all five in-request; both counted one learning and treated the rest as duplicates. Ten altered copies of the real runs were refused, and an independent review's six findings were fixed. This is a development pilot, not a comparison: N=1 per cell, no restart, burst, cold/warm, delete race or repair window, no A-v2 projection, comparison_ready false. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b5-dev-pilot.md).
+
+## SYS-05 B5 locked small comparison
+
+A lock written before the run pinned the pilot report, the eight-request plan, two balanced mode orders, the 64-attempt budget and each mode's runtime configuration hash. One locked execution on fresh databases kept every request: sync applied all five updates in-request; async admitted four, refused the fifth as queue full and drained. Recomputed ranges were update response sync 71.8-113.8 ms and async 8.4-61.4 ms, and received-to-applied witness sync 86.2-127.4 ms and async 272.7-394.6 ms; the async delay mostly reflects that the test runs the worker after all requests. This is descriptive (N=2 per mode), not a performance claim; restart, burst, delete race and repair-window conditions and the A-v2 projection remain. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b5-locked-run.md).
