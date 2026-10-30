@@ -11,6 +11,8 @@ import (
 )
 
 type SearchInput struct {
+	contextView   *ContextInvocationView
+	finalRejected func(Hit, string, string)
 	SearchCriteria
 	RelatedTo       *Ref     `json:"related_to,omitempty"`
 	IncludeInactive bool     `json:"include_inactive,omitempty"`
@@ -59,7 +61,7 @@ type ScoredHit struct {
 	Lanes []int
 }
 
-// laneByReason names the lane each search reason comes from (ST-811).
+// laneByReason names the lane each search reason comes from (existing policy).
 var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation"}
 
 // hitLanes lists the lanes that found a fused hit, in a fixed order.
@@ -86,7 +88,7 @@ func Fuse(lists [][]Hit, limit int) []Hit {
 	return out
 }
 
-// FuseScored is Fuse with each hit's score kept, for measurement (ST-810).
+// FuseScored is Fuse with each hit's score kept, for measurement (existing policy).
 func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 	if limit <= 0 {
 		return []ScoredHit{}
@@ -231,6 +233,13 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if e = s.cleanSearchLanes(ctx, token, in, d, collection, anchor, run, relationLane, queryVector, querySpace, historyRecords, &out, lists); e != nil {
 		return ContextBundle{}, Decision{}, e
 	}
+	filterContextViewLanes(lists, in.contextView)
+	filterContextViewHistory(historyRecords, in.contextView)
+	shadow := s.beginNativeSearchShadow(ctx, in, collection, lists, historyRecords)
+	defer shadow.finish()
+	if shadow != nil {
+		in.finalRejected = shadow.rejectFinal
+	}
 	scored := s.fuseRecallHits(ctx, lists, collection, in)
 	out.Items = make([]Hit, len(scored))
 	for i, r := range scored {
@@ -248,6 +257,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		}
 	}
 	out.ContextID = ID()
+	shadow.compute(ctx, s, token, in, d, out)
 	usage := searchUsage(run, in, out.Items)
 	releaseCommit, err := s.searchCommits.acquire(ctx, in.Scope)
 	if err != nil {
@@ -255,6 +265,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	}
 	defer releaseCommit()
 	if e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		shadow.beginFinal()
 		checked := searchReadTx{Tx: tx}
 		if in.RelatedTo != nil {
 			if err := verifySearchAnchor(ctx, tx, checked, in, anchor); err != nil {
@@ -277,14 +288,21 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		}
 		return audit(ctx, tx, in.Scope, d.PrincipalID, "search", ContentHash(in.Query))
 	}); e != nil {
+		shadow.failedFinal(e)
 		return ContextBundle{}, Decision{}, e
 	}
+	shadow.returned(out)
 	return out, d, nil
 }
 
 // prepareSearchInput validates the relation, history and criteria inputs,
 // stores the normalized criteria in in, and returns the text to authorize.
 func prepareSearchInput(in *SearchInput) (string, error) {
+	view, viewErr := freezeContextView(in.Scope, in.contextView)
+	if viewErr != nil {
+		return "", viewErr
+	}
+	in.contextView = view
 	if !validSearchRelation(*in) {
 		return "", ErrInvalid
 	}
@@ -583,15 +601,19 @@ func verifySearchHistory(ctx context.Context, tx Tx, checked searchReadTx, in Se
 	for _, h := range history {
 		r, err := tx.Get(ctx, colMemories, in.Scope, h.ID)
 		if err != nil {
+			observeSearchFinalRejection(in, h.Hit, "history", nativeFinalCode(err))
 			return err
 		}
 		if !historySearchable(r) || live(r) || !in.SearchCriteria.matchesRecord(r) || structuredText(r) != structuredText(historyRecords[h.ID]) || searchHitHash(HitFromRecord(colMemories, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
+			observeSearchFinalRejection(in, h.Hit, "history", "history_changed")
 			return ErrConflict
 		}
 		if err = tx.FenceRelationMember(ctx, in.Scope, colMemories, r.ID); err != nil {
+			observeSearchFinalRejection(in, h.Hit, "history", nativeFinalCode(err))
 			return err
 		}
 		if err = checkSources(ctx, checked, r); err != nil {
+			observeSearchFinalRejection(in, h.Hit, "history", nativeFinalCode(err))
 			return err
 		}
 	}
@@ -602,12 +624,15 @@ func verifySearchItems(ctx context.Context, checked searchReadTx, in SearchInput
 	for _, h := range items {
 		r, err := checked.Get(ctx, h.Collection, in.Scope, h.ID)
 		if err != nil {
+			observeSearchFinalRejection(in, h, "current", nativeFinalCode(err))
 			return err
 		}
 		if r.ContentErased || !live(r) || !in.SearchCriteria.matchesRecord(r) || r.Revision != h.Revision || h.Collection == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r)) || searchHitHash(HitFromRecord(h.Collection, r)) != snapshots[Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision}] {
+			observeSearchFinalRejection(in, h, "current", "item_changed")
 			return ErrConflict
 		}
 		if err = verifySearchItemSources(ctx, checked, in, run, h.Collection, r); err != nil {
+			observeSearchFinalRejection(in, h, "current", nativeFinalCode(err))
 			return err
 		}
 	}

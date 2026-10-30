@@ -335,6 +335,7 @@ func (s *Service) pinnedContext(ctx context.Context, token string, in ContextBui
 			pinned.Items = append(pinned.Items, *item.Item)
 		}
 	}
+	pinned.Items = filterContextViewItems(pinned.Items, in.ContextView, true)
 	empty := ContextBundle{Authority: AuthorityDataOnly, Items: []Hit{}}
 	if err = packContext(ctx, &empty, budget, in.TokenEncoding); err != nil {
 		return ContextBundle{}, err
@@ -347,7 +348,7 @@ func (s *Service) pinnedContext(ctx context.Context, token string, in ContextBui
 	// What the pins left, counting the shared envelope once.
 	if left := budget - pinned.TokensUsed + empty.TokensUsed; left > empty.TokensUsed {
 		bundle, err := s.Search(ctx, token, SearchInput{
-			SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task,
+			SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: in.ContextView,
 			Limit: maxItems, BudgetTokens: left, TokenEncoding: in.TokenEncoding,
 			Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
 			pinned: refs, // the search's receipt lists the pinned memories first
