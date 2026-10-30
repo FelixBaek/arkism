@@ -19,7 +19,7 @@ window.ArkismDigests = (ctx) => {
     requested: "요청하신 대로 요약 후보를 다시 만들었어요. 바꿀까요?"
   };
   const STATUS = [["active", "상태: 사용 중"], ["rejected", "상태: 거절됨"], ["superseded", "상태: 이전 버전"], ["stale", "상태: 못 씀"]];
-  const SORT = [["heat", "열기 높은 순"], ["recent", "최근 바뀐 순"], ["name", "이름 순"]];
+  const SORT = [["heat", "자주 쓰는 순"], ["recent", "최근 바뀐 순"], ["name", "이름 순"]];
   const ACTION = { merge: "합치기", store: "저장", skip: "건너뛰기" };
   const REASON = { new_information: "새 정보", same_meaning: "같은 뜻", more_specific: "더 구체적", adds_detail: "내용 보탬", already_covered: "이미 있음", updates_older: "옛 내용 갱신" };
 
@@ -87,7 +87,7 @@ window.ArkismDigests = (ctx) => {
     ensure();
     const at = rows.findIndex((r) => r[1] === "기억");
     const n = data.merge?.length || 0;
-    if (at >= 0 && n) rows[at] = [rows[at][0], rows[at][1], [...rows[at][2], { label: `병합 제안 ${n}`, n }], rows[at][3]];
+    if (at >= 0 && n) rows[at] = [rows[at][0], rows[at][1], [...rows[at][2], { label: `합치기 제안 ${n}`, n }], rows[at][3]];
     const { topic, user } = { topic: data.topicCand.length, user: data.userCand.length };
     const parts = [{ label: `주제 요약 바뀜 ${topic}`, n: topic }, { label: `나에 대한 요약 바뀜 ${user}`, n: user }].filter((p) => p.n);
     rows.splice(at >= 0 ? at + 1 : rows.length, 0, ["MEMORY", "모아보기", parts, ["memories", "digests"]]);
@@ -164,10 +164,10 @@ window.ArkismDigests = (ctx) => {
     const max = Math.max(0, ...all.map(scoreOf));
     const counts = { all: all.length, hot: 0, candidate: 0, quiet: 0 };
     all.forEach((e) => { counts[classOf(e, max)]++; });
-    const chips = filter.status === "active" ? [["all", "전체"], ["hot", "뜨거움"], ["candidate", "새 후보"], ["quiet", "잠잠함"]] : [["all", "전체"]];
+    const chips = filter.status === "active" ? [["all", "전체"], ["hot", "요즘 자주 씀"], ["candidate", "새 후보"], ["quiet", "한동안 안 씀"]] : [["all", "전체"]];
     $("#chips").replaceChildren(...chips.map(([k, label]) => {
       const c = el("button", `chip mem-kind${filter.chip === k ? " active" : ""}`); c.type = "button";
-      c.append(el("span", "", label), el("output", "", String(counts[k])));
+      c.append(el("span", "", label)); if (counts[k]) c.append(el("output", "", String(counts[k]))); // no 0 on an empty chip
       c.addEventListener("click", () => { filter.chip = k; paintList(); });
       return c;
     }));
@@ -180,14 +180,14 @@ window.ArkismDigests = (ctx) => {
     table.replaceChildren(...items.map((e) => {
       const d = e.digest || e.cand;
       const cell = el("div", "cell mem-cell");
-      const meta = [`기억 ${d.members?.length || 0}개`, `열기 ${scoreOf(e)}`, ago(d.updated_at)];
+      const meta = [`기억 ${d.members?.length || 0}개`, ago(d.updated_at)];
       if (e.digest?.outdated) meta.push("바탕 기억이 수정됨");
       if (e.digest?.stale) meta.push("그 뒤 승인된 기억 있음");
       cell.append(raw(el("div", "text", titleOf(e))), el("div", "mem-meta", meta.join(" · ")));
       const cls = classOf(e, max);
       const badge = e.cand ? el("span", "mem-badge warn", e.digest ? "새 후보" : PROPOSAL[e.cand.proposal] || "새 후보")
         : filter.status !== "active" ? el("span", "mem-badge", STATUS.find(([k]) => k === filter.status)[1].replace("상태: ", ""))
-        : el("span", "mem-badge", cls === "quiet" ? "잠잠함" : `열기 ${scoreOf(e)}`);
+        : el("span", "mem-badge", cls === "quiet" ? "한동안 안 씀" : "요즘 자주 씀");
       return row(`digest:${e.id}`, "minmax(0,1fr) auto", [cell, badge], () => detail());
     }));
     if (!data.key) table.append(el("div", "empty", "요약을 불러오는 중…"));
@@ -195,7 +195,7 @@ window.ArkismDigests = (ctx) => {
     else if (!items.length) table.append(el("div", "empty", filter.q ? "검색과 맞는 주제가 없어요." : filter.status === "active" ? "아직 주제 요약이 없어요. 승인된 기억이 쌓이면 밤사이 제안돼요." : "여기에 표시할 요약이 없어요."));
     const foot = el("div", "mem-more");
     const capNote = data.cap && data.activeN >= data.cap ? " · 최대 개수에 닿아서 합치기 제안이 나올 수 있어요" : "";
-    foot.append(el("span", "", `${all.length}개 중 ${items.length}개 표시 · 열기 = 최근 30일에 참고되거나 쓰인 정도${data.cap ? ` · 최대 ${data.cap}개` : ""}`), capNote);
+    foot.append(el("span", "", `${all.length}개 중 ${items.length}개 표시 · 자주 씀 = 최근 30일에 자주 참고된 주제${data.cap ? ` · 최대 ${data.cap}개` : ""}`), capNote);
     if (data.key) table.append(foot);
     markSelected();
   }
@@ -234,8 +234,8 @@ window.ArkismDigests = (ctx) => {
     if (!e) { body.append(el("h2", "", "주제를 고르세요"), el("p", "lead", "비슷한 기억을 묶은 요약이에요. 사실이나 지시가 아니라 참고 자료로 쓰여요.")); return; }
     const d = e.digest, c = e.cand;
     const head = el("div", "d-head");
-    head.append(el("p", "d-kind", d ? `주제 · 열기 ${scoreOf(e)}` : `주제 후보 · ${PROPOSAL[c.proposal] || "새 후보"}`), raw(el("h2", "", titleOf(e))));
-    if (d) head.append(el("p", "meta", `기억 ${d.members?.length || 0}개 · 요약 v${d.revision} · ${day(d.review?.at || d.updated_at)} 요약`));
+    head.append(el("p", "d-kind", d ? "주제" : `주제 후보 · ${PROPOSAL[c.proposal] || "새 후보"}`), raw(el("h2", "", titleOf(e))));
+    if (d) head.append(el("p", "meta", `기억 ${d.members?.length || 0}개 · ${day(d.review?.at || d.updated_at)} 요약`));
     if (d?.outdated) head.append(el("span", "mem-badge warn dg-flag", "바탕 기억이 수정됨"));
     if (d?.stale) head.append(el("span", "mem-badge warn dg-flag", "그 뒤 승인된 기억 있음"));
     if (d?.stale_mark) head.append(el("span", "mem-badge warn dg-flag", "바탕 기억이 대체됨"));
@@ -265,7 +265,7 @@ window.ArkismDigests = (ctx) => {
     const body = detailShell("모아보기");
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", "모아보기 · 나에 대한 요약"), el("h2", "", "나에 대한 요약"));
-    head.append(el("p", "meta", u ? `기억 ${u.members?.length || 0}개 · 요약 v${u.revision} · ${day(u.review?.at || u.updated_at)}` : "승인하면 새 세션 시작 때 에이전트에게 참고 자료로 전달돼요(지시가 아님)."));
+    head.append(el("p", "meta", u ? `기억 ${u.members?.length || 0}개 · ${day(u.review?.at || u.updated_at)}` : "승인하면 새 세션 시작 때 에이전트에게 참고 자료로 전달돼요(지시가 아님)."));
     body.append(head);
     if (c) body.append(candidateCard(c, "user", JUDGE_LEAD[c.judge] || "AI가 요약 후보를 만들었어요. 바꿀까요?"));
     if (u && !c) {
@@ -416,9 +416,9 @@ window.ArkismDigests = (ctx) => {
       return row(`merge:${r.id}`, "minmax(0,1fr) auto", [cell, el("span", `mem-badge${p.action === "merge" ? " warn" : p.action === "store" ? " strong" : ""}`, ACTION[p.action] || p.action)], () => mergeDetail());
     }));
     if (!data.key) table.append(el("div", "empty", "제안을 불러오는 중…"));
-    else if (data.merge === false) table.append(el("div", "empty", "병합 제안을 불러오지 못했어요. 새로고침하면 다시 불러와요."));
-    else if (data.merge === null) table.append(el("div", "empty", "이 서버는 병합 제안을 지원하지 않아요."));
-    else if (!items.length) table.append(el("div", "empty", state.query ? "검색과 맞는 제안이 없어요." : "확인할 병합 제안이 없어요."));
+    else if (data.merge === false) table.append(el("div", "empty", "합치기 제안을 불러오지 못했어요. 새로고침하면 다시 불러와요."));
+    else if (data.merge === null) table.append(el("div", "empty", "이 서버는 합치기 제안을 지원하지 않아요."));
+    else if (!items.length) table.append(el("div", "empty", state.query ? "검색과 맞는 제안이 없어요." : "확인할 합치기 제안이 없어요."));
     if (items.length) { const foot = el("div", "mem-more"); foot.append(el("span", "", "AI 제안은 바로 적용하지 않아요. 고르면 그때 저장돼요.")); table.append(foot); }
     markSelected();
   }
@@ -426,7 +426,7 @@ window.ArkismDigests = (ctx) => {
     const id = (state.selected || "").replace(/^merge:/, "");
     const r = (data.merge || []).find((x) => x.id === id);
     if (soft && !r) return;
-    const body = detailShell("병합 제안");
+    const body = detailShell("합치기 제안");
     if (!r) { body.append(el("h2", "", "제안을 고르세요"), el("p", "lead", "AI가 새 후보를 이미 있는 기억과 견줘 본 결과예요. 고르기 전엔 아무것도 바뀌지 않아요.")); return; }
     const p = proposal(r);
     const v = views.get(r.id);
@@ -438,7 +438,7 @@ window.ArkismDigests = (ctx) => {
     const cand = v?.candidate || record("memory_candidates", p.candidate?.id);
     const targets = v?.targets?.length ? v.targets : (p.targets || []).map((t) => record("memories", t.id)).filter(Boolean);
     const head = el("div", "d-head");
-    head.append(el("p", "d-kind", "병합 제안 · AI 제안"),
+    head.append(el("p", "d-kind", "합치기 제안 · AI 제안"),
       el("h2", "", { merge: "비슷한 기억이 이미 있어요", store: "새 기억으로 저장 제안", skip: "이미 있는 기억과 같아요" }[p.action] || "AI 제안"),
       el("p", "meta", [ago(r.created_at), cand ? originOf(cand) : ""].filter(Boolean).join(" · ")));
     body.append(head);

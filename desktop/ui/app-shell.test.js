@@ -15,6 +15,14 @@ test("boots unlocked on the built-in Arkism and fills home", async () => {
   assert.ok(app.apiCalls.some(([, p]) => p.startsWith("/v1/capabilities")));
 });
 
+test("MEMORY opens on the memory list, with 확인해 주세요 and 한눈에 beside it", async () => {
+  await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
+  assert.deepEqual(app.$$("#area-tabs .area-tab").map((t) => t.dataset.tab), ["memories", "check", "overview"]);
+  assert.equal(app.$("#area-tabs .area-tab.active").dataset.tab, "memories");
+  await app.click(app.$('#area-tabs .area-tab[data-tab="check"]'), 50);
+  assert.equal(app.$("#area-tabs .area-tab.active").dataset.tab, "check");
+});
+
 test("every menu and area tab draws", async () => {
   const errors = [], shown = [];
   process.on("unhandledRejection", (e) => errors.push(e));

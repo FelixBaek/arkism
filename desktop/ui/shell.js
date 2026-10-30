@@ -6,16 +6,19 @@ window.ArkismShell = (ctx) => {
   const { state, $, el, go } = ctx;
   // A zero count is left out (an empty 홈 is not 「홈 0」) unless the screen marks its count with data-show-zero.
   const count = (id) => () => { const c = $(`#count-${id}`), n = c?.textContent || ""; return n.trim() === "0" && !c.hasAttribute("data-show-zero") ? "" : n; };
+  const check = () => ctx.memoryCheck;
+  const noZero = (n) => () => (n() === "0" ? "" : n()); // 홈 · 기억: an empty count shows no number
 
   // [key, label, open(), isActive(), count?]
   const MENUS = {
     home: { label: "HOME", tabs: [
-      ["home", "홈", () => go("todo"), () => state.view === "todo", count("todo")]
+      ["home", "홈", () => go("todo"), () => state.view === "todo", noZero(count("todo"))]
     ] },
+    // The list first: a new user lands on their memories, 확인해 주세요 holds every decision, 한눈에 is the brain map.
     memory: { label: "MEMORY", tabs: [
-      ["overview", "개요", () => go("overview"), () => state.view === "overview"],
-      ["memories", "기억", () => go("memories", "active"), () => state.view === "memories", count("memories")],
-      ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
+      ["memories", "기억", () => go("memories", "active"), () => state.view === "memories" && !check().isCheck(state.memTab), noZero(count("memories"))],
+      ["check", "확인해 주세요", () => go("memories", check().firstCheck()), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }], // nothing known to wait: no 0 / 0+
+      ["overview", "한눈에", () => go("overview"), () => state.view === "overview"]
     ] },
     agent: { label: "FLOW", tabs: [
       ["crew", "워크플로우", () => go("crew"), () => ["crew", "graph", "workers", "teams", "teamNew", "meetings"].includes(state.view), count("crew")],
@@ -66,8 +69,7 @@ window.ArkismShell = (ctx) => {
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     const box = $("#area-tabs");
-    // MEMORY draws no tabs: the overview's own links open 기억·세션·사용량, and the rail goes back to 개요.
-    const tabs = key === "memory" ? [] : MENUS[key].tabs;
+    const tabs = MENUS[key].tabs;
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
     box.replaceChildren(...tabs.map(([id, , open, active, n]) => {
       const t = el("button", `area-tab${active() ? " active" : ""}`);

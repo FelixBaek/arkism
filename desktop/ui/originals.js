@@ -44,26 +44,29 @@ window.ArkismOriginals = (ctx) => {
     const live = () => host.isConnected && owner === identity() && state.view === "memories" && state.selected === memory.id;
     host.replaceChildren();
     if (!valid(response) || response.memory?.id !== memory.id || response.memory?.revision !== memory.revision || !Array.isArray(response.sources)) {
-      host.append(el("p", "meta", "출처를 불러오지 못했어요. 다시 선택해 주세요.")); return;
+      host.append(el("p", "meta", "어디서 왔는지 불러오지 못했어요. 다시 선택해 주세요.")); return;
     }
-    if (!response.sources.length) host.append(el("p", "meta", "연결된 출처가 없어요."));
+    if (!response.sources.length) host.append(el("p", "meta", "남아 있는 대화가 없어요."));
     for (const source of response.sources) {
+      // plain first: what was said, one line of where, 대화 보기; the runner's own fields wait under 자세히
       const row = el("section", "original-source");
-      row.append(el("p", "meta", `${origins[source.origin_product] || source.origin_product || "출처"} · ${date(source.collected_at)}`));
-      if (source.origin_agent_id) row.append(el("p", "meta", `원래 실행 에이전트   ${source.origin_agent_id} · 실행기가 기록한 정보`));
-      row.append(el("p", "meta", "저장된 근거 발췌예요. 실제 발화는 연결된 원문에서 확인해 주세요."));
-      row.append(el("p", "original-excerpt", source.excerpt || "조회할 수 있는 근거 본문이 없어요."));
+      row.append(el("p", "meta", "이 대화에서 이렇게 말했어요"), el("p", "original-excerpt", source.excerpt || "남은 내용이 없어요."));
+      row.append(el("p", "meta", `${origins[source.origin_product] || source.origin_product || "대화"} · ${date(source.collected_at)}`));
       const refs = source.archive_messages || [];
       refs.forEach((ref, index) => {
         const panel = el("div", "original-reader"); panel.hidden = true;
-        const trigger = button(`연결된 원문 ${refs.length > 1 ? index + 1 : ""} 열기`.replace("  ", " "), "small", null, () => {
+        const trigger = button(`대화 보기${refs.length > 1 ? ` ${index + 1}` : ""}`, "small", null, () => {
           panel.hidden = !panel.hidden; trigger.setAttribute("aria-expanded", String(!panel.hidden));
           panel.replaceChildren();
           if (!panel.hidden) messageReader(panel, ref, () => live() && panel.isConnected && !panel.hidden);
         });
         trigger.setAttribute("aria-expanded", "false"); row.append(trigger, panel);
       });
-      if (!refs.length) row.append(el("p", "meta", source.state === "erased" || source.deleted_at ? "원문이 삭제됐어요." : "정확한 대화 위치가 연결되지 않은 출처예요."));
+      if (!refs.length) row.append(el("p", "meta", source.state === "erased" || source.deleted_at ? "대화 원문은 지워졌어요." : "대화 원문은 남아 있지 않아요."));
+      const more = el("details", "d-rules"); more.append(el("summary", "", "자세히"));
+      if (source.origin_agent_id) more.append(el("p", "meta", `원래 실행 에이전트   ${source.origin_agent_id} · 실행기가 기록한 정보`));
+      more.append(el("p", "meta", "위 문장은 저장할 때 남긴 발췌예요. 정확한 말은 대화에서 확인해 주세요."));
+      row.append(more);
       host.append(row);
     }
   }

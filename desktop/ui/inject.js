@@ -203,11 +203,11 @@
     const tokenLine = (count, chars) => count ? `${count.tokens.toLocaleString()} 토큰 · ${chars.toLocaleString()}자 (${count.token_encoding || "cl100k_base"} 기준)` : `${chars.toLocaleString()}자 · 토큰 수는 계산하지 못했어요`;
 
     function effectSection() {
-      const s = section("효과", "답변과 문구가 겹쳤는지");
+      const s = section("효과", "답에 보였는지");
       const w7 = use7(), w30 = use30();
-      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 문구 겹침 통계를 보내지 않았어요.")); return s; }
+      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 답에 보였는지 기록를 보내지 않았어요.")); return s; }
       const rows = [];
-      for (const w of [w7, w30].filter(Boolean)) rows.push([`최근 ${w.days}일`, w.injections ? `${w.injections}번 들어감 · 문구 겹침 ${w.used}번 · ${w.rate}% · 대화 ${w.sessions}개` : `들어간 기억 없음 · 대화 ${w.sessions}개`]);
+      for (const w of [w7, w30].filter(Boolean)) rows.push([`최근 ${w.days}일`, w.injections ? `${w.injections}번 들어감 · 답에 보임 ${w.used}번 · ${w.rate}% · 대화 ${w.sessions}개` : `들어간 기억 없음 · 대화 ${w.sessions}개`]);
       const avg = (w30 || w7).avgChars ?? w7?.avgChars;
       if (avg !== null && avg !== undefined) {
         const ratio = session?.count && session.chars ? session.count.tokens / session.chars : null;
@@ -215,10 +215,10 @@
       }
       s.append(facts(rows));
       if (avg !== null && avg !== undefined && session?.count) s.append(el("p", "meta", "토큰은 아래 미리보기의 글자당 토큰 비율로 환산한 값이에요."));
-      s.append(el("p", "meta", "질문할 때 찾아 넣은 기억과 답변의 문구 겹침만 셉니다. 실제 활용 여부는 측정하지 않았고, 읽지 못한 대화 수는 이 통계에서 알 수 없어요."));
+      s.append(el("p", "meta", "질문할 때 찾아 넣은 기억의 문구가 답에 보였는지만 세요. 실제 활용 여부는 측정하지 않았고, 읽지 못한 대화 수는 이 통계에서 알 수 없어요."));
       const w = w30 || w7;
-      s.append(el("h4", "", `문구 겹침이 확인된 기억 · 최근 ${w.days}일`), rankList(w.topUsed, (r) => `문구 겹침 ${r.used}번 / ${r.injected}번 들어감`, "문구 겹침이 확인된 기억이 아직 없어요."));
-      s.append(el("h4", "", `문구 겹침이 확인되지 않은 기억 · 최근 ${w.days}일`), rankList(w.topUnused, (r) => `${r.injected}번 들어감`, "없어요."));
+      s.append(el("h4", "", `답에 보인 기억 · 최근 ${w.days}일`), rankList(w.topUsed, (r) => `답에 보임 ${r.used}번 / ${r.injected}번 들어감`, "답에 보인 기억이 아직 없어요."));
+      s.append(el("h4", "", `답에 안 보인 기억 · 최근 ${w.days}일`), rankList(w.topUnused, (r) => `${r.injected}번 들어감`, "없어요."));
       return s;
     }
     function sessionSection() {
@@ -278,14 +278,14 @@
     function tiles(stat, often) {
       const w7 = use7(), w30 = use30(), out = [];
       const ratio = (w) => (w.rate === null ? "—" : String(w.rate));
-      if (w7) out.push(stat(`최근 ${w7.days}일 문구 겹침 비율`, ratio(w7), `% · ${w7.injections}번 들어감 · 문구 겹침 ${w7.used}번`));
-      if (w30) out.push(stat(`최근 ${w30.days}일 문구 겹침 비율`, ratio(w30), `% · ${w30.injections}번 들어감 · 문구 겹침 ${w30.used}번`));
+      if (w7) out.push(stat(`최근 ${w7.days}일 답에 보인 비율`, ratio(w7), `% · ${w7.injections}번 들어감 · 답에 보임 ${w7.used}번`));
+      if (w30) out.push(stat(`최근 ${w30.days}일 답에 보인 비율`, ratio(w30), `% · ${w30.injections}번 들어감 · 답에 보임 ${w30.used}번`));
       const avg = w30?.avgChars ?? w7?.avgChars;
       if (avg !== null && avg !== undefined) out.push(stat("세션당 평균 들어간 양", avg.toLocaleString(), "자 · 대화 시작 + 질문"));
-      out.push(stat("문구 겹침을 검토할 기억", String(often), "개 · 확인해 주세요", often > 0));
+      out.push(stat("답에 안 보여 확인할 기억", String(often), "개 · 확인해 주세요", often > 0));
       return out;
     }
-    const openButton = () => button("들어가는 기억", "small", "eye", open);
+    const openButton = () => button("에이전트가 받는 기억", "small", "eye", open);
     window.addEventListener("arkism:inject-preview", () => setTimeout(open, 0));
     return { open, tiles, button: openButton };
   };

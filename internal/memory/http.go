@@ -117,6 +117,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	memorySignalRoutes(mux, s)
 	candidateEvidenceRoutes(mux, s)
 	memoryReviewDueRoutes(mux, s)
+	memoryRestoreRoutes(mux, s)
 	memoryConfirmRoutes(mux, s)
 	memoryManagementRoutes(mux, s)
 	memoryGraphRoutes(mux, s)

@@ -437,24 +437,24 @@ window.ArkismUsage = (ctx) => {
     const toolCard = card("많이 쓴 도구", `· ${d.tools.length}`, bars(d.tools.slice(0, 8), (s) => s.count, (s) => toolName(s.name), (s) => toolServer(s.name) || `${s.sessions}세션`, (s) => `${num(s.count)}회`));
     if (!w) {
       return [kpiRow([["세션", num(k.sessions), `하루 평균 ${num(k.sessions / days())}`], ["활동 시간", dur(k.active_seconds), `${k.active_days}일 동안`],
-        ["스킬 사용", num(skillUses), `스킬 ${d.skills.length}개`, "accent"], ["캐시 적중", `${k.cache_hit_pct}%`, `${num(k.cache_read)} 읽기`]]),
-        el("p", "v4u-hint", "답변과 기억의 문구 겹침은 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요."), heat, two(skillCard, toolCard)];
+        ["스킬 사용", num(skillUses), `스킬 ${d.skills.length}개`, "accent"], ["다시 쓴 입력", `${k.cache_hit_pct}%`, `${num(k.cache_read)} 토큰`]]),
+        el("p", "v4u-hint", "기억이 답에 보였는지는 PC 수집기가 보고하면 여기에 보여요. 실제 활용 여부는 측정하지 않아요."), heat, two(skillCard, toolCard)];
     }
     const byId = new Map((m.memories || []).map((x) => [x.id, x]));
     const injectedItems = w.items.filter((x) => x.injected > 0);
     const tidy = (m.memories || []).filter((x) => m.often?.(x));
     const rate = w.injections ? Math.round((w.used / w.injections) * 100) : null;
-    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "답변 문구 겹침 미확인 · 직접 검토", tidy.length ? "amber" : "");
+    const tidyKpi = kpi("정리할 기억", `${tidy.length}개`, "답에 안 보임 · 직접 검토", tidy.length ? "amber" : "");
     if (tidy.length) { const go = link("정리하기 →", () => m.openIdle?.()); go.classList.add("v4u-kpi-link"); tidyKpi.append(go); }
     const kp = el("div", "v4u-kpis");
-    kp.append(kpi("답변 문구 겹침 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
+    kp.append(kpi("답에 보인 비율", rate === null ? "—" : `${rate}%`, `최근 ${w.days}일 · 들어간 ${num(w.injections)}번 중 ${num(w.used)}번`, "accent"),
       kpi("들어간 기억", `${num(w.injections)}회`, `기억 ${num(injectedItems.length)}개 · 하루 ${(w.injections / Math.max(1, w.days)).toFixed(1)}회`), tidyKpi,
       kpi("세션", num(k.sessions), w.inject_sessions ? `기억을 받은 세션 ${num(w.inject_sessions)}` : `하루 평균 ${num(k.sessions / days())}`));
     // 기억 흐름: saved in the window → put into answers → used by the answer.
     const since = Date.now() - w.days * 86400000;
     const saved = (m.memories || []).filter((x) => new Date(x.created_at).getTime() >= since).length;
     const flow = [["저장", saved, `${num(saved)}개`, ""], ["답변에 들어감", injectedItems.length, `${num(w.injections)}회 · 기억 ${num(injectedItems.length)}개`, ""],
-      ["문구 겹침 확인", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 문구 겹침`]];
+      ["답에 보임", w.items.filter((x) => x.used > 0).length, `${num(w.items.filter((x) => x.used > 0).length)}개`, rate === null ? "" : `${rate}% 답에 보임`]];
     const fmax = Math.max(1, ...flow.map((f) => f[1]));
     const fbox = el("div", "v4u-bars v4u-flowbars");
     for (const [label, n, text, side] of flow) {
@@ -462,7 +462,7 @@ window.ArkismUsage = (ctx) => {
       row.append(el("span", "v4u-bar-name", label), bar, el("span", "v4u-num", text), el("span", "v4u-side", side)); fbox.append(row);
     }
     const flowCard = card("기억 흐름", `최근 ${w.days}일 · 실제 활용 여부는 미측정`, fbox);
-    // 종류별 문구 겹침: used / injected per kind.
+    // 종류별로 답에 보인 비율: used / injected per kind.
     const kinds = {};
     for (const x of injectedItems) { const kind = byId.get(x.id)?.kind; if (!kind) continue; const a = (kinds[kind] ||= { inj: 0, used: 0, n: 0 }); a.inj += x.injected; a.used += x.used; a.n++; }
     const kindRows = Object.entries(kinds).sort((a, b) => b[1].used / b[1].inj - a[1].used / a[1].inj);
@@ -473,18 +473,18 @@ window.ArkismUsage = (ctx) => {
       row.append(el("span", "v4u-bar-name", m.kindLabel ? m.kindLabel(kind) : kind), bar, el("span", `v4u-num${r < 20 ? " amber" : ""}`, `${r}%`), el("span", "v4u-side", `${a.n}개`)); kbox.append(row);
     }
     if (!kindRows.length) kbox.append(el("p", "v4u-empty", "아직 답변에 들어간 기억이 없어요."));
-    const kindCard = card("종류별 문구 겹침", "전달한 기억 중 문구 겹침이 확인된 비율", kbox);
+    const kindCard = card("종류별로 답에 보인 비율", "전달한 기억 중 답에 보인 비율", kbox);
     const tbox = el("div", "v4u-rows");
     for (const x of tidy.slice(0, 5)) {
       const s = w.items.find((y) => y.id === x.id) || { injected: 0, used: 0 };
       const row = el("button", "v4u-tidy"); row.type = "button";
-      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · 문구 겹침 ${s.used}번`));
+      const t = el("div", "v4u-session-text"); t.append(raw(el("b", "", x.text)), el("small", "", `${s.injected}번 들어감 · 답에 보임 ${s.used}번`));
       row.append(t, el("span", "v4u-link", "정리"));
       row.addEventListener("click", () => m.openMemory?.(x.id));
       tbox.append(row);
     }
     if (!tidy.length) tbox.append(el("p", "v4u-empty", "정리할 기억이 없어요."));
-    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `문구 겹침 미확인 · ${tidy.length}개 · 실제 활용 여부는 미측정`), tbox);
+    const tidyCard = card("정리할 기억", tidy.length ? link("모두 보기 →", () => m.openIdle?.()) : "", el("p", "v4u-hint", `답에 안 보임 · ${tidy.length}개 · 실제 활용 여부는 미측정`), tbox);
     return [kp, flowCard, heat, two(kindCard, tidyCard), two(skillCard, toolCard)];
   }
   // 많이 쓴 스킬 with the agents that ran it (GET /v1/skills/usage by_runtime) when the skill is known.
@@ -592,7 +592,7 @@ window.ArkismUsage = (ctx) => {
     skill_version_rejected: "스킬 후보 제외", skill_improvement_rejected: "AI 스킬 개선 제외",
     candidate_approve: "후보 승인", candidate_edit_approve: "고쳐서 승인", candidate_reject: "후보 버림", candidate_expired: "후보 기한 지남",
     dreaming_accept: "정리 제안 받아들임", dreaming_swap: "정리 제안 반대로", dreaming_dismiss: "정리 제안 둘 다 둠", dreaming_forget_both: "정리 제안 둘 다 잊음",
-    merge_accept: "병합 제안 받아들임", merge_dismiss: "병합 제안 넘김", conflict_resolved: "충돌 정리",
+    merge_accept: "합치기 제안 받아들임", merge_dismiss: "합치기 제안 넘김", conflict_resolved: "서로 다른 기억 정리",
     wiki_approve: "위키 초안 승인", wiki_reject: "위키 초안 거절", flow_approved: "흐름 승인", flow_rejected: "흐름 거절", flow_cancelled: "흐름 중단",
     skill_routed: "스킬 골라 줌", skill_route_loaded: "고른 스킬을 불러옴", role_model_changed: "역할별 모델 바꿈",
     agent_tool_on: "도구 켜기·설치", agent_tool_off: "도구 끄기·제거", ai_help_accepted: "AI 도움대로 함", ai_help_discarded: "AI 도움과 다르게 함"

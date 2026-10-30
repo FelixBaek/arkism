@@ -7,8 +7,8 @@
 // Zoom (wheel · pinch · +/− keys · buttons) and drag-to-pan only move the view; past LABEL_ZOOM the visible dots get short names.
 window.ArkismMemoryBubbles = (() => {
   "use strict";
-  // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 지지 solid, 관련 dotted, 충돌 red dashed, 대체 purple dotted.
-  const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "지지" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "관련" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "충돌" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "대체" } };
+  // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 뒷받침 solid, 같은 대화 dotted, 서로 다름 red dashed, 새로 바뀜 purple dotted.
+  const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "뒷받침" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "같은 대화" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "서로 다름" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "새로 바뀜" } };
   const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // spiral step

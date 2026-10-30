@@ -141,7 +141,7 @@ window.ArkismHome = function (ctx) {
         .map((m) => ({ kind: "memory", id: m.id, title: m.text, where: "기억", item: m }));
       if (palTab === "all" || palTab === "memory") groups.push(["최근 기억", recent]);
       if (palTab === "all") groups.push(["작업", [
-        { kind: "action", title: "기억 후보 검토", run: () => { state.menu = "memory"; go("memories", "candidate"); } },
+        { kind: "action", title: "새 기억 확인", run: () => { state.menu = "memory"; go("memories", "candidate"); } },
         { kind: "action", title: "연결 상태 보기", run: () => { const t = $("#status-toggle"); if ($("#status-card").hidden) t.click(); } },
         { kind: "action", title: "설정 열기", run: () => ctx.openSettings() }]]);
     } else {

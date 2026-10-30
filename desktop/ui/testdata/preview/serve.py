@@ -102,7 +102,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": groups, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write
 
-QUERY = {"/v1/memories/query": lambda state: "/v1/memories",
+QUERY = {"/v1/memories/query": lambda state: "/v1/memories?status=rejected" if state == "removed" else "/v1/memories",
          "/v1/memory_candidates/query": lambda state: "/v1/memory_candidates?status=" + state,
          "/v1/skills/query": lambda state: "/v1/skills/trash" if state == "trash" else "/v1/skills"}
 # The server's memory states, cut down to what the fixtures carry (internal/memory/catalog_memory.go memoryCatalogState).

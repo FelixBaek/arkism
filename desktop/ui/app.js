@@ -472,11 +472,11 @@ export function startApp() {
   }
   // 기억 처리 stages in the card: the same stages() the MEMORY › 개요 grid draws (overview.js), so a stopped stage shows here too.
   // Only while the card is open: the sums walk every memory, and overview is set up after the first renders.
-  const STAGE_LEVEL = { g: ["ok", "정상"], y: ["warn", "곧 확인"], o: ["warn", "확인 필요"], r: ["bad", "멈춤"] };
+  const STAGE_LEVEL = { n: ["", "아직 시작 전"], g: ["ok", "정상"], y: ["warn", "곧 확인"], o: ["warn", "확인 필요"], r: ["bad", "멈춤"] };
   function renderStatusStages(card) {
     void overview.loadSessions(); // cached for a minute; calls renderStatusCard again when it lands
     const list = overview.stages();
-    $("#status-stages").replaceChildren(...[["save", "저장"], ["use", "사용"], ["dream", "드리밍"], ["approve", "승인"]].map(([g, label]) => {
+    $("#status-stages").replaceChildren(...[["save", "저장"], ["use", "사용"], ["dream", "정리"], ["approve", "승인"]].map(([g, label]) => {
       const sec = el("div", "st-stage-group");
       sec.append(el("span", "st-stage-sec", label));
       const ul = el("ul", "status-list");
@@ -524,7 +524,8 @@ export function startApp() {
   dialogKeys(document);
   (window.ArkismPopoutSetup ||= {}).dialogKeys = dialogKeys;
   // 알림 줄: 문구 하나와 닫기(×). 다른 화면으로 가도 지워진다.
-  function notice(text) {
+  // action: [label, run] adds one button to the message (되돌리기 right after a delete).
+  function notice(text, action) {
     // An open window (dialog) covers the page, so its messages show inside that window instead.
     const doc = window.ArkismPopout?.current() || document; // the window the user is in: a popout's popup too
     const top = [...doc.querySelectorAll("dialog[open]")].pop();
@@ -543,7 +544,9 @@ export function startApp() {
     close.setAttribute("aria-label", "알림 닫기");
     close.append(icon("x"));
     close.addEventListener("click", () => notice(""));
-    n.append(el("span", "", text), close);
+    n.append(el("span", "", text));
+    if (action) n.append(button(action[0], "small", null, () => { notice(""); action[1](); }));
+    n.append(close);
   }
 
   // 알림 자리에 공통 상태 화면 하나 (Figma 198:3554, home-checks.js ArkismState.of), 닫기(×)는 그대로.
@@ -1043,23 +1046,25 @@ export function startApp() {
   function reviewBatchDetail(body) {
     const list = [...state.data.candidates].sort(byRisk).slice(0, BATCH);
     const keep = new Map(list.map((c) => [c.id, !(c.tags || []).includes("review:instruction_like")]));
-    body.append(el("h2", "", `기억 후보 ${list.length}개`), el("p", "lead", "눌러서 저장·버리기를 바꾸고 한 번에 반영해요. 14일 동안 안 보면 저절로 사라져요."));
     const cards = el("div", "tidy-cards");
     const paint = () => cards.replaceChildren(...list.map((c) => {
       const on = keep.get(c.id);
-      const card = el("button", `sim-card${on ? " on" : " off"}`);
-      card.type = "button";
+      const card = el("div", `sim-card${on ? " on" : " off"}`);
       const suspect = (c.tags || []).includes("review:instruction_like");
       const open = riskOf(c) === 0;
       const text = el("p", open ? "" : "one-line", c.text);
       if (!open) text.title = c.text;
-      card.append(el("span", on ? "tag" : "dim", on ? "저장" : "버리기"), raw(text),
-        el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : ""].filter(Boolean).join(" · ")));
+      // two plain buttons per card: what each card does is on the card, not in a toggle the reader has to guess
+      const pick = el("div", "sim-pick");
+      for (const [v, label] of [[true, "저장"], [false, "버리기"]]) { const b = button(label, `small${on === v ? " primary" : " ghost"}`, null, () => { keep.set(c.id, v); paintAll(); }); b.setAttribute("aria-pressed", String(on === v)); pick.append(b); }
+      card.append(raw(text), el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : ""].filter(Boolean).join(" · ")));
       if (open && c.classification.risk_reasons?.length) card.append(el("small", "dim", c.classification.risk_reasons.join(" · ")));
-      card.addEventListener("click", () => { keep.set(c.id, !on); paint(); });
+      card.append(pick);
       return card;
     }));
-    paint();
+    const applyBtn = button("", "primary", "check", () => apply());
+    const label = () => { const n = list.filter((c) => keep.get(c.id)).length; applyBtn.lastChild.textContent = `${n}개 저장 · ${list.length - n}개 버리기 반영`; };
+    const paintAll = () => { paint(); label(); };
     const apply = () => memoryList.reviewOnce("batch", async () => {
       const items = list.map((c) => keep.get(c.id) ? { id: c.id, expected_revision: c.revision, action: "approve" }
         : { id: c.id, expected_revision: c.revision, action: "reject", reason: "Arkism 앱 묶음 검토에서 버림" });
@@ -1068,10 +1073,14 @@ export function startApp() {
       await memoryList.reloadMemories();
       notice(failed ? `${items.length - failed}개 반영, ${failed}개는 다른 곳에서 바뀌어 건너뛰었어요.` : `${items.length}개를 반영했어요.`);
     });
-    const foot = el("div", "actions");
-    foot.append(button("하나씩 보기", "ghost", null, () => go("memories", "candidate")), button(`${list.length}개 한 번에 반영`, "primary", "check", apply));
+    // the apply button sits on top and stays there while the list scrolls
+    const head = el("div", "batch-head");
+    head.append(el("h2", "", `새 기억 확인 ${list.length}개`), el("p", "lead", "카드마다 저장할지 버릴지 골라 한 번에 반영해요. 버리면 기억하지 않아요."), applyBtn);
+    body.append(head);
     const rest = state.data.candidates.length - list.length;
-    body.append(cards, el("p", "meta", rest > 0 ? `반영하면 다음 ${Math.min(rest, BATCH)}개가 이어서 나와요 · 불러온 남은 후보 ${rest}개` : collectionPaging.snapshot("candidates").cursor ? "다음 목록에도 후보가 있어요." : "이게 전부예요."), foot);
+    body.append(cards, el("p", "meta", rest > 0 ? `반영하면 다음 ${Math.min(rest, BATCH)}개가 이어서 나와요 · 불러온 남은 후보 ${rest}개` : collectionPaging.snapshot("candidates").cursor ? "다음 목록에도 후보가 있어요." : "이게 전부예요."),
+      button("하나씩 보기", "ghost", null, () => go("memories", "candidate")));
+    paintAll();
   }
 
   // 업데이트 가능: 서버 pulls each skill repository forward (git pull --ff-only), never merging.
@@ -1090,7 +1099,7 @@ export function startApp() {
   // 먼저 확인 holds three rows; 기억 처리 멈춤 is a fourth row on top while it lasts (Figma 523:35767).
   const firstCount = (items) => (items[0]?.id === "stalled" ? 4 : 3);
   // The Home row for lists that failed while the memories loaded; each failed list is named once (#186).
-  const LIST_FAILED = { candidates: "기억 후보 목록을 불러오지 못했어요", conflicted: "부딪히는 기억 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요",
+  const LIST_FAILED = { candidates: "새 기억 확인 목록을 불러오지 못했어요", conflicted: "서로 다른 기억 목록을 불러오지 못했어요", skills: "스킬 목록을 불러오지 못했어요",
     crew: "FLOW 목록을 불러오지 못했어요", prompts: "프롬프트 목록을 불러오지 못했어요", designSystems: "디자인 시스템 목록을 불러오지 못했어요" };
   // A paged server list as a count (#465): its server total while more pages wait, "N+" without one, "—" when the list failed.
   function listCount(name, total) {
@@ -1142,10 +1151,10 @@ export function startApp() {
         sub: "하나로 합치면 관리가 쉬워요", action: "비교하기", detail: (body, i) => similarDetail(body, pairs[i] || pair), preview: pairs.map((x) => `${x.a.name} ↔ ${x.b.name} ${Math.round(x.score * 100)}%`) },
       { id: "unused", n: unusedSkills.length, icon: "clock-counter-clockwise", label: "안 쓰는 스킬", title: `60일 동안 안 쓴 스킬 ${unusedSkills.length}개`,
         sub: "휴지통으로 옮기면 에이전트가 더 읽지 않아요", action: "휴지통으로", run: () => confirmBatch(unusedSkills, () => trashSkills(unusedSkills)), preview: unusedSkills.slice(0, 5).map((sk) => sk.name) },
-      { id: "review", ...review, icon: "tray", label: "기억 검토", title: review.state === "partial" ? `기억 후보 ${review.min}개 이상 검토` : `기억 후보 ${review.text}개 검토`,
+      { id: "review", ...review, icon: "tray", label: "새 기억 확인", title: review.state === "partial" ? `새 기억 ${review.min}개 이상 확인` : `새 기억 ${review.text}개 확인`,
         sub: suspect.length ? `지시처럼 보이는 문장 ${suspect.length}개가 있어요` : "자동으로 저장하지 않은 후보예요", warn: suspect.length > 0,
-        action: "한 번에 검토", detail: (body) => reviewBatchDetail(body), preview: d.candidates.slice(0, 5).map((c) => c.text) },
-      { id: "conflicted", ...conflicted, icon: "warning-circle", label: "부딪히는 기억", title: conflicted.state === "partial" ? `부딪히는 기억 ${conflicted.min}개 이상` : `부딪히는 기억 ${conflicted.text}개`,
+        action: "한 번에 확인", detail: (body) => reviewBatchDetail(body), preview: d.candidates.slice(0, 5).map((c) => c.text) },
+      { id: "conflicted", ...conflicted, icon: "warning-circle", label: "서로 다른 기억", title: conflicted.state === "partial" ? `서로 다른 기억 ${conflicted.min}개 이상` : `서로 다른 기억 ${conflicted.text}개`,
         sub: "기존 기억과 내용이 달라 어느 쪽이 맞는지 골라야 해요", warn: true, action: "고르기", go: ["memories", "conflicted"],
         preview: d.conflicted.slice(0, 5).map((c) => c.text) },
       { id: "blocked", n: blocked.length, icon: "plug", label: "빠진 에이전트", title: blocked.length ? `${blocked[0][0].name}를 ${agentName(blocked[0][1])}에서 못 써요` : "",
@@ -1153,9 +1162,9 @@ export function startApp() {
         run: () => { skillViews.stage(blocked[0][0].id, blocked[0][1], "allow"); go("skills", "missing"); }, go: ["skills", "missing"],
         agent: blocked.length ? [AGENTS.find(([k]) => k === blocked[0][1])?.[2] || "sym:i-plug", agentName(blocked[0][1])] : null,
         preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name} → ${agentName(k)}`) },
-      { id: "idle", ...idleN, icon: "clock-counter-clockwise", label: "호출과 문구 검토", title: idleN.state === "partial" ? `검토할 기억 ${idleN.min}개 이상` : `검토할 기억 ${idleN.text}개`,
-        sub: "재검토 예정일이 지났거나 최근 호출·문구 겹침이 적어요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
-      { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
+      { id: "idle", ...idleN, icon: "clock-counter-clockwise", label: "다시 볼 기억", title: idleN.state === "partial" ? `검토할 기억 ${idleN.min}개 이상` : `검토할 기억 ${idleN.text}개`,
+        sub: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보여요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
+      { id: "fresh", n: fresh.length, icon: "sparkle", label: "새로 저장한 기억", title: `최근 3일 저장한 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
     ];
     const ORDER = ["lists", "extractor", "stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
@@ -1297,21 +1306,22 @@ export function startApp() {
       box.replaceChildren(...pageView.head());
     } else if (state.view === "crew") {
       box.replaceChildren(...crew.head());
-    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "provenance", "conflicted", "idle", "digests", "merge"].includes(state.memTab)) {
+    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "provenance", "conflicted", "idle", "digests", "merge", "removed"].includes(state.memTab)) {
       box.replaceChildren();
     } else if (state.view === "memories" && state.memTab === "originals") {
       box.replaceChildren(button("다시 불러오기", "", "arrows-clockwise", originals.reload));
     } else if (state.view === "memories") {
-      box.replaceChildren(button("기억 추가", "primary", null, memoryDetail.openMemoryAdd));
-    } else if (state.view === "todo" && state.start) {
-      box.replaceChildren();
+      box.replaceChildren(); // 기억 추가 sits in the list toolbar
+    } else if (state.view === "todo" && homePage().kind !== "home") {
+      box.replaceChildren(); // 시작하기 and the sub-pages (새 기억 확인 …) carry their own actions
     } else if (state.view === "todo") {
-      const note = el("span", "head-note");
+      // one plain action instead of 분석 time · 다시 분석 · 다시 불러오기
       const at = suggestions().at;
-      const again = el("button", "link-btn", analyzing ? "분석 중…" : "다시 분석"); again.type = "button"; again.disabled = analyzing; again.addEventListener("click", analyze);
-      const reload = el("button", "link-btn", "다시 불러오기"); reload.type = "button"; reload.addEventListener("click", loadAll);
-      note.append(icon("clock-counter-clockwise"), at ? `${ago(at)} 분석 ·` : "아직 분석 안 함 ·", again, "·", reload);
-      box.replaceChildren(note);
+      const ask = button(analyzing ? "제안 받는 중…" : "스킬 제안 받기", "", null, analyze); ask.disabled = analyzing;
+      if (at) ask.title = `${ago(at)} 받음`;
+      // Home already refreshes on focus and every 10s (visibleSync); this is the manual way for the impatient.
+      const again = button("", "ghost icon-btn", "arrows-clockwise", loadAll); again.title = "다시 불러오기"; again.setAttribute("aria-label", "다시 불러오기");
+      box.replaceChildren(again, ask);
     } else if (state.view === "images") {
       box.replaceChildren(state.promptRun ? button("이 프롬프트로 만들기", "primary", null, (e) => imageViews.runPrompt(e.currentTarget)) : button("프롬프트 추가", "primary", null, () => imageViews.openPromptEditor(null)));
     } else if (state.view === "design") {
@@ -1412,7 +1422,7 @@ export function startApp() {
 
   // ---------------------------------------------------------------- 할 일 (Figma v4 · 01 홈: 198:200, 198:2178, 198:2264, 198:3812, 210:17783)
   // 홈 = 맨 위 그림 + 먼저 확인 3가지 + 메뉴별 확인할 것 + 이번 주. 줄을 고르면 그 일의 화면(← 홈)으로, 전체 항목 보기는 표 하나로.
-  const TODO_SHORT = { review: "기억 후보", conflicted: "부딪힘", maintenance: "정리 제안", idle: "호출과 문구 검토", fresh: "새로 저장",
+  const TODO_SHORT = { review: "새 기억 확인", conflicted: "서로 다른 기억", maintenance: "정리 제안", idle: "다시 볼 기억", fresh: "새로 저장",
     suggest: "새 스킬", similar: "비슷함", unused: "안 씀", updates: "업데이트", blocked: "빠진 에이전트" };
   const TODO_MENUS = [["MEMORY", "기억", ["fresh", "review", "conflicted", "maintenance", "idle"], ["memories", "active"]],
     ["TOOLS", "스킬", ["suggest", "similar", "unused", "updates", "blocked"], ["skills"]]];
@@ -1523,8 +1533,8 @@ export function startApp() {
     wrap.replaceChildren(...parts);
   }
   function homeEmpty() {
-    return homeStart.checklist() || window.ArkismState.panel({ title: "지금은 확인할 일이 없어요", text: "새 기억 후보나 스킬 제안이 생기면 여기에 모여요.",
-      actions: [["기억 보기", () => go("memories", "active")], ["다시 불러오기", loadAll, "ghost"]] });
+    return homeStart.checklist() || window.ArkismState.panel({ title: "지금은 확인할 일이 없어요", text: "확인할 새 기억이나 스킬 제안이 생기면 여기에 모여요.",
+      actions: [["기억 보기", () => go("memories", "active")]] }); // 다시 불러오기 is the icon on the title row
   }
   function homeHead(text, count, aside) {
     const h = el("h2", "home-head", text);
@@ -1624,8 +1634,8 @@ export function startApp() {
     const idleN = t ? t.idle : !memoryPaging.partialMemories() && state.usageDone ? state.data.memories.filter(idleFromUsage).length : null;
     const used = mem && idleN != null ? `${Math.round(((mem - idleN) / mem) * 100)}%` : mem === 0 ? "—" : "…";
     const box = el("div", "home-week");
-    for (const [label, value, sub] of [["이번 주 세션", f.num(k.sessions), "최근 7일"], ["이번 주 토큰", f.num(k.tokens), `캐시 적중 ${k.cache_hit_pct}%`],
-      ["이번 주 비용", f.usd(k.cost_usd, k.priced), "공시 단가로 계산"], ["기억 사용", used, "최근 30일 답변에 쓰인 기억"]]) {
+    for (const [label, value, sub] of [["이번 주 세션", f.num(k.sessions), "최근 7일"], ["이번 주 토큰", f.num(k.tokens), `다시 쓴 입력 ${k.cache_hit_pct}%`],
+      ["이번 주 비용", f.usd(k.cost_usd, k.priced), "공개 가격으로 계산한 추정"], ["기억 사용", used, "최근 30일 답변에 쓰인 기억"]]) {
       const c = el("button", "home-stat");
       c.type = "button";
       c.append(el("span", "", label), el("strong", "", value), el("small", "", sub));
@@ -1663,9 +1673,9 @@ export function startApp() {
       el("p", "meta", state.loadError ? "" : rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
     const agents = presentAgents();
     const nums = el("div", "home-nums");
-    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 에이전트", agents.length]]) {
+    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["연결된 에이전트", agents.filter(([k]) => ["ok", "warn"].includes(agentHealth(k)[0])).length]]) { // 7 listed is not 7 working: count only the ones the server sees running
       const r = el("div", "");
-      const known = !state.loadError || label === "함께 일하는 에이전트"; // the to-do counts have nothing to count after a failed load
+      const known = !state.loadError || label === "연결된 에이전트"; // the to-do counts have nothing to count after a failed load
       r.append(el("span", "", label), el("output", known && warn && value ? "warn" : "", known ? String(value) : "—"));
       nums.append(r);
     }
@@ -1722,6 +1732,7 @@ export function startApp() {
   const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
   const memoryList = createMemoryList({
     get memory() { return state.screens.memory; },
+    get openMemoryAdd() { return memoryDetail.openMemoryAdd; },
     get listCount() { return listCount; },
     get idleCount() { return idleCount; },
     get partialMemories() { return memoryPaging.partialMemories; },
@@ -2023,7 +2034,7 @@ export function startApp() {
     if (state.view === "memories" && id) {
       const all = [...state.data.memories, ...memoryPaging.memoryResults.snapshot().items, ...state.data.candidates, ...state.data.conflicted];
       const m = catalogQuery.record(id) || all.find((x) => x.id === id);
-      if (m) return m.status === "active" ? memoryDetail.memoryDetail(m) : memoryDetail.candidateDetail(m);
+      if (m) return m.status === "active" || state.memTab === "removed" ? memoryDetail.memoryDetail(m) : memoryDetail.candidateDetail(m); // 지운 기억 lists deleted memories, not candidates
     }
     summaryDetail();
   }
@@ -2034,9 +2045,9 @@ export function startApp() {
     // Kinds across every memory on the server; without its totals, the loaded rows say so in the title.
     const kinds = state.memoryTotals?.kinds;
     const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${kinds ? kinds[k] || 0 : d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
-    const s = section(kinds || !memoryPaging.partialMemories() ? "사용 중인 기억" : `사용 중인 기억 · 불러온 ${d.memories.length}개 기준`); s.append(facts(byKind)); body.append(s);
+    const s = section(kinds || !memoryPaging.partialMemories() ? "사용 중인 기억" : `사용 중인 기억 · 불러온 ${d.memories.length}개 기준`); s.append(byKind.length ? facts(byKind) : el("p", "meta", "아직 저장된 기억이 없어요.")); body.append(s);
     const r = section("어떻게 쓰이나요");
-    r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["승인 대기", "대화에서 후보를 추출해요. 저장 여부는 사람이 검토해요."], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
+    r.append(facts([["대화 시작", "선호·작업 규칙을 모두 넣어요"], ["질문할 때", "관련 있는 기억만 최대 6개"], ["새 기억", "대화에서 기억할 만한 내용을 찾아요. 저장할지는 사람이 정해요."], ["저장소", "저장소에서 나온 기억은 그 저장소에서만, 나머지는 어디서나 써요"]]));
     body.append(r);
   }
   const renderMemoryContext = window.ArkismMemoryContext({ el });
@@ -2056,6 +2067,7 @@ export function startApp() {
   }
   const memoryDetail = createMemoryDetail({
     get actionCard() { return actionCard; },
+    get restore() { return memoryList.restore; },
     get ago() { return ago; },
     get button() { return button; },
     get decide() { return memoryList.decide; },
@@ -2292,7 +2304,7 @@ export function startApp() {
   const homeChecks = window.ArkismHomeChecks({ count: serverCount, state, request: appApi.request, query: appApi.query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
   const homeStart = window.ArkismHomeStart.create({ state, el, button, render, notice, tauri, ask: (...a) => window.ask(...a), openSettings: (tab) => { state.settingsTab = tab; go("settings"); } }); // 홈 › 시작하기 · 기억 뽑을 모델 (home-start.js)
   home.wireSearch();
-  shell = window.ArkismShell({ state, $, el, go, render });
+  shell = window.ArkismShell({ state, $, el, go, render, memoryCheck: memoryList });
   $("#status-toggle").addEventListener("click", () => renderStatusCard()); // after shell.js opened it: fill the 기억 처리 stages
   Object.assign(views, pages.views);
   Object.assign(crew.pages, window.ArkismTeams({ state, $, el, icon, catIcon, catMenu, catChipBody, button, go, render, request: appApi.request, query: appApi.query, notice, ago, headExtras, hasView: (v) => !!views[v], flowRuns: (...a) => crew.flowRuns(...a) }).pages); // CREW › 팀·회의·디스코드·사용량 (team.js)
