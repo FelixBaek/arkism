@@ -1,0 +1,25 @@
+{
+  "protocol": "zero-auxiliary-order-semantics-v1",
+  "task_id": "DYN-05.p1",
+  "status": "owner_selected_implementation_and_independent_verification_pending",
+  "fixed_parent_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "selected_policy_version": "p1-zeroaux-order-v1",
+  "policy_ids": [
+    "B1",
+    "B2",
+    "V3-P1-FD",
+    "V3-P1-IR",
+    "V3-P1-NOTIME",
+    "V3-P1-NOOUT"
+  ],
+  "B0": "Immutable baseline algorithm and its existing version remain unchanged.",
+  "activation_condition": "Only the selected policy version, and every configured non-relevance lane has exactly zero weight. Relevance is strictly positive under existing valid-config rules. Empty non-relevance set satisfies this condition.",
+  "precedence": "For this condition, preserve the complete immutable B0 eligible-candidate order before packing. This explicitly overrides the ordinary trust/updated/key final-tie rule for binary64 collisions between distinct baseline ranks.",
+  "numeric_scores": "Keep the existing lane order, dense ranks, binary64 weight/(60+dense_rank) terms and fusion-score bits, including underflow-to-zero. No epsilon, clamp, minimum positive weight, decimal substitution or implicit coefficient normalization. Baseline equivalence is ordered references and packing/cost, not equality of differently defined numeric scores.",
+  "validation": "Perform all existing input, registry, snapshot, scope, revision, state and feature availability/lineage checks before selecting the order. Zero auxiliary weight does not waive state/feature validation or imply absent data is zero.",
+  "packing": "Use the same eligible candidates in baseline order and unchanged context budget/final_k/PackContext rules; preserve original lane ordinals before eligibility filtering.",
+  "other_weights": "If any configured auxiliary weight is positive, retain the unchanged fixed binary64 score and ordinary final-tie ordering. Tiny positive auxiliary values do not activate this exception.",
+  "historical_versions": "Previously recorded configurations retain their original arithmetic and ordering semantics. The new selected registry explicitly names the new version for the six non-B0 policies; old valid-registry counterexample remains reproducible as historical evidence, not the selected-method acceptance target.",
+  "registry_binding": "Preserve all numeric parameters, role lists, inheritance/ablation semantics and seven policy IDs. Update only the six policy-version labels and consequent ranker/config/graph/registry association hashes. Never alter the fixed DYN or v1 DTOs/contracts.",
+  "evidence_requirement": "Replay the original registered subnormal counterexample against the new selected version, plus exact baseline ties, normal/subnormal relevance, zero and smallest-positive auxiliary weights, sparse/empty/ineligible lanes, all required state/feature failures and complete native CLI/compare flow. Historical old-version divergence remains explicit evidence, not a skipped test."
+}
