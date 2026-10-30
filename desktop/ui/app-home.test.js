@@ -708,9 +708,9 @@ test("overview: 세션 기록 copies resume and continue-in commands, counts age
   await press("이어서 하기", d.querySelector(".ss-row"), 20);
   assert.equal(app.clipboard.text, "cd /home/me/arkism; codex resume cx-1");
   // handoff ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
-  await press("넘기기 ⌄", d.querySelector(".ss-row"));
-  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 넘기기"]);
-  await press("Claude Code(으)로 넘기기", d, 30);
+  await press("handoff ⌄", d.querySelector(".ss-row"));
+  assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 handoff"]);
+  await press("Claude Code(으)로 handoff", d, 30);
   assert.match(app.clipboard.text, /^cd \/home\/me\/arkism; claude 'Arkism resume_work 도구로 작업 wk-1를/);
   assert.match(text(win()), /Claude Code 시작 명령을 복사했어요/);
   assert.ok(!app.calls.some((c) => /spawn|execute|run_command/.test(String(c?.[0] ?? c))), "no command is run");

@@ -48,7 +48,7 @@ const btn = (root, label) => dom.buttons(root, label)[0];
 test("install dialog: bad source asks for a fix, a good one previews skills and installs to the picked agents", async () => {
   const t = setup({ poll: done(SKILLS) });
   const b = t.catalog.installButton();
-  assert.match(b.textContent, /GitHub에서 설치/);
+  assert.match(b.textContent, /설치/);
   b.click();
   const dlg = dialog();
   assert.ok(dlg.open);

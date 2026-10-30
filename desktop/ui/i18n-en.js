@@ -1796,7 +1796,6 @@ window.ArkismI18nEN = {
   "설치 결과를 아직 받지 못했어요. 잠시 뒤 스킬 목록을 확인해 주세요.": "No install result yet. Check the skill list in a moment.",
   "프로그램": "Program",
   "자주 쓰는 서버": "Popular servers",
-  "GitHub에서 설치": "Install from GitHub",
   "상태 아이콘 색: 초록 정상 · 주황 확인 필요 · 빨강 연결 문제·멈춤": "Status colours: green fine · amber needs a look · red connection problem or stopped",
   "개선안 만들기 → 기존 버전과 비교 → 검토·승인 → 실제 작업에 시험 적용 순서로 진행해요.": "Make an improvement → compare it with the current version → review and approve → trial it on real work.",
   "저장소 주소를 넣으면 안에 있는 스킬을 보여 줘요. 받은 파일은 실행하지 않아요.": "Enter a repository address to see the skills inside. Downloaded files are never run.",
@@ -4308,7 +4307,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "카드 사진": "Card photo", "팀 목록 카드에 깔리는 사진이에요": "The photo behind the card in the team list", "워크플로우 목록 카드에 깔리는 사진이에요": "The photo behind the card in the workflow list",
   "↑ 내 사진 올리기": "↑ Upload my photo", "배경 없애기": "Remove background",
   "영어로 찾으면 더 많아요 (예: space, desk)": "English finds more (e.g. space, desk)",
-  "Unsplash 무료 사진 · 찍은 사람 이름이 카드 구석에 같이 보여요": "Free Unsplash photos · the photographer's name shows in the card corner",
+  "Unsplash 무료 사진 · 팀을 열면 찍은 사람 이름이 보여요": "Free Unsplash photos · open the team to see the photographer's name",
   "Unsplash 키가 없어요. 서버에 ARKISM_UNSPLASH_KEY를 넣으면 검색할 수 있어요. 내 사진 올리기는 그대로 쓸 수 있어요.": "No Unsplash key. Set ARKISM_UNSPLASH_KEY on the server to search. Uploading your own photo still works.",
   "내 사진": "My photo", "사진을 줄이지 못했어요. 다른 사진으로 해 주세요.": "Could not shrink the photo. Try another one.",
   "전문가를 골라 순서를 정하면 @이름으로 불러요": "Pick experts and an order, then call the team by @name",
@@ -5843,11 +5842,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "넘길 내용을 찾지 못했어요. 서버를 최신 판으로 올리면 쓸 수 있어요.": "Couldn't find anything to hand over. Update the server to use this.",
   "이어서 하기 명령": "Continue command",
   "이 에이전트는 이어서 하기 명령을 몰라요.": "This agent has no known continue command.",
-  "다른 에이전트로 넘기기": "Hand over to another agent",
+  "다른 에이전트로 handoff": "Hand off to another agent",
   "이어서 하기": "Continue",
   "이어서 하기 명령을 복사했어요. 터미널에 붙여 넣으세요.": "Copied the continue command. Paste it into a terminal.",
-  "넘기기": "Hand over",
-  "넘기기 ⌄": "Hand over ⌄",
+  "handoff ⌄": "Handoff ⌄",
   "잘 쓰이나 확인 보기": "View use check",
   "내용이 낡았거나 너무 넓을 수 있어요. 고치거나 「잘 쓰이나 확인」에서 정리해 보세요.": "It may be outdated or too broad. Edit it, or tidy it up in Use check.",
   "직접 연결": "Linked by hand",
@@ -5869,7 +5867,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "정리 제안{0}": "Tidy-up proposals{0}",
   "최근 {0}번 중 {1}번만 지켜졌어요.": "Kept only {1} of the last {0} times.",
   "{0}번 중 {1}번 지켜짐": "Kept {1} of {0} times",
-  "{0}(으)로 넘기기": "Hand over to {0}"
+  "{0}(으)로 handoff": "Hand off to {0}"
 });
 // 기록·사용량 tab of a workflow (modules/flowUsage.mjs)
 Object.assign(window.ArkismI18nEN.strings, {

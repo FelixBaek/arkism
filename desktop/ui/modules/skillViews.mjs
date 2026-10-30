@@ -154,7 +154,7 @@ export function createSkillViews(deps) {
   }
 
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
-  // state.skillPage opens a page inside the same view: 개선하기 (4 steps), GitHub에서 설치.
+  // state.skillPage opens a page inside the same view: 개선하기 (4 steps), 설치.
   const SKILL_STATES = [["all", "전체"], ["missing", "일부 에이전트에서 꺼짐"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인에 든 스킬"], ["trash", "휴지통"]];
 
   const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요."],
@@ -578,7 +578,7 @@ export function createSkillViews(deps) {
   }
 
 
-  // ---------------------------------------------------------------- 스킬 안의 페이지: 개선하기 · GitHub에서 설치
+  // ---------------------------------------------------------------- 스킬 안의 페이지: 개선하기 · 설치
   function renderSkillPage() {
     const p = deps.state.skillPage;
     ["#controls", "#chips", "#stats"].forEach((q) => deps.$(q).replaceChildren());
@@ -653,7 +653,7 @@ export function createSkillViews(deps) {
 
   function skillPageDetail() {
     const p = deps.state.skillPage;
-    const body = deps.detailShell(p.kind === "install" ? "GitHub에서 설치" : p.kind === "better" ? "개선하기" : IMPROVE_SIDE[p.step][0]);
+    const body = deps.detailShell(p.kind === "install" ? "설치" : p.kind === "better" ? "개선하기" : IMPROVE_SIDE[p.step][0]);
     body.append(skillPageCache?.side || "");
   }
 

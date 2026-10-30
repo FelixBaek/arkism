@@ -49,7 +49,7 @@ window.ArkismCoverPicker = ({ el, icon, request, query, state, notice }) => {
     const status = el("p", "tp-cover-status");
     const foot = el("div", "tp-cover-foot");
     const more = el("button", "tp-link", "더 보기"); more.type = "button"; more.hidden = true;
-    foot.append(el("small", "", "Unsplash 무료 사진 · 찍은 사람 이름이 카드 구석에 같이 보여요"), more);
+    foot.append(el("small", "", "Unsplash 무료 사진 · 팀을 열면 찍은 사람 이름이 보여요"), more);
     dlg.append(head, box, chips, status, grid, foot);
 
     let page = 1, query0 = "";
