@@ -15,22 +15,7 @@ import (
 // The crew path end to end over HTTP and Postgres: one checkpoint read yields the hook text and the
 // metadata view, and decide re-checks that view against the stored work before hashing it.
 func TestPostgresRoutingDecideRechecksTheWorkViewReadBeforeTheChoice(t *testing.T) {
-	f := newFixture(t)
-	f.svc.Repo = isolatedPostgres(t)
-	runner := f.runner()
-	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
-	inv := []Provider{{ID: "openai", Name: "OpenAI", Kind: "api", Models: []string{"gpt-6.1", "gpt-6.1-mini"}}}
-	for _, scope := range []Scope{scopeA, scopeB} { // the other scope can route, so only the work fence refuses it
-		if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scope, Providers: &inv}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	src := f.source()
-	pkg := workCheckpointPackage()
-	pkg.SourceRefs = []Ref{{Collection: "sources", ID: src.ID, Revision: src.Revision}}
-	if _, err := workCheckpointSave(f, f.agent, "work-pg", "evt-1", 0, pkg); err != nil {
-		t.Fatal(err)
-	}
+	f, runner, _, pkg := prechoiceRoutingFixture(t, isolatedPostgres(t), "work-pg")
 	server := httptest.NewServer(Handler(f.svc))
 	defer server.Close()
 	scopeMap := func(s Scope) map[string]any {
