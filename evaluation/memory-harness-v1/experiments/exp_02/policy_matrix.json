@@ -1,0 +1,185 @@
+{
+  "baseline_contract_sha256": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+  "dynamics_contract_sha256": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da",
+  "evaluation_adapter_slot": {
+    "binding": null,
+    "expected_owner_schema": null,
+    "owner_acceptance": null,
+    "owner_task": "EXP-03",
+    "role": "v2_evaluation_adapter"
+  },
+  "exp01_REF_slot": {
+    "binding": {
+      "role": "owner_contract",
+      "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/protocol.template.json",
+      "raw_sha256": "3c1d63f004fc84b835006f4bc0f60a9597996b5ad2f03e1c7663d97504af2650",
+      "size_bytes": 2720
+    },
+    "expected_owner_schema": {
+      "protocol_id": "exp01-protocol-draft-v1",
+      "schema": {
+        "role": "owner_schema",
+        "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/dataset_contract.json",
+        "raw_sha256": "a1296cea0119cdb11b4f6f2c0c1f6aeafe3e7f33ee4d48b3bef1aeda70c92a1a",
+        "size_bytes": 62863
+      }
+    },
+    "owner_acceptance": null,
+    "owner_task": "EXP-01.draft",
+    "role": "REF_contract"
+  },
+  "exp01_draft_slot": {
+    "binding": {
+      "role": "owner_contract",
+      "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/protocol.template.json",
+      "raw_sha256": "3c1d63f004fc84b835006f4bc0f60a9597996b5ad2f03e1c7663d97504af2650",
+      "size_bytes": 2720
+    },
+    "expected_owner_schema": {
+      "protocol_id": "exp01-protocol-draft-v1",
+      "schema": {
+        "role": "owner_schema",
+        "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/dataset_contract.json",
+        "raw_sha256": "a1296cea0119cdb11b4f6f2c0c1f6aeafe3e7f33ee4d48b3bef1aeda70c92a1a",
+        "size_bytes": 62863
+      }
+    },
+    "owner_acceptance": {
+      "role": "acceptance",
+      "relative_path": "EXP-01-draft-local-acceptance.json",
+      "raw_sha256": "b23d97cf2486758781892895c7261a57868fe035692a3748220bdded140cfcbf",
+      "size_bytes": 1878
+    },
+    "owner_task": "EXP-01.draft",
+    "role": "accepted_draft"
+  },
+  "feature_contract_binding": null,
+  "minimum_DYN05_acceptance": null,
+  "optional_policies": [
+    {
+      "future_contract": null,
+      "policy_id": "B3",
+      "selection": "unselected",
+      "support": "unsupported_by_fixed_952d"
+    },
+    {
+      "future_contract": null,
+      "policy_id": "V3-P1-AD",
+      "selection": "unselected",
+      "support": "unsupported_by_fixed_952d"
+    },
+    {
+      "future_contract": null,
+      "policy_id": "B4",
+      "selection": "unselected",
+      "support": "unsupported_by_fixed_952d"
+    },
+    {
+      "future_contract": null,
+      "policy_id": "B5",
+      "selection": "unselected",
+      "support": "unsupported_by_fixed_952d"
+    },
+    {
+      "future_contract": null,
+      "policy_id": "B6",
+      "selection": "unselected",
+      "support": "unsupported_by_fixed_952d"
+    }
+  ],
+  "policies": [
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "B0",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "B0",
+      "role": "comparator"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "B1",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "B1",
+      "role": "comparator"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "B2",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "B2",
+      "role": "treatment"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "V3-P1-FD",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "V3-P1-FD",
+      "role": "comparator"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "V3-P1-IR",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "V3-P1-IR",
+      "role": "comparator"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "V3-P1-NOTIME",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "V3-P1-NOTIME",
+      "role": "ablation"
+    },
+    {
+      "adapter_binding": null,
+      "contract_policy_key": "V3-P1-NOOUT",
+      "fallback": "error",
+      "implementation_acceptance": null,
+      "parameter_source": "owner_operating_plan_required",
+      "policy_id": "V3-P1-NOOUT",
+      "role": "ablation"
+    }
+  ],
+  "protocol": "exp02-policy-matrix-v1",
+  "required_policy_order": [
+    "B0",
+    "B1",
+    "B2",
+    "V3-P1-FD",
+    "V3-P1-IR",
+    "V3-P1-NOTIME",
+    "V3-P1-NOOUT"
+  ],
+  "scope": "specification_only",
+  "exp01_contract": {
+    "role": "owner_schema",
+    "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/dataset_contract.json",
+    "raw_sha256": "a1296cea0119cdb11b4f6f2c0c1f6aeafe3e7f33ee4d48b3bef1aeda70c92a1a",
+    "size_bytes": 62863
+  },
+  "exp01_protocol_template": {
+    "role": "owner_contract",
+    "relative_path": "evaluation/memory-harness-v1/experiments/exp_01/protocol.template.json",
+    "raw_sha256": "3c1d63f004fc84b835006f4bc0f60a9597996b5ad2f03e1c7663d97504af2650",
+    "size_bytes": 2720
+  },
+  "exp01_REF_semantic_sha256": "435819cc8d6ad7d769703a23c7a1f75130793db9b0b16962c33ea4ddadf098af",
+  "REF_stage_decision": {
+    "role": "owner_contract",
+    "relative_path": "EXP-02-root-REF-stage-decision-001.json",
+    "raw_sha256": "563d4f945de01fde525e4dbf44413d00ba03225dc32d02c89ec78b3a8de8fc2c",
+    "size_bytes": 2230
+  }
+}
