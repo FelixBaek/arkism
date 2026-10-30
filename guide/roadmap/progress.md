@@ -10,7 +10,7 @@
 - DYN-05: zero-aux 규칙 선택을 반영한 p1 runner/CLI/compare와 원격 검사를 수용했다. 아래 초기 실패 기록은 보존하며 전체 DYN-05/capture 완료로 합산하지 않는다.
 - SYS-01: A 수용 뒤 실제 Search/HTTP shadow 후보를 검증 중이다. 전체 수용은 아직 아니다.
 - SYS-03: 원자 저장 B 구성요소를 검증했지만 실제 같은-reader packing 영수증·표시/저장/읽기/답변 연결이 남았다.
-- SYS-04: 별도 metadata 모델 후보의 삭제 ID 반례를 수정·독립 재검증했다. 기본 수집 통합과 실제 복원·게시 B는 별도 진행 중이다.
+- SYS-04: 별도 metadata 모델 후보의 삭제 ID 반례를 수정·독립 재검증했다. 기본 수집510개(기존451+새59)와 Python758 검증을 마쳤으며 실제 복원·게시 B는 별도 진행 중이다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -47,9 +47,7 @@
 | EXP-02 비교군·통제·실행 명세 | spec 하위 단계 검증 | 작성자43메서드79leaf·독립96계약검사·수집323(새43개정확1회) 통과. 최종Python567·Go·UI532 통과. 실제adapter/실행계획게시/index최종수용은 남아 전체카드진행중이며21/63 유지 |
 | CAP-02 독립 관측 schema·개발 fixture | 공학 구현 검증·전체 카드 대기 | 12서로다른과제×4조건=48입력과분리checker. 작성자26·독립127사례·표준schema97문서·99파일재생성 통과. 사람oracle/옛버전/stop검토는pending, 실제native근거 아님 |
 | CAP-07 MCP 통신 호환 fixture | 작업 검증 완료 | 별도 가짜 서버와 현재 실제 inventory경로11조건/race, 작성자·root재실행Python9 및 root독립5검사 통과. 67개 원소스·CAP01 3artifact 불변. 현행 검증 누락4건을 재현했으며 제품 수정·현대프로토콜 지원·실제서버 검증은 별도 |
-| PSY-01 기억 정정 연구 측정·윤리 준비 | 작업 검증 완료 | 별도9산출물, 작성자19메서드62leaf·독립11/50 통과. 원자료15·산출물9핀 불변. 기본3측정·가설·선행비교·권한/윤리 준비만 수용하며 실제신규성·척도타당성·기관승인·사람연구완료와 구분 |
-| PSY-02 비교 표시·배정·재생 | 합성 구현 검증·전체 카드 대기 | 별도11파일, 작성자43메서드157leaf·독립20/85 통과. 유효 ID 변경의 참조 단절을 수정·재검증. 원nativeY는null/expected_only, B0source-only·연구자/기관후속은 남아21/63 유지 |
-| PSY-03 모의 분석·준비 | 구현 중 | PSY01뒤 허용된 병렬 모의 분석. 실제 연구·통계 선택·표본 확정·모집은 하지 않음 |
+| PSY-01~03 기억 정정 사용자 연구 | 비공개 진행 | 연구 자료와 기록은 공개 저장소에 두지 않고 서버에만 둔다 |
 | #152~158의 나머지 | 선행에 따라 병렬 진행 | EXP02 비교 명세는 별도 소스 검증 중. 전체63카드는 필수49/선택14이며 선택·하위 단계 조건을 유지 |
 
 단계 전체 검사: R1/R2/R4는 Python286, R3/R5/R6/R7은 Python349,
@@ -278,10 +276,7 @@ EXP-01.draft는 기존 파싱·안전 쓰기를 재사용해 템플릿·원문·
 
 CAP-07은 실제 현재 stdio inventory를 격리된 exact-source shadow와 합성 subprocess로 검증했다. legacy/modern/dual-era/timeout-error를 구분하고 빈 성공·실패·미확인을 분리했다. 초기화 오류/잘못된 결과/형식 오류/부분목록의 현행 검증 누락4건은 관측 기록이며 수정 완료가 아니다. 실제 연결 필요가 확인된 경우 별도 좁은 통합 설계를 따른다.
 
-PSY-01은 같은 정보·backend 상태의 표현과 실제 입력 포함 예측을 분리하는 측정·윤리·문헌 준비9산출물이다. Brier/행동/시간을 기본으로 하고 자기보고는 미선택 제안으로 뒀다. 누락 부록·척도 문항을 복원하지 않았고, 문헌 접근과 독립신규성/권한/타당성/윤리승인을 구분했다. PSY02의 실제 oracle/배정/비교 화면과 기관·연구자 결정은 후속이다.
-
 - [MCP 호환 fixture·현행 관측·검증 기록](../work-records/2026-10-30-roadmap-capability-protocol-fixtures.md)
-- [기억 정정 연구 측정·윤리 준비 검증 기록](../work-records/2026-10-30-roadmap-correction-study-preparation.md)
 
 PR482 후속55e5db8a는 원격6워크플로·실제check-runs·Codecov/patch·Sonar gate를 통과해 검토 가능 상태다. 보안 취약점0이며 유지보수 지적66건은 별도 남아 있다.
 
@@ -289,26 +284,20 @@ EXP-02.spec은 필수7정책과 비교통제를 검증하는 실제 parser/CLI�
 
 - [일곱 정책 비교 명세·실행 차단 검증 기록](../work-records/2026-10-30-roadmap-policy-comparison-spec.md)
 
-## CAP02·PSY02 공학 구현 검증 후속
+## CAP02 공학 구현 검증 후속
 
 CAP02는48개입력과체커의기술구현을검증했으며원카드필수사람oracle/허용옛버전/stop조건수용은아직pending이다. load단계의부분관측은뒤의독립실행관측과분리하며unknown이성공/권한으로바뀌지않는다. 실제다른task/outcome귀속변조는거부한다. outcomeID namespace와순번라벨shortcut은한계로기록하고이자료로실제효능을검증했다고주장하지않는다.
 
-PSY02는등록된실제caseID로양세션계획과재생을연결하도록고쳤다. 원일반ID도메인을줄이지않았고원실패와새양성회귀를보존했다. B1/B2정보·행동일치,기본3상태와진단3상태분리,표현48개/가상배정/재생·코드·실제브라우저검사범위를확인했다. 실제nativeY·B0화면·심리혼입심사·연구자/기관절차와사람자료수집은남아있다.
-
 - [호환성 관측 schema·48개 개발 사례 검증](../work-records/2026-10-30-roadmap-capability-evidence-fixtures.md)
-- [합성 비교 화면·배정·ID 연결 수정 검증](../work-records/2026-10-30-roadmap-correction-stimulus-harness.md)
 
 이번공개기록의parent f5aebd07과문서상태는전체53294 종료0(Python567·Go복잡도/vet/race·UI532)이다. 다른작업트리의미발행DYN05소스는이검사에포함하지않았으며,그별도전체167메서드의규칙충돌1FAIL을통과로바꾸지않는다.
 
 
-## RTE03·PSY03 격리 구현 독립 후속
+## RTE03 격리 구현 독립 후속
 
 RTE03은 결정 시점과 receipt 가용 시각, 정확한 ref/revision/content hash, history 누락과 알려진 빈값, 후선택 packing 대사를 검증한 격리 메타데이터 구현이다. FIFO 입력이 파일 검사 전에 멈추는 실제 결함을 고쳐 작성52/89세부·독립37/99를 통과했다. 실제 호스트/API·native reader/fence 연결은 남아 있어 전체 카드 완료는 아니다.
 
-PSY03은 세션2의 상태→참여자→집단 Brier, 결측/탈락 및 군·상태별 행동·시간 분석의 합성 구현이다. 군별 행동·완료시간을 바꿔도 같은 출력이 나오는 실제 결함2건을 수정해 작성45/107세부·독립30/63를 통과했다. 연구 선택과 실제 정답/사람 자료는 미확정이며 pilot 준비 완료로 표시하지 않는다.
-
 - [선택 전 메타데이터·FIFO 수정 검증](../work-records/2026-10-30-roadmap-routing-feature-preparation.md)
-- [Brier·군별 행동/시간 모의분석 검증](../work-records/2026-10-30-roadmap-correction-simulation.md)
 
 두 하위 구현만 수용했으며 전체21/63은 유지한다. 원 실패와 수정 전 소스는 별도로 보존했다. 공개 기록은 전체55678 종료0(Python567·Go복잡도/vet/race·UI532)과 공개 검사를 통과했다. 최초 샌드박스 소켓 오류는 원본 보존 후 동일 검사를 재실행했다. 별도 DYN05 작업트리의 수치 규범 충돌1FAIL은 미해결로 유지한다. SYS02는 기존 수락 API와 변환 계약을 대조해 다음 격리 구현을 준비 중이다. 빌드·배포·Claude 변경 없음.
 
@@ -390,3 +379,17 @@ SYS02의원A·현재v8거절/멱등/unknown·B5기준을정확한격리native범
 
 - [native 수락·저장 범위](native-state.md)
 - [작업 기록](../work-records/2026-10-30-roadmap-native-service.md)
+
+
+## SYS-04 A 수명·현재 Eval metadata 모델과 기본 수집
+
+원 source/memory 프로필과 signed64 clock 범위를 보존하고, 별도 metadata-v2에서 sources/memories/evaluations/eval_tasks/eval_runs/eval_trials/judge_calibrations의 exact scope/ref/revision/hash를 대조한다. Sources/Target/Relations와 Eval3참조·trial task/run은 필수 AND 근거이며, 누락·foreign·stale·unknown·cycle과 불완전 coverage/readback을 거절·보류한다. 여섯 복원 필드와 일곱 삭제 facet을 유지하고, 같은 여섯 hash만으로 불완전 graph의 복원을 허용하지 않는다. 승인된 기억과 ordinaryEval currentness·학습 자격은 서로 구분한다.
+
+새 프로필의 정상 Unicode/129~256byte/Cf ID를 두 삭제 입력 경로가 기존 ASCII label로 거절한 독립8반례를 보존했다. 새 후보에서 그 두 경로만 v2 Ref-ID 규칙을 쓰도록 고쳐 작성자59메서드·515세부사례 및 독립19/281이 실패·skip0으로 통과했다. 기존54 fixture 전체 plan 출력과JSON3원문을 보존했으며, v1 strict label·v2 fact-withdrawal/history 미지원은 그대로다. 현재 Go의문자열조건119경계대사는별도격리검사이며기본Python수집과구분한다.
+
+R8 기본 수집에 정확한 모듈 한 개만 등록해 기존451개ID와새59개ID를각각1회수집했다(510메서드·1483세부사례). 기존8음성+1양성·외부inventory음성2대조를 통과했다. 후자2개를기존생산guard가영구감지한다고주장하지않는다. root가5모델소스·28독립증거와6통합소스·31R8증거를재검산했고Python758(173+536+49)·메타데이터63카드96게이트를통과했다.
+
+이 단계는 A의 합성 모델·필요경계 검사다. 실제 DB/백업 복원·삭제 완료·최종 게시 B와 SYS01/03 선행 통합 수용은 별도다. 전체22/63·필수27개 미완료를 유지하며 빌드·배포·원격main·Claude 변경은 없다.
+
+- [모델 계약·검사 설명](../../evaluation/memory-harness-v1/system/sys_04/README.md)
+- [작업 기록](../work-records/2026-10-30-roadmap-lifecycle-metadata.md)
