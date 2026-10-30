@@ -18,6 +18,8 @@ type DynamicsLoadObservation struct {
 	TerminalLedgerBytes   int64
 	Withheld              bool
 	RepairStartNS         *int64
+	LastRepairStartNS     *int64
+	LastRepairEndNS       *int64
 }
 
 func (s *Service) ObserveDynamicsLoad(ctx context.Context, token string, scope Scope) (DynamicsLoadObservation, error) {
@@ -39,7 +41,7 @@ func (s *Service) ObserveDynamicsLoad(ctx context.Context, token string, scope S
 		if e != nil {
 			return e
 		}
-		out = DynamicsLoadObservation{QueueCount: p.Count, ActiveQueueBytes: p.ActiveBytes, Head: p.Head, Tail: p.Tail, LeaseGeneration: p.LeaseGeneration, PublicationGeneration: p.PublicationGeneration, AsOfNS: p.AsOfNS, PublishedNS: p.PublishedNS, TerminalLedgerBytes: total, Withheld: p.Withheld, RepairStartNS: p.RepairStartNS}
+		out = DynamicsLoadObservation{QueueCount: p.Count, ActiveQueueBytes: p.ActiveBytes, Head: p.Head, Tail: p.Tail, LeaseGeneration: p.LeaseGeneration, PublicationGeneration: p.PublicationGeneration, AsOfNS: p.AsOfNS, PublishedNS: p.PublishedNS, TerminalLedgerBytes: total, Withheld: p.Withheld, RepairStartNS: p.RepairStartNS, LastRepairStartNS: p.LastRepairStartNS, LastRepairEndNS: p.LastRepairEndNS}
 		if p.Count > 0 {
 			oldest, e := tx.Get(ctx, colJobs, scope, dynamicsEntryID(scope, p.Head+1))
 			if e != nil {

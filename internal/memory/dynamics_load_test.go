@@ -333,3 +333,81 @@ func TestDynamicsLoadFunctionalQueueRepairWithholdsPG(t *testing.T) {
 		t.Fatal("repair republish bypass", err)
 	}
 }
+
+// The explicit repair is refused to read-only authority, during a live lease
+// and when nothing is withheld. It clears an expired lease without reviving its
+// claim, queued work resumes after it, and an unknown origin closes with no interval.
+func TestDynamicsLoadRepairRepublishPG(t *testing.T) {
+	p, shadow, in := dynamicsFunctionalSetup(t)
+	p.accept(t)
+	claim, err := p.worker.claimDynamics(testCtx, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dynamicsEditCoordinator(t, p, func(d *DynamicsLoadPayload) { d.Withheld = true })
+	if err = p.worker.RepairDynamicsPublication(testCtx, p.workerToken, scopeA); !errors.Is(err, ErrDynamicsSnapshotUnavailable) {
+		t.Fatal("repair during a live lease", err)
+	}
+	dynamicsEditCoordinator(t, p, func(d *DynamicsLoadPayload) { d.LeaseUntilNS = dynamicsNowNS() - 1 })
+	if err = p.worker.WorkDynamicsOnce(testCtx, p.workerToken); !errors.Is(err, ErrDynamicsRuntimeBinding) {
+		t.Fatal("worker claimed while withheld", err)
+	}
+	if c := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; !c.Withheld || c.Count != 1 {
+		t.Fatal("queued work lost while withheld", c)
+	}
+	before := dynamicsRebindCoordinator(t, p.admin)
+	dynamicsAssertRepairDenied(t, p, before)
+	if err = p.worker.RepairDynamicsPublication(testCtx, p.workerToken, scopeA); err != nil {
+		t.Fatal("repair with queued work", err)
+	}
+	observation, err := p.worker.ObserveDynamicsLoad(testCtx, p.workerToken, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if observation.Withheld || observation.RepairStartNS != nil || observation.LastRepairStartNS != nil || observation.LastRepairEndNS != nil || observation.QueueCount != 1 || observation.PublicationGeneration != before.DynamicsLoad.PublicationGeneration {
+		t.Fatal("repair before any apply invented an interval, dropped work or published", observation)
+	}
+	if c := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; c.LeaseToken != "" || c.LeaseUntilNS != 0 {
+		t.Fatal("expired lease kept after repair", c)
+	}
+	if err = p.worker.applyDynamicsClaim(testCtx, p.workerToken, scopeA, claim); !errors.Is(err, ErrConflict) {
+		t.Fatal("expired claim applied after repair", err)
+	}
+	if err = p.worker.WorkDynamicsOnce(testCtx, p.workerToken); err != nil {
+		t.Fatal("queued work did not resume", err)
+	}
+	if c := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; c.Count != 0 || c.Withheld {
+		t.Fatal("resumed work not applied", c)
+	}
+	dynamicsAssertSelected(t, p, shadow, in)
+	if err = p.worker.RepairDynamicsPublication(testCtx, p.workerToken, scopeA); !errors.Is(err, ErrConflict) {
+		t.Fatal("repair without a hold", err)
+	}
+}
+
+func dynamicsEditCoordinator(t *testing.T, p *nativePGFixture, edit func(*DynamicsLoadPayload)) {
+	t.Helper()
+	if err := p.admin.Transaction(testCtx, func(ctx context.Context, tx Tx) error {
+		row, e := dynamicsLockCoordinator(ctx, tx, scopeA)
+		if e != nil {
+			return e
+		}
+		edit(row.DynamicsLoad)
+		return dynamicsReplace(ctx, tx, row)
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A read-only principal on the same bound runtime is denied and writes nothing.
+func dynamicsAssertRepairDenied(t *testing.T, p *nativePGFixture, before Record) {
+	t.Helper()
+	reader, token := dynamicsRefreshReader(t, p, dynamicsFixtureConfig(), false)
+	reader.DynamicsLoad = p.worker.DynamicsLoad
+	if err := reader.RepairDynamicsPublication(testCtx, token, scopeA); !errors.Is(err, ErrDenied) {
+		t.Fatal("read-only repair not denied", err)
+	}
+	if after := dynamicsRebindCoordinator(t, p.admin); after.Revision != before.Revision || !after.DynamicsLoad.Withheld {
+		t.Fatal("denied repair wrote", after.DynamicsLoad)
+	}
+}
