@@ -1,0 +1,534 @@
+{
+  "protocol": "sys05-offline-load-contract-v2",
+  "task": "SYS-05",
+  "scope": "A preparation only. Offline synthetic plans and reported-observation validation, no service scheduler or authenticated measurement. SYS03/04 integration and pilot budgets pending.",
+  "parser_limits": {
+    "max_bytes": 67108864,
+    "max_depth": 32,
+    "max_string_utf8_bytes": 4096,
+    "max_rows": 100000,
+    "max_total_array_elements": 200000
+  },
+  "schemas": {
+    "config": {
+      "object": {
+        "protocol": {
+          "enum": [
+            "sys05-load-config-v1"
+          ]
+        },
+        "run_id": "label",
+        "seed": "nonnegative",
+        "mode": "label",
+        "scenario": {
+          "enum": [
+            "normal",
+            "burst",
+            "overload",
+            "restart",
+            "publish_delay",
+            "store_failure",
+            "cold",
+            "warm"
+          ]
+        },
+        "cache": {
+          "enum": [
+            "cold",
+            "warm"
+          ]
+        },
+        "start_ns": "int64",
+        "duration_ns": "positive",
+        "arrival_schedule": {
+          "array": {
+            "object": {
+              "offset_ns": "nonnegative",
+              "count": "positive",
+              "spacing_ns": "nonnegative",
+              "operation": {
+                "enum": [
+                  "read",
+                  "update",
+                  "privacy",
+                  "embedding"
+                ]
+              }
+            }
+          }
+        },
+        "fault_schedule": {
+          "array": {
+            "object": {
+              "kind": {
+                "enum": [
+                  "restart",
+                  "publish_delay",
+                  "store_failure",
+                  "repair_block"
+                ]
+              },
+              "offset_ns": "nonnegative",
+              "duration_ns": "positive"
+            }
+          }
+        },
+        "queue_admission_limit": "positive",
+        "batch_limit": "positive",
+        "concurrency_limit": "positive",
+        "retry_limit": "nonnegative",
+        "deadline_ns": "positive",
+        "allowed_freshness_ns": "nonnegative",
+        "quality_criterion_sha256": "sha256",
+        "model_sha256": "sha256",
+        "corpus_sha256": "sha256"
+      }
+    },
+    "request": {
+      "object": {
+        "protocol": {
+          "enum": [
+            "sys05-request-v1"
+          ]
+        },
+        "config_sha256": "sha256",
+        "request_id": "sha256",
+        "scheduled_ns": "int64",
+        "operation": {
+          "enum": [
+            "read",
+            "update",
+            "privacy",
+            "embedding"
+          ]
+        },
+        "payload_sha256": "sha256"
+      }
+    },
+    "ledger": {
+      "object": {
+        "protocol": {
+          "enum": [
+            "sys05-ledger-v1"
+          ]
+        },
+        "request": {
+          "object": {
+            "protocol": {
+              "enum": [
+                "sys05-request-v1"
+              ]
+            },
+            "config_sha256": "sha256",
+            "request_id": "sha256",
+            "scheduled_ns": "int64",
+            "operation": {
+              "enum": [
+                "read",
+                "update",
+                "privacy",
+                "embedding"
+              ]
+            },
+            "payload_sha256": "sha256"
+          }
+        },
+        "received_ns": "int64"
+      }
+    },
+    "observations": {
+      "object": {
+        "protocol": {
+          "enum": [
+            "sys05-observations-v2"
+          ]
+        },
+        "config_sha256": "sha256",
+        "origin": {
+          "enum": [
+            "synthetic_fixture",
+            "reported_isolated_service"
+          ]
+        },
+        "observed_until_ns": "int64",
+        "outcomes": {
+          "array": {
+            "object": {
+              "request_id": "sha256",
+              "status": {
+                "enum": [
+                  "success",
+                  "rejected",
+                  "timeout",
+                  "failed",
+                  "pending"
+                ]
+              },
+              "completed_ns": {
+                "nullable": "int64"
+              },
+              "accepted_ns": {
+                "nullable": "int64"
+              },
+              "durable_ns": {
+                "nullable": "int64"
+              },
+              "applied_ns": {
+                "nullable": "int64"
+              },
+              "visible_ns": {
+                "nullable": "int64"
+              },
+              "enqueued_ns": {
+                "nullable": "int64"
+              },
+              "processing_started_ns": {
+                "nullable": "int64"
+              },
+              "fallback": {
+                "nullable": "bool"
+              },
+              "read_at_ns": {
+                "nullable": "int64"
+              },
+              "snapshot_ns": {
+                "nullable": "int64"
+              },
+              "quality_passed": {
+                "nullable": "bool"
+              },
+              "attempts": {
+                "array": {
+                  "object": {
+                    "attempt": "positive",
+                    "started_ns": "int64",
+                    "ended_ns": {
+                      "nullable": "int64"
+                    },
+                    "status": {
+                      "enum": [
+                        "success",
+                        "rejected",
+                        "timeout",
+                        "failed",
+                        "pending"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "queue_samples": {
+          "array": {
+            "object": {
+              "at_ns": "int64",
+              "depth": {
+                "nullable": "nonnegative"
+              },
+              "oldest_age_ns": {
+                "nullable": "nonnegative"
+              }
+            }
+          }
+        },
+        "cost_samples": {
+          "array": {
+            "object": {
+              "at_ns": "int64",
+              "state_bytes": {
+                "nullable": "nonnegative"
+              },
+              "receipt_bytes": {
+                "nullable": "nonnegative"
+              },
+              "ledger_bytes": {
+                "nullable": "nonnegative"
+              },
+              "checkpoint_bytes": {
+                "nullable": "nonnegative"
+              },
+              "replay_bytes": {
+                "nullable": "nonnegative"
+              },
+              "source_bytes": {
+                "nullable": "nonnegative"
+              },
+              "log_bytes": {
+                "nullable": "nonnegative"
+              },
+              "db_bytes": {
+                "nullable": "nonnegative"
+              },
+              "rss_bytes": {
+                "nullable": "nonnegative"
+              }
+            }
+          }
+        },
+        "repair_intervals": {
+          "array": {
+            "object": {
+              "repair_id": "label",
+              "blocked_ns": {
+                "nullable": "int64"
+              },
+              "validated_ns": {
+                "nullable": "int64"
+              },
+              "republished_ns": {
+                "nullable": "int64"
+              },
+              "validation_sha256": {
+                "nullable": "sha256"
+              },
+              "observed_from_ns": "int64",
+              "observed_through_ns": "int64",
+              "end_state": {
+                "enum": [
+                  "republished",
+                  "still_blocked",
+                  "unknown"
+                ]
+              }
+            }
+          }
+        },
+        "background_coverage": {
+          "array": {
+            "object": {
+              "kind": {
+                "enum": [
+                  "privacy",
+                  "embedding"
+                ]
+              },
+              "eligible": {
+                "nullable": "nonnegative"
+              },
+              "completed": {
+                "nullable": "nonnegative"
+              },
+              "max_wait_ns": {
+                "nullable": "nonnegative"
+              },
+              "starvation_observed": {
+                "nullable": "bool"
+              }
+            }
+          }
+        }
+      }
+    },
+    "observations_v1": {
+      "object": {
+        "protocol": {
+          "enum": [
+            "sys05-observations-v1"
+          ]
+        },
+        "config_sha256": "sha256",
+        "origin": {
+          "enum": [
+            "synthetic_fixture",
+            "reported_isolated_service"
+          ]
+        },
+        "observed_until_ns": "int64",
+        "outcomes": {
+          "array": {
+            "object": {
+              "request_id": "sha256",
+              "status": {
+                "enum": [
+                  "success",
+                  "rejected",
+                  "timeout",
+                  "failed",
+                  "pending"
+                ]
+              },
+              "completed_ns": {
+                "nullable": "int64"
+              },
+              "accepted_ns": {
+                "nullable": "int64"
+              },
+              "durable_ns": {
+                "nullable": "int64"
+              },
+              "applied_ns": {
+                "nullable": "int64"
+              },
+              "visible_ns": {
+                "nullable": "int64"
+              },
+              "enqueued_ns": {
+                "nullable": "int64"
+              },
+              "processing_started_ns": {
+                "nullable": "int64"
+              },
+              "fallback": {
+                "nullable": "bool"
+              },
+              "read_at_ns": {
+                "nullable": "int64"
+              },
+              "snapshot_ns": {
+                "nullable": "int64"
+              },
+              "quality_passed": {
+                "nullable": "bool"
+              },
+              "attempts": {
+                "array": {
+                  "object": {
+                    "attempt": "positive",
+                    "started_ns": "int64",
+                    "ended_ns": {
+                      "nullable": "int64"
+                    },
+                    "status": {
+                      "enum": [
+                        "success",
+                        "rejected",
+                        "timeout",
+                        "failed",
+                        "pending"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "queue_samples": {
+          "array": {
+            "object": {
+              "at_ns": "int64",
+              "depth": {
+                "nullable": "nonnegative"
+              },
+              "oldest_age_ns": {
+                "nullable": "nonnegative"
+              }
+            }
+          }
+        },
+        "cost_samples": {
+          "array": {
+            "object": {
+              "at_ns": "int64",
+              "state_bytes": {
+                "nullable": "nonnegative"
+              },
+              "receipt_bytes": {
+                "nullable": "nonnegative"
+              },
+              "ledger_bytes": {
+                "nullable": "nonnegative"
+              },
+              "checkpoint_bytes": {
+                "nullable": "nonnegative"
+              },
+              "replay_bytes": {
+                "nullable": "nonnegative"
+              },
+              "source_bytes": {
+                "nullable": "nonnegative"
+              },
+              "log_bytes": {
+                "nullable": "nonnegative"
+              },
+              "db_bytes": {
+                "nullable": "nonnegative"
+              },
+              "rss_bytes": {
+                "nullable": "nonnegative"
+              }
+            }
+          }
+        },
+        "repair_intervals": {
+          "array": {
+            "object": {
+              "repair_id": "label",
+              "blocked_ns": "int64",
+              "validated_ns": {
+                "nullable": "int64"
+              },
+              "republished_ns": {
+                "nullable": "int64"
+              },
+              "validation_sha256": {
+                "nullable": "sha256"
+              }
+            }
+          }
+        },
+        "background_coverage": {
+          "array": {
+            "object": {
+              "kind": {
+                "enum": [
+                  "privacy",
+                  "embedding"
+                ]
+              },
+              "eligible": {
+                "nullable": "nonnegative"
+              },
+              "completed": {
+                "nullable": "nonnegative"
+              },
+              "max_wait_ns": {
+                "nullable": "nonnegative"
+              },
+              "starvation_observed": {
+                "nullable": "bool"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "cost_dimensions": [
+    "state_bytes",
+    "receipt_bytes",
+    "ledger_bytes",
+    "checkpoint_bytes",
+    "replay_bytes",
+    "source_bytes",
+    "log_bytes",
+    "db_bytes",
+    "rss_bytes"
+  ],
+  "semantics": {
+    "time": "Signed int64 ns on a single caller-defined clock. Duration/differences must fit nonnegative signed int64. No absolute timestamp clamp. Receipt and observation times fall within start..observed_until. Arrival window end=start+duration.",
+    "arrival": "Segments expand exact count/offset/spacing. Same-time order is seed-derived hash then request identity; no random scheduler simulation. Scenario labels normal/burst/overload make no performance assertion. restart/publish_delay/store_failure require respective declared fault; cold/warm require matching cache.",
+    "identity": "Raw config SHA binds every artifact; common-input SHA is compact UTF8 sorted-key config excluding run_id and mode. Request ID=SHA256(domain NUL common-input-sha NUL segment-index NUL item-index); payload SHA=SHA256(domain NUL corpus-sha NUL request-id). Body-free. Different modes with same common input retain exact request IDs/times/operations/payload hashes.",
+    "ledger": "External ledger required, exact full request objects including raw config SHA. Duplicate/extra/mutated request rejects. Missing ledger/result rejects by default; explicit incomplete yields missing IDs and comparison_ready=false. An absent outcome remains unknown, not fabricated pending/success.",
+    "stages": "received is external ledger timestamp. accepted is applicable to every request; durable/applied/visible apply only non-read operations. Null means not observed/not claimed. Rejected cannot have accepted/stages. Later observed update stage requires earlier observed stage and monotone time. Response success does not prove async visibility.",
+    "attempts": "Contiguous 1-based, at most retry_limit+1, sequential nonoverlapping. Exactly last pending may lack end; timeout end may be unknown. Last status equals logical status; completion when observed equals final attempt end. First start >= received; all times <= observed_until. No double counting retry attempts as logical requests.",
+    "latency": "Completed-response distribution includes every status with observed completed_ns. Success-only distribution separate. Timeout without observed completion excluded only from numerical sample, retained in full denominator and censored count; no invented deadline latency. Nearest-rank p95/p99 index=ceil(p*N/100)-1, N explicit; empty min/mean/max/p95/p99 null. Mean exact quotient/remainder/denominator.",
+    "freshness": "Reads use read_at_ns-snapshot_ns, not response duration. read_at may be known with snapshot unknown; snapshot requires read_at and cannot be future. Unknown and violation retained; no reads means quality/freshness comparison not established.",
+    "backlog": "Depth and oldest age independently retain unknown. Known depth0 requires age0; known positive depth with unknown age is allowed but incomplete. Missing samples never imply empty queue.",
+    "repair": "V2 retains actual nullable blocked_ns, explicit observed_from_ns/observed_through_ns within the chosen window, and republished/still_blocked/unknown end_state. Known blocked<=observed_from; validated cannot precede known blocked or follow observation bound; known republish requires validation and observed_through==republish. Future/out-of-window completed repairs reject; caller must not rewrite origin. Unknown republish never extends observed_through to global horizon. Full exact duration requires known origin and republish; ongoing origin-to-bound lower bound is separate. Exact interval/window intersection when both endpoints known is separate from witnessed window outage. Union covers witnessed intervals only; gaps/unknown start/end/fullness explicit incomplete. Legacy observations-v1 remain within-window semantics, no carry-in support and repair provenance completeness explicitly false. Empty v2 repair observations yield null observed-union, not known0; witnessed intervals may have an explicit known0 duration.",
+    "fairness": "Exactly privacy and embedding coverage rows required, with nullable eligible/completed/max_wait/starvation. Unknown cannot assert no starvation. Background coverage is separate from logical request accounting.",
+    "cost": "Each state/receipt/ledger/checkpoint/replay/source/log/DB/RSS dimension separate N/unknown/min/mean/max/last. Do not sum independent peaks or infer total O(1).",
+    "comparison": "Explicit comparison_profile is reported_window_v1 for legacy within-window reported evidence, preserving original common-input/freshness/quality/full-denominator conditions plus fixed observed processing causality. It never means v2 carry-in/witness or B acceptance. explicit_window_witness_v2 additionally requires complete explicit repair-window witnesses, with unknown/incomplete staying false; no automatic legacy downgrade. Mixed profiles reject comparison_profile_mismatch. B execution requires explicit v2 and external actual acceptance gates, always unexecuted here. No superiority or authenticated execution inferred.",
+    "publication": "Explicit absolute paths; no symlink files/ancestors, regular files, bounded reads; output exclusive create, no overwrite; single file only, no multi-file transaction implied.",
+    "processing_causality": "For each observed pair: processing_started_ns<=applied_ns and processing_started_ns<=visible_ns, with applied<=visible from existing ordered stages. Missing processing with observed application/publication is unknown/incomplete, never known0; comparison readiness false. Existing stage-prefix requirements stay unchanged."
+  },
+  "entry_gates_pending": [
+    "SYS03 actual independent receiptchain acceptance and integration",
+    "SYS04 actual independent lifecycle/recovery acceptance and integration",
+    "root-reviewed pilot load/freshness budgets",
+    "SYS05.B bounded scheduler/atomic snapshot/fairness implementation and actual load execution"
+  ],
+  "parent_contract_sha256": "e83120aa0f34c20de7124482af5e3110ec2a8ad106783cdc52f41b44ec7b6bb3"
+}

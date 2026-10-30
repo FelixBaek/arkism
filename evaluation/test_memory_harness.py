@@ -9,7 +9,8 @@ _MODULES = ('test_contract_io.py', 'test_fixture_gen.py', 'test_metrics.py',
 _SYSTEM_MODULES = ('system/sys_01/test_shadow_contract.py',
                    'system/sys_02/test_outcome_contract.py',
                    'system/sys_03/test_atomicity.py',
-                   'system/sys_04/test_lifecycle.py')
+                   'system/sys_04/test_lifecycle.py',
+                   'system/sys_05/test_load.py')
 _EXPERIMENT_MODULES = ('experiments/exp_01/test_protocol.py',
                        'experiments/exp_02/test_run_plan.py')
 _DYNAMICS_MODULES = ('test_dynamics_compare.py',)
