@@ -34,6 +34,7 @@ window.ArkismShell = (ctx) => {
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin", () => String(state.data.tools?.plugins.length ?? "")],
       ["mcp", "도구 서버(MCP)", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin", () => String(state.data.tools?.servers.length ?? "")],
       ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
+      ["manage", "관리", () => go("manage"), () => state.view === "manage"], // 자주·안 씀·업데이트·실패·최근 추가 (app.js manageView)
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },
     gallery: { label: "GALLERY", tabs: [

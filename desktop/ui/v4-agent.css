@@ -46,6 +46,10 @@
   appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--nc-muted) 50%), linear-gradient(135deg, var(--nc-muted) 50%, transparent 50%);
   background-position: calc(100% - 15px) 50%, calc(100% - 11px) 50%; background-size: 4px 4px; background-repeat: no-repeat; }
 .wf-select option { background: var(--nc-surface); color: var(--nc-text); }
+.wf-cat-btn { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.wf-cat-btn .icon { width: 14px; height: 14px; }
+.wf-cat-menu .wf-chip { border: 1px solid var(--nc-line); color: var(--nc-text); }
+.wf-cat-menu .cat-menu-item output { margin-left: auto; font: 12px var(--mono); color: var(--nc-quiet); }
 
 .table-wrap > .wf-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; background: none; border: 0; }
 .panel:has(> .panel-main > .table-wrap > .wf-main) { border: 0; border-radius: 0; background: none; box-shadow: none; } /* 1424:2375: the Flow list sits on the page, no box */

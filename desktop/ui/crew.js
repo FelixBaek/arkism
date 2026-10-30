@@ -395,16 +395,45 @@ export const createCrew = (ctx) => {
       drawCards();
     });
     search.append(icon("magnifying-glass"), q);
-    const cat = el("select", "wf-select");
+    // 모든 카테고리 dropdown (1424:2375); each item is the category's icon + tag, as on the cards
+    const cat = el("button", "wf-select wf-cat-btn");
+    cat.type = "button";
+    cat.setAttribute("aria-haspopup", "menu");
     cat.setAttribute("aria-label", "카테고리");
-    for (const [key, label] of [["all", "모든 카테고리"], ...cats.map(([c, n]) => [c, `${c} ${n}`])]) {
-      const option = el("option", "", label);
-      option.value = key;
-      if (key !== "all") option.dataset.noI18n = ""; // the category is the user's own word
-      option.selected = key === state.crewCat;
-      cat.append(option);
-    }
-    cat.addEventListener("change", () => { state.crewCat = cat.value; state.selected = null; drawCards(); });
+    const catLabel = () => state.crewCat === "all" ? [el("span", "", "모든 카테고리")] : [icon(ctx.catIcon(state.crewCat)), raw(el("span", "", state.crewCat))];
+    cat.replaceChildren(...catLabel());
+    cat.addEventListener("click", () => {
+      const doc = cat.ownerDocument;
+      doc.querySelector(".cat-menu")?.remove();
+      const m = el("div", "cat-menu wf-cat-menu");
+      m.setAttribute("role", "menu");
+      const away = (e) => { if (!m.contains(e.target) && !cat.contains(e.target)) close(); };
+      const close = (refocus) => { m.remove(); doc.removeEventListener("pointerdown", away, true); if (refocus) cat.focus(); };
+      for (const [key, n] of [["all"], ...cats]) {
+        const b = el("button", `cat-menu-item${key === state.crewCat ? " on" : ""}`);
+        b.type = "button";
+        b.setAttribute("role", "menuitemradio");
+        b.setAttribute("aria-checked", String(key === state.crewCat));
+        if (key === "all") b.append(icon("squares-four"), el("span", "", "모든 카테고리"));
+        else { const tag = el("span", "wf-chip"); tag.append(icon(ctx.catIcon(key)), raw(el("span", "", key))); b.append(tag, el("output", "", String(n))); }
+        b.addEventListener("click", () => { close(true); state.crewCat = key; state.selected = null; cat.replaceChildren(...catLabel()); drawCards(); });
+        m.append(b);
+      }
+      m.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") { e.preventDefault(); close(true); return; }
+        const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        const bs = [...m.querySelectorAll("button")], i = bs.indexOf(doc.activeElement);
+        bs[(i + step + bs.length) % bs.length].focus();
+      });
+      doc.body.append(m);
+      const r = cat.getBoundingClientRect();
+      m.style.top = `${r.bottom + 4}px`;
+      m.style.left = `${Math.max(8, Math.min(r.right - m.offsetWidth, doc.defaultView.innerWidth - m.offsetWidth - 8))}px`;
+      doc.addEventListener("pointerdown", away, true);
+      (m.querySelector(".on") || m.querySelector("button"))?.focus();
+    });
     if (!cats.length) cat.hidden = true; // no category yet: nothing to choose
     bar.append(search, el("span", "grow"), cat, button("+ 새 워크플로우", "primary", null, openFlowCreate));
     $("#controls").replaceChildren(bar);
