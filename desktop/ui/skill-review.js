@@ -42,6 +42,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
       }
       select.value = skill.version_history.includes(preferred) ? preferred : skill.version_history.at(-1);
       label.append(select);
+      label.hidden = mode === "review"; // 검토·승인 names the version in one line instead of a picker (Figma 198:4070)
       body.replaceChildren(...(mode ? [] : [el("p", "meta", "스킬 원문과 평가는 검토 자료예요. 조회만으로 승인되거나 실행되지 않아요.")]), label, trials, detail);
       const show = async () => {
         const versionTicket = loads.begin(), id = select.value;
@@ -83,7 +84,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
           const self = ev => ev.evaluation?.eval_type === "model_self";
           const approvable = ev => human && version.status === "candidate" && !self(ev) && ev.evaluation?.passed === true && ev.created_by !== version.created_by;
           const restorable = ev => human && version.status === "superseded" && !version.validation_id && !self(ev) && ev.evaluation?.passed === true;
-          detail.replaceChildren(el("h4", "", `버전 ${n} · ${status[version.status]}`));
+          detail.replaceChildren(el(mode === "review" ? "p" : "h4", mode === "review" ? "meta" : "", `버전 ${n} · ${status[version.status]}`));
           if (baseline) {
             const rows = changed(baseline.text, version.text);
             detail.append(rows.length ? side.table([`기존 버전 ${number(baseline.id) || "?"}`, `후보 버전 ${n}`], rows.map(cells => [cells])) : el("p", "meta", "기존 버전과 바뀐 줄이 없어요."));
@@ -109,7 +110,7 @@ window.ArkismSkillReview = ({ state, el, button, request, query, reload, executi
             if (r) card.append(side.table(["항목", "기존", "후보"], [
               [["점수", [String(r.baseline_score), "mono"], [String(r.candidate_score), r.candidate_score > r.baseline_score ? "mono up" : "mono"]]],
               [["비용 / 시간", r.baseline_duration_ms ? spent(r.baseline_cost, r.baseline_duration_ms) : "—", spent(r.candidate_cost, r.candidate_duration_ms)]],
-              [["회귀 / 안전", "—", `${yes(r.regression_passed)} / ${yes(r.safety_passed)}`]]]));
+              r.regression_passed === true && r.safety_passed === true ? [["회귀 / 안전", "통과", "통과"]] : [["회귀 / 안전", "—", `${yes(r.regression_passed)} / ${yes(r.safety_passed)}`]]]));
             const more = el("details"); more.append(el("summary", "", "평가 자세히"), el("p", "original-text", picked.text || "저장된 내용이 없어요."));
             const plan = version.comparison_plan;
             if (plan) more.append(el("p", "meta", `통과 기준 · 점수 ${+(plan.min_score_gain * 100).toFixed(2)}점 이상 향상 · ${plan.max_cost >= 1e6 ? "비용 제한 없음" : `비용 $${(+plan.max_cost).toFixed(2)} 이하`} · ${+(plan.max_duration_ms / 60000).toFixed(1)}분 이하`));

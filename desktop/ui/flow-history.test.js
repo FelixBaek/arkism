@@ -138,10 +138,13 @@ test("an agent's and a team's 기록 list their @이름 FLOW runs and open the r
   }
 });
 
-test("그래프에서 보기 opens a waiting run on the graph with the waiting step amber, picked, and the answer buttons beside it", async () => {
+test("단계 보기 opens a waiting run on the graph with the waiting step amber, picked, and the answer buttons beside it", async () => {
   const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "waiting", waiting: { kind: "approval", node_id: "ok", question: "보낼까요?" } })]] });
   h.render(); await h.settle(); await firstResult(h);
-  h.btn(box(h).querySelector(".flow-decide"), "그래프에서 보기").click(); await h.settle();
+  const decide = box(h).querySelector(".flow-decide");
+  assert.deepEqual([...decide.querySelectorAll("button")].map((b) => b.textContent.trim()), ["중단 요청", "거절", "승인"], "1480:7861: no 그래프에서 보기 in the banner");
+  assert.match(decide.textContent, /보낼까요\? 승인하면 다음 단계가 이어지고, 거절하면 여기서 끝나요\./);
+  h.btn(box(h), "단계 보기").click(); await h.settle();
   const node = document.querySelector('.graph-page.run .g-node[data-id="ok"]');
   assert.ok(node.classList.contains("ask") && node.classList.contains("selected"), "the waiting step is amber and picked");
   assert.equal(node.querySelector(".g-node-flag.ask").textContent, "확인 필요");
@@ -169,11 +172,15 @@ test("a failed run says which step broke and 단계 보기 opens it on the graph
   h.closeAll();
 });
 
-test("the 확인 필요 card's popup goes straight to the waiting step on the graph", async () => {
-  const h = await boot({ view: "crew" });
+test("the 확인 필요 card's popup asks with 실행 보기 · 거절 · 승인, and 실행 보기 leads to the waiting step on the graph", async () => {
+  const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ status: "waiting", waiting: { kind: "approval", node_id: "ok", question: "보낼까요?" } })]] });
   h.render(); await h.settle();
   document.querySelector('[data-id="crew:wf1"]').click(); await h.settle();
-  h.btn(h.top().querySelector(".wf-attn"), "그래프에서 보기").click(); await h.settle();
+  const attn = h.top().querySelector(".wf-attn");
+  assert.deepEqual([...attn.querySelectorAll("button")].map((b) => b.textContent.trim()), ["실행 보기", "거절", "승인"], "1486:5990");
+  assert.match(attn.textContent, /승인하면 다음 단계가 이어지고, 거절하면 여기서 끝나요\./);
+  h.btn(attn, "실행 보기").click(); await h.settle();
+  h.btn(box(h), "단계 보기").click(); await h.settle();
   assert.ok(document.querySelector('.graph-page.run .g-node.ask.selected[data-id="ok"]'));
   h.closeAll();
 });

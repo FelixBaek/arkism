@@ -30,10 +30,10 @@
 .dg-line > span:last-child { flex: 1; min-width: 0; }
 .dg-op { flex: none; font-family: var(--mono); color: var(--nc-quiet); }
 .dg-line.del, .dg-line.del .dg-op { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); }
-.dg-line.add, .dg-line.add .dg-op { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); }
+.dg-line.add, .dg-line.add .dg-op { color: var(--nc-diff-add-fg); } /* + lines: coloured text, no fill */
 .dg-words { display: block; margin: 0; padding: 8px 10px; font: 400 calc(12.5px * var(--fs, 1))/1.6 var(--sans); white-space: pre-wrap; overflow-wrap: anywhere; }
-.dg-words del { background: var(--nc-diff-del-bg); color: var(--nc-diff-del-fg); text-decoration: line-through; }
-.dg-words ins { background: var(--nc-diff-add-bg); color: var(--nc-diff-add-fg); text-decoration: none; }
+.dg-words del { color: var(--nc-diff-del-fg); text-decoration: line-through; }
+.dg-words ins { color: var(--nc-diff-add-fg); text-decoration: none; }
 
 .memory-mode .detail-body .dg-quote { display: flex; flex-direction: column; }
 .dg-quote p { margin: 0; overflow-wrap: anywhere; }
@@ -52,3 +52,8 @@
 .dg-item-text p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
 .dg-item-text small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .dg-item .mem-badge.new { border-color: var(--nc-quiet); }
+
+/* 합치기 제안: the note under the list card, shown only while the merge rows are on screen */
+.dg-merge-note { display: none; margin: 0.75rem 0 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.panel-main:has(#table > .row[data-id^="merge:"]) > .dg-merge-note { display: block; }
+.panel-main:has(#table > .row[data-id^="merge:"]) > .table-wrap { flex: 0 1 auto; }

@@ -209,7 +209,7 @@ test("document view: sections with neighbours, versions and a test search with i
   assert.match(k.table().textContent, /부분 4개 · 제목 4개/);
   assert.equal(k.detail().firstChild.dataset.label, "부분 #1");
   assert.match(k.detail().textContent, /아직 확인 전이라/);
-  assert.match(k.detail().textContent, /앞뒤 부분#2Intro/);
+  assert.match(k.detail().textContent, /앞뒤 부분#2 · Intro/);
   k.detail().querySelector(".v4k-near button").click(); await dom.flush();
   assert.equal(k.detail().firstChild.dataset.label, "부분 #2");
   k.table().querySelectorAll(".v4k-row")[3].click(); await dom.flush();

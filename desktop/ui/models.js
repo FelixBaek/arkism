@@ -36,7 +36,8 @@ window.ArkismModels = (ctx) => {
   // A write's answer is newer than any providers read still out: publish() drops those reads, so a read that
   // started before a pick (opening the tab, a refresh poll) cannot land afterwards and put the old pick back.
   const loads = globalThis.ArkismKeep.latest();
-  const publish = (next) => { loads.cancel(); state.data.providers = next; return next; };
+  // POST answers (assist_model, role_model) leave out role_defaults: keep the ones the last read brought, or every role shows 아직 확인 안 됨.
+  const publish = (next) => { loads.cancel(); const rd = state.data.providers?.role_defaults; if (next && !next.role_defaults && rd) next = { ...next, role_defaults: rd }; state.data.providers = next; return next; };
   async function load() {
     const turn = loads.begin();
     let next;
@@ -64,9 +65,9 @@ window.ArkismModels = (ctx) => {
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
   // The same, per provider ({name, models}), for pickers that show where a model comes from.
-  // The same, one group per way the provider is connected (each subscription plan, API): a provider with a login and a key shows twice.
-  // Both copies save the same value; the runner, not the pick, decides how a model runs.
-  const pickerGroups = () => enabledByProvider().flatMap((p) => (p.badges.length > 1 ? p.badges.map((b) => ({ ...p, badges: [b] })) : [p]));
+  // Pickers show each provider once with all its connection badges (MAX, API) on the row: the server keeps only provider+model,
+  // so a copy per connection would share a value and a pick could never move off the first copy.
+  const pickerGroups = () => enabledByProvider();
   const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, badges: viaBadges(p), usable: usable(p), models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
   // Signed in, a key stored, or added by hand: its models can run. model-pick.js keeps the others behind 「연결 안 된 모델도 보기」.
   const usable = (p) => !!(p.custom || isCustom(p.id) || (p.keys || []).length || (p.accounts || []).some((a) => a.status === "connected"));
@@ -588,7 +589,7 @@ window.ArkismModels = (ctx) => {
       mark.append(icon("check"));
       const name = el("div", "ag-account-name");
       const top = el("div", "ag-account-top");
-      top.append(el("strong", "", k.name), el("span", "ag-plan", "API"));
+      top.append(el("strong", "", k.name), el("span", "ag-plan api", "API"));
       name.append(top, el("small", "mono", [masked(k), k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join(" · ")));
       const del = button("", "icon-btn plain", "trash", () => removeKey(src.p.id, k));
       del.setAttribute("aria-label", `${k.name} 키 지우기`);

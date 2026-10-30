@@ -1,11 +1,10 @@
 /* FLOW › workflow popup › 기록·사용량 (Figma 1404:16985): numbers, day bars in one violet, failing steps. */
-/* Figma chart violet (#a594f9 dark, #6e5bd8 light). Bars sit at 45% until hovered. */
+/* Figma chart violet (#a594f9 dark, #6e5bd8 light), bars at full strength (1404:16985). */
 .tm-usage { --cu-violet: #a594f9; }
 :root[data-theme="light"] .tm-usage { --cu-violet: #6e5bd8; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .tm-usage { --cu-violet: #6e5bd8; } }
 .tm-usage .tm-col i.bad { background: var(--nc-amber); border-radius: 2px 2px 0 0; }
-.tm-usage .tm-col i.auto { background: var(--cu-violet); border-radius: 0; opacity: .45; }
-.tm-usage .tm-col:hover i { opacity: 1; }
+.tm-usage .tm-col i.auto { background: var(--cu-violet); border-radius: 0; opacity: 1; }
 .tm-usage .tm-legend span:not(.bad)::before { background: var(--cu-violet); opacity: 1; }
 .flow-usage .tm-uctl { margin-bottom: 12px; }
 .flow-usage-body { display: flex; flex-direction: column; gap: 12px; }

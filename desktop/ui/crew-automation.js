@@ -222,14 +222,18 @@ window.ArkismAutomation = (h) => {
       paintHead();
       // 예상: per-run averages of the last 30 days (usage API: tokens·cost, runs: time).
       const est = el("dl", "auto-est");
-      const estRow = (k, v) => { const r = el("div", ""); r.append(el("dt", "", k), el("dd", "", v)); est.append(r); };
+      const estRow = (k, v, cls = "") => { const r = el("div", cls); r.append(el("dt", "", k), el("dd", "", v)); est.append(r); };
       est.dataset.est = "1";
       side.prepend(est);
       dlg.querySelector(".crew-popup-head").append(dlg.querySelector(".crew-popup-tabs")); // 993:60224: tabs are a pill group under the estimate, like the expert and team popups
       paintEst();
       function paintEst() {
         est.replaceChildren();
+        // per run: the 30-day usage totals over its runs; no run yet, no guess
+        const n = stats?.runs || 0;
         const avg = stats?.avgMs;
+        estRow("예상 토큰", n && stats.tokens ? `약 ${Math.round(stats.tokens / n).toLocaleString()}` : "—", "est-run");
+        estRow("예상 비용 (API 요금 기준)", n && stats.cost != null ? `약 $${(stats.cost / n).toFixed(2)}` : "—", "est-run");
         estRow("예상 시간", avg ? `약 ${h.spanText(avg)}` : "—");
       }
       head.paintEst = paintEst;
@@ -267,16 +271,7 @@ window.ArkismAutomation = (h) => {
       const top = el("div", "auto-top");
       body.append(top);
       if (!creating) {
-        const ruleBad = h.ruleChecks(base).filter((c) => !c.ok);
         for (const run of h.waitingRuns().filter((w) => w.crew_run.crew_id === rec.id)) top.append(approvalCard(run));
-        if (ruleBad.length) {
-          const card = el("div", "wf-attn small");
-          const t = el("div", "");
-          t.append(el("strong", "", `구조 검토 · 확인할 곳 ${ruleBad.length}`));
-          for (const c of ruleBad) t.append(el("p", "", `${c.label}: ${c.detail}`));
-          card.append(t, button("구조 검토", "", null, () => leave(() => h.openGraph(rec, { review: true, fromPopup: true }))));
-          top.append(card);
-        }
       }
       const ai = aiSection();
       body.prepend(ai);
@@ -351,10 +346,11 @@ window.ArkismAutomation = (h) => {
       const node = (rec.crew.graph?.nodes || []).find((n) => n.id === wait.crew_run.waiting.node_id);
       const card = el("div", "wf-attn");
       const t = el("div", "");
-      t.append(el("strong", "", `확인해 주세요${node ? ` · ${h.nodeTitle(node)}` : ""}`), el("p", "", wait.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"));
+      t.append(el("strong", "", `확인해 주세요${node ? ` · ${h.nodeTitle(node)}` : ""}`), el("p", ""));
+      t.lastChild.append(el("span", "", wait.crew_run.waiting.question || node?.config?.question || "다음 단계로 갈까요?"), " ", el("span", "", "승인하면 다음 단계가 이어지고, 거절하면 여기서 끝나요."));
       const acts = el("div", "wf-attn-actions");
       const after = async () => { await h.refreshRuns(); pop.select("overview"); };
-      acts.append(button("그래프에서 보기", "ghost", null, () => leave(() => h.openGraph(rec, { run: wait, select: wait.crew_run.waiting.node_id }))), button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
+      acts.append(button("실행 보기", "ghost", null, () => { run = wait; pop.select("history"); }),
         button("거절", "", null, async () => { await h.decide(wait, false); void after(); }), button("승인", "primary", null, async () => { await h.decide(wait, true); void after(); }));
       card.append(t, acts);
       return card;
@@ -552,7 +548,7 @@ window.ArkismAutomation = (h) => {
             for (const n of nodes) {
               const c = el("span", "auto-node");
               const p = byId(n.type === "expert" ? n.config?.expert : n.config?.persona);
-              c.append(IS_AI(n) && p ? h.avatarMark(p.crew) : icon(h.NODES[n.type]?.icon || "play"), h.nodeTitle(n));
+              c.append(IS_AI(n) ? (p ? h.avatarMark(p.crew) : h.modelMark(h.modelOf(n, d))) : icon(h.NODES[n.type]?.icon || "play"), h.nodeTitle(n));
               grp.append(c);
             }
             strip.append(grp);
@@ -617,7 +613,7 @@ window.ArkismAutomation = (h) => {
             touch(); paint();
           });
           kind.append(pick);
-        } else kind.textContent = [kindText(n), p?.crew.name].filter(Boolean).join(" · ");
+        } else kind.textContent = [kindText(n).replace(/ · 워커.*/, ""), p?.crew.name, n.config?.collab === "on" ? `워커 최대 ${n.config.max_workers || 5}` : ""].filter(Boolean).join(" · "); // 전문가 · 리서처 · 워커 최대 5
         who.append(title, kind);
         top.append(face, who, el("span", "grow"));
         if (IS_AI(n)) {
@@ -627,8 +623,8 @@ window.ArkismAutomation = (h) => {
           model.addEventListener("change", () => { if (model.value) n.config.model = model.value; else delete n.config.model; touch(); });
           top.append(creating ? model : el("span", "mono auto-model-text", h.modelOf(n, d)));
         }
-        const only = button("이 단계만", "ghost small", "play", () => trial(n.id, false));
-        const upto = button("여기까지", "ghost small", "play", () => trial(n.id, true));
+        const only = button("▷ 이 단계만", "ghost small", null, () => trial(n.id, false));
+        const upto = button("▷▷ 여기까지", "ghost small", null, () => trial(n.id, true));
         for (const b of [only, upto]) { b.classList.add("auto-try"); }
         const ok = !creating && !h.ownerOf(rec) && !graphDirty() && !dirty();
         only.disabled = upto.disabled = !ok;
@@ -808,7 +804,7 @@ window.ArkismAutomation = (h) => {
             label.type = "button";
             label.title = "눌러서 고치기";
             label.addEventListener("click", () => { editing = i; paint(); });
-            r.append(label, el("span", "grow"), ...note, when, del);
+            r.append(label, el("span", "grow"), ...note, when); // 빼기 shows once the row is opened to edit (1486:5990: rows carry no ✕)
           } else {
             // 디스코드 progress notices are not sent yet: offered only to a channel that already has it.
             const kind = h.select(c.kind === "discord" ? NOTIFY_KINDS : NOTIFY_KINDS.filter(([k]) => k !== "discord"), c.kind);

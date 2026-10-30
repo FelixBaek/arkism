@@ -331,7 +331,7 @@ test("병합 제안 lists AI proposals and accepts, edits or dismisses them", as
   assert.match(table, /새 후보 본문AI 제안: 합치기 · 대상 “기억 m1”/);
   assert.match(table, /저장할 후보AI 제안: 저장 · 새 정보/);
   assert.match(table, /대상 “기억 m5”/);
-  assert.match(table, /고르면 그때 저장돼요/);
+  assert.match(t.h.$(".dg-merge-note")?.textContent || "", /고르면 그때 저장돼요/, "the note sits under the list, outside the rows");
   t.state.query = "같은 뜻"; t.view.drawMerge();
   assert.equal(rows(t).length, 1);
   t.state.query = "없음없음"; t.view.drawMerge();

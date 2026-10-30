@@ -6,7 +6,7 @@ window.ArkismRouting = (ctx) => {
   const turns = window.ArkismRoutingTurns?.(ctx);
 
   const RANGES = [["1h", "1시간"], ["24h", "24시간"], ["7d", "7일"], ["30d", "30일"]];
-  const FAMILY_LOGO = { CLAUDE: "img:claude.svg", GPT: "sym:a-codex", GLM: "sym:a-zcode", GEMINI: "sym:a-gemini", XAI: "sym:i-x" };
+  const FAMILY_LOGO = { CLAUDE: "img:claude.svg", GPT: "sym:a-codex", GLM: "sym:a-zcode", GEMINI: "sym:a-gemini", XAI: "sym:a-grok" };
   const STATUS = { ok: ["ok", "정상"], watch: ["warn", "모니터링"], slow: ["warn", "느림"], key: ["warn", "키 만료 임박"], fixed: ["on", "고정 중"], idle: ["off", "대기"], off: ["off", "사용 안 함"] };
   const EVENT_KINDS = [["all", "전체"], ["incident", "장애"], ["policy", "정책 변경"], ["recovery", "복구"]];
   const EVENT_ICON = { incident: "warning-circle", policy: "sliders-horizontal", recovery: "check-circle" };
@@ -27,6 +27,16 @@ window.ArkismRouting = (ctx) => {
   const judgeName = (id) => JUDGE_NAME[id] || (String(id || "").startsWith("jev") ? "Jev" : id);
   // 이런 일은 늘 이 모델로 (POST /v1/routing/policy rules): the server tells the kind from the words in the request.
   const RULE_KINDS = [["code", "코딩", "코드·함수·버그·테스트 같은 낱말이 든 요청"], ["writing", "글쓰기", "글쓰기·번역·요약·이메일 같은 낱말이 든 요청"], ["quick", "짧은 질문", "위에 해당하지 않는 짧은 요청(80자 이하)"]];
+  // A model with no label comes named by its id (claude-sonnet-5-5): show it as people write it (Claude Sonnet 5.5).
+  function nice(n) {
+    if (!/^[a-z][a-z0-9.-]*$/.test(n || "")) return n || "";
+    const out = [];
+    for (const x of n.replace(/(\d)-(\d)(?!\d)/g, "$1.$2").split("-")) {
+      if (/^(GPT|GLM)$/.test(out.at(-1)) && /^\d/.test(x)) out[out.length - 1] += `-${x}`;
+      else out.push(/^(gpt|glm)$/.test(x) ? x.toUpperCase() : /^(\d|mini$|nano$)/.test(x) ? x : x[0].toUpperCase() + x.slice(1));
+    }
+    return out.join(" ");
+  }
   const unsupported = (e) => /HTTP 404|not_found|HTTP 501|not_implemented/.test(e?.message || "");
 
   // ------------------------------------------------------------------ data
@@ -56,7 +66,10 @@ window.ArkismRouting = (ctx) => {
   const paint = () => { if (state.view === "routing") render(false); };
 
   // ------------------------------------------------------------------ small parts
+  // The bare brand mark (brand.js) when there is one, as in Figma; GLM models run on Z.ai, whose mark is the Z.
   function agentTile(family, name) {
+    const m = window.ArkismBrand?.mark(family === "GLM" ? "z.ai" : family);
+    if (m) { m.title = name || family; return m; }
     const spec = FAMILY_LOGO[family];
     if (spec) return agentLogo(spec, name || family);
     const t = el("span", "agent-tile mono-logo", (family || "?").slice(0, 1));
@@ -93,13 +106,17 @@ window.ArkismRouting = (ctx) => {
     }
     return d;
   }
+  let sparkN = 0; // gradient ids: one per sparkline drawn
   function spark(values, kind) {
     const W = 160, H = 46, box = svg("svg", { class: `rt-spark ${kind}`, viewBox: `0 0 ${W} ${H + 8}`, "aria-hidden": "true" });
     if (!values || values.length < 2) return box;
     const mn = Math.min(...values), mx = Math.max(...values);
     const pts = values.map((v, i) => [(i * (W - 10)) / (values.length - 1), 6 + (H - 8) - ((v - mn) / (mx - mn || 1)) * (H - 8)]);
-    const d = curve(pts), last = pts[pts.length - 1];
-    box.append(svg("path", { class: "area", d: `${d} L ${last[0]} ${H + 8} L 0 ${H + 8} Z` }), svg("path", { class: "line", d }),
+    const d = curve(pts), last = pts[pts.length - 1], id = `rt-fade-${++sparkN}`;
+    const g = svg("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+    g.append(svg("stop", { offset: 0, "stop-color": "currentColor", "stop-opacity": 0.28 }), svg("stop", { offset: 1, "stop-color": "currentColor", "stop-opacity": 0 }));
+    const defs = svg("defs"); defs.append(g);
+    box.append(defs, svg("path", { class: "area", d: `${d} L ${last[0]} ${H + 8} L 0 ${H + 8} Z`, style: `fill:url(#${id})` }), svg("path", { class: "line", d }),
       svg("line", { class: "mark", x1: last[0], x2: last[0], y1: 2, y2: H + 8 }), svg("circle", { class: "dot", cx: last[0], cy: last[1], r: 3.5 }));
     return box;
   }
@@ -140,8 +157,9 @@ window.ArkismRouting = (ctx) => {
     }
     if (mark != null && points[mark.index]) {
       const q = [X(mark.index), Y(points[mark.index][mark.key] ?? 0)];
-      box.append(svg("circle", { class: "incident", cx: q[0], cy: q[1], r: 4 }));
-      const t = svg("text", { class: "incident-label", x: Math.min(W - 4, Math.max(L + 40, q[0])), y: Math.max(10, q[1] - 9), "text-anchor": "middle" }); t.textContent = mark.label; box.append(t);
+      box.append(svg("line", { class: "incident-line", x1: q[0], x2: q[0], y1: bot - ph, y2: bot }), svg("circle", { class: "incident", cx: q[0], cy: q[1], r: 3 }));
+      const left = q[0] > W - 90; // near the right edge the label sits left of the line
+      const t = svg("text", { class: "incident-label", x: q[0] + (left ? -4 : 4), y: bot - ph + 8, "text-anchor": left ? "end" : "start" }); t.textContent = mark.label; box.append(t);
     }
     for (let k = 0; k < 5; k++) {
       const i = Math.round((k * (points.length - 1)) / 4);
@@ -226,7 +244,7 @@ window.ArkismRouting = (ctx) => {
       const fixed = manual && m.id === d.policy.default_model;
       const kind = manual ? (fixed ? "fixed" : "idle") : m.status;
       const row = el("div", `rt-row${manual && !fixed ? " dimmed" : ""}`); row.style.gridTemplateColumns = cols;
-      const name = el("span", "rt-model"); const t = el("span", "rt-model-text"); t.append(el("b", "", m.name), el("small", "", m.provider || m.family));
+      const name = el("span", "rt-model"); const t = el("span", "rt-model-text"); t.append(el("b", "", nice(m.name)), el("small", "", m.provider || m.family));
       name.append(agentTile(m.family), t);
       const slow = m.status === "slow" || m.status === "watch";
       const cells = [el("span", "r m", num(m.requests)), el("span", `r m${slow ? " warn" : ""}`, `${sec1(m.p50_ms)}s / ${sec1(m.p95_ms)}s`), el("span", `r m${m.status === "watch" ? " warn" : ""}`, pct1(m.success_rate)), el("span", "r m", usd(m.cost_usd))];
@@ -296,11 +314,11 @@ window.ArkismRouting = (ctx) => {
     return r;
   }
   const openSettings = () => { state.settingsTab = "routing"; go("settings"); };
-  const modelName = (models, id) => (models || []).find((m) => m.id === id)?.name || "";
+  const modelName = (models, id) => nice((models || []).find((m) => m.id === id)?.name || "");
   // 마지막 판정 ({model, decision, rule}): why the newest routed request went where it went, with screen names.
   function lastPick(v, models) {
     if (!v?.model) return "—";
-    const m = modelName(models, v.model) || String(v.model).replace(/^[^/]+\//, ""), kind = RULE_KINDS.find(([k]) => k === v.rule)?.[1];
+    const m = modelName(models, v.model) || nice(String(v.model).replace(/^[^/]+\//, "")), kind = RULE_KINDS.find(([k]) => k === v.rule)?.[1];
     return kind ? `${kind} 요청이라 → ${m}` : v.decision === "clef" ? `판정 모델이 골라서 → ${m}` : v.decision === "default" ? `판정 모델이 고르지 않아서 → ${m}` : `기본 모델이라 → ${m}`;
   }
   // Where requests go when no judge picks: the 기본 모델, else the 1번 model.
@@ -320,7 +338,7 @@ window.ArkismRouting = (ctx) => {
     const p = d.policy || {};
     const c = el("section", "rt-policy-line");
     const auto = p.auto_routing === false ? `꺼짐 · ${fallbackName(p, d.models)}로 고정` : (!p.classifier ? `켜짐 · 판정 모델 없음 → ${fallbackName(p, d.models)}로` : p.classifier_ms != null ? `켜짐 · ${judgeName(p.classifier)} 보통 ${sec1(p.classifier_ms)}초` : `켜짐 · ${judgeName(p.classifier)}`);
-    const order = (p.failover?.order || []).map((id) => modelName(d.models, id) || id);
+    const order = (p.failover?.order || []).map((id) => modelName(d.models, id) || nice(String(id).replace(/^[^/]+\//, "")));
     const fail = p.auto_failover === false ? "꺼짐" : `켜짐${order.length ? ` · ${order.join(" → ")}` : " · 라우팅 순서대로"}`;
     const go2 = button("라우팅 설정", "", null, openSettings);
     c.append(el("h3", "", "라우팅 정책"), kv("자동 라우팅", auto), kv("실패하면 다음 모델로", fail), kv("마지막 판정", lastPick(p.last_decision, d.models)), go2);
@@ -424,6 +442,13 @@ window.ArkismRouting = (ctx) => {
     box.append(g);
     return box;
   }
+  // Event times as a clock (Figma): 03:41 today, 어제 22:05, else 10월 12일 22:05.
+  function clock(at) {
+    const t = new Date(at); if (isNaN(t)) return "";
+    const hm = `${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}`, day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const back = Math.round((day(new Date()) - day(t)) / 864e5);
+    return back === 0 ? hm : back === 1 ? `어제 ${hm}` : `${t.getMonth() + 1}월 ${t.getDate()}일 ${hm}`;
+  }
   function eventFeed(d) {
     const box = el("div", "rt-events");
     const head = el("div", "rt-card-head"); head.append(el("strong", "", "이벤트"), el("span", "", `${RANGES.find(([k]) => k === S.range)[1]} · ${(d.events || []).length}건`));
@@ -441,7 +466,7 @@ window.ArkismRouting = (ctx) => {
       row.classList.add(e.kind);
       const ic = el("span", `rt-event-icon ${e.kind}`);
       ic.append(e.family ? agentTile(e.family) : icon(EVENT_ICON[e.kind] || "warning-circle"));
-      const tx = el("div"); tx.append(el("b", "", e.title), el("p", "", e.detail || ""), el("small", "", ago(e.at)));
+      const tx = el("div"); tx.append(el("b", "", e.title), el("p", "", e.detail || ""), el("small", "mono", clock(e.at)));
       row.append(ic, tx); list.append(row);
     }
     if (!items.length) list.append(el("div", "empty", "해당하는 이벤트가 없어요."));

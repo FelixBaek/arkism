@@ -405,12 +405,11 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   await closeAll();
 });
 
-test("overview: a candidate's 원문 근거 shows the lines around the quote, and 세션 보기 opens that spot", async () => {
+test("overview: a candidate's 원문 근거 shows the quote and its source, and 세션 보기 opens that spot", async () => {
   await reviewOf("Alex는 주로 오전에"); await app.settle(50); let d = win();
   const box = d.querySelector(".ov-context"); assert.ok(box, "context block");
   assert.match(text(box), /나는 보통 오전에 코드 리뷰해/);
-  assert.equal(text(box.querySelector(".ss-msg mark.ss-hit")), "나는 보통 오전에 코드 리뷰해", "the quoted words are underlined in the conversation");
-  assert.ok(box.querySelectorAll(".ss-msg").length <= 5, "only the lines around it");
+  assert.ok(box.querySelector(".ov-detail-from") && !box.querySelector(".ss-msg"), "the source line, no conversation bubbles (Figma)");
   await press("세션 보기 ›", box, 80);
   assert.match(text(win()), /세션 기록/);
   assert.equal(win().querySelector(".ov-wide-search").value, "session_01JX8K2M1QWERTY");
@@ -709,7 +708,7 @@ test("overview: 세션 기록 copies resume and continue-in commands, counts age
   await press("이어서 하기", d.querySelector(".ss-row"), 20);
   assert.equal(app.clipboard.text, "cd /home/me/arkism; codex resume cx-1");
   // handoff ▾ lists the other agents seen here, reads the handoff and copies that agent's start command
-  await press("넘기기", d.querySelector(".ss-row"));
+  await press("넘기기 ⌄", d.querySelector(".ss-row"));
   assert.deepEqual([...d.querySelectorAll(".ss-menu .cat-menu-item")].map(text), ["Claude Code(으)로 넘기기"]);
   await press("Claude Code(으)로 넘기기", d, 30);
   assert.match(app.clipboard.text, /^cd \/home\/me\/arkism; claude 'Arkism resume_work 도구로 작업 wk-1를/);
@@ -1005,7 +1004,8 @@ test("home palette: Ctrl K, tabs, keys, results by kind and the empty actions", 
   const offEmpty = route("POST", "/v1/search", () => ok({ items: [] }));
   await palType("z");
   await palType("zzqqxx");
-  assert.match(text(pal()), /찾는 결과가 없어요/);
+  assert.match(text(pal()), /검색 결과 없음/);
+  assert.ok([...pal().querySelectorAll(".st-panel button")].some((b) => text(b) === "검색 지우기"), "the empty state clears the box");
   await palKey("ArrowDown"); await palKey("Enter");
   app.dom.type(pal().querySelector(".pal-input"), "zzy"); await app.settle();
   assert.match(text(pal()), /서버에서도 찾는 중이에요/);

@@ -899,10 +899,10 @@ export function createCrewWorkers(deps) {
       const tok = 1200 + Math.round((d?.instructions || "").length / 2);
       const avg = row?.calls ? row.cost_usd / row.calls : null;
       const secs = (wk.calls || []).filter((c) => c.ok && c.latency_ms > 0).map((c) => Math.max(1, Math.round(c.latency_ms / 1000))).sort((a, b) => a - b);
-      const time = !secs.length ? "기록 없음" : secs[0] === secs[secs.length - 1] ? deps.tr(`약 ${secs[0]}초`) : deps.tr(`${secs[0]}~${secs[secs.length - 1]}초`);
+      const time = !secs.length ? "—" : secs[0] === secs[secs.length - 1] ? deps.tr(`약 ${secs[0]}초`) : deps.tr(`${secs[0]}~${secs[secs.length - 1]}초`);
       // label · dotted leader · value on each line
       const line = (k, v) => { const r = deps.el("div", "ex-est-row"); r.append(deps.el("span", "", k), deps.el("i", ""), deps.raw(deps.el("span", "v", v))); return r; };
-      box.replaceChildren(line("예상 토큰", deps.tr(`약 ${tok >= 1000 ? `${(tok / 1000).toFixed(1)}K` : tok}`)), line("예상 비용", avg == null ? deps.tr("기록 없음") : deps.tr(`약 ${"$" + avg.toFixed(avg < 0.1 ? 3 : 2)}`)), line("예상 시간", time));
+      box.replaceChildren(line("예상 토큰", deps.tr(`약 ${tok >= 1000 ? `${(tok / 1000).toFixed(1)}K` : tok}`)), line("예상 비용 (API 요금 기준)", avg == null ? "—" : deps.tr(`약 ${"$" + avg.toFixed(avg < 0.1 ? 3 : 2)}`)), line("예상 시간", time));
     };
     paint();
     wk.estPaint = paint;

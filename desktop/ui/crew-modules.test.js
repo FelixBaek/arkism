@@ -226,3 +226,18 @@ test("engine errors read as plain Korean, the raw text kept for 자세히", asyn
   assert.match(plainRunError("effect_unsupported: FLOW effects support existing Telegram and Slack notifications only"), /할 수 없는 단계/);
   assert.equal(plainRunError("something odd"), "단계가 실패했어요.");
 });
+
+test("노드 짜기 hands the AI the saved workflows and asks for a subflow or a real multi-step graph", async () => {
+  globalThis.ArkismKeep ||= { latest: () => ({}) }; // crewEditor.mjs reads it only when an editor is made
+  const { draftPrompt } = await import("./modules/crewEditor.mjs");
+  const cur = { nodes: [{ id: "s", type: "start", title: "시작", config: {} }, { id: "e", type: "end", title: "끝", config: {} }], edges: [{ from: "s", to: "e" }] };
+  const research = { id: "wf-research", crew: { type: "workflow", name: "리서치", handle: "리서치", role: "주제를 받아 검색·출처 확인·정리까지", graph: { nodes: Array(8).fill({}) } } };
+  const p = draftPrompt("테스트로 리서치하는거", cur, [research, { id: "x", crew: { type: "workflow", name: "이름 없음" } }]);
+  const saved = JSON.parse(p.match(/Saved workflows: (.*)\n/)[1]);
+  assert.deepEqual(saved, [{ name: "리서치", handle: "리서치", role: "주제를 받아 검색·출처 확인·정리까지", steps: 8 }], "only workflows with a handle, with name·handle·role");
+  assert.match(p, /"subflow" with config \{"workflow": that workflow's handle, "task"/);
+  assert.match(p, /never one single ai node/);
+  assert.match(p, /Request: 테스트로 리서치하는거$/);
+  assert.match(p, /Workflow: \{"nodes":\[\{"id":"s"/);
+  assert.match(draftPrompt("x", cur), /Saved workflows: \[\]/, "no saved workflow: an empty list");
+});

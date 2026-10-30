@@ -148,8 +148,8 @@ function appHelpers(h) {
     if (aside.length) { const a = el("div", "head-aside"); a.append(...aside); head.append(a); }
   };
   const agentLogo = (spec, name) => { const t = el("span", "agent-tile"); t.title = name; return t; };
-  // pickerGroups: Anthropic with a MAX login and a key (two groups), OpenAI on a subscription with no plan; modelGroup as models.js draws it.
-  const groups = [{ id: "anthropic", name: "Anthropic", badges: ["MAX"], models: ["sonnet", "haiku"] }, { id: "anthropic", name: "Anthropic", badges: ["API"], models: ["sonnet", "haiku"] }, { id: "openai", name: "OpenAI", badges: [], models: ["gpt-5"] }];
+  // pickerGroups: Anthropic with a MAX login and a key (one group, both badges), OpenAI on a subscription with no plan; modelGroup as models.js draws it.
+  const groups = [{ id: "anthropic", name: "Anthropic", badges: ["MAX", "API"], models: ["sonnet", "haiku"] }, { id: "openai", name: "OpenAI", badges: [], models: ["gpt-5"] }];
   const modelGroup = (p, valueOf = (m) => `${p.id}|${m}`) => {
     const g = el("optgroup"); g.label = p.name; g.dataset.badges = p.badges.join(",");
     for (const m of p.models) { const o = el("option", "", m); o.value = valueOf(m); o.dataset.badges = g.dataset.badges; g.append(o); }

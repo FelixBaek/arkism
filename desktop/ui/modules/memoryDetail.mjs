@@ -255,7 +255,7 @@ export function createMemoryDetail(deps) {
     const originalEvidence = deps.section("원문 확인");
     originalEvidence.append(deps.el("p", "meta", "AI가 쓴 이유와 실제 대화는 다를 수 있어요. 저장하기 전에 원문을 확인해 보세요."));
     const sourceBox = deps.el("div", ""); originalEvidence.append(sourceBox);
-    const readSources = deps.button("원문 보기", "small", null, async event => {
+    const readSources = deps.button("원문 보기", "small d-wide", null, async event => {
       const trigger = event.currentTarget; trigger.disabled = true;
       try {
         const response = await deps.request(`/v1/memory_candidates/${encodeURIComponent(c.id)}/sources?${deps.query()}`);
