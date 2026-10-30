@@ -76,6 +76,7 @@ fs.mkdirSync(output,{recursive:true});
     await page.getByRole("combobox",{name:"정렬",exact:true}).selectOption("chunks");
     await page.waitForFunction(()=>document.querySelector(".v4k-row .v4s-title")?.textContent==="Rare source tail");
     await page.locator('[data-menu="memory"]').click();
+    await page.getByRole("tab",{name:/^한눈에/}).click(); // Memory opens on the list; the overview is its last tab
     await page.locator(".ov-chip").filter({hasText:"쓰는 중인 기억"}).click();
     await page.locator("dialog[open] .ov-wide-row").first().waitFor();
     assert.equal(await page.locator("dialog[open] .ov-wide-row").count(),50);

@@ -95,15 +95,16 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     await page.evaluate(() => document.documentElement.style.removeProperty("--fs"));
     await page.screenshot({ path: path.join(output, "memory.png") });
     // Candidates and conflicts retain a next-page control when local search hides all rows.
-    await page.getByRole("combobox", { name: "모아보기", exact: true }).selectOption("provenance");
-    await page.getByRole("tab", { name: /승인 대기/ }).click();
+    // 확인해 주세요 is its own area tab; 새 기억 확인 is the candidate list in it
+    await page.locator("#area-tabs [role=tab]", { hasText: "확인해 주세요" }).click();
+    await page.getByRole("tab", { name: /^새 기억 확인/ }).click();
     await page.getByRole("searchbox", { name: "기억 검색", exact: true }).fill("outside-loaded");
     await next("candidates");
     assert.equal(await page.evaluate(() => window.listCalls.filter(c => c.name === "candidates" && c.start).length), 1);
     await page.evaluate(() => window.groupCandidates = true);
     await page.getByRole("searchbox", { name: "기억 검색", exact: true }).fill("");
     await next("candidates");
-    await page.getByRole("tab", { name: /승인 대기/ }).click();
+    await page.getByRole("tab", { name: /^새 기억 확인/ }).click();
     await page.locator("details.candidate-group").waitFor();
     assert.equal(await page.locator(".candidate-children [data-id]").count(), 0);
     await page.locator("details.candidate-group summary").click();
@@ -115,7 +116,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     await page.screenshot({ path: path.join(output, "candidates.png") });
     await page.locator("details.candidate-group summary").click();
     await page.waitForFunction(() => document.querySelectorAll(".candidate-children [data-id]").length === 0);
-    await page.getByRole("tab", { name: /헷갈림/ }).click();
+    await page.getByRole("tab", { name: /^서로 다른 기억/ }).click();
     await next("conflicted");
     // Skills: failure preserves rows, retry advances once; search never hides the remote cursor.
     await page.locator('[data-menu="connect"]').click();

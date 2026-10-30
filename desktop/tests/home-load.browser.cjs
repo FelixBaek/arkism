@@ -45,7 +45,8 @@ const text = (page) => page.evaluate(() => document.body.innerText);
 const times = (s, part) => s.split(part).length - 1;
 const shot = (page, name) => process.env.ARKISM_HOME_EVIDENCE && page.screenshot({ path: path.join(process.env.ARKISM_HOME_EVIDENCE, `${name}.png`) });
 async function overview(page) {
-  await page.locator('.nav-item[data-menu="memory"]').click(); // its first tab is 개요
+  await page.locator('.nav-item[data-menu="memory"]').click(); // Memory opens on the list; 한눈에 is its last tab
+  await page.getByRole("tab", { name: /^한눈에/ }).click();
   await page.locator(".ov-host").waitFor();
   return page.locator("#table").innerText();
 }
@@ -55,12 +56,12 @@ async function overview(page) {
   try {
     // #186: the skill list fails, the memories still load and Home names only the failed list.
     let { page, errors } = await open(browser, ["/v1/skills", "/v1/memory_usage"]);
-    await page.waitForFunction(() => document.body.innerText.includes("기억 후보"));
+    await page.waitForFunction(() => document.body.innerText.includes("새 기억"));
     let home = await text(page);
     assert.ok(!home.includes("서버에 문제가 생겼어요"), "a failed skill list is not a whole load error");
     assert.ok(home.includes("스킬 목록을 불러오지 못했어요"), "the failed list says so");
     // #188: the server total of candidates, not the first page of 50
-    assert.ok(home.includes("기억 후보 120개 검토"), "review count is the server total");
+    assert.ok(home.includes("새 기억 120개 확인"), "review count is the server total");
     // #190: 360 hours read as days
     await page.waitForFunction(() => document.body.innerText.includes("째 멈췄어요"));
     home = await text(page);
@@ -115,9 +116,9 @@ async function overview(page) {
 
     // the candidate total and the sessions fail: the first page is not passed off as the total, the session chip waits
     ({ page, errors } = await open(browser, ["/v1/memory_candidates/query", "/v1/usage/sessions"]));
-    await page.waitForFunction(() => document.body.innerText.includes("기억 후보"));
+    await page.waitForFunction(() => document.body.innerText.includes("새 기억"));
     await page.waitForTimeout(500);
-    assert.ok((await text(page)).includes("기억 후보 50개 이상 검토"), "unknown total reads as at least the loaded page");
+    assert.ok((await text(page)).includes("새 기억 50개 이상 확인"), "unknown total reads as at least the loaded page");
     assert.notEqual(await page.locator("#count-todo").innerText(), "0", "a row with an unknown count still counts in the sidebar");
     await overview(page);
     assert.ok((await page.locator(".ov-chip", { hasText: "세션 기록" }).innerText()).includes("—"), "session chip unknown");
@@ -126,7 +127,7 @@ async function overview(page) {
 
     // the memory totals fail but the candidate total loads: the review count still uses it
     ({ page, errors } = await open(browser, ["/v1/memories/query"]));
-    await page.waitForFunction(() => document.body.innerText.includes("기억 후보 120개 검토"));
+    await page.waitForFunction(() => document.body.innerText.includes("새 기억 120개 확인"));
     assert.deepEqual(errors, []);
     console.log("Home load passed: one failed list, server candidate total, unreported agents, stall in days, failed load shows unknown.");
   } finally { await browser.close(); }

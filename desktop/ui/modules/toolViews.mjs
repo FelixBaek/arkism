@@ -96,7 +96,7 @@ export function createToolViews(deps) {
 
   // autoName: a server name from its address (the site's own word: mcp.example.com → example) or its program's last part.
   function autoName(raw, http) {
-    let n = "";
+    let n;
     if (http) { try { n = new URL(raw.trim()).hostname.split(".").filter((p) => !["mcp", "www", "api"].includes(p)).at(-2) || ""; } catch (_) { n = ""; } }
     else n = (splitArgs(raw.trim()).filter((a) => !a.startsWith("-")).at(-1) || "").split("/").at(-1).replace(/^server-/, "").replace(/^mcp-|-mcp$/g, "");
     return n.replace(/[^A-Za-z0-9@._-]/g, "").slice(0, 128);
