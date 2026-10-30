@@ -248,3 +248,8 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .wf-hook-row > code { min-width: 0; overflow-wrap: anywhere; font-size: calc(12px * var(--fs, 1)); }
 /* 확인 필요: a run waits for a person; said in words next to the ring. */
 .flow-need { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--warn-tint); color: var(--warn); font: 600 calc(12px * var(--fs, 1))/1 var(--sans); white-space: nowrap; }
+/* 자세히: 처음 쓰는 사람이 몰라도 되는 칸은 접어 둔다 */
+.auto-more-all { border-top: 1px solid var(--nc-line); padding: 16px 0 4px; }
+.auto-more-all > summary { cursor: pointer; width: fit-content; color: var(--nc-muted); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
+.auto-more-all > summary:hover { color: var(--nc-text); }
+.auto-more-all > .auto-stats { margin: 16px 0 4px; }

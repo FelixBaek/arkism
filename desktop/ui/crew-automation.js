@@ -156,7 +156,7 @@ window.ArkismAutomation = (h) => {
       if (!bar) return;
       const n = creating ? 0 : changed().length;
       bar.querySelector(".primary").disabled = !creating && !n; // the bar stays for AI 제안
-      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 지금 실행 탭에서 돌려 봐요` : `바뀐 칸 ${n}개 · 저장하면 다음 판 v${(rec.revision || 0) + 1} · 기록·사용량 탭에서 되돌릴 수 있어요`;
+      bar.querySelector(".auto-bar-note").textContent = creating ? `단계 ${h.stepCount(d.graph)}개 · 만든 뒤 지금 실행 탭에서 돌려 봐요` : n ? `바뀐 칸 ${n}개` : "";
     };
     const touch = () => { updateBar(); paintHead(); };
     const dirty = () => !creating && changed().length > 0;
@@ -230,8 +230,6 @@ window.ArkismAutomation = (h) => {
       function paintEst() {
         est.replaceChildren();
         const avg = stats?.avgMs;
-        estRow("예상 토큰", stats?.tokens && stats.runs ? `약 ${fmtTokens(stats.tokens / stats.runs)}` : "—");
-        estRow("예상 비용 (API 요금 기준)", stats?.cost != null && stats.runs ? `약 $${(stats.cost / stats.runs).toFixed(2)}` : "—");
         estRow("예상 시간", avg ? `약 ${h.spanText(avg)}` : "—");
       }
       head.paintEst = paintEst;
@@ -269,7 +267,6 @@ window.ArkismAutomation = (h) => {
       const top = el("div", "auto-top");
       body.append(top);
       if (!creating) {
-        top.append(...statCells());
         const ruleBad = h.ruleChecks(base).filter((c) => !c.ok);
         for (const run of h.waitingRuns().filter((w) => w.crew_run.crew_id === rec.id)) top.append(approvalCard(run));
         if (ruleBad.length) {
@@ -283,8 +280,12 @@ window.ArkismAutomation = (h) => {
       }
       const ai = aiSection();
       body.prepend(ai);
-      body.append(goalSection(), whenSection(), flowSection(), notifySection(), settingSection());
-      if (!creating) body.append(manageSection());
+      body.append(goalSection(), whenSection(), flowSection(), notifySection());
+      // 처음 쓰는 사람에게는 목표·언제·단계·알림만: 나머지는 「자세히」 안에 접어 둔다.
+      const more = el("details", "auto-more-all");
+      more.append(el("summary", "", creating ? "자세히 · 끝난 기준, 실행 설정" : "자세히 · 끝난 기준, 실행 설정, 기록, 관리"), goalMoreSection(), settingSection());
+      if (!creating) more.append(...statCells(), manageSection());
+      body.append(more);
       bar = el("div", "auto-bar");
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);
       const cancel = button("취소", "ghost", null, (e) => { if (creating) closeAsking(e); else { reset(); } });
@@ -362,18 +363,23 @@ window.ArkismAutomation = (h) => {
     // 목표: three lines of what it is for. Saved with the workflow (crew.goal). Each line is a box with the AI sparkle.
     const GOAL_HINT = { task: "what this automation does, in one line", done: "when the run counts as done, e.g. at least 3 sources", output: "what it leaves behind, e.g. a report, a message, a file" };
     const goalRowTalk = { task: {}, done: {}, output: {} };
+    function goalRow(k, label, hint) {
+      const i = h.input(d.goal?.[k] || "", { tag: "textarea", rows: 1, maxLength: 300, placeholder: hint, cls: "auto-goal-input" });
+      i.setAttribute("aria-label", label);
+      i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) e.preventDefault(); }); // still one line: it only wraps to show long text
+      i.addEventListener("input", () => { if (/[\r\n]/.test(i.value)) i.value = i.value.split(/[\r\n]+/).map((t) => t.trim()).join(" "); const v = i.value.trim(); if (v) (d.goal ||= {})[k] = v; else if (d.goal) { delete d.goal[k]; if (!Object.keys(d.goal).length) delete d.goal; } touch(); });
+      const f = window.ArkismAIChat.field(i, { state: goalRowTalk[k], oneLine: true, title: `${label} 다듬기`, preset: `You write the "${k}" line of an automation's goal (${GOAL_HINT[k]}). Korean, one short line, at most 300 characters.`,
+        context: () => JSON.stringify({ workflow: d.name || "", role: d.role || "", goal: d.goal || {}, steps: flat(d.graph).filter((n) => !["start", "end"].includes(n.type)).map((n) => n.title || h.nodeTitle(n)) }) });
+      return valueRow(label, f);
+    }
     function goalSection() {
       const s = section("check", "목표");
-      const row = (k, label, hint) => {
-        const i = h.input(d.goal?.[k] || "", { tag: "textarea", rows: 1, maxLength: 300, placeholder: hint, cls: "auto-goal-input" });
-        i.setAttribute("aria-label", label);
-        i.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) e.preventDefault(); }); // still one line: it only wraps to show long text
-        i.addEventListener("input", () => { if (/[\r\n]/.test(i.value)) i.value = i.value.split(/[\r\n]+/).map((t) => t.trim()).join(" "); const v = i.value.trim(); if (v) (d.goal ||= {})[k] = v; else if (d.goal) { delete d.goal[k]; if (!Object.keys(d.goal).length) delete d.goal; } touch(); });
-        const f = window.ArkismAIChat.field(i, { state: goalRowTalk[k], oneLine: true, title: `${label} 다듬기`, preset: `You write the "${k}" line of an automation's goal (${GOAL_HINT[k]}). Korean, one short line, at most 300 characters.`,
-          context: () => JSON.stringify({ workflow: d.name || "", role: d.role || "", goal: d.goal || {}, steps: flat(d.graph).filter((n) => !["start", "end"].includes(n.type)).map((n) => n.title || h.nodeTitle(n)) }) });
-        return valueRow(label, f);
-      };
-      s.append(box(row("task", "하려는 일", creating ? "무엇을 하는 자동화인지 한 줄로 적어요" : "한 줄로 적어요"), row("done", "끝난 기준", "언제 끝났다고 볼지 · 예: 출처 3개 이상"), row("output", "결과물", "무엇을 남길지 · 예: 보고서, 메시지, 파일")));
+      s.append(box(goalRow("task", "하려는 일", creating ? "무엇을 하는 자동화인지 한 줄로 적어요" : "한 줄로 적어요")));
+      return s;
+    }
+    function goalMoreSection() {
+      const s = section("check", "끝난 기준과 결과물");
+      s.append(box(goalRow("done", "끝난 기준", "언제 끝났다고 볼지 · 예: 출처 3개 이상"), goalRow("output", "결과물", "무엇을 남길지 · 예: 보고서, 메시지, 파일")));
       return s;
     }
 
@@ -485,7 +491,7 @@ window.ArkismAutomation = (h) => {
       }
       function draw() {
         list.replaceChildren();
-        list.append(valueRow("직접 부르기", el("span", "", `${d.handle ? h.flowAlias(d) : "@이름"}으로 부르거나 화면의 실행 버튼`), h.switchEl(true, "직접 부르기는 항상 켜져 있어요", () => notice("직접 부르기는 항상 켜져 있어요."))));
+        list.append(valueRow("직접 부르기", el("span", "", `${d.handle ? h.flowAlias(d) : "@이름"} 또는 실행 버튼`), h.switchEl(true, "직접 부르기는 항상 켜져 있어요", () => notice("직접 부르기는 항상 켜져 있어요."))));
         const cronWrap = el("span", "auto-sched");
         const paintCron = () => {
           cronWrap.replaceChildren();
@@ -552,20 +558,13 @@ window.ArkismAutomation = (h) => {
             strip.append(grp);
           });
           const back = (g.edges || []).filter(h.isBack);
-          const nodes = g.nodes;
-          const count = (f) => nodes.filter(f).length;
-          const info = [`노드 ${nodes.length}개`, count((n) => n.type === "ai") ? `전문가 ${count((n) => n.type === "ai")}` : "", count((n) => n.type === "ai_once") ? `한 번 묻기 ${count((n) => n.type === "ai_once")}` : "", count((n) => ["code", "http", "github", "notify"].includes(n.type)) ? `처리 ${count((n) => ["code", "http", "github", "notify"].includes(n.type))}` : ""].filter(Boolean).join(" · ");
           card.append(strip);
-          const meta = el("div", "auto-meta");
-          if (back.length) meta.append(el("span", "auto-back", `↺ 되돌아가는 선 ${back.length}개 (최대 ${Math.max(...back.map((e) => e.max))}번)`));
-          meta.append(el("span", "", info));
-          card.append(meta);
+          if (back.length) { const meta = el("div", "auto-meta"); meta.append(el("span", "auto-back", `↺ 되돌아가는 선 ${back.length}개 (최대 ${Math.max(...back.map((e) => e.max))}번)`)); card.append(meta); }
         }
         const work = flat(g).filter(h.WORK);
         const ais = work.filter(IS_AI);
         if (creating) work.forEach((n, i) => card.append(stepRow(n, i)));
         else if (ais.length) {
-          card.append(el("p", "auto-count", `AI 노드 ${ais.length}개 · 노드를 눌러 바로 고치거나, 여기서 따로 시험해요`));
           ais.forEach((n, i) => card.append(stepRow(n, i)));
         }
         if (!work.length) card.append(el("p", "wf-empty", "아직 할 일이 없어요. 그래프에서 노드를 이어 주세요."));
@@ -717,7 +716,7 @@ window.ArkismAutomation = (h) => {
       t.append(icon("chat-text"), "진행 알림");
       let editing = -1; // the channel row open for editing; the others read 메신저 · 채널
       const addChannel = () => { setNotify((n) => { n.channels = [...(n.channels || []), { kind: "telegram", channel: "", when: "events" }]; }); editing = channels().length - 1; paint(); };
-      head2.append(t, link("+ 채널 연결", addChannel), el("span", "auto-dim", "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요"));
+      head2.append(t, link("+ 채널 연결", addChannel));
       const list = el("div", "auto-box");
       const channels = () => d.notify?.channels || [];
       const setNotify = (fn) => { d.notify ||= {}; fn(d.notify); if (!d.notify.channels?.length && !d.notify.moments) delete d.notify; touch(); };
@@ -748,7 +747,7 @@ window.ArkismAutomation = (h) => {
         });
         if (!creating && bots.length) {
           const r = el("div", "auto-row");
-          r.append(el("span", "auto-key", "부르기"), el("span", "auto-dim", `채널에서 ${h.flowAlias(rec.crew)}로 이 자동화를 부르게 연결해요`), pill(st.add ? "닫기" : "채널 추가", () => { st.add = st.add ? null : { bot: bots[0].id }; paint(); }));
+          r.append(el("span", "auto-key", "부르기"), el("span", "auto-dim", `채널에서 ${h.flowAlias(rec.crew)}로 불러요`), pill(st.add ? "닫기" : "채널 추가", () => { st.add = st.add ? null : { bot: bots[0].id }; paint(); }));
           rows.push(r);
         }
         if (st.add && bots.length) {
@@ -786,7 +785,7 @@ window.ArkismAutomation = (h) => {
         const bot = botRows();
         if (!channels().length) {
           const empty = el("div", "auto-row");
-          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요 · 텔레그램·슬랙"), pill("연결하기", addChannel));
+          empty.append(el("span", "auto-dim", "아직 연결한 채널이 없어요"), pill("연결하기", addChannel));
           list.append(empty);
         }
         const cur = () => d.notify?.moments || DEFAULT_MOMENTS;
@@ -841,7 +840,7 @@ window.ArkismAutomation = (h) => {
         mo.append(el("span", "auto-key", "알림 시점"), checks);
         list.append(mo);
         if (bot.rows.length) {
-          list.append(el("div", "auto-subhead", "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요"));
+          list.append(el("div", "auto-subhead", "채널에서 부르기"));
           list.append(...bot.rows);
         }
       }
