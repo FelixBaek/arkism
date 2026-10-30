@@ -15,13 +15,16 @@ import (
 
 func validateDaemonDynamicsOptions(cfg daemonOptions) error {
 	if cfg.DynamicsRuntimeConfig == "" && cfg.DynamicsLoadConfig == "" {
+		if cfg.DynamicsRepair {
+			return memory.ErrInvalid
+		}
 		return nil
 	}
 	if cfg.DynamicsRuntimeConfig == "" || cfg.DynamicsLoadConfig == "" || cfg.Recovery {
 		return memory.ErrInvalid
 	}
 	mode, err := daemonMode(cfg)
-	if err != nil || (mode != "HTTP" && mode != "Worker") {
+	if err != nil || (mode != "HTTP" && mode != "Worker" && mode != "DynamicsRepair") {
 		return memory.ErrInvalid
 	}
 	return nil
@@ -41,7 +44,7 @@ func prepareDaemonDynamics(cfg daemonOptions) (daemonOptions, error) {
 	if plan == nil {
 		return cfg, nil
 	}
-	if cfg.Worker {
+	if cfg.Worker || cfg.DynamicsRepair {
 		if strings.TrimSpace(os.Getenv("MEMORY_WORKER_TOKEN")) == "" {
 			return cfg, memory.ErrInvalid
 		}
@@ -64,7 +67,7 @@ func configureDaemonDynamics(ctx context.Context, svc *memory.Service, cfg daemo
 	}
 	svc.DynamicsLoad = runtime
 	svc.NativeDynamics = &memory.NativeDynamicsRuntime{Enabled: true}
-	if cfg.Worker {
+	if cfg.Worker || cfg.DynamicsRepair {
 		return nil
 	}
 	if svc.Auth == nil || cfg.dynamicsReaderToken == "" {

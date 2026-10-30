@@ -13,7 +13,7 @@ import (
 
 func dynamicsFixtureConfig() DynamicsLoadConfig {
 	return DynamicsLoadConfig{Protocol: dynamicsLoadProtocol, Profile: "isolated-fixture-v1", Mode: "async", LoadContractSHA256: dynamicsLoadContractSHA256, LoadConfigSHA256: strings.Repeat("b", 64), Scopes: []Scope{scopeA}, Limits: DynamicsLoadLimits{
-		QueueCountLimit: 4, QueueActiveBytesLimit: 65536, MaxWaitNS: 5000000000, BatchLimit: 2, ConcurrencyLimit: 1, RetryLimit: 2, RetryBackoffNS: 1000000, DeadlineNS: 5000000000, WorkerSubstepTimeoutNS: 1000000000, LeaseNS: 10000000000, FinishTimeoutNS: 2000000000, PollIntervalNS: 5000000, PublishIntervalNS: 5000000, AllowedFreshnessNS: 1000000000, SnapshotMaxItems: 16, SnapshotMaxBytes: 65536, MaxConfiguredScopes: 2, TelemetryMaxBytes: 262144, TerminalLedgerRetentionBudget: 1048576}}
+		QueueCountLimit: 4, QueueActiveBytesLimit: 65536, MaxWaitNS: 5000000000, BatchLimit: 2, ConcurrencyLimit: 1, RetryLimit: 2, RetryBackoffNS: 1000000, DeadlineNS: 5000000000, WorkerSubstepTimeoutNS: 1000000000, LeaseNS: 4000000000, FinishTimeoutNS: 2000000000, PollIntervalNS: 5000000, PublishIntervalNS: 5000000, AllowedFreshnessNS: 1000000000, SnapshotMaxItems: 16, SnapshotMaxBytes: 65536, MaxConfiguredScopes: 2, TelemetryMaxBytes: 262144, TerminalLedgerRetentionBudget: 1048576}}
 }
 func dynamicsFixtureRuntime(t *testing.T, c DynamicsLoadConfig) *DynamicsLoadRuntime {
 	t.Helper()
@@ -44,7 +44,7 @@ func TestDynamicsWorkerConfig(t *testing.T) {
 	if _, err := NewDynamicsLoadRuntime(raw); err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []string{"null", "{}", string(raw) + "{}", strings.Replace(string(raw), `"profile":`, `"profile":"duplicate","profile":`, 1), strings.Replace(string(raw), `"queue_count_limit":4`, `"queue_count_limit":0`, 1), strings.Replace(string(raw), `"mode":"async"`, `"mode":"unsupported"`, 1), strings.Replace(string(raw), `"profile":`, `"unknown":1,"profile":`, 1)} {
+	for _, value := range []string{"null", "{}", string(raw) + "{}", strings.Replace(string(raw), `"profile":`, `"profile":"duplicate","profile":`, 1), strings.Replace(string(raw), `"queue_count_limit":4`, `"queue_count_limit":0`, 1), strings.Replace(string(raw), `"mode":"async"`, `"mode":"unsupported"`, 1), strings.Replace(string(raw), `"lease_ns":4000000000`, `"lease_ns":5000000000`, 1), strings.Replace(string(raw), `"profile":`, `"unknown":1,"profile":`, 1)} {
 		if _, err := NewDynamicsLoadRuntime([]byte(value)); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("invalid config accepted: %s", value)
 		}
