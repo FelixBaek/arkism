@@ -78,7 +78,7 @@ func tnum(t *testing.T, v any) float64 {
 
 func TestRoutedAttemptsCarryOrigin(t *testing.T) {
 	var got []map[string]any
-	decide := func(string, string) (map[string]any, error) {
+	decide := func(string, string, host.Obj) (map[string]any, error) {
 		return map[string]any{"id": "anthropic/opus", "decision": "clef", "fallbacks": []any{"openai/gpt-6.1-sol"}}, nil
 	}
 	run := func(s map[string]any) (map[string]any, error) {
