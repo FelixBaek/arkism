@@ -100,13 +100,14 @@ func TestNativeSearchShadowPostgresFinalFence(t *testing.T) {
 		t.Run(fault, func(t *testing.T) {
 			p, r, in := nativeSearchPGFixture(t)
 			p.worker.NativeSearchShadow = r
+			var afterMutation []string
 			repo := &nativeSearchBeforeTxRepo{Repository: p.workerRepo, before: func() {
 				nativeSearchInjectPGFault(t, p, in, fault)
+				afterMutation = nativeSearchRawDatabaseSnapshot(t, p.admin)
 			}}
 			p.worker.Repo = repo
-			before := len(pgCollection(t, p.admin, colJobs))
 			out, e := p.worker.Search(testCtx, p.workerToken, in)
-			if e == nil || out.ContextData != "" || len(out.Items) != 0 || len(pgCollection(t, p.admin, colJobs)) != before {
+			if e == nil || out.ContextData != "" || len(out.Items) != 0 || !reflect.DeepEqual(afterMutation, nativeSearchRawDatabaseSnapshot(t, p.admin)) {
 				t.Fatal("final fence bypassed", e)
 			}
 			got := r.Observations()

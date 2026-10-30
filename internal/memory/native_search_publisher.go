@@ -198,6 +198,9 @@ func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, 
 	err := s.Repo.Transaction(bound, func(ctx context.Context, tx Tx) error {
 		values = nil
 		bindings = nil
+		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
+			return err
+		}
 		if len(previews) == 0 {
 			return ctx.Err()
 		}
