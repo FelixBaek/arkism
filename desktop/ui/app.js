@@ -1357,7 +1357,8 @@ export function startApp() {
   function openInstall() {
     const groups = [
       ["skills", "스킬", [["GitHub에서 가져오기", "저장소 주소를 넣으면 스킬을 미리 보고 고른 곳에 설치해요.", () => { if (state.view !== "skills") go("skills"); skillViews.openSkillPage({ kind: "install" }); }],
-        ["AI에게 새 스킬 제안 받기", "최근 기억에서 반복한 요청을 찾아 스킬 초안을 홈의 할 일에 올려요.", analyze]]],
+        ["AI에게 새 스킬 제안 받기", "최근 기억에서 반복한 요청을 찾아 스킬 초안을 홈의 할 일에 올려요.", analyze],
+        ["폴더에 직접 넣기", "SKILL.md가 든 폴더를 스킬 폴더(설정 › 역할별 모델 › 스킬 폴더)에 넣고 새로고침을 누르면 목록에 나와요.", null]]],
       ["mcp", "MCP 서버", [["MCP 서버 추가", "실행할 프로그램이나 https 주소로 추가해요. 자주 쓰는 서버를 골라 채울 수도 있어요.", toolViews.openAddServer]]],
       ["plugin", "플러그인", [["Claude Code에서 설치", "새 플러그인은 Claude Code에서 /plugin 으로 설치해요.", null]]]];
     const first = state.view === "skills" ? "skills" : state.toolTab === "plugin" ? "plugin" : "mcp";
@@ -2319,7 +2320,47 @@ export function startApp() {
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, reload: loadAll, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), memoryCheck: memoryList, onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
-  Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views);
+  // TOOLS › 관리: what to look after, from the lists already loaded (skill use counts, update offers, apply requests).
+  function manageView() {
+    const DAY = 864e5, uses = (sk) => state.data.skillUse?.get(sk.id)?.count || 0;
+    const openSkill = (sk) => () => { go("skills"); state.selected = `skill:${sk.id}`; render(); };
+    function box(title, hint, rows, more) {
+      const g = el("section", "mg-box");
+      const h = el("div", "mg-head"); h.append(el("h3", "", title), el("output", "", String(rows.length)));
+      if (more && rows.length) h.append(button(more[0], "ghost small", null, more[1]));
+      g.append(h, el("p", "mg-hint", hint));
+      const ul = el("ul", "mg-list");
+      for (const [name, side, run] of rows.slice(0, 8)) {
+        const li = el("li"), b = el(run ? "button" : "div", "mg-row");
+        if (run) { b.type = "button"; b.addEventListener("click", run); }
+        b.append(raw(el("span", "mg-name", name)), el("span", "mg-side", side));
+        li.append(b); ul.append(li);
+      }
+      g.append(rows.length ? ul : el("p", "mg-empty", "없어요"));
+      return g;
+    }
+    function renderView() {
+      const d = state.data, live = (d.skills || []).filter((sk) => sk.status !== "deprecated");
+      const often = live.filter(uses).sort((a, b) => uses(b) - uses(a));
+      const rare = d.skillUse ? live.filter((sk) => !uses(sk)) : [];
+      const updates = d.tools?.skill_updates || [];
+      const failed = (d.tools?.requests || []).filter((q) => q.status === "failed");
+      const recent = live.filter((sk) => Date.now() - new Date(sk.created_at).getTime() < 14 * DAY).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
+      const KIND = { skill_update: "스킬 업데이트", mcp: "MCP", plugin: "플러그인", skill: "스킬" };
+      const grid = el("div", "mg-grid");
+      grid.append(
+        box("자주 씀", "에이전트가 많이 꺼내 쓴 스킬이에요.", often.map((sk) => [sk.name, `${uses(sk)}번`, openSkill(sk)])),
+        box("거의 안 씀", "60일 동안 한 번도 안 쓴 스킬이에요. 필요 없으면 「모두 보기」에서 정리하세요.", rare.map((sk) => [sk.name, "안 씀", openSkill(sk)]), ["모두 보기", () => go("skills", "unused")]),
+        box("업데이트 필요", "원본 저장소에 새 버전이 있어요.", updates.map((u) => [u.name, `${ver(u.from)} → ${ver(u.to)}`, null]), ["모두 업데이트", () => updateSkills(updates)]),
+        box("업데이트·설치 실패", "마지막 요청이 실패했어요. 이유를 보고 다시 시도하세요.", failed.map((q) => [q.name, `${KIND[q.kind] || q.kind} · ${q.error || "이유 모름"}`, null])),
+        box("최근 추가", "최근 2주 사이에 들어온 스킬이에요.", recent.map((sk) => [sk.name, ago(sk.created_at), openSkill(sk)])));
+      $("#table").className = "page-wrap";
+      $("#table").replaceChildren(grid);
+    }
+    return { manage: { title: "관리", sub: () => "자주 쓰는 것·안 쓰는 것·고칠 것을 한곳에서 봐요.", render: renderView, head: () => [] } };
+  }
+  Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views, manageView());
   const home = window.ArkismHome({ count: serverCount, state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });
