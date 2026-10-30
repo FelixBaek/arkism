@@ -216,12 +216,24 @@ test("a new candidate is approved, rejected with a reason, or fixed", async () =
   await h.picks[0].onConfirm({code: "wrong", note: "틀림"});
   assert.deepEqual(h.decisions, [["reject", {reason_code: "wrong", reason: "틀림"}]]);
   assert.equal(find(h.shell, "그대로 저장").disabled, true);
+  // a note typed in the box goes with 버리기 as is, no picker
+  const typed = await setup({caps: {review_decide: true}});
+  await typed.ctx.candidateDetail(candidate);
+  all(typed.shell).find((n) => n.className === "d-review-box").value = "이미 있음";
+  await find(typed.shell, "버리기").onClick();
+  assert.deepEqual(typed.decisions, [["reject", {reason: "이미 있음"}]]);
+  assert.equal(typed.picks.length, 0);
   const fresh = await setup({caps: {review_decide: true}});
   await fresh.ctx.candidateDetail(candidate);
   const approve = find(fresh.shell, "그대로 저장");
   assert.notEqual(approve.disabled, true);
   approve.onClick();
   assert.deepEqual(fresh.decisions, [["approve", ""]]);
+  const box = all(h.shell).find((n) => n.className === "d-review-box");
+  const calls = h.calls.length;
+  await find(h.shell, "고쳐서 저장").onClick();
+  assert.equal(h.calls.length, calls, "an empty box saves nothing");
+  box.value = "고친 문장";
   await find(h.shell, "고쳐서 저장").onClick();
   await settle();
   const [route, body] = h.calls.at(-1);
@@ -232,7 +244,7 @@ test("a new candidate is approved, rejected with a reason, or fixed", async () =
   await find(h.shell, "고쳐서 저장").onClick();
   await settle();
   assert.equal(h.notices.at(-1), "저장하지 못했어요 (stale).");
-  globalThis.askText = async () => "새 규칙";
+  box.value = "새 규칙";
   const before = h.notices.length;
   await find(h.shell, "고쳐서 저장").onClick();
   assert.equal(h.notices.length, before);

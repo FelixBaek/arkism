@@ -1242,7 +1242,6 @@ window.ArkismI18nEN = {
   "키 넣기": "Add key",
   "오른쪽 칸 너비": "Right column width",
   "끌어서 너비 바꾸기": "Drag to resize",
-  "고친 내용으로 승인": "Approve with edits",
   "기억 다듬기": "Polish memory",
   "지우기를 요청했어요. 서버에서 지우면 목록에서 빠져요.": "Deletion requested. It leaves the list once the server deletes it.",
   "초기화 시각 모름": "Reset time unknown",
@@ -4956,7 +4955,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "지시 {0}": "Instructions {0}", "소개 {0}": "Intro {0}"
 });
 Object.assign(window.ArkismI18nEN.strings, { "이미지 모델": "Image model", "기억 종류": "Memory kinds", "고정한 것": "Pinned", "바꾸면": "After" });
-Object.assign(window.ArkismI18nEN.strings, { "저장할 내용 · 고칠 수 있어요": "Text to save · you can edit it", "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
+Object.assign(window.ArkismI18nEN.strings, { "판단 근거": "Why the AI thinks so", "자세한 정보": "Details", "곧 확인": "Check soon" });
 Object.assign(window.ArkismI18nEN.strings, { "새 카테고리 이름": "New category name" });
 Object.assign(window.ArkismI18nEN.strings, { "새 창으로 열지 못했어요.": "Couldn't open it in a new window." });
 Object.assign(window.ArkismI18nEN.strings, { "기억 버블 지도 · 화살표로 고르고 +/−로 확대·축소, 끌어서 옮기기": "Memory bubble map · arrows to pick, +/− to zoom, drag to move" });
@@ -6096,3 +6095,4 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}에서 찾은 AI 앱이 없어요. API 키로 연결하거나 AI 앱을 설치한 뒤 다시 열어 주세요.": "No AI apps found on {0}. Connect with an API key, or install an AI app and reopen this.",
   "{0}에 기억을 연결했어요. 에이전트를 다시 시작하면 적용돼요.": "Linked memory to {0}. Restart the agent to apply it."
 });
+Object.assign(window.ArkismI18nEN.strings, { "고칠 내용 · 버리는 이유": "Edit · or why to discard", "고칠 내용이나 버리는 이유를 쓰세요": "Write the edit, or why you discard it", "고쳐서 저장할 내용 또는 버리는 이유": "Edited text or reason to discard", "위 칸에 고친 내용을 쓰세요.": "Write the edited text in the box above." });

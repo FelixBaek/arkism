@@ -15,12 +15,19 @@ test("boots unlocked on the built-in Arkism and fills home", async () => {
   assert.ok(app.apiCalls.some(([, p]) => p.startsWith("/v1/capabilities")));
 });
 
-test("MEMORY opens on the memory list, with 확인해 주세요 and 한눈에 beside it", async () => {
+test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인해 주세요", async () => {
+  for (const menu of ["home", "memory", "agent"]) {
+    await app.click(app.$(`.nav-item[data-menu="${menu}"]`), 50);
+    assert.equal(app.$$("#area-tabs .area-tab").length, 0, `${menu}: no tab line`);
+    assert.equal(app.$("#area-tabs").parentElement.hidden, true, `${menu}: the empty tab line is hidden`);
+  }
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
-  assert.deepEqual(app.$$("#area-tabs .area-tab").map((t) => t.dataset.tab), ["memories", "check", "overview"]);
-  assert.equal(app.$("#area-tabs .area-tab.active").dataset.tab, "memories");
-  await app.click(app.$('#area-tabs .area-tab[data-tab="check"]'), 50);
-  assert.equal(app.$("#area-tabs .area-tab.active").dataset.tab, "check");
+  assert.ok(app.$("#table .ov-chips"), "MEMORY opens on 한눈에");
+  const chip = app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c)));
+  assert.ok(chip, "the 확인해 주세요 chip");
+  await app.click(chip, 50);
+  assert.ok(!app.$("#table .ov-chips"), "the chip left 한눈에 for the review list");
+  assert.equal(app.$(".nav-item.active").dataset.menu, "memory");
 });
 
 test("every menu and area tab draws", async () => {
