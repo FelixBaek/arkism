@@ -5,8 +5,8 @@ import (
 	"errors"
 )
 
-// This companion does not amend the six-field native recovery DTO. Root must
-// wire its verification into the shared restore lifecycle before whole-B use.
+// This companion does not amend the six-field native recovery DTO. A restored
+// copy is rebound only by ReconcileDynamicsLoadRecovery.
 type DynamicsLoadRecoveryView struct {
 	Protocol            string
 	Scope               Scope
