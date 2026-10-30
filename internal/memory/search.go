@@ -237,9 +237,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	filterContextViewHistory(historyRecords, in.contextView)
 	shadow := s.beginNativeSearchShadow(ctx, in, collection, lists, historyRecords)
 	defer shadow.finish()
-	if shadow != nil {
-		in.finalRejected = shadow.rejectFinal
-	}
+	shadow.bindFinalRejection(&in)
 	scored := s.fuseRecallHits(ctx, lists, collection, in)
 	out.Items = make([]Hit, len(scored))
 	for i, r := range scored {
