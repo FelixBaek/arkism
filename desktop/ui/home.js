@@ -346,6 +346,8 @@ window.ArkismHome = function (ctx) {
     }
     const row = el("div", "unlock-actions");
     row.append(button("다시 시도", "primary", null, () => $("#unlock-form").requestSubmit($("#ssh-button"))), button("SSH 테스트", "", null, () => $("#ssh-test").click()));
+    // SSH는 됐지만 서버에 Arkism이 없거나 오래됨: 서버 설치 안내로 바로.
+    if (/^arkism_(not_found|too_old)/.test(code)) row.append(button("서버에 설치하는 방법", "", null, () => $("#ssh-guide").click()));
     parts.push(row);
     const list = el("details", "ssh-err-list");
     list.append(el("summary", "", "다른 오류 종류"));

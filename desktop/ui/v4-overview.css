@@ -168,6 +168,7 @@
 /* stage + wide windows (overview-windows.js) */
 .ov-win-badge { padding: 2px 9px; border-radius: 999px; background: var(--bg-muted); color: var(--tone); font-size: 12px; font-weight: 600; }
 .ov-win-badge:empty { display: none; }
+.ov-win-badge.a { color: var(--ov-amber); background: rgba(245,185,85,.16); } .ov-win-badge.r { color: var(--ov-red); background: rgba(255,81,96,.16); }
 .ov-win-cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ov-win-cell { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); text-align: left; color: inherit; font: inherit; }
 .ov-win-cell small { color: var(--text-2); font-size: 11px; } .ov-win-cell strong { font-size: 12.5px; }
@@ -250,6 +251,7 @@
 .ov-sum-cells { grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); }
 .ov-sum-cmd { display: flex; align-items: center; gap: 8px; min-width: 0; } .ov-sum-cmd code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; color: var(--text-2); }
 .ov-sum-why { display: flex; flex-direction: column; gap: 4px; font-size: 13px; } .ov-sum-why small { color: var(--text-2); font-size: 12px; } .ov-sum-why p { display: flex; justify-content: space-between; gap: 8px; margin: 0; } .ov-sum-why span { color: var(--text-2); }
+.ov-win-act { align-self: flex-start; }
 .ov-recall-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; } .ov-recall-item p { margin: 0; font-size: 14px; line-height: 1.5; } .ov-recall-item b { font-weight: 500; font-variant-numeric: tabular-nums; }
 .ov-wide-sum:empty { display: none; }
 .ov-lane { padding: 0 7px; border-radius: 6px; background: rgba(100,140,255,.16); color: var(--ov-blue); font-size: 11px; }
@@ -353,7 +355,7 @@
 :root[data-theme="light"] .ov-check.ok .ov-check-i { color: #2f8a4a; } :root[data-theme="light"] .ov-check.no .ov-check-i { color: #b57a10; }
 .ov-detail-group > .ov-win-err:empty { display: none; }
 /* light theme: the dark-theme amber/red on white is too faint for the wait count and tags */
-:root[data-theme="light"] .ov-wide-row-r.ov-r-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-r { color: #b4202e; }
+:root[data-theme="light"] .ov-wide-row-r.ov-r-a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-a, :root[data-theme="light"] .ov-win-badge.a { color: #8a5a00; } :root[data-theme="light"] .ov-win-tag.ov-tag-r { color: #b4202e; }
 /* wide windows: sort, search, then the kind chips wrapping on their own line */
 .ov-wide-filter { flex: 1 1 100%; min-width: 0; }
 .ov-wide-bar select.ov-wide-sort { flex: none; margin-left: 0; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
