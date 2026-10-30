@@ -11,7 +11,7 @@
 - SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
 - SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
 - SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
-- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. 실제 B 서비스·작업 대기열·복원·같은 조건 부하 비교는 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
+- SYS-05: A 요청계획 생성·실패 보존 집계의 오프라인 준비와 R8 등록을 독립 검증했다. B 후보에서 bounded worker·읽기 전용 refresh·daemon 설정·Unicode 경계를 합쳐 격리 PG·HTTP로 검사했다(미수용). 실제 B 서비스·작업 대기열·복원·같은 조건 부하 비교는 아직 미완료다. 전체 완료25개·필수24개 남음은 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -433,3 +433,7 @@ R8 adds exactly one module registration, preserving old510 test IDs and executin
 SYS-05 remains in_progress and the whole-card count remains25/63, with24 required cards remaining and14 conditional cards held. This publishes A preparation/default registration only. Native B service integration, authenticated runtime observation binding, bounded-worker recovery, mode wiring and locked same-condition load/quality/freshness/cost comparisons remain separate requirements. See the [SYS-05 tool contract](../../evaluation/memory-harness-v1/system/sys_05/README.md) and [work record](../work-records/2026-10-30-roadmap-load-preparation.md).
 
 This b8-based publication candidate also passed Python tools173 + evaluation577 + reuse49 =799 methods. Its separate default collector replay confirmed551/1599 with0failure/error/skip; those551 overlap evaluation577 and are not added to799. Initial tools socket-permission errors2 are retained; the same173 methods passed with authorized own-loopback execution. No product build, standalone acceptance, operating data, provider call or deployment ran. Final composed/staged/history publication and remote CI remain Root's next checks.
+
+## SYS-05 B bounded worker and daemon candidate
+
+A candidate wires the bounded dynamics worker, durable snapshot publication, a read-only snapshot refresh for a separate API process and explicit paired daemon flags (`-dynamics-runtime-config`, `-dynamics-load-config`). Absent flags keep the feature off. Both pinned config files reject JSON whose Unicode would be replaced during decoding (invalid UTF-8, encoded or escaped lone surrogates) through one shared check; valid U+FFFD, surrogate pairs and literal backslash text stay accepted. In an isolated PostgreSQL and loopback HTTP, a worker published, a separate API refreshed its own cache and served the target through actual Search, and a read-only reader could not publish. This is integration evidence, not acceptance: restore wiring, long-run fairness, same-condition load comparison and the nine-cost measurement remain. SYS-05 remains in_progress; counts stay25/63 with24 required remaining. See the [work record](../work-records/2026-10-30-roadmap-sys05-b-daemon-candidate.md).
