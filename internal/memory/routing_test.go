@@ -323,3 +323,120 @@ func TestClefPickModelSendsPlainKeys(t *testing.T) {
 		t.Fatal("criteria", crit)
 	}
 }
+
+func TestRoutingPrechoiceViewIsRecheckedAndHashedWithoutBodies(t *testing.T) {
+	f, runner, src, pkg := prechoiceRoutingFixture(t, nil, "work-one")
+	read, err := f.svc.GetWorkCheckpoint(testCtx, runner, WorkCheckpointGetInput{Scope: scopeA, ID: "work-one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := RoutingPrechoiceView{Checkpoint: RoutingViewCheckpoint{ID: read.ID, Revision: read.Revision, UpdatedAt: read.UpdatedAt},
+		Refs: read.Package.SourceRefs, History: "known_empty"}
+	decide := func(scope Scope, v RoutingPrechoiceView) (RoutingDecision, error) {
+		return f.svc.DecideRoute(testCtx, runner, RoutingDecideInput{Scope: scope, Task: "review", View: &v})
+	}
+	// The same legal snapshot replays to the same hash; without a view nothing is claimed.
+	a, err := decide(scopeA, view)
+	if err != nil || !strings.HasPrefix(a.ViewHash, "sha256:") || len(a.ViewHash) != 71 {
+		t.Fatal(a, err)
+	}
+	if b, err := decide(scopeA, view); err != nil || b.ViewHash != a.ViewHash {
+		t.Fatal("replay", b, err)
+	}
+	if d, err := f.svc.DecideRoute(testCtx, runner, RoutingDecideInput{Scope: scopeA, Task: "review"}); err != nil || d.ViewHash != "" {
+		t.Fatal("no view", d, err)
+	}
+	raw, _ := json.Marshal(view)
+	if strings.Contains(string(raw), pkg.Title) || strings.Contains(string(raw), pkg.Goal) {
+		t.Fatal("view carries a body", string(raw))
+	}
+
+	// A wrong history claim, an unknown history and a mismatched ref are not the stored work.
+	expectViewErrors(t, decide, ErrConflict, map[string]RoutingPrechoiceView{
+		"observed": func() RoutingPrechoiceView { w := view; w.History, w.HistoryCount = "observed", 1; return w }(),
+		"ref": func() RoutingPrechoiceView {
+			w := view
+			w.Refs = []Ref{{Collection: "sources", ID: src.ID, Revision: src.Revision + 1}}
+			return w
+		}(),
+		"no_refs": func() RoutingPrechoiceView { w := view; w.Refs = nil; return w }(),
+		"updated_at": func() RoutingPrechoiceView {
+			w := view
+			w.Checkpoint.UpdatedAt = w.Checkpoint.UpdatedAt.Add(time.Millisecond)
+			return w
+		}(),
+	})
+	expectViewErrors(t, decide, ErrInvalid, map[string]RoutingPrechoiceView{
+		"unknown":     func() RoutingPrechoiceView { w := view; w.History = "unknown"; return w }(),
+		"empty_count": func() RoutingPrechoiceView { w := view; w.HistoryCount = 1; return w }(),
+		"revision0":   func() RoutingPrechoiceView { w := view; w.Checkpoint.Revision = 0; return w }(),
+		"no_time":     func() RoutingPrechoiceView { w := view; w.Checkpoint.UpdatedAt = time.Time{}; return w }(),
+		"bad_id":      func() RoutingPrechoiceView { w := view; w.Checkpoint.ID = "../x"; return w }(),
+	})
+	// Other scope keeps the existing privacy-preserving not-found fence.
+	if _, err := decide(scopeB, view); !errors.Is(err, ErrNotFound) {
+		t.Fatal("foreign", err)
+	}
+	// A revision change after the read is stale, never retroactively accepted.
+	pkg.NextSteps = []string{"색인 다시 확인"}
+	if _, err := workCheckpointSave(f, f.agent, "work-one", "evt-2", 1, pkg); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := decide(scopeA, view); !errors.Is(err, ErrConflict) {
+		t.Fatal("stale revision", err)
+	}
+	// Deleted evidence keeps the checkpoint read fence: no hash for a view built on it.
+	fresh, err := f.svc.GetWorkCheckpoint(testCtx, runner, WorkCheckpointGetInput{Scope: scopeA, ID: "work-one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view.Checkpoint.Revision, view.Checkpoint.UpdatedAt = fresh.Revision, fresh.UpdatedAt
+	if _, err := decide(scopeA, view); err != nil {
+		t.Fatal("fresh view", err)
+	}
+	if err := f.repo.Delete(testCtx, "sources", scopeA, src.ID, src.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := decide(scopeA, view); err == nil || d.ViewHash != "" {
+		t.Fatal("deleted evidence", d, err)
+	}
+	// A token that may route but not read work is denied, never handed an unchecked hash.
+	f.auth.actors["tok-route-only"] = actor("router-2", "service", true, "route")
+	if _, err := f.svc.DecideRoute(testCtx, "tok-route-only", RoutingDecideInput{Scope: scopeA, Task: "review", View: &view}); !errors.Is(err, ErrDenied) {
+		t.Fatal("route-only token", err)
+	}
+}
+
+func expectViewErrors(t *testing.T, decide func(Scope, RoutingPrechoiceView) (RoutingDecision, error), want error, cases map[string]RoutingPrechoiceView) {
+	t.Helper()
+	for name, v := range cases {
+		if _, err := decide(scopeA, v); !errors.Is(err, want) {
+			t.Fatal(name, err)
+		}
+	}
+}
+
+// prechoiceRoutingFixture saves work id with one live source ref; both scopes can route, so only the work
+// fences refuse a foreign view. A nil repo keeps the offline store.
+func prechoiceRoutingFixture(t *testing.T, repo Repository, id string) (*fixture, string, Record, WorkCheckpointPackage) {
+	t.Helper()
+	f := newFixture(t)
+	if repo != nil {
+		f.svc.Repo = repo
+	}
+	runner := f.runner()
+	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
+	inv := []Provider{{ID: "openai", Name: "OpenAI", Kind: "api", Models: []string{"gpt-6.1", "gpt-6.1-mini"}}}
+	for _, scope := range []Scope{scopeA, scopeB} {
+		if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scope, Providers: &inv}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	src := f.source()
+	pkg := workCheckpointPackage()
+	pkg.SourceRefs = []Ref{{Collection: "sources", ID: src.ID, Revision: src.Revision}}
+	if _, err := workCheckpointSave(f, f.agent, id, "evt-1", 0, pkg); err != nil {
+		t.Fatal(err)
+	}
+	return f, runner, src, pkg
+}

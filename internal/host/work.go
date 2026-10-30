@@ -193,13 +193,37 @@ func checkWorkPayload(name string, payload map[string]any) error {
 
 // WorkHookContext reads fresh selected work; it never executes checks, inspects saved paths or caches bodies.
 func WorkHookContext(workID string, request Requester, scope map[string]any, maxChars int, delivery any) (string, error) {
-	result, err := WorkCall("resume_work", map[string]any{"id": workID}, request, scope)
+	result, err := readWorkHook(workID, request, scope, delivery)
 	if err != nil {
 		return "", err
 	}
+	return RenderHookContext(result, maxChars)
+}
+
+// WorkHookContextView is WorkHookContext plus the metadata-only view of the same single read
+// (checkpoint id/revision/updated_at, source ref identities, archive history count; no bodies).
+func WorkHookContextView(workID string, request Requester, scope map[string]any, maxChars int, delivery any) (Obj, string, error) {
+	result, err := readWorkHook(workID, request, scope, delivery)
+	if err != nil {
+		return nil, "", err
+	}
+	rev, _ := Int(result["revision"])
+	view, err := workPrechoiceView(workID, rev, result["updated_at"], result["package"].(map[string]any)["source_refs"], result["archive_messages"])
+	if err != nil {
+		return nil, "", err
+	}
+	context, err := RenderHookContext(result, maxChars)
+	return view, context, err
+}
+
+func readWorkHook(workID string, request Requester, scope map[string]any, delivery any) (map[string]any, error) {
+	result, err := WorkCall("resume_work", map[string]any{"id": workID}, request, scope)
+	if err != nil {
+		return nil, err
+	}
 	rev, isInt := Int(result["revision"])
 	if _, isPkg := result["package"].(map[string]any); result["id"] != workID || !isInt || rev < 1 || !isPkg {
-		return "", errors.New("invalid checkpoint response")
+		return nil, errors.New("invalid checkpoint response")
 	}
 	if related := relatedContext(result, request, scope); related != nil {
 		result["related_memories"] = related
@@ -207,7 +231,31 @@ func WorkHookContext(workID string, request Requester, scope map[string]any, max
 	if delivery != nil {
 		result["delivery"] = delivery
 	}
-	return RenderHookContext(result, maxChars)
+	return result, nil
+}
+
+func workPrechoiceView(id string, rev int64, updatedAt, sourceRefs, archive any) (Obj, error) {
+	at, ok := updatedAt.(string)
+	refs, okRefs := sourceRefs.([]any)
+	history, okHistory := archive.([]any)
+	if !ok || at == "" || (sourceRefs != nil && !okRefs) || (archive != nil && !okHistory) {
+		return nil, errors.New("invalid checkpoint response")
+	}
+	outRefs := make([]any, 0, len(refs))
+	for _, r := range refs {
+		m, isMap := r.(map[string]any)
+		refRev, isInt := Int(m["revision"])
+		if !isMap || !isInt {
+			return nil, errors.New("invalid checkpoint response")
+		}
+		outRefs = append(outRefs, Obj{{Key: "collection", Value: m["collection"]}, {Key: "id", Value: m["id"]}, {Key: "revision", Value: refRev}})
+	}
+	kind := "known_empty"
+	if len(history) > 0 {
+		kind = "observed"
+	}
+	return Obj{{Key: "checkpoint", Value: Obj{{Key: "id", Value: id}, {Key: "revision", Value: rev}, {Key: "updated_at", Value: at}}},
+		{Key: "refs", Value: outRefs}, {Key: "history", Value: kind}, {Key: "history_count", Value: len(history)}}, nil
 }
 
 // relatedContext adds independently verified direct evidence without modifying saved work.

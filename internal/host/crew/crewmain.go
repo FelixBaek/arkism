@@ -18,7 +18,7 @@ func init() {
 	host.Register("crew", crewMain)
 	host.ChildEnv = childEnv
 	host.CustomInfo = customInfo
-	host.DecideRoute = decideRoute
+	host.DecideRoute = func(task, group string) (map[string]any, error) { return decideRoute(task, group, nil) }
 	host.ReportCall = reportCall
 	host.CrewHookContext = func(prompt, callerModel string, timeout time.Duration) (string, error) {
 		return hookContext(prompt, callerModel, timeout, nil, nil)
@@ -323,7 +323,7 @@ func runWorkflowCmd(name string, a *args, floats map[string]float64, stdout io.W
 
 func runRouteCmd(a *args, stdout io.Writer) (int, error) {
 	if a.flags["decide-only"] {
-		d, err := decideRoute(a.vals["task"], a.get("group", ""))
+		d, err := decideRoute(a.vals["task"], a.get("group", ""), nil)
 		if err != nil {
 			return 0, err
 		}
