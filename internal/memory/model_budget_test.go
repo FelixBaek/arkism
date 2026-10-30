@@ -243,17 +243,18 @@ func TestModelBudgetDailyTargetIsSoftAndLegacyHardIsOptional(t *testing.T) {
 	}
 }
 
-// Without an active budget a human reader is told there is none; anyone else is still denied.
-func TestModelBudgetStatusWithoutPolicy(t *testing.T) {
+func TestModelBudgetStatusWithoutPolicyAnswersNoBudget(t *testing.T) {
 	f, _ := modelBudgetFixture(t)
 	f.svc.ModelBudgetPolicy = nil
-	if _, e := f.svc.ModelBudgetStatus(testCtx, f.human, scopeA); !errors.Is(e, ErrNotFound) {
+	if _, e := f.svc.ModelBudgetStatus(testCtx, "budget", scopeA); !errors.Is(e, ErrDenied) {
+		t.Fatal("a service read a missing budget", e)
+	}
+	budget := 15.0
+	if _, e := f.svc.SetRoutingPolicy(testCtx, f.human, RoutingPolicyInput{Scope: scopeA, MonthlyBudgetUSD: &budget}); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := f.svc.ModelBudgetStatus(testCtx, "budget", scopeA); !errors.Is(e, ErrDenied) {
-		t.Fatal("service reader", e)
-	}
-	if _, e := f.svc.ModelBudgetStatus(testCtx, "nobody", scopeA); !errors.Is(e, ErrDenied) {
-		t.Fatal("unknown token", e)
+	out, e := f.svc.ModelBudgetStatus(testCtx, f.human, scopeA)
+	if e != nil || out.Configured || out.MonthlyLimit != 0 || out.RoutingBudgetUSD != 15 || out.RoutingRevision != 1 || out.Month == "" {
+		t.Fatal("no budget answer", out, e)
 	}
 }

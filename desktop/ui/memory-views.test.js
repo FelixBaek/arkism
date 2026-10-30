@@ -116,7 +116,7 @@ test("the budget card shows dollars, the daily cap, subscription use and a retry
   assert.equal(c.firstChild, panel); // the card goes first
   await dom.flush();
   assert.deepEqual(calls[0], ["/v1/model-budget/status", JSON.stringify({ scope: { project_id: "p" } })]);
-  for (const t of ["2026-10 · UTC 기준", "$12.35 / $100.00", "$2.00 / $50.00", "$6.00 / $5.00", "오늘 상한$8.00", "미정산 예약$0.50", "7회 · API 환산 $3.00 (예산 밖)", "오늘 목표를 넘었어요"]) assert.ok(panel.textContent.includes(t), t);
+  for (const t of ["2026-10 · 매달 ", "$12.35 / $100.00", "$2.00 / $50.00", "$6.00 / $5.00", "오늘 상한$8.00", "미정산 예약$0.50", "7회 · API 환산 $3.00 (예산 밖)", "오늘 목표를 넘었어요"]) assert.ok(panel.textContent.includes(t), t);
   answer = { ...doc, daily_soft_target_exceeded: false, daily_limit_pico_usd: 0, subscription_requests: -1 };
   dom.buttons(panel, "예산 다시 조회")[0].click(); await dom.flush();
   assert.ok(panel.textContent.includes("지출 추이를 보는 기준"));
@@ -133,6 +133,27 @@ test("the budget card shows dollars, the daily cap, subscription use and a retry
     p2.remove(); await dom.flush();
     assert.match(p2.textContent, /불러오는 중/);
   }
+});
+
+test("with no budget policy the card offers one monthly amount, saved with the routing policy", async () => {
+  const calls = []; let answer = { configured: false, month: "2026-10", day: "2026-10-30", routing_month_cost_usd: 3.5, routing_revision: 4 };
+  const request = async (path, opts) => { calls.push([path, JSON.parse(opts.body)]); if (path === "/v1/routing/policy") { if (answer instanceof Error) throw answer; answer = { ...answer, routing_budget_usd: 20, routing_revision: 5 }; return {}; } return answer; };
+  assert.throws(() => window.ArkismModelBudget.validate({ configured: false, month: "x" }), /invalid_budget/);
+  assert.throws(() => window.ArkismModelBudget.validate({ configured: false, month: "2026-10", routing_budget_usd: -1 }), /invalid_budget/);
+  const c = host(), panel = window.ArkismModelBudget.mount({ container: c, scope: { project_id: "p" }, request, el: h.el, button: h.button });
+  await dom.flush();
+  for (const t of ["월 예산", "아직 월 예산이 없어요. 이번 달 약 $3.50를 썼어요.", "요청을 막지 않고"]) assert.ok(panel.textContent.includes(t), t);
+  assert.ok(!panel.textContent.includes("Claude API"));
+  const input = panel.querySelector("input");
+  input.value = "-3"; dom.buttons(panel, "저장")[0].click(); await dom.flush();
+  assert.match(panel.textContent, /0에서 100000 사이/); assert.equal(calls.length, 1);
+  input.value = "20"; dom.buttons(panel, "저장")[0].click(); await dom.flush(); await dom.flush();
+  assert.deepEqual(calls[1], ["/v1/routing/policy", { scope: { project_id: "p" }, expected_revision: 4, monthly_budget_usd: 20 }]);
+  assert.ok(panel.textContent.includes("이번 달 약 $3.50 / 월 예산 $20.00"), panel.textContent);
+  const again = { configured: false, month: "2026-10" }; const req2 = async (path, opts) => { if (path === "/v1/routing/policy") throw new Error("x"); return again; };
+  const p2 = window.ArkismModelBudget.mount({ container: host(), scope: {}, request: req2, el: h.el, button: h.button }); await dom.flush();
+  p2.querySelector("input").value = ""; dom.buttons(p2, "저장")[0].click(); await dom.flush();
+  assert.match(p2.textContent, /저장하지 못했어요/);
 });
 
 // ---------------------------------------------------------------- 과거 기억 (memory-time.js)
