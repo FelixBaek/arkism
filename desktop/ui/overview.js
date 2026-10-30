@@ -252,7 +252,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   let win = null;
-  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], reloadSessions: () => { S.at = 0; return loadSessions(); } }));
+  const windows = () => (win = win || window.ArkismOverviewWindows(ctx, { stages, sessions: () => S.sessions || [], sessionsTotal: () => S.total || 0, reloadSessions: () => { S.at = 0; return loadSessions(); } }));
   const openStage = (key) => windows().open(key);
   const openWide = (kind) => windows().wide(kind);
   // A separate window (popup-drag.js) reopens the stage or wide window that was dragged out of the app.

@@ -34,3 +34,10 @@ test("dreaming stays purple and diff lines keep their green and red fills (undon
   assert.match(rule(d, ".dg-words ins"), /background: var\(--nc-diff-add-bg\)/);
   assert.match(rule(d, ".dg-words del"), /background: var\(--nc-diff-del-bg\)/);
 });
+
+test("run graph: running is white, a taken path green, a back edge red (asked on 10-24 and 10-27)", () => {
+  assert.match(rule(css("crew.css"), ".g-node.st-running"), /var\(--text-1\)/);
+  assert.match(rule(css("crew.css"), ".g-edge.used"), /--g-human/);
+  assert.match(rule(css("v4-crew-graph.css"), ".g-edge.back"), /--status-danger/);
+  assert.match(rule(css("v4-crew-graph.css"), ".g-edge.used"), /--g-human/);
+});
