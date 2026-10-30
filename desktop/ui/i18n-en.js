@@ -3946,7 +3946,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
 });
-Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety"});
+Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety", "끝난 기준과 결과물": "Done when and output", "자세히 · 끝난 기준, 실행 설정": "More · done when, run settings", "자세히 · 끝난 기준, 실행 설정, 기록, 관리": "More · done when, run settings, history, manage"});
 Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand", "황토": "Tan", "장미": "Rose", "라일락": "Lilac", "하늘": "Sky", "민트": "Mint", "세이지": "Sage",
   "배경색": "Background", "아바타": "Avatar", "아바타 고르기": "Choose avatar", "모델 아이콘 쓰기": "Use model icon"});
 Object.assign(window.ArkismI18nEN.patterns, {"아바타 {0}": "Avatar {0}"});
@@ -4256,7 +4256,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "여기까지 시험": "Test up to here",
   "이 단계만 시험": "Test this step only",
   "+ 채널 연결": "+ Connect channel",
-  "진행 상황을 어디로 보낼지 정해요 · 봇은 설정 › 메신저에서 연결해요": "Choose where progress goes · connect bots in Settings › Messengers",
+  "아직 연결한 채널이 없어요": "No channel connected yet",
   "메신저": "Messenger",
   "나에게": "To me",
   "알림 시점": "Alert moments",
@@ -4287,14 +4287,12 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "전문가 · 워커 최대 {0}": "Expert · up to {0} workers",
   "약 ${0}": "About ${0}",
   "확인해 주세요{0}": "Please confirm{0}",
-  "${0}으로 부르거나 화면의 실행 버튼": "Call with ${0} or the Run button",
   "· 다음 실행 {0}": "· Next run {0}",
   "노드 {0}개": "{0} nodes",
   "전문가 {0}": "Experts {0}",
   "한 번 호출 {0}": "One call {0}",
   "처리 {0}": "Processing {0}",
   "↺ 되돌아가는 선 {0}개 (최대 {1}번)": "↺ {0} loop-back edges (max {1} times)",
-  "AI 노드 {0}개 · 노드를 눌러 바로 고치거나, 여기서 따로 시험해요": "{0} AI nodes · click a node to edit it, or test it here",
   "전문가 · {0}": "Expert · {0}",
   "최대 {0}분": "Up to {0} min",
   "되돌아가는 선은 {0}번까지": "Loop-back edges up to {0} times",
@@ -4661,7 +4659,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "AI 에이전트 (직접 쓰기)": "AI agent (write it yourself)",
   "보낼 곳": "Send to",
   "보낼 곳 빼기": "Remove destination",
-  "채널에서 부르기 · 봇은 설정 › 메신저에서 연결해요": "Call from a channel · connect bots in Settings › Messengers",
+  "채널에서 부르기": "Call from a channel",
   "단계마다 정해요": "Set per step",
   "모델을 비워 둔 AI 단계가 이걸 써요": "AI steps with no model use this",
   "단계마다 바꿀 수 있어요": "Each step can change it"
@@ -4816,7 +4814,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "기본 채널": "Default channel"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "바뀐 칸 {0}개 · 저장하면 다음 판 v{1} · 기록·사용량 탭에서 되돌릴 수 있어요": "{0} fields changed · saving makes v{1} · you can roll back in the History & usage tab"
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "팀 삭제": "Delete team",
@@ -5933,8 +5930,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "앞 단계 결과": "Previous step's result"
 });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "{0}으로 부르거나 화면의 실행 버튼": "Call it with {0} or the Run button on screen", "{0}로 부를 때만": "Only when called with {0}",
-  "채널에서 {0}로 이 자동화를 부르게 연결해요": "Connect a channel to call this automation with {0}", "목록에서 숨기고 {0} 부르기를 멈춰요": "Hide it from the list and stop {0} calls",
+  "{0} 또는 실행 버튼": "{0} or the Run button", "{0}로 부를 때만": "Only when called with {0}",
+  "채널에서 {0}로 불러요": "Call it with {0} from a channel", "목록에서 숨기고 {0} 부르기를 멈춰요": "Hide it from the list and stop {0} calls",
   "{0}에게 맡길 주제…": "A topic for {0}…", "토큰 · 헤더 {0}": "Token · header {0}",
   "AI가 제목을 '{0}'(으)로, 부르는 이름을 @{1}로 붙였어요. 설정에서 바꿀 수 있어요.": "AI named it '{0}' and called it @{1}. You can change both in settings.",
   "코딩 에이전트 채팅에 {0}를 치면 그래프대로 돌고, 부른 자리에는 진행과 결과를 보고해요.": "Type {0} in a coding agent chat to run the graph; progress and results come back where you called it.",
@@ -5943,7 +5940,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}에게 맡길 일 (비워도 돼요)": "A task for {0} (optional)"
 });
 Object.assign(window.ArkismI18nEN.strings, {
-  "예상 비용 (API 요금 기준)": "Estimated cost (at API rates)", "아직 연결한 채널이 없어요 · 텔레그램·슬랙": "No channel connected yet · Telegram, Slack",
+  
   "디스코드로는 아직 보내지 않아요": "Sending to Discord is not supported yet", "만들었어요. 지금 실행 탭에서 돌려 보세요.": "Created. Run it from the Run now tab.",
   "연습이 아니라 실제로 돌아요. 기록과 이번 달 한도에 남아요.": "This is a real run, not practice. It counts toward history and this month's limit.",
   "지금 실행 탭에서 돌린 것도 여기 남아요": "Runs from the Run now tab show up here too", "모두 보기": "Show all",
