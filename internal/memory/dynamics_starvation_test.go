@@ -126,7 +126,12 @@ func TestDynamicsLoadFunctionalStarvationRoundsPG(t *testing.T) {
 	out, err := json.Marshal(report)
 	dynamicsRebindExpect(t, err, nil, "report")
 	t.Logf("%s", out)
-	run, control := report["with_native"].(map[string]any), report["control_without_native"].(map[string]any)
+	run, ok := report["with_native"].(map[string]any)
+	control, ran := report["control_without_native"].(map[string]any)
+	if !ok || !ran {
+		// Subtests without PostgreSQL skip; a failed subtest has already failed this test.
+		t.Skip("a subtest produced no report")
+	}
 	for kind, c := range run["background_coverage"].(map[string]*dynamicsStarvationKind) {
 		if c.Eligible == 0 || c.StarvationObserved || run["final_eligible"].(map[string]int64)[kind] != 0 {
 			t.Fatalf("%s starved or still eligible: %s", kind, out)

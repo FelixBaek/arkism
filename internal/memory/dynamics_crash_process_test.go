@@ -271,7 +271,12 @@ func TestDynamicsWorkerProcessCrashUnderFullQueuePG(t *testing.T) {
 	out, err := json.Marshal(report)
 	dynamicsRebindExpect(t, err, nil, "report")
 	t.Logf("%s", out)
-	base, run := report["no_crash"].(map[string]any), report["crash_in_first_apply"].(map[string]any)
+	base, ok := report["no_crash"].(map[string]any)
+	run, ran := report["crash_in_first_apply"].(map[string]any)
+	if !ok || !ran {
+		// Subtests without PostgreSQL skip; a failed subtest has already failed this test.
+		t.Skip("a subtest produced no report")
+	}
 	for _, r := range []map[string]any{base, run} {
 		if r["count_after"] != int64(0) || r["head_after"] != int64(4) || r["entries_done"] != 4 || r["withheld_after"] != false || r["published_generation"].(int64) < 1 {
 			t.Fatalf("full queue did not finish cleanly: %s", out)
