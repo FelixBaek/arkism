@@ -154,13 +154,15 @@ func TestRoutingFallbackAndRevocation(t *testing.T) {
 	}
 }
 func TestTransferRejectsSecretsAndRawOutputs(t *testing.T) {
-	for _, s := range []string{"sk-abcdefghijklmnop", "API_KEY=abcdefgh12345", "Bearer abcdefghijk", "person@example.com", `{"raw_output":"hello"}`, `{"api_key":"abcdefgh12345"}`, structuredText(map[string]string{"description": `{"raw_output":"hello"}`})} {
-		if safeTransfer(s) {
-			t.Fatalf("accepted sensitive payload %q", s)
+	for round := 0; round < 2; round++ { // the second round reads remembered verdicts
+		for _, s := range []string{"sk-abcdefghijklmnop", "API_KEY=abcdefgh12345", "Bearer abcdefghijk", "person@example.com", `{"raw_output":"hello"}`, `{"api_key":"abcdefgh12345"}`, structuredText(map[string]string{"description": `{"raw_output":"hello"}`})} {
+			if safeTransfer(s) {
+				t.Fatalf("round %d accepted sensitive payload %q", round, s)
+			}
 		}
-	}
-	if !safeTransfer(`{"secret_names":["VOYAGE_API_KEY"],"lesson":"verify index"}`) {
-		t.Fatal("name is not a secret value")
+		if !safeTransfer(`{"secret_names":["VOYAGE_API_KEY"],"lesson":"verify index"}`) {
+			t.Fatal("name is not a secret value")
+		}
 	}
 }
 
