@@ -300,7 +300,7 @@ export function createMemoryList(deps) {
     } else {
       drawRows(shown, c => {
         const [why, warn] = deps.waitReason(c);
-        return deps.row(c.id, "minmax(0,1fr) auto", [memCell(c, [deps.kindLabel(c.kind), deps.riskLabel(c), deps.withAgent(c), deps.ago(c.created_at), deps.memRepo(c).split("/").pop()]), deps.el("span", `mem-badge${warn ? " warn" : ""}`, why.split(" — ")[0])], deps.renderDetail);
+        return deps.row(c.id, "minmax(0,1fr) auto", [memCell(c, [deps.kindLabel(c.kind), deps.riskLabel(c), deps.withAgent(c), deps.ago(c.created_at), deps.memRepo(c).split("/").pop()]), ...(why ? [deps.el("span", `mem-badge${warn ? " warn" : ""}`, why.split(" — ")[0])] : [])], deps.renderDetail);
       });
     }
     if (!items.length) table.append(deps.el("div", "empty", deps.memory.query ? "검색과 맞는 기억이 없어요." : "확인할 기억이 없어요."));

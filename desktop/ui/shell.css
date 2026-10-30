@@ -142,8 +142,11 @@
    app.css's 760 top bar is never used. Labels stay for screen readers. */
 .rail-toggle { grid-row: 1; grid-column: 2; justify-self: end; display: grid; place-items: center; padding: 0; border: 0; background: none; }
 .rail-toggle[hidden] { display: none; }
-.rail-tri { width: 22px; height: 19px; overflow: visible; fill: var(--nc-action); stroke: var(--nc-accent); stroke-width: 1.5; stroke-linejoin: round; transition: transform .2s ease; }
-.rail-toggle:hover .rail-tri, .rail-toggle:focus-visible .rail-tri { transform: rotate(-90deg); }
+/* Figma 198:7 / 1492:98316: on hover the mark turns toward where the rail goes (-90 folds, 90 opens) and swings
+   past it a few times on a damped spring (10-29 "핑퐁하듯이"), settling within 0.7s. */
+.rail-tri { width: 22px; height: 19px; overflow: visible; fill: var(--nc-action); stroke: var(--nc-accent); stroke-width: 1.5; stroke-linejoin: round; transition: transform 700ms linear(0, .109, .374, .696, .994, 1.211, 1.326, 1.341, 1.282, 1.18, 1.069, .973, .91, .882, .886, .913, .951, .988, 1.018, 1.036, 1.041, 1.037, 1.026, 1.013, 1); }
+.rail-toggle:is(:hover, :focus-visible) .rail-tri { transform: rotate(-90deg); }
+:root.rail-collapsed .rail-toggle:is(:hover, :focus-visible) .rail-tri { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .rail-tri { transition: none; } }
 .rail-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 6px 0 12px; flex: none; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-quiet); font: 400 calc(13px * var(--fs, 1))/20px var(--sans); text-align: left; }
 .rail-search:hover { color: var(--nc-text); }
