@@ -529,15 +529,7 @@ func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, propos
 		return ImportSkillResult{}, ErrConflict
 	}
 	if proposal != nil {
-		if existing.Status == "approved" {
-			if e := validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
-				return ImportSkillResult{}, e
-			}
-		}
-		if e := checkSources(ctx, tx, existing); e != nil {
-			return ImportSkillResult{}, e
-		}
-		if e := checkRelations(ctx, tx, existing); e != nil {
+		if e := checkReusedProposalVersion(ctx, tx, existing); e != nil {
 			return ImportSkillResult{}, e
 		}
 	}
@@ -551,6 +543,19 @@ func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, propos
 		return ImportSkillResult{}, e
 	}
 	return ImportSkillResult{ComparisonPlanSHA256: comparisonPlanHash(existing.ComparisonPlan), Skill: parent, Record: existing, Reused: true, Version: slices.Index(skillHistory(parent), existing.ID) + 1}, nil
+}
+
+// checkReusedProposalVersion re-checks a reused proposal's evaluation, sources and relations.
+func checkReusedProposalVersion(ctx context.Context, tx Tx, existing Record) error {
+	if existing.Status == "approved" {
+		if e := validation(ctx, tx, existing, existing.ValidationID, false); e != nil {
+			return e
+		}
+	}
+	if e := checkSources(ctx, tx, existing); e != nil {
+		return e
+	}
+	return checkRelations(ctx, tx, existing)
 }
 
 func checkImportBaseline(ctx context.Context, tx Tx, scope Scope, activeVersion string) error {

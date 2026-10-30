@@ -35,14 +35,8 @@ func (s *Service) RestoreMemory(ctx context.Context, token, id string, in Memory
 		if err != nil {
 			return err
 		}
-		if r.ContentErased || r.PrivacyQuarantined {
-			return ErrNotFound
-		}
-		if r.Revision != in.ExpectedRevision || r.ConflictID != "" {
-			return ErrConflict
-		}
-		if r.Status != "rejected" || r.ApprovedBy == "" || r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now()) {
-			return ErrInvalid
+		if err = memoryRestorable(r, in.ExpectedRevision); err != nil {
+			return err
 		}
 		if err = checkSources(ctx, tx, r); err != nil {
 			return err
@@ -67,6 +61,21 @@ func (s *Service) RestoreMemory(ctx context.Context, token, id string, in Memory
 		return Record{}, err
 	}
 	return out, nil
+}
+
+// memoryRestorable rejects an erased or quarantined memory, a stale or conflicted
+// revision, and one that is not a deleted, approved and unexpired memory.
+func memoryRestorable(r Record, expectedRevision int64) error {
+	if r.ContentErased || r.PrivacyQuarantined {
+		return ErrNotFound
+	}
+	if r.Revision != expectedRevision || r.ConflictID != "" {
+		return ErrConflict
+	}
+	if r.Status != "rejected" || r.ApprovedBy == "" || r.ExpiresAt != nil && !r.ExpiresAt.After(time.Now()) {
+		return ErrInvalid
+	}
+	return nil
 }
 
 func memoryRestoreRoutes(mux routeRegistrar, s *Service) {

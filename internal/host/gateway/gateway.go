@@ -630,43 +630,48 @@ func chatStream(parent context.Context, base, key string, body host.Obj, extra .
 			yield(nil, &statusError{resp.StatusCode})
 			return
 		}
-		contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("content-type"), ";")[0]))
-		data := responseChunks(resp, key, subscription.MaxOutput, nil)
-		model := get(body, "model").(string)
-		if truthy(get(body, "stream")) {
-			if contentType != "text/event-stream" {
-				yield(nil, Code("upstream_protocol"))
-				return
-			}
-			for chunk, err := range pipe(func(emit func([]byte) error) error { return MessagesStream(data, model, emit) }) {
-				if !yield(chunk, err) || err != nil {
-					return
-				}
-			}
-			return
-		}
-		if contentType != "application/json" {
+		chatReplyChunks(yield, resp, key, body)
+	}
+}
+
+// chatReplyChunks yields an accepted Chat API response in Messages form.
+func chatReplyChunks(yield func([]byte, error) bool, resp *http.Response, key string, body host.Obj) {
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(resp.Header.Get("content-type"), ";")[0]))
+	data := responseChunks(resp, key, subscription.MaxOutput, nil)
+	model := get(body, "model").(string)
+	if truthy(get(body, "stream")) {
+		if contentType != "text/event-stream" {
 			yield(nil, Code("upstream_protocol"))
 			return
 		}
-		all, err := gather(data)
-		if err != nil {
-			yield(nil, err)
-			return
+		for chunk, err := range pipe(func(emit func([]byte) error) error { return MessagesStream(data, model, emit) }) {
+			if !yield(chunk, err) || err != nil {
+				return
+			}
 		}
-		parsed, err := Parse(string(all))
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-		result, err := MessagesResponse(parsed, model)
-		if err != nil {
-			yield(nil, err)
-			return
-		}
-		out, err := pyDumps(result)
-		yield(out, err)
+		return
 	}
+	if contentType != "application/json" {
+		yield(nil, Code("upstream_protocol"))
+		return
+	}
+	all, err := gather(data)
+	if err != nil {
+		yield(nil, err)
+		return
+	}
+	parsed, err := Parse(string(all))
+	if err != nil {
+		yield(nil, err)
+		return
+	}
+	result, err := MessagesResponse(parsed, model)
+	if err != nil {
+		yield(nil, err)
+		return
+	}
+	out, err := pyDumps(result)
+	yield(out, err)
 }
 
 // upstreamRejected and targetUnavailable steer a group to its next candidate.
@@ -1970,12 +1975,7 @@ func (x *exchange) tryGroup(body host.Obj, candidates []string, choice, rule str
 	var first *groupFailure // the first member actually refused: its error is the caller's when none answers
 	var limitErr error
 	var limitAfter time.Duration
-	unique := []string{}
-	for _, mid := range candidates {
-		if !slices.Contains(unique, mid) {
-			unique = append(unique, mid)
-		}
-	}
+	unique := uniqueModels(candidates)
 	// Resting members go last; the pick keeps its decision only while it still goes first.
 	candidates = modelRests.order(unique, clock())
 	previous := ""
@@ -1990,25 +1990,14 @@ func (x *exchange) tryGroup(body host.Obj, candidates []string, choice, rule str
 			if !errors.Is(err, errLaneFull) && !errors.Is(err, errLaneWait) && !errors.Is(err, errRPM) {
 				return err // the caller left while it waited
 			}
-			if limitErr == nil || after < limitAfter {
-				limitAfter = after
-			}
+			limitAfter = shortestWait(limitErr, limitAfter, after)
 			limitErr = err
 			last = groupFailure{http.StatusTooManyRequests, err.Error(), err.Error()}
 			continue
 		}
 		limitErr = nil
-		kind := choice
-		classifier := ms
-		if i > 0 || mid != unique[0] {
-			kind, classifier = "failover", 0
-		}
+		x.startMember(mid, choice, rule, previous, ms, i > 0 || mid != unique[0])
 		i++
-		x.group = map[string]any{"model": mid, "decision": kind, "replaced": previous, "classifier_ms": classifier}
-		if kind != "failover" && rule != "" {
-			x.group["rule"] = rule
-		}
-		x.attemptAt, x.attemptErr, x.status, x.retryAfter = time.Now(), "", 0, 0
 		before := last
 		done, skipped, err := x.groupAttempt(body, mid, release, &last)
 		if done {
@@ -2031,6 +2020,39 @@ func (x *exchange) tryGroup(body host.Obj, candidates []string, choice, rule str
 	}
 	x.publicErr = last.code
 	return x.sendBytes(anthropicError(last.status, last.message))
+}
+
+// uniqueModels is candidates without repeats, first occurrence kept.
+func uniqueModels(candidates []string) []string {
+	unique := []string{}
+	for _, mid := range candidates {
+		if !slices.Contains(unique, mid) {
+			unique = append(unique, mid)
+		}
+	}
+	return unique
+}
+
+// shortestWait is the wait to advertise once a member refused for a limit: the shortest so far.
+func shortestWait(limitErr error, limitAfter, after time.Duration) time.Duration {
+	if limitErr == nil || after < limitAfter {
+		return after
+	}
+	return limitAfter
+}
+
+// startMember records the member about to run as the group's call and clears the last attempt.
+func (x *exchange) startMember(mid, choice, rule, previous string, ms int64, failover bool) {
+	kind := choice
+	classifier := ms
+	if failover {
+		kind, classifier = "failover", 0
+	}
+	x.group = map[string]any{"model": mid, "decision": kind, "replaced": previous, "classifier_ms": classifier}
+	if kind != "failover" && rule != "" {
+		x.group["rule"] = rule
+	}
+	x.attemptAt, x.attemptErr, x.status, x.retryAfter = time.Now(), "", 0, 0
 }
 
 // groupAttempt runs one admitted member; done means the group request ended with err,
@@ -2609,25 +2631,39 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool, ex
 		return x.sendBytes(anthropicError(502, "upstream_truncated"))
 	}
 	if err != nil {
-		var se *statusError
-		var ue *url.Error
-		status := 0
-		if errors.As(err, &se) {
-			status = se.status
-		} else if errors.As(err, &ue) {
-			if err := x.unreachable(); err != nil {
-				return err
-			}
-		}
-		if err := x.reject(status); err != nil {
+		return x.chatFailed(err)
+	}
+	ctype := "application/json"
+	if streaming {
+		ctype = "text/event-stream"
+	}
+	return x.send(200, x.chatRelay(first, next, streaming), ctype, nil)
+}
+
+// chatFailed answers a Chat API call that failed before its first chunk.
+func (x *exchange) chatFailed(err error) error {
+	var se *statusError
+	var ue *url.Error
+	status := 0
+	if errors.As(err, &se) {
+		status = se.status
+	} else if errors.As(err, &ue) {
+		if err := x.unreachable(); err != nil {
 			return err
 		}
-		if status < 400 || status > 599 {
-			status = 502
-		}
-		return x.sendBytes(anthropicError(status, "upstream_unavailable"))
 	}
-	data := func(yield func([]byte, error) bool) {
+	if err := x.reject(status); err != nil {
+		return err
+	}
+	if status < 400 || status > 599 {
+		status = 502
+	}
+	return x.sendBytes(anthropicError(status, "upstream_unavailable"))
+}
+
+// chatRelay passes the Chat API chunks on after first; a mid-stream failure ends the body.
+func (x *exchange) chatRelay(first []byte, next func() ([]byte, error, bool), streaming bool) byteSeq {
+	return func(yield func([]byte, error) bool) {
 		if !yield(first, nil) {
 			return
 		}
@@ -2648,11 +2684,6 @@ func (x *exchange) chatAPI(base, key string, body host.Obj, hostChatAPI bool, ex
 			}
 		}
 	}
-	ctype := "application/json"
-	if streaming {
-		ctype = "text/event-stream"
-	}
-	return x.send(200, data, ctype, nil)
 }
 
 // runGateway serves until SIGINT or SIGTERM, then ends every live Claude run.

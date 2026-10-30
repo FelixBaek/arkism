@@ -50,27 +50,32 @@ func (s *Service) flowChildViews(ctx context.Context, token string, scope Scope,
 		}
 		// The child read rechecks access; a denied or missing child keeps the bare reference.
 		if r, err := get(ctx, token, scope, ref.ID); err == nil {
-			started := r.CreatedAt
-			v.StartedAt = &started
-			if done, _ := flowChildTerminal(r); done {
-				finished := r.UpdatedAt
-				v.FinishedAt = &finished
-			}
-			if run := r.CrewRun; run != nil {
-				v.Status = run.Status
-				if run.Definition != nil {
-					v.Name = run.Definition.Name
-				}
-				for _, n := range run.Nodes {
-					v.Tokens += n.Tokens
-				}
-			} else if m := r.CrewMeeting; m != nil {
-				v.Status, v.Name, v.Tokens, v.Round = m.Status, m.Title, m.TokensUsed, m.Round
-			}
+			fillFlowChildView(&v, r)
 		}
 		out[key] = v
 	}
 	return out
+}
+
+// fillFlowChildView adds the summary of the child record r the reader could read.
+func fillFlowChildView(v *FlowChildView, r Record) {
+	started := r.CreatedAt
+	v.StartedAt = &started
+	if done, _ := flowChildTerminal(r); done {
+		finished := r.UpdatedAt
+		v.FinishedAt = &finished
+	}
+	if run := r.CrewRun; run != nil {
+		v.Status = run.Status
+		if run.Definition != nil {
+			v.Name = run.Definition.Name
+		}
+		for _, n := range run.Nodes {
+			v.Tokens += n.Tokens
+		}
+	} else if m := r.CrewMeeting; m != nil {
+		v.Status, v.Name, v.Tokens, v.Round = m.Status, m.Title, m.TokensUsed, m.Round
+	}
 }
 
 func (s *Service) FlowResult(ctx context.Context, token string, scope Scope, id string) (FlowResultView, error) {

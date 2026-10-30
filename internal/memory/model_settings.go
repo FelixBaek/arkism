@@ -607,12 +607,7 @@ func (s *Service) SwitchProviderModel(ctx context.Context, token string, in Prov
 // (or, with TestOnly, only tries it) on the host. The record keeps the last four.
 func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderKeyInput) (Record, error) {
 	in.Key = strings.TrimSpace(in.Key)
-	custom := in.Provider == "custom"
-	// A custom endpoint may need no key (a local server) and may carry extra headers; a known provider needs its key.
-	if !validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !(custom && in.Key == "" || validProviderKey(in.Key)) ||
-		!validNewKeyBaseURL(in.Provider, in.BaseURL) || custom && in.BaseURL == "" || len(in.Headers) > 0 && (!custom || !validProviderHeaders(in.Headers)) ||
-		!in.TestOnly && !validRunLabel(in.Name, 60) || in.TestOnly && in.Name != "" && !validRunLabel(in.Name, 60) ||
-		in.MonthlyBudgetUSD != nil && (*in.MonthlyBudgetUSD < 0 || *in.MonthlyBudgetUSD > 1e6) {
+	if !validProviderKeyTarget(in) || !validProviderKeyLabel(in) {
 		return Record{}, ErrInvalid
 	}
 	// The key may look like a secret; the name and address must not.
@@ -629,14 +624,8 @@ func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderK
 	}
 	req := ProviderRequest{ID: ID(), Kind: kind, Provider: in.Provider, Name: in.Name, Last4: in.Key[max(len(in.Key)-4, 0):], BaseURL: in.BaseURL,
 		MonthlyBudgetUSD: in.MonthlyBudgetUSD, Status: "pending", RequestedBy: d.PrincipalID}
-	var headers map[string]string
-	for _, h := range in.Headers {
-		if headers == nil {
-			headers = map[string]string{}
-		}
-		headers[h.Name] = h.Value
-		req.HeaderNames = append(req.HeaderNames, h.Name)
-	}
+	headers, names := heldProviderHeaders(in.Headers)
+	req.HeaderNames = names
 	if !in.TestOnly {
 		req.KeyID = "key_" + ID()
 	}
@@ -649,6 +638,34 @@ func (s *Service) AddProviderKey(ctx context.Context, token string, in ProviderK
 		s.providerKeys.putHeld(req.ID, in.Scope, in.Key, headers, time.Now())
 	}
 	return out, err
+}
+
+// validProviderKeyTarget checks the provider, key, address and headers. A custom endpoint may need
+// no key (a local server) and may carry extra headers; a known provider needs its key.
+func validProviderKeyTarget(in ProviderKeyInput) bool {
+	custom := in.Provider == "custom"
+	return !(!validScope(in.Scope) || !providerIDRe.MatchString(in.Provider) || !(custom && in.Key == "" || validProviderKey(in.Key)) ||
+		!validNewKeyBaseURL(in.Provider, in.BaseURL) || custom && in.BaseURL == "" || len(in.Headers) > 0 && (!custom || !validProviderHeaders(in.Headers)))
+}
+
+// validProviderKeyLabel checks the name (optional only for a test) and the monthly budget.
+func validProviderKeyLabel(in ProviderKeyInput) bool {
+	return !(!in.TestOnly && !validRunLabel(in.Name, 60) || in.TestOnly && in.Name != "" && !validRunLabel(in.Name, 60) ||
+		in.MonthlyBudgetUSD != nil && (*in.MonthlyBudgetUSD < 0 || *in.MonthlyBudgetUSD > 1e6))
+}
+
+// heldProviderHeaders returns the header values held for the runner and their names for the record; both nil when none.
+func heldProviderHeaders(hs []ProviderHeader) (map[string]string, []string) {
+	var headers map[string]string
+	var names []string
+	for _, h := range hs {
+		if headers == nil {
+			headers = map[string]string{}
+		}
+		headers[h.Name] = h.Value
+		names = append(names, h.Name)
+	}
+	return headers, names
 }
 
 // TestProviderModel queues a model test; no key travels, the runner uses what the host already has.
