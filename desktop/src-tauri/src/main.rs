@@ -252,6 +252,7 @@ fn model_roles(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
         v[key] = serde_json::Value::String(String::new());
         v[format!("{key}_saved")] = serde_json::Value::Bool(!secret.is_empty());
     }
+    v["ollama_models"] = serde_json::json!(runtime::ollama_models()); // the embedding and judge pickers list these instead of a typed name
     // 스킬 보안 검사: which optional engines this PC has, where the host looks by default (~/.local/bin).
     // shortcut: ignores ARKISM_SKILL_TOOLS_BIN and the per-engine overrides; read them if someone sets them.
     if let Some(home) = rt.home() {

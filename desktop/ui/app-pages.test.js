@@ -351,6 +351,24 @@ test("역할별 모델 › 판정 모델과 폴더 위치는 빠진 값을 알�
   app.fake.model_roles = saved;
 });
 
+// 직접 입력 금지: with this PC's Ollama list the embedding and judge models are picked, embedding models only for embedding.
+test("역할별 모델 picks Ollama models from the list and keeps what runs today", async () => {
+  const saved = app.fake.model_roles;
+  app.fake.model_roles = { ...saved, embed_model: "", picker_model: "", picker_url: "", ollama_models: ["qwen3:4b", "llama3.2:3b", "nomic-embed-text:latest", "qwen3-embedding:0.6b"] };
+  await settings("info"); await settings("roles");
+  const field = (label) => app.$(`.ag-roles [aria-label="${label}"]`);
+  const values = (label) => [...field(label).querySelectorAll("option")].map((o) => o.value);
+  assert.equal(field("임베딩 모델").tagName, "SELECT");
+  assert.deepEqual(values("임베딩 모델"), ["nomic-embed-text:latest", "qwen3-embedding:0.6b"]);
+  assert.equal(field("임베딩 모델").value, "qwen3-embedding:0.6b", "nothing saved: the default stays picked");
+  const judge = app.$('.ag-roles [aria-label="라우팅 판정 모델"]'); judge.value = "chat"; app.dom.fire(judge, "change"); await app.settle();
+  assert.deepEqual(values("판별 모델"), ["qwen3:4b", "llama3.2:3b"]);
+  app.fake.model_roles = { ...saved, ollama_models: [] }; // Ollama off: no list, so the name is typed
+  await settings("info"); await settings("roles");
+  assert.equal(field("임베딩 모델").tagName, "INPUT");
+  app.fake.model_roles = saved;
+});
+
 test("역할별 모델 reads the providers report again and shows how each model is connected", async () => {
   await settings("info"); await settings("roles");
   const picker = () => app.$('.ag-roles [aria-label="AI 도구 기본 모델"]');

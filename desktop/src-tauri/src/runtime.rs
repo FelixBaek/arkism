@@ -2019,14 +2019,18 @@ fn ready(server: &str) -> bool {
 const OLLAMA_URL: &str = "http://127.0.0.1:11434";
 const OLLAMA_MODEL: &str = "qwen3-embedding:0.6b";
 
+/// The models this computer's Ollama has (empty when it does not answer), for 역할별 모델's pickers.
+pub fn ollama_models() -> Vec<String> {
+    let reply = http_agent(Duration::from_secs(2)).get(&format!("{OLLAMA_URL}/api/tags")).call();
+    let Ok(mut reply) = reply else { return vec![] };
+    let Ok(tags) = reply.body_mut().read_json::<serde_json::Value>() else { return vec![] };
+    let names = tags["models"].as_array().map(|models| models.iter().filter_map(|m| m["name"].as_str().or(m["model"].as_str())).map(str::to_string).collect());
+    names.unwrap_or_default()
+}
+
 /// Ollama answers on this computer and has this embedding model.
 fn ollama_ready(model: &str) -> bool {
-    let reply = http_agent(Duration::from_secs(2)).get(&format!("{OLLAMA_URL}/api/tags")).call();
-    let Ok(mut reply) = reply else { return false };
-    let Ok(tags) = reply.body_mut().read_json::<serde_json::Value>() else { return false };
-    tags["models"].as_array().is_some_and(|models| {
-        models.iter().any(|m| m["name"].as_str().or(m["model"].as_str()).is_some_and(|n| n == model || n == format!("{model}:latest")))
-    })
+    ollama_models().iter().any(|n| n == model || *n == format!("{model}:latest"))
 }
 
 fn port_free(port: u16) -> bool {

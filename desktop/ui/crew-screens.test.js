@@ -253,7 +253,8 @@ test("inline card edits change cron, model and text values", async () => {
   const sel = node("ai1").querySelector("select.g-inline");
   // the 설정 › 역할별 모델 picker: 기본·자동 first, then one group per provider with all its connection badges, saving the plain model name
   assert.deepEqual([...sel.querySelectorAll("optgroup")].map((g) => `${g.label}:${g.dataset.badges}`), ["Anthropic:MAX,API", "OpenAI:"]);
-  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "sonnet", "haiku", "gpt-5"]);
+  assert.deepEqual([...sel.querySelectorAll("option")].slice(1).map((o) => o.value), ["auto", "\u0000sub", "sonnet", "haiku", "\u0000api", "gpt-5"]); // subscription models, then API-key ones, each under a heading
+  assert.equal([...sel.options].find((o) => o.value === "\u0000sub").disabled, true);
   sel.value = sel.options[sel.options.length - 1].value; dom.fire(sel, "change"); await h.settle();
   rowOf("ai1", "모델").click(); await h.settle();
   const sel2 = node("ai1").querySelector("select.g-inline");

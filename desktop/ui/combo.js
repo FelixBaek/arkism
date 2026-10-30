@@ -18,6 +18,7 @@
       let og = null;
       for (const o of ctl.options) {
         if (o.hidden) continue;
+        if (o.dataset.section != null) { rows.push({ section: o.textContent, disabled: true }); og = null; continue; } // a heading over several groups (model-pick.js 구독 / API)
         const g = o.parentElement.tagName === "OPTGROUP" ? o.parentElement : null;
         if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, logo: g.logo, badges: g.dataset.badges || "", disabled: true });
         og = g;
@@ -75,6 +76,7 @@
       }
     }
     const rows = open.items.map((o, i) => {
+      if (o.section) { const h = document.createElement("div"); h.className = "combo-section"; h.setAttribute("role", "presentation"); h.textContent = o.section; return h; }
       if (o.head) {
         const h = document.createElement("div"); h.className = "combo-head"; h.setAttribute("role", "presentation");
         const m = o.logo ? o.logo.cloneNode(true) : window.ArkismBrand?.mark(o.icon); // the provider's logo before its name
