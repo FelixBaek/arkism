@@ -67,6 +67,10 @@ func TestCandidateExpirySelectionAndIdempotence(t *testing.T) {
 	if len(f.repo.rows("memories")) != 0 || len(f.repo.rows("jobs")) != 0 {
 		t.Fatal("expiry created memory/job")
 	}
+	// #466: one count per expired candidate; a person's run of the expiry is not "automatic".
+	if got := decisionsOf(f.repo, "candidate_expired"); len(got) != 2 || got[0].Audit.ReasonCode != "" {
+		t.Fatalf("expiry decisions: %+v", got)
+	}
 }
 func TestCandidateExpiryGuardsAndRollback(t *testing.T) {
 	f := newFixture(t)

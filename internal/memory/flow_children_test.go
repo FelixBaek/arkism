@@ -85,6 +85,10 @@ func TestFlowChildrenCancelWaitsForDescendantsAndCannotApproveAfterStop(t *testi
 	h.call("POST", "/v1/crew/runs/"+run.ID+"/stop", f.human, FlowStopInput{Scope: scopeA, ExpectedRevision: result.Revision}, 200, &run)
 	decision := CrewRunDecisionInput{Scope: scopeA, ExpectedRevision: run.Revision, NodeID: result.Waiting.NodeID, Approve: true}
 	h.call("POST", "/v1/crew/runs/"+run.ID+"/decision", f.human, decision, 409, nil)
+	requireDecision(t, f.repo, "flow_cancelled", "") // #466: a person's stop; the refused approval is not counted
+	if len(decisionsOf(f.repo, "flow_approved")) != 0 {
+		t.Fatal("a refused approval was counted")
+	}
 	if e := engine.Drive(testCtx, run.ID); e != nil {
 		t.Fatal(e)
 	}

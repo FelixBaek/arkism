@@ -58,7 +58,7 @@ function setup({ handler, data = tools(), tauri = null } = {}) {
     renderStatusCard: () => log.push("status"), render: (x) => log.push(["render", x]), renderDetail: () => log.push("detail"), openDetail: () => log.push("open"),
     notice: (t) => notices.push(t),
     headExtras: (x) => log.push(["head", x]),
-    keepFocus: (sel) => { log.push(["keep", sel]); return () => log.push("restored"); },
+    keepFocus: () => { log.push(["keep"]); return () => log.push("restored"); },
     shownAgents: () => AGENTS.slice(0, 3),
     panelSearch: (ph) => { const w = h.el("div", "v4s-search"), i = h.el("input"); i.placeholder = ph; w.append(i); return w; },
     filterMenu: (key, groups) => Object.assign(h.el("div", "v4s-filter"), { key, groups }),
@@ -228,15 +228,16 @@ test("server detail: facts, switches, tools with more, calls, history, skills, w
   assert.match(d.textContent, /연결된 스킬2개/);
   await until(() => d.querySelectorAll(".cn-sec").some((x) => x.textContent.startsWith("스크립트") && !x.hidden));
   assert.match(d.textContent, /scripts\/run\.sh/);
+  assert.match(d.textContent, /스크립트 목록을 불러오지 못했어요/, "k2's failed read says so instead of hiding (#465)");
   assert.match(d.textContent, /최근 요청3건/);
   assert.match(d.textContent, /Codex 끄기방금 · denied/);
   assert.equal(btn(d, "다시 연결").textContent, "다시 연결");
-  // Cached scripts: a second detail does not ask again; a server change does.
+  // Cached scripts: a second detail asks again only for k2, whose read failed (#465); a server change asks for both.
   const before = s.calls.length;
   s.v.toolDetail(gh); await flush();
-  assert.equal(s.calls.length, before);
+  assert.equal(s.calls.length, before + 1);
   s.state.server = "other"; s.v.toolDetail(gh); await flush();
-  assert.equal(s.calls.length, before + 2);
+  assert.equal(s.calls.length, before + 3);
   // A context change while a script answer is out drops it.
   s.state.server = "third";
   s.v.toolDetail(gh);

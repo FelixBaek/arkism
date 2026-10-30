@@ -73,7 +73,7 @@ var (
 	reviewCandidates = candidates
 	reviewApprove    = approveRef
 	claudeRun        = claudeCLI
-	coin             = rand.Float64
+	coin             = rand.Float64 // math/rand: only shuffles A/B order against judge position bias, not a secret
 )
 
 func reviewHTTP(method, path string, payload any, tokenFile string) (map[string]any, error) {
@@ -276,7 +276,8 @@ func automatedCheck(item map[string]any, state string) []string {
 
 // claudeCLI is a text-only `claude -p` on the subscription login, without user settings, hooks, MCP or CLAUDE.md.
 func claudeCLI(prompt, system, schema string) (any, error) {
-	cmd := []string{"-p", prompt, "--model", evalModel, "--setting-sources", "", "--strict-mcp-config",
+	// The prompt goes on stdin: eval prompts come from skill files and one starting with "-" would be read as a flag.
+	cmd := []string{"-p", "--model", evalModel, "--setting-sources", "", "--strict-mcp-config",
 		"--tools", "", "--no-session-persistence", "--output-format", "json"}
 	if system != "" {
 		cmd = append(cmd, "--append-system-prompt", system)
@@ -294,6 +295,7 @@ func claudeCLI(prompt, system, schema string) (any, error) {
 	c := exec.CommandContext(ctx, "claude", cmd...)
 	c.WaitDelay = time.Second // a grandchild holding the pipe must not outlive the timeout
 	c.Dir = dir
+	c.Stdin = strings.NewReader(prompt)
 	var stdout, stderr strings.Builder
 	c.Stdout, c.Stderr = &stdout, &stderr
 	if err := c.Run(); err != nil && ctx.Err() != nil {

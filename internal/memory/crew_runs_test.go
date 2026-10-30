@@ -296,6 +296,11 @@ func TestCrewRunApprovalOutputAndLoopBack(t *testing.T) {
 	if _, err = f.svc.DecideCrewRun(testCtx, f.human, r.ID, CrewRunDecisionInput{Scope: scopeA, ExpectedRevision: wr.Revision, NodeID: "ok", Approve: true}); err != nil {
 		t.Fatal("the second round could not be decided", err)
 	}
+	// #466: each round is counted, the rejection with the person's note.
+	if d := requireDecision(t, f.repo, "flow_rejected", "approval"); d.Audit.Reason != "아직" {
+		t.Fatalf("rejection note = %q", d.Audit.Reason)
+	}
+	requireDecision(t, f.repo, "flow_approved", "approval")
 }
 
 // 실패한 곳부터 다시: a person may start a run with the finished nodes of a

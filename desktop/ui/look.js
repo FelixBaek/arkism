@@ -50,7 +50,7 @@ window.ArkismLook = (() => {
     e.preventDefault();
   };
   document.addEventListener("keydown", zoomKeys);
-  window.addEventListener("arkism-popout", (e) => /** @type {CustomEvent<Window>} */ (e).detail.addEventListener("keydown", zoomKeys)); // a popout window dresses as this one, so only the keys
+  (window.ArkismPopoutSetup ||= {}).zoomKeys = (d) => d.addEventListener("keydown", zoomKeys); // a popout window (popup-drag.js) dresses as this one, so only the keys
   apply();
   return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP };
 })();

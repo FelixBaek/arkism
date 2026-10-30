@@ -1,7 +1,9 @@
 name: Lint Go
 
 # golangci-lint with the small linter set in .golangci.yml (errcheck, govet, staticcheck,
-# ineffassign, unused). Same runner choice as checks.yml: outside code stays on GitHub-hosted runners.
+# ineffassign, unused, gocognit, predeclared, usetesting). Findings are limited to code changed
+# since the merge base with origin/main (issues.new-from-merge-base), so the job needs full
+# history and that ref. Same runner choice as checks.yml: outside code stays on GitHub-hosted runners.
 
 on:
   push:
@@ -24,6 +26,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Make origin/main available for the merge base
+        run: git rev-parse --verify -q origin/main >/dev/null || git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod

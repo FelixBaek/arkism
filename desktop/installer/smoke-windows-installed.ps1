@@ -54,6 +54,7 @@ function Get-InstalledSmokeTree([string]$Root, [string]$Directory) {
   Assert-InstalledSmokeDirectory $Directory
   foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
     $attrs = Get-InstalledSmokeAttributes $path
+    if (Test-InstalledSmokeOsCacheLink $path $attrs) { continue }
     if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw "smoke_tree_changed: $path" }
     if ($attrs -band [IO.FileAttributes]::Directory) { Get-InstalledSmokeTree $Root $path; continue }
     [pscustomobject]@{ Path = $path.Substring($Root.Length + 1).Replace('\', '/'); Sha256 = Get-InstalledSmokeHash $path }
@@ -402,10 +403,20 @@ function Test-InstalledSmokeInteger($Value) {
   return $Value -is [int] -or $Value -is [long]
 }
 
+# Windows adds this legacy cache junction to any profile that loads WinINet; walks skip it without following,
+# and cleanup removes only the link.
+function Test-InstalledSmokeOsCacheLink([string]$Path, $Attributes) {
+  $link = [IO.FileAttributes]::Directory -bor [IO.FileAttributes]::ReparsePoint
+  return $null -ne $Attributes -and ($Attributes -band $link) -eq $link -and
+    [IO.Path]::GetFileName($Path) -ceq 'Content.IE5' -and
+    ([IO.Path]::GetDirectoryName($Path)).EndsWith('\AppData\Local\Microsoft\Windows\INetCache', [StringComparison]::OrdinalIgnoreCase)
+}
+
 function Assert-InstalledSmokeTree([string]$Directory) {
   Assert-InstalledSmokeDirectory $Directory
   foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
     $attrs = Get-InstalledSmokeAttributes $path
+    if (Test-InstalledSmokeOsCacheLink $path $attrs) { continue }
     if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw "smoke_tree_changed: $path" }
     if ($attrs -band [IO.FileAttributes]::Directory) { Assert-InstalledSmokeTree $path }
   }
@@ -448,6 +459,8 @@ function Clear-InstalledSmokeOwnedReadOnly([string]$Directory) {
   Assert-InstalledSmokeDirectory $Directory
   foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
     $attrs = Get-InstalledSmokeAttributes $path
+    # Remove the cache link itself before the recursive delete so no runtime has to decide whether to follow it.
+    if (Test-InstalledSmokeOsCacheLink $path $attrs) { [IO.Directory]::Delete($path); continue }
     if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
     if ($attrs -band [IO.FileAttributes]::Directory) { Clear-InstalledSmokeOwnedReadOnly $path }
     Clear-InstalledSmokeReadOnlyEntry $path ([bool]($attrs -band [IO.FileAttributes]::Directory))
@@ -481,6 +494,7 @@ function Get-InstalledSmokeTreeAttributes([string]$Directory) {
   Get-InstalledSmokeAttributes $Directory
   foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($Directory)) {
     $attrs = Get-InstalledSmokeAttributes $path
+    if (Test-InstalledSmokeOsCacheLink $path $attrs) { continue }
     if ($null -eq $attrs -or ($attrs -band [IO.FileAttributes]::ReparsePoint)) { throw 'smoke_tree_changed' }
     if ($attrs -band [IO.FileAttributes]::Directory) { Get-InstalledSmokeTreeAttributes $path }
     else { $attrs }

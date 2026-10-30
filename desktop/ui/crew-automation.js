@@ -800,13 +800,14 @@ window.ArkismAutomation = (h) => {
           const known = st.known[b.id];
           if (known === undefined) {
             st.known[b.id] = null;
-            request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`).then((r) => r.items || [], () => []).then((items) => { st.known[b.id] = items; if (alive()) paint(); });
+            const got = (items) => { st.known[b.id] = items; if (alive()) paint(); };
+            request(`/v1/discord/bots/${encodeURIComponent(b.id)}/channels?${query()}`).then((r) => got(r.items || []), () => got(false)); // false: failed, not "no channels" (#465)
           }
           const row = el("div", "auto-row");
           const botSel = h.select(bots.map((x) => [x.id, x.name || x.id]), b.id);
           botSel.setAttribute("aria-label", "봇");
           botSel.addEventListener("change", () => { f.bot = botSel.value; paint(); });
-          const chSel = h.select([["", known ? "채널 고르기" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "");
+          const chSel = h.select([["", known ? "채널 고르기" : known === false ? "채널을 불러오지 못했어요" : "채널 불러오는 중…"], ...(known || []).map((c) => [c.channel_id, `#${c.name}${c.parent ? ` · ${c.parent}` : ""}`])], "");
           chSel.setAttribute("aria-label", "채널");
           row.append(botSel, chSel, el("span", "grow"), pill("연결", async () => {
             const id = chSel.value;
@@ -816,6 +817,7 @@ window.ArkismAutomation = (h) => {
             st.add = null;
             saveBot(b, [...(b.channels || []).filter((x) => x.channel_id !== id), ch], "채널을 연결했어요.").catch(() => {});
           }));
+          if (known === false) row.append(link("다시 시도", () => { delete st.known[b.id]; paint(); }));
           rows.push(row);
         }
         return { rows, count: mine.length };
@@ -856,15 +858,15 @@ window.ArkismAutomation = (h) => {
             kind.setAttribute("aria-label", "메신저");
             kind.addEventListener("change", () => { c.kind = kind.value; const m = (st.dests || []).find((x) => x.channel === c.kind); c.channel = m && m.name !== "default" ? m.name : ""; touch(); paint(); }); // the old kind's place is not valid here: take the first one the picker shows
             // 보낼 곳 = a destination already set up in 설정 › 메신저 (GET /v1/messengers), picked, never typed.
-            if (st.dests === undefined) { st.dests = null; request(`/v1/messengers?${query()}`).then((x) => x.destinations || [], () => []).then((x) => { st.dests = x; if (alive()) paint(); }); }
+            if (st.dests === undefined) { st.dests = null; const got = (x) => { st.dests = x; if (alive()) paint(); }; request(`/v1/messengers?${query()}`).then((x) => got(x.destinations || []), () => got(false)); } // false: failed, so it never reads as "connect one first" (#465)
             const mine = (st.dests || []).filter((x) => x.channel === c.kind);
             const destName = (x) => (x.name === "default" ? (c.kind === "telegram" ? "나에게 (기본)" : "기본 채널") : `#${x.name}`);
-            const opts = st.dests === null ? [["", "불러오는 중…"]] : mine.length ? mine.map((x) => [x.name === "default" ? "" : x.name, destName(x)]) : [["", "설정 › 메신저에서 먼저 연결해요"]];
+            const opts = st.dests === null ? [["", "불러오는 중…"]] : st.dests === false ? [["", "보낼 곳을 불러오지 못했어요"]] : mine.length ? mine.map((x) => [x.name === "default" ? "" : x.name, destName(x)]) : [["", "설정 › 메신저에서 먼저 연결해요"]];
             const ch = h.select(opts, opts.some(([v]) => v === (c.channel || "").replace(/^#/, "")) ? (c.channel || "").replace(/^#/, "") : opts[0][0]);
             ch.setAttribute("aria-label", "채널");
             ch.disabled = !mine.length;
             ch.addEventListener("change", () => { c.channel = ch.value; touch(); editing = -1; paint(); });
-            r.append(kind, ch, ...(st.dests && !mine.length ? [link("설정 열기", () => leave(() => window.dispatchEvent(new CustomEvent("arkism:open-settings", { detail: { tab: "messenger" } }))))] : []), el("span", "grow"), ...note, when, del);
+            r.append(kind, ch, ...(st.dests === false ? [link("다시 시도", () => { st.dests = undefined; paint(); })] : []), ...(st.dests && !mine.length ? [link("설정 열기", () => leave(() => window.dispatchEvent(new CustomEvent("arkism:open-settings", { detail: { tab: "messenger" } }))))] : []), el("span", "grow"), ...note, when, del);
           }
           list.append(r);
         });
@@ -885,7 +887,8 @@ window.ArkismAutomation = (h) => {
           list.append(...bot.rows);
         }
       }
-      if (!creating) request(`/v1/discord?${query()}`).then((r) => { st.bots = (r.bots || []).map(botOf); }, () => { st.bots = []; }).then(() => { if (alive()) paint(); });
+      const got = (bots) => { st.bots = bots; if (alive()) paint(); };
+      if (!creating) request(`/v1/discord?${query()}`).then((r) => got((r.bots || []).map(botOf)), () => got([]));
       paint();
       s.append(head2, list);
       return s;
@@ -1103,7 +1106,8 @@ window.ArkismAutomation = (h) => {
         if (!items?.length) vbox.append(el("p", "auto-hint auto-empty", items ? "버전 기록을 불러오지 못했어요." : "불러오는 중…"));
       };
       paintVersions();
-      request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${query()}`).then((r) => { items = r.items || []; }).catch(() => { items = []; }).then(() => { if (pop?.dialog.isConnected) paintVersions(); });
+      const got = (v) => { items = v; if (pop?.dialog.isConnected) paintVersions(); };
+      request(`/v1/crew/versions/${encodeURIComponent(rec.id)}?${query()}`).then((r) => got(r.items || []), () => got([]));
       body.append(ver);
       const sec = el("section", "auto-sec");
       const head2 = el("div", "wf-sec-head");

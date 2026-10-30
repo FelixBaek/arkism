@@ -492,6 +492,10 @@ test("고급: ComfyUI address, settings transfer, doctor, backups and erase", as
   app.fake.local_backups = { backups: [] };
   await settings("advanced");
   assert.match(table(), /아직 백업이 없어요/);
+  app.fake.search_mode = new Error("x"); // a failed check says so instead of staying on "확인하는 중…"
+  await settings("advanced");
+  assert.match(table(), /검색 방식을 확인하지 못했어요/);
+  assert.doesNotMatch(table(), /확인하는 중…/);
   const clear = find("기록 지우기");
   if (clear) { clear.click(); await app.settle(); assert.match(notice(), /속도 기록을 지웠어요/); }
   answers.push(false); await press("가져오기");
@@ -554,7 +558,10 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   const sel = (label) => roles().querySelector(`[aria-label="${label}"]`);
   const choose = async (label, value) => { sel(label).value = value; app.dom.fire(sel(label), "change"); await app.settle(); };
   assert.doesNotMatch(text(roles()), /서버가 정함/);
-  assert.equal(sel("스킬 판정 모델").options[0].textContent, "서버 기본값 (Clef)");
+  // the first option names what the server runs: its own engines, and the models the host reported
+  assert.equal(sel("스킬 판정 모델").options[0].textContent, "서버 기본값 · Clef");
+  assert.equal(sel("반성·검토 모델").options[0].textContent, "서버 기본값 · Claude Sonnet");
+  assert.equal(sel("스킬 요약 모델").options[0].textContent, "서버 기본값 · 스킬 설명 그대로");
   assert.equal(sel("기억 추출 모델").value, "anthropic|claude-haiku-4-5"); // the preview's pick
   assert.ok(sel("임베딩 모델").disabled);
   await choose("스킬 판정 모델", "jev");
@@ -574,6 +581,15 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.equal(roles().querySelector('[aria-label="Cisco Skill Scanner"]'), null); // not installed on this server
   await press("최근 판정", roles());
   assert.match(notice(), /라우팅 현황/);
+  // a server without role_defaults has no POST /v1/providers/role_model: no picker that would snap back
+  providersPatch = (d) => { delete d.role_defaults; delete d.role_options; };
+  try {
+    for (let i = 0; i < 2; i++) { await settings("info"); await settings("roles"); }
+    assert.equal(sel("스킬 판정 모델"), null);
+    assert.match(text(roles()), /서버가 정함/);
+  } finally { providersPatch = null; }
+  await settings("info"); await settings("roles"); await settings("info"); await settings("roles");
+  assert.ok(sel("스킬 판정 모델"));
   await settings("advanced");
   assert.doesNotMatch(text(app.$("#table")), /지금 백업/);
   await settings("connect");

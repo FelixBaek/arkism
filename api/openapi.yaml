@@ -2972,7 +2972,7 @@
     },
     "/v1/{collection}": {
       "post": {
-        "summary": "Create source, candidate, run, call, evaluation, reflection, relation or skill version. No direct memory/active writes.",
+        "summary": "Create source, candidate, run, call, evaluation, reflection, relation, skill version or shared evaluation record (eval_tasks, eval_runs, eval_trials, judge_calibrations; an eval_trials record relates to one eval_tasks and one eval_runs record). No direct memory/active writes.",
         "parameters": [
           {
             "name": "collection",
@@ -3632,7 +3632,7 @@
             }
           }
         },
-        "description": " Direct memories transition to superseded is invalid; use /v1/memories/{id}/supersede to create atomic replacement links. Evaluations used as verification evidence must have current valid sources and direct relations. Deleted, stale, inactive or expired supporting records invalidate the evaluation for this use; summaries return no partial result. Target identity/revision and evaluator independence checks remain unchanged. This is not recursive graph validation or physical cascade deletion."
+        "description": "Body {scope, expected_revision, status, reason_code, reason}. reason_code (stale|changed|unused|wrong|duplicate) with an optional reason note is allowed only for memories moving to rejected; it is stored as removal {code, note, by, at} and the memory leaves recall but stays in history. Direct memories transition to superseded is invalid; use /v1/memories/{id}/supersede to create atomic replacement links. Evaluations used as verification evidence must have current valid sources and direct relations. Deleted, stale, inactive or expired supporting records invalidate the evaluation for this use; summaries return no partial result. Target identity/revision and evaluator independence checks remain unchanged. This is not recursive graph validation or physical cascade deletion."
       }
     },
     "/v1/skills/{id}/apply": {
@@ -3772,6 +3772,184 @@
           }
         },
         "description": "버전 활성화는 상위 스킬의 active·미만료 상태와 유효한 출처도 요구한다. 빈 version_id로 활성 연결만 해제하는 rollback은 상위 출처 철회 후에도 허용한다. 적용 후의 상위/이전 버전 변경이 선택 버전의 평가 직접 근거를 무효화하면 전체 트랜잭션을 409로 취소한다."
+      }
+    },
+    "/v1/skill_versions/{id}/zip": {
+      "get": {
+        "description": "Requires read:skill_versions and read:sources for the same version and its source; a stale source or bundle answers 409.",
+        "summary": "Export a skill version as a zip: SKILL.md and its bundle's text companions; hash-only companions are named in OMITTED.txt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "description": "json answers {filename, content_base64} instead of the zip bytes",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "json"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Zip archive, or with format=json the same bytes as base64",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "filename",
+                    "content_base64"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "filename": {
+                      "type": "string"
+                    },
+                    "content_base64": {
+                      "type": "string",
+                      "contentEncoding": "base64"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/skills/{id}/availability": {
@@ -4995,7 +5173,7 @@
               }
             }
           }}}},
-    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss|forget_both}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing, forget_both (contradiction only, 400 otherwise) rejects both and keeps them as history (status forgotten). A signal proposal takes accept or dismiss only (swap 400) and neither changes the memory. accept, swap and forget_both run the conflict path's mark and resolve (second_supersedes_first, or reject_both) with the proposal close in one transaction and need transition:memories on both memories. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
+    "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss|forget_keep|forget_retire|forget_both|forget, reason_code, reason}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. forget_keep, forget_retire and forget_both (pair proposals) and forget (signal proposals) reject the named memories with a removal {code, note, by, at} and keep them as history (status forgotten); they require reason_code stale|changed|unused|wrong|duplicate, which every other decision must leave empty (400). A signal proposal takes accept, dismiss or forget (swap 400); accept and dismiss do not change the memory. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction; every decision that changes memories needs transition:memories on each of them. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -7441,7 +7619,31 @@
           }}}
     },
     "/v1/routing/skills": {
-      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?}}: newest 200, skill ids and names only, never the query.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+      "get": {"summary": "Recent route_skills decisions (read:routing)", "description": "{items[]{id, at, selected?, selected_name?, confirmed, provider, degraded?, candidates, runtime?, loaded?, outcome?, rival?, rival_name?}}: newest 200, skill ids and names only, never the query. loaded is the version the agent then loaded; outcome is its skill.usage status. rival is another judged candidate that also fit (suitability 2+, confidence 0.5+) but was not picked.", "responses": {"200": {"description": "Decisions"}, "400": {"description": "invalid_request"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
+    "/v1/routing/skills/{id}/use": {
+      "post": {"summary": "Report the load and outcome of a route_skills decision (search:skill_versions, the principal that routed)", "description": "Body {scope, event, version_id}. event loaded records the loaded skill version; then one skill.usage status (success, failure, cancelled, validation_failed) for that same version ends the decision. Returns the decision item.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Decision item"}, "400": {"description": "invalid_request"}, "403": {"description": "Not the principal that routed"}, "404": {"description": "No such decision"}, "409": {"description": "Outcome already reported or not loaded"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -7950,6 +8152,54 @@
             }
           }}}
     },
+    "/v1/decisions/summary": {
+      "get": {"summary": "Counts of people's and the AI's decisions by kind, reason code and period (read:routing, human principals only)", "description": "Query period=day|week|month (default week), days=1-366 (default 30). Kinds: skill_trashed, skill_restored, skill_rolled_back, skill_version_rejected, skill_improvement_rejected, candidate_approve|edit_approve|reject, candidate_expired, dreaming_<decision>, merge_<decision>, conflict_resolved, wiki_approve|reject, flow_approved, flow_rejected, flow_cancelled, skill_routed, skill_route_loaded, role_model_changed, agent_tool_on|off, ai_help_accepted|discarded. reason_code is empty when none applies; automatic marks a decision a service made. Counts are kept per day apart from audit_events, so audit retention does not lower them.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "period", "in": "query", "schema": {"type": "string", "enum": ["day", "week", "month"]}}, {"name": "days", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 366}}], "responses": {"200": {"description": "{authority, period, from, rows[{period (first day, YYYY-MM-DD UTC), kind, reason_code, count}]}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
+    "/v1/decisions": {
+      "post": {"summary": "Record a decision only the desktop sees (write:crew, human principals only)", "description": "Body {scope, kind ai_help_accepted|ai_help_discarded, target_id}: whether the person followed the AI help's advice on a candidate. Any other kind is refused.", "responses": {"200": {"description": "{recorded: true}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
     "/v1/usage/summary": {
       "get": {"summary": "사용량 화면 집계 (read:routing)", "description": "Query range=today|7d|30d|90d|all (default 30d), source=agent?. Returns kpi, by_day, projects, models, by_agent, agents, hours, shape, tools, skills, top_sessions, latest, requests, authority.", "responses": {"200": {"description": "Summary"}, "400": {"description": "invalid_request"},
           "401": {
@@ -8435,7 +8685,7 @@
     "/v1/memory_candidates/{id}/review": {
       "post": {
         "summary": "Human approve, edit-and-approve or reject",
-        "description": "Requires transition:memory_candidates and human role, with ContentSafe policy decision. Approval atomically updates candidate, inserts active memory with same ID and next candidate revision, queues embedding and writes audit. Edit preserves original proposal and sources; drops stale summary/keywords/embedding on new memory. Reject requires reason and can dispose of candidates with broken sources. Already reviewed or revision conflict returns 409. Input secrets return 422. Legacy /transition remains a separate two-step client contract backed by the same transition engine. Policy content_safe=true is mandatory; false returns 403; omitted decision fields return 503. Review/list permission alone does not grant transition permission. Legacy records may lack review metadata.",
+        "description": "Requires transition:memory_candidates and human role, with ContentSafe policy decision. Approval atomically updates candidate, inserts active memory with same ID and next candidate revision, queues embedding and writes audit. Edit preserves original proposal and sources; drops stale summary/keywords/embedding on new memory. Reject requires reason or reason_code (stale|changed|unused|wrong|duplicate; reject only) and can dispose of candidates with broken sources. Already reviewed or revision conflict returns 409. Input secrets return 422. Legacy /transition remains a separate two-step client contract backed by the same transition engine. Policy content_safe=true is mandatory; false returns 403; omitted decision fields return 503. Review/list permission alone does not grant transition permission. Legacy records may lack review metadata.",
         "parameters": [
           {
             "name": "id",
@@ -8632,7 +8882,7 @@
           }}}
     },
     "/v1/memory_candidates/classification_report": {
-      "get": {"summary": "How often people decided against the AI risk call", "description": "Needs review:memory_candidates. Counts the newest 1000 approved and 1000 rejected candidates per AI risk at decision time (none when unclassified), skipping decisions no person made (service review policies, capture auto-approval). overturned = approved while high, or rejected while low. Error rate per risk = overturned / decided.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{decided: {risk: n}, overturned: {risk: n}}"}, "403": {"description": "No review:memory_candidates permission"},
+      "get": {"summary": "How often people decided against the AI risk call", "description": "Needs review:memory_candidates. Counts the newest 1000 approved and 1000 rejected candidates per AI risk at decision time (none when unclassified), skipping decisions no person made (service review policies, capture auto-approval). overturned = approved while high, or rejected while low. reject_reasons counts rejected candidates by reason_code (none when absent). Error rate per risk = overturned / decided.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "schema": {"type": "string"}}], "responses": {"200": {"description": "{decided: {risk: n}, overturned: {risk: n}}"}, "403": {"description": "No review:memory_candidates permission"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -38392,6 +38642,10 @@
           },
           "authority": {
             "const": "data_only_untrusted"
+          },
+          "route_id": {
+            "type": "string",
+            "description": "The kept decision; report its load and outcome at /v1/routing/skills/{id}/use. Absent when the decision could not be kept."
           }
         },
         "required": [
@@ -40051,7 +40305,7 @@
         "required": [
           "eval_type"
         ],
-        "description": "Required for new evaluations only. user_rating: human; automated_check: service/pipeline; model_self: agent/service/pipeline evaluating their own target. Independent evaluations require a different principal. Scores are optional but must be paired with a finite positive score_max and lie within [0,score_max]. Omitted passed means unrated. model_self never verifies skills or reflections.",
+        "description": "Required for new evaluations only. user_rating: human; automated_check: service/pipeline; model_self: agent/service/pipeline evaluating their own target; llm_judge: service/pipeline, and calibration_ref (a judge_calibrations record) is required with it and forbidden otherwise. Independent evaluations require a different principal. Scores are optional but must be paired with a finite positive score_max and lie within [0,score_max]. Omitted passed means unrated. model_self and llm_judge never verify skills or reflections; llm_judge is counted in summary groups but never preferred. spec_ref (eval_tasks), trial_ref (eval_trials) and calibration_ref must name the exact current revision of a live record in the same scope, read by the same principal; a stale ref fails 409 and invalidates the evaluation as evidence.",
         "properties": {
           "comparison_report": {"$ref": "#/components/schemas/SkillComparisonReport"},
           "eval_type": {
@@ -40059,9 +40313,13 @@
             "enum": [
               "user_rating",
               "automated_check",
-              "model_self"
+              "model_self",
+              "llm_judge"
             ]
           },
+          "spec_ref": {"$ref": "#/components/schemas/Ref"},
+          "trial_ref": {"$ref": "#/components/schemas/Ref"},
+          "calibration_ref": {"$ref": "#/components/schemas/Ref"},
           "passed": {
             "type": "boolean"
           },
@@ -44497,6 +44755,9 @@
           },
           "reject_score": {
             "type": "number"
+          },
+          "removal": {
+            "$ref": "#/components/schemas/WireResponseRemoval"
           }
         },
         "additionalProperties": false,
@@ -46207,6 +46468,12 @@
           },
           "policy_decision_id": {
             "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -46898,6 +47165,9 @@
           },
           "overturned": {
             "type": "boolean"
+          },
+          "reason_code": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -47720,6 +47990,10 @@
           "done_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "zip": {
+            "type": "string",
+            "description": "skill_install from a zip file (base64); Name is the file name. Cleared once applied"
           }
         },
         "additionalProperties": false,
@@ -51280,6 +51554,15 @@
           },
           "score_max": {
             "type": "number"
+          },
+          "spec_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "trial_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "calibration_ref": {
+            "$ref": "#/components/schemas/WireResponseRef"
           }
         },
         "additionalProperties": false,
@@ -52503,6 +52786,12 @@
             "type": "string"
           },
           "version_id": {
+            "type": "string"
+          },
+          "reason_code": {
+            "type": "string"
+          },
+          "reason": {
             "type": "string"
           }
         },
@@ -55802,6 +56091,18 @@
           },
           "runtime": {
             "type": "string"
+          },
+          "loaded": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "rival": {
+            "type": "string"
+          },
+          "rival_name": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -57711,6 +58012,33 @@
         "x-go-type": "memory.MemoryWorkCounts",
         "x-go-source": "internal/memory/memory_signal.go",
         "description": "MemoryWorkCounts are the host-observed work results of the sessions a memory\nwas delivered to: one session counts once, by the last test and CI result the\nhost saw in it (#356). Counts only, never commands or output."
+      },
+      "WireResponseRemoval": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "by",
+          "at"
+        ],
+        "x-go-type": "memory.Removal",
+        "x-go-source": "internal/memory/removal.go",
+        "description": "Removal is why a person removed a memory: it stays in history (status rejected) with this note."
       }
     },
     "headers": {

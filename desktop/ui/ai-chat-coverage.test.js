@@ -179,7 +179,7 @@ test("bubble: capped to the room above when docked, below otherwise, so the firs
   } finally { Element.prototype.getBoundingClientRect = rect; globalThis.innerHeight = h; }
 });
 
-test("field: fills, polishes, trims one-line answers, undoes and reports failures", async () => {
+test("field: previews a fill beside the original, 저장 applies, 취소 drops only the preview, and reports failures", async () => {
   const replies = [];
   const kit = {
     assist: async (kind, prompt) => { assert.equal(kind, "json"); kit.last = prompt; return replies.shift(); },
@@ -195,13 +195,15 @@ test("field: fills, polishes, trims one-line answers, undoes and reports failure
   const star = fa.querySelector(".ex-ai-spark");
   await star.click(); await flush();
   assert.ok(fa.querySelector(".ex-ai-note.err").textContent.includes("AI 도움을 쓸 수 없어요."));
-  // api.kit is the fallback; empty field writes from context; execCommand types the text
+  // api.kit is the fallback; empty field writes from context as a preview; 저장 types it in with execCommand
   AI.kit = kit;
   doc.execCommand = (cmd, _ui, v) => { doc.activeElement.value = v; return true; };
   replies.push({ status: "done", output: JSON.stringify({ value: "  새 소개  " }) });
   await star.click(); await flush();
-  assert.equal(area.value, "새 소개");
+  assert.equal(area.value, "");
   assert.ok(kit.last.includes("(empty)") && kit.last.includes("Help write this field."));
+  byText(fa, "저장").click();
+  assert.equal(area.value, "새 소개");
   // the same text back: nothing to change
   replies.push({ status: "done", output: JSON.stringify({ value: "새 소개" }) });
   await star.click(); await flush();
@@ -220,7 +222,7 @@ test("field: fills, polishes, trims one-line answers, undoes and reports failure
   assert.ok(fa.textContent.includes("AI가 답하지 못했어요."));
   kit.assist = old;
 
-  // one-line INPUT: bullet stripped, max length, execCommand missing → plain assignment + input event
+  // one-line INPUT: bullet stripped, max length; execCommand missing → 저장 assigns and fires input
   delete doc.execCommand;
   const inp = doc.createElement("input"); inp.maxLength = 5; inp.value = "옛 글";
   let inputs = 0; inp.addEventListener("input", () => { inputs++; });
@@ -233,48 +235,61 @@ test("field: fills, polishes, trims one-line answers, undoes and reports failure
   s2.click(); s2.listeners.click[0](); // busy: the second run does nothing
   assert.equal(s2.disabled, true);
   release({ status: "done", output: JSON.stringify({ value: "\n- 첫 줄입니다요\n둘째" }) }); await flush();
-  assert.equal(inp.value, "첫 줄입니");
   assert.ok(kit.last.includes("Context:\n맥락") && kit.last.includes("Improve the current text"));
-  assert.ok(inputs >= 1);
-  // user typing clears the note; a synthetic input does not
+  // 1. the sparkle keeps the original in the field, editable, and shows the proposal as a separate diff
+  const box = fi.querySelector(".ex-ai-diff"), marks = (tag) => q(box, tag).map((x) => x.textContent).join("");
+  assert.equal(inp.value, "옛 글");
+  assert.notEqual(inp.style.display, "none", "the field stays on screen");
+  assert.equal(inputs, 0, "nothing typed into the field yet");
+  assert.equal(box.hidden, false);
+  assert.equal(marks("del"), "옛 글");
+  assert.equal(marks("ins"), "첫 줄입니");
+  assert.equal(doc.activeElement, byText(fi, "저장"));
+  // editing while the preview is open keeps the preview; its diff follows the edit
+  inp.value = "옛 글!"; await inp.fire("input", { isTrusted: true });
+  assert.equal(box.hidden, false);
+  assert.equal(marks("del"), "옛 글!");
+  // 3. 취소 drops only the preview: the field keeps the user's text
+  byText(fi, "취소").click();
+  assert.equal(inp.value, "옛 글!");
+  assert.equal(box.hidden, true);
+  assert.equal(fi.querySelector(".ex-ai-note").hidden, true);
+  // 2. 저장 puts the proposal into the field
+  replies.push({ status: "done", output: JSON.stringify({ value: "첫 줄입니" }) });
+  await s2.click(); await flush();
+  const before = inputs;
+  byText(fi, "저장").click();
+  assert.equal(inp.value, "첫 줄입니");
+  assert.equal(inputs, before + 1, "the screen hears the change");
+  assert.equal(box.hidden, true);
+  assert.equal(fi.querySelector(".ex-ai-note").hidden, true);
+  // a plain message goes when the user types; a synthetic input keeps it
+  replies.push({ status: "done", output: JSON.stringify({ value: "첫 줄입니" }) });
+  await s2.click(); await flush();
+  assert.ok(fi.textContent.includes("더 고칠 곳이 없어요."));
   await inp.fire("input", { isTrusted: false });
   assert.equal(fi.querySelector(".ex-ai-note").hidden, false);
   await inp.fire("input", { isTrusted: true });
   assert.equal(fi.querySelector(".ex-ai-note").hidden, true);
   await inp.fire("input", { isTrusted: true }); // nothing left to clear
-  // 취소 puts the old text back
-  replies.push({ status: "done", output: JSON.stringify({ value: "다른 것" }) });
-  await s2.click(); await flush();
-  assert.equal(fi.querySelector(".ex-ai-diff del").textContent, "첫 줄입니");
-  assert.equal(fi.querySelector(".ex-ai-diff ins").textContent, "다른 것");
-  byText(fi, "취소").click();
-  assert.equal(inp.value, "첫 줄입니");
-  // undo with no field on screen does nothing; a newer copy takes over show()
+  // 저장 with no field on screen writes nothing; a newer copy takes over show()
   replies.push({ status: "done", output: JSON.stringify({ value: "셋째" }) });
   await s2.click(); await flush();
-  const undo = byText(fi, "취소");
-  const keep = sti.input; sti.input = null; undo.click(); sti.input = keep;
-  assert.equal(inp.value, "셋째");
+  const save = byText(fi, "저장");
+  const keep = sti.input; sti.input = null; save.click(); sti.input = keep;
+  assert.equal(inp.value, "첫 줄입니");
   const inp2 = doc.createElement("input");
   fi.remove();
   const fi2 = AI.field(inp2, { state: sti, kit });
   mountIn(fi2);
   replies.push({ status: "done", output: JSON.stringify({ value: "넷" }) });
   s2.click(); await flush();
-  assert.equal(inp2.value, "넷");
+  assert.equal(inp2.value, "");
   assert.equal(doc.activeElement, byText(fi2, "저장"), "focus lands on 저장 of the copy on screen, not the replaced one");
-  assert.ok(byText(fi2, "저장") && !fi2.textContent.includes("AI가 고쳤어요"), "only 저장 / 취소, no note text");
-  // the box shows what changed in place (added / removed); a click on it goes back to the field
-  const box = fi2.querySelector(".ex-ai-diff");
-  assert.equal(box.hidden, false);
-  assert.equal(inp2.style.display, "none");
-  assert.equal(box.querySelector("del"), null, "the new copy started empty: all of it is added");
-  assert.equal(box.querySelector("ins").textContent, "넷");
-  box.listeners.click[0]();
-  assert.equal(box.hidden, true);
-  assert.equal(inp2.style.display, "");
-  assert.ok(fi2.textContent.includes("취소"), "취소 stays after going back to edit");
-  // 저장 keeps the AI text and closes the note
+  assert.ok(!fi2.textContent.includes("AI가 고쳤어요"), "only 저장 / 취소, no note text");
+  const box2 = fi2.querySelector(".ex-ai-diff");
+  assert.equal(box2.querySelector("del"), null, "the new copy started empty: all of it is added");
+  assert.equal(box2.querySelector("ins").textContent, "넷");
   byText(fi2, "저장").click();
   assert.equal(inp2.value, "넷");
   assert.equal(fi2.querySelector(".ex-ai-note").hidden, true);

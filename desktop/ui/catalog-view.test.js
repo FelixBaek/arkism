@@ -220,6 +220,40 @@ test("install page: preview list, side detail, agent picks, cancel and install",
   alive = false;
 });
 
+test("install page: a zip file goes in the request, previews and installs; a big one is refused", async () => {
+  const t = setup({ poll: done({ ...SKILLS, source: "pdf.zip", commit: "f".repeat(64) }) });
+  const side = h.el("aside");
+  const page = t.catalog.installPage(side, () => true);
+  document.body.append(page, side);
+  const pick = (file) => {
+    const made = [], create = document.createElement;
+    document.createElement = (tag) => { const n = create.call(document, tag); if (tag === "input") made.push(n); return n; };
+    try { btn(page, "zip 파일").click(); } finally { document.createElement = create; }
+    assert.equal(made[0].type, "file");
+    made[0].files = [file];
+    dom.fire(made[0], "change");
+  };
+  const zipBody = Buffer.from("PK zip").toString("base64");
+  pick({ name: "pdf.zip", size: 6, arrayBuffer: async () => new TextEncoder().encode("PK zip").buffer });
+  await dom.flush();
+  assert.deepEqual([t.calls[0][2].name, t.calls[0][2].zip, t.calls[0][2].enabled], ["pdf.zip", zipBody, false]);
+  assert.match(page.querySelector(".v4s-status").textContent, /pdf\.zip · SHA-256 fffffff/);
+  // A bad address after the zip preview keeps the zip: install still sends it.
+  page.querySelector("input").value = "bad";
+  dom.fire(page.querySelector("form"), "submit");
+  assert.equal(t.needs.length, 1);
+  t.host.poll = done({ installed: ["claude_code"] });
+  btn(page, "설치").click();
+  await dom.flush();
+  const post = t.calls.filter((c) => c[1] === "POST").at(-1)[2];
+  assert.deepEqual([post.name, post.zip, post.targets], ["pdf.zip", zipBody, ["claude_code"]]);
+  const posts = t.calls.length;
+  pick({ name: "big.zip", size: 200 * 1024, arrayBuffer: async () => new ArrayBuffer(0) });
+  await dom.flush();
+  assert.equal(t.calls.length, posts);
+  assert.match(page.querySelector(".v4s-status").textContent, /160KB/);
+});
+
 test("install page reports each preview and install outcome", async () => {
   const cases = [
     [{ post: () => ({ agent_tools: { requests: [] } }) }, /아직 답이 없어요/],

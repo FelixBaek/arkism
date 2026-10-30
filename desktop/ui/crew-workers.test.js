@@ -1,6 +1,7 @@
 // Behavior tests for the experts screen and expert window (crewWorkers, crewPersonas).
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom } = require("./testdata/crew-harness.cjs");
 
 const skipClose = (n) => n.matches(".crew-popup-close") || /^(취소|닫기)$/.test(n.textContent.trim());
@@ -338,4 +339,27 @@ test("실행하는 곳: this PC's runner connections, their state, and only the 
     assert.equal(h.calls.filter((c) => c.method === "POST" && /\/v1\/crew\/ag1$/.test(c.url)).at(-1).body.crew.backend, undefined);
   } finally { delete window.__TAURI__; }
   assert.deepEqual(clean(), []);
+});
+
+test("#465 expert: a failed run or call read and a failed channel read say so, not \"no runs\" / no channels", async () => {
+  const bots = [{ id: "b1", revision: 1, discord_bot: { name: "봇", state: "connected", channels: [] } }];
+  const h = await boot({ discord: { bots, settings: {} } });
+  const boom = () => Object.assign(new Error("boom"), { status: 500 });
+  h.routes.unshift(["GET", /^\/v1\/crew\/agents\/[^/]+\/calls/, () => boom()], ["GET", /^\/v1\/discord\/bots\/[^/]+\/channels/, () => boom()]);
+  h.render(); await h.settle();
+  window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: "ag1", tab: "usage", over: true } })); await h.settle();
+  const d = h.top();
+  assert.match(d.textContent, /실행 기록을 불러오지 못했어요/);
+  assert.doesNotMatch(d.textContent, /아직 실행 기록이 없어요/);
+  // an older server without the calls route is not a failure
+  h.routes.unshift(["GET", /^\/v1\/crew\/agents\/[^/]+\/calls/, () => Object.assign(new Error("not_found"), { status: 404 })]);
+  d.close(); await h.settle();
+  window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: "ag1", tab: "usage", over: true } })); await h.settle();
+  assert.doesNotMatch(h.top().textContent, /실행 기록을 불러오지 못했어요/);
+  h.top().close(); await h.settle();
+  window.dispatchEvent(new CustomEvent("arkism:open-expert", { detail: { id: "ag1", tab: "edit", over: true } })); await h.settle();
+  const card = () => h.top().querySelector(".ex-ch");
+  h.btn(card(), "+ 채널 연결").click(); await h.settle(); await h.settle();
+  assert.equal(card().querySelectorAll(".ex-ch-add select")[1].options[0].textContent, "채널을 불러오지 못했어요");
+  assert.ok(h.btn(card(), "다시 시도"), "a retry next to the picker");
 });

@@ -122,15 +122,17 @@ function extractHTML(src, add) {
   }
 }
 
+const uiFiles = (dir) => [
+  ...fs.readdirSync(dir).filter((f) => /\.(js|mjs)$/.test(f) && !f.endsWith(".test.js") && !f.startsWith("i18n")),
+  ...(fs.existsSync(path.join(dir, "modules")) ? fs.readdirSync(path.join(dir, "modules")).filter(f => f.endsWith(".mjs")).map(f => "modules/" + f) : [])
+].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+
 // Returns { statics: Map<text, [file:line]>, templates: Map<key, [file:line]> }
 function extract(dir = __dirname) {
   const statics = new Map();
   const templates = new Map();
   const put = (map, k, where) => { if (!map.has(k)) map.set(k, []); map.get(k).push(where); };
-  const files = [
-    ...fs.readdirSync(dir).filter((f) => /\.(js|mjs)$/.test(f) && !f.endsWith(".test.js") && !f.startsWith("i18n")),
-    ...(fs.existsSync(path.join(dir, "modules")) ? fs.readdirSync(path.join(dir, "modules")).filter(f => f.endsWith(".mjs")).map(f => "modules/" + f) : [])
-  ].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+  const files = uiFiles(dir);
   for (const f of files) {
     const src = fs.readFileSync(path.join(dir, f), "utf8");
     lexJS(src,
@@ -147,7 +149,34 @@ function extract(dir = __dirname) {
   return { statics, templates };
 }
 
-module.exports = { extract, lexJS, HANGUL, collapse };
+// Dictionary entries whose Korean appears nowhere any more: not in a UI string (decoded, so "\n" in source matches a
+// line break in the key), the page, or the server and desktop shell sources whose Korean messages reach the screen.
+// A pattern is stale when one of its Korean pieces between {0}… is gone. Text built at run time from pieces
+// ("a" + "b") is not seen whole, so such an entry needs one piece of it as its own literal or template.
+function stale(dict, dir = __dirname) {
+  const texts = [];
+  for (const f of uiFiles(dir)) lexJS(fs.readFileSync(path.join(dir, f), "utf8"), (s) => texts.push(s), (quasis) => texts.push(...quasis));
+  const html = path.join(dir, "index.html");
+  if (fs.existsSync(html)) texts.push(fs.readFileSync(html, "utf8"));
+  const walk = (p, ext) => {
+    if (!fs.existsSync(p)) return;
+    for (const e of fs.readdirSync(p, { withFileTypes: true })) {
+      const f = path.join(p, e.name);
+      if (e.isDirectory()) { if (e.name !== "testdata") walk(f, ext); }
+      else if (e.name.endsWith(ext) && !e.name.endsWith("_test" + ext)) texts.push(fs.readFileSync(f, "utf8"));
+    }
+  };
+  walk(path.join(dir, "..", "src-tauri", "src"), ".rs");
+  for (const d of ["internal", "cmd"]) walk(path.join(dir, "..", "..", d), ".go");
+  const raw = texts.join("\u0000"), flat = collapse(raw);
+  const seen = (t) => raw.includes(t) || flat.includes(collapse(t));
+  return {
+    strings: Object.keys(dict.strings || {}).filter((k) => !seen(k)),
+    patterns: Object.keys(dict.patterns || {}).filter((k) => k.split(/\{\d+\}/).some((p) => HANGUL.test(p) && !seen(p.trim())))
+  };
+}
+
+module.exports = { extract, stale, lexJS, HANGUL, collapse };
 
 if (require.main === module) {
   const { statics, templates } = extract(process.argv[2] || __dirname);

@@ -28,7 +28,10 @@ window.ArkismDigests = (ctx) => {
   let data = empty(), loading = null, filter = { chip: "all", status: "active", sort: "heat", q: "" }, picked = false;
   const texts = new Map(); // "collection/id" → record (member memories, merge candidates and targets)
   const views = new Map(); // merge proposal id → GET /v1/merge_proposals/{id}
-  const list = (kind, status) => request(`/v1/digests?${query({ kind, status })}`).catch(() => null);
+  // A route an older server lacks (404) is "not supported"; any other failure is FAILED, shown as "couldn't load", never as empty (#465).
+  const FAILED = Object.freeze({ failed: true });
+  const absent = (e) => (e?.status === 404 || e?.message === "not_found" ? null : FAILED);
+  const list = (kind, status) => request(`/v1/digests?${query({ kind, status })}`).catch(absent);
   const instructionLike = (d) => (d.tags || []).includes("review:instruction_like");
 
   function ensure() {
@@ -41,14 +44,15 @@ window.ArkismDigests = (ctx) => {
     const key = identity();
     loading = (async () => {
       const [ta, tc, ua, uc, uo, mp] = await Promise.all([list("topic", "active"), list("topic", "candidate"), list("user", "active"), list("user", "candidate"), list("user", "superseded"),
-        request(`/v1/merge_proposals?${query({ status: "open" })}`).catch(() => null)]);
+        request(`/v1/merge_proposals?${query({ status: "open" })}`).catch(absent)]);
       if (key !== identity()) return;
-      const before = JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge]);
+      const before = JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed]);
       const items = (p) => (Array.isArray(p?.items) ? p.items : []);
       Object.assign(data, { key, at: Date.now(), topic: items(ta), topicCand: items(tc), cap: ta?.cap || tc?.cap || 0, activeN: ta?.active ?? items(ta).length,
-        user: items(ua)[0] || null, userCand: items(uc), userOld: items(uo), merge: mp ? items(mp).filter((r) => r.merge?.proposal) : null });
+        user: items(ua)[0] || null, userCand: items(uc), userOld: items(uo), failed: [ta, tc, ua, uc, uo].includes(FAILED),
+        merge: mp === FAILED ? false : mp ? items(mp).filter((r) => r.merge?.proposal) : null }); // merge: false failed, null not supported
       if (key !== data.other.key) data.other = { key };
-      if (before !== JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge])) repaint();
+      if (before !== JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed])) repaint();
     })().finally(() => { loading = null; });
     return loading;
   }
@@ -69,13 +73,14 @@ window.ArkismDigests = (ctx) => {
     const local = collection === "memories" ? state.data.memories.find((m) => m.id === id) : collection === "memory_candidates" ? state.data.candidates.find((m) => m.id === id) : null;
     if (local) { texts.set(k, local); return local; }
     texts.set(k, undefined);
-    request(`/v1/${collection}/${encodeURIComponent(id)}?${query()}`).then((r) => { texts.set(k, r?.id === id ? r : null); }, () => texts.set(k, null))
-      .then(() => { if (state.view === "memories" && ["digests", "merge"].includes(state.memTab) && !document.querySelector("#detail [data-sync-dirty]")) { paintList(); detail(true); } });
+    const got = (v) => { texts.set(k, v); if (state.view === "memories" && ["digests", "merge"].includes(state.memTab) && !document.querySelector("#detail [data-sync-dirty]")) { paintList(); detail(true); } };
+    request(`/v1/${collection}/${encodeURIComponent(id)}?${query()}`).then((r) => got(r?.id === id ? r : null), () => got(null));
     return undefined;
   }
 
   // ------------------------------------------------------------ counts (memory screen, HOME)
-  function mergeCount() { ensure(); return data.key === identity() && data.merge ? data.merge.length : data.key === identity() ? 0 : null; }
+  // serverCount() input: null while loading, false when the read failed, else the number (0 also when the server has no proposals)
+  function mergeCount() { ensure(); return data.key !== identity() ? null : data.merge === false ? false : data.merge ? data.merge.length : 0; }
   function digestCounts() { ensure(); return { topic: data.topicCand.length, user: data.userCand.length }; }
   // 메뉴별 확인할 것: "병합 제안 n" joins the 기억 row, 모아보기 gets its own row right under it (Figma 385:30743).
   function menuRows(rows) {
@@ -145,9 +150,10 @@ window.ArkismDigests = (ctx) => {
     paintList();
   }
   async function loadOther(status) {
-    if (data.other[status]) return;
+    if (data.other[status] && !data.other[status].failed) return; // a failed read asks again
     const page = await list("topic", status);
     data.other[status] = Array.isArray(page?.items) ? page.items : [];
+    if (page === FAILED) data.other[status] = Object.assign([], { failed: true });
     if (state.view === "memories" && state.memTab === "digests" && filter.status === status) paintList();
   }
   function paintList() {
@@ -185,6 +191,7 @@ window.ArkismDigests = (ctx) => {
       return row(`digest:${e.id}`, "minmax(0,1fr) auto", [cell, badge], () => detail());
     }));
     if (!data.key) table.append(el("div", "empty", "요약을 불러오는 중…"));
+    else if ((filter.status === "active" ? data.failed : data.other[filter.status]?.failed) && !items.length) table.append(el("div", "empty", "요약을 불러오지 못했어요. 새로고침하면 다시 불러와요."));
     else if (!items.length) table.append(el("div", "empty", filter.q ? "검색과 맞는 주제가 없어요." : filter.status === "active" ? "아직 주제 요약이 없어요. 승인된 기억이 쌓이면 밤사이 제안돼요." : "여기에 표시할 요약이 없어요."));
     const foot = el("div", "mem-more");
     const capNote = data.cap && data.activeN >= data.cap ? " · 최대 개수에 닿아서 합치기 제안이 나올 수 있어요" : "";
@@ -409,6 +416,7 @@ window.ArkismDigests = (ctx) => {
       return row(`merge:${r.id}`, "minmax(0,1fr) auto", [cell, el("span", `mem-badge${p.action === "merge" ? " warn" : p.action === "store" ? " strong" : ""}`, ACTION[p.action] || p.action)], () => mergeDetail());
     }));
     if (!data.key) table.append(el("div", "empty", "제안을 불러오는 중…"));
+    else if (data.merge === false) table.append(el("div", "empty", "병합 제안을 불러오지 못했어요. 새로고침하면 다시 불러와요."));
     else if (data.merge === null) table.append(el("div", "empty", "이 서버는 병합 제안을 지원하지 않아요."));
     else if (!items.length) table.append(el("div", "empty", state.query ? "검색과 맞는 제안이 없어요." : "확인할 병합 제안이 없어요."));
     if (items.length) { const foot = el("div", "mem-more"); foot.append(el("span", "", "AI 제안은 바로 적용하지 않아요. 고르면 그때 저장돼요.")); table.append(foot); }
@@ -424,8 +432,8 @@ window.ArkismDigests = (ctx) => {
     const v = views.get(r.id);
     if (v === undefined) {
       views.set(r.id, null);
-      request(`/v1/merge_proposals/${encodeURIComponent(r.id)}?${query()}`).then((x) => views.set(r.id, x?.proposal?.id === r.id ? x : false), () => views.set(r.id, false))
-        .then(() => { if (state.selected === `merge:${r.id}` && !document.querySelector("#detail [data-sync-dirty]")) mergeDetail(); });
+      const got = (x) => { views.set(r.id, x); if (state.selected === `merge:${r.id}` && !document.querySelector("#detail [data-sync-dirty]")) mergeDetail(); };
+      request(`/v1/merge_proposals/${encodeURIComponent(r.id)}?${query()}`).then((x) => got(x?.proposal?.id === r.id ? x : false), () => got(false));
     }
     const cand = v?.candidate || record("memory_candidates", p.candidate?.id);
     const targets = v?.targets?.length ? v.targets : (p.targets || []).map((t) => record("memories", t.id)).filter(Boolean);

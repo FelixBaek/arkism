@@ -358,6 +358,11 @@ func (c *conflictRun) write(ctx context.Context, tx Tx, rel Record) (ConflictOut
 	if e := c.writeRelation(ctx, tx, rel); e != nil {
 		return ConflictOutput{}, e
 	}
+	if c.in.Action == "resolve" {
+		if e := recordDecision(ctx, tx, c.in.Scope, c.principal, "conflict_resolved", rel.ID, c.in.Resolution, c.in.Reason); e != nil {
+			return ConflictOutput{}, e
+		}
+	}
 	if e := audit(ctx, tx, c.in.Scope, c.principal, "conflict:"+c.in.Action, rel.ID); e != nil {
 		return ConflictOutput{}, e
 	}

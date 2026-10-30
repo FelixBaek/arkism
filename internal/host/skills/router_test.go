@@ -28,17 +28,17 @@ func j(t *testing.T, s string) map[string]any {
 func swapRouter(t *testing.T) {
 	t.Helper()
 	kitEnv(t) // route_skills also reads the agents' MCP configs: never this machine's
-	req, base, tok, cache, rt, ro, pc, loaded := routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills
+	req, base, tok, cache, rt, ro, pc, loaded, routes := routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills, routeOf
 	routerTokenFile = filepath.Join(t.TempDir(), "missing-token") // never the real token
 	capState := host.CaptureState
 	host.CaptureState = t.TempDir() // record_memory_usage writes the metrics log
 	t.Cleanup(func() { host.CaptureState = capState })
-	routerCacheDir, fromPC, receiveOnly, loadedSkills = t.TempDir(), false, false, map[string]loadedSkill{}
+	routerCacheDir, fromPC, receiveOnly, loadedSkills, routeOf = t.TempDir(), false, false, map[string]loadedSkill{}, map[string]string{}
 	sessions, maxChars, pinRoot := routerSessions, skillMaxChars, t.TempDir()
 	routerSessions = func() host.SessionStore { return host.SessionStore{Root: pinRoot} }
 	t.Cleanup(func() { routerSessions, skillMaxChars = sessions, maxChars })
 	t.Cleanup(func() {
-		routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills = req, base, tok, cache, rt, ro, pc, loaded
+		routerRequest, routerBaseURL, routerTokenFile, routerCacheDir, routerRuntime, receiveOnly, fromPC, loadedSkills, routeOf = req, base, tok, cache, rt, ro, pc, loaded, routes
 	})
 }
 
@@ -462,6 +462,24 @@ func TestRouteSkills(t *testing.T) {
 	skills := asList(field(out, "skills"))
 	if len(skills) != 2 || field(skills[0], "id") != "agent/skill-b" || field(skills[1], "id") != "agent/skill-c" || field(skills[0], "unconfirmed") != true || field(skills[1], "unconfirmed") != true {
 		t.Fatal(out)
+	}
+}
+
+// A routed version reports its load and then one outcome on the decision that offered it (#430).
+func TestRouteSkillsReportsLoadAndOutcome(t *testing.T) {
+	swapRouter(t)
+	fakeRequest(t, `{"selected_id":"skill-v1","route_id":"route-1","provider":"jev","judgments":[],"degraded":[]}`, versionReply)
+	if _, err := routeSkills("example task"); err != nil || routeOf["skill-v1"] != "route-1" {
+		t.Fatal(routeOf, err)
+	}
+	calls := fakeRequest(t, `{}`)
+	markRoute("skill-v1", "loaded")
+	markRoute("skill-v1", "success")
+	markRoute("skill-v1", "success") // the outcome is reported once
+	markRoute("skill-other", "loaded")
+	if len(*calls) != 2 || (*calls)[0].path != "/v1/routing/skills/route-1/use" || field((*calls)[0].payload, "event") != "loaded" ||
+		field((*calls)[1].payload, "event") != "success" || field((*calls)[1].payload, "version_id") != "skill-v1" {
+		t.Fatal(*calls)
 	}
 }
 

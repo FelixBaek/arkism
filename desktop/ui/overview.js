@@ -15,15 +15,15 @@ window.ArkismOverview = (ctx) => {
 
   // ---------------------------------------------------------------- data
   const S = { sessions: null, total: 0, cursor: "", at: 0, g: -1, loading: false, failed: false };
-  let sessionEpoch = 0;
+  const sessionLoads = globalThis.ArkismKeep.latest();
   async function loadSessions() {
     // the minute cache holds within one load; a reload (new generation) reads again, so a failed read is retried (#187)
     if (S.loading || (S.g === state.connection.generation && Date.now() - S.at < 60000)) return;
     S.loading = true;
-    const ticket = ++sessionEpoch, generation = state.connection.generation;
+    const ticket = sessionLoads.begin(), generation = state.connection.generation;
     let doc = null, failed = false;
     try { doc = await request(`/v1/usage/sessions?${query({ range: "7d", limit: 50 })}`); } catch { failed = true; }
-    if (ticket !== sessionEpoch) return; // reset() cleared S meanwhile
+    if (!ticket.live()) return; // reset() cleared S meanwhile
     S.loading = false;
     if (generation !== state.connection.generation) { void loadSessions(); return; } // reloaded meanwhile: read for the new load
     if (failed) { S.sessions = S.sessions || []; S.failed = true; }
@@ -41,7 +41,7 @@ window.ArkismOverview = (ctx) => {
   const today = (t) => t >= new Date().setHours(0, 0, 0, 0);
   const latest = (times) => Math.max(0, ...times);
   // What each stage is counted from. A source that did not load leaves the stage unknown, not zero or stalled (#187).
-  const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "sessions"], classify: ["candidates"], review: ["candidates"],
+  const NEEDS = { collect: ["sessions"], extract: ["memories", "candidates", "conflicted", "sessions"], classify: ["candidates", "conflicted"], review: ["candidates", "conflicted"],
     recall: ["memories", "usage"], trace: ["memories"], judge: ["memories"], dream: ["memories"] };
   const missing = () => state.loadError ? new Set(["memories", "candidates", "sessions"])
     : new Set([...Object.keys(state.listErrors || {}), ...(S.failed ? ["sessions"] : []), ...(state.usageDone ? [] : ["usage"])]);
@@ -288,11 +288,12 @@ window.ArkismOverview = (ctx) => {
     ui.ticks.replaceChildren(...Array.from({ length: 24 }, (_, i) => { const hour = (h - 23 + i + 24) % 24; return el("span", i === 23 ? "now" : "", i === 23 ? "지금" : hour % 6 === 0 ? `${String(hour).padStart(2, "0")}:00` : ""); }));
     const todaySessions = (S.sessions || []).filter((x) => today(time(x.ended_at || x.started_at))).length;
     // every active memory on the server (the map draws them all), not the loaded first page
-    const memN = state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
+    const sess = ctx.count(S.failed || state.loadError ? null : S.sessions ? todaySessions : undefined); // not "오늘 0" while it loads
     ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
-      chip("세션 기록", S.failed || state.loadError ? "—" : `오늘 ${num(todaySessions)}`, () => openWide("sessions")),
+      chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
-      chip("기억 지도", `점 ${state.loadError ? "—" : ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
+      chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
@@ -334,7 +335,7 @@ window.ArkismOverview = (ctx) => {
   }
 
   return {
-    reset() { sessionEpoch++; Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
+    reset() { sessionLoads.cancel(); Object.assign(S, { sessions:null,total:0,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
     usageChanged: () => win?.usageChanged(), // app.js loadUsage: an open 사용량 window shows the result
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }

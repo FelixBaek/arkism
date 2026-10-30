@@ -27,6 +27,7 @@ func TestFlowSourceRevocationBlocksProgressAndNewChildButAllowsRedactedStop(t *t
 	}
 	raw = h.call("POST", "/v1/crew/runs/"+run.ID+"/stop", tokEngine, FlowStopInput{Scope: scopeA, ExpectedRevision: run.Revision}, 200, &stopped)
 	assertRedactedFlowStop(t, raw, stopped, run.ID)
+	requireDecision(t, f.repo, "flow_cancelled", "automatic") // #466: the engine's stop, counted once though asked twice
 	f.svc.Auth = f.auth
 	h.call("GET", "/v1/crew/runs/"+run.ID+flowHTTPQuery, f.human, nil, 200, &stopped)
 	if stopped.CrewRun.Definition == nil || !stopped.CrewRun.CancelRequested {

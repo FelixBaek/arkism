@@ -5,7 +5,7 @@
 window.ArkismCrewPopup = ({ el, button }) => {
   function open({ title, sub = "", cover = "", avatar = null, tabs, initial, actions = [], onClose, cls = "", popout = null }) {
     const dlg = el("dialog", `crew-dialog crew-popup ${cls}`.trim());
-    if (popout) { dlg.dataset.popout = JSON.stringify(popout); dlg.dataset.popoutTitle = popout.title || title || ""; dlg.setAttribute("aria-keyshortcuts", "Alt+Shift+O"); } // how a separate window reopens it (popup-drag.js)
+    if (popout) { dlg.dataset.popout = JSON.stringify(popout); dlg.dataset.popoutTitle = popout.title || title || ""; } // how a separate window reopens it (popup-drag.js)
     const head = el("div", "crew-popup-head");
     if (cover) { head.style.setProperty("--cover", `url("${cover}")`); head.classList.add("has-cover"); }
     const who = el("div", "crew-popup-who");

@@ -1,6 +1,7 @@
 // @ts-check
 // Explicit module dependency entry. The browser source entry and esbuild use the same graph.
 import "./ask.js";
+import "./keep.js";
 import "./ssh-trust.js";
 import "./text-diff.js";
 import "./brand.js";
@@ -9,6 +10,7 @@ import "./popup-drag.js";
 import "./context-menu.js";
 import "./window-controls.js";
 import "./field-need.js";
+import "./delete-reason.js";
 import "./i18n.js";
 import "./preference-transfer.js";
 import "./agent-memory-import.js";

@@ -1,3 +1,4 @@
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const {test}=require('node:test');const assert=require('node:assert/strict');const {create}=require('./memory-pages.js');
 const row=id=>({id});
 test('first load reads one page; concurrent more requests share one call; cursor exhaustion stops',async()=>{

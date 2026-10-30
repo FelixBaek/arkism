@@ -85,6 +85,21 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.equal(win(), null);
 });
 
+test("overview: 자세히 on a 분류 card opens that candidate's own detail, even off the loaded page", async () => {
+  const d = await openWindow({ key: "classify" });
+  const items = [...d.querySelectorAll(".ov-win-list .ov-win-item")];
+  assert.ok(items.length > 1);
+  // the newest card, with a first page that does not carry it (the 승인 대기 list loads oldest first)
+  const card = items.at(-1), title = text(card.querySelector(".ov-win-item-title"));
+  const off = route("POST", "/v1/memory_candidates/query", () => ok({ items: [], total: 0, facets: {} }));
+  await press("자세히", card, 80);
+  off();
+  const w = win(), head = title.replace(/…$/, "").slice(0, 20);
+  assert.ok(text(w.querySelector(".ov-wide-row.on")).includes(head), "the clicked candidate is the selected row");
+  assert.ok(text(w.querySelector(".ov-wide-detail")).includes(head), "and its detail is open");
+  await closeAll();
+});
+
 test("overview: 분류 groups its waiting candidates by kind inside the window", async () => {
   const d = await openWindow({ key: "classify" });
   const list = d.querySelector(".ov-win-list"), heads = [...list.querySelectorAll(".ov-win-group")];
@@ -100,9 +115,10 @@ test("overview: 분류 groups its waiting candidates by kind inside the window",
   const item = list.querySelector(".ov-win-item");
   await press("승인", item, 50);
   assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/memory_candidates\/.+\/review$/.test(p) && /"approve"/.test(String(b))));
-  await press("버리기", win().querySelector(".ov-win-list .ov-win-item"));
-  assert.ok(app.$("dialog.ov-ask[open]"), "버리기 still asks for a reason");
-  app.$("dialog.ov-ask[open]").close();
+  const next = win().querySelector(".ov-win-list .ov-win-item");
+  await press("버리기", next);
+  assert.ok(next.querySelector(".del-reason"), "버리기 still asks for a reason, in place");
+  await press("취소", next.querySelector(".del-reason"));
   await closeAll();
 });
 
@@ -142,17 +158,21 @@ test("overview: review rows approve and reject in place, with the reason asked f
   assert.ok(!row.isConnected, "an approved row leaves the list");
   assert.ok(app.apiCalls.some(([m, p]) => m === "POST" && /\/review$/.test(p)));
   d = win() || await openWindow({ key: "classify" });
-  // 버리기 asks for a reason; an empty one is refused, 취소 keeps the row
+  // 버리기 opens the reason picker in place; no reason is refused, 취소 keeps the row
   const row2 = d.querySelector(".ov-win-item");
   await press("버리기", row2);
-  let ask = app.$("dialog.ov-ask[open]"); assert.ok(ask);
+  let ask = row2.querySelector(".del-reason"); assert.ok(ask);
+  assert.deepEqual([...ask.querySelectorAll(".del-reason-chip")].map(text), ["오래된 기억", "이미 바뀜", "사용하지 않음", "사실과 다름", "중복"]);
   await press("버리기", ask);
-  assert.match(text(ask), /버리는 이유를 적어 주세요/);
-  await press("취소", ask); assert.ok(!ask.isConnected);
-  await press("버리기", row2); ask = app.$("dialog.ov-ask[open]");
+  assert.match(text(ask), /이유를 하나 골라 주세요/);
+  await press("취소", ask); assert.ok(!ask.isConnected && row2.isConnected);
+  await press("버리기", row2); ask = row2.querySelector(".del-reason");
+  await press("중복", ask);
   ask.querySelector("textarea").value = "겹치는 내용";
   await press("버리기", ask, 50);
   assert.ok(!row2.isConnected);
+  const sent = JSON.parse(app.apiCalls.filter(([m, p]) => m === "POST" && /\/review$/.test(p)).at(-1)[2]);
+  assert.deepEqual([sent.action, sent.reason_code, sent.reason], ["reject", "duplicate", "겹치는 내용"]);
   // a server error keeps the row and says why
   const off = route("POST", "/v1/memory_candidates/", () => fail(409, "revision_conflict"));
   d = win() || await openWindow({ key: "classify" });
@@ -160,8 +180,8 @@ test("overview: review rows approve and reject in place, with the reason asked f
   if (row3) {
     await press("승인", row3, 50);
     assert.match(text(row3), /이미 처리됐거나/);
-    await press("버리기", row3); ask = app.$("dialog.ov-ask[open]"); ask.querySelector("textarea").value = "x"; await press("버리기", ask, 50);
-    assert.match(text(row3), /이미 처리됐거나/);
+    await press("버리기", row3); ask = row3.querySelector(".del-reason"); await press("오래된 기억", ask); await press("버리기", ask, 50);
+    assert.match(text(ask), /이미 처리됐거나/, "the picker stays open with the reason it failed");
   }
   off();
   assert.ok(before > 0);
@@ -271,9 +291,20 @@ test("overview: 승인 대기 keeps the edited text across redraws, as the next 
     let d = await reviewOf("코드 수정 후");
     const heading = () => text(win().querySelector(".ov-wide-detail h3")), box = () => win().querySelector(".ov-detail-edit");
     assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
-    // the AI rewrites the fix text; 저장 keeps it, and the heading now shows what 승인 would save
+    // the AI proposal is a preview: the box keeps the original and the heading does not move
+    const original = box().value;
     d.querySelector(".ex-ai-spark").click(); await app.settle(30);
-    await press("저장", d.querySelector(".ex-ai-note"));
+    assert.equal(box().value, original);
+    assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
+    assert.ok(win().querySelector(".ex-ai-diff ins"), "the proposal shows as a diff beside the box");
+    // 취소 drops only the preview
+    await press("취소", win().querySelector(".ex-ai-note"));
+    assert.equal(box().value, original);
+    assert.equal(win().querySelector(".ex-ai-diff").hidden, true);
+    // 저장 puts it in the box, and the heading now shows what 승인 would save
+    win().querySelector(".ex-ai-spark").click(); await app.settle(30);
+    await press("저장", win().querySelector(".ex-ai-note"));
+    assert.equal(box().value, answer);
     assert.equal(heading(), answer);
     // a redraw (another row, then back) keeps the saved text in the box and the heading
     const rows = () => [...win().querySelectorAll(".ov-wide-row:not(.ov-wide-row-dream)")];
@@ -334,12 +365,16 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   await press("기존 기억에 합치기", d, 60);
   assert.ok(app.apiCalls.some(([, p]) => p === "/v1/merge_proposals/mpx/decide"));
   offMerge();
-  // reject from the detail asks a reason; an error from the server stays on the detail
+  // reject from the detail opens the reason picker; an error from the server stays on the picker
   d = await reviewOf("Orbit 버그 재현");
   const offRej = route("POST", "/v1/memory_candidates/c4/review", () => fail(500, "boom"));
   await press("버리기", d.querySelector(".ov-detail-actions"));
-  const ask = app.$("dialog.ov-ask[open]"); ask.querySelector("textarea").value = "중복"; await press("버리기", ask, 50);
+  let pick = win().querySelector(".del-reason"); assert.ok(pick, "reason picker opens in place");
+  await press("버리기", pick, 30);
+  assert.match(text(pick), /이유를 하나 골라 주세요/, "a reason is required");
+  await press("중복", pick); await press("버리기", pick, 50);
   assert.match(text(win()), /처리하지 못했어요/);
+  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/c4/review" && /"reason_code":"duplicate"/.test(String(b))), "the reason code goes with the reject");
   offRej();
   await press("그대로 승인", win(), 60);
   // a conflicted candidate is resolved here: the existing memory beside it, where each came from, and the 기억 screen's choices
@@ -410,23 +445,28 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   await closeAll();
 });
 
-test("overview: a contradiction can drop both memories after a confirm; a duplicate cannot", async () => {
+test("overview: a dreaming proposal's 지우기 picks which memory and why; 취소 sends nothing", async () => {
   await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
   const d = win();
-  assert.equal(btn("둘 다 지우기", d), undefined, "the duplicate proposal has no 둘 다 지우기");
+  assert.equal(btn("둘 다 지우기", d), undefined, "one 지우기 with a target instead");
   const rows = [...d.querySelectorAll(".ov-wide-row-dream")];
   for (const r of rows) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
   assert.match(text(win()), /서로 다른 말을 하는 기억/);
   assert.match(text(win()), /넘기거나 지운 기억은 기억 이력에 남아요/);
   const sent = () => app.apiCalls.filter(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"forget_both"/.test(String(b)));
   const before = sent().length;
-  await press("둘 다 지우기", win());
-  let ask = app.$("dialog.ov-ask[open]"); assert.match(text(ask), /두 기억을 다 지울까요/);
-  await press("취소", ask, 30);
+  await press("지우기", win());
+  let pick = win().querySelector(".del-reason"); assert.match(text(pick), /넘길 기억남길 기억둘 다/);
+  await press("취소", pick, 30);
+  assert.equal(win().querySelector(".del-reason"), null, "cancel closes the picker");
   assert.equal(sent().length, before, "cancel sends nothing");
-  await press("둘 다 지우기", win());
-  ask = app.$("dialog.ov-ask[open]"); await press("지우기", ask, 60);
+  await press("지우기", win());
+  pick = win().querySelector(".del-reason");
+  await press("둘 다", pick); await press("사실과 다름", pick);
+  pick.querySelector("textarea").value = "둘 다 예전 일정";
+  await press("지우기", pick, 60);
   assert.equal(sent().length, before + 1);
+  assert.match(String(sent().at(-1)[2]), /"reason_code":"wrong".*"reason":"둘 다 예전 일정"/);
   await closeAll();
 });
 
@@ -441,17 +481,20 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   const rows = d.querySelectorAll(".ov-wide-row");
   rows[2].click(); await app.settle();
   assert.ok(rows[2].classList.contains("on") || win().querySelector(".ov-wide-row.on"));
-  // 지우기 asks first; 취소 keeps it, a failure says why, then it goes
+  // 지우기 asks why first; 취소 keeps it, a failure says why, then it is rejected with the reason (kept in history)
+  const removed = () => app.apiCalls.filter(([m, p, b]) => m === "POST" && /^\/v1\/memories\/[^/]+\/transition$/.test(p) && /"status":"rejected"/.test(String(b)));
+  const was = removed().length;
   await press("지우기", win().querySelector(".ov-detail-actions"));
-  let ask = app.$("dialog.ov-ask[open]"); await press("취소", ask);
-  const off = route("DELETE", "/v1/memories/", () => fail(500, "boom"));
+  let pick = win().querySelector(".del-reason"); await press("취소", pick);
+  assert.equal(removed().length, was, "cancel sends nothing");
+  const off = route("POST", "/v1/memories/", () => fail(500, "boom"));
   await press("지우기", win().querySelector(".ov-detail-actions"));
-  ask = app.$("dialog.ov-ask[open]"); await press("지우기", ask, 50);
+  pick = win().querySelector(".del-reason"); await press("오래된 기억", pick); await press("지우기", pick, 50);
   assert.match(text(win()), /지우지 못했어요/);
   off();
-  await press("지우기", win().querySelector(".ov-detail-actions"));
-  await press("지우기", app.$("dialog.ov-ask[open]"), 80);
-  assert.ok(app.apiCalls.some(([m, p]) => m === "DELETE" && p.startsWith("/v1/memories/")));
+  await press("지우기", pick, 80);
+  assert.ok(removed().length > was && /"reason_code":"stale"/.test(String(removed().at(-1)[2])));
+  assert.ok(!app.apiCalls.some(([m, p]) => m === "DELETE" && p.startsWith("/v1/memories/")), "no erasure");
   // 세션 보기 on a memory with a source, 고치기 opens it in the memory list
   win() || await openWindow({ wide: "active" }); await app.settle(30); d = win();
   const withSource = [...d.querySelectorAll(".ov-wide-row")].find((r) => { r.click(); return btn("세션 보기 ›", win()); });
@@ -465,10 +508,10 @@ test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", 
   d = await openWindow({ key: "judge" });
   assert.equal(btn("정리하러 가기", d), undefined);
   assert.match(text(d), /답에 안 쓰인 기억/);
-  const deletes = app.apiCalls.filter(([m]) => m === "DELETE").length;
+  const forgets = removed().length;
   await press("잊기", d.querySelector(".ov-win-list .ov-win-item"));
-  await press("잊기", app.$("dialog.ov-ask[open]"), 80);
-  assert.ok(app.apiCalls.filter(([m]) => m === "DELETE").length > deletes, "잊기 asks, then deletes");
+  await press("잊기", win().querySelector(".del-reason"), 80);
+  assert.ok(removed().length > forgets && /"reason_code":"unused"/.test(String(removed().at(-1)[2])), "잊기 asks why (사용하지 않음 chosen), then removes");
   d = await openWindow({ key: "judge" });
   await press("고치기", d.querySelector(".ov-win-list .ov-win-item"), 50);
   assert.ok(win() && editor(), "고치기 opens the edit popup over 쓰임 확인");

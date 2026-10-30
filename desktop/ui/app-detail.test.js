@@ -228,7 +228,7 @@ test("기억 정리 제안 opens a proposal and sends its choice", async () => {
   await home();
 });
 
-test("기억 정리 제안: a contradiction's 둘 다 지우기 asks first, then sends forget_both", async () => {
+test("기억 정리 제안: a contradiction's 지우기 asks which and why, then sends forget_both with the reason", async () => {
   // only the contradiction stays open: deciding the duplicate first reloads the list
   const fixture = JSON.parse(require("fs").readFileSync(require("path").join(__dirname, "testdata/preview/v1/maintenance_proposals.json"), "utf8"));
   const only = { items: fixture.items.filter((p) => p.maintenance.type === "contradiction") };
@@ -239,13 +239,16 @@ test("기억 정리 제안: a contradiction's 둘 다 지우기 asks first, then
   assert.match(t(app.$("#detail")), /넘기거나 지운 기억은 기억 이력에 남아요/);
   const sent = [];
   hook = (a) => { if (a.method === "POST") sent.push([a.path, a.body]); return a.method === "GET" && a.path.startsWith("/v1/maintenance_proposals") ? json(200, only) : null; };
-  await press(/^둘 다 지우기$/, 50);
-  assert.match(t(app.$("dialog.cn-confirm[open]")), /두 기억을 다 지울까요/);
-  rows("dialog.cn-confirm[open] button").find((b) => b.value === "ok").click(); await app.settle(1000);
+  await press(/^지우기$/, 50);
+  assert.match(t(app.$("#detail .del-reason")), /넘길 기억남길 기억둘 다/);
+  await press(/^둘 다$/, 20, "#detail .del-reason");
+  await press(/^이미 바뀜$/, 20, "#detail .del-reason");
+  await press(/^지우기$/, 1000, "#detail .del-reason");
   hook = () => null;
   const decide = sent.find(([p]) => /^\/v1\/maintenance_proposals\/[^/]+\/decide$/.test(p));
   assert.ok(decide, sent.map(([p]) => p).join(","));
   assert.equal(JSON.parse(decide[1]).decision, "forget_both");
+  assert.equal(JSON.parse(decide[1]).reason_code, "changed");
   await home();
 });
 

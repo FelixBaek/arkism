@@ -83,6 +83,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	crewRoutes(mux, s)
 	contextPinRoutes(mux, s)
 	mergeProposalRoutes(mux, s)
+	decisionRoutes(mux, s)
 	crewRunRoutes(mux, s)
 	crewAssistRoutes(mux, s)
 	crewMeetingRoutes(mux, s)

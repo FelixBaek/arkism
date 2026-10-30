@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -122,6 +123,7 @@ type AgentToolRequest struct {
 	URL       string   `json:"url,omitempty"`     // mcp_add over http
 	Targets   []string `json:"targets,omitempty"` // skill_install: the agents' skill folders to install into
 	Update    bool     `json:"update,omitempty"`  // skill_install: replace a skill already there
+	Zip       string   `json:"zip,omitempty"`     // skill_install from a zip file (base64); Name is the file name. Cleared once applied
 	Name      string   `json:"name"`
 	Enabled   bool     `json:"enabled"`
 	Status    string   `json:"status"` // pending | waiting (mcp_login: auth_url is open) | done | failed
@@ -205,6 +207,7 @@ type AgentToolSwitch struct {
 	URL       string   `json:"url,omitempty"`
 	Targets   []string `json:"targets,omitempty"`
 	Update    bool     `json:"update,omitempty"`
+	Zip       string   `json:"zip,omitempty"`
 }
 
 type AgentToolResult struct {
@@ -452,7 +455,8 @@ func agentToolsDoc(ctx context.Context, repo interface {
 }
 
 // updateAgentTools applies change to the scope's document inside one transaction.
-func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func(*AgentTools, time.Time)) (Record, error) {
+// then runs in the same transaction after change, to record what changed.
+func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func(*AgentTools, time.Time), then ...func(context.Context, Tx) error) (Record, error) {
 	var out Record
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		now := time.Now().UTC().Truncate(time.Millisecond)
@@ -471,6 +475,9 @@ func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func
 			tools.Requests = append([]AgentToolRequest(nil), tools.Requests...)
 		}
 		change(&tools, now)
+		if err := runInTx(ctx, tx, then); err != nil {
+			return err
+		}
 		r.AgentTools = &tools
 		r.UpdatedAt = now
 		if fresh {
@@ -484,6 +491,9 @@ func (s *Service) updateAgentTools(ctx context.Context, scope Scope, change func
 	})
 	return out, err
 }
+
+// skillZipMaxBytes caps a zip carried in the request: its base64 must fit the 256KB body.
+const skillZipMaxBytes = 160 << 10
 
 // skillInstallTargets are the skill folders skill_install may write: ~/.claude/skills, ~/.codex/skills, ~/.agents/skills, ~/.zcode/skills.
 var (
@@ -523,20 +533,25 @@ func (s *Service) RequestAgentTool(ctx context.Context, token string, in AgentTo
 		// A newer switch for the same thing replaces one still waiting.
 		kept := make([]AgentToolRequest, 0, len(t.Requests)+1)
 		for _, q := range t.Requests {
-			if q.Status != "pending" || q.Agent != in.Agent || q.Kind != in.Kind || q.Name != in.Name {
+			// One zip waits at a time, so the record never holds more than one upload.
+			if q.Status != "pending" || (q.Agent != in.Agent || q.Kind != in.Kind || q.Name != in.Name) && (q.Zip == "" || in.Zip == "") {
 				kept = append(kept, q)
 			}
 		}
 		t.Requests = append(kept, AgentToolRequest{ID: ID(), Agent: in.Agent, Kind: in.Kind, Name: in.Name, Enabled: in.Enabled,
-			SkillsDir: in.SkillsDir, ChatsDir: in.ChatsDir, Command: in.Command, URL: in.URL, Targets: in.Targets, Update: in.Update, Status: "pending", RequestedBy: d.PrincipalID, RequestedAt: now})
+			SkillsDir: in.SkillsDir, ChatsDir: in.ChatsDir, Command: in.Command, URL: in.URL, Targets: in.Targets, Update: in.Update, Zip: in.Zip, Status: "pending", RequestedBy: d.PrincipalID, RequestedAt: now})
 		if over := len(t.Requests) - agentToolRequestsKept; over > 0 {
 			t.Requests = t.Requests[over:]
 		}
+	}, func(ctx context.Context, tx Tx) error {
+		// Only the newest 50 requests are kept; the count of every switch outlives them.
+		kind := map[bool]string{true: "agent_tool_on", false: "agent_tool_off"}[in.Enabled]
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, kind, in.Agent, in.Kind, in.Name)
 	})
 }
 
 func validAgentToolSwitch(in AgentToolSwitch) error {
-	if in.Kind != "skill_install" && (len(in.Targets) > 0 || in.Update) {
+	if in.Kind != "skill_install" && skillInstallExtras(in) {
 		return ErrInvalid
 	}
 	switch in.Kind {
@@ -572,6 +587,11 @@ func validAgentSwitch(in AgentToolSwitch) error {
 	return nil
 }
 
+// skillInstallExtras reports fields only skill_install switches carry.
+func skillInstallExtras(in AgentToolSwitch) bool {
+	return len(in.Targets) > 0 || in.Update || in.Zip != ""
+}
+
 // switchHasExtras reports fields only agent, mcp_add and skill_install switches carry.
 func switchHasExtras(in AgentToolSwitch) bool {
 	return in.SkillsDir != "" || in.ChatsDir != "" || len(in.Command) > 0 || in.URL != ""
@@ -591,7 +611,12 @@ func validMCPAddSwitch(in AgentToolSwitch) error {
 }
 
 func validSkillInstallSwitch(in AgentToolSwitch) error {
-	if in.Agent != "shared" || !validSkillSource(in.Name) || switchHasExtras(in) ||
+	source := validSkillSource(in.Name)
+	if in.Zip != "" { // the host reads and checks the archive; here only its size and encoding
+		raw, err := base64.StdEncoding.DecodeString(in.Zip)
+		source = err == nil && len(raw) > 0 && len(raw) <= skillZipMaxBytes && validRunLabel(in.Name, 128)
+	}
+	if in.Agent != "shared" || !source || switchHasExtras(in) ||
 		in.Enabled != (len(in.Targets) > 0) || len(in.Targets) > len(skillInstallTargets) {
 		return ErrInvalid
 	}
@@ -649,6 +674,7 @@ func (t *AgentTools) settle(results []AgentToolResult, now time.Time) {
 	for i, q := range t.Requests {
 		if res, ok := index[q.ID]; ok && q.Status == "pending" {
 			t.Requests[i].Status, t.Requests[i].Error, t.Requests[i].Detail, t.Requests[i].DoneAt = res.Status, res.Error, res.Detail, &now
+			t.Requests[i].Zip = ""
 		}
 	}
 }

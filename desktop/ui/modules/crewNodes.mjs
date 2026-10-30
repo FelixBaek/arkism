@@ -118,7 +118,7 @@ export function createCrewNodes(deps) {
       h.textContent = deps.nodeTitle(n);
       sub.textContent = nodeLine(n);
     };
-    deps.redraw = () => { const y = body.scrollTop; draw(); body.scrollTop = y; deps.render(false); keepDlg(); };
+    deps.redraw = () => { const restore = globalThis.ArkismKeep.view(body, body); draw(); restore(); deps.render(false); keepDlg(); };
     const keepDlg = () => { if (deps.nodeDlg === dlg && !dlg.isConnected) document.body.append(dlg); };
     dlg.append(head, body, foot);
     dlg.addEventListener("close", () => {

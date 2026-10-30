@@ -54,8 +54,17 @@ func winApprovedSSHOptions(options []string, c winLocalConn) ([]string, error) {
 	if strings.ContainsAny(path, "\"\r\n\x00") || strings.Contains(path, "${") {
 		return nil, sshApprovalError()
 	}
+	return append(options, "-o", "UserKnownHostsFile="+sshConfigPath(path), "-o", "HostKeyAlias="+c.SSHHostAlias, "-o", "HostKeyAlgorithms="+c.SSHHostAlgorithms, "-o", "GlobalKnownHostsFile=none", "-o", "KnownHostsCommand=none", "-o", "UpdateHostKeys=no", "-o", "VerifyHostKeyDNS=no", "-o", "CheckHostIP=no"), nil
+}
+
+// Go escapes a bare quote as \", which Git's MSYS ssh rejects ("invalid quotes"), so quote
+// only a path with spaces: Go then wraps the whole argument and both ssh builds accept it.
+func sshConfigPath(path string) string {
 	path = strings.ReplaceAll(path, "%", "%%")
-	return append(options, "-o", "UserKnownHostsFile=\""+path+"\"", "-o", "HostKeyAlias="+c.SSHHostAlias, "-o", "HostKeyAlgorithms="+c.SSHHostAlgorithms, "-o", "GlobalKnownHostsFile=none", "-o", "KnownHostsCommand=none", "-o", "UpdateHostKeys=no", "-o", "VerifyHostKeyDNS=no", "-o", "CheckHostIP=no"), nil
+	if strings.ContainsAny(path, " \t") {
+		return "\"" + path + "\""
+	}
+	return path
 }
 
 func sshApprovalPath(c winLocalConn) (string, error) {

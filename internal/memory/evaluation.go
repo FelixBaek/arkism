@@ -12,10 +12,17 @@ type Evaluation struct {
 	Passed           *bool                  `json:"passed,omitempty" bson:"passed,omitempty"`
 	Score            *float64               `json:"score,omitempty" bson:"score,omitempty"`
 	ScoreMax         *float64               `json:"score_max,omitempty" bson:"score_max,omitempty"`
+	SpecRef          *Ref                   `json:"spec_ref,omitempty" bson:"spec_ref,omitempty"`
+	TrialRef         *Ref                   `json:"trial_ref,omitempty" bson:"trial_ref,omitempty"`
+	CalibrationRef   *Ref                   `json:"calibration_ref,omitempty" bson:"calibration_ref,omitempty"`
 }
 
 func validEvaluation(x *Evaluation) bool {
-	if x == nil || !validComparisonReport(x.ComparisonReport) || x.EvalType != "user_rating" && x.EvalType != "automated_check" && x.EvalType != "model_self" || (x.Score == nil) != (x.ScoreMax == nil) {
+	if x == nil || !validComparisonReport(x.ComparisonReport) || x.EvalType != "user_rating" && x.EvalType != "automated_check" && x.EvalType != "model_self" && x.EvalType != "llm_judge" || (x.Score == nil) != (x.ScoreMax == nil) {
+		return false
+	}
+	// A model judge is only usable with the calibration it was measured against.
+	if (x.EvalType == "llm_judge") != (x.CalibrationRef != nil) || !validEvaluationRef(x.SpecRef, colEvalTasks) || !validEvaluationRef(x.TrialRef, colEvalTrials) || !validEvaluationRef(x.CalibrationRef, colJudgeCalibrations) {
 		return false
 	}
 	if x.Score == nil {
@@ -27,7 +34,7 @@ func evaluationRole(kind, role string) bool {
 	switch kind {
 	case "user_rating":
 		return role == "human"
-	case "automated_check":
+	case "automated_check", "llm_judge":
 		return role == "service" || role == "pipeline"
 	case "model_self":
 		return role == "agent" || role == "service" || role == "pipeline"
@@ -38,7 +45,8 @@ func independentEvaluation(r Record) bool {
 	if r.Evaluation == nil {
 		return r.Passed
 	} // Existing independent legacy reviews remain readable/usable.
-	return validEvaluation(r.Evaluation) && r.Evaluation.EvalType != "model_self" && evaluationRole(r.Evaluation.EvalType, r.CreatedByType) && r.Evaluation.Passed != nil && *r.Evaluation.Passed && r.Passed
+	// shortcut: llm_judge verdicts are summary data only and never verify skills or reflections; open this after calibration thresholds are decided.
+	return validEvaluation(r.Evaluation) && r.Evaluation.EvalType != "model_self" && r.Evaluation.EvalType != "llm_judge" && evaluationRole(r.Evaluation.EvalType, r.CreatedByType) && r.Evaluation.Passed != nil && *r.Evaluation.Passed && r.Passed
 }
 
 type EvaluationSummaryInput struct {
@@ -93,6 +101,9 @@ func addEvaluation(total EvaluationTotals, x *Evaluation) EvaluationTotals {
 // has been deleted, superseded or revoked. Target checks stay with each caller.
 func checkEvaluationEvidence(ctx context.Context, tx Tx, r Record) error {
 	if e := checkSources(ctx, tx, r); e != nil {
+		return e
+	}
+	if e := checkDirectRelations(ctx, tx, Record{Scope: r.Scope, Relations: evaluationRefs(r.Evaluation)}); e != nil {
 		return e
 	}
 	return checkRelations(ctx, tx, r)

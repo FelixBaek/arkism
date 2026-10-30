@@ -171,6 +171,10 @@ func TestMergeProposalsChangeNothingUntilAPersonDecides(t *testing.T) {
 	if _, err = f.svc.DecideMergeProposal(testCtx, f.human, merge.ID, MergeDecision{Scope: scopeA, ExpectedRevision: 2, Decision: "dismiss"}); !errors.Is(err, ErrConflict) {
 		t.Fatal("decided twice", err)
 	}
+	// #466: the proposal drops the AI's words when decided; the counted decision keeps them.
+	if d := requireDecision(t, f.repo, "merge_accept", "more_specific"); d.Audit.Reason != "같은 규칙에 '쉬운 말' 추가" {
+		t.Fatalf("merge reason = %q", d.Audit.Reason)
+	}
 
 	stored, err := f.svc.DecideMergeProposal(testCtx, f.human, store.ID, MergeDecision{Scope: scopeA, ExpectedRevision: 1, Decision: "accept", Content: "커밋 메시지는 영어로, 한 줄 요약부터"})
 	if err != nil || stored.Status != "accepted" {
@@ -227,6 +231,9 @@ func TestMergeSkipDismissAndStale(t *testing.T) {
 	if got := f.get(f.human, "memories", scopeA, f.korean.ID); got.Status != "active" {
 		t.Fatal("skip changed the memory", got.Status)
 	}
+	// #466: each decision is counted by the AI's reason code; the stale proposal is not a decision.
+	requireDecision(t, f.repo, "merge_dismiss", "already_covered")
+	requireDecision(t, f.repo, "merge_accept", "already_covered")
 }
 
 func TestMergeTargetChangedBeforeTheDecisionGoesStale(t *testing.T) {

@@ -7,7 +7,7 @@ window.ArkismUsage = (ctx) => {
   "use strict";
   const { state, $, el, button, segment, render, request, query, agentLogo, AGENTS, ago } = ctx;
 
-  const TABS = [["overview", "개요"], ["requests", "요청"], ["sessions", "세션"], ["hours", "시간대"]];
+  const TABS = [["overview", "개요"], ["requests", "요청"], ["sessions", "세션"], ["hours", "시간대"], ["decisions", "결정"]];
   const RANGES = [["today", "오늘"], ["7d", "7일"], ["30d", "30일"], ["90d", "90일"], ["all", "전체"]];
   const DAY_METRICS = [["tokens", "토큰"], ["cost_usd", "비용"], ["sessions", "세션"], ["output", "출력"], ["messages", "메시지"]];
   const TOP_BY = [["tokens", "토큰"], ["cost_usd", "비용"], ["active_seconds", "활동"]];
@@ -19,7 +19,7 @@ window.ArkismUsage = (ctx) => {
   const OV_RANGE = { today: "24h", "7d": "7d", "30d": "30d" };
   const DECISIONS = { clef: "판정 모델이 고름", fixed: "고정 모델", failover: "장애 때 넘김", "": "—" };
   const decisionLabel = (k) => DECISIONS[k ?? ""] || k;
-  let epoch = 0;
+  const loads = globalThis.ArkismKeep.latest();
 
   const num = (n) => {
     n = Number(n || 0);
@@ -38,21 +38,22 @@ window.ArkismUsage = (ctx) => {
   // 화면 문구가 데이터와 한 줄에 섞여 raw()로 감쌀 때: 만들 때 번역한다 (한국어 화면이면 그대로).
   const tr = (s) => (window.ArkismI18n ? window.ArkismI18n.translate(s) : s);
   const menu = () => (["memory", "agent", "router", "connect"].includes(state.menu) ? state.menu : "router");
-  const tabs = () => (menu() === "router" ? TABS.filter(([k]) => k === "overview" || k === "requests") : TABS.filter(([k]) => k !== "requests"));
+  const tabs = () => (menu() === "router" ? TABS.filter(([k]) => k === "overview" || k === "requests" || k === "decisions") : TABS.filter(([k]) => k !== "requests"));
   const loadKey = () => (menu() === "router" ? `router|${S.range}` : `sessions|${S.range}|${S.source}`);
   const modelLabel = (id) => S.ov?.models?.find((m) => m.id === id)?.name || String(id || "").replace(/^[^/]+\//, "");
   const days = () => Math.max(1, { today: 1, "7d": 7, "30d": 30, "90d": 90 }[S.range] || S.doc?.by_day?.length || 1);
 
   async function load(silent = false) {
     const quiet = silent === true;
+    if (!quiet) DEC.key = ""; // 새로고침 also asks for the decision counts again
     if (quiet && S.state !== "ready") return;
-    const ticket = ++epoch, key = loadKey();
+    const ticket = loads.begin(), key = loadKey();
     if (!quiet) { S.state = "loading"; S.error = ""; paint(); }
     try {
       const router = menu() === "router", ovRange = OV_RANGE[S.range];
       const [doc, ov] = await Promise.all([request(`/v1/usage/summary?${query({ range: S.range, ...(S.source && !router ? { source: S.source } : {}) })}`),
         router && ovRange ? request(`/v1/routing/overview?${query({ range: ovRange })}`).catch(() => null) : Promise.resolve(null)]);
-      if (ticket !== epoch || (quiet && ctx.canRefresh?.() === false)) return;
+      if (!ticket.live() || (quiet && ctx.canRefresh?.() === false)) return;
       if (doc?.authority !== "data_only_untrusted" || !doc.kpi) throw new Error("invalid_response");
       const next = ov?.authority === "data_only_untrusted" ? ov : null;
       const same = JSON.stringify(S.doc) === JSON.stringify(doc) && JSON.stringify(S.ov) === JSON.stringify(next);
@@ -60,7 +61,7 @@ window.ArkismUsage = (ctx) => {
       if (quiet && same) return;
       S.doc = doc; S.ov = next; S.state = "ready";
     } catch (e) {
-      if (ticket !== epoch || quiet) return;
+      if (!ticket.live() || quiet) return;
       S.doc = null; S.state = unsupported(e) ? "unsupported" : "error"; S.error = e.message;
     }
     paint();
@@ -447,6 +448,53 @@ window.ArkismUsage = (ctx) => {
       ["밤", `20~2시 · ${share((hr) => hr >= 20 || hr < 2)}`], ["주말", weekday ? `평일의 ${Math.round((weekend / weekday) * 100)}%` : ""]])), toSessions()];
   }
 
+  // ------------------------------------------------------------------ 결정 (#466): what people and the AI decided in the range,
+  // counted by the server per day (GET /v1/decisions/summary), so the counts outlive the audit log they come from.
+  const DECISION_KINDS = {
+    skill_trashed: "스킬을 휴지통으로", skill_restored: "스킬을 되돌림", skill_rolled_back: "스킬 이전 버전으로 복귀",
+    skill_version_rejected: "스킬 후보 제외", skill_improvement_rejected: "AI 스킬 개선 제외",
+    candidate_approve: "후보 승인", candidate_edit_approve: "고쳐서 승인", candidate_reject: "후보 버림", candidate_expired: "후보 기한 지남",
+    dreaming_accept: "정리 제안 받아들임", dreaming_swap: "정리 제안 반대로", dreaming_dismiss: "정리 제안 둘 다 둠", dreaming_forget_both: "정리 제안 둘 다 잊음",
+    merge_accept: "병합 제안 받아들임", merge_dismiss: "병합 제안 넘김", conflict_resolved: "충돌 정리",
+    wiki_approve: "위키 초안 승인", wiki_reject: "위키 초안 거절", flow_approved: "흐름 승인", flow_rejected: "흐름 거절", flow_cancelled: "흐름 중단",
+    skill_routed: "스킬 골라 줌", skill_route_loaded: "고른 스킬을 불러옴", role_model_changed: "역할별 모델 바꿈",
+    agent_tool_on: "도구 켜기·설치", agent_tool_off: "도구 끄기·제거", ai_help_accepted: "AI 도움대로 함", ai_help_discarded: "AI 도움과 다르게 함"
+  };
+  const DECISION_REASONS = { "": "이유 없음", automatic: "자동", pick: "라우터가 고른 것", other: "다른 후보", rules: "규칙", judge: "판정 모델" };
+  const DEC_DAYS = { today: 1, "7d": 7, "30d": 30, "90d": 90, all: 366 };
+  const DEC = { key: "", rows: [], state: "idle", error: "" };
+  async function loadDecisions(key) {
+    try {
+      const doc = await request(`/v1/decisions/summary?${query({ period: "month", days: DEC_DAYS[key] || 30 })}`);
+      if (DEC.key !== key) return;
+      if (doc?.authority !== "data_only_untrusted" || !Array.isArray(doc.rows)) throw new Error("invalid_response");
+      Object.assign(DEC, { rows: doc.rows, state: "ready" });
+    } catch (e) {
+      if (DEC.key !== key) return;
+      Object.assign(DEC, { state: unsupported(e) ? "unsupported" : "error", error: e.message });
+    }
+    paint();
+  }
+  function decisionsTab() {
+    if (DEC.key !== S.range) { Object.assign(DEC, { key: S.range, state: "loading" }); const key = S.range; queueMicrotask(() => loadDecisions(key)); }
+    if (DEC.state !== "ready") {
+      return [el("div", "empty", DEC.state === "unsupported" ? "이 서버는 아직 결정 집계를 지원하지 않아요." : DEC.state === "error" ? `결정 수를 불러오지 못했어요 (${DEC.error}).` : "불러오는 중…")];
+    }
+    // One row per decision and reason, summed over the range's months.
+    const sums = new Map();
+    for (const r of DEC.rows) { const k = `${r.kind}\u0000${r.reason_code}`; sums.set(k, { kind: r.kind, reason: r.reason_code, count: (sums.get(k)?.count || 0) + r.count }); }
+    const list = el("div", "v4u-list");
+    for (const it of [...sums.values()].sort((a, b) => b.count - a.count || a.kind.localeCompare(b.kind))) {
+      const row = el("div", "v4u-req"), text = el("div", "v4u-session-text");
+      const reason = DECISION_REASONS[it.reason];
+      text.append(DECISION_KINDS[it.kind] ? el("b", "", DECISION_KINDS[it.kind]) : raw(el("b", "", it.kind)), reason ? el("small", "", reason) : raw(el("small", "", it.reason)));
+      row.append(text, el("span", "v4u-num", num(it.count)));
+      list.append(row);
+    }
+    if (!sums.size) list.append(el("p", "v4u-empty", "이 기간에 센 결정이 없어요."));
+    return [list];
+  }
+
   // ------------------------------------------------------------------ 세션 상세 (198:6822): one session's numbers, the dialogue opens in the 세션 기록 window
   function sessionPage(r) {
     const kp = kpiRow([["토큰", num(r.tokens), `입력 ${num(r.input)} · 출력 ${num(r.output)}`], ["비용", usd(r.cost_usd, r.priced), r.priced ? "공시 단가로 계산" : "단가 없음"],
@@ -508,7 +556,7 @@ window.ArkismUsage = (ctx) => {
     const d = S.doc;
     const at = d.updated_at || d.collected_at;
     const note = el("p", "v4u-hint v4u-at", menu() === "router" ? "Arkism 라우터를 거친 요청만 세요. 에이전트가 직접 쓴 토큰은 MEMORY·FLOW 사용량에서 봐요." : at ? `1분마다 모아요 · 마지막 ${new Date(at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}` : "");
-    table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab }[S.tab])(d));
+    table.replaceChildren(...(at || menu() === "router" ? [note] : []), ...({ overview, requests, sessions, hours: hoursTab, decisions: decisionsTab }[S.tab])(d));
     if (S.tab === "overview") window.ArkismModelBudget.mount({ container: table, scope: { ...state.scope }, request, el, button });
     if (S.tab === "requests") side("요청", requestsSide(d));
     else if (S.tab === "sessions") side("세션", sessionsSide(d));
@@ -522,7 +570,8 @@ window.ArkismUsage = (ctx) => {
     overview: "Arkism 라우터가 보낸 요청이 어느 모델로 갔고 토큰·비용이 얼마인지 봐요.",
     requests: "라우터를 거친 요청의 토큰·비용을 봐요. 모델별 성능은 라우팅 현황에서 봐요.",
     sessions: "세션을 프로젝트·모델·스킬별로 모아 봐요. 세션 하나하나는 MEMORY › 개요 › 세션 기록에서 봐요.",
-    hours: "언제 많이 일하는지 요일·시간별로 봐요."
+    hours: "언제 많이 일하는지 요일·시간별로 봐요.",
+    decisions: "사람과 AI가 내린 결정을 종류·이유별로 세요. 감사 기록이 지워져도 수는 남아요."
   };
   const sub = () => {
     if (S.session) { const r = S.session; return [agentName(r.agent), r.device, r.started_at && `${new Date(r.started_at).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}–${new Date(r.ended_at).toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false })}`].filter(Boolean).join(" · "); }
@@ -534,7 +583,7 @@ window.ArkismUsage = (ctx) => {
     agents: () => (S.doc?.agents || []).map((a) => a.name),
     agentCounts: () => (S.doc?.agents || []).map((a) => [a.name, a.all_sessions]),
     load, refresh: () => load(true), count: () => (S.doc?.requests?.count ? num(S.doc.requests.count) : ""), // only the ROUTER 사용량 tab shows it
-    reset: () => { epoch++; Object.assign(S, { doc: null, state: "idle", session: null }); },
+    reset: () => { loads.cancel(); Object.assign(S, { doc: null, state: "idle", session: null }); },
     leave: () => { S.session = null; },
     views: { usage: { title: () => (S.session ? S.session.title || "(제목 없음)" : "사용량"), sub, render: renderView,
       get keepDetail() { return !!S.session || S.tab !== "overview"; },

@@ -26,7 +26,7 @@ var (
 	ErrCandidateQuota   = errors.New("candidate_daily_limit")
 )
 
-var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links"}
+var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations"}
 
 const (
 	VerificationCandidate = "candidate"
@@ -99,12 +99,14 @@ type ProviderCost struct {
 // Record keeps original text independent of replaceable embeddings. References
 // bind evidence to a specific immutable content/version revision.
 type Record struct {
-	MemoryContext *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
-	// Reach (ST-824): where a memory is recalled; "" reads as memoryReach's default. See memory_reach.go.
+	NativeDynamics            *NativeDynamicsPayload     `json:"-" bson:"native_dynamics,omitempty"`
+	NativeOutcomeCaptureStamp *NativeOutcomeCaptureStamp `json:"-" bson:"native_outcome_capture_stamp,omitempty"`
+	MemoryContext             *MemoryContext             `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	// Reach (contract): where a memory is recalled; "" reads as memoryReach's default. See memory_reach.go.
 	Reach        string `json:"reach,omitempty" bson:"reach,omitempty"`
 	ReachProject string `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
 	ReachOrigin  string `json:"-" bson:"reach_origin,omitempty"`
-	// ReachSuggestion (ST-825) is the save-time proposal; ReachSuggestionDismissed is "reach|project" a person turned down.
+	// ReachSuggestion (contract) is the save-time proposal; ReachSuggestionDismissed is "reach|project" a person turned down.
 	ReachSuggestion          *ReachSuggestion     `json:"reach_suggestion,omitempty" bson:"reach_suggestion,omitempty"`
 	ReachSuggestionDismissed string               `json:"reach_suggestion_dismissed,omitempty" bson:"reach_suggestion_dismissed,omitempty"`
 	ModelBudget              *ModelBudgetState    `json:"-" bson:"model_budget,omitempty"`
@@ -144,7 +146,7 @@ type Record struct {
 	// dedicated /v1/work-checkpoints endpoints, never through generic Record
 	// serialization; receipts carry request hash/id/revision only.
 	WorkCheckpoint *WorkCheckpoint `json:"-" bson:"work_checkpoint,omitempty"`
-	// MemorySignal is the derived ST-813 trust signal on a jobs row (kind memory_signal).
+	// MemorySignal is the derived contract trust signal on a jobs row (kind memory_signal).
 	MemorySignal *MemorySignal `json:"memory_signal,omitempty" bson:"memory_signal,omitempty"`
 
 	// StaleMark: written from a memory a person has since replaced (stale_cascade.go).
@@ -165,6 +167,7 @@ type Record struct {
 	SupersededBy       *Ref                     `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
 	Supersedes         []Ref                    `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
 	Review             *ReviewDecision          `json:"review,omitempty" bson:"review,omitempty"`
+	Removal            *Removal                 `json:"removal,omitempty" bson:"removal,omitempty"`
 	Classification     *CandidateClassification `json:"classification,omitempty" bson:"classification,omitempty"`
 	OriginProduct      string                   `json:"origin_product,omitempty" bson:"origin_product,omitempty"`
 	SourceRef          string                   `json:"source_ref,omitempty" bson:"source_ref,omitempty"`
@@ -304,7 +307,7 @@ type Repository interface {
 	// MemoryOutcomeCounts aggregates memory_outcome evaluations per memory id under the same filters.
 	MemoryOutcomeCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeCount, error)
 	// MemoryOutcomeSessionCounts groups judged sessions by confirmed delivery,
-	// server-only return, or unknown observation (ST-819).
+	// server-only return, or unknown observation (contract).
 	MemoryOutcomeSessionCounts(context.Context, MemoryOutcomeQuery) ([]MemoryOutcomeSessionCount, error)
 	// MemoryUseCounts aggregates context_usage receipts per memory id (all revisions) in one scope.
 	MemoryUseCounts(context.Context, Scope, []string) ([]MemoryUseCount, error)
@@ -312,9 +315,9 @@ type Repository interface {
 	MemoryWorkCounts(context.Context, Scope, []string) ([]MemoryWorkCount, error)
 	// MemoryUsageWindow counts context_usage receipts per live memory created since the first time, and since the second.
 	MemoryUsageWindow(context.Context, Scope, time.Time, time.Time) ([]MemoryUsageCount, error)
-	// ST-820 graph reads; each applies the scope and memoryGraphWhere (reach) filter.
+	// contract graph reads; each applies the scope and memoryGraphWhere (reach) filter.
 	MemoryGraphNodes(context.Context, MemoryGraphQuery, []string) ([]Record, error)
-	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (ST-820 all mode).
+	// MemoryGraphMapNodes returns up to limit visible memories with id after the given one, by id (contract all mode).
 	MemoryGraphMapNodes(context.Context, MemoryGraphQuery, string, int) ([]Record, error)
 	// MemoryGraphLinks returns memory_relations rows naming any of the memory ids (up to memoryGraphScan+1).
 	MemoryGraphLinks(context.Context, MemoryGraphQuery, []string) ([]Record, error)

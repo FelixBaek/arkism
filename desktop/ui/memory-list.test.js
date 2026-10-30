@@ -2,6 +2,7 @@
 // Memory list (modules/memoryList.mjs), candidate groups (candidateGroups.mjs) and focus retention (listFocus.mjs).
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/fake-dom.cjs");
 
 const DAY = 86400000;
@@ -50,6 +51,10 @@ function setup(overrides = {}) {
     memoryPages: { refresh: async () => state.data.memories }, memoryKey: () => "k",
     loadMaintenance: async () => "maint", memoryResults: { reset: () => log.push("resetResults") },
     hydrateMaintenance: () => log.push("hydrate"), loadMemoryTotals: () => log.push("totals"),
+    // app.js listCount/idleCount: every row is loaded here, so a count is the rows' length
+    listCount: (name) => { const n = state.data[name].length; return { state: "loaded", n, min: n, text: String(n) }; },
+    idleCount: () => { const n = state.usageDone ? state.data.memories.filter(deps.idle).length : null; return { state: n === null ? "loading" : "loaded", n, min: n ?? 0, text: n === null ? "…" : String(n) }; },
+    partialMemories: () => false,
     ...overrides
   };
   return { document, h, deps, state, snaps, snap, calls, notices, gone, log };
@@ -74,7 +79,9 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memory.memTab = "digests"; assert.deepEqual(api.memTitle()[2], "주제 3개");
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");
   env.state.usageDone = false; env.deps.memory.memTab = "conflicted"; env.snap("memories").total = undefined;
-  assert.equal(api.memTitle()[2], "3개");
+  assert.equal(api.memTitle()[2], "3+개"); // idle use counts still loading: at least the 3 known, not exactly 3 (#465)
+  env.state.usageDone = true; env.deps.digests.mergeCount = () => false; // the merge proposal read failed (#465)
+  assert.equal(api.memTitle()[2], "4+개", "a failed merge count makes the total open-ended, not +0");
 });
 
 test("the main list draws check card, filters, chips, badges, paging and empty state", async () => {
@@ -260,8 +267,9 @@ test("decide reviews once per item with an operation id and reports conflicts", 
   assert.equal(env.notices.at(-1), "처리하지 못했어요: boom");
 });
 
-test("resolveConflict sends the chosen resolution and deletes the old memory on drop", async () => {
+test("resolveConflict sends the chosen resolution and removes the old memory with a reason on drop", async () => {
   const env = setup(); const api = await list(env);
+  delete require.cache[require.resolve("./delete-reason.js")]; require("./delete-reason.js");
   const rel = { id: "rel", revision: 2, relations: [{ collection: "memories", id: "m1", revision: 5 }] };
   env.deps.reply = (path) => (path.startsWith("/v1/memory_relations/") ? rel : {});
   const c = { id: "c1", conflict_id: "k1", revision: 4 };
@@ -275,11 +283,13 @@ test("resolveConflict sends the chosen resolution and deletes the old memory on 
     assert.ok(env.notices.at(-1).startsWith(note));
   }
   env.calls.length = 0;
-  await api.resolveConflict(c, "drop");
-  assert.equal(env.calls[2][1].method, "DELETE");
-  assert.equal(JSON.parse(env.calls[2][1].body).expected_revision, 6);
+  await api.resolveConflict(c, "drop", { code: "duplicate", note: "같은 말" });
+  assert.equal(JSON.parse(env.calls[1][1].body).reason_code, "duplicate", "the candidate reject carries the reason");
+  assert.equal(env.calls[2][0], "/v1/memories/m1/transition");
+  const removal = JSON.parse(env.calls[2][1].body);
+  assert.deepEqual([removal.expected_revision, removal.status, removal.reason_code, removal.reason], [6, "rejected", "duplicate", "같은 말"]);
   assert.match(env.notices.at(-1), /모두 지웠어요/);
-  env.deps.reply = (path, opts) => { if (opts?.method === "DELETE") throw new Error("x"); return path.startsWith("/v1/memory_relations/") ? rel : {}; };
+  env.deps.reply = (path) => { if (/\/transition$/.test(path)) throw new Error("x"); return path.startsWith("/v1/memory_relations/") ? rel : {}; };
   await api.resolveConflict(c, "drop");
   assert.match(env.notices.at(-1), /지금 기억은 지우지 못했어요/);
   env.deps.reply = () => ({ relations: [] });

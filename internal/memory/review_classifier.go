@@ -126,7 +126,7 @@ func trainReviewClassifier(ex []reviewExample, space string) *ReviewClassifier {
 // crossValidate trains on four fifths and scores the held-out fifth, five times.
 func crossValidate(ex []reviewExample) ReviewClassifierReport {
 	rep := ReviewClassifierReport{Examples: len(ex)}
-	order := rand.New(rand.NewSource(1)).Perm(len(ex))
+	order := rand.New(rand.NewSource(1)).Perm(len(ex)) // math/rand: fixed seed keeps the folds reproducible; nothing secret
 	scores := make([]float64, len(ex))
 	for fold := range 5 {
 		var train []reviewExample

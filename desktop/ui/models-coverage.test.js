@@ -1,6 +1,7 @@
 // 설정 › 에이전트's provider parts (models.js): accounts, keys, models and the key dialog against a stand-in server.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -58,7 +59,7 @@ function mk({ mode = "server", fail = {}, outcome = "done" } = {}) {
     state, el: dom.el, icon: dom.icon, button: dom.button, agentLogo: dom.agentLogo, ago: () => "방금", go: (x) => went.push(x), notice: (m) => notes.push(m),
     query: () => "",
     request: async (path, opt) => {
-      const body = opt && JSON.parse(opt.body);
+      const body = opt?.body && JSON.parse(opt.body); // a read passes only its abort signal
       calls.push([path, body]);
       const f = v.fail[path];
       if (f) throw new Error(f);

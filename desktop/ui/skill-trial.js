@@ -8,9 +8,10 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
   return (skillID, versionID) => {
     const panel = el("details", "section skill-trial"), body = el("div"); panel.append(el("summary", "", "제한적으로 시험 적용"), body);
     const scope = { ...state.scope }, owner = JSON.stringify([state.server, state.token, scope, skillID, versionID]);
-    let epoch = 0, busy = false, journal;
+    let busy = false, journal;
+    const draws = globalThis.ArkismKeep.latest();
     const key = crypto.subtle.digest("SHA-256", new TextEncoder().encode(owner)).then(bytes => journal = "arkism.skill-trial.v1." + Array.from(new Uint8Array(bytes), x => x.toString(16).padStart(2, "0")).join(""));
-    const live = ticket => panel.isConnected && panel.open && epoch === ticket && state.view === "skills" && state.selected === `skill:${skillID}` && owner === JSON.stringify([state.server, state.token, state.scope, skillID, versionID]);
+    const live = ticket => panel.isConnected && panel.open && ticket.live() && state.view === "skills" && state.selected === `skill:${skillID}` && owner === JSON.stringify([state.server, state.token, state.scope, skillID, versionID]);
     const sameScope = value => ["workspace_id", "project_id", "user_id", "agent_id"].every(k => (value?.[k] || "") === (scope[k] || ""));
     const post = (path, input) => request(path, { method: "POST", body: JSON.stringify({ scope, ...input }) });
     function validRecord(r) {
@@ -26,14 +27,15 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
     }
     const date = value => new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
     async function draw(selectedID) {
-      const ticket = ++epoch, create = el("div"), history = el("div"), detail = el("div"), note = el("p", "meta"); note.setAttribute("role", "status");
+      const ticket = draws.begin(), create = el("div"), history = el("div"), detail = el("div"), note = el("p", "meta"); note.setAttribute("role", "status");
       body.replaceChildren(el("p", "meta", "프로그램과 종료 시각을 정해 승인된 후보를 시험해요. 기본 버전은 유지돼요. 준비 후 사용할 에이전트에 시험 요청을 보내 주세요."), create, history, detail, note);
-      let listEpoch = 0, hasRecords = false;
+      let hasRecords = false;
+      const lists = globalThis.ArkismKeep.latest();
       async function page(after = "") {
-        const lookup = ++listEpoch; history.replaceChildren(el("p", "meta", "시험 기록을 읽는 중…"));
+        const lookup = lists.begin(); history.replaceChildren(el("p", "meta", "시험 기록을 읽는 중…"));
         try {
           const result = await post("/v1/skill-trials/list", { skill_id: skillID, candidate_id: versionID, limit: 10, after });
-          if (!live(ticket) || lookup !== listEpoch) return;
+          if (!live(ticket) || !lookup.live()) return;
           if (result.authority !== "data_only_untrusted" || !Array.isArray(result.items) || result.items.some(v => !validView(v)) || result.next_cursor && (typeof result.next_cursor !== "string" || result.next_cursor === after)) throw new Error("invalid_page");
           hasRecords = result.items.length > 0;
           history.replaceChildren(el("h4", "", "시험 기록"));
@@ -43,7 +45,7 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
           }
           if (after) history.append(button("첫 기록으로", "small", null, () => page()));
           if (result.next_cursor) history.append(button("다음 기록", "small", null, () => page(result.next_cursor)));
-        } catch (_) { if (live(ticket) && lookup === listEpoch) history.replaceChildren(el("p", "meta", "시험 기록을 읽지 못했어요."), button("기록 다시 조회", "small", null, () => page(after))); }
+        } catch (_) { if (live(ticket) && lookup.live()) history.replaceChildren(el("p", "meta", "시험 기록을 읽지 못했어요."), button("기록 다시 조회", "small", null, () => page(after))); }
       }
       function show(view) {
         const r = view.record, t = r.skill_trial;
@@ -129,7 +131,7 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
       }
       if (selectedID && live(ticket)) { busy = false; await refresh(selectedID); }
     }
-    panel.addEventListener("toggle", () => { if (panel.open) void draw(); else { epoch++; body.replaceChildren(); } });
+    panel.addEventListener("toggle", () => { if (panel.open) void draw(); else { draws.cancel(); body.replaceChildren(); } });
     return panel;
   };
 };

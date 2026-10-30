@@ -123,6 +123,7 @@
    새 화면은 --nc-* 를 쓴다. 아래에서 옛 이름(--bg-window, --text-1 …)도 같은 값으로 이어 줘서
    아직 안 바꾼 화면도 같은 색으로 보인다.
    =================================================================================== */
+/* stylelint-disable-next-line no-duplicate-selectors -- the v4 layer stays apart from the exported block above */
 :root {
   --nc-canvas: #111111; --nc-rail: #0b0b0b; --nc-surface: #181818; --nc-raised: #202020; --nc-subtle: #292929;
   --nc-line: #363636; --nc-text: #f0efeb; --nc-muted: #b8b7b2; --nc-quiet: #92918c; --nc-art: #8b8b86;
@@ -133,6 +134,7 @@
   --nc-radius-panel: 12px; --nc-radius-control: 8px; --nc-radius-quote: 6px;
   --nc-detail-w: 366px; --nc-rail-w: 218px; --nc-page-pad: 32px;
 }
+/* stylelint-disable-next-line no-duplicate-selectors -- same: v4 layer */
 :root[data-theme="light"] {
   --nc-canvas: #f5f5f3; --nc-rail: #eaeae8; --nc-surface: #fbfbfa; --nc-raised: #ffffff; --nc-subtle: #e6e6e4;
   --nc-line: #d3d3d0; --nc-text: #232323; --nc-muted: #5c5c59; --nc-quiet: #656562; --nc-art: #757570;

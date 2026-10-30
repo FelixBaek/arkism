@@ -167,7 +167,7 @@
   let translator = makeTranslator({});
   const translate = (text) => translator.translate(text);
   let dictionaryTask = null;
-  let languageSequence = 0;
+  const switches = globalThis.ArkismKeep.latest(); // the last language picked wins over a dictionary still loading
   async function englishDictionary() {
     if (!dictionaryTask) dictionaryTask = import("./i18n-en.js").then(() => {
       translator = makeTranslator(root.ArkismI18nEN);
@@ -262,11 +262,11 @@
   let titleOrig = null;
   async function setLang(next) {
     next = next === "en" ? "en" : "ko";
-    const sequence = ++languageSequence;
+    const sequence = switches.begin();
     if (next === "en") {
       try { await englishDictionary(); }
-      catch (error) { if (sequence === languageSequence) document.documentElement.lang = lang; console.warn("English dictionary unavailable", error); return false; }
-      if (sequence !== languageSequence) return false;
+      catch (error) { if (sequence.live()) document.documentElement.lang = lang; console.warn("English dictionary unavailable", error); return false; }
+      if (!sequence.live()) return false;
     }
     if (next === lang) return true;
     lang = next;
@@ -291,7 +291,7 @@
     walk(d.documentElement, fn);
     if (fn === apply) observer.observe(d.documentElement, OBSERVE);
   }
-  root.addEventListener("arkism-popout", (e) => { if (lang === "en") popout(e.detail, apply); });
+  (root.ArkismPopoutSetup ||= {}).translate = (d) => { if (lang === "en") popout(d, apply); };
 
   // 대화 상자 문구
   for (const name of ["confirm", "alert", "prompt"]) {

@@ -314,7 +314,6 @@
 /* 새 워크플로우 · 고치기 · 배경 사진 (198:2952 · 198:3038 · 240:18232 · 240:18299) */
 dialog.wf-dialog { border-radius: 12px; border: 1px solid var(--nc-line); background: var(--nc-canvas); color: var(--nc-text); box-shadow: var(--shadow-popover); }
 dialog.wf-dialog::backdrop { background: rgb(0 0 0 / .6); }
-dialog.wf-settings { width: min(1000px, calc(100vw - 48px)); }
 .wf-dialog .dialog-head { padding: 20px 24px 16px; border-bottom: 1px solid var(--nc-line); }
 .wf-dialog .dialog-head h2 { font: 500 calc(17px * var(--fs, 1))/1.45 var(--sans); color: var(--nc-text); }
 .wf-dialog .dialog-head p { color: var(--nc-muted); font: 400 calc(12.5px * var(--fs, 1))/1.5 var(--sans); }

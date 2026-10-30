@@ -33,12 +33,19 @@ window.ArkismModels = (ctx) => {
   let typing = null; // the provider whose filter had focus before a redraw
 
   const doc = () => state.data.providers || { providers: [], requests: [], disabled: [] };
+  // A write's answer is newer than any providers read still out: publish() drops those reads, so a read that
+  // started before a pick (opening the tab, a refresh poll) cannot land afterwards and put the old pick back.
+  const loads = globalThis.ArkismKeep.latest();
+  const publish = (next) => { loads.cancel(); state.data.providers = next; return next; };
   async function load() {
+    const turn = loads.begin();
+    let next;
     try {
-      state.data.providers = (await request(`/v1/providers?${query()}`)).providers || null;
+      next = (await request(`/v1/providers?${query()}`, { signal: turn.signal })).providers || null;
     } catch (_) {
-      state.data.providers = null; // older server: the tab says so
+      next = null; // older server: the tab says so
     }
+    if (turn.live()) state.data.providers = next;
     return state.data.providers;
   }
   // The list always shows the four known providers, so a key can be added before the first report.
@@ -71,7 +78,7 @@ window.ArkismModels = (ctx) => {
 
   async function switchModel(pid, model, on, extra = {}) {
     try {
-      state.data.providers = (await request("/v1/providers/models", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, model, enabled: on, ...extra }) })).providers;
+      publish((await request("/v1/providers/models", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, model, enabled: on, ...extra }) })).providers);
       render(false);
     } catch (e) { notice(errText(e)); }
   }
@@ -81,7 +88,7 @@ window.ArkismModels = (ctx) => {
     if (btn) btn.disabled = true;
     try {
       const rec = await request("/v1/providers/test", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, model }) });
-      state.data.providers = rec.providers;
+      publish(rec.providers);
       render(false);
       notice(`${model}에 시험 문장을 보냈어요. 길면 1분쯤 걸려요.`);
       const q = await waitFor(last(rec).id, 120000);
@@ -135,7 +142,7 @@ window.ArkismModels = (ctx) => {
     if (!await ask(`'${key.name}' 키(끝 ${key.last4})를 서버에서 지울까요?`)) return;
     try {
       const r = await request("/v1/providers/keys/remove", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, key_id: key.id }) });
-      state.data.providers = r.providers;
+      publish(r.providers);
       notice("지우기를 요청했어요. 서버에서 지우면 목록에서 빠져요.");
       render(false);
       const done = await waitFor(last(r).id);
@@ -185,7 +192,7 @@ window.ArkismModels = (ctx) => {
     if (name === null) return;
     try {
       const rec = await request("/v1/providers/labels", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, kind, id, label: name.trim() }) });
-      state.data.providers = rec.providers;
+      publish(rec.providers);
       render(false);
     } catch (e) { notice(errText(e)); }
   }
@@ -220,7 +227,7 @@ window.ArkismModels = (ctx) => {
   async function renameTo(kind, pid, id, name) {
     try {
       const rec = await request("/v1/providers/labels", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: pid, kind, id, label: name.trim() }) });
-      state.data.providers = rec.providers;
+      publish(rec.providers);
       notice("이름을 저장했어요.");
       render(false);
     } catch (e) { notice(errText(e)); }
@@ -241,7 +248,7 @@ window.ArkismModels = (ctx) => {
     try {
       const r = await request("/v1/providers/cli_update", { method: "POST", body: JSON.stringify({ scope: state.scope, provider: p.id, cli: a.cli,
         request_id: requestId(), expected_version: a.cli_info.version, expected_via: a.cli_info.via }) });
-      if (r?.providers) state.data.providers = r.providers;
+      if (r?.providers) publish(r.providers);
       notice(`${CLI_NAMES[a.cli] || a.cli} 업데이트를 요청했어요. ${state.mode === "local" ? "이 PC" : "서버"}에서 설치하면 버전이 바뀌어요.`);
       render(false);
       const id = r?.providers ? last(r).id : "";
@@ -566,7 +573,7 @@ window.ArkismModels = (ctx) => {
       const from = groups.find((p) => p.id === provider)?.name;
       sel.disabled = true;
       try {
-        state.data.providers = (await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model, ...(provider ? { provider } : {}) }) })).providers;
+        publish((await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model, ...(provider ? { provider } : {}) }) })).providers);
         notice(!model ? "AI 도움은 서버 기본 모델로 답해요." : from ? `AI 도움은 이제 ${from}의 ${model}로 답해요.` : `AI 도움은 이제 ${model}로 답해요.`);
         render(false);
       } catch (e) { notice(errText(e)); sel.value = current; } finally { sel.disabled = false; }
@@ -693,7 +700,7 @@ window.ArkismModels = (ctx) => {
       say(true, "확인하는 중…", "서버가 공급자에 물어보고 있어요.");
       try {
         const r = await request("/v1/providers/keys", { method: "POST", body: JSON.stringify(payload(true)) });
-        state.data.providers = r.providers;
+        publish(r.providers);
         const q = await waitFor(last(r).id);
         if (!q) say(false, "답이 없어요", "서버 실행기가 켜져 있는지 확인해 주세요.");
         else if (q.status === "done") {
@@ -717,7 +724,7 @@ window.ArkismModels = (ctx) => {
       try {
         const r = await request("/v1/providers/keys", { method: "POST", body: JSON.stringify(payload(false)) });
         key.value = "";
-        state.data.providers = r.providers;
+        publish(r.providers);
         if (p.custom) { // the new key becomes its own provider; the models picked here are the ones it starts with
           const pid = customPid(last(r).key_id || "");
           for (const m of found) if (!off.has(m)) await switchModel(pid, m, true, { add: true });
@@ -737,5 +744,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
+  return { load, publish, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
 };

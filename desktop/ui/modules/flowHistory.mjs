@@ -11,13 +11,13 @@ export function flowNeedsDecision(waiting) {
 // the initiating page and connection; no private result survives a scope switch.
 export function createFlowHistory({ state, el, button, request, query, notice, ago, go }) {
   const recovery = createFlowDeliveryRecovery({ state, el, button, request, notice });
-  let generation = 0;
+  const views = globalThis.ArkismKeep.latest();
   const session = () => JSON.stringify([state.server, state.scope, state.token, state.connection?.generation]);
   const raw = (node) => { node.setAttribute("data-no-i18n", ""); return node; };
   const paragraph = (text) => el("p", "flow-history-note", text);
   function view(container) {
-    const epoch = ++generation, key = session();
-    return () => epoch === generation && key === session() && container.isConnected;
+    const turn = views.begin(), key = session();
+    return () => turn.live() && key === session() && container.isConnected;
   }
   function heading(box, title, refresh) {
     const row = el("div", "flow-history-head");
@@ -123,6 +123,6 @@ export function createFlowHistory({ state, el, button, request, query, notice, a
       if (!items.length) container.append(paragraph("아직 @이름으로 부른 실행이 없어요."));
     } catch { if (current()) failure(container); }
   }
-  return { openResult, runs, reset: () => { generation++; } };
+  return { openResult, runs, reset: () => { views.cancel(); } };
 }
 

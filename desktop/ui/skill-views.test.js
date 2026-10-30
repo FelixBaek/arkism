@@ -1,6 +1,7 @@
 // 스킬 (modules/skillViews.mjs): checks, the list and its filters, staged agent changes, the detail and the in-view pages.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 const mod = import("./modules/skillViews.mjs");
 
@@ -398,6 +399,31 @@ test("deprecated detail restores the skill, and restore failures are reported", 
   btn(d, "되돌리기").click();
   await flush();
   assert.match(s.notices.at(-1), /되돌리지 못했어요 \(locked\)/);
+});
+
+test("detail exports the version as a zip, also from the trash, and reports a failure", async () => {
+  const urls = [];
+  const realURL = globalThis.URL;
+  globalThis.URL = Object.assign(function () {}, { createObjectURL: (b) => { urls.push(b); return "blob:x"; }, revokeObjectURL: () => {} });
+  try {
+    const sk = SK("a", { status: "deprecated" });
+    let fail = false;
+    const s = await views({ skills: [sk], handler: (path) => {
+      if (fail && path.includes("/zip")) throw new Error("x");
+      return path.includes("/zip") ? { filename: "a.zip", content_base64: Buffer.from("PK zip").toString("base64") } : {};
+    } });
+    await s.v.skillDetailV4(sk);
+    const d = s.doc.querySelector(".detail");
+    btn(d.querySelector(".v4s-trash"), "zip으로 내보내기").click();
+    await flush();
+    assert.ok(s.calls.some(([p]) => p === "/v1/skill_versions/v-a/zip?q=1"));
+    assert.equal(Buffer.from(await urls[0].arrayBuffer()).toString(), "PK zip");
+    assert.equal(s.notices.at(-1), "a.zip 다운로드를 시작했어요.");
+    fail = true;
+    btn(d.querySelector(".v4s-trash"), "zip으로 내보내기").click();
+    await flush();
+    assert.match(s.notices.at(-1), /zip을 만들지 못했어요/);
+  } finally { globalThis.URL = realURL; }
 });
 
 test("improve pages walk the four steps and their side text", async () => {

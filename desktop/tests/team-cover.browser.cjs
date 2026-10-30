@@ -10,7 +10,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_CORE_PATH || path.resolve(__
     page.on("pageerror", error => errors.push(error.message));
     page.on("console", m => { if (/Content Security Policy/.test(m.text())) blocked.push(m.text().slice(0, 160)); });
     const files = {
-      "/": ["text/html; charset=utf-8", '<!doctype html><body><script src="/team-cover.js"></script>'],
+      "/": ["text/html; charset=utf-8", '<!doctype html><body><script src="/keep.js"></script><script src="/team-cover.js"></script>'],
+      "/keep.js": ["text/javascript; charset=utf-8", fs.readFileSync(path.resolve(__dirname, "../ui/keep.js"), "utf8")],
       "/team-cover.js": ["text/javascript; charset=utf-8", fs.readFileSync(path.resolve(__dirname, "../ui/team-cover.js"), "utf8")]
     };
     await page.route("http://app.test/**", route => { const [type, body] = files[new URL(route.request().url()).pathname] || ["text/plain", ""]; route.fulfill({ status: 200, contentType: type, body, headers: { "content-security-policy": csp } }); });

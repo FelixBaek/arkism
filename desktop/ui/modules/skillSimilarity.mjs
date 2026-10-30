@@ -39,24 +39,25 @@ function* compare(skills, dismissed, top) {
   }
 }
 export function createSkillSimilarity({ notify, pause = () => new Promise(resolve => setTimeout(resolve, 0)) }) {
-  let epoch = 0, key = "", items = [], busy = false;
+  const runs = globalThis.ArkismKeep.latest(); // a newer catalog drops the comparison still yielding
+  let key = "", items = [], busy = false;
   async function finish(iterator, top, ticket) {
     let began = performance.now();
     while (!iterator.next().done) {
-      if (ticket !== epoch) return;
+      if (!ticket.live()) return;
       if (performance.now() - began >= 6) { await pause(); began = performance.now(); }
     }
-    if (ticket === epoch) { items = top; busy = false; queueMicrotask(() => { if (ticket === epoch) notify(); }); }
+    if (ticket.live()) { items = top; busy = false; queueMicrotask(() => { if (ticket.live()) notify(); }); }
   }
   function read(records, dismissed) {
     const live = records.filter(skill => skill.status !== "deprecated");
     const next = JSON.stringify([live.map(skill => [skill.id, skill.name, skill.description]), dismissed]);
     if (next === key) return items;
-    key = next; const ticket = ++epoch, top = [], iterator = compare(live, new Set(dismissed), top);
+    key = next; const ticket = runs.begin(), top = [], iterator = compare(live, new Set(dismissed), top);
     items = []; busy = live.length > 150;
     if (busy) void finish(iterator, top, ticket);
     else { while (!iterator.next().done) { /* small catalogs retain synchronous rendering */ } items = top; }
     return items;
   }
-  return { read, get busy() { return busy; }, reset() { epoch++; key = ""; items = []; busy = false; } };
+  return { read, get busy() { return busy; }, reset() { runs.cancel(); key = ""; items = []; busy = false; } };
 }

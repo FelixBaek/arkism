@@ -2,6 +2,7 @@
 // Memory detail panels (기억 평가 · 기억 맥락 · 생성 모델 기록 · Claude API 월 예산) and the 과거 기억 tab, on a small DOM stand-in.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
 const h = dom.helpers(document);
