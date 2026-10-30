@@ -80,7 +80,7 @@ func (s *Service) PublishDynamicsSnapshot(ctx context.Context, token string, sco
 	err = s.Repo.Transaction(bound, func(ctx context.Context, tx Tx) error {
 		snapshot = nil
 		var e error
-		snapshot, e = s.buildDynamicsSnapshotTx(ctx, tx, scope)
+		snapshot, e = s.buildDynamicsSnapshotTx(ctx, tx, scope, false)
 		return e
 	})
 	if errors.Is(err, ErrNotFound) {
@@ -93,6 +93,85 @@ func (s *Service) PublishDynamicsSnapshot(ctx context.Context, token string, sco
 		s.DynamicsLoad.installDynamicsSnapshot(snapshot)
 	}
 	return nil
+}
+
+// RepairDynamicsPublication is the explicit verify-then-republish step for a
+// withheld queue. It needs the same service write:jobs authority as Publish and
+// succeeds only without a live lease or pending purge; an expired lease, which
+// no worker can reclaim while withheld, is cleared so its claim stays fenced.
+// The snapshot is rebuilt from canonical rows in the same transaction; a
+// nonempty tail publishes only the applied prefix, as in Publish, and with no
+// applied prefix yet only the hold is released. The worker refuses to claim
+// while withheld, so requiring a drained queue here would strand queued work.
+func (s *Service) RepairDynamicsPublication(ctx context.Context, token string, scope Scope) error {
+	if !s.DynamicsLoad.configured(scope) {
+		return ErrDynamicsRuntimeBinding
+	}
+	bound, err := s.nativeActor(ctx, token, scope, "write:jobs")
+	if err != nil {
+		return err
+	}
+	var snapshot *DynamicsLoadSnapshot
+	err = s.Repo.Transaction(bound, func(ctx context.Context, tx Tx) error {
+		snapshot = nil
+		applied, e := s.releaseDynamicsHoldTx(ctx, tx, scope)
+		if e != nil || !applied {
+			return e
+		}
+		snapshot, e = s.buildDynamicsSnapshotTx(ctx, tx, scope, true)
+		if e == nil && snapshot == nil {
+			e = ErrDynamicsSnapshotUnavailable
+		}
+		return e
+	})
+	if err != nil {
+		return err
+	}
+	if snapshot != nil {
+		s.DynamicsLoad.installDynamicsSnapshot(snapshot)
+	}
+	return nil
+}
+
+// releaseDynamicsHoldTx clears the hold and closes a known repair interval;
+// its end is the validation time of the rebuild that follows in this transaction. It
+// reports whether an applied prefix exists to republish; with none, no stale
+// value can be served and the worker's next normal Publish follows its first apply.
+func (s *Service) releaseDynamicsHoldTx(ctx context.Context, tx Tx, scope Scope) (bool, error) {
+	c, e := dynamicsLockCoordinator(ctx, tx, scope)
+	if e != nil {
+		return false, e
+	}
+	if e = s.dynamicsBinding(ctx, tx, scope, c); e != nil {
+		return false, e
+	}
+	p := c.DynamicsLoad
+	if !p.Withheld {
+		return false, ErrConflict
+	}
+	now := dynamicsNowNS()
+	if p.LeaseUntilNS > now {
+		return false, ErrDynamicsSnapshotUnavailable
+	}
+	if p.RepairStartNS != nil {
+		if now < *p.RepairStartNS {
+			return false, ErrConflict
+		}
+		p.LastRepairStartNS, p.LastRepairEndNS = p.RepairStartNS, &now
+	}
+	p.LeaseToken, p.LeaseUntilNS = "", 0
+	p.Withheld, p.RepairStartNS = false, nil
+	// The release itself publishes nothing, but it must not outrun a restore or a pending purge.
+	if e = nativeCheckRestorePublicationTx(ctx, tx); e != nil {
+		return false, e
+	}
+	if e = dynamicsPublicationHeldTx(ctx, tx, scope, p); e != nil {
+		return false, e
+	}
+	if e = dynamicsReplace(ctx, tx, c); e != nil {
+		return false, e
+	}
+	return p.AsOfNS > 0 || p.Count == 0, nil
 }
 
 // Called within the existing authoritative native read transaction. Cached
@@ -132,7 +211,7 @@ func (s *Service) dynamicsSnapshotReadTx(ctx context.Context, tx Tx, scope Scope
 	return nil
 }
 
-func (s *Service) buildDynamicsSnapshotTx(ctx context.Context, tx Tx, scope Scope) (*DynamicsLoadSnapshot, error) {
+func (s *Service) buildDynamicsSnapshotTx(ctx context.Context, tx Tx, scope Scope, repaired bool) (*DynamicsLoadSnapshot, error) {
 	c, e := dynamicsLockCoordinator(ctx, tx, scope)
 	if e != nil {
 		return nil, e
@@ -149,17 +228,10 @@ func (s *Service) buildDynamicsSnapshotTx(ctx context.Context, tx Tx, scope Scop
 	if now < p.AsOfNS || now < p.PublishedNS {
 		return nil, ErrConflict
 	}
-	purges, e := tx.(nativeDynamicsTxQueries).NativeDynamicsPendingPurges(ctx, scope, 1)
-	if e != nil {
+	if e = dynamicsPublicationHeldTx(ctx, tx, scope, p); e != nil {
 		return nil, e
 	}
-	if len(purges) > 0 {
-		return nil, ErrDynamicsSnapshotUnavailable
-	}
-	if p.Withheld || p.LeaseToken != "" {
-		return nil, ErrDynamicsSnapshotUnavailable
-	}
-	if p.PublishedNS > 0 && now-p.PublishedNS < l.PublishIntervalNS {
+	if !repaired && p.PublishedNS > 0 && now-p.PublishedNS < l.PublishIntervalNS {
 		return nil, nil
 	}
 	states, e := dynamicsSnapshotStatesTx(ctx, tx, scope, l)
@@ -197,6 +269,18 @@ func (s *Service) buildDynamicsSnapshotTx(ctx context.Context, tx Tx, scope Scop
 		return nil, e
 	}
 	return snapshot, nil
+}
+
+// A pending purge, a hold or a lease blocks every publication.
+func dynamicsPublicationHeldTx(ctx context.Context, tx Tx, scope Scope, p *DynamicsLoadPayload) error {
+	purges, e := tx.(nativeDynamicsTxQueries).NativeDynamicsPendingPurges(ctx, scope, 1)
+	if e != nil {
+		return e
+	}
+	if len(purges) > 0 || p.Withheld || p.LeaseToken != "" {
+		return ErrDynamicsSnapshotUnavailable
+	}
+	return nil
 }
 func dynamicsSnapshotStatesTx(ctx context.Context, tx Tx, scope Scope, l DynamicsLoadLimits) (map[string]Record, error) {
 	rows, e := tx.(nativeDynamicsTxQueries).NativeDynamicsRows(ctx, scope, "state", "", "", int(l.SnapshotMaxItems)+1)
