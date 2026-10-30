@@ -30,9 +30,11 @@ window.ArkismModelBudget = (() => {
         body.replaceChildren(el("p", "meta", `${doc.month} · UTC 기준`), rows,
           el("p", "meta", "사용 확정액과 미정산 예약을 함께 계산해요. 실제 청구 금액과 다를 수 있어요."));
         body.append(el("p", "meta", doc.daily_soft_target_exceeded ? "오늘 목표를 넘었어요. 목표 초과만으로 처리를 차단하지 않으며 월 예산과 별도 설정한 상한은 계속 적용해요." : "오늘 목표는 지출 추이를 보는 기준이에요. 월 예산과 별도 설정한 상한은 계속 적용해요."));
-      } catch (_) {
+      } catch (e) {
         if (!turn.live() || !panel.isConnected) return;
-        body.replaceChildren(el("p", "meta", "예산 설정을 확인할 수 없어요. 서버 설정과 조회 권한을 확인해 주세요."));
+        // No budget set up here (most people never use the API key): no card at all.
+        if (e?.message === "not_found") { panel.remove(); return; }
+        body.replaceChildren(el("p", "meta", "예산을 불러오지 못했어요. 잠시 뒤 다시 조회해 주세요."));
       }
       if (turn.live() && panel.isConnected) body.append(button("예산 다시 조회", "ghost small", null, load));
     }

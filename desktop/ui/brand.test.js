@@ -24,6 +24,7 @@ test("provider names and base URL hosts find their LobeHub mark; unknown ones fi
   const w = {};
   vm.runInNewContext(fs.readFileSync(require("node:path").join(__dirname, "brand.js"), "utf8"), { window: w, document, String });
   const file = (n) => { const m = w.ArkismBrand.mark(n); return m && (m.src || m.style["--brand"]); };
-  for (const [n, f] of [["NousPortal", "nousresearch"], ["opencode", "opencode"], ["QWEN", "qwen-color"], ["Deepseek", "deepseek-color"], ["deepseek.com", "deepseek-color"], ["Z.ai", "zai"]]) assert.match(file(n), new RegExp(`img/brand/${f}\\.svg`), n);
+  for (const [n, f] of [["NousPortal", "nousresearch"], ["opencode", "opencode"], ["QWEN", "qwen-color"], ["Deepseek", "deepseek-color"], ["deepseek.com", "deepseek-color"], ["Z.ai", "zai"], ["github", "github"], ["figma", "figma-color"], ["Notion", "notion"], ["cloudflare", "cloudflare-color"]]) assert.match(file(n), new RegExp(`img/brand/${f}\\.svg`), n);
   assert.equal(w.ArkismBrand.mark("custom-abc"), null);
+  assert.equal(w.ArkismBrand.mark("githubcopilot"), null, "a GitHub-hosted product is not the GitHub mark");
 });

@@ -133,7 +133,7 @@ test("list: attention card, filters, sort, copies, categories and the footer", a
   const group = (title) => pop.querySelectorAll(".v4s-pop-group").find((g) => g.querySelector("h4").textContent === title);
   assert.deepEqual(pop.querySelectorAll("h4").map((x) => x.textContent), ["카테고리", "상태", "에이전트", "정렬"]);
   assert.deepEqual(group("카테고리").querySelectorAll(".chip").map((c) => c.textContent), ["전체3", "개발2", "분류 안 됨1"]);
-  assert.deepEqual(group("상태").querySelectorAll(".chip").map((c) => c.textContent), ["전체", "빠진 곳 있음1", "안 씀2", "보안 주의1", "업데이트 있음1", "플러그인 스킬1", "휴지통1"]);
+  assert.deepEqual(group("상태").querySelectorAll(".chip").map((c) => c.textContent), ["전체", "일부 에이전트에서 꺼짐1", "안 씀2", "보안 주의1", "업데이트 있음1", "플러그인에 든 스킬1", "휴지통1"]);
   assert.equal(group("상태").querySelector(".chip.active").textContent, "전체");
   btn(group("상태"), "휴지통").click();
   assert.deepEqual(s.log.at(-1), ["go", "skills", "trash"]);
@@ -226,7 +226,13 @@ test("list: no usage yet, no categories, empty, search empty, failed first page 
   s.snap.items = []; s.v.renderSkills();
   assert.doesNotMatch(s.doc.querySelector("#table").textContent, /조건에 맞는 스킬이 없어요/);
   s.snap.ready = true; s.v.renderSkills();
+  assert.match(s.doc.querySelector("#table").textContent, /아직 스킬이 없어요/); // nothing filtered: the first-skill state
+  btn(s.doc.querySelector("#table"), "스킬 설치").click();
+  assert.deepEqual(s.state.skillPage, { kind: "install" });
+  s.state.skillPage = null;
+  s.state.skillCat = "dev"; s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /조건에 맞는 스킬이 없어요/);
+  s.state.skillCat = "all";
   s.state.query = "x"; s.v.renderSkills();
   assert.match(s.doc.querySelector("#table").textContent, /검색과 맞는 스킬이 없어요/);
   s.snap.loading = true; s.snap.items = [SK("a")]; s.v.renderSkills();
@@ -272,10 +278,19 @@ test("staged agent changes: chips, change bar, apply per skill, revert and failu
   assert.equal(s.doc.querySelector("#change-text").textContent, "a → Claude Code에서 빼기 외 2개");
   await s.v.skillDetailV4(skills[0]);
   const d2 = s.doc.querySelectorAll(".detail")[1];
-  assert.match(d2.querySelector(".v4s-confirm").textContent, /Codex에 추가, Claude Code에서 빼기할까요/);
+  assert.equal(d2.querySelector(".v4s-confirm"), null); // one apply bar: the change bar
+  assert.match(d2.textContent, /아래 바에서 적용을 눌러야 바뀌어요/);
   assert.match(d2.querySelectorAll(".v4s-agent")[0].title, /예정을 취소해요/);
   assert.match(d2.textContent, /claude_code|Claude Code:3번/);
-  btn(d2.querySelector(".v4s-confirm"), "취소").click();
+  // 이 스킬 끄기 stages every shown agent off; 켜기 then stages them all back on (pending for a empties).
+  btn(d2.querySelector(".v4s-switch"), "이 스킬 끄기").click();
+  assert.deepEqual([...s.state.pending].filter(([k]) => k.startsWith("a|")).map(([, w]) => w).every((w) => w === "block"), true);
+  await s.v.skillDetailV4(skills[0]);
+  const d3 = s.doc.querySelectorAll(".detail").at(-1);
+  assert.match(d3.textContent, /지금은 어느 에이전트도 받지 않아요/);
+  btn(d3.querySelector(".v4s-switch"), "이 스킬 켜기").click();
+  assert.deepEqual([...s.state.pending.keys()].filter((k) => k.startsWith("a|")), ["a|codex"]);
+  s.state.pending.delete("a|codex");
   assert.equal(s.state.pending.size, 1);
   s.v.renderChangeBar();
   assert.equal(s.doc.querySelector("#change-text").textContent, "b → Gemini에서 빼기");
@@ -318,6 +333,13 @@ test("detail: security card, updates, repo check, experts, AI chat, version fact
   assert.equal(d.heading, "개발");
   assert.match(d.textContent, /보안 위험 · 쓰지 않는 걸 권해요/);
   assert.match(d.textContent, /검사 도구가 구체적인 이유를 보내지 않았어요/);
+  // A risky skill is paused for every agent until a person turns it on; that agent alone gets it after.
+  assert.match(d.textContent, /직접 켜기 전까지 Arkism이 에이전트에게 추천하지 않아요/);
+  assert.match(d.textContent, /보안 위험이라 멈춰 있어요/);
+  assert.equal(s.v.allowed(sk, "claude_code"), false);
+  assert.equal(s.v.allowed({ ...sk, skill_compatibility: { claude_code: "supported" } }, "claude_code"), true);
+  assert.equal(s.v.allowed({ ...sk, skill_compatibility: { claude_code: "supported" } }, "codex"), false);
+  assert.ok(btn(d.querySelector(".v4s-switch"), "이 스킬 켜기"));
   assert.match(d.textContent, /품질 — · 95/);
   assert.match(d.textContent, /최근 60일 안 씀/);
   assert.match(d.textContent, /v1\.0 → v2\.0 있음/);

@@ -149,8 +149,12 @@ type KnowledgeReceipt struct {
 	ExclusionSummary map[string]int `json:"exclusion_summary"`
 }
 
+// knowledgeDefaultProfile is the scope every agent searches: a search without a
+// specialist profile uses it, and the app binds uploads to it.
+const knowledgeDefaultProfile = "default"
+
 func validKnowledgeProfile(profile, version, skill, skillVersion string) bool {
-	return slices.Contains([]string{"design_consultant", "illustrator", "listing_reviewer"}, profile) && version == "v1" && skill == profile+".v1" && skillVersion == "v1"
+	return slices.Contains([]string{knowledgeDefaultProfile, "design_consultant", "illustrator", "listing_reviewer"}, profile) && version == "v1" && skill == profile+".v1" && skillVersion == "v1"
 }
 func knowledgeTrustRank(trust string) int {
 	switch trust {

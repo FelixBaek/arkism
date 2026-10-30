@@ -125,7 +125,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   const s = await views();
   s.state.data.tools.collected_at = "2020-01-01T00:00:00Z";
   s.v.renderTools();
-  assert.match(s.notices[0], /최근 5분 동안/);
+  assert.match(s.notices[0], /5분 넘게 새로 오지 않았어요/);
   const tiles = s.doc.querySelectorAll("#stats .cn-tile strong").map((x) => x.textContent);
   assert.deepEqual(tiles, ["1", "1", "2", "2"]);
   assert.equal(s.state.selected, null); // nothing opens until a row is clicked (the detail is a popup)
@@ -169,9 +169,18 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   s.v.renderTools();
   assert.equal(s.doc.querySelector("#controls .v4s-filter").groups[2].set, true);
   assert.match(s.doc.querySelector("#chips").textContent, /Gemini의 MCP 설정은 아직 읽지 않아요/);
-  assert.match(s.doc.querySelector("#table").textContent, /여기에 표시할 항목이 없어요/);
+  assert.match(s.doc.querySelector("#table").textContent, /조건에 맞는 항목이 없어요/);
   s.state.toolAgent = "hermes"; s.v.renderTools();
   assert.equal(s.state.toolAgent, "");
+  // A fresh install: no 0개 tiles, one next step in the list (MCP: add a server; plugins: where they come from).
+  const servers = s.state.data.tools.servers, plugins = s.state.data.tools.plugins;
+  s.state.data.tools.servers = []; s.v.renderTools();
+  assert.equal(s.doc.querySelectorAll("#stats .cn-tile").length, 0);
+  assert.match(s.doc.querySelector("#table").textContent, /아직 MCP 서버가 없어요/);
+  assert.ok(btn(s.doc.querySelector("#table"), "MCP 서버 추가"));
+  s.state.toolTab = "plugin"; s.state.data.tools.plugins = []; s.v.renderTools();
+  assert.match(s.doc.querySelector("#table").textContent, /아직 플러그인이 없어요\. 서버의 Claude Code에서 \/plugin/);
+  s.state.toolTab = "mcp"; s.state.data.tools.servers = servers; s.state.data.tools.plugins = plugins;
   // Plugin tab.
   s.state.toolTab = "plugin"; s.state.selected = null; s.v.renderTools();
   const prow = s.doc.querySelectorAll("#table .cn-row");
@@ -188,7 +197,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   s.state.data.tools = tools();
   // Never collected: treated as stale.
   s.state.data.tools.collected_at = ""; s.state.toolTab = "mcp"; s.v.renderTools();
-  assert.match(s.notices.at(-1), /최근 5분/);
+  assert.match(s.notices.at(-1), /5분 넘게/);
 });
 
 test("server detail: facts, switches, tools with more, calls, history, skills, workflows and disconnect", async () => {
@@ -502,7 +511,8 @@ test("add server: presets, method switch, agent picks, validation, sends per age
   presets[0].click();
   const sws = dlg.querySelectorAll(".mcp-agent .switch");
   assert.equal(sws.length, 3);
-  sws[0].click(); sws[1].click();
+  assert.deepEqual(sws.map((x) => x.getAttribute("aria-checked")), ["true", "true", "true"]); // every agent starts picked
+  sws[0].click(); sws[1].click(); sws[2].click();
   assert.equal(sws[0].getAttribute("aria-checked"), "false");
   await submit();
   assert.equal(s.calls.length, 0);
@@ -516,8 +526,15 @@ test("add server: presets, method switch, agent picks, validation, sends per age
   s.answerEmpty = true;
   s.v.openAddServer();
   const d2 = dialogs(s).at(-1);
-  d2.querySelectorAll(".mcp-preset")[1].click();
+  // The address is the default field; an empty name comes from the address.
+  assert.equal(d2.querySelectorAll("input").find((i) => i.placeholder.startsWith("https")).closest("label").hidden, false);
+  d2.querySelectorAll("input").find((i) => i.placeholder.startsWith("https")).value = "https://mcp.notes.example.com/mcp";
   await d2.querySelector("form").fire("submit", { submitter: { value: "ok" }, preventDefault() {} });
+  assert.equal(s.calls.at(-1)[1].name, "example");
+  s.v.openAddServer();
+  const d4 = dialogs(s).at(-1);
+  d4.querySelectorAll(".mcp-preset")[1].click();
+  await d4.querySelector("form").fire("submit", { submitter: { value: "ok" }, preventDefault() {} });
   assert.equal(s.calls.at(-1)[1].url, "https://cf.example/mcp");
   for (const [f, re] of [["secret_detected", /키나 토큰처럼 보이는 값/], ["boom", /요청하지 못했어요 \(boom\)/]]) {
     fail = f;

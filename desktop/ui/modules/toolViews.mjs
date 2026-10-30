@@ -94,20 +94,28 @@ export function createToolViews(deps) {
     return out;
   }
 
+  // autoName: a server name from its address (the site's own word: mcp.example.com → example) or its program's last part.
+  function autoName(raw, http) {
+    let n = "";
+    if (http) { try { n = new URL(raw.trim()).hostname.split(".").filter((p) => !["mcp", "www", "api"].includes(p)).at(-2) || ""; } catch (_) { n = ""; } }
+    else n = (splitArgs(raw.trim()).filter((a) => !a.startsWith("-")).at(-1) || "").split("/").at(-1).replace(/^server-/, "").replace(/^mcp-|-mcp$/g, "");
+    return n.replace(/[^A-Za-z0-9@._-]/g, "").slice(0, 128);
+  }
+
   function openAddServer() {
     const dlg = deps.el("dialog", "crew-dialog mcp-add");
     const form = deps.el("form");
     form.method = "dialog";
     const head = deps.el("div", "dialog-head");
     const t = deps.el("div", "");
-    t.append(deps.el("h2", "", "MCP 서버 추가"), deps.el("p", "", "키나 토큰은 넣지 마세요. 로그인이 필요한 서버는 추가한 뒤 에이전트에서 인증해요."));
+    t.append(deps.el("h2", "", "MCP 서버 추가"), deps.el("p", "", "자주 쓰는 서버를 고르거나 주소를 붙여 넣어요. 로그인이 필요한 서버는 추가한 뒤 로그인해요."));
     head.append(t);
     const name = deps.el("input", "mono");
-    name.placeholder = "github";
+    name.placeholder = "비워 두면 주소에서 정해요";
     const how = deps.el("select");
     for (const [k, l] of [["stdio", "프로그램 실행 (stdio)"], ["http", "주소 (http)"]]) { const o = deps.el("option", "", l); o.value = k; how.append(o); }
     const cmd = deps.el("input", "mono");
-    cmd.placeholder = "npx -y @modelcontextprotocol/server-github";
+    cmd.placeholder = "npx -y @modelcontextprotocol/server-memory";
     const url = deps.el("input", "mono");
     url.placeholder = "https://mcp.example.com/mcp";
     const f = (label, input, hint) => { const l = deps.el("label", "field", label); l.append(input); if (hint) l.append(deps.el("small", "", hint)); return l; };
@@ -121,15 +129,17 @@ export function createToolViews(deps) {
       howSeg.append(b);
       return b;
     });
+    how.value = "http"; // an address to paste is the plain start; a program to run sits behind 자세히
     const sync = () => { cmdF.hidden = how.value !== "stdio"; urlF.hidden = how.value !== "http"; howBtns.forEach((b) => b.classList.toggle("active", b.dataset.how === how.value)); };
     how.addEventListener("change", sync);
     sync();
-    const picked = new Set(["claude_code", "codex"]);
+    // Every agent the app can add a server to starts picked; 자세히 narrows it.
+    const picked = new Set(deps.AGENTS.filter(([k]) => SWITCHABLE.mcp.includes(k)).map(([k]) => k));
     const agents = deps.el("div", "mcp-agents");
     for (const [k, n, spec] of deps.AGENTS.filter(([k]) => SWITCHABLE.mcp.includes(k))) {
       const r = deps.el("div", "mcp-agent");
       const tt = deps.el("div", "");
-      tt.append(deps.el("span", "", n), deps.el("small", "", "각 에이전트의 CLI로 서버에 추가해요"));
+      tt.append(deps.el("span", "", n));
       const sw = deps.el("button", "switch");
       sw.type = "button";
       sw.setAttribute("role", "switch");
@@ -159,9 +169,11 @@ export function createToolViews(deps) {
     const howF = deps.el("div", "field");
     howF.append("연결 방식", howSeg);
     const agentsF = deps.el("div", "field");
-    agentsF.append("넣을 에이전트", agents);
+    agentsF.append("넣을 에이전트", agents, deps.el("small", "", "각 에이전트의 프로그램으로 서버에 추가해요."));
+    const more = deps.el("details", "mcp-more");
+    more.append(deps.el("summary", "", "자세히 · 이름, 연결 방식, 넣을 에이전트"), f("이름", name, "영문·숫자·@._/- · 최대 128자"), howF, agentsF);
     const main = deps.el("div", "mcp-main");
-    main.append(preset, f("이름", name, "영문·숫자·@._/- · 최대 128자"), howF, urlF, cmdF, agentsF, deps.el("p", "mcp-warn", "키와 토큰은 이 입력칸에 넣지 마세요."));
+    main.append(preset, urlF, cmdF, more, deps.el("p", "mcp-warn", "키나 토큰이 필요한 서버는 아직 여기서 추가할 수 없어요. 키는 이 칸들에 넣지 마세요."));
     // Right column: the add requests sent lately, and what the two methods mean.
     const side = deps.el("aside", "mcp-side");
     const reqs = (deps.state.data.tools?.requests || []).filter((q) => ["mcp_add", "mcp", "mcp_login"].includes(q.kind)).slice(-5).reverse();
@@ -181,8 +193,8 @@ export function createToolViews(deps) {
       side.append(box, deps.el("p", "cn-note", "적용될 때까지 상태를 다시 읽어요."));
     } else side.append(deps.el("p", "cn-note", "아직 보낸 요청이 없어요."));
     const ways = deps.el("dl", "mcp-ways");
-    ways.append(deps.el("dt", "", "stdio"), deps.el("dd", "", "서버 컴퓨터에서 프로그램을 실행해요. Node.js(npx)나 uv(uvx)가 필요할 수 있어요."),
-      deps.el("dt", "", "http"), deps.el("dd", "", "원격 서버 주소로 연결해요. 로그인이 필요하면 추가한 뒤 인증해요."));
+    ways.append(deps.el("dt", "", "주소 (http)"), deps.el("dd", "", "원격 서버 주소로 연결해요. 로그인이 필요하면 추가한 뒤 로그인해요."),
+      deps.el("dt", "", "프로그램 실행 (stdio)"), deps.el("dd", "", "서버 컴퓨터에서 프로그램을 실행해요. Node.js(npx)나 uv(uvx)가 필요할 수 있어요."));
     side.append(sideHead("방식 고르기"), ways);
     const body = deps.el("div", "dialog-body");
     body.append(main, side);
@@ -198,7 +210,7 @@ export function createToolViews(deps) {
     form.addEventListener("submit", async (e) => {
       if (e.submitter?.value !== "ok") return;
       e.preventDefault();
-      const n = name.value.trim();
+      const n = name.value.trim() || autoName(how.value === "http" ? url.value : cmd.value, how.value === "http");
       const extra = how.value === "http" ? { url: url.value.trim() } : { command: splitArgs(cmd.value.trim()) };
       if (!/^[A-Za-z0-9@._/-]{1,128}$/.test(n) || (how.value === "http" ? !extra.url.startsWith("https://") : !extra.command.length) || !picked.size) {
         deps.notice("이름, 프로그램이나 https 주소, 에이전트를 확인해 주세요.");
@@ -214,7 +226,7 @@ export function createToolViews(deps) {
         deps.render(false);
         pollTools();
         deps.catalog.watchAdd(r, n);
-      } catch (error_) { deps.notice(error_.message === "secret_detected" ? "키나 토큰처럼 보이는 값이 있어요. 빼고 다시 넣어 주세요." : `요청하지 못했어요 (${error_.message}).`); ok.disabled = false; }
+      } catch (error_) { deps.notice(error_.message === "secret_detected" ? "키나 토큰처럼 보이는 값이 있어요. 빼고 다시 넣어 주세요. 키가 필요한 서버는 아직 여기서 추가할 수 없어요." : `요청하지 못했어요 (${error_.message}).`); ok.disabled = false; }
     });
     dlg.append(form);
     dlg.addEventListener("close", () => dlg.remove());
@@ -301,20 +313,24 @@ export function createToolViews(deps) {
     if (!t) {
       deps.headExtras();
       deps.$("#stats").replaceChildren();
-      table.replaceChildren(deps.el("div", "empty", "MCP 목록을 불러오지 못했어요. 서버의 arkism-agents.timer가 돌고 있는지 확인해 주세요."));
+      const box = deps.el("div", "empty", "MCP 목록을 불러오지 못했어요. 잠시 뒤 새로고침을 눌러 주세요.");
+      const why = deps.el("details", "meta"); why.append(deps.el("summary", "", "자세히"), deps.el("p", "", "서버의 arkism-agents.timer가 돌고 있는지 확인해 주세요."));
+      box.append(why);
+      table.replaceChildren(box);
       const bar = deps.el("div", "v4s-bar"); bar.append(...deps.barActions(refreshTools)); // 새로고침 · 설치 stay so the list can be retried
       deps.$("#controls").replaceChildren(bar);
       return;
     }
     deps.headExtras({ count: `${(plugin ? t.plugins : t.servers).length}개` }); // 플러그인 · MCP are area tabs already
     const age = t.collected_at ? Date.now() - new Date(t.collected_at).getTime() : Infinity;
-    if (age > 5 * 60000) deps.notice("서버에서 최근 5분 동안 목록이 올라오지 않았어요. arkism-agents.timer를 확인해 주세요.");
+    if (age > 5 * 60000) deps.notice("목록이 5분 넘게 새로 오지 않았어요. 잠시 뒤 새로고침을 눌러 주세요.");
     if (plugin) deps.$("#stats").replaceChildren();
     else {
       const n = (g) => t.servers.filter((e) => toolGroup(e) === g).length;
       const tiles = deps.el("div", "cn-tiles");
-      tiles.append(cnTile("정상", String(n("ok")), "개"), cnTile("로그인 필요", String(n("login")), "개", n("login") > 0), cnTile("끊김", String(n("broken")), "개", n("broken") > 0), cnTile("꺼짐", String(n("off")), "개"));
-      deps.$("#stats").replaceChildren(tiles);
+      // Only the states some server is in: a fresh install shows no row of 0개.
+      for (const [g, label, warn] of [["ok", "정상"], ["login", "로그인 필요", true], ["broken", "끊김", true], ["off", "꺼짐"]]) if (n(g)) tiles.append(cnTile(label, String(n(g)), "개", warn));
+      deps.$("#stats").replaceChildren(...(tiles.childNodes.length ? [tiles] : []));
     }
     // 에이전트: only what that agent has on.
     const keys = deps.shownAgents().map(([k]) => k);
@@ -358,7 +374,13 @@ export function createToolViews(deps) {
       parts.push(cnBadge(label, BADGE[cls]));
       return cnRow(`tool:${e.name}`, parts, deps.renderDetail);
     }));
-    if (!list.length) table.append(deps.el("div", "empty", "여기에 표시할 항목이 없어요."));
+    if (!list.length && all.length) table.append(deps.el("div", "empty", "조건에 맞는 항목이 없어요."));
+    else if (!list.length) {
+      // Nothing yet: one next step. Plugins come from Claude Code itself (/plugin); a server can be added here.
+      const box = deps.el("div", "empty", plugin ? "아직 플러그인이 없어요. 서버의 Claude Code에서 /plugin 으로 설치하면 1분 안에 여기에 보여요. " : "아직 MCP 서버가 없어요. ");
+      if (!plugin) box.append(deps.button("MCP 서버 추가", "small", null, openAddServer));
+      table.append(box);
+    }
     restore();
   }
 
@@ -606,7 +628,7 @@ export function createToolViews(deps) {
     const parts = [head];
     const loginFor = deps.AGENTS.map(([k]) => k).filter((k) => needsLogin(entry, k));
     if (loginFor.length) {
-      parts.push(cnCallout(`${loginFor.map(value => deps.agentName(value)).join("·")} 로그인 필요`, "누르면 로그인 창이 열려요. Cloudflare 같은 서비스에서 허용하면 서버의 에이전트에 자동으로 적용돼요.",
+      parts.push(cnCallout(`${loginFor.map(value => deps.agentName(value)).join("·")} 로그인 필요`, "누르면 로그인 창이 열려요. 로그인할 서비스에서 허용하면 서버의 에이전트에 자동으로 적용돼요.",
         loginFor.map((k) => deps.button(`${deps.agentName(k)} 로그인`, "primary", null, () => toolAgentPopup(entry, kind, k, true)))));
     } else if (entry.note) {
       parts.push(cnCallout(entry.note, kind === "plugin" ? "Claude Code에서 /plugin 으로 다시 확인해 주세요." : "‘다시 연결’을 누르거나, 서버의 에이전트에서 /mcp 를 열어 다시 인증해 주세요. 끝나면 1분 안에 여기 반영돼요.",

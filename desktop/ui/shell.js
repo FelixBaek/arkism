@@ -30,7 +30,7 @@ window.ArkismShell = (ctx) => {
     connect: { label: "TOOLS", tabs: [
       ["skills", "스킬", () => go("skills"), () => state.view === "skills", count("skills")],
       ["plugin", "플러그인", () => { state.toolTab = "plugin"; go("tools"); }, () => state.view === "tools" && state.toolTab === "plugin", () => String(state.data.tools?.plugins.length ?? "")],
-      ["mcp", "MCP", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin", () => String(state.data.tools?.servers.length ?? "")],
+      ["mcp", "도구 서버(MCP)", () => { state.toolTab = "mcp"; go("tools"); }, () => state.view === "tools" && state.toolTab !== "plugin", () => String(state.data.tools?.servers.length ?? "")],
       ["knowledge", "지식", () => go("knowledge"), () => state.view === "knowledge"], // adopt-knowledge (knowledge.js)
       ["usage", "사용량", () => go("usage"), () => state.view === "usage"]
     ] },

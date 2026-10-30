@@ -407,7 +407,7 @@
       "request": "KnowledgeSearchInput",
       "response": "KnowledgeSearchResult",
       "summary": "Search active knowledge bindings",
-      "description": "Resolves at most 8 active bindings for the approved synthetic profile and returns a retrieval receipt. Defaults: profile version v1, skill id <profile>.v1, skill version v1. Requires synthetic handoff support and retrieve:knowledge authorization.",
+      "description": "Resolves at most 8 active bindings for the approved synthetic profile and returns a retrieval receipt. Defaults: profile default (the knowledge every agent shares), profile version v1, skill id <profile>.v1, skill version v1. Requires synthetic handoff support and retrieve:knowledge authorization.",
       "required_body": [
         "scope"
       ]

@@ -18,7 +18,7 @@ const SKILLS = { source: "o/r", commit: "abcdef1234567", skills: [
 ] };
 
 // host: how the fake server answers. post(body) → request list after the POST; poll(ids) → list on each GET.
-function setup(host = {}) {
+function setup(host = {}, extra = {}) {
   document.body.replaceChildren();
   const calls = [], notices = [], needs = [];
   let reloads = 0, polls = 0, seq = 0;
@@ -38,7 +38,7 @@ function setup(host = {}) {
   };
   const catalog = window.ArkismCatalog({ state, el: h.el, button: h.button, request, notice: (m) => notices.push(m),
     agentLogo: (spec, n) => { const s = h.el("span", "logo"); s.dataset.spec = spec; s.title = n; return s; },
-    reload: () => reloads++, pollTools: () => polls++ });
+    reload: () => reloads++, pollTools: () => polls++, ...extra });
   return { catalog, state, calls, notices, needs, reloads: () => reloads, polls: () => polls, host };
 }
 const done = (detail, extra = {}) => (q) => [{ ...q, status: "done", detail: JSON.stringify(detail), ...extra }];
@@ -257,10 +257,10 @@ test("install page: a zip file goes in the request, previews and installs; a big
 test("install page reports each preview and install outcome", async () => {
   const cases = [
     [{ post: () => ({ agent_tools: { requests: [] } }) }, /아직 답이 없어요/],
-    [{ poll: (q) => [{ ...q, status: "failed", error: "404" }] }, /확인하지 못했어요: 404/],
-    [{ poll: (q) => [{ ...q, status: "failed" }] }, /확인하지 못했어요: $/],
+    [{ poll: (q) => [{ ...q, status: "failed", error: "404" }] }, /^저장소를 확인하지 못했어요\. 주소가 맞는지 보고 다시 불러와 주세요\.자세히404$/],
+    [{ poll: (q) => [{ ...q, status: "failed" }] }, /다시 불러와 주세요\.$/],
     [{ poll: done({ skills: [] }) }, /SKILL.md를 찾지 못했어요/],
-    [{ postError: "boom" }, /요청하지 못했어요 \(boom\)/]
+    [{ postError: "boom" }, /요청하지 못했어요\. 잠시 뒤 다시 불러와 주세요\.자세히boom/]
   ];
   for (const [host, want] of cases) {
     const t = setup(host);
@@ -293,21 +293,58 @@ test("install page reports each preview and install outcome", async () => {
   t.host.poll = (q) => [{ ...q, status: "failed", error: "disk" }];
   ok.click(); await dom.flush();
   assert.equal(t.calls.filter((c) => c[1] === "POST").at(-1)[2].update, false);
-  assert.match(status.textContent, /설치하지 못했어요: disk/);
+  assert.match(status.textContent, /^설치하지 못했어요\. 다시 설치를 눌러 주세요\.자세히disk$/);
   alive = false;
   t.host.poll = (q) => [{ ...q, status: "failed" }];
   ok.click(); await dom.flush();
-  assert.equal(t.notices.at(-1), "설치하지 못했어요: ");
+  assert.equal(t.notices.at(-1), "설치하지 못했어요. 스킬 › 설치에서 다시 해 주세요.");
   t.host.post = () => ({ agent_tools: { requests: [] } });
   ok.click(); await dom.flush();
   assert.match(t.notices.at(-1), /설치 결과를 아직 받지 못했어요/);
   t.host.postError = "net";
   ok.click(); await dom.flush();
-  assert.match(status.textContent, /요청하지 못했어요 \(net\)/);
+  assert.match(status.textContent, /요청하지 못했어요\. 잠시 뒤 다시 설치를 눌러 주세요\.자세히net/);
   delete t.host.postError; delete t.host.post;
   t.host.poll = (q) => [{ ...q, status: "done" }];
   ok.click(); await dom.flush();
   assert.equal(t.notices.at(-1), "스킬을 설치했어요: . 목록에는 몇 분 안에 보여요.");
+});
+
+test("install page shows the safety scan, defaults to the shown agents and makes a risky install a deliberate choice", async () => {
+  const scanned = { source: "o/r", commit: "abcdef1234567", skills: [
+    { name: "bad", files: 1, bytes: 10, verdict: "DO_NOT_INSTALL", risk: 40, findings: ["remote_exec · curl | sh · CRITICAL · run.sh:3"] },
+    { name: "ok", files: 1, bytes: 10, verdict: "SAFE", risk: 0 }
+  ] };
+  const t2 = setup({ poll: done(scanned) }, { shownAgents: () => [["claude_code"], ["codex"], ["agents"], ["gemini"]], findingText: (x) => `뜻:${x.split(" · ")[0]}` });
+  const catalog = t2.catalog;
+  const side = h.el("aside");
+  const page = catalog.installPage(side, () => true);
+  document.body.append(page, side);
+  page.querySelector("input").value = "o/r";
+  dom.fire(page.querySelector("form"), "submit");
+  await dom.flush();
+  const rows = page.querySelectorAll(".v4s-row");
+  assert.equal(rows[0].querySelector(".v4s-badge.amber").textContent, "보안 위험");
+  assert.equal(rows[1].querySelector(".v4s-badge.amber"), null);
+  assert.match(side.textContent, /보안 위험 · 위험한 내용이 있어요\. 설치해도 직접 켜기 전까지 Arkism이 추천하지 않아요\./);
+  assert.match(side.querySelector("li").textContent, /뜻:remote_exec/);
+  // the shown agents with their own folder are picked; the shared folder and an unknown agent are not
+  assert.deepEqual(side.querySelectorAll(".v4s-loc").map((p) => p.textContent), ["~/.claude/skills/bad", "~/.codex/skills/bad"]);
+  const [, riskBox] = page.querySelectorAll("input[type=checkbox]");
+  assert.equal(riskBox.parentNode.hidden, false);
+  const posts = () => t2.calls.filter((c) => c[1] === "POST").length;
+  const before = posts();
+  btn(page, "설치").click();
+  await dom.flush();
+  assert.equal(posts(), before);
+  assert.match(t2.needs.at(-1)[1], /보안 위험이 있는 스킬이에요/);
+  riskBox.checked = true;
+  t2.host.poll = done({ installed: ["claude_code", "codex"] });
+  btn(page, "설치").click();
+  await dom.flush();
+  assert.deepEqual(t2.calls.filter((c) => c[1] === "POST").at(-1)[2].targets, ["claude_code", "codex"]);
+  rows[1].click();
+  assert.match(side.textContent, /보안 검사에서 걸린 것이 없어요/);
 });
 
 test("preset picker fills name, method and program or address", () => {

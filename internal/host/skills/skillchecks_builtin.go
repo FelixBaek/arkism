@@ -176,10 +176,23 @@ func builtinReadText(p string) []byte {
 
 // builtinSecurity scans every text file of the folder line by line.
 func builtinSecurity(folder string) []builtinFinding {
+	return builtinScan(builtinFiles(folder), func(rel string) []byte { return builtinReadText(filepath.Join(folder, filepath.FromSlash(rel))) })
+}
+
+// builtinText is data unless it is a binary or over 1 MB: the same rule as builtinReadText for files not on disk yet.
+func builtinText(raw []byte) []byte {
+	if len(raw) > builtinMaxFileBytes || bytes.IndexByte(raw[:min(len(raw), 8192)], 0) >= 0 {
+		return nil
+	}
+	return raw
+}
+
+// builtinScan runs the rules over the files read returns (nil skips one); rels are skill-relative.
+func builtinScan(rels []string, read func(string) []byte) []builtinFinding {
 	var out []builtinFinding
 	seen := map[builtinFinding]bool{}
-	for _, rel := range builtinFiles(folder) {
-		raw := builtinReadText(filepath.Join(folder, filepath.FromSlash(rel)))
+	for _, rel := range rels {
+		raw := read(rel)
 		if raw == nil {
 			continue
 		}

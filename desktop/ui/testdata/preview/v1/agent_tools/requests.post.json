@@ -1,0 +1,25 @@
+{
+ "agent_tools": {
+  "requests": [
+   {
+    "id": "r1",
+    "kind": "mcp",
+    "name": "github",
+    "agent": "codex",
+    "enabled": true,
+    "status": "done",
+    "requested_at": "2098-12-31T22:00:00Z"
+   },
+   {
+    "id": "r-install-preview",
+    "kind": "skill_install",
+    "name": "acme/team-skills",
+    "agent": "shared",
+    "enabled": false,
+    "status": "done",
+    "requested_at": "2098-12-31T23:00:00Z",
+    "detail": "{\"source\": \"acme/team-skills\", \"commit\": \"4f2c9a1d0b7e\", \"skills\": [{\"name\": \"deploy-helper\", \"description\": \"서버에 새 버전을 올리고 상태를 확인해요.\", \"files\": 4, \"bytes\": 9120, \"installed\": [], \"risk\": 80, \"verdict\": \"DO_NOT_INSTALL\", \"findings\": [\"secret · github_token · CRITICAL · SKILL.md:12\", \"remote_exec · curl_pipe_shell · HIGH · scripts/get.sh:1\"]}, {\"name\": \"meeting-notes\", \"description\": \"회의 녹취를 요약해 할 일로 정리해요.\", \"files\": 2, \"bytes\": 3400, \"installed\": [], \"risk\": 0, \"verdict\": \"SAFE\"}]}"
+   }
+  ]
+ }
+}

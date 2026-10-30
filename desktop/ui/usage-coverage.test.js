@@ -164,13 +164,29 @@ test("CREW and TOOLS 개요 put agents and tools first; empty periods say so", a
   assert.match(text(crew.table), /세션당/);
   const tools = await open(mk({ menu: "connect" }));
   assert.match(text(tools.table), /git_hub/);
-  assert.match(text(tools.table), /내장/);
+  assert.doesNotMatch(text(tools.table), /Read/, "많이 쓴 도구 lists MCP tools only (325:34690)");
+  const health = { calls: 100, failed: 3, p50_ms: 400, p95_ms: 2000, avg_ms: 600, servers: [{ name: "git_hub", calls: 100, failed: 3, p95_ms: 2000 }],
+    by_day: [{ date: "2026-09-30", calls: 0, failed: 0, p95_ms: null },
+      { date: "2026-10-01", calls: 40, failed: 0, p95_ms: 800, servers: [{ name: "git_hub", calls: 30, failed: 0, p95_ms: 700 }, { name: "notion", calls: 10, failed: 0, p95_ms: 900 }] },
+      { date: "2026-10-02", calls: 100, failed: 3, p95_ms: 2000, servers: [{ name: "git_hub", calls: 90, failed: 3, p95_ms: 2100 }, { name: "notion", calls: 10, failed: 0, p95_ms: 950 }] }],
+    fails: [{ tool: "mcp__git_hub__push", at: at, ms: 30000, err: "timeout", agent: "claude" }] };
+  const h = await open(mk({ menu: "connect", doc: summary({ tool_health: health }) }));
+  const ht = text(h.table);
+  assert.match(ht, /3\.0%/);
+  assert.match(ht, /느림/, "p95 over 1.5s marks the server slow");
+  assert.match(ht, /git_hub · 시간 초과 \(30초\)/);
+  assert.match(ht, /2\.0초 · 실패 3 \(10-02\)/, "the peak day is tagged");
+  assert.match(ht, /10-02 git_hub 서버가 느려지며 실패가 함께 늘었어요\. 나머지 날은 1초 안팎이에요\./, "the caption names the server that slowed against its own usual");
+  const up = await open(mk({ menu: "connect", doc: summary({ tool_health: health, tool_calls: 120, tool_calls_change_pct: 6 }) }));
+  assert.match(text(up.table), /120회30일 · 지난달보다 \+6%/);
+  assert.match(ht, /30일 · 도구 2개/, "no window before: no change shown");
   const emptyDoc = summary({ by_agent: [], tools: [], updated_at: "" });
   const e1 = await open(mk({ menu: "agent", doc: emptyDoc }));
   assert.match(text(e1.table), /기록된 세션이 없어요/);
   const e2 = await open(mk({ menu: "connect", doc: emptyDoc }));
-  assert.match(text(e2.table), /기록된 도구 호출이 없어요/);
-  assert.match(text(e2.table), /기록 없음/);
+  assert.match(text(e2.table), /기록된 MCP 도구 호출이 없어요/);
+  assert.match(text(e2.table), /서버가 보고한 MCP 서버가 없어요/);
+  assert.match(text(e2.table), /이 기간에 실패한 MCP 호출이 없어요/);
 });
 
 test("세션 tab sorts heavy sessions, opens one, and goes back", async () => {

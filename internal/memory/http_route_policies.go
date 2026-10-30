@@ -173,7 +173,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/knowledge/bindings":                          {action: "write:knowledge_bindings", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/bindings/{id}/state":               {action: "write:knowledge_bindings", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/index":                             {action: "write:knowledge_chunks", scope: routeJSON, limit: 256 << 10},
-	"POST /v1/knowledge/ingest":                            {action: "write:knowledge_sources", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/knowledge/ingest":                            {action: "write:knowledge_sources", scope: routeJSON, limit: 6 << 20}, // a Word file travels as base64
 	"POST /v1/knowledge/retrieve":                          {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/revalidate":                        {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/search":                            {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},

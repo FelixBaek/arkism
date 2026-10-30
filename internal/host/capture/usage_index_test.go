@@ -249,7 +249,7 @@ func TestUsageMainPlansAndWritesTheJSONCache(t *testing.T) {
 	if code := usageMain(nil, nil, &out, &errb); code != 0 || out.String() != `{"sessions": 0, "changed": 0, "sent": 0, "failed": 0}`+"\n" {
 		t.Fatal(code, out.String(), errb.String())
 	}
-	if _, err := os.Stat(filepath.Join(d, "state", "files-v2.json")); err != nil {
+	if _, err := os.Stat(filepath.Join(d, "state", "files-v3.json")); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()
@@ -343,5 +343,35 @@ func TestUsageFolderAndFile(t *testing.T) {
 	row = pick(captureSettings{Exclude: []string{"/opt/arkism"}})
 	if usageGet(row, "folder") != nil || usageGet(row, "file") != nil || usageGet(row, "project") != "proj" {
 		t.Fatalf("excluded folder leaked: %v", row)
+	}
+}
+
+func TestUsageClaudePairsMCPCallsWithResults(t *testing.T) {
+	d := t.TempDir()
+	use := func(id, name, ts string) map[string]any {
+		return map[string]any{"type": "assistant", "sessionId": "s1", "timestamp": ts, "message": map[string]any{"id": "m" + id, "model": "claude-opus-5-5",
+			"usage": map[string]any{"input_tokens": 1}, "content": []any{map[string]any{"type": "tool_use", "id": id, "name": name}}}}
+	}
+	result := func(id, ts string, isErr bool, text string) map[string]any {
+		return map[string]any{"type": "user", "sessionId": "s1", "timestamp": ts, "message": map[string]any{"content": []any{
+			map[string]any{"type": "tool_result", "tool_use_id": id, "is_error": isErr, "content": []any{map[string]any{"type": "text", "text": text}}}}}}
+	}
+	usageWriteRows(t, filepath.Join(d, "a.jsonl"),
+		map[string]any{"type": "user", "sessionId": "s1", "timestamp": "2026-10-09T00:59:00Z", "message": map[string]any{"content": "hi"}},
+		use("t1", "mcp__figma__use_figma", "2026-10-09T01:00:00Z"), result("t1", "2026-10-09T01:00:01.5Z", false, "ok"),
+		use("t2", "mcp__notion__fetch", "2026-10-09T01:01:00Z"), result("t2", "2026-10-09T01:01:30Z", true, "Request timed out after 30s"),
+		use("t3", "mcp__notion__fetch", "2026-10-09T01:02:00Z"), result("t3", "2026-10-09T01:02:09Z", true, "The user doesn't want to proceed with this tool use."),
+		use("t4", "Bash", "2026-10-09T01:03:00Z"), result("t4", "2026-10-09T01:03:01Z", true, "exit 1"))
+	usageFake(t, []archiveRoot{{"claude_code", "server", d, "*.jsonl"}}, usageCodexIndex)
+	rows, _ := usageCollect(host.Obj{}, false, map[string]*usageFile{})
+	got := canon(usageGet(usageFind(rows, "server|claude_code|s1"), "calls"))
+	want := `[{"at":"2026-10-09T01:00:00+00:00","ms":1500,"tool":"mcp__figma__use_figma"},{"at":"2026-10-09T01:01:00+00:00","err":"timeout","ms":30000,"tool":"mcp__notion__fetch"}]`
+	if got != want {
+		t.Fatalf("calls\n got: %s\nwant: %s", got, want)
+	}
+	for text, code := range map[string]string{"HTTP 401 Unauthorized": "auth", "403 Forbidden": "permission", "page not found": "not_found", "merge conflict": "conflict", "boom": "error"} {
+		if c := usageCallErr(text); c != code {
+			t.Fatal(text, c)
+		}
 	}
 }

@@ -215,15 +215,23 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 func (s *Service) skillRouteCandidates(ctx context.Context, in SearchInput, criteria SearchCriteria, bundle ContextBundle) ([]SkillCandidate, map[string]Record) {
 	candidates := []SkillCandidate{}
 	records := map[string]Record{}
+	var tools *AgentTools
+	if doc, e := agentToolsDoc(ctx, s.Repo, in.Scope); e == nil {
+		tools = doc.AgentTools
+	}
 	for _, hit := range bundle.Items {
 		r, e := s.Repo.Get(ctx, colSkillVersions, in.Scope, hit.ID)
 		if e != nil || r.Revision != hit.Revision || !criteria.matchesRecord(r) || !live(r) || !validAnalysis(r.Analysis) {
 			continue
 		}
 		// shortcut: filtering after the top-8 search can leave fewer candidates; widen the search if runtime copies crowd it.
-		if in.Runtime != "" {
+		risky := false
+		if _, security := catalogHostSkillChecks(tools, r.Analysis.Name, -1, -1); security == 0 {
+			risky = true
+		}
+		if in.Runtime != "" || risky {
 			parent, e := s.Repo.Get(ctx, colSkills, in.Scope, r.SkillID)
-			if e != nil || effectiveCompatibility(r, parent)[in.Runtime] == "unsupported" {
+			if e != nil || in.Runtime != "" && effectiveCompatibility(r, parent)[in.Runtime] == "unsupported" || risky && !skillTurnedOn(parent, in.Runtime) {
 				continue
 			}
 		}
@@ -236,6 +244,21 @@ func (s *Service) skillRouteCandidates(ctx context.Context, in SearchInput, crit
 		records[r.ID] = r
 	}
 	return candidates, records
+}
+
+// skillTurnedOn: a skill the host scan judged DO_NOT_INSTALL waits until a person marks it
+// "supported" (only SetSkillAvailability, human-only, writes the skill-level labels).
+// Without a runtime any agent a person turned it on for is enough.
+func skillTurnedOn(parent Record, runtime string) bool {
+	if runtime != "" {
+		return parent.SkillCompatibility[runtime] == "supported"
+	}
+	for _, v := range parent.SkillCompatibility {
+		if v == "supported" {
+			return true
+		}
+	}
+	return false
 }
 
 // The caller's MCP servers and plugins carry no record: only their name and description go to the judge.

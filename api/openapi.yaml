@@ -4129,420 +4129,6 @@
         "description": "버전 활성화는 상위 스킬의 active·미만료 상태와 유효한 출처도 요구한다. 빈 version_id로 활성 연결만 해제하는 rollback은 상위 출처 철회 후에도 허용한다. 적용 후의 상위/이전 버전 변경이 선택 버전의 평가 직접 근거를 무효화하면 전체 트랜잭션을 409로 취소한다."
       }
     },
-    "/v1/skills/{id}/watch": {
-      "post": {
-        "summary": "Watch the just-applied active version (owner only)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "scope"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "scope": {
-                    "$ref": "#/components/schemas/Scope"
-                  },
-                  "version_id": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Skill watch",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "version",
-                    "previous_version",
-                    "applied_at",
-                    "until",
-                    "state",
-                    "failures",
-                    "baseline_failures",
-                    "checked_at",
-                    "can_rollback",
-                    "authority"
-                  ],
-                  "properties": {
-                    "version": {
-                      "$ref": "#/components/schemas/Ref"
-                    },
-                    "previous_version": {
-                      "type": "string"
-                    },
-                    "applied_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "until": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": [
-                        "watching",
-                        "kept",
-                        "ended",
-                        "rolled_back",
-                        "rollback_blocked"
-                      ]
-                    },
-                    "failures": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "baseline_failures": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "checked_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "can_rollback": {
-                      "type": "boolean"
-                    },
-                    "authority": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "400": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "403": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "404": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "409": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "503": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "401": {
-            "description": "Missing bearer credentials.",
-            "headers": {
-              "WWW-Authenticate": {
-                "schema": {
-                  "type": "string",
-                  "const": "Bearer realm=\"arkism\""
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "적용 직후 사람이 켠다. 기본 7일 동안 실제 사용을 지켜본다. 권한은 apply·rollback 둘 다 필요하다."
-      }
-    },
-    "/v1/skills/{id}/watch/check": {
-      "post": {
-        "summary": "Check the watch and roll back when real use got worse (owner only)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "scope"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "scope": {
-                    "$ref": "#/components/schemas/Scope"
-                  },
-                  "version_id": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Skill watch",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "version",
-                    "previous_version",
-                    "applied_at",
-                    "until",
-                    "state",
-                    "failures",
-                    "baseline_failures",
-                    "checked_at",
-                    "can_rollback",
-                    "authority"
-                  ],
-                  "properties": {
-                    "version": {
-                      "$ref": "#/components/schemas/Ref"
-                    },
-                    "previous_version": {
-                      "type": "string"
-                    },
-                    "applied_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "until": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": [
-                        "watching",
-                        "kept",
-                        "ended",
-                        "rolled_back",
-                        "rollback_blocked"
-                      ]
-                    },
-                    "failures": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "baseline_failures": {
-                      "type": "integer",
-                      "minimum": 0
-                    },
-                    "checked_at": {
-                      "type": "string",
-                      "format": "date-time"
-                    },
-                    "can_rollback": {
-                      "type": "boolean"
-                    },
-                    "authority": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "400": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "403": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "404": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "409": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "503": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            }
-          },
-          "401": {
-            "description": "Missing bearer credentials.",
-            "headers": {
-              "WWW-Authenticate": {
-                "schema": {
-                  "type": "string",
-                  "const": "Bearer realm=\"arkism\""
-                }
-              },
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "새 버전의 실패한 실제 사용이 3번 이상이고 적용 전 같은 기간의 예전 버전 실패보다 많으면, 사람의 자격으로 일반 rollback을 실행한다. 예전 버전에 통과 평가가 없으면 rollback_blocked로 남긴다."
-      }
-    },
     "/v1/skills": {
       "get": {
         "summary": "List active skill baselines for the scoped registry",
@@ -7814,7 +7400,7 @@
             }
           }}}},
     "/v1/providers": {
-      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked, the engines this server can run and the providers 기억 추출 can run)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
+      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked and the engines this server can run)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -16773,7 +16359,7 @@
     "/v1/model-budget/status": {
       "post": {
         "summary": "Read configured shared account allowance",
-        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies. Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
+        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies, except that a human reader with read:model_budget gets 404 not_found (no budget in this scope). Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
         "requestBody": {
           "required": true,
           "content": {
@@ -16809,6 +16395,9 @@
           },
           "403": {
             "description": "Missing, expired or unauthorized policy"
+          },
+          "404": {
+            "description": "No active budget in this scope (human readers)"
           },
           "409": {
             "description": "Operation or settlement conflicts"
@@ -23794,7 +23383,7 @@
           "Management"
         ],
         "summary": "Search active knowledge bindings",
-        "description": "Resolves at most 8 active bindings for the approved synthetic profile and returns a retrieval receipt. Defaults: profile version v1, skill id <profile>.v1, skill version v1. Requires synthetic handoff support and retrieve:knowledge authorization.",
+        "description": "Resolves at most 8 active bindings for the approved synthetic profile and returns a retrieval receipt. Defaults: profile default (the knowledge every agent shares), profile version v1, skill id <profile>.v1, skill version v1. Requires synthetic handoff support and retrieve:knowledge authorization.",
         "parameters": [],
         "responses": {
           "200": {
@@ -33438,7 +33027,7 @@
           "Management"
         ],
         "summary": "Providers: role model",
-        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; extract also takes an openai model the Codex CLI runs or a google model the Gemini CLI runs (role_options.extract lists these providers); skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
         "parameters": [],
         "responses": {
           "200": {
@@ -40703,16 +40292,6 @@
             "type": "integer",
             "minimum": 0
           },
-          "baseline_cost": {
-            "type": "number",
-            "minimum": 0,
-            "description": "The baseline run's total cost, measured by the server from its cases."
-          },
-          "baseline_duration_ms": {
-            "type": "integer",
-            "minimum": 0,
-            "description": "The baseline run's total duration, measured by the server from its cases."
-          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -42669,16 +42248,21 @@
             "enum": [
               "text/plain",
               "text/markdown",
-              "application/json"
+              "application/json",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             ]
           },
           "synthetic": {
-            "type": "boolean",
-            "const": true
+            "type": "boolean"
           },
           "content": {
             "type": "string",
             "maxLength": 65536
+          },
+          "content_base64": {
+            "type": "string",
+            "description": "A Word (.docx) file, base64; the server reads its text. Not sent together with content.",
+            "maxLength": 5592408
           },
           "expected_revision": {
             "type": "integer",
@@ -42690,8 +42274,7 @@
           "source_key",
           "filename",
           "mime_type",
-          "synthetic",
-          "content"
+          "synthetic"
         ]
       },
       "SyntheticKnowledgeIngestionReport": {
@@ -48177,9 +47760,6 @@
           },
           "analysis_run": {
             "$ref": "#/components/schemas/WireResponseAnalysisRun"
-          },
-          "extractor": {
-            "$ref": "#/components/schemas/WireResponseExtractor"
           }
         },
         "additionalProperties": false,
@@ -48579,12 +48159,6 @@
           },
           "inject_chars": {
             "type": "integer"
-          },
-          "estimated": {
-            "type": "integer"
-          },
-          "unused_after": {
-            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -48610,15 +48184,6 @@
           },
           "used": {
             "type": "integer"
-          },
-          "estimated": {
-            "type": "integer"
-          },
-          "unreceipted": {
-            "type": "integer"
-          },
-          "unused": {
-            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -51348,6 +50913,13 @@
           "file": {
             "type": "string",
             "description": "the agent's own log file on that device"
+          },
+          "calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseUsageCall"
+            },
+            "description": "MCP calls paired with their results"
           }
         },
         "additionalProperties": false,
@@ -52033,12 +51605,6 @@
             "type": "number"
           },
           "candidate_duration_ms": {
-            "type": "integer"
-          },
-          "baseline_cost": {
-            "type": "number"
-          },
-          "baseline_duration_ms": {
             "type": "integer"
           },
           "regression_passed": {
@@ -54604,7 +54170,7 @@
         "additionalProperties": false,
         "x-go-type": "memory.KnowledgeSearchInput",
         "x-go-source": "internal/memory/knowledge_catalog.go",
-        "description": "KnowledgeSearchInput is RetrieveKnowledge without binding IDs: the active\nbindings of the profile are resolved here. Omitted profile version and\nskill fields take the profile's v1 defaults."
+        "description": "KnowledgeSearchInput is RetrieveKnowledge without binding IDs: the active\nbindings of the profile are resolved here. An omitted profile is the default\nscope every agent shares; omitted profile version and skill fields take the\nprofile's v1 defaults."
       },
       "WireRequestMessengerSave": {
         "type": "object",
@@ -57828,12 +57394,6 @@
           "candidate_duration_ms": {
             "type": "integer"
           },
-          "baseline_cost": {
-            "type": "number"
-          },
-          "baseline_duration_ms": {
-            "type": "integer"
-          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -58577,34 +58137,32 @@
         "x-go-source": "internal/memory/agent_tools.go",
         "description": "AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,\nwith the most common waiting or failure code. LastDoneAt is the last time any job finished, kept\nacross runs, so a stretch without candidates can be told from a stretch without processing (#449)."
       },
-      "WireResponseExtractor": {
+      "WireResponseUsageCall": {
         "type": "object",
         "properties": {
-          "model": {
+          "tool": {
             "type": "string"
           },
-          "cli": {
-            "type": "string"
+          "at": {
+            "type": "string",
+            "format": "date-time"
           },
-          "state": {
-            "type": "string"
+          "ms": {
+            "type": "integer"
           },
-          "clis": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
+          "err": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
         "required": [
-          "model",
-          "cli",
-          "state"
+          "tool",
+          "at",
+          "ms"
         ],
-        "x-go-type": "memory.Extractor",
-        "x-go-source": "internal/memory/agent_tools.go",
-        "description": "Extractor is what the host runs for 기억 추출 when nothing is picked: the model, its agent CLI and\nwhether that CLI is installed and signed in, with each known CLI's state (ready, login_needed, missing)."
+        "x-go-type": "memory.UsageCall",
+        "x-go-source": "internal/memory/usage_sessions.go",
+        "description": "UsageCall is one MCP tool call the collector paired with its result: the tool, when it was asked,\nhow long the result took and a fixed error code when it failed. Never arguments or results."
       }
     },
     "headers": {

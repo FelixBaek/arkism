@@ -123,7 +123,10 @@ test("the budget card shows dollars, the daily cap, subscription use and a retry
   assert.ok(!panel.textContent.includes("오늘 상한") && !panel.textContent.includes("구독"));
   answer = { ...doc, month: "bad" };
   dom.buttons(panel, "예산 다시 조회")[0].click(); await dom.flush();
-  assert.match(panel.textContent, /예산 설정을 확인할 수 없어요/);
+  assert.match(panel.textContent, /예산을 불러오지 못했어요/);
+  answer = new Error("not_found"); // no budget configured: the card goes away
+  dom.buttons(panel, "예산 다시 조회")[0].click(); await dom.flush();
+  assert.equal(panel.isConnected, false);
   for (const late of [doc, new Error("x")]) {
     answer = late;
     const c2 = host(), p2 = window.ArkismModelBudget.mount({ container: c2, scope: {}, request, el: h.el, button: h.button });
