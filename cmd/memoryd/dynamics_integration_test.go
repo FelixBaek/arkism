@@ -58,25 +58,36 @@ func daemonSearchModeFiles(t *testing.T, edit func(map[string]any)) string {
 	return path
 }
 
-func TestDynamicsIntegrationSearchModeConfig(t *testing.T) {
+// daemonSearchModeAPI is HTTP API options with both dynamics configs and the tokens set.
+func daemonSearchModeAPI(t *testing.T) daemonOptions {
+	t.Helper()
 	load, c := daemonDynamicsFixture(t)
 	r, l := daemonDynamicsFiles(t, load, c)
 	t.Setenv("MEMORY_DYNAMICS_READER_TOKEN", "reader")
 	t.Setenv("MEMORY_WORKER_TOKEN", "worker")
-	api := daemonOptions{DynamicsRuntimeConfig: r, DynamicsLoadConfig: l}
+	return daemonOptions{DynamicsRuntimeConfig: r, DynamicsLoadConfig: l}
+}
+
+// daemonBareMode keeps only the protocol and sets mode.
+func daemonBareMode(mode string) func(map[string]any) {
+	return func(m map[string]any) {
+		for k := range m {
+			if k != "protocol" {
+				delete(m, k)
+			}
+		}
+		m["mode"] = mode
+	}
+}
+
+func TestDynamicsIntegrationSearchModeConfig(t *testing.T) {
+	api := daemonSearchModeAPI(t)
 	for name, want := range map[string]bool{"absent": false, "off": false, "shadow": true} {
 		t.Run(name, func(t *testing.T) {
 			cfg := api
 			switch name {
 			case "off":
-				cfg.DynamicsSearchConfig = daemonSearchModeFiles(t, func(m map[string]any) {
-					for k := range m {
-						if k != "protocol" {
-							delete(m, k)
-						}
-					}
-					m["mode"] = "off"
-				})
+				cfg.DynamicsSearchConfig = daemonSearchModeFiles(t, daemonBareMode("off"))
 			case "shadow":
 				cfg.DynamicsSearchConfig = daemonSearchModeFiles(t, nil)
 			}
@@ -89,6 +100,10 @@ func TestDynamicsIntegrationSearchModeConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDynamicsIntegrationSearchModeConfigRefused(t *testing.T) {
+	api := daemonSearchModeAPI(t)
 	refused := map[string]func(map[string]any){
 		"dynamic_without_accepted_policy": func(m map[string]any) { m["mode"] = "dynamic" },
 		"unknown_mode":                    func(m map[string]any) { m["mode"] = "Shadow" },
@@ -108,14 +123,7 @@ func TestDynamicsIntegrationSearchModeConfig(t *testing.T) {
 		"zero_deadline":                   func(m map[string]any) { m["deadline_ns"] = 0 },
 		"zero_max_steps":                  func(m map[string]any) { m["max_steps"] = 0 },
 		"capacity_over_bound":             func(m map[string]any) { m["capacity"] = 1001 },
-		"bare_dynamic": func(m map[string]any) {
-			for k := range m {
-				if k != "protocol" {
-					delete(m, k)
-				}
-			}
-			m["mode"] = "dynamic"
-		},
+		"bare_dynamic":                    daemonBareMode("dynamic"),
 	}
 	for name, edit := range refused {
 		t.Run(name, func(t *testing.T) {
@@ -126,15 +134,13 @@ func TestDynamicsIntegrationSearchModeConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDynamicsIntegrationSearchModeOnlyOnTheAPI(t *testing.T) {
+	api := daemonSearchModeAPI(t)
+	r, l := api.DynamicsRuntimeConfig, api.DynamicsLoadConfig
 	shadow := daemonSearchModeFiles(t, nil)
-	off := daemonSearchModeFiles(t, func(m map[string]any) {
-		for k := range m {
-			if k != "protocol" {
-				delete(m, k)
-			}
-		}
-		m["mode"] = "off"
-	})
+	off := daemonSearchModeFiles(t, daemonBareMode("off"))
 	for name, cfg := range map[string]daemonOptions{
 		"no_dynamics_plan": {DynamicsSearchConfig: shadow},
 		"worker_off":       {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, Worker: true, DynamicsSearchConfig: off},
@@ -317,10 +323,23 @@ func TestDynamicsIntegrationOffShadowSameAnswerPG(t *testing.T) {
 			daemonDynamicsWaitStop(t, d)
 		}
 	})
+	daemonSearchWaitPublished(t, in.Scope, offAPI, shadowAPI)
+	// While the worker republishes every few milliseconds the shadow may read a
+	// cache one generation behind and fall back; the baseline answer must not move.
+	daemonSearchOffShadowOff(t, db, offCfg.Listen, shadowCfg.Listen, in.Target.ID, in.Scope)
+	haltWorker()
+	daemonSearchSettledGeneration(t, shadowAPI, in.Scope)
+	daemonSearchOffShadowOff(t, db, offCfg.Listen, shadowCfg.Listen, in.Target.ID, in.Scope)
+	daemonSearchCheckShadow(t, shadowAPI.NativeSearchShadow.Observations())
+}
+
+// daemonSearchWaitPublished waits until every API cache holds the worker's first publication.
+func daemonSearchWaitPublished(t *testing.T, scope memory.Scope, apis ...*memory.Service) {
+	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
-	for _, api := range []*memory.Service{offAPI, shadowAPI} {
+	for _, api := range apis {
 		for {
-			snapshot, e := api.DynamicsLoad.DynamicsSnapshot(in.Scope, time.Now().UnixNano())
+			snapshot, e := api.DynamicsLoad.DynamicsSnapshot(scope, time.Now().UnixNano())
 			if e == nil && snapshot.Head == 1 {
 				break
 			}
@@ -330,13 +349,11 @@ func TestDynamicsIntegrationOffShadowSameAnswerPG(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
-	// While the worker republishes every few milliseconds the shadow may read a
-	// cache one generation behind and fall back; the baseline answer must not move.
-	daemonSearchOffShadowOff(t, db, offCfg.Listen, shadowCfg.Listen, in.Target.ID, in.Scope)
-	haltWorker()
-	daemonSearchSettledGeneration(t, shadowAPI, in.Scope)
-	daemonSearchOffShadowOff(t, db, offCfg.Listen, shadowCfg.Listen, in.Target.ID, in.Scope)
-	obs := shadowAPI.NativeSearchShadow.Observations()
+}
+
+// daemonSearchCheckShadow checks the two shadow observations: under republishing, then settled.
+func daemonSearchCheckShadow(t *testing.T, obs []memory.NativeSearchShadowObservation) {
+	t.Helper()
 	// A lagging cache may only fall back as snapshot_unavailable, never compute on stale state.
 	if len(obs) == 2 && obs[0].Status != "selected" && (obs[0].Status != "fallback" || obs[0].Reason != "snapshot_unavailable") {
 		t.Fatal("shadow under republishing", obs[0])
@@ -381,18 +398,7 @@ func daemonSearchOffShadowOff(t *testing.T, db testDB, off, shadow, target strin
 	for _, address := range []string{off, shadow, off} {
 		before := daemonRecordKinds(t, db.url)
 		bundle := daemonSearchBundle(t, address, db.token, scope)
-		after := daemonRecordKinds(t, db.url)
-		delta := map[string]int{}
-		for k, n := range after {
-			if n != before[k] {
-				delta[k] = n - before[k]
-			}
-		}
-		for k := range before {
-			if _, ok := after[k]; !ok {
-				delta[k] = -before[k]
-			}
-		}
+		delta := daemonRecordDelta(before, daemonRecordKinds(t, db.url))
 		// The baseline search writes its usage receipt and its audit event, nothing else.
 		if want := map[string]int{"jobs/context_usage": 1, "audit_events/search": 1}; !reflect.DeepEqual(delta, want) {
 			t.Fatal("search side effects", address, delta)
@@ -400,6 +406,27 @@ func daemonSearchOffShadowOff(t *testing.T, db testDB, off, shadow, target strin
 		bundle.ContextID = ""
 		answers = append(answers, bundle)
 	}
+	daemonSearchSameAnswers(t, answers, target)
+}
+
+func daemonRecordDelta(before, after map[string]int) map[string]int {
+	delta := map[string]int{}
+	for k, n := range after {
+		if n != before[k] {
+			delta[k] = n - before[k]
+		}
+	}
+	for k := range before {
+		if _, ok := after[k]; !ok {
+			delta[k] = -before[k]
+		}
+	}
+	return delta
+}
+
+// daemonSearchSameAnswers checks that the shadow answer (middle) equals the off answers around it.
+func daemonSearchSameAnswers(t *testing.T, answers []memory.ContextBundle, target string) {
+	t.Helper()
 	if len(answers[0].Items) == 0 || answers[0].Items[0].ID != target {
 		t.Fatal("baseline search did not retrieve the fixture", answers[0].Items)
 	}
