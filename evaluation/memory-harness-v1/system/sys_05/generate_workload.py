@@ -151,6 +151,9 @@ def _directory(path):
             "unsafe_path", "$")
     parts = path.split("/")[1:]
     require(bool(parts) and all(x and x not in (".", "..") for x in parts), "unsafe_path", "$")
+    # Each component is opened relative to a pinned dir_fd, so it must stay one name.
+    parts = [os.path.basename(x) for x in parts]
+    require(all(parts), "unsafe_path", "$")
     fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
     try:
         for part in parts[:-1]:

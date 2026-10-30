@@ -249,7 +249,8 @@ func nativeSearchCheckCancellation(t *testing.T, callerCancel bool) {
 	t.Helper()
 	f, _ := nativeFixture(t)
 	r := nativeSearchTestRuntime(t, "B2")
-	r.config.Deadline = time.Millisecond
+	// The blocked source waits for the deadline, so it must be long enough to reach that source first.
+	r.config.Deadline = 100 * time.Millisecond
 	f.svc.NativeSearchShadow = r
 	q := nativeSearchTestInput()
 	q.Query = "설계"
