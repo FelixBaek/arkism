@@ -118,6 +118,7 @@ test("#187 #186 c51dc400: after a failed load the sidebar counts read —, not 0
 test("c51dc400 #438: the skill count is — when the list failed and N+ while more pages wait", withRoutes(async (add) => {
   let answer = () => fail(500, "boom");
   add("GET", "/v1/skills?", () => answer());
+  add("POST", "/v1/skills/query", () => fail(404, "not_found")); // no server total, so the count can only come from the list
   await reload(); await until(has("#count-skills", /—/));
   assert.equal(text(app.$("#count-skills")), "—");
   assert.match(text(app.$("#status-card")), /스킬 허브\s*—/);
