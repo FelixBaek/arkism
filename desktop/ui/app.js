@@ -1975,7 +1975,7 @@ export function startApp() {
 
   // ---------------------------------------------------------------- detail
   // TOOLS › 스킬·플러그인·MCP open an item in the crew popup frame (crew-popup.js) instead of the right panel.
-  // The skill pages (GitHub에서 설치, 개선 단계) keep the right panel: it explains the page, not an item.
+  // The skill pages (설치, 개선 단계) keep the right panel: it explains the page, not an item.
   const popupDetail = () => state.view === "tools" || (state.view === "skills" && !state.skillPage);
   let itemPop = null;
   function detailShell(label) {

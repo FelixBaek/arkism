@@ -803,7 +803,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 쓰는 중인 기억 (579:48597)
   // filter "idle" (검증 › 정리할 기억): the same 안 쓰임 rule as the 검증 step, opened in place
   function wideActive(filter, focusId) {
-    const d = shell("쓰는 중인 기억", state.memoryTotals?.active == null ? "" : `${num(state.memoryTotals.active)}개`, "승인된 기억만 불러오기에 쓰여요", filter === "idle" ? "judge" : "active");
+    const d = shell(filter === "idle" ? "정리할 기억" : "쓰는 중인 기억", state.memoryTotals?.active == null ? "" : `${num(state.memoryTotals.active)}개`, "승인된 기억만 불러오기에 쓰여요", filter === "idle" ? "judge" : "active");
     recipe(d, { wide: "active", args: [filter, focusId] });
     let q = "", kindF = filter || "all", sel = focusId || null, sort = "used";
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), chipHost = el("div");
@@ -986,7 +986,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const m = el("div", "cat-menu ss-menu"); m.setAttribute("role", "menu");
       const targets = SL.continueTargets(x.agent, seen);
       for (const a of targets) {
-        const b = el("button", "cat-menu-item", `${SL.label(a)}(으)로 넘기기`); b.type = "button"; b.setAttribute("role", "menuitem");
+        const b = el("button", "cat-menu-item", `${SL.label(a)}(으)로 handoff`); b.type = "button"; b.setAttribute("role", "menuitem");
         b.addEventListener("click", (ev) => { ev.stopPropagation(); void continueIn(x, a, ev.currentTarget); }); m.append(b);
       }
       if (!targets.length) { const b = el("button", "cat-menu-item", "넘길 다른 에이전트가 없어요"); b.type = "button"; b.disabled = true; m.append(b); }
@@ -1021,7 +1021,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function detailEl(x, seen) {
       const box = el("div", "ss-detail");
       box.append(factList(x));
-      const cont = el("div", "ov-detail-sec"); cont.append(el("small", "", "다른 에이전트로 넘기기"));
+      const cont = el("div", "ov-detail-sec"); cont.append(el("small", "", "다른 에이전트로 handoff"));
       const ca = el("div", "ov-detail-actions"), targets = SL.continueTargets(x.agent, seen);
       for (const a of targets) ca.append(button(SL.label(a), "small", "copy", (ev) => continueIn(x, a, ev.currentTarget)));
       cont.append(targets.length ? ca : el("p", "ov-win-empty", "넘길 다른 에이전트가 없어요."), el("small", "ov-detail-hint", "작업 상태나 보관된 대화를 읽고 시작하는 명령을 복사해요."));
@@ -1070,7 +1070,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       rr.append(tok, el("span", `ov-pill ov-pill-${st.tone}`, st.label), ...(keep ? [el("span", "ss-num", keep.short)] : []));
       const cmd = SL.resumeCommand(x), resume = button("이어서 하기", "small", null, (ev) => { ev.stopPropagation(); void copyText(cmd, ev.currentTarget, (ok) => say(x.id, ok ? "이어서 하기 명령을 복사했어요. 터미널에 붙여 넣으세요." : "복사하지 못했어요. 아래 명령을 직접 복사해 주세요.", cmd)); });
       resume.disabled = !cmd; resume.title = cmd || "이 에이전트는 이어서 하기 명령을 몰라요.";
-      const more = button("넘기기 ⌄", "small ss-more", null, (ev) => { ev.stopPropagation(); menuFor = menuFor === x.id ? "" : x.id; paint(); });
+      const more = button("handoff ⌄", "small ss-more", null, (ev) => { ev.stopPropagation(); menuFor = menuFor === x.id ? "" : x.id; paint(); });
       more.setAttribute("aria-haspopup", "menu"); more.setAttribute("aria-expanded", String(menuFor === x.id));
       rr.append(resume, more);
       r.append(t, rr);
