@@ -1174,17 +1174,23 @@ func TestOldFixRequestIsNotStarted(t *testing.T) {
 func TestGroupReachesOwnEngineAndPreservesWorkAcrossFallback(t *testing.T) {
 	spec := map[string]any{"task": "리뷰", "group": "group/review", "instructions": "역할", "skills": []any{"skill-one"},
 		"cwd": "/synthetic", "access": "read", "work_id": "work-one", "effort": "high"}
-	decision := map[string]any{"id": "xai/grok-5", "decision": "default", "group": "group/review", "fallbacks": []any{"openai/gpt-6.1"}}
+	decision := map[string]any{"id": "xai/grok-5", "decision": "default", "group": "group/review", "fallbacks": []any{"openai/gpt-6.1"},
+		"view_hash": "sha256:" + strings.Repeat("a", 64)}
 	attempts, reports := []map[string]any{}, []map[string]any{}
 	var asked []post
+	contexts := 0
 	patch(t, &runnerCall, func(path string, body any, _ time.Duration) (map[string]any, error) {
+		if contexts != 1 { // the work state is read before the choice, not after it
+			t.Fatal(contexts)
+		}
 		asked = append(asked, post{path, body})
 		return decision, nil
 	})
-	contexts := 0
-	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (string, error) {
+	view := host.Obj{{Key: "checkpoint", Value: host.Obj{{Key: "id", Value: "work-one"}, {Key: "revision", Value: int64(3)}}},
+		{Key: "refs", Value: []any{}}, {Key: "history", Value: "known_empty"}, {Key: "history_count", Value: 0}}
+	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (host.Obj, string, error) {
 		contexts++
-		return "과거 상태 · data_only_untrusted", nil
+		return view, "과거 상태 · data_only_untrusted", nil
 	})
 	run := func(v map[string]any) (map[string]any, error) {
 		attempts = append(attempts, v)
@@ -1198,10 +1204,14 @@ func TestGroupReachesOwnEngineAndPreservesWorkAcrossFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contexts != 1 || asked[0].path != "/v1/routing/decide" || field(asked[0].body, "group") != "group/review" {
+	if contexts != 1 || len(asked) != 1 || asked[0].path != "/v1/routing/decide" || field(asked[0].body, "group") != "group/review" {
 		t.Fatal(contexts, asked)
 	}
-	if field(out["routed"], "group") != "group/review" || out["ok"] != true || len(attempts) != 2 {
+	// The choice sees identities only; the checkpoint body reaches the runs, never the decide request.
+	if eq(t, field(asked[0].body, "view"), view); strings.Contains(dumpLine(asked[0].body), "과거 상태") {
+		t.Fatal(asked)
+	}
+	if field(out["routed"], "group") != "group/review" || field(out["routed"], "view_hash") != decision["view_hash"] || out["ok"] != true || len(attempts) != 2 {
 		t.Fatal(out)
 	}
 	for _, a := range attempts {
@@ -1218,14 +1228,33 @@ func TestGroupReachesOwnEngineAndPreservesWorkAcrossFallback(t *testing.T) {
 }
 
 func TestMissingCheckpointStopsExecutionAndNeverDropsContextSilently(t *testing.T) {
-	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (string, error) { return "", errors.New("missing") })
-	ran := 0
+	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (host.Obj, string, error) {
+		return nil, "", errors.New("missing")
+	})
+	ran, decided := 0, 0
 	_, err := runRouted(map[string]any{"task": "x", "work_id": "missing"},
-		func(string, string) (map[string]any, error) {
+		func(string, string, host.Obj) (map[string]any, error) {
+			decided++
 			return map[string]any{"id": "xai/grok-5", "decision": "default"}, nil
 		},
 		func(map[string]any) (map[string]any, error) { ran++; return nil, nil }, func(map[string]any) {})
-	if mustCrewErr(t, err, "missing"); ran != 0 {
+	// A failed read is not an empty history: no choice is made and nothing runs.
+	if mustCrewErr(t, err, "missing"); ran != 0 || decided != 0 {
+		t.Fatal(ran, decided)
+	}
+}
+
+func TestUnconfirmedWorkViewStopsExecution(t *testing.T) {
+	patch(t, &workHookContext, func(string, host.Requester, map[string]any) (host.Obj, string, error) {
+		return host.Obj{{Key: "history", Value: "known_empty"}}, "상태", nil
+	})
+	ran := 0
+	_, err := runRouted(map[string]any{"task": "x", "work_id": "work-one"},
+		func(string, string, host.Obj) (map[string]any, error) {
+			return map[string]any{"id": "xai/grok-5", "decision": "default"}, nil // an older server ignores the view
+		},
+		func(map[string]any) (map[string]any, error) { ran++; return nil, nil }, func(map[string]any) {})
+	if mustCrewErr(t, err, "unconfirmed view"); ran != 0 {
 		t.Fatal(ran)
 	}
 }
@@ -1234,7 +1263,7 @@ func TestGroupDecisionCannotSilentlyUseGlobalRoute(t *testing.T) {
 	ran := 0
 	run := func(map[string]any) (map[string]any, error) { ran++; return nil, nil }
 	_, err := runRouted(map[string]any{"task": "x", "group": "group/review"},
-		func(string, string) (map[string]any, error) {
+		func(string, string, host.Obj) (map[string]any, error) {
 			return map[string]any{"id": "xai/grok-5", "decision": "default"}, nil
 		}, run, func(map[string]any) {})
 	if mustCrewErr(t, err, "global"); ran != 0 {
@@ -1268,7 +1297,7 @@ func TestFailedPickHandsOverToTheFallbackAndEveryTryIsReported(t *testing.T) {
 		}
 		return result(true, "끝", pyStr(s["model"]), "", "", time.Time{}, ""), nil
 	}
-	out, err := runRouted(map[string]any{"task": "리뷰해 줘"}, func(string, string) (map[string]any, error) { return decision, nil }, run,
+	out, err := runRouted(map[string]any{"task": "리뷰해 줘"}, func(string, string, host.Obj) (map[string]any, error) { return decision, nil }, run,
 		func(c map[string]any) { reports = append(reports, c) })
 	if err != nil || out["ok"] != true {
 		t.Fatal(out, err)

@@ -17,9 +17,13 @@ func validGroup(group any) bool {
 	return ok && groupRe.MatchString(s)
 }
 
-// decideRoute is {id, model, provider, decision, classifier_ms, fallbacks} from Arkism 라우팅.
-func decideRoute(task, group string) (map[string]any, error) {
+// decideRoute is {id, model, provider, decision, classifier_ms, fallbacks, view_hash?} from Arkism 라우팅.
+// view is the metadata of the work state read before the choice; the server re-checks it is still current.
+func decideRoute(task, group string, view host.Obj) (map[string]any, error) {
 	body := host.Obj{{Key: "scope", Value: scope()}, {Key: "task", Value: task}}
+	if view != nil {
+		body = append(body, host.KV{Key: "view", Value: view})
+	}
 	if group != "" {
 		if !validGroup(group) {
 			return nil, crewErr("라우팅 그룹 ID를 확인해 주세요")
@@ -51,14 +55,14 @@ func routedErrorCode(errText string) string {
 }
 
 type (
-	decideFunc func(task, group string) (map[string]any, error)
+	decideFunc func(task, group string, view host.Obj) (map[string]any, error)
 	runFn      func(spec map[string]any) (map[string]any, error)
 	reportFunc func(call map[string]any)
 )
 
-// workHookContext reads a saved work checkpoint as reference data (a fake in tests).
-var workHookContext = func(workID string, request host.Requester, scope map[string]any) (string, error) {
-	return host.WorkHookContext(workID, request, scope, 8000, nil)
+// workHookContext reads a saved work checkpoint once as reference data and its metadata view (a fake in tests).
+var workHookContext = func(workID string, request host.Requester, scope map[string]any) (host.Obj, string, error) {
+	return host.WorkHookContextView(workID, request, scope, 8000, nil)
 }
 
 var runRoutedFn func(map[string]any, decideFunc, runFn, reportFunc) (map[string]any, error)
@@ -71,7 +75,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 		return nil, crewErr("할 일(task)이 비었어요")
 	}
 	if decide == nil {
-		decide = host.DecideRoute
+		decide = decideRoute
 	}
 	injected := run != nil
 	if run == nil {
@@ -84,20 +88,20 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if err != nil {
 		return nil, err
 	}
-	d, err := decide(task, group)
+	spec, view, err := withWorkContext(spec, task)
+	if err != nil {
+		return nil, err
+	}
+	d, err := decide(task, group, view)
 	if err != nil {
 		return nil, err
 	}
 	if group != "" && d["group"] != group {
 		return nil, crewErr("요청한 그룹의 라우팅 결과를 확인할 수 없어요")
 	}
-	if workID := spec["work_id"]; truthy(workID) {
-		// Read once for this execution so every fallback receives the same checkpoint as data.
-		context, err := workHookContext(pyStr(workID), requester, host.Scope())
-		if err != nil {
-			return nil, crewErr("선택한 작업 상태를 읽지 못해 실행하지 않았어요")
-		}
-		spec = withKey(spec, "task", task+"\n\n"+context)
+	viewHash, err := confirmedView(d, view)
+	if err != nil {
+		return nil, err
 	}
 	first, ok := d["id"].(string)
 	if !ok {
@@ -136,8 +140,34 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if group != "" {
 		routed = append(routed, host.KV{Key: "group", Value: group})
 	}
-	res["routed"] = routed
+	res["routed"] = append(routed, viewHash...)
 	return res, nil
+}
+
+// withWorkContext reads the selected work once before the choice: the decision sees its metadata view and
+// every fallback the same checkpoint as data. A failed read stops the run; it is never an empty history.
+func withWorkContext(spec map[string]any, task string) (map[string]any, host.Obj, error) {
+	workID := spec["work_id"]
+	if !truthy(workID) {
+		return spec, nil, nil
+	}
+	view, context, err := workHookContext(pyStr(workID), requester, host.Scope())
+	if err != nil {
+		return nil, nil, crewErr("선택한 작업 상태를 읽지 못해 실행하지 않았어요")
+	}
+	return withKey(spec, "task", task+"\n\n"+context), view, nil
+}
+
+// confirmedView is the decision's view_hash as a routed field; a sent view the server did not confirm stops the run.
+func confirmedView(d map[string]any, view host.Obj) (host.Obj, error) {
+	hash, _ := d["view_hash"].(string)
+	if view != nil && hash == "" {
+		return nil, crewErr("선택한 작업 상태를 라우팅이 확인하지 못해 실행하지 않았어요")
+	}
+	if hash == "" {
+		return nil, nil
+	}
+	return host.Obj{{Key: "view_hash", Value: hash}}, nil
 }
 
 func routeGroup(spec map[string]any) (string, error) {
