@@ -1,0 +1,40 @@
+{
+  "protocol": "sys-native-service-shadow-contract-v1",
+  "status": "private_engineering_source_no_product_enablement",
+  "authority_basis": "authenticated_cleaned_search_and_validated_native_read_snapshot",
+  "returned_baseline": "existing_native_composite_unchanged",
+  "shadow_reference": "arkism-native-shadow-rrf-reference-v1",
+  "arithmetic_bridge_contract_sha256": "52aa77d1448e54185a0b9c50265fa5a62aae7cecae9e96b5acdc6fbbc38aeac2",
+  "arithmetic_authority": "arithmetic_digest_only; original private_declared_fixture binding is not emitted as source proof",
+  "source_protocol": "native-read-publication-v1",
+  "source_fields": [
+    "native_protocol",
+    "native_config_sha256",
+    "state_ref_digest",
+    "state_revision",
+    "epoch",
+    "model_ns",
+    "dependency_lineage_sha256",
+    "selected_ranker_sha256",
+    "selected_arithmetic_dynamics_sha256",
+    "observed_read_ns",
+    "available_observed_ns",
+    "published_read_ns",
+    "value_projection_ns"
+  ],
+  "time_meaning": "Source proof is current at the validated serializable read snapshot. Read projection time and postcommit publication/cutoff are distinct. State values advance from read projection to publication/cutoff using the reviewed scalar decay helper; no new observations or jumps. Observed availability of this readview is conservative, not original durable commit/earliest availability or memory birth.",
+  "roles": "state methods require existing service/readjobs/exact source grants; other actors fall back without promotion; candidate-only methods require no extra native privilege",
+  "no_raw_telemetry": [
+    "query",
+    "body",
+    "checker",
+    "locator",
+    "private paths",
+    "tokens",
+    "raw actor credentials"
+  ],
+  "scope": "rank-only read-snapshot shadow; no response replacement, domainwrites, productionenv/UI/wire endpoint or full display/answer chain",
+  "unknown": "null or coded fallback; never numeric0 default",
+  "A_join": "unknown; no arbitrary A/v1/DYN hashes or identity aliases",
+  "arithmetic_implementation": "a38-derived-pure-helper-v1; identical protocol/hash domain/steps/error order; original a38 source immutable"
+}

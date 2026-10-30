@@ -1,0 +1,227 @@
+package memory
+
+import (
+	"context"
+	_ "embed"
+	"sync"
+	"time"
+
+	dyn "github.com/FelixBaek/arkism/internal/memoryharness/dynamicsv2"
+)
+
+//go:embed native_search_shadow_contract.json
+var nativeSearchShadowContract []byte
+
+// NativeSearchShadowConfig is an explicit in-process engineering configuration; no wire or environment loader enables it.
+type NativeSearchShadowConfig struct {
+	Mode                     string
+	Registry                 dyn.PolicyRegistryV2
+	Policy                   dyn.PolicyID
+	NativeVersion, Dimension string
+	Deadline                 time.Duration
+	MaxSteps                 int64
+	Capacity                 int
+}
+type NativeSearchShadowObservation struct {
+	Protocol         string   `json:"protocol"`
+	ContractSHA      string   `json:"contract_sha256"`
+	ScopeSHA         string   `json:"scope_sha256"`
+	CandidateSHA     string   `json:"candidate_sha256"`
+	PublishedSHA     string   `json:"published_sha256"`
+	ArithmeticSHA    string   `json:"arithmetic_only_sha256"`
+	BaselineSHA      string   `json:"actual_baseline_sha256"`
+	Status           string   `json:"status"`
+	Reason           string   `json:"reason"`
+	BaselineReturned bool     `json:"baseline_returned"`
+	CandidateCount   int      `json:"candidate_count"`
+	EntryCount       int      `json:"entry_count"`
+	SourceCount      int      `json:"source_count"`
+	Steps            int64    `json:"local_steps"`
+	SelectedRefs     []string `json:"selected_scoped_ref_sha256"`
+}
+type NativeSearchShadowRuntime struct {
+	config  NativeSearchShadowConfig
+	mu      sync.Mutex
+	records []NativeSearchShadowObservation
+	stages  []NativeSearchShadowStages
+}
+
+func NewNativeSearchShadowRuntime(cfg NativeSearchShadowConfig) (*NativeSearchShadowRuntime, error) {
+	if cfg.Mode == "off" {
+		return &NativeSearchShadowRuntime{config: cfg}, nil
+	}
+	if cfg.Mode != "shadow" || cfg.Deadline <= 0 || cfg.Deadline > 5*time.Second || cfg.MaxSteps < 1 || cfg.Capacity < 1 || cfg.Capacity > 1000 {
+		return nil, ErrInvalid
+	}
+	if e := dyn.ValidateTyped("PolicyRegistryV2", cfg.Registry); e != nil {
+		return nil, ErrInvalid
+	}
+	if _, ok := nativeSearchPolicy(cfg); !ok {
+		return nil, ErrInvalid
+	}
+	copyCfg, e := nativeClone(cfg)
+	if e != nil {
+		return nil, e
+	}
+	return &NativeSearchShadowRuntime{config: copyCfg, records: []NativeSearchShadowObservation{}}, nil
+}
+func nativeSearchPolicy(cfg NativeSearchShadowConfig) (dyn.PolicyEntry, bool) {
+	for _, entry := range cfg.Registry.Entries {
+		if entry.PolicyID == cfg.Policy {
+			return entry, true
+		}
+	}
+	return dyn.PolicyEntry{}, false
+}
+func (r *NativeSearchShadowRuntime) Observations() []NativeSearchShadowObservation {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]NativeSearchShadowObservation, len(r.records))
+	for i, v := range r.records {
+		out[i] = nativeCloneSearchObservation(v)
+	}
+	return out
+}
+func (r *NativeSearchShadowRuntime) remember(v NativeSearchShadowObservation, stage NativeSearchShadowStages) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.records) == r.config.Capacity {
+		copy(r.records, r.records[1:])
+		r.records = r.records[:len(r.records)-1]
+		copy(r.stages, r.stages[1:])
+		r.stages = r.stages[:len(r.stages)-1]
+	}
+	r.records = append(r.records, nativeCloneSearchObservation(v))
+	r.stages = append(r.stages, cloneNativeSearchStages(stage))
+}
+
+type nativeSearchAttempt struct {
+	runtime  *NativeSearchShadowRuntime
+	snapshot *nativeSearchSnapshot
+	record   NativeSearchShadowObservation
+	stages   NativeSearchShadowStages
+}
+
+func (s *Service) beginNativeSearchShadow(ctx context.Context, in SearchInput, collection string, lanes [][]Hit, history map[string]Record) *nativeSearchAttempt {
+	runtime := s.NativeSearchShadow
+	if runtime == nil || runtime.config.Mode != "shadow" {
+		return nil
+	}
+	a := &nativeSearchAttempt{runtime: runtime, record: NativeSearchShadowObservation{Protocol: "sys-native-service-shadow-v1", ContractSHA: ContentHash(string(nativeSearchShadowContract)), ScopeSHA: nativeSearchHash("Scope", in.Scope), Status: "fallback", Reason: "not_computed", SelectedRefs: []string{}}}
+	a.stages = NativeSearchShadowStages{Protocol: NativeSearchStagesProtocol, ContractSHA: ContentHash(string(nativeSearchStagesContract)), ScopeSHA: a.record.ScopeSHA, ContextViewSHA: contextViewSHA(in.contextView), FinalErrorCode: "not_entered", ReaderAcknowledgement: "unknown", ActualUse: "unknown", TaskSuccess: "unknown", CausalAttribution: "unknown"}
+	if ctx.Err() != nil {
+		a.record.Reason = "caller_canceled"
+		return a
+	}
+	if collection != colMemories {
+		a.record.Reason = "unsupported_collection"
+		return a
+	}
+	snap, code := nativeFreezeSearch(in.Scope, lanes, history)
+	if code != "" {
+		if ctx.Err() != nil {
+			code = "caller_canceled"
+		}
+		a.record.Reason = code
+		return a
+	}
+	a.snapshot = snap
+	a.record.CandidateSHA = snap.digest
+	a.stages.CandidateSHA = snap.digest
+	a.record.CandidateCount = len(snap.unique)
+	a.record.EntryCount = snap.entries
+	return a
+}
+func (a *nativeSearchAttempt) finish() {
+	if a == nil {
+		return
+	}
+	if !a.record.BaselineReturned && a.record.Status == "selected" {
+		a.record.Status = "computed_not_returned"
+	}
+	a.stages.ArithmeticSHA = a.record.ArithmeticSHA
+	a.stages.BaselineSHA = a.record.BaselineSHA
+	a.stages.PublishedSHA = a.record.PublishedSHA
+	a.stages.Status = a.record.Status
+	a.stages.Reason = a.record.Reason
+	a.runtime.remember(a.record, a.stages)
+}
+func (a *nativeSearchAttempt) compute(ctx context.Context, s *Service, token string, in SearchInput, actor Decision, baseline ContextBundle) {
+	if a == nil {
+		return
+	}
+	a.stages.ContextIDHash = ContentHash(baseline.ContextID)
+	a.stages.BaselinePreFinalCurrentRefs = []string{}
+	a.stages.BaselinePreFinalHistoryRefs = []string{}
+	for _, h := range baseline.Items {
+		a.stages.BaselinePreFinalCurrentRefs = append(a.stages.BaselinePreFinalCurrentRefs, contextHitRefSHA(h))
+	}
+	for _, h := range baseline.History {
+		a.stages.BaselinePreFinalHistoryRefs = append(a.stages.BaselinePreFinalHistoryRefs, contextHitRefSHA(h.Hit))
+	}
+	if a.snapshot == nil {
+		return
+	}
+	a.record.BaselineSHA = nativeSearchBundleHash(baseline)
+	if ctx.Err() != nil {
+		a.record.Reason = "caller_canceled"
+		return
+	}
+	bounded, cancel := context.WithTimeout(ctx, a.runtime.config.Deadline)
+	defer cancel()
+	published, cutoff, sourceSHA, code := s.nativePublishSearchValues(bounded, token, in, actor, a.snapshot, a.runtime.config)
+	if code != "" {
+		if ctx.Err() != nil {
+			code = "caller_canceled"
+		}
+		a.record.Reason = code
+		return
+	}
+	result := runNativeBridgeCandidate(bounded, nativeBridgeInput{Scope: in.Scope, Lanes: a.snapshot.lanes, History: a.snapshot.history, Limit: in.Limit, MaxChars: in.MaxChars, BudgetTokens: in.BudgetTokens, TokenEncoding: in.TokenEncoding, Now: cutoff, ClockDomain: "native-server-read-publication-v1", Registry: a.runtime.config.Registry, Policy: a.runtime.config.Policy, Published: published, MaxSteps: a.runtime.config.MaxSteps})
+	a.record.PublishedSHA = sourceSHA
+	a.record.SourceCount = len(published)
+	a.record.ArithmeticSHA = result.ResultSHA
+	a.record.Steps = result.Steps
+	if ctx.Err() != nil {
+		a.record.Reason = "caller_canceled"
+		return
+	}
+	if bounded.Err() != nil {
+		a.record.Reason = "shadow_deadline"
+		return
+	}
+	if result.Status != "selected" {
+		a.record.Reason = result.Reason
+		return
+	}
+	a.computedStages(in.Scope, result)
+	a.record.Status = "selected"
+	a.record.Reason = "none"
+	a.record.SelectedRefs = make([]string, 0, len(result.Ranked))
+	for _, row := range result.Ranked {
+		a.record.SelectedRefs = append(a.record.SelectedRefs, nativeSearchHash("ScopedRef", struct {
+			Scope Scope
+			Ref   Ref
+		}{in.Scope, Ref{Collection: row.Material.Collection, ID: row.Material.ID, Revision: row.Material.Revision}}))
+	}
+}
+
+func (a *nativeSearchAttempt) returned(out ContextBundle) {
+	if a == nil {
+		return
+	}
+	a.record.BaselineReturned = true
+	a.stages.BaselineReturned = true
+	a.stages.BaselineCurrentRefs = []string{}
+	a.stages.BaselineHistoryRefs = []string{}
+	for _, h := range out.Items {
+		a.stages.BaselineCurrentRefs = append(a.stages.BaselineCurrentRefs, contextHitRefSHA(h))
+	}
+	for _, h := range out.History {
+		a.stages.BaselineHistoryRefs = append(a.stages.BaselineHistoryRefs, contextHitRefSHA(h.Hit))
+	}
+	a.record.BaselineSHA = nativeSearchBundleHash(out)
+}
