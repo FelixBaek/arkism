@@ -19,6 +19,7 @@ function agentTools() {
   t.requests.push({ id: "r2", kind: "agent", agent: "orbit", enabled: true, status: "pending" });
   return d;
 }
+let retentionDays = 7;
 async function api(a) {
   const p = a.path.split("?")[0];
   if (a.method === "GET" && p === "/v1/agent_tools") return { status: 200, body: JSON.stringify(agentTools()) };
@@ -41,6 +42,8 @@ async function api(a) {
     d.roles = { ...d.roles, [pick.role]: { model: pick.model, provider: pick.provider, off: pick.off } };
     return { status: 200, body: JSON.stringify({ providers: d }) };
   }
+  // 대화 원문 보관 기간 on the server
+  if (p === "/v1/session-archives/settings") { if (a.method === "POST") retentionDays = JSON.parse(a.body).days; return { status: 200, body: JSON.stringify({ days: retentionDays }) }; }
   if (postFails && a.method === "POST" && p === "/v1/agent_tools/requests") return { status: 500, body: JSON.stringify({ code: "boom" }) };
   return null;
 }
@@ -125,7 +128,11 @@ test("일반: start at login, capture switch, excluded folders and the memo", as
   assert.doesNotMatch(text(app.$("#table")), /이 폴더와 그 안의 폴더/); // Figma: an excluded folder row is the path alone
   await press("삭제");
   assert.match(notice(), /다시 수집해요/);
-  assert.match(text(app.$("#table")), /대화 원문 보관.*7일/);
+  const keep = app.$('[aria-label="대화 원문 보관 기간"]');
+  assert.equal(keep.value, "7"); assert.equal(keep.disabled, false);
+  keep.value = "30"; app.dom.fire(keep, "change"); await app.settle();
+  assert.equal(retentionDays, 30);
+  assert.match(notice(), /보관 기간을 바꿨어요/);
   assert.equal(app.$(".ex-ai-field textarea"), null, "Figma 198:5962: the memo is a plain field, no AI sparkle");
   app.dom.type(app.$('[aria-label="기억할 것에 대한 메모"]'), "고객 이름은 빼"); await app.settle();
   assert.match(notice(), /메모를 저장했어요/);

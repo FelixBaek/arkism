@@ -5169,7 +5169,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "승인이 필요한 기억이 생기면 알려줘요.": "Tells you when a memory needs your approval.", "작업 완료 알림": "Finished jobs",
   "연결·수집 오류 알림": "Connection and capture errors", "연결이 끊기거나 대화를 저장하지 못하면 알려줘요.": "Tells you when the connection drops or a conversation can't be saved.",
   "알림 소리": "Notification sound", "데스크톱 알림이 올 때 소리를 내요.": "Plays a sound with desktop notifications.",
-  "대화 원문 보관": "Conversation originals", "원문은 7일 뒤 지워져요. 기억에 쓰인 원문은 쓸 때마다 7일 늘어나요.": "Originals are deleted after 7 days. Each time a memory uses one, it's kept 7 more days.",
+  "대화 원문 보관": "Conversation originals", "고른 기간이 지나면 원문을 지워요. 기억에 쓰인 원문은 쓸 때마다 그만큼 늘어나요.": "Originals are deleted after the period you pick. Each time a memory uses one, it's kept that much longer.", "대화 원문 보관 기간": "Keep conversation originals for", "보관 기간을 바꿨어요. 다음에 저장하거나 쓰는 대화부터 적용돼요.": "Changed how long originals are kept. It applies from the next conversation saved or used.", "보관 기간을 저장하지 못했어요.": "Couldn't save how long originals are kept.", "서버가 보관 기간 바꾸기를 아직 지원하지 않아요.": "This server can't change how long originals are kept yet.",
   "제외 폴더 추가": "Exclude folder",
   "라우팅 판정과 같게": "Same as routing judge", "스킬 설명 그대로": "Skill's own description",
   "위험한 명령·비밀값 유출을 찾아요.": "Finds dangerous commands and secret leaks.", "SKILL.md 품질을 0–100점으로 매겨요.": "Scores SKILL.md quality from 0 to 100.",
