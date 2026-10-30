@@ -37,18 +37,23 @@ VIAddVersionKey "LegalCopyright" "Arkism contributors"
 !define MUI_UNICON "${__FILEDIR__}\..\src-tauri\icons\icon.ico"
 ; Friendly Korean page copy replaces the stock MUI wording.
 !define MUI_WELCOMEPAGE_TITLE "Arkism ${VERSION} 설치"
-!define MUI_WELCOMEPAGE_TEXT "Arkism을 이 PC에 설치합니다.$\r$\n$\r$\n설치 전에 열려 있는 프로그램을 닫아 주세요.$\r$\n$\r$\n준비되면 '설치'를 눌러 주세요."
-!define MUI_FINISHPAGE_TITLE "설치를 마쳤습니다"
-!define MUI_FINISHPAGE_TEXT "Arkism을 쓸 준비가 됐습니다.$\r$\n$\r$\n'마침'을 누르면 창이 닫힙니다."
+!define MUI_WELCOMEPAGE_TEXT "Arkism ${VERSION}을 설치할게요.$\r$\n$\r$\n열려 있는 다른 프로그램은 잠깐 닫아 주세요. 그래야 설치가 깔끔하게 끝나요.$\r$\n$\r$\n준비되면 '설치'를 눌러 주세요."
+!define MUI_FINISHPAGE_TITLE "설치가 끝났어요"
+!define MUI_FINISHPAGE_TEXT "이제 Arkism이 기억을 챙길게요.$\r$\n$\r$\n'마침'을 누르면 바로 시작할 수 있어요."
 !ifdef ARKISM_EMIT_UNINSTALLER
   ; Build-only executable: write the uninstaller next to this emitter. It has
   ; no installation page, launch action, registry or shortcut writes.
   SilentInstall silent
+  ; Opening the uninstaller asks first (issue #148); a silent uninstall skips the page.
+  !define MUI_PAGE_HEADER_TEXT "Arkism 제거"
+  !define MUI_PAGE_HEADER_SUBTEXT "Arkism을 정말 지울까요?"
+  !define MUI_UNCONFIRMPAGE_TEXT_TOP "쌓아 둔 기억과 설정은 지우지 않고 남겨 둘게요. 그래도 지우려면 '제거'를 눌러 주세요."
+  !insertmacro MUI_UNPAGE_CONFIRM
   !define MUI_PAGE_HEADER_TEXT "Arkism 제거"
   !define MUI_PAGE_HEADER_SUBTEXT "잠시만 기다려 주세요."
-  !define MUI_INSTFILESPAGE_FINISHHEADER_TEXT "제거를 마쳤습니다"
-  !define MUI_INSTFILESPAGE_FINISHHEADER_SUBTEXT "Arkism을 이 PC에서 지웠습니다."
-  !define MUI_INSTFILESPAGE_ABORTHEADER_TEXT "제거하지 못했습니다"
+  !define MUI_INSTFILESPAGE_FINISHHEADER_TEXT "다 지웠어요"
+  !define MUI_INSTFILESPAGE_FINISHHEADER_SUBTEXT "기억과 설정은 그대로 남아 있어요."
+  !define MUI_INSTFILESPAGE_ABORTHEADER_TEXT "지우지 못했어요"
   !define MUI_INSTFILESPAGE_ABORTHEADER_SUBTEXT "아래 기록을 확인해 주세요."
   !insertmacro MUI_UNPAGE_INSTFILES
   !insertmacro MUI_LANGUAGE "Korean"

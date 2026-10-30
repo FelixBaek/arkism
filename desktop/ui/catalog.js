@@ -341,7 +341,7 @@
       pollTools?.();
     }
 
-    return { openInstall, installPage, installButton: () => button("GitHub에서 설치", "", "plus", openInstall), presetField, watchAdd };
+    return { openInstall, installPage, installButton: () => button("설치", "", "plus", openInstall), presetField, watchAdd };
   }
   factory.parseSource = parseSource;
   factory.PRESETS = PRESETS;
