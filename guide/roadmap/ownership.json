@@ -1229,7 +1229,7 @@
       "owner": "DYN-05",
       "status": "in_progress",
       "conditional": false,
-      "condition": "core p1 acceptance; fast/slow and capture extensions need separate selection and acceptance",
+      "condition": "p1 substage acceptance only; original v4 explicitly does not equate p1 with whole DYN05/capture. Fast/slow and capture remain separately selected conditional followups.",
       "entry_gates": [
         "DYN-05.p1"
       ],
@@ -1285,6 +1285,14 @@
         {
           "root": "repo",
           "path": "internal/memoryharness/dynamicsv2/policy_p1_v1_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/native_runner_parent_semantics_v1.json"
+        },
+        {
+          "root": "repo",
+          "path": "docs/research/memory-harness/zero_auxiliary_order_semantics_v1.json"
         }
       ],
       "consumes": [
@@ -1322,6 +1330,26 @@
           "owner": "DYN-03",
           "root": "repo",
           "path": "internal/memoryharness/dynamicsv2/probe.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/dataset_contract.json",
+          "owner": "EXP-01"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_01/protocol.template.json",
+          "owner": "EXP-01"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/policy_matrix.json",
+          "owner": "EXP-02"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/controls.json",
+          "owner": "EXP-02"
         }
       ],
       "shared_updates": [],
