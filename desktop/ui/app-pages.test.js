@@ -432,7 +432,7 @@ test("카테고리: draft edits, the save bar, order and delete", async () => {
   await press("조건 지우기");
   await press("위로");
   assert.match(text(app.$("#table")), /저장하지 않은 변경/);
-  await press("되돌리기");
+  await press("취소");
   assert.doesNotMatch(text(app.$("#table")), /저장하지 않은 변경/);
   app.$("#table").querySelectorAll(".cat-table .v4-tr:not(.th)")[1].click(); await app.settle();
   await press("카테고리 지우기");

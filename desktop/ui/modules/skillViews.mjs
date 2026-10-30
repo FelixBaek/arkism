@@ -155,7 +155,7 @@ export function createSkillViews(deps) {
 
   // v4 · 스킬 (Figma 198:802): 확인할 것 카드 → 검색·상태·정렬 → 분류 → 목록, 오른쪽은 고른 스킬.
   // state.skillPage opens a page inside the same view: 개선하기 (4 steps), 설치.
-  const SKILL_STATES = [["all", "전체"], ["missing", "일부 에이전트에서 꺼짐"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인에 든 스킬"], ["trash", "휴지통"]];
+  const SKILL_STATES = [["all", "전체"], ["missing", "일부 에이전트에서 꺼짐"], ["unused", "안 씀"], ["caution", "보안 주의"], ["update", "업데이트 있음"], ["plugin", "플러그인에 든 스킬"]]; // no 휴지통 chip: 안 씀 already lists those (owner request)
 
   const IMPROVE_STEPS = [["개선안", "무엇을 고칠까요?", "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요."],
     ["비교 평가", "기존 버전과 비교해요", "같은 평가 과제로 두 버전을 돌려 점수·비용·시간을 비교해요."],
@@ -487,7 +487,7 @@ export function createSkillViews(deps) {
     top.append(titleRow);
     if (sk.description) top.append(deps.raw(deps.el("p", "v4s-lead", sk.description)));
     // One AI button (ai-chat.js, Figma 1385:5245): it explains in the bubble, and its footer opens 개선하기 for a live skill.
-    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI", title: "AI", sub: sk.name,
+    const aiBtn = window.ArkismAIChat.button({ state: skillTalk.get(sk.id) || skillTalk.set(sk.id, {}).get(sk.id), label: "AI 설명", title: "AI 설명", sub: sk.name,
       greeting: "무엇이 궁금하세요?\n쉽게 설명하거나, 바로 고쳐 볼 수 있어요.",
       placeholder: "궁금한 것을 물어보세요", quick: ["쉽게 설명해 줘", "언제 쓰면 좋아?", "예시를 들어 줘"],
       footer: sk.status === "deprecated" ? null : { label: "이 스킬 개선하기", hint: "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요", onClick: openBetter },

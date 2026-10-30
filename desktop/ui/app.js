@@ -1182,7 +1182,8 @@ export function startApp() {
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새로 저장한 기억", title: `최근 3일 저장한 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
     ];
-    const ORDER = ["lists", "extractor", "stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
+    // "blocked" stays off Home: a skill left out of an agent may be on purpose, and Tools › 일부 에이전트에서 꺼짐 lists it (owner request)
+    const ORDER = ["lists", "extractor", "stalled", "suggest", "review", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
     // a broken extractor is the reason processing stalled: its card says how to fix it, so the stall row waits.
     // On a fresh install the 시작하기 checklist carries the same card.
     const extractor = homeStart.issueItem();
@@ -2248,6 +2249,8 @@ export function startApp() {
   document.addEventListener("keydown", (e) => {
     const editing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName);
     if (e.key.toLowerCase() === "k" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); home.palette(); return; }
+    // the webview's own find bar, downloads, print, history and source view make the app feel like a web page (owner request)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && ["f", "j", "g", "p", "h", "u"].includes(e.key.toLowerCase())) { e.preventDefault(); return; }
     if (e.key === "/" && !editing) { e.preventDefault(); const own = $(".panel-search input"); own?.offsetParent ? own.focus() : home.palette(); return; }
     if (e.key === "?" && !editing && !document.querySelector("dialog[open]")) { e.preventDefault(); home.shortcuts(); return; }
     if (e.key === "Escape" && $("#app").classList.contains("detail-open")) { closeDetail(); return; }

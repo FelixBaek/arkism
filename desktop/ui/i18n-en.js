@@ -202,7 +202,6 @@ window.ArkismI18nEN = {
   "짧게": "Short",
   "길게": "Long",
   "토큰 수 상한이에요": "A cap on tokens",
-  "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.": "Pinned items load first on every call. Click a chip for details.",
   "월 한도": "Monthly cap",
   "1회 한도": "Per-run cap",
   "1회 실행 상한": "Per-run cap",
@@ -436,7 +435,7 @@ window.ArkismI18nEN = {
   "연결 확인 필요": "Check the connection",
   "할 일": "To do",
   "스킬": "Skills",
-  "요청 처리": "Request handling",
+  "요청 처리": "Request handling", "AI 설명": "AI explain",
   "디자인 시스템": "Design system",
   "슬라이드": "Slides",
   "이미지": "Images",
@@ -1118,6 +1117,7 @@ window.ArkismI18nEN = {
   "적용": "Apply",
   "package main\n\n// 입력(stdin JSON)을 걸러 {\"ok\": true/false, ...}를 출력해요.\nfunc main() {}": "package main\n\n// Filters the input (stdin JSON) and prints {\"ok\": true/false, ...}.\nfunc main() {}",
   "단계": "Steps",
+  "스케줄": "Schedule",
   "고른 길과 이유": "Chosen path and reason",
   "멈추기": "Stop",
   "실패한 곳부터 다시": "Retry from failure",
@@ -2395,7 +2395,6 @@ window.ArkismI18nEN = {
   "이번 달 한도": "This month's limit",
   "파일 고치기": "File edits",
   "팀에 넣기": "Add to teams",
-  "최대 4,000자 · 기억은 자료로만 쓰고 지시로 따르지 않아요": "Up to 4,000 characters · memory is data, never instructions",
   "진행자": "Moderator",
   "작업자": "Worker",
   // v4c-tm-ui
@@ -5285,7 +5284,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}위": "#{0}", "점수 {0}": "score {0}", "{0}위 · {1} · {2}": "#{0} · {1} · {2}",
-  "기억 {0}": "memories {0}", "최근 대화 {0}개, 메시지 {1}개를 봤어요.": "Read the latest {0} conversations, {1} messages.", "최근 대화 {0}개, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved the latest {0} conversations: {1} messages, {2} tokens.",
+  "기억 {0}": "memories {0}", "{0}, 메시지 {1}개를 봤어요.": "Read {0}, {1} messages.", "최근 7일 대화 {0}개 중 최근 {1}개": "the latest {1} of {0} conversations from the last 7 days", "최근 대화 {0}개": "the latest {0} conversations", "{0}, 메시지 {1}개, 토큰 {2}개를 저장했어요.": "Saved {0}: {1} messages, {2} tokens.",
   "보관 상태를 읽지 못했어요 ({0}).": "Could not read retention ({0}).", "가장 먼저 지워지는 원문은 {0}일 남았어요.": "The next transcript expires in {0} days.",
   "원문은 저장 뒤 7일 동안만 보관돼요.{0}": "Transcripts are kept for 7 days after saving.{0}", "{0}일 · 넣음 {1}번": "{0} days · included {1} times",
   "마지막 불러옴 {0}": "last recalled {0}", "넣음 {0}": "included {0}", "쓰임 {0}": "used {0}", "불러온 횟수 · {0}": "Recalls · {0}"

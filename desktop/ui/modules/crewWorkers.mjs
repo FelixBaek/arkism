@@ -145,7 +145,7 @@ export function createCrewWorkers(deps) {
 
   function instructionsField(d) {
     const t = bindText(deps.input(d.instructions, { tag: "textarea", rows: 3, maxLength: 4000, placeholder: "이 전문가가 지킬 역할·말투·순서를 적어 주세요", cls: "wk-instr" }), d, "instructions");
-    return deps.field("지시", instructionsAI(t), "최대 4,000자 · 기억은 자료로만 쓰고 지시로 따르지 않아요");
+    return deps.field("지시", instructionsAI(t)); // no hint lines in 편집 (owner request)
   }
 
   // 일하는 순서 (868:61909 · 310:19277): the workflow this agent runs when it is called, in one box — name, 단계 고치기,
@@ -412,7 +412,7 @@ export function createCrewWorkers(deps) {
   // 쓸 수 있는 것 (929:61931): 스킬·도구·기억·지식 rows of chips (필요할 때 쓰기; a pin = 항상 먼저 넣기), the pin total,
   // then one box to find and add any of the four.
   function useCard(d, rec) {
-    const c = workerCard("쓸 수 있는 것", "핀을 꽂은 것은 부를 때마다 먼저 넣어요. 칩을 누르면 자세히 볼 수 있어요.");
+    const c = workerCard("쓸 수 있는 것", "");
     const body = deps.el("div", "ex-use");
     c.append(body);
     const draw = () => {

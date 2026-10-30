@@ -3,11 +3,11 @@
 :root[data-theme="light"] .graph-page, :root[data-theme="light"] .node-dialog { --g-http: #2f6fdc; --g-human: #1f8a52; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .graph-page, :root:not([data-theme="dark"]) .node-dialog { --g-http: #2f6fdc; --g-human: #1f8a52; } }
 .g-stage { background-size: 24px 24px; }
-/* 선 (Weavy 참고): 1.4px 노란색 72%, 화살표 없음, 되돌아가는 선은 같은 색 점선, 실패·거절 갈래 빨강 */
+/* 선 (Weavy 참고): 1.4px 노란색 72%, 화살표 없음, 되돌아가는 선은 빨간 점선, 실패·거절 갈래 빨강, 지나간 선 초록 */
 .g-edge { stroke-width: 1.4; stroke: color-mix(in srgb, var(--nc-accent) 72%, transparent); opacity: 1; }
-.g-edge.back { stroke: color-mix(in srgb, var(--nc-accent) 72%, transparent); stroke-dasharray: 5 4; opacity: 1; }
+.g-edge.back { stroke: color-mix(in srgb, var(--status-danger) 72%, transparent); stroke-dasharray: 5 4; opacity: 1; } /* a failed check goes back: red (owner request) */
 .g-edge.alt { stroke: color-mix(in srgb, var(--status-danger) 72%, transparent); }
-.g-edge.used { stroke: var(--warn); }
+.g-edge.used { stroke: var(--g-human); }
 .g-edge.selected { stroke: var(--text-1); }
 .graph-page { --g-line: #2b2d31; }
 :root[data-theme="light"] .graph-page { --g-line: var(--nc-line); }
