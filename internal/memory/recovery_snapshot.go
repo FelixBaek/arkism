@@ -25,6 +25,7 @@ type RecoverySnapshot struct {
 	Coverage       string                  `json:"coverage"`
 	Ledgers        []DeletionLedger        `json:"ledgers"`
 	ReceiptCauses  *[]RecoveryReceiptScope `json:"receipt_causes,omitempty"`
+	NativeDynamics *NativeRecoverySnapshot `json:"native_dynamics,omitempty"`
 }
 
 // ExportRecoverySnapshot is for the offline backup operator only. No HTTP/MCP
@@ -55,6 +56,7 @@ type RestoredRecoverySnapshot struct {
 	Ledgers          []DeletionLedger        `json:"ledgers"`
 	ReplayKeys       map[string]string       `json:"replay_keys"`
 	ReceiptCauses    *[]RecoveryReceiptScope `json:"receipt_causes,omitempty"`
+	NativeDynamics   *NativeRecoverySnapshot `json:"native_dynamics,omitempty"`
 }
 
 var restoreReplayKeyPattern = regexp.MustCompile(`^restore-(request|work|source)-[0-9a-f]{64}$`)
@@ -68,6 +70,10 @@ func (p *Postgres) RecoveryReviewSnapshot(ctx context.Context, restored bool, ge
 }
 
 func (p *Postgres) exportRecoverySnapshot(ctx context.Context, restored bool, generation string, causes bool) ([]byte, error) {
+	return p.exportRecoverySnapshotMode(ctx, restored, generation, causes, false)
+}
+
+func (p *Postgres) exportRecoverySnapshotMode(ctx context.Context, restored bool, generation string, causes, native bool) ([]byte, error) {
 	if p == nil || p.pool == nil || p.tx != nil {
 		return nil, ErrInvalid
 	}
@@ -109,11 +115,8 @@ func (p *Postgres) exportRecoverySnapshot(ctx context.Context, restored bool, ge
 		out.ReceiptCauses = &items
 		out.Version = 5
 	}
-	budget := 0
-	for _, scope := range scopes {
-		if budget, err = view.snapshotRecoveryScope(ctx, scope, restored, causes, &out, replayKeys, budget); err != nil {
-			return nil, err
-		}
+	if err = view.snapshotRecoveryScopesAndNative(ctx, scopes, restored, causes, native, &out, replayKeys); err != nil {
+		return nil, err
 	}
 	var artifact any = out
 	if restored {
@@ -150,7 +153,10 @@ func restoredRecoverySnapshot(out RecoverySnapshot, causes bool, manifest []byte
 	if causes {
 		version = 6
 	}
-	return RestoredRecoverySnapshot{Version: version, RestoredIdentity: out.SourceIdentity, RestoreManifest: string(manifest), CapturedAt: out.CapturedAt, Coverage: out.Coverage, Ledgers: out.Ledgers, ReplayKeys: replayKeys, ReceiptCauses: out.ReceiptCauses}
+	if out.NativeDynamics != nil {
+		version = 8
+	}
+	return RestoredRecoverySnapshot{Version: version, RestoredIdentity: out.SourceIdentity, RestoreManifest: string(manifest), CapturedAt: out.CapturedAt, Coverage: out.Coverage, Ledgers: out.Ledgers, ReplayKeys: replayKeys, ReceiptCauses: out.ReceiptCauses, NativeDynamics: out.NativeDynamics}
 }
 
 func (p *Postgres) checkPausedRecoveryGate(ctx context.Context, generation string) error {
@@ -270,4 +276,23 @@ func recoverySnapshotScopes(ctx context.Context, p *Postgres) ([]Scope, error) {
 		}
 	}
 	return out, pgErr(rows.Err())
+}
+
+func (p *Postgres) snapshotRecoveryScopesAndNative(ctx context.Context, scopes []Scope, restored, causes, native bool, out *RecoverySnapshot, replayKeys map[string]string) error {
+	var err error
+	budget := 0
+	for _, scope := range scopes {
+		if budget, err = p.snapshotRecoveryScope(ctx, scope, restored, causes, out, replayKeys, budget); err != nil {
+			return err
+		}
+	}
+	if native {
+		projection, err := p.nativeRecoverySnapshotTx(ctx)
+		if err != nil {
+			return err
+		}
+		out.NativeDynamics = &projection
+		out.Version = 7
+	}
+	return nil
 }

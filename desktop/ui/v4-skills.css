@@ -186,6 +186,9 @@ div.install-way { border-style: dashed; }
 .v4s-card legend { padding: 9px 12px; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }
 .v4s-card .generation-observation { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--nc-line); font: 400 13px/1.5 var(--sans); color: var(--nc-text); }
 .v4s-card .btn.small { align-self: flex-start; }
+.v4s-card .generation-rule { margin: 0; font: 500 13px/1.5 var(--sans); color: var(--nc-text); }
+.v4s-card .generation-missing { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font: 400 13px/1.5 var(--sans); color: var(--nc-muted); }
+.v4s-card .generation-advanced { display: flex; flex-direction: column; gap: 8px; }
 .v4s-improve > .v4s-actions { justify-content: space-between; }
 
 /* ---------------------------------------------------------------- segment (지식 탭) */

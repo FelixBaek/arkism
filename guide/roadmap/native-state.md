@@ -28,3 +28,5 @@ API에서 숨긴 것과 payload·검색 문서의 실제 제거는 다른 검사
 이 단계의 고정 통합 기준은 main `a389082b77cc57f45c174a561cb443a2d533e83f`와 검토된 로드맵 선행이다. 작성자 격리 검사와 root의 선택 회귀 결과는 작업 기록에 구분한다. 새 소스의 독립21메서드·93세부사례가 일반/race 모두 통과했고, 실제 과거7e schema4와 제한 역할의 원본 자료에서 최종 schema5로 올리는 검증도 통과했다. 원본 bytes·수락 시각·hash·legacy unknown을 보존하고 과거 사건을 채우지 않는지 확인했다. 호스트 checker 원본 bytes/hash와 서버 형식 검증은 별도로 검사했다.
 
 실제 Search/HTTP shadow 연결, 표시·저장·읽기·답변 단계의 전체 증거 연결, 삭제 후 retained-data 재구축·새 프로세스 복원·최종 게시 fence는 이 저장 구현만으로 완료되지 않는다. SYS-02는 기존 A 명세와 이 native 프로토콜의 실제 B 격리 수용 기준을 충족했다. 고정 합성 DYN에 없는 Task/Trial 결속을 만들지 않았으며 이전 A의 metadata-only 설명을 현재 durable B의 미구현으로 해석하지 않는다. SYS-03 전체 완료나 제품 빌드·배포 수용은 별도다. 원자성 모델 검사·실제 격리 DB 검사·전체 카드 수용을 구분한다.
+
+Local SYS-01/SYS-03/SYS-04 integration is now accepted in the pinned latest-main candidate; see [delivery and lifecycle](native-delivery-lifecycle.md) for exact reader, recovery, trust and test boundaries. Default feature enablement and deployment remain separate.

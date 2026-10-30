@@ -16,7 +16,14 @@ func (s *Service) nativeActor(ctx context.Context, token string, scope Scope, ac
 	if s == nil || s.Repo == nil || s.NativeDynamics == nil || !s.NativeDynamics.Enabled {
 		return ctx, ErrUnavailable
 	}
-	return s.nativeMaintenanceActor(ctx, token, scope, action)
+	bound, err := s.nativeMaintenanceActor(ctx, token, scope, action)
+	if err != nil {
+		return ctx, err
+	}
+	if err := s.CheckRestorePublication(bound); err != nil {
+		return bound, err
+	}
+	return bound, nil
 }
 
 func (s *Service) nativeMaintenanceActor(ctx context.Context, token string, scope Scope, action string) (context.Context, error) {
@@ -64,6 +71,9 @@ func (s *Service) ActivateNativeMemoryDynamics(ctx context.Context, token string
 	}{key, hash, in.RequestID})
 	var result NativeDynamicsReceipt
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
+			return err
+		}
 		result = NativeDynamicsReceipt{}
 		var transactionErr error
 		result, transactionErr = nativeActivateDynamicsTx(ctx, tx, in, cfg, deps, key, hash, request)
@@ -139,6 +149,9 @@ func (s *Service) ProcessNativeDynamicsCapture(ctx context.Context, token string
 	var result NativeDynamicsReceipt
 	var blocked error
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
+			return err
+		}
 		result = NativeDynamicsReceipt{}
 		blocked = nil
 		var transactionErr error
@@ -196,6 +209,9 @@ func (s *Service) ReadNativeDynamicsSnapshot(ctx context.Context, token string, 
 		return NativeDynamicsView{}, err
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
+			return err
+		}
 		out = NativeDynamicsView{Status: "missing", Authority: AuthorityDataOnly}
 		var transactionErr error
 		out, transactionErr = nativeReadSnapshotTx(ctx, tx, in, key, row, deps)
@@ -220,6 +236,9 @@ func (s *Service) DrainNativeDynamicsCaptures(ctx context.Context, token string,
 	}
 	var refs []Ref
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := nativeCheckRestorePublicationTx(ctx, tx); err != nil {
+			return err
+		}
 		refs = nil
 		q, ok := tx.(nativeDynamicsTxQueries)
 		if !ok {

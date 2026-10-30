@@ -11,3 +11,5 @@ This view is a selector for one invocation. It does not delete records, erase pr
 The original observation protocol keeps `SelectedRefs` as the full arithmetic ranking. The separate `sys-native-service-stages-v2` record distinguishes full ranking, prepack, arithmetic emission, observed baseline before the final transaction and actual returned baseline. A rejected reference identifies the checked reference; an unknown underlying cause remains null. Transaction errors are not attributed to an invented source cause.
 
 Server emission is not reader delivery. Reader acknowledgement, actual use, task success and causal attribution remain unknown in these records. The production host/crew receipt chain and its combined invocation-view checks are separate acceptance work. There is no UI change, production enablement, build or deployment in this stage.
+
+Local SYS-01/SYS-03/SYS-04 integration is now accepted in the pinned latest-main candidate; see [delivery and lifecycle](native-delivery-lifecycle.md) for exact reader, recovery, trust and test boundaries. Default feature enablement and deployment remain separate.

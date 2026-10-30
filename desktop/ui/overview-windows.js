@@ -259,18 +259,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const no = button("버리기", "small", null, () => DR().openAfter(note, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: async (why) => {
       lock(true); const res = await decide(c, "reject", DR().rejectFields(why)); if (res?.error) { lock(false); return res; } followedAI(c, aiPick, "reject"); r.remove();
     } }));
+    // While AI reads, this button cancels; after a failure or a cancel it says 다시 시도. The candidate text is never changed.
+    let running = null;
+    const aiLabel = (t) => { ai.lastChild.textContent = tr(t); };
     const ai = button("AI 도움", "small", "sparkle", async () => {
+      if (running) { running.abort(); return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
-      lock(true); note.textContent = "AI가 읽는 중…";
+      const mine = running = new AbortController(); let failed = true;
+      ok.disabled = no.disabled = true; aiLabel("취소"); note.textContent = "AI가 읽는 중… 최대 11분 걸려요.";
       try {
         const prompt = `An AI agent will be given this memory in later work if a person approves it.\nKind: ${c.kind}\nCandidate: ${c.text}\n${dupText ? `A similar existing memory: ${dupText}\n` : ""}Should the person approve it (true, still useful, specific) or reject it (wrong, one-off, vague, duplicate)?\nAnswer with ONE JSON object: {"pick": "approve" | "reject", "reason": "one or two short, plain Korean sentences"}.`;
-        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } } });
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } }, signal: mine.signal });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!["approve", "reject"].includes(j?.pick)) throw new Error(tr("AI가 고르지 못했어요."));
         aiPick = j.pick; ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
         advice.replaceChildren(el("strong", "", `AI 추천 · ${j.pick === "approve" ? "승인" : "버리기"}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 300))] : [])); advice.hidden = false; note.textContent = "";
-      } catch (e) { note.textContent = `AI 도움을 받지 못했어요: ${e.message}`; }
-      finally { lock(false); }
+        failed = false;
+      } catch (e) { note.textContent = e.code === "cancelled" ? "AI 도움을 취소했어요. 후보는 그대로예요." : `AI 도움을 받지 못했어요: ${e.message}`; }
+      finally { running = null; ok.disabled = no.disabled = false; aiLabel(failed ? "다시 시도" : "AI 도움"); }
     });
     side.append(ok, no, ai, button("자세히", "ghost small", null, () => wide("review", c.id))); r.firstChild.append(advice, note);
     if (DR().maybeStale(c, [D().memories.find((m) => m.id === c.classification?.dup_hint)])) side.append(DR().staleHint());
@@ -371,6 +377,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const barList = (pairs, max = Math.max(1, ...pairs.map(([, n]) => n))) => { const box = el("div", "ov-detail-bars"); for (const [a, n, tagged] of pairs) { const p = el("div", "ov-detail-bar"), track = el("i"), fill = el("b"), line = el("p", ""); fill.style.width = `${Math.round((n / max) * 100)}%`; if (tagged) fill.style.background = KIND_COLOR[tagged] || ""; track.append(fill); line.append(el("span", "", a), el("strong", "", `${num(n)}`)); p.append(line, track); box.append(p); } return box; };
   const block = (title, ...nodes) => { const b = el("div", "ov-win-chart ov-sum"); b.append(el("div", "ov-win-chart-title", title), ...nodes); return b; };
   const cellRow = (pairs) => { const c = el("div", "ov-win-cells ov-sum-cells"); for (const [l, v] of pairs) { const x = el("div", "ov-win-cell"); x.append(el("small", "", l), el("strong", "", v)); c.append(x); } return c; };
+  // 마지막 분석: the host's last capture drain that touched a job (agent_tools.analysis_run, #449), its reason in words and what to do
+  const RUN_WHY = { session_batch_wait: "대화가 끝나고 5분 쉬면 분석해요", archive_prompt_pending: "대화 원문이 보관되기를 기다려요",
+    session_archive_private_skipped: "비공개로 표시한 대화라 건너뛰었어요", capture_policy_pending: "저장 정책 승인을 기다려요",
+    session_batch_parent_pending: "같은 대화의 앞 묶음을 기다려요", 429: "모델 사용 한도에 걸려 1시간 뒤 다시 해요",
+    401: "서버가 분석 요청을 거부했어요 (로그인 만료)", 403: "서버가 분석 요청을 거부했어요 (권한 없음)" };
+  const RUN_CMD = "sudo systemctl start arkism-reflect.service";
+  function runBox(stopped) {
+    const run = D().tools?.analysis_run, box = block("마지막 분석");
+    const copy = () => { const b = button("명령 복사", "ghost small", null, () => Promise.resolve().then(() => b.ownerDocument.defaultView.navigator.clipboard.writeText(RUN_CMD)).then(() => { b.textContent = "복사했어요"; }, () => { b.textContent = "복사하지 못했어요"; })); return b; };
+    const stale = !run || Date.now() - time(run.at) > 2 * HOUR; // reflect runs hourly and drain every minute; two missed hours means no run
+    if (!run) box.append(el("p", "ov-win-empty", "서버가 아직 분석 결과를 보고하지 않았어요."));
+    else {
+      box.append(cellRow([["마지막 실행", ago(time(run.at))], ["본 대화", `${num(run.jobs)}개`], ["끝남", `${num(run.done)}개`], ["대기", `${num(run.waiting)}개`],
+        ["건너뜀·보류·실패", `${num(run.dropped + run.parked + run.failed)}개`], ["새 후보", `${num(run.candidates)}건`]]));
+      const code = run.error || run.reason;
+      if (code) { const l = el("div", "ov-sum-why"), p = el("p", ""); p.append(el("span", "", RUN_WHY[code] || code)); l.append(el("small", "", "이유"), p); box.append(l); }
+      box.append(cellRow([["마지막으로 분석을 끝낸 때", run.last_done_at ? ago(time(run.last_done_at)) : "—"], ["그때 나온 후보", run.last_done_at ? `${num(run.last_done_candidates)}건` : "—"]]));
+    }
+    const auth = /^40[13]$/.test(run?.error || run?.reason || "");
+    const why = stopped && note("r", `${stopped}이에요`, auth ? "서버가 분석 요청을 거부했어요. 에이전트 로그인을 확인해 주세요." : stale ? "최근 2시간 동안 서버의 분석이 돌지 않았어요. 서버에서 분석 타이머를 켜 주세요." : "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.");
+    if (auth) box.append(button("에이전트 설정 열기", "ghost small", null, (e) => { e.target.closest("dialog")?.close(); state.settingsTab = "agents"; go("settings"); }));
+    else if (stale) { const r = el("div", "ov-sum-cmd"); r.append(el("code", "", RUN_CMD), copy()); box.append(r); }
+    return why ? [why, box] : [box];
+  }
   // 분석: what went in (the 7-day sessions and their messages) and what came out (candidates by kind, and how each ended)
   function analysisBox() {
     const ses = env.sessions(), st = ses.map(sessionState), wk = Date.now() - 7 * 24 * HOUR;
@@ -446,8 +476,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       s.counts.forEach((n, k) => { const b = el("i", n ? (s.row?.[k] === "r" ? "r" : s.row?.[k] === "a" ? "a" : "") : "none"); b.style.height = `${6 + (n / max) * 54}px`; b.title = `${n}`; bars.append(b); });
       chart.append(bars, el("div", "ov-win-axis", "24시간 전 ··· 지금")); left.append(chart);
     }
-    if (key === "extract" && s.badge?.[1] === "r") left.append(note("r", `${s.badge[0]}이에요`, "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요."));
-    if (key === "extract") left.append(analysisBox());
+    if (key === "extract") left.append(...runBox(s.badge?.[1] === "r" ? s.badge[0] : ""), analysisBox());
     if (key === "classify") left.append(note("n", "글을 다 읽고 골라요", "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요."));
     if (key === "judge") left.append(note("a", "건넸는데 답에 안 쓰인 기억이에요", "아직 맞으면 유지, 틀렸으면 고치기, 필요 없으면 잊기를 눌러 주세요."));
     if (key === "dream") left.append(note("n", "골라야 바뀌어요", "지운 기억도 이력에 남아요."));
@@ -514,18 +543,30 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const g = el("div", "ov-detail-group"), cmp = el("div", "ov-detail-list");
     const card = (cls, label, id) => { const b = el("div", `ov-cmp ${cls}`); b.append(el("small", "", label), el("span", "", memText(id))); cmp.append(b); };
     if (signal) { card("", "대상 기억", x.memory.id); const ev = x.evidence; if (ev) cmp.append(el("p", "", `최근 ${num(ev.samples)}번 중 ${num(ev.passed)}번만 지켜졌어요 (통과율 ${Math.round((ev.pass_rate || 0) * 100)}%).`)); }
-    else { card("diff-add", "남길 기억", x.keep?.id); card("diff-del", "이력으로 넘길 기억", x.retire?.id); }
+    // the pair as it would end up: + stays, − goes to history; the proposal itself and each preview draw through it
+    const pair = (stay, gone) => { cmp.replaceChildren(); stay.forEach((r) => card("diff-add", "남길 기억", r?.id)); gone.forEach((r) => card("diff-del", "이력으로 넘길 기억", r?.id)); };
+    if (!signal) pair([x.keep], [x.retire]);
     const why = { same_meaning: "두 기억이 같은 말을 해요.", more_specific: "남길 기억이 더 자세해요. 다른 하나의 내용이 거기에 들어 있다고 봤어요.", newer_replaces_older: "새 기억이 예전 기억과 반대예요. 지금 생각은 새 기억이라고 봤어요." }[x.reason];
     const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
+    // invalid_request here means an older server without this decision (forget_both)
     const go2 = async (decision, extra = {}) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true));
       try { await request(`/v1/maintenance_proposals/${encodeURIComponent(p.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, decision, ...extra }) }); await reload(); done(); }
-      catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
-    if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")));
-    else act.append(button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => go2("accept")), button("반대로 남기기", "small", null, () => go2("swap")), button("둘 다 두기", "small", null, () => go2("dismiss")));
+      catch (er) { const error = er.message === "revision_conflict" ? "기억이 바뀌어 이 제안은 낡았어요." : er.message === "invalid_request" ? "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요." : `처리하지 못했어요: ${er.message}`; st.textContent = error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); return { error }; } };
     // 지우기: either memory or both, with a reason; each removed memory keeps it in its history
-    act.append(button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
-      target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) })));
-    if (DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id)))) act.append(DR().staleHint());
+    const forget = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: signal ? null : [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]],
+      target: signal ? "forget" : "forget_retire", onConfirm: ({ code, note, target }) => go2(target, DR().rejectFields({ code, note })) }));
+    const stale = DR().maybeStale(p, proposalRefs(x).map((ref) => memOf(ref.id))) ? [DR().staleHint()] : [];
+    if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")), forget, ...stale);
+    else {
+      // a choice first shows its result in place; only 이대로 적용 sends it, 취소 puts the proposal back
+      const RESULT = { accept: [[x.keep], [x.retire], "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요."], swap: [[x.retire], [x.keep], "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요."],
+        dismiss: [[x.keep, x.retire], [], "두 기억을 다 그대로 써요. 같은 제안은 다시 하지 않아요."] };
+      const choices = [button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "small primary", null, () => preview("accept")), button("반대로 남기기", "small", null, () => preview("swap")), button("둘 다 두기", "small", null, () => preview("dismiss")), forget, ...stale];
+      const back = () => { pair([x.keep], [x.retire]); act.replaceChildren(...choices); st.textContent = ""; };
+      const preview = (decision) => { const [stay, gone, note] = RESULT[decision]; pair(stay, gone); cmp.prepend(el("p", "", "적용하면 이렇게 돼요. 아직 바뀌지 않았어요."), el("p", "", note));
+        act.replaceChildren(button("이대로 적용", "small primary", null, () => go2(decision)), button("취소", "small", null, back)); };
+      act.append(...choices);
+    }
     g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", signal ? "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }
@@ -563,19 +604,24 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (await ctx.resolveConflict(c, choice)) done();
       else act.querySelectorAll("button").forEach((x) => (x.disabled = false));
     }); b.dataset.choice = choice; return b; });
+    // While AI reads, this button cancels; after a failure or a cancel it says 다시 시도.
+    let running = null;
     const ai = button("AI 제안", "small", null, async () => {
+      if (running) { running.abort(); return; }
       if (!old) { st.textContent = "기존 기억을 불러온 뒤에 AI 제안을 받을 수 있어요."; return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { st.textContent = "AI 도움을 쓸 수 없어요."; return; }
-      ai.disabled = true; st.textContent = "";
+      const mine = running = new AbortController(); let failed = true;
+      ai.textContent = tr("취소"); st.textContent = "AI가 읽는 중… 최대 11분 걸려요.";
       try {
         const prompt = `Two memories an AI agent is given conflict. Decide which the person should keep.\nExisting memory: ${old.text}\nNew candidate: ${c.text}\nAnswer with ONE JSON object: {"pick": "new" | "both" | "keep_old", "reason": "one short Korean sentence"}.`;
-        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } } });
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory conflict. Reply with the JSON object only." } }, signal: mine.signal });
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!CONFLICT_PICK[j?.pick]) throw new Error(tr("AI가 고르지 못했어요."));
         for (const b of picks) b.classList.toggle("primary", b.dataset.choice === j.pick);
         advice.replaceChildren(el("strong", "", `AI 제안 · ${tr(CONFLICT_PICK[j.pick])}`), ...(j.reason ? [el("p", "", String(j.reason).slice(0, 200))] : [])); advice.hidden = false;
-      } catch (e) { st.textContent = `AI 제안을 받지 못했어요: ${e.message}`; }
-      finally { ai.disabled = false; }
+        st.textContent = ""; failed = false;
+      } catch (e) { st.textContent = e.code === "cancelled" ? "AI 제안을 취소했어요. 기억은 그대로예요." : `AI 제안을 받지 못했어요: ${e.message}`; }
+      finally { running = null; ai.textContent = tr(failed ? "다시 시도" : "AI 제안"); }
     });
     const drop = button("지우기", "small danger", null, () => DR().openAfter(act, { targets: [["keep_old", "새 후보"], ["drop", "둘 다"]], target: "keep_old",
       onConfirm: async ({ code, note, target }) => (await ctx.resolveConflict(c, target, { code, note }) ? done() : { error: "지우지 못했어요. 위 알림을 확인해 주세요." }) }));

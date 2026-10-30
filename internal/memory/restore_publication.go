@@ -40,19 +40,23 @@ func (s *Service) CheckRestorePublication(ctx context.Context) error {
 }
 
 func (p *Postgres) RequireRestoreReview(ctx context.Context, digest string) error {
-	if !sourceHashPattern.MatchString(digest) {
+	if !sourceHashPattern.MatchString(digest) || p == nil || p.pool == nil {
 		return ErrInvalid
 	}
-	tag, err := p.q().Exec(ctx, `INSERT INTO memory_storage_metadata(key,value)
-VALUES('restore_review_pending',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value
-WHERE memory_storage_metadata.value=EXCLUDED.value`, []byte(digest))
-	if err != nil {
-		return pgErr(err)
-	}
-	if tag.RowsAffected() != 1 {
-		return ErrConflict
-	}
-	return nil
+	return p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		view, ok := tx.(*Postgres)
+		if !ok {
+			return ErrUnavailable
+		}
+		tag, err := view.q().Exec(ctx, `INSERT INTO memory_storage_metadata(key,value) VALUES('restore_review_pending',$1) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value WHERE memory_storage_metadata.value=EXCLUDED.value`, []byte(digest))
+		if err != nil {
+			return pgErr(err)
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrConflict
+		}
+		return view.requireNativeRestoreReviewTx(ctx, digest)
+	})
 }
 
 func (p *Postgres) CheckRestorePublication(ctx context.Context) error {
@@ -60,7 +64,10 @@ func (p *Postgres) CheckRestorePublication(ctx context.Context) error {
 	if err != nil || gate.Gate.State != "open" {
 		return ErrUnavailable
 	}
-	return p.checkRestorePublicationMarker(ctx)
+	if err := p.checkRestorePublicationMarker(ctx); err != nil {
+		return err
+	}
+	return p.checkNativeRestorePublication(ctx)
 }
 
 func (p *Postgres) checkRestorePublicationMarker(ctx context.Context) error {

@@ -324,15 +324,27 @@ func execProfiles(v map[string]any, config *execConfig) (map[string]any, error) 
 	items := []any{}
 	for _, id := range config.order {
 		profile := obj(config.profiles[id])
-		pins, dataset, _, err := material(profile, config.api.token)
+		pins, dataset, env, err := material(profile, config.api.token)
 		if err != nil {
 			return nil, err
 		}
-		items = append(items, map[string]any{"id": id, "name": profile["name"], "cases": len(list(dataset["cases"])),
-			"dataset_sha256": pins["dataset_sha256"], "environment_sha256": pins["environment_sha256"]})
+		cases := len(list(dataset["cases"]))
+		timeout, _ := host.Int(env["timeout_ms"])
+		items = append(items, map[string]any{"id": id, "name": profile["name"], "cases": cases,
+			"dataset_sha256": pins["dataset_sha256"], "environment_sha256": pins["environment_sha256"],
+			"default_plan": defaultPlan(cases, timeout)})
 	}
 	return map[string]any{"authority": "data_only_untrusted", "items": items}, nil
 }
+
+// defaultPlan is the pass rule the desktop proposes so the owner never types one: +5 points, the
+// candidate within the sum of its per-case time limits, and no cost cap (cost units are the adapter's own).
+func defaultPlan(cases int, timeoutMS int64) map[string]any {
+	return map[string]any{"min_score_gain": 0.05, "max_cost": defaultMaxCost, "max_duration_ms": int64(max(cases, 1)) * timeoutMS}
+}
+
+// shortcut: "no cap" is a large finite number because the plan needs one; add a per-profile cap if adapters report real money.
+const defaultMaxCost = 1e6
 
 func execHistory(v map[string]any, config *execConfig, state string) (map[string]any, error) {
 	scope := config.scope

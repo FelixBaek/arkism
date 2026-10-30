@@ -483,7 +483,7 @@ func captureCued(job map[string]any, cued []any, sid, origin string, started flo
 		if retry {
 			return runtimeErr("capture_retryable")
 		}
-		job["captured"] = true
+		job["captured"], job["session_candidates"] = true, len(claims)
 		if err := checkpoint(); err != nil {
 			return err
 		}
@@ -691,7 +691,7 @@ const archiveTTL = 7 * 86400
 // processJob is the drain's per-job step; tests replace it.
 var processJob = process
 
-func drain(allWorkOrigins bool) error {
+func drain(allWorkOrigins bool) (err error) {
 	if err := os.MkdirAll(capState, 0o700); err != nil {
 		return err
 	}
@@ -703,6 +703,14 @@ func drain(allWorkOrigins bool) error {
 		return err
 	}
 	defer lock.Close()
+	tally = &analysisRun{reasons: map[string]int{}}
+	defer func() {
+		run := tally
+		tally = nil
+		if saveErr := saveAnalysisRun(run, err); saveErr != nil { // a report, never a reason to fail the drain
+			metric(kv("event", "analysis_run_failure"), kv("error", errorCode(saveErr)))
+		}
+	}()
 	a, err := cleanupSpool(spoolDir(), "queued_at", -1)
 	if err != nil {
 		return err
@@ -787,12 +795,23 @@ func drainJob(path string, park func(string) error, parkedEvents map[string]bool
 		if after > timeNow() {
 			return errSkip
 		}
+		if tally != nil {
+			tally.jobs++
+		}
 		if err := processJob(job, save); err != nil {
 			return err
 		}
 		return os.Remove(path)
 	}()
-	if err == nil || err == errSkip {
+	if err == errSkip {
+		return nil
+	}
+	if err == nil {
+		if tally != nil {
+			n, _ := num(or(job["session_candidates"], 0))
+			tally.candidates += int(n)
+		}
+		count("done", "")
 		return nil
 	}
 	return settleJobFailure(job, path, err, park, save, parkedEvents)
@@ -806,6 +825,7 @@ func settleJobFailure(job map[string]any, path string, err error, park func(stri
 		// Pausing must preserve the last durable request and retry budget;
 		// resuming retries it immediately without a synthetic failure/backoff.
 		metric(kv("event", "capture_policy_pending"), kv("session", sid), kv("error", code))
+		count("waiting", "capture_policy_pending")
 		return nil
 	}
 	if sessionProcessorOn() && errors.Is(err, errSessionPending) && code == "session_archive_private_skipped" {
@@ -814,6 +834,7 @@ func settleJobFailure(job map[string]any, path string, err error, park func(stri
 			return err
 		}
 		metric(kv("event", "session_processor_dropped"), kv("session", sid), kv("error", code))
+		count("dropped", code)
 		return nil
 	}
 	if sessionProcessorOn() && errors.Is(err, errSessionPending) && (sessionModelDefect(code) || sessionInputDefect(code)) {
@@ -824,6 +845,7 @@ func settleJobFailure(job map[string]any, path string, err error, park func(stri
 		}
 		parkedEvents[str(job["event_id"])] = true
 		metric(kv("event", "session_processor_parked"), kv("session", sid), kv("error", code))
+		count("parked", code)
 		return nil
 	}
 	return retryJob(job, path, err, code, sid, park, save)
@@ -875,6 +897,7 @@ func retryJob(job map[string]any, path string, err error, code, sid string, park
 			return err
 		}
 		metric(kv("event", "session_processor_pending"), kv("session", sid), kv("error", code))
+		count("waiting", code)
 		return nil
 	}
 	if code == "archive_prompt_pending" {
@@ -885,6 +908,7 @@ func retryJob(job map[string]any, path string, err error, code, sid string, park
 				return err
 			}
 			metric(kv("event", "archive_wait"), kv("session", sid))
+			count("waiting", code)
 			return nil
 		}
 		code = "archive_prompt_expired"
@@ -901,6 +925,7 @@ func spendAttempt(job map[string]any, path string, err error, code, sid string, 
 		job["archive_retry_after"] = timeNow() + 60
 	}
 	metric(kv("event", "writeback_failure"), kv("session", sid), kv("error", code), kv("attempts", job["attempts"]))
+	count("failed", code)
 	if int(attempts)+1 >= capMaxAttempts {
 		if err := park(path); err != nil {
 			return err

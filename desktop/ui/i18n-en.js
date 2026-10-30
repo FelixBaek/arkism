@@ -3,6 +3,26 @@
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
 window.ArkismI18nEN = {
  "strings": {
+  "이 스킬의 교훈과 평가 과제를 미리 채웠어요. 확인하고 만들기를 누르세요.": "This skill's lessons and eval set are already filled in. Check them and press Create.",
+  "통과 기준은 평가 서버의 기본값으로 채워요. 바꾸려면 고급 설정을 여세요. 아직 검토하지 않은 교훈은 관측이 3개 이상일 때만 써요.": "The pass rule comes from the eval server's defaults. Open Advanced settings to change it. Unreviewed lessons are used only with 3 or more observations.",
+  "교훈을 읽지 못했어요. 권한과 서버 버전을 확인해 주세요.": "Could not read the lessons. Check your permissions and the server version.",
+  "평가 과제는 데스크톱 앱이 평가 서버에서 불러와요. 데스크톱 앱에서 열어 주세요.": "The desktop app loads the eval set from the eval server. Open this in the desktop app.",
+  "평가 서버가 평가 설정을 보내지 않았어요. 평가 서버의 Arkism 설정을 확인해 주세요.": "The eval server sent no eval settings. Check the Arkism settings on the eval server.",
+  "평가 서버에 등록된 평가 과제가 없어요. 평가 서버 설정에 과제를 하나 등록하면 자동으로 채워져요.": "No eval set is registered on the eval server. Register one in its settings and it fills in here.",
+  "평가 서버의 Arkism이 오래돼 통과 기준을 주지 않아요. 평가 서버를 업데이트하면 자동으로 채워져요.": "Arkism on the eval server is too old to send a pass rule. Update it and the rule fills in here.",
+  "아직 개선안을 만들 수 없어요.": "Cannot create an improvement yet.",
+  "쓸 관측 (빼려면 체크 해제)": "Observations to use (uncheck to leave out)",
+  "필요한 점수 향상 (100점 만점)": "Required score gain (out of 100)",
+  "후보 실행 시간 상한 (분)": "Candidate run time limit (minutes)",
+  "비용 상한 (평가기가 보고하는 값, 비우면 제한 없음)": "Cost cap (as the evaluator reports it; empty = no cap)",
+  "고급 설정": "Advanced settings",
+  "비용 제한 없음": "no cost cap",
+  "고급 설정의 값을 확인해 주세요.": "Check the values in Advanced settings.",
+  "평가 과제": "Eval set",
+  "개선안 만들기": "Create improvement",
+  "고른 관측과 지금 스킬이 모델에 전달되며 생성 비용이 들어요. 만든 뒤 비교 평가·승인을 거쳐야 적용돼요.": "The chosen observations and the current skill go to a model, which costs money. It applies only after comparison and approval.",
+  "관측을 3~16개 골라 주세요.": "Choose 3 to 16 observations.",
+  "만들기를 시작하지 못했어요. 스킬이 그사이 바뀌었거나 앱 저장 공간에 문제가 있어요. 다시 열어 주세요.": "Could not start. The skill changed in the meantime or app storage failed. Open this again.",
   "대화를 불러오는 중…": "Loading the conversation…",
   "둘 다 남기기": "Keep both",
   "기존 것 유지": "Keep the existing one",
@@ -719,7 +739,6 @@ window.ArkismI18nEN = {
   "프롬프트 작가": "Prompt writer",
   "카테고리 분류가": "Category classifier",
   "내용이 너무 길어요 (2만 자까지)": "Content is too long (20,000 characters max)",
-  "너무 오래 걸려요. 잠시 뒤 다시 해 주세요.": "This is taking too long. Try again shortly.",
   "서버의 모델 실행기가 꺼져 있어요. arkism-providers 서비스를 켜 주세요.": "The server's model runner is off. Start the arkism-providers service.",
   "직접 부름": "Called directly",
   "일정·웹훅": "Schedule & webhook",
@@ -1588,25 +1607,7 @@ window.ArkismI18nEN = {
   "개선안 생성은 관리 계정에서 시작할 수 있어요.": "Improvements can only be generated from an admin account.",
   "보류 요청을 읽지 못했어요. 중복 생성을 막기 위해 새 요청을 시작하지 않아요. 앱 저장 공간을 확인해 주세요.": "Couldn't read the pending request. To avoid duplicate generation, no new request will start. Check the app's storage.",
   "현재 기준 버전을 확인하는 중…": "Checking the current baseline version…",
-  "교훈 찾기": "Find lessons",
-  "고정 평가 과제 파일": "Fixed evaluation task file",
-  "실행 조건 파일": "Run conditions file",
-  "필요한 점수 향상 (0 초과, 1 이하)": "Required score gain (above 0, up to 1)",
-  "후보 전체 비용 상한 (평가기 단위)": "Total candidate cost cap (evaluator units)",
-  "후보 전체 실행 시간 상한 (밀리초)": "Total candidate run time cap (ms)",
   "개선안 생성": "Generate improvement",
-  "선택한 교훈과 기존 스킬이 모델에 전달되며 생성 비용이 발생해요. 비교 파일은 실행하거나 전송하지 않아요. 같은 파일을 보관해 주세요.": "The selected lessons and existing skill are sent to the model, which incurs generation costs. Comparison files aren't run or sent. Keep the same files.",
-  "같은 교훈의 관측 3~16개로 개선안을 만들어요. 생성 후 별도의 평가·승인·적용이 필요해요.": "Builds an improvement from 3–16 observations of the same lesson. Evaluation, approval, and applying are separate steps after generation.",
-  "작업 주제를 128바이트 이내로 입력해 주세요.": "Enter a task topic of 128 bytes or less.",
-  "교훈을 찾는 중…": "Finding lessons…",
-  "교훈을 선택한 뒤 사용할 관측을 골라 주세요.": "Select a lesson, then choose the observations to use.",
-  "관측이 3개 이상인 검토 대기 교훈이 없어요.": "No lessons pending review have 3 or more observations.",
-  "개선에 사용할 교훈": "Lesson to improve from",
-  "교훈 선택": "Select lesson",
-  "사용할 관측 (3~16개)": "Observations to use (3–16)",
-  "교훈을 읽지 못했어요. 권한과 서버 버전을 확인하고 다시 찾아 주세요.": "Couldn't read lessons. Check permissions and server version, then search again.",
-  "같은 교훈의 관측을 3~16개 선택해 주세요.": "Select 3–16 observations from the same lesson.",
-  "생성을 시작하지 못했어요. 앱 저장 공간, 8MB 이내의 JSON 파일과 현재 기준 버전을 확인해 주세요.": "Couldn't start generation. Check app storage, JSON files under 8MB, and the current baseline version.",
   "현재 기준 버전을 읽지 못했어요. 접었다 다시 펼쳐 주세요.": "Couldn't read the current baseline version. Collapse and expand again.",
   "개선안과 버전 검토": "Improvements and version review",
   "승인됨": "Approved",
@@ -1808,7 +1809,6 @@ window.ArkismI18nEN = {
   "확인할 기억이 없어요.": "No memories to check.",
   "개선안": "Improvement",
   "무엇을 고칠까요?": "What should change?",
-  "관련 교훈을 찾아 고를 관측을 선택하고, 평가 과제 파일을 넣어 주세요.": "Find related lessons, choose the observations to use, and add an eval task file.",
   "비교 평가": "Comparison eval",
   "기존 버전과 비교해요": "Compare with the current version",
   "같은 평가 과제로 두 버전을 돌려 점수·비용·시간을 비교해요.": "Run both versions on the same eval task and compare score, cost and time.",
@@ -2624,7 +2624,6 @@ window.ArkismI18nEN = {
   "이 스킬 개선하기": "Improve this skill",
   "교훈을 모아 새 버전을 만들고, 기존 버전과 비교해요": "Collect lessons into a new version and compare it with the old one",
   "에이전트 PC 연결": "Agent PC connection",
-  "필요한 점수 향상·비용 상한·시간 상한을 정해요. 아직 검토하지 않은 교훈은 독립 관측이 3개 이상일 때만 써요.": "Set the required score gain, cost cap and time cap. Unreviewed lessons are used only with 3 or more independent observations.",
   "스크립트 내려받기 (PPTX)": "Download script (PPTX)",
   "프롬프트 복사": "Copy prompt",
   "스크립트 복사": "Copy script",
@@ -2962,6 +2961,13 @@ window.ArkismI18nEN = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+  "이 스킬에 대한 관측이 아직 {0}개예요. 같은 교훈의 관측이 3개 이상 모이면 만들 수 있어요. 이 스킬을 실제 작업에 더 써 보세요.": "This skill has only {0} observations so far. You can create one once a lesson has 3 or more. Use the skill in real work a few more times.",
+  "평가 서버({0})에 연결하지 못했어요. 설정의 SSH 연결을 확인해 주세요.": "Could not reach the eval server ({0}). Check the SSH connection in Settings.",
+  "{0} · 관측 {1}개": "{0} · {1} observations",
+  "비용 {0} 이하": "cost up to {0}",
+  "통과 기준 · 점수가 {0}점 이상 오르고 {1}분 안에 끝나면 통과 · {2}": "Pass rule · passes if the score rises by {0} points or more and it finishes within {1} min · {2}",
+  "{0} · 과제 {1}개": "{0} · {1} tasks",
+  "통과 기준 · 점수 {0}점 이상 향상 · {1} · {2}분 이하": "Pass rule · score up {0} points or more · {1} · {2} min or less",
   "키 {0}": "{0} keys",
   "모델 {0}개 켜짐": "{0} models on",
   "- 나머지 {0}개는 arkism MCP의 recall 도구로 보세요.": "- {0} more: read them with the arkism MCP recall tool.",
@@ -3314,7 +3320,6 @@ window.ArkismI18nEN = {
   "비교 기준 {0} · 기존 점수 {1} → 후보 점수 {2}": "Comparison threshold {0} · baseline score {1} → candidate score {2}",
   "관측 {0} · 판 {1}": "Observation {0} · revision {1}",
   "버전 {0}{1}": "Version {0}{1}",
-  "고정 비교 조건 · 점수 향상 {0} 이상 · 비용 {1} 이하 · 시간 {2}ms 이하": "Fixed comparison conditions · score gain ≥ {0} · cost ≤ {1} · time ≤ {2}ms",
   "결과 · {0}": "Result · {0}",
   "기존 점수 {0} → 후보 점수 {1}": "Baseline score {0} → candidate score {1}",
   "비용 {0} · 시간 {1}ms · 회귀 {2} · 안전 {3}": "Cost {0} · time {1}ms · regression {2} · safety {3}",
@@ -5492,7 +5497,6 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 ·": "from a conversation ·", "AI 도움": "AI help", "AI가 읽는 중…": "AI is reading…",
-  "대화는 들어오는데 새 후보가 안 나와요. 서버의 분석 로그인·연결을 확인해 주세요.": "Conversations come in but no new candidates appear. Check the server's analysis sign-in and connection.",
   "글을 다 읽고 골라요": "Read the whole text, then choose",
   "AI 도움을 누르면 승인할지 버릴지 이유와 함께 추천해요. 고르는 건 사람이에요.": "AI help suggests approve or discard with a reason. A person makes the choice.",
   "건넸는데 답에 안 쓰인 기억이에요": "Memories handed out but not used in an answer",
@@ -5516,11 +5520,54 @@ Object.assign(window.ArkismI18nEN.strings, {
   "zip 파일": "Zip file", "zip이 160KB보다 커요. GitHub에 올려 주소로 설치해 주세요.": "The zip is larger than 160KB. Put it on GitHub and install it from the address.",
   "서버가 zip을 확인하고 있어요. 1분쯤 걸려요…": "The server is checking the zip. This takes about a minute…"
 });
+Object.assign(window.ArkismI18nEN.strings, {
+  "마지막 분석": "Last analysis",
+  "복사했어요": "Copied",
+  "복사하지 못했어요": "Could not copy",
+  "마지막 실행": "Last run",
+  "본 대화": "Conversations seen",
+  "건너뜀·보류·실패": "Skipped \u00b7 held \u00b7 failed",
+  "이유": "Reason",
+  "마지막으로 분석을 끝낸 때": "Last finished analysis",
+  "그때 나온 후보": "Candidates then",
+  "서버가 아직 분석 결과를 보고하지 않았어요.": "The server has not reported an analysis run yet.",
+  "명령 복사": "Copy command",
+  "에이전트 설정 열기": "Open agent settings",
+  "대화가 끝나고 5분 쉬면 분석해요": "Analyzed once a conversation has been idle for 5 minutes",
+  "대화 원문이 보관되기를 기다려요": "Waiting for the conversation text to be archived",
+  "비공개로 표시한 대화라 건너뛰었어요": "Skipped: the conversation is marked private",
+  "저장 정책 승인을 기다려요": "Waiting for the capture policy to be approved",
+  "같은 대화의 앞 묶음을 기다려요": "Waiting for the earlier batch of the same conversation",
+  "모델 사용 한도에 걸려 1시간 뒤 다시 해요": "Hit the model usage limit; retrying in an hour",
+  "서버가 분석 요청을 거부했어요 (로그인 만료)": "The server refused the analysis request (sign-in expired)",
+  "서버가 분석 요청을 거부했어요 (권한 없음)": "The server refused the analysis request (no permission)",
+  "서버가 분석 요청을 거부했어요. 에이전트 로그인을 확인해 주세요.": "The server refused the analysis request. Check the agent sign-in.",
+  "최근 2시간 동안 서버의 분석이 돌지 않았어요. 서버에서 분석 타이머를 켜 주세요.": "The server has not run an analysis in the last 2 hours. Start the analysis timer on the server.",
+  "분석은 돌고 있지만 대화가 끝나지 않았거나 기다리는 중이에요.": "Analysis is running, but conversations are still going or waiting.",
+});
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0} 다운로드를 시작했어요.": "{0} download started.",
   "스킬 {0}개 찾음 · {1} · SHA-256 {2} · 파일 {3}개 · {4}": "Found {0} skills · {1} · SHA-256 {2} · {3} files · {4}"
 });
 Object.assign(window.ArkismI18nEN.strings, {
+  "취소했어요": "Cancelled",
+  "서버에 닿지 못했어요. 연결을 확인하고 다시 시도해 주세요.": "Couldn't reach the server. Check the connection and try again.",
+  "서버가 1분 넘게 답하지 않아요. 잠시 뒤 다시 시도해 주세요.": "The server hasn't answered for over a minute. Try again in a moment.",
+  "11분 안에 답이 오지 않았어요. 다시 시도해 주세요.": "No answer within 11 minutes. Try again.",
+  "AI가 읽는 중… 최대 11분 걸려요.": "AI is reading… This can take up to 11 minutes.",
+  "AI 도움을 취소했어요. 후보는 그대로예요.": "AI help cancelled. The candidate is unchanged.",
+  "AI 제안을 취소했어요. 기억은 그대로예요.": "AI advice cancelled. The memory is unchanged.",
+  "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요.": "The server doesn't know this choice yet. Update the server, then try again."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "이대로 적용": "Apply this"
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "적용하면 이렇게 돼요. 아직 바뀌지 않았어요.": "This is what applying does. Nothing has changed yet."
+});
+Object.assign(window.ArkismI18nEN.strings, {
+  "남길 기억은 계속 쓰고, 넘길 기억은 기억 이력에 남아요.": "The memory that stays is kept in use; the other one moves to memory history.",
+  "두 기억을 다 그대로 써요. 같은 제안은 다시 하지 않아요.": "Both memories stay in use. The same suggestion won't come back.",
   "넘길 기억": "The one to retire",
   "둘 다": "Both",
   "지웠어요. 지운 이유와 함께 기억 이력에 남아요.": "Removed. It stays in memory history with the reason.",

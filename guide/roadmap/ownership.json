@@ -231,7 +231,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "CRW-02",
-        "CRW-04"
+        "CRW-04",
+        "SYS-03"
       ]
     },
     {
@@ -525,6 +526,79 @@
       "owner": "INTEGRATION",
       "requesters": [
         "SYS-01"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/host/capture/capture.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/postgres.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-03",
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/recovery_snapshot.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/restore_publication.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/context_view_receipt_chain_postgres_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/native_search_restore_gate_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-03",
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/native_search_shared_mutation_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-03",
+        "SYS-04"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/native_system_active_view_postgres_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01",
+        "SYS-03",
+        "SYS-04"
       ]
     }
   ],
@@ -1453,7 +1527,7 @@
       "id": "SYS-01",
       "issue": 152,
       "owner": "SYS-01",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -1558,6 +1632,14 @@
         {
           "root": "repo",
           "path": "guide/roadmap/native-search-shadow.md"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/context_view_recall.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/context_view_recall_test.go"
         }
       ],
       "consumes": [
@@ -1610,6 +1692,61 @@
           "owner": "SYS-03",
           "root": "repo",
           "path": "internal/memory/native_dynamics_types.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/receiptchain/contract.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/receiptchain/session.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/host/capture/receipt_chain.go"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "internal/memory/native_restore_fence.go"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_revision.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/host/capture/capture.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/restore_publication.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/context_view_receipt_chain_postgres_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go"
         }
       ],
       "shared_updates": [
@@ -1651,6 +1788,54 @@
           "owner": "INTEGRATION",
           "after": [
             "SYS-01.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/capture.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_receipt_chain_postgres_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
           ]
         }
       ],
@@ -1814,7 +1999,7 @@
       "id": "SYS-03",
       "issue": 152,
       "owner": "SYS-03",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -1899,6 +2084,66 @@
         {
           "root": "repo",
           "path": "guide/roadmap/native-state.md"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/receipt_chain.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/receipt_chain_runtime.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/receipt_chain_runtime_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/receipt_chain.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/receipt_chain_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/receipt_chain_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/ack.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/contract.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/contract_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/coverage.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/protocol_v1.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/session.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/storage.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/receiptchain/unicode.go"
+        },
+        {
+          "root": "repo",
+          "path": "guide/roadmap/native-delivery-lifecycle.md"
         }
       ],
       "consumes": [
@@ -1961,6 +2206,76 @@
           "owner": "DYN-03",
           "root": "repo",
           "path": "internal/memoryharness/dynamicsv2/native_numeric_prototype.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/context_view_v1.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/context_view_v1.json"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/native_search_publisher.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_postgres_test.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/host/capture/context_view_recall.go"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_revision.go"
+        },
+        {
+          "owner": "SYS-04",
+          "root": "repo",
+          "path": "internal/memory/native_restore_fence.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/host/capture/capture.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/postgres.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/restore_publication.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/context_view_receipt_chain_postgres_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go"
         }
       ],
       "shared_updates": [
@@ -2027,6 +2342,71 @@
           "after": [
             "SYS-03.spec"
           ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/crewrun/nodes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/host/capture/capture.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/postgres.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_receipt_chain_postgres_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
         }
       ],
       "dispatch_required": true
@@ -2035,9 +2415,9 @@
       "id": "SYS-04",
       "issue": 152,
       "owner": "SYS-04",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
-      "condition": "A lifecycle/current Eval metadata model and exact collection registered; actual deletion/recovery/publication B and upstream integration acceptance remain required.",
+      "condition": "A lifecycle/current Eval metadata model and exact collection registered; actual deletion/recovery/publication B and upstream integration acceptance remain required. Native recovery source is registered; edits to SYS-03 native_dynamics.go/native_dynamics_source.go and SYS-01 native_search_publisher.go/native_search_shadow_postgres_test.go are routed to their existing owners after SYS-04.spec and the owning card spec. Shared integration tests require all listed spec gates. Final whole-card acceptance and latest-main integration remain pending.",
       "entry_gates": [
         "SYS-04.spec"
       ],
@@ -2069,6 +2449,58 @@
         {
           "root": "repo",
           "path": "evaluation/memory-harness-v1/system/sys_04/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_revision.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_lifecycle_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_deletion_cause.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_deletion_cause_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_negative_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_newprocess_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_postgres.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_reconcile.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_recovery_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_restore_fence.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_restore_fence_postgres_test.go"
         }
       ],
       "consumes": [
@@ -2106,6 +2538,81 @@
           "owner": "SYS-01",
           "root": "repo",
           "path": "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_source.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_types.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_store.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/receiptchain/contract.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/context_view_v1.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/native_search_publisher.go"
+        },
+        {
+          "owner": "SYS-01",
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_postgres_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/postgres.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/recovery_snapshot.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/restore_publication.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/context_view_receipt_chain_postgres_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go"
+        },
+        {
+          "owner": "INTEGRATION",
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go"
         }
       ],
       "shared_updates": [
@@ -2138,6 +2645,65 @@
           "path": "internal/memory/memory_time.go",
           "owner": "INTEGRATION",
           "after": [
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/postgres.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/recovery_snapshot.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/restore_publication.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_restore_gate_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shared_mutation_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
+            "SYS-04.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_system_active_view_postgres_test.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec",
+            "SYS-03.spec",
             "SYS-04.spec"
           ]
         }

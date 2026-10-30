@@ -132,7 +132,8 @@ test("overview: 드리밍 decides each proposal in its own row, with the 승인 
   await press("접기 ⌃", wrap); assert.ok(panel.hidden);
   await press("결정하기 ⌄", wrap);
   const pick = btn("둘 다 두기", panel) ? "둘 다 두기" : "괜찮아요";
-  await press(pick, panel, 80);
+  await press(pick, panel, 30);
+  if (pick === "둘 다 두기") await press("이대로 적용", panel, 80); // a pair choice previews first
   assert.ok(app.apiCalls.some(([m, p, b]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p) && /"dismiss"/.test(String(b))));
   assert.match(text(win()), /드리밍/, "it stays in the 드리밍 window");
   await closeAll();
@@ -422,13 +423,13 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   assert.match(text(d), /비슷한 기억 2개/);
   assert.ok(d.querySelectorAll(".ov-wide-row-dream").length >= 2);
   let off = route("POST", "/v1/maintenance_proposals/", () => fail(409, "revision_conflict"));
-  await press("제안대로 합치기", d, 30);
+  await press("제안대로 합치기", d); await press("이대로 적용", d, 30);
   assert.match(text(d), /이 제안은 낡았어요/);
   off(); off = route("POST", "/v1/maintenance_proposals/", () => fail(500, "boom"));
-  await press("반대로 남기기", d, 30);
+  await press("취소", d); await press("반대로 남기기", d); await press("이대로 적용", d, 30);
   assert.match(text(d), /처리하지 못했어요/);
   off();
-  await press("둘 다 두기", d, 60);
+  await press("취소", d); await press("둘 다 두기", d); await press("이대로 적용", d, 60);
   assert.ok(app.apiCalls.some(([, p]) => /\/v1\/maintenance_proposals\/.+\/decide/.test(p)));
   // the signal proposal (rule often broken) has its own two choices
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
@@ -467,6 +468,41 @@ test("overview: a dreaming proposal's 지우기 picks which memory and why; 취�
   await press("지우기", pick, 60);
   assert.equal(sent().length, before + 1);
   assert.match(String(sent().at(-1)[2]), /"reason_code":"wrong".*"reason":"둘 다 예전 일정"/);
+  await closeAll();
+});
+
+test("overview: each pair choice previews its result and sends nothing before 이대로 적용", async () => {
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+  const sent = () => app.apiCalls.filter(([m, p]) => m === "POST" && /\/v1\/maintenance_proposals\/.+\/decide$/.test(p)).length;
+  const side = (cls) => [...win().querySelectorAll(`.ov-cmp.${cls} span`)].map(text);
+  const [keep, retire] = [side("diff-add")[0], side("diff-del")[0]];
+  const before = sent();
+  for (const [label, add, del] of [["제안대로 바꾸기", [keep], [retire]], ["반대로 남기기", [retire], [keep]], ["둘 다 두기", [keep, retire], []]]) {
+    await press(label, win(), 30);
+    assert.deepEqual([side("diff-add"), side("diff-del")], [add, del], label);
+    assert.ok(btn("이대로 적용", win()), label);
+    await press("취소", win(), 30);
+    assert.deepEqual([side("diff-add"), side("diff-del")], [[keep], [retire]], `${label} 취소 puts the proposal back`);
+  }
+  assert.equal(sent(), before, "nothing is sent before 이대로 적용");
+  await press("반대로 남기기", win()); await press("이대로 적용", win(), 60);
+  const last = app.apiCalls.filter(([m, p]) => m === "POST" && /\/decide$/.test(p)).pop();
+  assert.equal(JSON.parse(last[2]).decision, "swap");
+  await closeAll();
+});
+
+test("overview: an older server's invalid_request on 둘 다 지우기 reads as plain Korean", async () => {
+  const off = route("POST", "/v1/maintenance_proposals/", () => fail(400, "invalid_request"));
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  for (const r of [...win().querySelectorAll(".ov-wide-row-dream")]) { r.click(); await app.settle(); if (/서로 다른 말을 하는 기억/.test(text(win()))) break; }
+  await press("지우기", win());
+  const pick = win().querySelector(".del-reason");
+  await press("둘 다", pick); await press("사실과 다름", pick);
+  await press("지우기", pick, 60);
+  off();
+  assert.match(text(win()), /서버를 최신 판으로 올린 뒤/);
+  assert.doesNotMatch(text(win()), /invalid_request/);
   await closeAll();
 });
 
@@ -1040,6 +1076,37 @@ test("home: menu rows count crew runs, routing and knowledge; a stalled pipeline
   offs2.forEach((off) => off());
 });
 
+test("home: a finished analysis run with no candidate is not a stall, and the 분석 window says why", async () => {
+  const run = (at, extra) => route("GET", "/v1/agent_tools", () => ok({ agent_tools: { servers: [], plugins: [], requests: [], analysis_run: { at, jobs: 2, done: 1, candidates: 0, waiting: 1, dropped: 0, parked: 0, failed: 0, reason: "session_batch_wait", error: "", last_done_at: at, last_done_candidates: 0, ...extra } } }));
+  const offs = [route("GET", "/v1/usage/sessions", () => ok({ authority: "data_only_untrusted", items: [{ id: "u1", ended_at: ago(70) }, { id: "u2", ended_at: ago(1) }], next_cursor: "" })), run(ago(0.5))];
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  assert.ok(!/기억 추출이 .*멈췄어요/.test(text(app.$("#table"))), "the run finished a job after the sessions ended");
+  let d = await openWindow({ key: "extract" });
+  assert.match(text(d), /마지막 분석/);
+  assert.match(text(d), /대화가 끝나고 5분 쉬면 분석해요/);
+  assert.ok(!d.querySelector(".ov-win-note-r"), "no stall note");
+  await closeAll(); offs.pop()();
+  // no run for 80 hours: a real stall, and the window names the server command
+  offs.push(run(ago(80), { last_done_at: ago(80) }));
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  d = await openWindow({ key: "extract" });
+  assert.match(text(d.querySelector(".ov-win-note-r")), /분석 타이머를 켜 주세요/);
+  assert.match(text(d), /sudo systemctl start arkism-reflect.service/);
+  await closeAll(); offs.pop()();
+  // the server refused the run: the action is the agent sign-in
+  offs.push(run(ago(0.2), { done: 0, failed: 1, error: "401", last_done_at: ago(80) }));
+  app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
+  await home(); await app.settle(100);
+  d = await openWindow({ key: "extract" });
+  assert.match(text(d), /로그인 만료/);
+  await press("에이전트 설정 열기", d, 50);
+  assert.ok(!app.$("dialog.ov-win-extract[open]"), "the window closes"); assert.match(text(app.$("#table")), /Gemini CLI/, "agent settings are shown");
+  await closeAll();
+  offs.forEach((off) => off());
+});
+
 test("home: a prompt turns up in search once the gallery menu shows", async () => {
   const off = route("GET", "/v1/prompts", () => ok({ items: [{ id: "pp1", title: "썸네일 슬라이드", prompt: "표지", kind: "slide", image_prompt: { kind: "slide", title: "썸네일 슬라이드", prompt: "표지 {제목}", engine: "gpt" } }] }));
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(1500);
@@ -1146,4 +1213,27 @@ test("home: a lost connection shows why, how to retry and the way back to this P
   app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); await app.settle(100);
   await home();
   assert.equal(app.$(".home-lost"), null);
+});
+
+// 분류 대기·승인 대기 and the skill count showed the first page (50) while 100+ waited on the server: they now show the server totals.
+test("overview and skills: counts are the server totals while more pages wait", async () => {
+  let asked = 0;
+  const reload = async () => { const n = asked; app.dom.fire(app.window, "storage", { key: "arkism.popout-saved" }); for (let i = 0; i < 100 && asked === n; i++) await app.settle(100); await app.settle(100); };
+  const cand = { id: "cx1", text: "first page", status: "candidate", kind: "user", created_at: ago(1) };
+  const page = (total, facets = {}) => ok({ items: [], total, next_cursor: "", authority: "data_only", facets: { kinds: {}, repositories: {}, categories: {}, states: {}, ...facets } });
+  const offs = [
+    route("GET", "/v1/memory_usage", () => { asked++; return ok({ items: [] }); }),
+    route("GET", "/v1/memory_candidates", (a) => ok({ items: /conflicted/.test(a.path) ? [] : [cand], next_cursor: /conflicted/.test(a.path) ? "" : "more", authority: "data_only_untrusted" })),
+    route("POST", "/v1/memory_candidates/query", (a) => JSON.parse(a.body).state === "all" ? page(123, { unclassified: 77 }) : page(120)),
+    route("GET", "/v1/skills?", () => ok({ items: [{ id: "s1", name: "one", status: "approved" }], next_cursor: "more", authority: "data_only_untrusted" })),
+    route("POST", "/v1/skills/query", () => page(137))
+  ];
+  await reload();
+  await openWindow({ key: "collect" }); await closeAll(); await app.settle(50);
+  const steps = text(app.$(".ov-steps"));
+  assert.match(steps, /대기 77/, steps);
+  assert.match(steps, /123건/, steps);
+  assert.equal(text(app.$("#count-skills")), "137");
+  offs.forEach((off) => off());
+  await reload();
 });
