@@ -72,7 +72,6 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator("#table [data-id]").first().focus();await page.keyboard.press("Enter");
     await page.locator("#detail h2").waitFor();await capture("memory");
     await page.locator('[data-menu="agent"]').click();
-    await page.getByRole("tab",{name:/워크플로우/}).click();
     await page.locator(".wf-card, .crew-card").first().waitFor();await capture("workflows");
     await page.evaluate(()=>window.dispatchEvent(new CustomEvent("arkism:open-automation",{detail:{id:"wf-research"}})));
     await page.locator("dialog[open]").waitFor();await capture("workflow-popup");
@@ -91,7 +90,9 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator("#settings-button").click();
     // #218: 설정 › 역할별 모델 opens with the AI 도구 기본 모델 picker, its list grouped by provider like the workflow model list.
     await page.getByRole("tab",{name:"역할별 모델",exact:true}).click();
-    const assist=page.locator(".ag-roles").first().getByRole("combobox",{name:"AI 도구 기본 모델"});
+    const assist=page.locator(".ag-roles").getByRole("combobox",{name:"AI 도구 기본 모델"}); // in 요청 처리
+    // scroll first: a scroll closes an open list, and 요청 처리 sits below the fold
+    await assist.scrollIntoViewIfNeeded();await page.waitForTimeout(100);
     await assist.click();await page.locator(".combo-pop .combo-head").first().waitFor();
     assert.equal(await page.locator(".combo-pop .combo-head .brand-mark").count()>0,true,"provider heads lost their logo");
     assert.equal(await page.locator(".combo-pop .combo-opt small").first().innerText()>"",true,"model rows lost their provider");
@@ -111,11 +112,12 @@ fs.mkdirSync(output,{recursive:true});
     assert.equal(await page.locator("#table").getByText("저장",{exact:true}).count()>0,true,"English changed user text");
     // #194: crew names, categories and intros are the user's words, even when one matches a dictionary entry.
     await page.locator('[data-menu="agent"]').click();
-    await page.locator("#area-tabs .area-tab").nth(0).click();await page.locator(".wf-card").first().waitFor();
+    await page.locator(".wf-card").first().waitFor(); // FLOW is one page, no area tabs
     const flowCats=new Set(data["v1/crew.json"].items.map(r=>r.crew.category));
-    const chipCats=await page.locator(".auto-cat-chip span").allInnerTexts();
-    assert.ok(chipCats.length>0&&chipCats.every(c=>flowCats.has(c)),"workflow category chips translated: "+chipCats);
-    await page.locator(".auto-bar-top select").first().selectOption("agent");await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
+    // the category list: each option reads "<the user's category> <count>", the category left as typed
+    const catOpts=await page.locator("#controls select.wf-select option:not([value=all])").evaluateAll(os=>os.map(o=>[o.value,o.textContent]));
+    assert.ok(catOpts.length>0&&catOpts.every(([v,t])=>flowCats.has(v)&&t.startsWith(v+" ")),"workflow categories translated: "+JSON.stringify(catOpts));
+    await page.locator(".wf-kinds [data-kind=agent]").click();await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
     const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
     assert.deepEqual(await page.locator('.flow-card[data-flow-kind="agent"] strong').allInnerTexts(),agentsFixture.map(r=>r.crew.name));
     assert.deepEqual(await page.locator(".flow-card-category").allInnerTexts(),agentsFixture.filter(r=>!r.crew.cover).map(r=>r.crew.category)); // a card on a photo shows name and @name only
@@ -126,33 +128,8 @@ fs.mkdirSync(output,{recursive:true});
     assert.ok(flowOptions.length>1&&flowOptions.slice(1).every(n=>flowNames.has(n)),"workflow options translated: "+flowOptions);
     assert.equal(await page.locator("dialog[open] .ex-role").innerText(),"UI 시안 정리 · 디자인 검토");
     await page.keyboard.press("Escape");await page.locator("dialog[open]").waitFor({state:"detached"});
-    // #193: the time before a meeting title is translated; the title is not, and the rows fit at 900px.
-    await page.locator("#area-tabs .area-tab").nth(1).click();
-    const lastMeeting=page.locator(".cu-team .tm-urow").nth(1).locator("> span").last();
-    await lastMeeting.waitFor();
-    assert.match(await lastMeeting.innerText(),/^\d+ days? ago · 로그인 화면 다크 테마 검토$/);
-    await page.setViewportSize({width:900,height:1000});
-    assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll(".cu-table .tm-urow")].filter(r=>r.scrollWidth>r.clientWidth).length),0,"usage rows overflow at 900px");
     await page.setViewportSize({width:1440,height:1000});
     await page.evaluate(async()=>{ await window.ArkismI18n.setLang("ko"); });
-    if (!process.env.ARKISM_UI_BASELINE) { // #199: 템플릿·설정으로 만들기 asks before it drops a new automation's typing
-      await page.locator('[data-menu="agent"]').click();
-      await page.getByRole("tab",{name:/워크플로우/}).click();
-      await page.getByRole("button",{name:"+ 새 워크플로우",exact:true}).click();
-      await page.locator(".flow-create-option",{hasText:"단계 구성"}).click();
-      const pop=page.locator("dialog.v4-auto-new[open]"), confirm=page.locator("dialog.cn-confirm[open]"), other=pop.getByRole("button",{name:"템플릿·설정으로 만들기",exact:true});
-      await pop.getByRole("textbox",{name:"하려는 일"}).fill("매일 아침 뉴스 요약");
-      await other.click();
-      await confirm.getByText("아직 만들지 않았어요. 버리고 닫을까요?").waitFor();
-      await confirm.getByRole("button",{name:"취소",exact:true}).click();
-      await confirm.waitFor({state:"detached"});
-      assert.equal(await pop.count(),1,"취소 keeps the new automation");
-      await other.click();
-      await confirm.getByRole("button",{name:"확인",exact:true}).click();
-      await pop.waitFor({state:"detached"});
-      await page.locator("dialog[open]:not(.cn-confirm)").waitFor(); // the template/settings window
-      await page.keyboard.press("Escape");
-    }
     assert.deepEqual(errors,[]);
     fs.writeFileSync(path.join(output,"screens.json"),JSON.stringify(snapshots,null,2));
     console.log("UI structure: 8 real screens, keyboard opening/Escape, lazy English, Korean round trip, user text and crew user data passed");

@@ -62,7 +62,9 @@ const ui=path.resolve(process.env.ARKISM_UI_DIRECTORY||path.resolve(__dirname,'.
   await page.locator('#table [data-id]').first().click();await page.locator('#detail h2').waitFor();
   assert.equal(errors.length,0,errors.join('\n'));
   await page.setViewportSize({width:760,height:900});
-  assert.equal(await page.locator('#stats .memory-page-note').isVisible(),true);
+  // the note line shows only when it has something to say (loading or a failure); an empty one leaves no gap
+  const note=page.locator('#stats .memory-page-note');
+  assert.equal(await note.isVisible(),(await note.textContent()).trim()!=='');
   if(process.env.MEMORY_PAGES_SCREENSHOT)await page.screenshot({path:process.env.MEMORY_PAGES_SCREENSHOT});
   console.log('Real memory screen passed: first 50 only, explicit next page, failure/retry preservation, search outside loaded rows, server kind filter and detail selection.');
  }catch(e){console.error('App errors:',errors);console.error(await page.locator('body').innerText().catch(()=>''));throw e;}finally{await browser.close();}

@@ -95,7 +95,7 @@ window.ArkismSkillGenerate = ({ state, el, button, request, query, reload, tauri
     // The pending request's actions sit in the side panel; 입력 다시 고르기 opens only after the server refused it,
     // so a request that may have finished is never sent again under a new event id.
     function pendingView(ticket) {
-      const note = el("p", "meta", "처리 결과를 확인할 생성 요청이 있어요. 오른쪽에서 결과를 다시 확인하세요."), view = { note };
+      const note = el("p", "meta", "처리 결과를 확인할 생성 요청이 있어요. 오른쪽에서 결과를 다시 확인하세요."), view = { note, retry: null, reset: null };
       view.retry = button("생성 결과 다시 확인", "small", null, () => submit(pending.get(owner), ticket, view));
       view.reset = button("입력 다시 고르기", "ghost small", null, () => { if (busy || !live(ticket)) return; try { forget(); void draw(); } catch (_) { note.textContent = "보류 요청을 지우지 못했어요. 앱 저장 공간을 확인해 주세요."; } });
       view.reset.disabled = true; view.reset.title = "서버가 요청을 거절한 뒤에 다시 고를 수 있어요.";

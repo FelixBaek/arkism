@@ -120,7 +120,7 @@ window.ArkismSkillImprove = ({ state, el, button, request, query, tauri, reload,
     }
     function progress(stage) {
       const list = el("ol", "v4s-better-steps");
-      [["gather", "교훈 모으기"], ["make", "새 버전 만들기"], ["compare", "지금 버전과 비교하기"], ["done", "결과 정리하기"]].forEach(([k, label], i, all) => {
+      [["gather", "교훈 모으기"], ["make", "새 버전 만들기"], ["compare", "지금 버전과 비교하기"], ["done", "결과 정리하기"]].forEach(([, label], i, all) => {
         const at = all.findIndex(([x]) => x === stage), cls = i < at ? "done" : i === at ? "current" : "";
         list.append(el("li", cls, `${i < at ? "✓" : i === at ? "●" : "○"} ${label}`));
       });

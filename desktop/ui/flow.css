@@ -15,12 +15,12 @@
 .wf-settings .crew-card.wf-preview { padding-top: 8rem; }
 .wf-settings .crew-card.wf-preview .crew-cover-img { height: 7.25rem; }
 .flow-history-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-block: 1rem; }
-.flow-history-head h2 { margin: 0; font-size: calc(1.125rem * var(--fs, 1)); }
+.flow-history-head h2 { margin: 0; font-size: calc(.9375rem * var(--fs, 1)); font-weight: 500; overflow-wrap: anywhere; }
 .flow-history-row { display: grid; gap: .375rem; width: 100%; height: auto; min-height: 4.5rem; align-content: center; padding: 1rem; text-align: left; white-space: normal; overflow-wrap: anywhere; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); color: var(--nc-text); }
 .flow-history-row small, .flow-history-note { color: var(--nc-muted); line-height: 1.6; overflow-wrap: anywhere; }
 .flow-history-row:hover { border-color: var(--nc-accent); }
 .flow-history-row:focus-visible { outline: .125rem solid var(--nc-accent); outline-offset: .1875rem; }
-.flow-history-detail { padding: 1.25rem; border: .0625rem solid var(--nc-line); border-radius: var(--radius-md); background: var(--nc-raised); }
+.flow-history-detail { padding: 0; border: 0; border-radius: var(--radius-md); background: none; }
 .flow-history-detail h3 { margin-block: 1.5rem .5rem; font-size: calc(.875rem * var(--fs, 1)); }
 .flow-result-text { margin-block: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.7; }
 .flow-history-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-block: 1rem; }
@@ -36,8 +36,6 @@
 .flow-recovery-form > button { justify-self: start; max-width: 100%; height: auto; min-height: 2.5rem; white-space: normal; }
 /* 실행 결과 (1480:7861) */
 .flow-history-head .grow, .flow-line .grow { flex: 1; }
-.flow-history-head h2 { overflow-wrap: anywhere; }
-.flow-history-detail { padding: 0; border: 0; background: none; }
 .flow-sec-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-block: 1.25rem .5rem; }
 .flow-sec-head h3 { margin: 0; font-size: calc(.875rem * var(--fs, 1)); }
 .flow-sec-head small { color: var(--nc-muted); }
@@ -54,7 +52,6 @@ button.flow-line:focus-visible { outline: .125rem solid var(--nc-accent); outlin
 .flow-decide strong { color: var(--nc-amber); font-weight: 500; }
 .flow-decide p { margin: .25rem 0 0; color: var(--nc-text); }
 .flow-decide .flow-history-actions { margin: 0; }
-.flow-history-head h2 { font-size: calc(.9375rem * var(--fs, 1)); font-weight: 500; }
 .flow-decide.err { background: var(--status-danger-tint); }
 .flow-decide.err strong { color: var(--status-danger); }
 .flow-decide > div:first-child > .btn { margin-top: .5rem; padding-inline: 0; }
