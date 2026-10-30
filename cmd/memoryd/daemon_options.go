@@ -14,6 +14,7 @@ type daemonOptions struct {
 	DynamicsLoadConfig    string
 	dynamicsPlan          *daemonDynamicsPlan
 	dynamicsReaderToken   string
+	DynamicsRepair        bool
 	ReceiptCauses         bool
 	WriteGate             string
 	ExpectedStorage       string
@@ -68,6 +69,7 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.Listen, "listen", host.DefaultListen, "HTTP listen address")
 	flag.StringVar(&cfg.DynamicsRuntimeConfig, "dynamics-runtime-config", "", "explicit bounded dynamics runtime config; requires paired load config")
 	flag.StringVar(&cfg.DynamicsLoadConfig, "dynamics-load-config", "", "exact offline load config bound by the dynamics runtime config")
+	flag.BoolVar(&cfg.DynamicsRepair, "dynamics-repair", false, "verify and release a withheld dynamics publication in every configured scope, then exit; requires both dynamics configs")
 	flag.Parse()
 	return cfg
 }
@@ -145,7 +147,7 @@ func validateDaemonRuntimeOptions(cfg daemonOptions, standalone string) error {
 	return validateDaemonDynamicsOptions(cfg)
 }
 func (cfg daemonOptions) usesWorkerToken() bool {
-	return cfg.TrainReview != "" || cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != ""
+	return cfg.TrainReview != "" || cfg.Worker || cfg.CollectBlobs || cfg.AdoptBlobs || cfg.Reindex || cfg.BackupExpiry != "" || cfg.MemoryReach != "" || cfg.DynamicsRepair
 }
 func snapshotDaemonMode(mode string) bool {
 	return mode == "WriteGate" || mode == "ExportSnapshot" || mode == "InspectRestore"
@@ -169,6 +171,7 @@ func daemonMode(cfg daemonOptions) (string, error) {
 		{"CollectBlobs", cfg.CollectBlobs},
 		{"AdoptBlobs", cfg.AdoptBlobs},
 		{"Reindex", cfg.Reindex},
+		{"DynamicsRepair", cfg.DynamicsRepair},
 		{"Worker", cfg.Worker},
 	}
 	selected := "HTTP"

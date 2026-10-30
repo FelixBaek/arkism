@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -144,6 +146,45 @@ func runDaemonMaintenance(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 		return true, runDaemonSnapshot(ctx, pg, cfg, standalone)
 	case "CollectBlobs", "AdoptBlobs":
 		return true, runDaemonBlobs(ctx, pg, cfg, standalone)
+	case "DynamicsRepair":
+		return true, runDaemonDynamicsRepair(ctx, pg, cfg, standalone)
 	}
 	return false, nil
+}
+
+func runDaemonDynamicsRepair(ctx context.Context, pg *memory.Postgres, cfg daemonOptions, standalone string) error {
+	auth, err := configuredAuthorizer(pg, standalone)
+	if err != nil {
+		return err
+	}
+	svc := &memory.Service{Repo: pg, Auth: auth}
+	if err = configureDaemonDynamics(ctx, svc, cfg); err != nil {
+		return err
+	}
+	op, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return daemonDynamicsRepairRound(op, svc, os.Getenv("MEMORY_WORKER_TOKEN"), cfg.dynamicsPlan, os.Stdout)
+}
+
+type daemonDynamicsRepairer interface {
+	RepairDynamicsPublication(context.Context, string, memory.Scope) error
+}
+
+// daemonDynamicsRepairRound reports one line per configured scope. ErrConflict means
+// nothing was released (no hold, a live lease or a pending purge); any other failure stops.
+func daemonDynamicsRepairRound(ctx context.Context, r daemonDynamicsRepairer, token string, plan *daemonDynamicsPlan, out io.Writer) error {
+	if plan == nil || len(plan.config.Scopes) == 0 {
+		return memory.ErrInvalid
+	}
+	enc := json.NewEncoder(out)
+	for _, scope := range plan.config.Scopes {
+		err := r.RepairDynamicsPublication(ctx, token, scope)
+		if err != nil && !errors.Is(err, memory.ErrConflict) {
+			return err
+		}
+		if e := enc.Encode(map[string]any{"scope": scope, "released": err == nil}); e != nil {
+			return e
+		}
+	}
+	return nil
 }

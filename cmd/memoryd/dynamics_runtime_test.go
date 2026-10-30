@@ -29,11 +29,13 @@ func TestDaemonDynamicsOptionsRemainOffAndRejectOtherModes(t *testing.T) {
 	r, l := daemonDynamicsFiles(t, load, c)
 	for name, cfg := range map[string]daemonOptions{
 		"partial_runtime": {DynamicsRuntimeConfig: r}, "partial_load": {DynamicsLoadConfig: l},
-		"recovery": {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, Recovery: true},
-		"admin":    {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, CollectBlobs: true},
-		"init":     {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, InitDB: true},
-		"reindex":  {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, Reindex: true},
-		"recall":   {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, RecallBaseline: "self"},
+		"recovery":               {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, Recovery: true},
+		"admin":                  {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, CollectBlobs: true},
+		"init":                   {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, InitDB: true},
+		"reindex":                {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, Reindex: true},
+		"recall":                 {DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, RecallBaseline: "self"},
+		"repair_without_configs": {DynamicsRepair: true},
+		"repair_partial":         {DynamicsRuntimeConfig: r, DynamicsRepair: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := prepareDaemonDynamics(cfg); !errors.Is(err, memory.ErrInvalid) {
@@ -567,5 +569,46 @@ func TestDaemonDynamicsServeFailurePreservesStopFailure(t *testing.T) {
 	err := serveMemoryServer(context.Background(), &http.Server{Handler: http.NotFoundHandler()}, ln, nil, b)
 	if !errors.Is(err, desktopcontrol.ErrTimeout) {
 		t.Fatal("background join failure discarded on Serve error", err)
+	}
+}
+
+type fakeDynamicsRepairer struct {
+	results map[memory.Scope]error
+	tokens  []string
+}
+
+func (f *fakeDynamicsRepairer) RepairDynamicsPublication(_ context.Context, token string, scope memory.Scope) error {
+	f.tokens = append(f.tokens, token)
+	return f.results[scope]
+}
+
+func TestDaemonDynamicsRepairReportsEveryScope(t *testing.T) {
+	load, c := daemonDynamicsFixture(t)
+	c.Scopes = append(c.Scopes, memory.Scope{WorkspaceID: "fixture", ProjectID: "second"})
+	r, l := daemonDynamicsFiles(t, load, c)
+	t.Setenv("MEMORY_WORKER_TOKEN", "")
+	if _, err := prepareDaemonDynamics(daemonOptions{DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, DynamicsRepair: true}); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatal("repair without the worker token", err)
+	}
+	t.Setenv("MEMORY_WORKER_TOKEN", "worker")
+	t.Setenv("MEMORY_DYNAMICS_READER_TOKEN", "")
+	cfg, err := prepareDaemonDynamics(daemonOptions{DynamicsRuntimeConfig: r, DynamicsLoadConfig: l, DynamicsRepair: true})
+	if err != nil || len(cfg.dynamicsPlan.config.Scopes) != 2 {
+		t.Fatal("repair needs the worker token, not a reader", err)
+	}
+	a, b := cfg.dynamicsPlan.config.Scopes[0], cfg.dynamicsPlan.config.Scopes[1]
+	fake := &fakeDynamicsRepairer{results: map[memory.Scope]error{b: memory.ErrConflict}}
+	var out bytes.Buffer
+	if err = daemonDynamicsRepairRound(context.Background(), fake, "worker", cfg.dynamicsPlan, &out); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], `"released":true`) || !strings.Contains(lines[1], `"released":false`) || len(fake.tokens) != 2 || fake.tokens[0] != "worker" {
+		t.Fatalf("repair report %q %v", out.String(), fake.tokens)
+	}
+	fake = &fakeDynamicsRepairer{results: map[memory.Scope]error{a: memory.ErrDenied}}
+	out.Reset()
+	if err = daemonDynamicsRepairRound(context.Background(), fake, "worker", cfg.dynamicsPlan, &out); !errors.Is(err, memory.ErrDenied) || out.Len() != 0 || len(fake.tokens) != 1 {
+		t.Fatal("a denied repair must stop before reporting", err, out.String())
 	}
 }
