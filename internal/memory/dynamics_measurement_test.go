@@ -55,6 +55,8 @@ type dynamicsMeasureRow struct {
 	AppliedNow       *bool  `json:"receipt_applied_now"`
 	LearningConsumed *bool  `json:"receipt_learning_consumed"`
 	SearchStatus     string `json:"search_observation_status,omitempty"`
+	SnapshotAsOfNS   *int64 `json:"snapshot_as_of_ns,omitempty"`
+	QualityPassed    *bool  `json:"quality_passed,omitempty"`
 }
 
 type dynamicsMeasureHarness struct {
