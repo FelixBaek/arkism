@@ -182,7 +182,7 @@
 .status-card .status-list { gap: 0; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); overflow: hidden; }
 .status-card .status-list li { gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--nc-line); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .status-card .status-list li:last-child { border-bottom: 0; }
-.status-card .status-list li span { flex: none; width: 76px; }
+.status-card .status-list li span { flex: none; width: 96px; }
 .status-card .status-list li output { flex: 1; max-width: none; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); font-variant-numeric: tabular-nums; color: var(--nc-text); }
 .status-card .status-list li.warn output { color: var(--nc-amber); }
 .st-head { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
@@ -251,7 +251,7 @@
 .ssh-auth .segment .tab { padding: 5px 12px; border: 0; border-radius: 6px; background: none; color: var(--nc-muted); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 .ssh-auth .segment .tab.active { background: var(--nc-raised); color: var(--nc-text); font-weight: 600; box-shadow: 0 0 0 1px var(--nc-line); }
 @media (max-width: 760px) { .ssh-rows .ssh-row { grid-template-columns: 1fr; gap: 6px; } }
-.unlock .unlock-actions { justify-content: flex-start; }
+.unlock .unlock-actions { justify-content: flex-start; flex-wrap: wrap; }
 .unlock .unlock-actions .btn { height: auto; min-width: 0; padding: 7px 14px; line-height: 1.5; }
 .unlock .unlock-actions:not(#ssh-actions):not(:has(:not([hidden]))) { display: none; }
 .unlock .unlock-card #ssh-test-result:empty, .unlock .unlock-card #unlock-error:empty { display: none; }
@@ -260,7 +260,9 @@
 .unlock-link { border: 0; padding: 0; background: none; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .unlock-link:hover { color: var(--nc-text); }
 .unlock-link[hidden] { display: none; }
-@media (max-width: 1180px) { .unlock-side { display: none; } }
+.unlock-side .unlock-link { align-self: flex-start; text-align: left; }
+/* 좁은 창: 연결 방법 칸을 폼 아래로 내려, 서버 설치 안내와 오류 설명이 사라지지 않게 한다. */
+@media (max-width: 1180px) { .unlock-panel { flex-direction: column; } .unlock-side { width: auto; border-left: 0; border-top: 1px solid var(--nc-line); } .unlock-side > h2, .unlock-side > ol { display: none; } }
 @media (max-width: 760px) { .unlock { left: 0; padding: 16px; } }
 
 /* ---------------------------------------------------------------- 전체 검색 (Figma 08 · 공통 198:3468, left column) — opens under #search on 홈·설정 같은 화면 */
@@ -368,7 +370,7 @@
 .start-kv .mono { font: 400 13px/1.5 var(--mono); color: var(--nc-text); overflow-wrap: anywhere; }
 .start-card.start-ok { flex-direction: row; }
 .start-kv span:not(.mono):not(:first-child) { color: var(--nc-text); }
-@media (min-width: 1181px) { .unlock:has(#ssh-error-side:not([hidden])) #unlock-error { display: none; } }
+.unlock:has(#ssh-error-side:not([hidden])) #unlock-error { display: none; }
 
 /* ---------------------------------------------------------------- 통합 검색 창 (설정 줄 검색 아이콘 · Ctrl K) */
 .palette { width: min(720px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 64px)); margin: 10vh auto auto; padding: 0; display: none; flex-direction: column;
@@ -421,3 +423,19 @@
 .storage-pick input { width: 100%; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--nc-line); background: var(--nc-canvas); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--mono); }
 .storage-pick .storage-note { margin: 0; color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
 .storage-pick .form-error:empty { display: none; }
+/* 처음 실행: 아직 쓸 메뉴가 없으니 연결 화면이 사이드바까지 덮는다. 위에 탭 줄이 없으니 구분선도 없다. */
+.unlock.first-run { left: 0; z-index: 30; }
+.unlock.first-run .unlock-card { border-top: 0; }
+.ssh-more, .storage-more, .unlock-detail { border-top: 1px solid var(--nc-line); padding-top: 12px; }
+.ssh-more > summary, .storage-more > summary, .unlock-detail > summary { cursor: pointer; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.ssh-more[open] > summary, .storage-more[open] > summary { margin-bottom: 12px; }
+.ssh-more .ssh-row:first-of-type { border-top: 0; padding-top: 0; }
+.unlock-detail p { margin-top: 6px; font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); word-break: break-all; }
+.unlock-detail[hidden], #local-doctor-result[hidden] { display: none; }
+/* 홈 › 시작하기 (home-start.js): 오른쪽에 버튼과 상태, 좁으면 아래로. */
+.start-row-side { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; margin-left: auto; }
+.home-start-list .start-row { flex-wrap: wrap; }
+.home-start-list .start-agent-text { flex: 1 1 280px; }
+.home-start-list .start-agent-text .mono { word-break: break-all; }
+.start-autostart .link-btn { margin-left: 4px; }
+.home-start-list .start-agent-text small { white-space: normal; overflow: visible; }

@@ -858,7 +858,8 @@ window.ArkismPages = (ctx) => {
     // ROUTER › 라우팅 현황 keeps what 라우팅 판정 and route_skills actually picked.
     const recent = () => button("최근 판정", "ghost small", null, () => { go("routing"); notice("최근 판정은 라우팅 현황에서 봐요."); });
     const controls = (...parts) => { const c = el("div", "v4-role-pick"); c.append(...parts.filter(Boolean)); return c; };
-    // options: [[value, label]]; claude adds the Anthropic models the host runs through the Claude CLI.
+    // options: [[value, label]]; claude adds the models the host can run for the role: Anthropic ones through the
+    // Claude CLI, and for 기억 추출 every provider the server lists in role_options (Codex, Gemini).
     function picker(role, title, defaultLabel, options, claude, ...extra) {
       const pick = d().roles?.[role] || {};
       const current = pick.model ? (pick.provider ? `${pick.provider}|${pick.model}` : pick.model) : "";
@@ -868,7 +869,8 @@ window.ArkismPages = (ctx) => {
       sel.append(Object.assign(el("option", "", `서버 기본값 · ${defaultLabel || "아직 확인 안 됨"}`), { value: "" }));
       for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
       if (claude) {
-        for (const p of models.pickerGroups().filter((x) => x.id === "anthropic")) sel.append(models.modelGroup(p));
+        const runs = role === "extract" && d().role_options?.extract || ["anthropic"];
+        for (const p of models.pickerGroups().filter((x) => runs.includes(x.id))) sel.append(models.modelGroup(p));
       }
       if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", pick.model), { value: current })); // picked earlier, now off
       sel.value = current;

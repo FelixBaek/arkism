@@ -172,6 +172,16 @@ type AgentTools struct {
 	PCLinks         []PCLink        `json:"pc_links,omitempty"`
 	SkillRepos      []SkillRepo     `json:"skill_repos,omitempty"`
 	AnalysisRun     *AnalysisRun    `json:"analysis_run,omitempty"`
+	Extractor       *Extractor      `json:"extractor,omitempty"`
+}
+
+// Extractor is what the host runs for 기억 추출 when nothing is picked: the model, its agent CLI and
+// whether that CLI is installed and signed in, with each known CLI's state (ready, login_needed, missing).
+type Extractor struct {
+	Model string            `json:"model"`
+	CLI   string            `json:"cli"`
+	State string            `json:"state"`
+	CLIs  map[string]string `json:"clis,omitempty"`
 }
 
 // AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,
@@ -265,6 +275,8 @@ type AgentToolsReport struct {
 	SkillRepos *[]SkillRepo `json:"skill_repos,omitempty"`
 	// Absent keeps the last run: an idle drain does not report.
 	AnalysisRun *AnalysisRun `json:"analysis_run,omitempty"`
+	// Absent (an older host) keeps the last one.
+	Extractor *Extractor `json:"extractor,omitempty"`
 }
 
 const agentToolRequestsKept = 50
@@ -439,6 +451,24 @@ func validAnalysisRun(a *AnalysisRun) bool {
 	}
 	code := func(c string) bool { return c == "" || validRunLabel(c, 80) }
 	return !a.At.IsZero() && code(a.Reason) && code(a.Error) && (a.LastDoneCandidates == nil || *a.LastDoneCandidates >= 0)
+}
+
+var extractorStates = []string{"ready", "login_needed", "missing"}
+
+// validExtractor accepts an absent report (the last one is kept).
+func validExtractor(e *Extractor) bool {
+	if e == nil {
+		return true
+	}
+	if !validRunLabel(e.Model, 120) || !agentIDRe.MatchString(e.CLI) || !slices.Contains(extractorStates, e.State) || len(e.CLIs) > 8 {
+		return false
+	}
+	for cli, state := range e.CLIs {
+		if !agentIDRe.MatchString(cli) || !slices.Contains(extractorStates, state) {
+			return false
+		}
+	}
+	return true
 }
 
 func validPCLinks(list []PCLink) bool {
@@ -677,7 +707,7 @@ func validAgentToolsReport(in AgentToolsReport) bool {
 	if in.SkillChecks != nil && !validSkillChecks(*in.SkillChecks) || in.Agents != nil && !validAgentInfos(*in.Agents) || in.SkillUpdates != nil && !validSkillUpdates(*in.SkillUpdates) || in.PCLinks != nil && !validPCLinks(*in.PCLinks) || in.SkillRepos != nil && !validSkillRepos(*in.SkillRepos) {
 		return false
 	}
-	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) || !validAnalysisRun(in.AnalysisRun) {
+	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) || !validAnalysisRun(in.AnalysisRun) || !validExtractor(in.Extractor) {
 		return false
 	}
 	return validSharedDirs(in.SharedDirs) && validAgentToolResults(in.Results)
@@ -761,6 +791,9 @@ func (s *Service) ReportAgentTools(ctx context.Context, token string, in AgentTo
 		}
 		if in.AnalysisRun != nil {
 			t.AnalysisRun = in.AnalysisRun
+		}
+		if in.Extractor != nil {
+			t.Extractor = in.Extractor
 		}
 		t.settle(in.Results, now)
 		t.expireLogins(now)

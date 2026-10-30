@@ -63,6 +63,24 @@ var CLIS = []CLI{
 	{"agy", regexp.MustCompile(`^antigravity-`), "ARKISM_AGY_BIN", "agy", "google", "", "", "flag", true},
 }
 
+// CLILogins is each CLI's sign-in file under the home folder (모델 설정 and 기억 추출 read it).
+var CLILogins = map[string]string{"claude": ".claude/.credentials.json", "codex": ".codex/auth.json", "gemini": ".gemini/oauth_creds.json",
+	"grok": ".grok/auth.json", "agy": ".gemini/antigravity-cli/antigravity-oauth-token"}
+
+// Extractors are the CLIs 기억 추출 can run on, in the order it picks a signed-in one, each with the model
+// that runs when nothing is picked in 설정 › 역할별 모델: Claude's small model, or the CLI's own default.
+var Extractors = []struct{ CLI, Model string }{{"claude", "haiku"}, {"codex", "codex"}, {"gemini", "gemini"}}
+
+// ModelCLI is the CLIS row name whose pattern model matches first, or "" for none.
+func ModelCLI(model string) string {
+	for _, c := range CLIS {
+		if c.Pattern.MatchString(model) {
+			return c.Name
+		}
+	}
+	return ""
+}
+
 // CustomCLI runs a 직접 추가 provider's models in Claude Code against its Anthropic-compatible endpoint.
 var CustomCLI = CLI{Name: "custom", BinEnv: "ARKISM_CLAUDE_BIN", BinName: "claude", Provider: "custom",
 	KeyEnv: "ANTHROPIC_AUTH_TOKEN", BaseEnv: "ANTHROPIC_BASE_URL"}

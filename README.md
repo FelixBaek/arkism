@@ -81,14 +81,15 @@ Workflows run on Arkism's own Go engine. Team meetings and task execution are ma
 
 ## 4. Get started
 
-1. Download the latest installer from [Releases](https://github.com/FelixBaek/arkism/releases/latest). Windows installers are currently available.
-2. Open the app in **built-in mode**. The server and database run on your PC.
-3. Connect your agents and work as usual. Agent settings changed during connection are backed up first.
-4. Review candidates in **MEMORY** and approve only what you want agents to use later.
+1. Download the latest installer from [Releases](https://github.com/FelixBaek/arkism/releases/latest). Only Windows installers are available for now.
+2. Open the app, choose **Use on this PC** (이 PC에서 쓰기) and press **Start**. The server and database run on your PC.
+3. The app connects your agents (Claude Code, Codex and others) to Arkism by itself. Their settings files are backed up first, and **Get started** (시작하기) on Home shows where. Restart any agent that was open.
+4. Extracting memory candidates needs a signed-in Claude Code, Codex or Gemini CLI. **Get started › Memory extraction model** on Home says whether it is ready.
+5. Work as usual, then review candidates on Home or in **MEMORY** and approve only what you want agents to use later.
 
 Current Windows installers do not have Authenticode publisher signing, so SmartScreen may warn. App update verification signatures are separate. See the [security guide](https://github.com/FelixBaek/arkism/blob/main/guide/security-operations.md) for installation and update checks.
 
-To share one Arkism across several PCs, use [server mode](https://github.com/FelixBaek/arkism/blob/main/guide/server.md). Configure the server database and SSH connection separately.
+To share one Arkism across several PCs, choose **Connect to a server over SSH** (서버에 SSH로 연결) in the app. Arkism must be installed on the server first: see [server mode](https://github.com/FelixBaek/arkism/blob/main/guide/server.md) ([Korean](https://github.com/FelixBaek/arkism/blob/main/guide/server.ko.md)).
 
 ---
 

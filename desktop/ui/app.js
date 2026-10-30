@@ -109,6 +109,10 @@ export function startApp() {
     return tile;
   }
   const shownAgents = () => pages.shownAgents();
+  // An agent the minute report says is not installed: nothing to fix, so 홈 and the status card leave it out.
+  const missingAgent = (key) => (state.data.tools?.agents || []).some((a) => a.id === key && a.found === false);
+  const presentAgents = () => shownAgents().filter(([k]) => !missingAgent(k));
+  const extractorIssue = () => window.ArkismHomeStart.extractorIssue(state.data.tools); // 기억 뽑을 모델 (home-start.js)
   const agentName = (key) => (AGENTS.find(([k]) => k === key) || [key, key])[1];
   // Agents the server reports beyond the skill router's runtimes (ones the owner added by hand). They read only their own
   // skill folder, so the sidebar shows that folder's count and opens 설정 › 에이전트, and the status card shows their connection.
@@ -397,7 +401,7 @@ export function startApp() {
     const info = (t.agents || []).find((a) => a.id === key);
     // the report is in, so an agent it leaves out is not still being checked (#189)
     if (!info) return t.agents ? ["bad", "연결 안 됨", "서버 보고에 이 에이전트가 없어요"] : ["", "알 수 없음", "이 서버는 에이전트 상태를 보고하지 않아요"];
-    if (!info.found) return ["bad", "설치 안 됨", "서버에 설치돼 있지 않아요"];
+    if (!info.found) return ["", "설치 안 됨", state.mode === "local" ? "이 PC에 설치돼 있지 않아요" : "서버에 설치돼 있지 않아요"];
     if (!info.enabled) return ["bad", "꺼짐", "Arkism이 읽지 않아요 (설정 › 에이전트)"];
     const login = (t.servers || []).filter((x) => x.agents?.[key] === "on" && x.login?.[key] === "needed").map((x) => x.name);
     if (login.length) return ["warn", "로그인 필요", `MCP 로그인 필요: ${login.join(", ")}`];
@@ -412,15 +416,17 @@ export function startApp() {
       ["brain", "메모리 DB", dbLabel(), state.ready !== false],
       ["database", "서버", host, true],
       ["git-merge", "스킬 허브", skillsUnknown ? "—" : `${skills.text}개`, !skillsUnknown],
-      ["lock-simple", "로그인", state.email || "토큰", true]
+      ...(state.mode === "local" ? [] : [["lock-simple", "로그인", state.email || "SSH 연결", true]])
     ];
+    const ex = extractorIssue();
+    if (ex) items.push(["warning-circle", "기억 뽑을 모델", ex.short, false]);
     const failedLists = Object.keys(state.listErrors).length;
     if (failedLists) items.push(["database", "불러오지 못한 목록", `${failedLists}개`, false]); // #186
     // 설정 › 에이전트에서 끈 에이전트는 타일과 목록에서 뺀다.
     syncExtraAgents();
     const tiles = [...document.querySelectorAll("#status-agents [data-agent]")];
     const off = new Set(pages.prefs.agentsOff);
-    tiles.forEach((tile) => { tile.hidden = off.has(tile.dataset.agent); });
+    tiles.forEach((tile) => { tile.hidden = off.has(tile.dataset.agent) || missingAgent(tile.dataset.agent); });
     // The tiles carry each agent's health (border colour, hover text); no text list repeats it.
     const agents = tiles.filter((tile) => !tile.hidden).map((tile) => {
       const name = tile.title.split(" · ")[0];
@@ -1107,7 +1113,7 @@ export function startApp() {
     const suspect = d.candidates.filter((c) => (c.tags || []).includes("review:instruction_like"));
     const blocked = [];
     for (const sk of d.skills) {
-      for (const [k] of shownAgents()) {
+      for (const [k] of presentAgents()) {
         if (sk.skill_compatibility?.[k] === "unsupported") blocked.push([sk, k]);
       }
     }
@@ -1152,9 +1158,13 @@ export function startApp() {
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새 기억", title: `최근 3일 새 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
         action: "훑어보기", go: ["memories", "active"], preview: fresh.slice(0, 5).map((m) => m.text) }
     ];
-    const ORDER = ["lists", "stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
-    const stalled = homeChecks.stalledItem(state.connection.generation);
+    const ORDER = ["lists", "extractor", "stalled", "suggest", "review", "blocked", "updates", "conflicted", "maintenance", "similar", "unused", "idle", "fresh"];
+    // a broken extractor is the reason processing stalled: its card says how to fix it, so the stall row waits.
+    // On a fresh install the 시작하기 checklist carries the same card.
+    const extractor = homeStart.issueItem();
+    const stalled = extractor ? null : homeChecks.stalledItem(state.connection.generation);
     if (stalled) items.push(stalled);
+    if (extractor && !homeStart.fresh()) items.push(extractor);
     const lists = failedListsItem();
     if (lists) items.push(lists);
     // a count still loading or partial keeps its row; a failed one is not a to-do (불러오지 못한 목록 names a failed list, #186)
@@ -1492,7 +1502,9 @@ export function startApp() {
     if (!items.length) { wrap.replaceChildren(homeEmpty()); return; }
     if (page.kind === "all") { wrap.replaceChildren(todoTable(items)); return; }
     const now = items.slice(0, firstCount(items)), rest = items.slice(firstCount(items));
-    const parts = [...(lost ? [lost] : []), homeHead("먼저 확인", el("output", "", String(now.length))), firstList(now)];
+    // nothing saved yet: 시작하기 comes first, above whatever else the new install already found
+    const start = page.kind === "home" && !lost ? homeStart.checklist() : null;
+    const parts = [...(lost ? [lost] : []), ...(start ? [start] : []), homeHead("먼저 확인", el("output", "", String(now.length))), firstList(now)];
     if (!state.selected) {
       const menus = menuRows(rest);
       if (menus) parts.push(homeHead("메뉴별 확인할 것", null, "누르면 그 메뉴로 가요"), menus);
@@ -1511,7 +1523,7 @@ export function startApp() {
     wrap.replaceChildren(...parts);
   }
   function homeEmpty() {
-    return window.ArkismState.panel({ title: "지금은 확인할 일이 없어요", text: "새 기억 후보나 스킬 제안이 생기면 여기에 모여요.",
+    return homeStart.checklist() || window.ArkismState.panel({ title: "지금은 확인할 일이 없어요", text: "새 기억 후보나 스킬 제안이 생기면 여기에 모여요.",
       actions: [["기억 보기", () => go("memories", "active")], ["다시 불러오기", loadAll, "ghost"]] });
   }
   function homeHead(text, count, aside) {
@@ -1649,7 +1661,7 @@ export function startApp() {
     const head = el("div", "home-sum-head");
     head.append(el("h2", "", state.loadError ? "확인할 일을 불러오지 못했어요" : now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
       el("p", "meta", state.loadError ? "" : rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
-    const agents = shownAgents();
+    const agents = presentAgents();
     const nums = el("div", "home-nums");
     for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 에이전트", agents.length]]) {
       const r = el("div", "");
@@ -2270,12 +2282,13 @@ export function startApp() {
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
   const knowledge = window.ArkismKnowledge({ remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
-  const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
+  const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, reload: loadAll, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), onSessions: () => renderStatusCard() }); // MEMORY › 개요 (overview.js)
   Object.assign(pages.views, routing.views, usage.views, knowledge.views, overview.views);
   const home = window.ArkismHome({ count: serverCount, state, $, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, AGENTS, ago, pages, detailShell, markSelected, renderDetail, openDetail,
     skillCategory: (sk) => pages.categoryOf(sk)?.name || "", isPage: (v) => pages.views[v] || crew.pages[v], settingsTabs: () => shell.MENUS.settings.tabs, openRecord: openIntelligenceRecord,
     openSettings: (tab) => { if (tab) state.settingsTab = tab; go("settings"); }, sshLabel: appConnection.sshLabel, sshErrorText: appConnection.sshErrorText, useLocal: appConnection.useLocal, lock: appConnection.lock, reconnect: appConnection.reconnect });
   const homeChecks = window.ArkismHomeChecks({ count: serverCount, state, request: appApi.request, query: appApi.query, go, ago, render }); // 홈 › 기억 처리 멈춤 · 지식 줄 (home-checks.js)
+  const homeStart = window.ArkismHomeStart.create({ state, el, button, render, notice, tauri, ask: (...a) => window.ask(...a), openSettings: (tab) => { state.settingsTab = tab; go("settings"); } }); // 홈 › 시작하기 · 기억 뽑을 모델 (home-start.js)
   home.wireSearch();
   shell = window.ArkismShell({ state, $, el, go, render });
   $("#status-toggle").addEventListener("click", () => renderStatusCard()); // after shell.js opened it: fill the 기억 처리 stages

@@ -287,6 +287,15 @@ fn open_backups(rt: tauri::State<Arc<runtime::Runtime>>) -> Result<(), String> {
     std::process::Command::new(opener).arg(&folder).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// Opens the built-in Arkism's log folder, for the 이 PC 시작 실패 screen.
+#[tauri::command]
+fn open_logs(rt: tauri::State<Arc<runtime::Runtime>>) -> Result<(), String> {
+    let folder = rt.data_dir().join("logs");
+    std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
+    let opener = if cfg!(windows) { "explorer" } else if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
+    std::process::Command::new(opener).arg(&folder).spawn().map(|_| ()).map_err(|e| e.to_string())
+}
+
 /// 서버에 연결: the SSH address is all the user types. The app reads the server's connection
 /// details over that login, forwards its API here, and points the PC agents at the same address.
 #[tauri::command]
@@ -419,6 +428,41 @@ fn run_agent_setup(rt: &runtime::Runtime, command: &'static str) -> Result<Strin
     } else {
         Err(format!("agents_setup_failed: {}", String::from_utf8_lossy(&out.stderr).trim()))
     }
+}
+
+/// Keeps what the last install-arkism run did in agents-setup.json, so 홈 can say once which agents
+/// were connected and where the replaced files were backed up, or offer 다시 연결 after a failure.
+fn record_agent_setup(rt: &runtime::Runtime, result: &Result<String, String>) {
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+    let v = match result {
+        Ok(out) => serde_json::json!({ "ok": true, "at": at, "summary": serde_json::from_str::<serde_json::Value>(out.trim()).unwrap_or(serde_json::Value::Null) }),
+        Err(e) => serde_json::json!({ "ok": false, "at": at, "error": e }),
+    };
+    let _ = std::fs::create_dir_all(rt.data_dir());
+    let _ = std::fs::write(rt.data_dir().join("agents-setup.json"), v.to_string());
+}
+
+fn read_agent_setup(rt: &runtime::Runtime) -> serde_json::Value {
+    std::fs::read_to_string(rt.data_dir().join("agents-setup.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(serde_json::Value::Null)
+}
+
+/// 홈 시작 안내: the last agent connection result (null before the first run finished).
+#[tauri::command]
+fn agents_setup(rt: tauri::State<Arc<runtime::Runtime>>) -> serde_json::Value {
+    read_agent_setup(&rt)
+}
+
+/// 다시 연결: runs install-arkism again and returns the new result (a failure is in it, not an error).
+#[tauri::command]
+async fn agents_setup_retry(rt: tauri::State<'_, Arc<runtime::Runtime>>) -> Result<serde_json::Value, String> {
+    let rt = Arc::clone(&rt);
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = run_agent_setup(&rt, "install-arkism");
+        record_agent_setup(&rt, &result);
+        Ok(read_agent_setup(&rt))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 설정 › 연결 › 모델 중계기: whether this PC has a usable gateway token (never the value itself).
@@ -985,7 +1029,9 @@ fn main() {
                 let rt = Arc::clone(&rt);
                 std::thread::spawn(move || {
                     let Ok(_activity) = rt.activity() else { return };
-                    if run_agent_setup(&rt, "install-arkism").is_ok() {
+                    let result = run_agent_setup(&rt, "install-arkism");
+                    record_agent_setup(&rt, &result);
+                    if result.is_ok() {
                         // Read after the setup: the first start may have picked another 저장 위치 meanwhile.
                         let marker = rt.data_dir().join("agents-connected");
                         let _ = std::fs::create_dir_all(rt.data_dir());
@@ -1033,7 +1079,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
+        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {

@@ -7400,7 +7400,7 @@
             }
           }}}},
     "/v1/providers": {
-      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked and the engines this server can run)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
+      "get": {"summary": "Model settings of the scope: providers, CLI accounts, quota, stored keys (last four only), models, switched-off models, requests, assist_model, roles (설정 › 역할별 모델 picks), role_defaults and role_options (what each role runs with nothing picked, the engines this server can run and the providers 기억 추출 can run)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Record with a providers field; key/model tests read expired after 10 minutes, CLI updates after 20 minutes. Requests retain at most 100 entries, preserving pending work; a full pending queue rejects new requests with 409."},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -33024,7 +33024,7 @@
           "Management"
         ],
         "summary": "Providers: role model",
-        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; extract also takes an openai model the Codex CLI runs or a google model the Gemini CLI runs (role_options.extract lists these providers); skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
         "parameters": [],
         "responses": {
           "200": {
@@ -47753,6 +47753,9 @@
           },
           "analysis_run": {
             "$ref": "#/components/schemas/WireResponseAnalysisRun"
+          },
+          "extractor": {
+            "$ref": "#/components/schemas/WireResponseExtractor"
           }
         },
         "additionalProperties": false,
@@ -58137,6 +58140,35 @@
         "x-go-type": "memory.AnalysisRun",
         "x-go-source": "internal/memory/agent_tools.go",
         "description": "AnalysisRun is the host's last capture drain that touched a job: how many jobs it settled and how,\nwith the most common waiting or failure code. LastDoneAt is the last time any job finished, kept\nacross runs, so a stretch without candidates can be told from a stretch without processing (#449)."
+      },
+      "WireResponseExtractor": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "cli": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "clis": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "model",
+          "cli",
+          "state"
+        ],
+        "x-go-type": "memory.Extractor",
+        "x-go-source": "internal/memory/agent_tools.go",
+        "description": "Extractor is what the host runs for 기억 추출 when nothing is picked: the model, its agent CLI and\nwhether that CLI is installed and signed in, with each known CLI's state (ready, login_needed, missing)."
       }
     },
     "headers": {

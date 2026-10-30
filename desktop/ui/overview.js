@@ -88,7 +88,9 @@ window.ArkismOverview = (ctx) => {
     const n24 = (arr) => num(slots(arr).reduce((x, y) => x + y, 0));
     const todayCount = (arr) => arr.map((m) => time(m.created_at)).filter(today).length;
     const stallWords = window.ArkismState.stallFor(stalledHours);
-    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [stallWords.stopped, "r"] : ["정상", "n"],
+    // the last run failed (기억 추출 cannot run, or the run stopped on an error): 확인 필요 in plain words, not 정상
+    const runIssue = window.ArkismHomeStart?.extractorIssue(d.tools), runFailed = stalled ? "" : runIssue?.short || (d.tools?.analysis_run?.error ? "분석 실패" : "");
+    const BADGE = { collect: [lastSession ? "정상" : "기록 없음", "n"], extract: stalled ? [stallWords.stopped, "r"] : runFailed ? [runFailed, "a"] : ["정상", "n"],
       classify: [nUnclassified ? `대기 ${num(nUnclassified)}` : "모두 분류됨", "n"], review: [nWait ? `${num(nWait)}건` : "비어 있음", nWait ? "a" : "n"],
       recall: ["정상", "n"], trace: [reported ? "정상" : "보고 없음", "n"], judge: [tidy ? `확인 전 ${tidy}` : "확인 끝", "n"], dream: [nProp ? `제안 ${nProp}` : "제안 없음", "n"] };
     const TILES = {
@@ -104,7 +106,7 @@ window.ArkismOverview = (ctx) => {
     // dot health — g 정상 · y 곧 확인 · o 확인 필요 · r 멈춤: last event <24h g, <3d y, older/none o (불러오기 <7d y); waiting work: none g, 분류 <6h y else o, 승인 <3d y else o, 쓰임 확인·드리밍 y; 분석 멈춤 r
     const age = (t, yMax = 3 * 24 * HOUR) => !t ? "o" : now - t < 24 * HOUR ? "g" : now - t < yMax ? "y" : "o";
     const oldestUnclassified = unclassified.length ? Math.min(...unclassified.map((m) => time(m.created_at) || now)) : 0;
-    const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
+    const HEALTH = { collect: age(lastSession), extract: stalled ? "r" : runFailed ? "o" : age(lastExtract), classify: !unclassified.length ? "g" : now - oldestUnclassified < 6 * HOUR ? "y" : "o",
       review: !waiting.length ? "g" : now - oldest < 3 * 24 * HOUR ? "y" : "o", recall: age(latest(recallTimes), 7 * 24 * HOUR), trace: age(reported),
       judge: !w ? "o" : tidy ? "y" : "g", dream: nProp ? "y" : "g" };
     const gone = missing();

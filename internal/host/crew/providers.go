@@ -42,8 +42,7 @@ var defaultModels = map[string][]string{
 }
 
 // logins is where each CLI keeps its login; present means logged in.
-var logins = map[string]string{"claude": ".claude/.credentials.json", "codex": ".codex/auth.json", "gemini": ".gemini/oauth_creds.json",
-	"grok": ".grok/auth.json", "agy": ".gemini/antigravity-cli/antigravity-oauth-token"}
+var logins = host.CLILogins
 
 func stateFile(name string) string { return filepath.Join(host.AgentsState, name) }
 

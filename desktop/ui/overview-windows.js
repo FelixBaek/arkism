@@ -199,7 +199,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // ------------------------------------------------------------ stage window
   const SPEC = {
     collect: ["에이전트 대화를 세션 단위로 모아 저장해요", "Claude Code · Codex · BULTUK 등", "대화가 끝날 때마다", "자동 (수집 훅)"],
-    extract: ["저장된 대화에서 교훈·결정 후보를 뽑아요", "대화 저장", "대화가 끝난 뒤", "AI (서버 Claude)"],
+    extract: ["저장된 대화에서 교훈·결정 후보를 뽑아요", "대화 저장", "대화가 끝난 뒤", ""], // who: the extractor's CLI (wideStage)
     classify: ["후보에 위험도와 중복 힌트를 붙여요", "분석", "후보가 생기면 바로", "AI (분류만, 승인 안 함)"],
     review: ["사람이 승인해야 쓰는 기억이 돼요", "분류 · 드리밍", "언제든", "사람만"],
     recall: ["질문과 관련 있는 기억을 찾아 답에 넣어요", "쓰는 중인 기억", "에이전트가 질문할 때마다", "자동 (검색)"],
@@ -383,6 +383,19 @@ window.ArkismOverviewWindows = (ctx, env) => {
     session_batch_parent_pending: "같은 대화의 앞 묶음을 기다려요", 429: "모델 사용 한도에 걸려 1시간 뒤 다시 해요",
     401: "서버가 분석 요청을 거부했어요 (로그인 만료)", 403: "서버가 분석 요청을 거부했어요 (권한 없음)" };
   const RUN_CMD = "sudo systemctl start arkism-reflect.service";
+  // 기억 추출 failures (home-start.js extractorIssue): a plain sentence and one button; the code only under 자세히
+  function extractorWhy(issue) {
+    const l = el("div", "ov-sum-why"), p = el("p", "");
+    p.append(el("span", "", `${issue.title}. ${issue.text}`));
+    l.append(el("small", "", "이유"), p);
+    const to = (tab) => (e) => { e.target.closest("dialog")?.close(); state.settingsTab = tab; go("settings"); };
+    const act = issue.action === "login" ? button("로그인하기", "small primary ov-win-act", null, to("agents"))
+      : issue.action === "model" ? button("다른 모델 고르기", "small primary ov-win-act", null, to("roles"))
+        : button("다시 시도", "small primary ov-win-act", null, () => void ctx.reload?.()); // reads the next run's result
+    const out = [l, act];
+    if (issue.code) { const more = el("details", "ov-recall-more"); more.append(el("summary", "", "자세히"), el("p", "mono", issue.code)); out.push(more); }
+    return out;
+  }
   function runBox(stopped) {
     const run = D().tools?.analysis_run, box = block("마지막 분석");
     const copy = () => { const b = button("명령 복사", "ghost small", null, () => Promise.resolve().then(() => b.ownerDocument.defaultView.navigator.clipboard.writeText(RUN_CMD)).then(() => { b.textContent = "복사했어요"; }, () => { b.textContent = "복사하지 못했어요"; })); return b; };
@@ -391,8 +404,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     else {
       box.append(cellRow([["마지막 실행", ago(time(run.at))], ["본 대화", `${num(run.jobs)}개`], ["끝남", `${num(run.done)}개`], ["대기", `${num(run.waiting)}개`],
         ["건너뜀·보류·실패", `${num(run.dropped + run.parked + run.failed)}개`], ["새 후보", `${num(run.candidates)}건`]]));
-      const code = run.error || run.reason;
-      if (code) { const l = el("div", "ov-sum-why"), p = el("p", ""); p.append(el("span", "", RUN_WHY[code] || code)); l.append(el("small", "", "이유"), p); box.append(l); }
+      const code = run.error || run.reason, issue = window.ArkismHomeStart?.extractorIssue(D().tools);
+      if (issue) box.append(...extractorWhy(issue));
+      else if (code) { const l = el("div", "ov-sum-why"), p = el("p", ""); p.append(el("span", "", RUN_WHY[code] || code)); l.append(el("small", "", "이유"), p); box.append(l); }
       box.append(cellRow([["마지막으로 분석을 끝낸 때", run.last_done_at ? ago(time(run.last_done_at)) : "—"], ["그때 나온 후보", run.last_done_at ? `${num(run.last_done_candidates)}건` : "—"]]));
     }
     const auth = /^40[13]$/.test(run?.error || run?.reason || "");
@@ -462,8 +476,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
   // left: what the stage does and its numbers; right: the stage's list, every row in full, 60 more each time it scrolls to the end
   function wideStage(key) {
-    const s = env.stages().find((x) => x.key === key) || { label: key, tiles: [] }, spec = SPEC[key];
-    const d = shell(s.label, s.badge?.[0] ?? null, null, key);
+    const s = env.stages().find((x) => x.key === key) || { label: key, tiles: [] }, spec = [...SPEC[key]];
+    if (key === "extract") spec[3] = `AI (${window.ArkismHomeStart?.extractorName(D().tools) || "확인 중"})`; // the CLI that runs it, named as 홈 names it
+    const d = shell(s.label, s.badge?.[0] ?? null, null, key, s.badge?.[1]);
     d.classList.add(`ov-win-${key}`); recipe(d, { key }); shown = new WeakMap();
     redraw = () => { redrawing = true; open(key); };
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-stage-list");
@@ -500,11 +515,11 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   // ------------------------------------------------------------ wide windows
   // stage: the 기억 처리 step this window shows, which adds ‹ n / N 단계 › to walk the steps
-  function shell(titleText, badgeText, hint, stage) {
+  function shell(titleText, badgeText, hint, stage, tone) {
     const d = modal("ov-wide-win");
     const head = el("div", "ov-win-head"), t = el("div", "ov-win-title");
     t.append(el("i", "ov-dot"), el("h2", "", titleText));
-    if (badgeText != null) t.append(el("span", "ov-win-badge", badgeText)); // "" waits for a server total (hidden while empty)
+    if (badgeText != null) t.append(el("span", `ov-win-badge${tone === "a" || tone === "r" ? ` ${tone}` : ""}`, badgeText)); // "" waits for a server total (hidden while empty)
     const r = el("div", "ov-win-step"); if (hint) r.append(el("span", "", hint));
     const steps = env.stages(), i = stage ? steps.findIndex((x) => x.key === stage) : -1;
     if (i >= 0) { const go1 = (n) => () => open(steps[(i + n + steps.length) % steps.length].key), p = button("‹", "ghost small", null, go1(-1)), n = button("›", "ghost small", null, go1(1)); p.setAttribute("aria-label", "이전 단계"); n.setAttribute("aria-label", "다음 단계"); r.append(p, el("span", "", `${i + 1} / ${steps.length} 단계`), n); } const x = button("✕", "ghost small ov-wide-x", null, () => d.close()); x.setAttribute("aria-label", "닫기"); r.append(x);

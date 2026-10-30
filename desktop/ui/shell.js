@@ -4,7 +4,8 @@
 window.ArkismShell = (ctx) => {
   "use strict";
   const { state, $, el, go } = ctx;
-  const count = (id) => () => $(`#count-${id}`)?.textContent || "";
+  // A zero count is left out (an empty 홈 is not 「홈 0」) unless the screen marks its count with data-show-zero.
+  const count = (id) => () => { const c = $(`#count-${id}`), n = c?.textContent || ""; return n.trim() === "0" && !c.hasAttribute("data-show-zero") ? "" : n; };
 
   // [key, label, open(), isActive(), count?]
   const MENUS = {

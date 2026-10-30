@@ -60,6 +60,7 @@ import "./alerts.js";
 import "./shell.js";
 import "./home-checks.js";
 import "./home.js";
+import "./home-start.js";
 import { startApp } from "./app.js";
 await window.ArkismI18n.ready();
 startApp();

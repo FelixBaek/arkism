@@ -38,9 +38,13 @@ func RolePick(get func(path string, timeout time.Duration) (map[string]any, erro
 }
 
 // CLIRoleModel is a picked model as `claude -p --model` takes it, or fallback when model is empty or not a model name.
+// A Codex or Gemini model (기억 추출 can run on those CLIs) stays as named.
 func CLIRoleModel(model, fallback string) string {
 	if model == "" || model == "basic" || !cliModelRe.MatchString(model) {
 		return fallback
+	}
+	if cli := ModelCLI(model); cli == "codex" || cli == "gemini" {
+		return model
 	}
 	return ClaudeModel(model)
 }

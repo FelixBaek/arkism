@@ -169,6 +169,6 @@
   "assist_model": "",
   "roles": { "extract": { "model": "claude-haiku-4-5", "provider": "anthropic" }, "skill_scan": { "off": ["evaluator"] } },
   "role_defaults": { "route_judge": "clef", "skill_judge": "clef", "skill_candidates": "8", "embed": "ollama:qwen3-embedding:0.6b", "extract": "haiku", "reflect": "sonnet", "skill_summary": "basic", "skill_scan": "spector,evaluator" },
-  "role_options": { "route_judge": ["fixed", "clef", "jev"], "skill_judge": ["fixed", "clef", "jev"], "embed": ["ollama:qwen3-embedding:0.6b"] }
+  "role_options": { "route_judge": ["fixed", "clef", "jev"], "skill_judge": ["fixed", "clef", "jev"], "embed": ["ollama:qwen3-embedding:0.6b"], "extract": ["anthropic", "openai", "google"] }
  }
 }

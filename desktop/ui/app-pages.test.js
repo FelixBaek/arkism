@@ -531,7 +531,7 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await settings("connect");
   await mode("SSH로 연결");
   await press("SSH 테스트", app.$("#table"));
-  assert.match(text(app.$(".mode-out")), /호스트를 넣어 주세요/);
+  assert.match(text(app.$(".mode-out")), /서버 주소를 넣어 주세요/);
   await mode("이 PC");
   await press("저장하고 다시 연결");
   assert.match(text(app.$(".mode-out")), /이미 이 PC의 Arkism/);
@@ -563,6 +563,10 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.equal(sel("반성·검토 모델").options[0].textContent, "서버 기본값 · Claude Sonnet");
   assert.equal(sel("스킬 요약 모델").options[0].textContent, "서버 기본값 · 스킬 설명 그대로");
   assert.equal(sel("기억 추출 모델").value, "anthropic|claude-haiku-4-5"); // the preview's pick
+  // 기억 추출 offers every provider the server says it can run (role_options.extract); 반성·검토 only Anthropic
+  const groups = (label) => [...sel(label).querySelectorAll("optgroup")].map((g) => g.querySelector("option").value.split("|")[0]);
+  assert.ok(groups("기억 추출 모델").includes("openai"));
+  assert.deepEqual([...new Set(groups("반성·검토 모델"))], ["anthropic"]);
   assert.ok(sel("임베딩 모델").disabled);
   await choose("스킬 판정 모델", "jev");
   assert.deepEqual(rolePosts.at(-1), { scope: rolePosts.at(-1).scope, role: "skill_judge", model: "jev" });
