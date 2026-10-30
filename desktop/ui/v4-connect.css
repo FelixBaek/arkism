@@ -4,6 +4,9 @@
 
 /* ---------------------------------------------------------------- title line: ← back, count, buttons on the right */
 .page-head { position: relative; }
+/* 시작 2·3단계 (198:6650, 198:6736): a line under the area tabs, then the title 24px below it */
+.app.home-start .main > .page-head { padding-top: 24px; border-top: 1px solid var(--nc-line); }
+.app.home-start .area-bar > .search { display: none; }
 .page-head .head-back { align-self: flex-start; margin-bottom: 4px; padding: 0; border: 0; background: none; color: var(--nc-quiet); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
 .page-head .head-back:hover { color: var(--nc-text); }
 .page-head .head-aside { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 8px; }
@@ -52,7 +55,7 @@
 /* ---------------------------------------------------------------- list (surface, line border, radius 8) */
 .cn-list { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
 .cn-list:empty { display: none; }
-.cn-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); cursor: pointer; min-width: 0; }
+.cn-row { display: flex; align-items: center; gap: 12px; min-height: 68px; box-sizing: border-box; padding: 10px 16px; border-bottom: 1px solid var(--nc-line); cursor: pointer; min-width: 0; }
 .cn-row:last-child { border-bottom: 0; }
 .cn-row:hover { background: var(--nc-raised); }
 .cn-row.selected { background: var(--nc-raised); }
@@ -75,7 +78,7 @@
 .cn-warn { color: var(--nc-amber); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
 .cn-grow { flex: 1; min-width: 0; }
 
-.cn-badge { flex: none; display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 999px; font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); white-space: nowrap; }
+.cn-badge { flex: none; display: inline-flex; align-items: center; padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 999px; font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); white-space: nowrap; } /* 정상 reads quiet; only problems stand out (Figma 198:1060) */
 .cn-badge.warn { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
 .cn-badge.off { color: var(--nc-quiet); }
 .cn-badge.accent { border-color: transparent; color: var(--nc-accent); padding: 2px 0; }
@@ -109,7 +112,7 @@
 .cn-callout strong { font-weight: 500; display: block; margin-bottom: 2px; }
 
 .cn-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.cn-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid transparent; border-radius: 6px; background: var(--nc-raised); color: var(--nc-text); font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.cn-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; box-sizing: border-box; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
 .cn-chip .agent-tile, .cn-chip .agent-tile img, .cn-chip .agent-tile svg { width: 14px; height: 14px; }
 .cn-chip.off { background: none; border-color: var(--nc-line); color: var(--nc-quiet); }
 .cn-chip.staged { background: var(--nc-amber-bg); color: var(--nc-amber); }
@@ -122,7 +125,7 @@
 .cn-subrow-body { flex: 1; min-width: 0; display: flex; flex-direction: column; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .cn-subrow-body code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; padding: 0; }
 .cn-subrow-body small { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); overflow-wrap: anywhere; }
-.cn-kindtag { flex: none; align-self: flex-start; padding: 0 6px; border-radius: 4px; background: var(--nc-raised); font: 400 calc(11px * var(--fs, 1))/18px var(--sans); color: var(--nc-muted); }
+.cn-kindtag { flex: none; align-self: center; padding: 0 6px; border-radius: 4px; background: var(--nc-raised); font: 400 calc(11px * var(--fs, 1))/18px var(--sans); color: var(--nc-muted); }
 .cn-call { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .cn-call code { font: 400 calc(12px * var(--fs, 1))/1.5 var(--mono); color: var(--nc-text); background: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cn-call .agent-tile, .cn-call .agent-tile img, .cn-call .agent-tile svg { width: 14px; height: 14px; }
@@ -137,6 +140,7 @@ dialog.cn-confirm p { margin: 0; font: 400 calc(13px * var(--fs, 1))/1.5 var(--s
 dialog.cn-confirm .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 dialog.cn-confirm .btn.danger { border-color: transparent; background: var(--nc-amber-bg); color: var(--nc-amber); }
 dialog.cn-confirm .btn.primary { border-color: var(--nc-action); background: var(--nc-action); color: var(--nc-on-accent); }
+dialog.cn-confirm .btn.primary:disabled { border-color: var(--nc-line); background: var(--nc-surface); color: var(--nc-quiet); cursor: default; }
 .app.v4-connect .table-wrap > .cn-list { width: 100%; }
 
 /* ---------------------------------------------------------------- 확인해 주세요 card (amber-bg) */
@@ -219,6 +223,8 @@ dialog.mcp-add .dialog-body { display: grid; grid-template-columns: minmax(0, 1f
 .mcp-side .cn-note { margin-bottom: 18px; }
 dialog.mcp-add .field { display: flex; flex-direction: column; gap: 8px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 dialog.mcp-add .field > small, dialog.mcp-add .field > .meta { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); margin: 0; }
+dialog.mcp-add .field input:not(#_) { border: 1px solid var(--nc-line) !important; border-radius: var(--nc-radius-control) !important; background: var(--nc-raised) !important; } /* boxed fields (Figma 1583:90288), not the app-wide underline */
+dialog.mcp-add .field input:focus:not(#_) { border-color: var(--nc-quiet) !important; }
 dialog.mcp-add .field input { min-height: 40px; padding: 8px 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-text); font: 400 calc(13px * var(--fs, 1))/1.5 var(--mono); }
 .mcp-presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .mcp-preset { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--nc-line); border-radius: 6px; background: var(--nc-surface); color: var(--nc-text); cursor: pointer; }
@@ -233,7 +239,7 @@ dialog.mcp-add .mcp-how .tab code { font: 400 calc(13px * var(--fs, 1))/1.5 var(
 dialog.mcp-add .mcp-how .tab small { font: 400 calc(11px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 dialog.mcp-add .mcp-how .tab.active { background: var(--nc-raised); color: var(--nc-accent); }
 .mcp-agents { display: flex; flex-direction: column; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); overflow: hidden; }
-.mcp-agent { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--nc-line); }
+.mcp-agent { display: flex; align-items: center; gap: 12px; min-height: 40px; box-sizing: border-box; padding: 4px 16px; border-bottom: 1px solid var(--nc-line); }
 .mcp-agent:last-child { border-bottom: 0; }
 .mcp-agent > div { flex: 1; min-width: 0; display: flex; flex-direction: column; font: 400 calc(14px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .mcp-agent small { font-size: calc(12px * var(--fs, 1)); color: var(--nc-quiet); }
@@ -242,8 +248,8 @@ dialog.mcp-add .mcp-how .tab.active { background: var(--nc-raised); color: var(-
 dialog .switch[aria-checked="true"], .app.v4-connect .switch[aria-checked="true"] { background: var(--nc-action); border-color: var(--nc-action); }
 dialog .switch[aria-checked="true"] i { background: var(--nc-on-accent); }
 .mcp-warn { margin: 0; padding: 12px 16px; border-radius: var(--nc-radius-control); background: var(--nc-amber-bg); font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.mcp-ways { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; margin: 0; }
-.mcp-ways dt { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-accent); }
+.mcp-ways { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; margin: 0; }
+.mcp-ways dt { font: 400 calc(12px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-accent); word-break: keep-all; } /* "프로그램 실행" stays on one line, "(stdio)" under it (Figma 1583:90532) */
 .mcp-ways dd { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); color: var(--nc-muted); }
 dialog.mcp-add .dialog-foot { padding: 16px 24px 20px; border-top: 0; }
 dialog.mcp-add .dialog-foot .btn, dialog.apply-pop .btn { min-height: 34px; padding: 7px 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
@@ -278,6 +284,8 @@ dialog.apply-pop .dialog-foot { padding: 12px 24px 20px; border-top: 0; }
 .item-pop .crew-popup-body { padding: 0; overflow: auto; }
 .item-pop .detail-body { overflow: visible; padding: 0 24px 24px; gap: 22px; }
 .item-pop .cn-detail { padding: 0; }
+.item-pop .cn-sec-head h3 { margin-top: 0; } /* the dialog h3 margin doubled the section gaps (Figma 1281:80718) */
+.cn-callout .btn { background: none !important; border: 1px solid color-mix(in srgb, var(--nc-amber) 40%, transparent) !important; } /* Claude Code 로그인: an outline on the amber card (Figma 1583:98139) */
 .item-pop .detail-body h2 { margin: 0; font: 500 calc(16px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); overflow-wrap: anywhere; }
 .item-pop .btn { height: auto; min-height: 34px; padding: 7px 14px; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); }
 dialog.item-pop .btn.cn-link, dialog.item-pop .btn.ghost { min-height: 0; padding: 7px 0; border: 0; background: none; color: var(--nc-muted); }

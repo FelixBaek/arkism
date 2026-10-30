@@ -91,7 +91,7 @@ export function startApp() {
   };
   // Runtimes the skill router knows. Logos come from the agent logo set in the design file.
   const AGENTS = [["claude_code", "Claude Code", "img:claude.svg"], ["codex", "Codex", "sym:a-codex"], ["zcode", "ZCode", "sym:a-zcode"],
-    ["gemini", "Gemini CLI", "sym:a-gemini"], ["grok", "Grok", "sym:i-x"], ["opencode", "OpenCode", "sym:i-terminal"], ["cursor", "Cursor", "sym:i-code"]];
+    ["gemini", "Gemini CLI", "sym:a-gemini"], ["grok", "Grok", "sym:a-grok"], ["opencode", "OpenCode", "sym:a-opencode"], ["cursor", "Cursor", "sym:a-cursor"]];
   function agentLogo(spec, name) {
     const tile = el("span", "agent-tile");
     tile.title = name;
@@ -621,10 +621,11 @@ export function startApp() {
       if (g !== state.connection.generation) return;
       state.loading = false;
       state.loadError = loadFailure(e); // { code, reached, title, text }
-      state.data = emptyData(); // the last good load's agents and skills are not the current state (#187)
+      // the last good load stays on screen; counts read "—" and Home's to-dos stay empty while loadError is set (#187)
       setStatus("error", "연결 확인 필요");
       render();
-      stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached && state.view !== "todo" ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." }); // Home's card already says the reason
+      // Home (and 전체 항목) already show the lost-connection card with its own retry
+      if (state.view !== "todo" || homePage().kind === "start") stateNotice("loadFailed", { retry: () => { notice(""); void loadAll(); } }, { note: state.loadError.reached ? state.loadError.text : "연결을 확인하고 다시 시도해 주세요." });
     }
   }
   // Server-wide totals (POST /v1/memories/query, one row each): every active memory and the idle ones, with kinds.
@@ -1024,15 +1025,29 @@ export function startApp() {
       notice(done);
     });
     const foot = el("div", "actions");
-    // 지우기: either memory or both, with a reason; removed memories go to history, not deleted
+    // Figma 1407:26113 · 1408:3366: only a contradiction offers 둘 다 지우기, behind a small confirm; a merge never removes (198:2264)
+    if (!merge && !state.serverLacks?.has("forget_both")) {
+      const both = button("둘 다 지우기", "ghost danger tidy-forget", null, () => {
+        if (foot.querySelector(".tidy-confirm")) return foot.querySelector(".tidy-confirm").remove();
+        const box = el("div", "tidy-confirm");
+        box.setAttribute("role", "dialog");
+        const close = () => { box.remove(); both.focus(); };
+        const row = el("div", "actions");
+        row.append(button("취소", "ghost", null, close), button("둘 다 지우기", "danger", null, () => { box.remove(); void decide("forget_both", "둘 다 지웠어요. 기억 이력에 남아요."); }));
+        box.append(el("strong", "", "두 기억을 다 지울까요?"), el("p", "", "둘 다 더는 쓰이지 않아요. 기억 이력에는 남아요."), row);
+        box.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } });
+        both.after(box);
+        row.firstChild.focus();
+      });
+      foot.append(both);
+    }
     const DR = window.ArkismDeleteReason;
-    foot.append(button("지우기", "ghost danger tidy-forget", null, () => DR.openAfter(foot, { targets: [["forget_retire", "넘길 기억"], ["forget_keep", "남길 기억"], ["forget_both", "둘 다"]].filter(([v]) => v !== "forget_both" || !state.serverLacks?.has("forget_both")), target: "forget_retire",
-      onConfirm: async (why) => (await decide(why.target, "지웠어요. 지운 이유와 함께 기억 이력에 남아요.", DR.rejectFields(why)) ? undefined : { error: "지우지 못했어요." }) })));
     if (DR.maybeStale(t.p, [t.keep, t.retire])) foot.append(DR.staleHint());
     foot.append(button("둘 다 두기", "ghost", null, () => decide("dismiss", "둘 다 그대로 뒀어요. 같은 제안은 다시 하지 않아요.")),
       button("반대로 남기기", "", null, () => decide("swap", "반대쪽 기억을 남겼어요. 다른 하나는 이력에 남아요.")),
       button(merge ? "제안대로 합치기" : "제안대로 바꾸기", "primary", null, () => decide("accept", merge ? "합쳤어요. 옛 기억은 이력에 남아요." : "바꿨어요. 예전 기억은 이력에 남아요.")));
-    body.append(head, cards, why, plan, el("p", "meta", "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요." + (all.length > 1 ? ` · 남은 제안 ${all.length - 1}개` : "")), foot);
+    const left = all.length > 1 ? ` · 남은 제안 ${all.length - 1}개` : "";
+    body.append(head, cards, why, plan, el("p", "meta", (merge ? "어느 쪽을 골라도 지우지 않아요. 넘긴 기억은 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요.") + left), foot);
   }
 
   // 기억 검토: up to 5 candidates in one view, each set to keep or drop, sent as one review_batch.
@@ -1158,10 +1173,10 @@ export function startApp() {
         sub: "기존 기억과 내용이 달라 어느 쪽이 맞는지 골라야 해요", warn: true, action: "고르기", go: ["memories", "conflicted"],
         preview: d.conflicted.slice(0, 5).map((c) => c.text) },
       { id: "blocked", n: blocked.length, icon: "plug", label: "빠진 에이전트", title: blocked.length ? `${blocked[0][0].name}를 ${agentName(blocked[0][1])}에서 못 써요` : "",
-        sub: blocked.length > 1 ? `외 ${blocked.length - 1}곳이 막혀 있어요` : "칸을 눌러 추가하고 적용하면 바로 써요", action: blocked.length ? `${agentName(blocked[0][1])}에 추가` : "",
+        sub: "칸을 눌러 추가하고 적용하면 바로 써요", action: blocked.length ? `${agentName(blocked[0][1])}에 추가` : "",
         run: () => { skillViews.stage(blocked[0][0].id, blocked[0][1], "allow"); go("skills", "missing"); }, go: ["skills", "missing"],
         agent: blocked.length ? [AGENTS.find(([k]) => k === blocked[0][1])?.[2] || "sym:i-plug", agentName(blocked[0][1])] : null,
-        preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name} → ${agentName(k)}`) },
+        preview: blocked.slice(0, 5).map(([sk, k]) => `${sk.name}가 ${agentName(k)}에 없음`) },
       { id: "idle", ...idleN, icon: "clock-counter-clockwise", label: "다시 볼 기억", title: idleN.state === "partial" ? `검토할 기억 ${idleN.min}개 이상` : `검토할 기억 ${idleN.text}개`,
         sub: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보여요. 직접 확인해 주세요", action: "보기", go: ["memories", "idle"], preview: idleList.slice(0, 5).map((m) => m.text) },
       { id: "fresh", n: fresh.length, icon: "sparkle", label: "새로 저장한 기억", title: `최근 3일 저장한 기억 ${fresh.length}개`, sub: "맞는 내용인지 훑어보세요",
@@ -1315,13 +1330,14 @@ export function startApp() {
     } else if (state.view === "todo" && homePage().kind !== "home") {
       box.replaceChildren(); // 시작하기 and the sub-pages (새 기억 확인 …) carry their own actions
     } else if (state.view === "todo") {
-      // one plain action instead of 분석 time · 다시 분석 · 다시 불러오기
+      // Figma 1583:89751: when the skills were last analyzed · 다시 분석 · 다시 불러오기, left of 전체 항목 보기
       const at = suggestions().at;
-      const ask = button(analyzing ? "제안 받는 중…" : "스킬 제안 받기", "", null, analyze); ask.disabled = analyzing;
-      if (at) ask.title = `${ago(at)} 받음`;
-      // Home already refreshes on focus and every 10s (visibleSync); this is the manual way for the impatient.
-      const again = button("", "ghost icon-btn", "arrows-clockwise", loadAll); again.title = "다시 불러오기"; again.setAttribute("aria-label", "다시 불러오기");
-      box.replaceChildren(again, ask);
+      const line = el("span", "home-status");
+      const link = (label, fn) => { const b = el("button", "link-btn", label); b.type = "button"; b.addEventListener("click", fn); return b; };
+      const ask = link("다시 분석", analyze); ask.disabled = analyzing;
+      // Home already refreshes on focus and every 10s (visibleSync); 다시 불러오기 is the manual way for the impatient.
+      line.append(icon("clock-counter-clockwise"), el("span", "", analyzing ? "분석 중…" : at ? `${ago(at)} 분석` : "아직 분석 안 함"), " · ", ask, " · ", link("다시 불러오기", loadAll));
+      box.replaceChildren(line);
     } else if (state.view === "images") {
       box.replaceChildren(state.promptRun ? button("이 프롬프트로 만들기", "primary", null, (e) => imageViews.runPrompt(e.currentTarget)) : button("프롬프트 추가", "primary", null, () => imageViews.openPromptEditor(null)));
     } else if (state.view === "design") {
@@ -1362,10 +1378,7 @@ export function startApp() {
   }
   function go(view, tab) {
     // Old links keep their destination available inside FLOW instead of opening separate catalogues.
-    if (view === "workers" || view === "teams") {
-      state.flowKind = view === "workers" ? "agent" : "team";
-      view = "crew";
-    }
+    if (view === "workers" || view === "teams") view = "crew";
     state.view = view;
     if (view === "todo") state.todoAll = false;
     state.skillPage = null;
@@ -1570,12 +1583,18 @@ export function startApp() {
     for (const t of now) {
       if (t.id === "maintenance" && t.list?.length > 1) {
         const g = el("div", "home-group");
-        g.append(el("strong", "", t.label), el("output", "", String(t.list.length)), el("span", "", "어젯밤 살펴봤어요 · 고르기 전엔 아무것도 바뀌지 않아요"));
+        g.append(el("strong", "", t.label), el("output", "", String(t.list.length)), el("span", "", `어젯밤 정리 · ${kindLabel(t.list[0].keep.kind)} · 고르기 전엔 아무것도 바뀌지 않아요`));
         list.append(g);
         t.list.forEach((x, i) => row(t, `todo:maintenance#${i}`, maintenanceTitle(x), `어젯밤 정리 · ${kindLabel(x.keep.kind)}`));
       } else row(t, `todo:${t.id}`, t.title, t.sub, t.warn);
     }
     return list;
+  }
+  // 나머지 rows (Figma 1408:3366): a count-like title where it says enough, else the first item and how many more
+  function restSummary(t) {
+    if (["unused", "updates", "similar"].includes(t.id)) return t.title;
+    if (["suggest", "blocked"].includes(t.id) && t.preview[0]) return t.preview[0] + (t.n > 1 ? ` 외 ${t.n - 1}개` : "");
+    return t.preview[0] || tr(t.sub);
   }
   function restList(rest) {
     const list = el("div", "todo-list todo-rest");
@@ -1583,7 +1602,7 @@ export function startApp() {
       const id = `todo:${t.id}`;
       const item = el("div", `todo-item${todoKey(state.selected) === t.id ? " selected" : ""}`);
       item.dataset.id = id;
-      item.append(el("span", "label", t.label), raw(el("span", "sub", t.preview[0] || tr(t.sub))), el("output", `home-badge${t.warn ? " warn" : ""}`, t.n === null ? "…" : String(t.n)), el("span", "home-chev", "›"));
+      item.append(el("span", "label", t.label), raw(el("span", "sub", restSummary(t))), el("output", `home-badge${t.warn ? " warn" : ""}`, t.n === null ? "…" : String(t.n)), el("span", "home-chev", "›"));
       item.addEventListener("click", () => { if (t.detail || !t.go) pickTodo(id); else go(...t.go); });
       list.append(item);
     }
@@ -1602,7 +1621,7 @@ export function startApp() {
       const noted = tools.servers.filter((s) => s.note);
       const parts = [...login.map((s) => ({ label: `${s.name} 로그인 필요`, n: 1 })), ...noted.map((s) => ({ label: `${s.name} 설정 확인`, n: 1 }))];
       if (toolViews.pendingTool(tools)) parts.push({ label: "적용 대기", n: tools.requests.filter((q) => q.status === "pending").length });
-      rows.push(["TOOLS", "도구 서버(MCP)", parts, ["tools"]]);
+      rows.push(["TOOLS", "MCP", parts, ["tools"]]);
     }
     let any = false;
     for (const [menu, name, parts, target] of rows) {
@@ -1671,11 +1690,11 @@ export function startApp() {
     const head = el("div", "home-sum-head");
     head.append(el("h2", "", state.loadError ? "확인할 일을 불러오지 못했어요" : now.length ? `확인할 일 ${now.length}개가 먼저 기다려요` : "지금은 확인할 일이 없어요"),
       el("p", "meta", state.loadError ? "" : rest.length ? `나머지 ${todoTotal(rest)}개는 메뉴별로 모아 두었어요.` : "새 일이 생기면 여기에 모여요."));
-    const agents = presentAgents();
+    const agents = presentAgents().filter(([k]) => ["ok", "warn"].includes(agentHealth(k)[0])); // 7 listed is not 7 working: only the ones the server sees running
     const nums = el("div", "home-nums");
-    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["연결된 에이전트", agents.filter(([k]) => ["ok", "warn"].includes(agentHealth(k)[0])).length]]) { // 7 listed is not 7 working: count only the ones the server sees running
+    for (const [label, value, warn] of [["먼저 확인", now.length, true], ["메뉴별 확인할 것", todoTotal(rest)], ["함께 일하는 에이전트", agents.length]]) {
       const r = el("div", "");
-      const known = !state.loadError || label === "연결된 에이전트"; // the to-do counts have nothing to count after a failed load
+      const known = !state.loadError || label === "함께 일하는 에이전트"; // the to-do counts have nothing to count after a failed load
       r.append(el("span", "", label), el("output", known && warn && value ? "warn" : "", known ? String(value) : "—"));
       nums.append(r);
     }

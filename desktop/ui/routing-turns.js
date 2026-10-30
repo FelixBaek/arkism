@@ -110,8 +110,9 @@ window.ArkismRoutingTurns = (ctx) => {
     head.append(el("strong", "", "스킬 판정"), el("span", "", tr(`최근 ${num(items.length)}건`)));
     const by = el("div", "rtg-sides");
     const count = {};
-    for (const d of items) for (const k of [judge(d.provider), ...(d.degraded || []).map((x) => DEGRADED[x] || x)]) count[k] = (count[k] || 0) + 1;
-    for (const [k, n] of Object.entries(count).sort((a, b) => b[1] - a[1])) by.append(el("span", "rtg-chip", tr(`${k} ${num(n)}`)));
+    const bad = new Set();
+    for (const d of items) for (const k of [judge(d.provider), ...(d.degraded || []).map((x) => (bad.add(DEGRADED[x] || x), DEGRADED[x] || x))]) count[k] = (count[k] || 0) + 1;
+    for (const [k, n] of Object.entries(count).sort((a, b) => b[1] - a[1])) by.append(el("span", bad.has(k) ? "rtg-chip warn" : "rtg-chip", tr(`${k} ${num(n)}`)));
     const list = el("div", "rtg-calls rtg-skills");
     list.append(...items.slice(0, SKILLS_SHOWN).map(skillRow));
     c.append(head, el("small", "", "route_skills가 고른 스킬과 판정기예요. 규칙은 판정 모델 없이 검색 1위를 고른 것이고, 확신 낮음은 판정기가 고르지 않은 것이에요."), by, list);

@@ -5,7 +5,7 @@ export function createImageViews(deps) {
   // ---------------------------------------------------------------- 이미지
   const ENGINES = { gemini: "Gemini", gpt: "GPT", claude: "Claude", grok: "Grok", comfyui: "ComfyUI", other: "기타" };
 
-  const ENGINE_LOGOS = { gemini: "sym:a-gemini", gpt: "sym:a-codex", claude: "img:claude.svg", grok: "sym:i-x" };
+  const ENGINE_LOGOS = { gemini: "sym:a-gemini", gpt: "sym:a-codex", claude: "img:claude.svg", grok: "sym:a-grok" };
 
   // Older records said comfyui_api or codex; they read and save as the model they meant.
   const engineOf = (ip) => ({ comfyui_api: "comfyui", codex: "gpt" })[ip.engine] || ip.engine;

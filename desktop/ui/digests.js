@@ -419,7 +419,9 @@ window.ArkismDigests = (ctx) => {
     else if (data.merge === false) table.append(el("div", "empty", "합치기 제안을 불러오지 못했어요. 새로고침하면 다시 불러와요."));
     else if (data.merge === null) table.append(el("div", "empty", "이 서버는 합치기 제안을 지원하지 않아요."));
     else if (!items.length) table.append(el("div", "empty", state.query ? "검색과 맞는 제안이 없어요." : "확인할 합치기 제안이 없어요."));
-    if (items.length) { const foot = el("div", "mem-more"); foot.append(el("span", "", "AI 제안은 바로 적용하지 않아요. 고르면 그때 저장돼요.")); table.append(foot); }
+    // the note is a meta line under the list card, not a row in it (Figma 383:29822); CSS hides it once the merge rows are gone
+    document.querySelector(".dg-merge-note")?.remove();
+    if (items.length) table.parentElement.after(el("p", "dg-merge-note", "AI 제안은 바로 적용하지 않아요. 고르면 그때 저장돼요."));
     markSelected();
   }
   function mergeDetail(soft) {
@@ -446,7 +448,6 @@ window.ArkismDigests = (ctx) => {
     const card = el("div", "d-action dg-cand");
     const line = el("div", "dg-badges");
     line.append(el("span", "dg-label", "AI 제안"), el("span", "mem-badge warn", ACTION[p.action] || p.action));
-    if (REASON[p.reason_code]) line.append(el("span", "mem-badge", REASON[p.reason_code]));
     const stale = v && v.current === false;
     if (stale) line.append(el("span", "mem-badge warn", "바뀜"));
     card.append(line);
@@ -504,7 +505,9 @@ window.ArkismDigests = (ctx) => {
   // existing memory → candidate, word by word (text-diff.js); the texts are data, drawn as plain text
   function wordDiff(before, after) {
     const box = raw(el("p", "dg-diff dg-words"));
-    for (const [op, t] of window.ArkismTextDiff(before, after)) box.append(op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t));
+    // always word by word (Figma 383:29822): one word per "line", so the line diff never swaps a whole sentence; the marker comes off again below
+    const cut = (x) => (String(x || "").match(/\S+\s*|\s+/g) || []).join("\u0001\n"); // a word keeps its trailing space, so spaces alone never match
+    for (const [op, t0] of window.ArkismTextDiff(cut(before), cut(after))) { const t = t0.replaceAll("\u0001\n", ""); if (t) box.append(op === "=" ? document.createTextNode(t) : el(op === "-" ? "del" : "ins", "", t)); }
     return box;
   }
   function mergeQuote(text, foot) {

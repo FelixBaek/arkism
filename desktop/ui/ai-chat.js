@@ -122,10 +122,12 @@ window.ArkismAIChat = (() => {
       head.append(icon("sparkle"), el("strong", "", title), ...(opts.sub ? [el("small", "", opts.sub)] : []), x);
       const log = el("ol", "ex-chat");
       log.setAttribute("aria-live", "polite");
-      if (opts.greeting) log.append(el("li", "ex-chat-ai", opts.greeting));
+      const ava = () => { const a = el("span", "ex-ai-ava"); a.append(icon("sparkle")); return a; }; // the AI's avatar: a sparkle in a circle (Figma 1385:5245)
+      if (opts.greeting) { const g = el("li", "ex-chat-ai", opts.greeting); g.prepend(ava()); log.append(g); }
       for (const m of st.log) {
         const li = el("li", `ex-chat-${m.who}${m.busy ? " busy" : ""}${m.err ? " err" : ""}${m.fresh ? " fresh" : ""}`);
         if (m.busy) { li.setAttribute("aria-label", m.text); li.append(el("i"), el("i"), el("i")); } else raw(li).textContent = m.text;
+        if (m.who === "ai") li.prepend(ava());
         m.fresh = false;
         log.append(li);
       }
@@ -140,17 +142,19 @@ window.ArkismAIChat = (() => {
       go.disabled = wait;
       ask.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); if (!go.disabled) go.click(); } });
       const quick = el("div", "ex-ai-quick");
-      for (const q of opts.quick || []) {
+      st.used ||= [];
+      const left = (opts.quick || []).filter((q) => !st.used.includes(q)); // a chip goes once it was asked
+      for (const q of left) {
         const c = el("button", "ex-ai-chip", q);
         c.type = "button";
         c.disabled = wait;
-        c.addEventListener("click", () => void send(tr(q)));
+        c.addEventListener("click", () => { st.used.push(q); void send(tr(q)); });
         quick.append(c);
       }
       const row = el("div", "ex-ai-row");
       row.append(ask, go);
       pop.append(head, log);
-      if ((opts.quick || []).length) pop.append(quick);
+      if (left.length) pop.append(quick);
       pop.append(row);
       if (opts.footer) {
         const f = opts.footer;

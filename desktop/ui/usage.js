@@ -84,7 +84,12 @@ window.ArkismUsage = (ctx) => {
     c.append(...kids);
     return c;
   }
-  function kpi(label, value, sub, tone) { const k = el("div", `v4u-kpi${tone ? ` ${tone}` : ""}`); k.append(el("p", "", label), el("strong", "", value)); if (sub) k.append(el("small", "", sub)); return k; }
+  // 1544:54885: the number in mono with its unit small beside it ("28K 회"); values like "3시간 20분" stay whole.
+  function kpi(label, value, sub, tone) {
+    const k = el("div", `v4u-kpi${tone ? ` ${tone}` : ""}`), m = /^([≈$]?[\d.,]+[KMB]?)([^\d.,\sKMB][^\d\s]*)$/.exec(value), v = el("strong", "", m ? m[1] : value);
+    if (m) v.append(el("span", "v4u-unit", m[2]));
+    k.append(el("p", "", label), v); if (sub) k.append(el("small", "", sub)); return k;
+  }
   function kpiRow(items) { const r = el("div", "v4u-kpis"); r.append(...items.map((a) => kpi(...a))); return r; }
   function bars(items, valueOf, labelOf, sideOf, valueText = (it) => num(valueOf(it))) {
     const box = el("div", "v4u-bars"), max = Math.max(1, ...items.map(valueOf));
@@ -138,6 +143,7 @@ window.ArkismUsage = (ctx) => {
     row.addEventListener("click", () => { S.session = r; $("#table").scrollTop = 0; render(); });
     return row;
   }
+  const near = (c) => { c.classList.add("v4u-near"); return c; }; // 1544:54885: the sub text sits right after the title
   function link(text, onClick) { const b = el("button", "v4u-link", text); b.type = "button"; b.addEventListener("click", onClick); return b; }
   const toSessions = () => link("세션 목록 보기 ›", () => ctx.openSession?.());
   function facts(rows) { const dl = el("dl", "v4u-facts"); for (const [k, v] of rows) if (v) dl.append(el("dt", "", k), el("dd", "", v)); return dl; }
@@ -279,7 +285,7 @@ window.ArkismUsage = (ctx) => {
       box.append(row);
     }
     if (!list.length) box.append(el("p", "v4u-empty", "이 기간에 기록된 MCP 도구 호출이 없어요."));
-    return card("많이 쓴 도구", `상위 ${list.length} · 도구 ${num(kinds)}개`, box);
+    return near(card("많이 쓴 도구", `상위 ${list.length} · 도구 ${num(kinds)}개`, box));
   }
   function failsCard(h) {
     const box = el("div", "v4u-rows");
@@ -291,7 +297,7 @@ window.ArkismUsage = (ctx) => {
       box.append(row);
     }
     if (!h?.fails?.length) box.append(el("p", "v4u-empty", "이 기간에 실패한 MCP 호출이 없어요."));
-    return card("최근 실패", h?.failed ? `${rangeLabel()} 실패 ${num(h.failed)}회` : "", box);
+    return near(card("최근 실패", h?.failed ? `${rangeLabel()} 실패 ${num(h.failed)}회` : "", box));
   }
   // 저장소 활동: the PRs the code review collector reported (GET /v1/code_reviews), counted over the range by when the review ran.
   function repoCard() {
@@ -354,7 +360,7 @@ window.ArkismUsage = (ctx) => {
     for (const m of models) {
       const row = el("div", "v4u-tr"), o = S.ov?.models?.find((x) => x.id === m.name);
       const ok = typeof o?.success_rate === "number" ? o.success_rate : null;
-      row.append(raw(el("span", "v4u-mono", modelLabel(m.name))), el("span", "v4u-num", num(m.requests)), el("span", "v4u-num", num(m.tokens)), el("span", "v4u-num", usd(m.cost_usd, m.priced)),
+      row.append(raw(el("span", "v4u-mono", modelLabel(m.name))), el("span", "v4u-num", num(m.requests)), el("span", "v4u-num", num(m.tokens)), el("span", "v4u-num", usd(m.cost_usd, m.priced).replace("≈", "")),
         el("span", `v4u-num${ok !== null && ok < 98 ? " amber" : ""}`, ok === null ? "—" : `${ok}%`));
       t.append(row);
     }
@@ -559,7 +565,8 @@ window.ArkismUsage = (ctx) => {
   function sessionsSide(d) {
     const total = d.tools.reduce((a, s) => a + s.count, 0);
     const shape = d.shape.map((n, i) => ({ n, l: SHAPE[i] }));
-    return [sideSection("세션 길이", "메시지 수", bars(shape, (p) => p.n, (p) => p.l, null, (p) => num(p.n))),
+    const len = sideSection("세션 길이", "메시지 수", bars(shape, (p) => p.n, (p) => p.l, null, (p) => num(p.n))); len.classList.add("v4u-len");
+    return [len,
       sideSection("많이 쓴 스킬", "", facts(d.skills.slice(0, 5).map((s) => [s.name, `${num(s.count)}번`]))),
       sideSection("많이 쓴 도구", "", facts(d.tools.slice(0, 5).map((s) => [toolName(s.name), pct(s.count, total)]))),
       toSessions()];

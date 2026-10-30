@@ -7,16 +7,17 @@
 .auto-cat-chip:hover { border-color: var(--nc-quiet); }
 .auto-cat-chip.on { color: var(--nc-accent); border-color: transparent; background: var(--nc-raised); }
 .auto-cat-chip .icon { width: 12px; height: 12px; }
-.wf-card .crew-cover-top { justify-content: flex-end; min-width: 0; } /* the 일정 badge, top right; a long webhook name shortens it */
-.wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 100%; min-width: 0; height: 24px; overflow: hidden; padding: 0 9px; border-radius: 999px; background: rgb(0 0 0 / .55); color: #fff; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
+.wf-card .crew-cover-top { align-items: flex-start; justify-content: flex-end; gap: 6px; min-width: 0; } /* faces left; how it starts and 확인 필요 right */
+.wf-card .wf-card-when { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; max-width: 224px; min-width: 0; height: 24px; overflow: hidden; padding: 0 10px; border-radius: 999px; background: rgb(20 20 20 / .72); color: #f0f0eb; font: 500 calc(12px * var(--fs, 1))/1 var(--sans); }
 .wf-card .wf-card-when > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-card .wf-card-when i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #8d8d88; }
-.wf-card .wf-card-when.on { color: #fff; }
 .wf-card .wf-card-when.on i { background: var(--nc-accent); }
-.crew-card.wf-card.has-cover { padding: 16px; justify-content: flex-start; color: #fff; }
+.wf-card .flow-need { height: 24px; padding: 0 10px; background: rgb(20 20 20 / .72); color: #e3b279; font-weight: 500; }
+.crew-card.wf-card.has-cover { padding: 12px 15px 15px; justify-content: flex-start; gap: 0; border-color: rgb(255 255 255 / .08); color: #fff; }
 .crew-card.wf-card.has-cover .crew-cover-img { inset: 0; z-index: -2; height: 100%; border: 0; } /* under the ::before shade; on the same layer the photo covered it */
-.crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(0deg, rgb(0 0 0 / .92) 0%, rgb(0 0 0 / .75) 35%, rgb(0 0 0 / .35) 70%, rgb(0 0 0 / .5) 100%); } /* the name at the bottom and the badge at the top both read on any photo, even a white one */
-.crew-card.wf-card.has-cover .crew-cover-title { margin-top: auto; color: #fff; text-shadow: 0 1px 3px rgb(0 0 0 / .6); font-size: calc(24px * var(--fs, 1)); font-weight: 700; letter-spacing: -.02em; line-height: 1.15; text-transform: uppercase; }
+.crew-card.wf-card.has-cover::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgb(0 0 0 / .5) 26.5%, rgb(0 0 0 / .35) 48.6%, rgb(0 0 0 / .75) 74.3%, rgb(0 0 0 / .92) 100%); } /* 1478:12809: the badges and the name read on any photo */
+.crew-card.wf-card.has-cover .flow-alias { margin-top: auto; color: #f0efeb; font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); overflow-wrap: anywhere; }
+.crew-card.wf-card.has-cover .crew-cover-title { color: #f0efeb; font: 600 calc(28px * var(--fs, 1))/34.5px "Plex KR", "IBM Plex Sans KR", var(--sans); letter-spacing: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 
 /* ---- popup */
 .v4-auto { position: relative; margin: 16px auto auto; } /* 993:60224 · 998:60693: anchored to the top, so switching tabs never moves the window */
@@ -57,6 +58,7 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .auto-est dt { display: flex; flex: 1; align-items: center; gap: 6px; color: var(--nc-quiet); font-family: var(--sans); }
 .auto-est dt::after { content: ""; flex: 1; border-bottom: 1px dotted var(--nc-quiet); } /* dotted leader between name and value */
 .auto-est dd { margin: 0; color: var(--nc-muted); }
+.v4-auto:has(.crew-popup-body.auto-body) .auto-est > .est-run { display: none; } /* 개요 shows 예상 시간 only (1486:5990); 지금 실행 · 기록 add tokens and cost */
 
 /* ---- overview */
 .auto-top { display: flex; flex-direction: column; gap: 12px; padding-top: 20px; }
@@ -92,10 +94,9 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .v4-auto .auto-hint.warn, .auto-hint.warn { color: var(--warn); }
 .auto-switch-soon, .switch.soon { opacity: .45; }
 .auto-flow { padding: 14px 0 6px; }
-.auto-strip { display: flex; align-items: center; gap: 8px; padding: 0 14px 4px; overflow-x: auto; } /* one line across the full width: the arrows stretch between the steps */
+.auto-strip { display: flex; align-items: center; gap: 8px; padding: 0 14px 4px; overflow-x: auto; } /* 1486:5990: steps one after another, a short → between */
 .auto-strip > .auto-grp { flex: none; }
-.auto-strip > .auto-arrow { flex: 1 1 24px; min-width: 24px; position: relative; height: 1px; background: var(--nc-line); font-size: 0; }
-.auto-strip > .auto-arrow::after { content: ""; position: absolute; right: -1px; top: -4px; border: 4.5px solid transparent; border-left: 6px solid var(--nc-line); border-right: 0; }
+.auto-strip > .auto-arrow { flex: none; width: 12px; text-align: center; font-size: calc(12px * var(--fs, 1)); }
 .auto-grp { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 .auto-arrow { color: var(--nc-quiet); }
 .auto-node { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 1px solid var(--nc-line); border-radius: 6px; font: 400 calc(12px * var(--fs, 1))/1 var(--sans); }
@@ -119,7 +120,8 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .auto-step-who small { color: var(--nc-quiet); }
 .auto-model, .auto-model-text { color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
 .auto-model { width: 170px; height: 28px; }
-.auto-try { height: 24px; padding: 0 8px; font-size: calc(11.5px * var(--fs, 1)); }
+.auto-step .auto-try { height: 20px; padding: 0 6px; border: 1px solid var(--nc-line); border-radius: 4px; background: none; color: var(--nc-muted); font: 400 calc(11px * var(--fs, 1))/1 var(--sans); } /* outlined tag chips (1486:5990) */
+.auto-step .auto-try:hover:not(:disabled) { color: var(--nc-text); border-color: var(--nc-quiet); }
 .auto-goal { margin: 6px 0 0 76px; }
 .auto-goal textarea { width: 100%; }
 .auto-goal-edit { display: flex; flex-direction: column; gap: 6px; }
@@ -154,6 +156,7 @@ textarea.auto-inline-edit.multiline { display: block; width: 100%; resize: none;
 .auto-ask { display: flex; align-items: center; gap: 10px; padding-bottom: 20px; }
 .auto-ask input { flex: 1; height: 40px; }
 .auto-history .wf-runs { margin-top: 8px; }
+.auto-history > .auto-sec { border-top: 0; } /* 1404:16985: no line above 버전 기록 · 최근 실행 */
 
 /* ---- polish after capture review */
 .v4-auto .auto-est { margin-top: 0; }

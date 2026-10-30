@@ -296,11 +296,11 @@ test("automation test tab runs and polls, history restores a version", async () 
   // one step on its own and up to a step: cancelled, then run
   d.close(); await h.settle();
   d = await openAuto(h, "wf1");
-  for (const label of ["이 단계만", "여기까지"]) {
+  for (const label of ["▷ 이 단계만", "▷▷ 여기까지"]) {
     exact(d, label).click(); await h.settle();
     h.btn(h.top(), "취소").click(); await h.settle();
   }
-  exact(d, "여기까지").click(); await h.settle();
+  exact(d, "▷▷ 여기까지").click(); await h.settle();
   const ask = h.top();
   dom.type(ask.querySelector("input"), "시험"); h.btn(ask, "실행").click(); await h.settle();
   const stop = exact(d, "멈추기");

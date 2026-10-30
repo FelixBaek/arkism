@@ -157,7 +157,10 @@ window.ArkismHome = function (ctx) {
       sec.append(el("h3", "", name), ...g.map((h) => palRow(h, i++)));
       return sec;
     });
-    if (!parts.length) parts.push(el("p", "pal-empty", q.length >= 2 && serverQ !== q ? "서버에서도 찾는 중이에요…" : "찾는 결과가 없어요."));
+    if (!parts.length) {
+      const input = pal.querySelector(".pal-input");
+      parts.push(q ? window.ArkismState.of("noResults", { clear: () => { input.value = ""; palActive = 0; paintPal(); input.focus(); } }, q.length >= 2 && serverQ !== q ? { text: "서버에서도 찾는 중이에요…" } : {}) : el("p", "pal-empty", "찾는 결과가 없어요."));
+    }
     body.replaceChildren(...parts);
   }
   function palMark() {
@@ -256,11 +259,13 @@ window.ArkismHome = function (ctx) {
     input.addEventListener("keydown", onKey);
     input.addEventListener("focus", () => { if (globalHere() && query$()) paint(); });
     input.addEventListener("blur", () => setTimeout(hide, 120));
+    // × in the box: empty it the way typing would, so the list filter and the global search both reset.
+    $("#search-clear")?.addEventListener("click", () => { input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); });
   }
 
   // ------------------------------------------------------------ 단축키 (198:6478)
   const KEYS = [[["Ctrl / ⌘ K", "/"], "검색"], [["Esc"], "상세 패널 닫기"], [["j", "k"], "다음 / 이전 줄"], [["Enter"], "대화상자 기본 동작"],
-    [["Ctrl +", "Ctrl −", "Ctrl 0"], "확대 / 축소 / 기본값"], [["Alt Shift O"], "창을 앱 밖 새 창으로"], [["?"], "이 단축키 보기"]];
+    [["Ctrl +", "Ctrl −", "Ctrl 0"], "확대 / 축소 / 기본값"], [[["Alt", "Shift", "O"]], "창을 앱 밖 새 창으로"], [["?"], "이 단축키 보기"]];
   function shortcuts() {
     let d = $("#keys-dialog");
     if (!d) {
@@ -277,7 +282,7 @@ window.ArkismHome = function (ctx) {
       for (const [keys, what] of KEYS) {
         const r = el("div", "keys-row");
         const k = el("span", "keys-keys");
-        keys.forEach((key, i) => { if (i) k.append(el("i", "", i === 1 && keys[0].startsWith("Ctrl / ") ? "또는" : "/")); k.append(el("kbd", "", key)); });
+        keys.forEach((key, i) => { if (i) k.append(el("i", "", i === 1 && keys[0].startsWith("Ctrl / ") ? "또는" : "/")); [].concat(key).forEach((one) => k.append(el("kbd", "", one))); }); // a nested list is one chord: its keys sit side by side
         r.append(k, el("span", "", what));
         table.append(r);
       }
@@ -299,7 +304,8 @@ window.ArkismHome = function (ctx) {
     if (!state.loadError) return null;
     const card = el("div", "home-lost");
     const where = state.mode === "remote" ? `${ctx.sshLabel(state.ssh) || "서버"}에 SSH로` : state.mode === "local" ? "이 PC의 Arkism에" : "서버에";
-    card.append(el("p", "", state.loadError.reached ? state.loadError.text : `${where} 연결하지 못했어요.`));
+    const code = state.loadError.code;
+    card.append(el("p", "", state.loadError.reached ? state.loadError.text : code ? `${where} 연결하지 못했어요 (${code}).` : `${where} 연결하지 못했어요.`));
     const row = el("div", "actions");
     row.append(button("지금 다시 연결", "primary small", null, (e) => ctx.reconnect(e.currentTarget)));
     row.append(button("연결 설정", "small", null, () => ctx.openSettings("connect")));
@@ -327,7 +333,7 @@ window.ArkismHome = function (ctx) {
   function sshCommand(f) {
     if (!f?.host) return "";
     const user = f.user && !f.host.includes("@") ? `${f.user}@` : "";
-    return ["ssh", f.port ? `-p ${f.port}` : "", f.key && f.auth !== "password" ? `-i ${f.key}` : "", `${user}${f.host}`].filter(Boolean).join(" ");
+    return ["ssh", f.port && f.port !== 22 ? `-p ${f.port}` : "", f.key && f.auth !== "password" ? `-i ${f.key}` : "", `${user}${f.host}`].filter(Boolean).join(" ");
   }
   // Shows what went wrong in the right column of the connect screen; null puts the usual "이렇게 연결돼요" back.
   function sshError(code, text, form) {

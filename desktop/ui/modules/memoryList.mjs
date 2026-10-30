@@ -256,9 +256,9 @@ export function createMemoryList(deps) {
     // a known 0 shows no number: an empty list is not news; … (loading) and — (failed) stay
     const seg = deps.segment(MEM_CHECK.map(([k, l]) => [k, l, n[k].state === "loaded" && n[k].n === 0 ? undefined : n[k], true]), deps.memory.memTab, (k) => deps.go("memories", k)); seg.classList.add("mem-seg");
     deps.$("#controls").replaceChildren(...(deps.memory.memTab === "provenance" ? [] : [seg]));
-    if (deps.memory.memTab === "merge") { deps.digests.drawMerge(); return; }
     const tools = deps.el("div", "mem-tools"); tools.append(memSearch());
-    deps.$("#controls").append(tools);
+    deps.$("#controls").append(tools); // 합치기 제안 too: paintMerge filters by the same query (Figma 383:29822)
+    if (deps.memory.memTab === "merge") { deps.digests.drawMerge(); return; }
     deps.$("#stats").replaceChildren(catalogNote());
     const items = memorySource();
     const canDecide = !!deps.state.caps?.actions?.review_decide;
