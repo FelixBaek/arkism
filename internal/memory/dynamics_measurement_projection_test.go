@@ -392,6 +392,7 @@ func TestDynamicsMeasurementProjectionPG(t *testing.T) {
 		dynamicsProjectionNegatives(t, dir, raw)
 		report[mode] = map[string]any{"summary": summary, "raw_run_sha256": dynamicsSHA(mustJSON(t, raw))}
 	}
+	report["comparison"] = dynamicsProjectionCompare(t, root)
 	out, err := json.MarshalIndent(report, "", "  ")
 	dynamicsRebindExpect(t, err, nil, "report")
 	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-av2-projection.json"), out, 0o600), nil, "write report")
@@ -424,6 +425,28 @@ func dynamicsProjectionAssert(t *testing.T, mode string, summary map[string]any)
 	if mode == "sync" && (summary["v2_repair_coverage_ready"] != false || repair["reported_events"] != float64(0)) {
 		t.Fatalf("sync repair coverage: %v", repair)
 	}
+}
+
+// dynamicsProjectionCompare runs the unchanged A compare on the two projected runs. The
+// inputs are common, but the result must stay not ready: sync serves its previous
+// snapshot during the purge, so it has no repair interval to cover, and each run's
+// window ends when it was last observed. No superiority is judged.
+func dynamicsProjectionCompare(t *testing.T, root string) map[string]any {
+	t.Helper()
+	script := `import importlib.util, json, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("s", sys.argv[1]); S = importlib.util.module_from_spec(spec); spec.loader.exec_module(S)
+read = lambda d: [Path(d, n).read_bytes() for n in ("config.json", "workload.jsonl", "ledger.jsonl", "observations.json")]
+print(json.dumps(S.compare(read(sys.argv[2]), read(sys.argv[3]))))`
+	out, err := exec.Command("python3", "-I", "-c", script, filepath.Join(dynamicsProjectionSumDir, "summarize_load.py"),
+		filepath.Join(root, "av2-async"), filepath.Join(root, "av2-sync")).CombinedOutput()
+	dynamicsRebindExpect(t, err, nil, "compare")
+	var result map[string]any
+	dynamicsRebindExpect(t, json.Unmarshal(out, &result), nil, "compare output")
+	if result["same_common_inputs"] != true || result["comparison_ready"] != false || result["superiority_conclusion"] != "not_evaluated" {
+		t.Fatalf("comparison: %v", result)
+	}
+	return result
 }
 
 func mustJSON(t *testing.T, v any) []byte {
