@@ -174,8 +174,12 @@ class IntegrationReport(unittest.TestCase):
             r = good(); case(r, mode, condition)['fallback_count'] = bad
             self.assertStatus(r, 'needs_fix', mode + '/' + condition + ':unexpected_fallback')
 
-    def test_scope_approval_and_source_are_rechecked(self):
-        for key in ('scope_checked', 'approval_checked', 'source_checked'):
+    def test_duplicate_product_diff_path_holds(self):
+        r = good(); r['product_diff'].append(dict(r['product_diff'][0]))
+        self.assertStatus(r, 'hold', 'duplicate_product_diff')
+
+    def test_scope_approval_source_and_correction_are_rechecked(self):
+        for key in ('scope_checked', 'approval_checked', 'source_checked', 'correction_checked'):
             r = good(); case(r, 'dynamic', 'stale_state')[key] = False
             self.assertStatus(r, 'needs_fix', 'dynamic/stale_state:' + key)
 

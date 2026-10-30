@@ -17,7 +17,7 @@ Deviation: none for stage A. Stage B (actual product wiring) waits for SYS-05 ac
 
 - off and shadow equal the baseline with no receipt or reinforcement change.
 - A fault in dynamic mode falls back to the baseline with the expected reason and a count; errors are not hidden.
-- Every cell rechecks scope, approval, source, permission, deletion, revision and the final fence; no deleted or superseded memory is revived (corrections are covered by the revision recheck and `revived_ref`); no rollback to an older snapshot.
+- Every cell rechecks scope, approval, source, permission, deletion, revision, correction and the final fence; no deleted or superseded memory is revived; no rollback to an older snapshot. A product diff names each path once.
 - A cell without an expected fallback must report `fallback_count` 0; booleans and counts are typed strictly (1 is not true, false is not 0).
 - Blocking normal work (`returned: none`) is not a safe pass.
 - Every matrix cell is present once; unknown cells are rejected.
