@@ -283,7 +283,7 @@ window.ArkismAutomation = (h) => {
       body.append(more);
       bar = el("div", "auto-bar");
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);
-      const cancel = button("취소", "ghost", null, (e) => { if (creating) closeAsking(e); else { reset(); } });
+      const cancel = button("취소", "ghost", null, (e) => { if (creating) closeAsking(e); else if (dirty()) reset(); else leaveSilently(); }); // nothing changed: 취소 just closes
       bar.append(save, cancel);
       if (creating) bar.append(button("템플릿·설정으로 만들기", "ghost", null, (e) => closeAsking(e, () => h.openSettingsNew())));
       bar.append(el("span", "auto-bar-note"), ai.dock); // AI 제안 at the right end; its purple list stays on top of the body
