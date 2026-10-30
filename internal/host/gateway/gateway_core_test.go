@@ -1011,3 +1011,32 @@ func TestCoreGroupBodyBoundariesAreRejectedBeforeDeciding(t *testing.T) {
 		t.Fatal("decided or sent")
 	}
 }
+
+// A custom endpoint saved without a key gets no Authorization or x-api-key, on both the Messages and the Chat
+// path, and its stored extra headers ride along; the caller's own credentials never do.
+func TestCoreKeylessCustomEndpointSendsOnlyItsHeaders(t *testing.T) {
+	c := newCore(t)
+	keys, err := host.LoadKeys()
+	if err != nil || len(keys) != 2 {
+		t.Fatal(keys, err)
+	}
+	rows := []string{}
+	for _, k := range keys {
+		rows = append(rows, `{"id":"`+k["id"].(string)+`","provider":"custom","key":"","base_url":"`+k["base_url"].(string)+`",`+
+			`"header_names":["X-Gateway-Token"],"headers":"X-Gateway-Token: gw-secret-1234"}`)
+	}
+	writeFile(t, host.KeysFile, `{"keys":[`+strings.Join(rows, ",")+`]}`)
+	c.messages(`{"model":"custom-aaaaaaaaaaaa/deepseek-v4-pro","messages":[{"role":"user","content":"hi"}],"max_tokens":5}`,
+		"authorization", "Bearer sk-ant-oat-me")
+	c.messages(`{"model":"custom-bbbbbbbbbbbb/qwen","messages":[{"role":"user","content":"hi"}],"max_tokens":5}`,
+		"authorization", "Bearer sk-ant-oat-me")
+	seen := append(c.seenList(), c.fixture.seenList()...)
+	if len(seen) != 2 {
+		t.Fatalf("%d requests", len(seen))
+	}
+	for _, s := range seen {
+		if s.header.Get("Authorization") != "" || s.header.Get("X-Api-Key") != "" || s.header.Get("X-Gateway-Token") != "gw-secret-1234" {
+			t.Fatalf("%s %v", s.path, s.header)
+		}
+	}
+}

@@ -73,7 +73,8 @@
    "concurrency": 4,
    "revision": 3,
    "connection": {
-    "state": "ok"
+    "state": "key",
+    "label": "로그인 필요"
    }
   },
   {

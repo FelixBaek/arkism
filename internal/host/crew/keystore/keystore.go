@@ -174,9 +174,15 @@ func Delete(ref string) error {
 }
 
 // Resolve fills "key" in place for every row that holds a keyring reference (rows it cannot resolve keep no key),
-// and sets "storage" on every row. Readers of the keys file call this after parsing it.
+// and sets "storage" on every row; a "headers_ref" (a custom endpoint's extra headers) fills "headers" the same way.
+// Readers of the keys file call this after parsing it.
 func Resolve(rows []map[string]any) {
 	for _, k := range rows {
+		if ref, _ := k["headers_ref"].(string); ref != "" {
+			if v, err := Get(ref); err == nil {
+				k["headers"] = v
+			}
+		}
 		ref, _ := k["secret_ref"].(string)
 		if ref == "" {
 			k["storage"] = StorageFile

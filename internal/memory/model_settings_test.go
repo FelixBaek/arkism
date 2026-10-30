@@ -826,3 +826,43 @@ func TestProviderModelsRefreshIsNotBlockedByStalePendingRequests(t *testing.T) {
 		t.Fatal("refresh not queued", r.Providers.Requests)
 	}
 }
+
+func TestModelSettingsKeylessEndpointAndHeadersTravelLikeTheKey(t *testing.T) {
+	f := newFixture(t)
+	runner := f.runner()
+	const secret = "gateway-secret-value-123"
+	in := ProviderKeyInput{Scope: scopeA, Provider: "custom", Name: "집", BaseURL: "http://127.0.0.1:11434/v1",
+		Headers: []ProviderHeader{{Name: "X-Gateway-Token", Value: secret}}}
+	r, err := f.svc.AddProviderKey(testCtx, f.human, in)
+	if err != nil {
+		t.Fatal("keyless add", err)
+	}
+	q := r.Providers.Requests[0]
+	if q.Kind != "key_add" || q.Last4 != "" || !reflect.DeepEqual(q.HeaderNames, []string{"X-Gateway-Token"}) {
+		t.Fatal("request", q)
+	}
+	for col, rows := range f.repo.store {
+		for _, row := range rows {
+			if raw, _ := json.Marshal(row); strings.Contains(string(raw), secret) {
+				t.Fatal("header value stored in", col)
+			}
+		}
+	}
+	page, err := f.svc.ProviderHandoff(testCtx, runner, scopeA)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Key != "" || page.Items[0].Headers["X-Gateway-Token"] != secret {
+		t.Fatal("handoff", page, err)
+	}
+	for _, bad := range []ProviderKeyInput{
+		{Scope: scopeA, Provider: "openai", Name: "키 없음"}, // a known provider still needs its key
+		{Scope: scopeA, Provider: "custom", Name: "주소 없음"},
+		{Scope: scopeA, Provider: "openai", Name: "헤더", Key: testProviderKey, Headers: []ProviderHeader{{Name: "X-A", Value: "v"}}},
+		{Scope: scopeA, Provider: "custom", Name: "예약", BaseURL: "http://h/v1", Headers: []ProviderHeader{{Name: "Authorization", Value: "Basic x"}}},
+		{Scope: scopeA, Provider: "custom", Name: "줄바꿈", BaseURL: "http://h/v1", Headers: []ProviderHeader{{Name: "X-A", Value: "a\r\nX-B: b"}}},
+		{Scope: scopeA, Provider: "custom", Name: "콜론", BaseURL: "http://h/v1", Headers: []ProviderHeader{{Name: "X-A:", Value: "v"}}},
+		{Scope: scopeA, Provider: "custom", Name: "중복", BaseURL: "http://h/v1", Headers: []ProviderHeader{{Name: "X-A", Value: "1"}, {Name: "x-a", Value: "2"}}},
+	} {
+		if _, err := f.svc.AddProviderKey(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal("accepted", bad.Name, err)
+		}
+	}
+}

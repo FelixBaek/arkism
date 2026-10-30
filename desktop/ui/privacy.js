@@ -164,7 +164,9 @@ window.ArkismPrivacy = (ctx) => {
     actions.append(find);
     g.append(form, status, deletionHistory());
     const auditResult = el("p", "pg-hint", "보관소 점검은 읽기 전용이며 외부 백업과 사용자 앱 사본은 별도 확인이 필요해요.");
-    g.append(button("보관소 잔여 점검", "ghost small", null, async event => {
+    const audit = el("details", "key-adv"); audit.append(el("summary", "", "자세히 · 보관소 점검"));
+    g.append(audit);
+    audit.append(button("보관소 잔여 점검", "ghost small", null, async event => {
       const trigger = event.currentTarget; trigger.disabled = true;
       try {
         const result = await request(`/v1/session-archives/storage-audit?${query()}`);

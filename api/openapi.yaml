@@ -49718,6 +49718,12 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "header_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -49799,6 +49805,13 @@
           "done_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "header_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "names only; values travel like the key"
           }
         },
         "additionalProperties": false,

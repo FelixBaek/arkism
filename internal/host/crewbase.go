@@ -151,6 +151,27 @@ func CustomPID(key map[string]any) string {
 	return "custom-" + strings.ToLower(id)
 }
 
+// KeyUsable reports whether a keys-file row can serve requests: it has its secret, or it is a custom endpoint saved
+// without a key (no secret_ref: nothing failed to resolve).
+func KeyUsable(k map[string]any) bool {
+	key, _ := k["key"].(string)
+	ref, _ := k["secret_ref"].(string)
+	return key != "" || k["provider"] == "custom" && ref == ""
+}
+
+// HeaderPairs splits a custom endpoint's stored extra headers: "Name: Value" lines, the form Claude Code's
+// ANTHROPIC_CUSTOM_HEADERS reads. The server refuses names with ':' and values with line breaks.
+func HeaderPairs(k map[string]any) [][2]string {
+	lines, _ := k["headers"].(string)
+	var out [][2]string
+	for _, line := range strings.Split(lines, "\n") {
+		if name, value, ok := strings.Cut(line, ": "); ok && name != "" {
+			out = append(out, [2]string{name, value})
+		}
+	}
+	return out
+}
+
 // APIModeOn reports whether cli uses stored provider keys.
 func APIModeOn(cli string) bool { return APIMode["all"] || APIMode[cli] }
 
