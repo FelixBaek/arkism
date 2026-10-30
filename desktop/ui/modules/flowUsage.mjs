@@ -82,7 +82,8 @@ export function createFlowUsage({ el, request, query, ask, notice, startRun, run
     const tile = (value, label, sub) => { const c = el("div", "tm-ukpi"); c.append(el("strong", "", value), el("p", "", label), el("small", "", sub)); return c; };
     kp.append(tile(String(runs), "실행", rangeLabel()),
       tile(w.success_rate == null ? "—" : `${Number(w.success_rate).toFixed(1)}%`, "성공률", `끝난 ${done}번 중 실패 ${bad}번`),
-      tile(`≈${usd(cost)}`, "비용", runs ? `실행당 평균 ${usd(cost / runs)} · 토큰 ${usageTokens(w.tokens)}` : `토큰 ${usageTokens(w.tokens)}`), // ≈: list-price estimate
+      // ≈: list-price estimate. Someone on a subscription is not billed this, so the tile says so in words.
+      tile(`≈${usd(cost)}`, "API 요금으로 쳤을 때", runs ? `실제 청구액이 아니에요 · 실행당 ${usd(cost / runs)} · 토큰 ${usageTokens(w.tokens)}` : `실제 청구액이 아니에요 · 토큰 ${usageTokens(w.tokens)}`),
       tile(w.avg_ms ? usageDuration(w.avg_ms) : "—", "평균 시간", w.max_ms ? `가장 긴 실행 ${usageDuration(w.max_ms)}` : "끝난 실행이 없어요"));
     box.replaceChildren(kp, dayChart(days), failing(rec, d.failing_nodes || []));
   }

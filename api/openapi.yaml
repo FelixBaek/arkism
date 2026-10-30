@@ -33939,6 +33939,189 @@
           }
         }
       }
+    },
+    "/v1/crew/{id}/hook": {
+      "post": {
+        "operationId": "post_v1_crew_id_hook",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Show a workflow's webhook address and token",
+        "description": "Owner only (a human who may change provider settings and write the workflow). Creates the token on first use in the host-local hooks file the runner reads (ARKISM_CREW_HOOKS), and returns it with the address (ARKISM_CREW_PUBLIC_URL or http://ARKISM_CREW_LISTEN) and the header to send it in. this_pc_only is true for a loopback address. Unknown or archived items and non-workflows are 404.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseCrewHook"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestCrewHookInput"
+                  },
+                  {
+                    "required": [
+                      "scope"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -57489,7 +57672,7 @@
           "children": {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/WireResponseFlowChildRef"
+              "$ref": "#/components/schemas/WireResponseFlowChildView"
             }
           },
           "delivery": {
@@ -58854,6 +59037,100 @@
         "x-go-type": "memory.RoutingRule",
         "x-go-source": "internal/memory/routing.go",
         "description": "RoutingRule is the owner's \"이런 일은 늘 이 모델로\": a task of Kind goes to Model whenever it is a candidate."
+      },
+      "WireResponseCrewHook": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "header": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "this_pc_only": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "header",
+          "token",
+          "this_pc_only"
+        ],
+        "x-go-type": "memory.CrewHook",
+        "x-go-source": "internal/memory/crew_hook.go",
+        "description": "CrewHook is where another service sends a request to start the workflow, and the token it must send."
+      },
+      "WireRequestCrewHookInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.CrewHookInput",
+        "x-go-source": "internal/memory/crew_hook.go",
+        "description": "CrewHookInput asks for a workflow's webhook address and token."
+      },
+      "WireResponseFlowChildView": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "crew_id": {
+            "type": "string"
+          },
+          "node_id": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "round": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "crew_id",
+          "node_id",
+          "attempt",
+          "required"
+        ],
+        "x-go-type": "memory.FlowChildView",
+        "x-go-source": "internal/memory/flow_result.go",
+        "description": "FlowChildView is a child reference plus the summary a result screen lists.\nSummary fields stay empty when the reader cannot read the child itself."
       }
     },
     "headers": {

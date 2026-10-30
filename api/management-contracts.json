@@ -457,6 +457,17 @@
       ]
     },
     {
+      "method": "post",
+      "path": "/v1/crew/{id}/hook",
+      "request": "CrewHookInput",
+      "response": "CrewHook",
+      "summary": "Show a workflow's webhook address and token",
+      "description": "Owner only (a human who may change provider settings and write the workflow). Creates the token on first use in the host-local hooks file the runner reads (ARKISM_CREW_HOOKS), and returns it with the address (ARKISM_CREW_PUBLIC_URL or http://ARKISM_CREW_LISTEN) and the header to send it in. this_pc_only is true for a loopback address. Unknown or archived items and non-workflows are 404.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
       "method": "get",
       "path": "/v1/skills/usage",
       "request": null,

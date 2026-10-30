@@ -53,18 +53,15 @@ test("FLOW opens role and team editors from one catalogue and keeps every creati
   assert.ok(h.top()?.classList.contains("tm-pop"));
   assert.equal(h.state.view, "crew");
   h.closeAll();
-  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
-  assert.deepEqual([...h.top().querySelectorAll(".flow-create-option strong")].map((n) => n.textContent), ["단독 실행", "협업·회의", "단계 구성"], "리서치 is no longer a choice");
+  // 1511:4650: no single·team·step popup; the editor opens on 직접 부르기 → AI 작업 → 결과
+  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click(); await h.settle();
+  assert.equal(document.querySelector(".flow-create"), null);
+  const win = document.querySelector("dialog.graph-win[open]");
+  assert.ok(win, "the graph editor opens directly");
+  assert.deepEqual([...win.querySelectorAll(".g-node")].map((n) => n.querySelector("strong")?.textContent), ["직접 부르기", "AI 작업", "결과"]);
+  assert.ok(win.querySelector('.g-node[data-id="ai1"]').classList.contains("needs-task"));
+  assert.match(win.textContent, /처음이라면/);
   h.closeAll();
-  for (const label of ["단독 실행", "협업·회의", "단계 구성"]) {
-    h.render();
-    h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click();
-    const choice = [...h.top().querySelectorAll(".flow-create-option")].find((n) => n.textContent.includes(label));
-    assert.ok(choice, label);
-    choice.click(); await h.settle();
-    assert.ok(h.top(), `${label} opens its existing editor`);
-    h.closeAll();
-  }
 });
 
 test("agent and team cards show their cover like a workflow card, the avatar in the bottom-right", async () => {
@@ -125,4 +122,58 @@ test("FLOW filters by 실행 방식 tabs 전체 | 단독 | 단계 | 협업, with
   }
   tabs[0].click(); await h.settle();
   assert.deepEqual(kinds(), new Set(["workflow", "agent", "team"]));
+});
+
+test("a new workflow is drafted by 노드 짜기 only on the button, can be undone, and is named on its first save", async () => {
+  const h = await boot({ view: "crew" });
+  h.render(); await h.settle();
+  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click(); await h.settle();
+  const win = () => document.querySelector("dialog.graph-win[open]");
+  assert.match(win().textContent, /새 워크플로우/);
+  assert.equal(h.btn(win(), /^실행$/).disabled, false, "실행 saves first (asking only for the name), then runs");
+  const q = win().querySelector("input[aria-label='AI에게 맡길 일']");
+  dom.type(q, "매일 PR 요약");
+  assert.equal(h.assists.length, 0, "typing alone never asks the AI");
+  h.assistReply = () => ({ status: "done", output: JSON.stringify({ graph: { nodes: [{ id: "start", type: "start", title: "직접 부르기" }, { id: "ai1", type: "ai", title: "PR 모으기", config: { goal: "열린 PR 모으기" } }, { id: "sum", type: "expert", title: "요약", config: { goal: "요약" } }, { id: "end", type: "end", title: "결과" }],
+    edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "sum" }, { from: "sum", to: "end" }] } }) });
+  h.btn(win(), "노드 짜기").click(); await h.settle();
+  assert.equal(h.assists.length, 1);
+  assert.deepEqual([...win().querySelectorAll(".g-node.drafted")].map((n) => n.dataset.id).sort(), ["ai1", "sum"]);
+  assert.ok(win().querySelector('.g-node[data-id="sum"]').classList.contains("ai"), "AI steps come in as AI 작업 nodes");
+  assert.doesNotMatch(win().textContent, /처음이라면/, "the guide leaves once the graph changed");
+  h.btn(win(), "되돌리기").click(); await h.settle();
+  assert.equal(win().querySelectorAll(".g-node").length, 3);
+  // 노드 짜기 also sets when it starts; a new schedule is saved switched on
+  const drafted = JSON.parse(h.assistReply().output);
+  h.assistReply = () => ({ status: "done", output: JSON.stringify({ ...drafted, trigger: { kind: "schedule", cron: "0 9 * * *" } }) });
+  h.btn(win(), "노드 짜기").click(); await h.settle();
+  assert.match(win().querySelector('.g-node[data-id="start"]').textContent, /매일 09:00/);
+  // the first save asks only for the name, filled from the one line; no settings window
+  h.asks.length = 0;
+  h.btn(win(), "저장").click(); await h.settle();
+  assert.equal(document.querySelector("dialog.wf-settings"), null);
+  assert.equal(h.asks.length, 1);
+  assert.match(h.asks[0], /이름을 정해/);
+  assert.deepEqual(h.askOpts, { okLabel: "저장", primary: true });
+  const made = h.calls.find((x) => x.method === "POST" && x.url === "/v1/crew" && x.body.crew.type === "workflow");
+  assert.ok(made);
+  assert.deepEqual([made.body.crew.name, made.body.crew.handle], ["매일 PR 요약", "매일PR요약"]);
+  assert.deepEqual(made.body.crew.graph.nodes.map((n) => [n.id, n.type]), [["start", "start"], ["ai1", "ai"], ["sum", "ai"], ["end", "end"]]);
+  assert.equal(made.body.crew.graph.nodes[1].config.model, "auto");
+  assert.deepEqual([made.body.crew.trigger, made.body.crew.enabled], [{ kind: "schedule", cron: "0 9 * * *" }, true]);
+  h.closeAll();
+});
+
+test("실행 on a new workflow names it with 저장하고 실행, and a long line makes a short @이름", async () => {
+  const h = await boot({ view: "crew" });
+  h.render(); await h.settle();
+  h.btn(document.querySelector("#controls"), "+ 새 워크플로우").click(); await h.settle();
+  const win = () => document.querySelector("dialog.graph-win[open]");
+  dom.type(win().querySelector("input[aria-label='AI에게 맡길 일']"), "매일 아침 열린 PR을 모아 요약해서 텔레그램으로 보내 줘");
+  h.btn(win(), /^실행$/).click(); await h.settle();
+  assert.deepEqual(h.askOpts, { okLabel: "저장하고 실행", primary: true });
+  const made = h.calls.find((x) => x.method === "POST" && x.url === "/v1/crew" && x.body.crew.type === "workflow");
+  assert.equal(made.body.crew.name, "매일 아침 열린 PR을 모아 요약해서 텔레그램으로 보내 줘");
+  assert.equal(made.body.crew.handle, "매일아침열린PR을모아", "whole words, about 12 Korean letters");
+  h.closeAll();
 });

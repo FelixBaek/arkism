@@ -1,0 +1,55 @@
+{
+ "id": "wf-new-preview",
+ "revision": 1,
+ "crew": {
+  "type": "workflow",
+  "name": "매일 아침 열린 PR 요약해서 보내기",
+  "handle": "매일아침열린PR요약해서보내기",
+  "role": "",
+  "category": "",
+  "model": "",
+  "enabled": false,
+  "graph": {
+   "nodes": [
+    {
+     "id": "start",
+     "type": "start",
+     "title": "직접 부르기",
+     "x": 40,
+     "y": 160,
+     "config": {}
+    },
+    {
+     "id": "ai1",
+     "type": "ai",
+     "title": "AI 작업",
+     "x": 310,
+     "y": 160,
+     "config": {
+      "model": "auto",
+      "goal": "",
+      "access": "read"
+     }
+    },
+    {
+     "id": "end",
+     "type": "end",
+     "title": "결과",
+     "x": 580,
+     "y": 160,
+     "config": {}
+    }
+   ],
+   "edges": [
+    {
+     "from": "start",
+     "to": "ai1"
+    },
+    {
+     "from": "ai1",
+     "to": "end"
+    }
+   ]
+  }
+ }
+}

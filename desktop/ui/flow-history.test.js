@@ -44,7 +44,22 @@ test("a waiting FLOW run rings its card, and 실행 보기 in the popup opens it
   h.btn(h.top(), "실행 보기").click(); await h.settle();
   assert.equal(h.top().querySelector(".crew-popup-tab.on").textContent, "기록·사용량");
   assert.ok(h.top().querySelector(".flow-history-detail"));
-  assert.match(h.top().textContent, /사람의 결정이 필요해요/);
+  assert.match(h.top().textContent, /확인해 주세요 · 확인 단계에서 멈췄어요/);
+  h.closeAll();
+});
+
+test("child rows show done state, duration, tokens and meeting rounds", async () => {
+  const children = {
+    "work:1": { id: "child-1", kind: "workflow", status: "succeeded", name: "출처확인", started_at: "2026-10-18T05:32:00Z", finished_at: "2026-10-18T05:33:12Z", tokens: 9100 },
+    "meet:1": { id: "m1", kind: "meeting", status: "concluded", name: "리서치 회의", started_at: "2026-10-18T05:33:00Z", finished_at: "2026-10-18T05:40:00Z", round: 3 },
+    "work:2": { id: "child-2", kind: "workflow", status: "running", started_at: "2026-10-18T05:34:00Z" },
+  };
+  const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ children })]] });
+  h.render(); await h.settle(); await firstResult(h);
+  const rows = [...box(h).querySelectorAll("button.flow-line")].map((b) => b.textContent);
+  assert.match(rows[0], /^✓10-18 \d\d:32하위 실행출처확인1분 · 9k 토큰 · 열기 →$/);
+  assert.match(rows[1], /^✓.*회의 결과리서치 회의 · 결론 남라운드 3 · 열기 →$/);
+  assert.match(rows[2], /^○.*하위 실행.*실행 중 · 열기 →$/);
   h.closeAll();
 });
 
@@ -55,7 +70,7 @@ test("FLOW results retain the full report, child refs and uncertain delivery wit
   assert.equal(document.querySelector(".flow-result-text").textContent, full);
   assert.match(box(h).textContent, /전달 여부 확인 필요/);
   assert.match(box(h).textContent, /receipt-1/);
-  h.btn(box(h), /^하위 실행/).click(); await h.settle();
+  h.btn(box(h), /하위 실행/).click(); await h.settle();
   assert.equal(document.querySelector(".flow-result-text").textContent, "자식의 최종 결과");
   assert.equal(h.calls.filter(x => x.method === "POST").length, 0);
   h.closeAll();

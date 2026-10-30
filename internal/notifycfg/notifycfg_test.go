@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 const (
@@ -99,5 +101,32 @@ func TestTestSendsAndHidesSecrets(t *testing.T) {
 func TestScopeKeyNoCollision(t *testing.T) {
 	if ScopeKey("a/b", "c") == ScopeKey("a", "b/c") {
 		t.Fatal("scope keys collide")
+	}
+}
+
+// The server and the desktop's runner start with different ARKISM_AGENTS_STATE; both must land on one file.
+func TestPathIgnoresAgentsStateButKeepsAnOldFile(t *testing.T) {
+	home, state := t.TempDir(), t.TempDir()
+	oldHome, oldState := host.Home, host.AgentsState
+	t.Cleanup(func() { host.Home, host.AgentsState = oldHome, oldState })
+	host.Home, host.AgentsState = home, state
+	t.Setenv("ARKISM_CREW_NOTIFY", "")
+	want := filepath.Join(home, ".config", "arkism", "notify.json")
+	if got := Path(); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+	old := filepath.Join(state, "notify.json")
+	_ = os.WriteFile(old, []byte(`{}`), 0o600)
+	if got := Path(); got != old {
+		t.Fatalf("an existing old file must still be used, got %q", got)
+	}
+	_ = os.MkdirAll(filepath.Dir(want), 0o700)
+	_ = os.WriteFile(want, []byte(`{}`), 0o600)
+	if got := Path(); got != want {
+		t.Fatalf("the new file wins once it exists, got %q", got)
+	}
+	t.Setenv("ARKISM_CREW_NOTIFY", "/x/notify.json")
+	if got := Path(); got != "/x/notify.json" {
+		t.Fatalf("explicit setting must win, got %q", got)
 	}
 }

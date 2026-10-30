@@ -75,6 +75,25 @@ func write(path string, cfg map[string]map[string]map[string]any) error {
 	return host.AtomicWrite(path, string(raw))
 }
 
+// Path is the one notify file the server's 설정 › 메신저 writes and every workflow runner reads:
+// ARKISM_CREW_NOTIFY, else ~/.config/arkism/notify.json. It does not follow ARKISM_AGENTS_STATE,
+// because the desktop runs its server without it and its runner with it. A file saved at the old
+// place (ARKISM_AGENTS_STATE/notify.json) is still used while the new one does not exist.
+func Path() string {
+	if v := os.Getenv("ARKISM_CREW_NOTIFY"); v != "" {
+		return v
+	}
+	p := filepath.Join(host.Home, ".config", "arkism", "notify.json")
+	if old := filepath.Join(host.AgentsState, "notify.json"); old != p {
+		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+			if _, err := os.Stat(old); err == nil {
+				return old
+			}
+		}
+	}
+	return p
+}
+
 func str(m map[string]any, k string) string { s, _ := m[k].(string); return s }
 
 // ScopeKey names a workspace/project in Key. Each part is path-escaped, so an ID holding "/" can never
