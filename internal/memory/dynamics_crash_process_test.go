@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -119,6 +120,7 @@ func dynamicsCrashFixture(t *testing.T, leaseNS int64) (*nativePGFixture, Dynami
 // holds the lease and checks that the dead lease still blocks a new process.
 func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig, events int, role string) (*DynamicsLoadPayload, int64, string) {
 	t.Helper()
+	queued := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.Count
 	claim := dynamicsCrashCommand(t, p, cfg, role)
 	var stderr bytes.Buffer
 	claim.Stderr = &stderr
@@ -137,11 +139,11 @@ func dynamicsCrashKill(t *testing.T, p *nativePGFixture, cfg DynamicsLoadConfig,
 	}
 	killedAt := dynamicsNowNS()
 	held := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
-	if held.LeaseToken == "" || held.LeaseUntilNS <= killedAt || held.Count != 1 || len(p.rows(t, "event")) != events {
+	if held.LeaseToken == "" || held.LeaseUntilNS <= killedAt || held.Count != queued || len(p.rows(t, "event")) != events {
 		t.Fatalf("dead worker's lease not held or state changed: %+v", held)
 	}
 	early := dynamicsCrashDrain(t, p, cfg)
-	if after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; after.Count != 1 || after.LeaseToken != held.LeaseToken || len(p.rows(t, "event")) != events {
+	if after := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; after.Count != queued || after.LeaseToken != held.LeaseToken || len(p.rows(t, "event")) != events {
 		t.Fatalf("a new process took a live lease (%s): %+v", early, after)
 	}
 	time.Sleep(time.Duration(held.LeaseUntilNS-dynamicsNowNS()) + 50*time.Millisecond)
@@ -210,4 +212,71 @@ func dynamicsCrashCase(t *testing.T, leaseNS int64, role string) map[string]any 
 	}
 	row["withheld_after_repair"] = repaired.Withheld
 	return row
+}
+
+// dynamicsCrashFullQueue fills the queue with four updates on one trace and drains
+// it with new worker processes; with crash, the first worker dies inside its apply
+// transaction and an admission is tried while its lease is held.
+func dynamicsCrashFullQueue(t *testing.T, crash bool) map[string]any {
+	t.Helper()
+	p, cfg := dynamicsCrashFixture(t, int64(2*time.Second))
+	for i := 1; i < int(cfg.Limits.QueueCountLimit); i++ {
+		p.in.EventID = fmt.Sprintf("crash-load-%d", i)
+		p.accept(t)
+	}
+	events := len(p.rows(t, "event"))
+	if q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad; q.Count != cfg.Limits.QueueCountLimit {
+		t.Fatalf("queue not full: %d", q.Count)
+	}
+	out := map[string]any{"queue_limit": cfg.Limits.QueueCountLimit, "batch_limit": cfg.Limits.BatchLimit}
+	if crash {
+		dynamicsCrashKill(t, p, cfg, events, "apply")
+		p.in.EventID = "crash-load-overflow"
+		_, err := p.checker.RecordMemoryOutcome(testCtx, p.checkerToken, p.in)
+		if !errors.Is(err, ErrDynamicsQueueFull) {
+			t.Fatal("admission while full and the dead lease held:", err)
+		}
+		out["admission_while_held"] = err.Error()
+	}
+	var drains []string
+	for round := 0; round < 4 && dynamicsRebindCoordinator(t, p.admin).DynamicsLoad.Count > 0; round++ {
+		drains = append(drains, dynamicsCrashDrain(t, p, cfg))
+	}
+	q := dynamicsRebindCoordinator(t, p.admin).DynamicsLoad
+	done := 0
+	for i := int64(1); i <= q.Head; i++ {
+		entry, err := p.admin.Get(testCtx, colJobs, scopeA, dynamicsEntryID(scopeA, i))
+		dynamicsRebindExpect(t, err, nil, "entry row")
+		if entry.Status == JobStatusDone {
+			done++
+		}
+	}
+	out["drains"], out["events_added"], out["entries_done"] = drains, len(p.rows(t, "event"))-events, done
+	out["count_after"], out["head_after"], out["withheld_after"], out["published_generation"] = q.Count, q.Head, q.Withheld, q.PublicationGeneration
+	return out
+}
+
+// A full queue when the worker dies inside its first apply: a new admission is
+// refused as queue full while the dead lease is held, and after the lease new
+// processes finish all four entries in order with no hold. The four updates share
+// one trace, so native duplicate suppression applies; the crash run must add the
+// same native events as an uncrashed run of the same plan.
+func TestDynamicsWorkerProcessCrashUnderFullQueuePG(t *testing.T) {
+	report := map[string]any{"protocol": "sys05-b-worker-crash-full-queue-v1"}
+	for _, crash := range []bool{false, true} {
+		name := map[bool]string{false: "no_crash", true: "crash_in_first_apply"}[crash]
+		t.Run(name, func(t *testing.T) { report[name] = dynamicsCrashFullQueue(t, crash) })
+	}
+	out, err := json.Marshal(report)
+	dynamicsRebindExpect(t, err, nil, "report")
+	t.Logf("%s", out)
+	base, run := report["no_crash"].(map[string]any), report["crash_in_first_apply"].(map[string]any)
+	for _, r := range []map[string]any{base, run} {
+		if r["count_after"] != int64(0) || r["head_after"] != int64(4) || r["entries_done"] != 4 || r["withheld_after"] != false || r["published_generation"].(int64) < 1 {
+			t.Fatalf("full queue did not finish cleanly: %s", out)
+		}
+	}
+	if run["events_added"] != base["events_added"] {
+		t.Fatalf("crash changed the native events: %s", out)
+	}
 }
