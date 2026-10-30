@@ -185,7 +185,7 @@ window.ArkismRouting = (ctx) => {
     const traffic = (d.series?.points || []).map((p) => p.traffic), p50 = (d.series?.points || []).map((p) => p.p50), ok = (d.series?.points || []).map((p) => p.success_rate ?? 100), cost = (d.series?.points || []).map((p) => p.cost ?? 0);
     const sum = []; cost.reduce((a, v, i) => (sum[i] = a + v), 0);
     return [
-      kpiCard("요청 수", num(k.requests), "건", sign(k.requests_delta_pct, "%", (n) => n > 0), now != null ? `지금 ${num(now)}건/분` : "", traffic, "ok"),
+      kpiCard("요청 수", `${num(k.requests)}${d.families_note ? "+" : ""}`, "건", sign(k.requests_delta_pct, "%", (n) => n > 0), now != null ? `지금 ${num(now)}건/분` : "", traffic, "ok"),
       kpiCard("응답 시간", sec1(k.p50_ms), "초", sign(k.p50_delta_ms == null ? null : Math.round(k.p50_delta_ms / 100) / 10, "초", (n) => n < 0), `보통 걸린 시간 · 느릴 때 ${sec1(k.p95_ms)}초`, p50, "ok"),
       kpiCard("성공률", Number(k.success_rate).toFixed(1), "%", sign(k.success_rate_delta_pp, "%p", (n) => n >= 0), `실패 ${num(k.failures)}건`, ok, k.success_rate_delta_pp < 0 ? "bad" : "ok"),
       kpiCard("비용", usd(k.cost_usd), "", k.cost_delta_pct == null ? null : [`${k.cost_delta_pct > 0 ? "▲" : k.cost_delta_pct < 0 ? "▼" : "±"} ${Math.abs(k.cost_delta_pct)}%`, "warn"], k.budget_usd ? `이번 달 ${usd(k.month_cost_usd ?? 0)} · 월 예산의 ${Math.round(((k.month_cost_usd ?? 0) / k.budget_usd) * 100)}%` : "", sum, "warn")

@@ -14,7 +14,9 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 # Per-builder values (not in git): see README.md. Explicit environment wins over the file.
 if [[ -f "$DIR/local.env" ]]; then
-  while IFS='=' read -r key value; do
+  # Split at the first '=' only: `IFS='=' read` would drop a base64 key's trailing '=' padding.
+  while IFS= read -r line; do
+    key="${line%%=*}" value="${line#*=}"
     case "$key" in ARKISM_[A-Z_]*) [[ -n "${!key:-}" ]] || export "$key=$value" ;; *) ;; esac
   done < "$DIR/local.env"
 fi
@@ -40,6 +42,10 @@ for name in ARKISM_DEFAULT_SERVER ARKISM_DEFAULT_WORKSPACE ARKISM_DEFAULT_PROJEC
   [[ "$value" != *"'"* ]] || { echo "$name must not contain a quote" >&2; exit 2; }
   BUILD_ENV+="\$env:$name = '$value'"$'\n'
 done
+# A feed without its key builds an app that can never check for updates.
+if [[ -n "${ARKISM_UPDATE_FEED:-}" && -z "${ARKISM_UPDATE_PUBLIC_KEY:-}" ]]; then
+  echo "ARKISM_UPDATE_FEED is set but ARKISM_UPDATE_PUBLIC_KEY is not (base64 of the minisign update.pub)" >&2; exit 2
+fi
 # Check the feed first: another session may have shipped a newer version (see feed-newest.sh).
 NEWEST="$("$(dirname "$0")/feed-newest.sh")"
 if [[ -n "$NEWEST" ]] && { [[ "$NEWEST" = "$VERSION" ]] || [[ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; }; then
