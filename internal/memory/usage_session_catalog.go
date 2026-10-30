@@ -19,6 +19,28 @@ type UsageSessionCatalogPage struct {
 	Authority  string           `json:"authority"`
 	// Facets counts sessions per agent and per project (folder name) for the same range and search.
 	Facets map[string]map[string]int `json:"facets,omitempty"`
+	// Sums adds up every matching session, not only this page: messages, tokens and sessions ended today.
+	Sums *UsageSessionSums `json:"sums,omitempty"`
+}
+
+type UsageSessionSums struct {
+	Messages int64 `json:"messages"`
+	Tokens   int64 `json:"tokens"`
+	Today    int   `json:"today"`
+}
+
+// usageSessionSums totals the filtered sessions; "today" starts at midnight in the usage zone.
+func usageSessionSums(items []map[string]any) *UsageSessionSums {
+	y, m, d := time.Now().In(usageZone()).Date()
+	midnight, out := time.Date(y, m, d, 0, 0, 0, 0, usageZone()), &UsageSessionSums{}
+	for _, it := range items {
+		out.Messages += usageCatalogNumber(it["messages"])
+		out.Tokens += usageCatalogNumber(it["tokens"])
+		if ended, _ := it["ended_at"].(time.Time); !ended.Before(midnight) {
+			out.Today++
+		}
+	}
+	return out
 }
 
 func usageSessionResponse(out map[string]any) UsageSessionCatalogPage {
@@ -26,7 +48,8 @@ func usageSessionResponse(out map[string]any) UsageSessionCatalogPage {
 	items, _ := out["items"].([]map[string]any)
 	total, _ := out["total"].(int)
 	cursor, _ := out["next_cursor"].(string)
-	return UsageSessionCatalogPage{Items: items, Total: total, NextCursor: cursor, Authority: AuthorityDataOnly, Facets: facets}
+	sums, _ := out["sums"].(*UsageSessionSums)
+	return UsageSessionCatalogPage{Items: items, Total: total, NextCursor: cursor, Authority: AuthorityDataOnly, Facets: facets, Sums: sums}
 }
 
 func (s *Service) UsageSessionListPage(ctx context.Context, token string, scope Scope, rangeKey, agent, q, order, cursor string, limit int) (map[string]any, error) {
@@ -57,14 +80,14 @@ func (s *Service) usageSessionListPage(ctx context.Context, token string, scope 
 		return nil, err
 	}
 	items, agents, projects := usageSessionFilter(rows, usageSince(days), agent, project, q)
-	total := len(items)
+	total, sums := len(items), usageSessionSums(items)
 	sort.SliceStable(items, func(i, j int) bool { return usageCatalogLess(items[i], items[j], order) })
 	selected, next, err := catalogWindow(items, query, binding)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"items": selected, "total": total, "next_cursor": next, "authority": AuthorityDataOnly,
-		"facets": map[string]map[string]int{"agents": agents, "projects": projects}}, nil
+		"facets": map[string]map[string]int{"agents": agents, "projects": projects}, "sums": sums}, nil
 }
 
 // usageSince is the start of the first day in a range of days; zero for all time.

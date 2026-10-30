@@ -57180,6 +57180,9 @@
                 }
               ]
             }
+          },
+          "sums": {
+            "$ref": "#/components/schemas/WireResponseUsageSessionSums"
           }
         },
         "additionalProperties": false,
@@ -59533,6 +59536,28 @@
         "additionalProperties": false,
         "x-go-type": "memory.SessionArchiveSettingsInput",
         "x-go-source": "internal/memory/session_archive_settings.go"
+      },
+      "WireResponseUsageSessionSums": {
+        "type": "object",
+        "properties": {
+          "messages": {
+            "type": "integer"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "today": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "messages",
+          "tokens",
+          "today"
+        ],
+        "x-go-type": "memory.UsageSessionSums",
+        "x-go-source": "internal/memory/usage_session_catalog.go"
       }
     },
     "headers": {

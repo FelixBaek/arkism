@@ -205,6 +205,10 @@ func TestCatalogSessionsAllRowsGlobalOrderAndStableCursor(t *testing.T) {
 	if e != nil || first["total"] != 20005 || first["items"].([]map[string]any)[0]["id"] != "usage-20004" {
 		t.Fatal(first, e)
 	}
+	// the sums cover every session, not the 50 on the page
+	if sums := first["sums"].(*UsageSessionSums); sums.Messages != 200090010 || sums.Tokens != 400180020 || sums.Today != 20005 {
+		t.Fatalf("sums %+v", *sums)
+	}
 	cursor := first["next_cursor"].(string)
 	second, e := f.svc.UsageSessionListPage(testCtx, f.human, scopeA, "all", "", "", "tokens", cursor, 50)
 	if e != nil || len(second["items"].([]map[string]any)) != 50 {
