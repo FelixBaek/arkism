@@ -735,7 +735,7 @@ export function createCrewEditor(deps) {
     });
   }
 
-  // AI 한 줄로 짜기 (1512:4718): one line and 노드 짜기 (only on the button, never by itself); the nodes it changed stay marked with 되돌리기.
+  // AI 한 줄로 짜기 (1512:4718): one line and 노드 짜기 (only on the button, never by itself); the nodes it changed stay marked, and the toolbar's ← undoes it.
   function draftBar() {
     const bar = deps.el("div", "g-draft");
     for (const t of ["click", "pointerdown", "wheel"]) bar.addEventListener(t, (ev) => ev.stopPropagation());
@@ -751,12 +751,7 @@ export function createCrewEditor(deps) {
     bar.append(row);
     if (ed.drafted) {
       const done = deps.el("div", "g-draft-done");
-      done.append(deps.el("small", "", `AI가 노드 ${ed.drafted.changed.length}개를 바꿨어요. 바뀐 노드에 표시했어요.`), deps.button("되돌리기", "ghost small", "arrow-counter-clockwise", () => {
-        ed.graph = ed.drafted.before;
-        Object.assign(ed, { drafted: null, sel: null, selEdge: null });
-        touch();
-        deps.render(false);
-      }));
+      done.append(deps.el("small", "", `AI가 노드 ${ed.drafted.changed.length}개를 바꿨어요. 바뀐 노드에 표시했어요.`)); // undo is the toolbar's ← (Ctrl+Z): no second 되돌리기 menu
       bar.append(done);
     }
     return bar;
