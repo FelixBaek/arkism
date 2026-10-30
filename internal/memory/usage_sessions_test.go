@@ -33,7 +33,7 @@ func TestUsageSessionsUpsertAndSummaryCountsByDay(t *testing.T) {
 	if _, err := f.svc.RecordUsageSessions(testCtx, runner, UsageSessionsInput{Scope: scopeA, Items: []UsageSession{s}}); err != nil {
 		t.Fatal(err)
 	}
-	out, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "7d", "")
+	out, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "7d", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,11 +44,11 @@ func TestUsageSessionsUpsertAndSummaryCountsByDay(t *testing.T) {
 	if len(out["by_day"].([]map[string]any)) != 7 || out["hours"].([]int)[3] != 4 || out["shape"].([]int)[2] != 1 {
 		t.Fatal("series", out["by_day"], out["shape"])
 	}
-	all, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", "")
+	all, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", "", nil)
 	if all["kpi"].(map[string]any)["tokens"] != int64(2030) {
 		t.Fatal("all", all["kpi"])
 	}
-	none, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", "codex")
+	none, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", "codex", nil)
 	if none["kpi"].(map[string]any)["sessions"] != 0 || len(none["agents"].([]map[string]any)) != 1 {
 		t.Fatal("filter", none["kpi"], none["agents"])
 	}
@@ -74,7 +74,7 @@ func TestUsageSessionsUpsertAndSummaryCountsByDay(t *testing.T) {
 	if got, _ := f.svc.Repo.Get(testCtx, colUsageSessions, scopeA, usageSessionID(bad)); got.UsageSession.Title != "" || got.Text != "" {
 		t.Fatal("secret title kept", got.UsageSession.Title)
 	}
-	if _, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "1y", ""); !errors.Is(err, ErrInvalid) {
+	if _, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "1y", "", nil); !errors.Is(err, ErrInvalid) {
 		t.Fatal("bad range", err)
 	}
 }
@@ -96,7 +96,7 @@ func TestUsageSummaryToolHealthFromPairedMCPCalls(t *testing.T) {
 	if _, err := f.svc.RecordUsageSessions(testCtx, runner, UsageSessionsInput{Scope: scopeA, Items: []UsageSession{s, before}}); err != nil {
 		t.Fatal(err)
 	}
-	out, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "7d", "")
+	out, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "7d", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestUsageSummaryToolHealthFromPairedMCPCalls(t *testing.T) {
 	if n := len(perServer); n < 2 || n > 3 || out["tool_calls"] != 2 || out["tool_calls_change_pct"] != 100 {
 		t.Fatal("per server per day / change", perServer, out["tool_calls"], out["tool_calls_change_pct"])
 	}
-	if all, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", ""); all["tool_calls_change_pct"] != nil {
+	if all, _ := f.svc.UsageSummary(testCtx, f.human, scopeA, "all", "", nil); all["tool_calls_change_pct"] != nil {
 		t.Fatal("전체 has no window before it", all["tool_calls_change_pct"])
 	}
 	bad := s

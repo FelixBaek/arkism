@@ -13,7 +13,8 @@
   "failures": 158,
   "cost_usd": 42.6,
   "cost_delta_pct": 6,
-  "budget_usd": 60
+  "budget_usd": 60,
+  "month_cost_usd": 38.4
  },
  "series": {
   "points": [
@@ -444,7 +445,7 @@
   "classifier": "clef-flash",
   "classifier_ms": 400,
   "auto_failover": true,
-  "last_decision": "빌드·코딩 → CLAUDE",
+  "last_decision": { "model": "claude-sonnet-5-5", "decision": "fixed", "rule": "code" },
   "default_model": "",
   "revision": 7,
   "failover": {
@@ -454,7 +455,13 @@
     "gpt-5-5",
     "glm-5"
    ]
-  }
+  },
+  "rules": [
+   {
+    "kind": "code",
+    "model": "gpt-5-5"
+   }
+  ]
  },
  "gateway": {
   "main": {

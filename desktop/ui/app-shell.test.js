@@ -36,3 +36,19 @@ test("every menu and area tab draws", async () => {
   assert.deepEqual(errors, []);
   assert.ok(shown.length >= 3, `non-zero counts still show: ${shown}`);
 });
+
+test("ROUTER has no 라우팅 설정 tab: the policy card opens it and 라우팅 현황 stays the open tab", async () => {
+  const text = (n) => app.dom.text(n);
+  const tabs = () => app.$$("#area-tabs .area-tab").map((t) => text(t.querySelector("span")));
+  await app.click('.nav-item[data-menu="router"]', 100);
+  assert.deepEqual(tabs(), ["라우팅 현황", "사용량"]);
+  const open = app.$$("#detail button").find((b) => text(b) === "라우팅 설정");
+  assert.ok(open, "the policy card links to the routing settings");
+  await app.click(open, 100);
+  assert.equal(app.$(".nav-item.active").dataset.menu, "router");
+  assert.deepEqual(tabs(), ["라우팅 현황", "사용량"]);
+  assert.equal(app.$("#area-tabs").dataset.active, "라우팅 현황");
+  assert.ok(app.$("#table .v4-set-routing"), "the settings page is drawn");
+  await app.click(app.$$("#area-tabs .area-tab")[0], 100);
+  assert.ok(!app.$("#table .v4-set-routing"), "the tab goes back to 라우팅 현황");
+});

@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/prices"
 )
@@ -70,6 +71,49 @@ type RoutingEvent struct {
 	Detail string    `json:"detail,omitempty" bson:"detail,omitempty"`
 }
 
+// RoutingRule is the owner's "이런 일은 늘 이 모델로": a task of Kind goes to Model whenever it is a candidate.
+type RoutingRule struct {
+	Kind  string `json:"kind" bson:"kind"`
+	Model string `json:"model" bson:"model"`
+}
+
+// routeTaskKinds are the kinds a rule can name, checked in this order; "quick" is a short task that matched none.
+// shortcut: plain word lists, not a model; if rules misfire often, let the judge name the kind instead.
+var routeTaskKinds = []struct {
+	kind string
+	re   *regexp.Regexp
+}{
+	{"code", regexp.MustCompile("(?i)```|\\b(code|coding|function|bug|debug|refactor|compile|build|tests?|commit|script|sql|regex|stack ?trace|exception)\\b|\\.(go|js|ts|tsx|py|rs|java|kt|swift|cpp|cs|rb|php|sh)\\b|코드|코딩|함수|버그|디버그|리팩터|컴파일|빌드|테스트|커밋|스크립트|에러")},
+	{"writing", regexp.MustCompile(`(?i)\b(write|rewrite|essay|e-?mail|letter|blog|article|translate|translation|summari[sz]e|proofread)\b|글쓰기|글을 써|문장|에세이|이메일|메일|편지|블로그|번역|요약|다듬어|교정|보고서`)},
+}
+
+const quickTaskRunes = 80
+
+var routeRuleKinds = []string{"code", "writing", "quick"}
+
+func routeTaskKind(task string) string {
+	for _, k := range routeTaskKinds {
+		if k.re.MatchString(task) {
+			return k.kind
+		}
+	}
+	if utf8.RuneCountInString(task) <= quickTaskRunes {
+		return "quick"
+	}
+	return ""
+}
+
+func validRoutingRules(rules []RoutingRule) bool {
+	seen := map[string]bool{}
+	for _, r := range rules {
+		if !slices.Contains(routeRuleKinds, r.Kind) || seen[r.Kind] || !validRoutingModelID(r.Model) {
+			return false
+		}
+		seen[r.Kind] = true
+	}
+	return true
+}
+
 type Routing struct {
 	Groups             []RoutingGroup          `json:"groups,omitempty" bson:"groups,omitempty"`
 	AutoDiscoverGroups bool                    `json:"auto_discover_groups" bson:"auto_discover_groups"`
@@ -79,6 +123,9 @@ type Routing struct {
 	Failover           RoutingFailover         `json:"failover" bson:"failover"`
 	Models             map[string]RoutingModel `json:"models,omitempty" bson:"models,omitempty"`
 	Events             []RoutingEvent          `json:"events,omitempty" bson:"events,omitempty"`
+	Rules              []RoutingRule           `json:"rules,omitempty" bson:"rules,omitempty"`
+	// MonthlyBudgetUSD is the owner's 월 예산 for routed requests (0 = none): shown against this month's cost, never enforced.
+	MonthlyBudgetUSD float64 `json:"monthly_budget_usd,omitempty" bson:"monthly_budget_usd,omitempty"`
 }
 
 // RoutingCall is one routed run as the runner saw it: no prompt, no output.
@@ -87,6 +134,7 @@ type RoutingCall struct {
 	Family       string   `json:"family" bson:"family"`
 	Decision     string   `json:"decision" bson:"decision"`
 	Replaced     string   `json:"replaced,omitempty" bson:"replaced,omitempty"` // the model a failover call stood in for
+	Rule         string   `json:"rule,omitempty" bson:"rule,omitempty"`         // the 늘 이 모델로 kind that picked it (code, writing, quick)
 	OK           bool     `json:"ok" bson:"ok"`
 	LatencyMS    int64    `json:"latency_ms" bson:"latency_ms"`
 	ClassifierMS int64    `json:"classifier_ms,omitempty" bson:"classifier_ms,omitempty"`
@@ -350,6 +398,8 @@ type RoutingPolicyInput struct {
 	AutoFailover     *bool                 `json:"auto_failover,omitempty"`
 	DefaultModel     *string               `json:"default_model,omitempty"`
 	Failover         *RoutingFailoverInput `json:"failover,omitempty"`
+	Rules            *[]RoutingRule        `json:"rules,omitempty"`
+	MonthlyBudgetUSD *float64              `json:"monthly_budget_usd,omitempty"`
 }
 
 func validFailover(f RoutingFailover) bool {
@@ -378,7 +428,8 @@ func onOff(b bool) string {
 
 func (s *Service) SetRoutingPolicy(ctx context.Context, token string, in RoutingPolicyInput) (map[string]any, error) {
 	if !validScope(in.Scope) || in.DefaultModel != nil && *in.DefaultModel != "" && !validRoutingModelID(*in.DefaultModel) ||
-		in.Failover != nil && !validFailover(in.Failover.RoutingFailover) {
+		in.Failover != nil && !validFailover(in.Failover.RoutingFailover) || in.Rules != nil && !validRoutingRules(*in.Rules) ||
+		in.MonthlyBudgetUSD != nil && !(*in.MonthlyBudgetUSD >= 0 && *in.MonthlyBudgetUSD <= 100000) {
 		return nil, ErrInvalid
 	}
 	r, err := s.updateRouting(ctx, token, in.Scope, in.ExpectedRevision, func(doc *Routing, now time.Time, _ Tx) error {
@@ -401,12 +452,20 @@ func (s *Service) SetRoutingPolicy(ctx context.Context, token string, in Routing
 			doc.Failover = in.Failover.RoutingFailover
 			add("페일오버 조건 변경")
 		}
+		if in.Rules != nil {
+			doc.Rules = slices.Clone(*in.Rules)
+			add("늘 이 모델로 규칙 변경")
+		}
+		if in.MonthlyBudgetUSD != nil && *in.MonthlyBudgetUSD != doc.MonthlyBudgetUSD {
+			doc.MonthlyBudgetUSD = math.Round(*in.MonthlyBudgetUSD*100) / 100
+			add("월 예산 변경")
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"policy": policyView(*r.Routing, r.Revision, "", nil, ""), "authority": AuthorityDataOnly}, nil
+	return map[string]any{"policy": policyView(*r.Routing, r.Revision, "", nil, nil), "authority": AuthorityDataOnly}, nil
 }
 
 type RoutingModelInput struct {
@@ -545,7 +604,9 @@ type RoutingDecision struct {
 	Decision     string   `json:"decision"`
 	ClassifierMS int64    `json:"classifier_ms"`
 	Fallbacks    []string `json:"fallbacks"` // "provider/model", tried in order when the pick fails
-	Authority    string   `json:"authority"`
+	// Rule is the kind of task an owner rule sent to ID; Decision then stays "fixed" so older runners accept it.
+	Rule      string `json:"rule,omitempty"`
+	Authority string `json:"authority"`
 }
 
 // A model window matches a CLI alias or its claude-prefixed name at a separator boundary.
@@ -633,9 +694,13 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	if group != nil {
 		pick = 0
 	}
+	rule := ""
 	if doc.AutoRouting && (group == nil || group.Strategy == "smart") {
 		how = "default"
-		if picker := s.modelPicker(p.role("route_judge")); picker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
+		kind := routeTaskKind(in.Task)
+		if i := slices.IndexFunc(doc.Rules, func(r RoutingRule) bool { return r.Kind == kind }); i >= 0 && byID(doc.Rules[i].Model) >= 0 {
+			pick, how, rule = byID(doc.Rules[i].Model), "fixed", kind // a rule needs no judge: it never sends the task out
+		} else if picker := s.modelPicker(p.role("route_judge")); picker != nil && len(models) > 1 && d.ExternalTransfer && d.ContentSafe {
 			pick, how, ms = s.clefRoute(ctx, picker, in, group, models, byID, pick, how)
 		}
 	}
@@ -644,7 +709,7 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	}
 	chosen := models[pick]
 	out := RoutingDecision{Group: in.Group, ID: chosen.ID, Model: chosen.Model, Provider: strings.SplitN(chosen.ID, "/", 2)[0], Family: chosen.Family,
-		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, Authority: AuthorityDataOnly}
+		Decision: how, ClassifierMS: ms, Fallbacks: []string{}, Rule: rule, Authority: AuthorityDataOnly}
 	if doc.AutoFailover {
 		out.Fallbacks = routeFallbacks(doc, group, models, chosen.ID, byID, out.Fallbacks)
 	}
@@ -797,7 +862,7 @@ func (s *Service) RecordRoutingCall(ctx context.Context, token string, in Routin
 }
 
 func invalidRoutingCall(c RoutingCall) bool {
-	return !validRoutingModelID(c.Model) || c.Replaced != "" && !validRoutingModelID(c.Replaced) || !slices.Contains(routingDecisions, c.Decision) ||
+	return !validRoutingModelID(c.Model) || c.Replaced != "" && !validRoutingModelID(c.Replaced) || !slices.Contains(routingDecisions, c.Decision) || c.Rule != "" && !slices.Contains(routeRuleKinds, c.Rule) ||
 		c.LatencyMS < 0 || c.LatencyMS > 864e5 || c.ClassifierMS < 0 || c.ClassifierMS > 6e5 || c.InputTokens < 0 || c.OutputTokens < 0 ||
 		c.CostUSD != nil && (math.IsNaN(*c.CostUSD) || *c.CostUSD < 0 || *c.CostUSD > 1e4) || !routingErrorRe.MatchString(c.Error) ||
 		c.InputTokens > 1e8 || c.OutputTokens > 1e8 || !validRoutingOrigin(c.Origin)
@@ -853,9 +918,27 @@ func delta(now, before float64, ok bool) any {
 	return math.Round(1000*(now-before)/before) / 10
 }
 
-func policyView(doc Routing, revision int64, classifier string, classifierMS any, lastDecision string) map[string]any {
+func policyView(doc Routing, revision int64, classifier string, classifierMS any, lastDecision any) map[string]any {
 	return map[string]any{"revision": revision, "last_decision": lastDecision, "auto_routing": doc.AutoRouting, "auto_failover": doc.AutoFailover, "default_model": doc.DefaultModel,
-		"classifier": classifier, "classifier_ms": classifierMS, "failover": doc.Failover}
+		"classifier": classifier, "classifier_ms": classifierMS, "failover": doc.Failover, "rules": nonNilRules(doc.Rules), "monthly_budget_usd": doc.MonthlyBudgetUSD}
+}
+
+func nonNilRules(r []RoutingRule) []RoutingRule {
+	if r == nil {
+		return []RoutingRule{}
+	}
+	return r
+}
+
+// routingMonthCost adds up this UTC month's routed cost (Arkism's own calls left out) from the newest calls.
+func routingMonthCost(rows []Record, now time.Time) float64 {
+	start, cost := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC), 0.0
+	for _, r := range rows {
+		if c := r.RoutingCall; c != nil && !systemCall(c) && !r.CreatedAt.Before(start) && c.CostUSD != nil {
+			cost += *c.CostUSD
+		}
+	}
+	return math.Round(cost*100) / 100
 }
 
 func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope, rangeKey string) (map[string]any, error) {
@@ -904,16 +987,20 @@ func (s *Service) RoutingOverview(ctx context.Context, token string, scope Scope
 	if picker := s.modelPicker(p.role("route_judge")); picker != nil {
 		_, classifierName = pickerIdentity(picker)
 	}
+	var budget any
+	if doc.MonthlyBudgetUSD > 0 {
+		budget = doc.MonthlyBudgetUSD
+	}
 	out := map[string]any{
 		"kpi": map[string]any{"requests": all.n, "requests_now_per_min": math.Round(10*float64(t.lastMin.n)/5) / 10,
 			"requests_delta_pct": delta(float64(all.n), float64(prev.n), prevOK), "p50_ms": all.pct(0.5), "p50_delta_ms": p50Delta,
 			"p95_ms": all.pct(0.95), "success_rate": all.success(), "success_rate_delta_pp": successDelta, "failures": all.fails,
-			"cost_usd": all.cost, "cost_delta_pct": delta(all.cost, prev.cost, prevOK), "budget_usd": nil},
+			"cost_usd": all.cost, "cost_delta_pct": delta(all.cost, prev.cost, prevOK), "budget_usd": budget, "month_cost_usd": routingMonthCost(rows, now)},
 		"series":    map[string]any{"points": points},
 		"families":  families,
 		"models":    models,
 		"events":    events,
-		"policy":    policyView(doc, rev, classifierName, t.classifier.pct(0.5), lastClefDecision(rows)),
+		"policy":    policyView(doc, rev, classifierName, t.classifier.pct(0.5), lastRouteDecision(rows)),
 		"authority": AuthorityDataOnly,
 		"gateway":   gatewayView(rows, from), // 본대화·부속 호출 and turns (routing_gateway_view.go)
 	}
@@ -1055,13 +1142,14 @@ func routingDeltas(all, prev callStats, prevOK bool) (any, any) {
 	return p50Delta, successDelta
 }
 
-func lastClefDecision(rows []Record) string {
+// lastRouteDecision is the newest call the router chose (not a failover stand-in): its model, how and which rule.
+func lastRouteDecision(rows []Record) any {
 	for _, r := range rows { // newest first
-		if c := r.RoutingCall; c != nil && !systemCall(c) && c.Decision == "clef" {
-			return "Clef → " + c.Family
+		if c := r.RoutingCall; c != nil && !systemCall(c) && c.Decision != "failover" && c.Decision != "manual" {
+			return map[string]string{"model": c.Model, "decision": c.Decision, "rule": c.Rule}
 		}
 	}
-	return ""
+	return nil
 }
 
 // ------------------------------------------------------------------ HTTP

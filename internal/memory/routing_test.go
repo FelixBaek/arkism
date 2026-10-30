@@ -323,3 +323,84 @@ func TestClefPickModelSendsPlainKeys(t *testing.T) {
 		t.Fatal("criteria", crit)
 	}
 }
+
+func TestRoutingRulesSendAKindOfTaskToOneModelWithoutTheJudge(t *testing.T) {
+	f := newFixture(t)
+	runner := f.runner()
+	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
+	inv := []Provider{{ID: "openai", Name: "OpenAI", Kind: "subscription", Accounts: []ProviderAccount{{ID: "a", Label: "a", Status: "connected"}}, Models: []string{"gpt-6.1", "gpt-6.1-mini"}}}
+	if _, err := f.svc.ReportProviders(testCtx, runner, ProvidersReport{Scope: scopeA, Providers: &inv}); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range [][]RoutingRule{{{Kind: "image", Model: "openai/gpt-6.1"}}, {{Kind: "code", Model: "nope"}}, {{Kind: "code", Model: "openai/gpt-6.1"}, {Kind: "code", Model: "openai/gpt-6.1-mini"}}} {
+		if _, err := f.svc.SetRoutingPolicy(testCtx, f.human, RoutingPolicyInput{Scope: scopeA, Rules: &bad}); !errors.Is(err, ErrInvalid) {
+			t.Fatal("bad rule accepted", bad, err)
+		}
+	}
+	rules, budget := []RoutingRule{{Kind: "code", Model: "openai/gpt-6.1-mini"}, {Kind: "quick", Model: "openai/gone"}}, 20.0
+	if _, err := f.svc.SetRoutingPolicy(testCtx, f.agent, RoutingPolicyInput{Scope: scopeA, Rules: &rules}); !errors.Is(err, ErrDenied) {
+		t.Fatal("an agent set a rule", err)
+	}
+	if _, err := f.svc.SetRoutingPolicy(testCtx, f.human, RoutingPolicyInput{Scope: scopeA, Rules: &rules, MonthlyBudgetUSD: &budget}); err != nil {
+		t.Fatal(err)
+	}
+	picker := &fakePicker{choice: "openai/gpt-6.1"}
+	f.svc.ModelPicker = picker
+	d, err := f.svc.DecideRoute(testCtx, runner, RoutingDecideInput{Scope: scopeA, Task: "이 함수에 테스트를 써 줘"})
+	if err != nil || d.ID != "openai/gpt-6.1-mini" || d.Decision != "fixed" || d.Rule != "code" || picker.seen != nil {
+		t.Fatal("a coding task should follow its rule without asking the judge", d, err)
+	}
+	// A rule whose model is gone (or a kind without a rule) leaves the choice to the judge.
+	if d, _ = f.svc.DecideRoute(testCtx, runner, RoutingDecideInput{Scope: scopeA, Task: "안녕"}); d.Decision != "clef" || d.Rule != "" {
+		t.Fatal("quick rule to a missing model", d)
+	}
+	ov, err := f.svc.RoutingOverview(testCtx, f.human, scopeA, "24h")
+	if err != nil || ov["kpi"].(map[string]any)["budget_usd"] != 20.0 || len(ov["policy"].(map[string]any)["rules"].([]RoutingRule)) != 2 {
+		t.Fatal("overview budget and rules", ov["kpi"], ov["policy"], err)
+	}
+	for task, kind := range map[string]string{"fix the bug in main.go": "code", "이 메일을 영어로 번역해 줘": "writing", "오늘 날씨 어때?": "quick", strings.Repeat("긴 이야기 ", 40): ""} {
+		if got := routeTaskKind(task); got != kind {
+			t.Fatal(task, got)
+		}
+	}
+}
+
+func TestRoutedCallsKeepTheRuleThatPickedThem(t *testing.T) {
+	f := newFixture(t)
+	runner := f.runner()
+	f.auth.actors[runner] = actor("crew-runner", "service", true, "read", "handoff", "route", "write")
+	bad := RoutingCall{Model: "openai/gpt-6.1", Decision: "fixed", OK: true, Rule: "image"}
+	if _, err := f.svc.RecordRoutingCall(testCtx, runner, RoutingCallInput{Scope: scopeA, Call: bad}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("unknown rule kind accepted", err)
+	}
+	for _, c := range []RoutingCall{{Model: "openai/gpt-6.1", Decision: "fixed", OK: true, Rule: "code", InputTokens: 5}, {Model: "openai/gpt-6.1-mini", Decision: "failover", Replaced: "openai/gpt-6.1", OK: true}} {
+		if _, err := f.svc.RecordRoutingCall(testCtx, runner, RoutingCallInput{Scope: scopeA, Call: c}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := f.svc.UsageSummary(testCtx, f.human, scopeA, "month", "", time.FixedZone("", 9*3600))
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := out["requests"].(map[string]any)["items"].([]map[string]any)
+	rules := map[any]any{}
+	for _, it := range items {
+		rules[it["decision"]] = it["rule"]
+	}
+	if len(items) != 2 || rules["fixed"] != "code" || rules["failover"] != "" {
+		t.Fatal("rule per request", items)
+	}
+	ov, err := f.svc.RoutingOverview(testCtx, f.human, scopeA, "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the stand-in is not a decision: the last one is the rule's pick
+	if last := ov["policy"].(map[string]any)["last_decision"].(map[string]string); last["model"] != "openai/gpt-6.1" || last["rule"] != "code" {
+		t.Fatal("last decision", last)
+	}
+	for v, ok := range map[string]bool{"": true, "540": true, "-300": true, "x": false, "900": false} {
+		if _, got := usageTZ(v); got != ok {
+			t.Fatal("tz", v, got)
+		}
+	}
+}

@@ -22,6 +22,11 @@ window.ArkismRouting = (ctx) => {
   const usd = (n) => (n == null ? "—" : n >= 100 ? `$${Math.round(n).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR")}` : `$${Number(n).toFixed(2)}`);
   const pct1 = (n) => (n == null ? "—" : `${Number(n).toFixed(1)}%`);
   const svg = (tag, attrs = {}) => { const n = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v)); return n; };
+  // The judge's screen name: the server sends its model id ("clef-flash"), a chat judge its own model name.
+  const JUDGE_NAME = { "clef-flash": "Clef", "jev-1": "Jev" };
+  const judgeName = (id) => JUDGE_NAME[id] || (String(id || "").startsWith("jev") ? "Jev" : id);
+  // 이런 일은 늘 이 모델로 (POST /v1/routing/policy rules): the server tells the kind from the words in the request.
+  const RULE_KINDS = [["code", "코딩", "코드·함수·버그·테스트 같은 낱말이 든 요청"], ["writing", "글쓰기", "글쓰기·번역·요약·이메일 같은 낱말이 든 요청"], ["quick", "짧은 질문", "위에 해당하지 않는 짧은 요청(80자 이하)"]];
   const unsupported = (e) => /HTTP 404|not_found|HTTP 501|not_implemented/.test(e?.message || "");
 
   // ------------------------------------------------------------------ data
@@ -103,8 +108,10 @@ window.ArkismRouting = (ctx) => {
     const row = el("div", "rt-kpi-value");
     row.append(el("strong", "", value));
     if (unit) row.append(el("span", "", unit));
-    if (chip) row.append(delta(chip[0], chip[1]));
-    c.append(el("p", "", label), row, el("small", "", sub), spark(values, kind));
+    c.append(el("p", "", label), row);
+    // Each chip says what it is measured against: the same length of time just before the shown range.
+    if (chip) { const vs = el("div", "rt-kpi-vs"); vs.append(delta(chip[0], chip[1]), el("span", "", { "1h": "그 전 1시간보다", "24h": "그 전 24시간보다", "7d": "그 전 7일보다", "30d": "그 전 30일보다" }[S.range] || "")); c.append(vs); }
+    c.append(el("small", "", sub), spark(values, kind));
     return c;
   }
 
@@ -161,9 +168,9 @@ window.ArkismRouting = (ctx) => {
     const sum = []; cost.reduce((a, v, i) => (sum[i] = a + v), 0);
     return [
       kpiCard("요청 수", num(k.requests), "건", sign(k.requests_delta_pct, "%", (n) => n > 0), now != null ? `지금 ${num(now)}건/분` : "", traffic, "ok"),
-      kpiCard("지연시간 p50", sec1(k.p50_ms), "초", sign(k.p50_delta_ms == null ? null : Math.round(k.p50_delta_ms / 100) / 10, "초", (n) => n < 0), `p95 ${sec1(k.p95_ms)}초`, p50, "ok"),
+      kpiCard("응답 시간", sec1(k.p50_ms), "초", sign(k.p50_delta_ms == null ? null : Math.round(k.p50_delta_ms / 100) / 10, "초", (n) => n < 0), `보통 걸린 시간 · 느릴 때 ${sec1(k.p95_ms)}초`, p50, "ok"),
       kpiCard("성공률", Number(k.success_rate).toFixed(1), "%", sign(k.success_rate_delta_pp, "%p", (n) => n >= 0), `실패 ${num(k.failures)}건`, ok, k.success_rate_delta_pp < 0 ? "bad" : "ok"),
-      kpiCard("비용", usd(k.cost_usd), "", k.cost_delta_pct == null ? null : [`${k.cost_delta_pct > 0 ? "▲" : k.cost_delta_pct < 0 ? "▼" : "±"} ${Math.abs(k.cost_delta_pct)}%`, "warn"], k.budget_usd ? `예산 ${Math.round((k.cost_usd / k.budget_usd) * 100)}% 사용` : "", sum, "warn")
+      kpiCard("비용", usd(k.cost_usd), "", k.cost_delta_pct == null ? null : [`${k.cost_delta_pct > 0 ? "▲" : k.cost_delta_pct < 0 ? "▼" : "±"} ${Math.abs(k.cost_delta_pct)}%`, "warn"], k.budget_usd ? `이번 달 ${usd(k.month_cost_usd ?? 0)} · 월 예산의 ${Math.round(((k.month_cost_usd ?? 0) / k.budget_usd) * 100)}%` : "", sum, "warn")
     ];
   }
   function mainView() {
@@ -177,10 +184,10 @@ window.ArkismRouting = (ctx) => {
     const inc = d.series?.incident; const mark = inc ? { index: inc.index, key: "p95", label: inc.label } : null;
     const latency = lineChart(secPts, [{ key: "p95", cls: "dim dash" }, { key: "p50", cls: "main", now: true }], lMax, [0, lMax / 2, lMax].map(String), S.range, mark);
     const legend = el("span", "rt-legend");
-    legend.append(el("i", "lg-main"), "p50", el("i", "lg-dim"), "p95");
+    legend.append(el("i", "lg-main"), "보통", el("i", "lg-dim"), "느릴 때");
     const wrap = el("div", "rt-main");
     const charts = el("div", "rt-grid2");
-    charts.append(chartCard("트래픽", `평균 ${mean >= 100 ? num(Math.round(mean)) : mean.toFixed(1)}${perLabel} · 최고 ${num(Math.round(mx))}${perLabel}`, unitLabel, traffic), chartCard("지연시간", "", "응답까지 걸린 시간(초)", latency, legend));
+    charts.append(chartCard("트래픽", `평균 ${mean >= 100 ? num(Math.round(mean)) : mean.toFixed(1)}${perLabel} · 최고 ${num(Math.round(mx))}${perLabel}`, unitLabel, traffic), chartCard("응답 시간", "", "응답까지 걸린 시간(초)", latency, legend));
     wrap.append(charts);
     wrap.append(modelsTable(d), distribution(d));
     const gw = turns?.card(d.gateway); // Claude Code 본대화·부속 호출 (routing-turns.js)
@@ -213,7 +220,7 @@ window.ArkismRouting = (ctx) => {
     c.append(head);
     const cols = "minmax(0,1fr) 76px 112px 64px 64px 96px";
     const th = el("div", "rt-row th"); th.style.gridTemplateColumns = cols;
-    ["모델", "요청 수", "지연 p50 / p95", "성공률", "비용", "상태"].forEach((t, i) => th.append(el("span", i && i < 5 ? "r" : "", t)));
+    ["모델", "요청 수", "보통 / 느릴 때", "성공률", "비용", "상태"].forEach((t, i) => th.append(el("span", i && i < 5 ? "r" : "", t)));
     c.append(th);
     for (const m of d.models || []) {
       const fixed = manual && m.id === d.policy.default_model;
@@ -237,7 +244,7 @@ window.ArkismRouting = (ctx) => {
     if (S.state === "idle") { S.state = "loading"; queueMicrotask(load); }
     if (S.state !== "ready") {
       $("#stats").replaceChildren();
-      const msg = S.state === "unsupported" ? "이 서버는 아직 라우팅을 지원하지 않아요. 서버에 모델 라우터가 연결되면 여기서 요청량·지연시간·성공률·비용을 볼 수 있어요."
+      const msg = S.state === "unsupported" ? "이 서버는 아직 라우팅을 지원하지 않아요. 서버에 모델 라우터가 연결되면 여기서 요청 수·응답 시간·성공률·비용을 볼 수 있어요."
         : S.state === "error" ? `라우팅 정보를 불러오지 못했어요 (${S.error}). 다시 시도해 주세요.` : "불러오는 중…";
       const box = el("div", "empty", msg);
       if (S.state === "error") box.append(el("br"), button("다시 시도", "small", "arrows-clockwise", load));
@@ -247,11 +254,33 @@ window.ArkismRouting = (ctx) => {
     }
     const d = S.doc;
     $("#stats").replaceChildren();
+    const parts = [];
+    const warn = noJudgeNote(d.policy, d.models, () => { state.settingsTab = "roles"; go("settings"); });
+    if (!d.kpi.requests) {
+      // Nothing went through the router in this range: say what to do next instead of zeros and empty charts.
+      const box = el("div", "rt-card pad rt-empty"); const t = el("div");
+      t.append(el("strong", "", S.range === "30d" ? "아직 라우터를 거친 요청이 없어요" : "이 기간에는 라우터를 거친 요청이 없어요"),
+        el("p", "", "에이전트(Claude Code·Codex·Gemini CLI)를 연결하면 요청이 라우터를 거쳐 알맞은 모델로 가고, 여기에 요청 수·응답 시간·비용이 나와요."));
+      const acts = el("div", "rt-empty-acts");
+      acts.append(button("에이전트 연결하기", "primary", null, openSettings));
+      if (S.range !== "30d") acts.append(button("30일로 넓혀 보기", "ghost", null, () => { S.range = "30d"; void load(); }));
+      box.append(t, acts);
+      table.replaceChildren(...(warn ? [warn] : []), box);
+      detail();
+      return;
+    }
     const kp = el("div", "rt-kpis"); kp.append(...kpis(d)); // inside the table area: the stats row is hidden on narrow windows
-    const parts = [kp];
+    parts.push(kp);
+    if (warn) parts.push(warn);
+    if (d.kpi.budget_usd && (d.kpi.month_cost_usd ?? 0) >= d.kpi.budget_usd) {
+      const n = el("div", "callout rt-off"); const t = el("div");
+      t.append(el("strong", "", "이번 달 비용이 월 예산을 넘었어요"), el("p", "", `이번 달 ${usd(d.kpi.month_cost_usd)} · 월 예산 ${usd(d.kpi.budget_usd)}. 요청을 막지는 않아요. 줄이려면 비싼 모델을 끄거나 기본 모델을 바꿔요.`));
+      n.append(icon("warning-circle"), t, button("라우팅 설정", "small", "gear-six", openSettings));
+      parts.push(n);
+    }
     if (d.policy && d.policy.auto_routing === false) {
       const n = el("div", "callout rt-off"); const t = el("div");
-      t.append(el("strong", "", "자동 라우팅이 꺼져 있어요"), el("p", "", `모든 요청이 ${(d.models || []).find((m) => m.id === d.policy.default_model)?.name || "고정 모델"}로 가고 있어요. 모델 계열별 분배는 멈췄어요.`));
+      t.append(el("strong", "", "자동 라우팅이 꺼져 있어요"), el("p", "", `모든 요청이 ${fallbackName(d.policy, d.models)}로 가고 있어요. 모델 계열별 분배는 멈췄어요.`));
       n.append(icon("warning-circle"), t, button("라우팅 설정", "small", "gear-six", openSettings));
       parts.push(n);
     }
@@ -268,18 +297,37 @@ window.ArkismRouting = (ctx) => {
   }
   const openSettings = () => { state.settingsTab = "routing"; go("settings"); };
   const modelName = (models, id) => (models || []).find((m) => m.id === id)?.name || "";
+  // 마지막 판정 ({model, decision, rule}): why the newest routed request went where it went, with screen names.
+  function lastPick(v, models) {
+    if (!v?.model) return "—";
+    const m = modelName(models, v.model) || String(v.model).replace(/^[^/]+\//, ""), kind = RULE_KINDS.find(([k]) => k === v.rule)?.[1];
+    return kind ? `${kind} 요청이라 → ${m}` : v.decision === "clef" ? `판정 모델이 골라서 → ${m}` : v.decision === "default" ? `판정 모델이 고르지 않아서 → ${m}` : `기본 모델이라 → ${m}`;
+  }
+  // Where requests go when no judge picks: the 기본 모델, else the 1번 model.
+  const fallbackName = (p, models) => modelName(models, p.default_model) || (models || []).find((m) => m.enabled !== false)?.name || "1번 모델";
+  // Auto routing is on but nothing can choose: say so plainly, with the way to fix it (설정 › 역할별 모델 › 라우팅 판정).
+  function noJudgeNote(p, models, onFix) {
+    if (!p || p.auto_routing === false || p.classifier) return null;
+    const n = el("div", "callout rt-off rt-nojudge"); const t = el("div");
+    const rules = (p.rules || []).length;
+    t.append(el("strong", "", "판정 모델이 없어서 자동으로 고르지 못해요"),
+      el("p", "", rules ? `‘이런 일은 늘 이 모델로’에 맞지 않는 요청은 ${fallbackName(p, models)}로 가요. 판정 모델을 정하면 나머지도 나눠요.` : `지금은 모든 요청이 ${fallbackName(p, models)}로 가요. 판정 모델을 정하거나, 라우팅 설정에서 ‘이런 일은 늘 이 모델로’를 정해 주세요.`));
+    n.append(icon("warning-circle"), t, button("판정 모델 정하기", "small", null, onFix));
+    return n;
+  }
   // The screen only shows how routing is set; the switches live in 설정 › 라우팅 설정.
   function policyLine(d) {
     const p = d.policy || {};
     const c = el("section", "rt-policy-line");
-    const auto = p.auto_routing === false ? `꺼짐 · ${modelName(d.models, p.default_model) || "고정 모델"}로 고정` : (!p.classifier ? (p.default_model ? "켜짐 · 판정 모델 없음, 고정 모델로" : "켜짐 · 판정 모델 없음, 첫 모델로") : p.classifier_ms != null ? `켜짐 · ${p.classifier} 보통 ${sec1(p.classifier_ms)}초` : `켜짐 · ${p.classifier}`);
+    const auto = p.auto_routing === false ? `꺼짐 · ${fallbackName(p, d.models)}로 고정` : (!p.classifier ? `켜짐 · 판정 모델 없음 → ${fallbackName(p, d.models)}로` : p.classifier_ms != null ? `켜짐 · ${judgeName(p.classifier)} 보통 ${sec1(p.classifier_ms)}초` : `켜짐 · ${judgeName(p.classifier)}`);
     const order = (p.failover?.order || []).map((id) => modelName(d.models, id) || id);
     const fail = p.auto_failover === false ? "꺼짐" : `켜짐${order.length ? ` · ${order.join(" → ")}` : " · 라우팅 순서대로"}`;
     const go2 = button("라우팅 설정", "", null, openSettings);
-    c.append(el("h3", "", "라우팅 정책"), kv("자동 라우팅", auto), kv("실패 시 넘김", fail), kv("마지막 판정", p.last_decision || "—"), go2);
+    c.append(el("h3", "", "라우팅 정책"), kv("자동 라우팅", auto), kv("실패하면 다음 모델로", fail), kv("마지막 판정", lastPick(p.last_decision, d.models)), go2);
     return c;
   }
-  // 설정 › 라우팅 설정 (Figma 198:458): 자동 라우팅 and 실패하면 다음 모델로 as cards; switches save at once, conditions save with 조건 저장.
+  // 설정 › 라우팅 설정 (Figma 198:458): 자동 라우팅 and 실패하면 다음 모델로 as cards; switches and picks save at once,
+  // the failover order saves with 저장 and stays as a draft (with a bar) until then, also across tabs.
   function policyCards(items) {
     const p = S.policy || {}, f = { error_rate_pct: 5, p95_ms: 120000, order: [], ...(p.failover || {}), ...(S.failoverDraft || {}) };
     const on = items.filter((m) => m.enabled !== false);
@@ -296,37 +344,72 @@ window.ArkismRouting = (ctx) => {
     const head = (title, sw) => { const h = el("div", "rt-ctl-head"); h.append(el("h3", "", title), sw); return h; };
     const a = el("section", "rt-set-card");
     a.append(head("자동 라우팅", switchEl(p.auto_routing !== false, "자동 라우팅", (v) => savePolicySettings({ auto_routing: v }))),
-      el("p", "rt-set-hint", p.auto_routing === false ? "꺼져 있어요. 모든 요청이 고정 모델로 가요." : !p.classifier ? (p.default_model ? "판정 모델이 없어서 그룹 밖 요청은 고정 모델로, 그룹 요청은 그룹의 1번 모델로 가요. 판정 모델은 설정 › 에이전트에서 골라요." : "판정 모델이 없어서 그룹 밖 요청은 순서상 첫 모델로, 그룹 요청은 그룹의 1번 모델로 가요. 판정 모델은 설정 › 에이전트에서 골라요.") : "판정 모델이 요청 내용과 모델마다 적은 설명을 보고 알맞은 모델로 보내요."));
+      el("p", "rt-set-hint", p.auto_routing === false ? "꺼져 있어요. 모든 요청이 기본 모델로 가요." : p.classifier ? "판정 모델이 요청 내용과 모델마다 적은 설명을 보고 알맞은 모델로 보내요." : "켜져 있지만 판정 모델이 없어요."));
+    const warn = noJudgeNote(p, items, () => { state.settingsTab = "roles"; render(false); });
+    if (warn) a.append(warn);
     if (p.auto_routing === false) { const n = el("div", "rt-amber"); n.append(el("p", "", "모델 계열별 분배가 멈췄어요. 켜면 바로 다시 나눠요.")); a.append(n); }
     const g0 = el("div", "rt-fields");
-    g0.append(pick("고정 모델 (꺼 두거나 판정 모델이 답하지 못할 때)", p.default_model, (v) => savePolicySettings({ default_model: v }), "순서상 첫 모델"));
+    g0.append(pick("기본 모델 (자동 라우팅을 껐거나 판정 모델이 고르지 못할 때)", p.default_model, (v) => savePolicySettings({ default_model: v }), "1번 모델"));
     a.append(g0);
-    if (p.auto_routing !== false) a.append(kv("분류 담당", p.classifier ? `${p.classifier}${p.classifier_ms != null ? ` · 보통 ${sec1(p.classifier_ms)}초` : ""}` : "없음"), kv("마지막 판정", p.last_decision || "—"));
+    if (p.auto_routing !== false) a.append(kv("판정 모델", p.classifier ? `${judgeName(p.classifier)}${p.classifier_ms != null ? ` · 보통 ${sec1(p.classifier_ms)}초` : ""}` : "없음"), kv("마지막 판정", lastPick(p.last_decision, items)));
 
     const b = el("section", "rt-set-card");
-    b.append(head("실패하면 다음 모델로", switchEl(p.auto_failover !== false, "자동 페일오버", (v) => savePolicySettings({ auto_failover: v }))),
-      el("p", "rt-set-hint", "고른 모델이 응답을 시작하기 전에 거절되면 아래 순서로 넘겨요. 순서를 비우면 라우팅 순서를 따라요."));
+    b.append(head("실패하면 다음 모델로", switchEl(p.auto_failover !== false, "실패하면 다음 모델로", (v) => savePolicySettings({ auto_failover: v }))),
+      el("p", "rt-set-hint", "고른 모델이 답을 시작하기 전에 거절되면 바로 다음 모델로 넘겨요. 답을 쓰던 중에 끊긴 요청은 넘기지 않아요."));
     const name = (id) => on.find((m) => m.id === id)?.name || id;
-    b.append(kv("넘기는 조건", `오류율 ${f.error_rate_pct}% 넘음 · p95 ${Math.round(f.p95_ms / 1000)}초 넘음`),
-      kv("넘기는 순서", [...(f.order || []).map(name), "라우팅 순서대로"].join(" → ")),
-      kv("돌아오기", "한도·크레딧·429로 거절된 모델은 잠시 쉬며 맨 뒤로 가고, 요청 하나로 먼저 확인한 뒤 돌아와요"));
-    const stageF = (patch) => { S.failoverDraft = { ...(S.failoverDraft || {}), ...patch }; };
+    b.append(kv("넘기는 순서", [...(f.order || []).map(name), "1번 모델부터 차례로"].join(" → ")),
+      kv("돌아오기", "한도나 크레딧이 떨어져 거절된 모델은 잠시 쉬며 맨 뒤로 가요. 요청 하나로 먼저 확인한 뒤 돌아와요."));
+    const stageF = (patch) => { S.failoverDraft = { ...(S.failoverDraft || {}), ...patch }; render(false); };
     const order = [...(f.order || [])];
     const g2 = el("div", "rt-fields three");
-    // Each pick builds on the latest draft, so changing two slots keeps both.
+    // Each pick builds on the latest draft, so changing two slots keeps both; a model picked twice counts once.
     const slots = [order[0] || "", order[1] || "", order[2] || ""];
-    for (let i = 0; i < 3; i++) g2.append(pick(`${i + 1}번째로 넘길 모델`, order[i], (v) => { slots[i] = v || ""; stageF({ order: slots.filter(Boolean) }); }, "라우팅 순서대로"));
+    for (let i = 0; i < 3; i++) g2.append(pick(`${i + 1}번째로 넘길 모델`, order[i], (v) => { slots[i] = v || ""; stageF({ order: [...new Set(slots.filter(Boolean))] }); }, "1번 모델부터 차례로"));
     // These only mark models 주의·느림 in the overview; failover itself is per request (gateway).
     const g1 = el("div", "rt-fields");
-    g1.append(field("오류율이 이보다 높으면 '주의' 표시", f.error_rate_pct, (v) => stageF({ error_rate_pct: Number(v) }), "%"),
-      field("p95가 이보다 느리면 '느림' 표시", f.p95_ms / 1000, (v) => stageF({ p95_ms: Math.round(Number(v) * 1000) }), "초"));
-    const foot = el("div", "rt-foot"); foot.append(button("조건 저장", "", null, () => {
+    g1.append(field("실패가 이보다 잦으면 라우팅 현황에 '주의' 표시", f.error_rate_pct, (v) => { S.failoverDraft = { ...(S.failoverDraft || {}), error_rate_pct: Number(v) }; }, "%"),
+      field("느릴 때 응답 시간이 이보다 길면 '느림' 표시", f.p95_ms / 1000, (v) => { S.failoverDraft = { ...(S.failoverDraft || {}), p95_ms: Math.round(Number(v) * 1000) }; }, "초"));
+    g1.querySelectorAll("input").forEach((i) => i.addEventListener("change", () => render(false))); // the draft bar shows once a value is left
+    const saveF = () => {
       // Read the draft at click time: f is the value from when this card was drawn.
       const now = { error_rate_pct: 5, p95_ms: 120000, order: [], ...((S.policy || {}).failover || {}), ...(S.failoverDraft || {}) };
       void savePolicySettings({ failover: { error_rate_pct: now.error_rate_pct, p95_ms: now.p95_ms, order: now.order || [] } });
-    }));
-    b.append(g2, g1, foot);
+    };
+    const more = el("details", "rt-more"); more.append(el("summary", "", "자세히 · 넘기는 순서와 표시 기준"), g2, g1);
+    if (S.failoverDraft) more.open = true;
+    b.append(more);
+    if (S.failoverDraft) b.append(dirtyBar("넘기는 설정을 바꿨어요. 저장해야 적용돼요.", "넘기는 설정 저장", saveF, () => { S.failoverDraft = null; render(false); }));
     return [a, b];
+  }
+  function dirtyBar(text, saveLabel, onSave, onUndo) {
+    const bar = el("div", "rt-amber rt-dirty"); bar.append(el("p", "", text), button(saveLabel, "primary", null, onSave), button("되돌리기", "ghost", null, onUndo));
+    return bar;
+  }
+  // 이런 일은 늘 이 모델로: one pick per kind of request, saved at once. The server applies it before the judge.
+  function rulesCard(items) {
+    const p = S.policy || {}, rules = p.rules || [];
+    const on = items.filter((m) => m.enabled !== false);
+    const box = el("section", "rt-set-card rt-rules");
+    box.append(el("h3", "rt-h3", "이런 일은 늘 이 모델로"),
+      el("p", "rt-set-hint", "요청에 든 낱말로 일의 종류를 알아보고, 정한 모델로 바로 보내요. 판정 모델보다 먼저 쓰고, 자동 라우팅이 켜져 있을 때만 써요."));
+    const g = el("div", "rt-fields three");
+    for (const [kind, label, hint] of RULE_KINDS) {
+      const cur2 = rules.find((r) => r.kind === kind)?.model || "";
+      const f2 = el("label", "rt-field"); f2.append(el("span", "", label));
+      const sel = el("select"); sel.title = hint;
+      sel.append(new Option(p.classifier ? "판정 모델에 맡기기" : "따로 정하지 않음", ""));
+      for (const m of on) sel.append(new Option(m.name, m.id, false, m.id === cur2));
+      if (cur2 && !on.some((m) => m.id === cur2)) sel.append(new Option(`${cur2} (꺼짐)`, cur2, false, true));
+      sel.value = cur2;
+      sel.addEventListener("change", () => {
+        const next = RULE_KINDS.map(([k]) => (k === kind ? { kind: k, model: sel.value } : rules.find((r) => r.kind === k))).filter((r) => r?.model);
+        void savePolicySettings({ rules: next });
+      });
+      f2.append(sel, el("small", "rt-rule-hint", hint));
+      g.append(f2);
+    }
+    box.append(g);
+    return box;
   }
   function eventFeed(d) {
     const box = el("div", "rt-events");
@@ -382,9 +465,10 @@ window.ArkismRouting = (ctx) => {
         request(`/v1/routing/groups?${query()}`).catch((e) => (unsupported(e) ? null : Promise.reject(e)))]); // older servers have no groups
       if (!ticket.live()) return; // left the tab meanwhile
       if (doc?.authority !== "data_only_untrusted" || !Array.isArray(doc.items) || !ov?.policy) throw new Error("invalid_response");
-      S.settings = doc; S.policy = ov.policy; S.failoverDraft = null; S.settingsState = "ready";
-      S.groups = groups && Array.isArray(groups.items) ? groups : null; S.groupDraft = null;
-      if (!S.groups?.items.some((g) => g.id === S.group)) S.group = "";
+      // Unsaved drafts (models, failover, groups) stay: only their own 저장 or 되돌리기 clears them.
+      S.settings = doc; S.policy = ov.policy; S.settingsState = "ready";
+      S.groups = groups && Array.isArray(groups.items) ? groups : null;
+      if (!groupsNow().some((g) => g.id === S.group)) S.group = "";
       if (!doc.items.some((m) => m.id === S.selected)) S.selected = doc.items[0]?.id || "";
     } catch (e) { if (!ticket.live()) return; S.settings = null; S.settingsState = unsupported(e) ? "unsupported" : "error"; S.error = e.message; }
     if (state.view === "settings" && state.settingsTab === "routing") render(false);
@@ -392,7 +476,8 @@ window.ArkismRouting = (ctx) => {
   async function savePolicySettings(patch) {
     try {
       await request("/v1/routing/policy", { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: S.policy.revision, ...patch }) });
-      notice(patch.auto_routing === false ? "자동 라우팅을 껐어요. 모든 요청이 고정 모델로 가요." : patch.auto_routing === true ? "자동 라우팅을 켰어요." : "저장했어요.");
+      notice(patch.auto_routing === false ? "자동 라우팅을 껐어요. 모든 요청이 기본 모델로 가요." : patch.auto_routing === true ? "자동 라우팅을 켰어요." : "저장했어요.");
+      if (patch.failover) S.failoverDraft = null;
       S.state = "idle"; // the routing screen reads the new policy next time
     } catch (e) { notice(`저장하지 못했어요 (${e.message}).`); }
     await loadSettings();
@@ -416,6 +501,12 @@ window.ArkismRouting = (ctx) => {
   function modelList(items) {
     const box = el("section", "rt-set-card");
     const h = el("div", "rt-ctl-head"); h.append(el("h3", "", "라우팅에 쓰는 모델"), el("small", "", "1번이 첫 모델")); box.append(h);
+    if (!items.length) {
+      const go = button("에이전트 설정 열기", "primary", null, () => { state.settingsTab = "agents"; render(false); });
+      const e = el("div", "rt-empty"); e.append(el("p", "", "켠 모델이 없어요. 설정 › 에이전트에서 모델을 켜면 여기에 나와요."), go);
+      box.append(e);
+      return box;
+    }
     box.append(el("p", "rt-set-hint", "설정 › 에이전트에서 켠 모델이에요. 누르면 오른쪽에서 설명·순서·한도를 고쳐요."));
     const list = el("div", "rt-mlist");
     const sorted = [...items].sort((x, y) => (cur(x).enabled === false) - (cur(y).enabled === false) || (cur(x).order ?? 99) - (cur(y).order ?? 99));
@@ -430,6 +521,7 @@ window.ArkismRouting = (ctx) => {
       const conn = el("span", `rt-status ${cls}`); conn.append(el("i"), m.connection?.label || label);
       const sw = switchEl(on, `${m.name} 사용`, (v) => { stage(raw, { enabled: v }); void saveModel(raw); });
       sw.addEventListener("click", (e) => e.stopPropagation());
+      if (S.draft[raw.id]) t.append(el("small", "rt-unsaved", "저장 안 함"));
       row.append(el("span", "rt-order mono", on ? String(m.order ?? "—") : "—"), agentTile(m.family), t, el("span", "rt-when", m.when ? `의도 · ${m.when}` : ""), conn, sw);
       row.addEventListener("click", () => { S.selected = raw.id; S.group = ""; render(false); });
       list.append(row);
@@ -443,18 +535,22 @@ window.ArkismRouting = (ctx) => {
     const top = el("div", "rt-detail-top"); const t = el("div"); t.append(el("h3", "", m.name), el("small", "", `${m.provider || ""} · ${m.family} 계열`));
     top.append(agentTile(m.family, m.name), t, switchEl(m.enabled !== false, "라우팅에 쓰기", (v) => { stage(raw, { enabled: v }); void saveModel(raw); }));
     const when = el("div", "rt-sec"); when.append(el("h4", "", "판정 모델이 이럴 때 보내요"), el("small", "", "판정 모델이 이 설명을 보고 요청을 나눠요."));
-    const ta = el("textarea"); ta.value = m.when || ""; ta.rows = 2; ta.addEventListener("input", () => stage(raw, { when: ta.value })); when.append(ta);
-    const mix = el("div", "rt-sec"); mix.append(el("h4", "", "순서"), el("small", "", "고정 모델이 없을 때 먼저 고르고, 막혔을 때 넘기는 순서예요."));
+    const ta = el("textarea"); ta.value = m.when || ""; ta.rows = 2; ta.placeholder = "예: 코드를 고치거나 테스트를 쓸 때"; ta.setAttribute("aria-label", "이럴 때 보내요");
+    ta.addEventListener("input", () => stage(raw, { when: ta.value })); when.append(ta);
+    const mix = el("div", "rt-sec"); mix.append(el("h4", "", "순서"), el("small", "", "1번 모델이 기본으로 가고, 실패하면 다음 번호로 넘겨요."));
     const g1 = el("div", "rt-fields"); g1.append(field("순서", m.order, (v) => stage(raw, { order: Number(v) }), "번째"));
     mix.append(g1);
-    const lim = el("div", "rt-sec"); lim.append(el("h4", "", "한도"), el("small", "", "게이트웨이가 모델마다 지켜요. 넘치면 그룹은 다음 모델로 넘기고, 단일 모델은 429와 Retry-After로 돌려보내요. 비우거나 0이면 제한이 없어요."));
+    const lim = el("details", "rt-sec rt-more"); lim.append(el("summary", "", "자세히 · 한도"), el("small", "", "한도를 넘으면 그룹에서는 다음 모델로 넘기고, 아니면 잠깐 뒤에 다시 하라고 알려요. 비우거나 0이면 제한이 없어요."));
     const g2 = el("div", "rt-fields"); g2.append(field("분당 요청", m.rpm_limit, (v) => stage(raw, { rpm_limit: Number(v) }), "건"), field("동시 요청", m.concurrency, (v) => stage(raw, { concurrency: Number(v) }), "건"));
     lim.append(g2);
+    if (m.rpm_limit || m.concurrency) lim.open = true;
     const con = el("div", "rt-sec"); con.append(el("h4", "", "연결"));
     const sb = el("span", `rt-status ${(STATUS[m.connection?.state] || STATUS.ok)[0]}`); sb.append(el("i"), m.connection?.label || "정상");
     con.append(kv("공급자", m.provider || "—"), kv("상태", sb));
+    for (const i of [ta, ...g1.querySelectorAll("input"), ...g2.querySelectorAll("input")]) i.addEventListener("change", () => render(false)); // shows the 저장 bar
     const foot = el("div", "rt-foot");
-    foot.append(button("저장", "primary", null, () => saveModel(raw)));
+    if (S.draft[raw.id]) foot.append(dirtyBar("이 모델을 바꿨어요. 저장해야 적용돼요.", "저장", () => saveModel(raw), () => { delete S.draft[raw.id]; render(false); }));
+    else foot.append(button("저장", "primary", null, () => saveModel(raw)));
     const note = el("div", "rt-note-card");
     const link = el("button", "link-btn v4-link", "에이전트 설정 열기 ›"); link.type = "button";
     link.addEventListener("click", () => { state.settingsTab = "agents"; render(false); });
@@ -475,13 +571,14 @@ window.ArkismRouting = (ctx) => {
   const groupOf = (id) => editGroups().find((g) => g.id === id);
   const strategyName = (k) => STRATEGIES.find(([x]) => x === k)?.[1] || k;
   const GROUP_ERR = { not_found: "그룹에 꺼진 모델이 있어요. 모델을 켜거나 그룹에서 빼 주세요.", invalid_request: "이름과 모델을 확인해 주세요. 그룹에는 모델이 하나 이상 있어야 해요.", revision_conflict: "다른 곳에서 먼저 바꿨어요. 새로고침한 뒤 다시 해 주세요." };
+  // The 같은 모델 자동으로 묶기 switch (autoDiscover set) saves the saved groups with it, never the open draft.
   async function saveGroups(autoDiscover) {
-    const groups = groupsNow().filter((g) => !g.discovered).map(({ id, name, enabled, strategy, members }) => ({ id, name: name.trim(), enabled: enabled !== false, strategy, members }));
+    const groups = (autoDiscover === undefined ? groupsNow() : S.groups.items).filter((g) => !g.discovered).map(({ id, name, enabled, strategy, members }) => ({ id, name: name.trim(), enabled: enabled !== false, strategy, members }));
     try {
       await request("/v1/routing/groups", { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: S.groups.revision,
         groups, auto_discover: autoDiscover ?? !!S.groups.auto_discover }) });
       notice("그룹을 저장했어요.");
-      S.groupDraft = null;
+      if (autoDiscover === undefined) S.groupDraft = null;
     } catch (e) { notice(`저장하지 못했어요 (${GROUP_ERR[e.message] || e.message}).`); return; }
     await loadSettings();
   }
@@ -521,7 +618,8 @@ window.ArkismRouting = (ctx) => {
     if (o?.error) box.append(el("p", "rt-trial-out bad", o.error));
     else if (o) {
       const name = (id) => items.find((m) => m.id === id)?.name || id;
-      const how = { clef: `판정 모델이 골랐어요${o.classifier_ms ? ` · ${sec1(o.classifier_ms)}초` : ""}`, default: "판정 모델이 고르지 않았어요", fixed: "고정 모델로" }[o.decision] || o.decision;
+      const rule = RULE_KINDS.find(([k]) => k === o.rule)?.[1];
+      const how = rule ? `늘 이 모델로 · ${rule}` : { clef: `판정 모델이 골랐어요${o.classifier_ms ? ` · ${sec1(o.classifier_ms)}초` : ""}`, default: "판정 모델이 고르지 않아 1번 모델로", fixed: "기본 모델로" }[o.decision] || o.decision;
       const p = el("div", "rt-trial-out");
       p.append(kv("보낼 모델", name(o.id)), kv("고른 방법", how), kv("실패하면", (o.fallbacks || []).length ? [...o.fallbacks.map(name)].join(" → ") : "넘길 모델 없음"));
       box.append(p);
@@ -536,7 +634,9 @@ window.ArkismRouting = (ctx) => {
     }
     const auto = switchEl(!!S.groups.auto_discover, "같은 모델 자동으로 묶기", (v) => saveGroups(v));
     const h = el("div", "rt-ctl-head"); h.append(el("h3", "", "라우팅 그룹"), el("small", "", "같은 모델 자동으로 묶기"), auto);
-    box.append(h, el("p", "rt-set-hint", "같은 방식으로 라우팅되는 모델 묶음이에요. 에이전트가 모델 이름 대신 group/… 을 부르면 그룹 안에서 골라요."));
+    const more = el("details", "rt-more"); more.open = !!(S.group || S.groupDraft);
+    more.append(el("summary", "", "자세히 · 모델 묶음"), el("p", "rt-set-hint", "같은 방식으로 라우팅되는 모델 묶음이에요. 에이전트가 모델 이름 대신 group/… 을 부르면 그룹 안에서 골라요."));
+    box.append(h, more);
     const chips = el("div", "rt-group-chips");
     for (const g of groupsNow()) {
       const c = el("button", `rt-group-chip${S.group === g.id ? " active" : ""}${g.enabled === false ? " dimmed" : ""}`); c.type = "button";
@@ -549,7 +649,7 @@ window.ArkismRouting = (ctx) => {
     const add = el("button", "rt-group-chip add", "+ 새 그룹"); add.type = "button";
     add.addEventListener("click", () => newGroup(items));
     chips.append(add);
-    box.append(chips);
+    more.append(chips);
     const g = S.group && groupsNow().find((x) => x.id === S.group);
     if (g) {
       const line = el("div", "rt-group-line");
@@ -558,12 +658,9 @@ window.ArkismRouting = (ctx) => {
       seg.classList.add("rt-strategy");
       if (g.discovered) seg.querySelectorAll(".tab").forEach((b) => { b.disabled = true; });
       line.append(seg);
-      box.append(line, el("p", "rt-set-hint", STRATEGY_TEXT[g.strategy] || ""));
+      more.append(line, el("p", "rt-set-hint", STRATEGY_TEXT[g.strategy] || ""));
     }
-    if (S.groupDraft) {
-      const bar = el("div", "rt-amber rt-dirty"); bar.append(el("p", "", "그룹을 바꿨어요. 저장해야 적용돼요."), button("그룹 저장", "primary", null, () => saveGroups()), button("되돌리기", "ghost", null, () => { S.groupDraft = null; if (!S.groups.items.some((x) => x.id === S.group)) S.group = ""; render(false); }));
-      box.append(bar);
-    }
+    if (S.groupDraft) box.append(dirtyBar("그룹을 바꿨어요. 저장해야 적용돼요.", "그룹 저장", () => saveGroups(), () => { S.groupDraft = null; if (!S.groups.items.some((x) => x.id === S.group)) S.group = ""; render(false); }));
     box.append(trialBox(items));
     return box;
   }
@@ -674,16 +771,21 @@ window.ArkismRouting = (ctx) => {
     kit.side(grp ? groupDetail(grp, items) : sel ? modelDetail(sel) : kit.sideNote("모델을 고르세요."));
     const [auto, failover] = policyCards(items);
     const links = agentLinks();
-    return [auto, groupsCard(items), modelList(items), failover, ...(links ? [links] : [])];
+    const body = [auto, rulesCard(items), groupsCard(items), modelList(items), failover];
+    if (!links) return body;
+    // With no agent connected, nothing reaches routing yet: connecting one is the first step.
+    const none = !Object.values(S.links?.agents || {}).some((a) => a.current);
+    return none ? [links, ...body] : [...body, links];
   }
 
   return {
     refresh: () => load(true),
     render: renderView, detail, tab, load, loadSettings, count: () => S.doc?.models?.length || "",
-    reset: () => { loads.cancel(); Object.assign(S, { doc: null, state: "idle", settings: null, settingsState: "idle", draft: {} }); },
+    reset: () => { loads.cancel(); Object.assign(S, { doc: null, state: "idle", settings: null, settingsState: "idle", draft: {}, failoverDraft: null, groupDraft: null }); },
     leave: () => { if (S.state !== "idle") { loads.cancel("overview"); Object.assign(S, { doc: null, state: "idle" }); } }, // read again next time the screen opens
     // 라우팅 설정 lists the models turned on in 설정 › 에이전트: read them again every time the tab opens.
-    leaveSettings: () => { if (S.settingsState !== "idle") { loads.cancel("settings"); Object.assign(S, { settings: null, settingsState: "idle", draft: {}, failoverDraft: null }); } },
+    // Unsaved drafts stay for the next visit, where their 저장 bars show again.
+    leaveSettings: () => { if (S.settingsState !== "idle") { loads.cancel("settings"); Object.assign(S, { settings: null, settingsState: "idle" }); } },
     views: { routing: { title: "라우팅 현황", render: renderView, keepDetail: true,
       sub: () => (S.state === "ready" && S.at ? `실시간 · 10초마다 갱신 · 마지막 ${S.at.toLocaleTimeString(globalThis.ArkismI18n?.locale() || "ko-KR", { hour12: false })}` : "판정 모델이 요청을 나누고, 막히면 다음 모델로 넘겨요"),
       head: () => {

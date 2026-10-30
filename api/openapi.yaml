@@ -4129,6 +4129,420 @@
         "description": "버전 활성화는 상위 스킬의 active·미만료 상태와 유효한 출처도 요구한다. 빈 version_id로 활성 연결만 해제하는 rollback은 상위 출처 철회 후에도 허용한다. 적용 후의 상위/이전 버전 변경이 선택 버전의 평가 직접 근거를 무효화하면 전체 트랜잭션을 409로 취소한다."
       }
     },
+    "/v1/skills/{id}/watch": {
+      "post": {
+        "summary": "Watch the just-applied active version (owner only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "version_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Skill watch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "previous_version",
+                    "applied_at",
+                    "until",
+                    "state",
+                    "failures",
+                    "baseline_failures",
+                    "checked_at",
+                    "can_rollback",
+                    "authority"
+                  ],
+                  "properties": {
+                    "version": {
+                      "$ref": "#/components/schemas/Ref"
+                    },
+                    "previous_version": {
+                      "type": "string"
+                    },
+                    "applied_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "watching",
+                        "kept",
+                        "ended",
+                        "rolled_back",
+                        "rollback_blocked"
+                      ]
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "baseline_failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "checked_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "can_rollback": {
+                      "type": "boolean"
+                    },
+                    "authority": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "적용 직후 사람이 켠다. 기본 7일 동안 실제 사용을 지켜본다. 권한은 apply·rollback 둘 다 필요하다."
+      }
+    },
+    "/v1/skills/{id}/watch/check": {
+      "post": {
+        "summary": "Check the watch and roll back when real use got worse (owner only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "version_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Skill watch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "previous_version",
+                    "applied_at",
+                    "until",
+                    "state",
+                    "failures",
+                    "baseline_failures",
+                    "checked_at",
+                    "can_rollback",
+                    "authority"
+                  ],
+                  "properties": {
+                    "version": {
+                      "$ref": "#/components/schemas/Ref"
+                    },
+                    "previous_version": {
+                      "type": "string"
+                    },
+                    "applied_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "watching",
+                        "kept",
+                        "ended",
+                        "rolled_back",
+                        "rollback_blocked"
+                      ]
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "baseline_failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "checked_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "can_rollback": {
+                      "type": "boolean"
+                    },
+                    "authority": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "새 버전의 실패한 실제 사용이 3번 이상이고 적용 전 같은 기간의 예전 버전 실패보다 많으면, 사람의 자격으로 일반 rollback을 실행한다. 예전 버전에 통과 평가가 없으면 rollback_blocked로 남긴다."
+      }
+    },
     "/v1/skills": {
       "get": {
         "summary": "List active skill baselines for the scoped registry",
@@ -7595,7 +8009,7 @@
           }}}
     },
     "/v1/routing/overview": {
-      "get": {"summary": "Routing screen totals (read:routing)", "description": "Query range=1h|24h|7d|30d. kpi, series.points, families, models, events, policy; authority data_only_untrusted. Built from the newest 1000 routing calls.", "responses": {"200": {"description": "Overview"}, "400": {"description": "invalid_request"},
+      "get": {"summary": "Routing screen totals (read:routing)", "description": "Query range=1h|24h|7d|30d. kpi, series.points, families, models, events, policy (last_decision {model, decision, rule} or null); authority data_only_untrusted. Built from the newest 1000 routing calls.", "responses": {"200": {"description": "Overview"}, "400": {"description": "invalid_request"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -7667,7 +8081,7 @@
           }}}
     },
     "/v1/routing/policy": {
-      "post": {"summary": "Change auto routing, auto failover, the fixed model or failover conditions (human principals only)", "description": "Body {scope, expected_revision, auto_routing?, auto_failover?, default_model?, failover?}.", "responses": {"200": {"description": "{policy, authority}"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
+      "post": {"summary": "Change auto routing, auto failover, the fixed model or failover conditions (human principals only)", "description": "Body {scope, expected_revision, auto_routing?, auto_failover?, default_model?, failover?, rules?, monthly_budget_usd?}. rules: [{kind: code|writing|quick, model: provider/model}], each kind once; while auto routing is on, a task of that kind goes to its model (decision fixed, rule set) when the model is a candidate, without asking the judge. monthly_budget_usd: 0-100000, 0 clears; shown against this month's routed cost, never enforced.", "responses": {"200": {"description": "{policy, authority}"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -7783,7 +8197,7 @@
           }}}
     },
     "/v1/routing/decide": {
-      "post": {"summary": "Pick a model for a task (route:models)", "description": "Body {scope, task, exclude?, providers?, group?}. A group constrains both choice and fallbacks to its enabled members, preserving provider/exclude/quota checks. Unknown group is 404; disabled or exhausted group is 503. Ordered strategy uses member order; smart uses the existing classifier when enabled, falling back to member order. Global default and fallback order do not override group order. The response echoes group when requested. providers keeps only those providers' models. Before selection and fallbacks, a subscription model is excluded only when the provider has connected default=true accounts and all of those accounts have usage_status=ok, usage_checked_at within the last 2 minutes (up to 5 seconds of future clock skew), and an applicable window with left_pct=0 whose reset is future or unknown. Model-specific windows match the model name or prefix at a separator boundary, including claude-prefixed aliases; unrelated model windows do not block it. quotas takes precedence over the legacy quota alias. Unknown or stale usage, or no connected default accounts, does not prove exhaustion. Non-default API-mode accounts and kind=api providers are not gated by subscription quotas. Credits do not automatically refill a zero window. This only filters decide candidates and never changes UI enabled settings. Clef-flash picks among the remaining routing models when auto routing is on; else the fixed or first remaining model. Returns {id, model, provider, family, decision, classifier_ms, fallbacks, authority}.", "responses": {"200": {"description": "Decision"}, "503": {"description": "No eligible model remains"},
+      "post": {"summary": "Pick a model for a task (route:models)", "description": "Body {scope, task, exclude?, providers?, group?}. An owner rule (policy rules) for the task's kind wins while auto routing is on: decision fixed and rule names the kind. A group constrains both choice and fallbacks to its enabled members, preserving provider/exclude/quota checks. Unknown group is 404; disabled or exhausted group is 503. Ordered strategy uses member order; smart uses the existing classifier when enabled, falling back to member order. Global default and fallback order do not override group order. The response echoes group when requested. providers keeps only those providers' models. Before selection and fallbacks, a subscription model is excluded only when the provider has connected default=true accounts and all of those accounts have usage_status=ok, usage_checked_at within the last 2 minutes (up to 5 seconds of future clock skew), and an applicable window with left_pct=0 whose reset is future or unknown. Model-specific windows match the model name or prefix at a separator boundary, including claude-prefixed aliases; unrelated model windows do not block it. quotas takes precedence over the legacy quota alias. Unknown or stale usage, or no connected default accounts, does not prove exhaustion. Non-default API-mode accounts and kind=api providers are not gated by subscription quotas. Credits do not automatically refill a zero window. This only filters decide candidates and never changes UI enabled settings. Clef-flash picks among the remaining routing models when auto routing is on; else the fixed or first remaining model. Returns {id, model, provider, family, decision, classifier_ms, fallbacks, authority}.", "responses": {"200": {"description": "Decision"}, "503": {"description": "No eligible model remains"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -7853,7 +8267,7 @@
           }}}
     },
     "/v1/routing/calls": {
-      "post": {"summary": "The host runner reports one routed run (write:routing_calls)", "description": "Body {scope, call{model, decision, replaced?, ok, latency_ms, classifier_ms?, input_tokens?, output_tokens?, cost_usd?, error?}}. No prompt, output or token.", "responses": {"200": {"description": "Recorded"}, "400": {"description": "invalid_request"},
+      "post": {"summary": "The host runner reports one routed run (write:routing_calls)", "description": "Body {scope, call{model, decision, replaced?, rule? (code|writing|quick), ok, latency_ms, classifier_ms?, input_tokens?, output_tokens?, cost_usd?, error?}}. No prompt, output or token.", "responses": {"200": {"description": "Recorded"}, "400": {"description": "invalid_request"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -8201,7 +8615,7 @@
           }}}
     },
     "/v1/usage/summary": {
-      "get": {"summary": "사용량 화면 집계 (read:routing)", "description": "Query range=today|7d|30d|90d|all (default 30d), source=agent?. Returns kpi, by_day, projects, models, by_agent, agents, hours, shape, tools, skills, top_sessions, latest, requests, authority.", "responses": {"200": {"description": "Summary"}, "400": {"description": "invalid_request"},
+      "get": {"summary": "사용량 화면 집계 (read:routing)", "description": "Query range=today|7d|month|30d|90d|all (default 30d; month = from the 1st), source=agent?, tz=minutes east of UTC? (-840..840; day and month boundaries, default Asia/Seoul). requests.items[].rule names the 늘 이 모델로 kind that picked a call. Returns kpi, by_day, projects, models, by_agent, agents, hours, shape, tools, skills, top_sessions, latest, requests, authority.", "responses": {"200": {"description": "Summary"}, "400": {"description": "invalid_request"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -16359,7 +16773,7 @@
     "/v1/model-budget/status": {
       "post": {
         "summary": "Read configured shared account allowance",
-        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies, except that a human reader with read:model_budget gets 404 not_found (no budget in this scope). Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
+        "description": "One deployment-owned exact scope and UTC month/day. Limits are <= $100 total and <= $90 general per month. Configured service identities only for mutations, current authorization and explicit priority grant required. Missing/expired policy denies services; a human reader (read:model_budget and read:routing) gets configured false with zero limits, routing_budget_usd, routing_month_cost_usd and routing_revision instead. Human readers need read:model_budget. Amounts are integer pico-USD (1 USD = 1e12). Committed amounts include outstanding worst-case reservations; not all are actual spend. No prompt or key is stored. Uncertain dispatch cannot be released as not_sent. Cache creation counters are disjoint 5-minute and 1-hour counts.",
         "requestBody": {
           "required": true,
           "content": {
@@ -40292,6 +40706,16 @@
             "type": "integer",
             "minimum": 0
           },
+          "baseline_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "The baseline run's total cost, measured by the server from its cases."
+          },
+          "baseline_duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The baseline run's total duration, measured by the server from its cases."
+          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -43752,7 +44176,11 @@
           "subscription_requests": {"type": "integer", "minimum": 0, "description": "Claude subscription CLI calls recorded this UTC month. Record-only; never part of any limit above."},
           "subscription_input_tokens": {"type": "integer", "minimum": 0},
           "subscription_output_tokens": {"type": "integer", "minimum": 0},
-          "subscription_estimated_pico_usd": {"type": "integer", "minimum": 0, "description": "List-price API-equivalent estimate of those calls, not a charge."}
+          "subscription_estimated_pico_usd": {"type": "integer", "minimum": 0, "description": "List-price API-equivalent estimate of those calls, not a charge."},
+          "configured": {"type": "boolean", "description": "False when no deployment budget applies to the scope (human readers only)."},
+          "routing_budget_usd": {"type": "number", "minimum": 0, "description": "Without a deployment budget: the owner's monthly budget for routed requests, 0 or absent for none."},
+          "routing_month_cost_usd": {"type": "number", "minimum": 0, "description": "Without a deployment budget: this UTC month's routed cost from the newest 1000 calls."},
+          "routing_revision": {"type": "integer", "minimum": 0, "description": "Without a deployment budget: the routing revision POST /v1/routing/policy must name."}
         }
       },
       "ModelBudgetReservation": {
@@ -47760,6 +48188,9 @@
           },
           "analysis_run": {
             "$ref": "#/components/schemas/WireResponseAnalysisRun"
+          },
+          "extractor": {
+            "$ref": "#/components/schemas/WireResponseExtractor"
           }
         },
         "additionalProperties": false,
@@ -48159,6 +48590,12 @@
           },
           "inject_chars": {
             "type": "integer"
+          },
+          "estimated": {
+            "type": "integer"
+          },
+          "unused_after": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -48184,6 +48621,15 @@
           },
           "used": {
             "type": "integer"
+          },
+          "estimated": {
+            "type": "integer"
+          },
+          "unreceipted": {
+            "type": "integer"
+          },
+          "unused": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,
@@ -50589,6 +51035,15 @@
             "items": {
               "$ref": "#/components/schemas/WireResponseRoutingEvent"
             }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseRoutingRule"
+            }
+          },
+          "monthly_budget_usd": {
+            "type": "number"
           }
         },
         "additionalProperties": false,
@@ -50772,6 +51227,10 @@
           },
           "origin": {
             "$ref": "#/components/schemas/WireResponseRoutingOrigin"
+          },
+          "rule": {
+            "type": "string",
+            "description": "the 늘 이 모델로 kind that picked it (code, writing, quick)"
           }
         },
         "additionalProperties": false,
@@ -51605,6 +52064,12 @@
             "type": "number"
           },
           "candidate_duration_ms": {
+            "type": "integer"
+          },
+          "baseline_cost": {
+            "type": "number"
+          },
+          "baseline_duration_ms": {
             "type": "integer"
           },
           "regression_passed": {
@@ -57394,6 +57859,12 @@
           "candidate_duration_ms": {
             "type": "integer"
           },
+          "baseline_cost": {
+            "type": "number"
+          },
+          "baseline_duration_ms": {
+            "type": "integer"
+          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -58163,6 +58634,54 @@
         "x-go-type": "memory.UsageCall",
         "x-go-source": "internal/memory/usage_sessions.go",
         "description": "UsageCall is one MCP tool call the collector paired with its result: the tool, when it was asked,\nhow long the result took and a fixed error code when it failed. Never arguments or results."
+      },
+      "WireResponseExtractor": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "cli": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "clis": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "model",
+          "cli",
+          "state"
+        ],
+        "x-go-type": "memory.Extractor",
+        "x-go-source": "internal/memory/agent_tools.go",
+        "description": "Extractor is what the host runs for 기억 추출 when nothing is picked: the model, its agent CLI and\nwhether that CLI is installed and signed in, with each known CLI's state (ready, login_needed, missing)."
+      },
+      "WireResponseRoutingRule": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "model"
+        ],
+        "x-go-type": "memory.RoutingRule",
+        "x-go-source": "internal/memory/routing.go",
+        "description": "RoutingRule is the owner's \"이런 일은 늘 이 모델로\": a task of Kind goes to Model whenever it is a candidate."
       }
     },
     "headers": {

@@ -907,7 +907,7 @@
   "cost_usd": 24.1,
   "models": [
    {
-    "name": "openai/gpt-6.1-sol",
+    "name": "gpt-5-5",
     "tokens": 2000000,
     "input": 1700000,
     "output": 300000,
@@ -917,7 +917,7 @@
     "sessions": 0
    },
    {
-    "name": "anthropic/claude-sonnet-5-5",
+    "name": "claude-sonnet-5-5",
     "tokens": 900000,
     "input": 760000,
     "output": 140000,
@@ -927,7 +927,7 @@
     "sessions": 0
    },
    {
-    "name": "zai/glm-5",
+    "name": "glm-5",
     "tokens": 500000,
     "input": 440000,
     "output": 60000,
@@ -940,7 +940,7 @@
   "items": [
    {
     "at": "2026-10-13T05:02:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -952,9 +952,9 @@
    },
    {
     "at": "2026-10-13T04:55:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
-    "decision": "clef",
+    "decision": "fixed", "rule": "code",
     "ok": true,
     "latency_ms": 8913,
     "input": 15000,
@@ -964,9 +964,9 @@
    },
    {
     "at": "2026-10-13T04:48:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
-    "decision": "clef",
+    "decision": "fixed", "rule": "writing",
     "ok": true,
     "latency_ms": 4543,
     "input": 7000,
@@ -976,7 +976,7 @@
    },
    {
     "at": "2026-10-13T04:41:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -988,7 +988,7 @@
    },
    {
     "at": "2026-10-13T04:34:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1000,7 +1000,7 @@
    },
    {
     "at": "2026-10-13T04:27:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1012,7 +1012,7 @@
    },
    {
     "at": "2026-10-13T04:20:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1024,7 +1024,7 @@
    },
    {
     "at": "2026-10-13T04:13:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1036,7 +1036,7 @@
    },
    {
     "at": "2026-10-13T04:06:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1048,7 +1048,7 @@
    },
    {
     "at": "2026-10-13T03:59:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1060,7 +1060,7 @@
    },
    {
     "at": "2026-10-13T03:52:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1072,7 +1072,7 @@
    },
    {
     "at": "2026-10-13T03:45:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1084,7 +1084,7 @@
    },
    {
     "at": "2026-10-13T03:38:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1096,7 +1096,7 @@
    },
    {
     "at": "2026-10-13T03:31:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1108,7 +1108,7 @@
    },
    {
     "at": "2026-10-13T03:24:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1120,7 +1120,7 @@
    },
    {
     "at": "2026-10-13T03:17:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1132,7 +1132,7 @@
    },
    {
     "at": "2026-10-13T03:10:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1144,7 +1144,7 @@
    },
    {
     "at": "2026-10-13T03:03:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1156,7 +1156,7 @@
    },
    {
     "at": "2026-10-13T02:56:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1168,7 +1168,7 @@
    },
    {
     "at": "2026-10-13T02:49:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1180,7 +1180,7 @@
    },
    {
     "at": "2026-10-13T02:42:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1192,7 +1192,7 @@
    },
    {
     "at": "2026-10-13T02:35:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1204,8 +1204,8 @@
    },
    {
     "at": "2026-10-13T02:28:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 7404,
@@ -1216,8 +1216,8 @@
    },
    {
     "at": "2026-10-13T02:21:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 3072,
@@ -1228,7 +1228,7 @@
    },
    {
     "at": "2026-10-13T02:14:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1240,7 +1240,7 @@
    },
    {
     "at": "2026-10-13T02:07:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1252,7 +1252,7 @@
    },
    {
     "at": "2026-10-13T02:00:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1264,7 +1264,7 @@
    },
    {
     "at": "2026-10-13T01:53:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1276,7 +1276,7 @@
    },
    {
     "at": "2026-10-13T01:46:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1288,7 +1288,7 @@
    },
    {
     "at": "2026-10-13T01:39:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1300,7 +1300,7 @@
    },
    {
     "at": "2026-10-13T01:32:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1312,7 +1312,7 @@
    },
    {
     "at": "2026-10-13T01:25:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1324,7 +1324,7 @@
    },
    {
     "at": "2026-10-13T01:18:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1336,7 +1336,7 @@
    },
    {
     "at": "2026-10-13T01:11:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1348,7 +1348,7 @@
    },
    {
     "at": "2026-10-13T01:04:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1360,7 +1360,7 @@
    },
    {
     "at": "2026-10-13T00:57:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1372,7 +1372,7 @@
    },
    {
     "at": "2026-10-13T00:50:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1384,7 +1384,7 @@
    },
    {
     "at": "2026-10-13T00:43:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1396,7 +1396,7 @@
    },
    {
     "at": "2026-10-13T00:36:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1408,8 +1408,8 @@
    },
    {
     "at": "2026-10-13T00:29:00Z",
-    "model": "anthropic/claude-haiku-4-5",
-    "replaced": "zai/glm-5",
+    "model": "claude-haiku-4-5",
+    "replaced": "glm-5",
     "decision": "failover",
     "ok": true,
     "latency_ms": 4250,
@@ -1420,7 +1420,7 @@
    },
    {
     "at": "2026-10-13T00:22:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1432,7 +1432,7 @@
    },
    {
     "at": "2026-10-13T00:15:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1444,7 +1444,7 @@
    },
    {
     "at": "2026-10-13T00:08:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1456,7 +1456,7 @@
    },
    {
     "at": "2026-10-13T00:01:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1468,7 +1468,7 @@
    },
    {
     "at": "2026-10-12T23:54:00Z",
-    "model": "qwen/qwen3-coder",
+    "model": "qwen3-coder",
     "replaced": "",
     "decision": "코드 보조",
     "ok": true,
@@ -1480,7 +1480,7 @@
    },
    {
     "at": "2026-10-12T23:47:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1492,7 +1492,7 @@
    },
    {
     "at": "2026-10-12T23:40:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1504,7 +1504,7 @@
    },
    {
     "at": "2026-10-12T23:33:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1516,7 +1516,7 @@
    },
    {
     "at": "2026-10-12T23:26:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1528,7 +1528,7 @@
    },
    {
     "at": "2026-10-12T23:19:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1540,7 +1540,7 @@
    },
    {
     "at": "2026-10-12T23:12:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1552,7 +1552,7 @@
    },
    {
     "at": "2026-10-12T23:05:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1564,7 +1564,7 @@
    },
    {
     "at": "2026-10-12T22:58:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1576,7 +1576,7 @@
    },
    {
     "at": "2026-10-12T22:51:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1588,7 +1588,7 @@
    },
    {
     "at": "2026-10-12T22:44:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1600,7 +1600,7 @@
    },
    {
     "at": "2026-10-12T22:37:00Z",
-    "model": "zai/glm-5",
+    "model": "glm-5",
     "replaced": "",
     "decision": "fixed",
     "ok": true,
@@ -1612,7 +1612,7 @@
    },
    {
     "at": "2026-10-12T22:30:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1624,7 +1624,7 @@
    },
    {
     "at": "2026-10-12T22:23:00Z",
-    "model": "anthropic/claude-sonnet-5-5",
+    "model": "claude-sonnet-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1636,7 +1636,7 @@
    },
    {
     "at": "2026-10-12T22:16:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,
@@ -1648,7 +1648,7 @@
    },
    {
     "at": "2026-10-12T22:09:00Z",
-    "model": "openai/gpt-6.1-sol",
+    "model": "gpt-5-5",
     "replaced": "",
     "decision": "clef",
     "ok": true,

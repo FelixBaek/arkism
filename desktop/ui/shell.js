@@ -23,8 +23,8 @@ window.ArkismShell = (ctx) => {
       ["crew-usage", "사용량", () => go("crewUsage"), () => state.view === "crewUsage"]
     ] },
     router: { label: "ROUTER", tabs: [
-      ["routing", "라우팅 현황", () => go("routing"), () => state.view === "routing", count("routing")],
-      ["routing-set", "라우팅 설정", () => settings("routing"), () => state.view === "settings" && state.settingsTab === "routing"],
+      // 라우팅 설정 has no tab of its own (Figma 1303:79879): the policy card's 「라우팅 설정」 button opens it, and 라우팅 현황 stays lit.
+      ["routing", "라우팅 현황", () => go("routing"), () => state.view === "routing" || (state.view === "settings" && state.settingsTab === "routing"), count("routing")],
       ["usage", "사용량", () => go("usage"), () => state.view === "usage", count("usage")]
     ] },
     connect: { label: "TOOLS", tabs: [
@@ -39,7 +39,7 @@ window.ArkismShell = (ctx) => {
       ["image", "이미지", () => go("images", "image"), () => state.view === "images" && state.imageTab !== "slide", count("image")],
       ["slide", "슬라이드", () => go("images", "slide"), () => state.view === "images" && state.imageTab === "slide", count("slide")]
     ] },
-    // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅 설정 lives under ROUTER.
+    // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅 설정 opens from ROUTER › 라우팅 현황.
     settings: { label: "설정", tabs: [
       ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["appearance", "모양"], ["agents", "에이전트"], ["roles", "역할별 모델"],
       ["workflow", "페르소나"], ["categories", "카테고리"], ["advanced", "고급"], ["info", "정보"]
