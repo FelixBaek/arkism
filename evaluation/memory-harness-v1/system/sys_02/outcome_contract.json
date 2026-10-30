@@ -1,0 +1,370 @@
+{
+  "protocol": "sys-outcome-conversion-v1",
+  "task_id": "SYS-02.spec",
+  "verification_scope": "synthetic_model",
+  "is_product_contract": false,
+  "all_fields_required": true,
+  "additional_fields": false,
+  "models": {
+    "Observation": {
+      "fields": {
+        "protocol": {
+          "enum": [
+            "sys-outcome-conversion-v1"
+          ]
+        },
+        "provenance": {
+          "enum": [
+            "synthetic_fixture"
+          ]
+        },
+        "channel": {
+          "enum": [
+            "native_metadata",
+            "synthetic_dyn"
+          ]
+        },
+        "server_return": {
+          "enum": [
+            "observed_true",
+            "observed_false",
+            "pending",
+            "unknown"
+          ]
+        },
+        "context_delivery": {
+          "enum": [
+            "observed_true",
+            "observed_false",
+            "pending",
+            "unknown"
+          ]
+        },
+        "actual_use": {
+          "enum": [
+            "observed_true",
+            "observed_false",
+            "pending",
+            "unknown"
+          ]
+        },
+        "task_success": {
+          "enum": [
+            "observed_true",
+            "observed_false",
+            "pending",
+            "unknown"
+          ]
+        },
+        "native": {
+          "nullable": "NativeMetadata"
+        },
+        "dyn": {
+          "nullable": "SyntheticBinding"
+        }
+      }
+    },
+    "NativeMetadata": {
+      "fields": {
+        "scope": "SYS:Scope",
+        "request": "OutcomeRequest",
+        "evaluator": "Evaluator",
+        "target_record": "TargetRecord",
+        "trace_record": "TraceRecord",
+        "evidence_records": {
+          "items": "EvidenceRecord",
+          "min_items": 1,
+          "max_items": 64
+        },
+        "checker": "Checker",
+        "acceptance": "Acceptance",
+        "observation_clock": "SYS:NativeClock",
+        "source_clock": {
+          "enum": [
+            "unix_utc"
+          ]
+        },
+        "time_unit": {
+          "enum": [
+            "ns"
+          ]
+        }
+      }
+    },
+    "OutcomeRequest": {
+      "fields": {
+        "target": "SYS:CanonicalRecordRef",
+        "trace": "SYS:CanonicalRecordRef",
+        "evidence": {
+          "items": "SYS:CanonicalRecordRef",
+          "min_items": 1,
+          "max_items": 64
+        },
+        "event_id": "NativeEventID",
+        "checker_sha256": "SHA",
+        "dimension": {
+          "enum": [
+            "personal_compliance",
+            "work_task"
+          ]
+        },
+        "passed": {
+          "nullable": "Bool"
+        }
+      }
+    },
+    "Evaluator": {
+      "fields": {
+        "principal_id": "NativePrincipal",
+        "role": {
+          "enum": [
+            "service",
+            "pipeline",
+            "human",
+            "agent"
+          ]
+        },
+        "permission_observation": {
+          "enum": [
+            "declared_granted",
+            "denied",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "TargetRecord": {
+      "fields": {
+        "scope": "SYS:Scope",
+        "ref": "SYS:CanonicalRecordRef",
+        "current_ref": "SYS:CanonicalRecordRef",
+        "lifecycle": {
+          "enum": [
+            "live",
+            "deleted",
+            "revoked",
+            "quarantined"
+          ]
+        },
+        "created_by": "NativeLabel",
+        "approved_by": "NativeLabel",
+        "content_sha256": "SHA"
+      }
+    },
+    "TraceRecord": {
+      "fields": {
+        "scope": "SYS:Scope",
+        "ref": "SYS:CanonicalRecordRef",
+        "current_ref": "SYS:CanonicalRecordRef",
+        "lifecycle": {
+          "enum": [
+            "live",
+            "deleted",
+            "revoked",
+            "quarantined"
+          ]
+        },
+        "created_by": "NativeLabel",
+        "run_ref": "SYS:CanonicalRecordRef",
+        "run_current_ref": "SYS:CanonicalRecordRef",
+        "run_lifecycle": {
+          "enum": [
+            "live",
+            "deleted",
+            "revoked",
+            "quarantined"
+          ]
+        },
+        "run_task_type": "NativeLabel",
+        "run_terminal": "Bool",
+        "run_finished": "Bool",
+        "source_refs": {
+          "items": "SYS:CanonicalRecordRef",
+          "min_items": 1,
+          "max_items": 64
+        }
+      }
+    },
+    "EvidenceRecord": {
+      "fields": {
+        "scope": "SYS:Scope",
+        "ref": "SYS:CanonicalRecordRef",
+        "current_ref": "SYS:CanonicalRecordRef",
+        "lifecycle": {
+          "enum": [
+            "live",
+            "deleted",
+            "revoked",
+            "quarantined"
+          ]
+        },
+        "created_by": "NativeLabel",
+        "trace_ref": "SYS:CanonicalRecordRef",
+        "source_event_id": "NativePrincipal",
+        "retrieved_refs": {
+          "items": "SYS:CanonicalRecordRef",
+          "min_items": 0,
+          "max_items": 64
+        },
+        "content_sha256": "SHA"
+      }
+    },
+    "Checker": {
+      "fields": {
+        "host_config_sha256": "SHA",
+        "host_bytes_sha256": "SHA",
+        "basis": {
+          "enum": [
+            "synthetic_hash_comparison",
+            "server_format_only",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "Acceptance": {
+      "fields": {
+        "state": {
+          "enum": [
+            "accepted",
+            "rejected",
+            "pending",
+            "unknown"
+          ]
+        },
+        "evaluation_ref": {
+          "nullable": "SYS:CanonicalRecordRef"
+        },
+        "server_created_at": "SYS:NativeClock",
+        "processing_seq": {
+          "nullable": "PositiveInt64"
+        }
+      }
+    },
+    "SyntheticBinding": {
+      "fields": {
+        "stream_id": "SyntheticID",
+        "event_id": "SyntheticID",
+        "transport_attempt_id": "SyntheticID",
+        "clock_domain": {
+          "enum": [
+            "synthetic_clock"
+          ]
+        },
+        "observed_at_ns": {
+          "nullable": "NS"
+        },
+        "arrived_at_ns": {
+          "nullable": "NS"
+        },
+        "accepted_at_ns": "NS",
+        "accepted_seq": "PositiveInt64",
+        "key": "DYN:DynamicsKeyV2",
+        "task": "DYN:TaskBinding",
+        "evidence": "DYN:EvidenceBinding",
+        "attribution": {
+          "enum": [
+            "memory",
+            "tool",
+            "retrieval",
+            "evaluator",
+            "unattributable"
+          ]
+        },
+        "strength": {
+          "nullable": "UnitFloat"
+        }
+      }
+    }
+  },
+  "dependency_pins": {
+    "evaluation/memory-harness-v1/system/sys_01/test_shadow_contract.py": "38ec2e8fcd04649487a4693a3d05eb35d831e4445cb4f8f9435f5cdcf0e3cc29",
+    "evaluation/memory-harness-v1/system/sys_01/adapter_contract.json": "82936159380c3d34720ea80822db0b8c10c3242dba8bb493876c7a8895bad5f0",
+    "evaluation/memory-harness-v1/contract_io.py": "d575bf82f5d1088883fddf5191e97a60a2260cc46a37051af9a89cdd5b7aa74e",
+    "evaluation/memory-harness-v1/contracts/implementation_contract.json": "04463d838f397772743c5740a346230eb8e9db60db8dddc824d52e1f083790ef",
+    "docs/research/memory-harness/dynamics_policy_contract.json": "952d663b76254e15a3a65ab09dcd580504bc4c2814ce4903a8883ece1ca8f0da"
+  },
+  "strict_limits": {
+    "max_bytes": 4194304,
+    "max_depth": 32,
+    "max_string_bytes": 4096,
+    "max_array_items": 64
+  },
+  "authority": {
+    "fixture_metadata": "Declared necessary-boundary facts only, not live service authorization or source proof. No verified bool accepted.",
+    "native_accepted_observation": "Exact accepted evaluation read within service authorization/currentness boundary is required by B. JSON alone never authenticates it. Current A produces metadata plan only, no DYN event.",
+    "native_unresolved": [
+      "owner_authenticated_acceptance_and_currentness_resolver",
+      "native_task_trial_and_raw_artifact_binding",
+      "native_qualified_protocol_not_supported_by_fixed_DYN",
+      "SYS03_durable_processing_sequence_and_consumption"
+    ]
+  },
+  "meaning": {
+    "server_return": "Exact target appears in trace source retrieved list. It is not actual_use or task_success.",
+    "context_delivery": "Separate SYS01 presentation/delivery observation; never inferred from server return.",
+    "actual_use": "Independent use observation or unknown; return/delivery cannot establish it.",
+    "task_success": "Explicit checker observed boolean only; pending/unknown never false. Negative never implies memory attribution."
+  },
+  "identity": {
+    "api": "Current product hashes structuredText(scope)+LF+evaluator principal+LF+event_id; request hash covers native MemoryOutcomeInput including scope. The A audit digest uses distinct sys-outcome domain, NOT product byte-hash identity. Exact retry must recheck current refs.",
+    "logical": "Exact frozen DYN EvidenceIdentityProjectionV2. Full task_ref/run_ref/trial_ref/checker/evidence tuple required. Neither API event_id nor evaluation Ref defines logical identity. Native missing tuple returns null, never fabricated.",
+    "claim": "Frozen DYN EvidenceClaimProjectionV2 separately binds outcome/attribution/strength/observed/time/full task+evidence. Only qualified known outcomes consume evidence.",
+    "durability": "Synthetic in-memory test index only. Atomic durable event/consumption storage deferred to SYS03."
+  },
+  "time": {
+    "native": "server_created_at is evaluation.CreatedAt from server UTC, preserves unknown/native_zero/outside_int64 states. No client-clock substitution. Processing sequence absent in existing API; native processing_seq MUST be null.",
+    "synthetic": "DYN accepted_at_ns/accepted_seq in synthetic_clock only. Source observed<=accepted; arrived<=accepted for first acceptance. Retry retains first accepted coordinates; arrival may be later. Equal accepted time ordered by sequence. Never use sorted timestamp as sequence."
+  },
+  "mapping": {
+    "native": "Structural metadata-only plan; no EventV2, no evidence consumption or jump, no claim of authentic acceptance. Pending/unknown remains unobserved.",
+    "synthetic": "Separate complete offline DYN EventV2. Evidence namespace fixture; explicit synthetic_independent test labels only. Qualified failed requires attribution memory. Unknown/pending emits no outcome event. Strength is fixture-supplied test input, not a proposed production coefficient.",
+    "noncausal": "Observed failure with unattributable/tool/retrieval/evaluator attribution is non-learning; no negative memory blame."
+  },
+  "source_refs": {
+    "memory_outcome.go": "RecordMemoryOutcome/validMemoryOutcomeInput/memoryOutcomeTraceCompleted/memoryOutcomeEvidence",
+    "memory_outcome_read.go": "MemoryOutcomes entry.JudgedAt=CreatedAt; summary not accepted event",
+    "memory_signal.go": "context_usage counts not actual-use proof or DYN state",
+    "crew/memory_outcomes.go": "processOutcome/runChecker host bytes/checker hash check separate from server format check"
+  },
+  "support_ledger": [
+    {
+      "reference": "FNDM / Hindsight Memory-PRM",
+      "relation": "partial: outcome event/independence boundary only; no upstream algorithm, reward effect, causal credit or performance reproduced."
+    }
+  ],
+  "error_codes": [
+    "invalid_json",
+    "duplicate_key",
+    "invalid_unicode",
+    "resource_limit",
+    "missing_field",
+    "unknown_field",
+    "invalid_type",
+    "invalid_value",
+    "dependency_mismatch",
+    "unsupported_type",
+    "scope_mismatch",
+    "revision_mismatch",
+    "source_unavailable",
+    "self_rating",
+    "evaluator_denied",
+    "crew_trace_excluded",
+    "trace_invalid",
+    "evidence_invalid",
+    "target_not_returned",
+    "checker_mismatch",
+    "checker_unverified",
+    "acceptance_binding",
+    "clock_mismatch",
+    "future_observation",
+    "time_regression",
+    "sequence_regression",
+    "native_sequence_unavailable",
+    "native_qualification_unimplemented",
+    "hash_mismatch",
+    "event_conflict",
+    "evidence_conflict",
+    "namespace_mismatch"
+  ]
+}
