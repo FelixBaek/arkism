@@ -461,6 +461,24 @@
       "requesters": [
         "CRW-03"
       ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/dynamics_outcome.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02",
+        "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/dynamics_outcome_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-02",
+        "SYS-03"
+      ]
     }
   ],
   "cards": [
@@ -1514,6 +1532,22 @@
         {
           "root": "repo",
           "path": "internal/host/crew/memory_outcomes.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/dynamics_outcome.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-02.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/dynamics_outcome_test.go",
           "owner": "INTEGRATION",
           "after": [
             "SYS-02.spec"
