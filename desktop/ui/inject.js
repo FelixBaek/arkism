@@ -205,7 +205,7 @@
     function effectSection() {
       const s = section("효과", "답에 보였는지");
       const w7 = use7(), w30 = use30();
-      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 답에 보였는지 기록를 보내지 않았어요.")); return s; }
+      if (!w7 && !w30) { s.append(el("p", "meta", "아직 서버가 답에 보였는지 기록을 보내지 않았어요.")); return s; }
       const rows = [];
       for (const w of [w7, w30].filter(Boolean)) rows.push([`최근 ${w.days}일`, w.injections ? `${w.injections}번 들어감 · 답에 보임 ${w.used}번 · ${w.rate}% · 대화 ${w.sessions}개` : `들어간 기억 없음 · 대화 ${w.sessions}개`]);
       const avg = (w30 || w7).avgChars ?? w7?.avgChars;
