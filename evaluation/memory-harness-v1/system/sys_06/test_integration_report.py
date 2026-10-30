@@ -13,8 +13,7 @@ H = 'a' * 64
 def observed(expect):
     return {'returned': expect['returned'], 'baseline_equal': expect['baseline_equal'], 'receipts_delta': expect['receipts_delta'],
             'reinforcement_delta': expect['reinforcement_delta'], 'fallback_reason': expect['fallback_reason'],
-            'fallback_count': 1 if expect['fallback_reason'] else 0, 'fence_rechecked': True, 'permission_checked': True,
-            'deletion_checked': True, 'revision_checked': True, 'revived_ref': False, 'rolled_back_to_snapshot': False, 'error_hidden': False}
+            'fallback_count': 1 if expect['fallback_reason'] else 0, **{k: True for k in V.RECHECKS}, 'revived_ref': False, 'rolled_back_to_snapshot': False, 'error_hidden': False}
 
 
 def good(evidence='isolated_real', claim='local_integration'):
@@ -23,8 +22,11 @@ def good(evidence='isolated_real', claim='local_integration'):
             'product_diff': [{'path': 'internal/memory/service.go', 'sha256': H}], 'code_sha256': H, 'config_sha256': H,
             'fixture_sha256': H, 'system_contract_sha256': V.contract_index()[0],
             'independent_review': {'verdict': 'accept', 'report_sha256': H},
-            'commands': [{'cmd': 'go test -race ./internal/memory -run ^TestDynamicsIntegration', 'exit_code': 0, 'tests_run': 32, 'skipped': 0, 'failed': 0}],
+            'commands': [{'cmd': c, 'exit_code': 0, 'tests_run': 32, 'skipped': 0, 'failed': 0} for c in REQUIRED],
             'cases': [{'mode': c['mode'], 'condition': c['condition'], 'evidence': evidence, 'observed': observed(c['expect'])} for c in cells]}
+
+
+REQUIRED = V.load('integration_plan.json')['stages']['B']['required_checks']
 
 
 def case(report, mode, condition):
@@ -32,6 +34,12 @@ def case(report, mode, condition):
 
 
 class IntegrationReport(unittest.TestCase):
+    def setUp(self):
+        # SYS-05 is still in_progress in the real index; most cases assume its prerequisites were accepted.
+        real = V.contract_index
+        self.addCleanup(setattr, V, 'contract_index', real)
+        V.contract_index = lambda: real()[:2] + ([],)
+
     def assertStatus(self, report, status, reason=None):
         result = V.validate(report)
         self.assertEqual(result['status'], status, result)
@@ -40,6 +48,10 @@ class IntegrationReport(unittest.TestCase):
 
     def test_contract_index_matches_sys01_to_sys05_files(self):
         self.assertEqual(V.contract_index()[1], [])
+        self.doCleanups()
+        self.assertEqual(V.contract_index()[2], ['sys_05/load_contract.json'])
+        self.assertStatus(good(), 'hold', 'prerequisite_unaccepted:sys_05/load_contract.json')
+        self.assertStatus(good('synthetic', 'synthetic_pass'), 'synthetic_pass')
         cards = {c['card'] for c in V.load('system_contract.json')['contracts']}
         self.assertEqual(cards, {'SYS-01', 'SYS-02', 'SYS-03', 'SYS-04', 'SYS-05'})
 
@@ -118,7 +130,7 @@ class IntegrationReport(unittest.TestCase):
     def test_drifted_contract_file_holds_even_with_matching_index_hash(self):
         real = V.contract_index
         try:
-            V.contract_index = lambda: (real()[0], ['sys_05/load_contract.json'])
+            V.contract_index = lambda: (real()[0], ['sys_05/load_contract.json'], [])
             self.assertStatus(good(), 'hold', 'contract_drift:sys_05/load_contract.json')
         finally:
             V.contract_index = real
@@ -130,6 +142,42 @@ class IntegrationReport(unittest.TestCase):
         self.assertStatus(r, 'needs_fix', 'invalid_report')
         r = good(); case(r, 'off', 'normal')['note'] = 'x'
         self.assertStatus(r, 'hold', 'off/normal:invalid_observation')
+
+    def test_non_string_case_keys_hold_without_crashing(self):
+        for bad in (['off'], 7, None):
+            r = good(); r['cases'][0]['mode'] = bad
+            self.assertStatus(r, 'hold', 'invalid_case')
+        r = good(); r['cases'].append(dict(copy.deepcopy(r['cases'][0]), condition=3))
+        self.assertStatus(r, 'hold', 'invalid_case')
+
+    def test_required_checks_must_run_clean(self):
+        r = good(); r['commands'] = [{'cmd': 'echo ok', 'exit_code': 0, 'tests_run': 1, 'skipped': 0, 'failed': 0}]
+        self.assertStatus(r, 'hold', 'required_check_missing')
+        for key, bad in (('exit_code', False), ('skipped', 0.0), ('tests_run', True)):
+            r = good(); r['commands'][0][key] = bad
+            self.assertStatus(r, 'hold', 'invalid_command')
+        self.assertStatus(dict(good('synthetic', 'synthetic_pass'), commands=[{'cmd': 'echo ok', 'exit_code': 0, 'tests_run': 1, 'skipped': 0, 'failed': 0}]), 'synthetic_pass')
+
+    def test_product_diff_must_stay_in_the_allowlist(self):
+        for path in ('', '../../etc/passwd', 'README.md'):
+            r = good(); r['product_diff'][0]['path'] = path
+            self.assertStatus(r, 'hold', 'product_diff_outside_allowlist')
+
+    def test_observations_are_strictly_typed(self):
+        r = good(); case(r, 'off', 'normal')['baseline_equal'] = 1
+        self.assertStatus(r, 'needs_fix', 'off/normal:baseline_equal')
+        r = good(); case(r, 'shadow', 'normal')['receipts_delta'] = False
+        self.assertStatus(r, 'needs_fix', 'shadow/normal:receipts_delta')
+
+    def test_hidden_fallback_count_is_caught(self):
+        for mode, condition, bad in (('off', 'normal', 99), ('shadow', 'timeout', 'lots')):
+            r = good(); case(r, mode, condition)['fallback_count'] = bad
+            self.assertStatus(r, 'needs_fix', mode + '/' + condition + ':unexpected_fallback')
+
+    def test_scope_approval_and_source_are_rechecked(self):
+        for key in ('scope_checked', 'approval_checked', 'source_checked'):
+            r = good(); case(r, 'dynamic', 'stale_state')[key] = False
+            self.assertStatus(r, 'needs_fix', 'dynamic/stale_state:' + key)
 
 
 if __name__ == '__main__':
