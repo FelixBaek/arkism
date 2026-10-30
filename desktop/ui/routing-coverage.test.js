@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 require("./keep.js"); // the shared stale-reply and redraw guards the screens use
+require("./model-pick.js"); // the shared model picker rule
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -419,4 +420,20 @@ test("라우팅 설정 first use: connect an agent comes first, no models points
   const kids = w.nodes.main.children;
   assert.ok(kids[kids.length - 1].classList.contains("rt-links")); // connected: the card moves to the end
   delete window.__TAURI__;
+});
+
+test("라우팅 설정's model picks keep a model whose provider is not connected behind the toggle, with a way to connect", async () => {
+  const items = [...modelsDoc().items, { id: "k", name: "K", family: "XAI", provider: "xai", connection: { state: "key", label: "로그인 필요" } }];
+  const v = mk({ replies: { "/v1/routing/models": () => ({ authority: "data_only_untrusted", items }), "/v1/routing/overview": () => overview({ policy: { revision: 1, default_model: "" } }) } });
+  v.state.view = "settings";
+  v.draw(); await settle();
+  const fixed = v.nodes.main.all((n) => n.tagName === "SELECT")[0];
+  const { MORE, CONNECT } = window.ArkismModelPick;
+  assert.deepEqual(fixed.options.map((o) => o.value), ["", "a", "c", MORE]);
+  fixed.value = MORE; fixed.fire("change");
+  assert.ok(!v.calls.some(([p]) => p === "/v1/routing/policy"), "showing more is not a pick");
+  assert.equal(fixed.options.find((o) => o.value === "k").disabled, true);
+  fixed.value = CONNECT; fixed.fire("change");
+  assert.equal(v.state.settingsTab, "agents");
+  assert.deepEqual(v.went, ["settings"]);
 });

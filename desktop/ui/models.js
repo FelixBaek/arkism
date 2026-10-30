@@ -67,7 +67,11 @@ window.ArkismModels = (ctx) => {
   // The same, one group per way the provider is connected (each subscription plan, API): a provider with a login and a key shows twice.
   // Both copies save the same value; the runner, not the pick, decides how a model runs.
   const pickerGroups = () => enabledByProvider().flatMap((p) => (p.badges.length > 1 ? p.badges.map((b) => ({ ...p, badges: [b] })) : [p]));
-  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, badges: viaBadges(p), models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
+  const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, badges: viaBadges(p), usable: usable(p), models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
+  // Signed in, a key stored, or added by hand: its models can run. model-pick.js keeps the others behind 「연결 안 된 모델도 보기」.
+  const usable = (p) => !!(p.custom || isCustom(p.id) || (p.keys || []).length || (p.accounts || []).some((a) => a.status === "connected"));
+  // 연결하러 가기 in a picker: 설정 › 에이전트, where a provider signs in or takes a key.
+  const toAgents = () => window.dispatchEvent(new CustomEvent("arkism:open-settings", { detail: { tab: "agents" } }));
 
   const ERR = {
     access_denied: "이 계정은 모델·키 설정을 바꿀 수 없어요.",
@@ -75,6 +79,8 @@ window.ArkismModels = (ctx) => {
     secret_detected: "이름이나 주소에 키처럼 보이는 값이 있어요."
   };
   const errText = (e) => ERR[e.message] || `처리하지 못했어요 (${e.message}).`;
+  // An endpoint saved without a key has no last four characters; its extra headers show by name only.
+  const masked = (k) => [k.last4 ? `••••${k.last4}` : "키 없음", k.header_names?.length ? `헤더 ${k.header_names.join(", ")}` : ""].filter(Boolean).join(" · ");
 
   async function switchModel(pid, model, on, extra = {}) {
     try {
@@ -92,7 +98,7 @@ window.ArkismModels = (ctx) => {
       render(false);
       notice(`${model}에 시험 문장을 보냈어요. 길면 1분쯤 걸려요.`);
       const q = await waitFor(last(rec).id, 120000);
-      if (!q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 확인해 주세요.");
+      if (!q) notice(state.mode === "local" ? "아직 답이 없어요. 잠시 뒤 다시 확인해 주세요." : "서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 확인해 주세요.");
       else notice(q.status === "done" ? `${model} 연결 정상 · ${q.note || "응답 받음"}` : `${model} 시험 실패: ${q.error || "알 수 없음"}`);
     } catch (e) { notice(errText(e)); } finally { if (btn) btn.disabled = false; }
   }
@@ -102,17 +108,25 @@ window.ArkismModels = (ctx) => {
     if (q.status === "pending") return el("span", "tag", "시험 중");
     return el("span", `tag ${q.status === "done" ? "ok" : "warn"}`, q.status === "done" ? (q.note || "정상") : "시험 실패");
   }
-  // 계정 추가: a CLI login happens on the server, so the window shows the command to run there.
-  const LOGIN = { codex: "codex login", claude: "claude  →  /login", gemini: "gemini  →  로그인 선택",
+  // 계정 추가: on this PC the app opens the CLI's own sign-in (agent_login: a terminal window that opens the browser)
+  // and waits for it; on a server the login happens there, so the window shows the command to run.
+  const LOGIN = { codex: "codex login", claude: "claude auth login", gemini: "gemini  →  로그인 선택",
     grok: "grok  →  /login", agy: "agy  →  로그인" };
+  const APP_LOGIN = ["claude", "codex", "gemini"]; // agent_login.rs knows these
+  const ANOTHER = ["claude", "codex"]; // CLIs whose second account lives in its own folder (subscription accounts)
+  const LOGIN_ERR = { login_timeout: "10분 안에 로그인이 끝나지 않았어요. 다시 눌러 주세요.", login_terminal_missing: "로그인 창을 열지 못했어요. 터미널에서 아래 명령을 실행해 주세요.",
+    account_register_failed: "로그인은 됐지만 계정을 넣지 못했어요. 다시 눌러 주세요." };
+  const canAppLogin = (cli) => state.mode === "local" && !!window.__TAURI__?.core && APP_LOGIN.includes(cli);
   function openAccountHelp(p) {
     const clis = [...new Set([...(p.accounts || []).map((a) => a.cli), { openai: "codex", anthropic: "claude", google: "gemini" }[p.id]].filter(Boolean))];
+    const local = state.mode === "local";
     const dlg = el("dialog", "crew-dialog");
     const form = el("form");
     form.method = "dialog";
     const head = el("div", "dialog-head");
     const t = el("div", "");
-    t.append(el("h2", "", `${p.name} 계정 추가`), el("p", "", "구독 로그인은 서버에서 한 번 해 두면 돼요. 로그인하면 1분 안에 여기 보여요."));
+    t.append(el("h2", "", `${p.name} 계정 추가`), el("p", "", local ? "로그인 버튼을 누르면 로그인 창이 열려요. 브라우저에서 로그인을 마치면 여기 바로 보여요."
+      : "구독 로그인은 서버에서 한 번 해 두면 돼요. 로그인하면 1분 안에 여기 보여요."));
     const close = el("button", "icon-btn plain");
     close.value = "cancel";
     close.setAttribute("aria-label", "닫기");
@@ -120,18 +134,63 @@ window.ArkismModels = (ctx) => {
     head.append(t, close);
     const body = el("div", "dialog-body");
     if (!clis.length) body.append(el("p", "", `${p.name}는 API 키로 연결해요. 아래 '키 넣기'에서 키를 넣으면 바로 써요.`));
+    const status = el("div", "key-result");
+    status.hidden = true;
+    const say = (ok, title, sub, cmd) => {
+      status.hidden = false;
+      status.className = `key-result ${ok ? "ok" : ok === false ? "bad" : ""}`;
+      const tx = el("div");
+      tx.append(el("strong", "", title));
+      if (sub) tx.append(el("small", "", sub));
+      if (cmd) tx.append(el("code", "", cmd));
+      status.replaceChildren(icon(ok ? "check-circle" : ok === false ? "warning-circle" : "arrows-clockwise"), tx);
+    };
+    const logins = [];
+    async function login(c, another, btn) {
+      const name = CLI_NAMES[c] || c;
+      logins.forEach((b) => { b.disabled = true; });
+      say(null, "로그인 창을 열었어요", "브라우저에서 로그인을 마치면 여기서 바로 알려 줘요. 창을 닫지 마세요.");
+      const n = (p.accounts || []).filter((a) => a.cli === c).length;
+      try {
+        await window.__TAURI__.core.invoke("agent_login", { cli: c, another, label: another ? `${name} ${n + 1}` : null });
+        await load();
+        render(false);
+        say(true, `${name}에 로그인했어요`, "이제 이 계정으로 AI를 쓸 수 있어요.");
+        btn.textContent = "로그인됨";
+        notice(`${name}에 로그인했어요.`);
+      } catch (e) {
+        const code = String(e?.message || e);
+        say(false, LOGIN_ERR[code] || "로그인하지 못했어요. 다시 눌러 주세요.", "", code === "login_terminal_missing" ? LOGIN[c] : "");
+        logins.forEach((b) => { b.disabled = false; });
+      }
+    }
     for (const c of clis) {
       const row = el("div", "login-row");
-      row.append(el("strong", "", `${c} CLI`), el("code", "", LOGIN[c] || `${c} login`));
+      const name = CLI_NAMES[c] || c;
+      if (canAppLogin(c)) {
+        const signed = (p.accounts || []).some((a) => a.cli === c && a.status === "connected");
+        const info = el("div", "");
+        info.append(el("strong", "", name), el("small", "dim", signed ? "로그인돼 있어요" : "아직 로그인 안 됨"));
+        row.append(info);
+        const another = signed && ANOTHER.includes(c);
+        if (!signed || another) {
+          const b = button(another ? "다른 계정으로 로그인" : "로그인", another ? "" : "primary", null, () => void login(c, another, b));
+          b.type = "button";
+          logins.push(b);
+          row.append(b);
+        }
+      } else row.append(el("strong", "", /CLI$/.test(name) ? name : `${name} CLI`), el("code", "", LOGIN[c] || `${c} login`));
       body.append(row);
     }
-    body.append(el("p", "pg-hint", "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 '키 넣기'를 눌러요."));
+    body.append(status);
+    if (!local) body.append(el("p", "pg-hint", "여러 계정을 번갈아 쓰려면 계정마다 따로 로그인한 홈 폴더를 쓰세요. API로 쓰려면 '키 넣기'를 눌러요."));
     const foot = el("div", "dialog-foot");
-    const key = button("키 넣기", clis.length ? "" : "primary", null, () => { dlg.close(); openKeyDialog(p); });
+    const key = button("키 넣기", clis.length ? "ghost" : "primary", null, () => { dlg.close(); openKeyDialog(p); });
     key.type = "button";
-    const ok = button("닫기", clis.length ? "primary" : "");
+    key.title = "구독 대신 API 키로 연결해요";
+    const ok = button("닫기", clis.length && !logins.length ? "primary" : "");
     ok.type = "submit";
-    foot.append(key, ok);
+    foot.append(key, el("span", "grow"), ok);
     form.append(head, body, foot);
     dlg.append(form);
     dlg.addEventListener("close", () => dlg.remove());
@@ -219,7 +278,7 @@ window.ArkismModels = (ctx) => {
         if (!id) notice("서버가 새로고침 요청을 받지 않았어요. 잠시 뒤 다시 눌러 주세요.");
         const q = id ? await waitFor(id, 60000) : null;
         if (q?.status === "failed" || q?.status === "expired") notice(`모델 목록을 새로 받지 못했어요: ${q.error || "알 수 없음"}`);
-        else if (id && !q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요.");
+        else if (id && !q) notice("서버 실행기가 아직 답하지 않았어요. 잠시 뒤 다시 눌러 주세요."); // server mode only (this PC refreshes directly)
       }
       await load();
     } catch (e) { notice(errText(e)); } finally { render(false); }
@@ -293,6 +352,7 @@ window.ArkismModels = (ctx) => {
       // Gemini CLI renews its own sign-in whenever it runs; Arkism never refreshes it.
       const hint = a.cli === "gemini" && a.status === "expired" ? `${where} Gemini CLI를 한 번 실행하면 로그인이 갱신돼요.` : `${where} ${a.cli || "CLI"} 로그인을 다시 해 주세요.`;
       box.append(el("div", "mp-warn", hint));
+      if (canAppLogin(a.cli)) { const again = el("div", "mp-actions"); again.append(button("다시 로그인", "primary", null, () => openAccountHelp(p))); box.append(again); }
     }
     let windows = [];
     if (a.quotas?.length) windows = a.quotas;
@@ -321,11 +381,12 @@ window.ArkismModels = (ctx) => {
   }
   function accountsCard(p) {
     const accounts = p.accounts || [];
-    const kindText = p.kind === "subscription" ? `${p.name} · ${[...new Set(accounts.map((a) => CLI_NAMES[a.cli] || a.label))].join("·") || "구독"} 구독 계정이에요.` : `${p.name} · API 키로 연결해요.`;
+    const clis = [...new Set(accounts.map((a) => CLI_NAMES[a.cli] || a.label))].join("·");
+    const kindText = p.kind === "subscription" ? (clis ? `${p.name} · ${clis} 구독 계정이에요.` : `${p.name} · 구독 계정이에요.`) : `${p.name} · API 키로 연결해요.`;
     const c = card("계정", kindText);
     accounts.forEach((a, i) => c.append(accountBlock(p, a, i === 0)));
     if (!accounts.length) {
-      c.append(el("p", "mp-empty", p.custom ? "직접 추가한 제공자는 키로만 연결해요." : "로그인한 계정이 없어요. 구독으로 쓰려면 계정을 추가하고, API로 쓰려면 오른쪽에서 키를 넣어요."));
+      c.append(el("p", "mp-empty", p.custom ? "직접 추가한 제공자는 키로만 연결해요." : "로그인한 계정이 없어요. 구독으로 쓰려면 계정을 추가하고, API로 쓰려면 아래 'API 키'에서 키를 넣어요."));
       if (!p.custom) { const acts = el("div", "mp-actions"); acts.append(button("계정 추가", "", null, () => openAccountHelp(p))); c.append(acts); }
     }
     return c;
@@ -336,7 +397,7 @@ window.ArkismModels = (ctx) => {
     for (const q of (doc().requests || []).filter((x) => x.provider === p.id && x.kind === "key_add" && x.status !== "done").slice(-3)) {
       const msg = { pending: "서버에 저장하는 중", failed: `저장 실패: ${q.error || "알 수 없음"}`, expired: "실행기가 받지 못해 버렸어요. 다시 넣어 주세요." }[q.status];
       const r = el("div", "mp-key");
-      r.append(el("span", "mp-key-name", `${q.name} ••••${q.last4}`), el("span", `tag ${q.status === "pending" ? "" : "warn"}`, q.status === "pending" ? "대기" : "실패"));
+      r.append(el("span", "mp-key-name", `${q.name} ${masked(q)}`), el("span", `tag ${q.status === "pending" ? "" : "warn"}`, q.status === "pending" ? "대기" : "실패"));
       out.push(r, el("small", "mp-key-meta", msg));
     }
     return out;
@@ -347,7 +408,7 @@ window.ArkismModels = (ctx) => {
     if (!(p.keys || []).length && !pending.length) s.append(el("p", "", p.kind === "subscription" ? "저장된 키가 없어요. 구독 로그인만 쓰면 키가 없어도 돼요." : "저장된 키가 없어요."));
     for (const k of p.keys || []) {
       const r = el("div", "mp-key");
-      r.append(el("span", "mp-key-name", k.name), el("span", "mono", [`••••${k.last4}`, k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join("  ·  ")));
+      r.append(el("span", "mp-key-name", k.name), el("span", "mono", [masked(k), k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join("  ·  ")));
       const del = button("", "icon-btn plain", "trash", () => removeKey(p.id, k));
       del.title = "키 제거";
       del.setAttribute("aria-label", `${k.name} 키 지우기`);
@@ -380,9 +441,11 @@ window.ArkismModels = (ctx) => {
     const re = button(compact ? "목록 새로고침" : "새로고침", compact ? "" : "ghost", null, () => reload(re));
     tools.append(f, re);
     c.append(tools);
+    // No login and no key yet: the models are listed but cannot answer, so say what turns them on.
+    if (!usable(p) && all.length) { c.classList.add("mp-unusable"); c.append(el("p", "callout-line", "로그인하거나 API 키를 넣으면 이 모델들을 쓸 수 있어요.")); }
     const ml = el("div", "mp-models");
     f.addEventListener("input", () => { filters[p.id] = f.value; ml.querySelectorAll(".mp-model-row").forEach((r) => { r.hidden = !!q() && !r.dataset.model.toLowerCase().includes(q()); }); });
-    if (!all.length) ml.append(el("p", "mp-empty", "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요."));
+    if (!all.length) ml.append(el("p", "mp-empty", state.mode === "local" ? "아직 받은 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요." : "서버 실행기가 알려 준 모델이 없어요. '목록 새로고침'으로 다시 받아 보세요."));
     let onCount = 0;
     for (const m of all) {
       const on = enabled(p.id, m);
@@ -506,7 +569,7 @@ window.ArkismModels = (ctx) => {
     if (!src.accounts.length) list.append(el("p", "ag-empty", "로그인한 계정이 없어요."));
     const add = el("button", "ag-add-line");
     add.type = "button";
-    add.append(icon("plus"), el("span", "", `다른 ${title} 계정 추가`));
+    add.append(icon(src.accounts.length ? "plus" : "plug"), el("span", "", src.accounts.length ? `다른 ${title} 계정 추가` : `${title}에 로그인`));
     add.addEventListener("click", () => openAccountHelp(src.p));
     list.append(add);
     c.append(list);
@@ -526,7 +589,7 @@ window.ArkismModels = (ctx) => {
       const name = el("div", "ag-account-name");
       const top = el("div", "ag-account-top");
       top.append(el("strong", "", k.name), el("span", "ag-plan", "API"));
-      name.append(top, el("small", "mono", [`••••${k.last4}`, k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join(" · ")));
+      name.append(top, el("small", "mono", [masked(k), k.monthly_budget_usd != null ? `$${k.monthly_budget_usd}/월` : ""].filter(Boolean).join(" · ")));
       const del = button("", "icon-btn plain", "trash", () => removeKey(src.p.id, k));
       del.setAttribute("aria-label", `${k.name} 키 지우기`);
       row.append(mark, name, del);
@@ -565,9 +628,7 @@ window.ArkismModels = (ctx) => {
     const current = d.assist_model ? `${d.assist_provider || ""}|${d.assist_model}` : "";
     sel.append(Object.assign(el("option", "", "기본값 · 서버 설정"), { value: "" }));
     const groups = enabledByProvider();
-    for (const p of pickerGroups()) sel.append(modelGroup(p));
-    if (current && ![...sel.options].some((o) => o.value === current)) sel.append(Object.assign(el("option", "", d.assist_model), { value: current })); // picked earlier, now off or saved without a provider
-    sel.value = current;
+    globalThis.ArkismModelPick.fill(sel, pickerGroups(), { current, group: modelGroup, onConnect: toAgents });
     sel.addEventListener("change", async () => {
       const [provider, model] = sel.value ? sel.value.split("|") : ["", ""];
       const from = groups.find((p) => p.id === provider)?.name;
@@ -587,9 +648,78 @@ window.ArkismModels = (ctx) => {
   // Above 설정 › 에이전트: an older server without the providers report, or a runner that has not reported yet.
   function notices() {
     if (state.data.providers === null) return [el("p", "pg-hint", "이 서버는 아직 계정·모델 정보를 보내지 않아요. 서버를 새 버전으로 바꾸면 보여요.")];
-    return state.data.providers && !doc().collected_at ? [el("p", "callout-line", "서버 실행기가 아직 보고하지 않았어요. 실행기를 켜면 로그인 상태와 한도가 보여요.")] : [];
+    if (!state.data.providers || doc().collected_at) return [];
+    return [el("p", "callout-line", state.mode === "local" ? "이 PC의 Arkism이 아직 로그인 상태를 읽는 중이에요. 잠시 뒤 보여요." : "서버 실행기가 아직 보고하지 않았어요. 실행기를 켜면 로그인 상태와 한도가 보여요.")];
   }
-  const addProvider = (picked) => openKeyDialog({ id: "custom", name: "직접 추가한 제공자", custom: true }, picked);
+  // 제공자 추가 (Figma 1355:50848): how the new provider connects. 구독요금제 → subscribe (the CLI picker, pages.js),
+  // API 키 → the key dialog of the known provider picked under it, 엔드포인트 → an OpenAI-compatible address.
+  function addProvider(picked, subscribe) {
+    let how = "cli";
+    let pid = KNOWN[0][0];
+    const dlg = el("dialog", "crew-dialog add-provider");
+    const form = el("form");
+    form.method = "dialog";
+    const head = el("div", "dialog-head");
+    const ht = el("div", "mp-head");
+    ht.append(icon("plug"), el("h2", "", "제공자 추가"));
+    const close = el("button", "icon-btn plain");
+    close.value = "cancel";
+    close.setAttribute("aria-label", "닫기");
+    close.append(icon("x"));
+    head.append(ht, close);
+    const body = el("div", "dialog-body");
+    const WAYS = [["cli", "terminal", "구독요금제", "Claude·Codex처럼 구독 요금제로 로그인한 CLI를 써요 · 키 없이 정액이에요"],
+      ["key", "key", "API 키", "제공자 콘솔에서 받은 키를 붙여 넣어요 · 쓴 만큼 결제해요"],
+      ["endpoint", "link-simple", "엔드포인트", "OpenAI 호환 주소를 직접 넣어요 · 로컬 모델이나 사내 게이트웨이"]];
+    function draw() {
+      body.replaceChildren();
+      for (const [id, ic, title, desc] of WAYS) {
+        const b = el("button", `provider-way${how === id ? " on" : ""}`);
+        b.type = "button";
+        b.setAttribute("aria-pressed", String(how === id));
+        const t = el("div", "");
+        t.append(el("strong", "", title), el("small", "", desc));
+        const mark = el("span", "way-icon");
+        mark.append(icon(ic));
+        b.append(mark, t);
+        if (how === id) b.append(icon("check", "icon way-check"));
+        b.addEventListener("click", () => { how = id; draw(); });
+        body.append(b);
+        if (id === "key" && how === "key") { // which provider's key: the four the list always shows
+          const row = el("div", "way-providers");
+          for (const [kid, name] of KNOWN) {
+            const c = el("button", `chip${pid === kid ? " active" : ""}`);
+            c.type = "button";
+            c.setAttribute("aria-pressed", String(pid === kid));
+            c.append(logo({ id: kid, name }), name);
+            c.addEventListener("click", () => { pid = kid; draw(); });
+            row.append(c);
+          }
+          body.append(row);
+        }
+      }
+    }
+    const foot = el("div", "dialog-foot");
+    const cancel = button("취소", "ghost");
+    cancel.type = "submit";
+    cancel.value = "cancel";
+    const ok = button("다음", "primary");
+    ok.type = "submit";
+    ok.value = "ok";
+    foot.append(el("span", "grow"), cancel, ok);
+    form.append(head, body, foot);
+    form.addEventListener("submit", (e) => {
+      if (e.submitter?.value !== "ok") return;
+      if (how === "cli") subscribe();
+      else if (how === "key") openKeyDialog(providers().find((p) => p.id === pid));
+      else openKeyDialog({ id: "custom", name: "엔드포인트", custom: true }, picked);
+    });
+    dlg.append(form);
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    draw();
+    dlg.showModal();
+  }
 
   // ---------------------------------------------------------------- API key dialog
   function openKeyDialog(p, picked) {
@@ -598,7 +728,9 @@ window.ArkismModels = (ctx) => {
     form.method = "dialog";
     const head = el("div", "dialog-head");
     const ht = el("div", "mp-head");
-    ht.append(logo(p), el("h2", "", `${p.name} API 키 추가`));
+    // 직접 추가 = 엔드포인트 추가 (Figma 1361:3932): name, address, then an optional key; no budget.
+    if (p.custom) ht.append(el("h2", "", "엔드포인트 추가"));
+    else ht.append(logo(p), el("h2", "", `${p.name} API 키 추가`));
     const close = el("button", "icon-btn plain");
     close.value = "cancel";
     close.setAttribute("aria-label", "닫기");
@@ -613,13 +745,13 @@ window.ArkismModels = (ctx) => {
     };
     const name = el("input");
     name.maxLength = 60;
-    name.placeholder = `업무용 ${p.name}`;
+    name.placeholder = p.custom ? "집 Ollama" : `업무용 ${p.name}`;
     const key = el("input");
     key.type = "password";
     key.autocomplete = "off";
     key.spellcheck = false;
-    key.required = true;
-    key.placeholder = "키를 붙여 넣어요";
+    key.required = !p.custom;
+    key.placeholder = p.custom ? "sk-…" : "키를 붙여 넣어요";
     const keyRow = el("div", "key-input");
     const peek = el("button", "icon-btn plain", "보기");
     peek.type = "button";
@@ -640,7 +772,7 @@ window.ArkismModels = (ctx) => {
     budget.step = "1";
     budget.placeholder = "$30";
     const base = el("input");
-    base.placeholder = "https://…/v1";
+    base.placeholder = p.custom ? "http://localhost:11434/v1" : "https://…/v1";
     base.required = !!p.custom;
     const adv = el("details", "key-adv");
     if (p.custom) adv.open = true;
@@ -665,10 +797,54 @@ window.ArkismModels = (ctx) => {
     }
     const err = el("p", "form-error");
     err.setAttribute("role", "alert");
-    body.append(field("이름 (선택)", name, el("small", "dim", "키가 여러 개일 때 구분하는 이름이에요")), field("API 키", keyRow, keyHint),
+    // 고급 · 요청 헤더 (Figma 1361:3932): extra headers a company gateway wants; the values are kept like the key.
+    const headers = el("details", "key-adv req-headers");
+    const headerRows = el("div", "header-rows");
+    const addHeader = button("헤더 추가", "ghost", "plus");
+    addHeader.type = "button";
+    const hrows = [];
+    function headerRow() {
+      const r = el("div", "header-row");
+      const n = el("input", "mono");
+      n.placeholder = "X-Gateway-Token";
+      n.setAttribute("aria-label", "헤더 이름");
+      n.maxLength = 64;
+      const v = el("input");
+      v.type = "password";
+      v.autocomplete = "off";
+      v.spellcheck = false;
+      v.placeholder = "값";
+      v.setAttribute("aria-label", "헤더 값");
+      const rm = el("button", "icon-btn plain");
+      rm.type = "button";
+      rm.setAttribute("aria-label", "헤더 지우기");
+      rm.append(icon("x"));
+      const row = { n, v };
+      rm.addEventListener("click", () => { r.remove(); hrows.splice(hrows.indexOf(row), 1); addHeader.disabled = false; });
+      r.append(n, v, rm);
+      headerRows.append(r);
+      hrows.push(row);
+      addHeader.disabled = hrows.length >= 8;
+    }
+    addHeader.addEventListener("click", headerRow);
+    headerRow();
+    headers.append(el("summary", "", "고급 · 요청 헤더 추가 (사내 게이트웨이 인증)"), headerRows, addHeader,
+      el("small", "dim", "값은 키처럼 서버에만 저장돼요 · 화면엔 이름만 보여요"));
+    const headerList = () => hrows.map(({ n, v }) => ({ name: n.value.trim(), value: v.value.trim() })).filter((h) => h.name || h.value);
+    const reserved = ["authorization", "x-api-key", "anthropic-version", "content-type", "content-length", "host", "connection", "transfer-encoding", "user-agent", "accept", "accept-encoding"];
+    const headerError = () => headerList().some((h) => !h.value || !/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(h.name) || reserved.includes(h.name.toLowerCase()))
+      ? "헤더 이름은 영문·숫자·-로 쓰고 값도 넣어 주세요. 키는 API 키 칸에 넣어요." : "";
+    if (p.custom) {
+      base.className = "mono";
+      body.append(field("이름 (선택)", name, el("small", "dim", "엔드포인트가 여러 개일 때 구분하는 이름이에요")),
+        field("주소", base, el("small", "dim", "OpenAI 호환 /v1 주소예요 · 로컬이면 Ollama 주소")),
+        field("API 키 (선택)", keyRow, el("small", "dim", "비워 두면 키 없이 연결해요")), headers, result, chips, err);
+    } else body.append(field("이름 (선택)", name, el("small", "dim", "키가 여러 개일 때 구분하는 이름이에요")), field("API 키", keyRow, keyHint),
       field("월 예산 (선택)", budget, el("small", "dim", "정해 두면 쓴 만큼 빼서 보여 줘요")), adv, result, chips, err);
+    const hostOf = (u) => { try { return new URL(u).host; } catch { return ""; } };
+    const defaultName = () => (p.custom ? hostOf(base.value.trim()) || "엔드포인트" : `${p.name} 키`);
     const payload = (testOnly) => ({
-      scope: state.scope, provider: p.id, name: name.value.trim() || (testOnly ? "" : `${p.name} 키`), key: key.value.trim(),
+      scope: state.scope, provider: p.id, name: name.value.trim() || (testOnly ? "" : defaultName()), key: key.value.trim(), ...(p.custom && headerList().length ? { headers: headerList() } : {}),
       base_url: base.value.trim(), ...(budget.value !== "" ? { monthly_budget_usd: Number(budget.value) } : {}), ...(testOnly ? { test_only: true } : {})
     });
     // Z.ai keys go to its https address only; say so here instead of after the dialog closes (#171)
@@ -694,19 +870,20 @@ window.ArkismModels = (ctx) => {
     foot.append(test, spacer, cancel, ok);
     test.addEventListener("click", async () => {
       err.textContent = "";
-      if (!key.value.trim()) { err.textContent = "키를 먼저 넣어 주세요."; return; }
-      if (baseError()) { err.textContent = baseError(); return; }
+      if (p.custom && !base.value.trim()) { err.textContent = "주소를 먼저 넣어 주세요."; return; }
+      if (!p.custom && !key.value.trim()) { err.textContent = "키를 먼저 넣어 주세요."; return; }
+      if (baseError() || headerError()) { err.textContent = baseError() || headerError(); return; }
       test.disabled = true;
       say(true, "확인하는 중…", "서버가 공급자에 물어보고 있어요.");
       try {
         const r = await request("/v1/providers/keys", { method: "POST", body: JSON.stringify(payload(true)) });
         publish(r.providers);
         const q = await waitFor(last(r).id);
-        if (!q) say(false, "답이 없어요", "서버 실행기가 켜져 있는지 확인해 주세요.");
+        if (!q) say(false, "답이 없어요", state.mode === "local" ? "잠시 뒤 다시 시험해 주세요." : "서버 실행기가 켜져 있는지 확인해 주세요.");
         else if (q.status === "done") {
           found = q.models || [];
           if (p.custom) { off.clear(); found.forEach((m) => off.add(m)); } // many models: the owner picks the ones to use
-          say(true, `키가 맞아요 · 모델 ${found.length}개를 찾았어요`, p.custom ? "쓸 모델을 눌러 켜요. 켠 모델만 워크플로우 모델 목록에 보여요" : "켜 둔 모델만 워크플로우 모델 목록에 보여요");
+          say(true, p.custom ? `연결됐어요 · 모델 ${found.length}개를 찾았어요` : `키가 맞아요 · 모델 ${found.length}개를 찾았어요`, p.custom ? "쓸 모델을 눌러 켜요. 켠 모델만 워크플로우 모델 목록에 보여요" : "켜 둔 모델만 워크플로우 모델 목록에 보여요");
           showChips();
         }
         else say(false, "연결하지 못했어요", q.error || "키나 주소를 확인해 주세요.");
@@ -717,13 +894,14 @@ window.ArkismModels = (ctx) => {
       if (e.submitter?.value !== "save") return;
       e.preventDefault();
       err.textContent = "";
-      if (!key.value.trim()) { err.textContent = "키를 넣어 주세요."; return; }
-      if (p.custom && !base.value.trim()) { err.textContent = "직접 추가한 제공자는 주소가 필요해요."; return; }
-      if (baseError()) { err.textContent = baseError(); return; }
+      if (p.custom && !base.value.trim()) { err.textContent = "주소를 넣어 주세요."; return; }
+      if (!p.custom && !key.value.trim()) { err.textContent = "키를 넣어 주세요."; return; }
+      if (baseError() || headerError()) { err.textContent = baseError() || headerError(); return; }
       ok.disabled = true;
       try {
         const r = await request("/v1/providers/keys", { method: "POST", body: JSON.stringify(payload(false)) });
         key.value = "";
+        hrows.forEach(({ v }) => { v.value = ""; });
         publish(r.providers);
         if (p.custom) { // the new key becomes its own provider; the models picked here are the ones it starts with
           const pid = customPid(last(r).key_id || "");
@@ -734,7 +912,7 @@ window.ArkismModels = (ctx) => {
         notice("서버에 저장하도록 보냈어요.");
         render(false);
         const q = await waitFor(last(r).id);
-        notice(!q ? "아직 저장되지 않았어요. 서버 실행기를 확인해 주세요." : q.status === "done" ? "키를 저장했어요." : `저장하지 못했어요: ${q.error || "알 수 없음"}`);
+        notice(!q ? (state.mode === "local" ? "아직 저장되지 않았어요. 잠시 뒤 다시 열어 확인해 주세요." : "아직 저장되지 않았어요. 서버 실행기를 확인해 주세요.") : q.status === "done" ? "키를 저장했어요." : `저장하지 못했어요: ${q.error || "알 수 없음"}`);
       } catch (x) { err.textContent = errText(x); } finally { ok.disabled = false; }
     });
     dialog.append(form);
@@ -744,5 +922,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { load, publish, providers, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
+  return { openAccountHelp, canAppLogin, load, publish, providers, usable, toAgents, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
 };

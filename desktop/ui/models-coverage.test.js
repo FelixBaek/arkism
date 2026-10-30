@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 require("./keep.js"); // the shared stale-reply and redraw guards the screens use
+require("./model-pick.js"); // the shared model picker rule
 const { install, byText, text, flush } = require("./testdata/router-dom.js");
 
 const dom = install();
@@ -102,8 +103,13 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   assert.doesNotMatch(t, /AI 도구 기본 모델/);
   const pick = v.m.assistPicker();
   assert.equal(pick.getAttribute("aria-label"), "AI 도구 기본 모델");
-  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "xai|grok", "custom-abc|m1"]);
+  // xAI has no login or key: its model waits behind 「연결 안 된 모델도 보기」 (model-pick.js), then shows greyed with a way to connect
+  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "custom-abc|m1", window.ArkismModelPick.MORE]);
   assert.equal(pick.value, "openai|gpt-5");
+  pick.value = window.ArkismModelPick.MORE; pick.fire("change");
+  assert.equal(pick.value, "openai|gpt-5");
+  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "custom-abc|m1", "xai|grok", window.ArkismModelPick.CONNECT]);
+  assert.equal(pick.options.find((o) => o.value === "xai|grok").disabled, true);
   assert.deepEqual(v.m.enabledModels(), ["opus", "gpt-5", "hand", "grok", "m1"]);
   assert.deepEqual(v.m.enabledByProvider().map((p) => p.id), ["anthropic", "openai", "xai", "custom-abc"]);
   // each provider heading carries its 모델 설정 chip logo: the brand tile, or the stack fallback for xAI and custom ones
@@ -202,6 +208,12 @@ test("직접 추가 providers list the turned-on models first and toggle by addi
   many.state.data.providers = { ...serverDoc(), providers: [{ id: "custom-zz", name: "Many", models: Array.from({ length: 25 }, (_, i) => `x${i}`) }] };
   many.pick("custom-zz");
   assert.equal(label(many.nodes.main, "모델 찾기").placeholder, "모델 25개에서 찾기");
+  // a keyless endpoint reads 키 없음 from its empty last4, and its extra headers show by name only
+  const bare = mk();
+  bare.state.data.providers = { ...serverDoc(), providers: [{ id: "custom-zz", name: "집", custom: true, accounts: [], models: [],
+    keys: [{ id: "k3", name: "집", last4: "", header_names: ["X-Gateway-Token"] }] }] };
+  bare.pick("custom-zz");
+  assert.match(text(bare.nodes.main), /키 없음 · 헤더 X-Gateway-Token/);
 });
 
 test("accounts: refresh, CLI update, account help and key removal", async () => {
@@ -235,7 +247,7 @@ test("accounts: refresh, CLI update, account help and key removal", async () => 
   assert.match(text(main()), /업데이트 중…/); // the queued request stays pending in this fixture
   // account help: with CLIs, then 키 넣기 opens the key dialog
   click(main(), "계정 추가");
-  assert.match(text(dialog()), /codex CLI/); assert.match(text(dialog()), /zz login/);
+  assert.match(text(dialog()), /Codex CLI/); assert.match(text(dialog()), /zz login/);
   click(dialog(), "키 넣기");
   assert.match(text(dialog()), /OpenAI API 키 추가/);
   dialog().close();
@@ -286,8 +298,10 @@ test("provider rows and AI 도구 headings show the LobeHub mark by id, name or 
     await v.m.load(); v.draw();
     const marks = v.m.providers().map((p) => v.m.logo(p).children[0]?.className).filter((c) => /^mark-/.test(c || ""));
     assert.deepEqual(marks, ["mark-anthropic", "mark-xai", "mark-deepseek.com"]); // OpenAI and Google: no mark here, their KNOWN logo
-    const heads = v.m.assistPicker().children.filter((c) => c.tagName === "OPTGROUP");
-    assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "mark-xai", "mark-deepseek.com"]);
+    const pick = v.m.assistPicker();
+    pick.value = window.ArkismModelPick.MORE; pick.fire("change"); // xAI is not connected: shown after the toggle
+    const heads = pick.children.filter((c) => c.tagName === "OPTGROUP");
+    assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "mark-deepseek.com", "mark-xai"]);
   } finally { delete window.ArkismBrand; }
 });
 
@@ -359,28 +373,82 @@ test("key dialog for Z.ai checks the https address; a new provider needs an addr
   click(d, "연결 테스트"); assert.match(err(d), /https:\/\/로 시작/);
   d.all((x) => x.tagName === "FORM")[0].fire("submit", { submitter: { value: "save" } }); assert.match(err(d), /https:\/\/로 시작/);
   d.close();
-  // 공급자 추가 → a custom provider, and 설정 › 에이전트 is told which row to open
-  let picked = null;
-  v.m.addProvider((pid) => { picked = pid; });
+  // 제공자 추가: the way chooser. 구독요금제 hands over to the CLI picker, API 키 opens the picked provider's key dialog.
+  let picked = null, subscribed = 0;
+  const choose = (way, provider) => {
+    v.m.addProvider((pid) => { picked = pid; }, () => { subscribed++; });
+    const c = dialog();
+    assert.match(text(c), /제공자 추가.*구독요금제.*API 키.*엔드포인트/);
+    if (way) click(c, way);
+    if (provider) click(c, provider);
+    c.all((x) => x.tagName === "FORM")[0].fire("submit", { submitter: { value: "ok" } });
+    return c;
+  };
+  choose(); assert.equal(subscribed, 1);
+  v.m.addProvider(() => {}, () => { subscribed++; }); dialog().all((x) => x.tagName === "FORM")[0].fire("submit", { submitter: { value: "cancel" } });
+  assert.equal(subscribed, 1);
+  const c = choose("API 키", "Google");
+  assert.ok(c.all((x) => x.classList?.contains("chip") && x.classList.contains("active")).some((x) => /Google/.test(text(x))));
+  d = dialog(); assert.match(text(d), /Google API 키 추가/); d.close();
+  // 엔드포인트 → a custom provider: the address is needed, the key is not, and 설정 › 에이전트 is told which row to open
+  choose("엔드포인트");
   d = dialog();
-  assert.equal(field(d, "https://…/v1").focused, true);
-  assert.equal(d.all((x) => x.tagName === "DETAILS")[0].open, true);
-  field(d, "키를 붙여 넣어요").value = "k";
+  assert.match(text(d), /엔드포인트 추가/);
+  assert.equal(field(d, "http://localhost:11434/v1").focused, true);
+  // the only folded part is 고급 · 요청 헤더 (a gateway's sign-in), kept like the key
+  assert.deepEqual(d.all((x) => x.tagName === "DETAILS").map((x) => text(x).slice(0, 13)), ["고급 · 요청 헤더 추가"]);
+  assert.ok(!/월 예산/.test(text(d)));
   const form = d.all((x) => x.tagName === "FORM")[0];
-  form.fire("submit", { submitter: { value: "save" } }); assert.equal(err(d), "직접 추가한 제공자는 주소가 필요해요.");
-  field(d, "https://…/v1").value = "https://my/v1";
+  click(d, "연결 테스트"); assert.equal(err(d), "주소를 먼저 넣어 주세요.");
+  form.fire("submit", { submitter: { value: "save" } }); assert.equal(err(d), "주소를 넣어 주세요.");
+  field(d, "http://localhost:11434/v1").value = "http://my:11434/v1";
+  field(d, "X-Gateway-Token").value = "Authorization"; field(d, "값").value = "Basic x";
+  click(d, "연결 테스트"); assert.match(err(d), /헤더 이름은 영문·숫자·-로/);
+  field(d, "X-Gateway-Token").value = "X-Gateway-Token"; field(d, "값").value = "gw-secret";
   click(d, "연결 테스트"); await settle();
-  assert.match(text(d), /쓸 모델을 눌러 켜요/);
+  assert.match(text(d), /연결됐어요 · 모델 2개를 찾았어요.*쓸 모델을 눌러 켜요/);
+  const headers = [{ name: "X-Gateway-Token", value: "gw-secret" }];
+  assert.ok(v.calls.some(([p, b]) => p === "/v1/providers/keys" && b.test_only && b.key === "" && b.base_url === "http://my:11434/v1" && JSON.stringify(b.headers) === JSON.stringify(headers)));
   click(d, "m-a"); // turn one on
   form.fire("submit", { submitter: { value: "save" } }); await settle();
+  assert.ok(v.calls.some(([p, b]) => p === "/v1/providers/keys" && !b.test_only && b.key === "" && b.name === "my:11434" && JSON.stringify(b.headers) === JSON.stringify(headers)));
+  assert.equal(field(d, "값").value, ""); // the value does not stay in the closed dialog
   assert.ok(v.calls.some(([p, b]) => p === "/v1/providers/models" && b.provider === "custom-abcdef123456" && b.model === "m-a" && b.add));
   assert.ok(!v.calls.some(([, b]) => b?.model === "m-b" && b?.provider === "custom-abcdef123456"));
   assert.equal(picked, "custom-abcdef123456");
   // a custom key reply without a key id still names a provider
   v.server.requests.push({ id: "q-last", status: "done" });
   v.m.openKeyDialog({ id: "custom", name: "C", custom: true });
-  d = dialog(); field(d, "키를 붙여 넣어요").value = "k"; field(d, "https://…/v1").value = "https://a";
+  d = dialog(); field(d, "sk-…").value = "k-12345678"; field(d, "http://localhost:11434/v1").value = "https://a";
   v.ctx.request = async (path) => (path.startsWith("/v1/providers?") ? { providers: v.server } : { providers: { ...v.server, requests: [{ id: "q-last" }] } });
   d.all((x) => x.tagName === "FORM")[0].fire("submit", { submitter: { value: "save" } }); await settle();
   assert.equal(v.notes.at(-1), "키를 저장했어요.");
+});
+
+test("accounts: in-app login on this PC opens the CLI's sign-in, adds a second account and says what failed", async () => {
+  const v = mk({ mode: "local" });
+  await v.m.load(); v.draw();
+  const calls = [];
+  let reply = null;
+  window.__TAURI__ = { core: { invoke: async (cmd, args) => { calls.push([cmd, args]); if (reply) throw new Error(reply); return null; } } };
+  try {
+    click(v.nodes.main, "계정 추가");
+    assert.match(text(dialog()), /Codex로그인돼 있어요/);
+    assert.match(text(dialog()), /Gemini CLI아직 로그인 안 됨/);
+    click(dialog(), "다른 계정으로 로그인"); await settle();
+    assert.deepEqual(calls.at(-1), ["agent_login", { cli: "codex", another: true, label: "Codex 2" }]);
+    assert.match(text(dialog()), /Codex에 로그인했어요/);
+    assert.equal(v.notes.at(-1), "Codex에 로그인했어요.");
+    dialog().close();
+    click(v.nodes.main, "계정 추가");
+    reply = "login_terminal_missing";
+    click(dialog(), "로그인"); await settle();
+    assert.deepEqual(calls.at(-1)[1], { cli: "gemini", another: false, label: null });
+    assert.match(text(dialog()), /터미널에서 아래 명령을 실행해 주세요/);
+    reply = "login_timeout";
+    click(dialog(), "로그인"); await settle();
+    assert.match(text(dialog()), /10분 안에 로그인이 끝나지 않았어요/);
+    assert.doesNotMatch(text(dialog()), /login_timeout/);
+    dialog().close();
+  } finally { delete window.__TAURI__; }
 });

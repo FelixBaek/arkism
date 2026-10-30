@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"runtime"
 	"strings"
@@ -179,4 +181,64 @@ func TestKeyRowDecodesAsServerProviderKey(t *testing.T) {
 	if err := d.Decode(&k); err != nil {
 		t.Fatalf("server would reject the inventory: %v", err)
 	}
+}
+
+// A custom endpoint saved without a key keeps no key and sends no Authorization; its extra headers are stored like a
+// key (credential store when one answers, else the 0600 file), shown by name only, and sent on every provider call.
+func TestKeylessEndpointWithHeaders(t *testing.T) {
+	for _, ring := range []bool{true, false} {
+		t.Run(map[bool]string{true: "keyring", false: "file"}[ring], func(t *testing.T) { keylessEndpoint(t, ring) })
+	}
+}
+
+func keylessEndpoint(t *testing.T, ring bool) {
+	keyFiles(t)
+	if ring {
+		useKeyring(t, nil)
+	}
+	const secret = "gateway-secret-value-123"
+	var seen []http.Header
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = append(seen, r.Header.Clone())
+		w.Write([]byte(`{"data":[{"id":"qwen3"}]}`))
+	}))
+	res, err := carryOut(map[string]any{"request": map[string]any{"id": "r1", "kind": "key_add", "provider": "custom", "name": "집",
+		"key_id": "key_local0000001", "base_url": up.URL + "/v1"}, "headers": map[string]any{"X-Gateway-Token": secret}}, nil, nil)
+	if err != nil || res["status"] != "done" {
+		t.Fatal(ring, res, err)
+	}
+	if text := keysFileText(t); ring == strings.Contains(text, secret) || strings.Contains(text, "secret_ref") {
+		t.Fatal(ring, text)
+	}
+	keys, _ := loadKeys()
+	pub := keyRow(publicKey(keys[0]))
+	if raw, _ := json.Marshal(pub); strings.Contains(string(raw), secret) || !strings.Contains(string(raw), `"header_names":["X-Gateway-Token"]`) ||
+		!strings.Contains(string(raw), `"last4":""`) {
+		t.Fatal(string(raw))
+	}
+	if k, err := customKeyFor("qwen3", keys, host.CustomPID(keys[0])); err != nil || k == nil {
+		t.Fatal("a keyless endpoint must still serve its models", k, err)
+	}
+	if len(seen) == 0 {
+		t.Fatal("no /models call")
+	}
+	for _, h := range seen {
+		if h.Get("Authorization") != "" || h.Get("X-Api-Key") != "" || h.Get("X-Gateway-Token") != secret {
+			t.Fatal(ring, h)
+		}
+	}
+	env, err := customEnv(map[string]string{"ANTHROPIC_CUSTOM_HEADERS": "X-Old: leak"}, "qwen3", keys[0])
+	if err != nil || env["ANTHROPIC_CUSTOM_HEADERS"] != "X-Gateway-Token: "+secret || env["ANTHROPIC_AUTH_TOKEN"] != "no-key" {
+		t.Fatal(env, err)
+	}
+	if out := redact("echo "+secret, env); strings.Contains(out, secret) {
+		t.Fatal(out)
+	}
+	if err := removeKey("key_local0000001"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := keystore.Get(keystore.Ref("key_local0000001.headers")); ring && !errors.Is(err, keystore.ErrNotFound) {
+		t.Fatal("header secret left behind", err)
+	}
+	up.Close()
 }

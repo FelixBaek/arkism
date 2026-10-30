@@ -196,10 +196,8 @@ export const createCrew = (ctx) => {
   function modelSelect(value, emptyLabel) {
     const s = select([["", emptyLabel], ["auto", autoLabel()]], value || "");
     s.querySelector('option[value="auto"]').dataset.router = "1";
-    for (const p of models?.pickerGroups?.() || []) s.append(models.modelGroup(p, (m) => m));
-    if (value && value !== "auto" && ![...s.querySelectorAll("option")].some((o) => o.value === value)) s.append(Object.assign(el("option", "", value), { value }));
-    s.value = value || "";
-    return s;
+    // Not connected models wait behind 「연결 안 된 모델도 보기」 (model-pick.js); no jump to 설정 from here: it would drop the unsaved editor.
+    return globalThis.ArkismModelPick.fill(s, models?.pickerGroups?.() || [], { current: value || "", valueFor: (p, m) => m, group: models.modelGroup });
   }
   // only: keep the models this returns true for (the 이미지 picker lists vision models only).
   function modelList(id = "crew-models", only = null) {
@@ -214,7 +212,7 @@ export const createCrew = (ctx) => {
     // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
     // One group per way a provider is connected (MAX·PRO·API, as in 설정 › 역할별 모델).
-    const byProvider = models?.pickerGroups?.() || [];
+    const byProvider = (models?.pickerGroups?.() || []).filter((p) => p.usable !== false); // a typed name still works for the rest
     const where = new Map();
     for (const p of byProvider) for (const m of p.models) where.set(m, [...new Set([...(where.get(m) || []), p.name])]);
     for (const p of byProvider) for (const m of p.models) {
