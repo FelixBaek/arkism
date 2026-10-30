@@ -320,8 +320,8 @@ test("overview: 승인 대기 keeps the edited text across redraws, as the next 
     assert.deepEqual([...win().querySelectorAll(".ex-ai-diff del")].map(text), ["꼭"]);
     await press("저장", win().querySelector(".ex-ai-note"));
     assert.equal(heading(), answer);
-    // 취소 drops the draft: the heading is the candidate's own text again
-    await press("취소", win().querySelector(".ov-detail-actions"));
+    // emptying the box drops the draft: the heading is the candidate's own text again
+    box().value = ""; box().dispatchEvent(new app.window.Event("input"));
     assert.equal(heading(), "코드 수정 후 관련 테스트를 실행한다.");
   } finally { app.window.ArkismAIChat.kit = kit; await closeAll(); }
 });
@@ -345,14 +345,17 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   await press("세션 보기 ›", win(), 50);
   assert.match(text(win().querySelector(".ov-win-title")), /세션 기록/);
   assert.ok(win().querySelector(".ov-wide-search").value, "searched for that session");
-  // c6: fix verdict opens the editor; 취소 restores, 고친 내용으로 승인 saves
+  // c6: one box under the verdict; 고쳐서 저장 saves what it holds, an empty box only asks for it
   d = await reviewOf("코드 수정 후");
   assert.match(text(d), /고쳐서 저장 추천/);
-  await press("취소", d);
-  await press("고쳐서 승인", d);
-  d.querySelector(".ov-detail-edit").value = "코드를 고친 뒤 테스트를 돌린다";
-  await press("고친 내용으로 승인", d, 60);
-  assert.ok(app.apiCalls.some(([, p, b]) => /c6\/review$/.test(p) && /edit_approve/.test(String(b))));
+  const edit = d.querySelector(".ov-detail-edit");
+  assert.ok(edit && !edit.closest("[hidden]"), "the box is always there");
+  edit.value = "";
+  await press("고쳐서 저장", d);
+  assert.match(text(d), /위 칸에 고친 내용을 쓰세요/);
+  edit.value = "코드를 고친 뒤 테스트를 돌린다";
+  await press("고쳐서 저장", d, 60);
+  assert.ok(app.apiCalls.some(([, p, b]) => /c6\/review$/.test(p) && /edit_approve/.test(String(b)) && /테스트를 돌린다/.test(String(b))));
   // c3 has a merge proposal: a stale proposal says so, then the accept goes through
   d = await reviewOf("외부 API");
   assert.match(text(d), /비교/);
@@ -377,7 +380,11 @@ test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject
   assert.match(text(win()), /처리하지 못했어요/);
   assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/c4/review" && /"reason_code":"duplicate"/.test(String(b))), "the reason code goes with the reject");
   offRej();
-  await press("그대로 승인", win(), 60);
+  // a note typed in the box goes with 버리기 as is, no picker
+  win().querySelector(".del-reason")?.remove();
+  win().querySelector(".ov-detail-edit").value = "이미 고친 버그";
+  await press("버리기", win().querySelector(".ov-detail-actions"), 60);
+  assert.ok(app.apiCalls.some(([, p, b]) => p === "/v1/memory_candidates/c4/review" && /"reason":"이미 고친 버그"/.test(String(b)) && /"action":"reject"/.test(String(b))), "the typed note is the reason");
   // a conflicted candidate is resolved here: the existing memory beside it, where each came from, and the 기억 screen's choices
   await reviewOf("출시일은"); await app.settle(50); d = win();
   assert.match(text(d), /충돌하는 두 기억/);
@@ -870,7 +877,8 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
 test("overview: the screen's chips, steps and cards open windows; motion follows the settings", async () => {
   await openWindow({ key: "collect" }); await closeAll();
   const table = app.$("#table");
-  for (const c of table.querySelectorAll(".ov-chip")) { c.click(); await app.settle(30); assert.ok(win(), text(c)); await closeAll(); }
+  // 확인해 주세요 leaves for the review list (MEMORY has no tab line); the others open windows
+  for (const c of [...table.querySelectorAll(".ov-chip")].filter((c) => !/확인해 주세요/.test(text(c)))) { c.click(); await app.settle(30); assert.ok(win(), text(c)); await closeAll(); }
   table.querySelector(".ov-step").click(); await app.settle(); assert.ok(win()); await closeAll();
   table.querySelector(".ov-card").click(); await app.settle(); assert.ok(win()); await closeAll();
   // the nerve firing runs on its interval while shown, stops when hidden or on reduced motion

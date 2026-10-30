@@ -733,7 +733,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const h = el("div", "ov-detail-head"); h.append(...(conf ? [tagEl("서로 다름", "ov-tag-r")] : []), tagEl(kind(c.kind)), el("small", "", `${k?.by ? "AI 분류 · " : ""}${ago(k?.at || c.created_at)}`));
       if (!drafts.has(c.id)) drafts.set(c.id, { text: null, talk: {} });
       const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "";
-      const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? (fixText || c.text); edit.rows = 3; edit.hidden = dr.text == null && !fixText; edit.setAttribute("aria-label", "고쳐서 저장할 내용");
+      // one box (10-18): 고쳐서 저장 saves what is typed here, 버리기 keeps it as the note
+      const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? fixText; edit.rows = 3; edit.placeholder = tr("고칠 내용이나 버리는 이유를 쓰세요"); edit.setAttribute("aria-label", "고쳐서 저장할 내용 또는 버리는 이유");
       // the heading shows what 승인 would save once the person (or the AI sparkle's 저장, which types into the box) changed it
       const title = el("h3", "", dr.text ?? c.text), head = el("div", "ov-detail-group"); head.append(h, title); detail.append(head);
       edit.addEventListener("input", () => { dr.text = edit.value; title.textContent = edit.value.trim() ? edit.value : c.text; });
@@ -764,7 +765,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
         nw.append(el("small", "", "새 후보"), el("span", "", c.text)); od.append(el("small", "", n ? `기존 기억 · ${num(n)}번 쓰임` : "기존 기억"), el("span", "", oldMem.text)); cmp.append(od, nw); sec(decide1, "비교", cmp);
       }
-      const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions"); let editing = null;
+      const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(null, kindF); } };
       if (c.conflict_id || c.status === "conflicted") conflictPanel(c, decide1, act, st, sec, () => { sel = null; wideReview(null, kindF); });
       else {
@@ -775,16 +776,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
           try { await request(`/v1/merge_proposals/${encodeURIComponent(mp.id)}/decide`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: mp.revision, decision: "accept" }) }); merges.delete(c.id); sel = null; await reload(); wideReview(null, kindF); }
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
-        const choices = [...act.children, mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
-          mk("fix", "고쳐서 승인", () => editing(true)), button("버리기", "small", null, () => DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) })),
-          ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : [])];
-        const save = button("고친 내용으로 승인", "primary small", null, () => { if (edit.value.trim()) go1("edit_approve", { content: edit.value.trim() }).catch(() => {}); });
-        const cancel = button("취소", "small", null, () => { edit.value = c.text; dr.text = null; title.textContent = c.text; editing(false); });
-        editing = (on) => { editSec.hidden = !on; act.replaceChildren(...(on ? [save, cancel] : choices)); if (on) edit.focus(); };
+        const typed = () => edit.value.trim();
+        act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
+          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed() }).catch(() => {}); }),
+          // a typed note goes with the reject as is; an empty box still asks why (the server needs a reason)
+          button("버리기", "small", null, () => (typed() ? go1("reject", { reason: typed() }) : DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) }))),
+          ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : []));
       }
-      const editSec = sec(decide1, "저장할 내용 · 고칠 수 있어요", edit); editSec.hidden = true;
+      if (!c.conflict_id && c.status !== "conflicted") sec(decide1, "고칠 내용 · 버리는 이유", edit); // a conflict has its own choices
       window.ArkismAIChat?.field(edit, { state: dr.talk, title: "기억 다듬기", preset: "You polish one memory an AI agent will be given later: one clear Korean statement of the rule, decision or fact, keeping its meaning and its applicability conditions, nothing added that the text does not say. At most 1000 characters.", context: () => JSON.stringify({ kind: c.kind, original: c.text, summary: c.summary || "" }) });
-      editing?.(!edit.hidden);
       decide1.append(act, ...(mp || oldMem ? [el("small", "ov-detail-hint", "합치기는 위 기존 기억에 이 내용을 더해 하나로 만들어요. 새 기억으로 승인하면 둘 다 따로 남아요.")] : []), st); detail.append(decide1);
       // 판단 근거: why it was flagged, the source quote, the meaning checks
       if (conf && (c.summary || k?.risk_reasons?.length)) { const why = el("p", "ov-detail-why"); why.append(tagEl("서로 다름", "ov-tag-r"), el("span", "", c.summary || k.risk_reasons.join(" · "))); sec(basisG, "AI가 본 이유", why); }

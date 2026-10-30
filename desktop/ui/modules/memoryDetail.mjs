@@ -171,8 +171,8 @@ export function createMemoryDetail(deps) {
   function openMemoryAdd() { openMemoryFix(null); }
 
   // 고쳐서 저장: the corrected sentence is saved as the user's own, and the candidate is set aside with that reason.
-  async function openCandidateFix(c) {
-    const text = await askText("고친 문장을 쓰세요. 내가 직접 말한 기억으로 저장돼요.", c.text);
+  async function openCandidateFix(c, typed) {
+    const text = typed ?? await askText("고친 문장을 쓰세요. 내가 직접 말한 기억으로 저장돼요.", c.text);
     if (!text?.trim() || text.trim() === c.text) return;
     void (async () => {
       try {  // edit_approve keeps the candidate's sources and kind
@@ -317,9 +317,13 @@ export function createMemoryDetail(deps) {
       : `${why ? why + ". " : ""}저장하면 모든 에이전트가 자료로 써요.`;
     if (canDecide) {
       const ok = deps.button("그대로 저장", instructionLike ? "ghost small" : "primary small", null, () => { ok.disabled = no.disabled = true; void deps.decide(c, "approve", ""); });
-      const fix = deps.button("고쳐서 저장", "small", null, () => openCandidateFix(c));
+      // one box (10-18): 고쳐서 저장 saves what is typed here, 버리기 keeps it as the note
+      const box = deps.el("textarea", "d-review-box"); box.rows = 3; box.placeholder = "고칠 내용이나 버리는 이유를 쓰세요"; box.setAttribute("aria-label", "고쳐서 저장할 내용 또는 버리는 이유");
+      const typed = () => box.value.trim();
+      const fix = deps.button("고쳐서 저장", "small", null, () => { if (typed()) void openCandidateFix(c, typed()); else box.focus?.(); });
       const DR = window.ArkismDeleteReason;
-      const no = deps.button("버리기", instructionLike ? "primary small" : "ghost small", null, () => {
+      const no = deps.button("버리기", instructionLike ? "primary small" : "ghost small", null, async () => {
+        if (typed()) { ok.disabled = no.disabled = true; if (!await deps.decide(c, "reject", { reason: typed() })) ok.disabled = no.disabled = false; return; }
         if (card.querySelector?.(".del-reason")) return;
         card.append(DR.picker({ title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: async (why) => {
           ok.disabled = no.disabled = true;
@@ -327,6 +331,7 @@ export function createMemoryDetail(deps) {
         } }));
       });
       const card = deps.actionCard(text, ...(instructionLike ? [no, fix, ok] : [ok, fix, no]));
+      card.insertBefore(box, card.lastChild); // the box sits between the note and the buttons
       if (DR.maybeStale(c, [deps.state.data?.memories?.find((m) => m.id === c.classification?.dup_hint)])) card.append(DR.staleHint());
       if (instructionLike) card.setAttribute("role", "note");
       body.append(card);

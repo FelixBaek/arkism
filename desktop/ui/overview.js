@@ -297,7 +297,9 @@ window.ArkismOverview = (ctx) => {
     // every active memory on the server (the map draws them all), not the loaded first page
     const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
     const sess = ctx.count(S.failed || state.loadError ? null : S.sessions ? todaySessions : undefined); // not "오늘 0" while it loads
-    ui.chips.replaceChildren(chip("쓰는 중인 기억", memN, () => openWide("active")),
+    const wait = ctx.memoryCheck?.checkTotal() || { sum: 0 }; // MEMORY has no tab line: this chip is the way to 확인해 주세요
+    ui.chips.replaceChildren(chip("확인해 주세요", wait.sum ? wait.text : "없음", () => go("memories", ctx.memoryCheck.firstCheck())),
+      chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
       chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)

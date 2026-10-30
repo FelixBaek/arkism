@@ -14,11 +14,11 @@ window.ArkismShell = (ctx) => {
     home: { label: "HOME", tabs: [
       ["home", "홈", () => go("todo"), () => state.view === "todo", noZero(count("todo"))]
     ] },
-    // The list first: a new user lands on their memories, 확인해 주세요 holds every decision, 한눈에 is the brain map.
+    // No tab line (asked twice): MEMORY opens on 한눈에, and its chips lead to 기억 and 확인해 주세요.
     memory: { label: "MEMORY", tabs: [
+      ["overview", "한눈에", () => go("overview"), () => state.view === "overview"],
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories" && !check().isCheck(state.memTab), noZero(count("memories"))],
-      ["check", "확인해 주세요", () => go("memories", check().firstCheck()), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }], // nothing known to wait: no 0 / 0+
-      ["overview", "한눈에", () => go("overview"), () => state.view === "overview"]
+      ["check", "확인해 주세요", () => go("memories", check().firstCheck()), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }] // nothing known to wait: no 0 / 0+
     ] },
     agent: { label: "FLOW", tabs: [
       // One page, so no tab is drawn; usage sits in each workflow's 기록·사용량 tab. 디스코드 bots live in 설정 › 메신저.
@@ -68,9 +68,9 @@ window.ArkismShell = (ctx) => {
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     const box = $("#area-tabs");
-    // FLOW has one page, so no tab line
-    const tabs = key === "agent" ? [] : MENUS[key].tabs;
-    box.parentElement.hidden = key === "agent"; // FLOW (1424:2375) starts with its filters, no empty tab line
+    // No tab line for a menu of one page (HOME, FLOW 1424:2375) nor for MEMORY, whose 한눈에 chips are the way in
+    const tabs = key === "memory" || MENUS[key].tabs.length < 2 ? [] : MENUS[key].tabs;
+    box.parentElement.hidden = !tabs.length;
     box.dataset.active = tabs.find((t) => t[3]())?.[1] || ""; // app.js hides a page title that only repeats this tab
     // 현재 위치 (shown while the rail is folded): the menu, then the open tab when the menu has more than one
     const where = [el("span", "", $(`.nav-item[data-menu="${key}"] span`)?.textContent || MENUS[key].label)];

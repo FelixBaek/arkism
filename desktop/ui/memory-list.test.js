@@ -73,10 +73,10 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   env.deps.memUse = () => ({ injections: 4, used: 1 }); env.snap("memories").total = 12;
   assert.match(api.memTitle()[1], /25%/); assert.equal(api.memTitle()[2], "12개");
   env.deps.memory.memTab = "candidate";
-  assert.equal(api.memTitle()[2], "1개", "the open check tab counts its own items, not every memory");
+  assert.equal(api.memTitle()[2], "4개", "the check title counts everything waiting (the sub-tabs count their own), not every memory");
   assert.deepEqual(api.checkTotal(), { sum: 4, text: "4" }); // 1 candidate + 2 conflicted + 1 idle; provenance not counted
-  env.snap("candidates").total = 9; assert.equal(api.memTitle()[2], "9개");
-  env.deps.memory.memTab = "conflicted"; assert.equal(api.memTitle()[2], "2개");
+  env.snap("candidates").total = 9; assert.equal(api.memTitle()[2], `${api.checkTotal().text}개`);
+  env.deps.memory.memTab = "conflicted"; assert.equal(api.memTitle()[2], `${api.checkTotal().text}개`);
   env.deps.memory.memTab = "provenance"; assert.equal(api.memTitle()[0], "승인 기록");
   env.deps.memory.memTab = "digests"; assert.deepEqual(api.memTitle()[2], "주제 3개");
   env.deps.memory.memTab = "traits"; assert.equal(api.memTitle()[0], "사용자 특성");

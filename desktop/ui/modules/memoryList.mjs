@@ -34,8 +34,8 @@ export function createMemoryList(deps) {
     const t = deps.memory.memTab;
     const check = { candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
       idle: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보이는 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
-    // the open sub-tab's own count, never the whole memory list's (catalogName() is "memories" for merge and idle)
-    if (check) return ["확인해 주세요", check, `${(catalogName() !== "memories" ? deps.catalogQuery.snapshot(catalogName()).total : null) ?? checkCounts()[t].text}개`];
+    // everything waiting, as on the 한눈에 chip: each sub-tab already shows its own count
+    if (check) return ["확인해 주세요", check, `${checkTotal().text}개`];
     if (t === "provenance") return ["승인 기록", "예전 방식으로 저장돼 사람이 승인한 기록이 남지 않은 기억이에요. 할 일은 없고, 내용도 바꾸지 않아요.", `${deps.catalogQuery.snapshot("memories").total ?? checkCounts().provenance.text}개`];
     if (t === "removed") return ["지운 기억", "지운 기억은 에이전트가 쓰지 않아요. 되살리면 다시 써요.", `${deps.catalogQuery.snapshot("memories").total ?? "…"}개`];
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", deps.digests.title()];
