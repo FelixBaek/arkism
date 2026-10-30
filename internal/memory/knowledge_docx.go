@@ -61,33 +61,13 @@ func docxBodyText(r io.Reader) (string, error) {
 		}
 		switch t := tok.(type) {
 		case xml.StartElement:
-			switch t.Name.Local {
-			case "p":
-				para.Reset()
-				level = 0
-			case "pStyle":
-				level = docxHeadingLevel(t)
-			case "t":
-				inText = true
-			case "tab":
-				para.WriteByte('\t')
-			case "br", "cr":
-				para.WriteByte('\n')
-			}
+			docxStart(t, &para, &level, &inText)
 		case xml.EndElement:
 			switch t.Name.Local {
 			case "t":
 				inText = false
 			case "p":
-				line := strings.TrimSpace(para.String())
-				if line == "" {
-					continue
-				}
-				if level > 0 {
-					line = strings.Repeat("#", level) + " " + strings.ReplaceAll(line, "\n", " ")
-				}
-				out.WriteString(line)
-				out.WriteString("\n\n")
+				docxWriteParagraph(&out, para.String(), level)
 			}
 		case xml.CharData:
 			if inText {
@@ -96,6 +76,36 @@ func docxBodyText(r io.Reader) (string, error) {
 		}
 	}
 	return strings.TrimSpace(out.String()), nil
+}
+
+// docxStart applies one start element to the paragraph being read.
+func docxStart(t xml.StartElement, para *strings.Builder, level *int, inText *bool) {
+	switch t.Name.Local {
+	case "p":
+		para.Reset()
+		*level = 0
+	case "pStyle":
+		*level = docxHeadingLevel(t)
+	case "t":
+		*inText = true
+	case "tab":
+		para.WriteByte('\t')
+	case "br", "cr":
+		para.WriteByte('\n')
+	}
+}
+
+// docxWriteParagraph writes a non-empty paragraph, as a heading when level > 0.
+func docxWriteParagraph(out *strings.Builder, text string, level int) {
+	line := strings.TrimSpace(text)
+	if line == "" {
+		return
+	}
+	if level > 0 {
+		line = strings.Repeat("#", level) + " " + strings.ReplaceAll(line, "\n", " ")
+	}
+	out.WriteString(line)
+	out.WriteString("\n\n")
 }
 
 func docxHeadingLevel(t xml.StartElement) int {

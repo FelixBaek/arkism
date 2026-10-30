@@ -344,11 +344,19 @@ func (t *crewUsageTally) addCalls(u crewUsageData) {
 		}
 		o := c.Origin
 		k := callKind(o)
-		if k == "" || !t.want(k) && !(t.kind == "agent" && o.AgentID != "") || t.agentID != "" && o.AgentID != t.agentID || t.teamID != "" && o.TeamID != t.teamID || t.workflowID != "" && o.WorkflowID != t.workflowID {
+		if !t.wantCall(o, k) {
 			continue
 		}
 		t.addCall(r, c, o, k)
 	}
+}
+
+// wantCall reports whether a call of kind k from origin o is in the filter.
+func (t *crewUsageTally) wantCall(o *RoutingOrigin, k string) bool {
+	if k == "" || !t.want(k) && !(t.kind == "agent" && o.AgentID != "") {
+		return false
+	}
+	return (t.agentID == "" || o.AgentID == t.agentID) && (t.teamID == "" || o.TeamID == t.teamID) && (t.workflowID == "" || o.WorkflowID == t.workflowID)
 }
 
 func (t *crewUsageTally) addCall(r Record, c *RoutingCall, o *RoutingOrigin, k string) {

@@ -483,41 +483,53 @@ func (p *usageParser) claude(path string) error {
 			usageClaudeUser(s, d, m, when)
 			return
 		}
-		blocks, _ := m["content"].([]any)
-		for _, b := range blocks {
-			bm, ok := b.(map[string]any)
-			if !ok || bm["type"] != "tool_use" {
-				continue
-			}
-			name := usageText(bm["name"], "?")
-			if id := sstr(bm["id"]); id != "" && when != nil && strings.HasPrefix(name, "mcp__") && usageNameOK.MatchString(name) {
-				p.pending[id] = usagePend{name, *when}
-			}
-			skill := ""
-			if in, ok := bm["input"].(map[string]any); ok && name == "Skill" && truthy(in["skill"]) {
-				skill = head(str(in["skill"]), 200)
-			}
-			s.tool(name, skill)
-		}
+		p.claudeToolUses(s, m, when)
 		model := m["model"]
 		if model == "<synthetic>" || !truthy(m["usage"]) {
 			return
 		}
-		key := host.MustDumps(or(m["id"], d["uuid"]), host.DumpOpts{})
-		i, dup := p.seen[key]
-		if !dup || p.f.Seen[i].Sid == sid {
-			u := obj(m["usage"])
-			e := usageSeen{Key: key, Sid: sid, When: when, Model: usageText(model, ""), U: [4]int64{usageInt(u["input_tokens"]),
-				usageInt(u["output_tokens"]), usageInt(u["cache_read_input_tokens"]), usageInt(u["cache_creation_input_tokens"])}}
-			if dup {
-				p.f.Seen[i] = e
-			} else {
-				p.seen[key] = len(p.f.Seen)
-				p.f.Seen = append(p.f.Seen, e)
-			}
-		}
+		p.claudeUsage(sid, d, m, model, when)
 		s.stamp(when)
 	})
+}
+
+// claudeToolUses counts each tool_use and holds MCP ones for claudeResults to time.
+func (p *usageParser) claudeToolUses(s *usageSession, m map[string]any, when *int64) {
+	blocks, _ := m["content"].([]any)
+	for _, b := range blocks {
+		bm, ok := b.(map[string]any)
+		if !ok || bm["type"] != "tool_use" {
+			continue
+		}
+		name := usageText(bm["name"], "?")
+		if id := sstr(bm["id"]); id != "" && when != nil && strings.HasPrefix(name, "mcp__") && usageNameOK.MatchString(name) {
+			p.pending[id] = usagePend{name, *when}
+		}
+		skill := ""
+		if in, ok := bm["input"].(map[string]any); ok && name == "Skill" && truthy(in["skill"]) {
+			skill = head(str(in["skill"]), 200)
+		}
+		s.tool(name, skill)
+	}
+}
+
+// claudeUsage records one assistant message's token usage; a message seen again
+// replaces its earlier row only within the same session.
+func (p *usageParser) claudeUsage(sid string, d, m map[string]any, model any, when *int64) {
+	key := host.MustDumps(or(m["id"], d["uuid"]), host.DumpOpts{})
+	i, dup := p.seen[key]
+	if dup && p.f.Seen[i].Sid != sid {
+		return
+	}
+	u := obj(m["usage"])
+	e := usageSeen{Key: key, Sid: sid, When: when, Model: usageText(model, ""), U: [4]int64{usageInt(u["input_tokens"]),
+		usageInt(u["output_tokens"]), usageInt(u["cache_read_input_tokens"]), usageInt(u["cache_creation_input_tokens"])}}
+	if dup {
+		p.f.Seen[i] = e
+	} else {
+		p.seen[key] = len(p.f.Seen)
+		p.f.Seen = append(p.f.Seen, e)
+	}
 }
 
 // claudeResults pairs each MCP tool_result with its tool_use: response time and, on failure, a fixed code.

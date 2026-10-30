@@ -704,13 +704,18 @@ func validAgentToolsReport(in AgentToolsReport) bool {
 	if !validScope(in.Scope) || !validAgentToolEntries(in.Servers, false) || !validAgentToolEntries(in.Plugins, true) || len(in.Results) > agentToolRequestsKept || len(in.SkillCheckTools) > 120 {
 		return false
 	}
-	if in.SkillChecks != nil && !validSkillChecks(*in.SkillChecks) || in.Agents != nil && !validAgentInfos(*in.Agents) || in.SkillUpdates != nil && !validSkillUpdates(*in.SkillUpdates) || in.PCLinks != nil && !validPCLinks(*in.PCLinks) || in.SkillRepos != nil && !validSkillRepos(*in.SkillRepos) {
+	if !validAgentToolsSections(in) {
 		return false
 	}
 	if !validMemoryUse(in.MemoryUse) || !validMemoryUse(in.MemoryUse30) || !validAnalysisRun(in.AnalysisRun) || !validExtractor(in.Extractor) {
 		return false
 	}
 	return validSharedDirs(in.SharedDirs) && validAgentToolResults(in.Results)
+}
+
+// validAgentToolsSections checks the report sections a host tool may leave out.
+func validAgentToolsSections(in AgentToolsReport) bool {
+	return !(in.SkillChecks != nil && !validSkillChecks(*in.SkillChecks) || in.Agents != nil && !validAgentInfos(*in.Agents) || in.SkillUpdates != nil && !validSkillUpdates(*in.SkillUpdates) || in.PCLinks != nil && !validPCLinks(*in.PCLinks) || in.SkillRepos != nil && !validSkillRepos(*in.SkillRepos))
 }
 
 func validSharedDirs(dirs *[]string) bool {

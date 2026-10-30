@@ -108,45 +108,51 @@ func (s *Service) WatchSkill(ctx context.Context, token, skillID string, in Skil
 	ctx = bindRequestActor(ctx, actor)
 	var out SkillWatch
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		skill, e := tx.Get(ctx, colSkills, in.Scope, skillID)
-		if e != nil {
-			return e
-		}
-		version, e := tx.Get(ctx, colSkillVersions, in.Scope, in.VersionID)
-		if e != nil {
-			return e
-		}
-		if !live(skill) || skill.ActiveVersion != version.ID || version.SkillID != skillID || version.Status != "active" || version.BaseVersion == "" || !slices.Contains(skillHistory(skill), version.BaseVersion) {
-			return ErrConflict
-		}
-		now := time.Now().UTC()
-		id := skillWatchID(in.Scope, skillID)
-		prior, e := tx.Get(ctx, colJobs, in.Scope, id)
-		if e == nil {
-			if w, ok := readSkillWatch(prior); ok && w.Version.ID == version.ID && w.Version.Revision == version.Revision {
-				out = w // the same apply asked twice
-				return nil
-			}
-		} else if !errors.Is(e, ErrNotFound) {
-			return e
-		}
-		out = SkillWatch{Version: Ref{Collection: colSkillVersions, ID: version.ID, Revision: version.Revision}, PreviousVersion: version.BaseVersion, AppliedAt: version.UpdatedAt, Until: version.UpdatedAt.Add(skillWatchPeriod), State: "watching", CheckedAt: now}
-		record := Record{ID: id, Scope: in.Scope, Kind: skillWatchKind, Status: "managed", Revision: 1, SkillID: skillID, Target: &out.Version, Text: structuredText(out), CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
-		if e == nil {
-			record.Revision, record.CreatedAt = prior.Revision+1, prior.CreatedAt
-			e = tx.Replace(ctx, colJobs, record, prior.Revision)
-		} else {
-			e = tx.Insert(ctx, colJobs, record)
-		}
-		if e != nil {
-			return e
-		}
-		return audit(ctx, tx, in.Scope, actor.PrincipalID, "watch:skills", skillID)
+		var e error
+		out, e = startSkillWatch(ctx, tx, actor, skillID, in)
+		return e
 	})
 	if e != nil {
 		return SkillWatchView{}, e
 	}
 	return s.watchView(ctx, in.Scope, out), nil
+}
+
+// startSkillWatch writes the watch job for the active version; the same apply asked twice returns the existing watch.
+func startSkillWatch(ctx context.Context, tx Tx, actor Decision, skillID string, in SkillWatchInput) (SkillWatch, error) {
+	skill, e := tx.Get(ctx, colSkills, in.Scope, skillID)
+	if e != nil {
+		return SkillWatch{}, e
+	}
+	version, e := tx.Get(ctx, colSkillVersions, in.Scope, in.VersionID)
+	if e != nil {
+		return SkillWatch{}, e
+	}
+	if !live(skill) || skill.ActiveVersion != version.ID || version.SkillID != skillID || version.Status != "active" || version.BaseVersion == "" || !slices.Contains(skillHistory(skill), version.BaseVersion) {
+		return SkillWatch{}, ErrConflict
+	}
+	now := time.Now().UTC()
+	id := skillWatchID(in.Scope, skillID)
+	prior, e := tx.Get(ctx, colJobs, in.Scope, id)
+	if e == nil {
+		if w, ok := readSkillWatch(prior); ok && w.Version.ID == version.ID && w.Version.Revision == version.Revision {
+			return w, nil // the same apply asked twice
+		}
+	} else if !errors.Is(e, ErrNotFound) {
+		return SkillWatch{}, e
+	}
+	out := SkillWatch{Version: Ref{Collection: colSkillVersions, ID: version.ID, Revision: version.Revision}, PreviousVersion: version.BaseVersion, AppliedAt: version.UpdatedAt, Until: version.UpdatedAt.Add(skillWatchPeriod), State: "watching", CheckedAt: now}
+	record := Record{ID: id, Scope: in.Scope, Kind: skillWatchKind, Status: "managed", Revision: 1, SkillID: skillID, Target: &out.Version, Text: structuredText(out), CreatedBy: actor.PrincipalID, CreatedByType: actor.Role, CreatedAt: now, UpdatedAt: now}
+	if e == nil {
+		record.Revision, record.CreatedAt = prior.Revision+1, prior.CreatedAt
+		e = tx.Replace(ctx, colJobs, record, prior.Revision)
+	} else {
+		e = tx.Insert(ctx, colJobs, record)
+	}
+	if e != nil {
+		return out, e
+	}
+	return out, audit(ctx, tx, in.Scope, actor.PrincipalID, "watch:skills", skillID)
 }
 
 // CheckSkillWatch is the owner's read of the watch; it also runs the check when one is due.
@@ -226,37 +232,53 @@ func (s *Service) checkSkillWatch(ctx context.Context, token string, actor Decis
 	case !now.Before(w.Until):
 		w.State = "kept"
 	default:
-		current, e := s.Repo.Get(ctx, colSkillVersions, scope, w.Version.ID)
-		if e != nil {
+		if w, e = s.judgeSkillWatch(ctx, token, actor, record, skill, w, now); e != nil {
 			return w, e
-		}
-		if w.Failures, e = s.watchFailures(ctx, token, scope, skillID, current, w.AppliedAt, now, true); e != nil {
-			return w, e
-		}
-		previous, e := s.Repo.Get(ctx, colSkillVersions, scope, w.PreviousVersion)
-		if e != nil {
-			return w, e
-		}
-		if w.BaselineFailures, e = s.watchFailures(ctx, token, scope, skillID, previous, w.AppliedAt.Add(-now.Sub(w.AppliedAt)), w.AppliedAt, false); e != nil {
-			return w, e
-		}
-		evaluated := previous.ValidationID != ""
-		if watchWorse(w.Failures, w.BaselineFailures, evaluated) {
-			// The ordinary rollback; a previous version without an evaluation comes back on failed uses alone.
-			_, e = s.applySkillVersion(ctx, actor, SkillAutomationPolicy{}, skillID, ChangeInput{Scope: scope, ExpectedRevision: skill.Revision, VersionID: w.PreviousVersion}, true, !evaluated)
-			switch {
-			case e == nil:
-				w.State = "rolled_back"
-			case errors.Is(e, ErrDenied) || errors.Is(e, ErrConflict) || errors.Is(e, ErrInvalid) || errors.Is(e, ErrNotFound):
-				w.State = "rollback_blocked"
-			default:
-				return w, e
-			}
 		}
 	}
 	w.CheckedAt = now
-	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		current, e := tx.Get(ctx, colJobs, scope, record.ID)
+	e = s.saveSkillWatch(ctx, record, w, now)
+	return w, e
+}
+
+// judgeSkillWatch counts failed uses on both sides of the apply and rolls back when the new version is clearly worse.
+func (s *Service) judgeSkillWatch(ctx context.Context, token string, actor Decision, record, skill Record, w SkillWatch, now time.Time) (SkillWatch, error) {
+	scope, skillID := record.Scope, record.SkillID
+	current, e := s.Repo.Get(ctx, colSkillVersions, scope, w.Version.ID)
+	if e != nil {
+		return w, e
+	}
+	if w.Failures, e = s.watchFailures(ctx, token, scope, skillID, current, w.AppliedAt, now, true); e != nil {
+		return w, e
+	}
+	previous, e := s.Repo.Get(ctx, colSkillVersions, scope, w.PreviousVersion)
+	if e != nil {
+		return w, e
+	}
+	if w.BaselineFailures, e = s.watchFailures(ctx, token, scope, skillID, previous, w.AppliedAt.Add(-now.Sub(w.AppliedAt)), w.AppliedAt, false); e != nil {
+		return w, e
+	}
+	evaluated := previous.ValidationID != ""
+	if !watchWorse(w.Failures, w.BaselineFailures, evaluated) {
+		return w, nil
+	}
+	// The ordinary rollback; a previous version without an evaluation comes back on failed uses alone.
+	_, e = s.applySkillVersion(ctx, actor, SkillAutomationPolicy{}, skillID, ChangeInput{Scope: scope, ExpectedRevision: skill.Revision, VersionID: w.PreviousVersion}, true, !evaluated)
+	switch {
+	case e == nil:
+		w.State = "rolled_back"
+	case errors.Is(e, ErrDenied) || errors.Is(e, ErrConflict) || errors.Is(e, ErrInvalid) || errors.Is(e, ErrNotFound):
+		w.State = "rollback_blocked"
+	default:
+		return w, e
+	}
+	return w, nil
+}
+
+// saveSkillWatch stores the checked watch on its job, closing the job once the watch has ended.
+func (s *Service) saveSkillWatch(ctx context.Context, record Record, w SkillWatch, now time.Time) error {
+	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		current, e := tx.Get(ctx, colJobs, record.Scope, record.ID)
 		if e != nil {
 			return e
 		}
@@ -271,7 +293,6 @@ func (s *Service) checkSkillWatch(ctx context.Context, token string, actor Decis
 		current.UpdatedAt = now
 		return tx.Replace(ctx, colJobs, current, record.Revision)
 	})
-	return w, e
 }
 
 // watchWorse: after an evaluated previous version, any rise past a few failures; without an evaluation the

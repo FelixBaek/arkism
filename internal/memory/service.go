@@ -1456,26 +1456,91 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 // applySkillVersion is ApplySkill after authorization. unvalidated is only for a skill watch's rollback on
 // failed real uses: it restores the version the owner used before even when that version has no evaluation.
 func (s *Service) applySkillVersion(ctx context.Context, d Decision, automation SkillAutomationPolicy, id string, in ChangeInput, rollback, unvalidated bool) (Record, error) {
+	if unvalidated && (!rollback || in.VersionID == "") {
+		return Record{}, ErrInvalid
+	}
+	target, e := s.skillVersionTarget(ctx, in, id, rollback)
+	if e != nil {
+		return Record{}, e
+	}
+	vid := applyValidationID(d, in, target, rollback)
+	var result Record
+	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		var e error
+		result, e = applySkillVersionTx(ctx, tx, d, automation, id, in, target, vid, rollback, unvalidated)
+		return e
+	})
+	return result, e
+}
+
+// applySkillVersionTx switches the skill header to the target version inside the apply transaction.
+func applySkillVersionTx(ctx context.Context, tx Tx, d Decision, automation SkillAutomationPolicy, id string, in ChangeInput, target Record, vid string, rollback, unvalidated bool) (Record, error) {
 	action := "apply"
 	if rollback {
 		action = "rollback"
 	}
-	if unvalidated && (!rollback || in.VersionID == "") {
-		return Record{}, ErrInvalid
+	skill, e := tx.Get(ctx, "skills", in.Scope, id)
+	if e != nil {
+		return Record{}, e
 	}
-	var e error
-	var target Record
+	if skill.Revision != in.ExpectedRevision {
+		return Record{}, ErrConflict
+	}
+	if skill.ActiveVersion == in.VersionID {
+		return Record{}, ErrConflict
+	}
 	if in.VersionID != "" {
-		target, e = s.Repo.Get(ctx, "skill_versions", in.Scope, in.VersionID)
-		if e != nil {
+		if e = activateSkillVersion(ctx, tx, d, automation, id, in, skill, target, vid, rollback, unvalidated); e != nil {
 			return Record{}, e
 		}
-		if target.SkillID != id || target.Analysis == nil {
+	}
+	if skill.ActiveVersion != "" {
+		if e = supersedeSkillVersion(ctx, tx, in.Scope, skill.ActiveVersion); e != nil {
+			return Record{}, e
+		}
+	}
+	prev := skill.Revision
+	skill.ActiveVersion = in.VersionID
+	skill.Revision++
+	skill.UpdatedAt = time.Now().UTC()
+	if e = tx.Replace(ctx, "skills", skill, prev); e != nil {
+		return Record{}, e
+	}
+	// Applying also changes the header and old version: neither may invalidate
+	// the selected version's evaluation evidence within this transaction.
+	if in.VersionID != "" && !unvalidated {
+		if e = validation(ctx, tx, target, vid, false); e != nil {
+			return Record{}, e
+		}
+	}
+	if rollback {
+		if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_rolled_back", id, decidedBy(d), ""); e != nil {
+			return skill, e
+		}
+	}
+	return skill, audit(ctx, tx, in.Scope, d.PrincipalID, action+":skills", id)
+}
+
+// skillVersionTarget loads the requested version outside the transaction; only a rollback may name none.
+func (s *Service) skillVersionTarget(ctx context.Context, in ChangeInput, id string, rollback bool) (Record, error) {
+	if in.VersionID == "" {
+		if !rollback {
 			return Record{}, ErrInvalid
 		}
-	} else if !rollback {
+		return Record{}, nil
+	}
+	target, e := s.Repo.Get(ctx, "skill_versions", in.Scope, in.VersionID)
+	if e != nil {
+		return Record{}, e
+	}
+	if target.SkillID != id || target.Analysis == nil {
 		return Record{}, ErrInvalid
 	}
+	return target, nil
+}
+
+// applyValidationID picks the evaluation the applied version must carry.
+func applyValidationID(d Decision, in ChangeInput, target Record, rollback bool) string {
 	// An imported baseline never went through transition, so it has no
 	// validation; rolling back to it needs a fresh independent evaluation.
 	vid := target.ValidationID
@@ -1485,81 +1550,47 @@ func (s *Service) applySkillVersion(ctx context.Context, d Decision, automation 
 	if rollback && vid == "" {
 		vid = in.ValidationID
 	}
-	var result Record
-	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		skill, e := tx.Get(ctx, "skills", in.Scope, id)
-		if e != nil {
+	return vid
+}
+
+// activateSkillVersion checks the version being applied and marks it active.
+func activateSkillVersion(ctx context.Context, tx Tx, d Decision, automation SkillAutomationPolicy, id string, in ChangeInput, skill, target Record, vid string, rollback, unvalidated bool) error {
+	r, e := checkSkillVersion(ctx, tx, in, id, skill, target, rollback)
+	if e != nil {
+		return e
+	}
+	if !unvalidated {
+		if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
 			return e
 		}
-		if skill.Revision != in.ExpectedRevision {
-			return ErrConflict
-		}
-		if skill.ActiveVersion == in.VersionID {
-			return ErrConflict
-		}
-		if in.VersionID != "" {
-			r, e := checkSkillVersion(ctx, tx, in, id, skill, target, rollback)
-			if e != nil {
-				return e
-			}
-			if !unvalidated {
-				if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
-					return e
-				}
-			}
-			if d.Role == roleService && !rollback {
-				if e = checkAutomaticSkillPromotion(ctx, tx, r, in, automation); e != nil {
-					return e
-				}
-			}
-			prev := r.Revision
-			r.Revision++
-			r.Status = "active"
-			r.ValidationID = vid
-			r.UpdatedAt = time.Now().UTC()
-			if e = tx.Replace(ctx, "skill_versions", r, prev); e != nil {
-				return e
-			}
-			if e = enqueue(ctx, tx, "skill_versions", r); e != nil {
-				return e
-			}
-		}
-		if skill.ActiveVersion != "" {
-			old, e := tx.Get(ctx, "skill_versions", in.Scope, skill.ActiveVersion)
-			if e != nil {
-				return e
-			}
-			prev := old.Revision
-			old.Status = "superseded"
-			old.Revision++
-			old.UpdatedAt = time.Now().UTC()
-			if e = tx.Replace(ctx, "skill_versions", old, prev); e != nil {
-				return e
-			}
-		}
-		prev := skill.Revision
-		skill.ActiveVersion = in.VersionID
-		skill.Revision++
-		skill.UpdatedAt = time.Now().UTC()
-		if e = tx.Replace(ctx, "skills", skill, prev); e != nil {
+	}
+	if d.Role == roleService && !rollback {
+		if e = checkAutomaticSkillPromotion(ctx, tx, r, in, automation); e != nil {
 			return e
 		}
-		// Applying also changes the header and old version: neither may invalidate
-		// the selected version's evaluation evidence within this transaction.
-		if in.VersionID != "" && !unvalidated {
-			if e = validation(ctx, tx, target, vid, false); e != nil {
-				return e
-			}
-		}
-		result = skill
-		if rollback {
-			if e = recordDecision(ctx, tx, in.Scope, d.PrincipalID, "skill_rolled_back", id, decidedBy(d), ""); e != nil {
-				return e
-			}
-		}
-		return audit(ctx, tx, in.Scope, d.PrincipalID, action+":skills", id)
-	})
-	return result, e
+	}
+	prev := r.Revision
+	r.Revision++
+	r.Status = "active"
+	r.ValidationID = vid
+	r.UpdatedAt = time.Now().UTC()
+	if e = tx.Replace(ctx, "skill_versions", r, prev); e != nil {
+		return e
+	}
+	return enqueue(ctx, tx, "skill_versions", r)
+}
+
+// supersedeSkillVersion retires the version that was active before the apply.
+func supersedeSkillVersion(ctx context.Context, tx Tx, scope Scope, versionID string) error {
+	old, e := tx.Get(ctx, "skill_versions", scope, versionID)
+	if e != nil {
+		return e
+	}
+	prev := old.Revision
+	old.Status = "superseded"
+	old.Revision++
+	old.UpdatedAt = time.Now().UTC()
+	return tx.Replace(ctx, "skill_versions", old, prev)
 }
 
 // checkSkillVersion loads the version being applied and checks it against the skill header.
