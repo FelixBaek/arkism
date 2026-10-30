@@ -196,7 +196,8 @@
       "owner": "INTEGRATION",
       "requesters": [
         "SYS-06",
-        "SYS-03"
+        "SYS-03",
+        "SYS-01"
       ]
     },
     {
@@ -500,6 +501,30 @@
       "owner": "INTEGRATION",
       "requesters": [
         "SYS-03"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/context_build.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "internal/memory/crew_pins.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01"
+      ]
+    },
+    {
+      "root": "repo",
+      "path": "api/openapi.yaml",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-01"
       ]
     }
   ],
@@ -1465,6 +1490,74 @@
         {
           "root": "repo",
           "path": "internal/memory/dynamics_shadow_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_v1.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_v1.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_v1_http_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_v1_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_view_v1_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_bridge_candidate.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_publisher.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_http_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_postgres_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_shadow_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_snapshot.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_stages_v2.go"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_stages_v2.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_stages_v2_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "guide/roadmap/native-search-shadow.md"
         }
       ],
       "consumes": [
@@ -1502,12 +1595,59 @@
           "root": "repo",
           "path": "evaluation/test_memory_harness.py",
           "owner": "R8"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_source.go"
+        },
+        {
+          "owner": "SYS-03",
+          "root": "repo",
+          "path": "internal/memory/native_dynamics_types.go"
         }
       ],
       "shared_updates": [
         {
           "root": "repo",
           "path": "internal/memory/search.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/service.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/context_build.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/crew_pins.go",
+          "owner": "INTEGRATION",
+          "after": [
+            "SYS-01.spec"
+          ]
+        },
+        {
+          "root": "repo",
+          "path": "api/openapi.yaml",
           "owner": "INTEGRATION",
           "after": [
             "SYS-01.spec"

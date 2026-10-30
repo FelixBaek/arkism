@@ -393,3 +393,9 @@ R8 기본 수집에 정확한 모듈 한 개만 등록해 기존451개ID와새59
 
 - [모델 계약·검사 설명](../../evaluation/memory-harness-v1/system/sys_04/README.md)
 - [작업 기록](../work-records/2026-10-30-roadmap-lifecycle-metadata.md)
+
+## Native Search shadow and invocation-view component
+
+SYS-01 now has an isolated actual Search/HTTP read-only adapter plus optional BuildContext invocation exclusions and separate v2 stage observations. Author normal/race61/160 and independent normal/race6/23 passed; original315 JSON bytes are unchanged. Final-return races after native read publication reject stale revision/deletion/source/grant changes. Root publication-copy integration15/23 passed, source21 disclosure checks passed, and inherited comment cleanup preserved7155 Go tokens.
+
+This is component acceptance, not whole SYS-01: production host requests still use Search while the invocation view is a BuildContext input. Connecting that actual request to the final-render/transport/reader acknowledgement chain remains required, alongside SYS-03/SYS-04 integration. No fixture-only combination counts as that connection. Whole22/63, required27 remaining and optional14 held stay unchanged. Default off/shadow baseline behavior is preserved; no UI/product build/deploy/main merge. See [native Search scope](native-search-shadow.md) and [work record](../work-records/2026-10-30-roadmap-native-search-shadow.md).
