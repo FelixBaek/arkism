@@ -610,7 +610,8 @@ struct Reply {
 /// Only the Arkism API surface the UI uses; anything else is refused here,
 /// so a script running in the WebView cannot turn this into a general proxy.
 fn allowed(method: &str, path: &str) -> bool {
-    let api = path.starts_with("/v1/") || path == "/readyz" || path.starts_with("/readyz?");
+    // /healthz carries the server version that 설정 › 업데이트 compares with the app.
+    let api = path.starts_with("/v1/") || path == "/readyz" || path.starts_with("/readyz?") || path == "/healthz";
     // DELETE only for 기억 잊기 (DELETE /v1/memories/{id}), 워크플로우 지우기 (DELETE /v1/crew/{id}) and the
     // gallery's 삭제 (DELETE /v1/prompts/{id}, /v1/design_systems/{id}); every other change goes through POST.
     // desktop/ui/delete-allowlist.test.js checks every DELETE the UI sends is listed here.
@@ -1260,6 +1261,8 @@ mod tests {
         assert!(allowed("POST", "/v1/memory_candidates/x/review"));
         // 들어가는 기억 미리보기: the hooks' own calls plus the token count.
         assert!(allowed("POST", "/v1/search"));
+        assert!(allowed("GET", "/healthz"));
+        assert!(!allowed("GET", "/healthz/x"));
         assert!(allowed("POST", "/v1/context/tokens"));
         assert!(!allowed("DELETE", "/v1/context/tokens"));
         assert!(allowed("DELETE", "/v1/memories/x"));
