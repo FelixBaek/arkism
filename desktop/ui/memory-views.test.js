@@ -156,7 +156,7 @@ test("with no budget policy the card offers one monthly amount, saved with the r
   input.value = "20"; dom.buttons(panel, "저장")[0].click(); await dom.flush(); await dom.flush();
   assert.deepEqual(calls[1], ["/v1/routing/policy", { scope: { project_id: "p" }, expected_revision: 4, monthly_budget_usd: 20 }]);
   assert.ok(panel.textContent.includes("이번 달 약 $3.50 / 월 예산 $20.00"), panel.textContent);
-  const again = { configured: false, month: "2026-10" }; const req2 = async (path, opts) => { if (path === "/v1/routing/policy") throw new Error("x"); return again; };
+  const again = { configured: false, month: "2026-10" }; const req2 = async (path) => { if (path === "/v1/routing/policy") throw new Error("x"); return again; };
   const p2 = window.ArkismModelBudget.mount({ container: host(), scope: {}, request: req2, el: h.el, button: h.button }); await dom.flush();
   p2.querySelector("input").value = ""; dom.buttons(p2, "저장")[0].click(); await dom.flush();
   assert.match(p2.textContent, /저장하지 못했어요/);

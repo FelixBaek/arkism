@@ -31,6 +31,7 @@
   }
 
   // install-arkism's record (agents-setup.json): which agents' files it changed, where the backup is.
+  /** @type {[RegExp, string][]} */
   const AGENT_DIRS = [[/[\\/]\.claude([\\/]|\.json$)|[\\/]claude[\\/]/i, "Claude Code"], [/[\\/]\.codex[\\/]/i, "Codex"], [/[\\/]\.gemini[\\/]/i, "Gemini CLI"],
     [/[\\/]\.grok[\\/]/i, "Grok"], [/zcode/i, "ZCode"], [/opencode/i, "OpenCode"], [/cursor/i, "Cursor"]];
   function setupSummary(rec) {

@@ -28,7 +28,6 @@ window.ArkismSkillTrial = ({ state, el, button, request, query }) => {
       const view = await post(`/v1/skill-trials/${encodeURIComponent(id)}/inspect`, { skill_id: skillID });
       if (!live(ticket) || !validView(view) || view.record.id !== id) throw new Error("invalid_trial"); return view;
     }
-    const date = value => new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
     const short = value => new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
     async function draw(selectedID) {
       const ticket = draws.begin(), create = el("div"), note = el("p", "meta"), sideNote = el("p", "meta"); note.setAttribute("role", "status"); sideNote.setAttribute("role", "status");
