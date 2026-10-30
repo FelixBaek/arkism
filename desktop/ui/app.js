@@ -347,7 +347,7 @@ export function startApp() {
     if (item.status === "conflicted") return ["기존 기억과 부딪힘", true];
     if ((item.tags || []).includes("basis:assistant_result")) return ["에이전트 결과 — 확인 필요", false];
     if ((item.tags || []).includes("basis:inferred")) return ["AI 추측 — 사용자가 말하지 않음", false];
-    return ["검토 필요", false];
+    return ["", false]; // no known reason: say nothing rather than a bare "검토 필요" (10-18 request)
   }
   const standing = (m) => m.kind === "user" || m.kind === "procedural";
   function usageOf(id) {

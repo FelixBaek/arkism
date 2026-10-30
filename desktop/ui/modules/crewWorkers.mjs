@@ -1112,7 +1112,7 @@ export function createCrewWorkers(deps) {
     return bar;
   }
 
-  // 개요 (868:61909): numbers, AI 제안, 모델, 실행, 일하는 방법, 쓸 수 있는 것, 예산, 채널, 삭제.
+  // 개요 (868:61909): numbers, AI 제안, 모델, 실행, 워크플로우, 쓸 수 있는 것, 예산, 채널, 삭제.
   // 새 전문가 (rec null): the same screen with empty fields — AI로 초안 and 비슷한 것에서 시작 in place of the numbers,
   // 팀에 넣기 in place of 채널, and 만들기 in place of 저장.
   function editBody(box, rec) {
@@ -1125,7 +1125,7 @@ export function createCrewWorkers(deps) {
     const bar = rec ? saveBar(rec) : createBar();
     bar.append(ai.dock);
     box.append(modelCard(d), runCard(d),
-      workerCard("일하는 방법", "", instructionsField(d), workflowField(d)),
+      workerCard("워크플로우", "", instructionsField(d), workflowField(d)),
       useCard(d, rec), budgetCard(rec ? rec.id : null, d), ...(rec ? [channelCard(rec), enableRow(), dangerRow(rec), bar] : [teamsCard(), bar]));
   }
 

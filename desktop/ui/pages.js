@@ -1215,7 +1215,7 @@ window.ArkismPages = (ctx) => {
           return;
         }
         if (!storage?.changed()) { say("이미 이 PC의 Arkism을 쓰고 있어요."); return; }
-        if (!confirm(`저장 위치를 바꿀까요?\n\n지금 데이터는 옮기지 않고 ${storage.loc.path}에 그대로 둬요. 새 폴더가 비어 있으면 빈 Arkism으로 시작해요.`)) return;
+        if (!(await window.ask(`저장 위치를 바꿀까요?\n\n지금 데이터는 옮기지 않고 ${storage.loc.path}에 그대로 둬요. 새 폴더가 비어 있으면 빈 Arkism으로 시작해요.`, "바꾸기"))) return;
         const l = await storage.save();
         if (l) say(l.next === l.path ? "저장 위치를 바꿨어요." : "앱을 다시 열면 새 위치에서 시작해요.");
         return;

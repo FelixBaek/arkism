@@ -49,8 +49,8 @@
 
 .table-wrap > .wf-main { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 24px; background: none; border: 0; }
 .panel:has(> .panel-main > .table-wrap > .wf-main) { border: 0; border-radius: 0; background: none; box-shadow: none; } /* 1424:2375: the Flow list sits on the page, no box */
-.wf-grid { display: grid; grid-template-columns: repeat(auto-fill, 270px); gap: 10px; } /* 1424:2375: 270 × 226 cards, 10 apart */
-.crew-card.wf-card { position: relative; isolation: isolate; overflow: hidden; height: 226px; display: flex; flex-direction: column; gap: 10px; padding: 16px;
+.wf-grid { display: grid; grid-template-columns: repeat(auto-fill, 270px); gap: 10px; } /* 1478:12809: 270 × 154 cards, 10 apart */
+.crew-card.wf-card { position: relative; isolation: isolate; overflow: hidden; height: 154px; display: flex; flex-direction: column; gap: 10px; padding: 16px;
   border-radius: 12px; border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); text-align: left; }
 .crew-card.wf-card:hover { border-color: var(--nc-quiet); }
 .crew-card.wf-card.selected { background: var(--nc-raised); border-color: var(--nc-line); }
