@@ -89,7 +89,7 @@ func nativeCollectProofTx(ctx context.Context, tx Tx, scope Scope, roots []Ref) 
 		if err != nil {
 			return nil, err
 		}
-		if r.Scope != scope || r.ID != ref.ID || !live(r) || r.ContentErased || r.PrivacyQuarantined || ref.Revision > 0 && r.Revision != ref.Revision {
+		if !nativeLifecycleProofSupported(r, ref.Collection) || r.Scope != scope || r.ID != ref.ID || !live(r) || r.ContentErased || r.PrivacyQuarantined || ref.Revision > 0 && r.Revision != ref.Revision {
 			return nil, ErrConflict
 		}
 		out = append(out, NativeDynamicsDependency{Ref: Ref{Collection: ref.Collection, ID: r.ID, Revision: r.Revision}, Hash: nativeDependencyHash(r)})
@@ -120,7 +120,7 @@ func (s *Service) nativeAuthorizeProof(ctx context.Context, token string, scope 
 		if err != nil {
 			return nil, err
 		}
-		if r.Scope != scope || r.ID != ref.ID || !live(r) || r.ContentErased || r.PrivacyQuarantined || ref.Revision > 0 && r.Revision != ref.Revision {
+		if !nativeLifecycleProofSupported(r, ref.Collection) || r.Scope != scope || r.ID != ref.ID || !live(r) || r.ContentErased || r.PrivacyQuarantined || ref.Revision > 0 && r.Revision != ref.Revision {
 			return nil, ErrConflict
 		}
 		out = append(out, NativeDynamicsDependency{Ref: Ref{Collection: ref.Collection, ID: r.ID, Revision: r.Revision}, Hash: nativeDependencyHash(r)})
@@ -154,7 +154,7 @@ func nativeValidateProofTx(ctx context.Context, tx Tx, scope Scope, deps []Nativ
 		if err != nil {
 			return err
 		}
-		if r.Scope != scope || r.ID != dep.Ref.ID || r.Revision != dep.Ref.Revision || !live(r) || r.ContentErased || r.PrivacyQuarantined || nativeDependencyHash(r) != dep.Hash {
+		if !nativeLifecycleProofSupported(r, dep.Ref.Collection) || r.Scope != scope || r.ID != dep.Ref.ID || r.Revision != dep.Ref.Revision || !live(r) || r.ContentErased || r.PrivacyQuarantined || nativeDependencyHash(r) != dep.Hash {
 			return ErrConflict
 		}
 	}

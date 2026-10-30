@@ -1,6 +1,6 @@
 # 로드맵 진행 기록
 
-기준: 2026-10-30. 작업 검증 완료22/63(R1~R8, CRW-01~07, DYN-01, RTE-01~02, CAP-01·07, PSY-01, SYS-02). 필수49개 중22개 완료·27개 미완료이며 선택14개는 보류다. #150 준비는 별도 완료이며 63개 작업 분모에는 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
+기준: 2026-10-30. 작업 검증 완료25/63(R1~R8, CRW-01~07, DYN-01, RTE-01~02, CAP-01·07, PSY-01, SYS-01~04). 필수49개 중25개 완료·24개 미완료이며 선택14개는 보류다. #150 준비는 별도 완료이며 63개 작업 분모에는 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
 여기서 카드란 이슈 안의 개별 작업이다. “로컬 카드 수용”은 작업의 구현·실제 로컬 검사·독립 검토가 완료 기준을 충족했다는 과거 기록 용어이며, 앞으로 “작업 검증 완료”로 설명한다. `verified`도 이 뜻이다.
 원격 검사·PR 병합·실험·제품 통합은 각각 따로 기록한다.
 
@@ -8,9 +8,9 @@
 
 - SYS-02: 원A·실제 native B의 격리 기준 충족. 현재 API 거절·시간·identity·같은Tx 영속 인계와 실제PG/HTTP·업그레이드를 독립 검증했다.
 - DYN-05: zero-aux 규칙 선택을 반영한 p1 runner/CLI/compare와 원격 검사를 수용했다. 아래 초기 실패 기록은 보존하며 전체 DYN-05/capture 완료로 합산하지 않는다.
-- SYS-01: A 수용 뒤 실제 Search/HTTP shadow 후보를 검증 중이다. 전체 수용은 아직 아니다.
-- SYS-03: 원자 저장 B 구성요소를 검증했지만 실제 같은-reader packing 영수증·표시/저장/읽기/답변 연결이 남았다.
-- SYS-04: 별도 metadata 모델 후보의 삭제 ID 반례를 수정·독립 재검증했다. 기본 수집510개(기존451+새59)와 Python758 검증을 마쳤으며 실제 복원·게시 B는 별도 진행 중이다.
+- SYS-01: 실제 Search/HTTP shadow와 호출별 제외를 실제 Hook→BuildContext→동일 독자·영수증까지 연결해 원 기준을 충족했다. 최신 공개main f86 결합 일반/race·독립 검증을 통과했다.
+- SYS-03: 원자 저장·중복/복구·실제 schema4→5 근거와 같은-reader packing·표시/저장/메모리 GET/답변 연결을 수용했다. 외부 정정1회의 전체 물리행 대사로 정상 purge와 검색 부작용을 구분했다.
+- SYS-04: 원metadata 모델과 실제 복원·의존성 정정/삭제·native 게시 보류를 수용했다. 실제 LOGIN·특권 검산 경계·권한 철회 fallback을 검증했고 기존6필드와 일반 복원 보류는 유지한다.
 
 아래 표는 초기 단계 당시의 검증 이력이다. 현재 집계와 후속 상태는 위 요약 및 뒤의 단계별 후속 기록을 따른다.
 
@@ -410,3 +410,13 @@ R8 기본 수집에 정확한 모듈 한 개만 등록해 기존451개ID와새59
 SYS-01 now has an isolated actual Search/HTTP read-only adapter plus optional BuildContext invocation exclusions and separate v2 stage observations. Author normal/race61/160 and independent normal/race6/23 passed; original315 JSON bytes are unchanged. Final-return races after native read publication reject stale revision/deletion/source/grant changes. Root publication-copy integration15/23 passed, source21 disclosure checks passed, and inherited comment cleanup preserved7155 Go tokens.
 
 This is component acceptance, not whole SYS-01: production host requests still use Search while the invocation view is a BuildContext input. Connecting that actual request to the final-render/transport/reader acknowledgement chain remains required, alongside SYS-03/SYS-04 integration. No fixture-only combination counts as that connection. Whole22/63, required27 remaining and optional14 held stay unchanged. Default off/shadow baseline behavior is preserved; no UI/product build/deploy/main merge. See [native Search scope](native-search-shadow.md) and [work record](../work-records/2026-10-30-roadmap-native-search-shadow.md).
+
+## Native context delivery and lifecycle integration accepted locally
+
+Current whole-card count is25/63:25 required verified,24 required remaining and14 conditional held. SYS-01, SYS-03 and SYS-04 now meet their original local-service criteria; the original58 requirement/22-gate audit, exact source lineage and earlier failed experiments remain preserved.
+
+The final candidate combines verified public main f86b95f with the native changes. One invocation per mode ran387methods1374leaf in normal/race with0failure/skip; changed-Go39/39 normal/race, UI source591, full-module vet/lint and unchanged complexity gates passed. The active-native/view/reader/recovery checks are included, while independent1/2 and genuine-LOGIN reader6/64 retain separate counts. A new shared external-mutation test compares every physical database column without filtering purges, timestamps or fences.
+
+The incoming public-main Go12/UI17 files are preserved inheritance. API semantics retain the independent6 native changes and4 main changes. No UI or daemon feature enablement is introduced by this native implementation. Legacy standalone-product helpers, full check_local and unrestricted all-Go testing remain explicitly unexecuted. This is local integration, not release/deployment or scientific performance validation. Source protection and latest-main compatibility checks are complete locally; PR browser/remote checks are tracked separately.
+
+See [delivery and recovery boundaries](native-delivery-lifecycle.md) and the [integration work record](../work-records/2026-10-30-roadmap-native-system-integration.md). SYS-05 A workload/summary preparation has separate passing evidence; its B service/load implementation and SYS-06 mode/fallback integration remain unfinished.

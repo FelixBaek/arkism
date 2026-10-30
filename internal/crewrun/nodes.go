@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/FelixBaek/arkism/internal/flowresult"
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
+	"github.com/FelixBaek/arkism/internal/receiptchain"
 	"io"
 	"maps"
 	"net/http"
@@ -344,16 +345,17 @@ func runCmd(ctx context.Context, s cmdSpec) ([]byte, error) {
 
 // aiSpec is what RUNNER run-node reads on stdin.
 type aiSpec struct {
-	Model        string   `json:"model"`
-	Effort       string   `json:"effort"`
-	Instructions string   `json:"instructions"`
-	Task         string   `json:"task"`
-	CWD          string   `json:"cwd,omitempty"`
-	Access       string   `json:"access,omitempty"`
-	TimeoutS     int      `json:"timeout_s"`
-	Once         bool     `json:"once"`
-	Research     bool     `json:"research,omitempty"` // compact fallback only; saved multi-model research keeps its own calls
-	Skills       []string `json:"skills,omitempty"`   // hub skill ids the runner puts into the instructions
+	ReceiptChain *receiptchain.TransportRequest `json:"receipt_chain,omitempty"`
+	Model        string                         `json:"model"`
+	Effort       string                         `json:"effort"`
+	Instructions string                         `json:"instructions"`
+	Task         string                         `json:"task"`
+	CWD          string                         `json:"cwd,omitempty"`
+	Access       string                         `json:"access,omitempty"`
+	TimeoutS     int                            `json:"timeout_s"`
+	Once         bool                           `json:"once"`
+	Research     bool                           `json:"research,omitempty"` // compact fallback only; saved multi-model research keeps its own calls
+	Skills       []string                       `json:"skills,omitempty"`   // hub skill ids the runner puts into the instructions
 	// Origin tags the runner's routing call (meetings: kind, meeting_id, team_id, agent_id, trigger).
 	Origin map[string]string `json:"origin,omitempty"`
 	// Backend sends the step to that agent-runner connection instead of a local CLI; Run then names the step
@@ -457,9 +459,12 @@ func (e *Engine) callAIOnce(ctx context.Context, s aiSpec, limit time.Duration) 
 	if request, ok := ctx.Value(observationRequestKey{}).(ObservationTransportRequest); ok && AttemptObserverEnabled(ctx) {
 		s.Observation = &request
 	}
+	chainCall := beginReceiptChainAI(ctx, &s)
 	in, _ := json.Marshal(s)
+	chainCall.input(in)
 	args := append(append([]string{}, e.Runner...), "run-node", "--json")
 	out, err := runCmd(ctx, cmdSpec{args: args, env: os.Environ(), stdin: in, timeout: limit})
+	chainCall.finish(out, err)
 	var res aiAnswer
 	if json.Unmarshal(bytes.TrimSpace(out), &res) != nil {
 		if err == nil {
