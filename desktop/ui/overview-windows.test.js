@@ -193,3 +193,23 @@ test("분석 explains an extractor failure in plain words with one fix, the code
     win.reset();
   }
 });
+
+// 분류 › 자세히 used to open 승인 대기, which looked like the same screen; it now opens the row's own classification.
+test("분류 자세히 shows the classification in the row", async () => {
+  const { win, state } = windows([], null, () => ({}));
+  state.data.candidates = [{ id: "c1", kind: "fact", text: "Deploy on Fridays", created_at: "2026-10-29T00:00:00Z" },
+    { id: "c2", kind: "fact", text: "Uses port 8091", created_at: "2026-10-29T00:00:00Z", classification: { risk_reasons: ["개인 정보"] } }];
+  win.open("classify");
+  const dialogs = () => document.querySelectorAll("dialog").length, before = dialogs();
+  const row = document.querySelectorAll(".ov-win-item").find((r) => r.textContent.includes("Deploy on Fridays"));
+  const more = row.querySelector(".ov-class-more");
+  assert.ok(more.hidden);
+  dom.buttons(row, "자세히")[0].click(); await dom.flush();
+  assert.ok(!more.hidden);
+  assert.match(more.textContent, /아직 위험도와 중복 힌트가 붙지 않았어요/);
+  assert.equal(dialogs(), before, "no second window");
+  dom.buttons(row, "자세히")[0].click();
+  assert.ok(more.hidden, "자세히 again folds it");
+  assert.ok(!document.body.textContent.includes("Uses port 8091"), "a classified candidate has left 분류");
+  win.reset();
+});

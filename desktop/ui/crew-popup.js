@@ -44,7 +44,11 @@ window.ArkismCrewPopup = ({ el, button }) => {
     document.body.append(dlg);
     draw();
     dlg.showModal();
-    return { dialog: dlg, body, select: (key) => { current = key; draw(); }, setTitle: (t, s) => { names.firstChild.textContent = t; if (s != null) names.lastChild.textContent = s; } };
+    return { dialog: dlg, body, select: (key) => {
+      // Redrawing the open tab (a click inside it) keeps the reader where they were instead of jumping to the top.
+      const restore = key === current ? globalThis.ArkismKeep?.view(body, body, dlg, document.scrollingElement) : null;
+      current = key; draw(); restore?.();
+    }, setTitle: (t, s) => { names.firstChild.textContent = t; if (s != null) names.lastChild.textContent = s; } };
   }
   return { open };
 };

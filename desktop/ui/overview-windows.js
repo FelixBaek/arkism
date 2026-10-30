@@ -250,7 +250,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     });
   }
   const itemCount = (rows) => rows.filter((r) => !r.classList.contains("ov-win-group")).length;
-  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (that candidate in 승인 대기, selected with its detail)
+  // 분류 row: the whole candidate, 승인 · 버리기, AI 도움 (advice only: it lights one button and says why) and 자세히 (its classification and source, in the row)
   function reviewRow(c) {
     const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
     const r = row(kind(c.kind), c.text, [dupText ? `“${clip(dupText, 40)}”와 같은 뜻` : c.conflict_id ? "충돌 중" : c.classification?.risk_reasons?.[0] || "", c.summary ? `요약: ${c.summary}` : "", ago(c.created_at)].filter(Boolean).join(" · "), "");
@@ -281,7 +281,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
       } catch (e) { note.textContent = e.code === "cancelled" ? "AI 도움을 취소했어요. 후보는 그대로예요." : `AI 도움을 받지 못했어요: ${e.message}`; }
       finally { running = null; ok.disabled = no.disabled = false; aiLabel(failed ? "다시 시도" : "AI 도움"); }
     });
-    side.append(ok, no, ai, button("자세히", "ghost small", null, () => wide("review", c.id))); r.firstChild.append(advice, note);
+    // 자세히 opens this row's classification in place (asked: it used to jump to 승인 대기, which looked like the same screen)
+    const more = el("div", "ov-class-more"); more.hidden = true;
+    const detail = button("자세히", "ghost small", null, () => {
+      more.hidden = !more.hidden; detail.setAttribute("aria-expanded", String(!more.hidden));
+      if (more.hidden || more.childElementCount) return;
+      more.append(el("p", "", "아직 위험도와 중복 힌트가 붙지 않았어요. 붙고 나면 이 목록에서 빠지고 승인 대기에만 남아요.")); // 분류 lists only unclassified candidates
+      const from = contextBox(c); if (from) more.append(from); // no jump to 승인 대기 from a row (app-home.test.js)
+    });
+    detail.setAttribute("aria-expanded", "false");
+    side.append(ok, no, ai, detail); r.firstChild.append(advice, note, more);
     if (DR().maybeStale(c, [D().memories.find((m) => m.id === c.classification?.dup_hint)])) side.append(DR().staleHint());
     return r;
   }

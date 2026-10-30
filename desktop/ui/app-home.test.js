@@ -84,18 +84,15 @@ test("overview: stage windows step through every stage and their lists", async (
   assert.equal(win(), null);
 });
 
-test("overview: 자세히 on a 분류 card opens that candidate's own detail, even off the loaded page", async () => {
+// 10-31: 자세히 used to open 승인 대기, which looked like the same screen; the detail now opens inside the 분류 row
+test("overview: 자세히 on a 분류 card opens that candidate's detail in the row, not 승인 대기", async () => {
   const d = await openWindow({ key: "classify" });
-  const items = [...d.querySelectorAll(".ov-win-list .ov-win-item")];
-  assert.ok(items.length > 1);
-  // the newest card, with a first page that does not carry it (the 승인 대기 list loads oldest first)
-  const card = items.at(-1), title = text(card.querySelector(".ov-win-item-title"));
-  const off = route("POST", "/v1/memory_candidates/query", () => ok({ items: [], total: 0, facets: {} }));
+  const card = d.querySelector(".ov-win-list .ov-win-item"), more = card.querySelector(".ov-class-more");
+  assert.ok(more.hidden);
   await press("자세히", card, 80);
-  off();
-  const w = win(), head = title.replace(/…$/, "").slice(0, 20);
-  assert.ok(text(w.querySelector(".ov-wide-row.on")).includes(head), "the clicked candidate is the selected row");
-  assert.ok(text(w.querySelector(".ov-wide-detail")).includes(head), "and its detail is open");
+  assert.ok(!more.hidden, "the detail opens in the row");
+  assert.match(text(more), /위험도와 중복 힌트/);
+  assert.equal(win(), d, "still the 분류 window");
   await closeAll();
 });
 

@@ -6104,3 +6104,4 @@ Object.assign(window.ArkismI18nEN.strings, { "폴더에 직접 넣기": "Put it 
   "최근 2주 사이에 들어온 스킬이에요.": "Skills added in the last 2 weeks.", "자주 쓰는 것·안 쓰는 것·고칠 것을 한곳에서 봐요.": "See what's used, what isn't and what needs fixing in one place.",
   "기본 검사": "Basic check", "건네기": "Hand over", "고른 스킬을 에이전트에 알려요": "Tells the agent which skills were picked", "스킬 처리 흐름": "How skills are routed", "모델 바꾸기": "Change models" });
 Object.assign(window.ArkismI18nEN.patterns, { "기본 + 엔진 {0}개": "Basic + {0} engines", "요청마다 {0}개": "{0} per request" });
+Object.assign(window.ArkismI18nEN.strings, { "아직 위험도와 중복 힌트가 붙지 않았어요. 붙고 나면 이 목록에서 빠지고 승인 대기에만 남아요.": "No risk level or duplicate hint yet. Once they are added, it leaves this list and stays only in Pending approval." });
