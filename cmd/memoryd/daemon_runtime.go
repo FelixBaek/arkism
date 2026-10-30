@@ -48,7 +48,7 @@ type daemonWorkerStep struct {
 	recovery, noAgentRuntime bool
 	expiryScope              memory.Scope
 	expiryDays               int
-	nextSweep                time.Time
+	nextSweep, nextWatch     time.Time
 }
 
 func serveDaemonWorker(ctx context.Context, svc *memory.Service, cfg daemonOptions, control *desktopcontrol.Controller) error {
@@ -77,6 +77,13 @@ func (w *daemonWorkerStep) run(ctx context.Context) {
 			slog.Warn("candidate expiry deferred; check scoped expiry permission")
 		}
 		w.nextSweep = time.Now().Add(time.Hour)
+	}
+	// Skill watches roll a worse applied version back even when nobody opens the skill.
+	if !w.recovery && time.Now().After(w.nextWatch) {
+		if _, err := w.service.RunSkillWatches(op, w.token); err != nil {
+			slog.Warn("skill watch check deferred; retried next hour")
+		}
+		w.nextWatch = time.Now().Add(time.Hour)
 	}
 	slog.Debug("memory worker iteration")
 	if err := w.service.WorkOnce(op, w.token); err != nil && !errors.Is(err, memory.ErrNotFound) {

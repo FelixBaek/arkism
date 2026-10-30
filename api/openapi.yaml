@@ -4129,6 +4129,420 @@
         "description": "버전 활성화는 상위 스킬의 active·미만료 상태와 유효한 출처도 요구한다. 빈 version_id로 활성 연결만 해제하는 rollback은 상위 출처 철회 후에도 허용한다. 적용 후의 상위/이전 버전 변경이 선택 버전의 평가 직접 근거를 무효화하면 전체 트랜잭션을 409로 취소한다."
       }
     },
+    "/v1/skills/{id}/watch": {
+      "post": {
+        "summary": "Watch the just-applied active version (owner only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "version_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Skill watch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "previous_version",
+                    "applied_at",
+                    "until",
+                    "state",
+                    "failures",
+                    "baseline_failures",
+                    "checked_at",
+                    "can_rollback",
+                    "authority"
+                  ],
+                  "properties": {
+                    "version": {
+                      "$ref": "#/components/schemas/Ref"
+                    },
+                    "previous_version": {
+                      "type": "string"
+                    },
+                    "applied_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "watching",
+                        "kept",
+                        "ended",
+                        "rolled_back",
+                        "rollback_blocked"
+                      ]
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "baseline_failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "checked_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "can_rollback": {
+                      "type": "boolean"
+                    },
+                    "authority": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "적용 직후 사람이 켠다. 기본 7일 동안 실제 사용을 지켜본다. 권한은 apply·rollback 둘 다 필요하다."
+      }
+    },
+    "/v1/skills/{id}/watch/check": {
+      "post": {
+        "summary": "Check the watch and roll back when real use got worse (owner only)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "version_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Skill watch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "version",
+                    "previous_version",
+                    "applied_at",
+                    "until",
+                    "state",
+                    "failures",
+                    "baseline_failures",
+                    "checked_at",
+                    "can_rollback",
+                    "authority"
+                  ],
+                  "properties": {
+                    "version": {
+                      "$ref": "#/components/schemas/Ref"
+                    },
+                    "previous_version": {
+                      "type": "string"
+                    },
+                    "applied_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "until": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "watching",
+                        "kept",
+                        "ended",
+                        "rolled_back",
+                        "rollback_blocked"
+                      ]
+                    },
+                    "failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "baseline_failures": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "checked_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "can_rollback": {
+                      "type": "boolean"
+                    },
+                    "authority": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "새 버전의 실패한 실제 사용이 3번 이상이고 적용 전 같은 기간의 예전 버전 실패보다 많으면, 사람의 자격으로 일반 rollback을 실행한다. 예전 버전에 통과 평가가 없으면 rollback_blocked로 남긴다."
+      }
+    },
     "/v1/skills": {
       "get": {
         "summary": "List active skill baselines for the scoped registry",
@@ -40289,6 +40703,16 @@
             "type": "integer",
             "minimum": 0
           },
+          "baseline_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "The baseline run's total cost, measured by the server from its cases."
+          },
+          "baseline_duration_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The baseline run's total duration, measured by the server from its cases."
+          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -51611,6 +52035,12 @@
           "candidate_duration_ms": {
             "type": "integer"
           },
+          "baseline_cost": {
+            "type": "number"
+          },
+          "baseline_duration_ms": {
+            "type": "integer"
+          },
           "regression_passed": {
             "type": "boolean"
           },
@@ -57396,6 +57826,12 @@
             "type": "number"
           },
           "candidate_duration_ms": {
+            "type": "integer"
+          },
+          "baseline_cost": {
+            "type": "number"
+          },
+          "baseline_duration_ms": {
             "type": "integer"
           },
           "regression_passed": {

@@ -271,6 +271,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/skills/{id}/apply":                           {action: "apply:skills", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/skills/{id}/availability":                    {action: "apply:skills", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/skills/{id}/rollback":                        {action: "rollback:skills", scope: routeJSON, limit: 256 << 10},
+	"POST /v1/skills/{id}/watch":                           {action: "rollback:skills", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"POST /v1/skills/{id}/watch/check":                     {action: "rollback:skills", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/sources/ingest":                              {action: "write:sources", scope: routeMultipart},
 	"POST /v1/sources/{id}/deletion/retry":                 {action: "retry:deletion", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/unsplash/photos/{id}/use":                    {action: "read:crew", scope: routeJSON, limit: 256 << 10},

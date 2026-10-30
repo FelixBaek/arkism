@@ -171,6 +171,7 @@ func comparisonMeasurements(r SkillComparisonResult, scope Scope) ([2]RunDetails
 	measured := *v
 	measured.BaselineScore, measured.CandidateScore = baselineScore, candidateScore
 	measured.CandidateCost = cost[1]
+	measured.BaselineCost, measured.BaselineDurationMS = cost[0], duration[0]
 	return runs, measured, nil
 }
 

@@ -1446,6 +1446,24 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			}
 		}
 	}
+	unvalidated := false
+	if rollback && d.Role == roleHuman && in.ValidationID == "" {
+		unvalidated = s.watchedPreviousVersion(ctx, in, id)
+	}
+	return s.applySkillVersion(ctx, d, automation, id, in, rollback, unvalidated)
+}
+
+// applySkillVersion is ApplySkill after authorization. unvalidated is only for a skill watch's rollback on
+// failed real uses: it restores the version the owner used before even when that version has no evaluation.
+func (s *Service) applySkillVersion(ctx context.Context, d Decision, automation SkillAutomationPolicy, id string, in ChangeInput, rollback, unvalidated bool) (Record, error) {
+	action := "apply"
+	if rollback {
+		action = "rollback"
+	}
+	if unvalidated && (!rollback || in.VersionID == "") {
+		return Record{}, ErrInvalid
+	}
+	var e error
 	var target Record
 	if in.VersionID != "" {
 		target, e = s.Repo.Get(ctx, "skill_versions", in.Scope, in.VersionID)
@@ -1484,8 +1502,10 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 			if e != nil {
 				return e
 			}
-			if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
-				return e
+			if !unvalidated {
+				if e = validation(ctx, tx, r, vid, vid != target.ValidationID); e != nil {
+					return e
+				}
 			}
 			if d.Role == roleService && !rollback {
 				if e = checkAutomaticSkillPromotion(ctx, tx, r, in, automation); e != nil {
@@ -1526,7 +1546,7 @@ func (s *Service) ApplySkill(ctx context.Context, token, id string, in ChangeInp
 		}
 		// Applying also changes the header and old version: neither may invalidate
 		// the selected version's evaluation evidence within this transaction.
-		if in.VersionID != "" {
+		if in.VersionID != "" && !unvalidated {
 			if e = validation(ctx, tx, target, vid, false); e != nil {
 				return e
 			}

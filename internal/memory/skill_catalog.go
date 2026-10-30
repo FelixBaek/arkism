@@ -464,7 +464,7 @@ func (s *Service) importSkill(ctx context.Context, token string, in ImportSkillI
 			}
 		}
 		if existing, e := tx.Get(ctx, colSkillVersions, in.Scope, versionID); e == nil {
-			reused, e := reusedImportedSkill(ctx, tx, in, proposal, existing, contentHash)
+			reused, e := reusedImportedSkill(ctx, tx, in, proposal, existing, contentHash, decision)
 			if e != nil {
 				return e
 			}
@@ -517,7 +517,14 @@ func checkProposalEvidence(ctx context.Context, tx Tx, scope Scope, proposal *Pr
 	return nil
 }
 
-func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, proposal *ProposeSkillInput, existing Record, contentHash string) (ImportSkillResult, error) {
+func reusedImportedSkill(ctx context.Context, tx Tx, in ImportSkillInput, proposal *ProposeSkillInput, existing Record, contentHash string, decision Decision) (ImportSkillResult, error) {
+	// The owner asked again for a new version they had discarded: the same draft comes back as a candidate.
+	if proposal != nil && decision.Role == roleHuman && existing.Status == "rejected" && existing.Analysis != nil && existing.Analysis.ContentHash == contentHash {
+		var e error
+		if existing, e = reopenDiscardedDraft(ctx, tx, existing, decision); e != nil {
+			return ImportSkillResult{}, e
+		}
+	}
 	if existing.Analysis == nil || existing.Analysis.ContentHash != contentHash || (proposal == nil || existing.Status != "approved") && existing.Status != "candidate" && checkActiveSkill(ctx, tx, existing) != nil {
 		return ImportSkillResult{}, ErrConflict
 	}
