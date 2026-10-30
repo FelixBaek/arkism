@@ -109,6 +109,11 @@ test("분석 and 대화 저장 summarize what went in and what came out, each re
   assert.ok(document.querySelector("dialog.ov-wide-win"), "대화 저장 opens wide");
   assert.ok(body().includes("분석 끝") && body().includes("원문 D-3") && body().includes("원문 만료") && body().includes("원문 없음"), "each saved conversation says what it produced and whether its text is kept");
   assert.equal(calls.filter((c) => c === "/v1/usage/sessions/archives").length, 1);
+  // more sessions than the loaded page: the server's sums count all of them, and the bars say whose they are
+  Object.assign(env, { sessionsTotal: () => 120, sessionsSums: () => ({ messages: 900, tokens: 5000, today: 4 }) });
+  win.open("extract");
+  assert.ok(body().includes("최근 7일 대화 120개, 메시지 900개를 봤어요."));
+  assert.ok(body().includes("막대는 최근 대화 3개 기준이에요."));
   win.reset();
 });
 

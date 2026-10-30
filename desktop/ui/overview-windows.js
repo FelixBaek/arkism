@@ -427,13 +427,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return why ? [why, box] : [box];
   }
   // the 7-day total from the server, not the 50 rows one page holds (owner: exact counts)
-  const seenLine = (ses) => { const t = env.sessionsTotal?.() || 0; return t > ses.length ? `최근 7일 대화 ${num(t)}개 중 최근 ${num(ses.length)}개` : `최근 대화 ${num(ses.length)}개`; };
+  // messages and tokens over every 7-day session when the server sums them (an older server: the loaded rows)
+  const msgSum = (ses) => env.sessionsSums?.()?.messages ?? ses.reduce((a, x) => a + (x.messages || 0), 0);
+  const tokSum = (ses) => env.sessionsSums?.()?.tokens ?? ses.reduce((a, x) => a + (x.tokens || 0), 0);
+  const seenLine = (ses) => { const t = env.sessionsTotal?.() || 0; return t <= ses.length ? `최근 대화 ${num(ses.length)}개` : env.sessionsSums?.() ? `최근 7일 대화 ${num(t)}개` : `최근 7일 대화 ${num(t)}개 중 최근 ${num(ses.length)}개`; };
+  // the bars sort the loaded rows by state; say so when the sentence above counts more
+  const barsNote = (ses) => ((env.sessionsTotal?.() || 0) > ses.length && env.sessionsSums?.() ? [el("p", "ov-win-empty", `막대는 최근 대화 ${num(ses.length)}개 기준이에요.`)] : []);
   // 분석: what went in (the 7-day sessions and their messages) and what came out (candidates by kind, and how each ended)
   function analysisBox() {
     const ses = env.sessions(), st = ses.map(sessionState), wk = Date.now() - 7 * 24 * HOUR;
     const n = { ok: st.filter((x) => x.tone === "ok").length, wait: st.filter((x) => x.tone === "wait").length };
-    const inBox = block("분석한 대화", el("p", "ov-sum-line", `${seenLine(ses)}, 메시지 ${num(ses.reduce((a, x) => a + (x.messages || 0), 0))}개를 봤어요.`),
-      barList([["후보가 나온 대화", n.ok], ...(n.wait ? [["분석 기다리는 대화", n.wait]] : []), ["후보가 안 나온 대화", ses.length - n.ok - n.wait]], Math.max(1, ses.length)));
+    const inBox = block("분석한 대화", el("p", "ov-sum-line", `${seenLine(ses)}, 메시지 ${num(msgSum(ses))}개를 봤어요.`),
+      barList([["후보가 나온 대화", n.ok], ...(n.wait ? [["분석 기다리는 대화", n.wait]] : []), ["후보가 안 나온 대화", ses.length - n.ok - n.wait]], Math.max(1, ses.length)), ...barsNote(ses));
     const rej = readOnce("rejected", () => request(`/v1/memory_candidates?${query({ status: "rejected", created_from: new Date(wk).toISOString(), limit: 100 })}`));
     const rejected = rej.v?.items || [], pending = waiting(), approved = D().memories.filter((m) => tag(m, "event_id:") && time(m.created_at) >= wk);
     const kinds = {}; for (const m of [...pending, ...approved, ...rejected]) kinds[m.kind] = (kinds[m.kind] || 0) + 1;
@@ -469,8 +474,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const states = {}; for (const x of arc.v?.items || []) states[x.state] = (states[x.state] || 0) + 1;
     const soon = (arc.v?.items || []).flatMap((x) => x.archives || []).map((a) => time(a.expires_at)).filter(Boolean).sort((a, b) => a - b)[0];
     const left = soon ? Math.max(0, Math.ceil((soon - Date.now()) / (24 * HOUR))) : null;
-    const savedBox = block("저장한 대화", el("p", "ov-sum-line", `${seenLine(ses)}, 메시지 ${num(ses.reduce((a, x) => a + (x.messages || 0), 0))}개, 토큰 ${num(ses.reduce((a, x) => a + (x.tokens || 0), 0))}개를 저장했어요.`),
-      barList([["기억·후보가 나온 대화", st.filter((x) => x.tone === "ok").length], ["아직 안 나온 대화", st.filter((x) => x.tone !== "ok").length]], Math.max(1, ses.length)));
+    const savedBox = block("저장한 대화", el("p", "ov-sum-line", `${seenLine(ses)}, 메시지 ${num(msgSum(ses))}개, 토큰 ${num(tokSum(ses))}개를 저장했어요.`),
+      barList([["기억·후보가 나온 대화", st.filter((x) => x.tone === "ok").length], ["아직 안 나온 대화", st.filter((x) => x.tone !== "ok").length]], Math.max(1, ses.length)), ...barsNote(ses));
     const keptBox = block("원문 보관", ...(arc.err ? [el("p", "ov-win-empty", /HTTP 4(00|04)|not_found|invalid/.test(arc.err.message || "") ? "이 서버는 원문 보관 상태를 아직 알려 주지 않아요." : `보관 상태를 읽지 못했어요 (${arc.err.message}).`)]
       : !arc.v ? [el("p", "ov-win-empty", "불러오는 중…")]
       : [cellRow([["보관 중", `${num(states.active || 0)}개`], ["만료됨", `${num(states.expired || 0)}개`], ["원문 없음", `${num((states.none || 0) + (states.unsupported || 0) + (arc.v.missing?.length || 0))}개`]]),
