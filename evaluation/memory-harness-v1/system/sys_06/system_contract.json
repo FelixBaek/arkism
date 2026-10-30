@@ -60,7 +60,7 @@
       "card": "SYS-05",
       "path": "sys_05/load_contract.json",
       "sha256": "398df795b2eb03fc421158a10ca4094cdb199f3577545f28715b3d2d8c9ea2bc",
-      "review_state": "in_progress"
+      "review_state": "accepted"
     }
   ]
 }

@@ -35,7 +35,7 @@ def case(report, mode, condition):
 
 class IntegrationReport(unittest.TestCase):
     def setUp(self):
-        # SYS-05 is still in_progress in the real index; most cases assume its prerequisites were accepted.
+        # Cases run against an index with every prerequisite accepted; one test checks the unaccepted hold.
         real = V.contract_index
         self.addCleanup(setattr, V, 'contract_index', real)
         V.contract_index = lambda: real()[:2] + ([],)
@@ -49,7 +49,10 @@ class IntegrationReport(unittest.TestCase):
     def test_contract_index_matches_sys01_to_sys05_files(self):
         self.assertEqual(V.contract_index()[1], [])
         self.doCleanups()
-        self.assertEqual(V.contract_index()[2], ['sys_05/load_contract.json'])
+        real = V.contract_index
+        self.assertEqual(real()[2], [])  # SYS-05 accepted on 2026-10-31
+        V.contract_index = lambda: real()[:2] + (['sys_05/load_contract.json'],)
+        self.addCleanup(setattr, V, 'contract_index', real)
         self.assertStatus(good(), 'hold', 'prerequisite_unaccepted:sys_05/load_contract.json')
         self.assertStatus(good('synthetic', 'synthetic_pass'), 'synthetic_pass')
         cards = {c['card'] for c in V.load('system_contract.json')['contracts']}

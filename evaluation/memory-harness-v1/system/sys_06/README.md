@@ -4,7 +4,7 @@ Task: SYS-06 (#152)
 Research: none (engineering acceptance gate; no product result)
 Design: Stage A only. A flag matrix (off, shadow, dynamic, emergency_fallback × normal and seven fault/race conditions), an index of the SYS-01~05 contract files with their hashes, and a validator that judges an integration report.
 Relation: faithful
-Deviation: none for stage A. Stage B (actual product wiring) waits for SYS-05 acceptance, an accepted DYN policy and an owner-assigned Story allowlist.
+Deviation: none for stage A. Stage B (actual product wiring) waits for an accepted DYN policy and an owner-assigned Story allowlist; SYS-05 was accepted on 2026-10-31.
 
 ## Files
 
@@ -22,7 +22,7 @@ Deviation: none for stage A. Stage B (actual product wiring) waits for SYS-05 ac
 - Blocking normal work (`returned: none`) is not a safe pass.
 - Every matrix cell is present once; unknown cells are rejected.
 - Missing code/config/fixture hashes, independent review, clean commands (exit 0, no failure, no skip, at least one test), Story link or product diff hold the report.
-- A local integration claim also needs every SYS-01~05 index entry `accepted` (SYS-05 is still `in_progress`, so it holds today), every stage B `required_checks` command run clean verbatim, and product diff paths inside stage B `candidate_files`.
+- A local integration claim also needs every SYS-01~05 index entry `accepted` (all five are `accepted` since 2026-10-31), every stage B `required_checks` command run clean verbatim, and product diff paths inside stage B `candidate_files`.
 - Synthetic evidence can reach `synthetic_pass` but never `accepted_local_integration`; `production` is never accepted here.
 
 ## Reproduce
