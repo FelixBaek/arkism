@@ -139,6 +139,8 @@ type Record struct {
 	// SessionArchive carries encrypted session-archive chunks (cipher, parent)
 	// and header metadata. JSON-silent: raw originals never leave the store.
 	SessionArchive *SessionArchiveData `json:"-" bson:"session_archive,omitempty"`
+	// SessionArchiveSettings is a workspace's retention window for those originals.
+	SessionArchiveSettings *SessionArchiveSettings `json:"-" bson:"session_archive_settings,omitempty"`
 	// WorkCheckpoint carries program work-state packages and their
 	// idempotency receipts. JSON-silent: packages are served only through the
 	// dedicated /v1/work-checkpoints endpoints, never through generic Record

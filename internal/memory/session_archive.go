@@ -36,8 +36,9 @@ const (
 	colSessionArchives      = "session_archives"
 	colSessionArchiveChunks = "session_archive_chunks"
 
-	// SessionArchiveTTL is the retention window: originals live seven days and
-	// only a verified real use restarts the clock.
+	// SessionArchiveTTL is the default retention window: originals live seven days
+	// and only a verified real use restarts the clock. A workspace may pick 30 or
+	// 90 days instead (session_archive_settings.go).
 	SessionArchiveTTL = 7 * 24 * time.Hour
 	// SessionArchiveChunkSize bounds one plaintext chunk.
 	SessionArchiveChunkSize = 1 << 20
@@ -513,7 +514,11 @@ func (s *Service) CommitSessionArchive(ctx context.Context, token string, in Ses
 		if old.LastUsedAt != nil && old.LastUsedAt.After(base) {
 			base = *old.LastUsedAt
 		}
-		expires := base.Add(SessionArchiveTTL)
+		ttl, err := sessionArchiveTTL(ctx, tx, in.Scope)
+		if err != nil {
+			return err
+		}
+		expires := base.Add(ttl)
 		previous := header.Revision
 		header.Revision++
 		header.UpdatedAt = now
@@ -549,7 +554,11 @@ func (s *Service) createSessionArchive(ctx context.Context, tx Tx, in SessionArc
 	if verr != nil {
 		return SessionArchiveCommitOutput{}, verr
 	}
-	expires := observed.Add(SessionArchiveTTL)
+	ttl, err := sessionArchiveTTL(ctx, tx, in.Scope)
+	if err != nil {
+		return SessionArchiveCommitOutput{}, err
+	}
+	expires := observed.Add(ttl)
 	created := Record{
 		ID: in.ID, Scope: in.Scope, Kind: kindSessionArchive, Status: statusActive, Revision: 1,
 		Text: in.Text, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
@@ -849,7 +858,11 @@ func (s *Service) SessionArchiveUsed(ctx context.Context, token string, in Sessi
 		} else if !errors.Is(err, ErrNotFound) {
 			return err
 		}
-		expires := now.Add(SessionArchiveTTL)
+		ttl, err := sessionArchiveTTL(ctx, tx, in.Scope)
+		if err != nil {
+			return err
+		}
+		expires := now.Add(ttl)
 		if current.ExpiresAt != nil && current.ExpiresAt.After(expires) {
 			expires = *current.ExpiresAt
 		}
@@ -1072,6 +1085,7 @@ func (p *Postgres) SessionArchiveExpiredRows(ctx context.Context, scope Scope, n
 // 64 KiB escaped projection fit); everything else uses the default decode cap.
 func sessionArchiveRoutes(mux routeRegistrar, s *Service) {
 	sessionArchiveSearchRoutes(mux, s)
+	sessionArchiveSettingsRoutes(mux, s)
 	mux.HandleFunc("POST /v1/session-archives/chunks", func(w http.ResponseWriter, r *http.Request) {
 		var in SessionArchiveChunkInput
 		if !decodeLimit(w, r, &in, sessionArchiveChunkBodyLimit) {

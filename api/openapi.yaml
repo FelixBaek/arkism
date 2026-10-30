@@ -34122,6 +34122,367 @@
           }
         }
       }
+    },
+    "/v1/session-archives/settings": {
+      "get": {
+        "operationId": "get_v1_session_archives_settings",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Session archives: retention",
+        "description": "Retention window for conversation originals in this workspace and project: 7 (default), 30 or 90 days. Originals pick up a new window on their next save or use. Only a person may change it.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseSessionArchiveSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      },
+      "post": {
+        "operationId": "post_v1_session_archives_settings",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Session archives: set retention",
+        "description": "Retention window for conversation originals in this workspace and project: 7 (default), 30 or 90 days. Originals pick up a new window on their next save or use. Only a person may change it.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseSessionArchiveSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestSessionArchiveSettingsInput"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "days"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -59144,6 +59505,34 @@
         "x-go-type": "memory.FlowChildView",
         "x-go-source": "internal/memory/flow_result.go",
         "description": "FlowChildView is a child reference plus the summary a result screen lists.\nSummary fields stay empty when the reader cannot read the child itself."
+      },
+      "WireResponseSessionArchiveSettings": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "days"
+        ],
+        "x-go-type": "memory.SessionArchiveSettings",
+        "x-go-source": "internal/memory/session_archive_settings.go"
+      },
+      "WireRequestSessionArchiveSettingsInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "days": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SessionArchiveSettingsInput",
+        "x-go-source": "internal/memory/session_archive_settings.go"
       }
     },
     "headers": {
