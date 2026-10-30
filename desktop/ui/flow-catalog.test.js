@@ -107,8 +107,15 @@ test("FLOW has the search box first and a category picker, no 실행 방식 tabs
   const bar = document.querySelector(".wf-bar");
   assert.ok(bar.firstElementChild.classList.contains("wf-search"));
   assert.equal(bar.querySelector(".wf-kinds, [role=tab]"), null);
-  assert.equal(bar.querySelector(".wf-select option").textContent, "모든 카테고리", "no count beside 모든 카테고리");
   assert.deepEqual(new Set([...document.querySelectorAll(".wf-card[data-flow-kind]")].map((n) => n.dataset.flowKind)), new Set(["workflow", "agent", "team"]));
+  const pick = bar.querySelector(".wf-cat-btn");
+  assert.equal(pick.textContent, "모든 카테고리", "no count beside 모든 카테고리");
+  pick.click();
+  const items = [...document.querySelectorAll(".wf-cat-menu .cat-menu-item")];
+  assert.ok(items.length > 1 && items.slice(1).every((b) => b.querySelector(".wf-chip .icon")), "each category is its icon + tag");
+  items[1].click();
+  assert.equal(document.querySelector(".wf-cat-menu"), null);
+  assert.ok(pick.querySelector(".icon"), "the picked category shows with its icon");
 });
 
 test("a new workflow is drafted by 노드 짜기 only on the button, can be undone, and is named on its first save", async () => {

@@ -6096,3 +6096,11 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}에 기억을 연결했어요. 에이전트를 다시 시작하면 적용돼요.": "Linked memory to {0}. Restart the agent to apply it."
 });
 Object.assign(window.ArkismI18nEN.strings, { "고칠 내용 · 버리는 이유": "Edit · or why to discard", "고칠 내용이나 버리는 이유를 쓰세요": "Write the edit, or why you discard it", "고쳐서 저장할 내용 또는 버리는 이유": "Edited text or reason to discard", "위 칸에 고친 내용을 쓰세요.": "Write the edited text in the box above." });
+Object.assign(window.ArkismI18nEN.strings, { "폴더에 직접 넣기": "Put it in the folder yourself", "SKILL.md가 든 폴더를 스킬 폴더(설정 › 역할별 모델 › 스킬 폴더)에 넣고 새로고침을 누르면 목록에 나와요.": "Put a folder with SKILL.md in the skills folder (Settings › Models by role › Skills folder) and press Refresh to list it.",
+  "스킬 업데이트": "Skill update", "자주 씀": "Used often", "에이전트가 많이 꺼내 쓴 스킬이에요.": "Skills agents used the most.", "거의 안 씀": "Rarely used",
+  "60일 동안 한 번도 안 쓴 스킬이에요. 필요 없으면 「모두 보기」에서 정리하세요.": "Skills not used in 60 days. If you don't need them, tidy them up from \"See all\".",
+  "업데이트 필요": "Needs update", "원본 저장소에 새 버전이 있어요.": "The source repository has a new version.", "모두 업데이트": "Update all", "업데이트·설치 실패": "Failed updates · installs",
+  "마지막 요청이 실패했어요. 이유를 보고 다시 시도하세요.": "The last request failed. Check why and try again.", "이유 모름": "Unknown reason", "최근 추가": "Recently added",
+  "최근 2주 사이에 들어온 스킬이에요.": "Skills added in the last 2 weeks.", "자주 쓰는 것·안 쓰는 것·고칠 것을 한곳에서 봐요.": "See what's used, what isn't and what needs fixing in one place.",
+  "기본 검사": "Basic check", "건네기": "Hand over", "고른 스킬을 에이전트에 알려요": "Tells the agent which skills were picked", "스킬 처리 흐름": "How skills are routed", "모델 바꾸기": "Change models" });
+Object.assign(window.ArkismI18nEN.patterns, { "기본 + 엔진 {0}개": "Basic + {0} engines", "요청마다 {0}개": "{0} per request" });

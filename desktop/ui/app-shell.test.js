@@ -30,6 +30,17 @@ test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인
   assert.equal(app.$(".nav-item.active").dataset.menu, "memory");
 });
 
+test("TOOLS › 관리 lists skills by use, and the skills page shows the routing flow", async () => {
+  await app.click(app.$('.nav-item[data-menu="connect"]'), 50);
+  assert.equal(app.$$("#controls .v4s-flow-steps li").length, 5, "스킬 처리 흐름: five steps");
+  await app.click(app.$$("#area-tabs .area-tab").find((t) => t.dataset.tab === "manage"), 50);
+  const boxes = app.$$("#table .mg-box").map((b) => app.dom.text(b.querySelector("h3")));
+  assert.deepEqual(boxes, ["자주 씀", "거의 안 씀", "업데이트 필요", "업데이트·설치 실패", "최근 추가"]);
+  const often = app.$$("#table .mg-box")[0].querySelectorAll(".mg-side");
+  const n = [...often].map((x) => parseInt(app.dom.text(x), 10));
+  assert.ok(n.length && n.every((v, i) => !i || n[i - 1] >= v), "most used first");
+});
+
 test("every menu and area tab draws", async () => {
   const errors = [], shown = [];
   process.on("unhandledRejection", (e) => errors.push(e));

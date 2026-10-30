@@ -322,6 +322,7 @@ export function createSkillViews(deps) {
       card.append(text, deps.button("하나씩 확인하기", "primary", null, () => deps.go("skills", todo[0][0])));
       parts.push(card);
     }
+    if (deps.state.skillTab === "all") parts.push(routerFlow());
     const modelKeys = deps.shownAgents().map(([k]) => k);
     if (deps.state.skillModel && !modelKeys.includes(deps.state.skillModel.replace("!", ""))) deps.state.skillModel = "";
     // 에이전트: one chip per agent (logo + name, count = skills it can use); a picked agent gets a 쓰는/못 쓰는 toggle.
@@ -392,6 +393,24 @@ export function createSkillViews(deps) {
     restore();
   }
 
+
+  // 스킬 처리 흐름: how a skill reaches an agent, each step with what it runs now (설정 › 역할별 모델; the server's default when nothing is picked).
+  function routerFlow() {
+    const p = deps.state.data.providers || {}, now = (role) => p.roles?.[role]?.model || p.role_defaults?.[role] || "";
+    const NAME = { fixed: "고정 규칙", clef: "Clef", jev: "Jev", chat: "내 모델", basic: "스킬 설명 그대로", haiku: "Claude Haiku", sonnet: "Claude Sonnet", opus: "Claude Opus" };
+    const name = (v) => (v ? NAME[v] || v : "기본값");
+    const scan = (now("skill_scan") || "").split(",").filter((k) => k && !(p.roles?.skill_scan?.off || []).includes(k)).length;
+    const steps = [["보안 검사", scan ? `기본 + 엔진 ${scan}개` : "기본 검사"], ["요약", name(now("skill_summary"))],
+      ["후보 찾기", `요청마다 ${now("skill_candidates") || 8}개`], ["판정", name(now("skill_judge"))], ["건네기", "고른 스킬을 에이전트에 알려요"]];
+    const card = deps.el("section", "v4s-flow");
+    card.setAttribute("aria-label", "스킬 처리 흐름");
+    const ol = deps.el("ol", "v4s-flow-steps");
+    for (const [title, what] of steps) { const li = deps.el("li"); li.append(deps.el("strong", "", title), deps.el("span", "", what)); ol.append(li); }
+    const head = deps.el("div", "v4s-flow-head");
+    head.append(deps.el("strong", "", "스킬 처리 흐름"), deps.button("모델 바꾸기", "ghost small", null, () => window.dispatchEvent(new CustomEvent("arkism:open-settings", { detail: { tab: "roles" } }))));
+    card.append(head, ol);
+    return card;
+  }
 
   // ---------------------------------------------------------------- 스킬 상세 (v4)
   function skFacts(rows, wide) {
