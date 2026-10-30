@@ -142,3 +142,9 @@ func observeSearchFinalRejection(in SearchInput, h Hit, stage, code string) {
 		in.finalRejected(h, stage, code)
 	}
 }
+
+func (a *nativeSearchAttempt) bindFinalRejection(in *SearchInput) {
+	if a != nil {
+		in.finalRejected = a.rejectFinal
+	}
+}
