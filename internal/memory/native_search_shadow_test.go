@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	dyn "github.com/FelixBaek/arkism/internal/memoryharness/dynamicsv2"
 	"math"
 	"os"
@@ -396,5 +397,25 @@ func nativeSearchAssertTwoStateSources(t *testing.T, f *fixture, q SearchInput, 
 	}
 	if values[0].Value == nil || values[1].Value == nil || *values[0].Value <= *values[1].Value || values[0].Target.ID == values[1].Target.ID {
 		t.Fatal("source factory did not bind distinct native states")
+	}
+}
+
+func TestNativeSearchSourceErrorReasons(t *testing.T) {
+	done, cancel := context.WithCancel(testCtx)
+	cancel()
+	for want, c := range map[string]struct {
+		ctx context.Context
+		err error
+	}{
+		"shadow_deadline":            {done, ErrDynamicsSnapshotUnavailable},
+		"native_source_unauthorized": {testCtx, ErrDenied},
+		"missing_state":              {testCtx, ErrNotFound},
+		"stale_source":               {testCtx, ErrConflict},
+		"snapshot_unavailable":       {testCtx, errors.Join(ErrDynamicsSnapshotUnavailable, errors.New("generation behind"))},
+		"invalid_source":             {testCtx, ErrInvalid},
+	} {
+		if got := nativeSearchSourceError(c.ctx, c.err); got != want {
+			t.Fatal(want, got)
+		}
 	}
 }
