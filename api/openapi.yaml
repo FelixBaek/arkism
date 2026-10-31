@@ -44827,6 +44827,9 @@
           },
           "removal": {
             "$ref": "#/components/schemas/WireResponseRemoval"
+          },
+          "routing_attribution": {
+            "$ref": "#/components/schemas/WireResponseRoutingAttribution"
           }
         },
         "additionalProperties": false,
@@ -58310,6 +58313,111 @@
           "causal_attribution"
         ],
         "description": "Current server context-pack observations only. Digests are not reader acknowledgement/model delivery/use/causal proof."
+      },
+      "WireResponseRoutingAttribution": {
+        "type": "object",
+        "properties": {
+          "decision_id": {
+            "type": "string",
+            "description": "the runner's id for this routed step"
+          },
+          "decided_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "decision": {
+            "type": "string",
+            "description": "how the first pick was made"
+          },
+          "group": {
+            "type": "string"
+          },
+          "view_hash": {
+            "type": "string"
+          },
+          "chosen": {
+            "type": "string",
+            "description": "the first pick, provider/model"
+          },
+          "fallbacks": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "in order, as the runner capped them"
+          },
+          "attempts": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseRoutingAttributionAttempt"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stopped": {
+            "type": "string",
+            "description": "effect_unknown | budget_spent"
+          },
+          "arm": {
+            "type": "string",
+            "description": "pilot arm label (RTE-08)"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/WireResponseRoutingOrigin"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "decision_id",
+          "decided_at",
+          "decision",
+          "chosen",
+          "fallbacks",
+          "attempts"
+        ],
+        "x-go-type": "memory.RoutingAttribution",
+        "x-go-source": "internal/memory/routing_attribution.go"
+      },
+      "WireResponseRoutingAttributionAttempt": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "index",
+          "model",
+          "ok",
+          "latency_ms"
+        ],
+        "x-go-type": "memory.RoutingAttributionAttempt",
+        "x-go-source": "internal/memory/routing_attribution.go"
       }
     },
     "headers": {
