@@ -984,7 +984,8 @@ window.ArkismPages = (ctx) => {
   // 스킬 요약·후보 찾기·보안 검사: the rest of the skill routing flow (summary → candidates → judge, scanned on the way in).
   function skillBlocks(cur) {
     const url = roleField(cur.summary_url, "요약 모델 주소", "http://127.0.0.1:11434/v1");
-    const model = roleField(cur.summary_model, "요약 모델", "qwen3:4b");
+    const summaryLocal = !cur.summary_url || /^http:\/\/(127\.0\.0\.1|localhost):11434\b/.test(cur.summary_url); // as for 판별 모델: this PC's Ollama list
+    const model = ollamaPick(cur.summary_model, "요약 모델", "qwen3:4b", summaryLocal ? (cur.ollama_models || []).filter((m) => !EMBEDDING.test(m)) : []);
     const key = roleField("", "요약 모델 API 키", cur.summary_key_saved ? "저장됨 · 바꿀 때만 입력" : "없으면 비워 두기", true);
     let summary = cur.summary || "basic";
     const subs = el("div", "v4-judge-fields");
