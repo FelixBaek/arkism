@@ -7736,6 +7736,52 @@
             }
           }}}
     },
+    "/v1/routing/attributions": {
+      "get": {"summary": "Routing attribution records, read-only export (read:routing)", "description": "Scope query, optional after (cursor) and limit 1..500 (default 100). Returns {items:[{id,record,created_at}],next_cursor?,authority} in id order. Records exist only for steps the host runner routed with ARKISM_ROUTING_ATTRIBUTION=1; the offline routing analysis reads them. Postgres store only; others answer 503.", "responses": {"200": {"description": "Records"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "503": {"description": "dependency_unavailable"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}},
+      "post": {"summary": "The host runner records one routed step for later attribution (write:routing_calls)", "description": "Body {scope, record{decision_id, decided_at, decision clef|default|fixed|manual, chosen, fallbacks[<=3], attempts[1..4]{index, model, ok, latency_ms, error?}, group?, view_hash?, stopped? effect_unknown|budget_spent, arm?, origin?}}. Attempts follow chosen then fallbacks in order and only the last may be ok. Ids, model names, codes and times only: unknown fields are refused, so no prompt, output, memory body, token or key can be stored. One record per scope and decision_id: the same record again returns the stored one; a different record under that id is 409.", "responses": {"200": {"description": "Recorded"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "409": {"description": "Another record under this decision_id"},
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }}}
+    },
     "/v1/routing/groups": {
       "get": {"summary": "Arkism routing groups (read:routing)", "description": "Scoped {items,revision,auto_discover,authority}. Group {id:group/<slug>,name,enabled,strategy:smart|ordered,members:[provider/model],discovered?:true}. Explicit groups precede discovered groups; discovery matches exact model IDs across providers.", "responses": {"200": {"description": "Groups"},
           "401": {

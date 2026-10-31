@@ -248,6 +248,9 @@ type Record struct {
 
 	// RejectScore is the review classifier's advice when the queue is listed; never stored.
 	RejectScore *float64 `json:"reject_score,omitempty" bson:"-"`
+
+	// RoutingAttribution is an RTE-06 step record (jobs, kind routing_attribution).
+	RoutingAttribution *RoutingAttribution `json:"routing_attribution,omitempty" bson:"routing_attribution,omitempty"`
 }
 
 // VectorRank is one pgvector cosine distance for an already-authorized row.

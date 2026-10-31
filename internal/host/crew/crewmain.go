@@ -62,7 +62,7 @@ var crewCommands = map[string]crewCommand{
 	"decide":       {valued: []string{"note", "wait"}, bools: []string{"approve", "reject"}, positional: []string{"run_id"}, floats: []string{"wait"}},
 	"hook-context": {valued: []string{"caller-model"}},
 	"list":         {},
-	"route": {valued: []string{"task", "cwd", "access", "effort", "group", "work-id"}, bools: []string{"decide-only"}, required: []string{"task"},
+	"route": {valued: []string{"task", "cwd", "access", "effort", "group", "work-id", "pilot-arm"}, bools: []string{"decide-only"}, required: []string{"task"},
 		choices: map[string][]string{"access": {"read", "write", "full"}, "effort": efforts}},
 	"keys list":        {},
 	"keys add":         {valued: []string{"provider", "name", "base-url", "monthly-budget"}, required: []string{"provider", "name"}, choices: map[string][]string{"provider": providers}, floats: []string{"monthly-budget"}},
@@ -335,7 +335,7 @@ func runRouteCmd(a *args, stdout io.Writer) (int, error) {
 	}
 	stopOnTerm.Store(true)
 	out, err := runRoutedFn(map[string]any{"task": a.vals["task"], "cwd": a.get("cwd", ""), "access": a.get("access", "read"),
-		"effort": a.get("effort", "medium"), "group": a.get("group", ""), "work_id": a.get("work-id", "")}, nil, nil, nil)
+		"effort": a.get("effort", "medium"), "group": a.get("group", ""), "work_id": a.get("work-id", ""), "pilot_arm": a.get("pilot-arm", "")}, nil, nil, nil)
 	if err != nil {
 		return 0, err
 	}
