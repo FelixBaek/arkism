@@ -1147,6 +1147,7 @@ func lastClefDecision(rows []Record) string {
 
 func routingRoutes(mux routeRegistrar, s *Service) {
 	routingGroupRoutes(mux, s)
+	routingAttributionRoutes(mux, s)
 	mux.HandleFunc("GET /v1/routing/overview", func(w http.ResponseWriter, r *http.Request) {
 		out, e := s.RoutingOverview(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("range"))
 		respond(w, out, e)

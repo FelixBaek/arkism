@@ -4,6 +4,7 @@ package crew
 
 import (
 	"math"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -89,10 +90,15 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	if err != nil {
 		return nil, err
 	}
+	arm, err := pilotArm(spec)
+	if err != nil {
+		return nil, err
+	}
 	spec, view, err := withWorkContext(spec, task)
 	if err != nil {
 		return nil, err
 	}
+	decidedAt := routeNow()
 	d, err := decide(task, group, view)
 	if err != nil {
 		return nil, err
@@ -115,7 +121,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 		}
 		ids = append(ids, pyStr(f))
 	}
-	res, i, stopped, err := tryRoutes(spec, d, ids, injected, run, report)
+	res, i, stopped, err := tryRoutesRecorded(spec, d, ids, injected, run, report, attributionContext{group, arm, decidedAt})
 	if err != nil {
 		return nil, err
 	}
@@ -296,4 +302,80 @@ func observationRoutedRun(attempt map[string]any, index int, injected bool, run 
 		return observedInjectedRun(attempt, run)
 	}
 	return run(attempt)
+}
+
+// attributionOn is the RTE-06 switch: with ARKISM_ROUTING_ATTRIBUTION=1 each routed step leaves one attribution
+// record; otherwise (the default) nothing is written and routing is unchanged.
+var attributionOn = attributionOnDefault
+
+func attributionOnDefault() bool { return os.Getenv("ARKISM_ROUTING_ATTRIBUTION") == "1" }
+
+var armRe = regexp.MustCompile(`^[A-Za-z0-9_.:-]{1,64}$`)
+
+// pilotArm is the RTE-08 pilot arm label a step is recorded under. It is refused unless records are on: a pilot
+// run without its records would be a paid run nobody can analyse. The arm's models are its routing group's.
+func pilotArm(spec map[string]any) (string, error) {
+	arm := strings.TrimSpace(sOr(spec["pilot_arm"]))
+	if arm == "" {
+		return "", nil
+	}
+	if !attributionOn() {
+		return "", crewErr("파일럿 arm은 ARKISM_ROUTING_ATTRIBUTION=1일 때만 쓸 수 있어요")
+	}
+	if !armRe.MatchString(arm) {
+		return "", crewErr("파일럿 arm 이름을 확인해 주세요")
+	}
+	return arm, nil
+}
+
+type attributionContext struct {
+	group, arm string
+	decidedAt  time.Time
+}
+
+// tryRoutesRecorded is tryRoutes; with attribution on, the step's reported attempts also become one record.
+func tryRoutesRecorded(spec, d map[string]any, ids []string, injected bool, run runFn, report reportFunc, at attributionContext) (map[string]any, int, string, error) {
+	if !attributionOn() {
+		return tryRoutes(spec, d, ids, injected, run, report)
+	}
+	var attempts []map[string]any
+	res, i, stopped, err := tryRoutes(spec, d, ids, injected, run, func(call map[string]any) { attempts = append(attempts, call); report(call) })
+	if len(attempts) > 0 {
+		recordAttribution(attributionRecord(spec, d, at.group, at.arm, ids, attempts, stopped, at.decidedAt))
+	}
+	return res, i, stopped, err
+}
+
+// attributionRecord is the step as RTE-06 reads it: ids, model names, codes and times; never the task text or output.
+func attributionRecord(spec, d map[string]any, group, arm string, ids []string, calls []map[string]any, stopped string, decidedAt time.Time) host.Obj {
+	attempts := []any{}
+	for i, c := range calls {
+		ms, _ := num(c["latency_ms"])
+		a := host.Obj{{Key: "index", Value: i}, {Key: "model", Value: ids[i]}, {Key: "ok", Value: c["ok"] == true}, {Key: "latency_ms", Value: int64(ms)}}
+		if code := sOr(c["error"]); code != "" {
+			a = append(a, host.KV{Key: "error", Value: code})
+		}
+		attempts = append(attempts, a)
+	}
+	rec := host.Obj{{Key: "decision_id", Value: "rte-" + randHex(16)}, {Key: "decided_at", Value: decidedAt.UTC().Format(time.RFC3339Nano)},
+		{Key: "decision", Value: d["decision"]}, {Key: "chosen", Value: ids[0]}, {Key: "fallbacks", Value: toAny(ids[1:])}, {Key: "attempts", Value: attempts}}
+	for _, kv := range []host.KV{{Key: "group", Value: group}, {Key: "view_hash", Value: sOr(d["view_hash"])}, {Key: "stopped", Value: stopped}, {Key: "arm", Value: arm}} {
+		if kv.Value != "" {
+			rec = append(rec, kv)
+		}
+	}
+	if truthy(spec["origin"]) {
+		rec = append(rec, host.KV{Key: "origin", Value: spec["origin"]})
+	}
+	return rec
+}
+
+// recordAttribution is best effort like the call report, sent at most twice; the server keeps one record per
+// decision id, so a resend after a lost reply is a no-op.
+func recordAttribution(rec host.Obj) {
+	for try := 0; try < 2; try++ {
+		if _, err := runnerCall("/v1/routing/attributions", host.Obj{{Key: "scope", Value: scope()}, {Key: "record", Value: rec}}, 15*time.Second); err == nil {
+			return
+		}
+	}
 }
