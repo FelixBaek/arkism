@@ -84,8 +84,9 @@ def _ready_without_repair(summary):
 
 
 def _side(directory):
-    inputs = [Path(directory, name).read_bytes() for name in NAMES]
-    raw_bytes = Path(directory, "raw-run.json").read_bytes()
+    # The same guarded reader as the other SYS-05 tools: fixed file names, no symlinks, bounded size.
+    inputs = [G.read_raw(str(Path(directory, name))) for name in NAMES]
+    raw_bytes = G.read_raw(str(Path(directory, "raw-run.json")))
     # The witness must come from the very run that was projected: re-project and match bytes.
     ledger, observations = A.project(inputs[0], inputs[1], G.parse(raw_bytes))
     G.require(ledger == inputs[2] and observations == inputs[3], "config_mismatch", "$/raw-run.json")
