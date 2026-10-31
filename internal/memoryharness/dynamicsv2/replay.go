@@ -293,3 +293,37 @@ func replayStateBindings(s SnapshotV2, cfg DynamicsConfigV2) error {
 	}
 	return nil
 }
+
+// ReplayPrefixFastSlow replays each lane's accepted prefix with the same cutoff.
+// Only deliveries a lane actually consumed are pair-checked, so events after the
+// cutoff never change the result; any lane disagreement returns no snapshot.
+func ReplayPrefixFastSlow(fast, slow SnapshotV2, events []FastSlowEvent, cutoff int64, cfg FastSlowConfig) (SnapshotV2, SnapshotV2, error) {
+	if err := checkFastSlowConfig(cfg); err != nil {
+		return SnapshotV2{}, SnapshotV2{}, err
+	}
+	if !pairedSnapshots(fast, slow) {
+		return SnapshotV2{}, SnapshotV2{}, contractError("snapshot_binding", fastSlowPairPath)
+	}
+	fastEvents := make([]EventV2, len(events))
+	slowEvents := make([]EventV2, len(events))
+	for i, e := range events {
+		fastEvents[i], slowEvents[i] = e.Fast, e.Slow
+	}
+	f, fs, err := ReplayPrefix(fast, fastEvents, cutoff, cfg.Fast)
+	if err != nil {
+		return SnapshotV2{}, SnapshotV2{}, err
+	}
+	s, ss, err := ReplayPrefix(slow, slowEvents, cutoff, cfg.Slow)
+	if err != nil {
+		return SnapshotV2{}, SnapshotV2{}, err
+	}
+	if !reflect.DeepEqual(fs, ss) || !pairedSnapshots(f, s) {
+		return SnapshotV2{}, SnapshotV2{}, contractError("snapshot_binding", fastSlowPairPath)
+	}
+	for _, e := range events[:fs.InputCount] {
+		if err := checkFastSlowEvent(e); err != nil {
+			return SnapshotV2{}, SnapshotV2{}, err
+		}
+	}
+	return f, s, nil
+}

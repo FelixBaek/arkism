@@ -2,6 +2,7 @@ package dynamicsv2
 
 import (
 	"bytes"
+	"errors"
 	"math"
 	"os"
 	"reflect"
@@ -759,5 +760,239 @@ func TestTransitionStructuralMatrixRejectsRelatedMutations(t *testing.T) {
 			_, err = ApplyEvent(out.State, out.Receipts, next, cfg)
 			requireCode(t, err, "snapshot_binding")
 		})
+	}
+}
+
+// Fast/slow lane rates are test literals, not product or paper defaults.
+func fsConfig(t *testing.T) FastSlowConfig {
+	t.Helper()
+	fast, slow := fixtureConfig(t, "B2"), fixtureConfig(t, "B2")
+	fast.EtaPositive, fast.EtaNegative = .5, .5
+	slow.TauNS, slow.EtaPositive, slow.EtaNegative = 10000000000, .1, .2
+	return FastSlowConfig{Fast: sealFixture(t, "DynamicsConfigV2", fast), Slow: sealFixture(t, "DynamicsConfigV2", slow), FastWeight: .25}
+}
+func fsActive(t *testing.T, cfg FastSlowConfig) (FastSlowState, FastSlowIndex) {
+	t.Helper()
+	fs, fi := scalarFixtureActive(t, cfg.Fast)
+	ss, si := scalarFixtureActive(t, cfg.Slow)
+	return FastSlowState{Fast: fs, Slow: ss}, FastSlowIndex{Fast: fi, Slow: si}
+}
+func fsOutcome(t *testing.T, s FastSlowState, i FastSlowIndex, at int64, outcome Outcome, attribution Attribution) FastSlowEvent {
+	t.Helper()
+	return FastSlowEvent{Fast: scalarOutcomeEvent(t, s.Fast, i.Fast, at, outcome, attribution), Slow: scalarOutcomeEvent(t, s.Slow, i.Slow, at, outcome, attribution)}
+}
+func fsNext(r FastSlowTransition) (FastSlowState, FastSlowIndex) {
+	return FastSlowState{Fast: r.Fast.State, Slow: r.Slow.State}, FastSlowIndex{Fast: r.Fast.Receipts, Slow: r.Slow.Receipts}
+}
+
+func TestTransitionFastSlowHandOracles(t *testing.T) {
+	cases := []struct {
+		name             string
+		dt               int64
+		outcome          Outcome
+		attribution      Attribution
+		fast, slow, want float64
+	}{
+		{"same_time_passed", 0, "passed", "memory", .75, .55, .6},
+		{"tau_passed", 1000000000, "passed", "memory", .5919698602928606, .5071768381161817, .5283750936603515},
+		{"tau_failed_memory", 1000000000, "failed", "memory", .09196986029286058, .36193496721438384, .294443690484003},
+		{"tau_unknown", 1000000000, "unknown", "unattributable", .18393972058572117, .45241870901797976, .38529896190991514},
+		{"same_time_unknown", 0, "unknown", "unattributable", .5, .5, .5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := fsConfig(t)
+			s, i := fsActive(t, cfg)
+			r, err := ApplyEventFastSlow(s, i, fsOutcome(t, s, i, 10+tc.dt, tc.outcome, tc.attribution), cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			scalarAssertNear(t, r.Fast.State.Value, tc.fast, cfg.Fast)
+			scalarAssertNear(t, r.Slow.State.Value, tc.slow, cfg.Slow)
+			scalarAssertNear(t, fastSlowValue(r.Fast.State.Value, r.Slow.State.Value, cfg), tc.want, cfg.Fast)
+			if r.Fast.State.StateRevision != 2 || r.Slow.State.StateRevision != 2 || r.Fast.Receipt.Reason != r.Slow.Receipt.Reason {
+				t.Fatal("lanes did not advance together")
+			}
+		})
+	}
+}
+
+func TestTransitionFastSlowRetryAndRepackagingNoJump(t *testing.T) {
+	cfg := fsConfig(t)
+	s, i := fsActive(t, cfg)
+	e := fsOutcome(t, s, i, 10, "passed", "memory")
+	first, err := ApplyEventFastSlow(s, i, e, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, i1 := fsNext(first)
+	retry, err := ApplyEventFastSlow(s1, i1, e, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.Fast.AttemptDisposition != "duplicate_event" || !reflect.DeepEqual(retry.Fast.State, s1.Fast) || !reflect.DeepEqual(retry.Slow.State, s1.Slow) || len(retry.Slow.Receipts.Receipts) != len(i1.Slow.Receipts) {
+		t.Fatal("exact retry changed a lane or added a receipt")
+	}
+	repack := e
+	for _, lane := range []*EventV2{&repack.Fast, &repack.Slow} {
+		lane.EventID, lane.AcceptedSeq, lane.AcceptedAtNS = "repackaged", 3, 1000000010
+		*lane = sealFixture(t, "EventV2", *lane)
+	}
+	r, err := ApplyEventFastSlow(s1, i1, repack, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Fast.AttemptDisposition != "duplicate_evidence" || r.Fast.State.Value != s1.Fast.Value || r.Slow.State.Value != s1.Slow.Value || len(r.Slow.Receipts.EvidenceConsumptions) != 1 {
+		t.Fatal("same evidence decayed or jumped a lane")
+	}
+}
+
+func TestTransitionFastSlowRejectsLaneMismatchAtomically(t *testing.T) {
+	cfg := fsConfig(t)
+	s, i := fsActive(t, cfg)
+	before := [][]byte{replayRaw(t, s), replayRaw(t, i)}
+	e := fsOutcome(t, s, i, 10, "passed", "memory")
+	differ := e
+	differ.Slow = scalarOutcomeEvent(t, s.Slow, i.Slow, 10, "failed", "memory")
+	swapped := FastSlowEvent{Fast: e.Slow, Slow: e.Fast}
+	// The slow lane alone already consumed an exposure, so the lanes disagree.
+	expose := scalarAuxEvent(t, s.Slow, i.Slow, "exposure", 10, "exposure", "exposure_only")
+	ahead, err := ApplyEvent(s.Slow, i.Slow, expose, cfg.Slow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skewed := FastSlowIndex{Fast: i.Fast, Slow: ahead.Receipts}
+	skewedState := FastSlowState{Fast: s.Fast, Slow: ahead.State}
+	for _, tc := range []struct {
+		name  string
+		state FastSlowState
+		index FastSlowIndex
+		event FastSlowEvent
+		code  string
+	}{
+		{"different_outcome", s, i, differ, "event_conflict"},
+		{"swapped_lane_hash", s, i, swapped, "config_mismatch"},
+		{"lane_ahead", skewedState, skewed, e, "snapshot_binding"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := ApplyEventFastSlow(tc.state, tc.index, tc.event, cfg)
+			requireCode(t, err, tc.code)
+			if tc.name != "swapped_lane_hash" {
+				fsRequirePath(t, err, fastSlowPairPath)
+			}
+			if !reflect.DeepEqual(r, FastSlowTransition{}) {
+				t.Fatal("failed pair returned a partial lane result")
+			}
+		})
+	}
+	if !bytes.Equal(before[0], replayRaw(t, s)) || !bytes.Equal(before[1], replayRaw(t, i)) {
+		t.Fatal("inputs were mutated")
+	}
+}
+
+func TestTransitionFastSlowConfigGuards(t *testing.T) {
+	base := fsConfig(t)
+	cases := []struct {
+		name   string
+		change func(*FastSlowConfig)
+		code   string
+	}{
+		{"weight_above_one", func(c *FastSlowConfig) { c.FastWeight = 1.5 }, "invalid_value"},
+		{"weight_nan", func(c *FastSlowConfig) { c.FastWeight = math.NaN() }, "invalid_value"},
+		{"weight_unset", func(c *FastSlowConfig) { c.FastWeight = 0 }, "invalid_value"},
+		{"weight_one", func(c *FastSlowConfig) { c.FastWeight = 1 }, "invalid_value"},
+		{"same_tau", func(c *FastSlowConfig) { c.Slow.TauNS = c.Fast.TauNS }, "config_mismatch"},
+		{"fast_slower", func(c *FastSlowConfig) { c.Fast.TauNS = 20000000000 }, "config_mismatch"},
+		{"same_config", func(c *FastSlowConfig) { c.Slow = c.Fast }, "config_mismatch"},
+		{"different_initial", func(c *FastSlowConfig) { c.Slow.Initial = .4 }, "config_mismatch"},
+		{"different_rule", func(c *FastSlowConfig) { c.Slow.EvidenceRuleSHA256 = fixtureSHA("other") }, "config_mismatch"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := base
+			tc.change(&c)
+			c.Fast, c.Slow = sealFixture(t, "DynamicsConfigV2", c.Fast), sealFixture(t, "DynamicsConfigV2", c.Slow)
+			s, i := fsActive(t, c)
+			_, err := ApplyEventFastSlow(s, i, fsOutcome(t, s, i, 10, "passed", "memory"), c)
+			requireCode(t, err, tc.code)
+		})
+	}
+}
+
+func TestTransitionFastSlowDispositionDisagreementRejected(t *testing.T) {
+	cfg := fsConfig(t)
+	s, i := fsActive(t, cfg)
+	// Seq 2: the fast lane saw an exposure, the slow lane consumed the evidence.
+	slowFirst, err := ApplyEvent(s.Slow, i.Slow, scalarOutcomeEvent(t, s.Slow, i.Slow, 10, "passed", "memory"), cfg.Slow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fastFirst, err := ApplyEvent(s.Fast, i.Fast, scalarAuxEvent(t, s.Fast, i.Fast, "result", 10, "exposure", "exposure_only"), cfg.Fast)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := FastSlowState{Fast: fastFirst.State, Slow: slowFirst.State}
+	index := FastSlowIndex{Fast: fastFirst.Receipts, Slow: slowFirst.Receipts}
+	e := fsOutcome(t, state, index, 20, "passed", "memory")
+	for _, lane := range []*EventV2{&e.Fast, &e.Slow} {
+		lane.EventID = "repackaged"
+		*lane = sealFixture(t, "EventV2", *lane)
+	}
+	r, err := ApplyEventFastSlow(state, index, e, cfg)
+	requireCode(t, err, "snapshot_binding")
+	fsRequirePath(t, err, fastSlowPairPath)
+	if !reflect.DeepEqual(r, FastSlowTransition{}) {
+		t.Fatal("disagreeing lanes returned a result")
+	}
+}
+
+func fsRequirePath(t *testing.T, err error, path string) {
+	t.Helper()
+	var ce *ContractErrorV2
+	if !errors.As(err, &ce) || ce.Path != path {
+		t.Fatalf("got %v, want path %s", err, path)
+	}
+}
+
+func TestTransitionFastSlowOrderConflictAndSuccessImmutability(t *testing.T) {
+	cfg := fsConfig(t)
+	s, i := fsActive(t, cfg)
+	before := [][]byte{replayRaw(t, s), replayRaw(t, i)}
+	e := fsOutcome(t, s, i, 1000000010, "passed", "memory")
+	first, err := ApplyEventFastSlow(s, i, e, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before[0], replayRaw(t, s)) || !bytes.Equal(before[1], replayRaw(t, i)) {
+		t.Fatal("successful pair mutated its inputs")
+	}
+	s1, i1 := fsNext(first)
+	after := [][]byte{replayRaw(t, s1), replayRaw(t, i1)}
+	reseal := func(p FastSlowEvent, change func(*EventV2)) FastSlowEvent {
+		for _, lane := range []*EventV2{&p.Fast, &p.Slow} {
+			change(lane)
+			*lane = sealFixture(t, "EventV2", *lane)
+		}
+		return p
+	}
+	for _, tc := range []struct {
+		name  string
+		event FastSlowEvent
+		code  string
+	}{
+		{"same_id_other_payload", reseal(e, func(x *EventV2) { x.Strength = scalarPointer(.5) }), "event_conflict"},
+		{"older_sequence", reseal(e, func(x *EventV2) { x.EventID, x.AcceptedSeq = "older", 2 }), "sequence_regression"},
+		{"older_time", reseal(e, func(x *EventV2) { x.EventID, x.AcceptedSeq, x.AcceptedAtNS = "older", 3, 10 }), "time_regression"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := ApplyEventFastSlow(s1, i1, tc.event, cfg)
+			requireCode(t, err, tc.code)
+			if !reflect.DeepEqual(r, FastSlowTransition{}) {
+				t.Fatal("rejected pair returned a result")
+			}
+		})
+	}
+	if !bytes.Equal(after[0], replayRaw(t, s1)) || !bytes.Equal(after[1], replayRaw(t, i1)) {
+		t.Fatal("rejected pair mutated its inputs")
 	}
 }

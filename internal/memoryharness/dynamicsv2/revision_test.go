@@ -200,3 +200,38 @@ func TestRevisionPendingValueCheckedBeforeHistoricalRetry(t *testing.T) {
 	_, err = ApplyEvent(pending, active.Receipts, original, cfg)
 	requireCode(t, err, "snapshot_binding")
 }
+
+func TestRevisionFastSlowResetIsolatesNewRevision(t *testing.T) {
+	cfg := fsConfig(t)
+	s, i := fsActive(t, cfg)
+	r, err := ApplyEventFastSlow(s, i, fsOutcome(t, s, i, 1000000010, "passed", "memory"), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, i1 := fsNext(r)
+	target := s1.Fast.Key.Target
+	target.Revision++
+	target.ContentSHA256 = fixtureSHA("revision-2")
+	reset, err := ResetRevisionFastSlow(s1, target, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lane := range []StateV2{reset.Fast, reset.Slow} {
+		if lane.Status != "pending_activation" || lane.Value != cfg.Fast.Initial || lane.StateRevision != 0 || lane.ActivatedAtNS != nil || lane.Key.Target != target {
+			t.Fatal("new revision copied old learned value or anchor")
+		}
+	}
+	old := fsOutcome(t, s1, i1, 1000000020, "passed", "memory")
+	for _, lane := range []*EventV2{&old.Fast, &old.Slow} {
+		lane.EventID = "old-revision"
+		*lane = sealFixture(t, "EventV2", *lane)
+	}
+	_, err = ApplyEventFastSlow(reset, i1, old, cfg)
+	requireCode(t, err, "stale_target")
+	_, err = ResetRevisionFastSlow(reset, s1.Fast.Key.Target, cfg)
+	requireCode(t, err, "revision_regression")
+	// Lanes at different lifecycle positions are not silently re-aligned.
+	_, err = ResetRevisionFastSlow(FastSlowState{Fast: s1.Fast, Slow: s.Slow}, target, cfg)
+	requireCode(t, err, "snapshot_binding")
+	fsRequirePath(t, err, fastSlowPairPath)
+}
