@@ -670,7 +670,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     into.append(advice); act.append(choices, ai, drop);
   }
   function wideReview(focusId, startKind) {
-    const all = waiting(), dreams = dreamItems(), d = shell("확인해 주세요", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", "review");
+    const all = waiting(), dreams = dreamItems(), d = shell("새 기억 확인", `${num(all.length + dreams.length)}건`, "AI는 분류만 해요. 승인은 사람이 해요.", "review");
     recipe(d, { wide: "review", args: [focusId, startKind] });
     let q = "", kindF = startKind || "new", picked = false, typeF = "", sel = focusId || (startKind === "dream" ? dreams[0]?.id : all[0]?.id), order = "old"; const checked = new Set();
     const list = el("div", "ov-wide-list"), detail = el("div", "ov-wide-detail"), more = el("div", "ov-wide-foot-note");
