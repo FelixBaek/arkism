@@ -252,112 +252,141 @@ func (s *exp01Stream) current(id string) (Record, error) {
 	return s.f.svc.Repo.Get(testCtx, colMemories, s.scope, id)
 }
 
+// exp01Fail marks a step the product refused, with the product's error code.
+func exp01Fail(step exp01Step, err error) exp01Step {
+	step.Status = "product_refused"
+	step.ErrorCode, _ = errorResponse(err)
+	return step
+}
+
+// exp01Cascade marks a step the harness could not run because an earlier step left no product record.
+func exp01Cascade(step exp01Step, code string) exp01Step {
+	step.Status, step.ErrorCode = "harness_cascade", code
+	return step
+}
+
+func (s *exp01Stream) lookup(r exp01Ref) (Record, bool) {
+	rec, ok := s.records[exp01Key(r)]
+	return rec, ok
+}
+
 func (s *exp01Stream) apply(e exp01Event) exp01Step {
 	step := exp01Step{EventID: e.EventID, Kind: e.Kind, Status: "applied", DroppedFields: exp01Dropped(e)}
-	fail := func(err error) exp01Step {
-		step.Status = "product_refused"
-		step.ErrorCode, _ = errorResponse(err)
-		return step
-	}
-	// cascade marks a step the harness could not run because an earlier step left no product record.
-	cascade := func(code string) exp01Step {
-		step.Status, step.ErrorCode = "harness_cascade", code
-		return step
-	}
-	lookup := func(r exp01Ref) (Record, bool) { rec, ok := s.records[exp01Key(r)]; return rec, ok }
-	f := s.f
 	switch e.Kind {
 	case "material_available":
-		kind, ok := exp01Kinds[e.SourcePayload.Kind]
-		if !ok {
-			step.Status = "not_materializable"
-			step.ErrorCode = "no_product_kind"
-			return step
-		}
-		s.text[exp01Key(*e.Target)] = exp01SHA([]byte(e.SourcePayload.Text))
-		// The agent proposes and a human reviews, the product's own proposer/reviewer split.
-		src, err := f.svc.Create(testCtx, f.agent, "sources", sourceInput(CreateInput{Scope: s.scope, Text: e.SourcePayload.Text}))
-		if err != nil {
-			return fail(err)
-		}
-		in := candidateInput(CreateInput{Scope: s.scope, Text: e.SourcePayload.Text, Kind: kind, Sources: refs(src), Generator: &Generator{Model: "exp01-plan", PromptVersion: "none", PipelineVersion: "exp01-native-labelfree-v2"}})
-		cand, err := f.svc.Create(testCtx, f.agent, "memory_candidates", in)
-		if err != nil {
-			return fail(err)
-		}
-		if s.awaitsCorrection[exp01Key(*e.Target)] {
-			step.ProductAction = "create_candidate"
-			if err = s.bind(*e.Target, "memory_candidates", cand); err != nil {
-				return cascade("product_id_rebound")
-			}
-			return step
-		}
-		step.ProductAction = "create_candidate+review_approve"
-		m, err := f.svc.ReviewCandidate(testCtx, f.human, cand.ID, CandidateReviewInput{Scope: s.scope, ExpectedRevision: cand.Revision, Action: "approve"})
-		if err != nil {
-			return fail(err)
-		}
-		if err = s.bind(*e.Target, colMemories, m); err != nil {
-			return cascade("product_id_rebound")
-		}
+		return s.applyMaterial(e, step)
 	case "correction_proposed":
-		step.ProductAction = "conflict_mark_hold_second"
-		old, ok1 := lookup(*e.Target)
-		cand, ok2 := lookup(e.RelatedRefs[0])
-		if !ok1 || !ok2 {
-			return cascade("missing_prior_ref")
-		}
-		cur, err := s.current(old.ID)
-		if err != nil {
-			return fail(err)
-		}
-		out, err := f.svc.Conflict(testCtx, f.human, ConflictInput{Scope: s.scope, Memories: []Ref{{Collection: colMemories, ID: cur.ID, Revision: cur.Revision}, {Collection: "memory_candidates", ID: cand.ID, Revision: cand.Revision}}, Action: "mark", Reason: "EXP-01 plan correction", Hold: "second"})
-		if err != nil {
-			return fail(err)
-		}
-		s.conflict[exp01Key(*e.Target)] = out
+		return s.applyCorrectionProposed(e, step)
 	case "correction_committed":
-		step.ProductAction = "review_approve_replace_old"
-		out, ok := s.conflict[exp01Key(*e.Target)]
-		old, ok2 := lookup(*e.Target)
-		if !ok || !ok2 {
-			return cascade("no_pending_conflict")
-		}
-		var cand Record
-		oldRef := Ref{Collection: colMemories, ID: old.ID}
-		for _, row := range out.Memories {
-			if row.ID == old.ID {
-				oldRef.Revision = row.Revision
-			} else {
-				cand = row
-			}
-		}
-		if cand.ID == "" || oldRef.Revision == 0 {
-			return cascade("conflict_without_both_rows")
-		}
-		m, err := f.svc.ReviewCandidate(testCtx, f.human, cand.ID, CandidateReviewInput{Scope: s.scope, ExpectedRevision: cand.Revision, Action: "approve", OperationID: "exp01-" + e.EventID, Conflict: &CandidateReviewConflict{ID: out.Relation.ID, ExpectedRevision: out.Relation.Revision, Memory: oldRef, Resolution: "replace_old", Reason: "EXP-01 plan commit"}})
-		if err != nil {
-			return fail(err)
-		}
-		if err = s.bind(e.RelatedRefs[0], colMemories, m); err != nil {
-			return cascade("product_id_rebound")
-		}
+		return s.applyCorrectionCommitted(e, step)
 	case "material_deleted":
-		step.ProductAction = "delete"
-		old, ok := lookup(*e.Target)
-		if !ok {
-			return cascade("missing_prior_ref")
-		}
-		cur, err := s.current(old.ID)
-		if err != nil {
-			return fail(err)
-		}
-		if err = f.svc.Delete(testCtx, f.human, colMemories, cur.ID, ChangeInput{Scope: s.scope, ExpectedRevision: cur.Revision}); err != nil {
-			return fail(err)
-		}
+		return s.applyDeleted(e, step)
 	default: // task_started, exposure_observed, outcome_observed: assumed to have no input path into the baseline search (not verified per event)
 		step.ProductAction = "none"
 		step.Status = "no_product_input"
+		return step
+	}
+}
+
+func (s *exp01Stream) applyMaterial(e exp01Event, step exp01Step) exp01Step {
+	f := s.f
+	kind, ok := exp01Kinds[e.SourcePayload.Kind]
+	if !ok {
+		step.Status = "not_materializable"
+		step.ErrorCode = "no_product_kind"
+		return step
+	}
+	s.text[exp01Key(*e.Target)] = exp01SHA([]byte(e.SourcePayload.Text))
+	// The agent proposes and a human reviews, the product's own proposer/reviewer split.
+	src, err := f.svc.Create(testCtx, f.agent, "sources", sourceInput(CreateInput{Scope: s.scope, Text: e.SourcePayload.Text}))
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	in := candidateInput(CreateInput{Scope: s.scope, Text: e.SourcePayload.Text, Kind: kind, Sources: refs(src), Generator: &Generator{Model: "exp01-plan", PromptVersion: "none", PipelineVersion: "exp01-native-labelfree-v2"}})
+	cand, err := f.svc.Create(testCtx, f.agent, "memory_candidates", in)
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	if s.awaitsCorrection[exp01Key(*e.Target)] {
+		step.ProductAction = "create_candidate"
+		if err = s.bind(*e.Target, "memory_candidates", cand); err != nil {
+			return exp01Cascade(step, "product_id_rebound")
+		}
+		return step
+	}
+	step.ProductAction = "create_candidate+review_approve"
+	m, err := f.svc.ReviewCandidate(testCtx, f.human, cand.ID, CandidateReviewInput{Scope: s.scope, ExpectedRevision: cand.Revision, Action: "approve"})
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	if err = s.bind(*e.Target, colMemories, m); err != nil {
+		return exp01Cascade(step, "product_id_rebound")
+	}
+	return step
+}
+
+func (s *exp01Stream) applyCorrectionProposed(e exp01Event, step exp01Step) exp01Step {
+	f := s.f
+	step.ProductAction = "conflict_mark_hold_second"
+	old, ok1 := s.lookup(*e.Target)
+	cand, ok2 := s.lookup(e.RelatedRefs[0])
+	if !ok1 || !ok2 {
+		return exp01Cascade(step, "missing_prior_ref")
+	}
+	cur, err := s.current(old.ID)
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	out, err := f.svc.Conflict(testCtx, f.human, ConflictInput{Scope: s.scope, Memories: []Ref{{Collection: colMemories, ID: cur.ID, Revision: cur.Revision}, {Collection: "memory_candidates", ID: cand.ID, Revision: cand.Revision}}, Action: "mark", Reason: "EXP-01 plan correction", Hold: "second"})
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	s.conflict[exp01Key(*e.Target)] = out
+	return step
+}
+
+func (s *exp01Stream) applyCorrectionCommitted(e exp01Event, step exp01Step) exp01Step {
+	f := s.f
+	step.ProductAction = "review_approve_replace_old"
+	out, ok := s.conflict[exp01Key(*e.Target)]
+	old, ok2 := s.lookup(*e.Target)
+	if !ok || !ok2 {
+		return exp01Cascade(step, "no_pending_conflict")
+	}
+	var cand Record
+	oldRef := Ref{Collection: colMemories, ID: old.ID}
+	for _, row := range out.Memories {
+		if row.ID == old.ID {
+			oldRef.Revision = row.Revision
+		} else {
+			cand = row
+		}
+	}
+	if cand.ID == "" || oldRef.Revision == 0 {
+		return exp01Cascade(step, "conflict_without_both_rows")
+	}
+	m, err := f.svc.ReviewCandidate(testCtx, f.human, cand.ID, CandidateReviewInput{Scope: s.scope, ExpectedRevision: cand.Revision, Action: "approve", OperationID: "exp01-" + e.EventID, Conflict: &CandidateReviewConflict{ID: out.Relation.ID, ExpectedRevision: out.Relation.Revision, Memory: oldRef, Resolution: "replace_old", Reason: "EXP-01 plan commit"}})
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	if err = s.bind(e.RelatedRefs[0], colMemories, m); err != nil {
+		return exp01Cascade(step, "product_id_rebound")
+	}
+	return step
+}
+
+func (s *exp01Stream) applyDeleted(e exp01Event, step exp01Step) exp01Step {
+	step.ProductAction = "delete"
+	old, ok := s.lookup(*e.Target)
+	if !ok {
+		return exp01Cascade(step, "missing_prior_ref")
+	}
+	cur, err := s.current(old.ID)
+	if err != nil {
+		return exp01Fail(step, err)
+	}
+	if err = s.f.svc.Delete(testCtx, s.f.human, colMemories, cur.ID, ChangeInput{Scope: s.scope, ExpectedRevision: cur.Revision}); err != nil {
+		return exp01Fail(step, err)
 	}
 	return step
 }
@@ -402,6 +431,23 @@ func (s *exp01Stream) ask(q exp01Query) exp01Answer {
 
 func exp01Run(t *testing.T, admin *Postgres, events []exp01Event, queries []exp01Query) ([]exp01Step, []exp01Answer) {
 	t.Helper()
+	streams, order := exp01Streams(t, admin, events)
+	steps, answers := []exp01Step{}, []exp01Answer{}
+	for _, id := range order {
+		st, an := streams[id].run(id, events, queries)
+		steps, answers = append(steps, st...), append(answers, an...)
+	}
+	for _, q := range queries {
+		if streams[q.StreamID] == nil {
+			t.Fatal("query for a stream without events", q.QueryID)
+		}
+	}
+	return steps, answers
+}
+
+// exp01Streams opens one product fixture per stream, in first-event order, and marks targets a correction will replace.
+func exp01Streams(t *testing.T, admin *Postgres, events []exp01Event) (map[string]*exp01Stream, []string) {
+	t.Helper()
 	streams := map[string]*exp01Stream{}
 	order := []string{}
 	for _, e := range events {
@@ -415,38 +461,35 @@ func exp01Run(t *testing.T, admin *Postgres, events []exp01Event, queries []exp0
 			streams[e.StreamID].awaitsCorrection[exp01Key(e.RelatedRefs[0])] = true
 		}
 	}
-	steps, answers := []exp01Step{}, []exp01Answer{}
-	for _, id := range order {
-		s, next := streams[id], 0
-		mine := []exp01Event{}
-		for _, e := range events {
-			if e.StreamID == id {
-				mine = append(mine, e)
-			}
-		}
-		sort.SliceStable(mine, func(i, j int) bool { return mine[i].PlanSeq < mine[j].PlanSeq })
-		qs := []exp01Query{}
-		for _, q := range queries {
-			if q.StreamID == id {
-				qs = append(qs, q)
-			}
-		}
-		sort.SliceStable(qs, func(i, j int) bool { return qs[i].CutoffPlanSeq < qs[j].CutoffPlanSeq })
-		for _, q := range qs {
-			for next < len(mine) && mine[next].PlanSeq <= q.CutoffPlanSeq {
-				steps = append(steps, s.apply(mine[next]))
-				next++
-			}
-			answers = append(answers, s.ask(q))
-		}
-		for ; next < len(mine); next++ {
-			steps = append(steps, s.apply(mine[next]))
+	return streams, order
+}
+
+// run applies one stream's events in plan order and asks each query once its cutoff is reached.
+func (s *exp01Stream) run(id string, events []exp01Event, queries []exp01Query) ([]exp01Step, []exp01Answer) {
+	mine := []exp01Event{}
+	for _, e := range events {
+		if e.StreamID == id {
+			mine = append(mine, e)
 		}
 	}
+	sort.SliceStable(mine, func(i, j int) bool { return mine[i].PlanSeq < mine[j].PlanSeq })
+	qs := []exp01Query{}
 	for _, q := range queries {
-		if streams[q.StreamID] == nil {
-			t.Fatal("query for a stream without events", q.QueryID)
+		if q.StreamID == id {
+			qs = append(qs, q)
 		}
+	}
+	sort.SliceStable(qs, func(i, j int) bool { return qs[i].CutoffPlanSeq < qs[j].CutoffPlanSeq })
+	steps, answers, next := []exp01Step{}, []exp01Answer{}, 0
+	for _, q := range qs {
+		for next < len(mine) && mine[next].PlanSeq <= q.CutoffPlanSeq {
+			steps = append(steps, s.apply(mine[next]))
+			next++
+		}
+		answers = append(answers, s.ask(q))
+	}
+	for ; next < len(mine); next++ {
+		steps = append(steps, s.apply(mine[next]))
 	}
 	return steps, answers
 }
