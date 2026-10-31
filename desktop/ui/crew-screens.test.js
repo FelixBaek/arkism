@@ -71,6 +71,17 @@ test("a port click links two nodes and Escape cancels a pending link", async () 
   at(node("end")?.querySelector(".g-port.out") || node("code").querySelector(".g-port.out"), "pointerdown");
   document._pointTarget = node("ai1");
   at(window, "pointerup", { clientX: 240, clientY: 240 }); await h.settle();
+  // let go on empty canvas: a new AI 작업 lands there, joined from that port, and its window opens
+  const ids = () => [...document.querySelectorAll(".g-node")].map((n) => n.dataset.id);
+  const had = ids(), lines = document.querySelectorAll(".g-edge-hit").length;
+  at(node("ai1").querySelector(".g-port.out"), "pointerdown");
+  at(window, "pointermove", { clientX: 260, clientY: 260 });
+  document._pointTarget = document.querySelector(".g-canvas");
+  at(window, "pointerup", { clientX: 260, clientY: 260 }); await h.settle();
+  const fresh = ids().filter((id) => !had.includes(id));
+  assert.equal(fresh.length, 1, "one new node");
+  assert.match(fresh[0], /^ai\d+$/);
+  assert.equal(document.querySelectorAll(".g-edge-hit").length, lines + 1, "already joined");
   document._pointTarget = null;
   assert.deepEqual(clean(), []);
 });
