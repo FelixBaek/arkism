@@ -130,6 +130,7 @@ func (r *NativeSearchShadowRuntime) remember(v NativeSearchShadowObservation, st
 }
 
 type nativeSearchAttempt struct {
+	serving  bool
 	served   *nativeBridgeResult
 	runtime  *NativeSearchShadowRuntime
 	snapshot *nativeSearchSnapshot
@@ -171,7 +172,7 @@ func (a *nativeSearchAttempt) finish() {
 	if a == nil {
 		return
 	}
-	if !a.record.BaselineReturned && a.record.Status == "selected" {
+	if !a.record.BaselineReturned && !a.record.Served && a.record.Status == "selected" {
 		a.record.Status = "computed_not_returned"
 	}
 	a.stages.ArithmeticSHA = a.record.ArithmeticSHA
@@ -254,12 +255,19 @@ func (a *nativeSearchAttempt) serve(out ContextBundle, snapshots map[Ref]string)
 		snapshots[Ref{Collection: m.Collection, ID: m.ID, Revision: m.Revision}] = m.GuardSHA
 	}
 	served.ContextID, served.Degraded = out.ContextID, out.Degraded
-	a.record.Served = true
+	a.serving = true
 	return served
 }
 
 func (a *nativeSearchAttempt) returned(out ContextBundle) {
 	if a == nil {
+		return
+	}
+	// A selected native response is only served after the final transaction
+	// succeeds. Preserve the computed baseline hash and leave actual baseline
+	// return refs unobserved when that baseline was not returned.
+	if a.serving {
+		a.record.Served = true
 		return
 	}
 	a.record.BaselineReturned = true
