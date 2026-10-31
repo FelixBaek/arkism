@@ -957,21 +957,22 @@ export const createCrew = (ctx) => {
     const name = input(c.name, { required: true, maxLength: 60 });
     const handle = input(c.handle, { required: true, maxLength: 40, pattern: "[\\p{L}\\p{N}_\\-]{1,40}", placeholder: "띄어쓰기 없이" });
     const role = input(c.role, { maxLength: 200, placeholder: "주제를 받아 … 까지 해요" });
-    const category = input(c.category, { maxLength: 40, placeholder: "글쓰기·문서" });
-    category.setAttribute("list", "crew-cats");
-    const cats = el("datalist");
-    cats.id = "crew-cats";
-    categories(workflows()).forEach(([n]) => { const o = el("option"); o.value = n; cats.append(o); });
+    // the same chip and menu as the popup heads, so a new category gets its icon here too
+    const category = input(c.category, { maxLength: 40 }); category.type = "hidden";
+    const catBtn = el("button", "auto-cat"); catBtn.type = "button"; catBtn.setAttribute("aria-label", "카테고리");
+    const paintCat = () => catBtn.replaceChildren(...ctx.catChipBody(category.value.trim()));
+    catBtn.addEventListener("click", () => ctx.catMenu(catBtn, { list: categories(workflows()).map(([n]) => n), current: category.value.trim(), onPick: (v) => { category.value = v; paintCat(); cover.refresh(); } }));
+    paintCat();
+    const cats = el("span"); cats.append(category);
     // $이름 follows the name while it was still derived from it (or untitled), also when editing a saved workflow.
     const follows = !rec || c.handle === c.name.replace(/\s+/g, "").slice(0, 40) || c.handle.startsWith("제목없음");
     name.addEventListener("input", () => { if (follows && !handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); cover.refresh(); });
     handle.addEventListener("input", () => { handle.dataset.touched = "1"; handle.value = handle.value.replace(/^[@$]/, ""); cover.refresh(); });
     role.addEventListener("input", () => cover.refresh());
-    category.addEventListener("input", () => cover.refresh());
     const row1 = el("div", "scope-fields");
     row1.append(field("이름", name, "카드에 크게 보여요"), field("@이름", handle, "코딩 에이전트 채팅에 @이름을 치면 이 워크플로우를 불러요"));
     const row2 = el("div", "scope-fields");
-    row2.append(field("설명", role), field("카테고리", category));
+    row2.append(field("설명", role), field("카테고리", catBtn));
     bodyEl.append(cats, modelList(), row1, row2);
     let start = startWith || (preset?.graph ? "copy" : "simple");
     let fromTemplate = () => {};
@@ -985,7 +986,7 @@ export const createCrew = (ctx) => {
         if (!t) return;
         if (!name.value.trim()) { name.value = t.name || ""; if (!handle.dataset.touched) handle.value = name.value.replace(/\s+/g, "").slice(0, 40); }
         if (!role.value.trim() && t.role) role.value = t.role;
-        if (!category.value.trim() && t.category) category.value = t.category;
+        if (!category.value.trim() && t.category) { category.value = t.category; paintCat(); }
         if (!model.value.trim() && t.model) model.value = t.model;
       };
       const pick = el("div", "crew-choice big wf-choice");

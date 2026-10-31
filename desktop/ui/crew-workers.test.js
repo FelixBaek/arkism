@@ -236,18 +236,9 @@ test("the expert window: its workflow chart, memory kinds, face, close guard, te
   assert.ok(d.querySelector(".wk-flow-limit"), "limits under the chart");
   assert.ok(d.querySelector(".ex-flow-back-t"), "back edge label");
   for (const label of ["결정", "교훈"]) { [...d.querySelectorAll("button.wk-chip")].find((b) => b.textContent.trim() === label).click(); await h.settle(); }
-  // the face picker: cancelled, then a pick
-  const face = d.querySelector('[aria-label="아바타 고르기"]');
-  face.click(); await h.settle();
-  h.top().close(); await h.settle();
-  face.click(); await h.settle();
-  const fd = h.top();
-  const radio = fd.querySelectorAll("input[type=radio]");
-  radio[radio.length - 1].checked = true; dom.fire(radio[radio.length - 1], "change");
-  fd.querySelector("form") && dom.fire(fd.querySelector("form"), "submit");
-  h.btn(fd, /고르기|완료|확인/)?.click(); await h.settle();
-  if (fd.open) fd.close();
-  await h.settle();
+  // the head carries the category, not an avatar picker (as on a team)
+  assert.ok(!d.querySelector('[aria-label="아바타 고르기"]'));
+  assert.ok(d.querySelector(".ex-cat"));
   // closing with unsaved changes asks first
   h.answer = false;
   dom.fire(d, "cancel"); await h.settle();

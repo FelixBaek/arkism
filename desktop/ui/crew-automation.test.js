@@ -412,7 +412,25 @@ test("automation 취소 with nothing changed closes the window", async () => {
   const h = await boot();
   const d = await openAuto(h, "wf1");
   assert.ok(d.open);
+  assert.ok(d.querySelector(".auto-top > .auto-stats"), "an existing workflow shows its numbers at the top");
+  assert.ok(!d.querySelector(".auto-more-all .auto-stats"), "not folded into 자세히");
   exact(d.querySelector(".auto-bar"), "취소").click(); await h.settle();
   assert.equal(d.open, false);
   assert.equal([...document.querySelectorAll("dialog[open] .auto-bar")].length, 0); // not closed and opened again
+});
+
+test("the workflow settings form picks its category from the shared menu (new ones get an icon there)", async () => {
+  const h = await boot();
+  h.render(); await h.settle();
+  await openCreator(h);
+  exact(h.top(), "템플릿·설정으로 만들기").click(); await h.settle();
+  const f = h.top();
+  const chip = f.querySelector('button.auto-cat[aria-label="카테고리"]');
+  assert.ok(chip, "a chip, not a typed field");
+  assert.ok(!f.querySelector('input[list="crew-cats"]'));
+  // the shared menu (its new-category form has the icon grid) answers with a pick
+  h.catPick = "리서치"; const before = h.catMenus.length;
+  chip.click(); await h.settle();
+  assert.equal(h.catMenus.length, before + 1, "the shared category menu opens");
+  assert.match(chip.textContent, /리서치/);
 });
