@@ -235,3 +235,21 @@ func recordIDs(records []Record) []string {
 	}
 	return ids
 }
+
+func TestPostgresMemoryUsageWindowSkipsOldReceipts(t *testing.T) {
+	p, scope := openPostgresListsTest(t)
+	ctx := context.Background()
+	x := scope.ProjectID + "-"
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	insertPGRecords(t, p, "memories", Record{ID: x + "m", Scope: scope, Kind: "fact", Status: "active", Revision: 1, Text: "kept", CreatedAt: now, UpdatedAt: now})
+	receipt := func(id string, at time.Time) Record {
+		return Record{ID: x + id, Scope: scope, Kind: "context_usage", Status: "done", Revision: 1, CreatedAt: at, UpdatedAt: at,
+			Usage: &ContextUsage{Items: []MemoryUse{{Memory: Ref{Collection: "memories", ID: x + "m"}}}}}
+	}
+	// 2 days and 10 days old count; 40 days old (updated_at as old) is outside the 30-day window.
+	insertPGRecords(t, p, "jobs", receipt("r2", now.Add(-48*time.Hour)), receipt("r10", now.Add(-240*time.Hour)), receipt("r40", now.Add(-960*time.Hour)))
+	got, err := p.MemoryUsageWindow(ctx, scope, now.Add(-720*time.Hour), now.Add(-168*time.Hour))
+	if err != nil || len(got) != 1 || got[0].Uses != 2 || got[0].Recent != 1 {
+		t.Fatalf("usage window = %+v, %v; want one memory with 2 uses, 1 recent", got, err)
+	}
+}

@@ -756,10 +756,13 @@ func (p *Postgres) MemoryUsageWindow(ctx context.Context, s Scope, since, recent
 	}
 	// Each receipt's memories are made distinct inside the receipt, so the counts need no DISTINCT and the
 	// sort carries (id, time) only: count(DISTINCT j.id) sorted every receipt with its whole doc (#166: ~110 MB on disk).
+	// A receipt's updated_at starts at its created_at and only grows, so updated_at >= since keeps every receipt in the
+	// window and lets memory_records_scope_state skip the older ones instead of reading every job's doc for its date.
 	rows, err := p.q().Query(ctx, `WITH used AS MATERIALIZED (
 SELECT x.id, `+pgDateOf("j")+` AS at FROM memory_records j
 CROSS JOIN LATERAL (SELECT DISTINCT it->'memory'->>'id' AS id FROM jsonb_array_elements(CASE WHEN jsonb_typeof(j.doc->'usage'->'items')='array' THEN j.doc->'usage'->'items' ELSE '[]'::jsonb END) it WHERE it->'memory'->>'collection'='memories') x
-WHERE j.collection='jobs' AND j.workspace_id=$1 AND j.project_id=$2 AND j.user_id=$3 AND j.agent_id=$4 AND j.kind='context_usage' AND j.status='done' AND `+pgDateOf("j")+` >= $5
+WHERE j.collection='jobs' AND j.workspace_id=$1 AND j.project_id=$2 AND j.user_id=$3 AND j.agent_id=$4 AND j.kind='context_usage' AND j.status='done'
+  AND (j.updated_at IS NULL OR j.updated_at >= $5) AND `+pgDateOf("j")+` >= $5
 )
 SELECT u.id, count(*) FILTER (WHERE u.at >= $6), count(*), max(u.at) FROM used u
 WHERE EXISTS (SELECT 1 FROM memory_records m WHERE m.collection='memories' AND m.workspace_id=$1 AND m.project_id=$2 AND m.user_id=$3 AND m.agent_id=$4 AND m.id=u.id
