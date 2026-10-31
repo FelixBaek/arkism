@@ -12,6 +12,9 @@ import (
 //go:embed native_search_shadow_contract.json
 var nativeSearchShadowContract []byte
 
+//go:embed native_search_fastslow_contract.json
+var nativeSearchFastSlowContract []byte
+
 // NativeSearchShadowConfig is an explicit in-process engineering configuration; no wire or environment loader enables it.
 type NativeSearchShadowConfig struct {
 	Mode                     string
@@ -35,6 +38,7 @@ type NativeSearchFastSlow struct {
 type NativeSearchShadowObservation struct {
 	Protocol         string   `json:"protocol"`
 	ContractSHA      string   `json:"contract_sha256"`
+	Mode             string   `json:"mode,omitempty"`
 	ScopeSHA         string   `json:"scope_sha256"`
 	CandidateSHA     string   `json:"candidate_sha256"`
 	PublishedSHA     string   `json:"published_sha256"`
@@ -144,6 +148,11 @@ func (s *Service) beginNativeSearchShadow(ctx context.Context, in SearchInput, c
 		return nil
 	}
 	a := &nativeSearchAttempt{runtime: runtime, record: NativeSearchShadowObservation{Protocol: "sys-native-service-shadow-v1", ContractSHA: ContentHash(string(nativeSearchShadowContract)), ScopeSHA: nativeSearchHash("Scope", in.Scope), Status: "fallback", Reason: "not_computed", SelectedRefs: []string{}, FastSlow: runtime.config.FastSlow != nil}}
+	if runtime.config.FastSlow != nil {
+		a.record.Protocol = "sys-native-service-fast-slow-v1"
+		a.record.ContractSHA = ContentHash(string(nativeSearchFastSlowContract))
+		a.record.Mode = runtime.config.Mode
+	}
 	a.stages = NativeSearchShadowStages{Protocol: NativeSearchStagesProtocol, ContractSHA: ContentHash(string(nativeSearchStagesContract)), ScopeSHA: a.record.ScopeSHA, ContextViewSHA: contextViewSHA(in.contextView), FinalErrorCode: "not_entered", ReaderAcknowledgement: "unknown", ActualUse: "unknown", TaskSuccess: "unknown", CausalAttribution: "unknown"}
 	if ctx.Err() != nil {
 		a.record.Reason = "caller_canceled"

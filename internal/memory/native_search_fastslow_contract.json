@@ -1,0 +1,47 @@
+{
+  "protocol": "sys-native-service-fast-slow-contract-v1",
+  "observation_protocol": "sys-native-service-fast-slow-v1",
+  "status": "private_engineering_only; accepted policy and effect are unknown",
+  "configuration": {
+    "default": "Absent runtime or explicit off leaves the existing baseline and emits no observation.",
+    "selection": "This observation protocol applies to configured FastSlow in both shadow and on. Scalar shadow keeps the immutable sys-native-service-shadow-v1 observation and contract.",
+    "mode": "mode records the explicit validated runtime shadow or on configuration, including fallback and failed-return attempts. On requires a valid fast/slow pair. This contract adds no configuration loader, endpoint or owner-approved coefficient.",
+    "mixing": "The existing validated sealed runtime pair projects both native lanes to the read publication cutoff and mixes them with its configured weight. No new outcome, jump, policy choice or state write is created by this read."
+  },
+  "return_semantics": {
+    "shadow": "Compute the fast/slow ranking for observation; return the existing baseline unchanged after its normal final checks.",
+    "on_selected": "Select the fast/slow ranked and packed native bundle; Served becomes true only after Search final authorization, audit and fence transaction succeeds and Search returns that bundle.",
+    "source_or_calculation_failure": "A baseline request that remains authorized and live falls back to that baseline if native source permissions, source validation, snapshot availability, calculation or packing cannot produce a selection. Caller cancellation still rejects the response through the existing request/final checks.",
+    "final_failure": "Existing final authorization, audit, revision/liveness fence or cancellation errors reject the response. Neither a native nor baseline return is fabricated or counted as successful.",
+    "early_failure": "Initial search authorization or other failure before the attempt begins may produce no observation."
+  },
+  "observation_meaning": {
+    "actual_baseline_sha256": "When nonempty, the computed baseline digest, even when on returns native or final checks reject the response; it is not evidence of baseline return. Empty means unobserved, including early calculation exit followed by failed return. A successful baseline return fills this digest in the existing returned step.",
+    "baseline_returned": "True only after successful Search returns the baseline. Actual baseline current/history refs in the sibling stages record are null when baseline was not returned.",
+    "served": "Successful Search native-bundle return only. Not HTTP delivery, reader acknowledgement, model input, actual use, task success or causal effect.",
+    "selected_scoped_ref_sha256": "When the arithmetic result was accepted as selected (status selected or computed_not_returned), the unchanged full arithmetic ranking before prepack limit and packing; not reader inclusion or a return claim. This observation field retains its legacy initial empty array, including on failed arithmetic with a nonempty arithmetic_only_sha256. An empty array alone is not proof of a computed empty ranking; consult status and sibling stages, which use null for unrun ref stages.",
+    "arithmetic_only_sha256": "Existing arithmetic result digest only, not a served-response hash or source/delivery proof.",
+    "stages": "Reuse the immutable sys-native-service-stages-v2 contract. Emitted refs are arithmetic packing outputs; only Served establishes native Search return. Pre-final baseline refs and actual returned baseline refs remain distinct. Unknown/unrun refs stay null; known computed empty refs stay empty arrays.",
+    "consumer_dispatch": "Consumers must dispatch by the observation protocol and contract hash. New fast/slow records are not legacy scalar records; an old strict decoder may reject the mode field. Existing legacy scalar JSON remains unchanged.",
+    "failed_return_status": "computed_not_returned replaces selected only when calculation had selected a result but neither Served nor BaselineReturned became true. An earlier fallback or uncomputed attempt may retain its earlier status after a failed return; false return flags do not assert successful baseline or native delivery."
+  },
+  "source_evidence": {
+    "protocol": "native-read-publication-v1",
+    "authority": "Authenticated cleaned candidates and existing service/readjobs/exact-source authorization with validated native state and dependency lineage at the serializable read snapshot.",
+    "time": "Existing read projection and postcommit publication/cutoff clocks remain distinct. Native fast and slow values use their existing decay-only projections before the runtime mix. This does not assert original commit time or earliest availability.",
+    "digest_scope": "The existing AuthenticatedReadPublication preimage contains protocol, scope, candidate digest, source bindings and publication time. The binding includes native config hash, fast arithmetic dynamics hash and SlowValue for a pair. FastWeight and the slow sealed config hash are not direct fields of this publication digest.",
+    "runtime_validation": "The selected fast/slow pair is validated by existing runtime configuration and compatibility checks. This descriptor does not add a cryptographic binding of every runtime parameter or claim an accepted parameter policy.",
+    "compatibility": "Existing native-read-publication-v1, scalar codec, source-binding fields, arithmetic result encoding, nativeSearchHash domains and frozen contracts/golds remain unchanged."
+  },
+  "unknown": {
+    "accepted_policy": "unknown",
+    "scientific_effect_or_superiority": "unknown",
+    "reader_acknowledgement": "unknown",
+    "actual_use": "unknown",
+    "task_success": "unknown",
+    "causal_attribution": "unknown",
+    "A_join": "unknown; no arbitrary A/v1/DYN identity aliases"
+  },
+  "telemetry": "Bounded in-memory observations only. Scope and refs are hashed; no raw query, body, checker, locator, private path, actor credential, token or source identifier is emitted.",
+  "scope": "Engineering in-process fast/slow calculation and explicit Search return observation only. Search retains its existing usage-receipt/audit behavior; the read/calculation creates no native state/outcome writes. No new transport endpoint, daemon startup/deployment or full display/answer-chain claim."
+}
