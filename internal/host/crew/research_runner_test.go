@@ -45,7 +45,7 @@ func TestResearchRestrictsToolsWithoutChangingModelOrEffort(t *testing.T) {
 			t.Fatal("missing", flag)
 		}
 	}
-	if index(c.argv, "--max-turns") >= 0 || c.stdin != "research" || res["model"] != "claude-opus-5-5" || res["effort"] != "high" {
+	if c.argv[index(c.argv, "--max-turns")+1] != "50" || c.stdin != "research" || res["model"] != "claude-opus-5-5" || res["effort"] != "high" {
 		t.Fatal("research changed execution choices", res)
 	}
 	if c.env["ARKISM_TOKEN"] != "" || c.env["NODE_OPTIONS"] != "" || c.env["CLAUDE_CODE_SAFE_MODE"] != "1" || c.cwd != filepath.Join(c.env["HOME"], "research") {
