@@ -107,6 +107,7 @@ func nativeSupersedeEnrollmentTx(ctx context.Context, tx Tx, key NativeDynamicsK
 	}
 	state.NativeDynamics.State.Status = "superseded"
 	state.NativeDynamics.State.Value = nil
+	state.NativeDynamics.State.SlowValue = nil
 	state.NativeDynamics.State.Epoch++
 	return nativeReplaceTx(ctx, tx, state)
 }
@@ -446,6 +447,16 @@ func nativeReadSnapshotTx(ctx context.Context, tx Tx, in NativeDynamicsQuery, ke
 		return out, e
 	}
 	out = NativeDynamicsView{Status: "known", Value: &value, State: nativeRef(current), Epoch: st.Epoch, LastSeq: st.LastSeq, ConfigHash: p.ConfigHash, Authority: AuthorityDataOnly}
+	if cfg.SlowTauNS != nil {
+		if st.SlowValue == nil {
+			return NativeDynamicsView{}, ErrConflict
+		}
+		slow, e := dynamicsv2.NativeAdvanceScalarNumeric(*st.SlowValue, st.LastModelNS, in.CutoffNS, *cfg.SlowTauNS, *cfg.DecayEnabled, "decay_only", *cfg.SlowEtaPositive, *cfg.UnitStrength, nil)
+		if e != nil {
+			return NativeDynamicsView{}, e
+		}
+		out.SlowValue = &slow
+	}
 	return out, nil
 }
 
@@ -475,6 +486,10 @@ func nativeCreateActivationTx(ctx context.Context, tx Tx, in NativeDynamicsActiv
 	}
 	initial := *cfg.InitialValue
 	st := NativeDynamicsState{Value: &initial, LastModelNS: ns, LastSeq: 1, Epoch: 1, Status: "active", ActivationAt: now, MemoryCreatedAt: memory.CreatedAt, MemoryUpdatedAt: memory.UpdatedAt, Anchor: "native_derived_state_activation", History: []Ref{}}
+	if cfg.SlowTauNS != nil {
+		slow := initial // both lanes start at the shared initial value
+		st.SlowValue = &slow
+	}
 	seq := int64(1)
 	result = NativeDynamicsReceipt{Protocol: nativeDynamicsProtocol, Disposition: "activated", Event: Ref{Collection: colJobs, ID: eventID, Revision: 1}, State: Ref{Collection: colJobs, ID: nativeStateID(key), Revision: 1}, ProcessingSeq: &seq, SourceAcceptedAt: now, AppliedNow: true}
 	payload = NativeDynamicsPayload{Protocol: nativeDynamicsProtocol, Key: key, ConfigHash: hash, State: &st, Receipt: &result, IdentitySHA: request, Dependencies: deps, DependencyKeys: nativeDependencyKeys(in.Scope, deps)}

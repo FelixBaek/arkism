@@ -25,6 +25,8 @@ type nativeSearchSourceBinding struct {
 	RankerSHA, ArithmeticDynamicsSHA string
 	ProjectionNS                     int64
 	ValueProjectionNS                int64
+	// Present only for a fast/slow read, so a scalar binding hashes as before.
+	SlowValue *float64 `json:",omitempty"`
 }
 
 func (s *Service) nativePublishSearchValues(ctx context.Context, token string, in SearchInput, actor Decision, snap *nativeSearchSnapshot, cfg NativeSearchShadowConfig) ([]nativeBridgeValue, time.Time, string, string) {
@@ -61,7 +63,8 @@ func (s *Service) nativePublishSearchValues(ctx context.Context, token string, i
 	if err != nil {
 		return nil, time.Time{}, "", nativeSearchSourceError(ctx, err)
 	}
-	values, bindings, err := s.nativeSearchReadValues(bound, in, previews, entry)
+	pair, _ := nativeSearchFastSlowConfig(cfg, entry) // validated when the runtime was built
+	values, bindings, err := s.nativeSearchReadValues(bound, in, previews, entry, pair)
 	if err != nil {
 		return nil, time.Time{}, "", nativeSearchSourceError(ctx, err)
 	}
@@ -69,7 +72,7 @@ func (s *Service) nativePublishSearchValues(ctx context.Context, token string, i
 	if nativeBridgeClockOf(published).UnixNS == nil {
 		return nil, time.Time{}, "", "unrepresentable_clock"
 	}
-	if code := nativeSearchProjectPublication(values, bindings, entry, published); code != "" {
+	if code := nativeSearchProjectPublication(values, bindings, entry, pair, published); code != "" {
 		return nil, time.Time{}, "", code
 	}
 	digest := nativeSearchHash("AuthenticatedReadPublication", struct {
@@ -114,7 +117,7 @@ func (s *Service) nativeSearchSourcePreviews(ctx context.Context, token string, 
 	}
 	return out, nil
 }
-func nativeSearchSourceValueTx(ctx context.Context, tx Tx, in SearchInput, p nativeSearchSourcePreview, entry dyn.PolicyEntry, projection time.Time) (nativeBridgeValue, nativeSearchSourceBinding, error) {
+func nativeSearchSourceValueTx(ctx context.Context, tx Tx, in SearchInput, p nativeSearchSourcePreview, entry dyn.PolicyEntry, pair *dyn.FastSlowConfig, projection time.Time) (nativeBridgeValue, nativeSearchSourceBinding, error) {
 	var empty nativeBridgeValue
 	var noBinding nativeSearchSourceBinding
 	clock := nativeBridgeClockOf(projection)
@@ -139,7 +142,7 @@ func nativeSearchSourceValueTx(ctx context.Context, tx Tx, in SearchInput, p nat
 	if err != nil {
 		return empty, noBinding, err
 	}
-	if !nativeSearchCompatibleConfig(config.NativeDynamics.Config, entry.Dynamics) {
+	if !nativeSearchCompatibleConfig(config.NativeDynamics.Config, entry.Dynamics) || !nativeSearchCompatibleSlow(config.NativeDynamics.Config, pair) || (pair != nil && view.SlowValue == nil) {
 		return empty, noBinding, ErrInvalid
 	}
 	current, err := nativeGetTx(ctx, tx, in.Scope, p.row.ID, "state")
@@ -159,6 +162,10 @@ func nativeSearchSourceValueTx(ctx context.Context, tx Tx, in SearchInput, p nat
 		dynamicsSHA = entry.Dynamics.ConfigSHA256
 	}
 	binding := nativeSearchSourceBinding{Protocol: "native-read-publication-v1", NativeProtocol: nativeDynamicsProtocol, NativeConfigSHA: current.NativeDynamics.ConfigHash, StateRefSHA: nativeSearchHash("StateRef", nativeRef(current)), StateRevision: current.Revision, Epoch: st.Epoch, ModelNS: st.LastModelNS, LineageSHA: lineage, RankerSHA: entry.Ranker.ConfigSHA256, ArithmeticDynamicsSHA: dynamicsSHA, ProjectionNS: *clock.UnixNS}
+	if pair != nil {
+		slow := *view.SlowValue
+		binding.SlowValue = &slow
+	}
 	guard := nativeSearchHash("ValidatedState", struct {
 		Ref     Ref
 		Payload *NativeDynamicsPayload
@@ -175,6 +182,15 @@ func nativeSearchCompatibleConfig(native *NativeDynamicsConfig, arithmetic *dyn.
 	}
 	// This binds the applicable scalar view settings. Native pass-only provenance remains its own protocol, never synthetic event qualification.
 	return *native.InitialValue == arithmetic.Initial && *native.TauNS == arithmetic.TauNS && *native.EtaPositive == arithmetic.EtaPositive && *native.UnitStrength == arithmetic.UnitStrength && *native.DecayEnabled == arithmetic.DecayEnabled && *native.PositiveLearning == arithmetic.OutcomeJumpEnabled
+}
+
+// A lane pair reads only a native config whose slow rates equal the slow lane;
+// the shared fields are already bound to the fast lane above.
+func nativeSearchCompatibleSlow(native *NativeDynamicsConfig, pair *dyn.FastSlowConfig) bool {
+	if pair == nil {
+		return true
+	}
+	return native.SlowTauNS != nil && *native.SlowTauNS == pair.Slow.TauNS && *native.SlowEtaPositive == pair.Slow.EtaPositive
 }
 func nativeSearchSourceError(ctx context.Context, err error) string {
 	if ctx.Err() != nil {
@@ -197,7 +213,7 @@ func nativeSearchSourceError(ctx context.Context, err error) string {
 	return "invalid_source"
 }
 
-func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, previews []nativeSearchSourcePreview, entry dyn.PolicyEntry) ([]nativeBridgeValue, []nativeSearchSourceBinding, error) {
+func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, previews []nativeSearchSourcePreview, entry dyn.PolicyEntry, pair *dyn.FastSlowConfig) ([]nativeBridgeValue, []nativeSearchSourceBinding, error) {
 	var values []nativeBridgeValue
 	var bindings []nativeSearchSourceBinding
 	err := s.Repo.Transaction(bound, func(ctx context.Context, tx Tx) error {
@@ -217,7 +233,7 @@ func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, 
 		}
 		projection := time.Now().UTC()
 		for _, preview := range previews {
-			value, binding, e := nativeSearchSourceValueTx(ctx, tx, in, preview, entry, projection)
+			value, binding, e := nativeSearchSourceValueTx(ctx, tx, in, preview, entry, pair, projection)
 			if e != nil {
 				return e
 			}
@@ -229,7 +245,7 @@ func (s *Service) nativeSearchReadValues(bound context.Context, in SearchInput, 
 	return values, bindings, err
 }
 
-func nativeSearchProjectPublication(values []nativeBridgeValue, bindings []nativeSearchSourceBinding, entry dyn.PolicyEntry, published time.Time) string {
+func nativeSearchProjectPublication(values []nativeBridgeValue, bindings []nativeSearchSourceBinding, entry dyn.PolicyEntry, pair *dyn.FastSlowConfig, published time.Time) string {
 	for i := range values {
 		if entry.Dynamics == nil || values[i].Value == nil {
 			return "invalid_source"
@@ -242,10 +258,28 @@ func nativeSearchProjectPublication(values []nativeBridgeValue, bindings []nativ
 		if e != nil {
 			return "invalid_source"
 		}
+		if pair != nil {
+			if value, e = nativeSearchMixLanes(value, bindings[i].SlowValue, *observed.UnixNS, *nativeBridgeClockOf(published).UnixNS, pair); e != nil {
+				return "invalid_source"
+			}
+		}
 		values[i].Value = &value
 		bindings[i].ValueProjectionNS = *nativeBridgeClockOf(published).UnixNS
 		values[i].AvailableAt = published
 		values[i].PublishedAt = published
 	}
 	return ""
+}
+
+// nativeSearchMixLanes projects the slow lane like the fast one, then mixes.
+func nativeSearchMixLanes(fast float64, slow *float64, observedNS, publishedNS int64, pair *dyn.FastSlowConfig) (float64, error) {
+	if slow == nil {
+		return 0, ErrInvalid
+	}
+	s := pair.Slow
+	projected, e := dyn.NativeAdvanceScalarNumeric(*slow, observedNS, publishedNS, s.TauNS, s.DecayEnabled, "decay_only", s.EtaPositive, s.UnitStrength, nil)
+	if e != nil {
+		return 0, e
+	}
+	return dyn.MixFastSlow(fast, projected, *pair)
 }

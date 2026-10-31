@@ -11,9 +11,10 @@ import (
 	dyn "github.com/FelixBaek/arkism/internal/memoryharness/dynamicsv2"
 )
 
-// daemonSearchMode is the SYS-06 search mode file. Only off and shadow exist:
-// shadow keeps returning the baseline and records a separate diagnostic. A
-// "dynamic" serving mode is refused until a serving policy is accepted.
+// daemonSearchMode is the SYS-06 search mode file. off and shadow keep returning
+// the baseline; shadow records a separate diagnostic. "on" serves only the
+// DYN-02/03 fast/slow ranking and needs a fast_slow block; a general "dynamic"
+// serving mode is still refused until a serving policy is accepted.
 type daemonSearchMode struct {
 	Protocol       string `json:"protocol"`
 	Mode           string `json:"mode"`
@@ -25,6 +26,13 @@ type daemonSearchMode struct {
 	DeadlineNS     int64  `json:"deadline_ns"`
 	MaxSteps       int64  `json:"max_steps"`
 	Capacity       int    `json:"capacity"`
+	// FastSlow is optional in shadow and required in on.
+	FastSlow *daemonSearchFastSlow `json:"fast_slow"`
+}
+
+type daemonSearchFastSlow struct {
+	SlowDynamics dyn.DynamicsConfigV2 `json:"slow_dynamics"`
+	FastWeight   float64              `json:"fast_weight"`
 }
 
 // loadDaemonSearchMode returns nil for no file or mode off. A search mode file
@@ -52,7 +60,7 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 			return nil, memory.ErrInvalid // an off file carries no shadow settings to misread later
 		}
 		return nil, nil
-	case "shadow":
+	case "shadow", "on":
 	default:
 		return nil, memory.ErrInvalid
 	}
@@ -68,7 +76,10 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 	if json.Unmarshal(registryRaw, &registry) != nil {
 		return nil, memory.ErrInvalid
 	}
-	cfg := memory.NativeSearchShadowConfig{Mode: "shadow", Registry: registry, Policy: dyn.PolicyID(m.Policy), NativeVersion: m.NativeVersion, Dimension: m.Dimension, Deadline: time.Duration(m.DeadlineNS), MaxSteps: m.MaxSteps, Capacity: m.Capacity}
+	cfg := memory.NativeSearchShadowConfig{Mode: m.Mode, Registry: registry, Policy: dyn.PolicyID(m.Policy), NativeVersion: m.NativeVersion, Dimension: m.Dimension, Deadline: time.Duration(m.DeadlineNS), MaxSteps: m.MaxSteps, Capacity: m.Capacity}
+	if m.FastSlow != nil {
+		cfg.FastSlow = &memory.NativeSearchFastSlow{Slow: m.FastSlow.SlowDynamics, FastWeight: m.FastSlow.FastWeight}
+	}
 	if _, err = memory.NewNativeSearchShadowRuntime(cfg); err != nil || m.NativeVersion == "" || m.Dimension == "" {
 		return nil, memory.ErrInvalid
 	}

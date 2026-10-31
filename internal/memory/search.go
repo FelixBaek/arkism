@@ -256,6 +256,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	}
 	out.ContextID = ID()
 	shadow.compute(ctx, s, token, in, d, out)
+	out = shadow.serve(out, snapshots)
 	usage := searchUsage(run, in, out.Items)
 	releaseCommit, err := s.searchCommits.acquire(ctx, in.Scope)
 	if err != nil {

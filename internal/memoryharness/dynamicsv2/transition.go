@@ -729,3 +729,15 @@ func pairedReceipts(a, b ReceiptIndexV2) bool {
 	}
 	return true
 }
+
+// Validate checks a lane pair for callers outside this package (the product
+// search wiring) with the same rules as the fast/slow transition.
+func (cfg FastSlowConfig) Validate() error { return checkFastSlowConfig(cfg) }
+
+// MixFastSlow mixes two lane values read at the same time after checking cfg.
+func MixFastSlow(fast, slow float64, cfg FastSlowConfig) (float64, error) {
+	if err := checkFastSlowConfig(cfg); err != nil {
+		return 0, err
+	}
+	return fastSlowValue(fast, slow, cfg), nil
+}
