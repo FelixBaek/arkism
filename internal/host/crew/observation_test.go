@@ -50,8 +50,9 @@ func hostObservationSpec(t *testing.T) (map[string]any, *crewrun.ObservationTran
 func TestHostObservationRoutingCapturesFailureBeforeFallbackOverwrite(t *testing.T) {
 	spec, transport, session := hostObservationSpec(t)
 	spec["model"] = "auto"
+	spec["access"] = "read" // a failed read-only step still falls over; a write step would stop as effect_unknown
 	calls, reports := 0, 0
-	decide := func(task, group string) (map[string]any, error) {
+	decide := func(task, group string, _ host.Obj) (map[string]any, error) {
 		return map[string]any{"id": "fixture/first", "decision": "fixed", "fallbacks": []any{"fixture/second"}}, nil
 	}
 	run := func(input map[string]any) (map[string]any, error) {
@@ -79,8 +80,9 @@ func TestHostObservationRoutingCapturesFailureBeforeFallbackOverwrite(t *testing
 func TestHostObservationEarlierRowsSurviveLaterRunnerError(t *testing.T) {
 	spec, transport, session := hostObservationSpec(t)
 	spec["model"] = "auto"
+	spec["access"] = "read" // a failed read-only step still falls over; a write step would stop as effect_unknown
 	calls := 0
-	decide := func(task, group string) (map[string]any, error) {
+	decide := func(task, group string, _ host.Obj) (map[string]any, error) {
 		return map[string]any{"id": "fixture/first", "fallbacks": []any{"fixture/second"}}, nil
 	}
 	_, err := runRouted(spec, decide, func(map[string]any) (map[string]any, error) {
