@@ -252,7 +252,7 @@ func runNativeBridgeCandidate(ctx context.Context, in nativeBridgeInput) nativeB
 			return finish("packing_error")
 		}
 	}
-	out.Emitted = make([]nativeBridgeEmitted, 0, len(bundle.Items)+len(bundle.History))
+	out.Emitted = make([]nativeBridgeEmitted, 0, len(bundle.Items)) // history rows are appended after the items
 	for i, h := range bundle.Items {
 		out.Emitted = append(out.Emitted, nativeBridgeEmission(h, i+1, false, out.Prepack, nil))
 	}
