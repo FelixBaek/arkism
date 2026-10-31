@@ -71,61 +71,75 @@ func recordUsage(svc *Service, item ResolvedSkill, status string) error {
 // CAP-03 stub paths: the fake hub answered every request; the real server refuses.
 func TestCapReplayServerPaths(t *testing.T) {
 	forCapabilityRepos(t, func(t *testing.T, f *fixture) {
-		v1, publish := capabilitySkill(t, f, "cap03-demo")
-
-		// server_resolve_authorization: typed per-ref answers and a scope denial.
-		out, err := f.svc.ResolveSkills(testCtx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"cap03-demo@latest-approved", "cap03-demo@9", "missing@1", "bad-ref"}})
-		if err != nil || out.Items[0].Version != 1 || out.Items[1].Error != "version_not_found" || out.Items[2].Error != "skill_not_found" || out.Items[3].Error != "invalid_ref" {
-			t.Fatalf("resolve: %v %+v", err, out.Items)
-		}
-		f.auth.actors["tok-cap-other-scope"] = fakeActor{principal: "reader", role: "agent", external: true, wrongScope: true, verbs: actor("", "", true, allVerbs...).verbs}
-		if _, err = resolveOne(t, f.svc, "tok-cap-other-scope", "cap03-demo@latest-approved"); !errors.Is(err, ErrDenied) {
-			t.Fatal("other-scope reader resolved", err)
-		}
-
-		// pin_save_ok / pin_save_failure (server half): after v2 is approved the
-		// exact pin still serves v1 and latest-approved moves to v2.
-		served := out.Items[0]
-		v2 := publish("---\nname: cap03-demo\n---\nbody v2")
-		pinned, err := resolveOne(t, f.svc, f.agent, "cap03-demo@1")
-		if err != nil || pinned.VersionID != v1.Record.ID || pinned.ContentHash != served.ContentHash || pinned.ValidationStatus != "superseded" {
-			t.Fatalf("pinned replay: %v %+v", err, pinned)
-		}
-		latest, err := resolveOne(t, f.svc, f.agent, "cap03-demo@latest-approved")
-		if err != nil || latest.VersionID != v2.Record.ID || latest.Version != 2 || !latest.LatestApproved {
-			t.Fatalf("latest after approval: %v %+v", err, latest)
-		}
-
-		// server_usage_acceptance: the fake trace endpoint accepted any body; the
-		// server binds usage to a served version and hash. Status stays caller-asserted.
-		if err = recordUsage(f.svc, pinned, "success"); err != nil {
-			t.Fatal("served pin usage refused", err)
-		}
-		if err = recordUsage(f.svc, latest, "failure"); err != nil {
-			t.Fatal("served latest usage refused", err)
-		}
-		forged := pinned
-		forged.ContentHash = latest.ContentHash
-		if err = recordUsage(f.svc, forged, "success"); !errors.Is(err, ErrConflict) {
-			t.Fatal("usage for an unserved hash accepted", err)
-		}
-		forged = latest
-		forged.Version = 3
-		if err = recordUsage(f.svc, forged, "success"); !errors.Is(err, ErrConflict) {
-			t.Fatal("usage for an unknown version accepted", err)
-		}
-
-		// server_trial_resolution: the fake echoed any trial_id as active; the
-		// server reads the trial record and refuses an unknown one.
-		trial := SkillResolveInput{Scope: scopeA, Refs: []string{"cap03-demo@latest-approved"}, TrialID: "trial-1", Runtime: "codex"}
-		if got, err := f.svc.ResolveSkills(testCtx, f.agent, trial); err == nil || len(got.Items) != 0 {
-			t.Fatalf("unknown trial served: %v %+v", err, got.Items)
-		}
-		trial.Runtime = ""
-		if _, err := f.svc.ResolveSkills(testCtx, f.agent, trial); !errors.Is(err, ErrInvalid) {
-			t.Fatal("trial without runtime", err)
-		}
+		pinned, latest := capReplayResolveAndPin(t, f)
+		capReplayUsage(t, f, pinned, latest)
+		capReplayTrialResolution(t, f)
 	})
+}
+
+// server_resolve_authorization, then pin_save_ok / pin_save_failure (server half).
+func capReplayResolveAndPin(t *testing.T, f *fixture) (pinned, latest ResolvedSkill) {
+	t.Helper()
+	v1, publish := capabilitySkill(t, f, "cap03-demo")
+
+	// server_resolve_authorization: typed per-ref answers and a scope denial.
+	out, err := f.svc.ResolveSkills(testCtx, f.agent, SkillResolveInput{Scope: scopeA, Refs: []string{"cap03-demo@latest-approved", "cap03-demo@9", "missing@1", "bad-ref"}})
+	if err != nil || out.Items[0].Version != 1 || out.Items[1].Error != "version_not_found" || out.Items[2].Error != "skill_not_found" || out.Items[3].Error != "invalid_ref" {
+		t.Fatalf("resolve: %v %+v", err, out.Items)
+	}
+	f.auth.actors["tok-cap-other-scope"] = fakeActor{principal: "reader", role: "agent", external: true, wrongScope: true, verbs: actor("", "", true, allVerbs...).verbs}
+	if _, err = resolveOne(t, f.svc, "tok-cap-other-scope", "cap03-demo@latest-approved"); !errors.Is(err, ErrDenied) {
+		t.Fatal("other-scope reader resolved", err)
+	}
+
+	// After v2 is approved the exact pin still serves v1 and latest-approved moves to v2.
+	served := out.Items[0]
+	v2 := publish("---\nname: cap03-demo\n---\nbody v2")
+	pinned, err = resolveOne(t, f.svc, f.agent, "cap03-demo@1")
+	if err != nil || pinned.VersionID != v1.Record.ID || pinned.ContentHash != served.ContentHash || pinned.ValidationStatus != "superseded" {
+		t.Fatalf("pinned replay: %v %+v", err, pinned)
+	}
+	latest, err = resolveOne(t, f.svc, f.agent, "cap03-demo@latest-approved")
+	if err != nil || latest.VersionID != v2.Record.ID || latest.Version != 2 || !latest.LatestApproved {
+		t.Fatalf("latest after approval: %v %+v", err, latest)
+	}
+	return pinned, latest
+}
+
+// server_usage_acceptance: the fake trace endpoint accepted any body; the
+// server binds usage to a served version and hash. Status stays caller-asserted.
+func capReplayUsage(t *testing.T, f *fixture, pinned, latest ResolvedSkill) {
+	t.Helper()
+	if err := recordUsage(f.svc, pinned, "success"); err != nil {
+		t.Fatal("served pin usage refused", err)
+	}
+	if err := recordUsage(f.svc, latest, "failure"); err != nil {
+		t.Fatal("served latest usage refused", err)
+	}
+	forged := pinned
+	forged.ContentHash = latest.ContentHash
+	if err := recordUsage(f.svc, forged, "success"); !errors.Is(err, ErrConflict) {
+		t.Fatal("usage for an unserved hash accepted", err)
+	}
+	forged = latest
+	forged.Version = 3
+	if err := recordUsage(f.svc, forged, "success"); !errors.Is(err, ErrConflict) {
+		t.Fatal("usage for an unknown version accepted", err)
+	}
+}
+
+// server_trial_resolution: the fake echoed any trial_id as active; the
+// server reads the trial record and refuses an unknown one.
+func capReplayTrialResolution(t *testing.T, f *fixture) {
+	t.Helper()
+	trial := SkillResolveInput{Scope: scopeA, Refs: []string{"cap03-demo@latest-approved"}, TrialID: "trial-1", Runtime: "codex"}
+	if got, err := f.svc.ResolveSkills(testCtx, f.agent, trial); err == nil || len(got.Items) != 0 {
+		t.Fatalf("unknown trial served: %v %+v", err, got.Items)
+	}
+	trial.Runtime = ""
+	if _, err := f.svc.ResolveSkills(testCtx, f.agent, trial); !errors.Is(err, ErrInvalid) {
+		t.Fatal("trial without runtime", err)
+	}
 }
 
 // CAP-03 independent_trial_checker (server half of crew processTrial): the
@@ -223,40 +237,7 @@ func TestCapReplayComparisonAndNoChangeReport(t *testing.T) {
 	forCapabilityRepos(t, func(t *testing.T, f *fixture) {
 		served := map[string]map[string]ResolvedSkill{}
 		for _, condition := range []string{"unchanged", "compatible", "incompatible", "unknown"} {
-			id := "cap-" + condition
-			_, publish := capabilitySkill(t, f, id)
-			// Checkpoint: the view loaded before the change (input -> checkpoint).
-			checkpoint, err := resolveOne(t, f.svc, f.agent, id+"@latest-approved")
-			if err != nil || checkpoint.Error != "" {
-				t.Fatal("checkpoint", err, checkpoint.Error)
-			}
-			if body, ok := next[condition]; ok {
-				publish(fmt.Sprintf(body, id))
-			}
-			svc := f.svc
-			if condition == "unknown" {
-				svc = &Service{Repo: unreachableRepo{f.svc.Repo}, Auth: f.svc.Auth}
-			}
-			latest := func() (ResolvedSkill, error) { return resolveOne(t, svc, f.agent, id+"@latest-approved") }
-			pin := func() (ResolvedSkill, error) { return resolveOne(t, svc, f.agent, id+"@1") }
-			served[condition] = map[string]ResolvedSkill{}
-			for adapter, row := range want {
-				if got := capabilityDecide(adapter, checkpoint, latest, pin); got != row[condition] {
-					t.Errorf("%s/%s: server replay %v, lab %v", adapter, condition, got, row[condition])
-				}
-			}
-			if condition == "unknown" {
-				continue
-			}
-			before, err := pin()
-			if err != nil || before.VersionID != checkpoint.VersionID {
-				t.Fatal("pinned view", err)
-			}
-			current, err := latest()
-			if err != nil {
-				t.Fatal(err)
-			}
-			served[condition]["before"], served[condition]["current"] = before, current
+			served[condition] = capReplayCondition(t, f, condition, next[condition], want)
 		}
 
 		// CAP-05 verdict -> effect: after a pin save failure the incompatible view is
@@ -271,18 +252,60 @@ func TestCapReplayComparisonAndNoChangeReport(t *testing.T) {
 		// (provenance carries only origin identity), so compatible and incompatible
 		// changes are indistinguishable to it and
 		// selective revalidation (or the CAP-05 shadow) cannot be fed from it.
-		shape := func(r ResolvedSkill) string {
-			raw, _ := json.Marshal(r)
-			var m map[string]any
-			_ = json.Unmarshal(raw, &m)
-			for _, k := range []string{"ref", "skill_id", "version_id", "content_hash", "instructions", "name", "resolved_version", "provenance_summary"} {
-				delete(m, k)
-			}
-			out, _ := json.Marshal(m)
-			return string(out)
-		}
-		if a, b := shape(served["compatible"]["current"]), shape(served["incompatible"]["current"]); a != b {
+		if a, b := capReplayShape(served["compatible"]["current"]), capReplayShape(served["incompatible"]["current"]); a != b {
 			t.Fatalf("server distinguishes compatible from incompatible: %s vs %s", a, b)
 		}
 	})
+}
+
+// capReplayCondition replays every adapter on one condition and returns the
+// pinned ("before") and latest ("current") views; unknown returns none.
+func capReplayCondition(t *testing.T, f *fixture, condition, nextBody string, want map[string]map[string]capabilityDecision) map[string]ResolvedSkill {
+	t.Helper()
+	id := "cap-" + condition
+	_, publish := capabilitySkill(t, f, id)
+	// Checkpoint: the view loaded before the change (input -> checkpoint).
+	checkpoint, err := resolveOne(t, f.svc, f.agent, id+"@latest-approved")
+	if err != nil || checkpoint.Error != "" {
+		t.Fatal("checkpoint", err, checkpoint.Error)
+	}
+	if nextBody != "" {
+		publish(fmt.Sprintf(nextBody, id))
+	}
+	svc := f.svc
+	if condition == "unknown" {
+		svc = &Service{Repo: unreachableRepo{f.svc.Repo}, Auth: f.svc.Auth}
+	}
+	latest := func() (ResolvedSkill, error) { return resolveOne(t, svc, f.agent, id+"@latest-approved") }
+	pin := func() (ResolvedSkill, error) { return resolveOne(t, svc, f.agent, id+"@1") }
+	for adapter, row := range want {
+		if got := capabilityDecide(adapter, checkpoint, latest, pin); got != row[condition] {
+			t.Errorf("%s/%s: server replay %v, lab %v", adapter, condition, got, row[condition])
+		}
+	}
+	if condition == "unknown" {
+		return map[string]ResolvedSkill{}
+	}
+	before, err := pin()
+	if err != nil || before.VersionID != checkpoint.VersionID {
+		t.Fatal("pinned view", err)
+	}
+	current, err := latest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]ResolvedSkill{"before": before, "current": current}
+}
+
+// capReplayShape drops the identity fields so only what the server says about
+// the change itself is compared.
+func capReplayShape(r ResolvedSkill) string {
+	raw, _ := json.Marshal(r)
+	var m map[string]any
+	_ = json.Unmarshal(raw, &m)
+	for _, k := range []string{"ref", "skill_id", "version_id", "content_hash", "instructions", "name", "resolved_version", "provenance_summary"} {
+		delete(m, k)
+	}
+	out, _ := json.Marshal(m)
+	return string(out)
 }
