@@ -138,12 +138,12 @@ func TestEffortReachesEachCLI(t *testing.T) {
 		t.Fatal(argv)
 	}
 	argv, stdin = command(row(t, "opus"), "opus", "max", "역할", "일", "", false)
-	eq(t, argv[1:], []string{"-p", "--model", "opus", "--effort", "max", "--append-system-prompt", "역할"})
+	eq(t, argv[1:], []string{"-p", "--model", "opus", "--effort", "max", "--max-turns", "50", "--append-system-prompt", "역할"})
 	if stdin != "일" {
 		t.Fatal(stdin)
 	}
 	argv, _ = command(row(t, "glm-5"), "glm-5", "high", "역할", "일", "", false)
-	eq(t, argv[1:], []string{"--bare", "-p", "--model", "glm-5", "--append-system-prompt", "역할"})
+	eq(t, argv[1:], []string{"--bare", "-p", "--model", "glm-5", "--max-turns", "50", "--append-system-prompt", "역할"})
 	argv, stdin = command(row(t, "gemini-3"), "gemini-3", "high", "역할", "일", "", false)
 	eq(t, argv[1:4], []string{"-m", "gemini-3", "-p"})
 	if strings.Index(argv[4], "역할") > strings.Index(argv[4], "일") || stdin != "" {
@@ -154,8 +154,8 @@ func TestEffortReachesEachCLI(t *testing.T) {
 func TestOnceLimitsClaudeToOneTurn(t *testing.T) {
 	argv, _ := buildCommand(row(t, "opus"), "opus", "low", "", "x", "", true, "read")
 	eq(t, argv[1:8], []string{"-p", "--model", "opus", "--effort", "low", "--max-turns", "1"})
-	if argv, _ := buildCommand(row(t, "opus"), "opus", "low", "", "x", "", false, "read"); index(argv, "--max-turns") >= 0 {
-		t.Fatal(argv)
+	if argv, _ := buildCommand(row(t, "opus"), "opus", "low", "", "x", "", false, "read"); !slices.Equal(argv[6:8], []string{"--max-turns", "50"}) {
+		t.Fatal(argv) // any other step gets the shared tool-round cap
 	}
 	if argv, _ := buildCommand(row(t, "o3"), "o3", "low", "", "x", "", true, "read"); index(argv, "--max-turns") >= 0 {
 		t.Fatal(argv)
@@ -323,7 +323,7 @@ func TestStartPostsTheDesktopRunShapeAndWaitsForAnApproval(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	eq(t, view, map[string]any{"run_id": "run-1", "run_kind":"workflow", "terminal":false,"result":"","cancel_requested":false,"status": "waiting", "summary": "", "waiting": map[string]any{"node_id": "a", "question": "보낼까요?"}})
+	eq(t, view, map[string]any{"run_id": "run-1", "run_kind": "workflow", "terminal": false, "result": "", "cancel_requested": false, "status": "waiting", "summary": "", "waiting": map[string]any{"node_id": "a", "question": "보낼까요?"}})
 	if posts[0].path != "/v1/crew/runs" {
 		t.Fatal(posts[0].path)
 	}
@@ -515,7 +515,7 @@ func TestEachCustomKeyIsItsOwnProviderAndRunsItsModels(t *testing.T) {
 	eq(t, []string{env["ANTHROPIC_BASE_URL"], env["ANTHROPIC_AUTH_TOKEN"]}, []string{"https://api.deepseek.com/anthropic", ds})
 	argv, stdin := buildCommand(r, "deepseek-flash", "low", "역할", "일", "", false, "read")
 	eq(t, argv[1:5], []string{"--bare", "-p", "--model", "deepseek-flash"})
-	if stdin != "일" || index(argv, "--max-turns") >= 0 {
+	if stdin != "일" || !slices.Equal(argv[5:7], []string{"--max-turns", "50"}) {
 		t.Fatal(argv, stdin)
 	}
 	argv, _ = buildCommand(r, "deepseek-flash", "low", "", "일", "", true, "read")

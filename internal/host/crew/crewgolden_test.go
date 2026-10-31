@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -22,6 +23,22 @@ func strs(v any) []string {
 	return out
 }
 
+// withTurnCap is a golden argv with the tool-round cap added since (2026-10-31 owner decision): a Claude Code family
+// step that is not once gets --max-turns toolTurnCap where once puts --max-turns 1. The golden file stays as recorded.
+func withTurnCap(c map[string]any) any {
+	argv := list(c["argv"])
+	after := map[any]string{"claude": "--effort", "glm": "--model", "custom": "--model"}[c["cli"]]
+	if after == "" || c["once"] == true {
+		return argv
+	}
+	for i, a := range argv {
+		if a == after {
+			return append(append(append([]any{}, argv[:i+2]...), "--max-turns", strconv.Itoa(toolTurnCap)), argv[i+2:]...)
+		}
+	}
+	return argv
+}
+
 // Goldens from the Python runner (testdata/crew.json): the Go port must answer the same.
 func TestCrewGoldens(t *testing.T) {
 	g := readGolden(t, "crew.json")
@@ -33,7 +50,7 @@ func TestCrewGoldens(t *testing.T) {
 			r := row(t, pyStr(c["model"]))
 			argv, stdin := buildCommand(r, pyStr(c["model"]), pyStr(c["effort"]), pyStr(c["instructions"]), "일", "/tmp/o", c["once"] == true, pyStr(c["access"]))
 			argv[0] = filepath.ToSlash(argv[0]) // the golden holds the Unix binary path; Windows joins it with '\\'
-			if r.Name != c["cli"] || stdin != c["stdin"] || !same(plain(t, argv), c["argv"]) {
+			if r.Name != c["cli"] || stdin != c["stdin"] || !same(plain(t, argv), withTurnCap(c)) {
 				t.Fatalf("%v\ngot %q %q", c, argv, stdin)
 			}
 		}
