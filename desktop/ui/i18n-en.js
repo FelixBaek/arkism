@@ -1005,7 +1005,6 @@ window.ArkismI18nEN = {
   "키·토큰은 넣지 마세요. 키는 설정 › 에이전트에 넣어요.": "Don't enter keys or tokens. Put keys in Settings › Agents.",
   "띄어쓰기 없이": "No spaces",
   "주제를 받아 … 까지 해요": "Takes a topic and does …",
-  "글쓰기·문서": "Writing & docs",
   "카드에 크게 보여요": "Shown large on the card",
   "$이름": "$name",
   "설명": "Description",
@@ -3942,7 +3941,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 });
 Object.assign(window.ArkismI18nEN.patterns, {
 });
-Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety", "끝난 기준과 결과물": "Done when and output", "자세히 · 끝난 기준, 실행 설정": "More · done when, run settings", "자세히 · 끝난 기준, 실행 설정, 기록, 관리": "More · done when, run settings, history, manage"});
+Object.assign(window.ArkismI18nEN.strings, {"토큰 줄이기": "Cut tokens", "안전": "Safety", "끝난 기준과 결과물": "Done when and output", "자세히 · 끝난 기준, 실행 설정": "More · done when, run settings", "자세히 · 끝난 기준, 실행 설정, 관리": "More · done when, run settings, manage"});
 Object.assign(window.ArkismI18nEN.strings, {"크림": "Cream", "모래": "Sand", "황토": "Tan", "장미": "Rose", "라일락": "Lilac", "하늘": "Sky", "민트": "Mint", "세이지": "Sage",
   "배경색": "Background", "아바타": "Avatar", "아바타 고르기": "Choose avatar", "모델 아이콘 쓰기": "Use model icon"});
 Object.assign(window.ArkismI18nEN.patterns, {"아바타 {0}": "Avatar {0}"});
@@ -5415,6 +5414,7 @@ Object.assign(window.ArkismI18nEN.strings, {
   "서버가 1분 넘게 답하지 않아요. 잠시 뒤 다시 시도해 주세요.": "The server hasn't answered for over a minute. Try again in a moment.",
   "11분 안에 답이 오지 않았어요. 다시 시도해 주세요.": "No answer within 11 minutes. Try again.",
   "AI가 읽는 중… 최대 11분 걸려요.": "AI is reading… This can take up to 11 minutes.",
+  "AI가 읽는 중… 보통 1분 안에 끝나요.": "AI is reading… This usually takes under a minute.",
   "AI 도움을 취소했어요. 후보는 그대로예요.": "AI help cancelled. The candidate is unchanged.",
   "AI 제안을 취소했어요. 기억은 그대로예요.": "AI advice cancelled. The memory is unchanged.",
   "서버가 아직 이 선택을 몰라요. 서버를 최신 판으로 올린 뒤 다시 해 주세요.": "The server doesn't know this choice yet. Update the server, then try again."
