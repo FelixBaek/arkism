@@ -370,6 +370,9 @@ test("역할별 모델 picks Ollama models from the list and keeps what runs tod
   assert.equal(field("임베딩 모델").value, "qwen3-embedding:0.6b", "nothing saved: the default stays picked");
   const judge = app.$('.ag-roles [aria-label="라우팅 판정 모델"]'); judge.value = "chat"; app.dom.fire(judge, "change"); await app.settle();
   assert.deepEqual(values("판별 모델"), ["qwen3:4b", "llama3.2:3b"]);
+  const summary = app.$('.ag-roles [aria-label="스킬 요약 모델"]'); summary.value = "chat"; app.dom.fire(summary, "change"); await app.settle();
+  assert.equal(field("요약 모델").tagName, "SELECT", "the summary model is picked too");
+  assert.ok(!values("요약 모델").includes("nomic-embed-text:latest"));
   app.fake.model_roles = { ...saved, ollama_models: [] }; // Ollama off: no list, so the name is typed
   await settings("info"); await settings("roles");
   assert.equal(field("임베딩 모델").tagName, "INPUT");

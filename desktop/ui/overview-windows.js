@@ -72,7 +72,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
   let dlg = null;
   // beside: a non-modal window over the content area only, so the left menu stays usable (a menu click closes it)
   function modal(cls, beside = false) {
+    // the same window drawn again (a row click): keep where each list was scrolled, or it jumps to the top
+    const same = !!dlg && !!cls && cls.split(" ").every((c) => dlg.classList.contains(c));
+    const kept = same ? [...dlg.querySelectorAll("*")].filter((e) => e.scrollTop > 0 && typeof e.className === "string" && e.className).map((e) => [e.className, [...dlg.getElementsByClassName(e.className.split(" ")[0])].indexOf(e), e.scrollTop]) : [];
+    const pageY = window.scrollY;
     dlg?.close();
+    if (kept.length || pageY) requestAnimationFrame(() => {
+      if (pageY && window.scrollY !== pageY) window.scrollTo(0, pageY);
+      for (const [name, i, top] of kept) { const e = dlg?.getElementsByClassName(name.split(" ")[0])[i]; if (e) e.scrollTop = top; }
+    });
     const d = el("dialog", `crew-dialog ov-win ${cls || ""}`), rail = document.querySelector(".sidebar"), shut = () => d.close();
     d.addEventListener("close", () => { d.remove(); rail?.removeEventListener("click", shut); if (dlg === d) dlg = null; });
     document.body.append(d); dlg = d; redraw = null;
@@ -522,7 +530,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     right.append(head, ul, foot); body.append(left, right); d.append(body);
   }
   function expandTotal(key) {
-    return { extract: waiting().length + D().memories.length, classify: waiting().filter((m) => !m.classification).length, judge: toCheck().length, dream: dreamItems().length }[key] || 0;
+    // the server's totals when known: the loaded rows stop at a page
+    const wt = state.waitingTotals, mt = state.memoryTotals;
+    return { extract: (wt?.total ?? waiting().length) + (mt?.active ?? D().memories.length), classify: wt?.unclassified ?? waiting().filter((m) => !m.classification).length,
+      judge: Math.max(toCheck().length, mt?.idle ?? 0), dream: dreamItems().length }[key] || 0;
   }
   // 안 쓰임: returned unused_after times since its last record_memory_usage receipt (host memory_use), or injected 3+ times
   // with neither a receipt nor an answer restating it (the estimate). A person decides; nothing is demoted on its own.
@@ -746,9 +757,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const k = c.classification, conf = confusing(c, merges), mp = merges.get(c.id), v = k?.verdict;
       const h = el("div", "ov-detail-head"); h.append(...(conf ? [tagEl("서로 다름", "ov-tag-r")] : []), tagEl(kind(c.kind)), el("small", "", `${k?.by ? "AI 분류 · " : ""}${ago(k?.at || c.created_at)}`));
       if (!drafts.has(c.id)) drafts.set(c.id, { text: null, talk: {} });
-      const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "";
+      // the AI's words go straight into the box: the fixed sentence, or why to drop it
+      const dr = drafts.get(c.id), fixText = v?.action === "fix" && v.text ? v.text : "", dropWhy = v?.action === "discard" && v.reason ? v.reason : "";
       // one box (10-18): 고쳐서 저장 saves what is typed here, 버리기 keeps it as the note
-      const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? fixText; edit.rows = 3; edit.placeholder = tr("고칠 내용이나 버리는 이유를 쓰세요"); edit.setAttribute("aria-label", "고쳐서 저장할 내용 또는 버리는 이유");
+      const edit = el("textarea", "ov-detail-edit"); edit.value = dr.text ?? (fixText || dropWhy); edit.rows = 3; edit.placeholder = tr("고칠 내용이나 버리는 이유를 쓰세요"); edit.setAttribute("aria-label", "고쳐서 저장할 내용 또는 버리는 이유");
       // the heading shows what 승인 would save once the person (or the AI sparkle's 저장, which types into the box) changed it
       const title = el("h3", "", dr.text ?? c.text), head = el("div", "ov-detail-group"); head.append(h, title); detail.append(head);
       edit.addEventListener("input", () => { dr.text = edit.value; title.textContent = edit.value.trim() ? edit.value : c.text; });
@@ -757,7 +769,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const sec = (into, title, ...nodes) => { const s2 = el("div", "ov-detail-sec"); s2.append(el("small", "", title), ...nodes); into.append(s2); return s2; };
       // AI 판단 (764:61615): advice only, the buttons below stay the person's
       if (v && VERDICT[v.action]) {
-        const box = el("div", "ov-verdict"); box.append(el("strong", `ov-verdict-${v.action}`, VERDICT[v.action])); if (v.reason) box.append(el("p", "", v.reason));
+        // one line (10-31): AI 판단 · date · the verdict · 다시 보기; the reason only when the box does not already hold it, kept short
+        const box = el("div", "ov-verdict"); if (v.reason && !dropWhy) box.append(el("p", "", clip(v.reason, 140)));
         // 다시 보기: a person asks for a fresh judgement; the hourly AI review writes it, the old one stays until then
         const again = button("", "small ghost icon-btn ov-verdict-again", null, async () => {
           again.disabled = true;
@@ -766,11 +779,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
         });
         again.append(icon("sparkle")); again.title = tr("AI에게 다시 보게 하기"); again.setAttribute("aria-label", again.title);
         // AI 의미 검사 (592:51366) belongs to this judgement: marks only, a person decides; the note indented under its item
-        const checks = el("ul", "ov-checks");
-        for (const x of k?.semantic || []) { const lab = SEMANTIC[x.check]; if (!lab) continue; const li = el("li", `ov-check ${x.ok ? "ok" : "no"}`); const ic = el("span", "ov-check-i", x.ok ? "✓" : "!"); ic.setAttribute("aria-hidden", "true"); li.append(ic, el("span", "", lab[x.ok ? 0 : 1])); if (!x.ok && x.note) li.append(el("small", "ov-check-note", clip(x.note, 120))); checks.append(li); }
+        const checks = el("ul", "ov-checks"); // passed checks are noise: only what failed
+        for (const x of k?.semantic || []) { const lab = SEMANTIC[x.check]; if (!lab || x.ok) continue; const li = el("li", `ov-check ${x.ok ? "ok" : "no"}`); const ic = el("span", "ov-check-i", x.ok ? "✓" : "!"); ic.setAttribute("aria-hidden", "true"); li.append(ic, el("span", "", lab[x.ok ? 0 : 1])); if (!x.ok && x.note) li.append(el("small", "ov-check-note", clip(x.note, 120))); checks.append(li); }
         if (checks.children.length) box.append(checks);
         if (!k.by) { again.disabled = true; box.append(el("small", "ov-verdict-wait", "다시 보는 중이에요. 다음 AI 검토(매시 정각)에 바뀌어요.")); }
-        const s3 = sec(decide1, `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })}` : ""}`, box); s3.classList.add("ov-detail-sec-act", "ov-detail-sec-box"); s3.firstChild.after(again);
+        const line = el("div", "ov-verdict-line"); line.append(el("small", "", `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })}` : ""}`), el("strong", `ov-verdict-${v.action}`, VERDICT[v.action]), again);
+        const s3 = el("div", "ov-detail-sec ov-detail-sec-verdict"); s3.append(line, ...(box.children.length ? [box] : [])); decide1.append(s3);
       }
       const rs = c.reach_suggestion;
       if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec(decide1, "AI가 고른 쓰는 범위 · 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : [])); }
@@ -783,7 +797,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const go1 = async (action, extra) => { act.querySelectorAll("button").forEach((b) => (b.disabled = true)); const r = await decide(c, action, extra); if (r?.error) { st.textContent = r.error; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); } else { sel = null; wideReview(null, kindF); } };
       if (c.conflict_id || c.status === "conflicted") conflictPanel(c, decide1, act, st, sec, () => { sel = null; wideReview(null, kindF); });
       else {
-        const pick = v?.action === "fix" ? "fix" : v?.action === "merge" && mp ? "merge" : "approve"; // the AI's pick only takes the accent; nothing runs on its own
+        const pick = v?.action === "fix" ? "fix" : v?.action === "merge" && mp ? "merge" : v?.action === "discard" ? "reject" : "approve"; // the AI's pick only takes the accent; nothing runs on its own
         const mk = (key, label, fn) => button(label, `small${pick === key ? " primary" : ""}`, null, fn);
         if (mp) act.append(mk("merge", "기존 기억에 합치기", async (e) => {
           const mb = e.currentTarget; act.querySelectorAll("button").forEach((b) => (b.disabled = true));
@@ -792,9 +806,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
         }));
         const typed = () => edit.value.trim();
         act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
-          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed() }).catch(() => {}); }),
+          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text || (dropWhy && typed() === dropWhy)) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed() }).catch(() => {}); }),
           // a typed note goes with the reject as is; an empty box still asks why (the server needs a reason)
-          button("버리기", "small", null, () => (typed() ? go1("reject", { reason: typed() }) : DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) }))),
+          mk("reject", "버리기", () => (typed() ? go1("reject", { reason: typed() }) : DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) }))),
           ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : []));
       }
       if (!c.conflict_id && c.status !== "conflicted") sec(decide1, "고칠 내용 · 버리는 이유", edit); // a conflict has its own choices
