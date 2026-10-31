@@ -747,7 +747,7 @@ export function createCrewEditor(deps) {
     const q = deps.input(ed.draftText, { maxLength: 500, placeholder: "하고 싶은 일을 한 줄로 적으면 AI가 노드를 짜 줘요 · 예: 매일 아침 열린 PR을 모아 요약해서 보내 줘" });
     q.setAttribute("aria-label", "AI에게 맡길 일");
     q.addEventListener("input", () => { ed.draftText = q.value; });
-    const go = deps.button(ed.drafting ? "짜는 중…" : "노드 짜기", "primary small");
+    const go = deps.button(ed.drafting ? "짜는 중…" : "노드 짜기", "ex-ai-btn", "sparkle");
     go.type = "submit";
     go.disabled = ed.drafting;
     row.addEventListener("submit", (e) => { e.preventDefault(); void draftNodes(); });

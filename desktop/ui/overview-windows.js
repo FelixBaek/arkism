@@ -273,7 +273,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // While AI reads, this button cancels; after a failure or a cancel it says 다시 시도. The candidate text is never changed.
     let running = null;
     const aiLabel = (t) => { ai.lastChild.textContent = tr(t); };
-    const ai = button("AI 도움", "small", "sparkle", async () => {
+    const ai = button("AI 도움", "ex-ai-btn", "sparkle", async () => {
       if (running) { running.abort(); return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
       const mine = running = new AbortController(); let failed = true;
