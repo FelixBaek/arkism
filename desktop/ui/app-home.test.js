@@ -1304,3 +1304,20 @@ test("overview and skills: counts are the server totals while more pages wait", 
   offs.forEach((off) => off());
   await reload();
 });
+
+test("overview: a 버리기 추천 puts its reason in the box, takes the accent and is not saved as the memory", async () => {
+  const c = { id: "cx", revision: 1, text: "임시 비밀번호는 1234다.", kind: "semantic", status: "candidate", created_at: ago(2),
+    classification: { by: "ai", at: ago(1), verdict: { action: "discard", reason: "비밀값이라 저장하면 안 돼요." }, semantic: [{ check: "same_meaning", ok: true }] } };
+  const off = route("POST", "/v1/memory_candidates/query", () => ok({ authority: "data_only_untrusted", items: [c], next_cursor: "", total: 1 }));
+  try {
+    const d = await reviewOf("임시 비밀번호");
+    assert.match(text(d.querySelector(".ov-verdict-line")), /AI 판단.*버리기 추천/);
+    assert.equal(d.querySelector(".ov-detail-edit").value, "비밀값이라 저장하면 안 돼요.");
+    assert.ok(!d.querySelector(".ov-detail-sec-box"), "no box around the judgement");
+    assert.doesNotMatch(text(d.querySelector(".ov-detail-sec-verdict")), /원문과 뜻이/, "passed checks are not listed");
+    assert.ok(btn("버리기", d.querySelector(".ov-detail-actions")).className.includes("primary"));
+    await press("고쳐서 저장", d);
+    assert.match(text(d), /위 칸에 고친 내용을 쓰세요/);
+    assert.ok(!app.apiCalls.some(([, p]) => /cx\/review$/.test(p)), "the reason is never saved as the memory");
+  } finally { off(); await closeAll(); }
+});
