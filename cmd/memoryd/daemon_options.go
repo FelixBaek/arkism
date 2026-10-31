@@ -71,7 +71,7 @@ func daemonFlags() daemonOptions {
 	flag.StringVar(&cfg.Listen, "listen", host.DefaultListen, "HTTP listen address")
 	flag.StringVar(&cfg.DynamicsRuntimeConfig, "dynamics-runtime-config", "", "explicit bounded dynamics runtime config; requires paired load config")
 	flag.StringVar(&cfg.DynamicsLoadConfig, "dynamics-load-config", "", "exact offline load config bound by the dynamics runtime config")
-	flag.StringVar(&cfg.DynamicsSearchConfig, "dynamics-search-config", "", "explicit search mode config (off|shadow); requires both dynamics configs on the HTTP API")
+	flag.StringVar(&cfg.DynamicsSearchConfig, "dynamics-search-config", "", "explicit HTTP API search mode config (off|shadow|on); requires both dynamics configs; on requires fast_slow and is development wiring")
 	flag.BoolVar(&cfg.DynamicsRepair, "dynamics-repair", false, "verify and release a withheld dynamics publication in every configured scope, then exit; requires both dynamics configs")
 	flag.Parse()
 	return cfg
