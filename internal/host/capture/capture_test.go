@@ -44,6 +44,11 @@ func capFake(t *testing.T) string {
 		// reviewer reads go to the test's capGet stub (looked up per call, so a later stub applies)
 		revGet = func(path string, d time.Duration) (map[string]any, error) { return capGet(path, d) }
 	}
+	{
+		ip := inboxPost
+		save(func() { inboxPost = ip })
+		inboxPost = func(string, any, time.Duration) (map[string]any, error) { return map[string]any{"items": []any{}}, nil }
+	}
 	t.Cleanup(func() {
 		for _, f := range keep {
 			f()

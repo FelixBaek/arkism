@@ -1049,6 +1049,8 @@ func callTool(name, argsAny any) (host.Obj, error) {
 		value, err = host.RunHandoff(args, func(path string, payload map[string]any) (map[string]any, error) {
 			return routerRequest(path, payload)
 		})
+	case "send_session_message", "read_session_messages":
+		value, err = callSessionMessage(n, args)
 	case "recent_sessions", "recall_for_role", "expand_knowledge_graph":
 		value, err = collaborationRead(n, args)
 	case "save_work", "resume_work", "list_work":
