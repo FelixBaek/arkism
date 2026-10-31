@@ -957,7 +957,7 @@ export function createCrewWorkers(deps) {
     } }));
     const heads = deps.el("span", "ex-heads");
     const row = deps.el("span", "ex-heads-row");
-    row.append(face, cover);
+    row.append(cover); // 아바타 대신 카테고리 (as on a team): the category chip beside the name is the head's pick; a saved avatar stays in the data
     heads.append(row, credit);
     const acts = deps.el("div", "ex-acts");
     // Each tab marks the window (data-tab) so the head can lay itself out the way that screen's design does.

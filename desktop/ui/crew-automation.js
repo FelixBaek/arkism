@@ -272,14 +272,15 @@ window.ArkismAutomation = (h) => {
       body.append(top);
       if (!creating) {
         for (const run of h.waitingRuns().filter((w) => w.crew_run.crew_id === rec.id)) top.append(approvalCard(run));
+        top.append(...statCells()); // an existing workflow opens on its numbers, as a team does
       }
       const ai = aiSection();
       body.prepend(ai);
       body.append(goalSection(), whenSection(), flowSection(), notifySection());
       // 처음 쓰는 사람에게는 목표·언제·단계·알림만: 나머지는 「자세히」 안에 접어 둔다.
       const more = el("details", "auto-more-all");
-      more.append(el("summary", "", creating ? "자세히 · 끝난 기준, 실행 설정" : "자세히 · 끝난 기준, 실행 설정, 기록, 관리"), goalMoreSection(), settingSection());
-      if (!creating) more.append(...statCells(), manageSection());
+      more.append(el("summary", "", creating ? "자세히 · 끝난 기준, 실행 설정" : "자세히 · 끝난 기준, 실행 설정, 관리"), goalMoreSection(), settingSection());
+      if (!creating) more.append(manageSection());
       body.append(more);
       bar = el("div", "auto-bar");
       const save = button(creating ? "자동화 만들기" : "저장", "primary", null, doSave);

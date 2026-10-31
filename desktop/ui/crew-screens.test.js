@@ -770,3 +770,20 @@ test("the auto model choice names the router, never its raw id", async () => {
   assert.ok(opts.length > 0);
   for (const o of opts) assert.ok(/Clef/.test(o.label) && !/clef-flash/.test(o.label + o.textContent), o.label);
 });
+
+test("a trial run in progress lights the line into the working step and keeps a clock", async () => {
+  const h = await openGraph();
+  document.querySelector(".page-head .g-trial").click(); await h.settle();
+  const d = h.top();
+  dom.type(d.querySelector("input"), "돌려 봐");
+  // the server's answer to the first poll: the start is done, the AI step works
+  const t0 = new Date(Date.now() - 3000).toISOString();
+  h.data.runs.unshift({ id: "run-new", revision: 2, created_at: t0, crew_run: { crew_id: "wf1", status: "running",
+    nodes: { start: { status: "done", started_at: t0, finished_at: t0 }, ai1: { status: "running", started_at: t0 } } } });
+  h.btn(d, "실행").click(); await h.settle(); await h.settle(100);
+  const badge = document.querySelector(".g-test-badge.live");
+  assert.ok(badge && /실행 중 · \d/.test(badge.textContent), "the whole run has a clock while it goes");
+  assert.ok(document.querySelector('.g-node[data-id="ai1"] .g-node-dur.live'), "the working step counts up");
+  assert.ok(document.querySelector("circle.g-edge-flow animateMotion"), "a light runs along the line into it");
+  assert.deepEqual(clean(), []);
+});
