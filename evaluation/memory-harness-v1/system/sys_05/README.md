@@ -16,6 +16,18 @@ The summary has explicit machine-readable `comparison_profile` and `comparison_s
 
 The remaining interface and runtime boundaries below still apply, except for the explicitly versioned observation/summary changes above. Actual SYS03/04 integration, service performance and whole SYS05 acceptance remain pending.
 
+## v3 fault-window comparison (`compare_v3.py`)
+
+The v2 summary and compare are unchanged and still report a B pair as not ready: v2 counts a run with no repair interval as incomplete ("empty intervals are not evidence of no repair"), and sync never withholds, so it never has one. `compare_v3.py` (`sys05-comparison-eligibility-v3`) keeps every v2 readiness gate except repair coverage and the run's own last-observation time (summarize still refuses a run observed for less than the planned window), and asks each run for an explicit fault witness written by the measurement test (`fault_witnesses` in the raw run): the delete, one look at whether a read could select the snapshot (taken between two observations that must agree, else `unknown`), and the republication. The raw run is re-projected and must reproduce the ledger and observations byte for byte.
+
+- `withheld`: the run must also have its one complete v2 repair interval with the same id, starting at or after the delete and containing the look, ending at the republication. The interval and the unwitnessed span before it are both reported.
+- `behind`: not withheld, but a read gets no snapshot: the snapshot is not the current publication (the last applied update is not published), or none is available (not yet published or expired). No repair interval may exist.
+- `servable`: a read could select a snapshot; its publication time must precede the delete, and no repair interval may exist.
+
+The state is claimed only at the look (`state_scope: one_look_at_observed_ns`), not for the whole window. The delete-to-republication span, inside the planned window, is the one window common to both modes. A pair is comparable when both runs share the common inputs, differ in mode and are ready under these rules. Per-mode latencies, queue delay, freshness age, status counts, last costs and the fault window are reported side by side; `superiority_conclusion` stays `not_evaluated`.
+
+Limit: the witness is written by the measurement test like the rest of the raw run. A withheld look is cross-checked against the repair interval the service recorded; a behind or servable look is checked only for order and consistency, so `execution_authenticated` stays false.
+
 ## Existing offline interface boundaries
 
 This is preparation tooling, not a queue, worker, snapshot publisher, service benchmark or SYS-05 acceptance. It uses Python's standard library and performs no HTTP, database, model or provider calls. SYS-03/SYS-04 actual acceptance and integration, reviewed pilot budgets, and SYS-05 B remain pending. Test values are handwritten synthetic examples, not approved operating budgets or measured results.
