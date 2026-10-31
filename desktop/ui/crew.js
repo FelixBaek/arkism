@@ -1322,7 +1322,7 @@ export const createCrew = (ctx) => {
     }
     const save2 = button("저장", "primary g-save", null, crewEditor.saveGraph);
     save2.disabled = !crewEditor.ed.dirty && !!rec.id;
-    const review = button(`구조 검토${crewEditor.ed.suggestions?.length ? ` · ${crewEditor.ed.suggestions.length}` : ""}`, crewEditor.ed.review ? "active" : "", "sparkle", () => { crewEditor.ed.review = !crewEditor.ed.review; drawGraph(); });
+    const review = button(`구조 검토${crewEditor.ed.suggestions?.length ? ` · ${crewEditor.ed.suggestions.length}` : ""}`, crewEditor.ed.review ? "ex-ai-btn on" : "ex-ai-btn", "sparkle", () => { crewEditor.ed.review = !crewEditor.ed.review; drawGraph(); });
     const testing = ["running", "waiting"].includes(crewEditor.ed.test?.crew_run?.status);
     // 실행 on unsaved work saves first: a new workflow asks only for its name, then runs.
     const trial = button(testing ? "실행 중…" : crewEditor.ed.test ? "다시 실행" : "실행", "g-trial", "play", async () => {
