@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"reflect"
 	"sync"
@@ -42,6 +43,10 @@ func newDaemonFallbackRig(t *testing.T) *daemonFallbackRig {
 	r := &daemonFallbackRig{db: db, worker: &memory.Service{Repo: workerRepo, Auth: auth}, api: &memory.Service{Repo: app, Auth: auth}, tight: &memory.Service{Repo: app, Auth: auth}}
 	load, c := daemonDynamicsFixture(t)
 	c.Scopes = []memory.Scope{{WorkspaceID: "default", ProjectID: "default"}}
+	// The worker is halted after one publication, so the cells run on that snapshot; a 1s freshness window
+	// expired before the later cells on slow runners and turned them into snapshot_unavailable.
+	load = bytes.Replace(load, []byte(`"allowed_freshness_ns":1000000000`), []byte(`"allowed_freshness_ns":60000000000`), 1)
+	c.Limits.AllowedFreshnessNS, c.LoadConfigSHA256 = 60_000_000_000, memory.ContentHash(string(load))
 	rc, lc := daemonDynamicsFiles(t, load, c)
 	t.Setenv("MEMORY_WORKER_TOKEN", db.token)
 	t.Setenv("MEMORY_DYNAMICS_READER_TOKEN", reader)
