@@ -277,10 +277,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (running) { running.abort(); return; }
       const kit = window.ArkismAIChat?.kit; if (!kit) { note.textContent = "AI 도움을 쓸 수 없어요."; return; }
       const mine = running = new AbortController(); let failed = true;
-      ok.disabled = no.disabled = true; aiLabel("취소"); note.textContent = "AI가 읽는 중… 최대 11분 걸려요.";
+      ok.disabled = no.disabled = true; aiLabel("취소"); note.textContent = "AI가 읽는 중… 보통 1분 안에 끝나요.";
       try {
         const prompt = `An AI agent will be given this memory in later work if a person approves it.\nKind: ${c.kind}\nCandidate: ${c.text}\n${dupText ? `A similar existing memory: ${dupText}\n` : ""}Should the person approve it (true, still useful, specific) or reject it (wrong, one-off, vague, duplicate)?\nAnswer with ONE JSON object: {"pick": "approve" | "reject", "reason": "one or two short, plain Korean sentences"}.`;
-        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } }, signal: mine.signal });
+        const a = await kit.assist("json", prompt, { persona: { crew: { instructions: "You advise on one memory candidate. Reply with the JSON object only." } }, model: "haiku", signal: mine.signal }); // one short pick goes to the fast model (the runner falls back to the default if it cannot run)
         if (a.status !== "done") throw new Error(kit.assistError(a));
         const j = kit.parseJSON(a.output || ""); if (!["approve", "reject"].includes(j?.pick)) throw new Error(tr("AI가 고르지 못했어요."));
         aiPick = j.pick; ok.classList.toggle("primary", j.pick === "approve"); no.classList.toggle("primary", j.pick === "reject");
