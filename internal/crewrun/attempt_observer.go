@@ -874,7 +874,7 @@ func monotonicObservation(before, after AttemptObservation) bool {
 	return monotonicObservationUsage(before.Usage, after.Usage)
 }
 func validObservationTransition(records map[int64]AttemptObservation, incoming AttemptObservation) bool {
-	revisions := make([]int64, 0, len(records)+1)
+	revisions := make([]int64, 0, len(records)) // append grows it by the incoming revision
 	for revision, record := range records {
 		if !bytes.Equal(observationLineage(record), observationLineage(incoming)) {
 			return false
