@@ -5,6 +5,7 @@ package crew
 import (
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/FelixBaek/arkism/internal/host"
@@ -104,12 +105,17 @@ func buildCommand(row host.CLI, model, effort, instructions, task, outFile strin
 	return append(argv, flags...), stdin
 }
 
+// toolTurnCap bounds the tool rounds of one step on a CLI that can stop itself (the Claude Code family). The other
+// CLIs have no such switch and print plain text, so their tool use is not counted yet.
+// shortcut: the owner's starting value (2026-10-31), revisit when real runs hit it.
+const toolTurnCap = 50
+
 var effortSuffix = regexp.MustCompile(`-(minimal|low|medium|high|max)$`)
 
 // command is the CLI's own argv and stdin, before accessFlags.
 func command(row host.CLI, model, effort, instructions, task, outFile string, once bool) ([]string, string) {
 	exe := binOf(row)
-	maxTurns := []string{}
+	maxTurns := []string{"--max-turns", strconv.Itoa(toolTurnCap)}
 	if once {
 		maxTurns = []string{"--max-turns", "1"}
 	}
