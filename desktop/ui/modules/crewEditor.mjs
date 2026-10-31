@@ -160,9 +160,10 @@ export function createCrewEditor(deps) {
     return `${type}${i}`;
   }
 
-  function addNode(type, preset = {}) {
+  // drop: { from, port, x, y } when a line dragged from a port was let go on empty canvas: the node lands there, joined to it
+  function addNode(type, preset = {}, drop = null) {
     const g = ed.graph;
-    const anchor = g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
+    const anchor = drop ? null : g.nodes.find((n) => n.id === ed.sel) || g.nodes.filter((n) => n.type !== "end").at(-1) || g.nodes.at(-1);
     const n = { id: uid(type === "ai_once" ? "once" : type), type, title: preset.title || deps.NODES[type].label, x: (anchor?.x || 0) + 188 + 67, y: anchor?.y || 120, config: { ...(preset.config || {}) } };
     for (const [k, , kind, opts] of deps.FIELDS[type] || []) if ((kind === "select" || kind === "radio") && n.config[k] === undefined) n.config[k] = opts[0][0];
     // A new AI 작업 starts with no task (it works on what comes in) and the router picking the model.
@@ -171,7 +172,9 @@ export function createCrewEditor(deps) {
     if (type === "team") Object.assign(n.config, { topic: "{{input}}", ...preset.config });
     if (type === "ai_once") Object.assign(n.config, { prompt: "{{input}}", ...preset.config });
     if (type === "subflow") n.config.task ||= "{{input}}";
+    if (drop) { n.x = Math.round(drop.x); n.y = Math.round(drop.y); }
     g.nodes.push(n);
+    if (drop) g.edges.push({ from: drop.from, to: n.id, ...(drop.port ? { port: drop.port } : {}), ...(deps.wouldCycle(g, drop.from, n.id) ? { max: 2 } : {}) });
     if (anchor && anchor.type !== "end" && !deps.PORTS[anchor.type] && !deps.wouldCycle(g, anchor.id, n.id)) {
       // Insert after the anchor: anchor → new → anchor's old forward targets (back edges stay where they were).
       const outs = g.edges.filter((e) => e.from === anchor.id && !deps.isBack(e) && !e.port);
@@ -1001,6 +1004,8 @@ export function createCrewEditor(deps) {
       if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) < 5) { ed.linking = { from: n.id, port }; deps.render(false); return; }
       const target = canvas.ownerDocument.elementFromPoint(e.clientX, e.clientY)?.closest(".g-node"); // the editor's own window
       if (target && target.dataset.id !== n.id) linkTo(n, port, target.dataset.id);
+      // let go on empty canvas: a new AI 작업 there, already joined (its window opens to set it up)
+      else if (!target && canvas.contains(canvas.ownerDocument.elementFromPoint(e.clientX, e.clientY))) { const at = toCanvas(e, canvas); addNode("ai", {}, { from: n.id, port, x: at.x, y: at.y - 30 }); }
     };
     win.addEventListener("pointermove", move);
     win.addEventListener("pointerup", up);
