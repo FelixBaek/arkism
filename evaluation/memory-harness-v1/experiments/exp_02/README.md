@@ -36,3 +36,19 @@ PYTHONDONTWRITEBYTECODE=1 python3 -B -m unittest discover \
 공개 검사는 명시적으로 synthetic trust fixture의 pin을 test-local로 바꾸어 parser/결속 경계를 검사합니다. production pin을 유지하는 별도 subprocess는 이 합성 근거를 반드시 거절합니다. 실제 배정된 bytes의 spec CLI 검사는 별도 비공개 author 로그에 기록합니다. 실제 독립 수용이나 native 실행을 합성 fixture로 대체하지 않습니다. outer 방식 import 검사는 수집 가능성만 확인하며 R8 실제 연결 검사는 통합 담당의 책임입니다.
 
 작성자 검사에서는 43 methods / 49 subtest events / 79 leaf test units가 실행됐고 실패·오류·skip은 0입니다. 13개 subtest 부모를 중복 합산하지 않습니다. 독립 검토·전체 회귀·실제 R8 연결은 별도 단계입니다.
+
+## 탐색용 파일럿 어댑터
+
+`internal/memoryharness/dynamicsv2/exp02_pilot_adapter_test.go`는 EXP-01 생성 계획(사건·질문만, 정답 파일은 열지 않음)을 native 정책 엔진 입력으로 옮겨 일곱 정책 순위를 만드는 시험 코드입니다. 위의 실행계획 gate를 열지 않으며, 그 결과는 공식 EXP-02 결과나 REF winner가 아닙니다.
+
+```sh
+go test ./internal/memoryharness/dynamicsv2 -run TestEXP02 -count=1
+EXP02_POOL=1 EXP02_PLAN_DIR="$PLAN_DIR" EXP02_OUT_DIR="$NEW_DIR" \
+  go test ./internal/memoryharness/dynamicsv2 -run TestEXP02PilotAdapter -count=1
+```
+
+환경변수 없이 돌리면 한 스트림 인라인 계획으로 투영만 검사합니다. `EXP02_PLAN_DIR`을 주면 `rankings.jsonl`(정책별 선택·순위·선택 기억 원문)과 `manifest.json`(투영 규칙, 읽은 입력 파일 hash)을 새 폴더 `EXP02_OUT_DIR`에 씁니다. 실패한 정책 행이나 비활성 기억 선택이 하나라도 있으면 시험이 실패합니다.
+
+`EXP02_POOL=1`은 같은 split의 스트림을 인물·주제 조합이 겹치지 않게 묶어 한 native 스트림으로 합칩니다. 합칠 때 어느 스트림이든 자기 사건 순서가 바뀌면 거절합니다.
+
+한계: 과거 시점 질문은 cutoff 전에 무효화된 판을 되살릴 수 없어 모든 정책에서 정답에 닿지 못합니다. 계획의 미인증 outcome은 synthetic_independent 근거로 올려 투영하므로, outcome을 쓰는 정책의 차이는 근거가 인증된 경우를 가정한 값입니다. 중요도 특성은 기억 종류에 고정 가중치를 주는 단순 규칙입니다.
