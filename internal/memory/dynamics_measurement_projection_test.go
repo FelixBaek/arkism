@@ -2,6 +2,7 @@ package memory
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -36,6 +37,20 @@ type dynamicsProjectionRepair struct {
 	ValidationSHA256 string `json:"validation_sha256"`
 	// HoldWitnessedNS is when this harness itself read the hold with the same origin, before the repair.
 	HoldWitnessedNS int64 `json:"hold_witnessed_ns"`
+}
+
+// dynamicsProjectionFaultWitness is what this harness saw at the fault in either mode: the delete,
+// whether a read could select the snapshot then (withheld, behind the queue, or servable with the
+// publication time it served) and the republication after the repair. It lets a mode that never
+// withholds still show what readers got between the delete and the republication.
+type dynamicsProjectionFaultWitness struct {
+	FaultID           string `json:"fault_id"`
+	DeletedNS         int64  `json:"deleted_ns"`
+	ObservedNS        int64  `json:"observed_ns"`
+	Withheld          bool   `json:"withheld"`
+	Serving           string `json:"serving"`
+	ServedPublishedNS *int64 `json:"served_published_ns"`
+	RepublishedNS     int64  `json:"republished_ns"`
 }
 
 // dynamicsProjectionConfig binds the A config to the runtime limits actually used.
@@ -104,6 +119,7 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 		costSamples = append(costSamples, map[string]any{"at_unix_ns": at, "costs": dynamicsSliceCosts(t, p, dynamicsCosts(t, p, int64(len(ledger))))})
 	}
 	repairs := []dynamicsProjectionRepair{}
+	witnesses := []dynamicsProjectionFaultWitness{}
 	anchor := time.Now()
 	for _, line := range strings.Split(strings.TrimSpace(string(workloadRaw)), "\n") {
 		var req dynamicsProjectionRequest
@@ -112,7 +128,9 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 			faulted = true
 			costSample() // the purge after the delete scrubs stored receipts, so sample before it
 			time.Sleep(time.Until(anchor.Add(time.Duration(fault))))
-			repairs = dynamicsProjectionFault(h, &deleted)
+			var witness dynamicsProjectionFaultWitness
+			repairs, witness = dynamicsProjectionFault(h, &deleted)
+			witnesses = append(witnesses, witness)
 			sample()
 		}
 		time.Sleep(time.Until(anchor.Add(time.Duration(req.ScheduledNS))))
@@ -143,13 +161,13 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 		"protocol": "sys05-b5-raw-run-v1", "mode": mode, "config_sha256": dynamicsSHA(configRaw), "workload_sha256": dynamicsSHA(workloadRaw),
 		"runtime_config_load_sha256": runtimeConfig.LoadConfigSHA256, "anchor_unix_ns": anchor.UnixNano(),
 		"observed_until_unix_ns": time.Now().UnixNano(), "ingress": h.ingress, "requests": h.rows,
-		"queue_samples": samples, "cost_samples": costSamples, "repairs": repairs,
+		"queue_samples": samples, "cost_samples": costSamples, "repairs": repairs, "fault_witnesses": witnesses,
 	}
 }
 
 // dynamicsProjectionFault deletes the target while the last update may still be
 // queued, then purges and repairs; only a closed server interval is reported.
-func dynamicsProjectionFault(h *dynamicsMeasureHarness, deleted *bool) []dynamicsProjectionRepair {
+func dynamicsProjectionFault(h *dynamicsMeasureHarness, deleted *bool) ([]dynamicsProjectionRepair, dynamicsProjectionFaultWitness) {
 	h.t.Helper()
 	_, at := dynamicsMeasureDeleteOnly(h)
 	*deleted = true
@@ -157,26 +175,46 @@ func dynamicsProjectionFault(h *dynamicsMeasureHarness, deleted *bool) []dynamic
 	held, err := h.p.worker.ObserveDynamicsLoad(testCtx, h.p.workerToken, scopeA)
 	dynamicsRebindExpect(h.t, err, nil, "observe hold")
 	heldAt := time.Now().UnixNano()
+	witness := dynamicsProjectionFaultWitness{FaultID: "delete-race", DeletedNS: at.UnixNano(), ObservedNS: heldAt, Withheld: held.Withheld, Serving: "withheld"}
+	// The same gate a read applies before it selects the snapshot (dynamics_snapshot.go), read
+	// between two observations; a publication in between leaves the state unknown, not behind.
+	served, e := h.p.worker.DynamicsLoad.DynamicsSnapshot(scopeA, dynamicsNowNS())
+	if e != nil && !errors.Is(e, ErrDynamicsSnapshotUnavailable) {
+		h.t.Fatalf("snapshot at the fault: %v", e)
+	}
+	again, err := h.p.worker.ObserveDynamicsLoad(testCtx, h.p.workerToken, scopeA)
+	dynamicsRebindExpect(h.t, err, nil, "observe hold again")
+	switch {
+	case again.Withheld != held.Withheld || again.PublicationGeneration != held.PublicationGeneration || again.Head != held.Head || again.Tail != held.Tail:
+		witness.Serving = "unknown"
+	case held.Withheld:
+	case e != nil || served.Generation != held.PublicationGeneration || served.Head != held.Head || served.Tail != held.Tail:
+		witness.Serving = "behind"
+	default:
+		published := served.PublishedNS
+		witness.Serving, witness.ServedPublishedNS = "servable", &published
+	}
 	repaired := dynamicsMeasureRepair(h, at)
 	if repaired["publish_after_repair"] != "ok" {
 		h.t.Fatalf("repair: %v", repaired)
 	}
 	o, err := h.p.worker.ObserveDynamicsLoad(testCtx, h.p.workerToken, scopeA)
 	dynamicsRebindExpect(h.t, err, nil, "observe repair")
+	witness.RepublishedNS = o.PublishedNS
 	// Only an interval this harness saw held, with the same origin, is reported.
 	if !held.Withheld || held.RepairStartNS == nil || o.LastRepairStartNS == nil || o.LastRepairEndNS == nil || *held.RepairStartNS != *o.LastRepairStartNS {
-		return []dynamicsProjectionRepair{}
+		return []dynamicsProjectionRepair{}, witness
 	}
 	// The validation hash is the server's commitment to the republished state; recompute it from the served copy.
 	c := dynamicsRebindCoordinator(h.t, h.p.admin)
 	snapshot, err := h.p.worker.DynamicsLoad.DynamicsSnapshot(scopeA, dynamicsNowNS())
 	dynamicsRebindExpect(h.t, err, nil, "republished snapshot")
-	witness, err := dynamicsSnapshotWitness(snapshot)
+	hash, err := dynamicsSnapshotWitness(snapshot)
 	dynamicsRebindExpect(h.t, err, nil, "snapshot witness")
-	if witness != c.RequestHash || snapshot.PublishedNS != o.PublishedNS {
+	if hash != c.RequestHash || snapshot.PublishedNS != o.PublishedNS {
 		h.t.Fatalf("republished snapshot does not match its validation hash")
 	}
-	return []dynamicsProjectionRepair{{"delete-race", *o.LastRepairStartNS, *o.LastRepairEndNS, o.PublishedNS, c.RequestHash, heldAt}}
+	return []dynamicsProjectionRepair{{"delete-race", *o.LastRepairStartNS, *o.LastRepairEndNS, o.PublishedNS, c.RequestHash, heldAt}}, witness
 }
 
 // dynamicsMeasureDeleteOnly is the human delete step of the delete race.
@@ -393,6 +431,7 @@ func TestDynamicsMeasurementProjectionPG(t *testing.T) {
 		report[mode] = map[string]any{"summary": summary, "raw_run_sha256": dynamicsSHA(mustJSON(t, raw))}
 	}
 	report["comparison"] = dynamicsProjectionCompare(t, root)
+	report["comparison_v3"] = dynamicsProjectionCompareV3(t, root)
 	out, err := json.MarshalIndent(report, "", "  ")
 	dynamicsRebindExpect(t, err, nil, "report")
 	dynamicsRebindExpect(t, os.WriteFile(filepath.Join(root, "sys05-b5-av2-projection.json"), out, 0o600), nil, "write report")
@@ -445,6 +484,29 @@ print(json.dumps(S.compare(read(sys.argv[2]), read(sys.argv[3]))))`
 	dynamicsRebindExpect(t, json.Unmarshal(out, &result), nil, "compare output")
 	if result["same_common_inputs"] != true || result["comparison_ready"] != false || result["superiority_conclusion"] != "not_evaluated" {
 		t.Fatalf("comparison: %v", result)
+	}
+	return result
+}
+
+// dynamicsProjectionCompareV3 runs the v3 fault-window compare on the same two runs. Each
+// mode's fault witness must cover the delete: async withheld with its repair interval; sync
+// never withholds, and at the look its last applied update is not yet published (behind).
+func dynamicsProjectionCompareV3(t *testing.T, root string) map[string]any {
+	t.Helper()
+	out, err := exec.Command("python3", "-I", filepath.Join(dynamicsProjectionSumDir, "compare_v3.py"),
+		filepath.Join(root, "av2-async"), filepath.Join(root, "av2-sync")).CombinedOutput()
+	dynamicsRebindExpect(t, err, nil, "compare v3")
+	var result map[string]any
+	dynamicsRebindExpect(t, json.Unmarshal(out, &result), nil, "compare v3 output: "+string(out))
+	modes, _ := result["modes"].(map[string]any)
+	state := func(mode string) any {
+		m, _ := modes[mode].(map[string]any)
+		f, _ := m["fault"].(map[string]any)
+		return f["observed_state"]
+	}
+	// The harness drains before it looks, so a sync look sees the last update applied but not published.
+	if result["comparison_ready"] != true || state("async") != "withheld" || state("sync") != "behind" || result["superiority_conclusion"] != "not_evaluated" {
+		t.Fatalf("comparison v3: %s", out)
 	}
 	return result
 }

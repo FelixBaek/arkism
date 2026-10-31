@@ -1,0 +1,16 @@
+# SYS-05 sync and async compared under the same conditions with a v3 fault-window rule
+
+Task: SYS-05 (#152)
+Research: none
+Design: The unchanged v2 compare can never mark the B pair ready: it counts a run with no repair interval as incomplete, and sync never withholds. The PG measurement test now records one fault witness per run: the delete, one look at whether a read could select the dynamics snapshot (the same gate the read path applies, taken between two observations that must agree, else unknown) and the republication. A new `compare_v3.py` keeps every other v2 readiness gate, re-projects the raw run to bind the witness to the projected ledger and observations byte for byte, and accepts a withheld look only with the run's own complete repair interval (same id, starting at or after the delete, containing the look). A look that was not withheld is behind (last applied update not published) or servable with a publication before the delete. The state is claimed only at the look; the delete-to-republication span is the window common to both modes. The v2 summarizer and compare are unchanged and still report the pair not ready.
+Relation: extends
+Why: The owner withdrew accepting "same-condition comparison not possible" for SYS-05 and asked for the same-condition comparison.
+Verified: `TestDynamicsMeasurementProjectionPG` passed 5 times on a fresh disposable PostgreSQL each time; every run was comparable under v3 (async withheld, sync behind) while v2 stayed not ready. The SYS-05 Go suite `^(TestDynamicsMeasurement|TestDynamicsSnapshotRefresh|TestDynamicsHTTPAtomicAdmission|TestDynamicsOutcome)` passed 139 in plain and 139 under race (the one opt-in locked test stays off without its lock file, as before). The sys_05 Python tests passed, including 8 new v3 tests with 19 negative cases. go vet, gofmt on the changed file and the complexity gate passed. An independent model review first rejected (window overreach, race between the two reads, unbound witness); after the fixes a second pass accepted with notes, and its two notes (unauthenticated behind/servable looks, a behind that also covers no or expired snapshot) are now stated in the README and the compare docstring.
+Limits: The witness times are written by the test harness, like the rest of the raw run; service execution is not authenticated. One look per run, so the state between the delete and the republication is not claimed. Synthetic 5-request plan, N=5 runs, no superiority claim; RSS is the whole test process. The full local check was not run. No product build, deploy or merge was done.
+
+## 한국어 작업 기록
+
+제목: SYS-05 즉시·대기열 방식을 v3 고장 구간 규칙으로 같은 조건에서 비교
+이유: 소유자가 SYS-05의 "같은 조건 비교 불가 수용"을 철회하고 같은 조건 비교를 요청했다.
+검증: 측정 PG 시험을 매번 새 임시 PostgreSQL에서 5번 돌려 모두 통과했고, 5번 모두 v3로 비교 가능(대기열은 멈춤, 즉시는 뒤처짐)이며 v2는 그대로 비교 불가였다. SYS-05 Go 시험 묶음이 plain 139·race 139 통과했다(잠금 파일 없으면 건너뛰는 선택 시험 1개는 전과 같음). sys_05 파이썬 시험과 새 v3 시험 8개(음성 사례 19개)가 통과했다. go vet, 바뀐 파일 gofmt, 복잡도 검사가 통과했다. 독립 모델 검토는 처음에 반려(구간 과장, 두 읽기 사이 경쟁, 기록 미결합)했고 수정 뒤 2차에서 메모와 함께 수용했다. 메모 2건(뒤처짐·제공 가능 관측은 인증 안 됨, 뒤처짐에 스냅숏 없음·만료도 포함)은 README와 비교 설명에 적었다.
+한계: 기록 시각은 시험 하네스가 적으며 서비스 실행 인증은 아니다. 실행마다 한 번만 보므로 삭제부터 재게시까지의 상태 전체를 주장하지 않는다. 요청 5개짜리 합성 계획, 5회, 우열 판단 없음. RSS는 시험 프로세스 전체다. 전체 로컬 검사는 돌리지 않았다. 제품 빌드·배포·병합은 하지 않았다.
