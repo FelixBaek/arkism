@@ -131,6 +131,7 @@ test("a new workflow is drafted by 노드 짜기 only on the button, can be undo
   assert.equal(h.assists.length, 0, "typing alone never asks the AI");
   h.assistReply = () => ({ status: "done", output: JSON.stringify({ graph: { nodes: [{ id: "start", type: "start", title: "직접 부르기" }, { id: "ai1", type: "ai", title: "PR 모으기", config: { goal: "열린 PR 모으기" } }, { id: "sum", type: "expert", title: "요약", config: { goal: "요약" } }, { id: "end", type: "end", title: "결과" }],
     edges: [{ from: "start", to: "ai1" }, { from: "ai1", to: "sum" }, { from: "sum", to: "end" }] } }) });
+  assert.ok(h.btn(win(), "노드 짜기").classList.contains("ex-ai-btn"), "every AI action wears the AI 제안 pill");
   h.btn(win(), "노드 짜기").click(); await h.settle();
   assert.equal(h.assists.length, 1);
   assert.deepEqual([...win().querySelectorAll(".g-node.drafted")].map((n) => n.dataset.id).sort(), ["ai1", "sum"]);

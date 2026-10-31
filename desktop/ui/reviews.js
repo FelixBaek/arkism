@@ -174,7 +174,7 @@ window.ArkismReviews = (ctx) => {
     // has the server clone the PR branch, Claude Code change this spot, and the commit go to the same PR.
     const key = findingKey(it, f);
     if (!fixTalk.has(key)) fixTalk.set(key, {});
-    const fixBtn = it.pr_state !== "open" ? button("AI로 고치기", "small", null, null) : window.ArkismAIChat.button({ state: fixTalk.get(key), label: "AI로 고치기", title: "AI로 고치기",
+    const fixBtn = it.pr_state !== "open" ? button("AI로 고치기", "ex-ai-btn", "sparkle", null) : window.ArkismAIChat.button({ state: fixTalk.get(key), label: "AI로 고치기", title: "AI로 고치기",
       sub: "어떻게 고칠지 말하면 방법을 알려 주고, 적용하면 커밋해요", greeting: `${f.path}:${f.line} 지적을 어떻게 고칠까요? 그냥 보내면 지적대로 고쳐요.`,
       placeholder: "예: 테스트도 같이 고쳐 줘", quick: ["지적대로 고쳐 줘", "가장 작은 변경으로"],
       ask: async (want) => {

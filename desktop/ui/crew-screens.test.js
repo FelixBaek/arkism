@@ -575,6 +575,7 @@ test("structure review: AI suggestions apply, go stale and fail cleanly", async 
   const h = await openGraph();
   await h.click(document, /^구조 검토$/);
   assert.ok(document.querySelector(".g-right.review"));
+  assert.ok(document.querySelector(".btn.ex-ai-btn.on"), "구조 검토 wears the AI 제안 pill, lit while open");
   const chat = () => h.chats.filter((c) => c.label === "AI 제안").at(-1);
   const suggestions = [
     { title: "모델 낮추기", body: "싸게", tag: "tokens", action: { type: "set_model", node: "ai1", model: "haiku" } },

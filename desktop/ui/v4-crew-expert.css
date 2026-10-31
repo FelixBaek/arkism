@@ -82,9 +82,9 @@ textarea.ex-inline-input.multiline { display: block; width: 100%; resize: none; 
 .ex-metric strong { font-size: calc(20px * var(--fs, 1)); font-weight: 500; }
 .ex-metric small { color: var(--text-2); }
 .ex-ai { position: relative; align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.ex-ai-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
+.ex-ai-btn, .btn.ex-ai-btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--nc-ai) 45%, transparent); border-radius: 999px; background: var(--nc-ai-bg); color: var(--nc-ai); font: 500 calc(13px * var(--fs, 1))/1 var(--sans); cursor: pointer; }
 .ex-ai-btn .icon { width: 14px; height: 14px; }
-.ex-ai-btn:hover, .ex-ai-btn.on { border-color: var(--nc-ai); }
+.ex-ai-btn:hover, .ex-ai-btn.on, .btn.ex-ai-btn.on { border-color: var(--nc-ai); }
 .ex-ai-btn:focus-visible { outline: 2px solid var(--nc-ai); outline-offset: 2px; }
 /* The bubble grows out of the button (transform-origin top left), as in Lucian #215 */
 .ex-ai-pop { position: absolute; top: 42px; left: 0; z-index: 20; display: flex; flex-direction: column; gap: 10px; width: min(440px, 100%); padding: 14px; border: 1px solid var(--nc-ai); border-radius: 14px; background: var(--nc-surface); box-shadow: 0 12px 32px rgba(0, 0, 0, .35); transform-origin: 16px -8px; }
