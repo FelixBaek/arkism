@@ -147,14 +147,15 @@ test("분류 AI 도움 can be cancelled, a late answer is ignored, and 다시 �
   state.data.candidates = [{ id: "c1", kind: "lesson", text: "Keep PRs small", created_at: "2026-10-29T00:00:00Z" }];
   const asks = [];
   window.ArkismAIChat = { kit: {
-    assist: (kind, prompt, opts) => new Promise((resolve, reject) => { asks.push({ resolve, signal: opts.signal }); opts.signal.addEventListener("abort", () => reject(Object.assign(Error("취소했어요"), { code: "cancelled" }))); }),
+    assist: (kind, prompt, opts) => new Promise((resolve, reject) => { asks.push({ resolve, signal: opts.signal, model: opts.model }); opts.signal.addEventListener("abort", () => reject(Object.assign(Error("취소했어요"), { code: "cancelled" }))); }),
     assistError: (a) => a.error, parseJSON: (t) => JSON.parse(t) } };
   win.open("classify");
   const ai = () => dom.buttons(document.body, "AI 도움").concat(dom.buttons(document.body, "취소"), dom.buttons(document.body, "다시 시도")).find((b) => b.querySelector("svg"));
   const note = () => document.querySelector(".ov-win-err").textContent;
   ai().click();
   assert.match(ai().textContent, /취소/);
-  assert.match(note(), /최대 11분/);
+  assert.match(note(), /1분 안에/);
+  assert.equal(asks[0].model, "haiku", "one short pick goes to the fast model");
   assert.ok(dom.buttons(document.body, "승인")[0].disabled, "승인 waits while AI reads");
   ai().click(); await dom.flush();
   assert.ok(asks[0].signal.aborted);
