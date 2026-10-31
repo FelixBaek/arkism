@@ -147,6 +147,8 @@ type Record struct {
 	// dedicated /v1/work-checkpoints endpoints, never through generic Record
 	// serialization; receipts carry request hash/id/revision only.
 	WorkCheckpoint *WorkCheckpoint `json:"-" bson:"work_checkpoint,omitempty"`
+	// SessionMessage is a session inbox message (session_message.go), JSON-silent like WorkCheckpoint.
+	SessionMessage *SessionMessage `json:"-" bson:"session_message,omitempty"`
 	// MemorySignal is the derived contract trust signal on a jobs row (kind memory_signal).
 	MemorySignal *MemorySignal `json:"memory_signal,omitempty" bson:"memory_signal,omitempty"`
 

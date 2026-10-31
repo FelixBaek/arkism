@@ -297,6 +297,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/work-checkpoints/list":                       {action: "read:work_checkpoints", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/work-checkpoints/recent":                     {action: "read:work_checkpoints", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/work-checkpoints/save":                       {action: "write:work_checkpoints", scope: routeJSON, limit: workCheckpointBodyLimit},
+	"POST /v1/session-messages/send":                       {action: "write:session_messages", scope: routeJSON, limit: 64 << 10},
+	"POST /v1/session-messages/take":                       {action: "read:session_messages", scope: routeJSON, limit: 64 << 10},
 	"POST /v1/{collection}":                                {action: "write:{collection}", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/{collection}/{id}/transition":                {action: "transition:{collection}", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/crew/runs/{id}/effects":                      {action: "write:crew_runs", scope: routeJSON, limit: 16 << 10},
