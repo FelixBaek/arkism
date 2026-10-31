@@ -600,6 +600,14 @@
         "SYS-03",
         "SYS-04"
       ]
+    },
+    {
+      "root": "repo",
+      "path": "cmd/memoryd/dynamics_fastslow_http_test.go",
+      "owner": "INTEGRATION",
+      "requesters": [
+        "SYS-06"
+      ]
     }
   ],
   "cards": [
@@ -1163,7 +1171,7 @@
       "owner": "DYN-02",
       "status": "in_progress",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Scalar and fast/slow engineering remain partial acceptance; actual-outcome and accepted-coefficient hold is preserved. Optional capture stays unselected.",
       "entry_gates": [
         "DYN-02.scalar"
       ],
@@ -1238,7 +1246,7 @@
       "owner": "DYN-03",
       "status": "in_progress",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Scalar and fast/slow replay/probe engineering remain partial acceptance; actual-data/policy hold and optional capture prerequisite are preserved.",
       "entry_gates": [
         "DYN-03.scalar"
       ],
@@ -2714,9 +2722,9 @@
       "id": "SYS-05",
       "issue": 152,
       "owner": "SYS-05",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
-      "condition": "A offline request generator and failure-preserving summary contract independently reviewed and registered in R8. A preparation only; actual B service/queue/daemon/recovery/load comparison and full SYS-05.integration remain unfinished. Whole-card count unchanged.",
+      "condition": "Owner accepted the separate v3 same-condition comparison after 30 runs. Preserve prior v2 refusal and no superiority claim; isolated development acceptance, not deployment.",
       "entry_gates": [
         "SYS-05.spec"
       ],
@@ -2810,9 +2818,9 @@
       "id": "SYS-06",
       "issue": 152,
       "owner": "SYS-06",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Explicit off/shadow and development-only fast/slow on wiring are engineering evidence. General dynamic serving and an accepted serving policy remain held by the owner.",
       "entry_gates": [
         "SYS-06.spec"
       ],
@@ -4850,9 +4858,9 @@
       "id": "RTE-03",
       "issue": 155,
       "owner": "RTE-03",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Verified approved pre-decision view on the crew/decide API path. Gateway and broader SYS approved-view wiring are not claimed.",
       "entry_gates": [
         "RTE-03"
       ],
@@ -4915,9 +4923,9 @@
       "id": "RTE-04",
       "issue": 155,
       "owner": "RTE-04",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Verified required fixed-view baseline registry on frozen synthetic inputs. Extra research branches and real-provider response matrices remain pending.",
       "entry_gates": [
         "RTE-04"
       ],
@@ -4954,7 +4962,7 @@
       "id": "RTE-05",
       "issue": 155,
       "owner": "RTE-05",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5042,7 +5050,7 @@
       "id": "RTE-06",
       "issue": 155,
       "owner": "RTE-06",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5075,7 +5083,7 @@
       "id": "RTE-07",
       "issue": 155,
       "owner": "RTE-07",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5113,7 +5121,7 @@
       "id": "RTE-08",
       "issue": 155,
       "owner": "RTE-08",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5188,9 +5196,9 @@
       "id": "CAP-02",
       "issue": 156,
       "owner": "CAP-02",
-      "status": "in_progress",
+      "status": "verified",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Development fixture accepted after model review and owner review of four rules; no claim of item-by-item human oracle review or confirmatory sample.",
       "entry_gates": [
         "CAP-02"
       ],
@@ -5232,7 +5240,7 @@
       "id": "CAP-03",
       "issue": 156,
       "owner": "CAP-03",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5280,7 +5288,7 @@
       "id": "CAP-04",
       "issue": 156,
       "owner": "CAP-04",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5328,7 +5336,7 @@
       "id": "CAP-05",
       "issue": 156,
       "owner": "CAP-05",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -5372,9 +5380,9 @@
       "id": "CAP-06",
       "issue": 156,
       "owner": "CAP-06",
-      "status": "planned",
+      "status": "verified",
       "conditional": false,
-      "condition": "substage conditions still apply",
+      "condition": "Development analysis and owner integration decision accepted. Runtime step-boundary refresh and compatibility schema evidence are separate; no product effect claim.",
       "entry_gates": [
         "CAP-06"
       ],
