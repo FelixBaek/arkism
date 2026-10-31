@@ -4,7 +4,9 @@
 internal/memory and internal/host/crew run their tests one after another (no t.Parallel) and
 take most of the CI time. Every Postgres test gets its own database, so the same compiled test
 binary can run disjoint `-test.run` groups side by side. All other packages run as one plain
-`go test` at the same time.
+`go test` at the same time. The complete cmd/memoryd suite is deferred as one
+serial group so its publication/freshness tests retain their within-package
+execution order without competing with sibling test groups.
 
 The self-hosted runners share one 10-CPU quota, which fits two such runs. A burst of PRs would
 start many at once, throttle the quota and push every wall-clock budget in the tests past its
@@ -24,8 +26,20 @@ import sys
 import tempfile
 import time
 
-HEAVY = ["./internal/memory", "./internal/host/crew"]
+HEAVY = ["./internal/memory", "./internal/host/crew", "./cmd/memoryd"]
+# Keep daemon tests in their original within-package order, after sibling work.
+SERIAL_PACKAGES = {"./cmd/memoryd"}
 COVERAGE_FILE = "go-coverage.out"
+# These real PG measurements require each bounded worker round to complete,
+# including publication, within the unchanged one-second fixture budget. Run
+# them once after sibling test groups finish, rather than rerunning timeouts.
+SERIAL_TESTS = {
+    "./internal/memory": {
+        "TestDynamicsMeasurementProjectionPG",
+        "TestDynamicsMeasurementPilotSyncAsyncPG",
+        "TestDynamicsLoadSustainedOverloadPG",
+    },
+}
 # Tests with a wall-clock budget that can miss it only because the groups share the machine.
 # They get one rerun alone, after every other group has finished; nothing else is rerun.
 RERUNNABLE = {
@@ -92,9 +106,14 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ci-go-test-") as tmp, \
             concurrent.futures.ThreadPoolExecutor(jobs + 1) as pool:
         rest = start_rest(goflags, tags, opts.coverage, tmp, pool)
-        groups = [g for i, rel in enumerate(HEAVY)
-                  for g in start_groups(rel, i, goflags, opts.coverage, jobs, tmp, pool)]
-        failed = report(groups, rest)
+        groups, serial = [], []
+        for i, rel in enumerate(HEAVY):
+            scheduled, deferred = start_groups(rel, i, goflags, opts.coverage, jobs, tmp, pool)
+            groups.extend(scheduled)
+            serial.extend(deferred)
+        failed = report(groups, rest)  # joins all sibling test groups before measurements
+        serial_failed = report_serial(serial)
+        failed = failed or serial_failed
         if opts.coverage and not failed:
             merge_coverage(tmp)
     return 1 if failed else 0
@@ -122,17 +141,37 @@ def start_groups(rel, i, goflags, coverage, jobs, tmp, pool):
     covdir = os.path.join(tmp, f"cov{i}")
     os.mkdir(covdir)
     env = dict(os.environ, GOCOVERDIR=covdir) if coverage else None
+    serial_names = [name for name in names if rel in SERIAL_PACKAGES or name in SERIAL_TESTS.get(rel, set())]
+    names = [name for name in names if rel not in SERIAL_PACKAGES and name not in SERIAL_TESTS.get(rel, set())]
     size = max(1, len(names) // (jobs * 4))  # small groups keep every worker busy until the end
-    groups = []
-    for start in range(0, len(names), size):
-        cmd = [binary, "-test.run", "^(" + "|".join(names[start:start + size]) + ")$",
+    groups, serial = [], []
+    batches = [(names[start:start + size], False) for start in range(0, len(names), size)]
+    if serial_names:
+        batches.append((serial_names, True))
+    for batch, deferred in batches:
+        cmd = [binary, "-test.run", "^(" + "|".join(batch) + ")$",
                "-test.count=1", "-test.timeout=10m"]
         if coverage:
             # The flag is what the test binary reads; the env var, as `go test` sets it,
             # covers the test binary when a test re-runs it as a helper process.
             cmd.append("-test.gocoverdir=" + covdir)
-        groups.append((rel, pool.submit(run, cmd, rel, env), cmd, env))
-    return groups
+        if deferred:
+            serial.append((rel, cmd, env))
+        else:
+            groups.append((rel, pool.submit(run, cmd, rel, env), cmd, env))
+    return groups, serial
+
+
+def report_serial(groups):
+    failed = False
+    for rel, cmd, env in groups:
+        code, out = run(cmd, rel, env)
+        if code:
+            failed = True
+            print(f"--- FAIL serial group in {rel}\n{out}")
+        else:
+            print(f"serial group in {rel}: passed after sibling test groups finished")
+    return failed
 
 
 def report(groups, rest):

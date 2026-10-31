@@ -2,6 +2,7 @@
 
 The draft v1 files stay untouched; this version only binds a separate values file.
 """
+from fractions import Fraction
 import importlib.util
 import os
 from pathlib import Path
@@ -45,6 +46,93 @@ FIELDS = ('protocol', 'state', 'values_sha256', 'baseline_contract_sha256', 'dat
           'dataset_id', 'dataset_version', 'label_version', 'research', 'provenance', 'lock_sha256')
 
 
+# This is a readiness/type boundary, not approval of a hypothesis, gold review,
+# pilot completion or permission to run the experiment. Descriptive decisions
+# remain owner text; their scientific adequacy needs independent review.
+_UNRESOLVED = re.compile(r'(?i)(?:\b(?:unresolved|tbd|tba|todo|recompute)\b|fixture_|미정|미확정|재계산|미해결|not yet (?:decided|fixed)|to be determined)')
+_SENTINELS = {'pending', 'unknown', 'none', 'null', 'n/a', '?', '-'}
+_REF_IDS = {'B0', 'B1', 'V3-P1-FD', 'V3-P1-IR', 'B6', 'V3-P1-NOTIME', 'V3-P1-NOOUT'}
+_COMPARATOR_IDS = _REF_IDS | {'REF'}
+_NUMERIC = re.compile(r'[+]?(?:[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|[0-9]+/[0-9]+)\Z', re.ASCII)
+
+
+def _number(value):
+    # The frozen JSON codec uses integers only. Exact decimals/fractions use
+    # strings, so no float rounding or changes to the shared codec are needed.
+    if type(value) is int:
+        return Fraction(value)
+    if type(value) is str and _NUMERIC.fullmatch(value) and len(value) <= 128:
+        # Bound exponents before Fraction constructs arbitrarily large integers.
+        if 'e' in value.lower() and abs(int(value.lower().split('e')[1])) > 100:
+            return None
+        try:
+            return Fraction(value)
+        except (ValueError, ZeroDivisionError):
+            pass
+    return None
+
+
+def _ready(value):
+    if type(value) is str:
+        return (bool(value.strip()) and value.strip().casefold() not in _SENTINELS
+                and not value.strip().casefold().startswith('pending:')
+                and _UNRESOLVED.search(value) is None)
+    if type(value) is dict:
+        return bool(value) and all(_ready(v) for v in value.values())
+    if type(value) is list:
+        return bool(value) and all(_ready(v) for v in value)
+    return value is not None
+
+
+def _validate_research(research):
+    def check(key, condition):
+        G.require(condition, 'research_unresolved', '$.values.' + key)
+
+    for key, value in research.items():
+        check(key, _ready(value))
+    for key in ('k', 'candidate_count', 'repetitions', 'tuning_trials'):
+        value = research[key]
+        check(key, type(value) is int and value >= (0 if key == 'tuning_trials' else 1))
+    for key, low, high in (('delta_min', 0, 1), ('REF_tie_tolerance', 0, 1),
+                           ('tuning_compute_budget', 0, None)):
+        value = _number(research[key])
+        check(key, value is not None and (value > low if key == 'delta_min' else value >= low)
+              and (high is None or value <= high))
+    sample = research['sample_size']
+    check('sample_size', type(sample) is dict and
+          set(sample) <= {'test_clusters', 'validation_clusters', 'recompute_before_test_when_real_outcomes_exist'} and
+          all(type(sample.get(k)) is int and sample[k] > 0 for k in ('test_clusters', 'validation_clusters')) and
+          ('recompute_before_test_when_real_outcomes_exist' not in sample or
+           sample['recompute_before_test_when_real_outcomes_exist'] is False))
+    tokens = research['token_budget']
+    check('token_budget', type(tokens) is dict and 'max_output_tokens' in tokens and
+          set(tokens) <= {'max_output_tokens', 'max_input_tokens', 'max_total_tokens'} and
+          all(type(v) is int and v > 0 for v in tokens.values()))
+    if 'max_total_tokens' in tokens:
+        check('token_budget', tokens['max_total_tokens'] >= tokens['max_output_tokens'] + tokens.get('max_input_tokens', 0))
+    budget = research['total_budget']
+    check('total_budget', type(budget) is dict and set(budget) == {'usd_cap', 'expected_usd'})
+    cap, expected = _number(budget['usd_cap']), _number(budget['expected_usd'])
+    check('total_budget', cap is not None and expected is not None and cap > 0 and 0 <= expected <= cap)
+    strong = research['strong_prior_comparators']
+    check('strong_prior_comparators', type(strong) is list and bool(strong) and
+          all(type(v) is str and v in _COMPARATOR_IDS for v in strong) and len(set(strong)) == len(strong))
+    order = research['REF_id_order']
+    check('REF_id_order', (type(order) is str and bool(order.strip())) or
+          (type(order) is list and bool(order) and all(type(v) is str and v in _REF_IDS for v in order) and
+           len(set(order)) == len(order)))
+    check('candidate_count', 2 <= research['candidate_count'] and
+          len(set(strong) - {'REF'}) + 1 <= research['candidate_count'])
+    if type(order) is list:
+        check('candidate_count', research['candidate_count'] >= len(order) + 1)
+        # A REF tie order can name a subset of the full candidate matrix.
+    structured = {'k', 'candidate_count', 'repetitions', 'tuning_trials', 'delta_min',
+                  'REF_tie_tolerance', 'tuning_compute_budget', 'sample_size',
+                  'token_budget', 'total_budget', 'strong_prior_comparators', 'REF_id_order'}
+    for key in research.keys() - structured:
+        check(key, type(research[key]) is str and bool(research[key].strip()))
+
+
 def _research(values_raw):
     document = G.parse_raw(values_raw)
     G.require(type(document) is dict and type(document.get('values')) is dict, 'missing_field', '$.values')
@@ -60,6 +148,7 @@ def _research(values_raw):
         G.require(type(entry['provenance']) is str and OWNER_DECIDED.match(entry['provenance']) is not None,
                   'provenance_not_owner_decided', '$.values.' + key)
         research[key], provenance[key] = entry['value'], entry['provenance']
+    _validate_research(research)
     return research, provenance
 
 

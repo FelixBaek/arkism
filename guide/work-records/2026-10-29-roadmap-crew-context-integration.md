@@ -55,10 +55,8 @@ privacy workflows, not a new claim here. Caller facts/hashes are not independent
 authentication or verified semantic truth. No real model/provider/effect,
 operational DB, product build, release, deployment or R8 standalone gate ran.
 
-This is an adaptation of admission and explicit premise revalidation, with
-attribution to [TRACE](https://arxiv.org/abs/2609.33517) and
-[ATR](https://arxiv.org/abs/2609.08015); it is not their full reproduction or a
-claim that return-time admission alone is novel.
+This applies admission and explicit premise revalidation at return time; it
+does not claim that return-time admission alone is novel.
 
 ## 한국어 작업 기록
 
