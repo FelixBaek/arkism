@@ -140,7 +140,7 @@ regression corpus. Its reviewed default-collector registration is an exact-file
 R8 handoff; SYS-05 consumes that file and does not become its writer. A preparation
 and registration do not satisfy SYS-05.integration. Actual service/daemon,
 restore, queue fairness and same-condition performance evidence remain required.
-The SYS-05 status is in_progress; whole-card completion counts remain unchanged.
+That paragraph records the earlier preparation handoff. The current SYS-05 owner acceptance follows the later v3 same-condition comparison and 30-run record; see progress.md. General dynamic serving remains held under SYS-06.
 The SYS-05 B candidate owns the bounded dynamics worker, snapshot refresh and the
 daemon's paired dynamics flags. It reuses the existing worker token and read:jobs
 grants; native Search shadow stays off unless separately configured.

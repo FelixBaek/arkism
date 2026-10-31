@@ -1,0 +1,27 @@
+# Verify development fast/slow search through the daemon HTTP boundary
+
+Task: SYS-06; DYN-02; DYN-03; R0 (#150, #152)
+Research: Engineering integration acceptance and roadmap evidence reconciliation; not an effectiveness experiment.
+Design: Start the existing worker and separate off/shadow/on daemon HTTP services on one disposable PostgreSQL. Use genuine restricted LOGIN, existing authorizer/RLS, sealed test rates and an explicit mode file. Check actual HTTP ordering, packed context, fallback and committed native-state hashes. Reconcile the stale public ownership/status documents against the existing acceptance and owner records.
+Relation: adapted
+Deviation: Add a test only; production behavior, policies, numerical settings, frozen contracts and API schemas are unchanged. The fixture uses durable user memories to isolate ordering from recency, explicit packing/token limits and a 60-second permitted fixture freshness window; it is not a latency/freshness benchmark.
+Why: Service-level worker/Search acceptance did not prove that the daemon mode-file/configuration and HTTP path returned the fast/slow bundle. The public ownership manifest also lagged existing accepted work and could be misread as an instruction to repeat completed tasks or release data-dependent holds.
+Verified: The new actual HTTP test passed normally without skips. The entire TestDynamicsIntegration selection passed under race without failures or skips. Pinned changed-code Go lint reported zero findings. Worker values are checked against literal fast=0.5625 and slow=0.525; the baseline FTS order is reversed by the expected equal-weight fusion tie and existing trust defaults. Response scores retain the existing base-reference values, distinct from the internal fusion scores. Off/shadow return identical packed baseline bundles; on returns the reordered packed context and matching mode/return observation. Native state payload hashes stay unchanged across searches. Deleting one actual native state row makes on return the baseline without fabricating a native return. Every search adds only its expected usage and audit rows. Early failed test-fixture attempts are retained privately: stored payload encoding, absent packing options, recency and rendered-score interpretation were corrected without changing product code or weakening the final assertions.
+Limits: These are synthetic development memories and in-process daemon loops, not a standalone product executable, operating deployment, real-user data or accepted serving coefficients. Row-count checks alone do not prove absence of in-place changes; the native-state payload comparison supplies that scoped additional check. Existing data-dependent and owner-decision holds remain open. The current validation budget is USD50 total; paid spend is USD0. Full checkout regression and independent review are recorded separately when actually finished. No product build, deployment, operational database or paid provider call.
+
+제목: 개발용 fast/slow 검색을 daemon 설정부터 실제 HTTP까지 검증
+이유: 서비스 함수 검증과 별개로 daemon 설정·worker·HTTP 검색 연결을 확인하고, 뒤처진 공개 작업 상태를 기존 검증 근거에 맞췄다.
+검증: 새 실제 HTTP 일반 검사와 TestDynamicsIntegration 전체 race가 실패·건너뜀 없이 통과했다. 고정 Go lint 지적0개다. worker 두 값의 손계산, 실제 순서·포장 문맥 변경, off/shadow 동일 응답, 상태 바이트 불변, 실제 상태 삭제 뒤 기존 검색 복귀를 확인했다. 초기 검사 설정 오류와 잘못된 점수 기대는 실패 기록을 보존하고 고쳤으며 제품 코드는 바꾸지 않았다.
+한계: 가상 기억·테스트 프로세스 내부 daemon 검사다. 독립 제품 실행 파일·운영·사용자 자료·효과·정책 수용을 뜻하지 않는다. 자료 대기와 소유자 보류는 유지한다. 검증 총한도50달러 중 유료 지출0달러다. 전체 회귀·독립 검토는 실제 종료 뒤 별도 기록하며 제품 빌드·배포·운영 DB·유료 호출은 하지 않았다.
+
+## Independent review and private baseline rechecks
+
+The separate standards and specification reviews found no blocking issue. DYN-02/03 and SYS-06 manifest conditions now state the retained data/policy holds explicitly, as the specification reviewer recommended. Isolated copies of the existing private baselines passed RTE-04 59 tests, CAP-02 26 tests and CAP-06 30 tests; original source hashes were unchanged. Existing file-handle ResourceWarnings in the private suites were retained in their logs. These are synthetic engineering rechecks, not new real-use or human evidence, and do not release any hold.
+
+독립 검토·재검산: 코드 규칙과 명세 검토에서 차단 문제는 없었다. 권고에 따라 DYN-02/03·SYS-06 manifest에도 자료·정책 보류를 명시했다. 비공개 원본을 건드리지 않은 복사본에서 RTE-04 59개·CAP-02 26개·CAP-06 30개가 통과했다. 기존 파일 핸들 경고는 로그에 보존했다. 합성 공학 검사이며 실제 자료나 연구 결과로 승격하지 않는다.
+
+## Completed checkout regression
+
+`python3 tools/check_local.py` exited 0 on the final test source with the owned disposable PostgreSQL enabled: Python179 +597 +49, all Go vet/complexity/race package checks, and UI591 passed. Product-build checks were disabled; this does not assert that every Go test had zero skips. Cached package results remain visible in the raw log. The local runner initially omitted explicit minisign and PostgreSQL dump/restore paths and supplied incompatible home/project-root isolation; those setup failures were preserved. The two affected environment tests and the actual restore selection passed first, then the full unmodified checker passed after fixing only the private runner environment. No test assertion, timeout or product setting was loosened. The temporary database, roles and clients were checked and the owned cluster stopped and removed.
+
+전체 회귀: 최종 검사 소스에서 `python3 tools/check_local.py` 종료0을 확인했다. 일회용 PostgreSQL을 켠 Python179·597·49, Go vet·복잡도·전체 race, UI591개가 통과했다. 제품 빌드는 비활성이고 전체 Go 검사 skip0을 주장하지 않는다. 초기 도구 경로·격리 환경 실패를 보존했으며 해당 환경·복원 검사를 먼저 통과한 뒤 제품 코드나 검사 기준을 바꾸지 않고 전체 검사도 통과했다. 임시 DB·역할·연결을 확인하고 전용 클러스터를 종료·삭제했다.
