@@ -223,7 +223,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   await openWindow({ wide: "review" });
   await app.settle(50);
   let d = win();
-  assert.match(text(d), /확인해 주세요/);
+  assert.match(text(d), /새 기억 확인/);
   // sort and search go to the server query
   const sorter = d.querySelector("select.ov-wide-sort");
   for (const v of ["new", "risk", "old"]) { sorter.value = v; app.dom.fire(sorter, "change"); await app.settle(20); }
@@ -265,7 +265,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   cb[1].checked = false; app.dom.fire(cb[1], "change");
   const batch = btn("선택 1개 승인", win()); assert.ok(batch && !batch.disabled);
   batch.click(); await app.settle(80);
-  assert.match(text(win()), /확인해 주세요/);
+  assert.match(text(win()), /새 기억 확인/);
   // a batch where the server refuses says how many failed
   d = win();
   const cb2 = d.querySelector(".ov-wide-row input[type=checkbox]");
@@ -275,7 +275,7 @@ test("overview: 승인 대기 window searches, sorts, filters, batch-approves an
   btn("선택 1개 승인", d).click(); await app.settle(80);
   // the failure count is written to the footer, which the page load that follows redraws
   assert.ok(app.apiCalls.slice(calls).some(([m, p]) => m === "POST" && p.endsWith("/review")));
-  assert.match(text(win()), /확인해 주세요/);
+  assert.match(text(win()), /새 기억 확인/);
   offRev();
   offMerge();
   await closeAll();
@@ -445,7 +445,7 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   win() || await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(30); d = win();
   app.dom.type(d.querySelector(".ov-wide-search"), "없는말"); await app.settle(30);
   assert.match(text(win()), /지금 보여 줄 후보가 없어요/);
-  assert.match(text(win()), /확인해 주세요/);
+  assert.match(text(win()), /새 기억 확인/);
   await closeAll();
 });
 
@@ -636,7 +636,7 @@ test("overview: 세션 기록 window pages, filters, deletes and links candidate
   assert.match(text(win()), /세션 기록/);
   // a waiting candidate links to 승인 대기; 새로고침 reads the list again
   const cand = win().querySelector(".ov-detail-cand.link");
-  if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /확인해 주세요/); }
+  if (cand) { cand.click(); await app.settle(50); assert.match(text(win()), /새 기억 확인/); }
   await openWindow({ wide: "sessions" }); await app.settle(50);
   await press("새로고침", win(), 50);
   // 대화 보기 turns the window into the dialogue: the person on the right, the agent by name, each message's own time; ‹ 세션 정보 goes back
