@@ -85,3 +85,32 @@ func TestBudgetStopNeverHidesAnUnknownEffect(t *testing.T) {
 		}
 	}
 }
+
+// However many fallbacks a decision lists, a routed step makes at most 4 attempts.
+func TestFallbackChainCapsTheCallCount(t *testing.T) {
+	all := []string{"a/m1", "a/m2", "a/m3", "a/m4", "a/m5", "a/m6"}
+	for n, want := range map[int]int{0: 1, 1: 2, 3: 4, 4: 4, 6: 4} {
+		fallbacks := []any{}
+		for _, id := range all[:n] {
+			fallbacks = append(fallbacks, id)
+		}
+		decision := map[string]any{"id": "a/m0", "decision": "clef", "fallbacks": fallbacks}
+		decide := func(string, string, host.Obj) (map[string]any, error) { return decision, nil }
+		var ran, reported []string
+		run := func(s map[string]any) (map[string]any, error) {
+			ran = append(ran, pyStr(s["model"]))
+			return nil, crewErr("refused")
+		}
+		out, err := runRouted(map[string]any{"task": "x"}, decide, run, func(c map[string]any) { reported = append(reported, pyStr(c["model"])) })
+		if err != nil {
+			t.Fatal(err)
+		}
+		tried := append([]string{"a/m0"}, all[:want-1]...)
+		eq(t, len(ran), want)
+		eq(t, reported, tried)
+		eq(t, field(out["routed"], "tried"), toAny(tried))
+		if field(out["routed"], "id") != tried[want-1] || field(out["routed"], "stopped") != nil {
+			t.Fatal(n, out)
+		}
+	}
+}

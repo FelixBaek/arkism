@@ -110,6 +110,9 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 	}
 	ids := []string{first}
 	for _, f := range list(d["fallbacks"]) {
+		if len(ids) > maxRouteFallbacks { // one call cap for every policy, whatever the decision lists
+			break
+		}
 		ids = append(ids, pyStr(f))
 	}
 	res, i, stopped, err := tryRoutes(spec, d, ids, injected, run, report)
@@ -134,7 +137,7 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 
 // tryRoutes runs the task on each model in turn until one succeeds or a failed attempt may have changed things.
 // The step's timeout is one budget for the whole chain: a later attempt gets only the time left, and none starts
-// once it is spent. The attempt count is bounded by the candidate list. It returns the last result, its index and
+// once it is spent. The attempt count is bounded by the candidate list, which runRouted caps at 1+maxRouteFallbacks. It returns the last result, its index and
 // why it stopped early ("" when it did not).
 func tryRoutes(spec, d map[string]any, ids []string, injected bool, run runFn, report reportFunc) (map[string]any, int, string, error) {
 	var res map[string]any
@@ -176,6 +179,9 @@ func tryRoutes(spec, d map[string]any, ids []string, injected bool, run runFn, r
 }
 
 var routeNow = time.Now // a test clock
+
+// maxRouteFallbacks matches the server's routingFallbacks: a routed step makes at most 4 attempts.
+const maxRouteFallbacks = 3
 
 // chainBudget is the step's timeout as the chain's one wall-time budget, the same default runAttempt would use.
 // An invalid, zero-or-negative or overflowing timeout_s gets no budget: each attempt keeps its own limit and
