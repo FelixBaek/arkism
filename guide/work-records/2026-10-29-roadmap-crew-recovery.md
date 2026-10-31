@@ -70,9 +70,7 @@ local fake/fault scope with no unresolved concrete findings. CRW-04 is locally
 accepted; the roadmap count is14/63. This does not accept live execution or
 research effectiveness.
 
-The engineering adaptation follows [Safe to Resume?](https://arxiv.org/abs/2608.29381)
-and [ATR](https://arxiv.org/abs/2609.08015). It does not reproduce their complete
-systems or establish a new recovery theory. Fixture target/premise versions
+The recovery check does not establish a new recovery theory. Fixture target/premise versions
 are distinct from product run, source and summary revisions.
 
 Limits: inputs are caller-supplied evidence, not authentication or proof of

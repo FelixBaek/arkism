@@ -27,7 +27,17 @@ KEYS = G.ENUMS['ResearchDecisionID']
 
 
 def values(**overrides):
-    entries = {key: dict(value='fixture_' + key, provenance='owner_answered_20261031') for key in KEYS}
+    # Synthetic decisions exercise types; they do not represent a research approval.
+    decisions = {key: 'A specified synthetic decision for ' + key for key in KEYS}
+    decisions.update(k=3, repetitions=2, candidate_count=5, delta_min='1/10',
+                     REF_tie_tolerance='0.01', tuning_trials=0, tuning_compute_budget=0,
+                     sample_size={'test_clusters': 8, 'validation_clusters': 4,
+                                  'recompute_before_test_when_real_outcomes_exist': False},
+                     token_budget={'max_output_tokens': 80},
+                     total_budget={'usd_cap': '10', 'expected_usd': '3/2'},
+                     strong_prior_comparators=['B0', 'B1', 'REF'],
+                     REF_id_order=['B0', 'B1', 'V3-P1-FD', 'V3-P1-IR'])
+    entries = {key: dict(value=decisions[key], provenance='owner_answered_20261031') for key in KEYS}
     entries.update(overrides)
     return dict(record='fixture', state='owner_decided_not_final_locked', values=entries)
 
@@ -56,6 +66,43 @@ class LockV2(unittest.TestCase):
         self.assertEqual(caught.exception.code, code)
         if path is not None:
             self.assertEqual(caught.exception.path, path)
+
+    def test_research_value_boundaries(self):
+        cases = [('k', 0), ('k', True), ('repetitions', 0), ('candidate_count', 0),
+                 ('delta_min', 'unresolved'), ('delta_min', '0'), ('delta_min', '1.01'),
+                 ('delta_min', '1/0'), ('REF_tie_tolerance', '2'),
+                 ('tuning_trials', True), ('tuning_compute_budget', '-1'),
+                 ('sample_size', 0), ('sample_size', {}),
+                 ('sample_size', {'test_clusters': 0, 'validation_clusters': 4}),
+                 ('sample_size', {'test_clusters': 8, 'validation_clusters': 4,
+                                  'recompute_before_test_when_real_outcomes_exist': True}),
+                 ('token_budget', {'max_output_tokens': 0}),
+                 ('total_budget', {'usd_cap': 10, 'expected_usd': 'recompute before run'}),
+                 ('total_budget', {'usd_cap': 10, 'expected_usd': '11'}),
+                 ('REF_id_order', ['B0', 'B1', 'B2', 'V3-P1-IR']),
+                 ('REF_id_order', ['B0', 'B0', 'V3-P1-FD', 'V3-P1-IR']),
+                 ('candidate_count', 4), ('strong_prior_comparators', ['B2']),
+                 ('strong_prior_comparators', ['B0', 'B0'])]
+        for key in KEYS:
+            cases.extend((key, bad) for bad in ('', '  ', 'unresolved', 'pending', 'TBD', 'fixture_decision', None, [], {}, False))
+        for key, value in cases:
+            with self.subTest(key=key, value=value):
+                bad = raw(values(**{key: dict(value=value, provenance='owner_answered_20261031')}))
+                self.assert_error('research_unresolved', lambda: L.build_lock(bad, self.manifest), '$.values.' + key)
+
+    def test_exact_numeric_strings_and_zero_tuning_are_valid(self):
+        for number in ('0.1', '1/10', '1e-1'):
+            doc = values(delta_min=dict(value=number, provenance='owner_answered_20261031'))
+            self.assertEqual(L.build_lock(raw(doc), self.manifest)['research']['delta_min'], number)
+        # Alternative descriptive decisions are allowed, including pending-case handling.
+        alternative = values(failure_missingness_exclusion=dict(
+            value='Exclude pending correction cases; preserve unknown grading failures',
+            provenance='owner_answered_20261031'))
+        L.build_lock(raw(alternative), self.manifest)
+        # Closed boundary on tie tolerance, open boundary on minimum effect.
+        for number in (0, '0', '1'):
+            doc = values(REF_tie_tolerance=dict(value=number, provenance='owner_answered_20261031'))
+            L.build_lock(raw(doc), self.manifest)
 
     def test_lock_binds_values_contracts_dataset_and_verifies(self):
         record = json.loads(self.lock)
@@ -122,6 +169,28 @@ class LockV2(unittest.TestCase):
             mutated[position] ^= 0x01
             with self.assertRaises(G.ExpError, msg=position):
                 L.verify_lock(self.lock, bytes(mutated), self.manifest)
+
+    def test_rehashed_invalid_research_cannot_verify(self):
+        doc = values(k=dict(value=0, provenance='owner_answered_20261031'))
+        invalid_values = raw(doc)
+        record = json.loads(self.lock)
+        record['research']['k'] = 0
+        record['values_sha256'] = G.sha(invalid_values)
+        record['lock_sha256'] = G.sha(G.compact({k: v for k, v in record.items() if k != 'lock_sha256'}))
+        self.assert_error('research_unresolved', lambda: L.verify_lock(
+            L.lock_bytes(record), invalid_values, self.manifest), '$.values.k')
+
+    def test_cli_invalid_values_never_create_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            bad = raw(values(k=dict(value=0, provenance='owner_answered_20261031')))
+            (tmp / 'values.json').write_bytes(bad)
+            (tmp / 'manifest.json').write_bytes(self.manifest)
+            result = subprocess.run([sys.executable, '-B', str(Path(L.__file__)), 'lock',
+                '--values', str(tmp / 'values.json'), '--manifest', str(tmp / 'manifest.json'),
+                '--out', str(tmp / 'lock.json')], capture_output=True, text=True)
+            self.assertEqual((result.returncode, json.loads(result.stdout)['code']), (2, 'research_unresolved'))
+            self.assertFalse((tmp / 'lock.json').exists())
 
     def test_cli_lock_then_verify(self):
         script = str(Path(L.__file__))

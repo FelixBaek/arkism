@@ -4,7 +4,7 @@ Task: CRW-05 (#154)
 Research: E engineering evaluator validation; no model comparison or effectiveness result
 Design: Reuse native Engine.Drive/DriveMeeting, accepted observation/context/recovery contracts, frozen synthetic tasks and independent literal outcomes. Use the same explicit local executor for every condition.
 Relation: adapted
-Deviation: A separate runtime-v2 companion preserves the twenty frozen v1 artifacts. Model profiles, real prices, invoices and research holdout remain unbound/not_run. E-C4 is an independently authored partial ATR adaptation, with no upstream source copy or dependency installation.
+Deviation: A separate runtime-v2 companion preserves the twenty frozen v1 artifacts. Model profiles, real prices, invoices and research holdout remain unbound/not_run. E-C4 is an independently authored partial premise-revalidation check, with no upstream source copy or dependency installation.
 
 The parent materializes one selected task envelope without gold, split or
 checker paths. All five conditions receive identical initial task/source views,

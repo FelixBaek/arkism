@@ -109,6 +109,9 @@ func dynamicsLedgerDigestTx(ctx context.Context, tx *Postgres, scope Scope, iden
 	if !dynamicsCoordinatorCounters(p) || p.StorageIdentity != identity || p.Head > dynamicsLedgerRecoveryLimit {
 		return "", ErrConflict
 	}
+	if err = dynamicsRecoveryEntrySetTx(ctx, tx, scope, p.Tail); err != nil {
+		return "", err
+	}
 	raw, err := storeMarshal(c)
 	if err != nil {
 		return "", err
@@ -136,6 +139,51 @@ func dynamicsLedgerDigestTx(ctx context.Context, tx *Postgres, scope Scope, iden
 		commitments = append(commitments, string(entry))
 	}
 	return ContentHash(structuredText(commitments)), nil
+}
+
+// dynamicsRecoveryEntrySetTx checks the actual stored set before hashing IDs
+// derived from the coordinator. Reading one row beyond Tail detects extras while
+// keeping this offline pass bounded by the terminal and active queue limits.
+// Inspect SQL IDs as well as payload IDs: a duplicated payload under another
+// storage key must not disappear from the reconciliation witness.
+func dynamicsRecoveryEntrySetTx(ctx context.Context, tx *Postgres, scope Scope, tail int64) error {
+	rows, err := tx.q().Query(ctx, `SELECT id,kind,payload FROM memory_records
+WHERE collection='jobs' AND workspace_id=$1 AND project_id=$2 AND user_id=$3 AND agent_id=$4
+AND (kind=$5 OR starts_with(id,'sys05_entry_') OR doc->'sys05_load'->>'role'='entry')
+ORDER BY id LIMIT $6 FOR UPDATE`, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, dynamicsLoadPrefix+"entry", tail+1)
+	if err != nil {
+		return pgErr(err)
+	}
+	defer rows.Close()
+	seen := make(map[int64]bool)
+	var count int64
+	for rows.Next() {
+		var id, kind string
+		var payload []byte
+		if err = rows.Scan(&id, &kind, &payload); err != nil {
+			return pgErr(err)
+		}
+		count++
+		if count > tail {
+			return ErrConflict
+		}
+		row, e := pgDecode(payload)
+		if e != nil || dynamicsValidateRow(row, scope, "entry") != nil || kind != row.Kind || id != row.ID {
+			return ErrConflict
+		}
+		ordinal := row.DynamicsLoad.Ordinal
+		if ordinal < 1 || ordinal > tail || seen[ordinal] || id != dynamicsEntryID(scope, ordinal) {
+			return ErrConflict
+		}
+		seen[ordinal] = true
+	}
+	if err = rows.Err(); err != nil {
+		return pgErr(err)
+	}
+	if count != tail {
+		return ErrConflict
+	}
+	return nil
 }
 
 // dynamicsRebindTx moves the live queue to the restored identity. A new lease

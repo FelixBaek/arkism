@@ -47,10 +47,8 @@ Final check_local passed Python412, Go complexity/vet/full race and UI532.
 Pinned cached lint reported zero issues. Final module source pins are recorded
 with the private acceptance evidence; raw research artifacts remain private.
 
-The adaptation follows the distinction between retrieval and later admission
-in [TRACE](https://arxiv.org/abs/2609.33517), and explicit premise revalidation
-in [ATR](https://arxiv.org/abs/2609.08015). It does not reproduce their complete
-systems or provide an atomic target commit. Return-time admission alone is
+The design separates retrieval from later admission and revalidates premises
+explicitly. It does not provide an atomic target commit. Return-time admission alone is
 not claimed as independent research novelty.
 
 Limits: actual Client/meeting gates and their end-to-end regressions remain
@@ -65,4 +63,4 @@ deployment, personal-memory outcome or R8 standalone acceptance was run.
 변경 이유: 과거 자료·요약과 현재 사용 가능 근거를 구분하는 선택적 receipt와 순수 판단 API를 만든다.
 실행한 검증: 소유 일반/race85leaf, 독립 일반/race169leaf(137codec·16hash), fixture Python12methods/81leaf·Go race34leaf. Root artifact12hash·계보4단계·native fake handler4검사. 최종 전체check_local 종료0(Python412/Go/UI532), 고정lint0.
 현재 상태: 보조 모듈·fixture 인계 관문만 수용한다. 전체 CRW-03과 실제 Client/회의 gate는 미수용이며 전체 완료12/63을 유지한다.
-한계: read와 use의 원자성·완전한 TRACE/ATR·실제 refresh 실행·권한 인증·실제 모델/DB·제품 빌드·배포·R8 standalone 관문은 검증하지 않았다.
+한계: read와 use의 원자성·실제 refresh 실행·권한 인증·실제 모델/DB·제품 빌드·배포·R8 standalone 관문은 검증하지 않았다.
