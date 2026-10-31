@@ -226,3 +226,84 @@ func TestReadAtPendingErrorRespectsActualValidationOrder(t *testing.T) {
 		probeRequireError(t, v, err, "invalid_state", "$.states[*]")
 	})
 }
+
+func TestReadAtFastSlowReplayedPrefix(t *testing.T) {
+	cfg := fsConfig(t)
+	pending := FastSlowState{}
+	index := FastSlowIndex{}
+	activation := FastSlowEvent{}
+	pending.Fast, index.Fast, activation.Fast, _ = scalarFixturePendingConfig(t, cfg.Fast)
+	pending.Slow, index.Slow, activation.Slow, _ = scalarFixturePendingConfig(t, cfg.Slow)
+	initial := func(s StateV2, i ReceiptIndexV2) SnapshotV2 {
+		return sealFixture(t, "SnapshotV2", SnapshotV2{Protocol: "dynamics-snapshot-v2", Scope: s.Key.Scope, Dimension: s.Key.Dimension, ConfigSHA256: s.Key.ConfigSHA256, Cursor: i.Cursor, States: []StateV2{}, Receipts: i, StreamID: i.StreamID})
+	}
+	first, err := ApplyEventFastSlow(pending, index, activation, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s1, i1 := fsNext(first)
+	outcome := fsOutcome(t, s1, i1, 1000000010, "passed", "memory")
+	events := []FastSlowEvent{activation, outcome}
+	fast, slow, err := ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), events, 2, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := fast.States[0].Key.Target
+	before := [][]byte{replayRaw(t, fast), replayRaw(t, slow)}
+	for n := 0; n < 10; n++ {
+		v, err := ReadAtFastSlow(fast, slow, 3000000010, ref, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		scalarAssertNear(t, v.Fast.Value, .08011440871027234, cfg.Fast)
+		scalarAssertNear(t, v.Slow.Value, .41524127461457117, cfg.Slow)
+		scalarAssertNear(t, v.Value, .3314595581384965, cfg.Fast)
+	}
+	if !bytes.Equal(before[0], replayRaw(t, fast)) || !bytes.Equal(before[1], replayRaw(t, slow)) {
+		t.Fatal("probe changed a lane snapshot")
+	}
+	// A slow lane cut before the outcome cannot be mixed with a later fast lane.
+	_, early, err := ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), events, 1, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = ReadAtFastSlow(fast, early, 3000000010, ref, cfg)
+	requireCode(t, err, "snapshot_binding")
+	fsRequirePath(t, err, fastSlowPairPath)
+	mixed := []FastSlowEvent{activation, {Fast: outcome.Fast, Slow: scalarOutcomeEvent(t, s1.Slow, i1.Slow, 1000000010, "failed", "memory")}}
+	_, _, err = ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), mixed, 2, cfg)
+	requireCode(t, err, "snapshot_binding")
+	// Same receipts, different transport attempt: only the pair check sees it.
+	observed := outcome
+	observed.Slow.TransportAttemptID = "other-attempt"
+	observed.Slow = sealFixture(t, "EventV2", observed.Slow)
+	_, _, err = ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), []FastSlowEvent{activation, observed}, 2, cfg)
+	requireCode(t, err, "event_conflict")
+	fsRequirePath(t, err, fastSlowPairPath)
+	// A malformed pair after the cutoff cannot change the cutoff-1 prefix.
+	cleanF, cleanS, err := ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), events[:1], 1, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tail := range [][]FastSlowEvent{mixed, {activation, observed}} {
+		gotF, gotS, err := ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), initial(pending.Slow, index.Slow), tail, 1, cfg)
+		if err != nil || gotF.SnapshotSHA256 != cleanF.SnapshotSHA256 || gotS.SnapshotSHA256 != cleanS.SnapshotSHA256 {
+			t.Fatalf("future pair changed the prefix: %v", err)
+		}
+	}
+	// Lanes from different scopes never mix, even at the same cursor and target.
+	other := slow
+	other.Scope.Project = "other"
+	_, err = ReadAtFastSlow(fast, other, 3000000010, ref, cfg)
+	requireCode(t, err, "snapshot_binding")
+	fsRequirePath(t, err, fastSlowPairPath)
+	// Replay binds the lanes before any event, so an empty prefix cannot pair scopes.
+	otherInitial := initial(pending.Slow, index.Slow)
+	otherInitial.Scope.Project = "other"
+	otherInitial = sealFixture(t, "SnapshotV2", otherInitial)
+	for _, tail := range [][]FastSlowEvent{nil, events} {
+		_, _, err = ReplayPrefixFastSlow(initial(pending.Fast, index.Fast), otherInitial, tail, 0, cfg)
+		requireCode(t, err, "snapshot_binding")
+		fsRequirePath(t, err, fastSlowPairPath)
+	}
+}
