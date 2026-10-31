@@ -607,3 +607,125 @@ func scalarOutcomeReceiptReason(r Reason) bool {
 		return false
 	}
 }
+
+// FastSlowConfig pairs two complete scalar configs for the DYN-02 fastslow
+// substage. It is a development record outside dynamics-contract-v2: each lane
+// keeps mode "scalar" and its own config hash, and no coefficient has a default.
+type FastSlowConfig struct {
+	Fast       DynamicsConfigV2
+	Slow       DynamicsConfigV2
+	FastWeight float64
+}
+
+// FastSlowState, FastSlowIndex and FastSlowEvent hold one value per lane. The two
+// lane events are the same logical event sealed under each lane's config hash.
+type FastSlowState struct{ Fast, Slow StateV2 }
+type FastSlowIndex struct{ Fast, Slow ReceiptIndexV2 }
+type FastSlowEvent struct{ Fast, Slow EventV2 }
+type FastSlowTransition struct{ Fast, Slow TransitionV2 }
+
+const fastSlowPairPath = "$.fast_slow.pair"
+
+// ApplyEventFastSlow runs the reviewed scalar transition once per lane. Lanes
+// must stand at the same accepted history; either both succeed or neither does.
+func ApplyEventFastSlow(previous FastSlowState, index FastSlowIndex, event FastSlowEvent, cfg FastSlowConfig) (FastSlowTransition, error) {
+	if err := checkFastSlowConfig(cfg); err != nil {
+		return FastSlowTransition{}, err
+	}
+	if !pairedStates(previous.Fast, previous.Slow) || !pairedReceipts(index.Fast, index.Slow) {
+		return FastSlowTransition{}, contractError("snapshot_binding", fastSlowPairPath)
+	}
+	if err := checkFastSlowEvent(event); err != nil {
+		return FastSlowTransition{}, err
+	}
+	fast, err := ApplyEvent(previous.Fast, index.Fast, event.Fast, cfg.Fast)
+	if err != nil {
+		return FastSlowTransition{}, err
+	}
+	slow, err := ApplyEvent(previous.Slow, index.Slow, event.Slow, cfg.Slow)
+	if err != nil {
+		return FastSlowTransition{}, err
+	}
+	// Paired states, receipts and events make every lane decision identical;
+	// only the numeric values differ by rate.
+	return FastSlowTransition{Fast: fast, Slow: slow}, nil
+}
+
+// fastSlowValue mixes two lane values; callers have already checked the config.
+func fastSlowValue(fast, slow float64, cfg FastSlowConfig) float64 {
+	return cfg.FastWeight*fast + (1-cfg.FastWeight)*slow
+}
+
+func checkFastSlowConfig(cfg FastSlowConfig) error {
+	for _, c := range []DynamicsConfigV2{cfg.Fast, cfg.Slow} {
+		if err := ValidateTyped("DynamicsConfigV2", c); err != nil {
+			return err
+		}
+	}
+	f, s := cfg.Fast, cfg.Slow
+	// An unset (zero) weight or a weight of one would silently drop a lane.
+	if !(cfg.FastWeight > 0 && cfg.FastWeight < 1) {
+		return contractError("invalid_value", "$.fast_weight")
+	}
+	if f.TauNS >= s.TauNS {
+		return contractError("config_mismatch", "$.fast_slow.tau_ns")
+	}
+	// Only rates differ between lanes; shared fields keep the mixed initial value
+	// and the evidence/clock semantics identical to the scalar substage.
+	if f.ClockDomain != s.ClockDomain || f.Clock != s.Clock || f.Initial != s.Initial || f.UnitStrength != s.UnitStrength || f.NegativePolicy != s.NegativePolicy || f.DecayEnabled != s.DecayEnabled || f.OutcomeJumpEnabled != s.OutcomeJumpEnabled || f.EvidenceRuleSHA256 != s.EvidenceRuleSHA256 {
+		return contractError("config_mismatch", "$.fast_slow")
+	}
+	return nil
+}
+
+// Lane config hashes are checked by ApplyEvent/ReplayPrefix against each lane.
+func checkFastSlowEvent(e FastSlowEvent) error {
+	a, b := scalarClone(e.Fast), scalarClone(e.Slow)
+	a.Key.ConfigSHA256, b.Key.ConfigSHA256 = "", ""
+	a.PayloadSHA256, b.PayloadSHA256 = "", ""
+	if !reflect.DeepEqual(a, b) {
+		return contractError("event_conflict", fastSlowPairPath)
+	}
+	return nil
+}
+
+// pairedStates requires the same target and lifecycle position in both lanes.
+func pairedStates(a, b StateV2) bool {
+	ka, kb := a.Key, b.Key
+	ka.ConfigSHA256, kb.ConfigSHA256 = "", ""
+	return ka == kb && a.StateRevision == b.StateRevision && a.Status == b.Status && reflect.DeepEqual(a.LastAppliedSeq, b.LastAppliedSeq)
+}
+
+// pairedSnapshots requires one scope, dimension, accepted history and lane states.
+func pairedSnapshots(a, b SnapshotV2) bool {
+	if a.Scope != b.Scope || a.Dimension != b.Dimension || len(a.States) != len(b.States) || !pairedReceipts(a.Receipts, b.Receipts) {
+		return false
+	}
+	for i := range a.States {
+		if !pairedStates(a.States[i], b.States[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// pairedReceipts requires the same accepted history; values may differ by rate.
+func pairedReceipts(a, b ReceiptIndexV2) bool {
+	if a.StreamID != b.StreamID || a.Cursor.AcceptedSeq != b.Cursor.AcceptedSeq || a.Cursor.AcceptedAtNS != b.Cursor.AcceptedAtNS || len(a.Receipts) != len(b.Receipts) || len(a.EvidenceConsumptions) != len(b.EvidenceConsumptions) {
+		return false
+	}
+	for i := range a.EvidenceConsumptions {
+		if a.EvidenceConsumptions[i].IdentitySHA256 != b.EvidenceConsumptions[i].IdentitySHA256 || a.EvidenceConsumptions[i].ClaimSHA256 != b.EvidenceConsumptions[i].ClaimSHA256 {
+			return false
+		}
+	}
+	for i := range a.Receipts {
+		x, y := a.Receipts[i], b.Receipts[i]
+		kx, ky := x.Key, y.Key
+		kx.ConfigSHA256, ky.ConfigSHA256 = "", ""
+		if kx != ky || x.EventID != y.EventID || x.AcceptedSeq != y.AcceptedSeq || x.AcceptedAtNS != y.AcceptedAtNS || x.Disposition != y.Disposition || x.Reason != y.Reason || x.BeforeStateRevision != y.BeforeStateRevision || x.AfterStateRevision != y.AfterStateRevision {
+			return false
+		}
+	}
+	return true
+}

@@ -47,3 +47,22 @@ func ResetRevision(previous StateV2, target RefV2, cfg DynamicsConfigV2) (StateV
 func sameMemoryIdentity(a, b RefV2) bool {
 	return a.Origin == b.Origin && a.Collection == b.Collection && a.ID == b.ID
 }
+
+// ResetRevisionFastSlow resets both lanes to the new revision or neither.
+func ResetRevisionFastSlow(previous FastSlowState, target RefV2, cfg FastSlowConfig) (FastSlowState, error) {
+	if err := checkFastSlowConfig(cfg); err != nil {
+		return FastSlowState{}, err
+	}
+	if !pairedStates(previous.Fast, previous.Slow) {
+		return FastSlowState{}, contractError("snapshot_binding", fastSlowPairPath)
+	}
+	fast, err := ResetRevision(previous.Fast, target, cfg.Fast)
+	if err != nil {
+		return FastSlowState{}, err
+	}
+	slow, err := ResetRevision(previous.Slow, target, cfg.Slow)
+	if err != nil {
+		return FastSlowState{}, err
+	}
+	return FastSlowState{Fast: fast, Slow: slow}, nil
+}

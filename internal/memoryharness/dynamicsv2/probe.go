@@ -68,3 +68,29 @@ func probePendingError(snapshot SnapshotV2, target RefV2, err error) error {
 	}
 	return err
 }
+
+// FastSlowView is one lane-pair read at the same accepted prefix and time.
+type FastSlowView struct {
+	Fast, Slow StateViewV2
+	Value      float64
+}
+
+// ReadAtFastSlow reads both lanes and mixes them. Both snapshots must share scope
+// and accepted history, so neither lane can see a later or different event.
+func ReadAtFastSlow(fast, slow SnapshotV2, atNS int64, target RefV2, cfg FastSlowConfig) (FastSlowView, error) {
+	if err := checkFastSlowConfig(cfg); err != nil {
+		return FastSlowView{}, err
+	}
+	if !pairedSnapshots(fast, slow) {
+		return FastSlowView{}, contractError("snapshot_binding", fastSlowPairPath)
+	}
+	f, err := ReadAt(fast, atNS, target, cfg.Fast)
+	if err != nil {
+		return FastSlowView{}, err
+	}
+	s, err := ReadAt(slow, atNS, target, cfg.Slow)
+	if err != nil {
+		return FastSlowView{}, err
+	}
+	return FastSlowView{Fast: f, Slow: s, Value: fastSlowValue(f.Value, s.Value, cfg)}, nil
+}
