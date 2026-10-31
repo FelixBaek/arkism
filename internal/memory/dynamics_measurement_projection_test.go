@@ -53,13 +53,17 @@ type dynamicsProjectionFaultWitness struct {
 	RepublishedNS     int64  `json:"republished_ns"`
 }
 
+// dynamicsProjectionWindow is the planned window. The delete, purge, repair and republication after the
+// 700ms fault must fit inside it; 2s left too little room on slow runners (republication fell outside it).
+const dynamicsProjectionWindow = 4 * time.Second
+
 // dynamicsProjectionConfig binds the A config to the runtime limits actually used.
 func dynamicsProjectionConfig(mode string, limits DynamicsLoadLimits) map[string]any {
 	limitsRaw, _ := json.Marshal(limits)
 	ms := int64(time.Millisecond)
 	return map[string]any{
 		"protocol": "sys05-load-config-v1", "run_id": "av2-" + mode, "seed": 7, "mode": mode,
-		"scenario": "normal", "cache": "cold", "start_ns": 0, "duration_ns": 2000 * ms,
+		"scenario": "normal", "cache": "cold", "start_ns": 0, "duration_ns": int64(dynamicsProjectionWindow),
 		"arrival_schedule": []map[string]any{
 			{"offset_ns": 0, "count": 2, "spacing_ns": 100 * ms, "operation": "update"},
 			{"offset_ns": 400 * ms, "count": 1, "spacing_ns": 0, "operation": "read"},
@@ -155,7 +159,7 @@ func dynamicsProjectionRun(t *testing.T, dir, mode string) map[string]any {
 	h.drain()
 	h.witness()
 	sample()
-	time.Sleep(time.Until(anchor.Add(2 * time.Second)))
+	time.Sleep(time.Until(anchor.Add(dynamicsProjectionWindow)))
 	costSample()
 	return map[string]any{
 		"protocol": "sys05-b5-raw-run-v1", "mode": mode, "config_sha256": dynamicsSHA(configRaw), "workload_sha256": dynamicsSHA(workloadRaw),
