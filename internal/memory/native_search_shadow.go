@@ -21,6 +21,16 @@ type NativeSearchShadowConfig struct {
 	Deadline                 time.Duration
 	MaxSteps                 int64
 	Capacity                 int
+	// FastSlow, when set, reads the native slow lane and ranks on the mixed
+	// value. Mode "on" requires it and serves the ranking; "shadow" only records.
+	FastSlow *NativeSearchFastSlow
+}
+
+// NativeSearchFastSlow is the DYN-02/03 lane pair: the fast lane is the policy's
+// own dynamics config, Slow the sealed slow lane config.
+type NativeSearchFastSlow struct {
+	Slow       dyn.DynamicsConfigV2
+	FastWeight float64
 }
 type NativeSearchShadowObservation struct {
 	Protocol         string   `json:"protocol"`
@@ -38,6 +48,8 @@ type NativeSearchShadowObservation struct {
 	SourceCount      int      `json:"source_count"`
 	Steps            int64    `json:"local_steps"`
 	SelectedRefs     []string `json:"selected_scoped_ref_sha256"`
+	FastSlow         bool     `json:"fast_slow,omitempty"`
+	Served           bool     `json:"served,omitempty"`
 }
 type NativeSearchShadowRuntime struct {
 	config  NativeSearchShadowConfig
@@ -50,14 +62,18 @@ func NewNativeSearchShadowRuntime(cfg NativeSearchShadowConfig) (*NativeSearchSh
 	if cfg.Mode == "off" {
 		return &NativeSearchShadowRuntime{config: cfg}, nil
 	}
-	if cfg.Mode != "shadow" || cfg.Deadline <= 0 || cfg.Deadline > 5*time.Second || cfg.MaxSteps < 1 || cfg.Capacity < 1 || cfg.Capacity > 1000 {
+	if (cfg.Mode != "shadow" && cfg.Mode != "on") || (cfg.Mode == "on" && cfg.FastSlow == nil) || cfg.Deadline <= 0 || cfg.Deadline > 5*time.Second || cfg.MaxSteps < 1 || cfg.Capacity < 1 || cfg.Capacity > 1000 {
 		return nil, ErrInvalid
 	}
 	if e := dyn.ValidateTyped("PolicyRegistryV2", cfg.Registry); e != nil {
 		return nil, ErrInvalid
 	}
-	if _, ok := nativeSearchPolicy(cfg); !ok {
+	entry, ok := nativeSearchPolicy(cfg)
+	if !ok {
 		return nil, ErrInvalid
+	}
+	if _, e := nativeSearchFastSlowConfig(cfg, entry); e != nil {
+		return nil, e
 	}
 	copyCfg, e := nativeClone(cfg)
 	if e != nil {
@@ -72,6 +88,21 @@ func nativeSearchPolicy(cfg NativeSearchShadowConfig) (dyn.PolicyEntry, bool) {
 		}
 	}
 	return dyn.PolicyEntry{}, false
+}
+
+// nativeSearchFastSlowConfig returns nil when no lane pair is configured.
+func nativeSearchFastSlowConfig(cfg NativeSearchShadowConfig, entry dyn.PolicyEntry) (*dyn.FastSlowConfig, error) {
+	if cfg.FastSlow == nil {
+		return nil, nil
+	}
+	if entry.Dynamics == nil {
+		return nil, ErrInvalid
+	}
+	pair := dyn.FastSlowConfig{Fast: *entry.Dynamics, Slow: cfg.FastSlow.Slow, FastWeight: cfg.FastSlow.FastWeight}
+	if pair.Validate() != nil {
+		return nil, ErrInvalid
+	}
+	return &pair, nil
 }
 func (r *NativeSearchShadowRuntime) Observations() []NativeSearchShadowObservation {
 	if r == nil {
@@ -99,6 +130,7 @@ func (r *NativeSearchShadowRuntime) remember(v NativeSearchShadowObservation, st
 }
 
 type nativeSearchAttempt struct {
+	served   *nativeBridgeResult
 	runtime  *NativeSearchShadowRuntime
 	snapshot *nativeSearchSnapshot
 	record   NativeSearchShadowObservation
@@ -107,10 +139,10 @@ type nativeSearchAttempt struct {
 
 func (s *Service) beginNativeSearchShadow(ctx context.Context, in SearchInput, collection string, lanes [][]Hit, history map[string]Record) *nativeSearchAttempt {
 	runtime := s.NativeSearchShadow
-	if runtime == nil || runtime.config.Mode != "shadow" {
+	if runtime == nil || (runtime.config.Mode != "shadow" && runtime.config.Mode != "on") {
 		return nil
 	}
-	a := &nativeSearchAttempt{runtime: runtime, record: NativeSearchShadowObservation{Protocol: "sys-native-service-shadow-v1", ContractSHA: ContentHash(string(nativeSearchShadowContract)), ScopeSHA: nativeSearchHash("Scope", in.Scope), Status: "fallback", Reason: "not_computed", SelectedRefs: []string{}}}
+	a := &nativeSearchAttempt{runtime: runtime, record: NativeSearchShadowObservation{Protocol: "sys-native-service-shadow-v1", ContractSHA: ContentHash(string(nativeSearchShadowContract)), ScopeSHA: nativeSearchHash("Scope", in.Scope), Status: "fallback", Reason: "not_computed", SelectedRefs: []string{}, FastSlow: runtime.config.FastSlow != nil}}
 	a.stages = NativeSearchShadowStages{Protocol: NativeSearchStagesProtocol, ContractSHA: ContentHash(string(nativeSearchStagesContract)), ScopeSHA: a.record.ScopeSHA, ContextViewSHA: contextViewSHA(in.contextView), FinalErrorCode: "not_entered", ReaderAcknowledgement: "unknown", ActualUse: "unknown", TaskSuccess: "unknown", CausalAttribution: "unknown"}
 	if ctx.Err() != nil {
 		a.record.Reason = "caller_canceled"
@@ -198,6 +230,7 @@ func (a *nativeSearchAttempt) compute(ctx context.Context, s *Service, token str
 		return
 	}
 	a.computedStages(in.Scope, result)
+	a.served = &result
 	a.record.Status = "selected"
 	a.record.Reason = "none"
 	a.record.SelectedRefs = make([]string, 0, len(result.Ranked))
@@ -207,6 +240,22 @@ func (a *nativeSearchAttempt) compute(ctx context.Context, s *Service, token str
 			Ref   Ref
 		}{in.Scope, Ref{Collection: row.Material.Collection, ID: row.Material.ID, Revision: row.Material.Revision}}))
 	}
+}
+
+// serve returns the fast/slow ranking in mode "on" once it was selected; every
+// other case keeps the baseline. Served items get their own final-fence
+// snapshots, so the commit transaction checks them like baseline items.
+func (a *nativeSearchAttempt) serve(out ContextBundle, snapshots map[Ref]string) ContextBundle {
+	if a == nil || a.runtime.config.Mode != "on" || a.served == nil || a.record.Status != "selected" {
+		return out
+	}
+	served := a.served.served
+	for _, m := range a.served.Prepack {
+		snapshots[Ref{Collection: m.Collection, ID: m.ID, Revision: m.Revision}] = m.GuardSHA
+	}
+	served.ContextID, served.Degraded = out.ContextID, out.Degraded
+	a.record.Served = true
+	return served
 }
 
 func (a *nativeSearchAttempt) returned(out ContextBundle) {

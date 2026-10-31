@@ -132,6 +132,7 @@ type nativeBridgeResult struct {
 	TokenEncoding  *string                `json:"token_encoding"`
 	Steps          int64                  `json:"local_steps"`
 	ResultSHA      string                 `json:"result_sha256"`
+	served         ContextBundle          // unexported: never hashed or recorded, only served in mode "on"
 }
 
 type nativeBridgeWork struct {
@@ -265,6 +266,7 @@ func runNativeBridgeCandidate(ctx context.Context, in nativeBridgeInput) nativeB
 		out.TokensUsed = &bundle.TokensUsed
 		out.TokenEncoding = &bundle.TokenEncoding
 	}
+	out.served = bundle
 	return finish("none")
 }
 

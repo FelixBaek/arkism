@@ -43,7 +43,7 @@ func TestNativeSearchPublicationChecksAuthoritativeRestoreGate(t *testing.T) {
 				repo.gate = ErrUnavailable
 			}
 			svc := &Service{Repo: repo}
-			values, bindings, err := svc.nativeSearchReadValues(context.Background(), SearchInput{}, []nativeSearchSourcePreview{{row: Record{ID: "existing-state"}}}, dyn.PolicyEntry{})
+			values, bindings, err := svc.nativeSearchReadValues(context.Background(), SearchInput{}, []nativeSearchSourcePreview{{row: Record{ID: "existing-state"}}}, dyn.PolicyEntry{}, nil)
 			want := error(ErrNotFound)
 			reads := 1
 			if held {

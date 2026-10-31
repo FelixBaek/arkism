@@ -147,7 +147,7 @@ func nativeAdvanceTx(ctx context.Context, tx Tx, capture, state Record, cfg Nati
 	if len(st.History) >= int(*cfg.MaxHistory) || len(deps) > int(*cfg.MaxDependencies) || st.LastSeq == math.MaxInt64 {
 		return NativeDynamicsReceipt{}, ErrInvalid
 	}
-	value, sourceNS, learning, err := nativeAdvanceNumeric(p, st, cfg)
+	value, slow, sourceNS, learning, err := nativeAdvanceNumeric(p, st, cfg)
 	if err != nil {
 		return NativeDynamicsReceipt{}, err
 	}
@@ -169,6 +169,7 @@ func nativeAdvanceTx(ctx context.Context, tx Tx, capture, state Record, cfg Nati
 		return NativeDynamicsReceipt{}, e
 	}
 	st.Value = &value
+	st.SlowValue = slow
 	st.LastSeq = seq
 	st.LastModelNS = sourceNS
 	st.History = append(slices.Clone(st.History), nativeRef(capture))
@@ -225,10 +226,12 @@ func nativeTimeNS(at time.Time) (int64, error) {
 	return *c.UnixNS, nil
 }
 
-func nativeAdvanceNumeric(p *NativeDynamicsPayload, st *NativeDynamicsState, cfg NativeDynamicsConfig) (float64, int64, bool, error) {
+// The slow lane, when configured, takes the same observation, time and
+// operation as the fast lane; only its rates differ.
+func nativeAdvanceNumeric(p *NativeDynamicsPayload, st *NativeDynamicsState, cfg NativeDynamicsConfig) (float64, *float64, int64, bool, error) {
 	clock := nativeOutcomeClock(p.SourceAcceptedAt)
-	if clock.State != "known" || *clock.UnixNS < st.LastModelNS {
-		return 0, 0, false, ErrConflict
+	if clock.State != "known" || *clock.UnixNS < st.LastModelNS || (cfg.SlowTauNS != nil) != (st.SlowValue != nil) {
+		return 0, nil, 0, false, ErrConflict
 	}
 	operation := "decay_only"
 	var strength *float64
@@ -238,7 +241,11 @@ func nativeAdvanceNumeric(p *NativeDynamicsPayload, st *NativeDynamicsState, cfg
 		strength = cfg.ObservationStrength
 	}
 	value, e := dynamicsv2.NativeAdvanceScalarNumeric(*st.Value, st.LastModelNS, *clock.UnixNS, *cfg.TauNS, *cfg.DecayEnabled, operation, *cfg.EtaPositive, *cfg.UnitStrength, strength)
-	return value, *clock.UnixNS, learning, e
+	if e != nil || cfg.SlowTauNS == nil {
+		return value, nil, *clock.UnixNS, learning, e
+	}
+	slow, e := dynamicsv2.NativeAdvanceScalarNumeric(*st.SlowValue, st.LastModelNS, *clock.UnixNS, *cfg.SlowTauNS, *cfg.DecayEnabled, operation, *cfg.SlowEtaPositive, *cfg.UnitStrength, strength)
+	return value, &slow, *clock.UnixNS, learning, e
 }
 func nativePersistObservationTx(ctx context.Context, tx Tx, scope Scope, eventID, identity string, payload NativeDynamicsPayload, learning bool) error {
 	if e := nativeInsertTx(ctx, tx, nativeJob(scope, "event", eventID, payload)); e != nil {

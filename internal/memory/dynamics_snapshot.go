@@ -469,7 +469,7 @@ func (s *Service) authorizeDynamicsRefresh(ctx context.Context, token string, sn
 			return nil, ErrConflict
 		}
 		if p.State.Status != "active" {
-			if p.State.Value != nil {
+			if p.State.Value != nil || p.State.SlowValue != nil {
 				return nil, ErrConflict
 			}
 			continue
@@ -497,7 +497,7 @@ func validateDynamicsRefreshStatesTx(ctx context.Context, tx Tx, snapshot *Dynam
 			return ErrConflict
 		}
 		if p.State.Status != "active" {
-			if p.State.Value != nil {
+			if p.State.Value != nil || p.State.SlowValue != nil {
 				return ErrConflict
 			}
 			continue

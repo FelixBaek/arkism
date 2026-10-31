@@ -25,6 +25,10 @@ type NativeDynamicsConfig struct {
 	PositiveLearning    *bool    `json:"positive_learning" bson:"positive_learning"`
 	MaxHistory          *int64   `json:"max_history" bson:"max_history"`
 	MaxDependencies     *int64   `json:"max_dependencies" bson:"max_dependencies"`
+	// Optional DYN-02/03 slow lane: both set or neither. Absent keeps the scalar
+	// config, its stored bytes and its hash unchanged.
+	SlowTauNS       *int64   `json:"slow_tau_ns,omitempty" bson:"slow_tau_ns,omitempty"`
+	SlowEtaPositive *float64 `json:"slow_eta_positive,omitempty" bson:"slow_eta_positive,omitempty"`
 }
 
 type NativeDynamicsKey struct {
@@ -59,6 +63,7 @@ type NativeDynamicsState struct {
 	MemoryUpdatedAt time.Time `json:"memory_updated_at" bson:"memory_updated_at"`
 	Anchor          string    `json:"anchor" bson:"anchor"`
 	History         []Ref     `json:"history" bson:"history"`
+	SlowValue       *float64  `json:"slow_value,omitempty" bson:"slow_value,omitempty"`
 }
 
 type NativeDynamicsReceipt struct {
@@ -121,6 +126,7 @@ type NativeDynamicsQuery struct {
 type NativeDynamicsView struct {
 	Status     string   `json:"status"`
 	Value      *float64 `json:"value"`
+	SlowValue  *float64 `json:"slow_value,omitempty"`
 	State      Ref      `json:"state"`
 	Epoch      int64    `json:"epoch"`
 	LastSeq    int64    `json:"last_seq"`
@@ -165,6 +171,14 @@ func nativeFloatBits(v float64) string {
 	return fmt.Sprintf("%016x", math.Float64bits(v))
 }
 func nativeConfigHash(c NativeDynamicsConfig) string {
+	if c.SlowTauNS != nil {
+		scalar := c
+		scalar.SlowTauNS, scalar.SlowEtaPositive = nil, nil
+		return nativeHash("config_fast_slow", struct {
+			Scalar, SlowEta string
+			SlowTau         int64
+		}{nativeConfigHash(scalar), nativeFloatBits(*c.SlowEtaPositive), *c.SlowTauNS})
+	}
 	return nativeHash("config", struct {
 		Version, Initial, Eta, Unit, Strength string
 		Tau, History, Dependencies            int64
@@ -175,7 +189,15 @@ func nativeUnit(v *float64) bool {
 	return v != nil && !math.IsNaN(*v) && !math.IsInf(*v, 0) && *v >= 0 && *v <= 1
 }
 func nativeConfigValid(c NativeDynamicsConfig) bool {
-	return validRunLabel(c.Version, 128) && nativeUnit(c.InitialValue) && nativeUnit(c.EtaPositive) && nativeUnit(c.UnitStrength) && nativeUnit(c.ObservationStrength) && c.TauNS != nil && *c.TauNS > 0 && c.DecayEnabled != nil && c.PositiveLearning != nil && c.MaxHistory != nil && *c.MaxHistory > 0 && *c.MaxHistory <= 256 && c.MaxDependencies != nil && *c.MaxDependencies > 0 && *c.MaxDependencies <= 500
+	return validRunLabel(c.Version, 128) && nativeUnit(c.InitialValue) && nativeUnit(c.EtaPositive) && nativeUnit(c.UnitStrength) && nativeUnit(c.ObservationStrength) && c.TauNS != nil && *c.TauNS > 0 && c.DecayEnabled != nil && c.PositiveLearning != nil && c.MaxHistory != nil && *c.MaxHistory > 0 && *c.MaxHistory <= 256 && c.MaxDependencies != nil && *c.MaxDependencies > 0 && *c.MaxDependencies <= 500 && nativeSlowLaneValid(c)
+}
+
+// The slow lane is slower than the fast one; only its rates differ.
+func nativeSlowLaneValid(c NativeDynamicsConfig) bool {
+	if c.SlowTauNS == nil && c.SlowEtaPositive == nil {
+		return true
+	}
+	return c.SlowTauNS != nil && *c.SlowTauNS > *c.TauNS && nativeUnit(c.SlowEtaPositive)
 }
 func nativeDimension(d string) bool { return d == "personal_compliance" || d == "work_task" }
 func nativeClone[T any](in T) (T, error) {
