@@ -166,3 +166,7 @@ html.popout dialog.popout-root[open] > .graph-win-body { flex: 1; } /* over app.
 .g-canvas .g-node.st-failed .g-node-head .dot { background: var(--status-danger); }
 .wf-attn.err { background: var(--status-danger-tint); }
 .wf-attn.err strong { color: var(--status-danger); }
+.g-node-dur.live { color: var(--nc-amber); }
+.g-test-badge.live { cursor: default; border-color: color-mix(in srgb, var(--nc-amber) 45%, transparent); background: var(--nc-amber-bg); color: var(--nc-amber); }
+.g-edge-flow { fill: var(--g-human); filter: drop-shadow(0 0 4px var(--g-human)); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .g-edge-flow { display: none; } }

@@ -81,10 +81,10 @@ test("every card is the one photo card (1478:12809): cover or the default photo,
   card("ag1").querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
   assert.ok(card("ag1").classList.contains("has-cover") && /flow-cover\.webp$/.test(card("ag1").querySelector(".crew-cover-img").src), "a photo that fails to load gives way to the default one");
 
-  // the expert window picks a photo apart from the avatar and saves it with the agent
+  // the expert window picks a photo (no avatar in the head) and saves it with the agent
   card("ag2").click(); await h.settle();
   const d = h.top();
-  assert.ok(d.querySelector(".ex-heads .ex-face") && d.querySelector(".ex-heads .ex-cover"));
+  assert.ok(!d.querySelector(".ex-heads .ex-face") && d.querySelector(".ex-heads .ex-cover"));
   d.querySelector(".ex-cover").click(); await h.settle();
   document.querySelector("dialog.tp-cover .tp-cover-ph").click(); await h.settle();
   assert.ok(d.querySelector(".ex-cover img"));

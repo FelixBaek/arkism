@@ -559,6 +559,7 @@ export function createCrewEditor(deps) {
         if (st.status === "done") mark.append(deps.icon("check"));
         head.append(mark);
         if (st.status === "done" && st.started_at && st.finished_at) box.append(deps.el("small", "g-node-dur mono", secText(new Date(st.finished_at) - new Date(st.started_at))));
+        else if (st.status === "running" && st.started_at) box.append(deps.el("small", "g-node-dur live mono", secText(Math.max(0, Date.now() - new Date(st.started_at))))); // grows with each poll
       } else if (st) head.append(deps.el("i", `dot ${{ done: "ready", running: "warn", waiting: "warn", failed: "error" }[st.status] || ""}`));
       box.append(head);
       // 확인 필요 (amber) where the run waits for a person, 오류 (red) where it failed; the error itself is in the tooltip.
@@ -788,7 +789,11 @@ export function createCrewEditor(deps) {
  // 0.3초 (859:63707)
   function testBadge() {
     const cr = ed.test?.crew_run;
-    if (!cr || cr.status === "running") return null;
+    if (!cr) return null;
+    if (cr.status === "running") { // 실행 중 · the time so far, so the whole run has a clock while it goes
+      const t0 = Object.values(cr.nodes || {}).map((st) => st.started_at).filter(Boolean).map((x) => +new Date(x));
+      return deps.el("span", "g-test-badge live", ["실행 중", t0.length ? secText(Math.max(0, Date.now() - Math.min(...t0))) : ""].filter(Boolean).join(" · "));
+    }
     const steps = Object.entries(cr.nodes || {}).filter(([id, st]) => st.status === "done" && deps.WORK(deps.nodeIn(id) || {}));
     const t = Object.values(cr.nodes || {}).flatMap((st) => [st.started_at, st.finished_at]).filter(Boolean).map((x) => +new Date(x));
     const span = t.length ? secText(Math.max(...t) - Math.min(...t)) : "";
@@ -844,6 +849,7 @@ export function createCrewEditor(deps) {
     svg.replaceChildren();
     labels.replaceChildren();
     const loops = ed.run?.crew_run?.loops || {};
+    const runTest = ed.test?.crew_run?.nodes || {};
     const typeOf = new Map(ed.graph.nodes.map((n) => [n.id, n.type]));
     const drawn = [];
     let lift = 60, k = 0;
@@ -870,6 +876,14 @@ export function createCrewEditor(deps) {
       hit.append(title);
       if (!ed.run) hit.addEventListener("click", (ev) => { ev.stopPropagation(); selectOnCanvas(null, i); });
       svg.append(p, hit);
+      // 테스트 실행: a light runs along the line into the step that is working now
+      const into = ed.test && runTest[e.to]?.status === "running" && runTest[e.from]?.status === "done";
+      if (into) {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle"), go = document.createElementNS("http://www.w3.org/2000/svg", "animateMotion");
+        dot.setAttribute("r", "4"); dot.setAttribute("class", "g-edge-flow");
+        go.setAttribute("path", shape.d); go.setAttribute("dur", "1.2s"); go.setAttribute("repeatCount", "indefinite");
+        dot.append(go); svg.append(dot);
+      }
       const fromType = typeOf.get(e.from);
       const portText = deps.PORTS[fromType]?.find(([k]) => k === e.port)?.[1] || e.port;
       const fan = !back && ed.graph.edges.filter((x) => x.from === e.from && (x.port || "") === (e.port || "") && !deps.isBack(x)).length;
