@@ -114,14 +114,17 @@ fs.mkdirSync(output,{recursive:true});
     await page.locator('[data-menu="agent"]').click();
     await page.locator(".wf-card").first().waitFor(); // FLOW is one page, no area tabs
     const flowCats=new Set(data["v1/crew.json"].items.map(r=>r.crew.category));
-    // the category list: each option reads "<the user's category> <count>", the category left as typed
-    const catOpts=await page.locator("#controls select.wf-select option:not([value=all])").evaluateAll(os=>os.map(o=>[o.value,o.textContent]));
-    assert.ok(catOpts.length>0&&catOpts.every(([v,t])=>flowCats.has(v)&&t.startsWith(v+" ")),"workflow categories translated: "+JSON.stringify(catOpts));
-    await page.locator(".wf-kinds [data-kind=agent]").click();await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
+    // the category menu: each item reads "<the user's category>" and its count, the category left as typed
+    await page.locator("#controls .wf-cat-btn").click();
+    const catOpts=await page.locator(".wf-cat-menu .cat-menu-item:has(.wf-chip)").evaluateAll(bs=>bs.map(b=>[b.querySelector(".wf-chip").textContent.trim(),b.querySelector("output")?.textContent]));
+    await page.keyboard.press("Escape");
+    assert.ok(catOpts.length>0&&catOpts.every(([v,n])=>flowCats.has(v)&&/^\d+$/.test(n||"")),"workflow categories translated: "+JSON.stringify(catOpts));
+    // agents sit in the one FLOW list (no kind tabs); a card shows name and @name only, no category line
+    await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
     const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
-    assert.deepEqual(await page.locator('.flow-card[data-flow-kind="agent"] strong').allInnerTexts(),agentsFixture.map(r=>r.crew.name));
-    assert.deepEqual(await page.locator(".flow-card-category").allInnerTexts(),agentsFixture.filter(r=>!r.crew.cover).map(r=>r.crew.category)); // a card on a photo shows name and @name only
-    assert.equal(await page.locator(".flow-card",{hasText:"코드리뷰어"}).getAttribute("title"),"코드리뷰어");
+    assert.deepEqual((await page.locator('.flow-card[data-flow-kind="agent"] strong').allInnerTexts()).sort(),agentsFixture.map(r=>r.crew.name).sort());
+    assert.equal(await page.locator(".flow-card-category").count(),0);
+    assert.equal(await page.locator(".flow-card",{hasText:"코드리뷰어"}).getAttribute("title"),"코드리뷰어 · @코드리뷰어"); // name · @name
     await page.locator(".flow-card",{hasText:"디자이너"}).click();
     const flowNames=new Set(data["v1/crew.json"].items.map(r=>r.crew.name));
     const flowOptions=await page.locator("dialog[open] .ex-flow-pick option").allInnerTexts();

@@ -2,8 +2,8 @@ package memory
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -20,8 +20,9 @@ func TestPostgresRecoveryIdentity(t *testing.T) {
 		}
 		w = httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", "/healthz", nil))
-		if w.Code != 200 || strings.TrimSpace(w.Body.String()) != `{"status":"recovery"}` {
-			t.Fatal("liveness changed")
+		var health struct{ Status string }
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &health) != nil || health.Status != "recovery" {
+			t.Fatalf("liveness changed: %d %s", w.Code, w.Body.String())
 		}
 	}
 	checkUnavailable()
