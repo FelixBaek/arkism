@@ -698,15 +698,9 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 	if err != nil {
 		return RoutingDecision{}, err
 	}
-	var group *RoutingGroup
-	if in.Group != "" {
-		if group, err = routeGroup(p, doc, in.Group); err != nil {
-			return RoutingDecision{}, err
-		}
-	}
-	models := routeCandidates(p, doc, group, in)
-	if len(models) == 0 {
-		return RoutingDecision{}, ErrUnavailable
+	group, models, err := routeGroupCandidates(p, doc, in)
+	if err != nil {
+		return RoutingDecision{}, err
 	}
 	// Checked once a choice can be made, so a refused decide leaves no work read audit behind.
 	viewHash, err := s.routingViewHash(ctx, token, in.Scope, in.View)
@@ -738,6 +732,22 @@ func (s *Service) DecideRoute(ctx context.Context, token string, in RoutingDecid
 		out.Fallbacks = routeFallbacks(doc, group, models, chosen.ID, byID, out.Fallbacks)
 	}
 	return out, nil
+}
+
+// routeGroupCandidates resolves the requested group and the models a decide may pick from.
+func routeGroupCandidates(p *Providers, doc Routing, in RoutingDecideInput) (*RoutingGroup, []routingModel, error) {
+	var group *RoutingGroup
+	if in.Group != "" {
+		var err error
+		if group, err = routeGroup(p, doc, in.Group); err != nil {
+			return nil, nil, err
+		}
+	}
+	models := routeCandidates(p, doc, group, in)
+	if len(models) == 0 {
+		return nil, nil, ErrUnavailable
+	}
+	return group, models, nil
 }
 
 func validRoutingDecideInput(in RoutingDecideInput) bool {
