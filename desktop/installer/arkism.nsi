@@ -25,7 +25,10 @@ InstallDir "$LOCALAPPDATA\Programs\${APP}"
 InstallDirRegKey HKCU "${REG_UNINSTALL}" "InstallLocation"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
-VIProductVersion "${VERSION}.0"
+!ifndef VI_VERSION
+  !define VI_VERSION "${VERSION}.0"
+!endif
+VIProductVersion "${VI_VERSION}"
 VIAddVersionKey "ProductName" "${APP}"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "FileVersion" "${VERSION}"

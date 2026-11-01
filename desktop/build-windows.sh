@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the Arkism Windows installer on a Windows build PC (native MSVC + NSIS) over SSH.
 #
-#   desktop/build-windows.sh --version 0.1.0 [--host <build-pc>] [--relock]
+#   desktop/build-windows.sh --version 0.1.6-test.1 [--host <build-pc>] [--relock]
 #
 # desktop/local.env (not in git) supplies the build PC and the values compiled into the app:
 #   ARKISM_BUILD_HOST, ARKISM_BUILD_DIR (default C:/arkism-build), ARKISM_MAKENSIS (default makensis),
@@ -27,7 +27,7 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "--version x.y.z is required" >&2; exit 2; }
+"$DIR/check-version.sh" "$VERSION"
 [[ -n "$HOST" ]] || { echo "--host <build-pc> (or ARKISM_BUILD_HOST in desktop/local.env) is required" >&2; exit 2; }
 BUILD_DIR="${ARKISM_BUILD_DIR:-C:/arkism-build}"
 MAKENSIS="${ARKISM_MAKENSIS:-makensis}"
@@ -42,7 +42,7 @@ for name in ARKISM_DEFAULT_SERVER ARKISM_DEFAULT_WORKSPACE ARKISM_DEFAULT_PROJEC
 done
 # Check the feed first: another session may have shipped a newer version (see feed-newest.sh).
 NEWEST="$("$(dirname "$0")/feed-newest.sh")"
-if [[ -n "$NEWEST" ]] && { [[ "$NEWEST" = "$VERSION" ]] || [[ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; }; then
+if [[ -n "$NEWEST" && "$VERSION" != *-test.* ]] && { [[ "$NEWEST" = "$VERSION" ]] || [[ "$(printf '%s\n%s\n' "$NEWEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; }; then
   echo "the feed already has $NEWEST: build a newer version than that" >&2; exit 2
 fi
 REMOTE="$BUILD_DIR/$VERSION-$(date -u +%Y%m%dT%H%M%SZ)-$$"
