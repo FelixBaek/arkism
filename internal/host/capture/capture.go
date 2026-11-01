@@ -1133,15 +1133,11 @@ func hookInjectWithReceiptView(data map[string]any, name any, stdout io.Writer, 
 	if err := func() (err error) { defer recovered(&err); return sessionStore().LinkAgent(sid) }(); err != nil {
 		metric(kv("event", "hook_error"), kv("hook", "session_link"), kv("error", pyType(err)))
 	}
-	crew := ""
+	crew, inbox := "", ""
 	if name == "UserPromptSubmit" {
-		crew = crewContext(data, 3*time.Second)
+		crew, inbox = crewContext(data, 3*time.Second), inboxContext(sid, 3*time.Second)
 	}
 	work := workContext(data)
-	inbox := ""
-	if name == "UserPromptSubmit" {
-		inbox = inboxContext(sid, 3*time.Second)
-	}
 	var part host.Part
 	var revs *promptDelivery
 	var stableDelivery *stableOutput
@@ -1165,18 +1161,11 @@ func hookInjectWithReceiptView(data map[string]any, name any, stdout io.Writer, 
 		metric(kv("event", "hook_error"), kv("hook", name), kv("error", pyType(err)))
 		part = host.Part{}
 	}
-	budget := host.ContextMaxChars
-	if inbox != "" { // the taken messages always go out; the other blocks shrink around them
-		budget = max(2000, budget-host.Len(inbox)-2)
-	}
-	ctx, err := host.AssembleParts(part, host.Part{Full: work}, host.Part{Full: crew, Meta: host.CrewMeta(crew)}, budget)
+	ctx, err := host.AssembleParts(part, host.Part{Full: work}, host.Part{Full: crew, Meta: host.CrewMeta(crew)}, inboxBudget(inbox))
 	if err != nil {
 		return err
 	}
-	ctx = appendReceiptRecentContext(data, name, ctx)
-	if inbox != "" {
-		ctx = strings.TrimPrefix(ctx+"\n\n"+inbox, "\n\n")
-	}
+	ctx = withInbox(appendReceiptRecentContext(data, name, ctx), inbox)
 	if err := writeHookReceiptOutput(stdout, name, ctx, revs, chain); err != nil {
 		return err
 	}
