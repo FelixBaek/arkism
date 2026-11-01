@@ -42,7 +42,7 @@ func init() {
 
 const crewProg = "arkism crew"
 
-const crewUsage = "{resolve,run-node,handoff,start,status,decide,hook-context,list,route,keys,accounts,providers,backends} ..."
+const crewUsage = "{resolve,run-node,handoff,start,status,decide,hook-context,list,convert,route,keys,accounts,providers,backends} ..."
 
 // crewCommand is one parsed subcommand: its options and the positionals it needs.
 type crewCommand struct {
@@ -61,6 +61,7 @@ var crewCommands = map[string]crewCommand{
 	"status":       {positional: []string{"run_id"}},
 	"decide":       {valued: []string{"note", "wait"}, bools: []string{"approve", "reject"}, positional: []string{"run_id"}, floats: []string{"wait"}},
 	"hook-context": {valued: []string{"caller-model"}},
+	"convert":      {valued: []string{"backup"}, bools: []string{"apply"}},
 	"list":         {},
 	"route": {valued: []string{"task", "cwd", "access", "effort", "group", "work-id", "pilot-arm"}, bools: []string{"decide-only"}, required: []string{"task"},
 		choices: map[string][]string{"access": {"read", "write", "full"}, "effort": efforts}},
@@ -272,6 +273,12 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 			out = append(out, ordered(r, crewOrder...))
 		}
 		fmt.Fprintln(stdout, dumpIndent(out))
+	case "convert":
+		out, err := runConvert(a.flags["apply"], a.get("backup", ""))
+		if out != nil {
+			fmt.Fprintln(stdout, dumpIndent(out))
+		}
+		return 0, err
 	case "route":
 		return runRouteCmd(a, stdout)
 	case "providers show", "providers report", "providers watch":
