@@ -177,29 +177,12 @@ func (s *Service) TakeSessionMessages(ctx context.Context, token string, in Sess
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out.Items = []SessionMessageItem{}
 		for _, row := range rows {
-			current, err := tx.Get(ctx, colSessionMessages, in.Scope, row.ID)
-			if errors.Is(err, ErrNotFound) {
-				continue
-			}
+			item, err := deliverSessionMessage(ctx, tx, in, d.PrincipalID, row.ID, now)
 			if err != nil {
 				return err
 			}
-			// Another turn took it first, or the row belongs to someone else.
-			if !isSessionMessage(current) || !live(current) || current.SessionMessage.TargetSession != in.Session {
-				continue
-			}
-			m := *current.SessionMessage
-			out.Items = append(out.Items, SessionMessageItem{ID: current.ID, FromSession: m.FromSession, FromOrigin: m.FromOrigin, TargetSession: m.TargetSession, Text: m.Text, CreatedAt: current.CreatedAt})
-			next := current
-			delivered := m
-			delivered.Text, delivered.DeliveredAt = "", &now
-			next.SessionMessage = &delivered
-			next.Status, next.Revision, next.UpdatedAt = sessionMessageStatusDelivered, current.Revision+1, now
-			if err := tx.Replace(ctx, colSessionMessages, next, current.Revision); err != nil {
-				return err
-			}
-			if err := audit(ctx, tx, in.Scope, d.PrincipalID, "read:"+colSessionMessages+":take", current.ID); err != nil {
-				return err
+			if item != nil {
+				out.Items = append(out.Items, *item)
 			}
 		}
 		return nil
@@ -208,6 +191,31 @@ func (s *Service) TakeSessionMessages(ctx context.Context, token string, in Sess
 		return SessionMessageTakeOutput{Items: []SessionMessageItem{}, Authority: AuthorityDataOnly}, err
 	}
 	return out, nil
+}
+
+// deliverSessionMessage marks one waiting message delivered and erases its body; nil when it is no longer waiting.
+func deliverSessionMessage(ctx context.Context, tx Tx, in SessionMessageTakeInput, principal, id string, now time.Time) (*SessionMessageItem, error) {
+	current, err := tx.Get(ctx, colSessionMessages, in.Scope, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Another turn took it first, or the row belongs to someone else.
+	if !isSessionMessage(current) || !live(current) || current.SessionMessage.TargetSession != in.Session {
+		return nil, nil
+	}
+	m := *current.SessionMessage
+	item := SessionMessageItem{ID: current.ID, FromSession: m.FromSession, FromOrigin: m.FromOrigin, TargetSession: m.TargetSession, Text: m.Text, CreatedAt: current.CreatedAt}
+	next, delivered := current, m
+	delivered.Text, delivered.DeliveredAt = "", &now
+	next.SessionMessage = &delivered
+	next.Status, next.Revision, next.UpdatedAt = sessionMessageStatusDelivered, current.Revision+1, now
+	if err := tx.Replace(ctx, colSessionMessages, next, current.Revision); err != nil {
+		return nil, err
+	}
+	return &item, audit(ctx, tx, in.Scope, principal, "read:"+colSessionMessages+":take", current.ID)
 }
 
 var _ sessionMessageRowsReader = (*Postgres)(nil)

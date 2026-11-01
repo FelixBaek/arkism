@@ -2,6 +2,7 @@ package capture
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
@@ -46,4 +47,20 @@ func inboxContext(sid string, timeout time.Duration) string {
 		body = append(body, host.KV{Key: "more", Value: "남은 메시지는 다음 턴에 오거나 read_session_messages로 읽습니다"})
 	}
 	return InboxHeader + host.MustDumps(body, host.DumpOpts{NoASCII: true})
+}
+
+// inboxBudget leaves room for the taken messages, which always go out; the other blocks shrink around them.
+func inboxBudget(inbox string) int {
+	if inbox == "" {
+		return host.ContextMaxChars
+	}
+	return max(2000, host.ContextMaxChars-host.Len(inbox)-2)
+}
+
+// withInbox puts the inbox block last, so the context still starts with the memory block markShown checks.
+func withInbox(ctx, inbox string) string {
+	if inbox == "" {
+		return ctx
+	}
+	return strings.TrimPrefix(ctx+"\n\n"+inbox, "\n\n")
 }
