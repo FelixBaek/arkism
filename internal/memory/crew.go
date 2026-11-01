@@ -250,10 +250,12 @@ type CrewPage struct {
 }
 
 // CrewResolution is what a hook needs to call "$handle". Members and
-// LeaderModels are always empty (kept for older readers).
+// LeaderModels are always empty (kept for older readers). Part is the agent or
+// team an "@handle" named when Item is the workflow wrapping it.
 type CrewResolution struct {
 	Mode         string   `json:"mode,omitempty"`
 	Item         Record   `json:"item"`
+	Part         *Record  `json:"part,omitempty"`
 	Members      []Record `json:"members"`
 	LeaderModels []string `json:"leader_models"`
 }
@@ -798,6 +800,9 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 	}
 	for _, r := range page.Items {
 		if crewNamespace(r.Crew.Type) == ns && r.Crew.Handle != "" && crewKey(r.Crew.Handle) == key {
+			if ns == "@" {
+				return atResolution(page, r), nil
+			}
 			return CrewResolution{Item: r, Members: []Record{}, LeaderModels: []string{}}, nil
 		}
 	}
@@ -805,6 +810,30 @@ func (s *Service) ResolveCrew(ctx context.Context, token string, scope Scope, ha
 		return flowAlias(page, key)
 	}
 	return CrewResolution{}, ErrNotFound
+}
+
+// atResolution: "@handle" of an agent or team reaches the workflow of the same name wrapping it
+// (crew convert). A same-named workflow that does not wrap it is a clash: the agent or team still answers.
+func atResolution(page CrewPage, part Record) CrewResolution {
+	for _, r := range page.Items {
+		if r.Crew.Type == "workflow" && crewKey(r.Crew.Handle) == crewKey(part.Crew.Handle) && wrapsCrew(*r.Crew, part.ID) {
+			return CrewResolution{Item: r, Part: &part, Members: []Record{}, LeaderModels: []string{}}
+		}
+	}
+	return CrewResolution{Item: part, Members: []Record{}, LeaderModels: []string{}}
+}
+
+// wrapsCrew: a step of workflow w runs the agent or team id.
+func wrapsCrew(w Crew, id string) bool {
+	if w.Graph == nil {
+		return false
+	}
+	for _, n := range w.Graph.Nodes {
+		if n.Type == "expert" && n.Config["expert"] == id || n.Type == "team" && n.Config["team"] == id {
+			return true
+		}
+	}
+	return false
 }
 
 func crewRoutes(mux routeRegistrar, s *Service) {

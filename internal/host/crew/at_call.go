@@ -11,6 +11,14 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 )
 
+// atPart is the agent or team an "@handle" named, also when the server answers with the workflow wrapping it.
+func atPart(res map[string]any) map[string]any {
+	if part := obj(res["part"]); len(part) > 0 {
+		return part
+	}
+	return obj(res["item"])
+}
+
 func callAt(handle, task string, wait float64, cwd string, resolver func(string) (map[string]any, error)) (map[string]any, error) {
 	task = strings.TrimSpace(task)
 	if task == "" {
@@ -24,7 +32,7 @@ func callAt(handle, task string, wait float64, cwd string, resolver func(string)
 	if err != nil {
 		return nil, apiErr(err)
 	}
-	item := obj(res["item"])
+	item := atPart(res)
 	c := obj(item["crew"])
 	if cwd != "" {
 		task += "\n\n작업 폴더: " + cwd

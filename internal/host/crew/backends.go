@@ -420,7 +420,7 @@ func useBackend(name, expert string) (any, error) {
 	if err != nil {
 		return nil, crewErr(handle + " 전문가를 찾지 못했어요")
 	}
-	item := obj(res["item"])
+	item := atPart(res)
 	c := obj(item["crew"])
 	if c["type"] != "agent" {
 		return nil, crewErr(handle + "은(는) 전문가가 아니에요")
