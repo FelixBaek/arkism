@@ -118,4 +118,5 @@ STATE = {("/v1/memories/query", "idle"): lambda r: r.get("kind") not in ("user",
 SKILL_RULE = {"name": lambda rx, r: re.fullmatch(rx, r.get("name") or "", re.I), "path": lambda rx, r: re.search(rx, (r.get("id") or "") + " " + (r.get("source_path") or ""), re.I),
               "": lambda rx, r: re.search(rx, r.get("description") or "", re.I)}
 
+http.server.ThreadingHTTPServer.request_queue_size = 128  # the default 5 drops bursts of parallel calls; a dropped SYN retries only after 1 s
 http.server.ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
