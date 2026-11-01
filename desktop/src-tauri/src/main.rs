@@ -688,9 +688,15 @@ struct Update {
 }
 
 fn strictly_newer(current: &str, latest: &str) -> Result<bool, String> {
+    // A local test build x.y.z-test.N (desktop/check-version.sh) is older than the x.y.z release.
+    let (current, test) = match current.split_once("-test.") {
+        Some((base, n)) if !n.is_empty() && n.len() <= 4 && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit()) => (base, true),
+        Some(_) => return Err("update_current_invalid".into()),
+        None => (current, false),
+    };
     let current = parse_version(current).ok_or_else(|| "update_current_invalid".to_string())?;
     let latest = parse_version(latest).ok_or_else(|| "update_feed_invalid".to_string())?;
-    Ok(latest > current)
+    Ok(latest > current || (test && latest == current))
 }
 
 fn install_update_core(
@@ -1196,6 +1202,7 @@ mod tests {
             assert_eq!((fetches.get(), installs.get()), (1, 0));
             assert_eq!(strictly_newer("1.2.3", version), Ok(false));
         }
+        assert_eq!(strictly_newer("1.2.3-test.1", "1.2.2"), Ok(false));
     }
 
     #[test]
@@ -1204,6 +1211,10 @@ mod tests {
             ("a.b.c", "1.2.4", "update_current_invalid"),
             ("1.2", "1.2.4", "update_current_invalid"),
             ("4294967296.0.0", "1.2.4", "update_current_invalid"),
+            ("1.2.3-test.0", "1.2.4", "update_current_invalid"),
+            ("1.2.3-test.", "1.2.4", "update_current_invalid"),
+            ("1.2.3-test.+1", "1.2.4", "update_current_invalid"),
+            ("1.2.3-beta.1", "1.2.4", "update_current_invalid"),
             ("1.2.3", "a.b.c", "update_feed_invalid"),
             ("1.2.3", "1.2", "update_feed_invalid"),
             ("1.2.3", "4294967296.0.0", "update_feed_invalid"),
@@ -1225,7 +1236,7 @@ mod tests {
 
     #[test]
     fn update_install_passes_the_same_newer_candidate_exactly_once() {
-        for (current, version) in [("0.9.9", "0.10.0"), ("1.2.3", "1.2.4")] {
+        for (current, version) in [("0.9.9", "0.10.0"), ("1.2.3", "1.2.4"), ("1.2.3-test.2", "1.2.3")] {
             let latest = update_fixture(version);
             let expected = (latest.version.clone(), latest.file.clone(), latest.sha256.clone());
             let fetches = std::cell::Cell::new(0);

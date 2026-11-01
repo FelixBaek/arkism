@@ -25,7 +25,7 @@ function Invoke-InstallerPackagingProcess([string]$Executable, [string]$Argument
 }
 function Invoke-WindowsInstallerPackage {
   param(
-    [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version,
+    [Parameter(Mandatory)][ValidatePattern('^\d+\.\d+\.\d+(-test\.[1-9]\d{0,3})?$')][string]$Version,
     [Parameter(Mandatory)][string]$Stage,
     [Parameter(Mandatory)][string]$Makensis,
     [Parameter(Mandatory)][string]$Output,
@@ -46,13 +46,15 @@ function Invoke-WindowsInstallerPackage {
   $compiler = Get-Command $Makensis -CommandType Application -ErrorAction Stop | Select-Object -First 1
   Assert-InstallerPackagingPath $compiler.Source $false
   $source = Join-Path $PSScriptRoot 'arkism.nsi'
+  # Windows file versions are four numbers: x.y.z-test.N becomes x.y.z.N, a release x.y.z.0.
+  $numeric = if ($Version -match '-test\.(\d+)$') { ($Version -replace '-test\.\d+$', '') + '.' + $Matches[1] } else { "$Version.0" }
   $owner = [guid]::NewGuid().ToString('N')
   $root = Join-Path $TempRoot ('arkism-uninstaller-' + $owner)
   $null = New-Item -ItemType Directory -Path $root -ErrorAction Stop
   [IO.File]::WriteAllText((Join-Path $root 'TASK-OWNER.txt'), $owner)
   Write-Information "Owned uninstaller emission directory: $root" -InformationAction Continue
   $emitter = Join-Path $root 'emit-uninstaller.exe'
-  & $compiler.Source /V2 "/DVERSION=$Version" /DARKISM_EMIT_UNINSTALLER "/DSTAGE_DIR=$Stage" "/DOUT_FILE=$emitter" $source
+  & $compiler.Source /V2 "/DVERSION=$Version" "/DVI_VERSION=$numeric" /DARKISM_EMIT_UNINSTALLER "/DSTAGE_DIR=$Stage" "/DOUT_FILE=$emitter" $source
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $emitter -PathType Leaf)) { throw 'packaging_uninstaller_compile_failed' }
   Invoke-InstallerPackagingProcess $emitter '/S' $root 'emit'
   $generated = Join-Path $root 'uninstall.exe'
@@ -62,7 +64,7 @@ function Invoke-WindowsInstallerPackage {
   $manifest = Join-Path $root 'payload.json'
   Invoke-InstallerPackagingProcess $helper ('pack "' + $Version + '" "' + $Stage + '" "' + $manifest + '"') $root 'pack'
   Assert-InstallerPackagingPath $manifest $false
-  & $compiler.Source /V2 "/DVERSION=$Version" "/DSTAGE_DIR=$Stage" "/DPACKAGE_MANIFEST=$manifest" "/DOUT_FILE=$Output" $source
+  & $compiler.Source /V2 "/DVERSION=$Version" "/DVI_VERSION=$numeric" "/DSTAGE_DIR=$Stage" "/DPACKAGE_MANIFEST=$manifest" "/DOUT_FILE=$Output" $source
   if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Output -PathType Leaf)) { throw 'packaging_installer_compile_failed' }
   return [pscustomobject]@{ Installer = $Output; Uninstaller = $uninstaller; Manifest = $manifest; EmissionRoot = $root }
 }

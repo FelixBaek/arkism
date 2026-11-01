@@ -18,7 +18,8 @@ import (
 
 const uninstallRegistration = `Software\Microsoft\Windows\CurrentVersion\Uninstall\Arkism`
 
-var releaseVersion = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$`)
+// A release x.y.z, or a local test build of it x.y.z-test.N (desktop/check-version.sh).
+var releaseVersion = regexp.MustCompile(`^(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})(-test\.[1-9][0-9]{0,3})?$`)
 
 type metadataScope struct {
 	Live, SID, Registration string

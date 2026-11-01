@@ -714,3 +714,16 @@ func TestShortcutFolderCheckIsReadOnlyAndRejectsOtherFolders(t *testing.T) {
 		t.Fatal("accepted relative expected folder")
 	}
 }
+
+func TestReleaseVersionAcceptsLocalTestBuilds(t *testing.T) {
+	for _, v := range []string{"0.1.6", "0.1.6-test.1", "0.1.6-test.9999"} {
+		if !releaseVersion.MatchString(v) {
+			t.Fatalf("%s rejected", v)
+		}
+	}
+	for _, v := range []string{"0.1.6-test.0", "0.1.6-test.01", "0.1.6-test.10000", "0.1.6-beta.1", "0.1.6-test."} {
+		if releaseVersion.MatchString(v) {
+			t.Fatalf("%s accepted", v)
+		}
+	}
+}
