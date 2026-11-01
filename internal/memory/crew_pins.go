@@ -269,6 +269,9 @@ func (s *Service) resolvePins(ctx context.Context, token string, scope Scope, ha
 	if err != nil {
 		return out, Decision{}, err
 	}
+	if res.Part != nil {
+		res.Item = *res.Part // pins live on the agent or team, not on the workflow wrapping it
+	}
 	c := res.Item.Crew
 	if c.Type != "agent" && c.Type != "team" {
 		return out, Decision{}, ErrNotFound

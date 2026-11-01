@@ -571,7 +571,7 @@ func tryAgent(rec, a map[string]any, runner runFn) (map[string]any, error) {
 func tryAgentWithObservation(rec, a map[string]any, runner runFn, request *crewrun.ObservationTransportRequest) (map[string]any, error) {
 	handle := strings.TrimPrefix(strings.TrimSpace(sOr(a["expert"])), "@")
 	res, err := runnerCall("/v1/crew/resolve?"+scopeQuery("handle", "@"+handle), nil, 15*time.Second)
-	item := obj(res["item"])
+	item := atPart(res)
 	c := obj(item["crew"])
 	if err != nil || c["type"] != "agent" {
 		return failedResult("@" + handle + " 작업 에이전트를 찾지 못했어요"), nil
