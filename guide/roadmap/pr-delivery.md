@@ -94,8 +94,8 @@
 
 - 대상 base: `main` (공개 원격에서 확인).
 - 새 공개 후보: `codex/roadmap-delivery-20261101`.
-- PR: 생성 전. 생성 뒤 이 행에 실제 링크를 기록한다.
+- PR: [#534](https://github.com/FelixBaek/arkism/pull/534). 사용자 승인에 따라 `human-approved` 라벨을 적용했다.
 - 최신 main 반영: `15edfca69efa4565592b1f355a3cd5063d6fa4df`; 세션 메시지 변경을 보존하고 API 정의를 함께 합쳤다.
 - 공개 후보 검사: 전체 `tools/check_local.py` 종료0/1246.806초, Go vet·전체 race 및 Python179/820/49·프런트591개 통과(프런트 실패·누락0), 고정2970파일 변경0, lint0. 자체 임시PG 종료·삭제 확인. 일부 불변 Go 패키지는 캐시이며 개별 Go skip은 별도 미계수. 제품 빌드 없음.
-- 원격 CI/AI 리뷰/병합: 아직 미실행. 실제 GitHub 결과를 확인한 뒤 진행한다.
+- 원격 CI: [#534 Checks](https://github.com/FelixBaek/arkism/pull/534/checks), AI 리뷰·병합: [#534 Conversation](https://github.com/FelixBaek/arkism/pull/534). 이 링크의 최신 head별 결과가 최종 상태다. 모든 필수 검사와 AI 리뷰 지적을 확인한 뒤 병합한다; 생성 시점에는 아직 통과·병합을 주장하지 않는다.
 - 이슈: 병합 후 #151/#152/#154/#155 조건부 종료 후보. #150/#153/#156/#158 보류 유지; 삭제된 #157은 완료로 세지 않는다.
