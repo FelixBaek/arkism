@@ -110,6 +110,10 @@
       {
         "root": "repo",
         "path": "sonar-project.properties"
+      },
+      {
+        "root": "repo",
+        "path": "tools/ci_go_test.py"
       }
     ]
   },

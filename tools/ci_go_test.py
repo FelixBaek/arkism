@@ -30,7 +30,7 @@ HEAVY = ["./internal/memory", "./internal/host/crew", "./cmd/memoryd"]
 # Keep daemon tests in their original within-package order, after sibling work.
 SERIAL_PACKAGES = {"./cmd/memoryd"}
 COVERAGE_FILE = "go-coverage.out"
-# These real PG measurements require each bounded worker round to complete,
+# These real PG measurements and restore checks need each worker round to complete,
 # including publication, within the unchanged one-second fixture budget. Run
 # them once after sibling test groups finish, rather than rerunning timeouts.
 SERIAL_TESTS = {
@@ -38,6 +38,7 @@ SERIAL_TESTS = {
         "TestDynamicsMeasurementProjectionPG",
         "TestDynamicsMeasurementPilotSyncAsyncPG",
         "TestDynamicsLoadSustainedOverloadPG",
+        "TestDynamicsLoadRecoveryRebindAfterActualRestorePG",
     },
 }
 # Tests with a wall-clock budget that can miss it only because the groups share the machine.

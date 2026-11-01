@@ -1,0 +1,12 @@
+# Restore rebind CI isolation / 복원 재연결 검사 부하 분리
+
+Task: PR #534, SYS-04/SYS-05 recovery regression delivery
+Research: Synthetic local correctness validation only; no scientific or product acceptance.
+Design: Run the exact actual-restore rebind consistency test once in the existing deferred serial group after sibling work. Preserve its real dump/restore, copied-lease fences, review holds, final drain assertions, original queue/worker/lease limits and failure propagation. Other test groups remain parallel.
+Relation: partial
+Deviation: CI scheduling only. No product guard, fixture timestamp, timeout, queue allowance, retry policy or assertion change.
+Why: Current-head Go CI reported dependency_unavailable while draining the restored queue. The same unchanged test passed five isolated real-PostgreSQL race runs. Its bounded worker includes authorization, claims, capture preparation, apply and publication, while the previous CI schedule overlapped other heavy groups. This recovery correctness fixture is not a throughput/latency benchmark.
+Verified: Failed CI evidence is retained. Fresh disposable-PostgreSQL race target passed5times, package7.661 seconds, runner9.691 seconds, all source pins unchanged. Own database stopped0 and temporary directory removed. After the exact serial-set addition, all179 tools tests passed with local test sockets and the existing installed fixture signer. Existing tests confirm serial groups retain race/coverage arguments, execute once after parallel joins and propagate failure without retries/downgrades. Frozen roadmap check passed. Current new-head full CI and AI review remain pending.
+Limits: dependency_unavailable loses the underlying SQL/context phase, so the exact deadline/source of the failure is not proven from that error alone. Queue-wait expiry is not asserted as the cause. Serialization reduces sibling contention; a repeated failure still fails CI and requires bounded phase/error diagnosis. The first broad tools attempt lacked localhost socket permission and the fixture signer setting; its failures remain recorded, followed by the correctly configured179-test pass. No product build, deployment, operating database or paid provider call.
+
+복원 기능의 원래 실제 dump/restore·권한·복원 검토·복사 lease 거부·큐 배출 검증은 그대로다. 새로운 자동 재시도나 실패 무시는 추가하지 않는다. 테스트1개만 기존 serial 목록으로 옮겨 병렬 형제 작업이 끝난 뒤 한 번 실행한다. 원래 제한 시간을 늘린 제품 수정이나5회 통과를 전체 CI 통과로 표현하지 않는다. 최신 CI가 실제 통과해야 병합한다.
