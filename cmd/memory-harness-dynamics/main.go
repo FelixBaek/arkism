@@ -163,7 +163,7 @@ func readAt(root *os.Root, name string) ([]byte, error) {
 	if !before.Mode().IsRegular() {
 		return nil, problem("unsafe_path", "$")
 	}
-	file, err := root.Open(name)
+	file, err := openReadFile(root, name)
 	if err != nil {
 		return nil, problem("io_error", "$")
 	}
@@ -643,6 +643,12 @@ func syncDirectories(root *os.Root) error {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 1 && args[0] == "hash-stream" {
+		return nativeHashStream(os.Stdin, stdout)
+	}
+	if len(args) > 0 && args[0] == "verify" {
+		return runVerify(args, stdout, stderr)
+	}
 	status, err := executeRun(args)
 	if err == nil {
 		raw, writeErr := jsonBytes(status)

@@ -1,0 +1,19 @@
+{
+  "protocol": "exp04-evidence-package-v1",
+  "experiment_family": "p1",
+  "stage": "planned",
+  "population": "synthetic",
+  "artifacts": [],
+  "comparisons": [],
+  "coverage": [],
+  "claims": [],
+  "reuse_registry": [],
+  "next_questions": [],
+  "responsibility": {
+    "research_owner_ref": null,
+    "product_owner_ref": null,
+    "requested_at": null,
+    "unresolved_reason": "not_run_no_actual_results"
+  },
+  "owner_decision": null
+}

@@ -13,7 +13,20 @@ _SYSTEM_MODULES = ('system/sys_01/test_shadow_contract.py',
                    'system/sys_05/test_load.py',
                    'system/sys_06/test_integration_report.py')
 _EXPERIMENT_MODULES = ('experiments/exp_01/test_protocol.py',
-                       'experiments/exp_02/test_run_plan.py')
+                       'experiments/exp_02/test_run_plan.py',
+                       'experiments/exp_02/test_materialize_native.py',
+                       'experiments/exp_02/test_produce_run_plan.py',
+                       'experiments/exp_02/test_record_native.py',
+                       'experiments/exp_02/test_native_retries.py',
+                       'experiments/exp_03/test_analysis.py',
+                       'experiments/exp_03/test_attribution_views.py',
+                       'experiments/exp_03/test_native_attribution.py',
+                       'experiments/exp_03/test_native_projection.py',
+                       'experiments/exp_03/test_locked_analysis.py',
+                       'experiments/exp_03/test_ref_selection.py',
+                       'experiments/exp_03/test_task_adapter.py',
+                       'experiments/exp_04/test_decision_gate.py',
+                       'experiments/exp_04/test_final_consumer.py')
 _DYNAMICS_MODULES = ('test_dynamics_compare.py',)
 _DIRECTORY = Path(__file__).parent / 'memory-harness-v1'
 

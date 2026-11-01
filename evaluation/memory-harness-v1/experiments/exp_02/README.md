@@ -52,3 +52,29 @@ EXP02_POOL=1 EXP02_PLAN_DIR="$PLAN_DIR" EXP02_OUT_DIR="$NEW_DIR" \
 `EXP02_POOL=1`은 같은 split의 스트림을 인물·주제 조합이 겹치지 않게 묶어 한 native 스트림으로 합칩니다. 합칠 때 어느 스트림이든 자기 사건 순서가 바뀌면 거절합니다.
 
 한계: 과거 시점 질문은 cutoff 전에 무효화된 판을 되살릴 수 없어 모든 정책에서 정답에 닿지 못합니다. 계획의 미인증 outcome은 synthetic_independent 근거로 올려 투영하므로, outcome을 쓰는 정책의 차이는 근거가 인증된 경우를 가정한 값입니다. 중요도 특성은 기억 종류에 고정 가중치를 주는 단순 규칙입니다.
+
+## 원자료 기반 계획 생성기 (부분 구현)
+
+별도 `produce_run_plan.py`는 원본 자료·분석 일정·별도 합성 수용 입력·소유자 artifact 참조에서 질문/반복별 원래 typed RunPlan, `not_run` 원장, v2 시점 연결과 EXP03 projection 입력을 생성한다. 원래 `build_run_plan.py plan/verify-index`의 보류 gate는 그대로이며, 이 생성기가 그 gate의 수용을 대신하지 않는다. 참조 bytes/hash는 읽고 대조하지만 사람의 수용·독립성을 인증하지 않는다. 원자료 manifest의 events/queries/gold raw SHA도 직접 확인한다. 원본 analysis-source bytes를 그대로 보존하고 final-k 불일치는 덮어쓰지 않고 거부한다.
+
+CLI는 `--request --input-root --evidence-root --output-root --native-cli --native-cli-sha256 --out`을 명시한다. out은 input-root의 새 `produced` 디렉터리만 허용하며 덮어쓰지 않는다. 선언된 argv는 고정 native run 형식으로 생성한다. CLI는 핀으로 지정한 기존 실행파일의 hash-stream 프로세스1개를 사용하며 정책 실행은0개다. 결과도 `built_not_executed_or_authorized`다. 후속 별도 실행 dispatch·실제 원장 recorder·최종 검토와 REF/확인실험 전체 인수 연결이 필요하다. 자동 제품 빌드·정책 실행·승인 기능은 없다.
+
+## 실제 native 실행 원장 (부분 구현)
+
+`record_native.py`는 `--run-plan --run-index --projection-plan --analysis-plan --schedule --dispatch --trusted-dispatch-sha256 --input-root --evidence-root --output-root --native-cli`를 명시해 호출한다. 확인실험은 `--final-inputs --trusted-owner-review-sha256`도 함께 필요하다. 별도 실행 배정은 정확한 계획/미실행 원장/projection/실행파일 SHA, 순서 있는 시도 목록과 nanosecond 제한을 결속하며 범위는 `offline_native_fixture_only`다. 이는 실제 사람의 권한 인증을 대신하지 않는다.
+
+읽기 전용 preflight 이후 새 output-root/recording journal을 만들고 실제 고정 native run을 기록한다. native 출력의 부모 디렉터리는 미리 준비되어 있어야 한다. 고정 bytes의 private image를 실행하며 원래 argv와 실행 image SHA를 함께 기록한다. raw stdout/stderr·시간·exit·실패·미측정 비용과 원본 재검산 근거를 보존하고, 기존 produced/index.json 대신 recording/index.json과 projection.json을 새로 남긴다. 기존 output/journal은 덮어쓰지 않는다. 실제 프로세스 시간과 검증 호출, REF 재검산의 미측정 프로세스 수를 구분한다.
+
+시간초과와 입력 거부는 실패로 보존한다. 제어 가능한 취소는 자식 종료/회수와 현재 시도 저장 후 다음 실행을 중단하고 CLI130으로 끝낸다. 호스트 종료·예상 밖 치명적 중단의 journal은 완성 영수증이 아니며 복구가 필요할 수 있다. v1/v2 실행 배정은 job당1회를 지원한다. 다중 시도는 아래 v3에서 별도로 연결한다. 실제 연구 결과·사람의 검토와 전체 카드 수용은 별도다.
+
+## 단계별 산출물의 v2 이름
+
+`exp02-native-plan-request-v2`는 기존 필드에 `production_namespace`(단일 ID)와 `task_contract`(ArtifactRef 또는 null)를 추가한다. 생성 위치는 input-root의 해당 새 디렉터리이며, task가 있으면 전체 원자료4종을 같은 bytes로 결속하고 projection v2로 연결한다. `exp02-native-execution-dispatch-v2`는 `artifact_namespace`를 추가해 원장을 output-root의 새 단일 디렉터리에 저장한다. v1은 계속 produced/recording을 쓴다. 이 기능은 검증/최종 단계 공존을 위한 것이며 job당 여러 재시도의 출력 연결을 대신하지 않는다.
+
+## 실제 다중 시도와 출력 보존 v3
+
+`exp02-native-plan-request-v3`는 v2 필드에 `attempt_order`(고유 ID 1~16개)와 `artifact_namespace`를 추가한다. 고정 v1 RunPlan/RunIndex 자료형은 바꾸지 않는다. 한 job의 모든 시도는 계획의 동일 argv를 실제로 실행한다. 출력은 실행기가 새로 예약한 namespace/work/job 디렉터리에서 만들며, 각 시도가 끝나면 namespace 안의 결정적인 별도 디렉터리로 옮긴다. Linux의 원자적 RENAME_NOREPLACE를 사용해 기존 디렉터리를 덮어쓰지 않는다. Linux/libc 진입점이 없는 호스트는 실행 전에 거부한다. 실제 파일 시스템에서 이동이 실패하면 출력을 보존하고 추가 실행을 중단한다.
+
+`exp02-native-execution-dispatch-v3`는 각 attempts 항목에 `timeout_ns`를 추가한다. 전체 제한도 함께 적용한다. `exp03-native-projection-plan-v3`는 nullable task_contract와 `output_archive`(protocol: exp02-native-attempt-archive-v1, artifact_namespace)를 결속한다. native 검증은 각 시도의 정확한 archive 경로만 읽으며 다른 시도의 출력으로 바꿔치기하면 거부한다. 원래 CLI의 argv·stdout·출력 파일 bytes는 고치지 않는다.
+
+완료뿐 아니라 시간초과 후 남은 부분 출력도 보존한다. 부분 출력은 성공으로 인정하지 않는다. 주 분석에는 같은 시계에서 먼저 완료된 결과만 쓰고 정확히 같은 완료 시각이면 사전 순서를 쓴다. 이후 중복 결과는 주 분석에 더하지 않는다. 모든 시도의 실패·실행시간·비용·미측정 항목은 남는다. 실제 검증 사례는 시간초과 1회와 완료 2회에서 주 분석 7행, 시도 3개의 비용 보존이다. 합성 fixture 실행이며 실제 연구 결과 수용이나 제품 실행 권한을 뜻하지 않는다.

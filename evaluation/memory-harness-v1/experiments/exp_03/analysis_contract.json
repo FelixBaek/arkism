@@ -1,0 +1,16 @@
+{
+  "protocol": "exp03-analysis-contract-v1",
+  "status": "implementation_under_review_not_scientific_approval",
+  "input_protocols": ["exp03-analysis-plan-v1", "exp03-schedule-v1", "exp03-observations-v1", "exp03-cost-ledger-v1"],
+  "output_protocol": "exp03-paired-analysis-v1",
+  "scope": "paired_history_analysis_with_explicit_cluster_and_missingness_rules",
+  "separate_from_frozen_v1": true,
+  "maximum_input_bytes": 67108864,
+  "maximum_rows": 100000,
+  "maximum_bootstrap_work": 20000000,
+  "statuses": ["success", "truncated", "retrieval_failure", "packing_loss", "fence_rejected", "generator_failure", "checker_failure", "api_error", "timeout", "not_run", "missing"],
+  "cost_phases": ["ingest", "embedding", "importance", "retrieval", "reader_generator", "judge", "evidence_validation", "tuning_fit", "state_read_update", "repair_rebuild", "storage", "retry", "whole_run"],
+  "cost_units": {"calls": "count", "input_tokens": "count", "output_tokens": "count", "wall_time": "nanosecond", "cpu_time": "nanosecond", "storage_bytes": "byte", "peak_memory_bytes": "byte", "actual_currency": "USD", "synthetic_units": "fixture_units_v0"},
+  "policy_decisions": "All statistical settings are explicit analysis-plan inputs. A computational seal does not authorize research or certify labels, independent observations, actual service execution or participant results.",
+  "handoff": "EXP-02 run-index and verified native artifacts require a separately reviewed input projection. This protocol never silently reinterprets a frozen DTO."
+}
