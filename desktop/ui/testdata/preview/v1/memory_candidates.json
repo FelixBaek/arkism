@@ -79,7 +79,12 @@
     "basis:inferred",
     "event_id:codex:s8"
    ],
-   "created_by_type": "agent"
+   "created_by_type": "agent",
+   "reach_suggestion": {
+    "reach": "general",
+    "reason": "특정 저장소·언어 표시 없음",
+    "confidence": 0.6
+   }
   },
   {
    "id": "c6",

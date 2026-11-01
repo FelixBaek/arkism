@@ -323,6 +323,32 @@ test("overview: 승인 대기 keeps the edited text across redraws, as the next 
   } finally { app.window.ArkismAIChat.kit = kit; await closeAll(); }
 });
 
+// #524: the AI reach suggestion is a selector; its pick (default the suggestion) goes with 승인
+test("overview: 승인 대기 lets the person pick the reach, defaulting to the AI suggestion", async () => {
+  const sent = () => app.apiCalls.filter(([, p]) => p === "/v1/memory_candidates/c5/review").map(([, , b]) => JSON.parse(String(b)));
+  const off = route("POST", "/v1/memory_candidates/c5/review", () => fail(500, "boom")); // keeps c5 waiting between picks
+  try {
+    let d = await reviewOf("Alex는 주로");
+    const chip = (label) => [...d.querySelectorAll(".ov-wide-chips[role=group] button")].find((b) => text(b).startsWith(label));
+    assert.equal(chip("범용").getAttribute("aria-pressed"), "true", "the suggestion is the default");
+    assert.match(text(chip("범용")), /AI 추천/);
+    assert.ok(chip("이 프로젝트만").disabled, "no project key, no project pick");
+    assert.match(text(d), /모든 프로젝트 \(범용\)/);
+    await press("그대로 승인", d, 30);
+    assert.equal(sent().at(-1).reach, "general");
+    d = win(); chip("개인").click();
+    assert.equal(chip("개인").getAttribute("aria-pressed"), "true");
+    assert.equal(chip("범용").getAttribute("aria-pressed"), "false");
+    assert.match(text(d), /나만 \(개인\)/, "승인하면 follows the pick");
+    await press("그대로 승인", d, 30);
+    assert.equal(sent().at(-1).reach, "personal");
+    assert.equal(sent().at(-1).reach_project, undefined);
+  } finally { off(); await closeAll(); }
+  // a candidate without a suggestion sends no reach, as before
+  const d = await reviewOf("코드 수정 후");
+  assert.equal(d.querySelector(".ov-wide-chips[role=group]"), null);
+});
+
 test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject and conflict paths", async () => {
   const merge = { id: "mpx", revision: 3, merge: { proposal: { action: "merge", candidate: { id: "c3" }, targets: [{ id: "m1" }] } } };
   const offMerge = route("GET", "/v1/merge_proposals", () => ok({ items: [merge] }));

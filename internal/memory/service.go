@@ -1336,6 +1336,11 @@ func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
 			r.Review.AIRisk = r.Classification.Risk
 		}
 	}
+	if review.Reach != "" {
+		sg := r.ReachSuggestion // the candidate's suggestion, the one the reviewer saw
+		r.Review.Reach = review.Reach
+		r.Review.ReachOverridden = sg != nil && (sg.Reach != review.Reach || review.Reach == ReachProject && sg.ReachProject != review.ReachProject)
+	}
 	if personalPattern.MatchString(review.Content + " " + review.Reason) {
 		if r.Sensitivity != "restricted" {
 			r.Sensitivity = "private"
@@ -1396,6 +1401,9 @@ func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *Cand
 			memory.ReachSuggestion = &sg
 		}
 		memory.ContentHash = ContentHash(memory.Text)
+		if review.Reach != "" {
+			memory.Reach, memory.ReachProject, memory.ReachOrigin = review.Reach, review.ReachProject, reachOriginHuman
+		}
 	}
 	var e error
 	var replacementRelation Record
