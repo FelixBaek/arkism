@@ -45,8 +45,7 @@ const text = (page) => page.evaluate(() => document.body.innerText);
 const times = (s, part) => s.split(part).length - 1;
 const shot = (page, name) => process.env.ARKISM_HOME_EVIDENCE && page.screenshot({ path: path.join(process.env.ARKISM_HOME_EVIDENCE, `${name}.png`) });
 async function overview(page) {
-  await page.locator('.nav-item[data-menu="memory"]').click(); // Memory opens on the list; 한눈에 is its last tab
-  await page.getByRole("tab", { name: /^한눈에/ }).click();
+  await page.locator('.nav-item[data-menu="memory"]').click(); // MEMORY opens on 한눈에, with no tab line
   await page.locator(".ov-host").waitFor();
   return page.locator("#table").innerText();
 }
@@ -68,8 +67,9 @@ async function overview(page) {
     assert.ok(home.includes("기억 추출이 15일째 멈췄어요") && !home.includes("360시간"), "long stall in days");
     // #189: an agent the finished report leaves out is not connected, not checking
     await shot(page, "partial-home");
-    const opencode = await page.locator(".home-agent", { hasText: "OpenCode" }).innerText();
-    assert.ok(opencode.includes("연결 안 됨"), `OpenCode row: ${opencode}`);
+    // Home lists only agents the server sees running (58255469), so a left-out one is not shown as checking or working
+    await page.locator(".home-agent").first().waitFor();
+    assert.equal(await page.locator(".home-agent", { hasText: "OpenCode" }).count(), 0, "OpenCode is not listed as working");
     const stalled = await overview(page);
     await shot(page, "partial-overview");
     assert.ok(stalled.includes("15일째 멈춤") && !stalled.includes("360시간"), "overview stall in days");
