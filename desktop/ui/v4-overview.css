@@ -205,8 +205,7 @@
 @media (max-height: 640px) { .ov-wide-win { top: 16px; height: calc(100vh - 32px); } }
 @media (max-width: 720px) { .ov-wide-win { left: 16px; width: calc(100vw - 32px); } }
 .ov-wide-win[open] { display: flex; }
-.ov-wide-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); }
-.ov-wide-body { gap: 30px; padding: 24px; }
+.ov-wide-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(340px, 1fr); gap: 30px; padding: 24px; }
 .ov-wide-left { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; }
 /* the list is the one thing that scrolls on the left: the sort/search/chips stay put; a thumb bright enough to see (#363636 on the dark panel was not) */
 .ov-wide-list, .ov-wide-right { scrollbar-color: var(--nc-quiet) transparent; }

@@ -13,7 +13,7 @@
 .mg-label { font: 400 calc(12px * var(--fs, 1))/1.4 var(--sans); color: var(--nc-muted); }
 .mg-token .mg-label { grid-column: 1 / -1; }
 .mg-field input, .mg-masked { width: 100%; height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-bg, transparent); color: var(--nc-text); font-size: calc(13px * var(--fs, 1)); }
-.mg-masked { display: flex; align-items: center; justify-content: space-between; overflow: hidden; white-space: nowrap; }
+.mg-masked { display: flex; align-items: center; justify-content: space-between; overflow: hidden; white-space: nowrap; background: var(--nc-canvas); }
 .mg-masked small { color: var(--nc-quiet); font-family: var(--sans); }
 .mg-meta, .mg-note { margin: 0; font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); color: var(--nc-muted); }
 .mg-note.warn, .mg-chan small.warn { color: var(--nc-accent); }
@@ -29,11 +29,9 @@
 .mg-chan-head { display: flex; align-items: center; gap: 8px; padding: 12px 0 4px; border-top: 1px solid var(--nc-line); }
 .mg-chan-head strong { font: 500 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .mg-chan-n { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
-.mg-chan-group .mg-chan { padding-left: 24px; border-top: 0; }
+.mg-chan-group .mg-chan { padding: 6px 0 6px 24px; border-top: 0; gap: 0; }
 /* Figma 1366:84994: boxed fields (not the app-wide fill + underline; :is(#app, body) outranks its !important), a quiet side note, tighter channel rows, the filled Slack mark */
 :is(#app, body) .mg-field input { border: 1px solid var(--nc-line) !important; border-radius: var(--nc-radius-control) !important; background: var(--nc-canvas) !important; }
 :is(#app, body) .mg-field input:focus { border-color: var(--nc-accent) !important; }
-.mg-masked { background: var(--nc-canvas); }
 .v4-side .mg-note { color: var(--nc-quiet); }
-.mg-chan-group .mg-chan { padding-top: 6px; padding-bottom: 6px; gap: 0; }
 .mg-logo.brand-mono[style*="slack-logo"] { --brand: url("img/brand/slack-mark.svg") !important; }
