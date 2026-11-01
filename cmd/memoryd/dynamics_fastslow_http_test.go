@@ -31,6 +31,10 @@ type daemonFastSlowHTTPRig struct {
 }
 
 func newDaemonFastSlowHTTPRig(t *testing.T) *daemonFastSlowHTTPRig {
+	return newDaemonRankingHTTPRig(t, true)
+}
+
+func newDaemonRankingHTTPRig(t *testing.T, withSlow bool) *daemonFastSlowHTTPRig {
 	t.Helper()
 	db := newTestDB(t, true)
 	app := daemonDynamicsLogin(t, db)
@@ -53,11 +57,12 @@ func newDaemonFastSlowHTTPRig(t *testing.T) *daemonFastSlowHTTPRig {
 	t.Setenv("MEMORY_WORKER_TOKEN", db.token)
 	t.Setenv("MEMORY_DYNAMICS_READER_TOKEN", reader)
 	block := daemonFastSlowBlock(t)
-	for _, mode := range []string{"off", "shadow", "on"} {
-		path := daemonSearchModeFiles(t, daemonBareMode("off"))
-		if mode != "off" {
-			path = daemonSearchModeFiles(t, func(m map[string]any) { m["mode"], m["fast_slow"] = mode, block })
-		}
+	modes := []string{"off", "shadow", "on"}
+	if !withSlow {
+		modes[2] = "dynamic"
+	}
+	for _, mode := range modes {
+		path := daemonRankingModeFile(t, mode, withSlow, block)
 		cfg, e := prepareDaemonDynamics(daemonOptions{DynamicsRuntimeConfig: rc, DynamicsLoadConfig: lc, DynamicsSearchConfig: path, Listen: freeAddress(t)})
 		if e != nil {
 			t.Fatal(e)
@@ -83,7 +88,9 @@ func newDaemonFastSlowHTTPRig(t *testing.T) *daemonFastSlowHTTPRig {
 	r.other = other.ID
 	native := daemonShadowNativeConfig()
 	slow := block["slow_dynamics"].(dyn.DynamicsConfigV2)
-	native.SlowTauNS, native.SlowEtaPositive = &slow.TauNS, &slow.EtaPositive
+	if withSlow {
+		native.SlowTauNS, native.SlowEtaPositive = &slow.TauNS, &slow.EtaPositive
+	}
 	for _, target := range []memory.Ref{in.Target, other} {
 		if _, err = r.worker.ActivateNativeMemoryDynamics(context.Background(), db.token, memory.NativeDynamicsActivationInput{Scope: r.scope, Target: target, Dimension: in.Dimension, Config: native, RequestID: "http-fastslow-" + target.ID}); err != nil {
 			t.Fatal(err)
@@ -302,4 +309,17 @@ func daemonFastSlowOtherMemory(t *testing.T, app *memory.Postgres, auth memory.A
 		t.Fatal("unexpected fixture trust defaults")
 	}
 	return memory.Ref{Collection: "memories", ID: row.ID, Revision: row.Revision}
+}
+
+func daemonRankingModeFile(t *testing.T, mode string, withSlow bool, block map[string]any) string {
+	t.Helper()
+	if mode == "off" {
+		return daemonSearchModeFiles(t, daemonBareMode("off"))
+	}
+	return daemonSearchModeFiles(t, func(m map[string]any) {
+		m["mode"] = mode
+		if withSlow {
+			m["fast_slow"] = block
+		}
+	})
 }

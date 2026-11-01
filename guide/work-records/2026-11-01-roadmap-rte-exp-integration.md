@@ -1,0 +1,15 @@
+# RTE and EXP owned-tree integration
+
+Task: RTE-05 / RTE-06 / EXP-02 / EXP-03 / EXP-04 (#153, #155)
+Research: Integrate executable evidence paths; no outcome efficacy or adoption claim.
+Design: Transfer the existing RTE runtime/API implementation into the isolated final-lock tree containing the EXP pipeline. Preserve the original RTE tree. Before copying, require the same base, exact destination base bytes or absent new paths, and exact predecessor full-check hashes for all fifteen runtime/test/API files. Copy one additional current work record whose only post-check changes describe verification results. Merge the shared progress document without overwriting EXP updates.
+Relation: partial
+Deviation: The predecessor full check proves its original snapshot only. The copied work record has a recorded post-check document-only delta. Combined-tree acceptance requires separate current checks. No predecessor result is added to EXP counts to claim integrated verification.
+Why: Previously the real tool-count, terminal retry/fallback handling and attribution HTTP fixes were in a separate RTE worktree. They must be present in the same owned source tree as the EXP implementation before an integrated check can evaluate that code.
+Verified: All sixteen transferred files match the explicit handoff hashes, and the original RTE files remain unchanged. Fifteen code/test/API files match the predecessor's successful full-check pins. Destination checks passed before any copy. The current work-record checker passed after transfer. Combined routing/workflow/attribution focused race tests passed 19 top-level tests without failure/skip. Final native race tests passed 28 top-level tests without failure/skip; its code/test/data pins were unchanged. The combined check_local passed (exit 0; duration 821.192 seconds), including actual PostgreSQL integration (memory package 499.368 seconds, daemon 33.414 seconds), Python tools/evaluation/reuse tests and 591 frontend tests (zero failures/skips). All 2,954 checkout files pinned before the integrated run remained identical with no added/deleted files. The fresh disposable cluster stopped successfully and was removed. Some unchanged Go packages used test cache; this is not an uncached-every-test claim.
+Limits: The full-check source snapshot is proven; subsequent work-record/ownership-only edits are separately checked and recorded as documentation deltas. No product build, operating database, deployment, paid provider request, commit, push, PR or whole-card completion. CLI counts remain post-observation enforcement; unknown-adapter policy and general dynamic-serving policy remain pending. Actual research outcome/data holds and optional work remain unchanged.
+
+제목: 실행기 수정과 실험 구현을 같은 소유 작업 트리에 통합
+이유: 별도 RTE 작업 트리의 도구 계수·중단·HTTP 기록 수정을 EXP와 같은 코드에서 검사할 수 있도록 실제로 옮긴다.
+검증: 코드·시험·API 15개의 이전 전체 검사 해시와 일치했고, 이후 검증 결과만 추가한 작업 기록 1개도 현재 해시로 인계했다. 대상 파일이 원래 기준이거나 없음을 먼저 확인하고 16개를 복사 후 다시 대조했다. 원래 작업 트리는 수정하지 않았다.
+한계: 통합 집중 race 19개·native race 28개와 전체 check_local이 통과했다. 프런트엔드591개 통과, 사전 고정2,954파일 불변·추가/삭제0, 임시 DB 종료0/삭제를 확인했다. 종료 후 문서 변경은 별도 대조한다. 제품 빌드·배포·운영 DB·유료 호출·자동 커밋·카드 완료는 하지 않았다.

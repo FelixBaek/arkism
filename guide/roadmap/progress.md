@@ -1,6 +1,6 @@
 # 로드맵 진행 기록
 
-기준: 2026-11-01, 병합된 main. 필수49개 중 작업 검증 완료30개·미완료19개이며 선택14개는 보류다. 전체63개 중 완료30개다. #150 준비는 이 분모에 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
+기준: 2026-11-01, main 기반 EXP-03 개발 중. 필수49개 중 기존 작업 검증 완료30개·미완료19개이며 선택14개는 보류다. 이번 분석기 구현으로 완료 카드 수를 늘리지 않는다. 전체63개 중 완료30개다. #150 준비는 이 분모에 포함하지 않는다. 제품·연구·전체 로드맵 완료가 아니다.
 여기서 카드란 이슈 안의 개별 작업이다. “로컬 카드 수용”은 작업의 구현·실제 로컬 검사·독립 검토가 완료 기준을 충족했다는 과거 기록 용어이며, 앞으로 “작업 검증 완료”로 설명한다. `verified`도 이 뜻이다.
 원격 검사·PR 병합·실험·제품 통합은 각각 따로 기록한다.
 
@@ -12,16 +12,23 @@
 
 사용자는 전체 로드맵의 실행 가능한 작업을 계속하되 자료 부족 보류를 유지하라고 지시했다. 이번 테스트·검증 예산은 합계50달러 상한이다. 비용 승인이 자료·정답·정책·기관 승인까지 대신하지 않는다. 새 검색 모드는 여전히 기본 꺼짐이며, 제품 빌드·배포는 실행 범위에 넣지 않는다.
 
+후속 정정: 남은19개를 전부 자료 부족으로 보류한 것은 잘못이다. 정책 선택은 질문하고, 자료가 없어도 구현할 수 있는 코드는 개발한다. 검사·문서 정리와 기존30개를 이번 새 기능 완료로 계산하지 않는다.
+
 | 남은 필수 작업 | 현재 가능한 범위와 유지할 보류 |
 |---|---|
 | DYN-02·03 | scalar·fast/slow 구현과 개발용 연결을 유지·검증한다. 실제 결과 기록과 수용할 속도·비중은 대기한다. 선택 capture는 DYN-04 보류를 유지한다. |
 | DYN-05 | p1 runner·CLI·zero-aux 규칙 구현을 유지한다. 실제 파일럿과 선택 capture는 EXP 자료·선행 대기다. |
 | SYS-06 | off/shadow와 개발용 fast/slow on 연결을 검증한다. 일반 dynamic 제공과 수용 정책은 소유자 보류를 유지한다. |
-| EXP-01~04 | 개발·탐색 결과를 유지한다. 실제 outcome이 충분한 자료, 최종 실행 계약·잠금·분석·채택 판정은 대기한다. 기존 탐색 결과를 사후 확인 실험으로 바꾸지 않는다. |
-| RTE-05 | 현재 예산·시도·시간·부작용 경계를 유지한다. 일부 CLI의 실제 도구 이벤트 형식·동작 근거가 없어 공통 도구 호출 개수 상한을 완료로 표시하지 않는다. 모델 차례 상한과 도구 호출 개수는 다르다. |
+| EXP-01·02 | 고정 분석 입력 연결·원자료 변환·계획 생성·실제 실행 기록기를 구현했다. v3는 동일한 원래 argv로 다중 시도를 실행하고 완료/부분 출력을 각각 보존한다. 실제 outcome이 충분한 자료와 확인 연구는 보류하며 합성 검사를 연구 완료로 세지 않는다. |
+| EXP-03 | paired 분석·귀속 view·실제 native 검증·최종 입력 결속·validation-only REF 선택·합성 reader/checker를 연결했다. 주 분석에는 먼저 완료된 결과만 쓰고 모든 실패·중복·비용은 남긴다. 실제 다중 시도 검사를 수행했다. 원자료의 연구 수용과 전체 카드는 미완료다. |
+| EXP-04 | 실제 근거 색인과 native/task/REF/final 소비 검증기를 구현했다. 별도 소유자 검토 hash와 현재 코드·실행파일·원자료를 재검산한다. 실제 결과·책임자 채택·연구/제품 판정은 별도이며 전체 카드는 미완료다. |
+| RTE-05 | 실제 도구 계수·워크플로 재시도/대체 중단·HTTP 귀속 기록 수정을 EXP와 같은 소유 작업 트리에 통합했다. 일부 CLI의 이벤트 근거와 unknown 정책은 여전히 미확정이다. 사후 계수를 실행 전 강제 상한으로 표시하지 않는다. 전체 카드는 미완료다. |
 | RTE-06~08 | 기록·내보내기·분석·파일럿 스위치 연결을 유지한다. 실제 독립 결과와 고정 모델 풀·실측 행렬이 부족하므로 실제 파일럿과 효과 판정은 보류한다. |
 | CAP-03~05 | 서버 경로·개발 replay 검증을 유지한다. 소유자가 실제 스킬 사용 기록이 쌓일 때까지 보류했으므로 합성48건으로 전체 수용하지 않는다. |
-| PSY-02~05 | 기존 합성 자극·모의 분석은 유지한다. 실제 oracle·연구자의 측정/결측/표본 결정·연구 준비 관문이 없으므로 후속 수집·결과·제품 효과를 만들지 않는다. |
+| PSY-02·03 | 합성 배정·상태·분석기는 존재한다. 실제 native oracle은 비native reader와 누락된 본문/저장 Scope/fault 연결을 임의 생성하지 않고 자료 대기로 남긴다. 정상/fault의 같은 입력 상태에 반대인 수동 Y를 실제 판정으로 복사하지 않는다. 실제 사람 결과·효과는 없다. |
+| PSY-04·05 | 별도 소유 경로에 readiness·사전등록 초안·자료/runbook·조건부 결정 준비7파일을 보완했다. 모든 실제 수집/권한 gate는 false다. 실제 결과가 없으면 PSY-05는 빈 결과표·결정규칙까지만 허용하므로 prototype/제품 변경은 보류한다. 준비 문서를 개발 완료로 세지 않는다. |
+
+현재 EXP-03의 실제 변경·검증·한계는 [분석기 작업 기록](../work-records/2026-11-01-exp03-paired-analysis.md)에 이어 기록한다. 공식 실험 gate를 이 구현만으로 열지 않는다.
 
 이번 실행에서 기존 worker·off/shadow/on daemon 설정부터 실제 HTTP 순서·포장 문맥·상태 누락 fallback까지 새로 확인했다. 관련 race7개 상위/42개 하위포함, 전체 로컬 Python825·Go33개 패키지 검사·UI591, 별도 비공개 평가기115개가 통과했다. 캐시된 Go 결과와 전체 Go skip0을 주장하지 않는 한계를 기록했다. 제품 동작을 바꾸거나 자료 대기 카드를 완료로 올린 것이 아니다. [실제 검증 기록](../work-records/2026-11-01-roadmap-fastslow-http.md)을 따른다.
 
@@ -497,3 +504,66 @@ An optional `-dynamics-search-config` file now selects the HTTP API search mode:
 The native dynamics worker can now carry an optional slow lane: a native config with `slow_tau_ns` and `slow_eta_positive` gets a second value that the same observation, time and operation advance with the slower rates; a config without them stores and hashes exactly as before. The search mode file takes an optional `fast_slow` block (a sealed slow-lane dynamics config and a fast weight in (0,1), checked by the DYN-02 fast/slow rules). In `shadow` the mixed value `w*fast + (1-w)*slow` feeds the native ranking that is only recorded; the new mode `on` requires the block and returns that ranking when it is selected, falling back to the baseline otherwise. Absent and `off` are unchanged, and `dynamic` is still refused. Tests show off and shadow return the same answer as no shadow, on returns a different order led by the memory with the higher mixed state, the published value equals the hand-mixed lanes, and a repeated capture leaves the state unchanged. This is development wiring with test-literal rates, not an accepted serving policy; no effect is claimed and the counts are unchanged. See the [work record](../work-records/2026-10-31-roadmap-dyn-fastslow-product.md).
 
 Integration review corrected return observations: only a successful final Search transaction marks native Served, while the computed baseline comparison digest is preserved. Fast/slow shadow and on now use a separate observation contract and explicit mode; legacy scalar JSON and stages-v2 remain unchanged. Empty selection metadata after failed arithmetic is unobserved, not a computed-empty ranking. The independent PostgreSQL worker/Search probe and the focused fault/compatibility tests are recorded separately; neither claims daemon startup, accepted coefficients or product effect. See the [return record](../work-records/2026-11-01-native-search-return-observation.md) and [contract record](../work-records/2026-11-01-fastslow-observation-contract.md).
+
+EXP-03 locked-analysis preflight implementation: actual immutable EXP01 lock, original complete dataset, explicit independent cluster partition and final-test schedule now reconcile numeric analysis/budget settings and source/gold/scope hashes. Current/historical selected-mode coverage is exhaustive; cross-split shared clusters reject. Current focused17/collected690 tests and two independent narrow rereviews pass. This preflight does not yet connect the native projector/analyzer confirmatory gate. Semantic owner decisions, independent label review and timing attestation remain separate; no whole-card completion is claimed.
+
+EXP-03 reviewed-final-input connection: formal projector now reads exact complete lock/dataset/analysis/cluster inputs and strict original independent-gold review. Owner declaration raw SHA must be supplied separately and binds actual analysis/schedule/runplan/predeclared projection rules. Actual native replay is mandatory before internal confirmatory computation; standalone analyzer remains guarded. REF selection source records are hash-read, but registered REF calculation remains blocked until selection semantic verification and the derived alias are implemented. Current focused26/collected699/native20-race pass and two independent followups confirm corrected no-replay and source-read boundaries. Complete final-source/materializer/REF/native/analysis E2E and this tree's full check remain engineering work, not a data hold or whole-card completion.
+
+EXP-03 REF integration update: validation-only exact selector, actual fresh-validation replay connection and shared native REF observation alias are implemented. Required six non-B2 candidates, whole relevant/declared token-phase accounting, locked total budget and complete native source retention are enforced. First completed primary policy is now an explicit user decision. Focused selector23/collected724/native20-race and independent rereviews pass for component/prior native scopes. Actual source materializer, positive native REF CLI and full final E2E remain required development; no whole-card acceptance is claimed. EXP04 predecessor full check passed with2921fixedfiles and its disposable PG was cleaned.
+
+### 원자료 native 변환과 시간 연결 구현 (EXP-02/03, 부분)
+
+원본 관측 prefix·현재/과거 질문에서 실제7정책 엔진 입력을 만드는 별도 변환기를 구현했다. 정답은 입력받지 않으며, 수용·특징값·자격은 별도 합성 입력이다. 기존 Go 해시 코덱을 재사용하고 현재 철회가 과거 버전에도 적용되도록 수정했다. v2 시간 연결은 요청한 과거 시점과 원래 질문 시점을 각각 보존한다.
+
+단위14개·projection26개와 실제7정책10개 상태의 실행·원본 재검산이 통과했다(28.07초). 전체70개 예정 결과 중 무효화된 기억의 늦은 결과8개는 실패로 그대로 보존한다. 유효한 기억의 자격 있음/없음 결과도 실행했다. CLI 생성·덮어쓰기 거부를 확인했다. 합성 검사는 실제 연구 성과·사람의 승인·제품 권한을 뜻하지 않는다. 정식 계획/원장 생성기, 실제 원자료 REF CLI 성공과 전체 확인실험 E2E, EXP04 최종입력 연결은 남아 있다. 완료 수30/49와 새 완료0/19는 유지한다.
+
+### 원자료 기반 계획 생성기 추가 (EXP-02, 부분)
+
+원자료·분석 일정·명시적 수용/소유자 참조에서 질문/반복별 typed RunPlan과 미실행 원장·projection을 만드는 생성기 API/CLI를 구현했다. 실제 생성6계획×7정책42개를 실행·재검산했고 늦은 결과4개 실패를 보존했다. 원자료3종 rawSHA와 원본 source bytes를 지키며 final-k 불일치는 거부한다. 독립검토가 찾은 rawSHA 검사 누락과 해시용 프로세스 수 기록은 고쳤다. 수집752개·고정lint·독립12개 단위/실제Go 검사 통과. 생성만 한 원장은 미실행이며 실행 권한/사람의 수용을 인증하지 않는다. 별도 실행 dispatch·실제 recorder, REF CLI와 최종 E2E, EXP04 연결은 남았다. 새완료0/19·기존30/49 유지.
+
+### 실제 native 실행 원장 연결 (EXP-02, 부분)
+
+별도 독립 pin의 실행 배정과 실제 계획/입력/고정 argv 검사 후 native를 실행하고, 실제 raw/시간/exit/실패/비용 불확실성과 원본 fresh 재검산을 저장하는 API/CLI를 구현했다. 기존 미실행 원장은 보존하고 새 recording 원장/projection을 생성한다. 실제6실행/6재검산→42개 관측 중4실패, 실제 시간초과7개와 잘못된 native입력 거부7개를 분석 분모에 보존했다. CLI 실제 성공·기존결과 덮어쓰기 거부도 확인했다. 수집758개·lint0·독립6개/actualGo31.734초 통과.
+
+독립검토의 dispatch검사 전 REF실행과 취소 child정리 누락을 수정했다. preflight는 읽기만하고 journal 아래서만 REF native를 호출한다. 취소 검증은 mock이며 실제 OS신호 E2E로 표시하지 않는다. 현 wire의 job당1회 제약에 따른 다중시도 출력 연결, 실제 원자료 REF CLI/최종 E2E, EXP04 최종입력·명시적 RTE 통합은 남은 개발이다. 카드30/49·새완료0/19 유지. 전체 final-lock check_local 미실행.
+
+### 명시적 작업 채점·REF·최종 분석의 실제 기술 연결 (EXP-03, 부분)
+
+선택된 실제 본문에서 답을 추출하는 reader와 별도 명시적 checker를 구현하고, 실제 source/native 생성·원장·task CLI·REF CLI·최종 native/owner pin·task CLI·확인실험 코드 경로를 연결했다. 검증자료7행에서6비처리 후보 중B0를 선택하고, 최종7정책+동일 결과 REF alias8행을 분석했다. REF를 추가 실행/독립 표본으로 세지 않는다. 이는 원래 전체 사건을 보존한 단일 과거모드의 합성 기술 검사이며 연구 효과/사람의 수용을 증명하지 않는다.
+
+비용 source의 원장SHA 미대조 결함을 고쳐 원문 보존/실제 artifact읽기/허용된 local토큰placeholder 변환만 전체대조한다. 위조 채점·불린count·원장SHA·타임스탬프 재봉인은 거부한다. task events/manifest도 locked원문과 같아야 한다. 단계별 v2 저장 이름으로 검증/최종 산출물을 함께 보존하며 기존 v1은 유지한다. 수집766개16.271초·lint0·독립최신실제fixture20.854초·현재native전체race111.034초 통과. 전체 final-lock check_local 미실행. EXP04 최종/task-aware소비·다중시도출력·명시적 RTE통합·PSY 등 남은개발/인수 유지. 카드30/49·새완료0/19 그대로다.
+
+### EXP04 최종/task 현재 근거의 실제 소비 연결 (부분)
+
+프레데세서6파일의 exact hash 인계를 final-lock에 적용했고 원래 EXP04 트리는 보존했다. 새 consumer context v2가 최종 입력·별도 기대 owner pin·실제 코드와 실행 이미지·원장/비용/task/REF 전체 근거를 읽고 실제 projector를 다시 실행한다. 이미지 등록 SHA는 실행 전 projection과 실행 후 실제 fresh pin/경로 bytes 모두에 결속한다. 계산 최종 결속과 task replay 여부를 사람/연구/제품 권한과 구분한다.
+
+실제 source→task/REF/final→EXP04 API·CLI38.57초, 기존v1 API·CLI11.74초, 수집809개19.282초·lint0·독립 최신최종consumer36.923초·현재native전체race159.058초 통과. 잘못된 외부pin, 코드/이미지/원장 근거 누락, 재봉인한 관측과 A/B이미지 불일치를 거부한다. 결정은 계속null이고 연구/제품 승격은false다. 전체 final-lock check_local·다중시도 출력 연결·명시적 RTE 통합·PSY 등 원19개의 남은 작업은 유지한다. 카드30/49·새완료0/19다.
+
+
+### Native final attribution sensitivity (EXP-03/04, partial)
+
+The final/native projector now connects separately source-pinned evaluation views to the actual verified final trace, retaining the source primary, REF, complete costs and planned denominator. Supplied before-results labels do not prove registration: every derived view is explicitly exploratory. Missing labels withhold the entire view. EXP04 v3 independently pins the envelope and freshly reproduces the sensitivity with complete source/code/image closure. The actual source→task/REF/final→view API/CLI→EXP04 API/CLI passed under race in45.36 seconds; collected820 tests and pinned lint pass. Independent rereviews resolved the exploratory metadata defect. This resolves the concrete engineering gap identified by the remaining19 review, not whole-card scientific acceptance. The previous whole-tree check covers the old snapshot; a current whole check remains. Counts stay30/49, new accepted cards0/19. See the [work record](../work-records/2026-11-01-exp03-native-attribution-views.md).
+
+
+### Current integrated check after native attribution
+
+The frozen current tree passed `check_local` in913.147 seconds: tools179, evaluation820 and reuse49 Python tests; actual disposable-PostgreSQL memory503.387 seconds and daemon33.097 seconds; native full package race265.741 seconds; frontend591 passed with0failed/0skipped. Some unchanged Go packages used cache. All2,958 source pins match with0added/0deleted, baseline SHA unchanged, own PostgreSQL stop exit0 and temporary directory removed. Only progress/work-record documentation changes follow this snapshot. No product build, operating DB, paid-provider calls or publication. The concrete native-view implementation gap is closed in this tested scope; unresolved CLI-count and general-serving policy answers and actual research/data/owner holds remain. Counts stay30/49, new whole-card acceptance0/19.
+
+
+### User-selected CLI and serving policies (RTE-05 / SYS-06, partial)
+
+The explicit user decisions are now implemented: an unobservable CLI is refused before child execution, with exact known-zero tool accounting and safe configured fallback; general daemon `dynamic` serving accepts an explicitly supplied registered scalar or validated optional fast/slow policy while absent/off stays baseline. A separate general-serving observation contract preserves legacy scalar/fastslow contracts. Existing source access, deadline, liveness/revision/audit/cancellation and baseline fallback remain. Actual local executable refusal, routing fallback, actual disposable-PG worker→HTTP scalar ordering/fallback and scalar final-fault checks ran; the original combined target's malformed synthetic-lane failure is retained separately. Independent Standards/Spec rereviews report no mandatory production issue. Current whole-tree checks remain pending; predecessor913.147-second fullcheck does not cover these edits. Actual data/research/owner holds remain, with no whole-card acceptance claimed. See the [work record](../work-records/2026-11-01-roadmap-policy-serving-cli.md).
+
+
+### Final answered-policy implementation and composed functional verification
+
+Both explicit policy decisions are implemented: unobservable CLI kinds refuse before execution, and general service `dynamic` is opt-in with absent/off baseline. The frozen policy snapshot passed `check_local` in850.659 seconds with2,962unchanged pins, baseline SHA unchanged and own PostgreSQL stopped/removed. Python179/820/49 and frontend591 pass; actual PG memory470.601 seconds, daemon35.117 seconds and host runner105.167 seconds pass. Some unchanged Go packages use cache.
+
+A subsequent requirement audit found that individual tests did not yet prove the composed host/outcome chain. An external overlay kept that full snapshot untouched while executing actual HTTP→host budget→local task exit→canonical trace/receipt→independent checker/outcome HTTP→actual bounded native worker publication→API refresh→next HTTP Search. The retained memory advanced0.5625→0.6171875, the host-dropped memory stayed0.5 and repeated receipt processing emitted nothing. After terminal, the same test bytes were persisted and the whole daemon package reran:65top-level tests,0failed/0omitted,10DynamicsIntegration tests,41.865 seconds; lint0 and two rereviews. The follow-up fixed2,963pins before final two-document updates. This is a test-only delta with unchanged runtime, tracked separately from the original whole-check snapshot. Initial malformed test kind/times and guarded publication races remain failure evidence. The chain uses actual functions with a quiescent bounded worker step; automatic hook idle, continuous-publisher load, model delivery and scientific effect are separate scopes.
+
+All19 original conditional engineering deliverables were mapped to actual source/functions/behavior; concrete actual-data and separate human/research decision dependencies remain held. Preparation/tests/documents are not counted as new development, and whole research-card acceptance remains0/19 (existing30/49 unchanged). No product build, operating DB, paid-provider call, deployment or publication. The [policy work record](../work-records/2026-11-01-roadmap-policy-serving-cli.md) contains implementation and exact validation limits.
+
+
+### Public delivery and PR feature catalogue
+
+The authorized delivery is prepared from current public main in a separate clean clone. Existing session-message updates are preserved; the only overlapping API file was three-way merged. [PR catalogue](pr-delivery.md) documents each of the51original PRs included by#526, merged#526–529 and this integrated delivery: functionality, expected benefits, actual evidence scope and limits. Expected benefits are not measured scientific results. CI/review/merge status is recorded after evidence; no product build/deployment.

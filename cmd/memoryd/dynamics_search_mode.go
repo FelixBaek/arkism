@@ -13,8 +13,8 @@ import (
 
 // daemonSearchMode is the SYS-06 search mode file. off and shadow keep returning
 // the baseline; shadow records a separate diagnostic. "on" serves only the
-// DYN-02/03 fast/slow ranking and needs a fast_slow block; a general "dynamic"
-// serving mode is still refused until a serving policy is accepted.
+// DYN-02/03 fast/slow ranking and needs a fast_slow block. Explicit "dynamic"
+// serves the configured registered scalar or fast/slow policy; absent stays off.
 type daemonSearchMode struct {
 	Protocol       string `json:"protocol"`
 	Mode           string `json:"mode"`
@@ -60,7 +60,7 @@ func loadDaemonSearchMode(path string, background bool) (*memory.NativeSearchSha
 			return nil, memory.ErrInvalid // an off file carries no shadow settings to misread later
 		}
 		return nil, nil
-	case "shadow", "on":
+	case "shadow", "on", "dynamic":
 	default:
 		return nil, memory.ErrInvalid
 	}

@@ -102,6 +102,10 @@
       {
         "root": "repo",
         "path": "guide/roadmap/optional-decisions.md"
+      },
+      {
+        "root": "repo",
+        "path": "guide/roadmap/pr-delivery.md"
       }
     ]
   },
@@ -1469,6 +1473,26 @@
         {
           "root": "repo",
           "path": "docs/research/memory-harness/zero_auxiliary_order_semantics_v1.json"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_verify.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_verify_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_unix.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_other.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_unix_test.go"
         }
       ],
       "consumes": [
@@ -2858,6 +2882,22 @@
         {
           "root": "repo",
           "path": "evaluation/memory-harness-v1/system/sys_06/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_dynamic_contract.json"
+        },
+        {
+          "root": "repo",
+          "path": "internal/memory/native_search_dynamic_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memoryd/dynamics_dynamic_http_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memoryd/dynamics_host_outcome_chain_test.go"
         }
       ],
       "consumes": [
@@ -3037,6 +3077,46 @@
         {
           "root": "repo",
           "path": "evaluation/memory-harness-v1/experiments/exp_02/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/materialize_native.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/test_materialize_native.py"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_hash_stream.go"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_materialization_integration_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/produce_run_plan.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/test_produce_run_plan.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/record_native.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/test_record_native.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/attempt_archive.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_02/test_native_retries.py"
         }
       ],
       "consumes": [
@@ -3093,7 +3173,7 @@
       "id": "EXP-03",
       "issue": 153,
       "owner": "EXP-03",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3125,6 +3205,58 @@
         {
           "root": "repo",
           "path": "evaluation/memory-harness-v1/experiments/exp_03/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/attribution_views.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_attribution_views.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/project_native.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_native_projection.py"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_projection_integration_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/locked_analysis.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_locked_analysis.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/ref_selection.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_ref_selection.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/task_adapter.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_task_adapter.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/native_attribution.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_03/test_native_attribution.py"
         }
       ],
       "consumes": [
@@ -3147,6 +3279,31 @@
           "owner": "R8",
           "root": "repo",
           "path": "evaluation/memory-harness-v1/handoff.md"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_verify.go",
+          "owner": "DYN-05"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_verify_test.go",
+          "owner": "DYN-05"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_unix.go",
+          "owner": "DYN-05"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_other.go",
+          "owner": "DYN-05"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_open_unix_test.go",
+          "owner": "DYN-05"
         }
       ],
       "shared_updates": [],
@@ -3156,7 +3313,7 @@
       "id": "EXP-04",
       "issue": 153,
       "owner": "EXP-04",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "substage conditions still apply",
       "entry_gates": [
@@ -3185,6 +3342,26 @@
         {
           "root": "repo",
           "path": "evaluation/memory-harness-v1/experiments/exp_04/README.md"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_evidence_index_integration_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/test_final_consumer.py"
+        },
+        {
+          "root": "repo",
+          "path": "cmd/memory-harness-dynamics/native_final_consumer_integration_test.go"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/test_retry_final_consumer.py"
+        },
+        {
+          "root": "repo",
+          "path": "evaluation/memory-harness-v1/experiments/exp_04/test_native_attribution_consumer.py"
         }
       ],
       "consumes": [
@@ -4060,7 +4237,7 @@
       "id": "PSY-04",
       "issue": 157,
       "owner": "PSY-04",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "preparation acceptance only; collection and analysis are deferred to separately authorized future work",
       "entry_gates": [
@@ -4127,7 +4304,7 @@
       "id": "PSY-05",
       "issue": 157,
       "owner": "PSY-05",
-      "status": "planned",
+      "status": "in_progress",
       "conditional": false,
       "condition": "conditional design without claiming actual participant results or demonstrated UX improvement",
       "entry_gates": [

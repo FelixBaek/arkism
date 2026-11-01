@@ -1,0 +1,15 @@
+{
+  "protocol": "sys-native-service-dynamic-contract-v1",
+  "observation_protocol": "sys-native-service-dynamic-v1",
+  "mode": "dynamic",
+  "default": "off; absent daemon search-mode file creates no native search runtime",
+  "activation": "explicit complete hash-bound registry/policy + runtime/load/search configuration and existing scoped service reader authorization",
+  "serving": "Only a selected native packed bundle passing the existing final authorization, revision/liveness, audit and cancellation transaction is marked served. Otherwise existing baseline fallback or request rejection applies.",
+  "policy": "Caller must select an already registered typed policy; scalar or validated optional fast/slow. No new rate, weight or accepted scientific coefficient inferred.",
+  "observation": "Mode, contract digest and bounded hashed refs distinguish general serving from immutable legacy scalar shadow and fast/slow on. Served means successful Search return, not HTTP delivery, model use, task success or causal effect.",
+  "cost_and_writes": "Existing usage receipt/audit only; no new native state, outcome or learning writes on search.",
+  "privacy": "No raw query, source body, credentials or private path in observations.",
+  "stages": "Existing immutable sys-native-service-stages-v2 final-fence stages and unknown semantics are retained.",
+  "deployment_authorized": false,
+  "scientific_acceptance": false
+}

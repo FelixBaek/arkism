@@ -108,9 +108,17 @@ func TestNativeSearchFastSlowObservationFailedReturn(t *testing.T) {
 }
 
 func nativeFSCheckFailedReturn(t *testing.T, fault string) {
+	nativeRankingCheckFailedReturn(t, fault, "on")
+}
+
+func nativeRankingCheckFailedReturn(t *testing.T, fault, mode string) {
 	t.Helper()
 	r := nativeFSRuntime(t, "on", "V3-P1-NOTIME")
 	f, q, passed := nativeFSSearchFixture(t, r)
+	r.config.Mode = mode
+	if mode == "dynamic" {
+		r.config.FastSlow = nil
+	}
 	baseline, e := f.svc.Search(testCtx, "native", q)
 	if e != nil {
 		t.Fatal(e)

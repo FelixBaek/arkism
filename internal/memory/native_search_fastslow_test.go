@@ -60,7 +60,7 @@ func TestNativeSearchFastSlowRuntimeConfig(t *testing.T) {
 	}
 	refused := map[string]func(*NativeSearchShadowConfig){
 		"on_without_lanes":   func(c *NativeSearchShadowConfig) { c.Mode, c.FastSlow = "on", nil },
-		"dynamic_mode":       func(c *NativeSearchShadowConfig) { c.Mode = "dynamic" },
+		"unknown_mode":       func(c *NativeSearchShadowConfig) { c.Mode = "unregistered_mode" },
 		"zero_weight":        func(c *NativeSearchShadowConfig) { c.FastSlow.FastWeight = 0 },
 		"weight_one":         func(c *NativeSearchShadowConfig) { c.FastSlow.FastWeight = 1 },
 		"slow_not_slower":    func(c *NativeSearchShadowConfig) { c.FastSlow.Slow.TauNS = 1 },
