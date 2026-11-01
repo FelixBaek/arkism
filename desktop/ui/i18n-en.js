@@ -3696,13 +3696,11 @@ Object.assign(window.ArkismI18nEN.strings, {
   "FLOW 목록을 불러오지 못했어요": "Couldn't load the FLOW list",
   "FLOW 작업이 끝나면 알려줘요.": "Tells you when a FLOW job finishes.",
   "실행 조건": "Run trigger",
-  "모든 실행 방식": "All execution types",
   "실행 방식": "Execution type",
   "딥리서치": "Deep research",
-  "단독 실행": "Solo task",
-  "협업·회의": "Collaboration & meetings",
-  "단계 구성": "Build steps",
   "역할·협업·자동화를 한곳에서 관리해요.": "Manage roles, collaboration and automation in one place.",
+  "전문가 설정 열기": "Open expert settings",
+  "회의 설정 열기": "Open meeting settings",
   "회의 기록": "Meeting history"
 });
 // adopt-digests: MEMORY › 기억 › 모아보기 주제 요약 · 나에 대한 요약, 확인해 주세요 › 병합 제안 (digests.js)
@@ -4275,7 +4273,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "테스트": "Test",
   "여기까지 실행을 맡겼어요. 곧 시작해요.": "Run up to here queued. It starts shortly.",
   "실행 방식": "Run mode",
-  "모든 실행 방식": "All run modes",
   "+ 새 워크플로우": "+ New workflow",
   "직접": "Direct",
   "이 채널은 이미 다른 곳에 연결돼 있어요. 이 자동화로 바꿀까요?": "This channel is already connected elsewhere. Switch it to this automation?",
@@ -5871,7 +5868,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 // 기록·사용량 tab of a workflow (modules/flowUsage.mjs)
 Object.assign(window.ArkismI18nEN.strings, {
   "기록·사용량": "History & usage", "실패가 많은 단계": "Steps that fail most", "실패한 단계가 없어요.": "No step has failed.", "끝난 실행이 없어요": "No finished runs",
-  "단독": "Solo", "메뉴 접기": "Collapse menu", "메뉴 펼치기": "Expand menu", "현재 위치": "Current location",
+  "메뉴 접기": "Collapse menu", "메뉴 펼치기": "Expand menu", "현재 위치": "Current location",
   "이 워크플로우 실행만 세요. 테스트 실행은 빼요.": "Counts this workflow's runs only, without test runs.", "사용량을 불러오지 못했어요.": "Couldn't load usage.",
   "다시 돌릴 실패 기록을 찾지 못했어요.": "No failed run to retry.", "마지막 실패 실행을 실패한 곳부터 다시 돌릴까요? 끝난 단계는 결과를 그대로 써요.": "Retry the last failed run from where it failed? Finished steps keep their results."
 });

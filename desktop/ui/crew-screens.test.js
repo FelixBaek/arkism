@@ -455,6 +455,21 @@ const nodeWindow = async (h, id) => {
   return h.top();
 };
 
+test("#481: a step opens its agent's or team's own settings over the workflow", async () => {
+  const h = await openNodes();
+  const seen = [];
+  const keep = (e) => seen.push([e.type, e.detail.id, e.detail.over]);
+  window.addEventListener("arkism:open-expert", keep); window.addEventListener("arkism:open-team", keep);
+  let d = await nodeWindow(h, "ex");
+  h.btn(d, "전문가 설정 열기").click(); await h.settle();
+  while (h.top() && !h.top().classList.contains("graph-win")) { h.top().close(); await h.settle(); } // back to the workflow
+  d = await nodeWindow(h, "tm");
+  h.btn(d, "회의 설정 열기").click(); await h.settle();
+  window.removeEventListener("arkism:open-expert", keep); window.removeEventListener("arkism:open-team", keep);
+  assert.deepEqual(seen, [["arkism:open-expert", "ag1", true], ["arkism:open-team", "tm2", true]]);
+  h.closeAll();
+});
+
 test("node window: kinds, picks, new experts and teams, workers and skills", async () => {
   const h = await openNodes();
   // a saved expert node keeps its expert pick; the kind choice is only AI 작업 / 회의 (1436:8483), with no + 새 전문가

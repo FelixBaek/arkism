@@ -485,6 +485,7 @@ export const createCrew = (ctx) => {
   }
   // run: a FLOW run to show in its 기록 (a workflow opens it directly; an agent or team lists it under 부른 실행 결과)
   function openFlow(rec, run = null) {
+    rec = (rec.crew.type === "workflow" && ownerOf(rec)) || rec; // an agent's own workflow opens in that agent, where its steps are edited
     if (rec.crew.type === "workflow") { getAuto().open(rec, run ? "history" : undefined, run); return; }
     window.dispatchEvent(new CustomEvent(rec.crew.type === "team" ? "arkism:open-team" : "arkism:open-expert", { detail: { id: rec.id, over: true, ...(run ? { tab: "history" } : {}) } }));
   }

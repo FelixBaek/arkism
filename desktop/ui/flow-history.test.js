@@ -127,13 +127,14 @@ test("an agent's and a team's 기록 list their @이름 FLOW runs and open the r
   h.data.runs.unshift({ id: "flow-a", revision: 1, created_at: new Date().toISOString(), crew_run: { crew_id: "ag1", status: "succeeded", invocation_mode: "flow" } },
     { id: "flow-t", revision: 1, created_at: new Date().toISOString(), crew_run: { crew_id: "tm1", status: "succeeded", invocation_mode: "flow" } });
   h.render(); await h.settle();
-  for (const [card, run, text] of [["ag1", "flow-a", "전문가 보고서"], ["tm1", "flow-t", "팀 결론"]]) {
+  // #481: the agent shows as the workflow it works by (wf3), whose card opens the agent
+  for (const [card, run, text] of [["wf3", "flow-a", "전문가 보고서"], ["tm1", "flow-t", "팀 결론"]]) {
     document.querySelector(`[data-id="crew:${card}"]`).click(); await h.settle();
     [...h.top().querySelectorAll("[role=tab]")].find((t) => t.textContent.trim() === "기록").click(); await h.settle();
     assert.match(h.top().textContent, /부른 실행 결과/);
     h.btn(h.top(), new RegExp(run)).click(); await h.settle();
     assert.equal(h.top().querySelector(".flow-result-text").textContent, text);
-    if (card === "ag1") assert.match(h.top().textContent, /전달 실패/);
+    if (card === "wf3") assert.match(h.top().textContent, /전달 실패/);
     h.closeAll();
   }
 });
