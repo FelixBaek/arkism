@@ -81,7 +81,9 @@ fs.mkdirSync(output,{recursive:true});
     // one page: no area tabs (usage sits in each workflow's 기록·사용량 tab)
     assert.equal(await page.locator("#area-tabs [role=tab]").count(),0);
     for(const kind of ["agent","team","workflow"]) assert.ok(await page.locator(`[data-flow-kind="${kind}"]`).count(),kind+" remains reachable");
-    assert.equal(await page.locator('[data-id="crew:wf-research"]').count(),0,"owned definitions remain behind their role");
+    // #481: an agent that works by its own workflow is listed as that workflow, called by the agent's @name
+    assert.equal(await page.locator('[data-id="crew:ag-research"]').count(),0,"the agent shows as its own workflow");
+    assert.equal(await page.locator('[data-id="crew:wf-research"] .flow-alias').innerText(),"@리서처");
     await capture("flow-dark");
     // agents, teams and workflows share one list now (no kind tabs), so each card is opened from it directly
     assert.equal(await page.locator(".wf-kinds").count(),0);
@@ -90,7 +92,7 @@ fs.mkdirSync(output,{recursive:true});
     assert.match(await page.locator("dialog.ex-pop").innerText(),/모델/);
     assert.match(await page.locator("dialog.ex-pop").innerText(),/스킬/);
     await capture("role-editor");await page.keyboard.press("Escape");
-    await page.locator('[data-id="crew:ag-research"]').click();
+    await page.locator('[data-id="crew:wf-research"]').click(); // the agent's own workflow card opens the agent
     await page.locator("dialog.ex-pop .wk-instr").fill("그래프를 보고 돌아와도 남는 초안");
     await page.getByRole("button",{name:"단계 고치기",exact:true}).click();
     await page.locator(".g-stage").waitFor();
@@ -119,7 +121,7 @@ fs.mkdirSync(output,{recursive:true});
     const readWrites = await page.evaluate(()=>window.apiWrites.length);
     assert.equal(await page.locator("#chips [role=tab]").count(),0,"the FLOW screen has no 작업·결과함·개선 흐름 tabs");
     // a FLOW run's result lives in its own 기록 (here a role called by @이름)
-    await page.locator('[data-id="crew:ag-research"]').click();await page.locator("dialog.ex-pop[open]").waitFor();
+    await page.locator('[data-id="crew:wf-research"]').click();await page.locator("dialog.ex-pop[open]").waitFor();
     await page.locator("dialog.ex-pop[open] [role=tab]",{hasText:"기록"}).click();
     await page.locator(".flow-history-row",{hasText:"flow-result-1"}).click();
     await page.getByText("전달 여부 확인 필요").first().waitFor(); // the delivery line also names the error and message ids

@@ -24,7 +24,8 @@ func convertKey(h string) string {
 
 // planConvert is one change per named agent or team: "wrap" with the workflow to create, or "skip" with why
 // ("already": a workflow of that name runs it; "rename": another workflow has the name, rename one of them;
-// "works_by_workflow": the agent already runs as its linked workflow, which Flow lists).
+// "works_by_workflow": the agent already runs as its linked live workflow, which Flow lists; a link to an
+// archived workflow is dangling, so that agent is wrapped like any other).
 func planConvert(items []any) []map[string]any {
 	flows := []map[string]any{}
 	for _, r := range items {
@@ -41,7 +42,7 @@ func planConvert(items []any) []map[string]any {
 		}
 		change := map[string]any{"kind": typ, "id": id, "handle": handle, "action": "skip"}
 		out = append(out, change)
-		if typ == "agent" && truthy(c["workflow"]) {
+		if typ == "agent" && truthy(c["workflow"]) && convertNamed(flows, pyStr(c["workflow"])) != nil {
 			change["reason"] = "works_by_workflow"
 			continue
 		}

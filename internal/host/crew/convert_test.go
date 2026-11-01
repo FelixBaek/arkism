@@ -44,6 +44,15 @@ func TestConvertPlanWrapsNamedAgentsAndTeamsAndReportsTheRest(t *testing.T) {
 	}
 }
 
+func TestConvertWrapsAnAgentWhoseLinkedWorkflowIsArchived(t *testing.T) {
+	// The list holds live records only; an archived workflow leaves the agent's link dangling.
+	items := []any{map[string]any{"id": "a1", "crew": map[string]any{"type": "agent", "name": "배포", "handle": "배포", "workflow": "$없어진흐름"}}}
+	plan := planConvert(items)
+	if len(plan) != 1 || plan[0]["action"] != "wrap" || obj(plan[0]["crew"])["handle"] != "배포" {
+		t.Fatal(plan)
+	}
+}
+
 func TestConvertDryRunWritesNothing(t *testing.T) {
 	patch(t, &apiGet, func(string, time.Duration) (map[string]any, error) { return convertStore(), nil })
 	patch(t, &apiPost, func(path string, _ any, _ time.Duration) (map[string]any, error) {

@@ -17,9 +17,11 @@ test("FLOW lists workflows; agents and teams show only until a workflow of their
     { id: "writer", crew: { type: "agent", handle: "writer" } },
     { id: "writer-flow", crew: { type: "workflow", handle: "writer", ...step("expert", "writer") } },
     { id: "board", crew: { type: "team", handle: "board" } },
-    { id: "board-flow", crew: { type: "workflow", handle: "board", ...step("team", "board") } }
+    { id: "board-flow", crew: { type: "workflow", handle: "board", ...step("team", "board") } },
+    { id: "stale", crew: { type: "agent", handle: "stale", workflow: "$archived" } } // its workflow is archived: not listed
   ];
-  assert.deepEqual(flowItems(records).map((r) => r.id), ["owned", "public", "collision", "team", "writer-flow", "board-flow"]);
+  assert.deepEqual(flowItems(records).map((r) => r.id), ["owned", "public", "collision", "team", "writer-flow", "board-flow", "stale"]);
+  assert.equal(flowAlias(records[1], records), "@review", "an owned workflow is called by its agent's @name");
   assert.equal(flowAlias(records[2], records), "@딥리서치");
   assert.equal(flowAlias(records[3], records), "$review", "a same-named workflow that does not wrap the agent is a clash");
   assert.equal(flowAlias(records[0], records), "@review");
