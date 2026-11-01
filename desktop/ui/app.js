@@ -395,7 +395,7 @@ export function startApp() {
   // did the host report lately, and does any of its MCP servers wait for a sign-in.
   function agentHealth(key) {
     const t = state.data.tools;
-    if (!t?.collected_at) return state.loading ? ["", "확인 중", "서버 보고를 기다리는 중"] : ["", "알 수 없음", "서버 보고를 받지 못했어요"];
+    if (!t?.collected_at || state.loadError) return state.loading ? ["", "확인 중", "서버 보고를 기다리는 중"] : ["", "알 수 없음", "서버 보고를 받지 못했어요"]; // a failed reload keeps the last list on screen, not its agents as current (#187)
     const age = Math.round((Date.now() - new Date(t.collected_at).getTime()) / 60000);
     if (age > 15) return ["bad", "끊김", `서버 보고가 ${age}분째 없어요`];
     const info = (t.agents || []).find((a) => a.id === key);

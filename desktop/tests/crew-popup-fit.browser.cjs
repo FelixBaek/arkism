@@ -41,7 +41,8 @@ const css = [...fs.readFileSync(path.join(ui, "index.html"), "utf8").matchAll(/<
           document.body.append(dlg); dlg.showModal();
           return dlg.getBoundingClientRect().width;
         }, cls);
-        assert.equal(w, Math.min(1200, viewport.width - 32), `${cls} @ ${viewport.width}: FLOW popups open wide`);
+        // the detail popup is 940 wide in Figma (1404:16784); settings and node popups stay 1200
+        assert.equal(w, Math.min(cls === "crew-popup" ? 940 : 1200, viewport.width - 32), `${cls} @ ${viewport.width}: FLOW popups open wide`);
       }
       const wide = await page.evaluate(() => {
         document.querySelectorAll("dialog").forEach((d) => d.remove());
