@@ -3,26 +3,33 @@ const assert = require("node:assert/strict");
 require("./keep.js"); // the shared stale-reply and redraw guards the screens use
 const { boot, dom, crewRecords } = require("./testdata/crew-harness.cjs");
 
-test("FLOW preserves callable roles and teams without exposing owned workflow definitions", async () => {
+test("FLOW lists workflows; agents and teams show only until a workflow of their name wraps them (#481)", async () => {
   const { flowItems, flowAlias } = await import("./modules/flowCatalog.mjs");
+  const step = (type, id) => ({ graph: { nodes: [{ id: "work", type, config: { [type]: id } }] } });
   const records = [
     { id: "role", crew: { type: "agent", handle: "review", workflow: "$owned" } },
     { id: "owned", crew: { type: "workflow", handle: "owned" } },
     { id: "public", crew: { type: "workflow", handle: "딥리서치" } },
     { id: "collision", crew: { type: "workflow", handle: "review" } },
     { id: "team", crew: { type: "team", handle: "meeting" } },
-    { id: "persona", crew: { type: "persona", handle: "tone" } }
+    { id: "persona", crew: { type: "persona", handle: "tone" } },
+    { id: "part", crew: { type: "agent", name: "이름 없는 팀원" } },
+    { id: "writer", crew: { type: "agent", handle: "writer" } },
+    { id: "writer-flow", crew: { type: "workflow", handle: "writer", ...step("expert", "writer") } },
+    { id: "board", crew: { type: "team", handle: "board" } },
+    { id: "board-flow", crew: { type: "workflow", handle: "board", ...step("team", "board") } }
   ];
-  assert.deepEqual(flowItems(records).map((r) => r.id), ["role", "public", "collision", "team"]);
+  assert.deepEqual(flowItems(records).map((r) => r.id), ["owned", "public", "collision", "team", "writer-flow", "board-flow"]);
   assert.equal(flowAlias(records[2], records), "@딥리서치");
-  assert.equal(flowAlias(records[3], records), "$review");
+  assert.equal(flowAlias(records[3], records), "$review", "a same-named workflow that does not wrap the agent is a clash");
   assert.equal(flowAlias(records[0], records), "@review");
+  assert.equal(flowAlias(records[8], records), "@writer", "a wrapper is called by its part's name");
 });
 
 test("an owned graph returns to its role inside FLOW with the unsaved role draft", async () => {
   const h = await boot({ view: "crew" });
   h.render(); await h.settle();
-  document.querySelector('[data-id="crew:ag1"]').click(); await h.settle();
+  document.querySelector('[data-id="crew:wf3"]').click(); await h.settle(); // ag1's own workflow opens in ag1
   dom.type(h.fields.find((f) => f.input.classList.contains("wk-instr")).input, "아직 저장하지 않은 지시");
   h.btn(h.top(), "단계 고치기").click(); await h.settle();
   assert.ok(h.top()?.classList.contains("graph-win"), "the graph opens in its own window, the role dialog no longer over it");
@@ -39,8 +46,8 @@ test("FLOW opens role and team editors from one catalogue and keeps every creati
   h.render(); await h.settle();
   const rows = [...document.querySelectorAll(".wf-card[data-flow-kind]")];
   assert.deepEqual(new Set(rows.map((n) => n.dataset.flowKind)), new Set(["workflow", "agent", "team"]));
-  assert.equal(document.querySelector('[data-id="crew:wf3"]'), null, "owned workflow is reached through its role");
-  document.querySelector('[data-id="crew:ag1"]').click(); await h.settle();
+  assert.equal(document.querySelector('[data-id="crew:ag1"]'), null, "an agent that works by its workflow is shown as that workflow");
+  document.querySelector('[data-id="crew:wf3"]').click(); await h.settle();
   assert.ok(h.top()?.classList.contains("ex-pop"));
   assert.equal(h.state.view, "crew");
   h.closeAll();
@@ -62,12 +69,12 @@ test("FLOW opens role and team editors from one catalogue and keeps every creati
 test("every card is the one photo card (1478:12809): cover or the default photo, faces top-left, @name above the name", async () => {
   const records = crewRecords();
   const cover = { id: "c1", url: "https://img/c.jpg", thumb: "https://img/ct.jpg", author: "Kim", author_url: "https://u/kim" };
-  Object.assign(records.find((r) => r.id === "ag1").crew, { cover, avatar: { art: "001", bg: "sage" } });
+  Object.assign(records.find((r) => r.id === "ag2").crew, { cover, avatar: { art: "001", bg: "sage" } }); // ag1 shows as its workflow wf3
   records.find((r) => r.id === "tm1").crew.cover = cover;
   const h = await boot({ view: "crew", data: { crew: records } });
   h.render(); await h.settle();
   const card = (id) => document.querySelector(`[data-id="crew:${id}"]`);
-  for (const id of ["ag1", "tm1"]) assert.equal(card(id).querySelector(".crew-cover-img").src, cover.url, id);
+  for (const id of ["ag2", "tm1"]) assert.equal(card(id).querySelector(".crew-cover-img").src, cover.url, id);
   for (const c of document.querySelectorAll(".wf-card[data-flow-kind]")) {
     assert.ok(c.classList.contains("has-cover") && c.querySelector(".crew-cover-img"), c.dataset.id);
     assert.equal(c.querySelector(".flow-card-role, .flow-card-category, .flow-kind"), null, "no role, category or kind line");
@@ -75,11 +82,11 @@ test("every card is the one photo card (1478:12809): cover or the default photo,
     const alias = c.querySelector(".flow-alias");
     if (alias.textContent) assert.equal(alias.nextElementSibling, c.querySelector(".crew-cover-title"), "@name sits above the name");
   }
-  assert.ok(/img\/flow-cover\.webp$/.test(card("ag2").querySelector(".crew-cover-img").src), "no cover: the default photo");
-  assert.ok(card("ag1").querySelector(".flow-faces .wk-face"), "the agent's own face top-left");
-  assert.equal(card("ag1").querySelector(".wf-card-when").textContent, "직접 실행");
-  card("ag1").querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
-  assert.ok(card("ag1").classList.contains("has-cover") && /flow-cover\.webp$/.test(card("ag1").querySelector(".crew-cover-img").src), "a photo that fails to load gives way to the default one");
+  assert.ok(/img\/flow-cover\.webp$/.test(card("wf3").querySelector(".crew-cover-img").src), "no cover: the default photo");
+  assert.ok(card("ag2").querySelector(".flow-faces .wk-face"), "the agent's own face top-left");
+  assert.equal(card("ag2").querySelector(".wf-card-when").textContent, "직접 실행");
+  card("ag2").querySelector(".crew-cover-img").dispatchEvent(new window.Event("error"));
+  assert.ok(card("ag2").classList.contains("has-cover") && /flow-cover\.webp$/.test(card("ag2").querySelector(".crew-cover-img").src), "a photo that fails to load gives way to the default one");
 
   // the expert window picks a photo (no avatar in the head) and saves it with the agent
   card("ag2").click(); await h.settle();

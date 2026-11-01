@@ -228,6 +228,13 @@ export function createCrewNodes(deps) {
     return f;
   }
 
+  // #481: an agent's or team's own settings (지시·모델·예산·고정 기록…, 회의 틀·참고 자료·채널 연동) open over this step.
+  function partSettings(rec) {
+    const team = rec.crew.type === "team";
+    return deps.button(team ? "회의 설정 열기" : "전문가 설정 열기", "ghost part-settings", null, () =>
+      globalThis.dispatchEvent(new CustomEvent(team ? "arkism:open-team" : "arkism:open-expert", { detail: { id: rec.id, over: true } })));
+  }
+
   // 전문가·팀 고르기 (1024:60724 · 1024:61783): the picked one as a face card with 바꾸기, the others as chips.
   function pickCard(label, cur, all, onPick) {
     const wrap = deps.el("div", "field");
@@ -261,6 +268,7 @@ export function createCrewNodes(deps) {
       chips.append(b);
     }
     wrap.append(card);
+    if (cur) wrap.append(partSettings(cur));
     if (chips.childElementCount) wrap.append(chips);
     return wrap;
   }
@@ -356,6 +364,7 @@ export function createCrewNodes(deps) {
       changed(true);
     });
     list.append(add);
+    if (m.rec) list.append(partSettings(m.rec));
     L.append(group("참여자", list, deps.agents().length ? "위에서부터 말해요. 처음 넣은 사람이 진행자예요." : "참여자는 전문가예요. 먼저 전문가를 만들어 주세요."));
     L.append(group("진행 방식", deps.segment(Object.entries(deps.MODES), d.mode || "round_robin", (v) => { d.mode = v; changed(true); })));
     const rounds = deps.input(d.ending.max_rounds, { type: "number", min: 1, max: 10 });
