@@ -50,7 +50,8 @@ pub fn open(cli: &str, folder: Option<(&str, &Path)>) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         // `start` gives the CLI its own console window; /k keeps it open to show how the sign-in ended.
         let mut c = std::process::Command::new("cmd");
-        c.args(["/c", "start", "Arkism", "cmd", "/k"]).args(cmd.iter());
+        // `start` reads a quoted first argument as the window title; an empty one makes Rust write "".
+        c.args(["/c", "start", "", "cmd", "/k"]).args(cmd.iter());
         if let Some((k, d)) = folder {
             c.env(k, d);
         }
