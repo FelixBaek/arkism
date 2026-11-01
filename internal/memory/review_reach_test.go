@@ -32,6 +32,14 @@ func TestReviewReachStoredOnApproval(t *testing.T) {
 	if m.Reach != "" || m.ReachOrigin != "" || c.Review.Reach != "" || c.Review.ReachOverridden || memoryReach(m) != ReachGeneral {
 		t.Fatal("no reach must keep today's default", m.Reach, c.Review)
 	}
+	// a keyless project suggestion approved untouched: no reach, so no override
+	k := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "Go 코드는 gofmt", Sources: refs(f.source())}))
+	if k.ReachSuggestion == nil || k.ReachSuggestion.Reach != ReachProject || k.ReachSuggestion.ReachProject != "" {
+		t.Fatal("keyless suggestion", k.ReachSuggestion)
+	}
+	if km, e := f.svc.ReviewCandidate(testCtx, f.human, k.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: k.Revision, Action: "approve"}); e != nil || km.Reach != "" || km.ReachOrigin != "" || km.Review.Reach != "" || km.Review.ReachOverridden {
+		t.Fatal("untouched keyless approval", km.Reach, km.ReachOrigin, km.Review, e)
+	}
 	m, c = approve("결론부터 쓴다 same", CandidateReviewInput{Reach: ReachGeneral})
 	if m.Reach != ReachGeneral || m.ReachOrigin != reachOriginHuman || c.Review.Reach != ReachGeneral || c.Review.ReachOverridden || m.Review.Reach != ReachGeneral {
 		t.Fatal("suggested reach", m.Reach, m.ReachOrigin, c.Review)

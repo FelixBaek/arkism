@@ -103,7 +103,12 @@
     "basis:assistant_result",
     "event_id:claude-code:s9"
    ],
-   "created_by_type": "agent"
+   "created_by_type": "agent",
+   "reach_suggestion": {
+    "reach": "project",
+    "reason": "특정 언어·도구 표시, 어느 프로젝트인지는 사람이 고름",
+    "confidence": 0.45
+   }
   }
  ],
  "next_cursor": "",
