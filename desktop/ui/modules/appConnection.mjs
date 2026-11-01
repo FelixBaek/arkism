@@ -396,7 +396,7 @@ export function createAppConnection(deps) {
 
   deps.$("#local-logs").addEventListener("click", () => deps.tauri?.invoke("open_logs").catch(() => deps.notice("기록 폴더를 열지 못했어요.")));
 
-  deps.$("#ssh-guide").addEventListener("click", () => window.open(SERVER_GUIDE, "_blank"));
+  deps.$("#ssh-guide").addEventListener("click", () => window.open(SERVER_GUIDE, "_blank", "noopener"));
 
   deps.$("#remote-link").addEventListener("click", useServer);
 

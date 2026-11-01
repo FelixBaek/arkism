@@ -673,7 +673,7 @@ export const createCrew = (ctx) => {
     copy.name = `${copy.name} 복사`.slice(0, 60);
     copy.handle = `${copy.handle}2`.slice(0, 40);
     copy.enabled = false;
-    openSettings(null, copy);
+    void openSettings(null, copy);
   });
   const linkBtn = (label, onClick) => { const b = el("button", "wf-link", label); b.type = "button"; b.addEventListener("click", onClick); return b; };
   function workflowDetail(r) {

@@ -44,7 +44,7 @@ func crewHookBase() string {
 	if listen == "" {
 		listen = "127.0.0.1:8095"
 	}
-	return "http://" + listen
+	return "http://" + listen // NOSONAR: the crew listener serves plain HTTP; a public deployment sets ARKISM_CREW_PUBLIC_URL
 }
 
 // CrewHookToken returns the webhook of a workflow, creating its token on first use. Owner only:

@@ -231,7 +231,7 @@ window.ArkismSkillImprove = ({ state, el, button, request, query, tauri, reload,
     box.hidden = true;
     if (state.caps?.role !== "human" || sk.status === "deprecated") return box;
     const show = (...parts) => { box.replaceChildren(...parts); box.hidden = false; };
-    (async () => {
+    void (async () => {
       let w = null;
       try { w = await post(`/v1/skills/${encodeURIComponent(sk.id)}/watch/check`, {}); } catch (_) { w = null; }
       if (w?.authority === "data_only_untrusted" && w.state === "watching") {
