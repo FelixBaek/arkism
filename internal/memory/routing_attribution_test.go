@@ -2,10 +2,12 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -145,6 +147,76 @@ func TestRoutingAttributionHTTPRefusesExtraFieldsAndPagesTheExport(t *testing.T)
 	f.auth.actors["tok-write"] = actor("crew-runner", "service", true, "write")
 	if _, err := f.svc.ListRoutingAttributions(testCtx, "tok-write", scopeA, "", 10); !errors.Is(err, ErrDenied) {
 		t.Fatal("a token without read:routing", err)
+	}
+}
+
+func postAttributionTestRecord(t *testing.T, server *httptest.Server, token string, input RoutingAttributionInput) RoutingAttributionView {
+	t.Helper()
+	body, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/v1/routing/attributions", strings.NewReader(string(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	res, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var view RoutingAttributionView
+	decodeErr := json.NewDecoder(res.Body).Decode(&view)
+	if res.StatusCode != http.StatusOK || decodeErr != nil {
+		t.Fatalf("terminal record rejected: status=%d decode=%v", res.StatusCode, decodeErr)
+	}
+	return view
+}
+
+func TestRoutingAttributionHTTPKeepsToolAndResponseStops(t *testing.T) {
+	f := newFixture(t)
+	server := httptest.NewServer(Handler(f.svc))
+	defer server.Close()
+	stops := []string{"tool_call_limit_reached", "tool_call_limit_exceeded", "tool_call_count_unknown", "response_started"}
+	for _, stop := range stops {
+		t.Run(stop, func(t *testing.T) {
+			record := sampleAttribution("stop-" + stop)
+			record.Stopped = stop
+			record.Attempts = record.Attempts[:1]
+			record.Attempts[0].Error = stop
+			input := RoutingAttributionInput{Scope: scopeA, Record: record}
+			first := postAttributionTestRecord(t, server, f.agent, input)
+			again := postAttributionTestRecord(t, server, f.agent, input)
+			if first.Record.Stopped != stop || again.Record.Stopped != stop {
+				t.Fatal("terminal reason changed")
+			}
+			if again.ID != first.ID {
+				t.Fatal("retry duplicated terminal record")
+			}
+		})
+	}
+	query := url.Values{"workspace_id": {scopeA.WorkspaceID}, "project_id": {scopeA.ProjectID}, "user_id": {scopeA.UserID}, "agent_id": {scopeA.AgentID}}
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/v1/routing/attributions?"+query.Encode(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+f.human)
+	res, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var page RoutingAttributionPage
+	err = json.NewDecoder(res.Body).Decode(&page)
+	if res.StatusCode != http.StatusOK || err != nil || len(page.Items) != len(stops) {
+		t.Fatal("terminal failures lost from HTTP export denominator", res.StatusCode, len(page.Items), err)
+	}
+	for _, item := range page.Items {
+		if item.Record.Stopped == "" || item.Record.Attempts[0].OK {
+			t.Fatal("terminal failure was rewritten as success")
+		}
 	}
 }
 

@@ -105,8 +105,8 @@ func buildCommand(row host.CLI, model, effort, instructions, task, outFile strin
 	return append(argv, flags...), stdin
 }
 
-// toolTurnCap bounds the tool rounds of one step on a CLI that can stop itself (the Claude Code family). The other
-// CLIs have no such switch and print plain text, so their tool use is not counted yet.
+// toolTurnCap bounds Claude-family turns before execution. tool_budget.go also
+// counts individual reported invocations, including parallel tools in one turn.
 // shortcut: the owner's starting value (2026-10-31), revisit when real runs hit it.
 const toolTurnCap = 50
 

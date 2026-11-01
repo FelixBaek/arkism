@@ -44,7 +44,14 @@ func TestPostgresAgentHandoffMCPAndCLI(t *testing.T) {
 	stub := filepath.Join(root, "claude")
 	marker := filepath.Join(root, "executions")
 	args := filepath.Join(root, "argv")
-	for path, content := range map[string]string{token: f.agent, stub: "#!/bin/sh\nprintf 'ran\\n' >> '" + marker + "'\nprintf '%s\\n' \"$@\" > '" + args + "'\n/bin/cat >/dev/null\nprintf 'Stub observation.\\n\\tReview source evidence before integrating.\\n'\n"} {
+	// The real runner now requests stream-json. Keep the same two result
+	// facts, including tab normalization, inside a successful CLI frame.
+	answer, err := json.Marshal(map[string]any{"type": "result", "subtype": "success", "is_error": false,
+		"result": "Stub observation.\n\tReview source evidence before integrating.\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{token: f.agent, stub: "#!/bin/sh\nprintf 'ran\\n' >> '" + marker + "'\nprintf '%s\\n' \"$@\" > '" + args + "'\n/bin/cat >/dev/null\nprintf '%s\\n' '" + string(answer) + "'\n"} {
 		if err := os.WriteFile(path, []byte(content), 0700); err != nil {
 			t.Fatal(err)
 		}

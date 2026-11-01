@@ -24,7 +24,7 @@ type RoutingAttribution struct {
 	Chosen     string                      `json:"chosen" bson:"chosen"`       // the first pick, provider/model
 	Fallbacks  []string                    `json:"fallbacks" bson:"fallbacks"` // in order, as the runner capped them
 	Attempts   []RoutingAttributionAttempt `json:"attempts" bson:"attempts"`
-	Stopped    string                      `json:"stopped,omitempty" bson:"stopped,omitempty"` // effect_unknown | budget_spent
+	Stopped    string                      `json:"stopped,omitempty" bson:"stopped,omitempty"` // effect_unknown | budget_spent | tool_call_limit_reached | tool_call_limit_exceeded | tool_call_count_unknown | response_started
 	Arm        string                      `json:"arm,omitempty" bson:"arm,omitempty"`         // pilot arm label (RTE-08)
 	Origin     *RoutingOrigin              `json:"origin,omitempty" bson:"origin,omitempty"`
 }
@@ -64,7 +64,7 @@ func invalidRoutingAttribution(a RoutingAttribution) bool {
 	return !attributionIDRe.MatchString(a.DecisionID) || a.DecidedAt.IsZero() || !storableTime(a.DecidedAt) ||
 		!slices.Contains(routingDecisions, a.Decision) || a.Decision == "failover" || len(a.Fallbacks) > 3 ||
 		a.Group != "" && !routingGroupIDRe.MatchString(a.Group) || a.ViewHash != "" && !viewHashRe.MatchString(a.ViewHash) ||
-		!slices.Contains([]string{"", "effect_unknown", "budget_spent"}, a.Stopped) ||
+		!slices.Contains([]string{"", "effect_unknown", "budget_spent", "tool_call_limit_reached", "tool_call_limit_exceeded", "tool_call_count_unknown", "response_started"}, a.Stopped) ||
 		a.Arm != "" && !attributionArmRe.MatchString(a.Arm) || !validRoutingOrigin(a.Origin) || invalidAttempts(a)
 }
 

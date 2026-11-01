@@ -186,8 +186,11 @@ func firstFlowCallError(errs []error) error {
 }
 
 func (e *Engine) callWithFallback(ctx context.Context, spec aiSpec, fallback string, limit time.Duration, retries int) (aiAnswer, error) {
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	ctx, _ = withAIToolBudget(ctx)
 	answer, err := e.callAI(ctx, spec, limit, retries)
-	if err == nil || fallback == "" || spec.Backend != "" || ctx.Err() != nil || flowCallControl(err) {
+	if err == nil || fallback == "" || spec.Backend != "" || ctx.Err() != nil || flowCallControl(err) || terminalAIAnswer(answer) {
 		return answer, err
 	}
 	spec.Model = fallback

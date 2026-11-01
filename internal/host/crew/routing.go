@@ -147,9 +147,13 @@ func runRouted(spec map[string]any, decide decideFunc, run runFn, report reportF
 // why it stopped early ("" when it did not).
 func tryRoutes(spec, d map[string]any, ids []string, injected bool, run runFn, report reportFunc) (map[string]any, int, string, error) {
 	var res map[string]any
+	var tools toolChainBudget
 	budget, budgeted := chainBudget(spec)
 	deadline := routeNow().Add(budget)
 	for i, mid := range ids {
+		if i > 0 && tools.exhausted(res) {
+			return res, i - 1, "tool_call_limit_reached", nil
+		}
 		provider, model, found := strings.Cut(mid, "/")
 		if !found {
 			return nil, 0, "", crewErr("라우팅이 모델을 고르지 못했어요 (Arkism 라우팅 설정을 확인해 주세요)")
@@ -173,9 +177,16 @@ func tryRoutes(spec, d map[string]any, ids []string, injected bool, run runFn, r
 			}
 			res = result(false, "", model, "", "", time.Time{}, err.Error())
 		}
+		tools.consume(res)
 		report(routedCall(spec, d, ids, i, attempt, res))
+		if stopped := toolBudgetStop(res); stopped != "" {
+			return res, i, stopped, nil
+		}
 		if res["ok"] == true {
 			return res, i, "", nil
+		}
+		if res["stopped"] == "response_started" {
+			return res, i, "response_started", nil
 		}
 		if ran && !free && mayHaveChanged(attempt, res) {
 			return res, i, "effect_unknown", nil
@@ -212,7 +223,7 @@ const toolFree = "\x00tool_free"
 // started or an account refused before the start (no start time) falls over, as does any read-only step.
 func mayHaveChanged(attempt, res map[string]any) bool {
 	access, _ := nodeAccess(attempt) // an invalid access was refused before the run
-	notStarted := res["error"] == "cli_not_found" || res["error"] == "quota_exhausted" && neverStarted(res)
+	notStarted := res["error"] == "cli_not_found" || (res["error"] == "quota_exhausted" || res["error"] == "tool_call_count_unsupported") && neverStarted(res)
 	return access != "read" && !notStarted
 }
 

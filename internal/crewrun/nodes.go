@@ -382,20 +382,50 @@ func (a aiAnswer) tokens() int64 {
 }
 
 type aiAnswer struct {
-	OK     bool     `json:"ok"`
-	Output string   `json:"output"`
-	Model  string   `json:"model"`
-	Effort string   `json:"effort"`
-	CLI    string   `json:"cli"`
-	Ms     int64    `json:"duration_ms"`
-	Error  string   `json:"error"`
-	Usage  *aiUsage `json:"usage,omitempty"`
-	Rules  string   `json:"rules,omitempty"` // short sha256 of the shared record rules the runner added
+	OK        bool             `json:"ok"`
+	Output    string           `json:"output"`
+	Model     string           `json:"model"`
+	Effort    string           `json:"effort"`
+	CLI       string           `json:"cli"`
+	Ms        int64            `json:"duration_ms"`
+	Error     string           `json:"error"`
+	Usage     *aiUsage         `json:"usage,omitempty"`
+	Rules     string           `json:"rules,omitempty"` // short sha256 of the shared record rules the runner added
+	Routed    *aiRouteBoundary `json:"routed,omitempty"`
+	Stopped   string           `json:"stopped,omitempty"`
+	ToolUsage *aiToolUsage     `json:"tool_usage,omitempty"`
 	// Backend is the agent-runner trace when the step ran on a connection, failed or not.
 	Backend            map[string]any `json:"backend,omitempty"`
 	observationID      string
 	observationCallKey string
 	observationUsage   *UsageObservation
+}
+
+type aiRouteBoundary struct {
+	Stopped string `json:"stopped"`
+}
+
+// The runner owns side-effect and shared-budget boundaries. Retrying a failed
+// node or switching its model must not bypass its terminal decision.
+func terminalAIAnswer(answer aiAnswer) bool {
+	if answer.Error == "tool_call_limit_exceeded" || answer.Error == "tool_call_limit_reached" || answer.Error == "tool_call_count_unknown" {
+		return true
+	}
+	if terminalAIStop(answer.Stopped) {
+		return true
+	}
+	if answer.Routed == nil {
+		return false
+	}
+	return terminalAIStop(answer.Routed.Stopped)
+}
+
+func terminalAIStop(stop string) bool {
+	switch stop {
+	case "effect_unknown", "response_started", "budget_spent", "tool_call_limit_exceeded", "tool_call_limit_reached", "tool_call_count_unknown":
+		return true
+	}
+	return false
 }
 
 var traceLabel = regexp.MustCompile(`^[A-Za-z0-9._:@/ -]{1,128}$`)
@@ -434,24 +464,38 @@ func runTrace(t map[string]any) map[string]any {
 // runner stops its CLI (and the CLI's children) a little before we would
 // stop the runner, so nothing keeps working after the node failed.
 func (e *Engine) callAI(ctx context.Context, s aiSpec, limit time.Duration, retries int) (aiAnswer, error) {
+	ctx, cancel := context.WithTimeout(ctx, limit)
+	defer cancel()
+	ctx, tools := withAIToolBudget(ctx)
 	s.TimeoutS = max(1, int((limit-5*time.Second)/time.Second))
 	var err error
 	var last aiAnswer
 	for try := 0; try <= retries && ctx.Err() == nil; try++ {
+		if tools.observed >= ToolCallLimit {
+			return tools.exhausted(s.Model)
+		}
 		var res aiAnswer
 		attemptCtx := observationAnswerParent(ctx, last, false)
 		res, err = e.budgetedAIContext(attemptCtx, s, try, func(callCtx context.Context) (aiAnswer, error) {
-			return e.callAIOnce(callCtx, s, limit)
+			left := limit
+			if deadline, ok := callCtx.Deadline(); ok {
+				left = min(left, time.Until(deadline))
+			}
+			// CLI timeouts are whole seconds; keep the first attempt's existing
+			// allocation while the parent context enforces the exact deadline.
+			s.TimeoutS = max(1, int((left-5*time.Second+time.Second-1)/time.Second))
+			return e.callAIOnce(callCtx, s, left)
 		})
+		err = tools.consume(&res, err)
 		last = res
-		if err == nil || res.Backend != nil || flowCallControl(err) {
+		if err == nil || res.Backend != nil || flowCallControl(err) || terminalAIAnswer(res) {
 			return res, err // an external task or denied dispatch is never retried
 		}
 	}
 	if ctx.Err() != nil {
-		return observationAnswerOnly(last), ctx.Err()
+		return tools.answerOnly(last), ctx.Err()
 	}
-	return observationAnswerOnly(last), err
+	return tools.answerOnly(last), err
 }
 
 func (e *Engine) callAIOnce(ctx context.Context, s aiSpec, limit time.Duration) (aiAnswer, error) {

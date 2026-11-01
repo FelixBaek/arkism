@@ -7759,7 +7759,7 @@
               }
             }
           }}},
-      "post": {"summary": "The host runner records one routed step for later attribution (write:routing_calls)", "description": "Body {scope, record{decision_id, decided_at, decision clef|default|fixed|manual, chosen, fallbacks[<=3], attempts[1..4]{index, model, ok, latency_ms, error?}, group?, view_hash?, stopped? effect_unknown|budget_spent, arm?, origin?}}. Attempts follow chosen then fallbacks in order and only the last may be ok. Ids, model names, codes and times only: unknown fields are refused, so no prompt, output, memory body, token or key can be stored. One record per scope and decision_id: the same record again returns the stored one; a different record under that id is 409.", "responses": {"200": {"description": "Recorded"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "409": {"description": "Another record under this decision_id"},
+      "post": {"summary": "The host runner records one routed step for later attribution (write:routing_calls)", "description": "Body {scope, record{decision_id, decided_at, decision clef|default|fixed|manual, chosen, fallbacks[<=3], attempts[1..4]{index, model, ok, latency_ms, error?}, group?, view_hash?, stopped? effect_unknown|budget_spent|tool_call_limit_reached|tool_call_limit_exceeded|tool_call_count_unknown|response_started, arm?, origin?}}. Attempts follow chosen then fallbacks in order and only the last may be ok. Ids, model names, codes and times only: unknown fields are refused, so no prompt, output, memory body, token or key can be stored. One record per scope and decision_id: the same record again returns the stored one; a different record under that id is 409.. Unobservable CLI kinds are refused before execution as tool_call_count_unsupported with complete zero tool calls and not_dispatched enforcement; this known-zero refusal may try the next configured route.", "responses": {"200": {"description": "Recorded"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "409": {"description": "Another record under this decision_id"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -58622,7 +58622,7 @@
           },
           "stopped": {
             "type": "string",
-            "description": "effect_unknown | budget_spent"
+            "description": "effect_unknown | budget_spent | tool_call_limit_reached | tool_call_limit_exceeded | tool_call_count_unknown | response_started"
           },
           "arm": {
             "type": "string",

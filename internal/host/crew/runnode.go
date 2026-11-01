@@ -45,7 +45,7 @@ func failed(model, errText string) map[string]any {
 	return result(false, "", model, "", "", time.Time{}, errText)
 }
 
-var resultOrder = []string{"ok", "output", "model", "effort", "cli", "duration_ms", "error", "routed"}
+var resultOrder = []string{"ok", "output", "model", "effort", "cli", "duration_ms", "error", "routed", "stopped", "tool_usage"}
 
 // ---------------------------------------------------------------- skills and argument size
 
@@ -149,6 +149,7 @@ func runChatObserved(observation *hostObservationCall, owned bool, spec map[stri
 		}
 		res := result(ok, out, model, effort, "custom", started, errText)
 		res[toolFree] = true // a chat call has no tools, so 라우팅 may fall over after it
+		res["tool_usage"] = toolUsage{Protocol: "crew-tool-calls-v1", Limit: toolCallCap, Complete: true, Enforcement: "tool_free"}
 		return res
 	}
 	body := host.MustDumps(host.Obj{{Key: "model", Value: model}, {Key: "messages", Value: messages}}, host.DumpOpts{})
@@ -228,7 +229,7 @@ var spawnCLI = func(argv []string, stdin, cwd string, env map[string]string, tim
 	case <-timer.C:
 		killGroup(cmd.Process.Pid, sigKill)
 		<-done
-		return "", "", 0, errTimeout
+		return newlines(out.String()), newlines(errOut.String()), 0, errTimeout
 	case <-term:
 		killGroup(cmd.Process.Pid, sigKill)
 		unlink(outFile)
@@ -276,6 +277,11 @@ func stringList(v any) []string {
 // no CLI for the model, no working folder).
 func runNode(spec map[string]any) (map[string]any, error) {
 	res, err := runAttempt(spec)
+	if err == nil && res["ok"] != true {
+		if stop := runnerTerminal(spec, res, res[toolFree] == true); stop != "" {
+			res["stopped"] = stop
+		}
+	}
 	delete(res, toolFree) // only 라우팅 reads it
 	return res, err
 }
@@ -527,6 +533,15 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 	env map[string]string, profile map[string]any, timeout time.Duration, started time.Time) (res map[string]any, callErr error) {
 	observation, owned := startHostObservation(spec)
 	defer func() { finishHostObservation(observation, owned, spec, res, callErr) }()
+	if !supportsToolEvents(row.Name) {
+		if observation != nil {
+			observation.begin()
+			observation.notDispatched = true
+		}
+		res = result(false, "", model, effort, row.Name, time.Time{}, "tool_call_count_unsupported")
+		res["tool_usage"] = toolUsage{Protocol: "crew-tool-calls-v1", Limit: toolCallCap, Complete: true, Enforcement: "not_dispatched"}
+		return res, nil
+	}
 	outFile := ""
 	if row.Name == "codex" {
 		f, err := os.CreateTemp("", "arkism-crew-*.txt")
@@ -547,6 +562,16 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 		return nil, err
 	}
 	argv, stdin := buildCommand(row, model, effort, instructions, task, outFile, truthy(spec["once"]), access)
+	argv, counted := toolEventCommand(argv, row.Name)
+	calls := toolUsage{Protocol: "crew-tool-calls-v1", Limit: toolCallCap, Enforcement: "post_run"}
+	defer func() {
+		if res != nil {
+			res["tool_usage"] = calls
+			if stop := runnerTerminal(withKey(spec, "access", access), res, false); stop != "" {
+				res["stopped"] = stop
+			}
+		}
+	}()
 	if truthy(spec["research"]) {
 		argv = researchCommand(argv)
 	}
@@ -559,8 +584,15 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 	}
 	out, errOut, code, err := spawnCLI(argv, stdin, workdir, env, timeout, outFile)
 	observeSpawnEstimate(observation, instructions, task, out, model)
+	failedStream := false
+	if counted {
+		out, calls, failedStream = readToolEvents(out, row.Name)
+	}
 	switch err {
 	case errSpawn:
+		// cmd.Start failed: no CLI or tool could have run. This is an exact
+		// zero, not an unobserved stream that should poison later fallbacks.
+		calls = toolUsage{Protocol: "crew-tool-calls-v1", Limit: toolCallCap, Complete: true, Enforcement: "not_dispatched"}
 		if observation != nil {
 			observation.notDispatched = true
 			observation.knownDispatch = false
@@ -570,32 +602,53 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 		return result(false, "", model, effort, row.Name, started, "cli_not_found"), nil
 	case errTimeout:
 		unlink(outFile)
+		if calls.Exceeded {
+			return result(false, "", model, effort, row.Name, started, "tool_call_limit_exceeded"), nil
+		}
 		return result(false, "", model, effort, row.Name, started, "timeout"), nil
 	}
-	if outFile != "" {
-		if raw, err := os.ReadFile(outFile); err == nil && len(raw) > 0 {
-			out = newlines(string(raw))
-		}
-		unlink(outFile)
+	var answered bool
+	out, answered = readCLIAnswerFile(outFile, out)
+	calls.responseStarted = calls.responseStarted || answered
+	errText := cliExitError(code, out, errOut, model, profile, env)
+	if eventErr := cliEventError(counted, calls, failedStream, code); eventErr != "" && errText != "quota_exhausted" {
+		errText = eventErr
 	}
-	if code != 0 {
-		text := errOut
-		if text == "" {
-			text = out
-		}
-		if profile != nil && subscriptionLimit(text) {
-			_ = host.AccountsRecordLimit(profile, host.AgentsState, model, -1)
-			return result(false, "", model, effort, row.Name, started, "quota_exhausted"), nil
-		}
-		lines := pySplitlines(strings.TrimSpace(text))
-		last := ""
-		if len(lines) > 0 {
-			last = lines[len(lines)-1]
-		}
-		return result(false, redact(strings.TrimSpace(out), env), model, effort, row.Name, started,
-			fmt.Sprintf("exit_%d: ", code)+clipRunes(redact(last, env), 200)), nil
+	if errText == "quota_exhausted" {
+		out = ""
 	}
-	return result(true, redact(strings.TrimSpace(out), env), model, effort, row.Name, started, ""), nil
+	return result(errText == "", redact(strings.TrimSpace(out), env), model, effort, row.Name, started, errText), nil
+}
+
+func readCLIAnswerFile(path, fallback string) (string, bool) {
+	if path == "" {
+		return fallback, false
+	}
+	defer unlink(path)
+	if raw, err := os.ReadFile(path); err == nil && len(raw) > 0 {
+		return newlines(string(raw)), true
+	}
+	return fallback, false
+}
+
+func cliExitError(code int, out, errOut, model string, profile map[string]any, env map[string]string) string {
+	if code == 0 {
+		return ""
+	}
+	text := errOut
+	if text == "" {
+		text = out
+	}
+	if profile != nil && subscriptionLimit(text) {
+		_ = host.AccountsRecordLimit(profile, host.AgentsState, model, -1)
+		return "quota_exhausted"
+	}
+	lines := pySplitlines(strings.TrimSpace(text))
+	last := ""
+	if len(lines) > 0 {
+		last = lines[len(lines)-1]
+	}
+	return fmt.Sprintf("exit_%d: ", code) + clipRunes(redact(last, env), 200)
 }
 
 // runNodeFn is runNode (a fake in tests).

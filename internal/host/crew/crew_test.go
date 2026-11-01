@@ -71,7 +71,7 @@ func fakeSpawn(t *testing.T, out, errOut string, code int) *[]spawnCall {
 	calls := &[]spawnCall{}
 	patch(t, &spawnCLI, func(argv []string, stdin, cwd string, env map[string]string, _ time.Duration, _ string) (string, string, int, error) {
 		*calls = append(*calls, spawnCall{argv, stdin, cwd, env})
-		return out, errOut, code, nil
+		return fakeCLIOutput(argv, out, code), errOut, code, nil
 	})
 	return calls
 }

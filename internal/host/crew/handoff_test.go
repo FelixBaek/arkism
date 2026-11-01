@@ -85,11 +85,17 @@ func TestHandoffRealProcessPersistsResultAndBlocksReplay(t *testing.T) {
 	store := newHandoffStore()
 	input := handoffInput(t)
 	cli := filepath.Join(t.TempDir(), "claude")
-	if err := os.WriteFile(cli, []byte("#!/bin/sh\n/bin/cat >/dev/null\nprintf 'Inspected source-1; review required.\\n'\n"), 0700); err != nil {
+	if err := os.WriteFile(cli, []byte("#!/bin/sh\n/bin/cat >/dev/null\n/bin/cat <<'EVENTS'\n"+budgetEvent(map[string]any{"type": "result", "subtype": "success", "is_error": false, "result": "Inspected source-1; review required."})+"EVENTS\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ARKISM_CLAUDE_BIN", cli)
-	out, err := runHandoff(strings.NewReader(input), store.request, runNode)
+	out, err := runHandoff(strings.NewReader(input), store.request, func(spec map[string]any) (map[string]any, error) {
+		res, err := runNode(spec)
+		if err != nil || res["ok"] != true {
+			t.Logf("runner error=%v code=%v stop=%v", err, res["error"], res["stopped"])
+		}
+		return res, err
+	})
 	if err != nil || out["ok"] != true {
 		t.Fatalf("%v %v", out, err)
 	}
@@ -101,6 +107,32 @@ func TestHandoffRealProcessPersistsResultAndBlocksReplay(t *testing.T) {
 	_, err = runHandoff(strings.NewReader(input), store.request, func(map[string]any) (map[string]any, error) { calls++; return nil, nil })
 	if err == nil || calls != 0 {
 		t.Fatalf("replayed execution: %v %d", err, calls)
+	}
+}
+
+func TestHandoffRealCLIHonorsToolCallLimit(t *testing.T) {
+	for _, n := range []int{50, 51} {
+		t.Run(map[int]string{50: "at_limit", 51: "over_limit"}[n], func(t *testing.T) {
+			store := newHandoffStore()
+			input := handoffInput(t)
+			keyFiles(t)
+			patch(t, &host.Home, t.TempDir())
+			cli := filepath.Join(t.TempDir(), "claude")
+			script := "#!/bin/sh\n/bin/cat >/dev/null\n/bin/cat <<'EVENTS'\n" + claudeBudgetFixture(n) + "EVENTS\n"
+			if err := os.WriteFile(cli, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("ARKISM_CLAUDE_BIN", cli)
+			out, err := runHandoff(strings.NewReader(input), store.request, runNode)
+			if err != nil || out["ok"] != (n == 50) {
+				t.Fatal("real CLI boundary did not enforce count", out, err)
+			}
+			replays := 0
+			_, err = runHandoff(strings.NewReader(input), store.request, func(map[string]any) (map[string]any, error) { replays++; return nil, nil })
+			if err == nil || replays != 0 {
+				t.Fatal("handoff replayed completed or blocked execution", replays, err)
+			}
+		})
 	}
 }
 func TestHandoffFencesParentAndPersistsBlockedState(t *testing.T) {
