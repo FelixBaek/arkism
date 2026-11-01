@@ -2,7 +2,7 @@
 // holds every switch (자동 라우팅·페일오버, 모델별 설정). A server without /v1/routing/* gets the "아직 지원하지 않아요" screen.
 window.ArkismRouting = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, request, query, notice, detailShell, agentLogo, ago } = ctx;
+  const { state, $, el, icon, button, segment, go, render, request, query, notice, detailShell, agentLogo } = ctx;
   const turns = window.ArkismRoutingTurns?.(ctx);
 
   const RANGES = [["1h", "1시간"], ["24h", "24시간"], ["7d", "7일"], ["30d", "30일"]];

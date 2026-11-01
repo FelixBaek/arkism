@@ -1312,7 +1312,7 @@ export const createCrew = (ctx) => {
   });
 
 
-  function graphHead(line) {
+  function graphHead() {
     const rec = crewEditor.ed.rec;
     if (!rec) return [];
     if (crewEditor.ed.run) {
@@ -1370,7 +1370,7 @@ export const createCrew = (ctx) => {
     else if (!rec.id) title.append(el("span", "", "새 워크플로우"), el("small", "g-title-sub", "이름은 저장할 때 정해요"));
     else title.append(raw(el("span", "", rec.crew.name)), el("small", "g-title-sub", crewEditor.ed.run ? "실행" : "워크플로우 편집"));
     const aside = el("div", "head-aside");
-    aside.append(...graphHead(line));
+    aside.append(...graphHead());
     line.append(title);
     graphWin.querySelector(".graph-win-head").replaceChildren(line, aside);
     crewEditor.renderGraph();
