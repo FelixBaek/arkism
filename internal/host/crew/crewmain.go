@@ -274,11 +274,7 @@ func runCrew(name string, a *args, floats map[string]float64, stdin io.Reader, s
 		}
 		fmt.Fprintln(stdout, dumpIndent(out))
 	case "convert":
-		out, err := runConvert(a.flags["apply"], a.get("backup", ""))
-		if out != nil {
-			fmt.Fprintln(stdout, dumpIndent(out))
-		}
-		return 0, err
+		return runConvertCmd(a, stdout)
 	case "route":
 		return runRouteCmd(a, stdout)
 	case "providers show", "providers report", "providers watch":

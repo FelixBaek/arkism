@@ -13,7 +13,7 @@ func convertStore() map[string]any {
 	return map[string]any{"items": []any{
 		rec("a1", map[string]any{"type": "agent", "name": "리뷰어", "handle": "리뷰어", "role": "코드 리뷰", "category": "개발"}),
 		rec("t1", map[string]any{"type": "team", "name": "리뷰팀", "handle": "리뷰팀"}),
-		rec("a2", map[string]any{"type": "agent", "name": "이름 없음"}),                                // a part only: no wrapper
+		rec("a2", map[string]any{"type": "agent", "name": "이름 없음"}),                                   // a part only: no wrapper
 		rec("a3", map[string]any{"type": "agent", "name": "배포", "handle": "배포", "workflow": "$배포흐름"}), // runs as its workflow
 		rec("w1", map[string]any{"type": "workflow", "name": "배포흐름", "handle": "배포흐름"}),
 		rec("a4", map[string]any{"type": "agent", "name": "요약", "handle": "요약"}),

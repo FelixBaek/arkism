@@ -7,6 +7,7 @@ package crew
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -131,4 +132,13 @@ func runConvert(apply bool, backup string) (map[string]any, error) {
 		ch["created"] = rec["id"]
 	}
 	return out, nil
+}
+
+// runConvertCmd prints what convert did (or would do), even when a write stopped it.
+func runConvertCmd(a *args, stdout io.Writer) (int, error) {
+	out, err := runConvert(a.flags["apply"], a.get("backup", ""))
+	if out != nil {
+		fmt.Fprintln(stdout, dumpIndent(out))
+	}
+	return 0, err
 }
