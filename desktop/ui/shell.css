@@ -142,6 +142,8 @@
    app.css's 760 top bar is never used. Labels stay for screen readers. */
 .rail-toggle { grid-row: 1; grid-column: 2; justify-self: end; display: grid; place-items: center; padding: 0; border: 0; background: none; }
 .rail-toggle[hidden] { display: none; }
+/* The mark sits inside the 창 버튼 strip's 32px (.window-bar, z-index 1000), which would catch every click but its last pixel. */
+body:has(> .window-bar:not([hidden])) .rail-toggle { position: relative; z-index: 1001; }
 /* Figma 198:7 / 1492:98316: on hover the mark turns toward where the rail goes (-90 folds, 90 opens) and swings
    past it a few times on a damped spring (10-29 "핑퐁하듯이"), settling within 0.7s. */
 .rail-tri { width: 22px; height: 19px; overflow: visible; fill: var(--nc-action); stroke: var(--nc-accent); stroke-width: 1.5; stroke-linejoin: round; transition: transform 700ms linear(0, .109, .374, .696, .994, 1.211, 1.326, 1.341, 1.282, 1.18, 1.069, .973, .91, .882, .886, .913, .951, .988, 1.018, 1.036, 1.041, 1.037, 1.026, 1.013, 1); }
