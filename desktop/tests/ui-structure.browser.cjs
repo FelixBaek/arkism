@@ -121,10 +121,13 @@ fs.mkdirSync(output,{recursive:true});
     assert.ok(catOpts.length>0&&catOpts.every(([v,n])=>flowCats.has(v)&&/^\d+$/.test(n||"")),"workflow categories translated: "+JSON.stringify(catOpts));
     // agents sit in the one FLOW list (no kind tabs); a card shows name and @name only, no category line
     await page.locator('.flow-card[data-flow-kind="agent"]').first().waitFor();
-    const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent");
+    // #481: an agent that works by a live workflow shows as that workflow's card, called by the agent's @name
+    const flowHandles=new Set(data["v1/crew.json"].items.filter(r=>r.crew.type==="workflow").map(r=>r.crew.handle));
+    const agentsFixture=data["v1/crew.json"].items.filter(r=>r.crew.type==="agent"&&!flowHandles.has(r.crew.workflow));
     assert.deepEqual((await page.locator('.flow-card[data-flow-kind="agent"] strong').allInnerTexts()).sort(),agentsFixture.map(r=>r.crew.name).sort());
     assert.equal(await page.locator(".flow-card-category").count(),0);
     assert.equal(await page.locator(".flow-card",{hasText:"코드리뷰어"}).getAttribute("title"),"코드리뷰어 · @코드리뷰어"); // name · @name
+    assert.equal(await page.locator('.flow-card[data-flow-kind="workflow"][title="리서치 · @리서처"]').count(),1); // the agent's own workflow, by its @name
     await page.locator(".flow-card",{hasText:"디자이너"}).click();
     const flowNames=new Set(data["v1/crew.json"].items.map(r=>r.crew.name));
     const flowOptions=await page.locator("dialog[open] .ex-flow-pick option").allInnerTexts();
