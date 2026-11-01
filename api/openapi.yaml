@@ -40434,6 +40434,20 @@
             "type": "string",
             "description": "Required only for reject, nonblank, at most 2000 UTF-8 bytes."
           },
+          "reach": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "general",
+              "project"
+            ],
+            "description": "Optional, approve and edit_approve only (reject 400). Where the approved memory is recalled; stored on the memory and in review.reach, and review.reach_overridden=true when it differs from the candidate's reach_suggestion. Omitted keeps the kind default (user personal, otherwise general)."
+          },
+          "reach_project": {
+            "type": "string",
+            "maxLength": 256,
+            "description": "Required with reach=project (the project key, stored lowercased); must be empty otherwise."
+          },
           "automated": {
             "type": "boolean",
             "default": false,
@@ -40480,6 +40494,16 @@
             "type": "string",
             "readOnly": true,
             "description": "New explicit_review_api receipt records an authenticated role, not physical human presence. Legacy missing receipts are not upgraded."
+          },
+          "reach": {
+            "type": "string",
+            "readOnly": true,
+            "description": "The reach the reviewer chose on approval; absent when none was sent."
+          },
+          "reach_overridden": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when the chosen reach differs from the AI reach_suggestion shown on the candidate."
           }
         }
       },
@@ -48648,6 +48672,12 @@
           },
           "reason_code": {
             "type": "string"
+          },
+          "reach": {
+            "type": "string"
+          },
+          "reach_overridden": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,

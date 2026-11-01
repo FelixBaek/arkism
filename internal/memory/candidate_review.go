@@ -16,6 +16,9 @@ type CandidateReviewInput struct {
 	Content          string                   `json:"content,omitempty"`
 	Reason           string                   `json:"reason,omitempty"`
 	ReasonCode       string                   `json:"reason_code,omitempty"`
+	// Reach is the reviewer's pick on approve/edit_approve; empty keeps the kind default (memoryReach).
+	Reach        string `json:"reach,omitempty"`
+	ReachProject string `json:"reach_project,omitempty"`
 }
 type ReviewDecision struct {
 	ReceiptID string    `json:"receipt_id,omitempty" bson:"receipt_id,omitempty"`
@@ -32,12 +35,16 @@ type ReviewDecision struct {
 	Person     bool   `json:"person,omitempty" bson:"person,omitempty"`
 	AIRisk     string `json:"ai_risk,omitempty" bson:"ai_risk,omitempty"`
 	Overturned bool   `json:"overturned,omitempty" bson:"overturned,omitempty"`
+	// Reach is what the reviewer chose; ReachOverridden marks a choice other than the AI suggestion shown.
+	Reach           string `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachOverridden bool   `json:"reach_overridden,omitempty" bson:"reach_overridden,omitempty"`
 }
 
 func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in CandidateReviewInput) (Record, error) {
 	if in.ExpectedRevision < 1 || id == "" || len(id) > 256 || in.OperationID != "" && !idempotencyPattern.MatchString(in.OperationID) {
 		return Record{}, ErrInvalid
 	}
+	in.ReachProject = strings.ToLower(strings.TrimSpace(in.ReachProject)) // same form SetMemoryReach stores
 	status, e := candidateReviewStatus(in)
 	if e != nil {
 		return Record{}, e
@@ -59,6 +66,9 @@ func candidateReviewStatus(in CandidateReviewInput) (string, error) {
 	if in.ReasonCode != "" && (in.Action != "reject" || !removalReasons[in.ReasonCode]) {
 		return "", ErrInvalid
 	}
+	if !validReviewReach(in) {
+		return "", ErrInvalid
+	}
 	switch in.Action {
 	case "approve":
 		if in.Content != "" || in.Reason != "" {
@@ -77,6 +87,19 @@ func candidateReviewStatus(in CandidateReviewInput) (string, error) {
 		return "", ErrInvalid
 	}
 	return "approved", nil
+}
+
+// validReviewReach: reach goes only with an approval, and project needs its project key.
+func validReviewReach(in CandidateReviewInput) bool {
+	switch in.Reach {
+	case "":
+		return in.ReachProject == ""
+	case ReachPersonal, ReachGeneral:
+		return in.ReachProject == "" && in.Action != "reject"
+	case ReachProject:
+		return in.ReachProject != "" && validProjectKey(in.ReachProject) && in.Action != "reject"
+	}
+	return false
 }
 
 type CandidateReviewBatchItem struct {

@@ -786,8 +786,22 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const line = el("div", "ov-verdict-line"); line.append(el("small", "", `AI 판단${k.at ? ` · ${new Date(k.at).toLocaleDateString(loc(), { month: "numeric", day: "numeric" })}` : ""}`), el("strong", `ov-verdict-${v.action}`, VERDICT[v.action]), again);
         const s3 = el("div", "ov-detail-sec ov-detail-sec-verdict"); s3.append(line, ...(box.children.length ? [box] : [])); decide1.append(s3);
       }
-      const rs = c.reach_suggestion;
-      if (rs) { const chips = el("div", "ov-wide-chips"); for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) chips.append(el("span", `ov-wide-chip${val === rs.reach ? " on" : ""}`, val === rs.reach ? `${l} · AI 추천` : l)); sec(decide1, "AI가 고른 쓰는 범위 · 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : [])); }
+      // 쓰는 범위 (#524): the AI suggestion is the default pick; the person's pick goes with 승인 and 고쳐서 저장
+      const rs = c.reach_suggestion, kindReach = c.reach || (c.kind === "user" ? "personal" : "general"), reachBtns = [];
+      if (rs && dr.reach == null) dr.reach = rs.reach !== "project" || rs.reach_project ? rs.reach : kindReach; // project needs its key
+      const reachExtra = () => (rs && dr.reach ? { reach: dr.reach, ...(dr.reach === "project" ? { reach_project: rs.reach_project } : {}) } : {});
+      const whereNow = el("strong", "", REACH_WHERE[(rs && dr.reach) || kindReach] || REACH_WHERE.general);
+      if (rs) {
+        const chips = el("div", "ov-wide-chips"); chips.setAttribute("role", "group"); chips.setAttribute("aria-label", tr("쓰는 범위"));
+        for (const [val, l] of [["personal", "개인"], ["general", "범용"], ["project", "이 프로젝트만"]]) {
+          const b = el("button", "ov-wide-chip", val === rs.reach ? `${l} · AI 추천` : l); b.type = "button";
+          if (val === "project" && !rs.reach_project) { b.disabled = true; b.title = tr("어느 프로젝트인지 몰라 고를 수 없어요"); }
+          b.addEventListener("click", () => { dr.reach = val; paintReach(); }); reachBtns.push([val, b]); chips.append(b);
+        }
+        sec(decide1, "쓰는 범위 · AI 추천이 기본, 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : []));
+      }
+      function paintReach() { for (const [val, b] of reachBtns) { b.classList.toggle("on", val === dr.reach); b.setAttribute("aria-pressed", String(val === dr.reach)); } whereNow.textContent = REACH_WHERE[dr.reach] || REACH_WHERE.general; }
+      if (rs) paintReach();
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {
         const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
@@ -805,8 +819,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
         const typed = () => edit.value.trim();
-        act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve")),
-          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text || (dropWhy && typed() === dropWhy)) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed() }).catch(() => {}); }),
+        act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve", reachExtra())),
+          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text || (dropWhy && typed() === dropWhy)) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed(), ...reachExtra() }).catch(() => {}); }),
           // a typed note goes with the reject as is; an empty box still asks why (the server needs a reason)
           mk("reject", "버리기", () => (typed() ? go1("reject", { reason: typed() }) : DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) }))),
           ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : []));
@@ -822,9 +836,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (basisG.children.length > 1) detail.append(basisG);
       if (!k?.evidence_span && tag(c, "event_id:")) sec(metaG, "어디서 왔나요", contextBox(c, "", false));
       const f = el("div", "ov-detail-facts"), fact = (a2, b2) => { const p = el("p", ""); p.append(el("span", "", a2), el("strong", "", b2)); f.append(p); };
-      // approve takes no reach: an empty one becomes personal for a user memory, general otherwise (the suggestion stays advice)
-      const reachOnApprove = c.reach || (c.kind === "user" ? "personal" : "general");
-      fact("들어갈 곳", "쓰는 중인 기억"); fact("쓰는 곳", REACH_WHERE[reachOnApprove] || REACH_WHERE.general); sec(metaG, "승인하면", f);
+      // without a suggestion approve sends no reach: personal for a user memory, general otherwise
+      fact("들어갈 곳", "쓰는 중인 기억"); const wp = el("p", ""); wp.append(el("span", "", "쓰는 곳"), whereNow); f.append(wp); sec(metaG, "승인하면", f);
       detail.append(metaG);
     }
     twoPane(d, bar, list, detail); d.lastChild.querySelector(".ov-wide-left").append(more); paint();
