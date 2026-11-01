@@ -344,9 +344,23 @@ test("overview: 승인 대기 lets the person pick the reach, defaulting to the 
     assert.equal(sent().at(-1).reach, "personal");
     assert.equal(sent().at(-1).reach_project, undefined);
   } finally { off(); await closeAll(); }
-  // a candidate without a suggestion sends no reach, as before
-  const d = await reviewOf("코드 수정 후");
-  assert.equal(d.querySelector(".ov-wide-chips[role=group]"), null);
+  // a keyless project suggestion: nothing picked, the kind default shown, and an untouched approve sends no reach
+  const sent6 = () => app.apiCalls.filter(([, p]) => p === "/v1/memory_candidates/c6/review").map(([, , b]) => JSON.parse(String(b)));
+  const off6 = route("POST", "/v1/memory_candidates/c6/review", () => fail(500, "boom"));
+  try {
+    const d = await reviewOf("코드 수정 후");
+    const chips = [...d.querySelectorAll(".ov-wide-chips[role=group] button")];
+    assert.equal(chips.length, 3);
+    assert.ok(chips.every((b) => b.getAttribute("aria-pressed") === "false"), "nothing picked");
+    assert.ok(chips.find((b) => text(b).startsWith("이 프로젝트만")).disabled);
+    assert.match(text(d), /모든 프로젝트 \(범용\)/, "the kind default");
+    d.querySelector(".ov-detail-edit").value = "코드를 고친 뒤 테스트를 돌린다";
+    await press("고쳐서 저장", d, 30);
+    assert.equal(sent6().at(-1).reach, undefined, "no reach until a click");
+    chips.find((b) => text(b).startsWith("개인")).click();
+    await press("고쳐서 저장", win(), 30);
+    assert.equal(sent6().at(-1).reach, "personal");
+  } finally { off6(); await closeAll(); }
 });
 
 test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject and conflict paths", async () => {

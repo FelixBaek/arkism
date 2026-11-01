@@ -788,7 +788,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       }
       // 쓰는 범위 (#524): the AI suggestion is the default pick; the person's pick goes with 승인 and 고쳐서 저장
       const rs = c.reach_suggestion, kindReach = c.reach || (c.kind === "user" ? "personal" : "general"), reachBtns = [];
-      if (rs && dr.reach == null) dr.reach = rs.reach !== "project" || rs.reach_project ? rs.reach : kindReach; // project needs its key
+      // a keyless project suggestion cannot be sent: nothing is picked, and approve sends no reach until a click
+      if (rs && dr.reach === undefined) dr.reach = rs.reach !== "project" || rs.reach_project ? rs.reach : null;
       const reachExtra = () => (rs && dr.reach ? { reach: dr.reach, ...(dr.reach === "project" ? { reach_project: rs.reach_project } : {}) } : {});
       const whereNow = el("strong", "", REACH_WHERE[(rs && dr.reach) || kindReach] || REACH_WHERE.general);
       if (rs) {
@@ -800,7 +801,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         }
         sec(decide1, "쓰는 범위 · AI 추천이 기본, 정하는 건 사람이에요", chips, ...(rs.reason ? [el("p", "", rs.reason)] : []));
       }
-      function paintReach() { for (const [val, b] of reachBtns) { b.classList.toggle("on", val === dr.reach); b.setAttribute("aria-pressed", String(val === dr.reach)); } whereNow.textContent = REACH_WHERE[dr.reach] || REACH_WHERE.general; }
+      function paintReach() { for (const [val, b] of reachBtns) { b.classList.toggle("on", val === dr.reach); b.setAttribute("aria-pressed", String(val === dr.reach)); } whereNow.textContent = REACH_WHERE[dr.reach || kindReach] || REACH_WHERE.general; }
       if (rs) paintReach();
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {

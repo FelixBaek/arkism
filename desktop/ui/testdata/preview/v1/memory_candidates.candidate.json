@@ -160,6 +160,11 @@
       "ok": true
      }
     ]
+   },
+   "reach_suggestion": {
+    "reach": "project",
+    "reason": "특정 언어·도구 표시, 어느 프로젝트인지는 사람이 고름",
+    "confidence": 0.45
    }
   }
  ],
