@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -259,5 +260,37 @@ func TestToolBudgetUnsupportedCLIAllowsKnownZeroFallback(t *testing.T) {
 	usage, ok := res["tool_usage"].(toolUsage)
 	if err != nil || res["ok"] != true || i != 1 || stop != "" || len(*calls) != 1 || !ok || !usage.Complete || usage.ObservedCalls != 1 {
 		t.Fatal("known-zero refusal poisoned fallback", res, i, stop, err, len(*calls))
+	}
+}
+
+// Wire diagnostics and repeated tool events are not answer output tokens.
+func TestToolBudgetObservationEstimatesExtractedAnswer(t *testing.T) {
+	for _, model := range []string{"opus", "gpt-6.1-sol"} {
+		t.Run(model, func(t *testing.T) {
+			cli := row(t, model)
+			answer := "final answer"
+			stream := claudeBudgetFixture(20)
+			if cli.Name == "codex" {
+				stream = budgetEvent(map[string]any{"type": "item.completed", "item": map[string]any{"type": "command_execution", "id": "tool-1", "aggregated_output": strings.Repeat("diagnostic", 1000)}}) + fakeCLIOutput([]string{"exec", "--json"}, answer, 0)
+			}
+			patch(t, &spawnCLI, func(_ []string, _, _ string, _ map[string]string, _ time.Duration, outFile string) (string, string, int, error) {
+				if cli.Name == "codex" {
+					if err := os.WriteFile(outFile, []byte(answer), 0600); err != nil {
+						t.Fatal(err)
+					}
+					return strings.ReplaceAll(stream, answer, strings.Repeat("wire draft ", 100)), "", 0, nil
+				}
+				return stream, "", 0, nil
+			})
+			spec, _, _ := hostObservationSpec(t)
+			call, owned := startHostObservation(spec)
+			active := withKey(spec, hostObservationActiveKey, call)
+			res, err := spawnNode(active, cli, model, "low", "synthetic", "", "", "read", t.TempDir(), nil, nil, time.Second, time.Now())
+			finishHostObservation(call, owned, spec, res, err)
+			expected := usageOf(map[string]any{"task": "synthetic"}, map[string]any{"output": answer, "model": model})
+			if err != nil || res["ok"] != true || res["output"] != answer || !reflect.DeepEqual(call.estimated, expected) {
+				t.Fatalf("wire events inflated answer estimate: got=%v want=%v err=%v", call.estimated, expected, err)
+			}
+		})
 	}
 }

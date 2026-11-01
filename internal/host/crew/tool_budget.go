@@ -120,6 +120,7 @@ func (r *toolEventReader) claude(event map[string]any) {
 			case "text", "thinking", "redacted_thinking":
 				if block["type"] == "text" && sOr(block["text"]) != "" {
 					r.usage.responseStarted = true
+					r.answer += sOr(block["text"])
 				}
 			default:
 				r.invalid = true

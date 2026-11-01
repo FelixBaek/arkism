@@ -583,11 +583,11 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 		observation.incomplete()
 	}
 	out, errOut, code, err := spawnCLI(argv, stdin, workdir, env, timeout, outFile)
-	observeSpawnEstimate(observation, instructions, task, out, model)
 	failedStream := false
 	if counted {
 		out, calls, failedStream = readToolEvents(out, row.Name)
 	}
+	observeSpawnEstimate(observation, instructions, task, out, model)
 	switch err {
 	case errSpawn:
 		// cmd.Start failed: no CLI or tool could have run. This is an exact
@@ -609,6 +609,7 @@ func spawnNode(spec map[string]any, row host.CLI, model, effort, task, own, skil
 	}
 	var answered bool
 	out, answered = readCLIAnswerFile(outFile, out)
+	observeSpawnEstimate(observation, instructions, task, out, model)
 	calls.responseStarted = calls.responseStarted || answered
 	errText := cliExitError(code, out, errOut, model, profile, env)
 	if eventErr := cliEventError(counted, calls, failedStream, code); eventErr != "" && errText != "quota_exhausted" {

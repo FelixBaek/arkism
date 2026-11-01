@@ -189,7 +189,7 @@ func TestHostObservationInvalidUsageComponentKeepsKnownCost(t *testing.T) {
 func TestHostObservationCLIHiddenCallsAndTimeoutRemainPartial(t *testing.T) {
 	spec, transport, session := hostObservationSpec(t)
 	patch(t, &spawnCLI, func([]string, string, string, map[string]string, time.Duration, string) (string, string, int, error) {
-		return "paid partial output", "", 1, errTimeout
+		return budgetEvent(map[string]any{"type": "assistant", "message": map[string]any{"content": []any{map[string]any{"type": "text", "text": "paid partial output"}}}}), "", 1, errTimeout
 	})
 	res, err := spawnNode(spec, host.CLI{Name: "claude"}, "first", "medium", "synthetic task", "instructions", "", "read", "", nil, nil, time.Second, time.Now())
 	closeHostObservation(session)

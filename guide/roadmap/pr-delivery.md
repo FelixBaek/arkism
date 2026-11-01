@@ -86,6 +86,10 @@
 | [#523](https://github.com/FelixBaek/arkism/pull/523) | fast/slow 상태 전이·재생·조회 | 빠른 상태와 느린 상태를 같은 사건 이력에서 분리해 계산한다 | 비중·속도는 실제 효과를 입증한 값 아님. 원 PR Evidence 참조. |
 | [#525](https://github.com/FelixBaek/arkism/pull/525) | EXP-01 v2 불변 최종 잠금 | 누락 값·변경된 입력·자기 검토 자료가 최종 잠금으로 섞이지 않게 한다 | 원문 hash는 사람 승인·등록 시점 인증 아님. 원 PR Evidence 참조. |
 
+## 전달 리뷰 보완
+
+[#534](https://github.com/FelixBaek/arkism/pull/534) 리뷰에서 CLI JSONL 전체가 답변 비용으로 잘못 추정되는 문제를 수정했다. 구조화 답변·최종 답변 파일로 추정하며 유효한 부분 답변은 유지한다. 시험 이미지의 coverage 호환과 실제 child 취소 fixture를 보완했다. 평가 Python 시험을 정확히 분류하고 보안 지적53개의 입력·실행 경계를 검토한 뒤 근거가 확인된 정확한5개 파일·규칙만 예외로 기록했다. 기대 개선은 비용 과대 추정 방지와 시험 재현성이며, 실제 청구·성능 효과 입증은 아니다. 실행기 전체 race114.043초·covered native41.859초·평가820개 통과. 상세 근거와 실패 이력은 [작업기록](../work-records/2026-11-01-roadmap-review-fixes.md)에 있다. 원격 재검사는 최신 head의 Checks에서 확인한다.
+
 ## 보류와 적용 범위
 
 실제 독립 oracle·참여자/실험 관측·실제 reward/비용·skill-use 자료가 없는 연구 인수는 보류한다. PSY 준비 문서와 실제 결과 없는 prototype은 실제 효과 검증으로 세지 않는다. 원래 19개 조건부 개발 범위의 코드 근거와 실제 자료/사람 결정을 구분한다. 기본 off는 유지하며 이 전달은 제품 빌드·운영 enable·배포를 포함하지 않는다. UI 추가도 없다.
@@ -95,7 +99,7 @@
 - 대상 base: `main` (공개 원격에서 확인).
 - 새 공개 후보: `codex/roadmap-delivery-20261101`.
 - PR: [#534](https://github.com/FelixBaek/arkism/pull/534). 사용자 승인에 따라 `human-approved` 라벨을 적용했다.
-- 최신 main 반영: `15edfca69efa4565592b1f355a3cd5063d6fa4df`; 세션 메시지 변경을 보존하고 API 정의를 함께 합쳤다.
-- 공개 후보 검사: 전체 `tools/check_local.py` 종료0/1246.806초, Go vet·전체 race 및 Python179/820/49·프런트591개 통과(프런트 실패·누락0), 고정2970파일 변경0, lint0. 자체 임시PG 종료·삭제 확인. 일부 불변 Go 패키지는 캐시이며 개별 Go skip은 별도 미계수. 제품 빌드 없음.
+- 최신 main 반영: `ea7bb9cb753a33273265bf02e577da157000334b`; 세션 메시지·API 결합과 이후 프런트엔드 의존성 보안 수정을 보존했다. 재배치로 생긴 코드·시험 차이는 상위 의존성2파일뿐이며 충돌은 없었다.
+- 공개 후보 로컬 검사(`15edfca` 기반, 이후 상위 의존성2파일 반영): 전체 `tools/check_local.py` 종료0/1246.806초, Go vet·전체 race 및 Python179/820/49·프런트591개 통과(프런트 실패·누락0), 고정2970파일 변경0, lint0. 자체 임시PG 종료·삭제 확인. 일부 불변 Go 패키지는 캐시이며 개별 Go skip은 별도 미계수. 제품 빌드 없음.
 - 원격 CI: [#534 Checks](https://github.com/FelixBaek/arkism/pull/534/checks), AI 리뷰·병합: [#534 Conversation](https://github.com/FelixBaek/arkism/pull/534). 이 링크의 최신 head별 결과가 최종 상태다. 모든 필수 검사와 AI 리뷰 지적을 확인한 뒤 병합한다; 생성 시점에는 아직 통과·병합을 주장하지 않는다.
 - 이슈: 병합 후 #151/#152/#154/#155 조건부 종료 후보. #150/#153/#156/#158 보류 유지; 삭제된 #157은 완료로 세지 않는다.
