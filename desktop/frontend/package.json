@@ -19,5 +19,8 @@
     "playwright-core": "1.63.0",
     "stylelint": "17.16.0",
     "typescript": "6.0.3"
+  },
+  "overrides": {
+    "minimatch": "11.0.1"
   }
 }
