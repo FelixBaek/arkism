@@ -95,8 +95,8 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     await page.evaluate(() => document.documentElement.style.removeProperty("--fs"));
     await page.screenshot({ path: path.join(output, "memory.png") });
     // Candidates and conflicts retain a next-page control when local search hides all rows.
-    // 확인해 주세요 is its own area tab; 새 기억 확인 is the candidate list in it
-    await page.locator("#area-tabs [role=tab]", { hasText: "확인해 주세요" }).click();
+    // 확인해 주세요 is a box on the memory list (no area tab line); its button opens the check lists
+    await page.getByRole("button", { name: "하나씩 확인하기", exact: true }).click();
     await page.getByRole("tab", { name: /^새 기억 확인/ }).click();
     await page.getByRole("searchbox", { name: "기억 검색", exact: true }).fill("outside-loaded");
     await next("candidates");
@@ -141,11 +141,12 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
       await page.getByRole("dialog", { name: "필터" }).locator("section", { has: page.locator("h4", { hasText: /^상태$/ }) }).getByRole("button", { name: new RegExp(`^${label}`) }).click();
       await page.keyboard.press("Escape");
     }
-    await pickState("휴지통");
-    await page.locator('[data-collection="skillTrash"]').waitFor();
-    await next("skillTrash");
-    await page.waitForFunction(() => [...document.querySelectorAll(".v4s-name")].some(n => n.textContent === "skillTrash-00099"));
-    assert.equal(await page.evaluate(() => window.listCalls.filter(c => c.name === "skillTrash" && c.start).length), 1);
+    // The owner dropped the 휴지통 chip (안 씀 already lists those): 상태 switches the list without a separate trash catalogue.
+    await page.locator(".v4s-filter-btn").first().click();
+    assert.equal(await page.getByRole("dialog", { name: "필터" }).getByRole("button", { name: /^휴지통/ }).count(), 0);
+    await page.keyboard.press("Escape");
+    await pickState("안 씀");
+    await page.waitForFunction(() => /필터\s*1/.test(document.querySelector(".v4s-filter-btn")?.textContent || ""));
     await pickState("전체");
     async function revealAll() {
       for (let i = 0; i < 30; i++) {
@@ -177,7 +178,7 @@ const ui = path.resolve(process.env.ARKISM_UI_DIRECTORY || path.resolve(__dirnam
     assert.deepEqual(errors, []);
     const report = { loadedMemories: 400, calls: await page.evaluate(() => window.listCalls) };
     fs.writeFileSync(path.join(output, "report.json"), JSON.stringify(report, null, 2));
-    console.log("Lists passed: 50 per initial collection, 400 memories windowed, variable heights/zoom/narrow viewport, End/Home/Tab/focus, candidate/conflict cursors, skill retry/virtualization, trash next page, candidate group pages, new skill version checks, typing caret and late navigation.");
+    console.log("Lists passed: 50 per initial collection, 400 memories windowed, variable heights/zoom/narrow viewport, End/Home/Tab/focus, candidate/conflict cursors, skill retry/virtualization, 상태 without a 휴지통 chip, candidate group pages, new skill version checks, typing caret and late navigation.");
   } catch (error) { console.error(errors); console.error((await page.locator("body").innerText()).slice(-3500)); throw error; }
   finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
