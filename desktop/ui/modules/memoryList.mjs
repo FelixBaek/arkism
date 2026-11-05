@@ -23,7 +23,8 @@ export function createMemoryList(deps) {
     const d = deps.state.data, merge = deps.digests.mergeCount(), notes = deps.digests.notesCount();
     return { candidate: deps.listCount("candidates", deps.state.candidateTotal), provenance: serverCount(d.memories.filter(deps.approvalUnproven), { more: deps.partialMemories() }),
       conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge === false ? null : merge),
-      notes: serverCount(notes === null ? undefined : notes === false ? null : notes) };
+      notes: serverCount(notes === null ? undefined : notes === false ? null : notes),
+      proposals: serverCount(deps.overview?.proposals() ?? 0) }; // 정리 제안: cleanup and agent change proposals, answered in the review window
   }
 
   // What is known to wait, with "+" when a part is still unknown or partial.
@@ -77,7 +78,9 @@ export function createMemoryList(deps) {
   // 확인해 주세요 tab: the first list with something waiting, and the total next to the open tab.
   const firstCheck = () => { const n = checkCounts(); return MEM_CHECK.find(([k]) => n[k].min)?.[0] || "candidate"; };
   // 확인할 것 (side panel): [label, count] of each list with something waiting; what a person decides first, then what tidies up
-  const checkLines = () => { const n = checkCounts(), label = Object.fromEntries(MEM_CHECK); return ["candidate", "conflicted", "idle", "merge", "notes"].filter((k) => n[k].min).map((k) => [label[k], n[k].text]); };
+  const checkLines = () => { const n = checkCounts(), label = { ...Object.fromEntries(MEM_CHECK), proposals: "정리 제안" }; return ["candidate", "conflicted", "idle", "merge", "notes", "proposals"].filter((k) => n[k].min).map((k) => [label[k], n[k].text]); };
+  // 하나씩 확인하기: the first memory list with something waiting; with only proposals left, the review window on 정리 제안
+  const openCheck = () => { const n = checkCounts(); if (!MEM_CHECK.some(([k]) => n[k].min) && n.proposals.min && deps.openProposals) deps.openProposals(); else deps.go("memories", firstCheck()); };
 
   // One badge per row: how often it is used, or why it needs a look.
   function memBadge(m) {
@@ -490,6 +493,7 @@ export function createMemoryList(deps) {
     get checkTotal() { return checkTotal; },
     get firstCheck() { return firstCheck; },
     get checkLines() { return checkLines; },
+    get openCheck() { return openCheck; },
     get isCheck() { return isCheck; },
     get restore() { return restore; },
     get memSelect() { return memSelect; },

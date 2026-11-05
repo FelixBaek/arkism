@@ -299,7 +299,7 @@ window.ArkismOverview = (ctx) => {
     const memN = ctx.memoryCount().replace(/\d+/, (n) => num(n));
     const sess = ctx.count(S.failed || state.loadError ? null : S.sessions ? todaySessions : undefined); // not "오늘 0" while it loads
     const wait = ctx.memoryCheck?.checkTotal() || { sum: 0 }; // MEMORY has no tab line: this chip is the way to 확인해 주세요
-    ui.chips.replaceChildren(chip("확인해 주세요", wait.sum ? wait.text : "없음", () => go("memories", ctx.memoryCheck.firstCheck())),
+    ui.chips.replaceChildren(chip("확인해 주세요", wait.sum ? wait.text : "없음", () => ctx.memoryCheck.openCheck()),
       chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
@@ -349,6 +349,7 @@ window.ArkismOverview = (ctx) => {
   return {
     reset() { sessionLoads.cancel(); Object.assign(S, { sessions:null,total:0,sums:null,cursor:"",at:0,g:-1,loading:false,failed:false }); win?.reset(); },
     stages, loadSessions, openStage, // 연결 상태 card (app.js renderStatusStages)
+    proposals: () => windows().proposals(), // memoryList.checkCounts: 정리 제안 waiting in the review window
     usageChanged: () => win?.usageChanged(), // app.js loadUsage: an open 사용량 window shows the result
     views: { overview: { title: "개요", render: renderView, head: () => [button("새로고침", "ghost", "arrows-clockwise", () => { S.at = 0; void loadSessions(); })] } }
   };

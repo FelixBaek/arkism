@@ -1888,5 +1888,6 @@ window.ArkismOverviewWindows = (ctx, env) => {
     left.append(bar, canvas); canvas.append(legend, empty); paint(); void loadExtra();
   }
 
-  return { open, wide, reset() { dlg?.close(); read.clear(); recalls = null; once.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); if (traceWin && traceWin === dlg) wideTrace(); } };
+  // proposals: what the review window lists under 정리 제안 (the rail count and 확인할 것 include it)
+  return { open, wide, proposals: () => dreamItems().length, reset() { dlg?.close(); read.clear(); recalls = null; once.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); if (traceWin && traceWin === dlg) wideTrace(); } };
 };

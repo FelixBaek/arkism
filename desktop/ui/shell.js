@@ -18,7 +18,7 @@ window.ArkismShell = (ctx) => {
     memory: { label: "MEMORY", tabs: [
       ["overview", "한눈에", () => go("overview"), () => state.view === "overview"],
       ["memories", "기억", () => go("memories", "active"), () => state.view === "memories" && !check().isCheck(state.memTab), noZero(count("memories"))],
-      ["check", "확인해 주세요", () => go("memories", check().firstCheck()), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }] // nothing known to wait: no 0 / 0+
+      ["check", "확인해 주세요", () => check().openCheck(), () => state.view === "memories" && check().isCheck(state.memTab), () => { const t = check().checkTotal(); return t.sum ? t.text : ""; }] // nothing known to wait: no 0 / 0+
     ] },
     agent: { label: "FLOW", tabs: [
       // One page, so no tab is drawn; usage sits in each workflow's 기록·사용량 tab. 디스코드 bots live in 설정 › 메신저.

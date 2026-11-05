@@ -1782,6 +1782,8 @@ export function startApp() {
     get currentMemoryPages() { return memoryPaging.currentMemoryPages; },
     get DAY() { return DAY; },
     get digests() { return digests; },
+    get overview() { return overview; },
+    openProposals: () => window.dispatchEvent(new CustomEvent("arkism:open-overview-window", { detail: { wide: "review", args: [null, "dream"] } })),
     get insight() { return insight; },
     get el() { return el; },
     get ensureMemoryResults() { return memoryPaging.ensureMemoryResults; },
@@ -2086,7 +2088,7 @@ export function startApp() {
     // 확인할 것: what waits for a person, first, with the one way in (the rail shows the same total next to Memory)
     const waiting = memoryList.checkLines();
     if (waiting.length) {
-      const c = section("확인할 것"); c.append(facts(waiting), button("하나씩 확인하기", "primary small", null, () => go("memories", memoryList.firstCheck())));
+      const c = section("확인할 것"); c.append(facts(waiting), button("하나씩 확인하기", "primary small", null, () => memoryList.openCheck()));
       body.append(c);
     }
     // Kinds across every memory on the server; without its totals, the loaded rows say so in the title.

@@ -127,6 +127,13 @@ test("the main list draws filters, chips, badges, paging and empty state", async
   assert.deepEqual(chips.filter((c) => /mem-kind/.test(c.className)).map((c) => c.textContent), ["전체3", "사용자", "프로젝트"], "only the open tab shows its count");
   chips[1].click(); assert.equal(deps.memory.kind, "user");
   assert.equal(api.firstCheck(), "candidate", "하나씩 확인하기 starts at the first non-empty list");
+  // 정리 제안 (cleanup and agent change proposals in the review window) join the total and 확인할 것; with nothing else waiting, 하나씩 확인하기 opens them
+  let opened = 0; const before = api.checkTotal().sum; deps.overview = { proposals: () => 3 }; deps.openProposals = () => opened++;
+  assert.deepEqual(api.checkLines().at(-1), ["정리 제안", "3"]); assert.equal(api.checkTotal().sum, before + 3);
+  api.openCheck(); assert.equal(opened, 0, "a memory list waits first"); assert.deepEqual(env.gone.at(-1), ["memories", "candidate"]);
+  state.data.candidates = []; deps.digests.mergeCount = () => 0;
+  api.openCheck(); assert.equal(opened, 1, "only proposals wait: the review window opens on 정리 제안");
+  delete deps.overview; delete deps.openProposals; state.data.candidates = [{ id: "c1" }]; deps.digests.mergeCount = () => 2;
   // the toolbar holds only the search and 기억 추가; everything else waits under 자세히 and 모아보기 next to the kind tabs
   const tools = controls.querySelector(".mem-tools");
   assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가", "segment mem-seg mem-view-seg"]); // 목록 · 타임라인 at the right end
