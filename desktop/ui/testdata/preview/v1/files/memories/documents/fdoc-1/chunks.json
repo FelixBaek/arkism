@@ -16,7 +16,10 @@
      "id": "k-dep2",
      "status": "candidate"
     }
-   ]
+   ],
+   "source": {
+    "id": "src-design-notes"
+   }
   },
   {
    "locator": "chunk:2",
@@ -27,13 +30,19 @@
      "id": "k-dep3",
      "status": "rejected"
     }
-   ]
+   ],
+   "source": {
+    "id": "src-design-notes"
+   }
   },
   {
    "locator": "page:2/chunk:1",
    "hash": "c71d5e9a02f84b13",
    "status": "pending",
-   "candidates": []
+   "candidates": [],
+   "source": {
+    "id": "src-design-notes"
+   }
   },
   {
    "locator": "page:2/chunk:2",
@@ -44,7 +53,10 @@
      "id": "k-dep4",
      "status": "gone"
     }
-   ]
+   ],
+   "source": {
+    "id": "src-design-notes"
+   }
   }
  ]
 }

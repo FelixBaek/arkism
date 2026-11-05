@@ -79,13 +79,13 @@ async function setup(over, stateOver = {}) {
   const state = { view: "knowledge", server: "local", scope: { workspace_id: "w" }, connection: { generation: 1 }, ...stateOver };
   const srv = server(over);
   const heads = [];
-  const confirms = [], gone = [];
+  const confirms = [], gone = [], opened = [];
   let view;
   const ctx = {
     ...h, query: (o = {}) => h.query(o), state, request: srv.request, ago: (v) => (v ? `ago(${v})` : "—"),
     render: () => view.views.knowledge.render(),
     detailShell: (label) => { const body = h.el("div", "detail-body"); body.dataset.label = label; h.$("#detail").replaceChildren(body); return body; },
-    headExtras: (o) => heads.push(o), go: (...a) => gone.push(a),
+    headExtras: (o) => heads.push(o), go: (...a) => gone.push(a), openMemory: (id) => opened.push(id),
     confirmPop: async (...a) => { confirms.push(a); return confirms.answer ?? true; },
     remoteCollection: (read) => createRemoteCollection({ state, read, createPager }),
     virtualList: createVirtualList()
@@ -94,7 +94,7 @@ async function setup(over, stateOver = {}) {
   view = window.ArkismKnowledge(ctx);
   const files = (picked.length = 0, picked);
   const k = {
-    view, state, srv, heads, confirms, gone, files, h, document,
+    view, state, srv, heads, confirms, gone, opened, files, h, document,
     table: () => h.$("#table"), detail: () => h.$("#detail"),
     btn(root, label) { const b = dom.buttons(root, label)[0]; assert.ok(b, `button ${label}`); return b; },
     async press(root, label) { k.btn(root, label).click(); await dom.flush(); },
@@ -104,6 +104,16 @@ async function setup(over, stateOver = {}) {
   return k;
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// 기억 후보 만들기 window → 파일 tab: pick these files, then send them.
+async function sendFiles(k, files, label = "기억 후보 만들기") {
+  require("./crew-popup.js");
+  k.view.views.knowledge.head()[0].click(); await dom.flush();
+  const dlg = k.document.body.querySelector("dialog.v4k-add");
+  assert.ok(dlg, "the add window opens");
+  await k.press(dlg, "파일"); await k.press(dlg, "파일 고르기");
+  const input = k.files.at(-1); input.files = files; dom.fire(input, "change"); await dom.flush();
+  await k.press(dlg, label); await dom.flush();
+}
 const file = (name, content, size = content.length) => ({ name, size, text: async () => content });
 
 test("first render loads sources, wiki, graph and jobs, then lists sources with review attention", async () => {
@@ -249,7 +259,7 @@ test("document view: sections with neighbours, versions and a test search with i
   // back to sources
   k.heads.at(-1).back[1](); await dom.flush();
   assert.equal(v.title(), "지식");
-  assert.equal(v.head().length, 2); // 파일로 기억 후보 만들기 · + 파일 올리기
+  assert.equal(v.head().length, 2); // 기억 후보 만들기 · + 파일 올리기
 });
 
 test("search answers: no binding, empty receipt, invalid response and failure", async () => {
@@ -708,13 +718,11 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   });
   await k.start();
   const hb = k.view.views.knowledge.head();
-  assert.equal(hb[0].textContent.trim(), "파일로 기억 후보 만들기");
-  hb[0].click(); const input = k.files.at(-1);
-  input.files = [{ name: "notes.exe", size: 3, arrayBuffer: async () => new ArrayBuffer(3) }]; dom.fire(input, "change"); await dom.flush();
+  assert.equal(hb[0].textContent.trim(), "기억 후보 만들기");
+  await sendFiles(k, [{ name: "notes.exe", size: 3, arrayBuffer: async () => new ArrayBuffer(3) }]);
   assert.match(k.table().textContent, /이 형식은 읽지 못해요/, "the server's 415 in plain words");
   assert.equal(k.posted("/v1/files/memories")[0].body.mime, undefined, "an unknown type is left to the server");
-  hb[0].click(); const input2 = k.files.at(-1);
-  input2.files = [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input2, "change"); await dom.flush();
+  await sendFiles(k, [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
   assert.deepEqual(k.posted("/v1/files/memories")[1].body, { scope: { workspace_id: "w" }, filename: "plan.pdf", content_base64: "YWJj", mime: "application/pdf" });
   assert.doesNotMatch(k.table().textContent, /이 형식은 읽지 못해요/, "a fresh start clears the old notice");
   await wait(1600); await dom.flush();
@@ -741,8 +749,7 @@ test("file → memory candidates: a failed job resumes through its run route; an
     "/v1/files/memories": () => ({ job_id: "fx", status: "running" })
   }, { caps: { actions: { review_decide: false } } });
   await k.start();
-  k.view.views.knowledge.head()[0].click(); const input = k.files.at(-1);
-  input.files = [{ name: "plan.txt", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input, "change"); await dom.flush();
+  await sendFiles(k, [{ name: "plan.txt", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
   assert.doesNotMatch(k.table().textContent, /멈추기/, "cancel is a people-only route");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /오늘 쓸 수 있는 모델 호출을 다 썼어요/);
@@ -798,8 +805,7 @@ test("부분·이력 window from a finished extraction card; a failed page read 
     "/v1/files/memories": () => ({ job_id: "fx", document_id: "docx1", status: "done", candidates_created: 0 })
   });
   await k.start();
-  k.view.views.knowledge.head()[0].click(); const input = k.files.at(-1);
-  input.files = [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input, "change"); await dom.flush();
+  await sendFiles(k, [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
   await k.press(k.table(), "부분·이력 보기"); await dom.flush();
   const dlg = k.document.body.querySelector("dialog.v4k-parts");
   assert.match(dlg.textContent, /잠시 문제가 생겼어요/);
@@ -811,4 +817,176 @@ test("부분·이력 window from a finished extraction card; a failed page read 
 test("delta: the server's counts in the screen's words", () => {
   assert.equal(window.ArkismKnowledge.delta(undefined), null);
   assert.deepEqual(window.ArkismKnowledge.delta({ chunks_total: 3, chunks_changed: 1, removed_sources: [{ candidate_ids: ["a", "b"] }, {}] }), { total: 3, unchanged: 0, changed: 1, removed: 0, left: 2 });
+});
+
+test("add window: pasted text goes to ingest with its 자세히 extras; several files go one by one with one notice", async () => {
+  require("./crew-popup.js");
+  let n = 0;
+  const k = await setup({
+    "/v1/spaces/": () => ({ config: { extraction_strategies: { meetings: {}, code: {} } } }),
+    "/v1/memories/ingest": () => ({ items: [{ job_id: "ti", document_id: "dt", status: "done", candidates_created: 2 }] }),
+    "/v1/files/memories": (_, body) => { n++; if (body.filename === "b.txt") throw Object.assign(new Error("payload_too_large"), { status: 413 }); return { job_id: `f${n}`, status: "done", candidates_created: 1 }; }
+  }, { scope: { workspace_id: "w", project_id: "p" } });
+  await k.start();
+  k.view.views.knowledge.head()[0].click(); await dom.flush();
+  const dlg = () => k.document.body.querySelector("dialog.v4k-add");
+  assert.equal(k.btn(dlg(), "기억 후보 만들기").disabled, true, "nothing to send yet");
+  const ta = dlg().querySelector("textarea.v4k-paste"); ta.value = "회의 메모\n둘째 줄"; dom.fire(ta, "input");
+  const opts = dlg().querySelector("details.v4k-opts");
+  const [tags, context] = opts.querySelectorAll("input");
+  tags.value = "회의, 디자인, 회의"; dom.fire(tags, "input"); context.value = " 주간 회의 "; dom.fire(context, "input");
+  const meta = opts.querySelector("textarea"); meta.value = "project=arkism\nbad line"; dom.fire(meta, "input");
+  const strat = [...opts.querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "meetings"));
+  assert.ok(strat, "the space's strategies are offered"); strat.value = "meetings"; dom.fire(strat, "change");
+  await k.press(dlg(), "기억 후보 만들기"); await dom.flush();
+  assert.deepEqual(k.posted("/v1/memories/ingest")[0].body.items, [{ content: "회의 메모\n둘째 줄", tags: ["회의", "디자인"], context: "주간 회의", strategy: "meetings", metadata: { project: "arkism" } }]);
+  assert.match(k.table().textContent, /기억 후보 2개를 만들었어요/);
+  // files: two at once, a reader picked; one fails and the rest still go
+  k.view.views.knowledge.head()[0].click(); await dom.flush();
+  await k.press(dlg(), "파일"); await k.press(dlg(), "파일 고르기");
+  const input = k.files.at(-1); assert.equal(input.multiple, true);
+  const buf = async () => new TextEncoder().encode("abc").buffer;
+  input.files = [{ name: "a.md", size: 3, arrayBuffer: buf }, { name: "b.txt", size: 3, arrayBuffer: buf }]; dom.fire(input, "change"); await dom.flush();
+  const parser = [...dlg().querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "vision"));
+  parser.value = "converter"; dom.fire(parser, "change");
+  await k.press(dlg(), "파일 2개로 기억 후보 만들기"); await dom.flush();
+  const sent = k.posted("/v1/files/memories").map((c) => c.body);
+  assert.deepEqual(sent.map((b) => [b.filename, b.parsers]), [["a.md", ["converter"]], ["b.txt", ["converter"]]]);
+  assert.match(k.table().textContent, /2개 중 1개를 보냈어요\. 못 보낸 파일이 1개 있어요\./);
+});
+
+test("ingestExtras, filterDocs and deleteImpact", () => {
+  const K = window.ArkismKnowledge;
+  assert.deepEqual(K.ingestExtras({ tags: " ", context: "", meta: "", parser: "builtin" }, true), {});
+  assert.deepEqual(K.ingestExtras({ tags: "a，b", parser: "builtin", meta: "x=1" }, false), { tags: ["a", "b"], parsers: ["builtin"] });
+  assert.match(K.ingestExtras({ when: "2026-10-01T09:30" }, true).timestamp, /^2026-10-01T/);
+  assert.deepEqual(K.ingestExtras({ when: "nope" }, true), {});
+  const docs = [{ id: "d1", label: "Plan.pdf", tags: ["work"], updated_at: "2026-10-02T10:00:00Z" }, { id: "d2", label: "notes", tags: [], updated_at: "2026-10-05T00:00:00Z" }];
+  assert.deepEqual(K.filterDocs(docs, { q: "plan" }).map((d) => d.id), ["d1"]);
+  assert.deepEqual(K.filterDocs(docs, { q: "WORK" }).map((d) => d.id), ["d1"]);
+  assert.deepEqual(K.filterDocs(docs, { from: "2026-10-03" }).map((d) => d.id), ["d2"]);
+  assert.deepEqual(K.filterDocs(docs, { to: "2026-10-02" }).map((d) => d.id), ["d1"]);
+  assert.deepEqual(K.deleteImpact([{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved" }] }, { candidates: [{ id: "a", status: "candidate" }, { id: "c", status: "rejected" }] }, {}]),
+    { waiting: 1, kept: 1 });
+});
+
+test("기억 문서: list with filters, tag edits, reprocess asks first, delete counts before it deletes", async () => {
+  require("./crew-popup.js");
+  const docs = [{ id: "fd1", label: "plan.pdf", status: "done", job_id: "j1", tags: ["work"], chunks: 3, candidates_created: 4, updated_at: "2026-10-05T00:00:00Z", created_at: T },
+    { id: "fd2", label: "memo", status: "failed", job_id: "j2", tags: [], chunks: 1, candidates_created: 0, updated_at: "2026-10-01T00:00:00Z", created_at: T }];
+  const k = await setup({
+    "/v1/files/memories/documents/fd1/chunks": () => ({ items: [{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved", memory_id: "b" }] }], next_cursor: "" }),
+    "/v1/files/memories/documents/fd1/reprocess": () => ({ job_id: "j3", status: "done", candidates_created: 1 }),
+    "/v1/files/memories/documents/fd1": (_, body) => (body.add || body.remove ? { candidates: 2, memories: 1, skipped: 0 } : { rejected: 1, kept: 1, jobs: 0 }),
+    "/v1/files/memories/documents": (path) => ({ items: path.includes("tag=work") ? [docs[0]] : docs, next_cursor: "" })
+  });
+  await k.start();
+  k.table().querySelectorAll(".v4k-seg button")[2].click(); await dom.flush(); await dom.flush();
+  const t = () => k.table().textContent, d = () => k.detail().textContent;
+  assert.match(t(), /plan\.pdf/); assert.match(t(), /memo/);
+  assert.equal(k.table().querySelector(".v4k-seg button.on output").textContent, "2", "the count sits on the open tab");
+  // date filter is local; tag filter asks the server
+  const [from] = k.table().querySelectorAll("input.v4k-date"); from.value = "2026-10-03"; dom.fire(from, "change"); await dom.flush();
+  assert.doesNotMatch(t(), /memo/); assert.match(t(), /불러온 2개 중 1개 표시/);
+  from.value = ""; dom.fire(from, "change"); await dom.flush();
+  const tagSel = [...k.table().querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "work"));
+  tagSel.value = "work"; dom.fire(tagSel, "change"); await dom.flush(); await dom.flush();
+  assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents?") && c.path.includes("tag=work")));
+  assert.doesNotMatch(t(), /memo/);
+  // tags
+  assert.equal(k.detail().firstChild.dataset.label, "기억 문서");
+  k.detail().querySelector(".v4k-tag").click(); await dom.flush(); await dom.flush();
+  let patch = k.srv.calls.filter((c) => c.method === "PATCH");
+  assert.deepEqual(patch[0], { path: "/v1/files/memories/documents/fd1", method: "PATCH", body: { scope: { workspace_id: "w" }, remove: ["work"] } });
+  const form = k.detail().querySelector("form.v4k-bind"); form.querySelector("input").value = "plan"; dom.fire(form, "submit"); await dom.flush(); await dom.flush();
+  patch = k.srv.calls.filter((c) => c.method === "PATCH");
+  assert.deepEqual(patch[1].body.add, ["plan"]);
+  assert.match(t() + d(), /태그를 고쳤어요 · 후보 2개 · 기억 1개에도 반영/);
+  // reprocess: declined sends nothing, accepted posts
+  k.confirms.answer = false; await k.press(k.detail(), "다시 처리");
+  assert.equal(k.posted("/v1/files/memories/documents/fd1/reprocess").length, 0);
+  k.confirms.answer = true; await k.press(k.detail(), "다시 처리"); await dom.flush();
+  assert.equal(k.posted("/v1/files/memories/documents/fd1/reprocess").length, 1);
+  // delete: the card counts first and nothing is deleted until it is pressed
+  await k.press(k.detail(), "지우기"); await dom.flush();
+  assert.match(d(), /확인을 기다리는 후보 1개는 버려지고, 이미 승인한 기억 1개는 그대로 남아요/);
+  assert.equal(k.srv.calls.filter((c) => c.method === "DELETE").length, 0);
+  k.btn(k.detail().querySelector(".v4k-card") || k.detail(), "지우기").click(); await dom.flush(); await dom.flush();
+  const del = k.srv.calls.filter((c) => c.method === "DELETE");
+  assert.deepEqual(del, [{ path: "/v1/files/memories/documents/fd1", method: "DELETE", body: { scope: { workspace_id: "w" } } }]);
+  assert.match(t() + d(), /지웠어요 · 버린 후보 1개 · 남은 기억 1개/);
+});
+
+test("원본 파일 tab downloads a kept file; a candidate with a memory opens that memory", async () => {
+  require("./crew-popup.js");
+  const saved = [];
+  window.ArkismSaveFile = (...a) => saved.push(a);
+  const k = await setup({
+    "/v1/files/memories/documents/fd1/chunks": () => ({ items: [{ locator: "page:1", hash: "x", status: "extracted", source: { id: "src1" }, candidates: [{ id: "c1", status: "approved", memory_id: "m1" }] }], next_cursor: "" }),
+    "/v1/files/memories/documents": () => ({ items: [{ id: "fd1", label: "plan.pdf", status: "done", tags: [], chunks: 1, candidates_created: 1, updated_at: T }], next_cursor: "" }),
+    "/v1/sources/src1/artifacts/a1": () => new Uint8Array([1, 2, 3]),
+    "/v1/sources/src1/artifacts": () => ({ items: [{ id: "a1", kind: "original", mime: "application/pdf", bytes: 2048 }] })
+  });
+  await k.start();
+  k.table().querySelectorAll(".v4k-seg button")[2].click(); await dom.flush(); await dom.flush();
+  await k.press(k.detail(), "원본 파일"); await dom.flush(); await dom.flush();
+  const dlg = () => k.document.body.querySelector("dialog.v4k-parts");
+  assert.match(dlg().textContent, /application\/pdf/);
+  await k.press(dlg(), "내려받기"); await dom.flush();
+  assert.equal(saved.length, 1); assert.equal(saved[0][0], "a1.pdf"); assert.deepEqual([...saved[0][1]], [1, 2, 3]);
+  assert.match(dlg().textContent, /내려받았어요/);
+  await k.press(dlg(), "부분"); await dom.flush();
+  const chip = dlg().querySelector(".v4k-cand"); assert.ok(chip, "candidate chip");
+  assert.equal(chip.title, "이 기억과 바뀐 이력 보기");
+  chip.click(); await dom.flush();
+  assert.deepEqual(k.opened, ["m1"], "per-fact history opens through the memory detail");
+});
+
+test("wiki folders: pick, create, move, delete with its pages; a page moves, saves as Markdown, deletes at its revision; export", async () => {
+  const saved = [], asked = [];
+  window.ArkismSaveFile = (...a) => saved.push(a);
+  window.askText = async (msg, value) => { asked.push([msg, value]); return asked.answer.shift(); };
+  asked.answer = ["운영/배포", "운영/옛배포"];
+  const k = await setup({
+    "/v1/wiki/tree": () => ({ folders: [{ path: "운영", pages: 1 }, { path: "운영/배포", pages: 1 }], pages: [{ id: "p1", folder: "운영/배포" }, { id: "p2", folder: "" }] }),
+    "/v1/wiki/folders": (path) => (path.includes("path=") ? { deleted: ["p1"] } : { ok: true }),
+    "/v1/wiki/export": () => new Uint8Array([80, 75])
+  });
+  await k.start();
+  k.table().querySelectorAll(".v4k-seg button")[1].click(); await dom.flush();
+  const side = () => k.table().querySelector(".v4k-groups");
+  assert.match(side().textContent, /전체/); assert.match(side().textContent, /운영\/배포/);
+  // 운영 holds its inner folder's page too
+  [...side().querySelectorAll(".v4k-group")].find((g) => g.textContent.startsWith("운영") && !g.textContent.includes("배포")).click(); await dom.flush();
+  assert.equal(k.table().querySelectorAll(".v4k-row").length, 1);
+  assert.equal(side().querySelector(".v4k-group.on output").textContent, "1");
+  // create (pre-filled under the open folder) and move
+  await k.press(side(), "+ 새 폴더"); await dom.flush();
+  assert.equal(asked[0][1], "운영/");
+  assert.deepEqual(k.posted("/v1/wiki/folders")[0].body, { scope: { workspace_id: "w" }, path: "운영/배포" });
+  await k.press(side(), "이름 바꾸기·옮기기"); await dom.flush();
+  assert.deepEqual(k.srv.calls.find((c) => c.method === "PATCH" && c.path === "/v1/wiki/folders").body, { scope: { workspace_id: "w" }, from: "운영/배포", to: "운영/옛배포" });
+  // delete: a folder with pages asks with the count and goes recursive
+  [...side().querySelectorAll(".v4k-group")].find((g) => g.textContent.includes("운영/배포")).click(); await dom.flush();
+  await k.press(side(), "폴더 지우기"); await dom.flush();
+  assert.match(k.confirms.at(-1)[1], /페이지 1쪽도 함께 지워지고/);
+  const del = k.srv.calls.find((c) => c.method === "DELETE" && c.path.startsWith("/v1/wiki/folders?"));
+  assert.match(del.path, /path=%EC%9A%B4%EC%98%81%2F%EB%B0%B0%ED%8F%AC/); assert.match(del.path, /recursive=true/);
+  assert.match(k.table().textContent + k.detail().textContent, /지웠어요 · 페이지 1쪽/);
+  // page tools on the first page
+  k.table().querySelector(".v4k-row").click(); await dom.flush();
+  const where = [...k.detail().querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "운영"));
+  where.value = "운영"; dom.fire(where, "change"); await dom.flush(); await dom.flush();
+  const mv = k.srv.calls.find((c) => c.method === "PATCH" && c.path.startsWith("/v1/wiki/pages/"));
+  assert.equal(mv.body.folder, "운영"); assert.equal(typeof mv.body.expected_revision, "number");
+  await k.press(k.detail(), "Markdown으로 저장");
+  assert.match(saved.at(-1)[0], /\.md$/); assert.equal(saved.at(-1)[2], "text/markdown");
+  k.confirms.answer = false; await k.press(k.detail(), "페이지 지우기");
+  assert.equal(k.srv.calls.filter((c) => c.method === "DELETE" && c.path.startsWith("/v1/wiki/pages/")).length, 0);
+  k.confirms.answer = true; await k.press(k.detail(), "페이지 지우기"); await dom.flush();
+  assert.match(k.srv.calls.find((c) => c.method === "DELETE" && c.path.startsWith("/v1/wiki/pages/")).path, /expected_revision=\d/);
+  // export
+  await k.press(side(), "위키 내보내기 (.zip)"); await dom.flush();
+  assert.deepEqual(saved.at(-1).slice(0, 1), ["wiki.zip"]); assert.deepEqual([...saved.at(-1)[1]], [80, 75]);
+  assert.match(k.table().textContent + k.detail().textContent, /위키를 내보냈어요/);
 });

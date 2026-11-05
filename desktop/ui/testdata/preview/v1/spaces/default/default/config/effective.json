@@ -53,7 +53,9 @@
       "meeting-notes": {
         "extraction_mode": "custom",
         "extraction_instructions": "회의록이면 결정과 담당자만 남겨요."
-      }
+      },
+      "meetings": {},
+      "code-review": {}
     },
     "extraction_default_strategy": "meeting-notes",
     "entity_resolution": "propose",

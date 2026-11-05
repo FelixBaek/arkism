@@ -1,0 +1,61 @@
+{
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "items": [
+  {
+   "id": "fdoc-1",
+   "label": "design-notes.md",
+   "status": "done",
+   "job_id": "fx-design-notes",
+   "tags": [
+    "디자인",
+    "회의"
+   ],
+   "chunks": 5,
+   "candidates_created": 4,
+   "requested_by": "owner",
+   "created_at": "2026-10-28T09:12:00Z",
+   "updated_at": "2026-11-04T10:20:00Z"
+  },
+  {
+   "id": "fdoc-2",
+   "label": "주간 회의 메모",
+   "status": "done",
+   "job_id": "fx-weekly",
+   "tags": [
+    "회의"
+   ],
+   "chunks": 1,
+   "candidates_created": 3,
+   "requested_by": "owner",
+   "created_at": "2026-11-03T08:00:00Z",
+   "updated_at": "2026-11-03T08:01:00Z"
+  },
+  {
+   "id": "fdoc-3",
+   "label": "release-checklist.pdf",
+   "status": "running",
+   "job_id": "fx-release",
+   "tags": [
+    "배포"
+   ],
+   "chunks": 12,
+   "candidates_created": 2,
+   "requested_by": "owner",
+   "created_at": "2026-11-05T14:30:00Z",
+   "updated_at": "2026-11-05T14:31:00Z"
+  },
+  {
+   "id": "fdoc-4",
+   "label": "standup-recording.m4a",
+   "status": "failed",
+   "job_id": "fx-standup",
+   "tags": [],
+   "chunks": 2,
+   "candidates_created": 0,
+   "requested_by": "owner",
+   "created_at": "2026-11-02T07:45:00Z",
+   "updated_at": "2026-11-02T07:47:00Z"
+  }
+ ]
+}

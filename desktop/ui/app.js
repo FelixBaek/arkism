@@ -2287,10 +2287,11 @@ export function startApp() {
   const isPicked = (n) => n.matches(".selected, .active, .on, [aria-selected=true], [aria-current], [aria-pressed=true], [aria-expanded=true]");
   const models = window.ArkismModels({ state, el, icon, button, go, render, request: appApi.request, query: appApi.query, notice, agentLogo, ago });
   const routing = window.ArkismRouting({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, segment, go, render, request: appApi.request, query: appApi.query, notice, detailShell, agentLogo, ago });
+  const openMemory = (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); }; // one memory's detail (its 바뀐 이력 too)
   const usage = window.ArkismUsage({ state, $, el, button, segment, render, request: appApi.request, query: appApi.query, agentLogo, AGENTS, ago, go, detailShell,
     openSession: (sid) => window.dispatchEvent(new CustomEvent("arkism:open-overview-window", { detail: { wide: "sessions", args: sid ? [sid] : [] } })), openSettings: (tab) => { state.settingsTab = tab; go("settings"); },
     memory: () => ({ use: memUse(), memories: state.data.memories, kindLabel, often: overlapReview, openIdle: () => { state.menu = "memory"; go("memories", "idle"); },
-      openMemory: (id) => { state.menu = "memory"; go("memories", "active"); state.selected = id; renderDetail(); } }),
+      openMemory }),
     skillAgents: (name) => { const by = {}; for (const sk of state.data.skills.filter((x) => x.name === name)) for (const [k, n] of Object.entries(state.data.skillUse?.get(sk.id)?.by_runtime || {})) by[k] = (by[k] || 0) + n; return Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k]) => k); } });
   const gallery = window.ArkismGalleryDelete({ state, $, el, button, icon, raw, render, request: appApi.request, query: appApi.query, notice, confirmPop: toolViews.confirmPop, shortDate });
   const remoteCollection = read => createRemoteCollection({ state, read, createPager: window.ArkismMemoryPages.create });
@@ -2330,7 +2331,7 @@ export function startApp() {
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
-  const knowledge = window.ArkismKnowledge({ go, remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
+  const knowledge = window.ArkismKnowledge({ go, openMemory, remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, reload: loadAll, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), memoryCheck: memoryList, onSessions: () => renderStatusCard(), notice }); // MEMORY › 개요 (overview.js)
   // TOOLS › 관리: what to look after, from the lists already loaded (skill use counts, update offers, apply requests).
   function manageView() {

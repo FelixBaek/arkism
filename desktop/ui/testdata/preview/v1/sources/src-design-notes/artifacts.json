@@ -1,0 +1,19 @@
+{
+ "items": [
+  {
+   "id": "art-1",
+   "kind": "pdf",
+   "mime": "application/pdf",
+   "digest": "sha256:9f2c41d0",
+   "bytes": 18432
+  },
+  {
+   "id": "art-2",
+   "kind": "ocr",
+   "mime": "text/plain",
+   "digest": "sha256:3b8e07c2",
+   "bytes": 4210
+  }
+ ],
+ "next_cursor": ""
+}

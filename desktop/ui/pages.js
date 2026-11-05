@@ -1,4 +1,10 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
+// Hands a file (text or bytes) to the browser's download; a link click cannot tell whether the save went through.
+// Shared by 설정 (preference files) and 지식 (kept originals, wiki pages and the wiki archive).
+window.ArkismSaveFile = (name, data, type) => {
+  const url = URL.createObjectURL(new Blob([data], { type }));
+  try { const a = document.createElement("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+};
 window.ArkismPages = (ctx) => {
   "use strict";
   const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus } = ctx;
@@ -1467,11 +1473,7 @@ window.ArkismPages = (ctx) => {
     input.addEventListener("change", () => { const f = input.files?.[0]; if (!f) return resolve(null); if (f.size > max) { tooBig(); return resolve(null); } f.text().then(resolve, () => resolve(null)); });
     input.click();
   });
-  // Hands text to the browser's download; a link click cannot tell whether the save went through.
-  const saveFile = (name, text, type) => {
-    const url = URL.createObjectURL(new Blob([text], { type }));
-    try { const a = el("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
-  };
+  const saveFile = window.ArkismSaveFile;
 
   // 데이터: 이 PC의 Arkism(내장 모드)만. 백업은 문서 › Arkism Backups에 폴더로 남는다.
   // 기억 공간 옮기기 (POST /v1/spaces/{workspace}/{project}/export · import): a bundle file of this space's memories.

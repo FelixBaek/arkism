@@ -18,3 +18,17 @@ test("loadFailure tells an unreachable server from each kind of answer", async (
   }
   assert.equal(loadFailure({ code: "x_invalid" }).code, "x_invalid");
 });
+
+test("binary requests return the file's bytes from the app bridge, and an error stays a coded error", async () => {
+  const { createAppApi } = await import("./modules/appApi.mjs");
+  const sent = [];
+  const replies = [{ status: 200, body: "AQID" }, { status: 413, body: "{\"code\":\"payload_too_large\"}" }, { status: 200, body: "{\"ok\":1}" }];
+  const deps = { state: { server: "http://s", token: "t", scope: {} }, trimSlash: (s) => s, readJSON: (t) => { try { return JSON.parse(t); } catch (_) { return null; } },
+    tauri: { invoke: async (cmd, a) => { sent.push(a); return replies.shift(); } } };
+  const api = createAppApi(deps);
+  assert.deepEqual([...await api.request("/v1/wiki/export", { binary: true })], [1, 2, 3]);
+  assert.equal(sent[0].binary, true);
+  await assert.rejects(api.request("/v1/wiki/export", { binary: true }), (e) => e.code === "payload_too_large" && e.status === 413);
+  assert.deepEqual(await api.request("/v1/x"), { ok: 1 });
+  assert.equal("binary" in sent[2], false); // plain calls keep the old command shape
+});

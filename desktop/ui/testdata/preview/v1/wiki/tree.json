@@ -1,0 +1,42 @@
+{
+ "folders": [
+  {
+   "path": "운영",
+   "pages": 2
+  },
+  {
+   "path": "운영/배포",
+   "pages": 2
+  },
+  {
+   "path": "디자인",
+   "pages": 2
+  }
+ ],
+ "pages": [
+  {
+   "id": "wiki-1",
+   "folder": "운영/배포"
+  },
+  {
+   "id": "wiki-8",
+   "folder": "운영/배포"
+  },
+  {
+   "id": "wiki-3",
+   "folder": "운영"
+  },
+  {
+   "id": "wiki-4",
+   "folder": "운영"
+  },
+  {
+   "id": "wiki-5",
+   "folder": "디자인"
+  },
+  {
+   "id": "wiki-2",
+   "folder": "디자인"
+  }
+ ]
+}

@@ -8,7 +8,7 @@ const path = require("path");
 test("UI DELETE paths are allowed by the desktop app", () => {
   const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
   const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
-  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_-]+\/)"/g)].map((m) => m[1]);
+  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_\/-]+\/)"/g)].map((m) => m[1]);
   const missing = [];
   for (const f of fs.readdirSync(__dirname).filter((n) => n.endsWith(".js") && !n.endsWith(".test.js"))) {
     const src = fs.readFileSync(path.join(__dirname, f), "utf8");
@@ -54,4 +54,18 @@ test("proposed topic PATCH and DELETE are allowed by the desktop app", () => {
   assert.match(ui, /request\(`\/v1\/mental-models\/\$\{encodeURIComponent\(m\.id\)\}`, action === "approve"/);
   assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/mental-models\/"\)/);
   assert.match(body, /method == "DELETE"[^;]*one_id\("\/v1\/mental-models\/"\)/);
+});
+
+// 지식 › 위키 폴더 builds its DELETE path with a helper (folderUrl), so the scan above skips it; PATCH moves folders, pages and edits a document's tags.
+test("wiki folder and page, and extraction document PATCH and DELETE are allowed by the desktop app", () => {
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
+  const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
+  const ui = fs.readFileSync(path.join(__dirname, "knowledge.js"), "utf8");
+  assert.match(ui, /folderUrl = \(extra\) => `\/v1\/wiki\/folders\?/); assert.match(ui, /request\(folderUrl\(/);
+  assert.match(ui, /request\("\/v1\/wiki\/folders", \{ method: "PATCH"/);
+  assert.match(ui, /request\(`\/v1\/wiki\/pages\/\$\{id\}`, \{ method: "PATCH"/);
+  assert.match(ui, /request\(`\/v1\/files\/memories\/documents\/\$\{id\}`, \{ method: "PATCH"/);
+  assert.match(body, /let wiki_folders = path\.split\(\['\?', '#'\]\)\.next\(\) == Some\("\/v1\/wiki\/folders"\);/);
+  assert.match(body, /method == "DELETE"[^;]*wiki_folders/);
+  assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/files\/memories\/documents\/"\)[^;]*one_id\("\/v1\/wiki\/pages\/"\)[^;]*wiki_folders/);
 });

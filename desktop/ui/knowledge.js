@@ -9,6 +9,7 @@
 window.ArkismKnowledge = (ctx) => {
   "use strict";
   const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
+  const save = (name, data, type) => window.ArkismSaveFile(name, data, type);
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
   const SHARED = "default"; // the server's default scope: every agent of this person searches it
   const FORMATS = [["", "전체"], [".docx", "Word"], [".pdf", "PDF"], [".xlsx", "표 (.xlsx)"], [".csv", "표 (.csv)"], [".tsv", "표 (.tsv)"], [".pptx", "발표 자료"],
@@ -31,9 +32,12 @@ window.ArkismKnowledge = (ctx) => {
   const K = {
     tab: "sources", state: "idle", error: "", sources: [], total: 0, facets: {}, wiki: "idle", pages: [], links: [], jobs: [],
     src: { q: "", status: "", sort: "recent", format: "" }, srcSel: "", docs: {},
-    pg: { q: "", type: "", sort: "recent", chip: "all" }, pageSel: "", compare: false, edit: null,
+    pg: { q: "", type: "", sort: "recent", chip: "all", folder: null }, pageSel: "", compare: false, edit: null,
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: SHARED, q: "", busy: false, result: null, error: "" },
-    busy: false, notice: "", remove: null, upload: null, extract: null
+    busy: false, notice: "", remove: null, upload: null, extract: null,
+    // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q and the dates filter what is loaded
+    fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", sel: "", del: null },
+    folders: [], folderOf: {} // 위키 폴더 (GET /v1/wiki/tree); pg.folder null = every folder
   };
   let typing = 0;
   const loads = globalThis.ArkismKeep.latest(); // "sources" and "wiki": a newer read or reset() drops the older answer
@@ -70,12 +74,16 @@ window.ArkismKnowledge = (ctx) => {
   async function load() {
     const ticket = loads.begin("wiki");
     K.state = K.state === "ready" ? "ready" : "loading"; paint();
-    const [, p, g, j] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs")]);
+    const [, p, g, j, t] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs"), get("/v1/wiki/tree")]);
     if (!ticket.live()) return;
     if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = p.value.items; K.wiki = "ready"; }
     else { K.pages = []; K.wiki = p.status === "rejected" && off(p.reason) ? "off" : "error"; }
     K.links = g.status === "fulfilled" && Array.isArray(g.value?.links) ? g.value.links : [];
     K.jobs = j.status === "fulfilled" && Array.isArray(j.value?.items) ? j.value.items : [];
+    const tree = t.status === "fulfilled" ? t.value : null; // an older server has no tree: no folders
+    K.folders = Array.isArray(tree?.folders) ? tree.folders : [];
+    K.folderOf = Object.fromEntries((Array.isArray(tree?.pages) ? tree.pages : []).map((x) => [x.id, x.folder || ""]));
+    if (K.pg.folder && !K.folders.some((f) => f.path === K.pg.folder)) K.pg.folder = null;
     if (K.srcSel && !K.sources.some((x) => x.id === K.srcSel)) K.srcSel = "";
     if (K.pageSel && !K.pages.some((x) => x.id === K.pageSel)) K.pageSel = "";
     for (const id of Object.keys(K.docs)) if (!K.sources.some((x) => x.id === id)) delete K.docs[id];
@@ -92,11 +100,11 @@ window.ArkismKnowledge = (ctx) => {
     paint();
   }
   const current = (id) => K.docs[id]?.items.find((d) => d.current) || K.docs[id]?.items[0] || null;
-  async function act(work, done) {
+  async function act(work, done, err = errText) {
     if (K.busy) return;
     K.busy = true; K.notice = ""; paint();
     try { const r = await work(); K.notice = typeof done === "function" ? done(r) : done || ""; }
-    catch (e) { K.notice = errText(e); }
+    catch (e) { K.notice = err(e); }
     K.busy = false;
     await load();
   }
@@ -220,9 +228,11 @@ window.ArkismKnowledge = (ctx) => {
   const b64 = (buf) => { let bin = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(bin); };
   // One file picker for both uploads: onFile gets the file and its lower-case extension. Any file may be picked:
   // a server with a converter reads more formats, and one without answers 415 (shown as a plain sentence).
-  function chooseFile(onFile) {
-    const input = el("input"); input.type = "file";
-    input.addEventListener("change", () => { const f = input.files?.[0]; if (f) onFile(f, (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase()); });
+  // many: onFile gets every picked file at once (the add window's 파일 tab).
+  const extOf = (f) => (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
+  function chooseFile(onFile, many = false) {
+    const input = el("input"); input.type = "file"; input.multiple = many;
+    input.addEventListener("change", () => { const fs = [...(input.files || [])]; if (many) { if (fs.length) onFile(fs); } else if (fs[0]) onFile(fs[0], extOf(fs[0])); });
     input.click();
   }
   function pickFile(source) {
@@ -297,7 +307,7 @@ window.ArkismKnowledge = (ctx) => {
     if (K.busy) return;
     K.busy = true; K.notice = ""; K.extract = { label, phase: "queued", active: true, total: 0, next: 0, created: 0, skipped: 0 }; paint();
     try { showExtract(await work(), label); } catch (e) { K.extract = { label, phase: "failed", active: false, error: extractErr(e) }; }
-    K.busy = false; paint();
+    K.busy = false; K.fd.state = "idle"; paint(); // 기억 문서 reads again
   }
   const human = () => state.caps?.actions?.review_decide !== false;
   async function cancelExtract() {
@@ -315,11 +325,6 @@ window.ArkismKnowledge = (ctx) => {
       (e) => { if (K.extract?.id === x.id) { K.extract.error = extractErr(e); K.extract.active = false; clearTimeout(extractTimer); paint(); } });
     clearTimeout(extractTimer); extractTimer = setTimeout(pollExtract, 1500);
   }
-  const pickExtractFile = () => chooseFile(async (f, ext) => {
-    if (f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
-    const content = b64(await f.arrayBuffer());
-    void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, ...(MIME[ext] ? { mime: MIME[ext] } : {}) }), f.name);
-  });
   const extractFromSource = (s) => startExtract(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/extract_memories`, {}), s.display_name);
   const EXTRACT_WORD = { queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
   function extractCard() {
@@ -353,8 +358,11 @@ window.ArkismKnowledge = (ctx) => {
   const CHUNK = { unchanged: "그대로", extracted: "읽음", pending: "아직 안 읽음", active: "사용 중", draft: "확인 전", quarantined: "격리됨", erased: "지워짐", deleted: "지워짐" };
   const CAND = { candidate: "확인 대기", conflicted: "확인 대기", approved: "승인됨", active: "승인됨", rejected: "버림", superseded: "새 기억으로 바뀜", gone: "없어짐" };
   const UPLOAD = { pending: "기다리는 중", retry: "기다리는 중", running: "읽는 중", done: "끝남", failed: "실패", cancelled: "멈춤" };
+  const ARTIFACT = { code: "코드", ocr: "글자 인식", tool_output: "도구 결과", pdf: "PDF", image: "이미지", screenshot_region: "화면 일부", audio: "소리" };
+  const EXT = { "text/plain": ".txt", "application/json": ".json", "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg" };
+  const bytes = (n) => (n >= 1 << 20 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round((n || 0) / 1024))}KB`);
   const deltaLine = (d) => `전체 ${num(d.total)} · 그대로 ${num(d.unchanged)} · 바뀜 ${num(d.changed)} · 빠짐 ${num(d.removed)}`;
-  function openParts({ title, source, doc }) {
+  function openParts({ title, source, doc, initial }) {
     const base = source ? `/v1/knowledge/sources/${encodeURIComponent(source)}` : `/v1/files/memories/documents/${encodeURIComponent(doc)}`;
     const L = { chunks: { items: [], next: "", busy: false, error: "", read: false }, history: { items: [], next: "", busy: false, error: "", read: false } };
     let extract = "", pop = null, open = "chunks";
@@ -386,11 +394,48 @@ window.ArkismKnowledge = (ctx) => {
       head.append(noI18n(el("span", "", `#${c[1]}`)));
       return head;
     }
+    // A candidate that became a memory opens that memory (its 바뀐 이력 shows every revision); a waiting one opens the review list.
     function candidates(list) {
       if (!list.length) return el("p", "meta", "이 부분에서 만든 기억 후보가 없어요.");
       const box = el("div", "v4k-chips");
-      for (const [i, c] of list.entries()) box.append(el("span", `v4s-badge${c.status === "candidate" || c.status === "conflicted" ? " amber" : ""}`, `후보 ${i + 1} · ${CAND[c.status] || c.status}`));
+      for (const [i, c] of list.entries()) {
+        const b = el("button", `v4s-badge v4k-cand${c.status === "candidate" || c.status === "conflicted" ? " amber" : ""}`, `후보 ${i + 1} · ${CAND[c.status] || c.status}`); b.type = "button";
+        if (c.memory_id) { b.title = "이 기억과 바뀐 이력 보기"; b.addEventListener("click", () => { pop.dialog.close(); ctx.openMemory?.(c.memory_id); }); }
+        else if (c.status === "candidate" || c.status === "conflicted") { b.title = "확인해 주세요에서 보기"; b.addEventListener("click", () => { pop.dialog.close(); ctx.go?.("memories", "candidate"); }); }
+        else b.disabled = true;
+        box.append(b);
+      }
       return box;
+    }
+    // 원본 파일: the files the server kept for this document's evidence (GET /v1/sources/{id}/artifacts; only with
+    // MEMORY_FILE_KEEP_ORIGINALS on). Each downloads through GET …/artifacts/{artifact_id}.
+    const kept = {}; // source id → { items, error } once read
+    function originals(body) {
+      open = "files";
+      if (!L.chunks.read && !L.chunks.busy) void more("chunks");
+      const ids = [...new Set(L.chunks.items.map((x) => x.source?.id).filter(Boolean))];
+      for (const id of ids) if (!kept[id]) {
+        kept[id] = { items: null, error: "" };
+        get(`/v1/sources/${encodeURIComponent(id)}/artifacts`, { limit: 100 }).then((r) => { kept[id].items = Array.isArray(r?.items) ? r.items : []; },
+          (e) => { kept[id].error = off(e) ? "원본 파일을 볼 권한이 없거나 남아 있지 않아요." : errText(e); kept[id].items = []; }).then(redraw);
+      }
+      const list = el("div", "v4k-evidence");
+      const files = ids.flatMap((id) => (kept[id].items || []).map((a) => [id, a]));
+      for (const [id, a] of files) {
+        const c = item(a.id, [ARTIFACT[a.kind] || a.kind, a.mime, bytes(a.bytes)]);
+        const acts = el("div", "v4s-actions"), dl = button("내려받기", "", null, () => download(id, a, dl));
+        acts.append(dl); c.append(acts); list.append(c);
+      }
+      const waiting = L.chunks.busy || ids.some((id) => !kept[id].items);
+      if (waiting) list.append(el("p", "meta", "불러오는 중…"));
+      for (const id of ids) if (kept[id].error) list.append(el("p", "v4k-warn", kept[id].error));
+      if (!waiting && !files.length) list.append(el("div", "empty", "보관한 원본 파일이 없어요. 서버에서 원본 보관(MEMORY_FILE_KEEP_ORIGINALS)을 켜야 올린 파일이 남아요."));
+      body.append(list);
+    }
+    async function download(id, a, b) {
+      b.disabled = true;
+      try { save(`${a.id}${EXT[a.mime] || ""}`, await request(`/v1/sources/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(a.id)}?${query()}`, { binary: true }), a.mime); b.textContent = "내려받았어요"; }
+      catch (e) { b.textContent = e?.message === "payload_too_large" ? "파일이 너무 커요" : "내려받지 못했어요"; b.disabled = false; }
     }
     const version = (x) => source
       ? item(x.filename, [x.current ? "지금 버전" : "예전 버전", x.extraction_status === "failed" ? "읽기 실패" : `부분 ${num(x.chunk_count)}개`, ago(x.created_at)])
@@ -413,9 +458,10 @@ window.ArkismKnowledge = (ctx) => {
       if (acts.childElementCount) body.append(acts);
     };
     const sub = source ? "검색에 쓰는 부분과 올린 버전이에요. 내용은 사람에게만 보여요." : "파일에서 읽은 부분과 그 부분에서 나온 기억 후보예요. 후보는 '확인해 주세요'에서 승인해야 쓰여요.";
-    pop = window.ArkismCrewPopup({ el, button }).open({ title, sub, cls: "v4k-parts", tabs: [
+    pop = window.ArkismCrewPopup({ el, button }).open({ title, sub, cls: "v4k-parts", initial, tabs: [
       { key: "chunks", label: "부분", render: tab("chunks", chunk, "부분이 없어요.") },
-      { key: "history", label: source ? "버전" : "올린 이력", render: tab("history", version, "이력이 없어요.") }] });
+      { key: "history", label: source ? "버전" : "올린 이력", render: tab("history", version, "이력이 없어요.") },
+      ...(doc ? [{ key: "files", label: "원본 파일", render: originals }] : [])] });
     noI18n(pop.dialog.querySelector("h2"));
   }
 
@@ -757,7 +803,7 @@ window.ArkismKnowledge = (ctx) => {
   // ---------------------------------------------------------------- 위키 (384:31269)
   function filteredPages() {
     const { q, type, sort, chip } = K.pg;
-    let items = K.pages.filter((p) => p.review_state !== "deleted" && (!type || p.type === type));
+    let items = K.pages.filter((p) => p.review_state !== "deleted" && (!type || p.type === type) && inFolder(p, K.pg.folder));
     items = items.filter((p) => chip === "all" || (chip === "locked" ? p.locked : chip === "stale" ? p.stale_sources?.length : p.review_state === chip));
     if (q) { const t = q.toLowerCase(); items = items.filter((p) => titleOf(p).toLowerCase().includes(t) || body(p).text.toLowerCase().includes(t)); }
     return [...items].sort(sort === "title" ? (a, b) => titleOf(a).localeCompare(titleOf(b)) : (a, b) => String(b.updated_at).localeCompare(String(a.updated_at)));
@@ -786,7 +832,10 @@ window.ArkismKnowledge = (ctx) => {
       list.append(row("v4k-row", K.pageSel === p.id, [text(titleOf(p), `링크 ${b.links?.length || 0} · 출처 ${p.knowledge_source_ids?.length || 0} · ${when}`, false), badge(pageState(p))], () => openPage(p.id)));
     }
     if (!items.length) list.append(el("div", "empty", alive.length ? "조건에 맞는 페이지가 없어요." : "아직 위키가 없어요. 자료 상세에서 '위키 만들기'를 눌러 보세요."));
-    parts.push(list, el("p", "v4s-foot", `${alive.length}개 중 ${items.length}개 표시 · 잠긴 페이지는 AI가 고치지 않아요`));
+    const main = el("div", "v4k-main"), cols = el("div", "v4k-cols");
+    main.append(list, el("p", "v4s-foot", `${alive.length}개 중 ${items.length}개 표시 · 잠긴 페이지는 AI가 고치지 않아요`));
+    cols.append(folderSide(), main);
+    parts.push(cols);
     table.replaceChildren(...parts);
     if (!K.pageSel && items[0]) K.pageSel = items[0].id;
     pageDetail();
@@ -859,7 +908,270 @@ window.ArkismKnowledge = (ctx) => {
     lock.append(el("p", "meta", p.locked ? "잠겨 있어요. AI 작업은 이 페이지를 건너뛰어요." : "검토한 내용을 그대로 두려면 잠가요."),
       button(p.locked ? "잠금 풀기" : "잠그기", "", null, () => act(() => post(`/v1/wiki/pages/${id}/lock`, { expected_revision: p.revision, locked: !p.locked }), p.locked ? "잠금을 풀었어요." : "잠갔어요.")));
     lock.lastChild.disabled = K.busy;
-    box.append(sec("잠금", null, lock));
+    box.append(sec("잠금", null, lock), pageTools(p));
+  }
+
+  // ---------------------------------------------------------------- 기억 후보 만들기 (글 붙여넣기 · 여러 파일)
+  // 글: POST /v1/memories/ingest (one item). 파일: POST /v1/files/memories, one file after another (the desktop bridge carries
+  // JSON only, so the multipart batch route is not used; each file gets the same per-file result and job).
+  // Everything optional sits under 자세히 and stays empty: the server's own defaults apply.
+  const PARSERS = [["", "서버 기본 순서"], ["builtin", "내장 읽기"], ["converter", "변환기"], ["vision", "이미지 읽기 (모델)"], ["transcribe", "음성 받아쓰기 (모델)"],
+    ["upload_job", "외부 읽기 (업로드)"], ["presigned_job", "외부 읽기 (주소)"]];
+  let strategies = null; // the space's named extraction strategies, read once per window
+  async function loadStrategies() {
+    const { workspace_id: w, project_id: p } = state.scope || {};
+    if (!w || !p) return [];
+    try { return Object.keys((await get(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`))?.config?.extraction_strategies || {}).sort(); }
+    catch (_) { return []; } // no strategies to offer; the server default applies
+  }
+  const field = (label, input) => { const f = el("label", "v4k-field"); f.append(el("span", "", label), input); return f; };
+  function openAdd(initial = "text") {
+    const A = { text: "", files: [], tags: "", context: "", when: "", meta: "", strategy: "", parser: "" };
+    let pop = null;
+    const redraw = (key) => { if (pop?.dialog.isConnected) pop.select(key); };
+    if (!strategies) loadStrategies().then((list) => { strategies = list; if (list.length) redraw(A.files.length ? "files" : initial); });
+    function options(files) {
+      const more = el("details", "v4k-more v4k-opts"); more.append(el("summary", "", "자세히"));
+      const input = (key, type = "text", ph = "") => { const i = el("input", "v4s-input"); i.type = type; i.value = A[key]; i.placeholder = ph; i.addEventListener("input", () => { A[key] = i.value; }); return i; };
+      more.append(field("태그 (쉼표로 나눠요)", input("tags", "text", "회의, 디자인")), field("상황 설명 (AI가 글과 함께 읽어요)", input("context", "text", "팀 주간 회의록")),
+        field("일이 있었던 때 (‘어제’ 같은 말의 기준)", input("when", "datetime-local")));
+      if (!files) { const t = el("textarea", "v4s-input"); t.rows = 3; t.value = A.meta; t.placeholder = "project=arkism"; t.addEventListener("input", () => { A.meta = t.value; }); more.append(field("메타데이터 (한 줄에 이름=값)", t)); }
+      if (strategies?.length) more.append(field("뽑는 방식", select("뽑는 방식", [["", "공간 기본"], ...strategies.map((x) => [x, x])], A.strategy, (v) => { A.strategy = v; })));
+      if (files) more.append(field("파일 읽는 방법", select("파일 읽는 방법", PARSERS, A.parser, (v) => { A.parser = v; })));
+      return more;
+    }
+    const actions = (label, ok, go) => {
+      const a = el("div", "v4s-actions"), b = button(label, "primary", null, () => { pop.dialog.close(); go(); });
+      b.disabled = !ok || K.busy || !!K.extract?.active;
+      a.append(b, link("취소", () => pop.dialog.close()));
+      return a;
+    };
+    const textTab = (body) => {
+      const t = el("textarea", "v4s-input v4k-paste"); t.rows = 10; t.value = A.text; t.placeholder = "회의 메모, 대화, 글을 붙여넣어 주세요."; t.setAttribute("aria-label", "넣을 글");
+      const acts = actions("기억 후보 만들기", A.text.trim(), () => extractText(A));
+      t.addEventListener("input", () => { A.text = t.value; acts.firstChild.disabled = !t.value.trim() || K.busy; });
+      body.append(t, options(false), el("p", "meta", "글에서 기억할 만한 내용을 뽑아 후보로 만들어요. 저장할지는 '확인해 주세요'에서 내가 골라요."), acts);
+    };
+    const filesTab = (body) => {
+      const list = el("div", "v4k-chunks");
+      for (const f of A.files) { const r = el("div", "v4k-chunk"); r.append(noI18n(el("span", "", f.name)), el("small", "", bytes(f.size))); list.append(r); }
+      if (!A.files.length) list.append(el("p", "meta", "아직 고른 파일이 없어요."));
+      const pick = el("div", "v4s-actions");
+      pick.append(button(A.files.length ? "다른 파일 고르기" : "파일 고르기", "", null, () => chooseFile((fs) => { A.files = fs; redraw("files"); }, true)));
+      body.append(pick, list, el("p", "meta", `${KINDS} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.`), options(true),
+        actions(A.files.length > 1 ? `파일 ${A.files.length}개로 기억 후보 만들기` : "기억 후보 만들기", A.files.length, () => extractFiles(A)));
+    };
+    pop = window.ArkismCrewPopup({ el, button }).open({ title: "기억 후보 만들기", sub: "AI가 뽑은 내용은 후보로만 남아요. 내가 승인해야 기억이 돼요.", cls: "v4k-add", initial, tabs: [
+      { key: "text", label: "글 붙여넣기", render: textTab }, { key: "files", label: "파일", render: filesTab }] });
+  }
+  function extractText(A) {
+    const label = A.text.trim().split("\n")[0].slice(0, 40);
+    return startExtract(async () => {
+      const r = await post("/v1/memories/ingest", { items: [{ content: A.text, ...window.ArkismKnowledge.ingestExtras(A, true) }] });
+      const it = r?.items?.[0];
+      if (!it) throw new Error("invalid_response");
+      if (it.status === "failed" && !it.job_id) throw new Error(it.error || "invalid_request");
+      return it;
+    }, label);
+  }
+  // One file after another; a file that fails does not stop the rest, and the end says how many went.
+  async function extractFiles(A) {
+    const n = A.files.length, extra = window.ArkismKnowledge.ingestExtras(A, false);
+    let failed = 0, reason = "";
+    for (const [i, f] of A.files.entries()) {
+      if (f.size > 4 << 20) { failed++; reason ||= "파일이 너무 커요. 4MB까지 올릴 수 있어요."; continue; }
+      const ext = extOf(f);
+      await startExtract(async () => post("/v1/files/memories", { filename: f.name, content_base64: b64(await f.arrayBuffer()), ...(MIME[ext] ? { mime: MIME[ext] } : {}), ...extra }),
+        n > 1 ? `${f.name} (${i + 1}/${n})` : f.name);
+      if (K.extract?.error) { failed++; reason ||= K.extract.error; }
+    }
+    if (n > 1) { K.notice = failed ? `${n}개 중 ${n - failed}개를 보냈어요. 못 보낸 파일이 ${failed}개 있어요.` : `${n}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.`; if (reason) K.notice += ` ${reason}`; paint(); }
+    else if (failed && !K.extract?.error) { K.notice = reason; paint(); }
+  }
+
+  // ---------------------------------------------------------------- 기억 문서 (GET /v1/files/memories/documents, PATCH · DELETE …/{id}, …/reprocess)
+  // Every text or file a person turned into memory candidates. Tag edits reach the document's waiting candidates and
+  // approved memories; reprocessing reads the stored text again and only makes new candidates; deleting first counts
+  // what it touches (waiting candidates are rejected, approved memories stay).
+  const DOC = { pending: ["기다리는 중", "amber"], retry: ["기다리는 중", "amber"], running: ["읽는 중", "amber"], done: ["끝남", ""], failed: ["멈춤", "amber"], cancelled: ["멈춤", ""] };
+  const docErr = (e) => (/conflict/.test(e?.message || "") ? "아직 읽고 있거나 그새 바뀐 문서예요. 잠시 뒤 다시 해 주세요." : extractErr(e));
+  async function loadDocs(more = false) {
+    const F = K.fd, ticket = loads.begin("docs");
+    F.busy = true; F.error = ""; paint();
+    try {
+      const r = await get("/v1/files/memories/documents", { limit: 50, ...(F.tag ? { tag: F.tag } : {}), ...(more && F.next ? { cursor: F.next } : {}) });
+      if (!ticket.live()) return;
+      if (!Array.isArray(r?.items)) throw new Error("invalid_response");
+      F.items = more ? [...F.items, ...r.items] : r.items; F.next = r.next_cursor || ""; F.state = "ready";
+    } catch (e) { if (!ticket.live()) return; F.error = errText(e); F.state = F.items.length ? "ready" : off(e) ? "off" : "error"; }
+    F.busy = false; paint();
+  }
+  function renderDocs(table) {
+    const F = K.fd, parts = [];
+    const ex = extractCard(); if (ex) parts.push(ex);
+    if (F.state === "idle") { F.state = "loading"; queueMicrotask(() => loadDocs()); }
+    const bar = el("div", "v4s-bar");
+    const date = (key, label) => { const i = el("input", "v4s-input v4k-date"); i.type = "date"; i.value = F[key]; i.setAttribute("aria-label", label); i.title = label; i.addEventListener("change", () => { F[key] = i.value; paint(); }); return i; };
+    const tags = [...new Set([F.tag, ...F.items.flatMap((d) => d.tags || [])].filter(Boolean))].sort();
+    bar.append(searchBox("문서 이름·태그 검색", F.q, (v) => { F.q = v; paint(); }),
+      noI18nOpts(select("태그", [["", "태그: 모두"], ...tags.map((t) => [t, t])], F.tag, (v) => { F.tag = v; F.state = "loading"; void loadDocs(); })),
+      date("from", "이날부터"), date("to", "이날까지"));
+    parts.push(bar);
+    if (noticeLine()) parts.push(noticeLine());
+    const items = window.ArkismKnowledge.filterDocs(F.items, F);
+    const list = el("div", "v4s-list");
+    for (const d of items) {
+      const meta = `부분 ${num(d.chunks)}개 · 후보 ${num(d.candidates_created)}개 · ${ago(d.updated_at)} 올림`; // one sentence, so it translates as a whole
+      list.append(row("v4k-row", F.sel === d.id, [text(d.label || d.id, meta, true), badge(DOC[d.status] || [d.status || "—", ""])], () => { F.sel = d.id; F.del = null; K.notice = ""; paint(); }));
+    }
+    if (!items.length) {
+      const box = el("div", "empty");
+      if (F.state === "loading" || F.state === "idle") box.append(el("p", "", "불러오는 중…"));
+      else if (F.state === "off") box.append(el("p", "", "이 서버는 기억 문서 목록을 아직 지원하지 않아요."));
+      else if (F.state === "error") box.append(el("p", "", F.error), button("다시 시도", "", null, () => loadDocs()));
+      else if (F.items.length || F.tag) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { Object.assign(F, { q: "", from: "", to: "" }); if (F.tag) { F.tag = ""; void loadDocs(); } else paint(); }));
+      else box.append(el("p", "", "아직 기억 후보를 만든 글이나 파일이 없어요."), button("기억 후보 만들기", "primary", null, () => openAdd()));
+      list.append(box);
+    }
+    parts.push(list, el("p", "v4s-foot", F.busy ? "불러오는 중…" : `불러온 ${F.items.length}개 중 ${items.length}개 표시 · 이름·태그·날짜는 불러온 목록에서 걸러요`));
+    if (F.next) { const b = button("문서 더 보기", "", null, () => loadDocs(true)); b.disabled = F.busy; parts.push(b); }
+    table.replaceChildren(...parts);
+    if (!items.some((d) => d.id === F.sel)) F.sel = items[0]?.id || "";
+    docDetail(items.find((d) => d.id === F.sel));
+  }
+  const noI18nOpts = (s) => { for (const o of [...s.options].slice(1)) noI18n(o); return s; }; // tag names are data
+  function docDetail(d) {
+    if (!d) { $("#detail").replaceChildren(); return; }
+    const F = K.fd, id = encodeURIComponent(d.id);
+    const box = detailShell("기억 문서");
+    const head = el("div", "v4s-head");
+    head.append(noI18n(el("h2", "mono v4k-h2", d.label || d.id)), el("p", "v4s-lead", [(DOC[d.status] || [d.status])[0], `${ago(d.updated_at)} 올림`].join(" · ")));
+    box.append(head);
+    const docAct = (work, done) => act(work, done, docErr).then(() => loadDocs());
+    if (d.status === "failed") box.append(card("읽다가 멈췄어요. 이어서 읽으면 남은 부분만 읽어요.", [button("이어서 하기", "primary", null, () => { K.extract = { id: d.job_id, label: d.label, phase: "failed" }; resumeExtract(); })]));
+    if (F.del?.id === d.id) box.append(deleteCard(d));
+    // 태그
+    const tagBox = el("div", "v4k-wlinks");
+    for (const t of d.tags || []) {
+      const c = el("button", "v4k-wchip v4k-tag", `${t} ×`); c.type = "button"; noI18n(c); c.setAttribute("aria-label", `${t} 태그 빼기`);
+      c.disabled = K.busy || !human();
+      c.addEventListener("click", () => docAct(() => request(`/v1/files/memories/documents/${id}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, remove: [t] }) }), tagDone));
+      tagBox.append(c);
+    }
+    if (!d.tags?.length) tagBox.append(el("p", "meta", "태그가 없어요."));
+    const add = el("form", "v4k-bind add"), input = el("input", "v4s-input"); input.placeholder = "새 태그"; input.setAttribute("aria-label", "새 태그");
+    const addBtn = button("추가", "", null); addBtn.type = "submit"; addBtn.disabled = K.busy || !human();
+    add.append(input, addBtn);
+    add.addEventListener("submit", (e) => { e.preventDefault(); const t = input.value.trim(); if (t) docAct(() => request(`/v1/files/memories/documents/${id}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, add: [t] }) }), tagDone); });
+    box.append(sec("태그", null, tagBox, add, el("p", "meta", "고친 태그는 이 문서의 기억 후보와 승인된 기억에도 같이 바뀌어요.")));
+    // 기억 후보
+    const cands = el("div", "v4s-actions");
+    cands.append(button("부분·이력 보기", "", null, () => openParts({ title: d.label || d.id, doc: d.id })), button("후보 확인하러 가기", "", null, () => ctx.go?.("memories", "candidate")));
+    box.append(sec("기억 후보", null, el("p", "meta", `이 문서에서 만든 후보 ${num(d.candidates_created)}개 · 부분을 누르면 그 부분에서 나온 후보와 기억, 바뀐 이력을 볼 수 있어요.`), cands));
+    // 관리
+    const tools = el("div", "v4s-actions");
+    const again = button("다시 처리", "", null, async () => {
+      if (!(await confirmPop("이 문서를 다시 읽을까요?", "저장해 둔 글을 처음부터 다시 읽어 새 기억 후보를 만들어요. 모델 호출을 써요. 이미 있는 후보와 기억은 그대로예요.", "다시 처리"))) return;
+      void startExtract(() => post(`/v1/files/memories/documents/${id}/reprocess`), d.label || d.id);
+    });
+    again.disabled = K.busy || !!K.extract?.active || !["done"].includes(d.status);
+    const del = button("지우기", "ghost danger", null, () => previewDelete(d)); del.disabled = K.busy || !human();
+    tools.append(button("원본 파일", "", null, () => openParts({ title: d.label || d.id, doc: d.id, initial: "files" })), again, del);
+    box.append(sec("관리", null, tools, noticeLine()));
+    const more = el("details", "v4k-more");
+    more.append(el("summary", "", "자세히"), facts([["문서 ID", d.id, true], ["작업 ID", d.job_id, true], ["올린 사람", d.requested_by, true], ["처음 올린 때", ago(d.created_at)], ["부분", num(d.chunks)]]));
+    box.append(more);
+  }
+  const tagDone = (r) => (r?.skipped ? `태그를 고쳤어요 · 후보 ${num(r?.candidates)}개 · 기억 ${num(r?.memories)}개에도 반영 · 그사이 바뀐 ${num(r.skipped)}개는 건너뜀`
+    : `태그를 고쳤어요 · 후보 ${num(r?.candidates)}개 · 기억 ${num(r?.memories)}개에도 반영`); // two whole sentences so each translates
+  // Counts first from the document's chunks (…/chunks: each chunk's candidates and their state), then asks.
+  async function previewDelete(d) {
+    const F = K.fd;
+    F.del = { id: d.id, state: "loading" }; paint();
+    try {
+      const all = [];
+      for (let cursor = "", i = 0; i < 20; i++) {
+        const r = await get(`/v1/files/memories/documents/${encodeURIComponent(d.id)}/chunks`, { limit: 200, ...(cursor ? { cursor } : {}) });
+        all.push(...(r?.items || [])); cursor = r?.next_cursor || "";
+        if (!cursor) break;
+      }
+      if (F.del?.id === d.id) F.del = { id: d.id, state: "preview", ...window.ArkismKnowledge.deleteImpact(all) };
+    } catch (e) { if (F.del?.id === d.id) F.del = { id: d.id, state: "error", error: errText(e) }; }
+    paint();
+  }
+  function deleteCard(d) {
+    const R = K.fd.del, close = link("취소", () => { K.fd.del = null; paint(); });
+    if (R.state === "loading") return card("이 문서로 만든 후보와 기억을 세는 중…", []);
+    if (R.state === "error") return card(R.error, [button("다시 시도", "", null, () => previewDelete(d)), close]);
+    const go = () => { K.fd.del = null; void act(() => request(`/v1/files/memories/documents/${encodeURIComponent(d.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope }) }),
+      (r) => `지웠어요 · 버린 후보 ${num(r?.rejected)}개 · 남은 기억 ${num(r?.kept)}개`, docErr).then(() => { K.fd.sel = ""; return loadDocs(); }); };
+    return card(`지우면 확인을 기다리는 후보 ${num(R.waiting)}개는 버려지고, 이미 승인한 기억 ${num(R.kept)}개는 그대로 남아요. 되돌릴 수 없어요.`, [button("지우기", "danger", null, go), close]);
+  }
+
+  // ---------------------------------------------------------------- 위키 폴더 · 내보내기 (GET /v1/wiki/tree, POST/PATCH/DELETE /v1/wiki/folders, GET /v1/wiki/export)
+  const folderOf = (p) => p.folder ?? K.folderOf[p.id] ?? "";
+  const inFolder = (p, f) => f == null || folderOf(p) === f || folderOf(p).startsWith(`${f}/`);
+  const folderUrl = (extra) => `/v1/wiki/folders?${query(extra)}`; // DELETE takes the folder in the query
+  const wikiErr = (e) => (/conflict/.test(e?.message || "") ? "폴더에 페이지가 있거나 그새 바뀌었어요. 새로고침했어요." : e?.message === "payload_too_large" ? "위키가 너무 커서 한 번에 내보내지 못했어요." : errText(e));
+  const wikiAct = (work, done) => act(work, done, wikiErr);
+  async function newFolder() {
+    const path = (await window.askText("새 폴더 이름\n'/'로 나누면 안쪽 폴더가 돼요. 예: 운영/배포", K.pg.folder ? `${K.pg.folder}/` : "", { okLabel: "만들기", primary: true }))?.trim().replace(/^\/+|\/+$/g, "");
+    if (!path) return;
+    await wikiAct(() => post("/v1/wiki/folders", { path }), "폴더를 만들었어요.");
+    K.pg.folder = path; paint();
+  }
+  async function moveFolder(from) {
+    const to = (await window.askText("폴더의 새 경로\n이름만 바꾸거나 '/'로 다른 폴더 안으로 옮겨요. 안의 페이지도 함께 옮겨져요.", from, { okLabel: "바꾸기", primary: true }))?.trim().replace(/^\/+|\/+$/g, "");
+    if (!to || to === from) return;
+    await wikiAct(() => request("/v1/wiki/folders", { method: "PATCH", body: JSON.stringify({ scope: state.scope, from, to }) }), "폴더를 옮겼어요.");
+    if (K.folders.some((f) => f.path === to)) K.pg.folder = to;
+    paint();
+  }
+  async function deleteFolder(path) {
+    const n = K.pages.filter((p) => p.review_state !== "deleted" && inFolder(p, path)).length;
+    if (!(await confirmPop("폴더를 지울까요?", n ? `안에 있는 페이지 ${n}쪽도 함께 지워지고, 다른 페이지에서 그 페이지로 가는 링크는 글자로 바뀌어요. 되돌릴 수 없어요.` : "빈 폴더를 지워요.", "지우기"))) return;
+    K.pg.folder = null;
+    await wikiAct(() => request(folderUrl({ path, ...(n ? { recursive: "true" } : {}) }), { method: "DELETE" }), (r) => `지웠어요 · 페이지 ${num(r?.deleted?.length)}쪽`);
+  }
+  const exportWiki = () => wikiAct(async () => save("wiki.zip", await request(`/v1/wiki/export?${query({ format: "zip" })}`, { binary: true }), "application/zip"),
+    "위키를 내보냈어요. 검토된 페이지만 들어 있어요.");
+  function folderSide() {
+    const side = el("div", "v4k-groups");
+    side.append(el("p", "v4k-label", "폴더"));
+    const alive = K.pages.filter((p) => p.review_state !== "deleted");
+    const group = (key, label, sub, n) => {
+      const g = el("button", `v4k-group${K.pg.folder === key ? " on" : ""}`); g.type = "button";
+      const t = el("span", "v4k-group-text"), b = el("b", "", label);
+      if (key) noI18n(b);
+      t.append(b); if (sub) t.append(el("small", "", sub)); g.append(t, el("output", "", String(n)));
+      g.addEventListener("click", () => { K.pg.folder = key; paint(); });
+      return g;
+    };
+    side.append(group(null, "전체", "모든 폴더", alive.length));
+    for (const f of K.folders) side.append(group(f.path, f.path, "", alive.filter((p) => inFolder(p, f.path)).length)); // the count includes inner folders
+    const acts = el("div", "v4k-folder-acts");
+    acts.append(link("+ 새 폴더", newFolder));
+    if (K.pg.folder) acts.append(link("이름 바꾸기·옮기기", () => moveFolder(K.pg.folder)), link("폴더 지우기", () => deleteFolder(K.pg.folder)));
+    acts.append(link("위키 내보내기 (.zip)", exportWiki));
+    for (const b of acts.querySelectorAll("button")) b.disabled = K.busy;
+    side.append(acts);
+    return side;
+  }
+  // 페이지 관리: move to a folder, save as Markdown, delete (locked pages too; links to it become plain text).
+  function pageTools(p) {
+    const id = encodeURIComponent(p.id), b = body(p);
+    const where = select("폴더", [["", "맨 위"], ...K.folders.map((f) => [f.path, f.path])], folderOf(p), (v) =>
+      wikiAct(() => request(`/v1/wiki/pages/${id}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, expected_revision: p.revision, folder: v }) }), "페이지를 옮겼어요."));
+    noI18nOpts(where); where.disabled = K.busy;
+    const acts = el("div", "v4s-actions");
+    acts.append(button("Markdown으로 저장", "", null, () => { save(`${p.slug || p.id}.md`, `# ${titleOf(p)}\n\n${b.text || ""}\n`, "text/markdown"); K.notice = "페이지를 저장했어요."; paint(); }),
+      button("페이지 지우기", "ghost danger", null, async () => {
+        if (!(await confirmPop("이 페이지를 지울까요?", "다른 페이지에서 이 페이지로 가는 링크는 글자로 바뀌어요. 잠긴 페이지도 지워져요. 되돌릴 수 없어요.", "지우기"))) return;
+        K.pageSel = "";
+        await wikiAct(() => request(`/v1/wiki/pages/${id}?${query({ expected_revision: p.revision })}`, { method: "DELETE" }), "페이지를 지웠어요.");
+      }));
+    for (const x of acts.querySelectorAll("button")) x.disabled = K.busy;
+    return sec("관리", null, field("폴더", where), acts);
   }
 
   // ---------------------------------------------------------------- view
@@ -883,26 +1195,28 @@ window.ArkismKnowledge = (ctx) => {
     }
     if (doc) return renderDoc(table);
     const seg = el("div", "v4s-seg v4k-seg");
-    for (const [k, label, n] of [["sources", "자료", K.total], ["wiki", "위키", K.pages.filter((p) => p.review_state !== "deleted").length]]) {
+    const docsN = K.fd.state === "ready" ? `${K.fd.items.length}${K.fd.next ? "+" : ""}` : "";
+    for (const [k, label, n] of [["sources", "자료", K.total], ["wiki", "위키", K.pages.filter((p) => p.review_state !== "deleted").length], ["docs", "기억 문서", docsN]]) {
       const b = el("button", K.tab === k ? "on" : ""); b.type = "button"; b.setAttribute("aria-pressed", String(K.tab === k));
-      b.append(label, el("output", "", String(n)));
+      b.append(label); if (K.tab === k && n !== "") b.append(el("output", "", String(n))); // the count sits next to the open tab only
       b.addEventListener("click", () => { K.tab = k; K.notice = ""; K.remove = null; paint(); });
       seg.append(b);
     }
     const holder = el("div", "v4k-body");
-    if (K.tab === "wiki") renderWiki(holder); else renderSources(holder);
+    if (K.tab === "wiki") renderWiki(holder); else if (K.tab === "docs") renderDocs(holder); else renderSources(holder);
     table.replaceChildren(seg, ...holder.childNodes);
   }
 
   return {
-    reset: () => { clearTimeout(extractTimer); K.extract = null; sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
+    reset: () => { clearTimeout(extractTimer); K.extract = null; sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; strategies = null;
+      Object.assign(K.fd, { state: "idle", items: [], next: "", busy: false, sel: "", del: null }); Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
     views: { knowledge: {
       title: () => (K.doc ? K.sources.find((x) => x.id === K.doc)?.display_name || "지식" : "지식"),
       sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 부분 단위로 찾아 써요. 새 버전은 다시 확인해야 AI가 써요." : "올려 둔 문서를 내 AI가 찾아 써요. 올릴 때 내용을 확인하면 바로 쓰여요."),
       render: renderView, keepDetail: true,
       head: () => K.doc
         ? [button("새 버전 올리기", "", null, () => { const s = K.sources.find((x) => x.id === K.doc); if (s) pickFile(s); })]
-        : [button("파일로 기억 후보 만들기", "", null, pickExtractFile), button("+ 파일 올리기", "primary", null, () => pickFile(null))]
+        : [button("기억 후보 만들기", "", null, () => openAdd()), button("+ 파일 올리기", "primary", null, () => pickFile(null))]
     } }
   };
 };
@@ -937,4 +1251,36 @@ window.ArkismKnowledge.splitText = (text, max = 64 << 10) => {
     return out;
   };
   return pack(String(text), 0).filter((p) => p.trim());
+};
+// The add window's optional fields in the server's words; empty ones stay out so the space defaults apply.
+// text: the paste tab (metadata lines "name=value"); otherwise the file tab (one reader to try).
+window.ArkismKnowledge.ingestExtras = (A, text) => {
+  const out = {}, tags = [...new Set(String(A.tags || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+  if (tags.length) out.tags = tags;
+  if (String(A.context || "").trim()) out.context = A.context.trim();
+  const when = A.when ? new Date(A.when) : null; // datetime-local is the person's own clock
+  if (when && !Number.isNaN(when.getTime())) out.timestamp = when.toISOString();
+  if (A.strategy) out.strategy = A.strategy;
+  if (text) {
+    const meta = {};
+    for (const line of String(A.meta || "").split("\n")) { const m = /^\s*([^=:]+?)\s*[=:]\s*(.*?)\s*$/.exec(line); if (m) meta[m[1]] = m[2]; }
+    if (Object.keys(meta).length) out.metadata = meta;
+  } else if (A.parser) out.parsers = [A.parser];
+  return out;
+};
+// 기억 문서 filters over the loaded list: q in the name, id or tags; from/to as YYYY-MM-DD against the last upload.
+// shortcut: the day is the server's UTC day and only loaded pages are searched; a server-side text query would replace this.
+window.ArkismKnowledge.filterDocs = (items, { q = "", from = "", to = "" } = {}) => {
+  const t = q.trim().toLowerCase();
+  return items.filter((d) => {
+    const day = String(d.updated_at || d.created_at || "").slice(0, 10);
+    return (!t || [d.label, d.id, ...(d.tags || [])].some((x) => String(x || "").toLowerCase().includes(t))) && (!from || day >= from) && (!to || day <= to);
+  });
+};
+// What deleting a document touches, counted like the server does: waiting candidates are rejected, approved ones stay as memories.
+window.ArkismKnowledge.deleteImpact = (chunks) => {
+  const seen = new Map();
+  for (const c of chunks || []) for (const x of c.candidates || []) seen.set(x.id, x.status);
+  const st = [...seen.values()];
+  return { waiting: st.filter((x) => x === "candidate").length, kept: st.filter((x) => x === "approved" || x === "active").length };
 };

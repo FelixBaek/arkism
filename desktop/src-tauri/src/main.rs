@@ -622,13 +622,17 @@ fn allowed(method: &str, path: &str) -> bool {
     let one_id = |prefix: &str| path.strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/') && !id.contains('?'));
     // the same, with a query after the id (the webhook routes read their scope from it)
     let query_id = |prefix: &str| path.split(['?', '#']).next().unwrap_or("").strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/'));
+    // 지식 › 기억 문서 (태그 고치기·지우기) and 위키 폴더·페이지 (옮기기·이름 바꾸기·지우기): /v1/wiki/folders takes its path in the body or query.
+    let wiki_folders = path.split(['?', '#']).next() == Some("/v1/wiki/folders");
     let delete = method == "DELETE"
         && (path.starts_with("/v1/memories/") || one_id("/v1/crew/") || one_id("/v1/prompts/") || one_id("/v1/design_systems/")
-            || one_id("/v1/directives/") || one_id("/v1/entities/") || one_id("/v1/mental-models/") || query_id("/v1/webhooks/"));
+            || one_id("/v1/directives/") || one_id("/v1/entities/") || one_id("/v1/mental-models/") || query_id("/v1/webhooks/")
+            || one_id("/v1/files/memories/documents/") || query_id("/v1/wiki/pages/") || wiki_folders);
     // 설정 › 기억 공간 saves with PATCH and resets with PUT, on /v1/spaces/{workspace}/{project}/config only.
     let space_config = path.strip_prefix("/v1/spaces/").and_then(|p| p.strip_suffix("/config"))
         .is_some_and(|p| p.split('/').count() == 2 && p.split('/').all(|s| !s.is_empty() && !s.contains('?') && !s.contains('#')));
-    let patch = method == "PATCH" && (one_id("/v1/entities/") || one_id("/v1/mental-models/") || one_id("/v1/webhooks/") || space_config);
+    let patch = method == "PATCH" && (one_id("/v1/entities/") || one_id("/v1/mental-models/") || one_id("/v1/webhooks/")
+        || one_id("/v1/files/memories/documents/") || one_id("/v1/wiki/pages/") || wiki_folders || space_config);
     let put = method == "PUT" && space_config;
     // `..` (or %2e%2e) only matters in the path: a search query may contain it.
     let route = path.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase().replace("%2e", ".");
@@ -646,11 +650,14 @@ fn api_agent() -> &'static ureq::Agent {
 }
 
 #[tauri::command]
-async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, base: String, token: String, method: String, path: String, body: Option<String>) -> Result<Reply, String> {
-    api_with_gate(rt.gate(), base, token, method, path, body).await
+async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, base: String, token: String, method: String, path: String, body: Option<String>, binary: Option<bool>) -> Result<Reply, String> {
+    api_with_gate(rt.gate(), base, token, method, path, body, binary.unwrap_or(false)).await
 }
 
-async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, method: String, path: String, body: Option<String>) -> Result<Reply, String> {
+/// A file the UI saves (a kept original, the wiki archive) comes back base64 up to this size.
+const API_BINARY_MAX: u64 = 64 << 20;
+
+async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, method: String, path: String, body: Option<String>, binary: bool) -> Result<Reply, String> {
     if !valid_base(&base) {
         return Err("server_address_invalid".into());
     }
@@ -670,7 +677,14 @@ async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, 
         };
         let mut r = res?;
         let status = r.status().as_u16();
-        let body = r.body_mut().read_to_string().map_err(|e| e.to_string())?;
+        // binary: a successful file body as base64 (an error body stays text the UI reads)
+        let body = if binary && (200..300).contains(&status) {
+            use base64::Engine;
+            let bytes = r.body_mut().with_config().limit(API_BINARY_MAX).read_to_vec().map_err(|e| e.to_string())?;
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        } else {
+            r.body_mut().read_to_string().map_err(|e| e.to_string())?
+        };
         Ok(Reply { status, body })
     })
     .await
@@ -1222,7 +1236,7 @@ mod tests {
         let gate = Arc::new(lifecycle::Gate::default());
         let _lease = gate.lease().unwrap();
         let result = tauri::async_runtime::block_on(api_with_gate(gate.clone(), "http://127.0.0.1:1".into(),
-            "fixture".into(), "POST".into(), "/v1/memories".into(), Some("{}".into())));
+            "fixture".into(), "POST".into(), "/v1/memories".into(), Some("{}".into()), false));
         assert_eq!(result.err().as_deref(), Some("update_runtime_busy"));
     }
 
@@ -1257,7 +1271,7 @@ mod tests {
     #[test]
     fn api_returns_error_status_body_and_sends_json() {
         let (base, server) = serve_once("HTTP/1.1 404 Not Found\r\nContent-Length: 13\r\nConnection: close\r\n\r\n{\"error\":\"x\"}");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t0k".into(), "POST".into(), "/v1/memories".into(), Some("{\"a\":1}".into()))).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t0k".into(), "POST".into(), "/v1/memories".into(), Some("{\"a\":1}".into()), false)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (404, "{\"error\":\"x\"}"));
         let request = server.join().unwrap();
         assert!(request.starts_with("POST /v1/memories HTTP/1.1\r\n"), "{request}");
@@ -1265,9 +1279,19 @@ mod tests {
         assert!(request.ends_with("{\"a\":1}"), "{request}");
 
         let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok");
-        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/readyz".into(), None)).unwrap();
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/readyz".into(), None, false)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (200, "ok"));
         assert!(server.join().unwrap().starts_with("GET /readyz HTTP/1.1"));
+
+        // binary: a file body comes back base64, an error body stays text
+        let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\n\x01\x02\x03");
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true)).unwrap();
+        assert_eq!((reply.status, reply.body.as_str()), (200, "AQID"));
+        server.join().unwrap();
+        let (base, server) = serve_once("HTTP/1.1 413 Payload Too Large\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}");
+        let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true)).unwrap();
+        assert_eq!((reply.status, reply.body.as_str()), (413, "{}"));
+        server.join().unwrap();
     }
 
     #[test]
@@ -1298,6 +1322,9 @@ mod tests {
         assert!(allowed("DELETE", "/v1/webhooks/wh1?workspace_id=w&project_id=p") && allowed("DELETE", "/v1/webhooks/wh1"));
         assert!(!allowed("DELETE", "/v1/webhooks/") && !allowed("DELETE", "/v1/webhooks/wh1/deliveries") && !allowed("DELETE", "/v1/webhooks?x=1"));
         assert!(allowed("PATCH", "/v1/webhooks/wh1") && !allowed("PATCH", "/v1/webhooks/wh1/test") && !allowed("PATCH", "/v1/memories/m1"));
+        assert!(allowed("PATCH", "/v1/files/memories/documents/d1") && allowed("DELETE", "/v1/files/memories/documents/d1") && !allowed("DELETE", "/v1/files/memories/documents/d1/chunks"));
+        assert!(allowed("PATCH", "/v1/wiki/pages/p1") && allowed("DELETE", "/v1/wiki/pages/p1?expected_revision=2") && !allowed("DELETE", "/v1/wiki/pages/p1/lock"));
+        assert!(allowed("PATCH", "/v1/wiki/folders") && allowed("DELETE", "/v1/wiki/folders?path=a&recursive=true") && !allowed("DELETE", "/v1/wiki/folders/x") && !allowed("DELETE", "/v1/wiki/tree"));
         assert!(allowed("PATCH", "/v1/spaces/w/p/config") && allowed("PUT", "/v1/spaces/w/p/config") && allowed("GET", "/v1/spaces/w/p/config/effective"));
         assert!(!allowed("PUT", "/v1/spaces/w/config") && !allowed("PUT", "/v1/spaces/w/p/x/config") && !allowed("PUT", "/v1/spaces//p/config") && !allowed("PUT", "/v1/memories/m1"));
         assert!(!allowed("PATCH", "/v1/spaces/w/p/config?x=1") && !allowed("PUT", "/v1/spaces/w/../config") && !allowed("DELETE", "/v1/spaces/w/p/config"));
