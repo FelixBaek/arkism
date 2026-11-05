@@ -132,6 +132,9 @@ def wrappers(s):
         "MessengerResult": envelope({"ok": {"type": "boolean"}, "error": {"type": "string"}}, ["ok"]),
         "DeletedEnvelope": envelope({"deleted": {"type": "boolean"}}),
         "TwinClaimsPage": envelope({"items": nullable(arr("TwinClaim")), "authority": authority}),
+        # The space settings routes describe their fields in prose; these name the Go shapes (audit block included).
+        "SpaceConfigResponse": ref("SpaceView"),
+        "SpaceConfigPatch": s.named("SpaceConfigInput", "Request"),
     }
 
 

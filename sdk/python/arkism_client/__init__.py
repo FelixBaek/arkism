@@ -510,13 +510,13 @@ class ArkismClient(BaseClient):
         """GET /v1/spaces/{workspace}/{project}/config — A space's settings (read:space_configs)"""
         return self.request("GET", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, None)
 
-    def put_v1_spaces_by_workspace_by_project_config(self, workspace, project):
+    def put_v1_spaces_by_workspace_by_project_config(self, workspace, project, body=None):
         """PUT /v1/spaces/{workspace}/{project}/config — Replace a space's settings (human principals only)"""
-        return self.request("PUT", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, None)
+        return self.request("PUT", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, body)
 
-    def patch_v1_spaces_by_workspace_by_project_config(self, workspace, project):
+    def patch_v1_spaces_by_workspace_by_project_config(self, workspace, project, body=None):
         """PATCH /v1/spaces/{workspace}/{project}/config — Change some of a space's settings (human principals only)"""
-        return self.request("PATCH", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, None)
+        return self.request("PATCH", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, body)
 
     def get_v1_spaces_by_workspace_by_project_config_effective(self, workspace, project):
         """GET /v1/spaces/{workspace}/{project}/config/effective — A space's resolved settings and where each came from (search:memories)"""

@@ -8966,23 +8966,23 @@
     "/v1/spaces/{workspace}/{project}/config": {
       "get": {
         "summary": "A space's settings (read:space_configs)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. audit {enabled, actions[]} (at most 64 actions; a trailing * matches a prefix) narrows only the optional audit events of this space (read, preview, search, retrieve, watch, observe, availability); raw-content reads and every write stay recorded; omitted or {} records everything; shown and changed by people only.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "{workspace_id, project_id, revision, config}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+        "responses": {"200": {"description": "{workspace_id, project_id, revision, config}", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SpaceConfigResponse"}}}}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1SpacesByWorkspaceByProjectConfig"
       },
       "put": {
         "summary": "Replace a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits. Extraction opt-ins: memory_language (auto, the person's own language, or a language tag such as ko or en) is the language extracted memory texts are written in; work_state_candidates (default off, null inherits) makes a fresh work checkpoint or handoff save propose its decisions and current state as decision candidates for review; recall_session_archives (default off, null inherits) adds up to 3 raw past session messages to search results as a separate sessions lane.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. audit {enabled, actions[]} (at most 64 actions; a trailing * matches a prefix) narrows only the optional audit events of this space (read, preview, search, retrieve, watch, observe, availability); raw-content reads and every write stay recorded; omitted or {} records everything; shown and changed by people only. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits. Extraction opt-ins: memory_language (auto, the person's own language, or a language tag such as ko or en) is the language extracted memory texts are written in; work_state_candidates (default off, null inherits) makes a fresh work checkpoint or handoff save propose its decisions and current state as decision candidates for review; recall_session_archives (default off, null inherits) adds up to 3 raw past session messages to search results as a separate sessions lane.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "422": {"description": "secret_detected"}},
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SpaceConfigPatch"}}}}, "responses": {"200": {"description": "The stored space", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SpaceConfigResponse"}}}}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "422": {"description": "secret_detected"}},
         "operationId": "putV1SpacesByWorkspaceByProjectConfig"
       },
       "patch": {
         "summary": "Change some of a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits. Extraction opt-ins: memory_language (auto, the person's own language, or a language tag such as ko or en) is the language extracted memory texts are written in; work_state_candidates (default off, null inherits) makes a fresh work checkpoint or handoff save propose its decisions and current state as decision candidates for review; recall_session_archives (default off, null inherits) adds up to 3 raw past session messages to search results as a separate sessions lane.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): recall_quality {relevance_gate (default true: exact and keyword hits must share the query topic or be vector-backed), conflict_pending attach|exclude (default attach), provisional (default false), auto_close_on_correction (default false)} (inherited whole), extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect; reflect_default_options, mental_model_defaults and consolidation are whole blocks (inherited whole, an empty block clears; see guide/server.md). Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. audit {enabled, actions[]} (at most 64 actions; a trailing * matches a prefix) narrows only the optional audit events of this space (read, preview, search, retrieve, watch, observe, availability); raw-content reads and every write stay recorded; omitted or {} records everything; shown and changed by people only. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits. Extraction opt-ins: memory_language (auto, the person's own language, or a language tag such as ko or en) is the language extracted memory texts are written in; work_state_candidates (default off, null inherits) makes a fresh work checkpoint or handoff save propose its decisions and current state as decision candidates for review; recall_session_archives (default off, null inherits) adds up to 3 raw past session messages to search results as a separate sessions lane.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SpaceConfigPatch"}}}}, "responses": {"200": {"description": "The stored space", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SpaceConfigResponse"}}}}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "patchV1SpacesByWorkspaceByProjectConfig"
       }
     },
@@ -76907,6 +76907,1608 @@
         "x-go-type": "memory.EntityRelationInput",
         "x-go-source": "internal/memory/capture_labels.go",
         "description": "EntityRelationInput is one relation the caller states between two entity names of\nthe same claim (role, team, reports-to). It becomes a graph edge only when a person\napproves the memory."
+      },
+      "WireResponseSpaceView": {
+        "type": "object",
+        "properties": {
+          "workspace_id": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "config": {
+            "$ref": "#/components/schemas/WireResponseSpaceConfig"
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "workspace_id",
+          "project_id",
+          "revision",
+          "config"
+        ],
+        "x-go-type": "memory.SpaceView",
+        "x-go-source": "internal/memory/spaces.go"
+      },
+      "WireResponseSpaceConfig": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "aliases": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_reach": {
+            "type": "string"
+          },
+          "extraction_enabled": {
+            "type": "boolean"
+          },
+          "rerank_enabled": {
+            "type": "boolean"
+          },
+          "consolidation_schedule": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "extraction_mode": {
+            "type": "string"
+          },
+          "extraction_instructions": {
+            "type": "string"
+          },
+          "lanes": {
+            "$ref": "#/components/schemas/WireResponseSpaceLanes"
+          },
+          "rerank": {
+            "type": "boolean"
+          },
+          "rerank_model": {
+            "type": "boolean"
+          },
+          "defense_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseSpaceDefenseRule"
+            }
+          },
+          "mcp_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recall_budget_tokens": {
+            "type": "integer"
+          },
+          "reflect_max_tokens": {
+            "type": "integer"
+          },
+          "auto_derive": {
+            "$ref": "#/components/schemas/WireResponseSpaceAutoDerive"
+          },
+          "recall_lane_weights": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            }
+          },
+          "reflect_mission": {
+            "type": "string"
+          },
+          "reflect_disposition": {
+            "$ref": "#/components/schemas/WireResponseReflectDisposition"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/WireResponseSpaceAudit"
+          },
+          "entity_resolution": {
+            "type": "string"
+          },
+          "entities_allow_free_form": {
+            "type": "boolean"
+          },
+          "entity_free_types": {
+            "type": "boolean"
+          },
+          "entity_labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseEntityLabelGroup"
+            }
+          },
+          "extraction_mission": {
+            "type": "string"
+          },
+          "extraction_chunk_size": {
+            "type": "integer"
+          },
+          "extract_causal": {
+            "type": "boolean"
+          },
+          "extraction_strategies": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/WireResponseExtractStrategy"
+            }
+          },
+          "extraction_default_strategy": {
+            "type": "string"
+          },
+          "default_timezone": {
+            "type": "string"
+          },
+          "memory_language": {
+            "type": "string"
+          },
+          "work_state_candidates": {
+            "type": "boolean"
+          },
+          "recall_session_archives": {
+            "type": "boolean"
+          },
+          "reflect_default_options": {
+            "$ref": "#/components/schemas/WireResponseSpaceReflectDefaults"
+          },
+          "mental_model_defaults": {
+            "$ref": "#/components/schemas/WireResponseSpaceMentalModelDefaults"
+          },
+          "consolidation": {
+            "$ref": "#/components/schemas/WireResponseSpaceConsolidation"
+          },
+          "recall_quality": {
+            "$ref": "#/components/schemas/WireResponseSpaceRecallQuality"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "display_name",
+          "aliases",
+          "default_reach",
+          "extraction_enabled",
+          "consolidation_schedule",
+          "notes",
+          "reflect_mission"
+        ],
+        "x-go-type": "memory.SpaceConfig",
+        "x-go-source": "internal/memory/spaces.go"
+      },
+      "WireResponseSpaceLanes": {
+        "type": "object",
+        "properties": {
+          "fts": {
+            "type": "boolean"
+          },
+          "vector": {
+            "type": "boolean"
+          },
+          "temporal": {
+            "type": "boolean"
+          },
+          "graph": {
+            "type": "boolean"
+          },
+          "semantic": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceLanes",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "SpaceLanes turns recall lanes on or off; nil inherits."
+      },
+      "WireResponseSpaceDefenseRule": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "description": "redact | block"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ],
+        "x-go-type": "memory.SpaceDefenseRule",
+        "x-go-source": "internal/memory/space_settings.go"
+      },
+      "WireResponseSpaceAutoDerive": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "interval": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceAutoDerive",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "SpaceAutoDerive tunes automatic derivation (auto_derive.go); empty fields inherit.\nInterval is a Go duration from 1m to 720h."
+      },
+      "WireResponseReflectDisposition": {
+        "type": "object",
+        "properties": {
+          "skepticism": {
+            "type": "integer"
+          },
+          "literalism": {
+            "type": "integer"
+          },
+          "empathy": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ReflectDisposition",
+        "x-go-source": "internal/memory/reflect.go",
+        "description": "ReflectDisposition tunes how an answer weighs its records, each 1 (low) to 5 (high); 0 is unset."
+      },
+      "WireResponseSpaceAudit": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceAudit",
+        "x-go-source": "internal/memory/audit_policy.go",
+        "description": "SpaceAudit is a space's audit block. It can only narrow optional events."
+      },
+      "WireResponseEntityLabelGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "boolean"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseEntityLabelValue"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key"
+        ],
+        "x-go-type": "memory.EntityLabelGroup",
+        "x-go-source": "internal/memory/entity_labels.go",
+        "description": "EntityLabelGroup is one dimension of the schema. Type is value (default),\nmulti-values, text or multi-text; the value kinds need Values, the text kinds take none."
+      },
+      "WireResponseEntityLabelValue": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "value"
+        ],
+        "x-go-type": "memory.EntityLabelValue",
+        "x-go-source": "internal/memory/entity_labels.go"
+      },
+      "WireResponseSpaceReflectDefaults": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "string"
+          },
+          "fact_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exclude_mental_models": {
+            "type": "boolean"
+          },
+          "tag_scoped_directives": {
+            "type": "boolean"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/WireResponseReflectToolBudget"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "tools"
+        ],
+        "x-go-type": "memory.SpaceReflectDefaults",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceReflectDefaults are the defaults a reflect request takes for what it leaves unset."
+      },
+      "WireResponseReflectToolBudget": {
+        "type": "object",
+        "properties": {
+          "recall_max_tokens": {
+            "type": "integer"
+          },
+          "recall_max_chunk_tokens": {
+            "type": "integer"
+          },
+          "observations_max_tokens": {
+            "type": "integer"
+          },
+          "mental_models_max_tokens": {
+            "type": "integer"
+          },
+          "read_mental_models_max_tokens": {
+            "type": "integer"
+          },
+          "expand_max_tokens": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ReflectToolBudget",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ReflectToolBudget caps, in approximate tokens, what one tool call adds to the prompt. 0 keeps the shipped default."
+      },
+      "WireResponseSpaceMentalModelDefaults": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "$ref": "#/components/schemas/WireResponseMentalModelRefresh"
+          },
+          "min_interval": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceMentalModelDefaults",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceMentalModelDefaults is the trigger a mental model created without a refresh mode takes,\nand the space-wide min_interval every model's triggers wait for when it sets none."
+      },
+      "WireResponseSpaceConsolidation": {
+        "type": "object",
+        "properties": {
+          "observations_mission": {
+            "type": "string"
+          },
+          "default_scope_mode": {
+            "type": "string"
+          },
+          "default_scopes": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "strategies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseConsolidationStrategy"
+            }
+          },
+          "scope_limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseObservationScopeLimit"
+            }
+          },
+          "max_observations_per_scope": {
+            "type": "integer"
+          },
+          "batch_size": {
+            "type": "integer"
+          },
+          "parallel": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceConsolidation",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceConsolidation shapes observation consolidation: which tag scopes memories are\nconsolidated in, the mission, strategies per tag scope, per-scope limits and run size."
+      },
+      "WireResponseConsolidationStrategy": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseObservationTagRule"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observations_mission": {
+            "type": "string"
+          },
+          "max_observations_per_scope": {
+            "type": "integer"
+          },
+          "source_max_tokens": {
+            "type": "integer"
+          },
+          "source_max_tokens_per_observation": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "x-go-type": "memory.ConsolidationStrategy",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ConsolidationStrategy claims the observation scopes one of its rules matches; the first claiming strategy wins whole."
+      },
+      "WireResponseObservationTagRule": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "tags"
+        ],
+        "x-go-type": "memory.ObservationTagRule",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ObservationTagRule matches a scope's tags with globs: \"all\" when every glob matches some tag, \"exact\" when the globs cover the tags one to one."
+      },
+      "WireResponseObservationScopeLimit": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "limit"
+        ],
+        "x-go-type": "memory.ObservationScopeLimit",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ObservationScopeLimit caps the observations of scopes its globs cover exactly: -1 unlimited, 0 none new."
+      },
+      "WireResponseSpaceRecallQuality": {
+        "type": "object",
+        "properties": {
+          "relevance_gate": {
+            "type": "boolean"
+          },
+          "conflict_pending": {
+            "type": "string"
+          },
+          "provisional": {
+            "type": "boolean"
+          },
+          "auto_close_on_correction": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceRecallQuality",
+        "x-go-source": "internal/memory/recall_quality.go",
+        "description": "SpaceRecallQuality is the recall_quality block; the block is inherited whole."
+      },
+      "WireRequestSpaceConfigInput": {
+        "type": "object",
+        "properties": {
+          "expected_revision": {
+            "type": "integer"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_reach": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consolidation_schedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_mission": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestReflectDisposition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_instructions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lanes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceLanes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rerank": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rerank_model": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defense_rules": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WireRequestSpaceDefenseRule"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mcp_tools": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_budget_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "auto_derive": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceAutoDerive"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "audit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceAudit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entity_resolution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entities_allow_free_form": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entity_free_types": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "entity_labels": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/WireRequestEntityLabelGroup"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_lane_weights": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "number"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_mission": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_chunk_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extract_causal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_strategies": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "$ref": "#/components/schemas/WireRequestExtractStrategy"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extraction_default_strategy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "work_state_candidates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_session_archives": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reflect_default_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceReflectDefaults"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mental_model_defaults": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceMentalModelDefaults"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consolidation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceConsolidation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recall_quality": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestSpaceRecallQuality"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceConfigInput",
+        "x-go-source": "internal/memory/spaces.go",
+        "description": "SpaceConfigInput is PUT (unset fields take defaults) or PATCH (unset fields stay)."
+      },
+      "WireRequestReflectDisposition": {
+        "type": "object",
+        "properties": {
+          "skepticism": {
+            "type": "integer"
+          },
+          "literalism": {
+            "type": "integer"
+          },
+          "empathy": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ReflectDisposition",
+        "x-go-source": "internal/memory/reflect.go",
+        "description": "ReflectDisposition tunes how an answer weighs its records, each 1 (low) to 5 (high); 0 is unset."
+      },
+      "WireRequestSpaceLanes": {
+        "type": "object",
+        "properties": {
+          "fts": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vector": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "temporal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "graph": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "semantic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceLanes",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "SpaceLanes turns recall lanes on or off; nil inherits."
+      },
+      "WireRequestSpaceDefenseRule": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "description": "redact | block"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceDefenseRule",
+        "x-go-source": "internal/memory/space_settings.go"
+      },
+      "WireRequestSpaceAutoDerive": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "threshold": {
+            "type": "integer"
+          },
+          "interval": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceAutoDerive",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "SpaceAutoDerive tunes automatic derivation (auto_derive.go); empty fields inherit.\nInterval is a Go duration from 1m to 720h."
+      },
+      "WireRequestSpaceAudit": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceAudit",
+        "x-go-source": "internal/memory/audit_policy.go",
+        "description": "SpaceAudit is a space's audit block. It can only narrow optional events."
+      },
+      "WireRequestEntityLabelGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "tag": {
+            "type": "boolean"
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireRequestEntityLabelValue"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.EntityLabelGroup",
+        "x-go-source": "internal/memory/entity_labels.go",
+        "description": "EntityLabelGroup is one dimension of the schema. Type is value (default),\nmulti-values, text or multi-text; the value kinds need Values, the text kinds take none."
+      },
+      "WireRequestEntityLabelValue": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.EntityLabelValue",
+        "x-go-source": "internal/memory/entity_labels.go"
+      },
+      "WireRequestExtractStrategy": {
+        "type": "object",
+        "properties": {
+          "extraction_mode": {
+            "type": "string"
+          },
+          "extraction_instructions": {
+            "type": "string"
+          },
+          "extraction_mission": {
+            "type": "string"
+          },
+          "extraction_chunk_size": {
+            "type": "integer"
+          },
+          "extract_causal": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ExtractStrategy",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "ExtractStrategy is a set of extraction settings: a space's named strategy an item\npicks by name, or a dry run's overrides. Empty fields keep the space's setting."
+      },
+      "WireRequestSpaceReflectDefaults": {
+        "type": "object",
+        "properties": {
+          "budget": {
+            "type": "string"
+          },
+          "fact_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exclude_mental_models": {
+            "type": "boolean"
+          },
+          "tag_scoped_directives": {
+            "type": "boolean"
+          },
+          "tools": {
+            "$ref": "#/components/schemas/WireRequestReflectToolBudget"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceReflectDefaults",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceReflectDefaults are the defaults a reflect request takes for what it leaves unset."
+      },
+      "WireRequestReflectToolBudget": {
+        "type": "object",
+        "properties": {
+          "recall_max_tokens": {
+            "type": "integer"
+          },
+          "recall_max_chunk_tokens": {
+            "type": "integer"
+          },
+          "observations_max_tokens": {
+            "type": "integer"
+          },
+          "mental_models_max_tokens": {
+            "type": "integer"
+          },
+          "read_mental_models_max_tokens": {
+            "type": "integer"
+          },
+          "expand_max_tokens": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ReflectToolBudget",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ReflectToolBudget caps, in approximate tokens, what one tool call adds to the prompt. 0 keeps the shipped default."
+      },
+      "WireRequestSpaceMentalModelDefaults": {
+        "type": "object",
+        "properties": {
+          "trigger": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestMentalModelRefresh"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "min_interval": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceMentalModelDefaults",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceMentalModelDefaults is the trigger a mental model created without a refresh mode takes,\nand the space-wide min_interval every model's triggers wait for when it sets none."
+      },
+      "WireRequestMentalModelRefresh": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "cron": {
+            "type": "string"
+          },
+          "after_consolidation": {
+            "type": "boolean"
+          },
+          "min_interval": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_tokens": {
+            "type": "integer"
+          },
+          "strategy": {
+            "type": "string"
+          },
+          "full_refresh_cron": {
+            "type": "string"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "fact_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags_match": {
+            "type": "string"
+          },
+          "tag_groups": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WireRequestTagTest"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "include_chunks": {
+            "type": "boolean"
+          },
+          "recall_max_tokens": {
+            "type": "integer"
+          },
+          "response_schema": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.MentalModelRefresh",
+        "x-go-source": "internal/memory/mental_models.go",
+        "description": "MentalModelRefresh says when a mental model is due and what a refresh reads.\nMode keeps the three original rules; cron (5 fields, UTC) refreshes on a\nschedule but only when approved memories changed since the last refresh;\nafter_consolidation refreshes once a consolidation run changed observations;\nmin_interval (a duration such as \"6h\") holds every trigger back; kinds and\ntags narrow the recall; max_tokens caps one refresh (prompt and answer).\nstrategy \"delta\" (opt-in) asks for a minimal edit of the approved text from the\nmemories that changed since it was approved, instead of rewriting it.\nThe old form, a bare mode string, still decodes from bodies, records and bundles."
+      },
+      "WireRequestTagTest": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "match": {
+            "type": "string"
+          },
+          "resolve": {
+            "type": "string"
+          },
+          "not": {
+            "type": "boolean"
+          },
+          "and": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireRequestTagTest"
+            }
+          },
+          "or": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireRequestTagTest"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.TagTest",
+        "x-go-source": "internal/memory/search_filters.go",
+        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go)."
+      },
+      "WireRequestSpaceConsolidation": {
+        "type": "object",
+        "properties": {
+          "observations_mission": {
+            "type": "string"
+          },
+          "default_scope_mode": {
+            "type": "string"
+          },
+          "default_scopes": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "strategies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireRequestConsolidationStrategy"
+            }
+          },
+          "scope_limits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireRequestObservationScopeLimit"
+            }
+          },
+          "max_observations_per_scope": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "batch_size": {
+            "type": "integer"
+          },
+          "parallel": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceConsolidation",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "SpaceConsolidation shapes observation consolidation: which tag scopes memories are\nconsolidated in, the mission, strategies per tag scope, per-scope limits and run size."
+      },
+      "WireRequestConsolidationStrategy": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestObservationTagRule"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "observations_mission": {
+            "type": "string"
+          },
+          "max_observations_per_scope": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_max_tokens": {
+            "type": "integer"
+          },
+          "source_max_tokens_per_observation": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ConsolidationStrategy",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ConsolidationStrategy claims the observation scopes one of its rules matches; the first claiming strategy wins whole."
+      },
+      "WireRequestObservationTagRule": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags_match": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ObservationTagRule",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ObservationTagRule matches a scope's tags with globs: \"all\" when every glob matches some tag, \"exact\" when the globs cover the tags one to one."
+      },
+      "WireRequestObservationScopeLimit": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ObservationScopeLimit",
+        "x-go-source": "internal/memory/reflect_models_settings.go",
+        "description": "ObservationScopeLimit caps the observations of scopes its globs cover exactly: -1 unlimited, 0 none new."
+      },
+      "WireRequestSpaceRecallQuality": {
+        "type": "object",
+        "properties": {
+          "relevance_gate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conflict_pending": {
+            "type": "string"
+          },
+          "provisional": {
+            "type": "boolean"
+          },
+          "auto_close_on_correction": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.SpaceRecallQuality",
+        "x-go-source": "internal/memory/recall_quality.go",
+        "description": "SpaceRecallQuality is the recall_quality block; the block is inherited whole."
+      },
+      "SpaceConfigResponse": {
+        "$ref": "#/components/schemas/WireResponseSpaceView"
+      },
+      "SpaceConfigPatch": {
+        "$ref": "#/components/schemas/WireRequestSpaceConfigInput"
       }
     },
     "headers": {

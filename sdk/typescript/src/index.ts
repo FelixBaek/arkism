@@ -643,6 +643,44 @@ export type WireResponseWikiFolderMoveResult = { "path": string; "moved": (Array
 export type WireRequestWikiFolderMoveInput = { "scope"?: WireRequestScope; "from"?: string; "to"?: string };
 export type WireResponseValidToProposal = { "at": string; "by": WireResponseRef };
 export type WireResponseEntityRelationInput = { "source": string; "relation": string; "target": string };
+export type WireResponseSpaceView = { "workspace_id": string; "project_id": string; "revision": number; "config": WireResponseSpaceConfig; "counts"?: { [key: string]: number } };
+export type WireResponseSpaceConfig = { "display_name": string; "aliases": (Array<string> | null); "default_reach": string; "extraction_enabled": boolean; "rerank_enabled"?: boolean; "consolidation_schedule": string; "notes": string; "extraction_mode"?: string; "extraction_instructions"?: string; "lanes"?: WireResponseSpaceLanes; "rerank"?: boolean; "rerank_model"?: boolean; "defense_rules"?: Array<WireResponseSpaceDefenseRule>; "mcp_tools"?: Array<string>; "recall_budget_tokens"?: number; "reflect_max_tokens"?: number; "auto_derive"?: WireResponseSpaceAutoDerive; "recall_lane_weights"?: { [key: string]: number }; "reflect_mission": string; "reflect_disposition"?: WireResponseReflectDisposition; "audit"?: WireResponseSpaceAudit; "entity_resolution"?: string; "entities_allow_free_form"?: boolean; "entity_free_types"?: boolean; "entity_labels"?: Array<WireResponseEntityLabelGroup>; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: boolean; "extraction_strategies"?: { [key: string]: WireResponseExtractStrategy }; "extraction_default_strategy"?: string; "default_timezone"?: string; "memory_language"?: string; "work_state_candidates"?: boolean; "recall_session_archives"?: boolean; "reflect_default_options"?: WireResponseSpaceReflectDefaults; "mental_model_defaults"?: WireResponseSpaceMentalModelDefaults; "consolidation"?: WireResponseSpaceConsolidation; "recall_quality"?: WireResponseSpaceRecallQuality };
+export type WireResponseSpaceLanes = { "fts"?: boolean; "vector"?: boolean; "temporal"?: boolean; "graph"?: boolean; "semantic"?: boolean };
+export type WireResponseSpaceDefenseRule = { "name"?: string; "pattern"?: string; "action": string };
+export type WireResponseSpaceAutoDerive = { "enabled"?: boolean; "threshold"?: number; "interval"?: string };
+export type WireResponseReflectDisposition = { "skepticism"?: number; "literalism"?: number; "empathy"?: number };
+export type WireResponseSpaceAudit = { "enabled"?: boolean; "actions"?: Array<string> };
+export type WireResponseEntityLabelGroup = { "key": string; "description"?: string; "type"?: string; "tag"?: boolean; "values"?: Array<WireResponseEntityLabelValue> };
+export type WireResponseEntityLabelValue = { "value": string; "description"?: string };
+export type WireResponseSpaceReflectDefaults = { "budget"?: string; "fact_types"?: Array<string>; "exclude_mental_models"?: boolean; "tag_scoped_directives"?: boolean; "tools": WireResponseReflectToolBudget };
+export type WireResponseReflectToolBudget = { "recall_max_tokens"?: number; "recall_max_chunk_tokens"?: number; "observations_max_tokens"?: number; "mental_models_max_tokens"?: number; "read_mental_models_max_tokens"?: number; "expand_max_tokens"?: number };
+export type WireResponseSpaceMentalModelDefaults = { "trigger"?: WireResponseMentalModelRefresh; "min_interval"?: string };
+export type WireResponseSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireResponseConsolidationStrategy>; "scope_limits"?: Array<WireResponseObservationScopeLimit>; "max_observations_per_scope"?: number; "batch_size"?: number; "parallel"?: number };
+export type WireResponseConsolidationStrategy = { "name": string; "scopes": (Array<WireResponseObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: number; "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
+export type WireResponseObservationTagRule = { "tags": (Array<string> | null); "tags_match"?: string };
+export type WireResponseObservationScopeLimit = { "scope": (Array<string> | null); "limit": number };
+export type WireResponseSpaceRecallQuality = { "relevance_gate"?: boolean; "conflict_pending"?: string; "provisional"?: boolean; "auto_close_on_correction"?: boolean };
+export type WireRequestSpaceConfigInput = { "expected_revision"?: number; "display_name"?: (string | null); "default_reach"?: (string | null); "extraction_enabled"?: (boolean | null); "consolidation_schedule"?: (string | null); "notes"?: (string | null); "reflect_mission"?: (string | null); "reflect_disposition"?: (WireRequestReflectDisposition | null); "extraction_mode"?: (string | null); "extraction_instructions"?: (string | null); "lanes"?: (WireRequestSpaceLanes | null); "rerank"?: (boolean | null); "rerank_model"?: (boolean | null); "defense_rules"?: ((Array<WireRequestSpaceDefenseRule> | null) | null); "mcp_tools"?: ((Array<string> | null) | null); "recall_budget_tokens"?: (number | null); "reflect_max_tokens"?: (number | null); "auto_derive"?: (WireRequestSpaceAutoDerive | null); "audit"?: (WireRequestSpaceAudit | null); "entity_resolution"?: (string | null); "entities_allow_free_form"?: (boolean | null); "entity_free_types"?: (boolean | null); "entity_labels"?: ((Array<WireRequestEntityLabelGroup> | null) | null); "recall_lane_weights"?: (({ [key: string]: number } | null) | null); "extraction_mission"?: (string | null); "extraction_chunk_size"?: (number | null); "extract_causal"?: (boolean | null); "extraction_strategies"?: (({ [key: string]: WireRequestExtractStrategy } | null) | null); "extraction_default_strategy"?: (string | null); "default_timezone"?: (string | null); "memory_language"?: (string | null); "work_state_candidates"?: (boolean | null); "recall_session_archives"?: (boolean | null); "reflect_default_options"?: (WireRequestSpaceReflectDefaults | null); "mental_model_defaults"?: (WireRequestSpaceMentalModelDefaults | null); "consolidation"?: (WireRequestSpaceConsolidation | null); "recall_quality"?: (WireRequestSpaceRecallQuality | null) };
+export type WireRequestReflectDisposition = { "skepticism"?: number; "literalism"?: number; "empathy"?: number };
+export type WireRequestSpaceLanes = { "fts"?: (boolean | null); "vector"?: (boolean | null); "temporal"?: (boolean | null); "graph"?: (boolean | null); "semantic"?: (boolean | null) };
+export type WireRequestSpaceDefenseRule = { "name"?: string; "pattern"?: string; "action"?: string };
+export type WireRequestSpaceAutoDerive = { "enabled"?: (boolean | null); "threshold"?: number; "interval"?: string };
+export type WireRequestSpaceAudit = { "enabled"?: (boolean | null); "actions"?: Array<string> };
+export type WireRequestEntityLabelGroup = { "key"?: string; "description"?: string; "type"?: string; "tag"?: boolean; "values"?: Array<WireRequestEntityLabelValue> };
+export type WireRequestEntityLabelValue = { "value"?: string; "description"?: string };
+export type WireRequestExtractStrategy = { "extraction_mode"?: string; "extraction_instructions"?: string; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: (boolean | null) };
+export type WireRequestSpaceReflectDefaults = { "budget"?: string; "fact_types"?: Array<string>; "exclude_mental_models"?: boolean; "tag_scoped_directives"?: boolean; "tools"?: WireRequestReflectToolBudget };
+export type WireRequestReflectToolBudget = { "recall_max_tokens"?: number; "recall_max_chunk_tokens"?: number; "observations_max_tokens"?: number; "mental_models_max_tokens"?: number; "read_mental_models_max_tokens"?: number; "expand_max_tokens"?: number };
+export type WireRequestSpaceMentalModelDefaults = { "trigger"?: (WireRequestMentalModelRefresh | null); "min_interval"?: string };
+export type WireRequestMentalModelRefresh = { "mode"?: string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<(Array<WireRequestTagTest> | null)>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
+export type WireRequestTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireRequestTagTest>; "or"?: Array<WireRequestTagTest> };
+export type WireRequestSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireRequestConsolidationStrategy>; "scope_limits"?: Array<WireRequestObservationScopeLimit>; "max_observations_per_scope"?: (number | null); "batch_size"?: number; "parallel"?: number };
+export type WireRequestConsolidationStrategy = { "name"?: string; "scopes"?: (Array<WireRequestObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: (number | null); "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
+export type WireRequestObservationTagRule = { "tags"?: (Array<string> | null); "tags_match"?: string };
+export type WireRequestObservationScopeLimit = { "scope"?: (Array<string> | null); "limit"?: number };
+export type WireRequestSpaceRecallQuality = { "relevance_gate"?: (boolean | null); "conflict_pending"?: string; "provisional"?: boolean; "auto_close_on_correction"?: boolean };
+export type SpaceConfigResponse = WireResponseSpaceView;
+export type SpaceConfigPatch = WireRequestSpaceConfigInput;
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -1155,16 +1193,16 @@ export class ArkismClient {
     return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/clone`, undefined, undefined);
   }
   /** GET /v1/spaces/{workspace}/{project}/config — A space's settings (read:space_configs) */
-  getV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string): Promise<unknown> {
+  getV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string): Promise<SpaceConfigResponse> {
     return this.request("GET", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, undefined);
   }
   /** PUT /v1/spaces/{workspace}/{project}/config — Replace a space's settings (human principals only) */
-  putV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string): Promise<unknown> {
-    return this.request("PUT", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, undefined);
+  putV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string, body: SpaceConfigPatch): Promise<SpaceConfigResponse> {
+    return this.request("PUT", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, body);
   }
   /** PATCH /v1/spaces/{workspace}/{project}/config — Change some of a space's settings (human principals only) */
-  patchV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string): Promise<unknown> {
-    return this.request("PATCH", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, undefined);
+  patchV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string, body: SpaceConfigPatch): Promise<SpaceConfigResponse> {
+    return this.request("PATCH", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, body);
   }
   /** GET /v1/spaces/{workspace}/{project}/config/effective — A space's resolved settings and where each came from (search:memories) */
   getV1SpacesByWorkspaceByProjectConfigEffective(workspace: string, project: string): Promise<unknown> {
