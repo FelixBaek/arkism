@@ -16,8 +16,8 @@ import { createImageViews } from "./modules/imageViews.mjs";
 import { createDesignViews } from "./modules/designViews.mjs";
 import { createToolViews } from "./modules/toolViews.mjs";
 import { createMemoryDetail } from "./modules/memoryDetail.mjs";
-import { memoryLabels, labelLine, provisionalBlock } from "./modules/memoryLabels.mjs";
-window.ArkismMemoryLabels = { memoryLabels, labelLine, provisionalBlock };
+import { memoryLabels, labelLine, provisionalBlock, rowLabels } from "./modules/memoryLabels.mjs";
+window.ArkismMemoryLabels = { memoryLabels, labelLine, provisionalBlock, rowLabels };
 import { whenPick, validPage, endOfDay } from "./modules/memoryTimeline.mjs";
 window.ArkismMemoryTimeline = { whenPick, validPage, endOfDay }; // the Memory window (overview-windows.js) offers the same 시점 // the classic-script windows (overview-windows.js) draw the same labels
 import { createAppConnection } from "./modules/appConnection.mjs";

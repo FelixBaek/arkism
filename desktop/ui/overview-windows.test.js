@@ -372,3 +372,28 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
   assert.ok(calls.some((c) => /\/v1\/operations\?.*status=failed/.test(c)));
   win.reset?.();
 });
+
+test("새 기억 확인 and 쓰는 중인 기억 rows show one label; the detail keeps them all", async () => {
+  const { memoryLabels, labelLine, provisionalBlock, rowLabels } = await import("./modules/memoryLabels.mjs");
+  window.ArkismMemoryLabels = { memoryLabels, labelLine, provisionalBlock, rowLabels };
+  require("./memory-time.js");
+  const { whenPick, validPage, endOfDay } = await import("./modules/memoryTimeline.mjs");
+  window.ArkismMemoryTimeline = { whenPick, validPage, endOfDay };
+  const tags = ["temporary", "rule:always", "review:pending_correction"], at = new Date().toISOString();
+  const cand = { id: "c1", kind: "fact", text: "Deploy on Fridays", tags, revision: 1, created_at: at };
+  const mem = { id: "m1", kind: "fact", text: "Port 8091", tags, status: "active", revision: 1, created_at: at };
+  let items = [cand];
+  const state = { data: { memories: [mem], candidates: [cand], tools: {} }, scope: {}, connection: { generation: 1 } };
+  const ctx = { state, ...h, query: (o = {}) => h.query(o), request: async () => ({ items: [] }), ago: () => "방금", go() {}, render() {},
+    remoteCollection: () => ({ load: async () => {}, reset() {}, footer() {}, snapshot: () => ({ items, total: items.length, facets: {}, loading: false }) }) };
+  const win = window.ArkismOverviewWindows(ctx, { stages: () => [], sessions: () => [] });
+  const last = () => document.querySelectorAll("dialog.ov-wide-win").at(-1);
+  const rowText = () => last().querySelectorAll(".ov-wide-row .mem-label").map((n) => n.textContent);
+  win.wide("review"); await dom.flush(); await dom.flush();
+  assert.deepEqual(rowText(), ["정정 검토 중"], "a review row carries only its leading label");
+  assert.deepEqual(last().querySelectorAll(".ov-detail-head .mem-label").map((n) => n.textContent), ["정정 검토 중", "이번만 · 7일 뒤 만료", "규칙: 항상"]);
+  items = [mem];
+  win.wide("active"); await dom.flush(); await dom.flush();
+  assert.deepEqual(rowText(), ["정정 검토 중"], "an active memory row carries only its leading label");
+  win.reset(); delete window.ArkismMemoryLabels;
+});

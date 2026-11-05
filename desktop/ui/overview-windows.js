@@ -23,8 +23,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const openSession = (ev, quote) => wide("sessions", ev.split(":")[1], quote); // the 세션 기록 window, that session's dialogue open
   const D = () => state.data;
   const DR = () => window.ArkismDeleteReason;
-  // 정정 검토 중 · 이번만 · 규칙 · 결정 · 관계 · 파일 경로 없음 as accent text (modules/memoryLabels.mjs via app.js)
-  const labels0 = (c) => { const L = window.ArkismMemoryLabels; return L ? L.labelLine(L.memoryLabels(c, { maintenance: state.data?.maintenance }), { el }) : null; };
+  // 정정 검토 중 · 이번만 · 규칙 · 결정 · 관계 · 파일 경로 없음 as accent text (modules/memoryLabels.mjs via app.js); a list row shows only its one rowLabels label
+  const labels0 = (c, row) => {
+    const L = window.ArkismMemoryLabels; if (!L) return null;
+    const all = L.memoryLabels(c, { maintenance: state.data?.maintenance });
+    return L.labelLine(row ? L.rowLabels(all) : all, { el });
+  };
   const tr = (x) => window.ArkismI18n?.translate(x) || x;
   const usage = (id) => state.usage?.get(id);
   // read: memories outside the loaded first page (most-used ones are often older), fetched once each; false = gone or unreadable
@@ -738,7 +742,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t"), conf = confusing(c, merges); l1.append(...(conf ? [tagEl("서로 다름", "ov-tag-r")] : []), tagEl(kind(c.kind)), el("span", "ov-win-item-title", clip(c.text, 70)));
         const dupText = c.classification?.dup_hint && D().memories.find((m) => m.id === c.classification.dup_hint)?.text;
         t.append(l1, el("small", "", [dupText ? `“${clip(dupText, 24)}”와 같은 뜻` : c.conflict_id ? "충돌 중" : c.classification?.risk_reasons?.[0] || "", ago(c.created_at)].filter(Boolean).join(" · ")));
-        const labels = labels0(c); if (labels) t.append(labels);
+        const labels = labels0(c, true); if (labels) t.append(labels);
         r.append(cb, t, el("span", `ov-wide-row-r ${time(c.created_at) < Date.now() - 24 * HOUR ? "ov-r-a" : ""}`, waitFor(c.created_at))); r.addEventListener("click", () => { sel = c.id; paint(); }); list.append(r);
       }
       more.replaceChildren(); remote.footer(more);
@@ -893,7 +897,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const r = el("div", `ov-wide-row${m.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t"); l1.append(tagEl(kind(m.kind)), el("span", "ov-win-item-title", clip(m.text, 70)));
         const when = window.ArkismMemoryTime.span(m.occurred); // the day the content says it happened, before the day it was saved
         t.append(l1, el("small", "", [tag(m, "repo:"), when ? `일어난 때 ${when}` : ago(m.created_at)].filter(Boolean).join(" · ")));
-        const labels = labels0(m); if (labels) t.append(labels);
+        const labels = labels0(m, true); if (labels) t.append(labels);
         const u = usage(m.id); r.append(t, el("span", "ov-wide-row-r", u ? (u.d7 ? `7일 ${num(u.d7)}번 쓰임` : "안 쓰임") : ""));
         r.addEventListener("click", () => { sel = m.id; paint(); }); list.append(r);
       }
