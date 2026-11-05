@@ -30,11 +30,13 @@ func (s *Service) createExtractJob(ctx context.Context, d Decision, scope Scope,
 		doc, err := tx.Get(ctx, "jobs", scope, docID)
 		switch {
 		case errors.Is(err, ErrNotFound):
-			err = tx.Insert(ctx, "jobs", Record{ID: docID, Scope: scope, Kind: fileExtractDocKind, Status: JobStatusDone, Revision: 1, Target: target, CreatedAt: now, UpdatedAt: now})
+			err = tx.Insert(ctx, "jobs", Record{ID: docID, Scope: scope, Kind: fileExtractDocKind, Status: JobStatusDone, Revision: 1, Target: target, CreatedAt: now, UpdatedAt: now,
+				CreatedBy: d.PrincipalID, CreatedByType: d.Role})
 		case err == nil && doc.Kind == fileExtractDocKind:
 			if doc.Target != nil {
 				out.FileExtract.Previous = doc.Target.ID
 			}
+			out.FileExtract.Tags = doc.Tags
 			doc.Target, doc.UpdatedAt, doc.Revision = target, now, doc.Revision+1
 			err = tx.Replace(ctx, "jobs", doc, doc.Revision-1)
 		case err == nil:
@@ -281,6 +283,10 @@ func (s *Service) failExtractJob(ctx context.Context, r Record, runErr error) (R
 // ExtractKnowledgeMemories turns an existing knowledge source into candidates,
 // with the knowledge file's source anchor as their evidence.
 func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string, in KnowledgeExtractInput) (FileMemoriesResult, error) {
+	return s.extractKnowledge(ctx, token, id, in, "")
+}
+
+func (s *Service) extractKnowledge(ctx context.Context, token, id string, in KnowledgeExtractInput, round string) (FileMemoriesResult, error) {
 	if !validRunLabel(id, 256) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
@@ -320,5 +326,5 @@ func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string
 		chunks[i].Source = Ref{Collection: "sources", ID: anchor.ID, Revision: anchor.Revision}
 	}
 	plan.Label = src.Knowledge.DisplayName
-	return s.extractStored(ctx, token, d, in.Scope, plan, "knowledge:"+src.ID, chunks, out, fileExtractSyncChunks, false)
+	return s.extractStored(ctx, token, d, in.Scope, plan, "knowledge:"+src.ID, round, chunks, out, fileExtractSyncChunks, false)
 }

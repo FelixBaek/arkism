@@ -77,6 +77,8 @@ type CaptureClaim struct {
 
 	// Entities the caller states for this claim (EntityInput); they go on the candidate.
 	Entities []EntityInput `json:"entities,omitempty"`
+	// labels are the document's reviewer tags; only server-side extraction sets them.
+	labels []string
 }
 
 // classification is nil for a claim without a risk call.
@@ -656,6 +658,7 @@ func captureTags(in CaptureInput, c CaptureClaim) ([]string, bool) {
 	// Event, session and trace ids travel as tags: the record's own
 	// source_event_id/trace_id must name stored evidence, which these are not.
 	tags = append(tags, "event_id:"+in.Event.ID)
+	tags = append(tags, c.labels...)
 	if in.Event.SessionID != "" {
 		tags = append(tags, "session:"+in.Event.SessionID)
 	}

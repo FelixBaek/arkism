@@ -89,15 +89,16 @@ type KnowledgeHistoryPage struct {
 type DocumentPage struct {
 	Cursor string
 	Limit  int
+	Tag    string // the document list only
 }
 
 // parseDocumentQuery reads the scope plus cursor and limit (1..200, default 50).
 func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
-	scope, q, err := parseWikiQuery(raw, "cursor", "limit")
+	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag")
 	if err != nil {
 		return Scope{}, DocumentPage{}, err
 	}
-	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault}
+	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag")}
 	if v := q.Get("limit"); v != "" {
 		n, e := strconv.Atoi(v)
 		if e != nil || n < 1 || n > documentPageMax {
@@ -105,7 +106,7 @@ func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
 		}
 		page.Limit = n
 	}
-	if len(page.Cursor) > 256 {
+	if len(page.Cursor) > 256 || page.Tag != "" && !validTagEdit([]string{page.Tag}) {
 		return Scope{}, DocumentPage{}, ErrInvalid
 	}
 	return scope, page, nil

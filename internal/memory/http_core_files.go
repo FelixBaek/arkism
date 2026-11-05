@@ -37,6 +37,32 @@ type FileBatchOutput struct {
 
 func registerFilesCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) {
 	mux.HandleFunc("POST /v1/files/memories/batch", s.extractBatchHTTP)
+	mux.HandleFunc("GET /v1/files/memories/documents", func(w http.ResponseWriter, r *http.Request) {
+		scope, page, e := parseDocumentQuery(r.URL.RawQuery)
+		if e != nil {
+			respond(w, nil, e)
+			return
+		}
+		out, e := s.ListExtractDocuments(r.Context(), bearer(r), scope, page)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("PATCH /v1/files/memories/documents/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in DocumentTagsInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.EditDocumentTags(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("POST /v1/files/memories/documents/{id}/reprocess", func(w http.ResponseWriter, r *http.Request) {
+		var in WikiScopeInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.ReprocessDocument(r.Context(), bearer(r), r.PathValue("id"), in)
+		s.startExtractJob(r, in.Scope, out, e)
+		respond(w, out, e)
+	})
 }
 
 // batchRequestBytes bounds a whole batch request: the files plus the metadata

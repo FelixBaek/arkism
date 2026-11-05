@@ -1570,6 +1570,18 @@ class ArkismClient(BaseClient):
         """POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request; body: {metadata JSON, file JSON} sent as multipart in this order"""
         return self.request("POST", f"/v1/files/memories/batch", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', True)]])
 
+    def list_file_extract_documents(self, query=None):
+        """GET /v1/files/memories/documents — List memory-extraction documents"""
+        return self.request("GET", f"/v1/files/memories/documents", query, None)
+
+    def edit_file_extract_document_tags(self, id, body=None):
+        """PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced"""
+        return self.request("PATCH", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}", None, body)
+
+    def reprocess_file_extract_document(self, id, body=None):
+        """POST /v1/files/memories/documents/{id}/reprocess — Extract a finished document again"""
+        return self.request("POST", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/reprocess", None, body)
+
     def extract_file_memories(self, body=None):
         """POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)"""
         return self.request("POST", f"/v1/files/memories", None, body)

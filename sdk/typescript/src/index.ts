@@ -608,7 +608,7 @@ export type WireResponseObservationData = { "source_memories": (Array<WireRespon
 export type WireResponseDerivedRevision = { "version": number; "status": string; "action": string; "text": string; "citations": (Array<WireResponseRef> | null); "durability"?: string; "durability_reason"?: string; "confidence"?: number; "generator"?: WireResponseGenerator; "by": string; "at": string; "withheld"?: boolean };
 export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string };
 export type WireResponseDirective = { "title": string; "priority": number; "applies_to": string };
-export type WireResponseFileExtractJob = { "label": string; "sources": (Array<string> | null); "total": number; "next": number; "candidates_created": number; "skipped": (Array<WireResponseExtractSkip> | null); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch };
+export type WireResponseFileExtractJob = { "label": string; "sources": (Array<string> | null); "total": number; "next": number; "candidates_created": number; "skipped": (Array<WireResponseExtractSkip> | null); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch; "tags"?: Array<string> };
 export type WireResponseExtractSkip = { "locator"?: string; "reason": string };
 export type WireResponseFileExtractDelta = { "chunks_total": number; "chunks_unchanged": number; "chunks_changed": number; "chunks_removed": number; "removed_sources": (Array<WireResponseFileExtractRemoved> | null) };
 export type WireResponseFileExtractRemoved = { "locator": string; "source": WireResponseRef; "candidate_ids": (Array<string> | null) };
@@ -2206,6 +2206,18 @@ export class ArkismClient {
   /** POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request */
   extract_file_memories_batch(body: { "metadata": { "scope": Scope; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
+  }
+  /** GET /v1/files/memories/documents — List memory-extraction documents */
+  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
+    return this.request("GET", `/v1/files/memories/documents`, query, undefined);
+  }
+  /** PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced */
+  edit_file_extract_document_tags(id: string, body: { "scope": Scope; "add"?: Array<string>; "remove"?: Array<string> }): Promise<{ "document_id": string; "tags": Array<string>; "candidates": number; "memories": number; "skipped": number }> {
+    return this.request("PATCH", `/v1/files/memories/documents/${encodeURIComponent(id)}`, undefined, body);
+  }
+  /** POST /v1/files/memories/documents/{id}/reprocess — Extract a finished document again */
+  reprocess_file_extract_document(id: string, body: { "scope": Scope }): Promise<{ "status": string; "job_id"?: string; "document_id"?: string }> {
+    return this.request("POST", `/v1/files/memories/documents/${encodeURIComponent(id)}/reprocess`, undefined, body);
   }
   /** POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document) */
   extract_file_memories(body: { "scope": Scope; "filename": string; "content_base64": string; "mime"?: string; "dry_run"?: boolean; "context"?: string; "timestamp"?: string; "tags"?: Array<string>; "strategy"?: string }): Promise<{ [key: string]: unknown }> {

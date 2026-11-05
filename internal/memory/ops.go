@@ -94,6 +94,7 @@ type OpsListInput struct {
 	Status   string
 	Actor    string
 	RecordID string
+	Tag      string
 	From, To time.Time
 	Cursor   string
 	Limit    int
@@ -155,12 +156,12 @@ func (in OpsListInput) recordQuery(collection, binding string) (opsRecordQuery, 
 	if in.Limit < 1 || in.Limit > opsPageMax {
 		return opsRecordQuery{}, ErrInvalid
 	}
-	for _, v := range []string{in.Action, in.Kind, in.Status, in.Actor, in.RecordID} {
+	for _, v := range []string{in.Action, in.Kind, in.Status, in.Actor, in.RecordID, in.Tag} {
 		if !validOpsFilter(v) {
 			return opsRecordQuery{}, ErrInvalid
 		}
 	}
-	q := opsRecordQuery{Scope: in.Scope, Collection: collection, Kind: in.Kind, KindPrefix: in.Action, Actor: in.Actor, TargetID: in.RecordID, From: in.From, To: in.To, Limit: in.Limit + 1}
+	q := opsRecordQuery{Scope: in.Scope, Collection: collection, Kind: in.Kind, KindPrefix: in.Action, Actor: in.Actor, TargetID: in.RecordID, Tag: in.Tag, From: in.From, To: in.To, Limit: in.Limit + 1}
 	if in.Status != "" {
 		q.Statuses = []string{in.Status}
 	}

@@ -229,6 +229,8 @@ type FileExtractChunk struct {
 	Text       string   `json:"-" bson:"text,omitempty"`
 	Hash       string   `json:"-" bson:"hash,omitempty"`
 	Candidates []string `json:"-" bson:"candidates,omitempty"`
+	// Round names a reprocess run, so its capture events are new rather than retries.
+	Round string `json:"-" bson:"round,omitempty"`
 }
 
 type FileExtractJob struct {
@@ -254,6 +256,11 @@ type FileExtractJob struct {
 	Zone     string          `json:"zone,omitempty" bson:"zone,omitempty"`
 	// Batch is the provider batch the remaining chunks were sent as (file_extract_batch.go).
 	Batch *ExtractBatch `json:"batch,omitempty" bson:"batch,omitempty"`
+	// Ref is the document reference (file:<name>, knowledge:<source id>, doc:<id> or
+	// text:<hash>); Tags are the document's reviewer tags when the upload was made, given
+	// to its new candidates.
+	Ref  string   `json:"-" bson:"ref,omitempty"`
+	Tags []string `json:"tags,omitempty" bson:"tags,omitempty"`
 }
 
 // zone is the job's time zone; the server's for a job queued before zones were stored.
@@ -712,7 +719,7 @@ func (s *Service) extractUploaded(ctx context.Context, token string, d Decision,
 		return out, s.previewChunks(ctx, token, d, f.Scope, &plan, chunks, &out)
 	}
 	plan.Label = f.Name
-	return s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, chunks, out, fileExtractSyncChunks, false)
+	return s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, "", chunks, out, fileExtractSyncChunks, false)
 }
 
 // ingestMaxItems bounds one ingest request; every item may become its own job.
@@ -824,7 +831,7 @@ func (s *Service) ingestItem(ctx context.Context, token string, d Decision, scop
 	if it.DocumentID != "" {
 		docRef, plan.Label = "doc:"+it.DocumentID, it.DocumentID
 	}
-	return s.extractStored(ctx, token, d, scope, plan, docRef, chunks, FileMemoriesResult{Skipped: extractRedactionNote(redacted)}, sync, it.UpdateMode == "append")
+	return s.extractStored(ctx, token, d, scope, plan, docRef, "", chunks, FileMemoriesResult{Skipped: extractRedactionNote(redacted)}, sync, it.UpdateMode == "append")
 }
 
 // storeExtractSources stores the filtered text as source evidence, in parts
@@ -867,12 +874,11 @@ func extractSourceIDs(chunks []FileExtractChunk) []string {
 // upload: up to sync of them now, the rest as a queued job. Chunks without a source
 // yet (an uploaded file, ingested text) get one; unchanged chunks keep their old
 // source. With appendText the chunks follow the document's earlier ones instead of
-// replacing them.
-func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, plan FileExtractJob, docRef string, chunks []FileExtractChunk, out FileMemoriesResult, sync int, appendText bool) (FileMemoriesResult, error) {
+// replacing them. A reprocess round extracts every chunk again.
+func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, plan FileExtractJob, docRef, round string, chunks []FileExtractChunk, out FileMemoriesResult, sync int, appendText bool) (FileMemoriesResult, error) {
 	// The uploader is part of the identity: another person's file of the same
 	// name is a different document, and its chunks and candidates stay theirs.
 	docID := extractDocID(scope, d.PrincipalID, docRef)
-	out.DocumentID = docID
 	prev, err := s.extractDocState(ctx, scope, docID)
 	if err != nil {
 		return FileMemoriesResult{}, err
@@ -880,15 +886,30 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	if appendText {
 		chunks = appendExtractChunks(prev, chunks)
 	}
+	if round != "" { // a reprocess round extracts every chunk again under new event ids
+		prev = nil
+		for i := range chunks {
+			chunks[i].Round = round
+		}
+	}
 	fresh, kept, delta := diffExtractChunks(prev, chunks)
 	if len(fresh) > 0 && fresh[0].Source.ID == "" {
 		if err = s.storeExtractSources(ctx, token, scope, plan.Label, fresh); err != nil {
 			return FileMemoriesResult{}, err
 		}
 	}
-	out.SourceIDs = extractSourceIDs(append(slices.Clone(kept), fresh...))
-	out.SourceID, out.Delta = out.SourceIDs[0], &delta
-	plan.Document, plan.Chunks, plan.Kept, plan.Delta, plan.Total, plan.Skipped = docID, fresh, kept, delta, len(fresh), out.Skipped
+	plan.Document, plan.Ref, plan.Chunks, plan.Kept, plan.Delta = docID, docRef, fresh, kept, delta
+	return s.launchExtract(ctx, token, d, scope, plan, out, sync)
+}
+
+// launchExtract records the planned document job (document, chunks and delta filled
+// in) and runs it at once when it has at most sync chunks; a longer one is queued.
+func (s *Service) launchExtract(ctx context.Context, token string, d Decision, scope Scope, plan FileExtractJob, out FileMemoriesResult, sync int) (FileMemoriesResult, error) {
+	fresh := plan.Chunks
+	out.DocumentID = plan.Document
+	out.SourceIDs = extractSourceIDs(append(slices.Clone(plan.Kept), fresh...))
+	out.SourceID, out.Delta = out.SourceIDs[0], &plan.Delta
+	plan.Total, plan.Skipped = len(fresh), out.Skipped
 	job, err := s.createExtractJob(ctx, d, scope, plan)
 	if err != nil {
 		return FileMemoriesResult{}, err
@@ -911,6 +932,15 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	}
 	out.Status, out.CandidatesCreated, out.Skipped = r.Status, r.FileExtract.CandidatesCreated, r.FileExtract.Skipped
 	return out, nil
+}
+
+// extractEventID is the capture event of one chunk; a reprocess round makes it new.
+func extractEventID(ch FileExtractChunk) string {
+	id := "file-extract:" + ch.Source.ID + ":" + ch.Locator + ":" + ch.Hash[:min(16, len(ch.Hash))]
+	if ch.Round != "" {
+		id += ":" + ch.Round
+	}
+	return id
 }
 
 // appendExtractChunks puts the new text after the document's earlier chunks, numbered on.
@@ -999,12 +1029,12 @@ func (s *Service) captureExtracted(ctx context.Context, token string, scope Scop
 	}
 	at, o := plan.refTime().UTC(), plan.Options
 	in := CaptureInput{Scope: scope, Generator: &gen, zone: plan.zone(),
-		Event: CaptureEvent{ID: "file-extract:" + ch.Source.ID + ":" + ch.Locator + ":" + ch.Hash[:min(16, len(ch.Hash))], Type: "backfill", OriginProduct: "arkism", OccurredAt: &at}}
+		Event: CaptureEvent{ID: extractEventID(ch), Type: "backfill", OriginProduct: "arkism", OccurredAt: &at}}
 	for _, c := range claims {
 		confidence := c.Confidence
 		in.Claims = append(in.Claims, CaptureClaim{Subject: "file-extract", Text: c.Content, Kind: c.Kind, Basis: "inferred", Confidence: &confidence,
 			Reason:     ch.Locator + ": " + runeCutString(extractSpaces(c.EvidenceQuote), fileExtractQuoteRunes),
-			SourceRefs: []Ref{ch.Source}, locator: ch.Locator, OccurredFrom: c.OccurredFrom, OccurredTo: c.OccurredTo,
+			SourceRefs: []Ref{ch.Source}, locator: ch.Locator, labels: plan.Tags, OccurredFrom: c.OccurredFrom, OccurredTo: c.OccurredTo,
 			Tags: o.Tags, Metadata: o.Metadata, Entities: entityNameInputs(o.Entities),
 			// The document was read by a model, so the evidence is inference whatever the model labelled it.
 			MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: c.SemanticKind}})
