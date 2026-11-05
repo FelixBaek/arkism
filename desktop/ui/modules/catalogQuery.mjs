@@ -12,7 +12,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
     if (["skills", "skillTrash"].includes(name)) return { ...base, state: name === "skillTrash" ? "trash" : state.skillTab, sort: state.skillSort, direction: state.skillDir || 0, model: state.skillModel, category: state.skillCat, categories: preferences().categories.map(({ id, rules }) => ({ id, rules })), agents: preferences().agents };
     // 시점: which memories were true on that day, as recorded when it was picked (POST /v1/memories/at)
     if (name === "memories" && state.memTab === "active" && state.validAt) return { scope: state.scope, q: base.q, kind: state.kind === "all" ? "" : state.kind, as_of: state.validAsOf, valid_at: endOfDay(state.validAt) };
-    // 타임라인 asks newest first whatever the list sort, so each next page is older (더 이전 불러오기 at its left end)
+    // 타임라인 asks newest first whatever the list sort, so each next page is older (더 이전 불러오기 at its bottom end)
     return { ...base, state: name === "candidates" ? "candidate" : name === "conflicted" ? "conflicted" : ["idle", "provenance", "removed"].includes(state.memTab) ? state.memTab : "active", kind: state.kind === "all" ? "" : state.kind, repository: state.repo || "", sort: name === "candidates" ? "risk" : name === "conflicted" ? "recent" : state.memView === "timeline" && state.memTab === "active" ? "recent" : state.sort, kept_ids: preferences().kept, collect_unused: preferences().collectUnused };
   }
   const key = name => JSON.stringify({ identity: identity(), body: spec(name) });

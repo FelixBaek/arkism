@@ -45,25 +45,50 @@ function entryMore(r, { el, raw }) {
   return meta;
 }
 
+// The vertical rail both 변경 이력 and 기억 › 타임라인 draw (.mem-brief-* in v4-memory.css): an <ol> whose stops draw the
+// 1px line and a small hollow dot in CSS, each stop led by a date heading. State classes on a stop: current (soft accent
+// dot), review (dashed dot), muted (quiet dot).
+
+/** The rail list. buttons(): its visible buttons in order, walked by ↑ ↓ Home End. deps: el. */
+export function briefRail(buttons, { el }, label = "") {
+  const list = el("ol", "mem-brief-list");
+  if (label) list.setAttribute("aria-label", label);
+  list.addEventListener("keydown", (e) => {
+    const all = buttons(), i = all.indexOf(e.target);
+    const next = { ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: all.length - 1 }[e.key];
+    if (i < 0 || next === undefined || !all[next]) return;
+    e.preventDefault(); all[next].focus?.(); all[next].scrollIntoView?.({ block: "nearest" });
+  });
+  return list;
+}
+
+/** One stop on the rail, with its state classes. */
+export const briefStop = (el, ...states) => el("li", ["mem-brief-item", ...states.filter(Boolean)].join(" "));
+
+/** A stop's date heading: the date as written, then a muted tag (a word to translate, or a node kept as written). deps: el, raw. */
+export function briefDate(date, tag, { el, raw }, tagName = "span") {
+  const head = el(tagName, "mem-brief-date");
+  head.append(raw(el("span", "", date || "—")));
+  if (tag) { const t = el("span", "mem-brief-tag"); t.append(" · ", typeof tag === "string" ? el("span", "", tag) : tag); head.append(t); }
+  return head;
+}
+
 /**
  * 변경 이력 as a briefing list: each entry is a button (date, then the text clamped to two lines) that opens in place,
  * one at a time, to show 기간, approver, evidence and — for an older version — 이전으로 되돌리기. All closed at first.
  * More than `limit` versions: the newest `limit` and 이전 N개 더 보기. revert(row, button) or null. deps: el, raw.
  */
 export function timelineView(rows, deps, { revert = null, limit = 5 } = {}) {
-  const { el, raw } = deps, box = el("div", "mem-brief"), list = el("ol", "mem-brief-list");
+  const { el, raw } = deps, box = el("div", "mem-brief");
   const shown = rows.filter((r) => r.kind !== "conflict");
+  const list = briefRail(() => items.filter((it) => !it.li.hidden).map((it) => it.head), deps);
   let versions = 0;
   const items = shown.map((r) => {
-    const id = `mem-brief-${++ids}`, li = el("li", `mem-brief-item ${r.kind}`);
+    const id = `mem-brief-${++ids}`, li = briefStop(el, r.kind, r.kind === "pending" && "review");
     if (r.kind !== "pending" && ++versions > limit) li.hidden = true;
     const head = el("button", "mem-brief-head"); head.type = "button";
     head.setAttribute("aria-expanded", "false"); head.setAttribute("aria-controls", id);
-    const date = el("span", "mem-brief-date");
-    date.append(raw(el("span", "", day(r.from) || "—")));
-    const tag = r.kind === "current" ? "지금" : r.kind === "pending" ? "검토 중" : "";
-    if (tag) { const t = el("span", "mem-brief-tag"); t.append(" · ", el("span", "", tag)); date.append(t); }
-    head.append(date, raw(el("span", "mem-brief-text", r.text)));
+    head.append(briefDate(day(r.from), r.kind === "current" ? "지금" : r.kind === "pending" ? "검토 중" : "", deps), raw(el("span", "mem-brief-text", r.text)));
     const more = el("div", "mem-brief-more"); more.id = id; more.hidden = true;
     more.append(entryMore(r, deps));
     if (revert && r.kind === "previous" && r.text) {
@@ -78,13 +103,6 @@ export function timelineView(rows, deps, { revert = null, limit = 5 } = {}) {
     });
     li.append(head, more); list.append(li);
     return { li, head, more };
-  });
-  // ↑ ↓ Home End move between the visible entries
-  list.addEventListener("keydown", (e) => {
-    const heads = items.filter((it) => !it.li.hidden).map((it) => it.head), i = heads.indexOf(e.target);
-    const next = { ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: heads.length - 1 }[e.key];
-    if (i < 0 || next === undefined || !heads[next]) return;
-    e.preventDefault(); heads[next].focus?.();
   });
   box.append(list);
   const hidden = items.filter((it) => it.li.hidden);

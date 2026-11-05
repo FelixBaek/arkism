@@ -1,5 +1,5 @@
 // Run with: node --test desktop/ui/*.test.js
-// 기억 › 목록 · 타임라인 · 그래프 (modules/memoryViews.mjs through modules/memoryList.mjs), on a small DOM stand-in.
+// 기억 › 목록 · 타임라인 (modules/memoryViews.mjs through modules/memoryList.mjs), on a small DOM stand-in.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 require("./keep.js");
@@ -53,14 +53,6 @@ function setup() {
   return { document, h, deps, state, snap, log, stored, calls };
 }
 
-// memory-bubbles.js draws on a canvas the stand-in DOM lacks: a recorder with the same calls
-function fakeBubbles(env, made = []) {
-  require("./memory-bubbles.js");
-  const real = window.ArkismMemoryBubbles;
-  window.ArkismMemoryBubbles = { KIND_COLOR: real.KIND_COLOR, create: (opts) => { const m = { opts, el: env.h.el("div", "mm-bubbles"), destroyed: 0, sel: [], setItems: (x) => { m.items = x; }, setEdges: (x) => { m.edges = x; }, setSelected: (id) => m.sel.push(id), destroy: () => { m.destroyed++; } }; made.push(m); return m; } };
-  return { made, real };
-}
-
 async function page(env) {
   const { createMemoryList } = await import("./modules/memoryList.mjs");
   const api = createMemoryList(env.deps);
@@ -68,9 +60,8 @@ async function page(env) {
 }
 const viewTab = (env, k) => env.document.querySelector(`#controls .mem-view-seg [data-key="${k}"]`);
 
-test("the view switch sits in the toolbar, is remembered, and keeps search, kind tabs and 자세히 for every view", async () => {
+test("the view switch (목록 · 타임라인) sits in the toolbar, is remembered, and keeps search, kind tabs and 자세히", async () => {
   const env = setup(), { draw } = await page(env);
-  fakeBubbles(env);
   draw();
   assert.ok(env.document.querySelector("#controls .mem-tools .mem-view-seg"), "the segment sits in the toolbar row");
   assert.equal(env.document.querySelectorAll("#table .row").length, MEMS.length, "목록 is the plain list");
@@ -83,13 +74,14 @@ test("the view switch sits in the toolbar, is remembered, and keeps search, kind
   assert.ok(env.document.querySelector("#controls .panel-search"), "search stays");
   assert.ok(env.document.querySelector("#chips .mem-kind.active"), "kind tabs stay");
   assert.ok(env.document.querySelector("#chips .mem-more-pop"), "자세히 stays");
-  assert.ok(env.document.querySelector("#table .mem-tl"));
+  assert.ok(env.document.querySelector("#table .mem-page-tl"));
   assert.equal(env.document.querySelectorAll("#table .row").length, 0);
   const more = env.document.querySelector("#chips .mem-more-pop");
   assert.ok(more.querySelector('select[aria-label="간격"]'), "zoom lives in 자세히 on the timeline");
   assert.equal(more.querySelector('select[aria-label="정렬"]'), null, "sorting means nothing on a timeline");
-  viewTab(env, "graph").click(); draw();
-  assert.ok(env.document.querySelector("#controls .panel-search") && env.document.querySelector("#chips .mem-kind.active"));
+  assert.deepEqual(env.document.querySelectorAll("#controls .mem-view-seg .tab").map((b) => b.dataset.key), ["list", "timeline"], "no 그래프");
+  env.deps.memory.memView = "graph"; draw();
+  assert.ok(env.document.querySelectorAll("#table .row").length > 0 && !env.document.querySelector("#table .mem-page-tl"), "a stored 그래프 falls back to 목록");
 });
 
 test("the timeline catalog loads newest first, so 더 이전 불러오기 really loads older memories", async () => {
@@ -103,84 +95,68 @@ test("the timeline catalog loads newest first, so 더 이전 불러오기 really
   assert.deepEqual(bodies.map((b) => b.sort), ["recent", "used"]);
 });
 
-test("timeline layout: oldest left, newest right, labels alternate, size follows use, same day shares one dot", async () => {
-  const { timelineLayout, memoryWhen } = await import("./modules/memoryViews.mjs");
+test("timeline groups: newest first, by day, week or month", async () => {
+  const { timelineGroups, memoryWhen } = await import("./modules/memoryViews.mjs");
   assert.equal(memoryWhen(MEMS[4]), Date.parse("2026-08-15T00:00:00Z"), "the event time wins over the saved time");
-  const lay = timelineLayout(MEMS, { use: (m) => USED[m.id], hollow: (m) => m.id === "a", review: (m) => (m.tags || []).length > 0 });
-  assert.equal(lay.dots.length, 5, "c and d (same day) share a dot");
-  const xs = lay.dots.map((d) => d.x);
-  assert.deepEqual(xs, [...xs].sort((a, b) => a - b));
-  assert.deepEqual(lay.dots.map((d) => d.items.map((m) => m.id).join("")), ["a", "e", "b", "cd", "f"], "ordered by when it happened");
-  assert.ok(xs.slice(1).every((x, i) => x - xs[i] >= 84), "neighbours never crowd");
-  assert.deepEqual(lay.dots.map((d) => d.side), ["above", "below", "above", "below", "above"], "alternating, the newest above");
-  const size = Object.fromEntries(lay.dots.map((d) => [d.items[0].id, d.size]));
-  assert.equal(size.e, 20); assert.equal(size.a, 8); assert.ok(size.f > size.b && size.b > 8, "used more = bigger, clamped to 8–20");
-  assert.deepEqual([lay.dots[0].hollow, lay.dots[3].review, lay.dots[3].hollow], [true, true, false]);
-  assert.ok(lay.width > xs.at(-1));
-  assert.equal(timelineLayout(MEMS, { zoom: "month" }).dots.length, 4, "zoomed out to months: Jul · Aug · Sep · Oct");
+  const ids = (gs) => gs.map((g) => g.items.map((m) => m.id).join(""));
+  const days = timelineGroups(MEMS);
+  assert.deepEqual(ids(days), ["f", "cd", "b", "e", "a"], "newest on top, c and d share a day");
+  assert.ok(days.every((g, i) => !i || g.at < days[i - 1].at));
+  // 10-13 (Tue) … 10-20 (Tue): weeks starting Mon 10-19, 10-05, 08-31, 08-10, 06-29
+  assert.deepEqual(ids(timelineGroups(MEMS, "week")), ["f", "cd", "b", "e", "a"]);
+  const extra = [...MEMS, { id: "g", text: "g", created_at: at("10-19") }, { id: "h", text: "h", created_at: at("10-14") }];
+  assert.deepEqual(ids(timelineGroups(extra, "week")), ["fg", "h", "cd", "b", "e", "a"], "the same Monday-started week shares a stop");
+  assert.deepEqual(ids(timelineGroups(MEMS, "month")), ["fcd", "b", "e", "a"], "months: Oct · Sep · Aug · Jul");
 });
 
-test("the timeline strip starts at the newest, groups open a popover, dots pick the detail and walk by arrow keys", async () => {
+test("the timeline is a vertical rail: date stops, rows with meta and one label, keyboard, detail and paging", async () => {
   const env = setup(), { draw } = await page(env);
-  env.deps.memory.memView = "timeline"; env.snap("memories").cursor = "next";
-  draw();
-  const strip = env.document.querySelector("#table .mem-tl");
-  assert.equal(strip.scrollLeft, strip.layout.width, "scrolled to the right end (the browser clamps it)");
-  const dots = env.document.querySelectorAll("#table .mem-tl-item");
-  assert.equal(dots.length, 5);
-  assert.deepEqual(dots.map((d) => d.tabIndex), [-1, -1, -1, -1, 0], "one tab stop: the newest");
-  assert.match(dots[4].getAttribute("aria-label"), /가장 최근 f/);
-  assert.ok(dots[0].className.includes("hollow") && dots[3].className.includes("group") && dots[3].className.includes("review"));
-  assert.equal(dots[0].querySelector(".mem-tl-title").textContent.length, 18, "labels are cut to ~18 characters");
-  // arrows
-  dots[4].focus(); dom.fire(dots[4], "keydown", { key: "ArrowLeft" });
-  assert.equal(env.document.activeElement, dots[3]); assert.equal(dots[3].tabIndex, 0); assert.equal(dots[4].tabIndex, -1);
-  dom.fire(dots[3], "keydown", { key: "Home" }); assert.equal(env.document.activeElement, dots[0]);
-  // a single dot opens the detail
-  dots[4].click();
-  assert.equal(env.state.selected, "f");
-  assert.deepEqual(env.log.slice(-4), ["pin:f", "mark", "detail:f", "open"]);
-  // a grouped day lists its memories, and one of them opens the detail
-  dots[3].click();
-  const pop = env.document.querySelector("#table .mem-tl-pop");
-  assert.equal(pop.querySelectorAll(".mem-tl-pop-row").length, 2);
-  assert.equal(env.document.activeElement, pop.querySelector(".mem-tl-pop-row"));
-  dom.fire(pop, "keydown", { key: "Escape" });
-  assert.equal(env.document.querySelector("#table .mem-tl-pop"), null); assert.equal(env.document.activeElement, dots[3]);
-  dots[3].click(); env.document.querySelectorAll("#table .mem-tl-pop-row")[1].click();
-  assert.equal(env.state.selected, "d");
-  // older pages load from the left end, and the view stays where it was
-  strip.scrollLeft = 100; dom.fire(strip, "scroll");
-  env.document.querySelector("#table .mem-tl-more").click();
-  assert.equal(env.log.at(-1), "more:memories");
-  draw();
-  const again = env.document.querySelector("#table .mem-tl");
-  assert.equal(again.scrollLeft, 100, "a redraw keeps the scroll position");
-  assert.ok(again.querySelector(".mem-tl-item.selected[data-id=d]") === null && again.querySelector(".mem-tl-item.group.selected"), "the group holding the pick is marked");
-  env.snap("memories").cursor = ""; draw();
-  assert.equal(env.document.querySelector("#table .mem-tl-more"), null, "every page loaded: no 더 이전 불러오기");
-});
-
-test("the graph view reuses the memory map, and a picked node opens the detail panel", async () => {
-  const env = setup(), { made, real } = fakeBubbles(env);
+  const seen = [];
+  globalThis.IntersectionObserver = class { constructor(cb) { this.cb = cb; seen.push(this); } observe(n) { this.n = n; } disconnect() { this.off = true; } };
   try {
-    const { draw } = await page(env);
-    env.deps.memory.memView = "graph"; draw();
-    assert.equal(made.length, 1); assert.ok(env.document.querySelector("#table .mem-graph .mm-bubbles"));
-    assert.deepEqual(made[0].items.map((x) => x.id), MEMS.map((m) => m.id));
-    assert.equal(made[0].opts.groupOf("kind", { kind: "user" }).color, real.KIND_COLOR.user, "kind colours are the map's own");
-    await dom.flush();
-    assert.match(env.calls[0], /^\/v1\/memory-graph\?mode=all/);
-    assert.equal(made[0].destroyed, 1, "the lines arrived: the map is drawn again with them");
+    env.deps.memory.memView = "timeline"; env.snap("memories").cursor = "next";
+    env.deps.state.data.maintenance = [];
     draw();
-    assert.deepEqual(made[1].edges, [{ from: "c", to: "d", t: "supports" }], "only lines between shown memories");
-    draw(); assert.equal(made.length, 2, "a redraw with the same memories keeps the map");
-    made[1].opts.onSelect("e");
-    assert.equal(env.state.selected, "e");
-    assert.deepEqual(env.log.slice(-4), ["pin:e", "mark", "detail:e", "open"]);
-    assert.equal(made[1].sel.at(-1), "e");
-    env.deps.memory.memView = "list"; draw();
-    assert.equal(made[1].destroyed, 1, "leaving the graph stops the map");
-    assert.equal(env.calls.length, 1, "the lines are read once per connection");
-  } finally { window.ArkismMemoryBubbles = real; }
+    const box = env.document.querySelector("#table .mem-page-tl");
+    const stops = box.querySelectorAll(".mem-brief-item");
+    assert.equal(stops.length, 5);
+    assert.deepEqual(stops.map((s) => s.querySelector(".mem-brief-date").tagName), ["H3", "H3", "H3", "H3", "H3"]);
+    assert.match(stops[0].querySelector(".mem-brief-date").textContent, /2026/, "the date has the year");
+    assert.ok(stops[0].querySelector(".mem-brief-tag"), "a weekday or 오늘 · 어제 follows the date");
+    assert.ok(stops[1].className.includes("review"), "a stop holding a memory waiting on review has a dashed dot");
+    assert.ok(stops[4].className.includes("muted"), "an unused memory's stop is muted");
+    const rows = box.querySelectorAll(".mem-brief-row");
+    assert.deepEqual(rows.map((r) => r.dataset.id), ["f", "c", "d", "b", "e", "a"]);
+    assert.ok(rows.every((r) => r.tagName === "BUTTON"));
+    assert.equal(rows[0].querySelector(".mem-brief-meta").textContent, "user · 답에 보임 10번");
+    assert.equal(rows[2].querySelectorAll(".mem-label").length, 1); assert.equal(rows[2].querySelector(".mem-label").textContent, "정정 검토 중");
+    assert.equal(rows[0].querySelector(".mem-labels"), null, "no label line without labels");
+    assert.ok(rows[5].className.includes("muted"));
+    // ↑ ↓ Home End
+    rows[0].focus(); dom.fire(rows[0], "keydown", { key: "ArrowDown" }); assert.equal(env.document.activeElement, rows[1]);
+    dom.fire(rows[1], "keydown", { key: "ArrowUp" }); assert.equal(env.document.activeElement, rows[0]);
+    dom.fire(rows[0], "keydown", { key: "End" }); assert.equal(env.document.activeElement, rows[5]);
+    dom.fire(rows[5], "keydown", { key: "Home" }); assert.equal(env.document.activeElement, rows[0]);
+    // a row opens the detail and is marked as the pick
+    rows[2].click();
+    assert.equal(env.state.selected, "d");
+    assert.deepEqual(env.log.slice(-4), ["pin:d", "mark", "detail:d", "open"]);
+    draw();
+    assert.equal(env.document.querySelector("#table .mem-brief-row.selected").dataset.id, "d");
+    // paging: reaching the bottom loads the next older page once; the button stays as the fallback
+    assert.equal(seen.at(-2).off, true, "a redraw drops the old observer");
+    const io = seen.at(-1), older = env.document.querySelector("#table .mem-brief-older");
+    assert.equal(io.n, older);
+    io.cb([{ isIntersecting: true }]); io.cb([{ isIntersecting: true }]);
+    assert.deepEqual(env.log.filter((l) => l === "more:memories"), ["more:memories"]);
+    assert.equal(older.disabled, true);
+    draw(); env.document.querySelector("#table .mem-brief-older").click();
+    assert.deepEqual(env.log.filter((l) => l === "more:memories").length, 2, "the button loads too");
+    env.snap("memories").cursor = ""; draw();
+    assert.equal(env.document.querySelector("#table .mem-brief-older"), null, "every page loaded: no 더 이전 불러오기");
+    // 자세히 zoom regroups
+    env.document.querySelector('#chips select[aria-label="간격"]').value = "month";
+    dom.fire(env.document.querySelector('#chips select[aria-label="간격"]'), "change"); draw();
+    assert.equal(env.document.querySelectorAll("#table .mem-brief-item").length, 4);
+  } finally { delete globalThis.IntersectionObserver; }
 });
