@@ -267,8 +267,8 @@ window.ArkismKnowledge = (ctx) => {
 
   // ---------------------------------------------------------------- 파일 → 기억 후보 (POST /v1/files/memories, …/extract_memories)
   // The server only proposes: every claim lands as a memory candidate a person approves in 확인해 주세요.
-  // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}). The server has no stop route for these
-  // jobs (/v1/operations/{id}/cancel refuses the file_memory_extract kind), so the card offers none.
+  // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}); 멈추기 asks /v1/operations/{id}/cancel (people only).
+  // A failed job is resumed by its uploader through …/jobs/{id}/run (the operations retry route refuses this kind).
   const extractErr = (e) => ({ no_extractable_text: "파일에서 글자를 찾지 못했어요. 스캔한 PDF나 암호가 걸린 PDF는 읽지 못해요.", model_not_configured: "서버에 기억을 뽑을 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.",
     model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요.", candidate_daily_limit: "오늘 만들 수 있는 후보 수를 넘었어요. 내일 다시 해 주세요." }[e?.message] || errText(e));
   let extractTimer = 0;
@@ -291,6 +291,22 @@ window.ArkismKnowledge = (ctx) => {
     K.busy = true; K.notice = ""; K.extract = { label, phase: "queued", active: true, total: 0, next: 0, created: 0, skipped: 0 }; paint();
     try { showExtract(await work(), label); } catch (e) { K.extract = { label, phase: "failed", active: false, error: extractErr(e) }; }
     K.busy = false; paint();
+  }
+  const human = () => state.caps?.actions?.review_decide !== false;
+  async function cancelExtract() {
+    const x = K.extract;
+    if (!x?.id || !(await confirmPop("기억 후보 만들기를 멈출까요?", "이미 만든 후보는 그대로 남아요.", "멈추기"))) return;
+    try { await post(`/v1/operations/${encodeURIComponent(x.id)}/cancel`, x.revision ? { expected_revision: x.revision } : {}); await pollExtract(); }
+    catch (e) { x.error = e?.message === "revision_conflict" ? "그사이 작업이 바뀌었어요. 다시 눌러 주세요." : extractErr(e); paint(); }
+  }
+  // The run route works through the rest of the job before it answers, so the card polls meanwhile.
+  function resumeExtract() {
+    const x = K.extract;
+    if (!x?.id) return;
+    Object.assign(x, { phase: "running", active: true, error: "", jobError: "" }); paint();
+    post(`/v1/files/memories/jobs/${encodeURIComponent(x.id)}/run`).then((r) => { if (K.extract?.id === x.id) showExtract(r); },
+      (e) => { if (K.extract?.id === x.id) { K.extract.error = extractErr(e); K.extract.active = false; clearTimeout(extractTimer); paint(); } });
+    clearTimeout(extractTimer); extractTimer = setTimeout(pollExtract, 1500);
   }
   const pickExtractFile = () => chooseFile(async (f, ext) => {
     if (!MIME[ext] && ext !== ".pdf") { K.notice = `PDF·${KINDS} 파일에서 기억 후보를 만들 수 있어요.`; paint(); return; }
@@ -315,6 +331,8 @@ window.ArkismKnowledge = (ctx) => {
     if (x.error || x.jobError) c.append(el("p", "v4k-warn", x.error || extractErr({ message: x.jobError })));
     const a = el("div", "v4s-actions");
     if ((x.created || x.delta?.left) && !x.active) a.append(button("후보 확인하러 가기", "primary", null, () => ctx.go?.("memories", "candidate")));
+    if (x.active && x.id && human()) a.append(button("멈추기", "ghost", null, cancelExtract));
+    if (!x.active && x.id && x.phase === "failed") a.append(button("이어서 하기", "primary", null, resumeExtract));
     if (!x.active) a.append(link("닫기", () => { K.extract = null; paint(); }));
     c.append(a);
     if (x.skipped) { const more = el("details", "v4k-more"); more.append(el("summary", "", "자세히"), el("p", "meta", `건너뛴 부분 ${num(x.skipped)}곳 (비공개·비밀값이거나 읽을 수 없는 부분)`)); c.append(more); }
@@ -812,7 +830,7 @@ window.ArkismKnowledge = (ctx) => {
 window.ArkismKnowledge.extractState = (r = {}) => {
   const j = r.job || r, phase = { pending: "queued", retry: "queued", waiting: "queued", running: "running", done: "done", cancelled: "cancelled", failed: "failed" }[r.status] || "queued";
   const d = j.delta || r.delta;
-  return { id: r.id || r.job_id || "", phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
+  return { id: r.id || r.job_id || "", revision: r.revision || 0, phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
     total: j.total || 0, next: j.next || 0, created: j.candidates_created || 0, skipped: (j.skipped || []).length, jobError: phase === "failed" ? j.error || "failed" : "",
     delta: d?.chunks_total != null ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0,
       left: (d.removed_sources || []).reduce((n, x) => n + (x.candidate_ids?.length || 0), 0) } : null };

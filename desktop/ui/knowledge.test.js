@@ -689,12 +689,13 @@ test("upload: text over 64KB goes up in parts with one progress line and a plain
   assert.equal(k.document.body.querySelector("dialog.v4k-ask"), null);
 });
 
-test("file → memory candidates: upload, poll to done with delta counts, open the candidate review; no dead stop button", async () => {
+test("file → memory candidates: upload, poll to done with delta counts, open the candidate review; stop asks first", async () => {
   let reads = 0;
   const k = await setup({
     "/v1/files/memories/jobs/": () => (++reads < 2 ? { id: "fx", status: "running", revision: 1, job: { total: 4, next: 1 } }
       : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1, removed_sources: [{ locator: "chunk:4", candidate_ids: ["c9"] }] } } }),
-    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" })
+    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" }),
+    "/v1/operations/": () => ({ id: "fx", status: "cancelled" })
   });
   await k.start();
   const hb = k.view.views.knowledge.head();
@@ -709,13 +710,36 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   assert.doesNotMatch(k.table().textContent, /기억 후보를 만들 수 있어요/, "a fresh start clears the old notice");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /4부분 중 1부분 읽음/);
-  // the server has no stop route for extraction jobs, so the card offers none
-  assert.doesNotMatch(k.table().textContent, /멈추기/);
-  await wait(1600); await dom.flush();
+  // stop: declined asks and sends nothing; accepted cancels at the read revision and reads the job again
+  k.confirms.answer = false; await k.press(k.table(), "멈추기");
+  assert.equal(k.confirms.length, 1); assert.equal(k.posted("/v1/operations/fx/cancel").length, 0);
+  k.confirms.answer = true; await k.press(k.table(), "멈추기"); await dom.flush();
+  assert.deepEqual(k.posted("/v1/operations/fx/cancel")[0].body, { scope: { workspace_id: "w" }, expected_revision: 1 });
   assert.match(k.table().textContent, /기억 후보 3개를 만들었어요/);
   assert.match(k.table().textContent, /전체 4 · 그대로 1 · 바뀜 2 · 빠짐 1/);
   assert.match(k.table().textContent, /빠진 부분에서 나온 기억 후보 1개는 그대로 남아 있어요/);
   await k.press(k.table(), "후보 확인하러 가기");
   assert.deepEqual(k.gone.at(-1), ["memories", "candidate"]);
   k.view.views.knowledge.render?.(); // leaves no timer behind
+});
+
+test("file → memory candidates: a failed job resumes through its run route; an agent token gets no stop button", async () => {
+  let runs = 0;
+  const k = await setup({
+    "/v1/files/memories/jobs/fx/run": () => { runs++; return { id: "fx", status: "done", revision: 4, job: { total: 2, next: 2, candidates_created: 2 } }; },
+    "/v1/files/memories/jobs/": () => (runs ? { id: "fx", status: "done", revision: 4, job: { total: 2, next: 2, candidates_created: 2 } }
+      : { id: "fx", status: "failed", revision: 2, job: { total: 2, next: 1, error: "model_budget_exceeded" } }),
+    "/v1/files/memories": () => ({ job_id: "fx", status: "running" })
+  }, { caps: { actions: { review_decide: false } } });
+  await k.start();
+  k.view.views.knowledge.head()[0].click(); const input = k.files.at(-1);
+  input.files = [{ name: "plan.txt", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input, "change"); await dom.flush();
+  assert.doesNotMatch(k.table().textContent, /멈추기/, "cancel is a people-only route");
+  await wait(1600); await dom.flush();
+  assert.match(k.table().textContent, /오늘 쓸 수 있는 모델 호출을 다 썼어요/);
+  await k.press(k.table(), "이어서 하기"); await dom.flush();
+  assert.equal(k.posted("/v1/files/memories/jobs/fx/run").length, 1);
+  assert.match(k.table().textContent, /기억 후보 2개를 만들었어요/);
+  assert.equal(dom.buttons(k.table(), "이어서 하기").length, 0);
+  k.view.views.knowledge.render?.();
 });

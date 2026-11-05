@@ -227,7 +227,8 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
     if (path.startsWith("/v1/stats")) return { memories: { total: 5, by_status: { candidate: 5 } }, pending_candidates: 2, sources: { total: 1 } };
     if (path.startsWith("/v1/tags/rename")) return { renamed: 3, more: false, body };
     if (path.startsWith("/v1/tags")) return { items: [{ tag: "work", count: 3 }, { tag: "home", count: 1 }, { tag: "session:s1", count: 4 }] };
-    if (path.startsWith("/v1/operations?")) return { items: [{ id: "op1", kind: "embedding", operable: true, revision: 4, updated_at: "2026-11-05T00:00:00Z" }] };
+    if (path.startsWith("/v1/operations?")) return { items: [{ id: "op1", kind: "embedding", operable: true, revision: 4, updated_at: "2026-11-05T00:00:00Z" },
+      { id: "op2", kind: "file_memory_extract", operable: true, revision: 2, updated_at: "2026-11-05T00:00:00Z" }] };
     return {};
   };
   const { win, calls, state } = windows([], {}, read);
@@ -245,6 +246,7 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
   btn(ask, "합치기").click(); await dom.flush();
   assert.ok(calls.includes("/v1/tags/rename"));
   assert.ok(btn(last("dialog.ov-wide-win"), "다시 시도"));
+  assert.equal(last("dialog.ov-wide-win").querySelectorAll("button").filter((b) => b.textContent.trim() === "다시 시도").length, 1, "a file extraction resumes under its uploader, not here");
   win.reset?.();
   state.caps = { actions: { review_decide: false } };
   win.wide("ops"); await dom.flush(); await dom.flush();

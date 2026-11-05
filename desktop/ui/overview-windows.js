@@ -1196,7 +1196,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const failed = ops.value?.items || [];
       if (!failed.length) upkeep.append(row("", "멈춘 작업이 없어요", "색인·위키 같은 뒤에서 하는 일이 잘 돌고 있어요."));
       for (const o of failed.slice(0, 10)) {
-        const again = o.operable && human ? [button("다시 시도", "small", null, async (ev) => { const b = ev.currentTarget; b.disabled = true;
+        // a file extraction resumes only under its uploader's token (자료 › 이어서 하기); the retry route refuses it
+        const again = o.operable && human && o.kind !== "file_memory_extract" ? [button("다시 시도", "small", null, async (ev) => { const b = ev.currentTarget; b.disabled = true;
           try { await request(`/v1/operations/${encodeURIComponent(o.id)}/retry`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: o.revision }) }); redo(); }
           catch (e) { b.disabled = false; b.title = e.message === "revision_conflict" ? tr("그새 바뀌었어요. 다시 열어 주세요.") : tr("다시 시도하지 못했어요."); } })] : [];
         upkeep.append(row("", `멈춘 작업 · ${OP_KIND[o.kind] || "기타 작업"}`, ago(o.updated_at), "", again));
