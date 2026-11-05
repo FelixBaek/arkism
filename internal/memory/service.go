@@ -1212,6 +1212,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	if col == "skill_versions" && in.Status == "active" {
 		return Record{}, ErrInvalid
 	}
+	autoClose := s.autoCloseOn(ctx, in.Scope, review)
 	var result Record
 	committed := "" // the status this call wrote; a replayed review writes none
 	var activated *Record
@@ -1281,7 +1282,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		activated = activatedMemory(col, result) // replays never reach here
 		action := "transition:" + col + ":" + in.Status
 		if review != nil {
-			if e = recordMemoryReview(ctx, tx, id, d.PrincipalID, *review, result); e != nil {
+			if e = recordReviewOutcome(ctx, tx, id, d.PrincipalID, review, result, autoClose); e != nil {
 				return e
 			}
 			action = "review:memory_candidates:" + review.Action
@@ -1802,11 +1803,11 @@ func HitFromRecord(col string, r Record) Hit {
 	if col == colMemories || col == "memory_candidates" {
 		normalizeMemoryProvenance(&r)
 	}
-	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Occurred: r.Occurred, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
+	hit := Hit{keywords: r.Keywords, MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Occurred: r.Occurred, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
 	if col == colMemories {
 		hit.ApprovalOrigin = memoryApprovalOrigin(r)
 		hit.Reach, hit.ReachProject = memoryReach(r), r.ReachProject
-		hit.ConflictPending = r.ConflictID != ""
+		hit.ConflictPending, hit.conflictID, hit.ValidToProposal = r.ConflictID != "", r.ConflictID, r.ValidToProposal
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)
 		hit.SupersededBy = r.SupersededBy
 		hit.ProofCount, hit.LastConfirmedAt = r.ProofCount, r.LastConfirmedAt

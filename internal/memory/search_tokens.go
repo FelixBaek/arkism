@@ -127,6 +127,8 @@ var searchQueryScaffolding = map[string]bool{
 	"at": true, "to": true, "for": true, "with": true, "by": true,
 	"you": true, "your": true, "me": true, "my": true, "his": true,
 	"her": true, "their": true, "they": true, "he": true, "she": true,
+	"언제": true, "어디": true, "어디서": true, "누가": true, "누구": true,
+	"무엇": true, "뭐": true, "왜": true, "어떻게": true, "어느": true, "무슨": true,
 }
 
 // searchQueryTerms are the distinct normalized topic tokens of a query, capped

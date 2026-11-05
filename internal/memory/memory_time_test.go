@@ -12,52 +12,52 @@ import (
 func TestMemoryTimeBoundariesAndUnknowns(t *testing.T) {
 	at := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
 	r := Record{Text: "old", Status: "active", ApprovedBy: "human", Revision: 1}
-	if _, reason := memoryAt(r, at); reason != "history_not_recorded" {
+	if _, reason := memoryAt(r, at, at); reason != "history_not_recorded" {
 		t.Fatal(reason)
 	}
 	recordMemoryState(colMemories, nil, &r, at)
-	if st, reason := memoryAt(r, at.Add(-time.Millisecond)); st != nil || reason != "" {
+	if st, reason := memoryAt(r, at.Add(-time.Millisecond), at.Add(-time.Millisecond)); st != nil || reason != "" {
 		t.Fatal(st, reason)
 	}
-	if st, reason := memoryAt(r, at); st == nil || reason != "" {
+	if st, reason := memoryAt(r, at, at); st == nil || reason != "" {
 		t.Fatal(st, reason)
 	}
 	old := r
 	r.Status = "expired"
 	r.Revision++
 	recordMemoryState(colMemories, &old, &r, at.Add(time.Second))
-	if st, _ := memoryAt(r, at); st == nil {
+	if st, _ := memoryAt(r, at, at); st == nil {
 		t.Fatal("lost earlier state")
 	}
-	if st, _ := memoryAt(r, at.Add(time.Second)); st != nil {
+	if st, _ := memoryAt(r, at.Add(time.Second), at.Add(time.Second)); st != nil {
 		t.Fatal("expiry boundary")
 	}
 	r.Text = "changed"
-	if _, reason := memoryAt(r, at); reason != "content_unavailable" {
+	if _, reason := memoryAt(r, at, at); reason != "content_unavailable" {
 		t.Fatal(reason)
 	}
 	r = old
 	expiry := at
 	r.ExpiresAt = &expiry
 	recordMemoryState(colMemories, nil, &r, at)
-	if st, _ := memoryAt(r, at); st != nil {
+	if st, _ := memoryAt(r, at, at); st != nil {
 		t.Fatal("expiry inclusive")
 	}
 	r.ExpiresAt = nil
 	future := at.Add(time.Second)
 	r.EffectiveAt = &future
 	recordMemoryState(colMemories, nil, &r, at)
-	if st, _ := memoryAt(r, at); st != nil {
+	if st, _ := memoryAt(r, at, at); st != nil {
 		t.Fatal("future validity")
 	}
-	if st, _ := memoryAt(r, future); st == nil {
+	if st, _ := memoryAt(r, future, future); st == nil {
 		t.Fatal("inclusive effective time")
 	}
 	legacy := old
 	legacy.MemoryTimeline = nil
 	r = legacy
 	recordMemoryState(colMemories, &legacy, &r, at)
-	if _, reason := memoryAt(r, at.Add(-time.Millisecond)); reason != "history_not_recorded" {
+	if _, reason := memoryAt(r, at.Add(-time.Millisecond), at.Add(-time.Millisecond)); reason != "history_not_recorded" {
 		t.Fatal("invented legacy history")
 	}
 }
@@ -74,10 +74,10 @@ func TestMemoryTimeQuarantineAndClockReversal(t *testing.T) {
 	r.PrivacyQuarantined = false
 	r.Revision++
 	recordMemoryState(colMemories, &old, &r, at.Add(2*time.Second))
-	if state, _ := memoryAt(r, at.Add(time.Second)); state != nil {
+	if state, _ := memoryAt(r, at.Add(time.Second), at.Add(time.Second)); state != nil {
 		t.Fatal("quarantine omitted")
 	}
-	if state, _ := memoryAt(r, at.Add(2*time.Second)); state == nil {
+	if state, _ := memoryAt(r, at.Add(2*time.Second), at.Add(2*time.Second)); state == nil {
 		t.Fatal("released state missing")
 	}
 	old = r

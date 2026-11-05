@@ -565,6 +565,17 @@ Parallel consolidation (`parallel` above 1) reserves each call against the daily
 
 Routes added with them, none of which calls a model: `POST /v1/mental-models/{id}/clear` (people only), `POST /v1/mental-models/cron-preview`, `GET /v1/observations/scopes`, `POST /v1/observations/strategies/preview`, `DELETE /v1/observations` (people only; bulk, audited; rows keep their history with status `deleted`) and `POST /v1/prompts/preview`.
 
+### Recall quality settings
+
+The `recall_quality` space block (inherited whole, like the blocks above) changes what memory search returns. Upgrading changes two things by default; the rest is opt-in.
+
+- `relevance_gate` (default **on**; `false` turns it off): an exact-keyword or keyword-search hit stays only when its text, summary and keywords share the query's topic words (one, or two once the query has three or more) or the vector lane found it too. A keyword equal to the whole query always passes. When every hit is removed the result is empty with `empty_reason: below_relevance_floor`. On the fixed no-answer set in `internal/memory/testdata/recall_no_answer_v1.json` this cut off-topic results from 14 of 14 no-answer queries to 2 of 14 with no answer lost (11 of 11). Korean question words (언제, 어디, 누가, 무엇, 왜, 어떻게, …) now count as question scaffolding, as English ones already did.
+- `conflict_pending` (default **attach**): a memory a correction is waiting on comes back with `pending_correction` (the correction's text only for callers with `read:memory_candidates`). `exclude` leaves such memories out until a person decides.
+- `provisional` (default off): pending candidates that match the query come back in a separate `provisional` list with a `provisional_notice`, only to callers with `read:memory_candidates`. They are never mixed into `items`, never counted in the context budget and never exported.
+- `auto_close_on_correction` (default off): when a person approves a correction and keeps the old memory (`keep_both`), the old memory gets a `valid_to_proposal`; a person accepts it by setting `expires_at` to that time (`POST /v1/memories/{id}/expiry` now accepts that one past time). With this on, the approval ends the old memory at once.
+
+`POST /v1/memories/at` takes an optional `valid_at` next to `as_of`: `as_of` is record time (what was known then), `valid_at` keeps only memories in effect at that time. The `recall_at` MCP tool passes it through.
+
 ## Model providers
 
 The server reaches models through a few plain HTTP protocols, so most hosted

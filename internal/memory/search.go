@@ -446,8 +446,7 @@ func (s *Service) searchLists(ctx context.Context, token, collection string, in 
 	}
 	// A probe, not a request: a caller without the optional lane recalls memories only, and
 	// authorize would write a denial audit row on every such recall.
-	action := "read:" + colObservations
-	if d, err := s.Auth.Authorize(ctx, token, Authorization{Action: action, Scope: in.Scope, Context: NewContextScope(in.Scope, action, "internal")}); err != nil || !d.Allowed || d.PrincipalID == "" || d.Scope != in.Scope {
+	if !s.probeAllowed(ctx, token, "read:"+colObservations, in.Scope) {
 		return lists, nil
 	}
 	derived, err := s.Repo.SearchCollection(ctx, colObservations, in, vector, space)

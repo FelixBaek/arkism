@@ -112,6 +112,8 @@ type SpaceConfig struct {
 	ReflectDefaults     *SpaceReflectDefaults     `json:"reflect_default_options,omitempty" bson:"reflect_default_options,omitempty"`
 	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty" bson:"mental_model_defaults,omitempty"`
 	Consolidation       *SpaceConsolidation       `json:"consolidation,omitempty" bson:"consolidation,omitempty"`
+	// RecallQuality: relevance gate, pending corrections, provisional candidates, closing corrected facts (recall_quality.go).
+	RecallQuality *SpaceRecallQuality `json:"recall_quality,omitempty" bson:"recall_quality,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -159,6 +161,7 @@ type SpaceConfigInput struct {
 	ReflectDefaults           *SpaceReflectDefaults       `json:"reflect_default_options,omitempty"`
 	MentalModelDefaults       *SpaceMentalModelDefaults   `json:"mental_model_defaults,omitempty"`
 	Consolidation             *SpaceConsolidation         `json:"consolidation,omitempty"`
+	RecallQuality             *SpaceRecallQuality         `json:"recall_quality,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

@@ -163,6 +163,9 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
 	lists = laneFloors(in, lists, trace)
+	if collection == colMemories {
+		lists = relevanceGate(in, lists, trace)
+	}
 	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes {
 		return lists, trace, nil
 	}
@@ -225,7 +228,13 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 	if in.PreferObservations {
 		out.Items = preferObservations(out.Items)
 	}
+	if len(out.Items) == 0 && trace.dropStages["relevance"] > 0 {
+		out.EmptyReason = emptyBelowRelevance
+	}
 	trace.annotate(out, lists)
+	if err := s.pendingRecall(ctx, token, in, collection, out); err != nil {
+		return err
+	}
 	return s.collectSourceFacts(ctx, in, out, clean)
 }
 

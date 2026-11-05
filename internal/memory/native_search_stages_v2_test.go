@@ -25,8 +25,8 @@ func nativeStageFixture(t *testing.T) (*fixture, Record, Record, *nativeStageLan
 	t.Helper()
 	f := newFixture(t)
 	f.svc.Embedder = nil
-	a := viewMemory(t, f, scopeA, "viewcanary stage-a raw-stage-body-canary")
-	b := viewMemory(t, f, scopeA, "viewcanary stage-b raw-stage-body-canary")
+	a := viewMemory(t, f, scopeA, "viewcanary searchcanary stage-a raw-stage-body-canary")
+	b := viewMemory(t, f, scopeA, "viewcanary searchcanary stage-b raw-stage-body-canary")
 	ah := HitFromRecord(colMemories, a)
 	bh := HitFromRecord(colMemories, b)
 	ah.Reasons = []string{reasonExactKeyword}

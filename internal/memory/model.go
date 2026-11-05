@@ -211,14 +211,16 @@ type Record struct {
 	UpdatedAt          time.Time                `json:"updated_at" bson:"updated_at"`
 	EffectiveAt        *time.Time               `json:"effective_at,omitempty" bson:"effective_at,omitempty"`
 	// Occurred is when the content says the event happened (memory_context.go resolveOccurred), not when it was recorded.
-	Occurred      *RecallTimeWindow `json:"occurred,omitempty" bson:"occurred,omitempty"`
-	ExpiresAt     *time.Time        `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
-	ReviewDueAt   *time.Time        `json:"review_due_at,omitempty" bson:"review_due_at,omitempty"`
-	CreatedBy     string            `json:"created_by" bson:"created_by"`
-	Trust         float64           `json:"trust" bson:"trust"`
-	SkillID       string            `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
-	ActiveVersion string            `json:"active_version,omitempty" bson:"active_version,omitempty"`
-	BaseVersion   string            `json:"base_version,omitempty" bson:"base_version,omitempty"`
+	Occurred    *RecallTimeWindow `json:"occurred,omitempty" bson:"occurred,omitempty"`
+	ExpiresAt   *time.Time        `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	ReviewDueAt *time.Time        `json:"review_due_at,omitempty" bson:"review_due_at,omitempty"`
+	// ValidToProposal: an approved correction proposes ending this memory (recall_quality.go).
+	ValidToProposal *ValidToProposal `json:"valid_to_proposal,omitempty" bson:"valid_to_proposal,omitempty"`
+	CreatedBy       string           `json:"created_by" bson:"created_by"`
+	Trust           float64          `json:"trust" bson:"trust"`
+	SkillID         string           `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
+	ActiveVersion   string           `json:"active_version,omitempty" bson:"active_version,omitempty"`
+	BaseVersion     string           `json:"base_version,omitempty" bson:"base_version,omitempty"`
 	// Skill hub: ordered version IDs on the parent skill (index+1 is the
 	// public version number), import origin and runtime compatibility on a
 	// version. Content stays immutable; only lifecycle status moves.
@@ -415,30 +417,33 @@ type Hit struct {
 	ProofCount      int        `json:"proof_count,omitempty" bson:"-"`
 	LastConfirmedAt *time.Time `json:"last_confirmed_at,omitempty" bson:"-"`
 
-	ApprovalOrigin     string         `json:"approval_origin,omitempty" bson:"-"`
-	MemoryContext      *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
-	Reach              string         `json:"reach,omitempty" bson:"reach,omitempty"`
-	ReachProject       string         `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
-	ConflictPending    bool           `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
-	Supersedes         []Ref          `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
-	SupersededBy       *Ref           `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
-	TrustLevel         string         `json:"trust_level,omitempty" bson:"trust_level,omitempty"`
-	GeneratorModel     string         `json:"generator_model,omitempty" bson:"generator_model,omitempty"`
-	CreatedBy          string         `json:"created_by,omitempty" bson:"created_by,omitempty"`
-	CreatedAt          *time.Time     `json:"created_at,omitempty" bson:"created_at,omitempty"`
-	Tags               []string       `json:"tags,omitempty" bson:"tags,omitempty"`
-	Digest             string         `json:"digest,omitempty" bson:"digest,omitempty"`
-	ReviewStatus       string         `json:"review_status,omitempty" bson:"review_status,omitempty"`
-	SourceEventID      string         `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
-	TraceID            string         `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
-	VerificationStatus string         `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
-	CollectedAt        *time.Time     `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
-	EffectiveAt        *time.Time     `json:"effective_at" bson:"effective_at,omitempty"`
-	Rank               int            `json:"rank,omitempty" bson:"rank,omitempty"`
-	Score              float64        `json:"score,omitempty" bson:"-"`
-	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
-	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
-	Explain            *HitExplain    `json:"explain,omitempty" bson:"-"`
+	ApprovalOrigin  string         `json:"approval_origin,omitempty" bson:"-"`
+	MemoryContext   *MemoryContext `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
+	Reach           string         `json:"reach,omitempty" bson:"reach,omitempty"`
+	ReachProject    string         `json:"reach_project,omitempty" bson:"reach_project,omitempty"`
+	ConflictPending bool           `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
+	// PendingCorrection and ValidToProposal label a memory a correction is waiting on or has replaced (recall_quality.go).
+	PendingCorrection  *PendingCorrection `json:"pending_correction,omitempty" bson:"-"`
+	ValidToProposal    *ValidToProposal   `json:"valid_to_proposal,omitempty" bson:"-"`
+	Supersedes         []Ref              `json:"supersedes,omitempty" bson:"supersedes,omitempty"`
+	SupersededBy       *Ref               `json:"superseded_by,omitempty" bson:"superseded_by,omitempty"`
+	TrustLevel         string             `json:"trust_level,omitempty" bson:"trust_level,omitempty"`
+	GeneratorModel     string             `json:"generator_model,omitempty" bson:"generator_model,omitempty"`
+	CreatedBy          string             `json:"created_by,omitempty" bson:"created_by,omitempty"`
+	CreatedAt          *time.Time         `json:"created_at,omitempty" bson:"created_at,omitempty"`
+	Tags               []string           `json:"tags,omitempty" bson:"tags,omitempty"`
+	Digest             string             `json:"digest,omitempty" bson:"digest,omitempty"`
+	ReviewStatus       string             `json:"review_status,omitempty" bson:"review_status,omitempty"`
+	SourceEventID      string             `json:"source_event_id,omitempty" bson:"source_event_id,omitempty"`
+	TraceID            string             `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
+	VerificationStatus string             `json:"verification_status,omitempty" bson:"verification_status,omitempty"`
+	CollectedAt        *time.Time         `json:"collected_at,omitempty" bson:"collected_at,omitempty"`
+	EffectiveAt        *time.Time         `json:"effective_at" bson:"effective_at,omitempty"`
+	Rank               int                `json:"rank,omitempty" bson:"rank,omitempty"`
+	Score              float64            `json:"score,omitempty" bson:"-"`
+	Lanes              []string           `json:"lanes,omitempty" bson:"-"`
+	VectorMatch        *VectorMatch       `json:"vector_match,omitempty" bson:"-"`
+	Explain            *HitExplain        `json:"explain,omitempty" bson:"-"`
 	// SourceTraces and Entities are filled only when the search asked for them (recall_include.go).
 	SourceTraces []SourceTrace   `json:"source_traces,omitempty" bson:"-"`
 	Entities     []HitEntity     `json:"entities,omitempty" bson:"-"`
@@ -471,6 +476,9 @@ type Hit struct {
 	vectorDistanceLimit float64
 	// graphHops: steps from a top hit for a graph or causal lane hit (recall_lanes.go).
 	graphHops int
+	// conflictID and keywords feed the pending-correction label and the relevance gate (recall_quality.go).
+	conflictID string
+	keywords   []string
 }
 type ContextBundle struct {
 	History       []HistoricalHit `json:"history,omitempty"`
@@ -482,6 +490,11 @@ type ContextBundle struct {
 	Items         []Hit           `json:"items"`
 	Degraded      []string        `json:"degraded,omitempty"`
 	Explain       *RecallExplain  `json:"explain,omitempty"`
+	// EmptyReason says why a recall that found hits returned none (recall_quality.go).
+	EmptyReason string `json:"empty_reason,omitempty"`
+	// Provisional are pending candidates a space opted in to show, never mixed into Items.
+	Provisional       []Hit  `json:"provisional,omitempty"`
+	ProvisionalNotice string `json:"provisional_notice,omitempty"`
 	// sourceFacts are the cleaned source memories of observation hits, held for
 	// include source_facts until the search's checks are done (recall_include.go).
 	sourceFacts map[string][]Hit

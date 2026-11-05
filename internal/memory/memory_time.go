@@ -48,7 +48,10 @@ func recordMemoryState(col string, old *Record, r *Record, now time.Time) error 
 	r.MemoryTimeline = append(r.MemoryTimeline, state)
 	return nil
 }
-func memoryAt(r Record, at time.Time) (*MemoryState, string) {
+
+// memoryAt is r as recorded at `at` (record time), kept only when that state held the
+// fact true at `valid` (valid time: effective_at <= valid < expires_at).
+func memoryAt(r Record, at, valid time.Time) (*MemoryState, string) {
 	if len(r.MemoryTimeline) == 0 {
 		return nil, "history_not_recorded"
 	}
@@ -66,7 +69,7 @@ func memoryAt(r Record, at time.Time) (*MemoryState, string) {
 		}
 		return nil, "history_not_recorded"
 	}
-	if found.Withheld || found.Status != "active" || !found.Approved || found.EffectiveAt != nil && found.EffectiveAt.After(at) || found.ExpiresAt != nil && !found.ExpiresAt.After(at) {
+	if found.Withheld || found.Status != "active" || !found.Approved || found.EffectiveAt != nil && found.EffectiveAt.After(valid) || found.ExpiresAt != nil && !found.ExpiresAt.After(valid) {
 		return nil, ""
 	}
 	if found.ContentHash != ContentHash(recordContent(r)) {
@@ -76,12 +79,14 @@ func memoryAt(r Record, at time.Time) (*MemoryState, string) {
 }
 
 type MemoryAtInput struct {
-	Scope  Scope     `json:"scope"`
-	AsOf   time.Time `json:"as_of"`
-	Query  string    `json:"q,omitempty"`
-	Kind   string    `json:"kind,omitempty"`
-	Limit  int       `json:"limit,omitempty"`
-	Cursor string    `json:"cursor,omitempty"`
+	Scope Scope     `json:"scope"`
+	AsOf  time.Time `json:"as_of"`
+	// ValidAt (optional, default as_of) asks which facts were true at that time, as recorded at as_of.
+	ValidAt *time.Time `json:"valid_at,omitempty"`
+	Query   string     `json:"q,omitempty"`
+	Kind    string     `json:"kind,omitempty"`
+	Limit   int        `json:"limit,omitempty"`
+	Cursor  string     `json:"cursor,omitempty"`
 }
 type MemoryAtHit struct {
 	ID                 string     `json:"id"`
@@ -117,6 +122,13 @@ func normalizeMemoryAt(in MemoryAtInput) (MemoryAtInput, MemoryListInput, error)
 		return in, list, ErrInvalid
 	}
 	in.AsOf = in.AsOf.UTC()
+	valid := in.AsOf
+	if in.ValidAt != nil {
+		valid = in.ValidAt.UTC()
+	}
+	if in.ValidAt = &valid; valid.Year() < 1970 || valid.Year() > 9999 {
+		return in, list, ErrInvalid
+	}
 	in.Query = list.Query
 	in.Limit = list.Limit
 	if in.Cursor != "" {
@@ -202,7 +214,7 @@ func (s *Service) MemoriesAt(ctx context.Context, token string, in MemoryAtInput
 		out.NextCursor = base64.RawURLEncoding.EncodeToString([]byte(structuredText(memoryCursor{rows[len(rows)-1].ID, memoryAtBinding(in)})))
 	}
 	for _, r := range rows {
-		state, reason := memoryAt(r, in.AsOf)
+		state, reason := memoryAt(r, in.AsOf, *in.ValidAt)
 		if reason != "" {
 			out.Unknown = append(out.Unknown, MemoryAtUnknown{r.ID, reason})
 			continue
@@ -232,7 +244,7 @@ func (s *Service) memoryAtBatch(ctx context.Context, token string, in MemoryAtIn
 		if d.PrincipalID != actor.PrincipalID || d.Role != actor.Role {
 			return rows, ErrDenied
 		}
-		state, unknown := memoryAt(r, in.AsOf)
+		state, unknown := memoryAt(r, in.AsOf, *in.ValidAt)
 		if state == nil && unknown == "" {
 			continue
 		}

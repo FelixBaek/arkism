@@ -96,7 +96,7 @@ type ObservationScopeLimit struct {
 }
 
 func validReflectModelSettings(c SpaceConfig) error {
-	if !c.ReflectDefaults.valid() || !c.MentalModelDefaults.valid() || !c.Consolidation.valid() {
+	if !c.ReflectDefaults.valid() || !c.MentalModelDefaults.valid() || !c.Consolidation.valid() || !c.RecallQuality.valid() {
 		return ErrInvalid
 	}
 	if c.Consolidation != nil && containsSecret(consolidationMissions(c.Consolidation)) {
@@ -178,6 +178,7 @@ func resolveReflectModelBlocks(out *SpaceConfig, layers []spaceLayer, src map[st
 	inheritSetting(out, layers, src, "reflect_default_options", func(c *SpaceConfig) **SpaceReflectDefaults { return &c.ReflectDefaults }, func(v *SpaceReflectDefaults) bool { return v != nil })
 	inheritSetting(out, layers, src, "mental_model_defaults", func(c *SpaceConfig) **SpaceMentalModelDefaults { return &c.MentalModelDefaults }, func(v *SpaceMentalModelDefaults) bool { return v != nil })
 	inheritSetting(out, layers, src, "consolidation", func(c *SpaceConfig) **SpaceConsolidation { return &c.Consolidation }, func(v *SpaceConsolidation) bool { return v != nil })
+	inheritSetting(out, layers, src, "recall_quality", func(c *SpaceConfig) **SpaceRecallQuality { return &c.RecallQuality }, func(v *SpaceRecallQuality) bool { return v != nil })
 }
 
 // applyReflectModelBlocks copies the blocks a PUT or PATCH sent; an empty block clears it (back to inherited).
@@ -185,6 +186,7 @@ func applyReflectModelBlocks(c *SpaceConfig, in SpaceConfigInput) {
 	c.ReflectDefaults = replaceBlock(c.ReflectDefaults, in.ReflectDefaults)
 	c.MentalModelDefaults = replaceBlock(c.MentalModelDefaults, in.MentalModelDefaults)
 	c.Consolidation = replaceBlock(c.Consolidation, in.Consolidation)
+	c.RecallQuality = replaceBlock(c.RecallQuality, in.RecallQuality)
 }
 
 func replaceBlock[T any](cur, in *T) *T {

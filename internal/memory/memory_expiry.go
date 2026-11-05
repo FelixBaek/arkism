@@ -8,7 +8,9 @@ import (
 // MemoryExpiryInput sets or clears (ExpiresAt == nil) the optional end date of
 // an active memory. Once that time passes every read path that uses live()
 // or the Postgres expires_at filter treats the memory as expired: it is no
-// longer recalled, searched or listed as active.
+// longer recalled, searched or listed as active. A past time is accepted only as
+// the memory's valid_to_proposal time: accepting it ends the memory then. Any change
+// here, a clear included, settles the proposal.
 type MemoryExpiryInput struct {
 	Scope            Scope      `json:"scope"`
 	ExpectedRevision int64      `json:"expected_revision"`
@@ -22,7 +24,7 @@ func (s *Service) SetMemoryExpiry(ctx context.Context, token, id string, in Memo
 	now := time.Now().UTC()
 	if in.ExpiresAt != nil {
 		at := in.ExpiresAt.UTC().Truncate(time.Millisecond)
-		if !at.After(now) || at.Year() > 9999 {
+		if at.Year() > 9999 {
 			return Record{}, ErrInvalid
 		}
 		in.ExpiresAt = &at
@@ -50,7 +52,10 @@ func (s *Service) SetMemoryExpiry(ctx context.Context, token, id string, in Memo
 		if r.ConflictID != "" || r.Revision != in.ExpectedRevision || !live(r) {
 			return ErrConflict
 		}
-		r.ExpiresAt = in.ExpiresAt
+		if in.ExpiresAt != nil && !in.ExpiresAt.After(now) && (r.ValidToProposal == nil || !r.ValidToProposal.At.Equal(*in.ExpiresAt)) {
+			return ErrInvalid
+		}
+		r.ExpiresAt, r.ValidToProposal = in.ExpiresAt, nil
 		r.Revision++
 		r.UpdatedAt = time.Now().UTC()
 		if e = tx.Replace(ctx, "memories", r, in.ExpectedRevision); e != nil {

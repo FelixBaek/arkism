@@ -1,0 +1,41 @@
+{
+  "version": "recall_no_answer_v1",
+  "note": "Fixed relevance-floor eval. Memories carry the broad keywords capture writes in practice; no-answer queries share one of those keywords but ask about a topic the space never stored. answer is the memory key a correct recall returns in its top five, empty for no-answer.",
+  "memories": [
+    {"key": "theme", "text": "기본 테마는 paper 라이트로 쓴다", "keywords": ["테마", "설정", "ui"]},
+    {"key": "deploy", "text": "배포는 매주 금요일 오후에 한다", "keywords": ["배포", "일정", "금요일"]},
+    {"key": "db", "text": "운영 데이터베이스는 postgres 16을 쓴다", "keywords": ["database", "postgres", "운영"]},
+    {"key": "indent", "text": "The team uses tabs for indentation in Go code", "keywords": ["style", "go", "code"]},
+    {"key": "review", "text": "Pull requests need one human approval before merge", "keywords": ["review", "merge", "project"]},
+    {"key": "backup", "text": "백업은 매일 새벽 4시에 외부 디스크로 복사한다", "keywords": ["백업", "운영", "일정"]},
+    {"key": "answers", "text": "Felix prefers short answers in Korean", "keywords": ["answer", "style", "korean"]},
+    {"key": "meeting", "text": "주간 회의는 월요일 10시에 한다", "keywords": ["회의", "일정", "월요일"]}
+  ],
+  "queries": [
+    {"query": "테마 설정", "answer": "theme"},
+    {"query": "배포 일정", "answer": "deploy"},
+    {"query": "postgres version", "answer": "db"},
+    {"query": "go code style", "answer": "indent"},
+    {"query": "review merge rule", "answer": "review"},
+    {"query": "백업 시간", "answer": "backup"},
+    {"query": "회의 요일", "answer": "meeting"},
+    {"query": "korean answer style", "answer": "answers"},
+    {"query": "금요일", "answer": "deploy"},
+    {"query": "database", "answer": "db"},
+    {"query": "운영 서버 시간대", "answer": ""},
+    {"query": "go to the gym schedule", "answer": ""},
+    {"query": "project budget for next quarter", "answer": ""},
+    {"query": "code of conduct policy", "answer": ""},
+    {"query": "style of the wedding dress", "answer": ""},
+    {"query": "일정 공유 앱 추천", "answer": ""},
+    {"query": "the review of the new movie", "answer": ""},
+    {"query": "korean food recipe for dinner", "answer": ""},
+    {"query": "merge sort algorithm complexity", "answer": ""},
+    {"query": "설정 파일 경로 위치", "answer": ""},
+    {"query": "ui animation library choice", "answer": ""},
+    {"query": "월요일 점심 메뉴 뭐 먹지", "answer": ""},
+    {"query": "postgres", "answer": "db"},
+    {"query": "database password", "answer": ""},
+    {"query": "answer key", "answer": ""}
+  ]
+}
