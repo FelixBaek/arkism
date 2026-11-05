@@ -219,3 +219,35 @@ test("분류 자세히 shows the classification in the row", async () => {
   assert.ok(!document.body.textContent.includes("Uses port 8091"), "a classified candidate has left 분류");
   win.reset();
 });
+
+test("기억 관리: numbers, a merge that asks first, retry on stopped work; an agent token gets no change buttons", async () => {
+  require("./memory-management.js");
+  const last = (sel) => document.querySelectorAll(sel).at(-1);
+  const read = (path, body) => {
+    if (path.startsWith("/v1/stats")) return { memories: { total: 5, by_status: { candidate: 5 } }, pending_candidates: 2, sources: { total: 1 } };
+    if (path.startsWith("/v1/tags/rename")) return { renamed: 3, more: false, body };
+    if (path.startsWith("/v1/tags")) return { items: [{ tag: "work", count: 3 }, { tag: "home", count: 1 }, { tag: "session:s1", count: 4 }] };
+    if (path.startsWith("/v1/operations?")) return { items: [{ id: "op1", kind: "embedding", operable: true, revision: 4, updated_at: "2026-11-05T00:00:00Z" }] };
+    return {};
+  };
+  const { win, calls, state } = windows([], {}, read);
+  win.wide("ops"); await dom.flush(); await dom.flush();
+  const dlg = last("dialog.ov-wide-win"), text = () => dlg.textContent;
+  assert.match(text(), /0개쓰는 기억/, "a present status map without active means zero");
+  assert.match(text(), /대화에서 자동으로 붙어 바꿀 수 없어요/);
+  const btn = (root, t) => [root, ...root.querySelectorAll("button")].find((b) => b.tagName === "BUTTON" && b.textContent.trim() === t);
+  btn(dlg, "이름 바꾸기").click();
+  const input = dlg.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "새 태그 이름"); input.value = "home";
+  btn(dlg, "바꾸기").click(); await dom.flush();
+  const ask = last("dialog.ov-ask");
+  assert.match(ask.textContent, /'work' 태그를 'home'에 합칠까요\?/);
+  assert.ok(!calls.some((c) => c === "/v1/tags/rename"), "nothing renamed before the answer");
+  btn(ask, "합치기").click(); await dom.flush();
+  assert.ok(calls.includes("/v1/tags/rename"));
+  assert.ok(btn(last("dialog.ov-wide-win"), "다시 시도"));
+  win.reset?.();
+  state.caps = { actions: { review_decide: false } };
+  win.wide("ops"); await dom.flush(); await dom.flush();
+  const agent = last("dialog.ov-wide-win");
+  assert.equal(btn(agent, "이름 바꾸기"), undefined); assert.equal(btn(agent, "다시 시도"), undefined);
+});

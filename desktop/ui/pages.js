@@ -1,7 +1,7 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
 window.ArkismPages = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus } = ctx;
+  const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus } = ctx;
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";
@@ -1291,29 +1291,20 @@ window.ArkismPages = (ctx) => {
     cf.append(cu);
     comfy.append(cf);
     // 가져오기: 파일을 고르면 내용을 검사하고, 하나라도 틀리면 아무것도 바꾸지 않는다.
-    const pickFile = () => new Promise((resolve) => {
-      const input = el("input"); input.type = "file"; input.accept = "application/json,.json";
-      input.addEventListener("change", () => { const f = input.files?.[0]; if (!f || f.size > 1048576) return resolve(null); f.text().then(resolve, () => resolve(null)); });
-      input.click();
-    });
     const currentAccount = async () => {
       const owner = JSON.stringify([state.server, state.token, state.scope]);
-      const query = new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== "")).toString();
-      const caps = await request(`/v1/capabilities?${query}`);
+      const caps = await request(`/v1/capabilities?${query()}`);
       if (owner !== JSON.stringify([state.server, state.token, state.scope])) throw new Error("changed_identity");
       return { ...caps, scope: { ...state.scope } };
     };
     const importError = (e) => ({ other_account: "다른 계정에서 내보낸 파일이에요. 그 계정으로 로그인한 뒤 가져와 주세요.", other_scope: "다른 작업 범위에서 내보낸 파일이에요. 설정 › 고급 › 연결의 범위를 맞춰 주세요." })[e?.message] || "가져오지 못했어요. Arkism에서 내보낸 파일인지 확인해 주세요. 기존 설정은 그대로예요.";
     const transfer = group("PC 설정 옮기기", "화면·정렬·분류 설정을 파일로 옮겨요.");
     transfer.append(button("PC 설정 내보내기", "", null, () => {
-      let url;
       try {
         const text = window.ArkismPreferenceTransfer.export((key) => localStorage.getItem(key));
-        url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-        const link = el("a"); link.href = url; link.download = "arkism-preferences.json"; link.click();
+        saveFile("arkism-preferences.json", text, "application/json");
         notice("설정 파일 다운로드를 시작했어요. 저장되면 다른 PC의 설정 › 고급에서 가져오세요."); // a link click cannot tell whether the save went through
       } catch (_) { notice("설정 파일을 만들지 못했어요. 기존 설정은 그대로예요."); }
-      finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
     }), button("PC 설정 가져오기", "", null, async () => {
       const text = await pickFile();
       if (!text) return;
@@ -1325,18 +1316,14 @@ window.ArkismPages = (ctx) => {
     }));
     const memoryTransfer = group("기억 정리 설정 옮기기", "‘유지’한 기억과 정리 설정을 옮겨요. 같은 계정에서만 가져올 수 있어요.");
     memoryTransfer.append(button("기억 정리 설정 내보내기", "", null, async () => {
-      let url;
       const owner = JSON.stringify([state.server, state.token, state.scope]);
       try {
-        const query = new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== "")).toString();
-        const caps = await request(`/v1/capabilities?${query}`);
+        const caps = await request(`/v1/capabilities?${query()}`);
         if (owner !== JSON.stringify([state.server, state.token, state.scope]) || ["workspace_id", "project_id", "user_id", "agent_id"].some(k => (caps.scope?.[k] || "") !== (state.scope[k] || ""))) throw new Error("changed_identity");
         const text = window.ArkismPreferenceTransfer.exportMemory(k => localStorage.getItem(k), { ...caps, server: state.server });
-        url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-        const link = el("a"); link.href = url; link.download = "arkism-memory-preferences.json"; link.click();
+        saveFile("arkism-memory-preferences.json", text, "application/json");
         notice("기억 정리 설정을 저장했어요. 같은 계정으로 로그인한 앱의 설정 › 고급에서 가져오세요.");
       } catch (_) { notice("기억 정리 설정을 내보내지 못했어요. 로그인과 연결 상태를 확인해 주세요."); }
-      finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
     }), button("기억 정리 설정 가져오기", "", null, async () => {
       const text = await pickFile();
       if (!text) return;
@@ -1348,18 +1335,14 @@ window.ArkismPages = (ctx) => {
     }));
     const skillTransfer = group("스킬 제안 옮기기", "스킬 제안 초안과 숨긴 제안을 옮겨요. 같은 계정에서만 가져올 수 있고, 초안 본문이 들어 있어요.");
     skillTransfer.append(button("스킬 제안 내보내기", "", null, async () => {
-      let url;
       const owner = JSON.stringify([state.server, state.token, state.scope]);
       try {
-        const query = new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== "")).toString();
-        const caps = await request(`/v1/capabilities?${query}`);
+        const caps = await request(`/v1/capabilities?${query()}`);
         if (owner !== JSON.stringify([state.server, state.token, state.scope]) || ["workspace_id", "project_id", "user_id", "agent_id"].some(k => (caps.scope?.[k] || "") !== (state.scope[k] || ""))) throw new Error("changed_identity");
         const text = window.ArkismPreferenceTransfer.exportSkills(k => localStorage.getItem(k), { ...caps, server: state.server });
-        url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-        const link = el("a"); link.href = url; link.download = "arkism-skill-preferences.json"; link.click();
+        saveFile("arkism-skill-preferences.json", text, "application/json");
         notice("스킬 제안을 저장했어요. 같은 계정으로 로그인한 앱의 설정 › 고급에서 가져오세요.");
       } catch (_) { notice("스킬 제안을 내보내지 못했어요. 로그인과 연결 상태를 확인해 주세요."); }
-      finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); }
     }), button("스킬 제안 가져오기", "", null, async () => {
       const text = await pickFile();
       if (!text) return;
@@ -1407,7 +1390,7 @@ window.ArkismPages = (ctx) => {
       } catch (_) { keep.value = days; notice("보관 기간을 저장하지 못했어요."); }
     });
     keep.disabled = true;
-    request(`/v1/session-archives/settings?${new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== ""))}`)
+    request(`/v1/session-archives/settings?${query()}`)
       .then((r) => { days = String(r.days); keep.value = days; keep.disabled = false; }, () => { keep.title = "서버가 보관 기간 바꾸기를 아직 지원하지 않아요."; });
     const save = async (next, done) => {
       try { await tauri.invoke("set_capture_settings", { settings: next }); current = next; draw(); if (done) notice(done); }
@@ -1473,23 +1456,40 @@ window.ArkismPages = (ctx) => {
     return [g];
   }
 
+  // A file the person picks, read as text; nothing for no pick, an unreadable file or one over max (tooBig says so).
+  const pickFile = (accept = "application/json,.json", max = 1048576, tooBig = () => {}) => new Promise((resolve) => {
+    const input = el("input"); input.type = "file"; input.accept = accept;
+    input.addEventListener("change", () => { const f = input.files?.[0]; if (!f) return resolve(null); if (f.size > max) { tooBig(); return resolve(null); } f.text().then(resolve, () => resolve(null)); });
+    input.click();
+  });
+  // Hands text to the browser's download; a link click cannot tell whether the save went through.
+  const saveFile = (name, text, type) => {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    try { const a = el("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  };
+
   // 데이터: 이 PC의 Arkism(내장 모드)만. 백업은 문서 › Arkism Backups에 폴더로 남는다.
   // 기억 공간 옮기기 (POST /v1/spaces/{workspace}/{project}/export · import): a bundle file of this space's memories.
   // Export needs the external:space_bundle grant; an import never saves directly — everything lands as candidates to review.
+  // The space is the app's current scope (설정 › 고급 › 연결), never a guessed "default": a missing one stops with a message.
   const space = { busy: false, line: "", warn: false, review: false };
-  const spacePath = () => `/v1/spaces/${encodeURIComponent(state.scope.workspace_id || "default")}/${encodeURIComponent(state.scope.project_id || "default")}`;
-  const spaceQuery = () => new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== "")).toString();
+  const spacePath = () => {
+    const { workspace_id: w, project_id: p } = state.scope;
+    if (!w || !p) throw new Error("no_space");
+    return `/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}`;
+  };
   const spaceShow = (line, warn = false, review = false) => { Object.assign(space, { line, warn, review }); if (state.view === "settings" && state.settingsTab === "advanced") render(false); };
   async function spaceJob(kind, job) { // until done or failed; 10 minutes is the server's own job limit
     for (let i = 0; i < 400 && ["queued", "running"].includes(job.state); i++) {
       await new Promise((r) => setTimeout(r, 1500));
-      job = await request(`/v1/spaces/${kind}/${encodeURIComponent(job.id)}?${spaceQuery()}`);
+      job = await request(`/v1/spaces/${kind}/${encodeURIComponent(job.id)}?${query()}`);
     }
     if (job.state !== "done") throw new Error(job.error || "space_job_failed");
     return job;
   }
   const SPACE_ERR = { access_denied: "이 계정에는 기억을 밖으로 내보낼 권한이 없어요. 서버 관리자에게 'external:space_bundle' 권한을 받아 주세요.",
-    invalid_request: "Arkism에서 내보낸 기억 공간 파일인지 확인해 주세요.", payload_too_large: "파일이 너무 커요. 8MB까지 가져올 수 있어요." };
+    invalid_request: "Arkism에서 내보낸 기억 공간 파일인지 확인해 주세요.", payload_too_large: "파일이 너무 커요. 8MB까지 가져올 수 있어요.",
+    no_space: "작업 공간과 프로젝트가 정해지지 않았어요. 설정 › 고급 › 연결에서 범위를 먼저 정해 주세요." };
   async function spaceRun(work) {
     if (space.busy) return;
     space.busy = true;
@@ -1500,30 +1500,27 @@ window.ArkismPages = (ctx) => {
   const spaceExport = () => spaceRun(async () => {
     spaceShow("내보낼 파일을 만드는 중…");
     const job = await spaceJob("exports", await request(`${spacePath()}/export`, { method: "POST", body: "{}" }));
-    const text = await request(`/v1/spaces/exports/${encodeURIComponent(job.id)}/download?${spaceQuery()}`, { raw: true });
-    const url = URL.createObjectURL(new Blob([text], { type: "application/x-ndjson" }));
-    const a = el("a"); a.href = url; a.download = `arkism-space-${state.scope.project_id || "default"}.jsonl`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const text = await request(`/v1/spaces/exports/${encodeURIComponent(job.id)}/download?${query()}`, { raw: true });
+    saveFile(`arkism-space-${state.scope.project_id}.jsonl`, text, "application/x-ndjson");
     spaceShow("파일 다운로드를 시작했어요. 다른 Arkism의 설정 › 고급에서 가져오세요. 기억 내용이 들어 있으니 안전한 곳에 두세요.");
   });
-  const spaceImport = () => {
-    const input = el("input"); input.type = "file"; input.accept = ".jsonl,application/x-ndjson";
-    input.addEventListener("change", () => spaceRun(async () => {
-      const f = input.files?.[0];
-      if (!f) return;
-      if (f.size > 8 << 20) throw new Error("payload_too_large");
-      if (!(await window.ask("이 파일의 기억을 가져올까요? 바로 저장되지 않고 모두 '확인해 주세요'에 후보로 들어가요.", "가져오기"))) return;
+  const spaceImport = async () => {
+    const bundle = await pickFile(".jsonl,application/x-ndjson", 8 << 20, () => spaceShow(SPACE_ERR.payload_too_large, true));
+    if (!bundle) return;
+    void spaceRun(async () => {
+      const path = spacePath();
+      if (!(await ask("이 파일의 기억을 가져올까요? 바로 저장되지 않고 모두 '확인해 주세요'에 후보로 들어가요.", "가져오기"))) return;
       spaceShow("가져오는 중…");
-      const job = await spaceJob("imports", await request(`${spacePath()}/import`, { method: "POST", body: JSON.stringify({ bundle: await f.text(), import_as: "candidate" }) }));
+      const job = await spaceJob("imports", await request(`${path}/import`, { method: "POST", body: JSON.stringify({ bundle, import_as: "candidate" }) }));
       const r = job.report || {};
       spaceShow(`후보 ${r.imported || 0}개를 가져왔어요. 이미 있는 기억 ${r.merged || 0}개는 건너뛰었고, 받지 않은 것 ${(r.rejected || 0) + (r.skipped || []).reduce((n, x) => n + (x.count || 0), 0)}개예요.`, false, (r.imported || 0) > 0);
-    }));
-    input.click();
+    });
   };
   function spaceGroup() {
     const g = group("기억 공간 옮기기", "이 공간의 기억을 파일로 내보내거나, 받은 파일을 가져와요. 가져온 기억은 내가 확인해야 저장돼요.");
     const row = el("div", "v4s-actions");
-    row.append(button("기억 내보내기", "", null, spaceExport), button("기억 가져오기", "", null, spaceImport));
+    row.append(button("기억 내보내기", "", null, spaceExport));
+    if (state.caps?.actions?.review_decide !== false) row.append(button("기억 가져오기", "", null, spaceImport)); // the import route takes people only; an agent token never sees it
     for (const b of row.children) b.disabled = space.busy;
     g.append(row);
     if (space.line) g.append(el("p", `pg-hint${space.warn ? " warn" : ""}`, space.line));

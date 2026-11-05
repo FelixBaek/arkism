@@ -1180,6 +1180,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const [st, tg, ops] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`)]);
     if (!d.isConnected) return;
     const redo = () => { if (dlg === d) wideOps(focusTag); };
+    const human = state.caps?.actions?.review_decide !== false; // rename and retry are people-only routes: an agent token sees no button
     // left: the numbers, then upkeep
     const t = st.status === "fulfilled" ? M.statTiles(st.value) : null, show = (v, unit) => (v == null ? "—" : `${num(v)}${unit}`);
     const tiles = el("div", "ov-win-tiles ov-win-tiles-4");
@@ -1195,7 +1196,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const failed = ops.value?.items || [];
       if (!failed.length) upkeep.append(row("", "멈춘 작업이 없어요", "색인·위키 같은 뒤에서 하는 일이 잘 돌고 있어요."));
       for (const o of failed.slice(0, 10)) {
-        const again = o.operable ? [button("다시 시도", "small", null, async (ev) => { const b = ev.currentTarget; b.disabled = true;
+        const again = o.operable && human ? [button("다시 시도", "small", null, async (ev) => { const b = ev.currentTarget; b.disabled = true;
           try { await request(`/v1/operations/${encodeURIComponent(o.id)}/retry`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: o.revision }) }); redo(); }
           catch (e) { b.disabled = false; b.title = e.message === "revision_conflict" ? tr("그새 바뀌었어요. 다시 열어 주세요.") : tr("다시 시도하지 못했어요."); } })] : [];
         upkeep.append(row("", `멈춘 작업 · ${OP_KIND[o.kind] || "기타 작업"}`, ago(o.updated_at), "", again));
@@ -1207,13 +1208,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (tg.status === "rejected") { right.append(el("p", "ov-win-err", "태그를 불러오지 못했어요.")); return; }
     const rows = M.tagRows(tg.value);
     if (!rows.length) { right.append(el("p", "ov-win-empty", "아직 태그가 붙은 기억이 없어요.")); return; }
-    right.append(el("p", "ov-detail-hint", "이름을 바꾸면 그 태그가 붙은 기억이 모두 바뀌어요. 있는 태그 이름으로 바꾸면 둘이 합쳐져요."));
+    if (human) right.append(el("p", "ov-detail-hint", "이름을 바꾸면 그 태그가 붙은 기억이 모두 바뀌어요. 있는 태그 이름으로 바꾸면 둘이 합쳐져요."));
     const list = el("div", "ov-detail-list");
     for (const r of rows) {
       const name = el("span", "mono", r.tag); name.dataset.noI18n = "";
       const item = el("div", "ov-win-item ov-tag-row"), l = el("div", "ov-win-item-l"), side = el("div", "ov-win-item-r");
       l.append(name, el("small", "", r.system ? `기억 ${num(r.count)}개 · 대화에서 자동으로 붙어 바꿀 수 없어요` : `기억 ${num(r.count)}개`));
-      if (!r.system) side.append(button("이름 바꾸기", "small", null, () => editTag(item, rows, r, redo)));
+      if (!r.system && human) side.append(button("이름 바꾸기", "small", null, () => editTag(item, rows, r, redo)));
       item.append(l, side); list.append(item);
       if (r.tag === focusTag) requestAnimationFrame(() => item.scrollIntoView({ block: "nearest" }));
     }
@@ -1227,11 +1228,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const go2 = async () => {
       const c = window.ArkismMemoryManagement.tagChange(rows, r.tag, input.value);
       if (!c) { st.textContent = tr("다른 이름을 넣어 주세요. 띄어쓰기와 'session:'은 쓸 수 없어요."); return; }
-      const msg = c.merge ? `'${c.from}' 태그를 '${c.to}'에 합칠까요? 기억 ${num(c.moving)}개가 '${c.to}' 태그로 바뀌어요.` : `'${c.from}' 태그 이름을 '${c.to}'(으)로 바꿀까요? 기억 ${num(c.moving)}개가 바뀌어요.`;
-      if (!(await window.ask(msg))) return;
-      box.querySelectorAll("button,input").forEach((b) => (b.disabled = true)); st.textContent = tr("바꾸는 중…");
-      try { for (let i = 0; i < 100; i++) { const res = await request("/v1/tags/rename", { method: "POST", body: JSON.stringify({ scope: state.scope, from: c.from, to: c.to }) }); if (!res?.more) break; } done(); }
-      catch (e) { st.textContent = tr(e.message === "invalid_request" ? "이 이름은 쓸 수 없어요." : e.message === "access_denied" ? "태그는 사람 계정만 바꿀 수 있어요." : "바꾸지 못했어요. 다시 시도해 주세요."); box.querySelectorAll("button,input").forEach((b) => (b.disabled = false)); }
+      const title = c.merge ? `'${c.from}' 태그를 '${c.to}'에 합칠까요?` : `'${c.from}' 태그 이름을 '${c.to}'(으)로 바꿀까요?`;
+      askConfirm(title, c.merge ? `기억 ${num(c.moving)}개가 '${c.to}' 태그로 바뀌어요.` : `기억 ${num(c.moving)}개가 바뀌어요.`, async () => {
+        box.querySelectorAll("button,input").forEach((b) => (b.disabled = true)); st.textContent = tr("바꾸는 중…");
+        try { for (let i = 0; i < 100; i++) { const res = await request("/v1/tags/rename", { method: "POST", body: JSON.stringify({ scope: state.scope, from: c.from, to: c.to }) }); if (!res?.more) break; } done(); }
+        catch (e) { st.textContent = tr(e.message === "invalid_request" ? "이 이름은 쓸 수 없어요." : e.message === "access_denied" ? "태그는 사람 계정만 바꿀 수 있어요." : "바꾸지 못했어요. 다시 시도해 주세요."); box.querySelectorAll("button,input").forEach((b) => (b.disabled = false)); }
+      }, c.merge ? "합치기" : "바꾸기");
     };
     input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); void go2(); } });
     const act = el("div", "ov-detail-actions"); act.append(button("바꾸기", "small primary", null, go2), button("취소", "small", null, done));

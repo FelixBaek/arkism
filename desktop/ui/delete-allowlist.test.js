@@ -8,7 +8,7 @@ const path = require("path");
 test("UI DELETE paths are allowed by the desktop app", () => {
   const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
   const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
-  const allowed = [...body.matchAll(/(?:one_id\(|starts_with\()"(\/v1\/[a-z_]+\/)"/g)].map((m) => m[1]);
+  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_]+\/)"/g)].map((m) => m[1]);
   const missing = [];
   for (const f of fs.readdirSync(__dirname).filter((n) => n.endsWith(".js") && !n.endsWith(".test.js"))) {
     const src = fs.readFileSync(path.join(__dirname, f), "utf8");
@@ -22,4 +22,15 @@ test("UI DELETE paths are allowed by the desktop app", () => {
   }
   assert.deepEqual(missing, []);
   assert.ok(allowed.includes("/v1/memories/") && allowed.includes("/v1/crew/"));
+});
+
+// Calls built from a path helper (`${hookPath(h)}`) slip past the scan above, so the webhook card's DELETE and PATCH are named here.
+test("webhook DELETE and PATCH are allowed by the desktop app", () => {
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
+  const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
+  const ui = fs.readFileSync(path.join(__dirname, "messenger.js"), "utf8");
+  assert.match(ui, /hookPath = \(h, tail = ""\) => `\/v1\/webhooks\//);
+  assert.match(ui, /method: "DELETE"/); assert.match(ui, /method: "PATCH"/);
+  assert.match(body, /query_id\("\/v1\/webhooks\/"\)/, "DELETE /v1/webhooks/{id}?scope");
+  assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/webhooks\/"\)/, "PATCH /v1/webhooks/{id}");
 });

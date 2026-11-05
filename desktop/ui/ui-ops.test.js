@@ -17,16 +17,19 @@ const all = (root, sel = "button") => [root, ...root.querySelectorAll("*")].filt
 const btn = (root, text) => all(root).find((b) => b.textContent.trim() === text);
 const has = (root, text) => root.textContent.includes(text);
 
-test("extract state maps job status to a phase and reads delta counts wherever they sit", () => {
+test("extract state maps job status to a phase and reads delta from the upload answer or the job", () => {
   const s = window.ArkismKnowledge.extractState;
   assert.deepEqual(s({ id: "j", status: "running", revision: 2, job: { total: 10, next: 4, candidates_created: 3, skipped: [{}, {}] } }),
-    { id: "j", revision: 2, phase: "running", active: true, total: 10, next: 4, created: 3, skipped: 2, jobError: "", delta: null });
+    { id: "j", phase: "running", active: true, total: 10, next: 4, created: 3, skipped: 2, jobError: "", delta: null });
   assert.equal(s({ id: "j", status: "retry" }).phase, "queued");
   assert.equal(s({ id: "j", status: "cancelled" }).active, false);
   assert.equal(s({ id: "j", status: "failed", job: { error: "no_text" } }).jobError, "no_text");
   assert.equal(s({ status: "running" }).active, false, "no id: nothing to poll");
-  assert.deepEqual(s({ id: "j", status: "done", job: { delta: { chunks_total: 5, chunks_changed: 2 } } }).delta, { total: 5, unchanged: 0, changed: 2, removed: 0 });
-  assert.deepEqual(s({ id: "j", status: "done", chunks_total: 3, chunks_unchanged: 3 }).delta, { total: 3, unchanged: 3, changed: 0, removed: 0 });
+  // job read: job.delta; upload answer: delta beside job_id; removed_sources counts the candidates left behind
+  assert.deepEqual(s({ id: "j", status: "done", job: { delta: { chunks_total: 5, chunks_changed: 2, chunks_removed: 1, removed_sources: [{ locator: "chunk:3", candidate_ids: ["c1", "c2"] }] } } }).delta,
+    { total: 5, unchanged: 0, changed: 2, removed: 1, left: 2 });
+  assert.deepEqual(s({ job_id: "j", status: "pending", delta: { chunks_total: 3, chunks_unchanged: 3, removed_sources: [] } }).delta, { total: 3, unchanged: 3, changed: 0, removed: 0, left: 0 });
+  assert.equal(s({ id: "j", status: "done", chunks_total: 3 }).delta, null, "counts outside delta are not read");
 });
 
 test("delivery state names done, retry, failed and waiting deliveries", () => {
@@ -53,6 +56,7 @@ test("stat tiles read totals and leave unknown values empty", () => {
   assert.equal(t.active, 9); assert.equal(t.pending, 4); assert.equal(t.sources, 3);
   assert.deepEqual(t.kinds[0], ["project", 7]);
   assert.equal(management.statTiles({}).active, null);
+  assert.equal(management.statTiles({ memories: { total: 2, by_status: { candidate: 2 } } }).active, 0, "no active key in a present map is zero");
 });
 
 function setup(routes) {

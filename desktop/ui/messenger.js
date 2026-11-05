@@ -24,10 +24,10 @@ window.ArkismMessenger = (ctx) => {
     catch (e) { S.herr = /HTTP 404|HTTP 501|not_found|not_implemented/.test(e.message) ? "unsupported" : e.message === "access_denied" ? "denied" : e.message; if (!quiet) S.hooks = []; }
     finally { S.loading = false; S.loaded = true; if (state.view === "settings" && state.settingsTab === "messenger") render(false); }
   }
-  async function act(fn, ok) {
+  async function act(fn, ok, errs = {}) {
     if (S.busy) return;
     S.busy = true;
-    try { await fn(); notice(ok); } catch (e) { notice(errText(e)); } finally { S.busy = false; }
+    try { await fn(); notice(ok); } catch (e) { notice(errs[e.message] || errText(e)); } finally { S.busy = false; }
     await load(true);
   }
   const fields = (b) => ({ name: b.name, channels: b.channels || [], ...(b.target ? { target: b.target } : {}), allowed: b.allowed || { user_ids: [], role_ids: [] }, ...(b.guild_id ? { guild_id: b.guild_id } : {}) });
@@ -151,12 +151,7 @@ window.ArkismMessenger = (ctx) => {
   const hookPath = (h, tail = "") => `/v1/webhooks/${encodeURIComponent(h.id)}${tail}`;
   const newSecret = () => Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, "0")).join("");
   const HOOK_ERR = { invalid_request: "주소나 고른 알림을 확인해 주세요. 주소는 https://로 시작해야 해요.", access_denied: "웹훅은 사람 계정만 바꿀 수 있어요." };
-  async function hookAct(fn, ok) {
-    if (S.busy) return;
-    S.busy = true;
-    try { await fn(); notice(ok); } catch (e) { notice(HOOK_ERR[e.message] || errText(e)); } finally { S.busy = false; }
-    await load(true);
-  }
+  const hookAct = (fn, ok) => act(fn, ok, HOOK_ERR);
   async function openLog(h) {
     if (S.logs[h.id] && !S.logs[h.id].loading) { delete S.logs[h.id]; render(false); return; }
     S.logs[h.id] = { loading: true, items: [] }; render(false);

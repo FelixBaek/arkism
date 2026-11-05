@@ -210,12 +210,15 @@ window.ArkismKnowledge = (ctx) => {
     if ((b?.lifecycle_status || b?.knowledge?.lifecycle_status || b?.status) !== "active_synthetic") await post(`/v1/knowledge/bindings/${encodeURIComponent(b.id)}/state`, { expected_revision: b.revision, status: "active_synthetic" });
   }
   const b64 = (buf) => { let bin = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(bin); };
-  function pickFile(source) {
+  // One file picker for both uploads: onFile gets the file and its lower-case extension.
+  function chooseFile(onFile) {
     const input = el("input"); input.type = "file"; input.accept = ".docx,.md,.txt,.json,.pdf";
-    input.addEventListener("change", async () => {
-      const f = input.files?.[0];
-      if (!f) return;
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase(), word = ext === ".docx";
+    input.addEventListener("change", () => { const f = input.files?.[0]; if (f) onFile(f, (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase()); });
+    input.click();
+  }
+  function pickFile(source) {
+    chooseFile(async (f, ext) => {
+      const word = ext === ".docx";
       if (ext === ".pdf") { K.notice = "PDF는 아직 읽지 못해요. Word(.docx)나 텍스트(.txt)로 저장해서 올려 주세요."; paint(); return; }
       if (!MIME[ext]) { K.notice = `${KINDS} 파일을 올릴 수 있어요. 다른 파일은 텍스트로 저장해서 올려 주세요.`; paint(); return; }
       if (word && f.size > 4 << 20) { K.notice = "파일이 너무 커요. Word 파일은 4MB까지 올릴 수 있어요."; paint(); return; }
@@ -241,7 +244,6 @@ window.ArkismKnowledge = (ctx) => {
       }, (r) => choice === "use" ? (r?.duplicate ? "같은 내용이에요. 이제 내 모든 AI가 이 자료를 찾아 써요." : "올렸어요. 이제 내 모든 AI가 이 자료를 찾아 써요.")
         : r?.duplicate ? "같은 내용이라 새 버전을 만들지 않았어요." : "올렸어요. 자료를 열어 확인하고 '쓰게 하기'를 눌러 주세요.");
     });
-    input.click();
   }
   // One progress line while the parts go up; a part that fails does not stop the rest, and the end says which failed.
   // A name holds no "/" (the server refuses it), so "(1／3)" uses the full-width slash.
@@ -265,7 +267,8 @@ window.ArkismKnowledge = (ctx) => {
 
   // ---------------------------------------------------------------- 파일 → 기억 후보 (POST /v1/files/memories, …/extract_memories)
   // The server only proposes: every claim lands as a memory candidate a person approves in 확인해 주세요.
-  // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}); 멈추기 asks /v1/operations/{id}/cancel.
+  // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}). The server has no stop route for these
+  // jobs (/v1/operations/{id}/cancel refuses the file_memory_extract kind), so the card offers none.
   const extractErr = (e) => ({ no_extractable_text: "파일에서 글자를 찾지 못했어요. 스캔한 PDF나 암호가 걸린 PDF는 읽지 못해요.", model_not_configured: "서버에 기억을 뽑을 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.",
     model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요.", candidate_daily_limit: "오늘 만들 수 있는 후보 수를 넘었어요. 내일 다시 해 주세요." }[e?.message] || errText(e));
   let extractTimer = 0;
@@ -289,25 +292,12 @@ window.ArkismKnowledge = (ctx) => {
     try { showExtract(await work(), label); } catch (e) { K.extract = { label, phase: "failed", active: false, error: extractErr(e) }; }
     K.busy = false; paint();
   }
-  async function cancelExtract() {
-    const x = K.extract;
-    if (!x?.id || !(await confirmPop("기억 후보 만들기를 멈출까요?", "이미 만든 후보는 그대로 남아요.", "멈추기"))) return;
-    try { await post(`/v1/operations/${encodeURIComponent(x.id)}/cancel`, x.revision ? { expected_revision: x.revision } : {}); await pollExtract(); }
-    catch (e) { x.error = e?.message === "invalid_request" ? "이 작업은 멈출 수 없어요. 끝날 때까지 기다려 주세요." : extractErr(e); paint(); }
-  }
-  function pickExtractFile() {
-    const input = el("input"); input.type = "file"; input.accept = ".pdf,.docx,.md,.txt,.json";
-    input.addEventListener("change", async () => {
-      const f = input.files?.[0];
-      if (!f) return;
-      const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
-      if (!MIME[ext] && ext !== ".pdf") { K.notice = `PDF·${KINDS} 파일에서 기억 후보를 만들 수 있어요.`; paint(); return; }
-      if (f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
-      const content = b64(await f.arrayBuffer());
-      void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, mime: MIME[ext] || "application/pdf" }), f.name);
-    });
-    input.click();
-  }
+  const pickExtractFile = () => chooseFile(async (f, ext) => {
+    if (!MIME[ext] && ext !== ".pdf") { K.notice = `PDF·${KINDS} 파일에서 기억 후보를 만들 수 있어요.`; paint(); return; }
+    if (f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
+    const content = b64(await f.arrayBuffer());
+    void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, mime: MIME[ext] || "application/pdf" }), f.name);
+  });
   const extractFromSource = (s) => startExtract(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/extract_memories`, {}), s.display_name);
   const EXTRACT_WORD = { queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
   function extractCard() {
@@ -321,10 +311,10 @@ window.ArkismKnowledge = (ctx) => {
     if (x.active && !x.total) c.append(el("p", "v4k-card-note", "파일을 읽고 있어요…"));
     if (!x.active && !x.error) c.append(el("p", "", x.created ? `기억 후보 ${num(x.created)}개를 만들었어요. 저장할지는 내가 골라요.` : "새로 만든 후보가 없어요."));
     if (x.delta) c.append(el("p", "v4k-card-note", `전체 ${num(x.delta.total)} · 그대로 ${num(x.delta.unchanged)} · 바뀜 ${num(x.delta.changed)} · 빠짐 ${num(x.delta.removed)}`));
+    if (x.delta?.left) c.append(el("p", "v4k-card-note", `빠진 부분에서 나온 기억 후보 ${num(x.delta.left)}개는 그대로 남아 있어요. 필요 없으면 '확인해 주세요'에서 버려 주세요.`));
     if (x.error || x.jobError) c.append(el("p", "v4k-warn", x.error || extractErr({ message: x.jobError })));
     const a = el("div", "v4s-actions");
-    if (x.created && !x.active) a.append(button("후보 확인하러 가기", "primary", null, () => ctx.go?.("memories", "candidate")));
-    if (x.active && x.id) a.append(button("멈추기", "ghost", null, cancelExtract));
+    if ((x.created || x.delta?.left) && !x.active) a.append(button("후보 확인하러 가기", "primary", null, () => ctx.go?.("memories", "candidate")));
     if (!x.active) a.append(link("닫기", () => { K.extract = null; paint(); }));
     c.append(a);
     if (x.skipped) { const more = el("details", "v4k-more"); more.append(el("summary", "", "자세히"), el("p", "meta", `건너뛴 부분 ${num(x.skipped)}곳 (비공개·비밀값이거나 읽을 수 없는 부분)`)); c.append(more); }
@@ -817,14 +807,15 @@ window.ArkismKnowledge = (ctx) => {
     } }
   };
 };
-// One shape for a file-extraction answer: the first POST ({job_id, status, …}) or a job read ({id, status, revision, job}).
-// Re-extraction counts (chunks_total/unchanged/changed/removed) show only when the server sends them.
+// One shape for a file-extraction answer: the first POST ({job_id, status, delta, …}) or a job read ({id, status, revision, job: {…, delta}}).
+// Re-extraction counts (delta: chunks_total/unchanged/changed/removed, removed_sources) show only when the server sends them.
 window.ArkismKnowledge.extractState = (r = {}) => {
   const j = r.job || r, phase = { pending: "queued", retry: "queued", waiting: "queued", running: "running", done: "done", cancelled: "cancelled", failed: "failed" }[r.status] || "queued";
-  const d = [r, j, r.delta, j.delta].find((x) => x && x.chunks_total != null);
-  return { id: r.id || r.job_id || "", revision: r.revision || 0, phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
+  const d = j.delta || r.delta;
+  return { id: r.id || r.job_id || "", phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
     total: j.total || 0, next: j.next || 0, created: j.candidates_created || 0, skipped: (j.skipped || []).length, jobError: phase === "failed" ? j.error || "failed" : "",
-    delta: d ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0 } : null };
+    delta: d?.chunks_total != null ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0,
+      left: (d.removed_sources || []).reduce((n, x) => n + (x.candidate_ids?.length || 0), 0) } : null };
 };
 // Cuts text into parts of at most max UTF-8 bytes (the server's per-file cap): at blank lines first,
 // then at line ends, then between characters. Parts that hold only spaces are dropped.

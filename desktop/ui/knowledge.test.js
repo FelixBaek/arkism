@@ -689,13 +689,12 @@ test("upload: text over 64KB goes up in parts with one progress line and a plain
   assert.equal(k.document.body.querySelector("dialog.v4k-ask"), null);
 });
 
-test("file → memory candidates: upload, poll to done with delta counts, open the candidate review; cancel asks first", async () => {
+test("file → memory candidates: upload, poll to done with delta counts, open the candidate review; no dead stop button", async () => {
   let reads = 0;
   const k = await setup({
     "/v1/files/memories/jobs/": () => (++reads < 2 ? { id: "fx", status: "running", revision: 1, job: { total: 4, next: 1 } }
-      : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1 } } }),
-    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" }),
-    "/v1/operations/": () => { throw new Error("invalid_request"); }
+      : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1, removed_sources: [{ locator: "chunk:4", candidate_ids: ["c9"] }] } } }),
+    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" })
   });
   await k.start();
   const hb = k.view.views.knowledge.head();
@@ -710,14 +709,12 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   assert.doesNotMatch(k.table().textContent, /기억 후보를 만들 수 있어요/, "a fresh start clears the old notice");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /4부분 중 1부분 읽음/);
-  // cancel: declined asks and sends nothing; accepted shows the server's refusal plainly
-  k.confirms.answer = false; await k.press(k.table(), "멈추기");
-  assert.equal(k.confirms.length, 1); assert.equal(k.posted("/v1/operations/fx/cancel").length, 0);
-  k.confirms.answer = true; await k.press(k.table(), "멈추기"); await dom.flush();
-  assert.match(k.table().textContent, /멈출 수 없어요/);
+  // the server has no stop route for extraction jobs, so the card offers none
+  assert.doesNotMatch(k.table().textContent, /멈추기/);
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /기억 후보 3개를 만들었어요/);
   assert.match(k.table().textContent, /전체 4 · 그대로 1 · 바뀜 2 · 빠짐 1/);
+  assert.match(k.table().textContent, /빠진 부분에서 나온 기억 후보 1개는 그대로 남아 있어요/);
   await k.press(k.table(), "후보 확인하러 가기");
   assert.deepEqual(k.gone.at(-1), ["memories", "candidate"]);
   k.view.views.knowledge.render?.(); // leaves no timer behind

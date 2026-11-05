@@ -44,6 +44,10 @@ async function api(a) {
   }
   // 대화 원문 보관 기간 on the server
   if (p === "/v1/session-archives/settings") { if (a.method === "POST") retentionDays = JSON.parse(a.body).days; return { status: 200, body: JSON.stringify({ days: retentionDays }) }; }
+  // 기억 공간 옮기기: export and import answer with a job that is done on the first read
+  if (a.method === "POST" && /^\/v1\/spaces\/[^/]+\/[^/]+\/(export|import)$/.test(p)) return { status: 202, body: JSON.stringify({ id: "sj", state: "queued" }) };
+  if (p === "/v1/spaces/exports/sj/download") return { status: 200, body: '{"format":"arkism.space"}\n' };
+  if (/^\/v1\/spaces\/(exports|imports)\/sj$/.test(p)) return { status: 200, body: JSON.stringify({ id: "sj", state: "done", report: { imported: 2, merged: 1, rejected: 0, skipped: [] } }) };
   if (postFails && a.method === "POST" && p === "/v1/agent_tools/requests") return { status: 500, body: JSON.stringify({ code: "boom" }) };
   return null;
 }
@@ -673,4 +677,21 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   await press("저장하고 다시 연결"); // back to the built-in Arkism: remembers this PC as the choice and reloads
   assert.ok(app.window._reloaded > reloads);
   assert.equal(app.storage.getItem("arkism.mode"), "local");
+});
+
+test("고급: a space bundle goes out and comes back as candidates, in the app's own scope", async () => {
+  await settings("advanced");
+  blobs = [];
+  await press("기억 내보내기", app.$("#table"), 1600);
+  const out = app.apiCalls.find(([m, p]) => m === "POST" && /\/export$/.test(p));
+  assert.equal(out[1], "/v1/spaces/default/default/export", "the current scope, not a guess");
+  assert.equal(await blobs.at(-1).text(), '{"format":"arkism.space"}\n');
+  assert.match(text(app.$("#table")), /파일 다운로드를 시작했어요/);
+  nextFile = file('{"format":"arkism.space"}\n'); answers.length = 0; answers.push(true);
+  await press("기억 가져오기", app.$("#table"), 1600); await app.settle(1600);
+  nextFile = null;
+  const inn = app.apiCalls.find(([m, p]) => m === "POST" && /\/import$/.test(p));
+  assert.deepEqual(JSON.parse(inn[2]), { bundle: '{"format":"arkism.space"}\n', import_as: "candidate" });
+  assert.match(text(app.$("#table")), /후보 2개를 가져왔어요/);
+  assert.ok(find("후보 확인하러 가기", app.$("#table")));
 });

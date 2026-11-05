@@ -82,7 +82,8 @@
   // GET /v1/stats in plain numbers; a missing field stays unknown (null), never 0.
   function statTiles(stats) {
     const n = v => (typeof v === "number" ? v : null);
-    return { active: n(stats?.memories?.by_status?.active), total: n(stats?.memories?.total), pending: n(stats?.pending_candidates), sources: n(stats?.sources?.total),
+    const byStatus = stats?.memories?.by_status; // the server leaves out statuses with no memories: present map, missing key = 0
+    return { active: byStatus && typeof byStatus === "object" ? n(byStatus.active ?? 0) : null, total: n(stats?.memories?.total), pending: n(stats?.pending_candidates), sources: n(stats?.sources?.total),
       kinds: Object.entries(stats?.memories?.by_kind || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]) };
   }
   const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles };
