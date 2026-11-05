@@ -7431,6 +7431,7 @@
  "관계 {0}개": "{0} relações",
  "근거 {0}개": "{0} fontes",
  "이전 {0}개 더 보기": "Ver {0} anteriores",
- "{0}번 (30일)": "{0} vezes (30 dias)"
+ "{0}번 (30일)": "{0} vezes (30 dias)",
+ "관계를 따라가 찾은 기억 {0}개": "{0} memórias encontradas seguindo as conexões"
  }
 };

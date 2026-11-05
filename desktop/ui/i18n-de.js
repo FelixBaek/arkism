@@ -7431,6 +7431,7 @@
  "관계 {0}개": "{0} Beziehungen",
  "근거 {0}개": "{0} Belege",
  "이전 {0}개 더 보기": "{0} frühere anzeigen",
- "{0}번 (30일)": "{0}-mal (30 Tage)"
+ "{0}번 (30일)": "{0}-mal (30 Tage)",
+ "관계를 따라가 찾은 기억 {0}개": "{0} Erinnerungen über Verknüpfungen gefunden"
  }
 };

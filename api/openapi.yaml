@@ -48911,6 +48911,11 @@
             "type": "integer",
             "description": "Model calls made."
           },
+          "graph_nodes": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Memories reached by following links: the relation graph, entity mentions or the graph and causal search lanes."
+          },
           "usage": {
             "type": "object",
             "description": "Summed over every model call."

@@ -318,7 +318,7 @@ func (s *Service) previewReflectPrompt(ctx context.Context, token string, in Pro
 	if d := settings.ReflectDefaults; d != nil && d.TagScopedDirectives {
 		rules = directivesForTags(rules, in.Tags)
 	}
-	run := &reflectRun{in: ReflectInput{Scope: in.Scope, Query: "[question]", Tags: in.Tags, PromptOnly: true, space: &settings}, rules: rules, seen: map[string]bool{}}
+	run := &reflectRun{in: ReflectInput{Scope: in.Scope, Query: "[question]", Tags: in.Tags, PromptOnly: true, space: &settings}, rules: rules, seen: map[string]bool{}, graph: map[string]bool{}}
 	if err := s.reflectGuidance(ctx, token, run); err != nil {
 		return "", "", err
 	}

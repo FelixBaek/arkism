@@ -7428,3 +7428,5 @@ Object.assign(window.ArkismI18nEN.strings, {
   "그중 생각": "Of which reasoning" });
 Object.assign(window.ArkismI18nEN.patterns, {
   "{0}번 (30일)": "{0} times (30 days)" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "관계를 따라가 찾은 기억 {0}개": "{0} memories reached by following links" });

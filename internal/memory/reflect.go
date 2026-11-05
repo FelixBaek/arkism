@@ -136,6 +136,8 @@ type ReflectOutput struct {
 	Retrieved         []ReflectRetrieved `json:"retrieved"`
 	ToolTrace         []ReflectToolStep  `json:"tool_trace"`
 	Iterations        int                `json:"iterations,omitempty"`
+	// GraphNodes counts the memories reached by following links: the relation graph, entity mentions or graph and causal search lanes.
+	GraphNodes int `json:"graph_nodes"`
 	Usage             *ProviderUsage     `json:"usage,omitempty"`
 	Generator         *Generator         `json:"generator,omitempty"`
 	Prompt            *ReflectPrompt     `json:"prompt,omitempty"`
@@ -151,16 +153,22 @@ type reflectRun struct {
 	tools       ReflectToolBudget
 	hits        []Hit
 	seen        map[string]bool
+	graph       map[string]bool
 	trace       []ReflectToolStep
 }
 
-func (r *reflectRun) add(hits []Hit) []string {
+// add keeps new hits; walked marks a tool that follows links (related memories, entity mentions),
+// and a memory a graph or causal lane found counts as walked too.
+func (r *reflectRun) add(hits []Hit, walked bool) []string {
 	ids := []string{}
 	for _, h := range hits {
 		if h.ID == "" || h.Collection != colMentalModels && h.Collection != "sources" && !factTypeKept(r.in.FactTypes, h.Collection) {
 			continue
 		}
 		ids = append(ids, h.ID)
+		if h.Collection == colMemories && (walked || slices.Contains(h.Lanes, "graph") || slices.Contains(h.Lanes, "causal")) {
+			r.graph[h.ID] = true
+		}
 		if !r.seen[h.ID] {
 			r.seen[h.ID] = true
 			r.hits = append(r.hits, h)
@@ -247,7 +255,7 @@ func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (R
 	if spaceTokens {
 		in.MaxTokens = settings.ReflectMaxTokens
 	}
-	run := &reflectRun{seen: map[string]bool{}}
+	run := &reflectRun{seen: map[string]bool{}, graph: map[string]bool{}}
 	applyReflectDefaults(&in, run, settings, iterSet, limitSet)
 	in.space = &settings
 	run.in = in
@@ -277,7 +285,7 @@ func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (R
 	if err = s.reflectGuidance(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
-	run.add(bundle.Items)
+	run.add(bundle.Items, false)
 	out := ReflectOutput{CitedMemoryIDs: []string{}, DirectivesApplied: []string{}, Retrieved: []ReflectRetrieved{}, ToolTrace: []ReflectToolStep{}}
 	for _, r := range run.rules {
 		out.DirectivesApplied = append(out.DirectivesApplied, r.ID)
@@ -316,6 +324,7 @@ func (s *Service) reflectRetrieved(ctx context.Context, token string, out Reflec
 		}
 		out.Retrieved = append(out.Retrieved, ReflectRetrieved{ID: h.ID, Kind: h.Kind, Score: h.Score, Attachments: h.Attachments})
 	}
+	out.GraphNodes = len(run.graph)
 	return out, err
 }
 

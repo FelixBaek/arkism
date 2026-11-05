@@ -326,7 +326,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     for (const r of shown) list.append(memoryLink(r.id));
     const tabs = [["all", "전체", got.length], ...kinds.map((k) => [k, k === "observation" ? "정리된 관찰" : k === "mental_model" ? "생각 정리" : ctx.kindLabel(k) || "기타", got.filter((r) => String(r.kind || "") === k).length])];
     return [el("h3", "insight-head", "찾아본 기억"), seg(tabs, evidence, (k) => { evidence = k; paintAsk(); }), list,
-      el("p", "meta", `근거로 든 기억 ${shown.filter((r) => cited.has(r.id)).length}개가 이 안에 있어요.`)];
+      el("p", "meta", `근거로 든 기억 ${shown.filter((r) => cited.has(r.id)).length}개가 이 안에 있어요.`),
+      ...(answer.graph_nodes > 0 ? [el("p", "meta", `관계를 따라가 찾은 기억 ${answer.graph_nodes}개`)] : [])];
   }
   // prompt_only: nothing went to the model; the two prompts it would have got, as text.
   function promptCard() {

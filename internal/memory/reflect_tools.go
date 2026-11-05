@@ -118,7 +118,8 @@ func (s *Service) reflectTool(ctx context.Context, token string, run *reflectRun
 	case err != nil:
 		return step, err
 	}
-	step.IDs = run.add(hits)
+	walked := call.Name == reflectToolEntity || call.Name == reflectToolExpand && (call.Args.Depth == "" || call.Args.Depth == "memory")
+	step.IDs = run.add(hits, walked)
 	if run.in.Include != nil && run.in.Include.ToolCalls.Output {
 		step.Output = hitTexts(hits, run)
 	}

@@ -412,7 +412,7 @@ test("asking for an entity summary without a server model says what to set up", 
 test("ask sends filters, budget, fact types and disposition; shows tokens in and out, step time and evidence by kind; an answer becomes a rule only through the form", async () => {
   const t = setup("ask", [["/v1/reflect", () => ({ answer: "스테이징에서 결제를 끝까지 눌러 봐요.", cited_memory_ids: ["m4"], directives_applied: [],
     retrieved: [{ id: "m4", kind: "lesson", score: 0.9 }, { id: "o1", kind: "observation", score: 0.5 }, { id: "m7", kind: "lesson", score: 0.4 }],
-    tool_trace: [{ tool: "recall", args: { query: "배포" }, ids: ["m4"], ms: 37 }], iterations: 2, usage: { input_tokens: 2140, output_tokens: 188, total_tokens: 2328 } })],
+    tool_trace: [{ tool: "recall", args: { query: "배포" }, ids: ["m4"], ms: 37 }], iterations: 2, graph_nodes: 2, usage: { input_tokens: 2140, output_tokens: 188, total_tokens: 2328 } })],
     ["/v1/memories/", (p) => memory(p.split("/")[3].split("?")[0])], ["/v1/directives", (p, o) => ({ id: "d5", revision: 1, ...JSON.parse(o.body) })]]);
   t.view.draw();
   const form = t.h.$("#chips form"), set = (k, v) => { form.querySelector(`[data-opt="${k}"]`).value = v; };
@@ -424,6 +424,7 @@ test("ask sends filters, budget, fact types and disposition; shows tokens in and
     exclude_mental_models: true, disposition: { skepticism: 4 }, apply_all_directives: true }, "an out-of-range disposition stays the space's");
   const table = t.h.$("#table");
   assert.match(table.textContent, /보낸 토큰2140/); assert.match(table.textContent, /받은 토큰188/);
+  assert.match(table.textContent, /관계를 따라가 찾은 기억 2개/);
   assert.match(table.querySelector(".insight-step").textContent, /1개 찾음 · 37ms/);
   // evidence tabs: the count only next to the active tab
   const tabs = () => [...table.querySelectorAll(".insight-seg .tm-seg-tab")];

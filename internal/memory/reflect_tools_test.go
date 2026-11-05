@@ -235,6 +235,19 @@ func TestReflectEntityToolChecksEachMemory(t *testing.T) {
 	if !slices.Equal(out.ToolTrace[0].IDs, []string{"m1"}) || out.ToolTrace[0].Error != "" || strings.Contains(llm.prompts[1], "rotation") || strings.Contains(llm.prompts[1], "backups") || !strings.Contains(llm.prompts[1], "stores memories in Postgres") {
 		t.Fatal(out.ToolTrace, llm.prompts[1])
 	}
+	if out.GraphNodes != 1 {
+		t.Fatal("the entity's mention is a followed link", out.GraphNodes)
+	}
+}
+
+// Memories count as graph nodes when a link-following tool or a graph/causal lane found them, once each.
+func TestReflectRunCountsGraphNodes(t *testing.T) {
+	run := &reflectRun{seen: map[string]bool{}, graph: map[string]bool{}}
+	run.add([]Hit{{ID: "a", Collection: colMemories, Lanes: []string{"keyword"}}, {ID: "b", Collection: colMemories, Lanes: []string{"causal"}}}, false)
+	run.add([]Hit{{ID: "c", Collection: colMemories}, {ID: "b", Collection: colMemories}, {ID: "s", Collection: "sources"}}, true)
+	if len(run.graph) != 2 || !run.graph["b"] || !run.graph["c"] {
+		t.Fatal(run.graph)
+	}
 }
 
 // An approved summary reaches the model only while every memory it cites may.

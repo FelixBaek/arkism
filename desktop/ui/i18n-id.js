@@ -7431,6 +7431,7 @@
  "관계 {0}개": "{0} relasi",
  "근거 {0}개": "{0} sumber",
  "이전 {0}개 더 보기": "Tampilkan {0} sebelumnya",
- "{0}번 (30일)": "{0} kali (30 hari)"
+ "{0}번 (30일)": "{0} kali (30 hari)",
+ "관계를 따라가 찾은 기억 {0}개": "{0} memori ditemukan dengan mengikuti keterkaitannya"
  }
 };
