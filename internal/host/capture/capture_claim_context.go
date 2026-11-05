@@ -199,7 +199,7 @@ func buildClaimsWithReceipt(raw []any, userText string, related []map[string]any
 	claims := []any{}
 	var receipt *ClaimContextReceipt
 	used := 0
-	for index, value := range raw[:min(len(raw), 16)] {
+	for index, value := range raw { // extractWindows caps each call (claimsPerCall)
 		row, err := asDict(value)
 		if err != nil {
 			return nil, nil, err
@@ -242,7 +242,7 @@ func buildClaimsWithReceipt(raw []any, userText string, related []map[string]any
 // requests retain their original v2 generator.
 func extractionGenerator(pipeline string) host.Obj {
 	gen := generator(pipeline)
-	gen.Set("prompt_version", "capture-extract-v6")
+	gen.Set("prompt_version", "capture-extract-v7")
 	return gen
 }
 

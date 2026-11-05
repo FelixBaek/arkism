@@ -4,7 +4,8 @@ import "strings"
 
 // Capture modes and density (space settings capture_mode, capture_density). The server's default
 // density is balanced; durable (a space's choice, or no server to ask) keeps only the user's own
-// lasting statements from turns with a memory cue.
+// lasting statements from turns with a memory cue; conversation (opt-in) reads a conversation
+// between people for every fact of every speaker.
 // assistant_results (opt-in) also reads the agent's last reply of the turn and keeps facts the
 // agent confirmed and facts other people are quoted as saying, as assistant_result candidates a
 // person still reviews; balanced and dense keep more specific facts. Both read every turn, not
@@ -15,11 +16,39 @@ const assistantResultsMode = "assistant_results"
 func captureMode() string    { return strField(spaceConfig()["capture_mode"]) }
 func captureDensity() string { return strField(spaceConfig()["capture_density"]) }
 
-// captureEveryTurn: assistant_results, balanced and dense read every turn instead of cued ones only.
+// captureEveryTurn: assistant_results, balanced, dense and conversation read every turn instead of cued ones only.
 func captureEveryTurn() bool {
 	d := captureDensity()
-	return captureMode() == assistantResultsMode || d == "balanced" || d == "dense"
+	return captureMode() == assistantResultsMode || d == "balanced" || d == "dense" || d == densityConversation
 }
+
+// densityConversation is the profile for conversations between people (and assistants): every
+// concrete fact of every speaker, one claim each. It swaps the coding profile's keep, subject and
+// speaker rules instead of appending to them, reads long batches in windows (extractionWindows),
+// and keeps the turns themselves as searchable conversation sources (capture_turns.go).
+const densityConversation = "conversation"
+
+const (
+	conversationRole = "You extract memory claims from a conversation between people, and maybe an assistant. A line may start with its date and speaker.\n"
+	conversationKeep = `- Keep EVERY concrete fact any speaker states about themselves, another person or the world, one claim per fact:
+  events and activities with their dates, things people own, buy, make or read, names (people, pets, places, titles),
+  numbers, places, preferences and opinions, reasons and feelings, plans and goals, relationships and roles.
+  Small personal details count. Skip only greetings, filler and questions that state nothing.
+`
+	conversationText = `- text: one standalone sentence in MEMORY_LANGUAGE (given in the user message; auto = the language the speakers wrote in, never
+  translated), faithful to what was said, understandable without this chat. Add nothing.
+  It must name the person it is about by name, never "the user", "I" or "he". Give an event its absolute date in text
+  ("on 2023-05-07", "in the week before 2023-05-07"), resolved against the line's own date, else TODAY.
+- Record the content itself, not the speaking: not "Mina said she likes X" but "Mina likes X".
+`
+	conversationSpeakers = `- Every speaker's words count; a fact one speaker states about another person is about that person.
+- kind here: episodic for an event or activity, person for any other fact about a named person; not user, decision,
+  procedural or lesson, which are for a user's rules to a coding agent.
+`
+)
+
+// conversationPrompt is the conversation profile's whole prompt.
+const conversationPrompt = conversationRole + extractFormat + conversationKeep + conversationText + conversationSpeakers + extractTail
 
 const assistantRule = `- ASSISTANT RESULTS mode: besides the user's own words, also keep lasting facts the agent CONFIRMED in ASSISTANT RESULTS
   (a command's or test's outcome, a value it read from a file or tool, a state it checked) and lasting facts another person is
@@ -34,6 +63,9 @@ var densityRules = map[string]string{
 
 // capturePrompt and captureSchema are the extraction prompt and schema for the space's mode and density.
 func capturePrompt(mode, density string) string {
+	if density == densityConversation {
+		return conversationPrompt
+	}
 	p := extractPrompt
 	if mode == assistantResultsMode {
 		p = strings.Replace(p, `- Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with "응".`, assistantRule, 1)

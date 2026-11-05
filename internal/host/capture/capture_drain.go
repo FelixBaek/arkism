@@ -15,10 +15,11 @@ import (
 
 // ---------------------------------------------------------------- extraction
 
-const extractPrompt = `You extract durable memory claims from a user's own messages to an AI coding agent.
-Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson|person|episodic","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null,"risk":"high|medium|low","risk_reasons":["..."],"dup_hint":"","rule":"","decision_status":"","temporary":false,"entities":[],"relations":[]}]}
-Rules:
-- Keep ONLY what the USER explicitly stated that should still hold in future sessions: lasting preferences, standing
+// The extraction prompt is built from parts so a capture profile swaps whole rules
+// (capture_assistant.go capturePrompt) instead of appending one an earlier rule overrides.
+const (
+	extractRole = "You extract durable memory claims from a user's own messages to an AI coding agent.\n"
+	extractKeep = `- Keep ONLY what the USER explicitly stated that should still hold in future sessions: lasting preferences, standing
   instructions ("앞으로/항상/하지 마"), project goals, decisions, facts about their own systems, corrections of facts.
 - Ignore one-off task requests ("고쳐줘", "처리해", "해줘"), questions, complaints, chit-chat, temporary ideas, and anything
   only the assistant said. Do not infer habits or guess intent.
@@ -28,13 +29,23 @@ Rules:
   Keep supported standing project rules from mixed turns and omit only their temporary task requests.
   A commit-size constraint is a procedural rule, not a spending permission. Keep explicit lasting dislikes and
   ongoing system/account facts, including a stated monthly API grant; retain any tentative wording in text.
-- text: one standalone sentence in MEMORY_LANGUAGE (given in the user message; auto = the language the user wrote it in, never
+`
+	extractText = `- text: one standalone sentence in MEMORY_LANGUAGE (given in the user message; auto = the language the user wrote it in, never
   translated), faithful to the user's meaning, understandable without this chat. Add nothing.
   It must name what it is about (the product, project, screen or tool). A rule whose subject only this chat knows is not a claim.
   Retain the explicitly named project in every extracted rule; never turn a project-specific rule into a global one.
 - Record the content itself, not the user's action: not "the user asked for X" but what X is.
-- Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with "응".
-- A change keeps both sides: "<what> uses Y instead of X". Turn relative dates (today, next week) into absolute ones using TODAY.
+`
+	extractSpeakers = "- Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with \"응\".\n"
+)
+
+const extractPrompt = extractRole + extractFormat + extractKeep + extractText + extractSpeakers + extractTail
+
+const extractFormat = `Return JSON only: {"claims":[{"subject":"...","text":"...","kind":"user|decision|procedural|lesson|person|episodic","quote":"...","reason":"...","confidence":0.0,"supersedes_id":null,"risk":"high|medium|low","risk_reasons":["..."],"dup_hint":"","rule":"","decision_status":"","temporary":false,"entities":[],"relations":[]}]}
+Rules:
+`
+
+const extractTail = `- A change keeps both sides: "<what> uses Y instead of X". Turn relative dates (today, next week) into absolute ones using TODAY.
 - occurred_from / occurred_to: the days the event the claim describes happened, as YYYY-MM-DD (YYYY-MM for a whole month),
   resolved against TODAY; the same day twice for one day. Use empty strings for a standing rule or an undated statement.
 - Preserve every condition, exception, negation, uncertainty and stated change-effective time in text itself.
@@ -68,7 +79,9 @@ Rules:
   relation a lowercase snake_case label such as has_role, member_of, reports_to, works_on; [] when none. A role name used as a
   relation target is an entity too.
 - subject: 1-4 words naming the topic.
-- Skip anything EXISTING MEMORIES already say. If a claim corrects one of them, set supersedes_id to that memory id.
+- Skip a claim only when an EXISTING MEMORY already states the same fact. A new detail about a known topic (another date,
+  name, number, place, item or reason) is a new claim. If a claim corrects one of them, set supersedes_id to that memory id.
+- reason: one short phrase in MEMORY_LANGUAGE, the language of text, saying why it is worth keeping.
 ` + riskRules + `
 - Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
@@ -285,6 +298,32 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	if started == 0 {
 		started = monotonic()
 	}
+	var items []any
+	// The server takes captureClaimsMax claims a request; later parts get their own event id.
+	for i := 0; i < len(claims); i += captureClaimsMax {
+		id := eventID
+		if i > 0 {
+			id = fmt.Sprintf("%s:%d", eventID, i/captureClaimsMax)
+		}
+		part, err := postCapture(eventType, id, sid, occurredAt, claims[i:min(i+captureClaimsMax, len(claims))], origin, gen)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, part...)
+	}
+	for _, v := range items {
+		item, err := asDict(v)
+		if err != nil {
+			return nil, err
+		}
+		metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", item["status"]), kv("reason", item["reason"]),
+			kv("candidate_id", or(item["candidate_id"], item["memory_id"])), kv("latency_ms", int((monotonic()-started)*1000)))
+	}
+	return items, nil
+}
+
+// postCapture sends one capture request and returns its items.
+func postCapture(eventType, eventID, sid string, occurredAt any, claims []any, origin string, gen host.Obj) ([]any, error) {
 	body := host.Obj{{Key: "scope", Value: capScope()}, {Key: "generator", Value: gen}, {Key: "claims", Value: claims}}
 	if sessionProcessorOn() { // the server accepts automated capture only from a service role
 		body = append(body, host.KV{Key: "automated", Value: true})
@@ -302,19 +341,7 @@ func sendCapture(eventType, eventID, sid string, occurredAt any, claims []any, o
 	if !has {
 		return nil, fmt.Errorf("%w: 'items'", errKey)
 	}
-	items, err := asList(raw)
-	if err != nil {
-		return nil, err
-	}
-	for _, v := range items {
-		item, err := asDict(v)
-		if err != nil {
-			return nil, err
-		}
-		metric(kv("event", eventType), kv("session", head(sid, 12)), kv("status", item["status"]), kv("reason", item["reason"]),
-			kv("candidate_id", or(item["candidate_id"], item["memory_id"])), kv("latency_ms", int((monotonic()-started)*1000)))
-	}
-	return items, nil
+	return asList(raw)
 }
 
 var captureOrigins = map[string]bool{"claude_code": true, "codex": true, "zcode": true, "gemini": true, "grok": true, "deepseek": true, "langgraph": true}
@@ -432,7 +459,7 @@ func process(job map[string]any, persist func() error) (err error) {
 	if len(cued) == 0 && len(users) > 0 {
 		metric(kv("event", job["type"]), kv("session", head(sid, 12)), kv("status", "skipped_no_cue"), kv("turns", len(users)))
 	}
-	return nil
+	return storeTurns(job, cued, origin, checkpoint)
 }
 
 // allCodexInternal reports whether every queued turn is a Codex ambient prompt (false for no turns).
@@ -570,13 +597,12 @@ func prepareCapture(job map[string]any, cued []any, sid, origin string, checkPol
 	if err != nil {
 		return nil, err
 	}
-	mode := captureMode()
-	out, err := privateModel(redactPrivate(withGuidance(capturePrompt(mode, captureDensity()))), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s%s", messageDay(cued), memoryLanguage(), existing, userText, assistantSection(mode, job)),
-		capModel, 120*time.Second, captureSchema(mode), "claims", str(or(job["cwd"], "")))
-	if err != nil {
-		return nil, err
-	}
-	raw, err := asList(out)
+	mode, density := captureMode(), captureDensity()
+	system := redactPrivate(withGuidance(capturePrompt(mode, density)))
+	raw, err := extractWindows(density, texts, func(text string) (any, error) {
+		return privateModel(system, fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s%s", messageDay(cued), memoryLanguage(), existing, text, assistantSection(mode, job)),
+			capModel, 120*time.Second, captureSchema(mode), "claims", str(or(job["cwd"], "")))
+	})
 	if err != nil {
 		return nil, err
 	}

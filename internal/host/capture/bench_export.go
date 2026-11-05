@@ -31,7 +31,8 @@ func CaptureModel() string { return capModel }
 // related the EXISTING MEMORIES rows (id, text, revision) the drain gets from search, guidance an
 // optional user note appended the way capture.json's is, density the space's capture_density as
 // the server resolves it (config/effective; "" is durable). The caller feeds user text only, so the
-// capture mode stays user. pipeline names the generator.
+// capture mode stays user. pipeline names the generator. Each line is one turn, so the
+// conversation density reads it in windows.
 func ExtractClaims(userText, today string, related []map[string]any, guidance, density, pipeline string) (BenchExtraction, error) {
 	userText, guidance = redactPrivate(userText), redactPrivate(guidance)
 	if err := os.MkdirAll(capState, 0o700); err != nil {
@@ -51,12 +52,11 @@ func ExtractClaims(userText, today string, related []map[string]any, guidance, d
 	if existing == "" {
 		existing = "(none)"
 	}
-	out, err := privateModel(capturePrompt("", density)+userGuidance(guidance), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: auto\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
-		capModel, 180*time.Second, claimsSchema, "claims")
-	if err != nil {
-		return BenchExtraction{}, err
-	}
-	raw, err := asList(out)
+	system := capturePrompt("", density) + userGuidance(guidance)
+	raw, err := extractWindows(density, strings.Split(userText, "\n"), func(text string) (any, error) {
+		return privateModel(system, fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: auto\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, text),
+			capModel, 180*time.Second, claimsSchema, "claims")
+	})
 	if err != nil {
 		return BenchExtraction{}, err
 	}
