@@ -7,9 +7,6 @@ import (
 	"time"
 )
 
-// fileExtractRequestBytes fits a 4 MiB file as base64 plus the JSON around it.
-const fileExtractRequestBytes = 6 << 20
-
 func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("POST /v1/extract/preview", func(w http.ResponseWriter, r *http.Request) {
 		var in ExtractPreviewInput
@@ -21,7 +18,7 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 	})
 	mux.HandleFunc("POST /v1/files/memories", func(w http.ResponseWriter, r *http.Request) {
 		var in FileMemoriesInput
-		if !decodeLimit(w, r, &in, fileExtractRequestBytes) {
+		if !decodeLimit(w, r, &in, s.Files.requestBytes()) {
 			return
 		}
 		out, e := s.ExtractFileMemories(r.Context(), bearer(r), in)
@@ -30,7 +27,7 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 	})
 	mux.HandleFunc("POST /v1/memories/ingest", func(w http.ResponseWriter, r *http.Request) {
 		var in IngestInput
-		if !decodeLimit(w, r, &in, fileExtractRequestBytes) {
+		if !decodeLimit(w, r, &in, ingestRequestBytes) {
 			return
 		}
 		out, e := s.Ingest(r.Context(), bearer(r), in)

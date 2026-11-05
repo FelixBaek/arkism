@@ -134,16 +134,20 @@ func postBody(ctx context.Context, client *http.Client, endpoint string, header 
 	return sendBody(ctx, client, http.MethodPost, endpoint, header, body, maxResponse)
 }
 
-// sendBody is postBody for any method; a GET sends no body.
+// sendBody is postBody for any method; a GET sends no body and no Content-Type.
 func sendBody(ctx context.Context, client *http.Client, method, endpoint string, header http.Header, body []byte, maxResponse int64) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", ErrInvalid)
 	}
 	for k, v := range header {
 		req.Header[k] = v
 	}
-	if req.Header.Get("Content-Type") == "" {
+	if body != nil && req.Header.Get("Content-Type") == "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	injectTraceparent(ctx, endpoint, req.Header)

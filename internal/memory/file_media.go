@@ -26,10 +26,8 @@ import (
 const (
 	fileVisionOperation     = "wiki_file_vision"
 	fileTranscribeOperation = "wiki_file_transcribe"
-	// fileVisionMaxPages bounds the scanned pages one upload reads; each is a model call.
-	fileVisionMaxPages  = 8
-	fileVisionImageCost = 1600 // token estimate for one image in the budget gate
-	transcribeProvider  = "transcription"
+	fileVisionImageCost     = 1600 // token estimate for one image in the budget gate
+	transcribeProvider      = "transcription"
 	// transcribeDestination is the transfer destination of speech-to-text calls.
 	transcribeDestination = "external:transcription"
 )
@@ -49,57 +47,139 @@ const fileVisionPrompt = "Write out all text visible in this image exactly as wr
 // never spends the vision or speech model, the file needs a real run.
 var errMediaDryRun = errors.New("media is read only in a real run")
 
+// hostedParserDestination is the transfer destination of an external reading service.
+const hostedParserDestination = "external:file_parser"
+
+// uploadedFile is one file a person sent, decoded and size-checked.
+type uploadedFile struct {
+	Scope   Scope
+	Name    string
+	MIME    string
+	Raw     []byte
+	Parsers []string
+	DryRun  bool
+}
+
 // fileMemoryPages reads an upload into page texts: documents with their
 // readers, images, scanned PDFs and audio through the opted-in models. A dry run
 // of a model-read file returns no pages and a dry_run_media note.
-func (s *Service) fileMemoryPages(ctx context.Context, token string, d Decision, in FileMemoriesInput) ([]string, bool, []ExtractSkip, error) {
-	pages, paged, notes, err := s.readFilePages(ctx, token, d, in)
+func (s *Service) fileMemoryPages(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+	pages, paged, notes, err := s.readFilePages(ctx, token, d, f)
 	if errors.Is(err, errMediaDryRun) {
 		return nil, paged, []ExtractSkip{{Locator: "file", Reason: "dry_run_media"}}, nil
 	}
 	return pages, paged, notes, err
 }
 
-func (s *Service) readFilePages(ctx context.Context, token string, d Decision, in FileMemoriesInput) ([]string, bool, []ExtractSkip, error) {
-	mime, media := mediaFormats[strings.ToLower(path.Ext(in.Filename))]
-	if !media {
-		pages, paged, err := extractFilePages(in)
-		if errors.Is(err, errPDFNoText) && s.visionModel() != nil {
-			return s.scannedPDFPages(ctx, token, d, in)
+// uploadMIME checks the client's MIME type against the file name and returns
+// the type to record. With an external reading service any extension is taken.
+func (s *Service) uploadMIME(name, given string) (string, error) {
+	if mime, ok := mediaFormats[strings.ToLower(path.Ext(name))]; ok {
+		if given != "" && given != mime {
+			return "", ErrInvalid
 		}
-		return pages, paged, []ExtractSkip{}, err
+		return mime, nil
 	}
-	if in.MIME != "" && in.MIME != mime {
-		return nil, false, nil, ErrInvalid
+	mime, err := documentMIME(name, given)
+	if errors.Is(err, errUnsupportedFormat) && len(s.Files.Hosted) > 0 {
+		return givenMIME(given)
 	}
-	raw, err := fileUpload(in)
+	return mime, err
+}
+
+// readFilePages tries the readers in the request's or the operator's order. A
+// reader that cannot read the file hands it to the next one; a limit, a
+// refusal or a dry-run stop ends the chain.
+func (s *Service) readFilePages(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+	order, err := s.Files.parserOrder(f.Parsers)
 	if err != nil {
 		return nil, false, nil, err
 	}
-	if strings.HasPrefix(mime, "audio/") {
-		text, err := s.transcribeFile(ctx, token, d, in, mime, raw)
-		return []string{text}, false, []ExtractSkip{}, err
+	ext := strings.ToLower(path.Ext(f.Name))
+	err = errUnsupportedFormat
+	for _, name := range order {
+		read := s.fileParser(name, ext)
+		if read == nil {
+			continue
+		}
+		pages, paged, notes, perr := read(ctx, token, d, f)
+		if perr == nil && strings.TrimSpace(strings.Join(pages, "")) == "" {
+			perr = ErrInvalid
+		}
+		if perr == nil {
+			return pages, paged, append([]ExtractSkip{}, notes...), nil
+		}
+		if err = perr; !parserFallsThrough(perr) {
+			break
+		}
 	}
-	pages, err := s.readImages(ctx, token, d, in, mime, [][]byte{raw})
-	return pages, false, []ExtractSkip{}, err
+	return nil, false, nil, err
+}
+
+type fileParserFunc func(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error)
+
+// fileParser is the named reader when it can read this extension, else nil.
+func (s *Service) fileParser(name, ext string) fileParserFunc {
+	mime, media := mediaFormats[ext]
+	_, builtin := documentFormats[ext]
+	vision := name == parserVision && s.visionModel() != nil
+	switch {
+	case name == parserBuiltin && builtin:
+		return localParser(builtinPages)
+	case name == parserConverter && converterHandles(ext):
+		return localParser(converterPages)
+	case vision && ext == ".pdf":
+		return s.scannedPDFPages
+	case vision && media && strings.HasPrefix(mime, "image/"):
+		return func(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+			pages, err := s.readImages(ctx, token, d, f, [][]byte{f.Raw})
+			return pages, false, nil, err
+		}
+	case name == parserTranscribe && s.Transcriber != nil && media && strings.HasPrefix(mime, "audio/"):
+		return func(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+			text, err := s.transcribeFile(ctx, token, d, f)
+			return []string{text}, false, nil, err
+		}
+	case s.Files.Hosted[name] != nil:
+		return s.hostedPages(s.Files.Hosted[name])
+	}
+	return nil
+}
+
+func localParser(read func(string, []byte) ([]string, bool, error)) fileParserFunc {
+	return func(_ context.Context, _ string, _ Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+		pages, paged, err := read(strings.ToLower(path.Ext(f.Name)), f.Raw)
+		return pages, paged, nil, err
+	}
+}
+
+// hostedPages sends the file to an external reading service after the same
+// per-file transfer check as a model call. A dry run never sends it.
+func (s *Service) hostedPages(p HostedParser) fileParserFunc {
+	return func(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+		if f.DryRun {
+			return nil, false, nil, errMediaDryRun
+		}
+		if err := s.authorizeMedia(ctx, token, d, f.Scope, hostedParserDestination, f.Name, f.MIME, f.Raw); err != nil {
+			return nil, false, nil, err
+		}
+		text, err := p.Parse(ctx, strings.ToLower(path.Ext(f.Name)), f.MIME, f.Raw)
+		return []string{strings.TrimSpace(text)}, false, nil, err
+	}
 }
 
 // scannedPDFPages reads the page images of a PDF without text, up to the page limit.
-func (s *Service) scannedPDFPages(ctx context.Context, token string, d Decision, in FileMemoriesInput) ([]string, bool, []ExtractSkip, error) {
-	raw, err := fileUpload(in)
+func (s *Service) scannedPDFPages(ctx context.Context, token string, d Decision, f uploadedFile) ([]string, bool, []ExtractSkip, error) {
+	images, err := pdfPageImages(f.Raw)
 	if err != nil {
 		return nil, false, nil, err
 	}
-	images, err := pdfPageImages(raw)
-	if err != nil {
-		return nil, false, nil, err
-	}
-	skipped, read := []ExtractSkip{}, 0
+	skipped, read, limit := []ExtractSkip{}, 0, s.Files.visionPages()
 	for i, img := range images {
 		if img == nil {
 			continue
 		}
-		if read++; read > fileVisionMaxPages {
+		if read++; read > limit {
 			images[i] = nil
 			skipped = append(skipped, ExtractSkip{Locator: fmt.Sprintf("page:%d", i+1), Reason: "vision_page_limit"})
 		}
@@ -107,7 +187,7 @@ func (s *Service) scannedPDFPages(ctx context.Context, token string, d Decision,
 	if read == 0 {
 		return nil, false, nil, errPDFNoText
 	}
-	pages, err := s.readImages(ctx, token, d, in, "image/jpeg", images)
+	pages, err := s.readImages(ctx, token, d, f, images)
 	return pages, true, skipped, err
 }
 
@@ -119,28 +199,29 @@ func (s *Service) visionModel() VisionLLM {
 	return nil
 }
 
-// readImages turns each image into text; a nil image is an empty page.
-func (s *Service) readImages(ctx context.Context, token string, d Decision, in FileMemoriesInput, mime string, images [][]byte) ([]string, error) {
+// readImages turns each image into text; a nil image is an empty page. Each
+// image is sent with the type its bytes show (a scanned page may be JPEG or PNG).
+func (s *Service) readImages(ctx context.Context, token string, d Decision, f uploadedFile, images [][]byte) ([]string, error) {
 	v := s.visionModel()
 	if v == nil {
 		return nil, fmt.Errorf("image reading is not enabled: %w", errUnsupportedFormat)
 	}
-	if in.DryRun {
+	if f.DryRun {
 		return nil, errMediaDryRun
 	}
-	scope, label := in.Scope, in.Filename
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
 	pages := make([]string, len(images))
 	for i, img := range images {
 		if img == nil {
 			continue
 		}
-		if err := s.authorizeMedia(ctx, token, d, scope, wikiDestination, label, mime, img); err != nil {
+		mime := imageMIME(img, f.MIME)
+		if err := s.authorizeMedia(ctx, token, d, f.Scope, wikiDestination, f.Name, mime, img); err != nil {
 			return nil, err
 		}
-		text, err := s.budgetedCall(ctx, scope, budget, fileVisionImageCost+wikiMaxCallTokens, func() (string, ProviderUsage, error) {
+		text, err := s.budgetedCall(ctx, f.Scope, budget, fileVisionImageCost+wikiMaxCallTokens, func() (string, ProviderUsage, error) {
 			// The trace keeps the image's digest, never its bytes.
-			m := modelCallSpec{scope: scope, operation: fileVisionOperation, kind: "image", provider: wikiProvider, model: s.Wiki.Generator().Model,
+			m := modelCallSpec{scope: f.Scope, operation: fileVisionOperation, kind: "image", provider: wikiProvider, model: s.Wiki.Generator().Model,
 				prompt: fileVisionSystem + "\n\n" + fileVisionPrompt + "\n\n[image " + mime + " sha256:" + ContentHash(string(img)) + "]"}
 			return s.ledgerCall(ctx, m, func(ctx context.Context) (string, ProviderUsage, error) {
 				return v.CompleteImage(ctx, fileVisionSystem, fileVisionPrompt, mime, img, wikiMaxCallTokens)
@@ -163,11 +244,11 @@ func (s *Service) ingestBlocksText(ctx context.Context, token string, d Decision
 			parts = append(parts, b.Text)
 			continue
 		}
-		raw, err := fileUpload(FileMemoriesInput{ContentBase64: b.ContentBase64})
+		raw, err := decodeUpload(b.ContentBase64, s.Files.maxBytes())
 		if err != nil {
 			return "", err
 		}
-		pages, err := s.readImages(ctx, token, d, FileMemoriesInput{Scope: scope, Filename: fmt.Sprintf("block-%d", i+1)}, b.MIME, [][]byte{raw})
+		pages, err := s.readImages(ctx, token, d, uploadedFile{Scope: scope, Name: fmt.Sprintf("block-%d", i+1), MIME: b.MIME}, [][]byte{raw})
 		if err != nil {
 			return "", err
 		}
@@ -177,29 +258,40 @@ func (s *Service) ingestBlocksText(ctx context.Context, token string, d Decision
 }
 
 // transcribeFile turns one audio file into text through the transcription endpoint.
-func (s *Service) transcribeFile(ctx context.Context, token string, d Decision, in FileMemoriesInput, mime string, audio []byte) (string, error) {
+func (s *Service) transcribeFile(ctx context.Context, token string, d Decision, f uploadedFile) (string, error) {
 	if s.Transcriber == nil {
 		return "", fmt.Errorf("audio transcription is not enabled: %w", errUnsupportedFormat)
 	}
-	if in.DryRun {
+	if f.DryRun {
 		return "", errMediaDryRun
 	}
-	scope, label := in.Scope, in.Filename
-	if err := s.authorizeMedia(ctx, token, d, scope, transcribeDestination, label, mime, audio); err != nil {
+	if err := s.authorizeMedia(ctx, token, d, f.Scope, transcribeDestination, f.Name, f.MIME, f.Raw); err != nil {
 		return "", err
 	}
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
-	text, err := s.budgetedCall(ctx, scope, budget, wikiMaxCallTokens, func() (string, ProviderUsage, error) {
-		m := modelCallSpec{scope: scope, operation: fileTranscribeOperation, kind: "transcribe", provider: transcribeProvider, model: s.Transcriber.Model(),
-			prompt: "[audio " + mime + " sha256:" + ContentHash(string(audio)) + "]"}
+	text, err := s.budgetedCall(ctx, f.Scope, budget, wikiMaxCallTokens, func() (string, ProviderUsage, error) {
+		m := modelCallSpec{scope: f.Scope, operation: fileTranscribeOperation, kind: "transcribe", provider: transcribeProvider, model: s.Transcriber.Model(),
+			prompt: "[audio " + f.MIME + " sha256:" + ContentHash(string(f.Raw)) + "]"}
 		return s.ledgerCall(ctx, m, func(ctx context.Context) (string, ProviderUsage, error) {
-			return s.Transcriber.Transcribe(ctx, path.Ext(label), mime, audio)
+			return s.Transcriber.Transcribe(ctx, path.Ext(f.Name), f.MIME, f.Raw)
 		})
 	})
 	if err != nil {
 		return "", mediaCallError(err)
 	}
 	return strings.TrimSpace(text), nil
+}
+
+// imageMIME is the image type the bytes show, else the declared one; a
+// scanned page whose bytes say nothing is a JPEG stream.
+func imageMIME(img []byte, declared string) string {
+	if detected := http.DetectContentType(img); strings.HasPrefix(detected, "image/") {
+		return detected
+	}
+	if strings.HasPrefix(declared, "image/") {
+		return declared
+	}
+	return "image/jpeg"
 }
 
 func mediaCallError(err error) error {

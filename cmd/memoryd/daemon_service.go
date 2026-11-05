@@ -170,6 +170,10 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	if transcriber != nil {
 		svc.Transcriber = transcriber
 	}
+	if err != nil {
+		return err
+	}
+	svc.Files, err = memory.FileSettingsFromEnv() // MEMORY_FILE_*: upload limits and reader order
 	return err
 }
 func configureDaemonAnthropic(svc *memory.Service) error {

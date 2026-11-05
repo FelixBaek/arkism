@@ -221,3 +221,16 @@ func TestDocumentReaderHardening(t *testing.T) {
 		t.Fatalf("zip entries: %v", err)
 	}
 }
+
+// documentText joins a file's pages into one Markdown text (the static reader chain).
+func documentText(filename string, raw []byte) (string, error) {
+	pages, _, err := documentPages(filename, raw)
+	if err != nil {
+		return "", err
+	}
+	text := strings.TrimSpace(strings.Join(pages, "\n\n"))
+	if text == "" {
+		return "", ErrInvalid
+	}
+	return text, nil
+}

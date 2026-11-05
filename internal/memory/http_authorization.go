@@ -38,6 +38,8 @@ type routePolicy struct {
 	scope  routeScope
 	limit  int64
 	roles  []string
+	// fileLimit replaces limit with the operator's per-file upload limit as base64.
+	fileLimit bool
 }
 
 type authorizationMux struct {
@@ -124,6 +126,9 @@ func (w *routeResponse) flush(dst http.ResponseWriter) {
 type httpPreflightKey struct{}
 
 func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, policy routePolicy) (Decision, error) {
+	if policy.fileLimit {
+		policy.limit = s.Files.requestBytes()
+	}
 	scope, input, err := policy.requestScope(w, r)
 	if err != nil {
 		return Decision{}, err

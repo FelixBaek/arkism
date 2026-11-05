@@ -137,7 +137,7 @@ func TestScannedPDFPagesReadByVision(t *testing.T) {
 	if err != nil || len(v.images) != 2 || string(v.images[1]) != "JPEG2" || len(llm.prompts) != 2 || !strings.Contains(llm.prompts[1], "둘째 쪽 글자") {
 		t.Fatalf("%+v %v %d %q", out, err, len(v.images), llm.prompts)
 	}
-	many := make([]string, fileVisionMaxPages+2)
+	many := make([]string, fileVisionPagesDefault+2)
 	for i := range many {
 		many[i] = fmt.Sprintf("J%d", i)
 	}

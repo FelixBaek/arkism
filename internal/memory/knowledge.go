@@ -4,7 +4,6 @@ package memory
 // artifact store. The source anchor is stable; documents and chunks are immutable.
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -84,6 +83,8 @@ type KnowledgeIngestInput struct {
 	ContentBase64    string `json:"content_base64,omitempty"`
 	Synthetic        bool   `json:"synthetic"`
 	ExpectedRevision int64  `json:"expected_revision,omitempty"`
+	// Parsers names the readers to try for a file, in order; empty uses the server's order.
+	Parsers []string `json:"parsers,omitempty"`
 }
 type KnowledgeIngestResult struct {
 	Source    Record   `json:"source"`
@@ -146,14 +147,14 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		return out, ErrDenied
 	}
 	ext := strings.ToLower(path.Ext(in.Filename))
-	mime, e := documentMIME(in.Filename, in.MIMEType)
+	mime, e := s.uploadMIME(in.Filename, in.MIMEType)
 	if e != nil {
 		return out, e
 	}
 	// chunkExt: a converted file's headings come out as Markdown headings.
 	chunkExt := ext
 	if in.ContentBase64 != "" || documentFormats[ext].read != nil || documentFormats[ext].mime == "" {
-		if in.Content, e = knowledgeFileText(in); e != nil {
+		if in.Content, e = s.knowledgeFileText(ctx, token, d, in, mime); e != nil {
 			return out, e
 		}
 		in.ContentBase64, chunkExt = "", ".md"
@@ -258,19 +259,27 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 }
 
 // knowledgeFileText reads a file that is not plain text: an uploaded file
-// (content_base64) or a text format such as HTML sent as content.
-func knowledgeFileText(in KnowledgeIngestInput) (string, error) {
-	if in.ContentBase64 == "" {
-		return documentText(in.Filename, []byte(in.Content))
+// (content_base64) or a text format such as HTML sent as content. Images and
+// audio go through the opted-in readers like any upload for memory extraction.
+func (s *Service) knowledgeFileText(ctx context.Context, token string, d Decision, in KnowledgeIngestInput, mime string) (string, error) {
+	raw := []byte(in.Content)
+	if in.ContentBase64 != "" {
+		if in.Content != "" {
+			return "", ErrInvalid
+		}
+		var err error
+		if raw, err = decodeUpload(in.ContentBase64, s.Files.maxBytes()); err != nil {
+			return "", err
+		}
 	}
-	if in.Content != "" || len(in.ContentBase64) > base64.StdEncoding.EncodedLen(documentMaxFile) {
+	if len(raw) == 0 {
 		return "", ErrInvalid
 	}
-	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+	pages, _, _, err := s.readFilePages(ctx, token, d, uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Raw: raw, Parsers: in.Parsers})
 	if err != nil {
-		return "", ErrInvalid
+		return "", err
 	}
-	return documentText(in.Filename, raw)
+	return strings.TrimSpace(strings.Join(pages, "\n\n")), nil
 }
 func validKnowledgeIngest(in KnowledgeIngestInput, mime string) bool {
 	return validRunLabel(in.SourceKey, 128) && validRunLabel(in.Filename, 200) && !strings.ContainsAny(in.Filename, "/\\") && path.Base(in.Filename) == in.Filename && mime != "" && in.MIMEType == mime && len(in.Content) != 0 && len(in.Content) <= 64<<10 && utf8.ValidString(in.Content) && !strings.ContainsRune(in.Content, 0) && in.ExpectedRevision >= 0
@@ -547,7 +556,7 @@ func (s *Service) registerKnowledgeHTTP(mux routeRegistrar) {
 	s.registerKnowledgeCatalogHTTP(mux)
 	mux.HandleFunc("POST /v1/knowledge/ingest", func(w http.ResponseWriter, r *http.Request) {
 		var in KnowledgeIngestInput
-		if !decode(w, r, &in) {
+		if !decodeLimit(w, r, &in, s.Files.requestBytes()) {
 			return
 		}
 		out, e := s.IngestKnowledge(r.Context(), bearer(r), in)

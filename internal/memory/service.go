@@ -61,7 +61,9 @@ type Service struct {
 	// BlobObjects, when set, stores blob bytes there instead of in BlobDirectory.
 	BlobObjects BlobObjectStore
 	// Transcriber, when set, turns uploaded audio into text for memory extraction.
-	Transcriber         Transcriber
+	Transcriber Transcriber
+	// Files are the upload limits and the reader order (MEMORY_FILE_*); zero is the defaults.
+	Files               FileSettings
 	CandidateDailyLimit int
 	// CaptureMergeSimilarity is the cosine similarity at or above which a captured
 	// claim gets a merge proposal toward the closest approved memory instead of a

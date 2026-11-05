@@ -150,8 +150,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/auth/google":                                 {},
 	"POST /v1/capture":                                     {action: "read:memory_candidates", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/extract/preview":                             {action: "generate:memory_candidates", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
-	"POST /v1/files/memories":                              {action: "write:memory_candidates", scope: routeJSON, limit: fileExtractRequestBytes, roles: []string{roleHuman, roleAgent}},
-	"POST /v1/memories/ingest":                             {action: "write:memory_candidates", scope: routeJSON, limit: fileExtractRequestBytes, roles: []string{roleHuman, roleAgent}},
+	"POST /v1/files/memories":                              {action: "write:memory_candidates", scope: routeJSON, limit: fileRequestJSONOverhead, fileLimit: true, roles: []string{roleHuman, roleAgent}},
+	"POST /v1/memories/ingest":                             {action: "write:memory_candidates", scope: routeJSON, limit: ingestRequestBytes, roles: []string{roleHuman, roleAgent}},
 	"GET /v1/files/memories/jobs/{id}":                     {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/files/memories/documents/{id}/chunks":         {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/files/memories/documents/{id}/history":        {action: "read:memory_candidates", scope: routeQuery},
@@ -220,7 +220,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/knowledge/bindings":                          {action: "write:knowledge_bindings", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/bindings/{id}/state":               {action: "write:knowledge_bindings", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/index":                             {action: "write:knowledge_chunks", scope: routeJSON, limit: 256 << 10},
-	"POST /v1/knowledge/ingest":                            {action: "write:knowledge_sources", scope: routeJSON, limit: 6 << 20}, // a Word file travels as base64
+	"POST /v1/knowledge/ingest":                            {action: "write:knowledge_sources", scope: routeJSON, limit: fileRequestJSONOverhead, fileLimit: true}, // a file travels as base64
 	"POST /v1/knowledge/retrieve":                          {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/revalidate":                        {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/knowledge/search":                            {action: "retrieve:knowledge", scope: routeJSON, limit: 256 << 10},

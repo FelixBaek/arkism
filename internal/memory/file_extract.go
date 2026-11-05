@@ -40,7 +40,6 @@ const (
 	fileExtractMaxChunks   = 24
 	fileExtractSyncChunks  = 2
 	fileExtractMaxClaims   = 32 // Capture takes at most 32 claims per event
-	fileExtractMaxFile     = 4 << 20
 	fileExtractMaxText     = 512 << 10
 	fileExtractMaxPreview  = 64 << 10
 	fileExtractSourceBytes = 60000 // under the 64000-byte source text limit
@@ -141,6 +140,8 @@ type FileMemoriesInput struct {
 	Timestamp     *time.Time `json:"timestamp,omitempty"`
 	Tags          []string   `json:"tags,omitempty"`
 	Strategy      string     `json:"strategy,omitempty"`
+	// Parsers names the readers to try, in order; empty uses the server's order.
+	Parsers []string `json:"parsers,omitempty"`
 }
 
 // IngestInput is text to extract memory candidates from (POST /v1/memories/ingest).
@@ -604,27 +605,32 @@ func extractRedactionNote(n int) []ExtractSkip {
 }
 
 // fileUpload decodes an uploaded file within the file size limit.
-func fileUpload(in FileMemoriesInput) ([]byte, error) {
-	if len(in.ContentBase64) > base64.StdEncoding.EncodedLen(fileExtractMaxFile) {
+// decodeUpload decodes a base64 file no larger than the per-file limit.
+func decodeUpload(content string, limit int64) ([]byte, error) {
+	if int64(len(content)) > int64(base64.StdEncoding.EncodedLen(int(limit))) {
 		return nil, errBlobTooLarge
 	}
-	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+	raw, err := base64.StdEncoding.DecodeString(content)
 	if err != nil || len(raw) == 0 {
 		return nil, ErrInvalid
+	}
+	if int64(len(raw)) > limit {
+		return nil, errBlobTooLarge
 	}
 	return raw, nil
 }
 
-// extractFilePages reads an uploaded file of any supported format into page texts.
-func extractFilePages(in FileMemoriesInput) ([]string, bool, error) {
-	if _, err := documentMIME(in.Filename, in.MIME); err != nil {
-		return nil, false, err
-	}
-	raw, err := fileUpload(in)
+// uploadFile checks one JSON upload's name, type and size.
+func (s *Service) uploadFile(in FileMemoriesInput) (uploadedFile, error) {
+	mime, err := s.uploadMIME(in.Filename, in.MIME)
 	if err != nil {
-		return nil, false, err
+		return uploadedFile{}, err
 	}
-	return documentPages(in.Filename, raw)
+	raw, err := decodeUpload(in.ContentBase64, s.Files.maxBytes())
+	if err != nil {
+		return uploadedFile{}, err
+	}
+	return uploadedFile{Scope: in.Scope, Name: in.Filename, MIME: mime, Raw: raw, Parsers: in.Parsers, DryRun: in.DryRun}, nil
 }
 
 func pagePointers(pages []string) []*string {
@@ -672,7 +678,11 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
-	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, in)
+	f, err := s.uploadFile(in)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, f)
 	if err == nil {
 		err = s.defendItem(ctx, in.Scope, "write:memory_candidates", &plan.Options, pagePointers(pages)...)
 	}
@@ -701,6 +711,9 @@ const (
 	ingestMaxBlocks = 64
 )
 
+// ingestRequestBytes bounds one ingest request: its texts and image blocks as JSON.
+const ingestRequestBytes = 6 << 20
+
 // Ingest extracts memory candidates from text items, each its own document and job.
 // The whole request (shapes, strategies, model) is checked first, so a malformed item
 // stores nothing. After that each item stands alone: its result says done, pending or
@@ -709,7 +722,7 @@ const (
 // every item and answers at once (the HTTP route starts the queued jobs).
 func (s *Service) Ingest(ctx context.Context, token string, in IngestInput) (IngestResult, error) {
 	if !validScope(in.Scope) || len(in.Items) == 0 || len(in.Items) > ingestMaxItems || slices.ContainsFunc(in.Items, func(it IngestItem) bool { return !validIngestItem(it) }) ||
-		ingestImages(in.Items) > fileVisionMaxPages {
+		ingestImages(in.Items) > s.Files.visionPages() {
 		return IngestResult{}, ErrInvalid
 	}
 	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
