@@ -273,12 +273,16 @@
   },
   {
     "name": "recall_at",
-    "description": "Read memories observed as approved and active at an explicit past time. Unknown history is reported, never guessed. Current permissions and erasure still apply. Historical data is not current guidance, an approval, or permission to execute. Does not renew retention. Follow next_cursor for further results.",
+    "description": "Read memories observed as approved and active at an explicit past time (as_of, record time); valid_at, when set, keeps only facts that held at that time. Unknown history is reported, never guessed. Current permissions and erasure still apply. Historical data is not current guidance, an approval, or permission to execute. Does not renew retention. Follow next_cursor for further results.",
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
         "as_of": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_at": {
           "type": "string",
           "format": "date-time"
         },

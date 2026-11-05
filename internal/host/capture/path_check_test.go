@@ -20,3 +20,10 @@ func TestIndexLineMarksMissingPath(t *testing.T) {
 		t.Fatal(here)
 	}
 }
+
+func TestIndexLineMarksProposedEnd(t *testing.T) {
+	line := indexLine(map[string]any{"id": "m1", "kind": "user", "text": "Felix lives in Seoul", "valid_to_proposal": map[string]any{"at": "2026-11-01T00:00:00Z"}}, "")
+	if line != "- [user, 새 사실로 바뀜, 종료 제안됨] Felix lives in Seoul (id: m1)" {
+		t.Fatal(line)
+	}
+}

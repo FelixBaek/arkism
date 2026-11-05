@@ -129,6 +129,28 @@ func TestRecallAtPreservesUnknownsWithoutUse(t *testing.T) {
 	}
 }
 
+func TestRecallAtValidTimeAndRecallQualityFields(t *testing.T) {
+	swapRouter(t)
+	calls := fakeRequest(t, `{"items":[]}`)
+	call(t, "recall_at", `{"as_of":"2026-10-05T10:00:00Z","valid_at":"2026-09-01T00:00:00Z"}`)
+	if len(*calls) != 1 || (*calls)[0].payload.(map[string]any)["valid_at"] != "2026-09-01T00:00:00Z" {
+		t.Fatal(*calls)
+	}
+	reply := `{"items":[{"id":"m1","kind":"user","status":"active","text":"기본 테마는 다크","conflict_pending":true,` +
+		`"pending_correction":{"candidate_id":"c1","text":"paper 라이트","notice":"정정 검토 중"},"valid_to_proposal":{"at":"2026-11-01T00:00:00Z","by":{"collection":"memories","id":"m2","revision":1}}}],` +
+		`"provisional":[{"id":"c2","origin":"provisional","text":"후보"}],"provisional_notice":"승인 전 후보입니다."}`
+	fakeRequest(t, reply)
+	out := structured(t, call(t, "recall", `{"query":"기본 테마"}`))
+	m := host.MustDumps(field(out, "memories"), host.DumpOpts{Compact: true, NoASCII: true})
+	if !strings.Contains(m, `"pending_correction":{`) || !strings.Contains(m, `"valid_to_proposal":{`) || len(asList(field(out, "provisional"))) != 1 || field(out, "provisional_notice") == nil {
+		t.Fatal(out)
+	}
+	fakeRequest(t, `{"items":[],"empty_reason":"below_relevance_floor"}`)
+	if out = structured(t, call(t, "recall", `{"query":"wedding dress"}`)); field(out, "empty_reason") != "below_relevance_floor" {
+		t.Fatal(out)
+	}
+}
+
 func TestRecallRelationLaneAndInvalidAnchors(t *testing.T) {
 	swapRouter(t)
 	t.Setenv("ARKISM_REPO", "owner/repo")

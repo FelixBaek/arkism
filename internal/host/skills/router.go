@@ -783,6 +783,11 @@ func searchExtras(res map[string]any) host.Obj {
 	if explain := res["explain"]; explain != nil {
 		out = append(out, host.KV{Key: "explain", Value: explain})
 	}
+	for _, k := range []string{"empty_reason", "provisional", "provisional_notice"} {
+		if truthy(res[k]) {
+			out = append(out, host.KV{Key: k, Value: res[k]})
+		}
+	}
 	return out
 }
 
@@ -983,7 +988,7 @@ func recallShape(found []any) ([]any, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain", "source_traces", "entities"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "pending_correction", "valid_to_proposal", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain", "source_traces", "entities"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}
@@ -1062,13 +1067,19 @@ func searchSessionArchives(query, after, archiveID any) (map[string]any, error) 
 }
 
 // recallAt reads observed historical state without treating it as current instructions.
-func recallAt(asOf, query, kind, limit, cursor any) (map[string]any, error) {
+// as_of is record time (what was known then); valid_at, when set, is the time the facts held.
+func recallAt(asOf, validAt, query, kind, limit, cursor any) (map[string]any, error) {
 	a, ok := asOf.(string)
+	v, validOK := validAt.(string)
 	n, isInt := host.Int(limit)
-	if !ok || a == "" || !isString(query) || !isString(kind) || !isString(cursor) || !isInt || n < 1 || n > 100 {
+	if !ok || a == "" || !validOK || !isString(query) || !isString(kind) || !isString(cursor) || !isInt || n < 1 || n > 100 {
 		return nil, errors.New("as_of and valid query options are required")
 	}
-	return routerRequest("/v1/memories/at", map[string]any{"scope": host.Scope(), "as_of": a, "q": query, "kind": kind, "limit": limit, "cursor": cursor})
+	payload := map[string]any{"scope": host.Scope(), "as_of": a, "q": query, "kind": kind, "limit": limit, "cursor": cursor}
+	if v != "" {
+		payload["valid_at"] = v
+	}
+	return routerRequest("/v1/memories/at", payload)
 }
 
 func traceMemorySources(memoryID any) (map[string]any, error) {
@@ -1329,7 +1340,7 @@ func callToolMemory(n string, args map[string]any) (any, error) {
 	case "search_session_archives":
 		return searchSessionArchives(arg(args, "query", ""), arg(args, "after", ""), arg(args, "archive_id", ""))
 	case "recall_at":
-		return recallAt(args["as_of"], arg(args, "query", ""), arg(args, "kind", ""), arg(args, "limit", 20), arg(args, "cursor", ""))
+		return recallAt(args["as_of"], arg(args, "valid_at", ""), arg(args, "query", ""), arg(args, "kind", ""), arg(args, "limit", 20), arg(args, "cursor", ""))
 	case "trace_memory_sources":
 		return traceMemorySources(arg(args, "memory_id", ""))
 	case "read_session_message":

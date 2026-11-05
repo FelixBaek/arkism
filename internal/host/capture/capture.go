@@ -526,6 +526,9 @@ func indexLine(item map[string]any, cwd string) string {
 	if truthy(item["conflict_pending"]) || truthy(item["conflict_id"]) {
 		markers = append(markers, "충돌 검토 중")
 	}
+	if truthy(item["valid_to_proposal"]) {
+		markers = append(markers, "새 사실로 바뀜, 종료 제안됨")
+	}
 	if truthy(item["supersedes"]) {
 		markers = append(markers, "이전 기억 대체")
 	}
