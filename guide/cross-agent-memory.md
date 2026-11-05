@@ -52,6 +52,10 @@ them from paid model executions and from operation of the deployed service.
 | MCP `reflect`, HTTP `/v1/reflect` | Server-model answer from approved memories under directives, with cited memory ids; not stored |
 | MCP `browse_memory`, HTTP `GET /v1/directives`, `/v1/observations`, `/v1/mental-models`, `/v1/entities`, `/v1/causal-links`, `/v1/files/memories/jobs/{id}` | Read-only pages; active observations, approved causal links and approved mental-model text only; no create, propose, review or approve |
 | MCP `read_wiki` (`tree`), HTTP `/v1/wiki/tree` | Folders and reviewed page titles |
+| MCP `propose_directive`, `propose_mental_model`, HTTP `POST /v1/directives`, `POST /v1/mental-models` | An agent's directive or mental model is stored as `proposed`: it applies nowhere, is not refreshed and is not exported. A person saving it approves it (`GET /v1/mental-models?status=proposed` lists the open ones) |
+| MCP `propose_memory_update`, `propose_invalidation`, HTTP `POST /v1/capture` (`supersedes`), `POST /v1/maintenance_proposals` (`invalidation`) | A correction candidate, or a question in the maintenance queue. Only a person's approval replaces a memory; only a person's `forget` decision retires one |
+| MCP `add_document`, HTTP `POST /v1/files/memories` | Extraction candidates for review. Agents only in a space whose `mcp_tools` list names `add_document` (it spends the model budget) |
+| MCP `read_document`, `read_space_config`, `browse_memory` `jobs`/`knowledge_sources`, `cancel_job` | Document chunks and history, the space's effective settings, and the jobs this agent started (an agent cancels only its own) |
 | HTTP `/v1/knowledge-graph/relations` | Human-only assertion; an agent cannot approve its own relation |
 
 The MCP client fixes scope from its configured identity; tool arguments cannot

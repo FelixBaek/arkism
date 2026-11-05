@@ -3,7 +3,7 @@
 /* eslint-disable */
 
 export type DirectiveInput = { "scope": Scope; "expected_revision"?: number; "title": string; "rule": string; "priority"?: number; "applies_to": "reflect" | "context" | "both"; "active"?: boolean; "tags"?: Array<string> };
-export type Directive = { "id": string; "revision": number; "scope": Scope; "title": string; "rule": string; "priority": number; "applies_to": "reflect" | "context" | "both"; "active": boolean; "tags": Array<string>; "created_by": string; "created_at": string; "updated_at": string };
+export type Directive = { "id": string; "revision": number; "scope": Scope; "title": string; "rule": string; "priority": number; "applies_to": "reflect" | "context" | "both"; "active": boolean; "proposed"?: boolean; "tags": Array<string>; "created_by": string; "created_at": string; "updated_at": string };
 export type DirectiveList = { "items": Array<Directive>; "next_cursor"?: string };
 export type DirectiveDeleteInput = { "scope": Scope; "expected_revision": number };
 export type DirectiveDeleted = { "deleted": boolean };
@@ -700,7 +700,7 @@ export class ArkismClient {
   getV1Directives(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string }): Promise<DirectiveList> {
     return this.request("GET", `/v1/directives`, query, undefined);
   }
-  /** POST /v1/directives — Create a directive (write:directives, human principals only; active on creation) */
+  /** POST /v1/directives — Create a directive (write:directives; a person's is stored as asked, an agent's is always stored inactive with proposed=true until a person saves it, at most 20 open proposals per scope) */
   postV1Directives(body: DirectiveInput): Promise<Directive> {
     return this.request("POST", `/v1/directives`, undefined, body);
   }
@@ -824,11 +824,11 @@ export class ArkismClient {
   getV1AuditEventsStats(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "from"?: string; "to"?: string }): Promise<{ "from": string; "to": string; "total": number; "by_action": Array<{ "bucket"?: string; "key": string; "count": number }>; "by_day": Array<{ "bucket"?: string; "key": string; "count": number }> }> {
     return this.request("GET", `/v1/audit-events/stats`, query, undefined);
   }
-  /** GET /v1/operations — List background jobs (human/service read:jobs) */
+  /** GET /v1/operations — List background jobs (read:jobs; an agent sees only the jobs it created) */
   getV1Operations(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "kind"?: string; "status"?: string; "from"?: string; "to"?: string; "cursor"?: string; "limit"?: number }): Promise<{ "items": Array<{ "id": string; "kind": string; "status": string; "revision": number; "attempts": number; "manual_retries": number; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "run_at"?: string; "lease_until"?: string; "error"?: string; "created_by"?: string; "created_at": string; "updated_at": string; "operable": boolean }>; "next_cursor"?: string }> {
     return this.request("GET", `/v1/operations`, query, undefined);
   }
-  /** GET /v1/operations/{id} — Read one job's metadata (human/service read:jobs) */
+  /** GET /v1/operations/{id} — Read one job's metadata (read:jobs; another principal's job is 404 for an agent) */
   getV1OperationsById(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "id": string; "kind": string; "status": string; "revision": number; "attempts": number; "manual_retries": number; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "run_at"?: string; "lease_until"?: string; "error"?: string; "created_by"?: string; "created_at": string; "updated_at": string; "operable": boolean }> {
     return this.request("GET", `/v1/operations/${encodeURIComponent(id)}`, query, undefined);
   }
@@ -836,7 +836,7 @@ export class ArkismClient {
   deleteV1OperationsById(id: string, body: { "scope": Scope; "expected_revision"?: number }): Promise<{ "id": string; "kind": string; "status": string; "revision": number; "attempts": number; "manual_retries": number; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "run_at"?: string; "lease_until"?: string; "error"?: string; "created_by"?: string; "created_at": string; "updated_at": string; "operable": boolean }> {
     return this.request("DELETE", `/v1/operations/${encodeURIComponent(id)}`, undefined, body);
   }
-  /** POST /v1/operations/{id}/cancel — Cancel a pending or running operable job (human transition:jobs) */
+  /** POST /v1/operations/{id}/cancel — Cancel a pending or running operable job (transition:jobs; an agent may cancel only its own jobs, another's is 404) */
   postV1OperationsByIdCancel(id: string, body: { "scope": Scope; "expected_revision"?: number }): Promise<{ "id": string; "kind": string; "status": string; "revision": number; "attempts": number; "manual_retries": number; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "run_at"?: string; "lease_until"?: string; "error"?: string; "created_by"?: string; "created_at": string; "updated_at": string; "operable": boolean }> {
     return this.request("POST", `/v1/operations/${encodeURIComponent(id)}/cancel`, undefined, body);
   }
@@ -2100,7 +2100,7 @@ export class ArkismClient {
   extract_preview(body: { "scope": Scope; "text": string; "source_label"?: string }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/extract/preview`, undefined, body);
   }
-  /** POST /v1/files/memories — Turn a file into memory candidates */
+  /** POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document) */
   extract_file_memories(body: { "scope": Scope; "filename": string; "content_base64": string; "mime"?: string; "dry_run"?: boolean }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/files/memories`, undefined, body);
   }
@@ -2108,7 +2108,7 @@ export class ArkismClient {
   get_file_memories_job(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ [key: string]: unknown }> {
     return this.request("GET", `/v1/files/memories/jobs/${encodeURIComponent(id)}`, query, undefined);
   }
-  /** POST /v1/files/memories/jobs/{id}/run — Resume a file extraction job */
+  /** POST /v1/files/memories/jobs/{id}/run — Resume a file extraction job (an agent only when the space config mcp_tools lists add_document) */
   run_file_memories_job(id: string, body: { "scope": Scope }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/files/memories/jobs/${encodeURIComponent(id)}/run`, undefined, body);
   }
@@ -2225,10 +2225,10 @@ export class ArkismClient {
     return this.request("POST", `/v1/observations/${encodeURIComponent(id)}/review`, undefined, undefined);
   }
   /** GET /v1/mental-models — Mental models of the scope, paginated (read:mental_models) */
-  getV1MentalModels(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "cursor"?: string; "limit"?: number }): Promise<unknown> {
+  getV1MentalModels(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "active" | "proposed"; "cursor"?: string; "limit"?: number }): Promise<unknown> {
     return this.request("GET", `/v1/mental-models`, query, undefined);
   }
-  /** POST /v1/mental-models — Create a mental model (human principals only) */
+  /** POST /v1/mental-models — Create a mental model (a person's is active; an agent's is stored with status proposed, never refreshed or read into answers until a person saves it, at most 20 open proposals per scope) */
   postV1MentalModels(): Promise<unknown> {
     return this.request("POST", `/v1/mental-models`, undefined, undefined);
   }

@@ -185,7 +185,7 @@ func (s *Service) RunFileExtractJob(ctx context.Context, token string, scope Sco
 	if !validRunLabel(id, 256) {
 		return FileExtractJobView{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", scope)
+	d, err := s.extractActor(ctx, token, "write:memory_candidates", scope, true)
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
@@ -237,7 +237,7 @@ func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string
 	if !validRunLabel(id, 256) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope)
+	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, false)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

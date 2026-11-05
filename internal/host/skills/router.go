@@ -968,7 +968,9 @@ func memoryPathTexts(m map[string]any) []string {
 }
 
 // remember submits a candidate through the existing capture gate; it never approves it.
-func remember(text, kind any) (host.Obj, error) {
+// remember submits one memory candidate; supersedes (propose_memory_update) makes it a
+// correction of that memory, which a person's approval alone retires.
+func remember(text, kind any, supersedes map[string]any) (host.Obj, error) {
 	t, ok := text.(string)
 	if !ok || pyStrip(t) == "" || len(t) > 4000 || !containsStr([]string{"user", "decision", "procedural", "lesson"}, str(kind)) || !isString(kind) {
 		return nil, errors.New("one nonempty memory of at most 4000 UTF-8 bytes and a valid kind are required")
@@ -977,13 +979,17 @@ func remember(text, kind any) (host.Obj, error) {
 	if origin == "" {
 		origin = "codex"
 	}
+	claim := map[string]any{"subject": "memory", "text": pyStrip(t), "kind": kind, "basis": "inferred",
+		"reason": "MCP로 제안한 기억. 사람의 검토가 필요합니다."}
+	if supersedes != nil {
+		claim["supersedes"], claim["reason"] = supersedes, "MCP로 제안한 기억 수정. 사람이 승인해야 이전 기억을 대신합니다."
+	}
 	result, err := routerRequest("/v1/capture", map[string]any{
 		"scope":     host.Scope(),
 		"generator": map[string]any{"model": "external-agent", "prompt_version": "memory-mcp-v1", "pipeline_version": "memory-mcp-v1"},
 		"event": map[string]any{"id": "mcp:" + randHex(16), "type": "turn_completed", "origin_product": origin,
 			"occurred_at": isoMillis(time.Now())},
-		"claims": []any{map[string]any{"subject": "memory", "text": pyStrip(t), "kind": kind, "basis": "inferred",
-			"reason": "MCP로 제안한 기억. 사람의 검토가 필요합니다."}},
+		"claims": []any{claim},
 	})
 	if err != nil {
 		return nil, err
@@ -1205,8 +1211,9 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	case "search_knowledge", "recall", "recall_digest", "search_session_archives", "recall_at", "trace_memory_sources",
 		"read_session_message", "record_memory_usage", "read_wiki", "reflect", "browse_memory":
 		value, err = callToolMemory(n, args)
-	case "remember":
-		return callToolRemember(args)
+	case "remember", "propose_memory_update", "propose_directive", "propose_mental_model", "propose_invalidation",
+		"add_document", "cancel_job", "read_document", "read_space_config":
+		return callMemoryWrite(n, args)
 	case "code_search_symbols", "code_callers", "code_callees", "code_impact":
 		value, err = callCodeGraph(n, args)
 	case "refresh_skills", "router_status":
@@ -1286,8 +1293,16 @@ func callToolMemory(n string, args map[string]any) (any, error) {
 }
 
 // callToolRemember submits a memory candidate and marks the answer as an error when it was rejected.
-func callToolRemember(args map[string]any) (host.Obj, error) {
-	v, err := remember(arg(args, "text", ""), arg(args, "kind", "decision"))
+func callToolRemember(n string, args map[string]any) (host.Obj, error) {
+	var supersedes map[string]any
+	if n == "propose_memory_update" {
+		ref, ok := memoryRef(args)
+		if !ok {
+			return nil, errors.New("memory_id and the revision recall returned are required")
+		}
+		supersedes = ref
+	}
+	v, err := remember(arg(args, "text", ""), arg(args, "kind", "decision"), supersedes)
 	if err != nil {
 		return nil, err
 	}

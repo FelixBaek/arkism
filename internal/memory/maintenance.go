@@ -24,6 +24,10 @@ import (
 // (ST-813) shows it often fails: a rule often broken or a lesson that often
 // fails. It carries the signal's counts as the AI's evidence. Deciding it never
 // changes the memory; a person who agrees fixes or retires it the usual way.
+//
+// An invalidation proposal is the same one-memory shape without evidence: an
+// agent reports that a memory looks outdated or incorrect. Only a person's
+// forget decision retires the memory; accept or dismiss leave it as it is.
 const colMaintenance = "maintenance_proposals"
 
 const (
@@ -37,6 +41,8 @@ var (
 	maintenanceReasons = []string{"same_meaning", "newer_replaces_older", "more_specific"}
 	// signal proposal type -> the memory kinds it may name
 	signalTypes          = map[string][]string{"rule_often_violated": {"user", "procedural", "decision"}, "lesson_often_failing": {"lesson"}}
+	invalidationType     = "invalidation"
+	invalidationReasons  = []string{"outdated", "incorrect"}
 	maintenanceDecisions = map[string]string{"accept": "accepted", "swap": "swapped", "dismiss": "dismissed", "forget_both": "forgotten", "forget_keep": "forgotten", "forget_retire": "forgotten", "forget": "forgotten"}
 )
 
@@ -83,15 +89,24 @@ func validMaintenance(p MaintenanceProposal) bool {
 	if p.Decision != "" || p.DecidedBy != "" || p.DecidedAt != nil {
 		return false
 	}
-	if _, ok := signalTypes[p.Type]; ok {
-		e := p.Evidence
-		return p.Reason == "low_pass_rate" && p.Memory != nil && ref(*p.Memory) && p.Keep == (Ref{}) && p.Retire == (Ref{}) &&
-			e != nil && e.Samples > 0 && e.Passed >= 0 && e.Passed <= e.Samples
+	_, signal := signalTypes[p.Type]
+	if p.Type == invalidationType || signal {
+		return p.Memory != nil && ref(*p.Memory) && p.Keep == (Ref{}) && p.Retire == (Ref{}) && validOneMemory(p, signal)
 	}
 	return p.Memory == nil && p.Evidence == nil && slices.Contains(maintenanceTypes, p.Type) && slices.Contains(maintenanceReasons, p.Reason) && ref(p.Keep) && ref(p.Retire) &&
 		p.Keep.ID != p.Retire.ID
 }
 
+// validOneMemory checks the reason and evidence of a signal or an invalidation proposal.
+func validOneMemory(p MaintenanceProposal, signal bool) bool {
+	if !signal {
+		return slices.Contains(invalidationReasons, p.Reason) && p.Evidence == nil
+	}
+	e := p.Evidence
+	return p.Reason == "low_pass_rate" && e != nil && e.Samples > 0 && e.Passed >= 0 && e.Passed <= e.Samples
+}
+
+// isSignalProposal is true for every one-memory proposal: a signal or an invalidation.
 func isSignalProposal(p MaintenanceProposal) bool { return p.Memory != nil }
 
 // proposalRefs is the memories a proposal names: one for a signal proposal, else the pair.
@@ -168,7 +183,8 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 		return Record{}, err
 	}
 	// The evidence is checked against stored signals, so the proposer must be able to read them.
-	if isSignalProposal(in.Proposal) {
+	hasEvidence := in.Proposal.Evidence != nil
+	if hasEvidence {
 		if _, err := s.authorize(ctx, token, "read:usage", in.Scope, "", ""); err != nil {
 			return Record{}, err
 		}
@@ -190,7 +206,7 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 			return err
 		}
 		p := in.Proposal
-		if isSignalProposal(p) {
+		if hasEvidence {
 			if err := checkSignalEvidence(ctx, tx, in.Scope, &p); err != nil {
 				return err
 			}

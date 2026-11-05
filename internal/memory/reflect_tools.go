@@ -151,7 +151,7 @@ func (s *Service) reflectEntity(ctx context.Context, token string, scope Scope, 
 // the model; the summary then passes the gate at its citations' highest sensitivity
 // with their sources. A summary that fails any check is left out, as search filters a hit.
 func (s *Service) reflectMentalModels(ctx context.Context, token string, scope Scope) ([]Hit, error) {
-	page, err := s.ListMentalModels(ctx, token, scope, "", reflectMentalModelsMax)
+	page, err := s.ListMentalModels(ctx, token, scope, "", "", reflectMentalModelsMax)
 	if err != nil {
 		return nil, err
 	}

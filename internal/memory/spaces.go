@@ -478,6 +478,11 @@ func (s *Service) SetSpaceAlias(ctx context.Context, token string, scope Scope, 
 	})
 }
 
+// spaceRecordInactive: expired, or an agent's proposal, which is not a definition a person made.
+func spaceRecordInactive(col string, r Record, now time.Time) bool {
+	return r.ExpiresAt != nil && !r.ExpiresAt.After(now) || spaceDefinitionCollection(col) && r.Status == obsProposed
+}
+
 // spaceRecordSkip says why a stored record stays out of a bundle ("" = it goes in).
 func spaceRecordSkip(col string, r Record, now time.Time) string {
 	if r.ContentErased || r.PrivacyQuarantined || r.PrivacyDeletion != nil || r.Removal != nil {
@@ -491,7 +496,7 @@ func spaceRecordSkip(col string, r Record, now time.Time) string {
 	if r.Sensitivity == "private" || !transferable {
 		return "privacy_excluded"
 	}
-	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
+	if spaceRecordInactive(col, r, now) {
 		return "inactive"
 	}
 	switch col {
@@ -908,7 +913,7 @@ func (s *Service) importSpaceLines(ctx context.Context, token string, d Decision
 		case line.Record != nil && (line.Section == colMemories || line.Section == "memory_candidates"):
 			claims, origin = append(claims, spaceClaim(m.BundleID, line.Section, *line.Record)), append(origin, line.Record)
 		case line.Record != nil && slices.Contains(spaceDefinitions, line.Section) && slices.Contains(Collections, line.Section):
-			s.importSpaceDefinition(ctx, token, scope, line, &report)
+			s.importSpaceDefinition(ctx, token, d.Role, scope, line, &report)
 		default:
 			report.Skipped = append(report.Skipped, SpaceSkip{Section: line.Section, Reason: "unknown_section", Count: 1})
 		}
@@ -994,13 +999,15 @@ func (s *Service) importSpaceConfig(ctx context.Context, d Decision, scope Scope
 }
 
 // importSpaceDefinition hands a definition to its own collection's create path and rules.
-func (s *Service) importSpaceDefinition(ctx context.Context, token string, scope Scope, line spaceBundleLine, report *SpaceReport) {
+func (s *Service) importSpaceDefinition(ctx context.Context, token, role string, scope Scope, line spaceBundleLine, report *SpaceReport) {
 	r := line.Record
-	// Both are human-written: CreateDirective and CreateMentalModel refuse any non-human importer.
+	// Both are human-written: an agent importer would only turn them into its own proposals.
 	err := ErrInvalid
 	switch {
+	case role != roleHuman:
+		err = ErrDenied
 	case line.Section == colDirectives && r.Directive != nil:
-		active := r.Status != "inactive"
+		active := r.Status == statusActive
 		_, err = s.CreateDirective(ctx, token, DirectiveInput{Scope: scope, Title: r.Directive.Title, Rule: r.Text,
 			Priority: r.Directive.Priority, AppliesTo: r.Directive.AppliesTo, Active: &active, Tags: r.Tags})
 	case line.Section == colMentalModels && r.MentalModel != nil:

@@ -81,7 +81,7 @@ class ArkismClient(BaseClient):
         return self.request("GET", f"/v1/directives", query, None)
 
     def post_v1_directives(self, body=None):
-        """POST /v1/directives — Create a directive (write:directives, human principals only; active on creation)"""
+        """POST /v1/directives — Create a directive (write:directives; a person's is stored as asked, an agent's is always stored inactive with proposed=true until a person saves it, at most 20 open proposals per scope)"""
         return self.request("POST", f"/v1/directives", None, body)
 
     def get_v1_directives_by_id(self, id, query=None):
@@ -205,11 +205,11 @@ class ArkismClient(BaseClient):
         return self.request("GET", f"/v1/audit-events/stats", query, None)
 
     def get_v1_operations(self, query=None):
-        """GET /v1/operations — List background jobs (human/service read:jobs)"""
+        """GET /v1/operations — List background jobs (read:jobs; an agent sees only the jobs it created)"""
         return self.request("GET", f"/v1/operations", query, None)
 
     def get_v1_operations_by_id(self, id, query=None):
-        """GET /v1/operations/{id} — Read one job's metadata (human/service read:jobs)"""
+        """GET /v1/operations/{id} — Read one job's metadata (read:jobs; another principal's job is 404 for an agent)"""
         return self.request("GET", f"/v1/operations/{urllib.parse.quote(id, safe='')}", query, None)
 
     def delete_v1_operations_by_id(self, id, body=None):
@@ -217,7 +217,7 @@ class ArkismClient(BaseClient):
         return self.request("DELETE", f"/v1/operations/{urllib.parse.quote(id, safe='')}", None, body)
 
     def post_v1_operations_by_id_cancel(self, id, body=None):
-        """POST /v1/operations/{id}/cancel — Cancel a pending or running operable job (human transition:jobs)"""
+        """POST /v1/operations/{id}/cancel — Cancel a pending or running operable job (transition:jobs; an agent may cancel only its own jobs, another's is 404)"""
         return self.request("POST", f"/v1/operations/{urllib.parse.quote(id, safe='')}/cancel", None, body)
 
     def post_v1_operations_by_id_retry(self, id, body=None):
@@ -1481,7 +1481,7 @@ class ArkismClient(BaseClient):
         return self.request("POST", f"/v1/extract/preview", None, body)
 
     def extract_file_memories(self, body=None):
-        """POST /v1/files/memories — Turn a file into memory candidates"""
+        """POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)"""
         return self.request("POST", f"/v1/files/memories", None, body)
 
     def get_file_memories_job(self, id, query=None):
@@ -1489,7 +1489,7 @@ class ArkismClient(BaseClient):
         return self.request("GET", f"/v1/files/memories/jobs/{urllib.parse.quote(id, safe='')}", query, None)
 
     def run_file_memories_job(self, id, body=None):
-        """POST /v1/files/memories/jobs/{id}/run — Resume a file extraction job"""
+        """POST /v1/files/memories/jobs/{id}/run — Resume a file extraction job (an agent only when the space config mcp_tools lists add_document)"""
         return self.request("POST", f"/v1/files/memories/jobs/{urllib.parse.quote(id, safe='')}/run", None, body)
 
     def extract_knowledge_memories(self, id, body=None):
@@ -1609,7 +1609,7 @@ class ArkismClient(BaseClient):
         return self.request("GET", f"/v1/mental-models", query, None)
 
     def post_v1_mental_models(self):
-        """POST /v1/mental-models — Create a mental model (human principals only)"""
+        """POST /v1/mental-models — Create a mental model (a person's is active; an agent's is stored with status proposed, never refreshed or read into answers until a person saves it, at most 20 open proposals per scope)"""
         return self.request("POST", f"/v1/mental-models", None, None)
 
     def get_v1_mental_models_by_id(self, id, query=None):

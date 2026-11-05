@@ -27,8 +27,12 @@ func directiveInput(title, rule, target string, priority int) DirectiveInput {
 
 func TestDirectiveOnlyHumansWrite(t *testing.T) {
 	f := newFixture(t)
-	if _, err := f.svc.CreateDirective(testCtx, f.agent, directiveInput("t", "r", "both", 1)); !errors.Is(err, ErrDenied) {
-		t.Fatal("agent created a directive", err)
+	// An agent only proposes: even asking for active, its directive applies nowhere.
+	on := true
+	prop := directiveInput("t", "r", "both", 1)
+	prop.Active = &on
+	if p, err := f.svc.CreateDirective(testCtx, f.agent, prop); err != nil || p.Active || !p.Proposed {
+		t.Fatal("agent directive must be a proposal", p, err)
 	}
 	d, err := f.svc.CreateDirective(testCtx, f.human, directiveInput("Units", "Always use metric units.", "both", 5))
 	if err != nil || !d.Active || d.Revision != 1 || d.CreatedBy != "human-1" {
@@ -65,22 +69,30 @@ func TestDirectiveOnlyHumansWrite(t *testing.T) {
 	if err = f.svc.DeleteDirective(testCtx, f.human, d.ID, DirectiveDeleteInput{Scope: scopeA, ExpectedRevision: 2}); err != nil {
 		t.Fatal(err)
 	}
-	if list, err := f.svc.ListDirectives(testCtx, f.human, scopeA, 0, ""); err != nil || len(list.Items) != 0 {
-		t.Fatal("deleted still listed", err)
+	if list, err := f.svc.ListDirectives(testCtx, f.human, scopeA, 0, ""); err != nil || len(list.Items) != 1 || !list.Items[0].Proposed {
+		t.Fatal("deleted still listed (only the agent's proposal stays)", err)
 	}
 }
 
-func TestDirectiveHTTPAgentRefused(t *testing.T) {
+func TestDirectiveHTTPAgentOnlyProposes(t *testing.T) {
 	f := newFixture(t)
 	body := structuredText(directiveInput("t", "rule", "both", 1))
-	for token, want := range map[string]int{f.agent: 403, f.human: 201} {
+	for token, active := range map[string]bool{f.agent: false, f.human: true} {
 		req := httptest.NewRequest("POST", "/v1/directives", strings.NewReader(body))
 		req.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
 		Handler(f.svc).ServeHTTP(w, req)
-		if w.Code != want {
+		var got DirectiveView
+		if w.Code != 201 || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.Active != active || got.Proposed == active {
 			t.Fatal(token, w.Code, w.Body.String())
 		}
+	}
+	req := httptest.NewRequest("POST", "/v1/directives", strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+f.work)
+	w := httptest.NewRecorder()
+	Handler(f.svc).ServeHTTP(w, req)
+	if w.Code != 403 {
+		t.Fatal("service created a directive", w.Code)
 	}
 }
 

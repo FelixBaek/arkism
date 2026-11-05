@@ -9,6 +9,7 @@ import (
 // approval and counter rows in jobs keep their own state machines untouched.
 // A file extraction runs under its uploader's token, so an operator may cancel
 // or delete it but not requeue it; the uploader resumes it with its run route.
+// An agent sees and cancels only the jobs it started itself.
 var operableJobKinds = map[string]bool{"embedding": true, wikiJobKind: true, fileExtractJobKind: true}
 
 // OperationView is the metadata form of one jobs row; payloads stay inside.
@@ -59,8 +60,12 @@ func (s *Service) ListOperations(ctx context.Context, token string, in OpsListIn
 	if in.Action != "" {
 		return out, ErrInvalid
 	}
-	if _, err := s.opsAuthorize(ctx, token, "read:jobs", in.Scope, "", roleHuman, roleService); err != nil {
+	d, err := s.opsAuthorize(ctx, token, "read:jobs", in.Scope, "", roleHuman, roleService, roleAgent)
+	if err != nil {
 		return out, err
+	}
+	if d.Role == roleAgent {
+		in.Actor = d.PrincipalID
 	}
 	rows, next, err := s.opsPage(ctx, in, colJobs)
 	if err != nil {
@@ -74,7 +79,8 @@ func (s *Service) ListOperations(ctx context.Context, token string, in OpsListIn
 }
 
 func (s *Service) GetOperation(ctx context.Context, token string, scope Scope, id string) (OperationView, error) {
-	if _, err := s.opsAuthorize(ctx, token, "read:jobs", scope, id, roleHuman, roleService); err != nil {
+	d, err := s.opsAuthorize(ctx, token, "read:jobs", scope, id, roleHuman, roleService, roleAgent)
+	if err != nil {
 		return OperationView{}, err
 	}
 	if s.Repo == nil {
@@ -84,6 +90,9 @@ func (s *Service) GetOperation(ctx context.Context, token string, scope Scope, i
 	if err != nil {
 		return OperationView{}, err
 	}
+	if !ownsJob(d, r) {
+		return OperationView{}, ErrNotFound
+	}
 	return viewOperation(r), nil
 }
 
@@ -91,7 +100,7 @@ func (s *Service) GetOperation(ctx context.Context, token string, scope Scope, i
 // lease: the revision moves on, so the holder's finish is refused and the
 // claim queries (which only take pending/retry/expired-running) skip it.
 func (s *Service) CancelOperation(ctx context.Context, token, id string, in OperationChangeInput) (OperationView, error) {
-	return s.changeOperation(ctx, token, id, in, "transition:jobs", "cancel:jobs", func(r *Record) (bool, error) {
+	return s.changeOperation(ctx, token, id, in, "transition:jobs", "cancel:jobs", true, func(r *Record) (bool, error) {
 		if r.Status != JobStatusPending && r.Status != JobStatusRetry && r.Status != JobStatusRunning {
 			return false, ErrConflict
 		}
@@ -103,7 +112,7 @@ func (s *Service) CancelOperation(ctx context.Context, token, id string, in Oper
 // RetryOperation requeues failed work with fresh attempts, at most
 // maxManualJobRetries times per job.
 func (s *Service) RetryOperation(ctx context.Context, token, id string, in OperationChangeInput) (OperationView, error) {
-	return s.changeOperation(ctx, token, id, in, "transition:jobs", "retry:jobs", func(r *Record) (bool, error) {
+	return s.changeOperation(ctx, token, id, in, "transition:jobs", "retry:jobs", false, func(r *Record) (bool, error) {
 		if r.Kind == fileExtractJobKind {
 			return false, ErrInvalid
 		}
@@ -118,7 +127,7 @@ func (s *Service) RetryOperation(ctx context.Context, token, id string, in Opera
 
 // DeleteOperation removes finished work only.
 func (s *Service) DeleteOperation(ctx context.Context, token, id string, in OperationChangeInput) (OperationView, error) {
-	return s.changeOperation(ctx, token, id, in, "delete:jobs", "delete:jobs", func(r *Record) (bool, error) {
+	return s.changeOperation(ctx, token, id, in, "delete:jobs", "delete:jobs", false, func(r *Record) (bool, error) {
 		if r.Status != JobStatusDone && r.Status != JobStatusFailed && r.Status != JobStatusCancelled {
 			return false, ErrConflict
 		}
@@ -126,11 +135,19 @@ func (s *Service) DeleteOperation(ctx context.Context, token, id string, in Oper
 	})
 }
 
-func (s *Service) changeOperation(ctx context.Context, token, id string, in OperationChangeInput, action, auditAction string, apply func(*Record) (bool, error)) (OperationView, error) {
+// ownsJob: people and services see every job, an agent only the ones it started.
+func ownsJob(d Decision, r Record) bool { return d.Role != roleAgent || r.CreatedBy == d.PrincipalID }
+
+// changeOperation applies one change; agentOwn lets an agent change a job it started itself.
+func (s *Service) changeOperation(ctx context.Context, token, id string, in OperationChangeInput, action, auditAction string, agentOwn bool, apply func(*Record) (bool, error)) (OperationView, error) {
 	if in.ExpectedRevision < 0 {
 		return OperationView{}, ErrInvalid
 	}
-	d, err := s.opsAuthorize(ctx, token, action, in.Scope, id, roleHuman)
+	roles := []string{roleHuman}
+	if agentOwn {
+		roles = append(roles, roleAgent)
+	}
+	d, err := s.opsAuthorize(ctx, token, action, in.Scope, id, roles...)
 	if err != nil {
 		return OperationView{}, err
 	}
@@ -142,6 +159,9 @@ func (s *Service) changeOperation(ctx context.Context, token, id string, in Oper
 		r, err := tx.Get(ctx, colJobs, in.Scope, id)
 		if err != nil {
 			return err
+		}
+		if !ownsJob(d, r) {
+			return ErrNotFound
 		}
 		if !operableJobKinds[r.Kind] {
 			return ErrInvalid

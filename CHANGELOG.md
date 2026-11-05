@@ -5,6 +5,11 @@ source changes only; they do not claim that a signed installer is available.
 
 ## Unreleased
 
+- Give agents eight more MCP tools that only propose: directives, mental
+  models, memory corrections and invalidations wait for a person; agents can
+  also list and cancel their own jobs, read document chunks and history, read
+  the space's effective config, and upload a file for candidates when the
+  space lists `add_document` in `mcp_tools`.
 - Give the agents of the built-in desktop Arkism their own `agent` token in
   place of the owner token, so approvals, deletions and other owner-only calls
   stay with the person; existing installs get it on their next start.

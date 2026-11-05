@@ -344,7 +344,7 @@
         "operationId": "getV1Directives"
       },
       "post": {
-        "summary": "Create a directive (write:directives, human principals only; active on creation)",
+        "summary": "Create a directive (write:directives; a person's is stored as asked, an agent's is always stored inactive with proposed=true until a person saves it, at most 20 open proposals per scope)",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3896,7 +3896,7 @@
     },
     "/v1/operations": {
       "get": {
-        "summary": "List background jobs (human/service read:jobs)",
+        "summary": "List background jobs (read:jobs; an agent sees only the jobs it created)",
         "description": "Every jobs row of the scope, newest first, as metadata (no payloads). Only embedding, wiki_build and file_memory_extract jobs are operable.",
         "parameters": [
           {
@@ -4166,7 +4166,7 @@
     },
     "/v1/operations/{id}": {
       "get": {
-        "summary": "Read one job's metadata (human/service read:jobs)",
+        "summary": "Read one job's metadata (read:jobs; another principal's job is 404 for an agent)",
         "parameters": [
           {
             "name": "id",
@@ -4607,7 +4607,7 @@
     },
     "/v1/operations/{id}/cancel": {
       "post": {
-        "summary": "Cancel a pending or running operable job (human transition:jobs)",
+        "summary": "Cancel a pending or running operable job (transition:jobs; an agent may cancel only its own jobs, another's is 404)",
         "description": "pending/retry/running -> cancelled. A running job's lease is revoked: its holder can no longer finish it and no worker claims a cancelled job. A running file extraction stops before its next chunk. Audited.",
         "parameters": [
           {
@@ -8468,7 +8468,8 @@
           }},
         "operationId": "postV1PromptsById"}
     },
-    "/v1/maintenance_proposals": {"get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [
+    "/v1/maintenance_proposals": {
+      "get": {"summary": "Memory cleanup proposals of one status (default open), newest first, up to 500 (read:maintenance_proposals)", "parameters": [
           {
             "name": "workspace_id",
             "in": "query",
@@ -8529,7 +8530,11 @@
               }
             }
           }},
-        "operationId": "getV1MaintenanceProposals"}, "post": {"summary": "Propose keeping one of two active memories (write:maintenance_proposals)", "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal : proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory.", "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"},
+        "operationId": "getV1MaintenanceProposals"},
+      "post": {
+        "summary": "Propose keeping one of two active memories (write:maintenance_proposals)",
+        "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal : proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory. Invalidation proposal: proposal{type invalidation, memory ref, reason outdated|incorrect}, keep, retire and evidence empty; it asks a person to forget one memory and changes nothing by itself (decisions forget or dismiss). One record per memory.",
+        "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -8551,7 +8556,9 @@
               }
             }
           }},
-        "operationId": "postV1MaintenanceProposals"}},
+        "operationId": "postV1MaintenanceProposals"
+      }
+    },
     "/v1/maintenance_proposals/{id}/decide": {"post": {"summary": "A person's answer to a proposal (human principals only)", "description": "Body {scope, expected_revision, decision accept|swap|dismiss|forget_keep|forget_retire|forget_both|forget, reason_code, reason}. accept keeps keep and supersedes retire, swap the other way round, dismiss changes nothing. forget_keep, forget_retire and forget_both (pair proposals) and forget (signal proposals) reject the named memories with a removal {code, note, by, at} and keep them as history (status forgotten); they require reason_code stale|changed|unused|wrong|duplicate, which every other decision must leave empty (400). A signal proposal takes accept, dismiss or forget (swap 400); accept and dismiss do not change the memory. accept and swap run the conflict path's mark and resolve (second_supersedes_first) with the proposal close in one transaction; every decision that changes memories needs transition:memories on each of them. A memory changed since the proposal returns 409 and marks the proposal stale.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The closed proposal"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
@@ -38721,7 +38728,7 @@
         "tags": [
           "Management"
         ],
-        "summary": "Turn a file into memory candidates",
+        "summary": "Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)",
         "description": "Reads txt, md, json, docx, pdf, html/htm, csv, tsv, xlsx (a Markdown table per sheet), pptx (a page per slide), eml (headers, text body, attachment names) and the legacy binary doc (main text), xls (string and number cells, a table per sheet) and ppt (a page per slide) with built-in readers (base64, at most 4 MiB; encrypted PDFs, and scanned PDFs unless image reading is on, return no_extractable_text). Images (png, jpg/jpeg, webp) and scanned PDFs (JPEG page images, at most 8 pages; later pages are skipped with vision_page_limit) are read by the server chat model only when the operator set MEMORY_FILE_VISION=1; audio (mp3, wav, m4a, ogg, webm, flac) is transcribed only when MEMORY_TRANSCRIBE_ENDPOINT and MEMORY_TRANSCRIBE_MODEL are set. Each such file needs transfer:model_input (destination external:wiki-llm or external:transcription, decided on the file name, type, size and sha256) before its bytes leave the server, counts against the daily model call cap and is filed in the usage ledger (operations wiki_file_vision, wiki_file_transcribe); the returned text goes through the same privacy filters and candidate review. Without the opt-in these formats are 415. Other extensions are 415 unsupported_media_type unless the operator configured MEMORY_DOCUMENT_CONVERTER (absolute path, run without a shell, empty environment, private temporary folder, 60 s and 4 MiB output limits) and listed the extension in MEMORY_DOCUMENT_CONVERTER_EXTENSIONS; converted text goes through the same privacy filters. The result carries document_id for the document chunk and history routes. With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. When the same person uploads the same file name again in the same scope, the upload extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
@@ -39032,7 +39039,7 @@
         "tags": [
           "Management"
         ],
-        "summary": "Resume a file extraction job",
+        "summary": "Resume a file extraction job (an agent only when the space config mcp_tools lists add_document)",
         "description": "Runs the remaining chunks of a pending or stopped job (budget stop, restart). Only the person who uploaded the file may run it (others get 403). A finished job, or one an operator stopped, is returned unchanged. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
@@ -43270,9 +43277,22 @@
         "operationId": "getV1ObservationsByIdHistory"}},
     "/v1/observations/{id}/review": {"post": {"summary": "A person's decision on an observation (human principals only)", "description": "Body {scope, expected_revision, action approve|reject|edit, content? (edit only), reason?}. approve makes a proposal recallable after rechecking its sources; reject retires a proposal or an active observation; edit replaces the wording and makes it active.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Observation view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1ObservationsByIdReview"}},
-    "/v1/mental-models": {"get": {"summary": "Mental models of the scope, paginated (read:mental_models)", "description": "limit 1-100 (50), cursor from next_cursor; at most 200 are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, revision, title, query, refresh, active, draft, draft_diff, last_refresh_at, stale, stale_reason}], next_cursor, authority}. stale is true when a cited record no longer stands (stale_reason sources_changed) or approved memories changed after the last refresh (new_memories)."}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
-        "operationId": "getV1MentalModels"}, "post": {"summary": "Create a mental model (human principals only)", "description": "Body {scope, title 1-120, query 1-1000, refresh}. refresh is {mode manual|on_change|daily, cron (5 fields, UTC; refreshes on a tick only when approved memories changed), after_consolidation, min_interval (duration up to 720h), kinds, tags (recall filters, up to 16 each), max_tokens 1000-40000, strategy full|delta}; a bare mode string is still accepted. strategy delta (opt-in) refreshes from the approved text, its citations and only the memories changed since approval; with nothing new the refresh answers 404, and a citation that may no longer be sent falls back to a full rewrite. Secrets and private spans are refused.", "parameters": [], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
-        "operationId": "postV1MentalModels"}},
+    "/v1/mental-models": {
+      "get": {
+        "summary": "Mental models of the scope, paginated (read:mental_models)",
+        "description": "limit 1-100 (50), cursor from next_cursor; at most 200 are read. status active (default) or proposed (agent proposals waiting for a person); each item carries status.",
+        "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["active", "proposed"]}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}],
+        "responses": {"200": {"description": "{items[{id, revision, title, query, refresh, active, draft, draft_diff, last_refresh_at, stale, stale_reason}], next_cursor, authority}. stale is true when a cited record no longer stands (stale_reason sources_changed) or approved memories changed after the last refresh (new_memories)."}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+        "operationId": "getV1MentalModels"
+      },
+      "post": {
+        "summary": "Create a mental model (a person's is active; an agent's is stored with status proposed, never refreshed or read into answers until a person saves it, at most 20 open proposals per scope)",
+        "description": "Body {scope, title 1-120, query 1-1000, refresh}. refresh is {mode manual|on_change|daily, cron (5 fields, UTC; refreshes on a tick only when approved memories changed), after_consolidation, min_interval (duration up to 720h), kinds, tags (recall filters, up to 16 each), max_tokens 1000-40000, strategy full|delta}; a bare mode string is still accepted. strategy delta (opt-in) refreshes from the approved text, its citations and only the memories changed since approval; with nothing new the refresh answers 404, and a citation that may no longer be sent falls back to a full rewrite. Secrets and private spans are refused.",
+        "parameters": [],
+        "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+        "operationId": "postV1MentalModels"
+      }
+    },
     "/v1/mental-models/{id}": {"get": {"summary": "One mental model", "description": "The approved summary (active), a pending draft and the draft's diff against the active text.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1MentalModelsById"}, "patch": {"summary": "Change a mental model's title, query or refresh (human principals only)", "description": "Body {scope, expected_revision, title, query, refresh}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "patchV1MentalModelsById"}, "delete": {"summary": "Delete a mental model (human principals only)", "description": "Body {scope, expected_revision}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{deleted}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
@@ -44619,6 +44639,10 @@
           },
           "active": {
             "type": "boolean"
+          },
+          "proposed": {
+            "type": "boolean",
+            "description": "An agent's proposal; a person's save approves it"
           },
           "tags": {
             "type": "array",

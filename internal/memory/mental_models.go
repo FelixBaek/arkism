@@ -5,6 +5,8 @@ package memory
 // model (Service.Wiki) write a cited summary. The summary is a draft until a
 // person approves it; the approved revision is what readers see. dry_run
 // returns the summary and stores neither a draft nor a history entry.
+// An agent may only propose a topic: it is stored as "proposed", is never
+// refreshed or read by reflect, and becomes active when a person saves it.
 
 import (
 	"bytes"
@@ -34,6 +36,7 @@ const (
 	mmListLimit      = 200
 	mmPageDefault    = 50
 	mmPageMax        = 100
+	mmProposedMax    = 20 // open agent proposals per scope
 	mmTitleMax       = 120
 	mmQueryMax       = 1000
 	mmReviewApprove  = "approve"
@@ -120,6 +123,7 @@ type MentalModelView struct {
 	Title         string             `json:"title"`
 	Query         string             `json:"query"`
 	Refresh       MentalModelRefresh `json:"refresh"`
+	Status        string             `json:"status"`
 	Active        *DerivedRevision   `json:"active,omitempty"`
 	Draft         *DerivedRevision   `json:"draft,omitempty"`
 	DraftDiff     []DigestDiffLine   `json:"draft_diff,omitempty"`
@@ -179,7 +183,7 @@ func (s *Service) mentalModelView(ctx context.Context, r Record) MentalModelView
 		m = *r.MentalModel
 	}
 	m.Active, m.Draft = s.withholdGone(ctx, r.Scope, m.Active), s.withholdGone(ctx, r.Scope, m.Draft)
-	v := MentalModelView{ID: r.ID, Scope: r.Scope, Revision: r.Revision, Title: m.Title, Query: m.Query, Refresh: m.Refresh, Active: m.Active, Draft: m.Draft,
+	v := MentalModelView{ID: r.ID, Scope: r.Scope, Revision: r.Revision, Title: m.Title, Query: m.Query, Refresh: m.Refresh, Status: r.Status, Active: m.Active, Draft: m.Draft,
 		LastRefreshAt: m.LastRefreshAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Authority: AuthorityDataOnly}
 	v.Stale, v.StaleReason = s.mentalModelStale(ctx, r)
 	if m.Draft != nil {
@@ -211,13 +215,25 @@ func (s *Service) CreateMentalModel(ctx context.Context, token string, in Mental
 	if err := validMentalModelInput(in); err != nil {
 		return MentalModelView{}, err
 	}
-	d, err := s.derivedHuman(ctx, token, colMentalModels, in.Scope, "")
+	d, err := s.wikiAuthorize(ctx, token, "write:"+colMentalModels, in.Scope, "", "", roleHuman, roleAgent)
 	if err != nil {
 		return MentalModelView{}, err
 	}
+	status, approvedBy := statusActive, d.PrincipalID
+	if d.Role == roleAgent {
+		status, approvedBy = obsProposed, ""
+		// shortcut: the cap is read outside the insert transaction, so racing proposals may pass it by one.
+		open, err := s.Repo.ListRecordsByStatus(ctx, in.Scope, colMentalModels, obsProposed, mmProposedMax)
+		if err != nil {
+			return MentalModelView{}, err
+		}
+		if len(open) >= mmProposedMax {
+			return MentalModelView{}, ErrConflict
+		}
+	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	r := Record{ID: "mm_" + ID(), Scope: in.Scope, Kind: mentalModelKind, Status: statusActive, Revision: 1, CreatedAt: now, UpdatedAt: now,
-		CreatedBy: d.PrincipalID, CreatedByType: d.Role, ApprovedBy: d.PrincipalID,
+	r := Record{ID: "mm_" + ID(), Scope: in.Scope, Kind: mentalModelKind, Status: status, Revision: 1, CreatedAt: now, UpdatedAt: now,
+		CreatedBy: d.PrincipalID, CreatedByType: d.Role, ApprovedBy: approvedBy,
 		MentalModel: &MentalModelData{Title: strings.TrimSpace(in.Title), Query: strings.TrimSpace(in.Query), Refresh: in.Refresh}}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if err := tx.Insert(ctx, colMentalModels, r); err != nil {
@@ -264,18 +280,22 @@ func (s *Service) MentalModelHistory(ctx context.Context, token string, scope Sc
 	return MentalModelHistory{ID: r.ID, Revisions: revisionHistory(r.MentalModel.History), Authority: AuthorityDataOnly}, nil
 }
 
-func (s *Service) ListMentalModels(ctx context.Context, token string, scope Scope, cursor string, limit int) (MentalModelPage, error) {
+// ListMentalModels lists active models, or with status "proposed" the agent proposals waiting for a person.
+func (s *Service) ListMentalModels(ctx context.Context, token string, scope Scope, status, cursor string, limit int) (MentalModelPage, error) {
 	if limit == 0 {
 		limit = mmPageDefault
 	}
+	if status == "" {
+		status = statusActive
+	}
 	offset, ok := parseOffsetCursor(cursor, mmListLimit)
-	if !validScope(scope) || limit < 1 || limit > mmPageMax || !ok {
+	if !validScope(scope) || limit < 1 || limit > mmPageMax || !ok || status != statusActive && status != obsProposed {
 		return MentalModelPage{}, ErrInvalid
 	}
 	if _, err := s.authorize(ctx, token, "read:"+colMentalModels, scope, "", ""); err != nil {
 		return MentalModelPage{}, err
 	}
-	rows, err := s.Repo.ListRecordsByStatus(ctx, scope, colMentalModels, statusActive, mmListLimit)
+	rows, err := s.Repo.ListRecordsByStatus(ctx, scope, colMentalModels, status, mmListLimit)
 	if err != nil {
 		return MentalModelPage{}, err
 	}
@@ -327,7 +347,11 @@ func (s *Service) UpdateMentalModel(ctx context.Context, token, id string, in Me
 	if err != nil {
 		return MentalModelView{}, err
 	}
+	// A person saving a proposed model approves it.
 	r, err := s.mentalModelWrite(ctx, d, in.Scope, id, in.ExpectedRevision, "update", func(r *Record) error {
+		if r.Status == obsProposed {
+			r.Status, r.ApprovedBy = statusActive, d.PrincipalID
+		}
 		r.MentalModel.Title, r.MentalModel.Query, r.MentalModel.Refresh = strings.TrimSpace(in.Title), strings.TrimSpace(in.Query), in.Refresh
 		return nil
 	})
@@ -414,6 +438,9 @@ func (s *Service) RefreshMentalModel(ctx context.Context, token, id string, in M
 	r, err := s.mentalModelRead(ctx, token, in.Scope, id)
 	if err != nil {
 		return MentalModelView{}, err
+	}
+	if r.Status == obsProposed {
+		return MentalModelView{}, ErrConflict // no model call for a topic nobody approved yet
 	}
 	return s.refreshMentalModel(ctx, token, d, r, in.DryRun, &WikiJob{MaxTotalTokens: obsRunTokens})
 }

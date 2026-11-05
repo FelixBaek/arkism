@@ -22,6 +22,9 @@ var browseKinds = map[string]struct {
 	"mental_models": {"/v1/mental-models", false, true, ""},
 	"entities":      {"/v1/entities", true, true, ""},
 	"file_job":      {"/v1/files/memories/jobs", false, false, ""},
+	// The server lists an agent only the jobs it started.
+	"jobs":              {"/v1/operations", false, true, ""},
+	"knowledge_sources": {"/v1/knowledge/sources", false, true, ""},
 	// Only person-approved links; candidates are model proposals still waiting for review.
 	"causal_links": {"/v1/causal-links", false, true, "&status=active"},
 }
@@ -35,7 +38,7 @@ func browseMemory(args map[string]any) (any, error) {
 	kind := argStr(args, "kind", "")
 	k, ok := browseKinds[kind]
 	if !ok {
-		return nil, errors.New("kind must be directives, observations, mental_models, entities, causal_links or file_job")
+		return nil, errors.New("kind must be directives, observations, mental_models, entities, causal_links, file_job, jobs or knowledge_sources")
 	}
 	id, query, cursor := argStr(args, "id", ""), strings.TrimSpace(argStr(args, "query", "")), argStr(args, "cursor", "")
 	limit, lok := host.Int(arg(args, "limit", 20))

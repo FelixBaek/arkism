@@ -2,9 +2,10 @@ package memory
 
 // Directives are hard rules a person writes for answers (reflect) and for the
 // context agents receive (context build). A person writes them, so they are
-// active on creation; no agent or service principal may create, change or
-// delete one. They live at project scope (workspace + project) so every user
-// and agent of the project reads the same rules.
+// active on creation. An agent may only propose one: it is stored as
+// "proposed", applies nowhere, and becomes active when a person saves it. No
+// agent or service principal may change or delete one. They live at project
+// scope (workspace + project) so every user and agent of the project reads the same rules.
 
 import (
 	"cmp"
@@ -23,6 +24,8 @@ const (
 	directiveRuleMaxRunes  = 4000
 	directiveMaxPriority   = 100
 	directiveListDefault   = 50
+	// directiveProposedMax keeps agent proposals from filling the per-scope cap people need.
+	directiveProposedMax = 20
 	// DirectiveAuthority labels directives apart from retrieved data: they are rules people set.
 	DirectiveAuthority = "human_hard_rule"
 )
@@ -56,6 +59,7 @@ type DirectiveView struct {
 	Priority  int       `json:"priority"`
 	AppliesTo string    `json:"applies_to"`
 	Active    bool      `json:"active"`
+	Proposed  bool      `json:"proposed,omitempty"`
 	Tags      []string  `json:"tags"`
 	CreatedBy string    `json:"created_by"`
 	CreatedAt time.Time `json:"created_at"`
@@ -78,7 +82,7 @@ func viewDirective(r Record) DirectiveView {
 		tags = []string{}
 	}
 	return DirectiveView{ID: r.ID, Revision: r.Revision, Scope: r.Scope, Title: r.Directive.Title, Rule: r.Text, Priority: r.Directive.Priority,
-		AppliesTo: r.Directive.AppliesTo, Active: r.Status == "active", Tags: tags, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		AppliesTo: r.Directive.AppliesTo, Active: r.Status == "active", Proposed: r.Status == obsProposed, Tags: tags, CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
 func validDirectiveInput(in DirectiveInput) error {
@@ -109,12 +113,16 @@ func (s *Service) CreateDirective(ctx context.Context, token string, in Directiv
 	if err := validDirectiveInput(in); err != nil || in.ExpectedRevision != 0 {
 		return DirectiveView{}, cmp.Or(err, ErrInvalid)
 	}
-	d, err := s.wikiAuthorize(ctx, token, "write:"+colDirectives, in.Scope, "", "", roleHuman)
+	d, err := s.wikiAuthorize(ctx, token, "write:"+colDirectives, in.Scope, "", "", roleHuman, roleAgent)
 	if err != nil {
 		return DirectiveView{}, err
 	}
+	status := directiveStatus(in.Active)
+	if d.Role == roleAgent {
+		status = obsProposed
+	}
 	now := time.Now().UTC()
-	r := Record{ID: ID(), Scope: projectScope(in.Scope), Kind: directiveKind, Status: directiveStatus(in.Active), Revision: 1,
+	r := Record{ID: ID(), Scope: projectScope(in.Scope), Kind: directiveKind, Status: status, Revision: 1,
 		Text: strings.TrimSpace(in.Rule), Tags: in.Tags, Directive: &Directive{Title: strings.TrimSpace(in.Title), Priority: in.Priority, AppliesTo: in.AppliesTo},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	// shortcut: the per-scope cap is checked outside the transaction, so two racing creates may pass it by one.
@@ -122,7 +130,13 @@ func (s *Service) CreateDirective(ctx context.Context, token string, in Directiv
 	if err != nil {
 		return DirectiveView{}, err
 	}
-	if len(existing) >= directiveMaxPerScope {
+	proposed := 0
+	for _, e := range existing {
+		if e.Status == obsProposed {
+			proposed++
+		}
+	}
+	if len(existing) >= directiveMaxPerScope || status == obsProposed && proposed >= directiveProposedMax {
 		return DirectiveView{}, ErrConflict
 	}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -163,6 +177,7 @@ func (s *Service) GetDirective(ctx context.Context, token string, scope Scope, i
 }
 
 // UpdateDirective replaces every field; expected_revision guards against a concurrent edit.
+// A person saving a proposed directive approves it (active unless they turn it off).
 func (s *Service) UpdateDirective(ctx context.Context, token, id string, in DirectiveInput) (DirectiveView, error) {
 	if err := validDirectiveInput(in); err != nil || in.ExpectedRevision < 1 || !validRunLabel(id, 256) {
 		return DirectiveView{}, cmp.Or(err, ErrInvalid)

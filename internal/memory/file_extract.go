@@ -242,9 +242,15 @@ func extractChunks(pages []string, paged bool) []FileExtractChunk {
 	return out
 }
 
-// extractActor is a person with the scope's permission and a configured model.
-func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope) (Decision, error) {
-	d, err := s.wikiAuthorize(ctx, token, action, scope, "", "", roleHuman)
+// extractActor is a person with the scope's permission and a configured model. An agent
+// (agentOK: file upload and its job run) qualifies only where the space's MCP tool list names add_document: uploads spend the
+// model budget, so an empty list (every tool) does not let agents in.
+func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope, agentOK bool) (Decision, error) {
+	roles := []string{roleHuman}
+	if agentOK {
+		roles = append(roles, roleAgent)
+	}
+	d, err := s.wikiAuthorize(ctx, token, action, scope, "", "", roles...)
 	if err != nil {
 		return d, err
 	}
@@ -252,11 +258,17 @@ func (s *Service) extractActor(ctx context.Context, token, action string, scope 
 		return d, ErrModelNotConfigured
 	}
 	settings, err := s.spaceSettings(ctx, scope)
+	if err == nil && d.Role == roleAgent && !slices.Contains(settings.MCPTools, agentUploadTool) {
+		return Decision{}, ErrDenied
+	}
 	if err == nil && !settings.ExtractionEnabled {
 		err = ErrExtractionDisabled
 	}
 	return d, err
 }
+
+// agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
+const agentUploadTool = "add_document"
 
 // extractChunk sends one privacy-filtered chunk to the model under the budget gate.
 func (s *Service) extractChunk(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]ExtractedClaim, []ExtractSkip, error) {
@@ -310,7 +322,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 		in.SourceLabel != "" && (!validRunLabel(in.SourceLabel, 200) || containsSecret(in.SourceLabel)) {
 		return ExtractPreviewResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope)
+	d, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope, false)
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
@@ -391,7 +403,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if !validScope(in.Scope) || !validRunLabel(in.Filename, 200) || strings.ContainsAny(in.Filename, "/\\") || containsSecret(in.Filename) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope)
+	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

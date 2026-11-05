@@ -25,9 +25,7 @@ var spaceTools struct {
 
 // spaceToolsFetch reads the allowlist of the router's space (nil = every tool).
 var spaceToolsFetch = func() ([]string, error) {
-	scope := host.Scope()
-	path := "/v1/spaces/" + url.PathEscape(str(scope["workspace_id"])) + "/" + url.PathEscape(str(scope["project_id"])) + "/config/effective"
-	res, err := postJSON(path, nil, routerTokenFile, func(code int) error { return fmt.Errorf("space settings unavailable (HTTP %d)", code) })
+	res, err := postJSON(spaceConfigPath(), nil, routerTokenFile, func(code int) error { return fmt.Errorf("space settings unavailable (HTTP %d)", code) })
 	if err != nil {
 		return nil, err
 	}
@@ -40,6 +38,12 @@ var spaceToolsFetch = func() ([]string, error) {
 		}
 	}
 	return names, nil
+}
+
+// spaceConfigPath is the router space's effective settings route (read_space_config reads it too).
+func spaceConfigPath() string {
+	scope := host.Scope()
+	return "/v1/spaces/" + url.PathEscape(str(scope["workspace_id"])) + "/" + url.PathEscape(str(scope["project_id"])) + "/config/effective"
 }
 
 func spaceToolAllowed(name string) bool {

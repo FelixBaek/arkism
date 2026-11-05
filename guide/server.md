@@ -244,7 +244,7 @@ wiki. What a person approves and how is described in
    | Principal | Actions to add |
    |---|---|
    | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates` |
-   | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages` |
+   | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages`, and for the proposal tools `write:directives`, `write:mental_models`, `write:maintenance_proposals`, `read:jobs`, `transition:jobs`, `read:knowledge_sources`, `read:knowledge_documents`; `add_document` also needs `write:memory_candidates`, `generate:memory_candidates` and `external:transfer` |
    | Service that runs model jobs | the job's write action (`write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `generate:wiki_pages`) plus `search:memories` and `context:read` |
    | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied` |
 
@@ -300,6 +300,14 @@ wiki. What a person approves and how is described in
    ISO weeks (`2026-W44`) and a year alone (`2025년`). Numeric dates with dots
    or dashes are read day first: `03-04-2026` is 3 April, never March 4.
    Dates with slashes are not read, since both orders are common there.
+11. **Agent proposal tools.** Agents can now propose directives, mental
+    models and invalidations, list and cancel their own jobs, and read
+    documents. What an agent creates stays `proposed` until a person saves or
+    decides it; open proposals are capped at 20 per scope and kind. Agent file
+    uploads (`add_document`) spend the daily model calls, so they are off
+    until a person lists `add_document` in the space's `mcp_tools`
+    (`PATCH /v1/spaces/{workspace}/{project}/config`). Space bundle import is
+    now refused for non-human principals.
 
 ## Model providers
 

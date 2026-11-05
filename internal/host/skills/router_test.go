@@ -304,7 +304,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 			t.Fatalf("work tool %d differs from host.WorkTools", i)
 		}
 	}
-	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,list_workflow_runs,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,start_flow_improvement,get_flow_improvement,list_flow_improvements,advance_flow_improvement,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,reflect,browse_memory,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work,send_session_message,read_session_messages" {
+	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,list_workflow_runs,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,start_flow_improvement,get_flow_improvement,list_flow_improvements,advance_flow_improvement,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,reflect,browse_memory,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work,send_session_message,read_session_messages,propose_directive,propose_mental_model,propose_memory_update,propose_invalidation,add_document,read_document,cancel_job,read_space_config" {
 		t.Fatal(names)
 	}
 	if _, err := routeSkills("  "); err == nil {
@@ -429,7 +429,7 @@ func TestRememberIsACandidateAndReportsRejection(t *testing.T) {
 		t.Fatal(p)
 	}
 	for _, text := range []any{"", "    ", strings.Repeat("a", 4001), strings.Repeat("가", 1334), json123()} {
-		if _, err := remember(text, "decision"); err == nil {
+		if _, err := remember(text, "decision", nil); err == nil {
 			t.Fatal(text)
 		}
 	}

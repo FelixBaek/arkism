@@ -85,7 +85,7 @@ func registerMentalModelsHTTP(mux routeRegistrar, s *Service) {
 			respond(w, nil, e)
 			return
 		}
-		v, e := s.ListMentalModels(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("cursor"), limit)
+		v, e := s.ListMentalModels(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("status"), r.URL.Query().Get("cursor"), limit)
 		respond(w, v, e)
 	})
 	mux.HandleFunc("GET /v1/mental-models/{id}", func(w http.ResponseWriter, r *http.Request) {

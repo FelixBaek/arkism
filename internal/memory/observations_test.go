@@ -261,8 +261,8 @@ func TestMentalModelRefreshReviewAndHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.CreateMentalModel(testCtx, f.agent, MentalModelInput{Scope: scopeA, Title: "x", Query: "y", Refresh: MentalModelRefresh{Mode: mmRefreshManual}}); !errors.Is(err, ErrDenied) {
-		t.Fatalf("agent create: %v", err)
+	if p, err := f.svc.CreateMentalModel(testCtx, f.agent, MentalModelInput{Scope: scopeA, Title: "x", Query: "y", Refresh: MentalModelRefresh{Mode: mmRefreshManual}}); err != nil || p.Status != obsProposed {
+		t.Fatalf("agent create must be a proposal: %+v %v", p, err)
 	}
 	if _, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "x", Query: "<private>y</private>", Refresh: MentalModelRefresh{Mode: mmRefreshManual}}); !errors.Is(err, ErrSecretDetected) {
 		t.Fatalf("private query: %v", err)
