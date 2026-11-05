@@ -1371,7 +1371,19 @@ window.ArkismOverviewWindows = (ctx, env) => {
         ["어디서", transportLabel(x.transport) ? tr(transportLabel(x.transport)) : x.transport], ["요청", String(x.route || "").startsWith(`${x.method} `) ? x.route : [x.method, x.route].filter(Boolean).join(" ")], ["걸린 시간", x.duration_ms ? `${num(x.duration_ms)}ms` : ""],
         ["대상", [x.target?.collection, x.target?.id].filter(Boolean).join(" · ")], ["코드", x.action], ["이유 코드", x.reason_code], ["요청 ID", x.request_id], ["꼭 남는 기록", x.mandatory ? tr("예 — 끌 수 없어요") : ""]]));
       // only when the server keeps bodies (ARKISM_AUDIT_BODIES); already redacted and capped
-      if (x.request_body) { const pre = el("pre", "mono ov-ops-text", x.request_body); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", "보낸 내용"), pre); }
+      const body = (title, text) => { const pre = el("pre", "mono ov-ops-text", text); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", title), pre); };
+      if (x.request_body) body("보낸 내용", x.request_body);
+      // the answer is a follow-up response:<action> event pointing at this one (same request id)
+      let res = x;
+      if (!String(x.action).startsWith("response:")) {
+        try {
+          const r = await request(`/v1/audit-events?${query({ action: `response:${x.action}`, record_id: x.id, limit: 1 })}`), hit = (r.items || []).find((i) => i.request_id === x.request_id);
+          res = hit ? await request(`/v1/audit-events/${encodeURIComponent(hit.id)}?${query()}`) : null;
+        } catch { res = null; }
+        if (!d.isConnected) return;
+      }
+      if (res?.response_status) right.append(facts([["응답 코드", res.response_status]]));
+      if (res?.response_body) body("받은 내용", res.response_body);
       right.append(el("div", "ov-detail-actions"));
       right.lastChild.append(button("요청량으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(volume); }));
     };

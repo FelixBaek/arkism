@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "Không thể hoàn tác",
  "찾은 결과를 판정 모델로 거르기": "Lọc kết quả tìm được bằng mô hình đánh giá",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Nếu bật hai công tắc ở trên, một mô hình đánh giá nhỏ sẽ loại bớt trước những ký ức không liên quan hoặc trùng lặp. Bạn không cần chọn lại bằng mô hình máy chủ.",
- "한 번에 읽을 기억": "Số ký ức đọc mỗi lần"
+ "한 번에 읽을 기억": "Số ký ức đọc mỗi lần",
+ "응답 코드": "Mã phản hồi",
+ "받은 내용": "Nội dung nhận được"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

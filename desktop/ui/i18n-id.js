@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "Tidak bisa dibatalkan",
  "찾은 결과를 판정 모델로 거르기": "Saring hasil temuan dengan model penilai",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Jika kedua sakelar di atas aktif, model penilai kecil akan lebih dulu membuang memori yang tidak relevan atau tumpang tindih. Tidak perlu memilih ulang dengan model server.",
- "한 번에 읽을 기억": "Memori yang dibaca sekaligus"
+ "한 번에 읽을 기억": "Memori yang dibaca sekaligus",
+ "응답 코드": "Kode respons",
+ "받은 내용": "Isi yang diterima"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

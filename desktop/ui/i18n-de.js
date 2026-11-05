@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "Nicht rückgängig zu machen",
  "찾은 결과를 판정 모델로 거르기": "Gefundene Ergebnisse mit dem Bewertungsmodell filtern",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Wenn die beiden Schalter oben an sind, entfernt ein kleines Bewertungsmodell zuerst Erinnerungen, die nicht passen oder sich überschneiden. Du musst nicht noch einmal mit dem Servermodell auswählen.",
- "한 번에 읽을 기억": "Erinnerungen pro Durchgang"
+ "한 번에 읽을 기억": "Erinnerungen pro Durchgang",
+ "응답 코드": "Antwortcode",
+ "받은 내용": "Empfangener Inhalt"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

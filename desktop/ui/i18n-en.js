@@ -7618,3 +7618,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "찾은 결과를 판정 모델로 거르기": "Filter results with the judge model",
   "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "With the two switches above on, a small judge model first removes unrelated or overlapping memories. No need to re-rank with the server model.",
   "한 번에 읽을 기억": "Memories read at once" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "응답 코드": "Response code",
+  "받은 내용": "Response received" });

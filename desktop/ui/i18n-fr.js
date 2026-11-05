@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "Irréversible",
  "찾은 결과를 판정 모델로 거르기": "Filtrer les résultats avec le modèle de jugement",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Si les deux options ci-dessus sont activées, un petit modèle de jugement écarte d'abord les souvenirs sans rapport ou en double. Pas besoin de refaire le tri avec le modèle du serveur.",
- "한 번에 읽을 기억": "Souvenirs lus à la fois"
+ "한 번에 읽을 기억": "Souvenirs lus à la fois",
+ "응답 코드": "Code de réponse",
+ "받은 내용": "Contenu reçu"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",

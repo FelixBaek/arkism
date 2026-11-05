@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "Não pode ser desfeito",
  "찾은 결과를 판정 모델로 거르기": "Filtrar os resultados com o modelo de avaliação",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Com as duas chaves acima ligadas, um modelo de avaliação pequeno tira primeiro as memórias sem relação ou repetidas. Não precisa escolher de novo com o modelo do servidor.",
- "한 번에 읽을 기억": "Memórias lidas de uma vez"
+ "한 번에 읽을 기억": "Memórias lidas de uma vez",
+ "응답 코드": "Código de resposta",
+ "받은 내용": "Conteúdo recebido"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",

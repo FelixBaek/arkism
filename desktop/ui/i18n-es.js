@@ -6338,7 +6338,9 @@
  "되돌릴 수 없어요": "No se puede deshacer",
  "찾은 결과를 판정 모델로 거르기": "Filtrar los resultados con el modelo juez",
  "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요.": "Si dejas activados los dos interruptores de arriba, un modelo juez pequeño quita primero los recuerdos que no tienen relación o que se repiten. No hace falta volver a elegir con el modelo del servidor.",
- "한 번에 읽을 기억": "Recuerdos que se leen a la vez"
+ "한 번에 읽을 기억": "Recuerdos que se leen a la vez",
+ "응답 코드": "Código de respuesta",
+ "받은 내용": "Contenido recibido"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

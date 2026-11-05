@@ -311,7 +311,9 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
     if (path.startsWith("/v1/stats")) return { memories: { total: 1, by_status: { active: 1 } }, links: { causes: 3, supports: 1 } };
     if (path.startsWith("/v1/tags")) return { items: [] };
     if (path.startsWith("/v1/audit-events/stats")) return { total: 7, by_day: [{ bucket: "2026-11-04", count: 3 }, { bucket: "2026-11-05", count: 4 }], by_action: [{ key: "read:memories", count: 5 }] };
-    if (path.startsWith("/v1/audit-events/a1")) return { id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", method: "POST", route: "/v1/capture", duration_ms: 42, decision: "allow", mandatory: true, created_at: "2026-11-05T00:00:00Z", request_body: '{"text":"[REDACTED]"}' };
+    if (path.startsWith("/v1/audit-events/r1")) return { id: "r1", action: "response:write:memories", request_id: "req-1", response_status: 201, response_body: '{"id":"m1","text":"[REDACTED]"}', target: { id: "a1" } };
+    if (path.startsWith("/v1/audit-events?") && /action=response%3Awrite%3Amemories/.test(path) && /record_id=a1/.test(path)) return { items: [{ id: "r1", action: "response:write:memories", request_id: "req-1" }] };
+    if (path.startsWith("/v1/audit-events/a1")) return { id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", method: "POST", route: "/v1/capture", duration_ms: 42, decision: "allow", mandatory: true, created_at: "2026-11-05T00:00:00Z", request_id: "req-1", request_body: '{"text":"[REDACTED]"}' };
     if (path.startsWith("/v1/audit-events?") && /transport=http/.test(path)) return { items: [{ id: "a2", action: "read:memories", actor: "felix", actor_type: "human", transport: "http", created_at: "2026-11-05T00:00:00Z" }] };
     if (path.startsWith("/v1/audit-events?")) return { items: [{ id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", created_at: "2026-11-05T00:00:00Z" },
       { id: "a2", action: "read:memories", actor: "felix", actor_type: "human", transport: "http", created_at: "2026-11-05T00:00:00Z" }] };
@@ -339,7 +341,7 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
   assert.match(last().textContent, /요청량 · 모두 7건/); assert.match(last().textContent, /기억 읽음5/);
   pickRow("기억 바꿈").click(); await dom.flush(); await dom.flush();
   assert.ok(calls.some((c) => c.startsWith("/v1/audit-events/a1?")));
-  for (const t of ["에이전트 도구(MCP)", "POST /v1/capture", "42ms", "예 — 끌 수 없어요", "보낸 내용", "[REDACTED]"]) assert.ok(last().textContent.includes(t), t);
+  for (const t of ["에이전트 도구(MCP)", "POST /v1/capture", "42ms", "예 — 끌 수 없어요", "보낸 내용", "[REDACTED]", "응답 코드", "201", "받은 내용", '"id":"m1"']) assert.ok(last().textContent.includes(t), t);
   assert.ok(pickRow("기억 바꿈").classList.contains("on"));
   sel("어디서").value = "http"; sel("어디서").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
   assert.equal(last().querySelectorAll(".ov-ops-pick").length, 1); assert.ok(pickRow("기억 읽음"));
