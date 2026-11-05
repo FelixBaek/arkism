@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"context"
 	"errors"
 	"slices"
 	"testing"
@@ -22,8 +23,8 @@ func TestParseTimeIntentLanguages(t *testing.T) {
 		"zh-Hans": {"今天": today, "昨天的部署": yesterday, "前天": before, "3天前": threeAgo, "三天前": threeAgo, "上周": lastWeek, "上个星期": lastWeek, "这周": thisWeek, "上个月": lastMonth, "这个月": thisMonth, "去年": lastYear, "10月31号": oct31, "10月底": lateOct},
 		"zh-Hant": {"上週": lastWeek, "這週": thisWeek, "上個月": lastMonth, "這個月": thisMonth, "10月31號": oct31},
 		"es":      {"hoy": today, "ayer": yesterday, "anteayer": before, "hace 3 días": threeAgo, "la semana pasada": lastWeek, "esta semana": thisWeek, "el mes pasado": lastMonth, "este mes": thisMonth, "el año pasado": lastYear, "este año": thisYear, "31 de octubre de 2026": oct31, "31 de octubre": oct31, "en octubre": october, "octubre de 2026": october, "finales de octubre": lateOct},
-		"fr":      {"aujourd'hui": today, "hier soir": yesterday, "avant-hier": before, "il y a 3 jours": threeAgo, "la semaine dernière": lastWeek, "cette semaine": thisWeek, "le mois dernier": lastMonth, "ce mois-ci": thisMonth, "l'année dernière": lastYear, "cette année": thisYear, "31 octobre 2026": oct31, "le 31 octobre": oct31, "en octobre": october, "fin octobre": lateOct},
-		"de":      {"heute": today, "gestern": yesterday, "vorgestern": before, "vor 3 Tagen": threeAgo, "letzte Woche": lastWeek, "diese Woche": thisWeek, "letzten Monat": lastMonth, "diesen Monat": thisMonth, "letztes Jahr": lastYear, "dieses Jahr": thisYear, "31. Oktober 2026": oct31, "31.10.2026": oct31, "im Oktober": october, "Ende Oktober": lateOct, "im März": {day(2026, 3, 1), day(2026, 4, 1)}},
+		"fr":      {"aujourd'hui": today, "hier soir": yesterday, "qu'avons-nous décidé hier": yesterday, "avant-hier": before, "il y a 3 jours": threeAgo, "la semaine dernière": lastWeek, "cette semaine": thisWeek, "le mois dernier": lastMonth, "ce mois-ci": thisMonth, "l'année dernière": lastYear, "cette année": thisYear, "31 octobre 2026": oct31, "le 31 octobre": oct31, "en octobre": october, "fin octobre": lateOct},
+		"de":      {"heute": today, "gestern": yesterday, "was haben wir hier gestern gemacht": yesterday, "vorgestern": before, "vor 3 Tagen": threeAgo, "letzte Woche": lastWeek, "diese Woche": thisWeek, "letzten Monat": lastMonth, "diesen Monat": thisMonth, "letztes Jahr": lastYear, "dieses Jahr": thisYear, "31. Oktober 2026": oct31, "31.10.2026": oct31, "im Oktober": october, "Ende Oktober": lateOct, "im März": {day(2026, 3, 1), day(2026, 4, 1)}},
 	} {
 		for query, want := range cases {
 			w, ok := parseTimeIntent(query, nov5)
@@ -33,7 +34,7 @@ func TestParseTimeIntentLanguages(t *testing.T) {
 		}
 	}
 	// A bare month name that is also an ordinary word, and impossible dates, name no span.
-	for _, q := range []string{"mars rover", "31.02.2026", "3个月计划", "31 février"} {
+	for _, q := range []string{"mars rover", "31.02.2026", "3个月计划", "31 février", "was haben wir hier entschieden", "die Notizen von hier"} {
 		if w, ok := parseTimeIntent(q, nov5); ok {
 			t.Errorf("%q: unexpected window %v", q, w)
 		}
@@ -108,6 +109,48 @@ func TestTagsMatchModes(t *testing.T) {
 		if err != nil || !slices.Equal(got, wantIDs) {
 			t.Fatalf("%q: %v %v", mode, got, err)
 		}
+	}
+}
+
+// tagFilterCases cross every mode and a few tag groups with stored tag sets; the Go
+// rule decides, and TestPostgresTagFiltersAgreeWithGo checks the SQL says the same.
+func tagFilterCases() (filters []SearchFilters, stored [][]string) {
+	for _, mode := range append(slices.Clone(tagsMatchModes), "") {
+		filters = append(filters, SearchFilters{Tags: []string{"a", "b"}, TagsMatch: mode})
+	}
+	filters = append(filters,
+		// (a AND b) OR c
+		SearchFilters{TagGroups: [][]TagTest{{{Tags: []string{"a", "b"}, Match: "all_strict"}, {Tags: []string{"c"}}}}},
+		// any of a, and not c (untagged rows pass the negation)
+		SearchFilters{TagGroups: [][]TagTest{{{Tags: []string{"a"}, Match: "any"}}, {{Tags: []string{"c"}, Not: true}}}},
+		// tags plus a group: has a, and exactly {a, b} or not b
+		SearchFilters{Tags: []string{"a"}, TagGroups: [][]TagTest{{{Tags: []string{"a", "b"}, Match: "exact"}, {Tags: []string{"b"}, Not: true}}}},
+	)
+	return filters, [][]string{nil, {}, {"a"}, {"b"}, {"c"}, {"a", "b"}, {"b", "a"}, {"a", "c"}, {"a", "b", "c"}, {"z"}}
+}
+
+func TestTagGroups(t *testing.T) {
+	filters, _ := tagFilterCases()
+	for _, tc := range []struct {
+		f    SearchFilters
+		have []string
+		ok   bool
+	}{
+		{filters[6], []string{"b", "a"}, true}, {filters[6], []string{"c"}, true}, {filters[6], []string{"a"}, false}, {filters[6], nil, false},
+		{filters[7], nil, true}, {filters[7], []string{"a"}, true}, {filters[7], []string{"a", "c"}, false}, {filters[7], []string{"z"}, false},
+		{filters[8], []string{"a", "b"}, true}, {filters[8], []string{"a", "c"}, true}, {filters[8], []string{"a", "b", "c"}, false}, {filters[8], nil, false},
+	} {
+		if got := (SearchCriteria{Filters: &tc.f}).matches("", tc.have, time.Time{}, time.Time{}); got != tc.ok {
+			t.Errorf("%+v %v: got %v", tc.f.TagGroups, tc.have, got)
+		}
+	}
+	for _, groups := range [][][]TagTest{{{}}, {{{Tags: nil}}}, {{{Tags: []string{"a"}, Match: "some"}}}, {{{Tags: []string{"a", "a"}}}}, make([][]TagTest, tagGroupsMax+1)} {
+		if _, err := normalizeSearchCriteria(SearchCriteria{Filters: &SearchFilters{TagGroups: groups}}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%+v: %v", groups, err)
+		}
+	}
+	if c, err := normalizeSearchCriteria(SearchCriteria{Filters: &SearchFilters{TagGroups: filters[6].TagGroups}}); err != nil || c.Filters == nil {
+		t.Fatal("tag groups alone must keep the filter", err)
 	}
 }
 
@@ -187,6 +230,56 @@ func TestRecallGraphWalksBoundedDepthWithDecay(t *testing.T) {
 	}
 	if _, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "gamma", GraphDepth: 4}); !errors.Is(err, ErrInvalid) {
 		t.Fatal(err)
+	}
+}
+
+// A step asks past the ids it has already seen, so back-edges to the seeds cannot fill it.
+func TestNeighborStepSkipsBackEdges(t *testing.T) {
+	f, _ := recallFixture(t)
+	next := func(_ context.Context, _ Scope, frontier []string, limit int) ([]string, error) {
+		if slices.Equal(frontier, []string{"beta"}) {
+			return []string{"gamma", "yday", "alpha"}[:min(3, limit)], nil
+		}
+		return []string{"beta"}, nil
+	}
+	in := SearchInput{Scope: scopeA, Limit: 1, GraphDepth: 2}
+	top := []ScoredHit{{Hit: Hit{ID: "gamma"}}, {Hit: Hit{ID: "yday"}}}
+	lanes, err := f.svc.neighborLanes(testCtx, in, top, []neighborSource{{reasonGraph, next}}, func(h []Hit) ([]Hit, error) { return h, nil })
+	if err != nil || len(lanes) != 1 || !slices.Equal(ids(lanes[0]), []string{"beta", "alpha"}) {
+		t.Fatal(lanes, err)
+	}
+}
+
+// The walk never steps through a memory the caller cannot read: neighbours reachable
+// only through another scope's memory or another project's memory stay out.
+func TestRecallGraphDoesNotWalkThroughUnreadable(t *testing.T) {
+	f, _ := recallFixture(t)
+	f.svc.RecallGraph = true
+	at := time.Now().UTC()
+	for _, r := range []Record{
+		{ID: "foreign", Scope: scopeB},
+		{ID: "elsewhere", Scope: scopeA, Reach: ReachProject, ReachProject: "other-repo"},
+		{ID: "hidden1", Scope: scopeA}, {ID: "hidden2", Scope: scopeA},
+	} {
+		r.Kind, r.Text, r.Status, r.ApprovedBy, r.Revision, r.Sources, r.CreatedAt, r.UpdatedAt = "decision", r.ID+" note", "active", "human", 1, refs(f.source()), at, at
+		if err := f.repo.Insert(testCtx, colMemories, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.repo.relations = []fakeRelation{
+		{SourceID: "gamma", TargetKind: "memory", TargetID: "foreign", Kind: "references"},
+		{SourceID: "foreign", TargetKind: "memory", TargetID: "hidden1", Kind: "references"},
+		{SourceID: "gamma", TargetKind: "memory", TargetID: "elsewhere", Kind: "references"},
+		{SourceID: "elsewhere", TargetKind: "memory", TargetID: "hidden2", Kind: "references"},
+	}
+	out, err := f.svc.Search(testCtx, f.agent, SearchInput{Scope: scopeA, Query: "gamma", GraphDepth: 3, SearchCriteria: SearchCriteria{ProjectKey: "this-repo"}})
+	if err != nil || !slices.Equal(ids(out.Items), []string{"gamma"}) {
+		t.Fatal(ids(out.Items), err)
+	}
+	// The same walk from the other project reaches its memory and the one behind it.
+	out, err = f.svc.Search(testCtx, f.agent, SearchInput{Scope: scopeA, Query: "gamma", GraphDepth: 3, SearchCriteria: SearchCriteria{ProjectKey: "other-repo"}})
+	if got := ids(out.Items); err != nil || !slices.Contains(got, "elsewhere") || !slices.Contains(got, "hidden2") || slices.Contains(got, "hidden1") {
+		t.Fatal(got, err)
 	}
 }
 

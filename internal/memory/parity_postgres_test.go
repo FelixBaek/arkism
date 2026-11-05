@@ -253,3 +253,25 @@ func TestPostgresSearchTagsMatchModes(t *testing.T) {
 		}
 	}
 }
+
+// The SQL tag rules (pgTagsMatch, tag groups) decide every case the same way as the Go rule.
+func TestPostgresTagFiltersAgreeWithGo(t *testing.T) {
+	_, p := pgFixture(t)
+	filters, stored := tagFilterCases()
+	for _, f := range filters {
+		where, args := pgCriteria(SearchCriteria{Filters: &f}, 2)
+		for _, have := range stored {
+			doc := map[string]any{"tags": have}
+			if have == nil {
+				doc = map[string]any{}
+			}
+			var got bool
+			if err := p.q().QueryRow(testCtx, "SELECT COALESCE(("+where+"), false) FROM (SELECT $1::jsonb AS doc) d", append([]any{doc}, args...)...).Scan(&got); err != nil {
+				t.Fatal(f, err)
+			}
+			if want := (SearchCriteria{Filters: &f}).matches("", have, time.Time{}, time.Time{}); got != want {
+				t.Errorf("%+v tags=%v: sql %v go %v", f, have, got, want)
+			}
+		}
+	}
+}

@@ -31,7 +31,7 @@ type SearchInput struct {
 	Query           string           `json:"query"`
 	Limit           int              `json:"limit"`
 	MaxChars        int              `json:"max_chars"`
-	// ExpandCausal adds memories one active causal link from the top hits (recall_lanes.go).
+	// ExpandCausal adds memories up to GraphDepth active causal links from the top hits (recall_lanes.go).
 	ExpandCausal bool `json:"expand_causal,omitempty"`
 	// Explain returns each hit's lane ranks and rerank score (recall_lanes.go).
 	Explain bool `json:"explain,omitempty"`
@@ -46,6 +46,8 @@ type SearchInput struct {
 	MinScore float64 `json:"min_score,omitempty"`
 	// Rerank false skips the reranker for this search; nil or true keeps the server default.
 	Rerank *bool `json:"rerank,omitempty"`
+	// PreferObservations leaves out memories an approved observation in the result was written from.
+	PreferObservations bool `json:"prefer_observations,omitempty"`
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
 	Include        []string `json:"include,omitempty"`
 	retrievalQuery string

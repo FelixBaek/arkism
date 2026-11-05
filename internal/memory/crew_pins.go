@@ -347,7 +347,7 @@ func (s *Service) pinnedContext(ctx context.Context, token string, in ContextBui
 			Limit: maxItems, BudgetTokens: left, TokenEncoding: in.TokenEncoding,
 			Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
 			Explain: in.Explain, Timezone: in.Timezone, ExpandCausal: in.ExpandCausal,
-			QueryTime: in.QueryTime, GraphDepth: in.GraphDepth, MinScore: in.MinScore, Rerank: in.Rerank,
+			QueryTime: in.QueryTime, GraphDepth: in.GraphDepth, MinScore: in.MinScore, Rerank: in.Rerank, PreferObservations: in.PreferObservations,
 			pinned: refs, // the search's receipt lists the pinned memories first
 		})
 		if err != nil {

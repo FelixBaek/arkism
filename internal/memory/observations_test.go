@@ -508,3 +508,31 @@ func TestNativeServingKeepsBaselineWithObservations(t *testing.T) {
 		t.Fatalf("served %+v", got)
 	}
 }
+
+func TestRecallPreferObservationsDropsTheirSourceMemories(t *testing.T) {
+	f, llm, ms := obsFixture(t)
+	llm.answers = []string{obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID))}
+	out, err := f.consolidate(f.human, false)
+	if err != nil || len(out.Proposed) != 1 {
+		t.Fatal(err)
+	}
+	p := out.Proposed[0]
+	if _, err := f.svc.ReviewObservation(testCtx, f.human, p.ID, ObservationReviewInput{Scope: scopeA, ExpectedRevision: p.Revision, Action: "approve"}); err != nil {
+		t.Fatal(err)
+	}
+	search := func(prefer bool) []string {
+		res, err := f.svc.Search(testCtx, f.agent, SearchInput{Scope: scopeA, Query: "staging flag", Limit: 20, PreferObservations: prefer})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ids(res.Items)
+	}
+	all, preferred := search(false), search(true)
+	if !slices.Contains(all, ms[0].ID) || !slices.Contains(all, p.ID) {
+		t.Fatal(all)
+	}
+	// The observation stays, the two memories it was written from go, the uncited one stays.
+	if !slices.Contains(preferred, p.ID) || slices.Contains(preferred, ms[0].ID) || slices.Contains(preferred, ms[1].ID) || !slices.Contains(preferred, ms[2].ID) {
+		t.Fatal(preferred)
+	}
+}

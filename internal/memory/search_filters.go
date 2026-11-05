@@ -17,11 +17,14 @@ type SearchFilters struct {
 	Statuses []string `json:"statuses,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
 	// TagsMatch is how Tags match (tagsMatch): any_strict (default), any, all, all_strict or exact.
-	TagsMatch   string     `json:"tags_match,omitempty"`
-	CreatedFrom *time.Time `json:"created_from,omitempty"`
-	CreatedTo   *time.Time `json:"created_to,omitempty"`
-	UpdatedFrom *time.Time `json:"updated_from,omitempty"`
-	UpdatedTo   *time.Time `json:"updated_to,omitempty"`
+	TagsMatch string `json:"tags_match,omitempty"`
+	// TagGroups is a boolean tag filter: every group must hold, and a group holds when any
+	// of its tests does (tagsMatch, negated by Not). It applies on top of Tags.
+	TagGroups   [][]TagTest `json:"tag_groups,omitempty"`
+	CreatedFrom *time.Time  `json:"created_from,omitempty"`
+	CreatedTo   *time.Time  `json:"created_to,omitempty"`
+	UpdatedFrom *time.Time  `json:"updated_from,omitempty"`
+	UpdatedTo   *time.Time  `json:"updated_to,omitempty"`
 	// Exact-search lanes for identity, model and file (step 2). Names
 	// and models match the recorded values verbatim; a file filter matches the
 	// artifact digest or any source span content hash. A hit that cannot show
@@ -30,6 +33,15 @@ type SearchFilters struct {
 	GeneratorModels []string `json:"generator_models,omitempty"`
 	FileDigests     []string `json:"file_digests,omitempty"`
 }
+
+// TagTest is one test in a tag group: Tags matched as Match says (tagsMatch), or not.
+type TagTest struct {
+	Tags  []string `json:"tags"`
+	Match string   `json:"match,omitempty"`
+	Not   bool     `json:"not,omitempty"`
+}
+
+const tagGroupsMax = 8 // groups, and tests per group
 
 func normalizeSearchCriteria(in SearchCriteria) (SearchCriteria, error) {
 	if len(in.Kinds) > 16 || !validTags(in.Kinds) {
@@ -52,10 +64,15 @@ func normalizeSearchCriteria(in SearchCriteria) (SearchCriteria, error) {
 	if !normalizeFilterLabels(&f) || !normalizeFilterIdentities(&f) || !normalizeFilterTimes(&f) {
 		return in, ErrInvalid
 	}
-	if len(f.Statuses) == 0 && len(f.Tags) == 0 && len(f.CreatedBy) == 0 && len(f.GeneratorModels) == 0 && len(f.FileDigests) == 0 && f.CreatedFrom == nil && f.CreatedTo == nil && f.UpdatedFrom == nil && f.UpdatedTo == nil {
+	if f.empty() {
 		in.Filters = nil
 	}
 	return in, nil
+}
+
+func (f SearchFilters) empty() bool {
+	return len(f.Statuses) == 0 && len(f.Tags) == 0 && len(f.TagGroups) == 0 && len(f.CreatedBy) == 0 && len(f.GeneratorModels) == 0 && len(f.FileDigests) == 0 &&
+		f.CreatedFrom == nil && f.CreatedTo == nil && f.UpdatedFrom == nil && f.UpdatedTo == nil
 }
 
 func normalizeFilterLabels(f *SearchFilters) bool {
@@ -77,6 +94,23 @@ func normalizeFilterLabels(f *SearchFilters) bool {
 		}
 	}
 	f.Tags = slices.Clone(f.Tags)
+	return validTagGroups(f.TagGroups)
+}
+
+func validTagGroups(groups [][]TagTest) bool {
+	if len(groups) > tagGroupsMax {
+		return false
+	}
+	for _, group := range groups {
+		if len(group) == 0 || len(group) > tagGroupsMax {
+			return false
+		}
+		for _, test := range group {
+			if len(test.Tags) == 0 || !validTags(test.Tags) || test.Match != "" && !slices.Contains(tagsMatchModes, test.Match) || slices.ContainsFunc(test.Tags, containsSecret) {
+				return false
+			}
+		}
+	}
 	return true
 }
 
@@ -173,7 +207,7 @@ func (c SearchCriteria) matches(kind string, tags []string, created, updated tim
 		return true
 	}
 	f := c.Filters
-	if len(f.Tags) > 0 && !tagsMatch(f.TagsMatch, f.Tags, tags) {
+	if len(f.Tags) > 0 && !tagsMatch(f.TagsMatch, f.Tags, tags) || !tagGroupsMatch(f.TagGroups, tags) {
 		return false
 	}
 	for _, bound := range []struct {
@@ -219,6 +253,15 @@ func tagsMatch(mode string, want, have []string) bool {
 		return !slices.ContainsFunc(want, func(tag string) bool { return !has(tag) }) && !slices.ContainsFunc(have, func(tag string) bool { return !slices.Contains(want, tag) })
 	}
 	return slices.ContainsFunc(want, has)
+}
+
+func tagGroupsMatch(groups [][]TagTest, have []string) bool {
+	for _, group := range groups {
+		if !slices.ContainsFunc(group, func(t TagTest) bool { return tagsMatch(t.Match, t.Tags, have) != t.Not }) {
+			return false
+		}
+	}
+	return true
 }
 
 var memorySearchStatuses = []string{"active", "superseded", "conflicted", "rejected", "expired"}

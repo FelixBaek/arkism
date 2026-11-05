@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"time"
 )
@@ -20,6 +21,7 @@ const (
 	graphSeedCount  = 5
 	graphFanOut     = 20
 	graphDepthMax   = 3
+	graphStepMax    = 100 // ids one step may read: the repository's neighbour limit
 	graphHopDecay   = 0.5 // each further step halves a neighbour's lane weight
 	rerankMaxRows   = 100
 	rerankTextMax   = 2000
@@ -149,8 +151,22 @@ func (s *Service) recallItems(ctx context.Context, in SearchInput, d Decision, c
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
 		out.Items = append(out.Items, r.Hit)
 	}
+	if in.PreferObservations {
+		out.Items = preferObservations(out.Items)
+	}
 	trace.annotate(out, lists)
 	return nil
+}
+
+// preferObservations drops the memories an approved observation among items was written from.
+func preferObservations(items []Hit) []Hit {
+	covered := map[string]bool{}
+	for _, h := range items {
+		for _, id := range h.SourceIDs {
+			covered[id] = covered[id] || h.Derived
+		}
+	}
+	return slices.DeleteFunc(items, func(h Hit) bool { return !h.Derived && h.Collection == colMemories && covered[h.ID] })
 }
 
 // neighborSource is one way to step from memories to their neighbours (relations
@@ -193,16 +209,21 @@ func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []Score
 
 // neighborStep reads and cleans the unseen memories one src step from frontier.
 func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []string, src neighborSource, limit int, seen map[string]bool, clean func([]Hit) ([]Hit, error)) ([]Hit, error) {
-	ids, err := src.next(ctx, in.Scope, frontier, limit)
+	// Ask past the ids already seen (back-edges to earlier steps), so they cannot fill the step.
+	ids, err := src.next(ctx, in.Scope, frontier, min(limit+len(seen), graphStepMax))
 	if err != nil {
 		return nil, err
 	}
 	hits := make([]Hit, 0, len(ids))
+	read := 0 // at most limit reads per step, however many ids came back
 	for _, id := range ids {
 		if seen[id] {
 			continue
 		}
-		seen[id] = true
+		if read == limit {
+			break
+		}
+		seen[id], read = true, read+1
 		// A neighbour that is gone or unreadable simply drops out; cleaning rechecks the rest.
 		if r, err := s.Repo.Get(ctx, colMemories, in.Scope, id); err == nil {
 			hits = append(hits, searchHit(r, colMemories, src.reason))

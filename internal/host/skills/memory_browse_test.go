@@ -151,16 +151,19 @@ func TestRecallPassesQueryTimeRerankDepthAndInclude(t *testing.T) {
 	t.Setenv("ARKISM_REPO", "")
 	hit := `{"id":"m1","kind":"decision","status":"active","text":"결정","score":0.05,"lanes":["keyword"],"source_traces":[{"source_id":"s","state":"available","excerpt":"원문"}],"entities":[{"id":"e","name":"billing","type":"service"}]}`
 	calls := fakeRequest(t, `{"items":[`+hit+`]}`)
-	out := structured(t, call(t, "recall", `{"query":"어제 결정","query_time":"2026-11-04T09:00:00+09:00","rerank":false,"graph_depth":3,"include":["sources","entities"]}`))
+	out := structured(t, call(t, "recall", `{"query":"어제 결정","query_time":"2026-11-04T09:00:00+09:00","rerank":false,"graph_depth":3,"include":["sources","entities"],"min_score":0.02,"tags":["ops"],"tags_match":"all_strict","prefer_observations":true}`))
 	payload := asMap((*calls)[0].payload)
 	if payload["query_time"] != "2026-11-04T09:00:00+09:00" || payload["rerank"] != false || canon(t, payload["graph_depth"]) != "3" || canon(t, payload["include"]) != `["sources","entities"]` {
+		t.Fatal(payload)
+	}
+	if canon(t, payload["min_score"]) != "0.02" || payload["prefer_observations"] != true || canon(t, payload["filters"]) != `{"tags":["ops"],"tags_match":"all_strict"}` {
 		t.Fatal(payload)
 	}
 	if got := canon(t, field(out, "memories")); !strings.Contains(got, `"source_traces"`) || !strings.Contains(got, `"entities"`) {
 		t.Fatal(got)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`} {
+	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`, `{"query":"q","min_score":2}`, `{"query":"q","min_score":"0.1"}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tags":[]}`, `{"query":"q","tags":[1]}`, `{"query":"q","prefer_observations":"yes"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}

@@ -46965,6 +46965,26 @@
             "enum": ["any", "all", "any_strict", "all_strict", "exact"],
             "description": "How tags match. any_strict (default when omitted): at least one tag. all_strict: every tag. any / all: the same, but untagged memories also pass. exact: the memory's tag set equals tags. Requires tags."
           },
+          "tag_groups": {
+            "type": "array",
+            "maxItems": 8,
+            "description": "Boolean tag filter on top of tags: every group must hold, and a group holds when any of its tests does. Example: (a AND b) OR c is [[{\"tags\":[\"a\",\"b\"],\"match\":\"all_strict\"},{\"tags\":[\"c\"]}]]; NOT c is [[{\"tags\":[\"c\"],\"not\":true}]].",
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["tags"],
+                "properties": {
+                  "tags": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+                  "match": {"type": "string", "enum": ["any", "all", "any_strict", "all_strict", "exact"], "description": "As tags_match; default any_strict."},
+                  "not": {"type": "boolean", "description": "true passes the memories the test rejects."}
+                }
+              }
+            }
+          },
           "created_from": {
             "type": [
               "string",
@@ -47236,6 +47256,10 @@
           "rerank": {
             "type": "boolean",
             "description": "false skips the reranker for this request. Omitted or true keeps the server default (on when a reranker is configured); the outbound-text and usage-ledger rules still apply."
+          },
+          "prefer_observations": {
+            "type": "boolean",
+            "description": "Leave out memory hits that an approved observation in the same result was written from, so the summary stands in for its sources."
           }
         },
         "required": [
@@ -47569,12 +47593,16 @@
             "type": "boolean",
             "description": "false skips the reranker for this request. Omitted or true keeps the server default (on when a reranker is configured); the outbound-text and usage-ledger rules still apply."
           },
+          "prefer_observations": {
+            "type": "boolean",
+            "description": "Leave out memory hits that an approved observation in the same result was written from, so the summary stands in for its sources."
+          },
           "include": {
             "type": "array",
             "maxItems": 2,
             "uniqueItems": true,
             "items": {"type": "string", "enum": ["sources", "entities"]},
-            "description": "Attach to each memory hit its checked source traces with short excerpts (sources) and the named entities it mentions (entities). See Hit.source_traces and Hit.entities."
+            "description": "Attach to each memory hit its checked source traces with short excerpts (sources) and the named entities it mentions (entities). See Hit.source_traces and Hit.entities. These extras are not counted against max_chars or budget_tokens; they are bounded instead: at most 3 sources (excerpts cut to 300 characters) and 10 entities per hit."
           }
         },
         "required": [

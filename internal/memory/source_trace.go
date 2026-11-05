@@ -54,7 +54,7 @@ func parseSourceTraceQuery(raw string) (Scope, error) {
 }
 
 func (s *Service) TraceMemorySources(ctx context.Context, token string, scope Scope, id string) (MemorySources, error) {
-	return s.traceRecordSources(ctx, token, scope, id, colMemories)
+	return s.traceRecordSources(ctx, token, scope, id, colMemories, 0)
 }
 
 func (s *Service) TraceCandidateSources(ctx context.Context, token string, scope Scope, id string) (MemorySources, error) {
@@ -65,10 +65,11 @@ func (s *Service) TraceCandidateSources(ctx context.Context, token string, scope
 	if actor.Role != roleHuman {
 		return MemorySources{}, ErrDenied
 	}
-	return s.traceRecordSources(bindRequestActor(ctx, actor), token, scope, id, "memory_candidates")
+	return s.traceRecordSources(bindRequestActor(ctx, actor), token, scope, id, "memory_candidates", 0)
 }
 
-func (s *Service) traceRecordSources(ctx context.Context, token string, scope Scope, id, collection string) (MemorySources, error) {
+// limit > 0 traces only the first limit sources (recall include); 0 traces all.
+func (s *Service) traceRecordSources(ctx context.Context, token string, scope Scope, id, collection string, limit int) (MemorySources, error) {
 	if len(id) == 0 || len(id) > 256 {
 		return MemorySources{}, ErrInvalid
 	}
@@ -99,7 +100,10 @@ func (s *Service) traceRecordSources(ctx context.Context, token string, scope Sc
 		rows := map[string]Record{}
 		states := map[string]string{}
 		deleted := map[string]time.Time{}
-		for _, ref := range r.Sources {
+		for i, ref := range r.Sources {
+			if limit > 0 && i >= limit {
+				break
+			}
 			if ref.SourceID == "" || len(ref.SourceID) > 256 {
 				return ErrInvalid
 			}

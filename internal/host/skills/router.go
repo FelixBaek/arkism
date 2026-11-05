@@ -799,7 +799,7 @@ func recallByIDs(ids []string, project string) ([]any, error) {
 // recallSearchOptions checks the search-only recall options before any request.
 func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	for _, key := range []string{"explain", "expand_causal"} {
+	for _, key := range []string{"explain", "expand_causal", "prefer_observations"} {
 		if v, ok := opts[key]; ok && v != nil {
 			b, isBool := v.(bool)
 			if !isBool {
@@ -811,6 +811,9 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 		}
 	}
 	if err := recallAnchorOptions(opts, out); err != nil {
+		return nil, err
+	}
+	if err := recallFilterOptions(opts, out); err != nil {
 		return nil, err
 	}
 	if v, ok := opts["timezone"]; ok && v != nil {
@@ -859,6 +862,37 @@ func recallAnchorOptions(opts, out map[string]any) error {
 	return nil
 }
 
+// recallFilterOptions checks min_score (0..1) and tags with tags_match into out; the
+// server re-validates both (tag text, secrets, modes).
+func recallFilterOptions(opts, out map[string]any) error {
+	if v, ok := opts["min_score"]; ok && v != nil {
+		n, isNum := v.(json.Number)
+		f, err := n.Float64()
+		if !isNum || err != nil || f < 0 || f > 1 {
+			return errors.New("min_score must be a number from 0 to 1")
+		}
+		out["min_score"] = n
+	}
+	filters := map[string]any{}
+	if v, ok := opts["tags"]; ok && v != nil {
+		list, isList := v.([]any)
+		if !isList || len(list) == 0 || len(list) > 32 || slices.ContainsFunc(list, func(t any) bool { s, isStr := t.(string); return !isStr || s == "" || len(s) > 128 }) {
+			return errors.New("tags must list 1 to 32 tag names")
+		}
+		filters["tags"] = list
+	}
+	if v, ok := opts["tags_match"]; ok && v != nil {
+		if !slices.Contains([]any{"any", "all", "any_strict", "all_strict", "exact"}, v) || filters["tags"] == nil {
+			return errors.New("tags_match must be any, all, any_strict, all_strict or exact, with tags")
+		}
+		filters["tags_match"] = v
+	}
+	if len(filters) > 0 {
+		out["filters"] = filters
+	}
+	return nil
+}
+
 func validRecallInclude(list []any) bool {
 	for i, item := range list {
 		if (item != "sources" && item != "entities") || slices.Contains(list[:i], item) {
@@ -871,8 +905,8 @@ func validRecallInclude(list []any) bool {
 // recallSearch runs the memory search for a query or a related_to anchor. A query search
 // leaves modes to the server so its default lanes run, including the time-word lane
 // ("yesterday", "10월 말") and the relations-graph lane when enabled; the server keeps
-// exactly the lanes asked for once modes are explicit, so expand_causal (memories one
-// approved causal link from the top hits) only adds a lane to a query search.
+// exactly the lanes asked for once modes are explicit, so expand_causal (memories over
+// approved causal links from the top hits, up to graph_depth) only adds a lane to a query search.
 func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[string]any) ([]any, map[string]any, error) {
 	text := "related memory evidence"
 	if isStr && pyStrip(q) != "" {

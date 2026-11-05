@@ -6,7 +6,9 @@ import (
 	"slices"
 )
 
-// Bounds for what include adds to each memory hit; they sit outside max_chars and the token budget.
+// Bounds for what include adds to each memory hit. The extras sit outside max_chars and
+// the token budget (documented on the API): at most 3 traced sources (one checked read
+// transaction per hit, limit <= 50) of 300 runes and 10 entity names per hit.
 const (
 	includeSourcesMax  = 3
 	includeExcerptMax  = 300
@@ -64,14 +66,14 @@ func (s *Service) attachSources(ctx context.Context, token string, scope Scope, 
 	if h.Collection != colMemories || h.Origin != "memory" {
 		return nil
 	}
-	trace, err := s.traceRecordSources(ctx, token, scope, h.ID, colMemories)
+	trace, err := s.traceRecordSources(ctx, token, scope, h.ID, colMemories, includeSourcesMax)
 	if skippable(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	h.SourceTraces = trace.Sources[:min(len(trace.Sources), includeSourcesMax)]
+	h.SourceTraces = trace.Sources
 	for i := range h.SourceTraces {
 		t := &h.SourceTraces[i]
 		t.ArchiveMessages = nil

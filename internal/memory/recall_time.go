@@ -139,11 +139,21 @@ var timeRules = []timeRule{
 	{words(`올해|금년`, `\bthis year\b`, `今年`, `\beste año\b`, `\bcette (?:année|annee)\b`, `\b(?:dieses|diesem) jahr\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, 0) }, false},
 }
 
+// "hier" is French for yesterday but German for here, so a query with common German
+// words does not read it as a time word ("was haben wir hier entschieden").
+var (
+	germanWords = regexp.MustCompile(`\b(?:ich|wir|ist|sind|bin|habe|hat|haben|und|nicht|der|die|das|dem|den|von|nach|mit|auch|noch|wo|wie|gibt|steht|liegt)\b`)
+	hierWord    = regexp.MustCompile(`\bhier\b`)
+)
+
 // parseTimeIntent finds the first time phrase in query (Korean, English, Japanese,
 // Chinese, Spanish, French or German) and
 // resolves it against now, whose location is the reader's calendar.
 func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
 	q := strings.ToLower(query)
+	if germanWords.MatchString(q) {
+		q = hierWord.ReplaceAllString(q, "")
+	}
 	for _, rule := range timeRules {
 		m := rule.re.FindStringSubmatch(q)
 		if m == nil {

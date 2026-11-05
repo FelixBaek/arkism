@@ -122,6 +122,16 @@ func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 		if len(f.Tags) > 0 {
 			add(pgTagsMatch[f.TagsMatch], f.Tags)
 		}
+		for _, group := range f.TagGroups {
+			tests := make([]string, len(group))
+			for i, t := range group {
+				// COALESCE: a NULL from untagged rows must negate like Go's false does.
+				tests[i] = fmt.Sprintf("COALESCE(("+pgTagsMatch[t.Match]+"), false) <> %t", next, t.Not)
+				args = append(args, t.Tags)
+				next++
+			}
+			parts = append(parts, "("+strings.Join(tests, " OR ")+")")
+		}
 		if len(f.CreatedBy) > 0 {
 			add("doc->>'created_by' = ANY($%d::text[])", f.CreatedBy)
 		}
