@@ -22,7 +22,7 @@ func TestReflectAsksTheServerAndLabelsTheAnswer(t *testing.T) {
 	}
 	*calls = nil
 	for _, bad := range []string{`{}`, `{"query":"  "}`, `{"query":"q","limit":21}`, `{"query":"q","max_tokens":10}`, `{"query":"q","limit":true}`,
-		`{"query":"q","tags":"x"}`, `{"query":"` + strings.Repeat("가", 2001) + `"}`} {
+		`{"query":"q","tags":"x"}`, `{"query":"q","tags":[3]}`, `{"query":"q","tags":[""]}`, `{"query":"` + strings.Repeat("가", 2001) + `"}`} {
 		if _, err := callTool("reflect", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}
@@ -79,8 +79,13 @@ func TestBrowseMemoryReadsOneItem(t *testing.T) {
 	if !strings.HasPrefix((*calls)[0].path, "/v1/entities/e1?") || asMap(field(out, "item"))["name"] != "Arkism" {
 		t.Fatal(*calls, out)
 	}
+	calls = fakeRequest(t, `{"id":"mm1","active":{"text":"approved"},"draft":{"text":"unreviewed"},"draft_diff":[1]}`)
+	item := asMap(field(structured(t, call(t, "browse_memory", `{"kind":"mental_models","id":"mm1"}`)), "item"))
+	if _, hasDraft := item["draft"]; hasDraft || item["draft_diff"] != nil || item["active"] == nil {
+		t.Fatal("mental model draft leaked", item)
+	}
 	*calls = nil
-	for _, bad := range []string{`{}`, `{"kind":"reviews"}`, `{"kind":"file_job"}`, `{"kind":"entities","limit":51}`, `{"kind":"entities","limit":true}`,
+	for _, bad := range []string{`{}`, `{"kind":"reviews"}`, `{"kind":"file_job"}`, `{"kind":"file_job","id":".."}`, `{"kind":"entities","limit":51}`, `{"kind":"entities","limit":true}`,
 		`{"kind":"entities","query":"` + strings.Repeat("a", 201) + `"}`} {
 		if _, err := callTool("browse_memory", j(t, bad)); err == nil {
 			t.Fatal(bad)
@@ -105,7 +110,7 @@ func TestRecallPassesExplainAndTimezoneWithServerLanes(t *testing.T) {
 		t.Fatal(out)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","timezone":3}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
+	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","timezone":3}`, `{"query":"q","timezone":"Asia/Seoul?x=1"}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}
@@ -124,5 +129,19 @@ func TestReadWikiTree(t *testing.T) {
 	}
 	if _, err := callTool("read_wiki", j(t, `{"tree":true,"query":"배포"}`)); err == nil {
 		t.Fatal("tree with query accepted")
+	}
+}
+
+// A hit only the time-word lane found scores one-lane RRF (about 1/61), under the default floor;
+// it still answers "what did we decide yesterday", so the floor keeps it like an exact match.
+func TestRecallKeepsTemporalOnlyHitUnderDefaultFloor(t *testing.T) {
+	swapRouter(t)
+	t.Setenv("ARKISM_REPO", "")
+	t.Setenv("ARKISM_RECALL_MIN_SCORE", "")
+	fakeRequest(t, `{"items":[{"id":"t1","kind":"episodic","status":"active","text":"어제 배포","score":0.016,"lanes":["temporal"]},`+
+		`{"id":"v1","kind":"episodic","status":"active","text":"무관","score":0.016,"lanes":["vector"]}]}`)
+	out := structured(t, call(t, "recall", `{"query":"어제 뭐 했지"}`))
+	if got := canon(t, field(out, "memories")); !strings.Contains(got, `"id":"t1"`) || strings.Contains(got, `"id":"v1"`) {
+		t.Fatal(got)
 	}
 }

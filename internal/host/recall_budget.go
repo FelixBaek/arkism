@@ -78,6 +78,7 @@ func (b RecallBudget) Apply(items []any, vectorRan bool) (kept []any, droppedSco
 
 // VectorRan reports whether a /v1/search response came from all three lanes; the floor was
 // measured that way (ST-810), so a lexical-only search (embedder off or down) is not judged by it.
+// No modes means the server's default lanes, which include vector.
 func VectorRan(modes []any, res map[string]any) bool {
 	degraded, _ := res["degraded"].([]any)
 	has := func(list []any, s string) bool {
@@ -88,7 +89,7 @@ func VectorRan(modes []any, res map[string]any) bool {
 		}
 		return false
 	}
-	return has(modes, "vector") && !has(degraded, "memory_vector_unavailable") && !has(degraded, "memory_vector_disabled")
+	return (len(modes) == 0 || has(modes, "vector")) && !has(degraded, "memory_vector_unavailable") && !has(degraded, "memory_vector_disabled")
 }
 
 // Floor preserves a server-verified vector match without treating its RRF rank
@@ -172,10 +173,12 @@ func score(v any) (float64, bool) {
 	return 0, false
 }
 
+// textLane: a lane that matched the query itself. A temporal hit lies inside the date window the
+// query named ("yesterday"), so it is as direct a match as an exact keyword; one-lane RRF would floor it out.
 func textLane(v any) bool {
 	lanes, _ := v.([]any)
 	for _, l := range lanes {
-		if l == "exact" || l == "keyword" {
+		if l == "exact" || l == "keyword" || l == "temporal" {
 			return true
 		}
 	}

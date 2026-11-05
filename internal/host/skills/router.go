@@ -810,7 +810,7 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	}
 	if v, ok := opts["timezone"]; ok && v != nil {
 		tz, isStr := v.(string)
-		if !isStr || len(tz) > 64 {
+		if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
 			return nil, errors.New("timezone must be an IANA name such as Asia/Seoul")
 		}
 		if tz != "" {
@@ -846,8 +846,7 @@ func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[
 	}
 	found := asList(getOr(res, "items", []any{}))
 	if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
-		// No modes means the server's default exact, keyword and vector lanes (plus time and graph).
-		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan([]any{"exact", "fts", "vector"}, res))
+		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(nil, res)) // nil: the server's default lanes
 	}
 	return found, res, nil
 }

@@ -39,6 +39,9 @@ func browseMemory(args map[string]any) (any, error) {
 	if _, isBool := args["limit"].(bool); isBool || !lok || limit < 1 || limit > 50 || len(id) > 256 || len(query) > 200 || len(cursor) > 256 {
 		return nil, errors.New("invalid browse_memory arguments")
 	}
+	if id == "." || id == ".." { // would leave the item route once the server cleans the path
+		return nil, errors.New("invalid browse_memory arguments")
+	}
 	if id == "" && !k.list {
 		return nil, errors.New("file_job needs an id")
 	}
@@ -105,6 +108,11 @@ func reflectAnswer(args map[string]any) (any, error) {
 		list, ok := tags.([]any)
 		if !ok || len(list) > 32 {
 			return nil, errors.New("tags must be a list of at most 32 strings")
+		}
+		for _, tag := range list {
+			if s, isStr := tag.(string); !isStr || s == "" || host.Len(s) > 128 {
+				return nil, errors.New("tags must be a list of at most 32 strings")
+			}
 		}
 		payload["tags"] = list
 	}

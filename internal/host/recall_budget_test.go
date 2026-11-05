@@ -66,7 +66,7 @@ func TestRecallBudgetApply(t *testing.T) {
 	if kept, low := b.Floor(items[:2], false); len(kept) != 2 || low != 0 {
 		t.Fatal(kept, low)
 	}
-	if !VectorRan([]any{"exact", "fts", "vector"}, map[string]any{}) || VectorRan([]any{"exact", "fts"}, map[string]any{}) ||
+	if !VectorRan([]any{"exact", "fts", "vector"}, map[string]any{}) || !VectorRan(nil, map[string]any{}) || VectorRan(nil, map[string]any{"degraded": []any{"memory_vector_disabled"}}) || VectorRan([]any{"exact", "fts"}, map[string]any{}) ||
 		VectorRan([]any{"exact", "fts", "vector"}, map[string]any{"degraded": []any{"memory_vector_disabled"}}) ||
 		VectorRan([]any{"exact", "fts", "vector"}, map[string]any{"degraded": []any{"memory_vector_unavailable"}}) {
 		t.Fatal("VectorRan")
