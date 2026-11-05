@@ -252,6 +252,9 @@ func gReset() {
 	googleSignatures, googleSigOrder = map[googleSigKey]googleSig{}, nil
 	googleLock.Unlock()
 	googleCache = nil
+	googleCacheMu.Lock()
+	googleCaches = map[[32]byte]googleCached{}
+	googleCacheMu.Unlock()
 }
 
 func gJSON(body string) http.HandlerFunc {

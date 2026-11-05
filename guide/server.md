@@ -752,6 +752,19 @@ the gateway does not have (other editors' or vendors' device logins) are not
 offered: each needs its own sign-in flow, token refresh and terms check in the
 gateway first, and the server would only reach them through it.
 
+With a stored Google API key (API mode), `ARKISM_GOOGLE_CONTEXT_CACHE=1`
+on the gateway stores a long stable prompt prefix (system instruction,
+tools and tool config, at least 4 KiB) once upstream as cached content and
+points later requests at it, so those input tokens are billed at the
+provider's cached rate. An entry lives 55 minutes and is recreated 5 minutes
+before that; a refused create (prefix below the model's minimum) falls back
+to the full request and is not retried for 5 minutes; a request the provider
+rejects drops the entry. Cached tokens arrive as `cached_tokens` in the chat
+usage, so they show in `arkism_llm_cached_input_tokens` and the usage
+ledger. **Upgrade note.** Off by default: each create is a billed request
+and cached content has a storage charge. The login mode has no cache resource
+and is never cached.
+
 ### Local models
 
 Neural embedding models and cross-encoders do not run inside memoryd: that

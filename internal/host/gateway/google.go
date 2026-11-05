@@ -844,7 +844,10 @@ func googleRun(input any, model string, stream, count bool, yield func(host.Obj)
 	if err != nil {
 		return err
 	}
-	wrapped := auth.token != ""
+	wrapped, cached := auth.token != "", ""
+	if !count {
+		body, cached = googleUseCache(auth, body, model, began)
+	}
 	target, headers, payload, err := googleRequest(auth, body, model, stream, count)
 	if err != nil {
 		return err
@@ -867,6 +870,9 @@ func googleRun(input any, model string, stream, count bool, yield func(host.Obj)
 		return googleErr("upstream_unreachable", 502, true)
 	}
 	if status != 0 {
+		if cached != "" {
+			googleCacheForget(cached) // expired or deleted upstream; the next request recreates it
+		}
 		if status < 400 || status > 599 {
 			status = 502
 		}
