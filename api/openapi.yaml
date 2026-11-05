@@ -77093,6 +77093,18 @@
           },
           "recall_quality": {
             "$ref": "#/components/schemas/WireResponseSpaceRecallQuality"
+          },
+          "capture_mode": {
+            "type": "string"
+          },
+          "capture_density": {
+            "type": "string"
+          },
+          "decision_models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -77490,6 +77502,21 @@
           },
           "auto_close_on_correction": {
             "type": "boolean"
+          },
+          "provisional_vectors": {
+            "type": "boolean"
+          },
+          "rerank_options": {
+            "$ref": "#/components/schemas/WireResponseRerankOptions"
+          },
+          "prefer_observations": {
+            "type": "boolean"
+          },
+          "include_chunks": {
+            "type": "boolean"
+          },
+          "chunks_max_tokens": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -77907,6 +77934,46 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/WireRequestSpaceRecallQuality"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capture_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "capture_density": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision_models": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               {
                 "type": "null"
@@ -78505,10 +78572,39 @@
             "type": "string"
           },
           "provisional": {
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "auto_close_on_correction": {
             "type": "boolean"
+          },
+          "provisional_vectors": {
+            "type": "boolean"
+          },
+          "rerank_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WireRequestRerankOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prefer_observations": {
+            "type": "boolean"
+          },
+          "include_chunks": {
+            "type": "boolean"
+          },
+          "chunks_max_tokens": {
+            "type": "integer"
           }
         },
         "additionalProperties": false,
@@ -78521,6 +78617,36 @@
       },
       "SpaceConfigPatch": {
         "$ref": "#/components/schemas/WireRequestSpaceConfigInput"
+      },
+      "WireResponseRerankOptions": {
+        "type": "object",
+        "properties": {
+          "prune": {
+            "type": "boolean"
+          },
+          "dedup": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.RerankOptions",
+        "x-go-source": "internal/memory/recall_floors.go",
+        "description": "RerankOptions widen what the model rerank (rerank: \"model\") may do in its one call:\nprune drops snippets it marks off-topic, dedup drops snippets it marks as repeating\na higher one. Neither runs without the model rerank, so neither spends extra budget."
+      },
+      "WireRequestRerankOptions": {
+        "type": "object",
+        "properties": {
+          "prune": {
+            "type": "boolean"
+          },
+          "dedup": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.RerankOptions",
+        "x-go-source": "internal/memory/recall_floors.go",
+        "description": "RerankOptions widen what the model rerank (rerank: \"model\") may do in its one call:\nprune drops snippets it marks off-topic, dedup drops snippets it marks as repeating\na higher one. Neither runs without the model rerank, so neither spends extra budget."
       }
     },
     "headers": {
