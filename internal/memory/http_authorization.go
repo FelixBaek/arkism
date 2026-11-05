@@ -40,6 +40,8 @@ type routePolicy struct {
 	roles  []string
 	// fileLimit replaces limit with the operator's per-file upload limit as base64.
 	fileLimit bool
+	// extDataLimit replaces limit with the request size the extension data value limit needs.
+	extDataLimit bool
 }
 
 type authorizationMux struct {
@@ -125,12 +127,21 @@ func (w *routeResponse) flush(dst http.ResponseWriter) {
 
 type httpPreflightKey struct{}
 
-func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, policy routePolicy) (Decision, error) {
-	if policy.fileLimit && policy.scope == routeMultipart {
-		policy.limit = s.batchRequestBytes()
-	} else if policy.fileLimit {
-		policy.limit = s.Files.requestBytes()
+// routeBodyLimit swaps a route's fixed body cap for the configured one.
+func (s *Service) routeBodyLimit(policy routePolicy) int64 {
+	switch {
+	case policy.fileLimit && policy.scope == routeMultipart:
+		return s.batchRequestBytes()
+	case policy.fileLimit:
+		return s.Files.requestBytes()
+	case policy.extDataLimit:
+		return s.ExtData.requestBytes()
 	}
+	return policy.limit
+}
+
+func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, policy routePolicy) (Decision, error) {
+	policy.limit = s.routeBodyLimit(policy)
 	scope, input, err := policy.requestScope(w, r)
 	if err != nil {
 		return Decision{}, err

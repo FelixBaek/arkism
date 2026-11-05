@@ -28,7 +28,7 @@ var extensionRoutePolicies = map[string]routePolicy{
 	"POST " + extensionToolCallPath:                    {action: extensionActionTemplate, scope: routeJSON, limit: extensionBodyLimit},
 	"GET /v1/extensions/{extension}/data":              {action: "read:" + colExtData, scope: routeQuery},
 	"GET /v1/extensions/{extension}/data/{key}":        {action: "read:" + colExtData, scope: routeQuery},
-	"POST /v1/extensions/{extension}/data":             {action: "write:" + colExtData, scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman, roleService}},
+	"POST /v1/extensions/{extension}/data":             {action: "write:" + colExtData, scope: routeJSON, limit: 64 << 10, extDataLimit: true, roles: []string{roleHuman, roleService}},
 }
 
 func init() {
@@ -53,7 +53,7 @@ func registerExtensionsCoreHTTP(mux routeRegistrar, s *Service) {
 	})
 	mux.HandleFunc("POST /v1/extensions/{extension}/data", func(w http.ResponseWriter, r *http.Request) {
 		var in ExtDataChange
-		if !decodeLimit(w, r, &in, 64<<10) {
+		if !decodeLimit(w, r, &in, s.ExtData.requestBytes()) {
 			return
 		}
 		out, err := s.ChangeExtensionData(r.Context(), bearer(r), in.Scope, r.PathValue("extension"), in.Changes)

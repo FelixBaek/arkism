@@ -260,6 +260,7 @@ wiki. What a person approves and how is described in
    | `MEMORY_AUTO_DERIVE` | `on` lets the worker run observation, causal link and model name proposals by itself after approvals. Off by default, so an upgrade does not start spending the daily model calls. Needs the server model; results stay proposals for a person. This is the server default: a space's `auto_derive` setting (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) overrides each field |
    | `ARKISM_EXTENSIONS_FILE` | Path to a JSON file of out-of-process extensions (see item 12). Unset means none. An unreadable file, a bad entry or an extension that does not answer `describe` stops startup |
    | `ARKISM_MCP_TOOLS` | Comma-separated MCP tool names the server allows in every space (a tool must also pass the space's `mcp_tools`). Empty allows every tool. Shown as `server_mcp_tools` in `GET /v1/spaces/{workspace}/{project}/config/effective`. A bad name stops startup |
+   | `ARKISM_EXT_DATA_MAX_KEYS`, `ARKISM_EXT_DATA_VALUE_BYTES` | Per-space limits of each extension's data store: keys (default 200, at most 5000) and one JSON value's size (default 4096 bytes, 64 to 262144). Keys × value size may not pass 16 MiB. A bad value stops startup |
    | `MEMORY_AUTO_DERIVE_THRESHOLD`, `MEMORY_AUTO_DERIVE_INTERVAL` | Approvals that start a run at once (1-1000, default `10`) and the longest wait after the first counted approval (Go duration, `1m` to `720h`, default `6h`) |
    | `MEMORY_DERIVE_SCHEDULE` | `on` lets the worker run mental-model triggers (`daily`, `cron`, `full_refresh_cron`, `on_change`, `after_consolidation`) and a space's `consolidation_schedule` without anyone calling consolidate. One job per scope waits for the earliest due time; a model's `min_interval` (or the space's `mental_model_defaults.min_interval`) folds a burst of triggers into one refresh, and an attempt that wrote nothing waits an hour. Off by default, so an upgrade does not start spending the daily model calls. Results stay drafts and proposals for a person |
 
@@ -476,7 +477,12 @@ wiki. What a person approves and how is described in
     extensions get a small store per space in the existing records table
     (collection `ext_data`, so backup, restore, row security and space
     deletion cover it): at most 200 keys per extension and space, JSON values
-    up to 4 KiB, secrets and private spans refused. A route or tool that
+    up to 4 KiB, secrets and private spans refused. `ARKISM_EXT_DATA_MAX_KEYS`
+    (1–5000) and `ARKISM_EXT_DATA_VALUE_BYTES` (64 B–256 KiB) raise these;
+    keys × value size may not pass 16 MiB, because a data call carries every
+    entry of the space, and memoryd refuses to start on a bad value. The
+    change request limit grows with the value size (4 × value + 16 KiB, at
+    least 64 KiB). A route or tool that
     declares `"data": true` receives the entries as `data` and may answer
     `data` changes (`[{"op":"put","key","value"},{"op":"delete","key"}]`),
     applied with the caller's `read:ext_data` and `write:ext_data`. People and

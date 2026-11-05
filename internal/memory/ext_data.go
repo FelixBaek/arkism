@@ -1,10 +1,13 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
+	"strconv"
 	"time"
 	"unicode/utf8"
 )
@@ -17,10 +20,49 @@ import (
 // and an extension reads and changes its own entries through a route or tool
 // call that declared "data": true, always with the caller's permission.
 const (
-	colExtData        = "ext_data"
-	extDataMaxKeys    = opsPageMax // one page lists every key of an extension in a space
-	extDataValueBytes = 4 << 10
+	colExtData               = "ext_data"
+	extDataDefaultKeys       = opsPageMax
+	extDataDefaultValueBytes = 4 << 10
+	extDataKeysCap           = 5000
+	extDataValueCap          = 256 << 10
+	// extDataSnapshotMax bounds keys × value size: a data call carries every entry of the space.
+	extDataSnapshotMax = 16 << 20
 )
+
+// ExtDataLimits are the per-space limits of one extension's store: keys and the
+// size of one JSON value. Zero keeps the default (200 keys, 4 KiB).
+type ExtDataLimits struct {
+	MaxKeys    int
+	ValueBytes int
+}
+
+func (l ExtDataLimits) maxKeys() int64  { return int64(cmp.Or(l.MaxKeys, extDataDefaultKeys)) }
+func (l ExtDataLimits) valueBytes() int { return cmp.Or(l.ValueBytes, extDataDefaultValueBytes) }
+func (l ExtDataLimits) requestBytes() int64 {
+	return max(64<<10, 4*int64(l.valueBytes())+16<<10) // room for a few full values per change request
+}
+
+// ParseExtDataLimits reads ARKISM_EXT_DATA_MAX_KEYS (1–5000) and
+// ARKISM_EXT_DATA_VALUE_BYTES (64 B–256 KiB); empty keeps the default. Keys
+// times value size may not pass 16 MiB, the most one data call carries.
+func ParseExtDataLimits(keys, valueBytes string) (ExtDataLimits, error) {
+	var l ExtDataLimits
+	var err error
+	if keys != "" {
+		if l.MaxKeys, err = strconv.Atoi(keys); err != nil || l.MaxKeys < 1 || l.MaxKeys > extDataKeysCap {
+			return l, fmt.Errorf("ARKISM_EXT_DATA_MAX_KEYS: want 1-%d", extDataKeysCap)
+		}
+	}
+	if valueBytes != "" {
+		if l.ValueBytes, err = strconv.Atoi(valueBytes); err != nil || l.ValueBytes < 64 || l.ValueBytes > extDataValueCap {
+			return l, fmt.Errorf("ARKISM_EXT_DATA_VALUE_BYTES: want 64-%d", extDataValueCap)
+		}
+	}
+	if l.maxKeys()*int64(l.valueBytes()) > extDataSnapshotMax {
+		return l, fmt.Errorf("ARKISM_EXT_DATA_MAX_KEYS × ARKISM_EXT_DATA_VALUE_BYTES may not pass %d bytes", extDataSnapshotMax)
+	}
+	return l, nil
+}
 
 var extDataKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
 
@@ -60,14 +102,14 @@ func extDataItem(r Record) ExtDataItem {
 	return ExtDataItem{Key: r.ExtData.Key, Value: json.RawMessage(r.ExtData.Value), Revision: r.Revision, UpdatedAt: r.UpdatedAt, UpdatedBy: r.CreatedBy}
 }
 
-func validExtDataOp(op ExtDataOp) error {
+func validExtDataOp(op ExtDataOp, maxValue int) error {
 	if !extDataKeyPattern.MatchString(op.Key) || op.ExpectedRevision < 0 || op.Op != "put" && op.Op != "delete" || op.Op == "delete" && len(op.Value) > 0 {
 		return ErrInvalid
 	}
 	if op.Op == "delete" {
 		return nil
 	}
-	if len(op.Value) == 0 || len(op.Value) > extDataValueBytes || !utf8.Valid(op.Value) || !json.Valid(op.Value) {
+	if len(op.Value) == 0 || len(op.Value) > maxValue || !utf8.Valid(op.Value) || !json.Valid(op.Value) {
 		return ErrInvalid
 	}
 	if containsSecret(string(op.Value)) || containsSecret(op.Key) {
@@ -137,7 +179,7 @@ func (s *Service) ChangeExtensionData(ctx context.Context, token string, scope S
 		return nil, ErrInvalid
 	}
 	for _, op := range ops {
-		if err := validExtDataOp(op); err != nil {
+		if err := validExtDataOp(op, s.ExtData.valueBytes()); err != nil {
 			return nil, err
 		}
 	}
@@ -151,7 +193,7 @@ func (s *Service) ChangeExtensionData(ctx context.Context, token string, scope S
 		count := have
 		for _, op := range ops {
 			item, added, err := s.changeExtData(ctx, tx, scope, d, extension, op)
-			if count += added; err == nil && count > extDataMaxKeys {
+			if count += added; err == nil && count > s.ExtData.maxKeys() {
 				err = errors.Join(ErrInvalid, errExtDataFull)
 			}
 			if err != nil {
@@ -186,7 +228,7 @@ func (s *Service) changeExtData(ctx context.Context, tx Tx, scope Scope, d Decis
 		}
 		return nil, -1, tx.Delete(ctx, colExtData, scope, id, cur.Revision)
 	}
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Millisecond)
 	r := Record{ID: id, Scope: scope, Kind: extension, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
 		ExtData: &ExtDataEntry{Extension: extension, Key: op.Key, Value: string(op.Value)}}
 	added := int64(1)
@@ -216,17 +258,23 @@ func (s *Service) extDataCount(ctx context.Context, scope Scope, extension strin
 	return 0, err
 }
 
-var errExtDataFull = errors.New("extension data holds at most 200 keys per space")
+var errExtDataFull = errors.New("extension data key limit reached for this space")
 
 // extDataSnapshot is every entry an extension keeps in the space, for a call that declared "data": true.
 func (s *Service) extDataSnapshot(ctx context.Context, token string, scope Scope, extension string) (map[string]json.RawMessage, error) {
-	page, err := s.ListExtensionData(ctx, token, scope, extension, "", extDataMaxKeys)
-	if err != nil {
-		return nil, err
+	out := map[string]json.RawMessage{}
+	cursor := ""
+	for {
+		page, err := s.ListExtensionData(ctx, token, scope, extension, cursor, opsPageMax)
+		if err != nil {
+			return nil, err
+		}
+		for _, it := range page.Items {
+			out[it.Key] = it.Value
+		}
+		// the key cap is soft (extDataCount), so stop at a page past it rather than read on
+		if cursor = page.NextCursor; cursor == "" || int64(len(out)) > s.ExtData.maxKeys()+opsPageMax {
+			return out, nil
+		}
 	}
-	out := make(map[string]json.RawMessage, len(page.Items))
-	for _, it := range page.Items {
-		out[it.Key] = it.Value
-	}
-	return out, nil
 }

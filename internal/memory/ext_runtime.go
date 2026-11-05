@@ -54,7 +54,7 @@ import (
 const (
 	extDefaultTimeout = 2 * time.Second
 	extMaxTimeout     = 30 * time.Second
-	extMaxMessage     = 1 << 20
+	extMaxMessage     = 1<<20 + extDataSnapshotMax // a data call carries every entry of the space
 	extTenantTTL      = 30 * time.Second
 	extTenantCacheMax = 4096
 )

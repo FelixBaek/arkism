@@ -30,6 +30,9 @@ func configureDaemonExtensions(svc *memory.Service) error {
 	if svc.MCPTools, err = memory.ParseMCPTools(os.Getenv("ARKISM_MCP_TOOLS")); err != nil {
 		return err
 	}
+	if svc.ExtData, err = memory.ParseExtDataLimits(os.Getenv("ARKISM_EXT_DATA_MAX_KEYS"), os.Getenv("ARKISM_EXT_DATA_VALUE_BYTES")); err != nil {
+		return err
+	}
 	path := os.Getenv("ARKISM_EXTENSIONS_FILE")
 	if path == "" {
 		return nil

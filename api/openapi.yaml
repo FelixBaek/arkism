@@ -48090,7 +48090,7 @@
           "Management"
         ],
         "summary": "Change an extension's stored data",
-        "description": "write:ext_data (human or service). Applies 1..32 changes all or none: put (key, JSON value up to 4 KiB) or delete (key); expected_revision, when set, must match (409). At most 200 keys per extension and space; secrets (422) and private spans (400) are refused. Deleting a key erases it. The answer lists the written entries.",
+        "description": "write:ext_data (human or service). Applies 1..32 changes all or none: put (key, JSON value up to 4 KiB by default, ARKISM_EXT_DATA_VALUE_BYTES up to 256 KiB) or delete (key); expected_revision, when set, must match (409). At most 200 keys per extension and space by default (ARKISM_EXT_DATA_MAX_KEYS up to 5000; keys times value bytes at most 16 MiB); secrets (422) and private spans (400) are refused. Deleting a key erases it. The answer lists the written entries.",
         "parameters": [
           {
             "in": "path",

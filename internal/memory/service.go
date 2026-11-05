@@ -114,6 +114,8 @@ type Service struct {
 	Prometheus PrometheusConfig
 	// Extensions are an embedding program's own checks and reactions (extensions.go).
 	Extensions Extensions
+	// ExtData raises the extension data store's per-space limits (ARKISM_EXT_DATA_*); zero keeps the defaults.
+	ExtData ExtDataLimits
 	// MCPTools is the server-wide MCP tool allowlist (ARKISM_MCP_TOOLS); empty allows every tool.
 	MCPTools []string
 

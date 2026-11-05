@@ -402,7 +402,7 @@ func TestExtensionDataStore(t *testing.T) {
 	for name, change := range map[string]string{
 		"secret":  `[{"op":"put","key":"k","value":"sk-ant-api03-` + strings.Repeat("a", 90) + `"}]`,
 		"private": `[{"op":"put","key":"k","value":"<private>x</private>"}]`,
-		"large":   `[{"op":"put","key":"k","value":"` + strings.Repeat("x", extDataValueBytes) + `"}]`,
+		"large":   `[{"op":"put","key":"k","value":"` + strings.Repeat("x", extDataDefaultValueBytes) + `"}]`,
 		"key":     `[{"op":"put","key":"../k","value":1}]`,
 		"op":      `[{"op":"drop","key":"k"}]`,
 	} {
@@ -444,13 +444,13 @@ func TestExtensionDataStore(t *testing.T) {
 	if rec := extRequest(t, h, f.human, http.MethodGet, "/v1/extensions/house/data/color"+q, ""); rec.Code != 404 {
 		t.Fatal("deleted entry still served", rec.Code)
 	}
-	for i := 0; i < extDataMaxKeys; i += 25 {
+	for i := 0; i < extDataDefaultKeys; i += 25 {
 		changes := []string{}
 		for j := i; j < i+25; j++ {
 			changes = append(changes, fmt.Sprintf(`{"op":"put","key":"k%d","value":%d}`, j, j))
 		}
 		want := 200
-		if i+25 > extDataMaxKeys-1 { // "n" from the data route already holds one key
+		if i+25 > extDataDefaultKeys-1 { // "n" from the data route already holds one key
 			want = 400
 		}
 		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != want {
@@ -526,5 +526,46 @@ func TestModelCallExtensionRewritesDeniesAndRecords(t *testing.T) {
 	rows := scopeRecords(f, colLLMRequests, scopeA)
 	if len(rows) != 2 {
 		t.Fatalf("traced %d calls, want 2 (the refused one was never made)", len(rows))
+	}
+}
+
+func TestExtensionDataLimits(t *testing.T) {
+	for _, c := range []struct {
+		keys, bytes string
+		ok          bool
+	}{{"", "", true}, {"1000", "16384", true}, {"0", "", false}, {"5001", "", false}, {"", "63", false}, {"", "262145", false}, {"5000", "65536", false}, {"x", "", false}} {
+		if _, err := ParseExtDataLimits(c.keys, c.bytes); (err == nil) != c.ok {
+			t.Fatal(c, err)
+		}
+	}
+	f := newOpsFixture(t)
+	loadExtensions(t, f, stdioExtension(t, "house"))
+	h := handlerMode(f.svc, time.Minute, true)
+	body := func(changes string) string {
+		return `{"scope":{"workspace_id":"ws-a","project_id":"proj-a"},"changes":` + changes + `}`
+	}
+	big := `[{"op":"put","key":"big","value":"` + strings.Repeat("x", 6<<10) + `"}]`
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(big)); rec.Code != 400 {
+		t.Fatal("default limit took a 6 KiB value", rec.Code)
+	}
+	f.svc.ExtData = ExtDataLimits{MaxKeys: 250, ValueBytes: 8 << 10}
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(big)); rec.Code != 200 {
+		t.Fatal("raised limit refused a 6 KiB value", rec.Code, rec.Body)
+	}
+	for i := 1; i < 250; i += 25 {
+		changes := []string{}
+		for j := i; j < min(i+25, 250); j++ {
+			changes = append(changes, fmt.Sprintf(`{"op":"put","key":"k%d","value":%d}`, j, j))
+		}
+		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != 200 {
+			t.Fatal("raised key cap", i, rec.Code, rec.Body)
+		}
+	}
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"put","key":"one-more","value":1}]`)); rec.Code != 400 {
+		t.Fatal("key 251 accepted", rec.Code)
+	}
+	snap, err := f.svc.extDataSnapshot(testCtx, f.human, scopeA, "house")
+	if err != nil || len(snap) != 250 || len(snap["big"]) < 6<<10 {
+		t.Fatal("snapshot past one page", len(snap), err)
 	}
 }
