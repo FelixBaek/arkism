@@ -226,15 +226,19 @@ test("cards that do not fit a small window are hidden; the selected card always 
   reduced = false; b.destroy(); plain.b.destroy();
 });
 
-test("a line kind the map does not know draws dashed grey and its card names the kind", () => {
+test("a line kind the map does not know draws dashed grey and its card names the kind; causes gets its name and an arrow", () => {
   reduced = true;
   const { b, items, resize } = make({ size: [300, 260] });
-  b.setItems(items); b.setEdges([{ from: "m0", to: "m1", t: "causes" }, { from: "m0", to: "m2", t: "mentions" }]);
+  b.setItems(items); b.setEdges([{ from: "m0", to: "m1", t: "made_up" }, { from: "m0", to: "m2", t: "mentions" }]);
   resize(); calls.length = 0;
   b.setSelected("m0");
   const subs = b.el.querySelectorAll(".mm-card small").map((s) => s.textContent);
-  assert.ok(subs.includes("일반 · causes"), subs.join("|"));
+  assert.ok(subs.includes("일반 · made_up"), subs.join("|"));
+  assert.ok(!calls.some(([k]) => k === "closePath"), "no arrowhead for lines without a direction");
   assert.ok(subs.includes("일반 · 이름 언급"), subs.join("|"));
   assert.ok(calls.some(([k, a]) => k === "setLineDash" && a.length === 2 && Math.abs(a[0] / a[1] - 4 / 3) < 1e-9), "grey dashes for the unknown kind");
+  b.setEdges([{ from: "m0", to: "m1", t: "causes" }]); calls.length = 0; b.setSelected(null); b.setSelected("m0");
+  assert.ok(b.el.querySelectorAll(".mm-card small").map((s) => s.textContent).includes("일반 · 원인→결과"));
+  assert.ok(calls.some(([k]) => k === "closePath"), "an arrowhead at the effect");
   reduced = false; b.destroy();
 });

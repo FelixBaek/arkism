@@ -6126,5 +6126,5 @@ Object.assign(window.ArkismI18nEN.strings, { "이름 언급": "Name mention", "�
   "보는 방법": "View", "시간순": "By time", "그 시각 상태": "State at a time", "언제 일이었나요? 예: 지난주 배포, 10월 말": "When was it? E.g. last week's deploy, late October", "시간으로 기억 찾기": "Find memories by time",
   "언제 일인지 적어 주세요.": "Write when it happened.", "사람": "Person", "서비스": "Service", "장소": "Place", "단체": "Organization", "자주 나온 이름": "Frequent names", "이름 더 보기": "More names",
   "나온 기억": "Memories", "처음": "First", "이 이름의 자세한 내용을 불러오지 못했어요.": "Couldn't load this name's details.", "다른 이름": "Other names", "정리한 내용": "Summary",
-  "● 사람이 승인한 관찰이에요": "● An observation a person approved", "지도에 있는 기억과 이어지지 않았어요.": "Not linked to any memory on the map." });
+  "● 사람이 승인한 관찰이에요": "● An observation a person approved", "지도에 있는 기억과 이어지지 않았어요.": "Not linked to any memory on the map.", "원인→결과": "Cause → effect", "원인": "Cause" });
 Object.assign(window.ArkismI18nEN.patterns, { "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "An observation summarizing several memories. Based on {0} memories", "기억 {0}개에 나옴": "In {0} memories", "바탕 기억 {0}개": "Based on {0} memories" });

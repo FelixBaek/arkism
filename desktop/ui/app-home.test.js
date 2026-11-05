@@ -916,9 +916,11 @@ test("overview: 기억 지도 adds names and observations, links them and pages 
   const graph = { nodes: [{ id: "m1", label: "Orbit 백엔드", kind: "decision", reach: "project" }, { id: "m2", label: "결제 흐름", kind: "lesson", reach: "general" }], edges: [{ from: "m1", to: "m2", type: "causes" }] };
   const names = Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, name: i ? `이름${i}` : "민지", type: i ? "tool" : "person", mentions: 20 - i }));
   const asked = [];
+  let inFlight = 0, peak = 0; // name pages load a few at a time, not 20 at once
+  const slow = async (r) => { peak = Math.max(peak, ++inFlight); await new Promise((t) => setTimeout(t, 2)); inFlight--; return r; };
   const offs = [
     route("GET", "/v1/memory-graph", () => ok(graph)),
-    route("GET", "/v1/entities/", (a) => (/\/e1\?/.test(a.path) ? fail(500, "boom") : !/\/e0\?/.test(a.path) ? ok({ memories: [], related: [], timeline: [] }) : ok({ id: "e0", name: "민지", type: "person", aliases: ["Minji"], mentions: 2, proposed_mentions: 0, first_seen: "2026-10-01T00:00:00Z", last_seen: "2026-10-30T00:00:00Z", memories: [{ id: "m1", kind: "decision" }, { id: "m2" }, { id: "gone" }], related: [], timeline: [] }))),
+    route("GET", "/v1/entities/", (a) => slow(/\/e1\?/.test(a.path) ? fail(500, "boom") : !/\/e0\?/.test(a.path) ? ok({ memories: [], related: [], timeline: [] }) : ok({ id: "e0", name: "민지", type: "person", aliases: ["Minji"], mentions: 2, proposed_mentions: 0, first_seen: "2026-10-01T00:00:00Z", last_seen: "2026-10-30T00:00:00Z", memories: [{ id: "m1", kind: "decision" }, { id: "m2" }, { id: "gone" }], related: [], timeline: [] }))),
     route("GET", "/v1/entities/graph", (a) => { asked.push(a.path); return ok({ nodes: /limit=40/.test(a.path) ? [...names, { id: "e20", name: "새 이름", type: "concept", mentions: 1 }] : names, edges: [] }); }),
     route("GET", "/v1/observations", () => ok({ items: [{ id: "o1", status: "active", content: "주로 오후에 배포한다", source_memory_ids: ["m1", "m2"] }] }))
   ];
@@ -926,12 +928,15 @@ test("overview: 기억 지도 adds names and observations, links them and pages 
   assert.match(text(d), /자주 나온 이름/);
   assert.match(text(d.querySelector(".ov-map-legend")), /이름 언급/);
   assert.match(text(d.querySelector(".ov-map-legend")), /정리 바탕/);
+  assert.match(text(d.querySelector(".ov-map-legend")), /원인→결과/);
+  assert.ok(peak >= 1 && peak <= 4, `at most 4 name pages at once, saw ${peak}`);
   const pickName = (n) => [...d.querySelectorAll(".ov-win-click")].find((r) => text(r).startsWith(n));
   pickName("민지").click(); await app.settle(30);
   assert.match(text(d), /사람/); assert.match(text(d), /Minji/); assert.match(text(d), /이어진 기억2/);
-  // an entity link opens the memory; the memory lists the name and the observation back, and an unknown line kind by its name
+  // an entity link opens the memory; the memory lists the name and the observation back; m1 causes m2, so m2 is its 결과
   [...d.querySelectorAll(".ov-map-rel")].find((r) => /Orbit 백엔드/.test(text(r))).click(); await app.settle(30);
-  for (const s of ["이름 언급", "정리 바탕", "causes", "정리된 관찰"]) assert.ok(text(d).includes(s), s);
+  for (const s of ["이름 언급", "정리 바탕", "정리된 관찰"]) assert.ok(text(d).includes(s), s);
+  assert.equal(text([...d.querySelectorAll(".ov-map-rel")].find((r) => /결제 흐름/.test(text(r))).querySelector(".ov-map-tagpill")), "결과");
   [...d.querySelectorAll(".ov-map-rel")].find((r) => /주로 오후에/.test(text(r))).click(); await app.settle(30);
   assert.match(text(d), /사람이 승인한 관찰이에요/);
   await press("닫기", d.querySelector(".ov-map-sidehead"));

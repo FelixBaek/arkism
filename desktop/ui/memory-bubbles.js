@@ -9,9 +9,12 @@ window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 뒷받침 solid, 같은 대화 dotted, 서로 다름 red dashed, 새로 바뀜 purple dotted.
   const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "뒷받침" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "같은 대화" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "서로 다름" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "새로 바뀜" },
-    mentions: { c: "#e0a3c8", dash: [2, 3], n: "이름 언급" }, derived_from: { c: "#9fb4c8", dash: [], n: "정리 바탕" } };
+    mentions: { c: "#e0a3c8", dash: [2, 3], n: "이름 언급" }, derived_from: { c: "#9fb4c8", dash: [], n: "정리 바탕" },
+    causes: { c: "#f0a35e", dash: [], n: "원인→결과", arrow: true } }; // causes runs from the cause to the effect: an arrowhead at the effect
   // a line kind this build does not know yet (a newer server's) still draws: grey dashes named by its kind
   const edgeStyle = (t) => EDGE[t] || { c: "#9a9a94", dash: [4, 3], n: String(t || "관계") };
+  // arrowhead at (x, y) pointing away from (fx, fy), in the current stroke colour; size in canvas units
+  const arrowHead = (ctx, fx, fy, x, y, size) => { const a = Math.atan2(y - fy, x - fx); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - size * Math.cos(a - 0.45), y - size * Math.sin(a - 0.45)); ctx.lineTo(x - size * Math.cos(a + 0.45), y - size * Math.sin(a + 0.45)); ctx.closePath(); ctx.fillStyle = ctx.strokeStyle; ctx.fill(); };
   const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // spiral step
@@ -192,6 +195,7 @@ window.ArkismMemoryBubbles = (() => {
         const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll || items.length > MANY) continue;
         const s = edgeStyle(l.t); ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2 / zoom; ctx.setLineDash(px(s.dash));
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
+        if (s.arrow) { const d = Math.hypot(l.b.x - l.a.x, l.b.y - l.a.y) || 1; arrowHead(ctx, l.a.x, l.a.y, l.b.x - (l.b.x - l.a.x) / d * l.b.r, l.b.y - (l.b.y - l.a.y) / d * l.b.r, 6 / zoom); }
       }
       ctx.setLineDash([]);
       if (showAll && items.length > MANY && groups.length > 1) { // rim to rim, never across the dots
@@ -223,7 +227,7 @@ window.ArkismMemoryBubbles = (() => {
         const [ax, ay] = edge(l.a), [bx, by] = edge(l.b), col = l.t === "same_session" ? muted : s.c;
         const path = () => { ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(cx, cy, bx, by); ctx.stroke(); };
         ctx.globalAlpha = 0.55; ctx.strokeStyle = bg; ctx.lineWidth = 4 / zoom; ctx.setLineDash([]); path(); // faint backing so the line reads over bubbles
-        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6 / zoom; ctx.setLineDash(px(s.dash)); path();
+        ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = 1.6 / zoom; ctx.setLineDash(px(s.dash)); path(); if (s.arrow) arrowHead(ctx, cx, cy, bx, by, 8 / zoom);
         if ((d - l.a.r - l.b.r) * zoom > 40) { // pill a little past the middle, toward the related memory, so the focus card does not cover it
           const t = foci.has(l.a.id) ? 0.6 : 0.4, u = 1 - t;
           tags.push([s, col, ...scr(u * u * l.a.x + 2 * u * t * cx + t * t * l.b.x, u * u * l.a.y + 2 * u * t * cy + t * t * l.b.y)]);

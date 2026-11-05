@@ -28,7 +28,8 @@ window.ArkismMemoryTime = (ctx) => {
     const body = detailShell("시간순 기억");
     if (!selected) { body.append(el("h2", "", "기억을 골라 확인하세요"), el("p", "lead", "언제 있었던 일인지 순서대로 보여 줘요. 사람이 승인한 기억만 나와요.")); return; }
     const at = eventAt(selected), head = el("div", "d-head");
-    head.append(el("p", "d-kind", LANES[laneOf(selected)]), el("h2", "", selected.text || selected.summary || "본문 없음"));
+    const title = el("h2", "", selected.text || selected.summary || "본문 없음"); title.setAttribute("data-no-i18n", "");
+    head.append(el("p", "d-kind", LANES[laneOf(selected)]), title);
     if (at.t) head.append(el("p", "lead", `${at.what} · ${date(at.t)}`));
     body.append(head);
     if (laneOf(selected) === "observations") body.append(el("p", "meta", `여러 기억을 정리한 관찰이에요. 바탕 기억 ${(selected.source_ids || []).length}개`));
@@ -74,7 +75,7 @@ window.ArkismMemoryTime = (ctx) => {
     table.append(status);
     if (!searched && !busy && !error) {
       const tries = el("div", "chips mem-time-try");
-      for (const w of ["오늘", "어제", "지난주", "이번 달"]) tries.append(button(w, "small", null, () => { ask = w; const q = $("#chips .memory-time-form input"); if (q) q.value = w; void load(); }));
+      for (const w of ["오늘", "어제", "지난주", "이번 달"]) tries.append(button(w, "small", null, () => { ask = globalThis.ArkismI18n?.translate(w) || w; const q = $("#chips .memory-time-form input"); if (q) q.value = ask; void load(); }));
       table.append(tries);
     }
     if (error) { const again = button("다시 찾기", "small", null, () => void load()); again.disabled = busy; table.append(again); }
@@ -117,7 +118,7 @@ window.ArkismMemoryTime = (ctx) => {
     } catch (_) {
       if (!live()) return;
       rows = []; win = null; error = "찾지 못했어요. 연결과 접근 권한을 확인하고 다시 찾아 주세요.";
-    } finally { if (live()) { busy = false; paintLine(); } }
+    } finally { if (turn.live() && current === identity()) busy = false; if (live()) paintLine(); } // a reply after leaving the tab still ends the wait, so coming back can search again
   }
   function paint() {
     if (mode === "line") { paintLine(); return; }
@@ -157,7 +158,7 @@ window.ArkismMemoryTime = (ctx) => {
     } catch (_) {
       if (!live()) return;
       rows = []; selected = null; next = ""; error = "불러오지 못했어요. 연결과 접근 권한을 확인하고 다시 조회하세요."; detail();
-    } finally { if (live()) { busy = false; paint(); } }
+    } finally { if (turn.live() && current === identity()) busy = false; if (live()) paint(); }
   }
   function draw() {
     const changed = key !== identity();

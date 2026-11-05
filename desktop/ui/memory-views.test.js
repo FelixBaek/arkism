@@ -372,10 +372,24 @@ test("시간순 says when no time was found, retries a failure and drops stale a
   v2.draw(); dom.input(h.$("#chips form input"), "어제"); h.$("#chips form").requestSubmit();
   s2.memTab = "active"; release(hits([{ id: "z", collection: "memories", text: "늦은 답" }])); await dom.flush();
   assert.ok(!h.$("#table").textContent.includes("늦은 답"));
+  // coming back to the tab after that late answer can search again (not stuck on 찾는 중)
+  s2.memTab = "past"; reply = hits([], week); v2.draw(); h.$("#chips form").requestSubmit(); await dom.flush();
+  assert.match(h.$("#table").textContent, /‘지난주’/);
   // switching to 그 시각 상태 and back keeps each view's own form
   state.memTab = "past"; s2.memTab = "past"; v2.draw();
   dom.buttons(h.$("#chips"), "그 시각 상태")[0].click();
   assert.equal(h.$("#chips form input").type, "datetime-local");
   dom.buttons(h.$("#chips"), "시간순")[0].click();
   assert.equal(h.$("#chips form input").type, "search");
+});
+
+test("시간순 examples send the words the screen shows (English screen: English words the server also reads)", async () => {
+  const before = globalThis.ArkismI18n, calls = [];
+  globalThis.ArkismI18n = { translate: (s) => ({ 지난주: "Last week" })[s] || s, locale: () => "en-US" };
+  try {
+    const { view } = lineView(async (path, opts) => { calls.push(JSON.parse(opts.body)); return hits([], week); });
+    view.draw(); dom.buttons(h.$("#table"), "지난주")[0].click(); await dom.flush();
+    assert.equal(calls[0].query, "Last week");
+    assert.equal(calls[0].timezone, Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } finally { globalThis.ArkismI18n = before; }
 });
