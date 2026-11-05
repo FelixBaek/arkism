@@ -259,7 +259,7 @@ window.ArkismMessenger = (ctx) => {
   return { tab };
 };
 // 웹훅 알림 종류 (the server's webhookEvents) and one delivery's state in words: retry says when it goes again.
-window.ArkismMessenger.WEBHOOK_EVENTS = { "candidate.created": "기억 후보가 생겼을 때", "memory.approved": "기억을 승인했을 때", "memory.rejected": "기억을 버렸을 때", "memory.updated": "기억이 바뀌었을 때", "memory.deleted": "기억을 지웠을 때", "webhook.test": "시험 알림" };
+window.ArkismMessenger.WEBHOOK_EVENTS = { "candidate.created": "기억 후보가 생겼을 때", "memory.approved": "기억을 승인했을 때", "memory.rejected": "기억을 버렸을 때", "memory.updated": "기억이 바뀌었을 때", "memory.deleted": "기억을 지웠을 때", "consolidation.completed": "기억 정리가 끝났을 때", "ingest.completed": "파일 수집이 끝났을 때", "defense.triggered": "공간 방어 규칙이 작동했을 때", "webhook.test": "시험 알림" };
 window.ArkismMessenger.deliveryState = (v = {}) => {
   const d = v.delivery || {}, code = d.http_status ? `HTTP ${d.http_status}` : "", when = (t) => { const x = new Date(t); return Number.isNaN(x.getTime()) ? "" : x.toLocaleString(); };
   if (v.status === "done") return { label: "보냄", detail: [code, d.latency_ms ? `${d.latency_ms}ms` : ""].filter(Boolean).join(" · "), tone: "" };
