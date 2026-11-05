@@ -846,10 +846,16 @@ operation, rerank, recall lane and file extraction stage durations, finished
 background jobs by kind and outcome with their run time
 (`arkism_operations_total`, `arkism_operation_duration_seconds`), documents
 handed to memory extraction by source (`arkism_documents_ingested_total`:
-text, file, knowledge, reprocess), job queue backlog, running,
+text, file, knowledge, reprocess), extension hook wall time by hook and
+outcome (`arkism_extension_hook_duration_seconds`: ok or refused), rerank
+calls, failures and timeouts for every stage of the fallback chain (labels
+`stage`, 0 first, and `provider`; `GET /metrics` lists the same in
+`rerank_stages`), job queue backlog, running,
 failed and oldest-waiting gauges by job kind, tracing, database pool,
 goroutines, heap, GC, CPU, RSS and open files). They hold no memory text and
-no scope data. The queue gauges are counted with the server's own store
+no scope data. **Upgrade note.** The rerank counters used to be one
+unlabelled series for the first stage only; they now carry `stage` and
+`provider` labels, so a query on the old series needs `stage="0"`. The queue gauges are counted with the server's own store
 binding on each scrape (2 s limit; `arkism_job_queue_stats_up` is 0 when the
 count failed); cached input and reasoning tokens appear only when the provider
 reports them.

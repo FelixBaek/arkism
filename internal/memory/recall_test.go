@@ -408,6 +408,17 @@ func TestRecallRerankFallbackChain(t *testing.T) {
 	if err != nil || rows[0].ID != "c" || !trace.reranked || outcomes(trace) != "failed,ok" || first.Metrics().Fallbacks != 1 || second.Metrics().Calls != 1 {
 		t.Fatalf("%v %q %v", rows, outcomes(trace), err)
 	}
+	// Every stage is metered on its own, not only the first.
+	prom := promText(rerankFamilies(f.svc.Reranker))
+	for _, want := range []string{`arkism_rerank_fallbacks_total{stage="0",provider="tei"} 1`, `arkism_rerank_calls_total{stage="1",provider="tei"} 1`,
+		`arkism_rerank_fallbacks_total{stage="1",provider="tei"} 0`, `arkism_rerank_calls_total{stage="2",provider="local"} 0`} {
+		if !strings.Contains(prom, want) {
+			t.Fatalf("missing %q in\n%s", want, prom)
+		}
+	}
+	if st := f.svc.Reranker.StageMetrics(); len(st) != 3 || st[2].Model != "lexical" || st[1].Calls != 1 {
+		t.Fatalf("stages %+v", st)
+	}
 	out := ContextBundle{}
 	trace.annotate(&out, nil)
 	if out.Explain == nil || len(out.Explain.RerankChain) != 2 || out.Explain.RerankChain[1].Provider == "" {

@@ -54978,13 +54978,30 @@
           "rerank": {
             "type": "object",
             "additionalProperties": false,
-            "description": "Process rerank calls; present when a reranker is configured. A fallback served the fused order.",
+            "description": "Process rerank calls of the first stage; present when a reranker is configured. A fallback means that stage failed.",
             "properties": {
               "calls": {"type": "integer", "minimum": 0},
               "fallbacks": {"type": "integer", "minimum": 0},
               "timeouts": {"type": "integer", "minimum": 0}
             },
             "required": ["calls", "fallbacks", "timeouts"]
+          },
+          "rerank_stages": {
+            "type": "array",
+            "description": "Every stage of the rerank fallback chain in the order tried, with its own calls, failures (fallbacks) and timeouts; present when a reranker is configured.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "stage": {"type": "integer", "minimum": 0},
+                "provider": {"type": "string"},
+                "model": {"type": "string"},
+                "calls": {"type": "integer", "minimum": 0},
+                "fallbacks": {"type": "integer", "minimum": 0},
+                "timeouts": {"type": "integer", "minimum": 0}
+              },
+              "required": ["stage", "provider", "model", "calls", "fallbacks", "timeouts"]
+            }
           },
           "tracing": {
             "type": "object",

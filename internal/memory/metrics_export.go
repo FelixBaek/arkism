@@ -179,10 +179,7 @@ func (s *Service) metricFamilies(stats *requestMetrics) []metricFamily {
 	out = append(out, stageFamilies()...)
 	out = append(out, s.queueFamilies()...)
 	if s.Reranker != nil {
-		m := s.Reranker.Metrics()
-		out = append(out, counter("arkism_rerank_calls_total", "Rerank calls.", float64(m.Calls)),
-			counter("arkism_rerank_fallbacks_total", "Rerank calls that served the fused order.", float64(m.Fallbacks)),
-			counter("arkism_rerank_timeouts_total", "Rerank calls that timed out.", float64(m.Timeouts)))
+		out = append(out, rerankFamilies(s.Reranker)...)
 	}
 	if t := tracingMetrics(); t != nil {
 		out = append(out, metricFamily{name: "arkism_trace_spans_total", help: "Finished spans by export outcome.", kind: "counter", points: []metricPoint{
@@ -196,6 +193,20 @@ func (s *Service) metricFamilies(stats *requestMetrics) []metricFamily {
 		}
 	}
 	return append(out, runtimeFamilies()...)
+}
+
+// rerankFamilies reports every stage of the rerank fallback chain, labelled by its place (0 first) and provider.
+func rerankFamilies(chain *TEIReranker) []metricFamily {
+	calls := metricFamily{name: "arkism_rerank_calls_total", help: "Rerank calls by fallback chain stage.", kind: "counter"}
+	failed := metricFamily{name: "arkism_rerank_fallbacks_total", help: "Rerank calls that failed at this stage; the next stage, or the fused order after the last, served.", kind: "counter"}
+	timeouts := metricFamily{name: "arkism_rerank_timeouts_total", help: "Rerank calls that timed out at this stage.", kind: "counter"}
+	for _, m := range chain.StageMetrics() {
+		l := [][2]string{{"stage", strconv.Itoa(m.Stage)}, {"provider", m.Provider}}
+		calls.points = append(calls.points, metricPoint{labels: l, value: float64(m.Calls)})
+		failed.points = append(failed.points, metricPoint{labels: l, value: float64(m.Fallbacks)})
+		timeouts.points = append(timeouts.points, metricPoint{labels: l, value: float64(m.Timeouts)})
+	}
+	return []metricFamily{calls, failed, timeouts}
 }
 
 func counter(name, help string, v float64) metricFamily {

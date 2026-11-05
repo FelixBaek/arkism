@@ -17,6 +17,7 @@ const (
 	stageExtract      = "extract_stage"
 	stageOperation    = "operation"
 	stageDocument     = "document"
+	stageExtHook      = "extension_hook"
 	stageMetricsMax   = 256
 	jobQueueKindsMax  = 200
 	jobQueueStatsWait = 2 * time.Second
@@ -41,6 +42,15 @@ func observeOperation(kind string, err error, elapsed time.Duration) {
 		outcome = "error"
 	}
 	observeStageOutcome(stageOperation, kind, outcome, elapsed)
+}
+
+// observeHook records one extension hook call by hook and outcome (ok, or refused for a refusing hook).
+func observeHook(hook string, err error, start time.Time) {
+	outcome := "ok"
+	if err != nil {
+		outcome = "refused"
+	}
+	observeStageOutcome(stageExtHook, hook, outcome, time.Since(start))
 }
 
 // observeDocument counts one document handed to extraction: text, file or knowledge, and reprocess for a new round.
@@ -72,6 +82,7 @@ func stageFamilies() []metricFamily {
 	ops := metricFamily{name: "arkism_operations_total", help: "Background jobs finished by kind and outcome.", kind: "counter"}
 	opDur := metricFamily{name: "arkism_operation_duration_seconds", help: "Background job run time by kind and outcome.", kind: "histogram", bounds: latencyBounds[:]}
 	docs := metricFamily{name: "arkism_documents_ingested_total", help: "Documents handed to memory extraction by source (text, file, knowledge, reprocess).", kind: "counter"}
+	hooks := metricFamily{name: "arkism_extension_hook_duration_seconds", help: "Extension hook wall time by hook and outcome (ok, refused).", kind: "histogram", bounds: latencyBounds[:]}
 	for key, h := range stageStats.series {
 		switch key[0] {
 		case stageRecallLane:
@@ -82,11 +93,13 @@ func stageFamilies() []metricFamily {
 			opDur.points = append(opDur.points, histogramPoint(l, *h))
 		case stageDocument:
 			docs.points = append(docs.points, metricPoint{labels: [][2]string{{"source", key[1]}}, value: float64(h.count)})
+		case stageExtHook:
+			hooks.points = append(hooks.points, histogramPoint([][2]string{{"hook", key[1]}, {"outcome", key[2]}}, *h))
 		default:
 			extract.points = append(extract.points, histogramPoint([][2]string{{"stage", key[1]}}, *h))
 		}
 	}
-	return []metricFamily{lanes, extract, ops, opDur, docs}
+	return []metricFamily{lanes, extract, ops, opDur, docs, hooks}
 }
 
 // JobQueueStat is one job kind's open work across every space this server's worker serves.

@@ -298,3 +298,21 @@ func (t *TEIReranker) fellBack(err error) {
 
 // Metrics reports this process's rerank calls and fallbacks.
 func (t *TEIReranker) Metrics() RerankMetrics { return t.metrics.snapshot() }
+
+// RerankStageMetrics is one stage of the fallback chain: its place (0 first), provider and counts.
+type RerankStageMetrics struct {
+	Stage    int    `json:"stage"`
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	RerankMetrics
+}
+
+// StageMetrics reports every stage of the chain that starts at t, in the order they are tried.
+func (t *TEIReranker) StageMetrics() []RerankStageMetrics {
+	var out []RerankStageMetrics
+	for i, r := 0, t; r != nil; i, r = i+1, r.next {
+		u := r.usage()
+		out = append(out, RerankStageMetrics{Stage: i, Provider: u.Provider, Model: u.Model, RerankMetrics: r.Metrics()})
+	}
+	return out
+}

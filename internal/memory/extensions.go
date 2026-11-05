@@ -214,6 +214,7 @@ func (x Extensions) afterModelCall(ctx context.Context, m modelCallSpec, usage P
 			slog.Error("model call hook panicked", "operation", m.operation)
 		}
 	}()
+	defer observeHook("model_call_hook_after", nil, time.Now())
 	result := ModelCallResult{OK: callErr == nil, Model: usage.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,
 		CachedInputTokens: usage.CachedInputTokens, LatencyMS: elapsed.Milliseconds()}
 	if callErr != nil {
@@ -227,11 +228,13 @@ var ErrExtensionRefused = errors.New("refused by extension")
 
 // guard runs a refusing hook; a panic counts as a refusal (fail closed).
 func guard(name string, hook func() error) (err error) {
+	start := time.Now()
 	defer func() {
 		if recover() != nil {
 			slog.Error("extension hook panicked", "hook", name)
 			err = ErrExtensionRefused
 		}
+		observeHook(name, err, start)
 	}()
 	return hook()
 }
@@ -267,6 +270,7 @@ func withOperation[T any](s *Service, ctx context.Context, token, op string, sco
 				slog.Error("operation hook panicked", "operation", op)
 			}
 		}()
+		defer observeHook("operation_hook_after", nil, time.Now())
 		hook.AfterOperation(context.WithoutCancel(ctx), actor, op, input, out, err)
 	}()
 	return out, err
@@ -303,6 +307,7 @@ func (x Extensions) afterTransition(ctx context.Context, col, status string, app
 			slog.Error("approve hook panicked", "id", approved.ID)
 		}
 	}()
+	defer observeHook("approve_hook", nil, time.Now())
 	x.ApproveHook.AfterApprove(context.WithoutCancel(ctx), approved)
 }
 

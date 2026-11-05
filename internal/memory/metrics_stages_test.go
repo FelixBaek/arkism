@@ -64,6 +64,25 @@ func TestStageAndQueueMetrics(t *testing.T) {
 	}
 }
 
+func TestExtensionHookMetrics(t *testing.T) {
+	_ = guard("tenant_hook", func() error { return errors.New("no") })
+	_ = guard("job_hook", func() error { panic("boom") })
+	x := Extensions{ApproveHook: approveHookFunc(func(context.Context, Record) {})}
+	x.afterTransition(testCtx, "memory_candidates", "approved", Record{ID: "m1"})
+	body := promText(stageFamilies())
+	for _, want := range []string{`arkism_extension_hook_duration_seconds_count{hook="tenant_hook",outcome="refused"}`,
+		`arkism_extension_hook_duration_seconds_count{hook="job_hook",outcome="refused"}`,
+		`arkism_extension_hook_duration_seconds_bucket{hook="approve_hook",outcome="ok",le="0.05"}`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in\n%s", want, body)
+		}
+	}
+}
+
+type approveHookFunc func(context.Context, Record)
+
+func (f approveHookFunc) AfterApprove(ctx context.Context, r Record) { f(ctx, r) }
+
 func TestOperationAndReasoningMetrics(t *testing.T) {
 	// The registry is process-wide and other tests finish jobs too, so compare deltas.
 	value := func(body, series string) (n float64) {
