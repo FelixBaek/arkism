@@ -7347,7 +7347,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "별칭 추가": "Add alias",
   "별칭": "Alias",
   "자세히 · 프로젝트 ID 바꾸기": "Details · Change project ID",
-  "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.": "The project ID itself can only be changed on the server with memoryd --space-rename after stopping the server. You can change the display name and aliases right here.",
   "복제할 새 공간의 프로젝트 이름을 적어 주세요. 지금 공간과 달라야 해요.": "Please enter a project name for the new space to copy into. It must be different from the current space.",
   "복제할 것을 하나 이상 골라 주세요.": "Please pick at least one thing to copy.",
   "복제하는 중…": "Copying…",
@@ -7438,3 +7437,29 @@ Object.assign(window.ArkismI18nEN.strings, {
   "타임라인": "Timeline",
   "기억 타임라인": "Memory timeline",
   "더 이전 불러오기": "Load earlier" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.": "A job is running in this space or it is under legal hold. Delete it again once the job is done.",
+  "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.": "That project ID is already in use. Enter a different one.",
+  "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요.": "This server can't do that right now. Ask your server admin.",
+  "새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.": "Enter a new project ID. It must differ from the current one and can't start with @.",
+  "권한 표 몇 개는 서버 관리자가 옮겨야 해요.": "A few permission tables need to be moved by the server admin.",
+  "새 프로젝트 ID": "New project ID",
+  "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요.": "Unlike the display name, the project ID is how agents and other devices find this space. You'll see what moves first.",
+  "새 ID": "New ID",
+  "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요.": "Member and permission tables can't be moved with this account, so they stay under the old ID. The server admin can move them with memoryd --space-rename.",
+  "ID 바꾸기": "Change ID",
+  "처리하지 못했어요.": "Couldn't do that.",
+  "· 마지막 활동": "· Last activity",
+  "이름·ID·@별칭으로 찾기": "Search by name, ID or @alias",
+  "공간 찾기": "Search spaces",
+  "찾는 공간이 없어요.": "No matching spaces.",
+  "고르기 취소": "Clear selection" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "프로젝트 ID를 ‘{0}’에서 ‘{1}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.": "Change the project ID from ‘{0}’ to ‘{1}’?\nAll memories and settings of this space move to the new ID. Agents and other devices must switch to the new ID to find this space.",
+  "프로젝트 ID를 ‘{0}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘{1}’로 바꿔 주세요.{2}": "Changed the project ID to ‘{0}’. Switch the project to ‘{1}’ in Settings › Connection.{2}",
+  "기록 {0}개가 ‘{1}’로 옮겨져요.": "{0} records will move to ‘{1}’.",
+  "‘{0}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.": "Delete the space ‘{0}’?\nAll memories, documents, attachments and settings of this space are deleted and can't be brought back. To delete, type the project ID exactly.",
+  "고른 공간 {0}개를 지울까요?\n{1}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수({2})를 적어 주세요.": "Delete the {0} selected spaces?\n{1}\nAll memories, documents, attachments and settings in them are deleted and can't be brought back. To delete, type the number of spaces ({2}).",
+  "공간 {0}개를 지웠어요.": "Deleted {0} spaces.",
+  "{0} 고르기": "Select {0}",
+  "고른 공간 {0}개 지우기": "Delete {0} selected spaces" });

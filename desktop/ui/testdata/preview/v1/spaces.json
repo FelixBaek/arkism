@@ -1,8 +1,66 @@
 {
  "items": [
-  {"workspace_id": "default", "project_id": "default", "revision": 3, "config": {"display_name": "기본 공간", "aliases": ["main", "home"]}, "counts": {"memories": 42}},
-  {"workspace_id": "default", "project_id": "orbit", "revision": 1, "config": {"display_name": "Orbit", "aliases": ["orbit-app"]}, "counts": {"memories": 18}},
-  {"workspace_id": "default", "project_id": "side-notes", "revision": 0, "config": {"display_name": "", "aliases": []}, "counts": {"memories": 3}}
+  {
+   "workspace_id": "default",
+   "project_id": "default",
+   "revision": 3,
+   "config": {
+    "display_name": "기본 공간",
+    "aliases": [
+     "main",
+     "home"
+    ]
+   },
+   "counts": {
+    "memories": 42
+   },
+   "created": "2026-02-14T09:00:00Z",
+   "last_activity": "2026-11-05T17:20:00Z"
+  },
+  {
+   "workspace_id": "default",
+   "project_id": "orbit",
+   "revision": 1,
+   "config": {
+    "display_name": "Orbit",
+    "aliases": [
+     "orbit-app"
+    ]
+   },
+   "counts": {
+    "memories": 18
+   },
+   "created": "2026-06-03T11:00:00Z",
+   "last_activity": "2026-10-28T08:10:00Z"
+  },
+  {
+   "workspace_id": "default",
+   "project_id": "side-notes",
+   "revision": 0,
+   "config": {
+    "display_name": "",
+    "aliases": []
+   },
+   "counts": {
+    "memories": 3
+   },
+   "created": "2026-09-21T15:30:00Z",
+   "last_activity": "2026-09-22T10:00:00Z"
+  },
+  {
+   "workspace_id": "default",
+   "project_id": "old-test",
+   "revision": 0,
+   "config": {
+    "display_name": "예전 테스트",
+    "aliases": []
+   },
+   "counts": {
+    "memories": 7
+   },
+   "created": "2026-01-05T10:00:00Z",
+   "last_activity": "2026-01-20T12:00:00Z"
+  }
  ],
  "next": ""
 }

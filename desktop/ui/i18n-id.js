@@ -6127,7 +6127,6 @@
  "별칭 추가": "Tambah alias",
  "별칭": "Alias",
  "자세히 · 프로젝트 ID 바꾸기": "Rincian · Ganti ID proyek",
- "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.": "ID proyek sendiri hanya bisa diganti di server dengan memoryd --space-rename setelah server dihentikan. Nama yang ditampilkan dan alias bisa diganti langsung di sini.",
  "복제할 새 공간의 프로젝트 이름을 적어 주세요. 지금 공간과 달라야 해요.": "Tulis nama proyek untuk ruang baru hasil salinan. Harus berbeda dari ruang saat ini.",
  "복제할 것을 하나 이상 골라 주세요.": "Pilih minimal satu hal untuk disalin.",
  "복제하는 중…": "Menyalin…",
@@ -6194,7 +6193,23 @@
  "간격: 한 달": "Jarak: sebulan",
  "타임라인": "Linimasa",
  "기억 타임라인": "Linimasa memori",
- "더 이전 불러오기": "Muat yang lebih lama"
+ "더 이전 불러오기": "Muat yang lebih lama",
+ "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.": "Ruang ini sedang menjalankan tugas atau sedang ditahan secara hukum. Hapus lagi setelah tugasnya selesai.",
+ "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.": "ID proyek itu sudah dipakai. Tulis nama lain.",
+ "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요.": "Server ini tidak bisa melakukannya sekarang. Tanyakan ke admin server.",
+ "새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.": "Tulis ID proyek yang baru. ID harus berbeda dari ID sekarang dan tidak boleh diawali @.",
+ "권한 표 몇 개는 서버 관리자가 옮겨야 해요.": "Beberapa tabel izin harus dipindahkan oleh admin server.",
+ "새 프로젝트 ID": "ID proyek baru",
+ "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요.": "Berbeda dengan nama yang terlihat, ID proyek adalah nama yang dipakai agen dan perangkat lain untuk memanggil ruang ini. Kamu akan melihat dulu apa saja yang dipindahkan.",
+ "새 ID": "ID baru",
+ "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요.": "Tabel anggota dan izin tidak bisa dipindahkan dengan akun ini, jadi tetap berada di ID lama. Admin server bisa memindahkannya dengan memoryd --space-rename.",
+ "ID 바꾸기": "Ganti ID",
+ "처리하지 못했어요.": "Tidak berhasil diproses.",
+ "· 마지막 활동": "· Aktivitas terakhir",
+ "이름·ID·@별칭으로 찾기": "Cari dengan nama, ID, atau @alias",
+ "공간 찾기": "Cari ruang",
+ "찾는 공간이 없어요.": "Ruang yang dicari tidak ada.",
+ "고르기 취소": "Batalkan pilihan"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7439,6 +7454,14 @@
  "근거 {0}개": "{0} sumber",
  "이전 {0}개 더 보기": "Tampilkan {0} sebelumnya",
  "{0}번 (30일)": "{0} kali (30 hari)",
- "관계를 따라가 찾은 기억 {0}개": "{0} memori ditemukan dengan mengikuti keterkaitannya"
+ "관계를 따라가 찾은 기억 {0}개": "{0} memori ditemukan dengan mengikuti keterkaitannya",
+ "프로젝트 ID를 ‘{0}’에서 ‘{1}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.": "Ganti ID proyek dari ‘{0}’ ke ‘{1}’?\nSemua memori dan pengaturan ruang ini akan dipindahkan ke ID baru. Agen dan perangkat lain juga harus beralih ke ID baru agar bisa menemukan ruang ini.",
+ "프로젝트 ID를 ‘{0}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘{1}’로 바꿔 주세요.{2}": "ID proyek diganti menjadi ‘{0}’. Ganti proyek ke ‘{1}’ di Pengaturan › Koneksi.{2}",
+ "기록 {0}개가 ‘{1}’로 옮겨져요.": "{0} catatan akan dipindahkan ke ‘{1}’.",
+ "‘{0}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.": "Hapus ruang ‘{0}’?\nSemua memori, bahan, file lampiran, dan pengaturan ruang ini akan dihapus dan tidak bisa dikembalikan. Untuk menghapus, tulis ID proyek persis seperti aslinya.",
+ "고른 공간 {0}개를 지울까요?\n{1}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수({2})를 적어 주세요.": "Hapus {0} ruang yang dipilih?\n{1}\nSemua memori, bahan, file lampiran, dan pengaturan di dalamnya akan dihapus dan tidak bisa dikembalikan. Untuk menghapus, tulis jumlah ruang ({2}).",
+ "공간 {0}개를 지웠어요.": "{0} ruang sudah dihapus.",
+ "{0} 고르기": "Pilih {0}",
+ "고른 공간 {0}개 지우기": "Hapus {0} ruang yang dipilih"
  }
 };

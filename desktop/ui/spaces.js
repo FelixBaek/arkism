@@ -1,6 +1,7 @@
 // @ts-check
 // 설정 › 기억 공간, below the space's own settings: moving a space (bundle export/import, also as a template), its name
-// and aliases, cloning it, and every space of the workspace (GET /v1/spaces). Over /v1/spaces/{workspace}/{project}/…:
+// and aliases, its project id (rename, preview first), cloning it, and every space of the workspace (GET /v1/spaces),
+// searchable, where a person deletes one or several spaces (POST /v1/spaces/delete, after typing a confirm). Over /v1/spaces/{workspace}/{project}/…:
 // export · import · clone answer with a job read until done; aliases and the name are a person's own config writes.
 // Nothing imported or cloned is saved directly: memories land as candidates, a template's rules and outlines as proposals.
 (function (root) {
@@ -35,13 +36,25 @@
     }
     return out;
   }
-  const lib = { ALIAS, PARTS, MORE_PARTS, primaryMoves, bundlePreview };
+  // the list filter: project id, shown name or an alias contains the words typed (any case)
+  function matchSpace(s, q) {
+    const words = String(q || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const hay = [s.project_id, s.config?.display_name, ...(s.config?.aliases || []).map((a) => `@${a}`)].join(" ").toLowerCase();
+    return words.every((w) => hay.includes(w));
+  }
+  // a bulk delete answer → the ids that went and the ones that did not, with their error codes
+  function deleteOutcome(batch) {
+    const done = [], failed = [];
+    for (const r of batch?.results || []) (r.error ? failed : done).push(r.error ? [r.project_id, r.error] : r.project_id);
+    return { done, failed };
+  }
+  const lib = { ALIAS, PARTS, MORE_PARTS, primaryMoves, bundlePreview, matchSpace, deleteOutcome };
 
   function create(ctx) {
     const { state, el, button, request, query, notice, render, go, pickFile, saveFile, spaceJob } = ctx;
-    const ask = (...a) => globalThis.ask(...a), askText = (...a) => globalThis.askText(...a);
+    const ask = (...a) => globalThis.ask(...a), askText = (...a) => globalThis.askText(...a), askTyped = (...a) => globalThis.askTyped(...a);
     const human = () => state.caps?.actions?.review_decide !== false; // these writes take people only; an agent token never sees them
-    const S = { busy: false, line: "", warn: false, review: false, key: "", view: null, list: null, listErr: "", next: "", preview: null, parts: new Set(["config", "data"]), target: "" };
+    const S = { busy: false, line: "", warn: false, review: false, key: "", view: null, list: null, listErr: "", next: "", preview: null, parts: new Set(["config", "data"]), target: "", find: "", picked: new Set(), newID: "", plan: null };
     const scopeKey = () => JSON.stringify([state.server, state.scope?.workspace_id, state.scope?.project_id]);
     const enc = encodeURIComponent, data = (node) => { node.dataset.noI18n = ""; return node; }; // server text and ids stay as they are
     const spacePath = (p = state.scope?.project_id) => {
@@ -49,17 +62,21 @@
       if (!w || !p) throw new Error("no_space");
       return `/v1/spaces/${enc(w)}/${enc(p)}`;
     };
+    const answer = (at) => (S.line && (S.at || "move") === at ? [el("p", `pg-hint${S.warn ? " warn" : ""}`, S.line)] : []);
     const redraw = () => { if (state.view === "settings" && state.settingsTab === "space") render(false); };
-    const show = (line, warn = false, review = false) => { Object.assign(S, { line, warn, review }); redraw(); };
+    const show = (line, warn = false, review = false) => { if (!S.busy) S.at = "move"; Object.assign(S, { line, warn, review }); redraw(); };
     const ERR = { access_denied: "이 계정에는 기억을 밖으로 내보낼 권한이 없어요. 서버 관리자에게 'external:space_bundle' 권한을 받아 주세요.",
       invalid_request: "Arkism에서 내보낸 기억 공간 파일인지 확인해 주세요.", payload_too_large: "파일이 너무 커요. 8MB까지 가져올 수 있어요.",
       no_space: "작업 공간과 프로젝트가 정해지지 않았어요. 설정 › 고급 › 연결에서 범위를 먼저 정해 주세요.",
       conflict: "설정을 저장한 적 있는 공간에는 템플릿을 넣을 수 없어요. 새 공간에 가져와 주세요.", handle_taken: "이미 다른 공간이 쓰는 별칭이에요.",
-      revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", not_found: "찾을 수 없는 공간이에요." };
+      revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", not_found: "찾을 수 없는 공간이에요.",
+      space_busy: "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.", id_taken: "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.",
+      unavailable: "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요." };
     const errText = (e) => ERR[e?.message] || "처리하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.";
-    async function run(work) {
+    // at: the group that shows the answer line (move, name or list)
+    async function run(work, at = "move") {
       if (S.busy) return;
-      S.busy = true;
+      S.busy = true; S.at = at;
       try { await work(); } catch (e) { show(errText(e), true); }
       S.busy = false;
       redraw();
@@ -144,7 +161,7 @@
       if (S.preview) tpl.push(previewCard(kit));
       g.append(kit.more("자세히 · 템플릿", ...tpl));
       if (S.preview) g.lastElementChild.open = true;
-      if (S.line) g.append(el("p", `pg-hint${S.warn ? " warn" : ""}`, S.line));
+      g.append(...answer("move"));
       if (S.review) g.append(button("후보 확인하러 가기", "primary", null, () => go("memories", "candidate")));
       return g;
     }
@@ -190,8 +207,43 @@
       if (!aliases.length) chips.append(el("p", "meta", "별칭이 없어요."));
       const add = button("별칭 추가", "small", null, addAlias); add.disabled = !can || S.busy;
       g.append(kit.line("별칭", "", add), chips);
-      g.append(kit.more("자세히 · 프로젝트 ID 바꾸기", el("p", "pg-hint", "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.")));
+      g.append(...answer("name"));
+      const more = kit.more("자세히 · 프로젝트 ID 바꾸기", ...idChange(kit, can));
+      if (S.plan) more.open = true;
+      g.append(more);
       return g;
+    }
+    // 프로젝트 ID 바꾸기: POST …/rename, first execute=false (what would move), then the move itself after a confirm
+    const renameCall = (execute) => request(`${spacePath()}/rename`, { method: "POST", body: JSON.stringify({ project_id: S.plan?.to || S.newID.trim(), execute }) })
+      .catch((e) => { throw new Error(e?.message === "revision_conflict" ? "id_taken" : e?.message === "dependency_unavailable" ? "unavailable" : e?.message); });
+    const previewID = () => run(async () => {
+      const to = S.newID.trim();
+      if (!to || to === state.scope?.project_id || to.startsWith("@")) { show("새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.", true); return; }
+      const r = await renameCall(false);
+      S.plan = { to, rows: Object.values(r.records || {}).reduce((n, x) => n + x, 0), skipped: r.skipped || [] }; show("");
+    }, "name");
+    const applyID = () => run(async () => {
+      const { to } = S.plan, from = state.scope?.project_id;
+      if (!(await ask(`프로젝트 ID를 ‘${from}’에서 ‘${to}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.`, "바꾸기"))) return;
+      const r = await renameCall(true);
+      S.plan = null; S.newID = "";
+      show(`프로젝트 ID를 ‘${to}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘${to}’로 바꿔 주세요.${r.skipped?.length ? " 권한 표 몇 개는 서버 관리자가 옮겨야 해요." : ""}`);
+      void reload();
+    }, "name");
+    function idChange(kit, can) {
+      const input = el("input", "sp-newid"); input.value = S.newID; input.maxLength = 128; input.placeholder = "새 프로젝트 ID"; input.setAttribute("aria-label", "새 프로젝트 ID");
+      input.addEventListener("input", () => { S.newID = input.value; if (S.plan) { S.plan = null; redraw(); } });
+      const check = button("미리 보기", "small", null, previewID); check.disabled = S.busy;
+      const out = [el("p", "pg-hint", "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요."), ...(can ? [kit.line("새 ID", "", input), check] : [])];
+      if (S.plan) {
+        const card = el("div", "d-action sp-preview");
+        card.append(el("strong", "", `기록 ${S.plan.rows.toLocaleString()}개가 ‘${S.plan.to}’로 옮겨져요.`));
+        if (S.plan.skipped.length) card.append(el("p", "meta", "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요."));
+        const row = el("div", "v4s-actions"), ok = button("ID 바꾸기", "primary", null, applyID); ok.disabled = S.busy;
+        row.append(ok, button("취소", "ghost", null, () => { S.plan = null; redraw(); }));
+        card.append(row); out.push(card);
+      }
+      return out;
     }
 
     // ---------------------------------------------------------- 공간 복제
@@ -223,25 +275,63 @@
       if (!page) { S.listErr = "공간 목록을 더 불러오지 못했어요."; redraw(); return; }
       S.list = [...(S.list || []), ...(page.items || [])]; S.next = page.next || ""; redraw();
     }
+    // 지우기: one space after typing its project id, several after typing how many; the server deletes each on its own
+    const deleteSpaces = (ids) => run(async () => {
+      const ok = ids.length === 1
+        ? await askTyped(`‘${ids[0]}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.`, ids[0], "지우기")
+        : await askTyped(`고른 공간 ${ids.length}개를 지울까요?\n${ids.join(", ")}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수(${ids.length})를 적어 주세요.`, String(ids.length), "모두 지우기");
+      if (!ok) return;
+      show("지우는 중…");
+      const { done, failed } = deleteOutcome(await request(`/v1/spaces/delete?${query()}`, { method: "POST", body: JSON.stringify({ spaces: ids.map((id) => ({ project_id: id, confirm: id })) }) }));
+      S.list = (S.list || []).filter((s) => !done.includes(s.project_id));
+      for (const id of done) S.picked.delete(id);
+      const why = (code) => ERR[code === "revision_conflict" ? "space_busy" : code] || "처리하지 못했어요.";
+      show([done.length ? `공간 ${done.length}개를 지웠어요.` : "", ...failed.map(([id, code]) => `‘${id}’: ${why(code)}`)].filter(Boolean).join(" "), failed.length > 0);
+    }, "list");
+    const day = (v) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString() : "—"; };
+    function spaceRow(s, can) {
+      const here = s.project_id === state.scope?.project_id, name = s.config?.display_name || s.project_id;
+      const t = el("div"), meta = el("small"), r = el("div", "setting sp-row");
+      meta.append(data(el("span", "mono", s.project_id)), el("span", "", ` · 기억 ${(s.counts?.memories || 0).toLocaleString()}개`), ...(s.config?.aliases?.length ? [data(el("span", "", ` · ${s.config.aliases.map((a) => `@${a}`).join(" ")}`))] : []));
+      const when = el("small", "sp-when"); when.append(el("span", "", "만든 날 "), data(el("span", "", day(s.created))), el("span", "", " · 마지막 활동 "), data(el("span", "", day(s.last_activity))));
+      t.append(data(el("strong", here ? "sp-here" : "", name)), meta, when);
+      if (can && !here) { // the space in use is not deleted from here: switch to another one first
+        const lab = el("label", "sp-check"), c = el("input"); c.type = "checkbox"; c.checked = S.picked.has(s.project_id); c.setAttribute("aria-label", `${s.project_id} 고르기`);
+        c.addEventListener("change", () => { if (c.checked) S.picked.add(s.project_id); else S.picked.delete(s.project_id); redraw(); });
+        lab.append(c); r.append(lab);
+      } else if (can) r.append(el("span", "sp-gap")); // keeps the names in one column
+      const right = el("span", "v4s-actions");
+      if (here) right.append(el("span", "sp-here", "지금 공간"));
+      else if (can) { const x = button("지우기", "small ghost", null, () => deleteSpaces([s.project_id])); x.setAttribute("aria-label", `${s.project_id} 지우기`); x.disabled = S.busy; right.append(x); }
+      r.append(t, right);
+      return r;
+    }
     function listGroup(kit) {
       const g = kit.group("이 작업 공간의 공간", "기억이 있거나 설정을 저장한 공간이에요. 쓰는 공간은 설정 › 연결에서 바꿔요.");
       if (S.listErr) g.append(el("p", "pg-hint warn", S.listErr));
       if (!S.list) { g.append(el("p", "pg-hint", "불러오는 중…")); return g; }
-      if (!S.list.length && !S.listErr) g.append(el("p", "pg-hint", "아직 공간이 없어요."));
-      for (const s of S.list) {
-        const here = s.project_id === state.scope?.project_id, name = s.config?.display_name || s.project_id;
-        const t = el("div"), meta = el("small");
-        meta.append(data(el("span", "mono", s.project_id)), el("span", "", ` · 기억 ${(s.counts?.memories || 0).toLocaleString()}개`), ...(s.config?.aliases?.length ? [data(el("span", "", ` · ${s.config.aliases.map((a) => `@${a}`).join(" ")}`))] : []));
-        t.append(data(el("strong", here ? "sp-here" : "", name)), meta);
-        const r = el("div", "setting"); r.append(t, here ? el("span", "sp-here", "지금 공간") : el("span"));
-        g.append(r);
-      }
+      if (!S.list.length && !S.listErr) { g.append(el("p", "pg-hint", "아직 공간이 없어요.")); return g; }
+      const can = human() && state.caps?.actions?.delete_spaces !== false;
+      const find = el("input", "sp-find"); find.value = S.find; find.placeholder = "이름·ID·@별칭으로 찾기"; find.setAttribute("aria-label", "공간 찾기");
+      const none = el("p", "pg-hint", "찾는 공간이 없어요."), rows = S.list.map((s) => [s, spaceRow(s, can)]);
+      // rows hide in place while typing: a redraw would take the focus out of the box
+      const filter = () => { let n = 0; for (const [s, r] of rows) { r.hidden = !matchSpace(s, S.find); n += r.hidden ? 0 : 1; } none.hidden = n > 0; };
+      find.addEventListener("input", () => { S.find = find.value; filter(); });
+      g.append(find, none, ...rows.map(([, r]) => r));
+      filter();
       if (S.next) g.append(button("더 보기", "small", null, moreSpaces));
+      g.append(...answer("list"));
+      const picked = [...S.picked].filter((id) => S.list.some((s) => s.project_id === id));
+      if (can && picked.length) {
+        const bar = el("div", "v4s-actions"), go2 = button(`고른 공간 ${picked.length}개 지우기`, "danger", null, () => deleteSpaces(picked)); go2.disabled = S.busy;
+        bar.append(go2, button("고르기 취소", "ghost", null, () => { S.picked.clear(); redraw(); }));
+        g.append(bar);
+      }
       return g;
     }
 
     function groups(kit) {
-      if (S.key !== scopeKey()) { Object.assign(S, { view: null, list: null, preview: null, line: "", review: false, target: "" }); void load().catch(() => {}); }
+      if (S.key !== scopeKey()) { Object.assign(S, { view: null, list: null, preview: null, line: "", review: false, target: "", find: "", picked: new Set(), newID: "", plan: null }); void load().catch(() => {}); }
       return [nameGroup(kit), moveGroup(kit), cloneGroup(kit), listGroup(kit)];
     }
     return { groups };

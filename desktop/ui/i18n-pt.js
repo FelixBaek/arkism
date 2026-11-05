@@ -6127,7 +6127,6 @@
  "별칭 추가": "Adicionar apelido",
  "별칭": "Apelido",
  "자세히 · 프로젝트 ID 바꾸기": "Detalhes · Alterar o ID do projeto",
- "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.": "O ID do projeto em si só pode ser alterado no servidor, com memoryd --space-rename, depois de parar o servidor. O nome exibido e os apelidos você altera aqui mesmo.",
  "복제할 새 공간의 프로젝트 이름을 적어 주세요. 지금 공간과 달라야 해요.": "Digite o nome do projeto do novo espaço para onde copiar. Ele precisa ser diferente do espaço atual.",
  "복제할 것을 하나 이상 골라 주세요.": "Escolha pelo menos uma coisa para copiar.",
  "복제하는 중…": "Copiando…",
@@ -6194,7 +6193,23 @@
  "간격: 한 달": "Intervalo: um mês",
  "타임라인": "Linha do tempo",
  "기억 타임라인": "Linha do tempo das memórias",
- "더 이전 불러오기": "Carregar mais antigas"
+ "더 이전 불러오기": "Carregar mais antigas",
+ "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.": "Este espaço tem uma tarefa em andamento ou está sob retenção legal. Quando a tarefa terminar, tente excluir de novo.",
+ "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.": "Esse ID de projeto já existe. Digite outro nome.",
+ "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요.": "Este servidor não pode fazer isso agora. Fale com o administrador do servidor.",
+ "새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.": "Digite o novo ID do projeto. Ele precisa ser diferente do atual e não pode começar com @.",
+ "권한 표 몇 개는 서버 관리자가 옮겨야 해요.": "Algumas tabelas de permissões precisam ser movidas pelo administrador do servidor.",
+ "새 프로젝트 ID": "Novo ID do projeto",
+ "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요.": "Diferente do nome exibido, o ID do projeto é o nome que os agentes e outros dispositivos usam para chamar este espaço. Primeiro mostramos o que será movido.",
+ "새 ID": "Novo ID",
+ "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요.": "As tabelas de membros e permissões não podem ser movidas com esta conta, então ficam no ID antigo. O administrador do servidor pode movê-las com memoryd --space-rename.",
+ "ID 바꾸기": "Alterar ID",
+ "처리하지 못했어요.": "Não foi possível concluir.",
+ "· 마지막 활동": "· Última atividade",
+ "이름·ID·@별칭으로 찾기": "Buscar por nome, ID ou @apelido",
+ "공간 찾기": "Buscar espaços",
+ "찾는 공간이 없어요.": "Nenhum espaço encontrado.",
+ "고르기 취소": "Limpar seleção"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -7439,6 +7454,14 @@
  "근거 {0}개": "{0} fontes",
  "이전 {0}개 더 보기": "Ver {0} anteriores",
  "{0}번 (30일)": "{0} vezes (30 dias)",
- "관계를 따라가 찾은 기억 {0}개": "{0} memórias encontradas seguindo as conexões"
+ "관계를 따라가 찾은 기억 {0}개": "{0} memórias encontradas seguindo as conexões",
+ "프로젝트 ID를 ‘{0}’에서 ‘{1}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.": "Alterar o ID do projeto de ‘{0}’ para ‘{1}’?\nTodas as memórias e configurações deste espaço serão movidas para o novo ID. Os agentes e outros dispositivos também precisam mudar para o novo ID para encontrar este espaço.",
+ "프로젝트 ID를 ‘{0}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘{1}’로 바꿔 주세요.{2}": "O ID do projeto foi alterado para ‘{0}’. Em Configurações › Conexão, troque o projeto para ‘{1}’.{2}",
+ "기록 {0}개가 ‘{1}’로 옮겨져요.": "{0} registros serão movidos para ‘{1}’.",
+ "‘{0}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.": "Excluir o espaço ‘{0}’?\nTodas as memórias, materiais, arquivos anexados e configurações deste espaço serão excluídos e não poderão ser recuperados. Para excluir, digite o ID do projeto exatamente como está.",
+ "고른 공간 {0}개를 지울까요?\n{1}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수({2})를 적어 주세요.": "Excluir os {0} espaços selecionados?\n{1}\nTodas as memórias, materiais, arquivos anexados e configurações dentro deles serão excluídos e não poderão ser recuperados. Para excluir, digite o número de espaços ({2}).",
+ "공간 {0}개를 지웠어요.": "{0} espaços excluídos.",
+ "{0} 고르기": "Selecionar {0}",
+ "고른 공간 {0}개 지우기": "Excluir {0} espaços selecionados"
  }
 };

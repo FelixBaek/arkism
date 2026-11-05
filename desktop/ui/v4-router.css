@@ -529,8 +529,8 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .cat-body .rule select { appearance: none; -webkit-appearance: none; height: 36px; padding: 0 30px 0 14px; border: 1px solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256' fill='none' stroke='%23999' stroke-width='20' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M208 96l-80 80-80-80'/%3E%3C/svg%3E") no-repeat right 12px center / 10px; color: var(--nc-text); font: 400 calc(13px * var(--fs, 1)) var(--sans); text-align: center; }
 /* 고급 (Figma 198:6392): the wipe button reads amber like other caution text; the privacy search field is a plain one-line field */
 .v4-set-advanced .btn.danger { color: var(--nc-accent); }
-:is(#app, body) .v4-set-advanced .privacy-phrase input[type="search"] { height: 40px; padding: 0 12px; border: 0 !important; border-bottom: 1px solid var(--field-line) !important; border-radius: 0 !important; background: var(--field-tint) !important; box-shadow: none !important; font: 400 calc(13px * var(--fs, 1)) var(--sans); }
-:is(#app, body) .v4-set-advanced .privacy-phrase input[type="search"]:focus { outline: none; border-bottom: 2px solid var(--nc-accent) !important; }
+:is(#app, body) .v4-set-advanced .privacy-phrase input[type="search"], :is(#app, body) .v4-set-space input.sp-find { height: 40px; padding: 0 12px; border: 0 !important; border-bottom: 1px solid var(--field-line) !important; border-radius: 0 !important; background: var(--field-tint) !important; box-shadow: none !important; font: 400 calc(13px * var(--fs, 1)) var(--sans); }
+:is(#app, body) .v4-set-advanced .privacy-phrase input[type="search"]:focus, :is(#app, body) .v4-set-space input.sp-find:focus { outline: none; border-bottom: 2px solid var(--nc-accent) !important; }
 /* 모양 (Figma 198:6048): a narrower side column with a page-level heading */
 @media (min-width: 1181px) { .panel:has(.v4-set-appearance) > .detail { width: 340px; flex: none; } }
 .panel:has(.v4-set-appearance) .v4-side-sec > h3 { font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
@@ -563,6 +563,13 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set-space .pg-group .sp-chip .btn.link-btn { flex: none; width: auto; margin-left: 4px; padding: 0; min-height: 0; min-width: 0; height: auto; border: 0; border-radius: 0; background: none; color: var(--nc-muted); font: inherit; }
 .v4-set-space .sp-check { display: inline-flex; align-items: center; gap: 6px; font-size: calc(13px * var(--fs, 1)); color: var(--nc-text); cursor: pointer; }
 .v4-set-space .sp-check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--nc-accent); }
+/* the space list: a pick box before each row, the dates under the counts, the search box above */
+.v4-set-space .sp-row { display: flex; align-items: center; gap: 10px; }
+.v4-set-space .sp-row > div { flex: 1; min-width: 0; }
+.v4-set-space .sp-row .sp-when { display: block; color: var(--nc-quiet); }
+.v4-set-space input.sp-find { width: 100%; margin: 4px 0 8px; }
+.v4-set-space .setting > input.sp-newid { flex: none; width: min(280px, 60%); }
+.v4-set-space .sp-row .sp-gap { flex: none; width: 1rem; }
 .v4-set-space .sp-preview { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
 .v4-set-space .sp-preview p { margin: 0; overflow-wrap: anywhere; }
 .v4-set-space .setting small .mono { font: calc(12px * var(--fs, 1)) var(--mono); }

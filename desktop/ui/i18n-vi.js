@@ -6127,7 +6127,6 @@
  "별칭 추가": "Thêm bí danh",
  "별칭": "Bí danh",
  "자세히 · 프로젝트 ID 바꾸기": "Chi tiết · Đổi mã dự án",
- "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.": "Bản thân mã dự án chỉ có thể đổi trên máy chủ bằng memoryd --space-rename sau khi dừng máy chủ. Tên hiển thị và bí danh thì đổi ngay tại đây.",
  "복제할 새 공간의 프로젝트 이름을 적어 주세요. 지금 공간과 달라야 해요.": "Hãy nhập tên dự án cho không gian mới sẽ sao chép vào. Tên phải khác không gian hiện tại.",
  "복제할 것을 하나 이상 골라 주세요.": "Hãy chọn ít nhất một thứ để sao chép.",
  "복제하는 중…": "Đang sao chép…",
@@ -6194,7 +6193,23 @@
  "간격: 한 달": "Khoảng cách: một tháng",
  "타임라인": "Dòng thời gian",
  "기억 타임라인": "Dòng thời gian ký ức",
- "더 이전 불러오기": "Tải thêm mục cũ hơn"
+ "더 이전 불러오기": "Tải thêm mục cũ hơn",
+ "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.": "Không gian này đang có tác vụ chạy hoặc đang bị giữ theo quy định pháp lý. Vui lòng xóa lại sau khi tác vụ kết thúc.",
+ "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.": "ID dự án này đã được dùng rồi. Vui lòng nhập tên khác.",
+ "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요.": "Máy chủ này hiện chưa làm được việc đó. Vui lòng hỏi quản trị viên máy chủ.",
+ "새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.": "Vui lòng nhập ID dự án mới. ID phải khác ID hiện tại và không được bắt đầu bằng @.",
+ "권한 표 몇 개는 서버 관리자가 옮겨야 해요.": "Một số bảng quyền cần quản trị viên máy chủ chuyển giúp.",
+ "새 프로젝트 ID": "ID dự án mới",
+ "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요.": "Khác với tên hiển thị, ID dự án là tên mà tác tử và các thiết bị khác dùng để gọi không gian này. Trước tiên, bạn sẽ thấy những gì được chuyển.",
+ "새 ID": "ID mới",
+ "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요.": "Bảng thành viên và bảng quyền không thể chuyển bằng tài khoản này nên vẫn nằm ở ID cũ. Quản trị viên máy chủ có thể chuyển bằng memoryd --space-rename.",
+ "ID 바꾸기": "Đổi ID",
+ "처리하지 못했어요.": "Không xử lý được.",
+ "· 마지막 활동": "· Hoạt động gần nhất",
+ "이름·ID·@별칭으로 찾기": "Tìm theo tên, ID hoặc @bí danh",
+ "공간 찾기": "Tìm không gian",
+ "찾는 공간이 없어요.": "Không có không gian nào phù hợp.",
+ "고르기 취소": "Bỏ chọn"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7439,6 +7454,14 @@
  "근거 {0}개": "{0} nguồn",
  "이전 {0}개 더 보기": "Xem thêm {0} mục trước",
  "{0}번 (30일)": "{0} lần (30 ngày)",
- "관계를 따라가 찾은 기억 {0}개": "{0} ký ức tìm được nhờ lần theo các liên kết"
+ "관계를 따라가 찾은 기억 {0}개": "{0} ký ức tìm được nhờ lần theo các liên kết",
+ "프로젝트 ID를 ‘{0}’에서 ‘{1}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.": "Đổi ID dự án từ ‘{0}’ sang ‘{1}’?\nTất cả ký ức và cài đặt của không gian này sẽ được chuyển sang ID mới. Tác tử và các thiết bị khác cũng phải đổi sang ID mới thì mới tìm thấy không gian này.",
+ "프로젝트 ID를 ‘{0}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘{1}’로 바꿔 주세요.{2}": "Đã đổi ID dự án thành ‘{0}’. Vui lòng đổi dự án thành ‘{1}’ trong Cài đặt › Kết nối.{2}",
+ "기록 {0}개가 ‘{1}’로 옮겨져요.": "{0} bản ghi sẽ được chuyển sang ‘{1}’.",
+ "‘{0}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.": "Xóa không gian ‘{0}’?\nTất cả ký ức, tài liệu, tệp đính kèm và cài đặt của không gian này sẽ bị xóa và không thể khôi phục. Để xóa, vui lòng nhập chính xác ID dự án.",
+ "고른 공간 {0}개를 지울까요?\n{1}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수({2})를 적어 주세요.": "Xóa {0} không gian đã chọn?\n{1}\nTất cả ký ức, tài liệu, tệp đính kèm và cài đặt bên trong sẽ bị xóa và không thể khôi phục. Để xóa, vui lòng nhập số lượng không gian ({2}).",
+ "공간 {0}개를 지웠어요.": "Đã xóa {0} không gian.",
+ "{0} 고르기": "Chọn {0}",
+ "고른 공간 {0}개 지우기": "Xóa {0} không gian đã chọn"
  }
 };

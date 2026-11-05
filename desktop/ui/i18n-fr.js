@@ -6127,7 +6127,6 @@
  "별칭 추가": "Ajouter un alias",
  "별칭": "Alias",
  "자세히 · 프로젝트 ID 바꾸기": "Détails · Changer l'ID du projet",
- "프로젝트 ID 자체는 서버를 멈춘 뒤 서버에서 memoryd --space-rename 으로만 바꿀 수 있어요. 보이는 이름과 별칭은 여기서 바로 바꿔요.": "L'ID du projet lui-même ne peut être changé que sur le serveur, avec memoryd --space-rename, après avoir arrêté le serveur. Le nom affiché et les alias se modifient directement ici.",
  "복제할 새 공간의 프로젝트 이름을 적어 주세요. 지금 공간과 달라야 해요.": "Saisissez le nom de projet du nouvel espace à créer par copie. Il doit être différent de l'espace actuel.",
  "복제할 것을 하나 이상 골라 주세요.": "Choisissez au moins un élément à copier.",
  "복제하는 중…": "Copie en cours…",
@@ -6194,7 +6193,23 @@
  "간격: 한 달": "Intervalle : mois",
  "타임라인": "Chronologie",
  "기억 타임라인": "Chronologie des souvenirs",
- "더 이전 불러오기": "Charger les plus anciens"
+ "더 이전 불러오기": "Charger les plus anciens",
+ "작업이 돌고 있거나 법적 보존 중인 공간이에요. 작업이 끝난 뒤 다시 지워 주세요.": "Une tâche est en cours dans cet espace, ou il est sous conservation légale. Supprimez-le à nouveau une fois la tâche terminée.",
+ "이미 있는 프로젝트 ID예요. 다른 이름을 적어 주세요.": "Cet ID de projet existe déjà. Saisissez un autre nom.",
+ "이 서버에서는 지금 할 수 없어요. 서버 관리자에게 물어봐 주세요.": "Ce serveur ne peut pas le faire pour le moment. Demandez à l'administrateur du serveur.",
+ "새 프로젝트 ID를 적어 주세요. 지금 ID와 달라야 하고 @로 시작할 수 없어요.": "Saisissez un nouvel ID de projet. Il doit être différent de l'ID actuel et ne peut pas commencer par @.",
+ "권한 표 몇 개는 서버 관리자가 옮겨야 해요.": "Certains tableaux de permissions doivent être déplacés par l'administrateur du serveur.",
+ "새 프로젝트 ID": "Nouvel ID de projet",
+ "보이는 이름과 달리 프로젝트 ID는 에이전트와 다른 기기가 이 공간을 부르는 이름이에요. 먼저 무엇이 옮겨지는지 보여 줘요.": "Contrairement au nom affiché, l'ID de projet est le nom par lequel les agents et les autres appareils désignent cet espace. Nous vous montrons d'abord ce qui sera déplacé.",
+ "새 ID": "Nouvel ID",
+ "구성원·권한 표는 이 계정으로 옮길 수 없어 예전 ID에 남아요. 서버 관리자가 memoryd --space-rename 으로 옮길 수 있어요.": "Les tableaux des membres et des permissions ne peuvent pas être déplacés avec ce compte : ils restent sous l'ancien ID. L'administrateur du serveur peut les déplacer avec memoryd --space-rename.",
+ "ID 바꾸기": "Changer l'ID",
+ "처리하지 못했어요.": "L'opération a échoué.",
+ "· 마지막 활동": "· Dernière activité",
+ "이름·ID·@별칭으로 찾기": "Rechercher par nom, ID ou @alias",
+ "공간 찾기": "Rechercher un espace",
+ "찾는 공간이 없어요.": "Aucun espace trouvé.",
+ "고르기 취소": "Annuler la sélection"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -7439,6 +7454,14 @@
  "근거 {0}개": "{0} sources",
  "이전 {0}개 더 보기": "Afficher {0} plus anciennes",
  "{0}번 (30일)": "{0} fois (30 jours)",
- "관계를 따라가 찾은 기억 {0}개": "{0} souvenirs trouvés en suivant les liens"
+ "관계를 따라가 찾은 기억 {0}개": "{0} souvenirs trouvés en suivant les liens",
+ "프로젝트 ID를 ‘{0}’에서 ‘{1}’로 바꿀까요?\n이 공간의 기억과 설정이 모두 새 ID로 옮겨져요. 에이전트와 다른 기기도 새 ID로 바꿔야 이 공간을 찾아요.": "Changer l'ID de projet de « {0} » en « {1} » ?\nTous les souvenirs et réglages de cet espace seront déplacés vers le nouvel ID. Les agents et les autres appareils doivent aussi passer au nouvel ID pour retrouver cet espace.",
+ "프로젝트 ID를 ‘{0}’로 바꿨어요. 설정 › 연결에서 프로젝트를 ‘{1}’로 바꿔 주세요.{2}": "L'ID de projet est maintenant « {0} ». Dans Réglages › Connexion, changez le projet en « {1} ».{2}",
+ "기록 {0}개가 ‘{1}’로 옮겨져요.": "{0} enregistrements seront déplacés vers « {1} ».",
+ "‘{0}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.": "Supprimer l'espace « {0} » ?\nTous les souvenirs, documents, fichiers joints et réglages de cet espace seront supprimés et ne pourront pas être récupérés. Pour le supprimer, saisissez exactement l'ID du projet.",
+ "고른 공간 {0}개를 지울까요?\n{1}\n안의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 공간 수({2})를 적어 주세요.": "Supprimer les {0} espaces sélectionnés ?\n{1}\nTous les souvenirs, documents, fichiers joints et réglages qu'ils contiennent seront supprimés et ne pourront pas être récupérés. Pour les supprimer, saisissez le nombre d'espaces ({2}).",
+ "공간 {0}개를 지웠어요.": "{0} espaces supprimés.",
+ "{0} 고르기": "Sélectionner {0}",
+ "고른 공간 {0}개 지우기": "Supprimer les {0} espaces sélectionnés"
  }
 };
