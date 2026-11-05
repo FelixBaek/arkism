@@ -5587,8 +5587,8 @@
  "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Ini aturan yang disarankan agen. Jika disimpan, aturan ini disetujui dan langsung dipakai.",
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Mengurutkan ulang sekali lagi memori yang ditemukan. Hanya dipakai jika server sudah menyiapkan fitur pemilihan ulang.",
  "서버 모델로 다시 고르기": "Pilih ulang dengan model server",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Model server membaca 20 memori teratas yang ditemukan lalu mengurutkannya ulang. Awalnya dalam keadaan mati.",
- "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Sedang aktif. Setiap kali mencari, model server dipanggil dan memakai anggaran model."
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Sedang aktif. Setiap kali mencari, model server dipanggil dan memakai anggaran model.",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Model server membaca 20 memori teratas yang ditemukan lalu menyusun ulang urutannya. Jika diaktifkan, setiap pencarian akan memakai kuota (anggaran) model."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

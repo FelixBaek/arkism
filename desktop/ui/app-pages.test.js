@@ -763,7 +763,7 @@ test("기억 공간: finding settings save as a PATCH; a revision conflict says 
   const t = () => text(app.$("#table"));
   const sw = (label) => app.$$("#table [aria-label]").find((n) => n.getAttribute("aria-label") === label && n.tagName !== "INPUT");
   const field = (label) => app.$$("#table input").find((n) => n.getAttribute("aria-label") === label);
-  assert.match(t(), /켜 두면 찾을 때마다 모델 사용량\(예산\)을 써요/, "rerank names its budget");
+  assert.match(t(), /켜면 찾을 때마다 모델 사용량\(예산\)을 써요/, "rerank names its budget");
   sw("뜻으로 찾기").click(); await app.settle();
   const budget = field("에이전트에 줄 기억 양"); budget.value = "3000"; budget.dispatchEvent(new app.window.Event("change")); await app.settle();
   const tok = field("답 길이 상한"); tok.value = "20"; tok.dispatchEvent(new app.window.Event("change")); await app.settle();

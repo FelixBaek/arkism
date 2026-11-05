@@ -5587,8 +5587,8 @@
  "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Cette règle a été suggérée par un agent. Si vous l'enregistrez, elle est approuvée et appliquée tout de suite.",
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Réorganise encore une fois l'ordre des souvenirs trouvés. Cette option ne fonctionne que si le serveur propose un service de reclassement.",
  "서버 모델로 다시 고르기": "Reclasser avec le modèle du serveur",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Le modèle du serveur lit les 20 premiers souvenirs trouvés et en réorganise l'ordre. Désactivé au départ.",
- "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "C'est activé. À chaque recherche, le modèle du serveur est sollicité et consomme du budget de modèle."
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "C'est activé. À chaque recherche, le modèle du serveur est sollicité et consomme du budget de modèle.",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Le modèle du serveur lit les 20 premiers souvenirs trouvés et en corrige l'ordre. Si vous l'activez, chaque recherche utilise votre quota d'utilisation du modèle (budget)."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",

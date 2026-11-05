@@ -6742,5 +6742,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
   "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Reorders the found memories once more. Used only when the server has a re-ranking service set up.",
   "서버 모델로 다시 고르기": "Re-rank with the server model",
-  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "The server model reads the top 20 found memories and reorders them. Off at first.",
   "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "It's on. Every search calls the server model and spends the model budget." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "The server model reads the top 20 found memories and reorders them. When on, every search uses model budget." });

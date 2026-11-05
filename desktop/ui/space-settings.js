@@ -274,7 +274,7 @@
       g.append(kit.line("검색 결과 다시 고르기", "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.",
         edit ? kit.sw(!!rr, "검색 결과 다시 고르기", (next) => { d.rerank = next; redraw(); }) : readOnly(rr ? "켜짐" : "꺼짐")), origin("rerank", () => { d.rerank = null; redraw(); }));
       const rm = !!(d?.rerank_model ?? S.eff.rerank_model);
-      g.append(kit.line("서버 모델로 다시 고르기", "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.",
+      g.append(kit.line("서버 모델로 다시 고르기", "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.",
         edit ? kit.sw(rm, "서버 모델로 다시 고르기", (next) => { d.rerank_model = next; redraw(); }) : readOnly(rm ? "켜짐" : "꺼짐")), origin("rerank_model", () => { d.rerank_model = null; redraw(); }));
       if (rm) g.append(el("p", "pg-hint warn", "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요."));
       const budget = numberBox(d?.recall_budget_tokens, 1, 64000, S.eff.recall_budget_tokens, "에이전트에 줄 기억 양", edit, (n) => { setDraft("recall_budget_tokens", n); redraw(); });
