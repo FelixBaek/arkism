@@ -29,6 +29,10 @@ source changes only; they do not claim that a signed installer is available.
   webhooks with retries (`MEMORY_WEBHOOK_KEY`), space export and import
   bundles and a memory wiki. Upgrade steps and new permissions are in
   [server mode](guide/server.md#upgrade-to-the-memory-review-features).
+- Optionally (`MEMORY_AUTO_DERIVE=on`, off by default) propose observations,
+  causal links and names after approvals; give topic summaries schedule,
+  after-consolidation, minimum-interval and filter triggers and a stale mark;
+  let a person approve a cited summary draft for a name.
 - Give agents `reflect`, `browse_memory`, causal and time options on `recall`,
   and the wiki folder tree over MCP; show these features in the desktop app.
 

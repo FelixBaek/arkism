@@ -60,6 +60,7 @@ func (s *Service) RestoreMemory(ctx context.Context, token, id string, in Memory
 	if err != nil {
 		return Record{}, err
 	}
+	s.afterMemoryApproval(ctx, actor.PrincipalID, &out)
 	return out, nil
 }
 

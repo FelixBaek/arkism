@@ -5,9 +5,13 @@ package memory
 // refreshes due mental models), causal link proposals and the model entity
 // pass. Each pass only proposes; a person approves what becomes active.
 //
+// It is off unless the operator sets MEMORY_AUTO_DERIVE=on: an upgrade must not
+// start spending the server model's daily calls on its own.
+//
 // One deduped job per scope (kind auto_derive in the jobs collection) counts
-// approvals. It runs once threshold approvals arrived, or interval after the
-// first unprocessed one, whichever is sooner. The shared worker (WorkOnce)
+// memories that became active (afterMemoryApproval, every approval path). It
+// runs once threshold approvals arrived, or interval after the first
+// unprocessed one, whichever is sooner. The shared worker (WorkOnce)
 // claims it like any job and runs one pass per claim, so a slow model never
 // holds the embedding queue for more than one bounded pass. Nothing is queued
 // or run without a server model, and every pass goes through the per-scope
@@ -37,6 +41,8 @@ type AutoDeriveJob struct {
 	Pass     int        `json:"pass" bson:"pass"`
 	Outcome  string     `json:"outcome,omitempty" bson:"outcome,omitempty"`
 	LastRun  *time.Time `json:"last_run,omitempty" bson:"last_run,omitempty"`
+	// Started is when the current run's first pass began; approvals after it are queued again at the end.
+	Started *time.Time `json:"started,omitempty" bson:"started,omitempty"`
 }
 
 type autoDeriveSettings struct {
@@ -45,12 +51,12 @@ type autoDeriveSettings struct {
 	Interval  time.Duration
 }
 
-// autoDeriveSettingsFor returns the server defaults, set by MEMORY_AUTO_DERIVE (off
-// disables), MEMORY_AUTO_DERIVE_THRESHOLD (approvals, 1-1000) and
+// autoDeriveSettingsFor returns the server defaults, set by MEMORY_AUTO_DERIVE (on
+// enables; off by default), MEMORY_AUTO_DERIVE_THRESHOLD (approvals, 1-1000) and
 // MEMORY_AUTO_DERIVE_INTERVAL (a duration, 1m-720h). Invalid values keep the default.
 // Per-space overrides plug in here: read the scope's SpaceConfig and let set fields win.
 func autoDeriveSettingsFor(Scope) autoDeriveSettings {
-	out := autoDeriveSettings{Enabled: os.Getenv("MEMORY_AUTO_DERIVE") != "off", Threshold: autoDeriveDefaultThreshold, Interval: autoDeriveDefaultInterval}
+	out := autoDeriveSettings{Enabled: os.Getenv("MEMORY_AUTO_DERIVE") == "on", Threshold: autoDeriveDefaultThreshold, Interval: autoDeriveDefaultInterval}
 	if n, err := strconv.Atoi(os.Getenv("MEMORY_AUTO_DERIVE_THRESHOLD")); err == nil && n >= 1 && n <= 1000 {
 		out.Threshold = n
 	}
@@ -65,16 +71,22 @@ func autoDeriveJobID(scope Scope) string {
 }
 
 // noteApprovedMemory counts one approval toward the scope's job. Best effort: an
-// approval never fails on it, and one arriving while the job runs is not counted
-// (that run reads every approved memory anyway).
+// approval never fails on it. One arriving while the job runs leaves the job alone
+// (the run holds its lease); the run queues itself again when it ends (Started).
 func (s *Service) noteApprovedMemory(ctx context.Context, scope Scope) {
 	set := autoDeriveSettingsFor(scope)
 	if s.Wiki == nil || !set.Enabled || s.Repo == nil || ctx.Err() != nil {
 		return
 	}
-	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		return countApproval(ctx, tx, scope, set, time.Now().UTC())
-	})
+	count := func() error {
+		return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+			return countApproval(ctx, tx, scope, set, time.Now().UTC())
+		})
+	}
+	err := count()
+	if errors.Is(err, ErrConflict) {
+		err = count() // two first approvals raced to insert the job; count on the one that won
+	}
 	if err != nil {
 		slog.Debug("automatic derivation not queued", "error", err)
 	}
@@ -120,6 +132,10 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 	if job.AutoDerive != nil {
 		state = *job.AutoDerive
 	}
+	if state.Pass == 0 || state.Started == nil {
+		started := time.Now().UTC()
+		state.Started, state.Approved = &started, 0 // this run consumes the approvals counted so far
+	}
 	outcome, err := s.autoDerivePass(ctx, workerToken, job.Scope, state.Pass)
 	if err != nil {
 		return err
@@ -128,6 +144,8 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 	state.Pass++
 	state.Outcome, state.LastRun = outcome, &now
 	done := outcome != "ok" || state.Pass >= len(autoDerivePasses)
+	// Approvals that arrived after the run began are not in every pass it made: start the next count.
+	again := done && (state.Approved > 0 || latestApprovedMemory(ctx, s.Repo, job.Scope).After(*state.Started))
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, err := tx.Get(ctx, colJobs, job.Scope, job.ID)
 		if err != nil {
@@ -137,7 +155,15 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 			return ErrConflict // the lease was lost (cancelled or reclaimed)
 		}
 		cur.Status, cur.RunAt, cur.LeaseToken, cur.LeaseUntil, cur.UpdatedAt = JobStatusPending, &now, "", time.Time{}, now
-		if done {
+		switch {
+		case again:
+			set := autoDeriveSettingsFor(job.Scope)
+			at := now.Add(set.Interval)
+			if state.Approved >= set.Threshold {
+				at = now
+			}
+			state.Pass, state.Started, state.Approved, cur.RunAt = 0, nil, max(state.Approved, 1), &at
+		case done:
 			cur.Status, cur.RunAt = JobStatusDone, nil
 		}
 		cur.Attempts, cur.AutoDerive = 0, &state

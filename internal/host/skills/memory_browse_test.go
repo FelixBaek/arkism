@@ -100,9 +100,10 @@ func TestBrowseMemoryReadsOneItem(t *testing.T) {
 	if _, err := callTool("browse_memory", j(t, `{"kind":"observations","id":"o1"}`)); err == nil {
 		t.Fatal("unreviewed observation returned")
 	}
-	calls = fakeRequest(t, `{"id":"e1","name":"Arkism","aliases":["ark"]}`)
+	calls = fakeRequest(t, `{"id":"e1","name":"Arkism","aliases":["ark"],"summary":{"text":"approved"},"summary_draft":{"text":"unreviewed"}}`)
 	out = structured(t, call(t, "browse_memory", `{"kind":"entities","id":"e1"}`))
-	if !strings.HasPrefix((*calls)[0].path, "/v1/entities/e1?") || asMap(field(out, "item"))["name"] != "Arkism" {
+	entity := asMap(field(out, "item"))
+	if !strings.HasPrefix((*calls)[0].path, "/v1/entities/e1?") || entity["name"] != "Arkism" || entity["summary"] == nil || entity["summary_draft"] != nil {
 		t.Fatal(*calls, out)
 	}
 	calls = fakeRequest(t, `{"id":"mm1","active":{"text":"approved"},"draft":{"text":"unreviewed"},"draft_diff":[1]}`)

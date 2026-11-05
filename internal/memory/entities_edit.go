@@ -102,7 +102,8 @@ func (s *Service) reviewEntitySummary(ctx context.Context, scope Scope, e *Named
 
 // DraftEntitySummary asks the server model for a cited summary of an entity from the approved
 // memories and observations its names recall (each one passes the transfer gate). The
-// draft waits on the entity for a person (PATCH summary_review); it is never published by itself.
+// draft waits on the entity for a person (PATCH summary_review); it is never published by itself,
+// and while it waits a new draft is refused (409), so a service caller cannot loop model calls.
 func (s *Service) DraftEntitySummary(ctx context.Context, token, id string, in EntitySummaryInput) (NamedEntity, error) {
 	d, err := s.entityEditor(ctx, token, in.Scope, id, roleService)
 	if err != nil {
@@ -123,6 +124,9 @@ func (s *Service) DraftEntitySummary(ctx context.Context, token, id string, in E
 	if err != nil {
 		return NamedEntity{}, err
 	}
+	if !in.DryRun && e.SummaryDraft != nil {
+		return NamedEntity{}, ErrConflict // one draft waits for a person; no new model call until it is decided
+	}
 	query := strings.Join(append([]string{e.Name}, e.Aliases...), " ")
 	draft, err := s.citedSummaryDraft(ctx, token, d, summaryRequest{scope: in.Scope, title: e.Type + ": " + e.Name, query: query}, &WikiJob{MaxTotalTokens: obsRunTokens})
 	if err != nil {
@@ -138,6 +142,9 @@ func (s *Service) DraftEntitySummary(ctx context.Context, token, id string, in E
 		cur, err := errEntityNotFound(g, id)
 		if err != nil {
 			return err
+		}
+		if cur.SummaryDraft != nil {
+			return ErrConflict
 		}
 		next := *cur
 		next.SummaryDraft, next.UpdatedAt = draft, now

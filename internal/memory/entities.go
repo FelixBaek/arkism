@@ -191,10 +191,15 @@ func (s *Service) entityEditor(ctx context.Context, token string, scope Scope, i
 	return d, nil
 }
 
-// afterMemoryApproval runs the deterministic entity pass for a newly approved
-// memory and counts it toward automatic derivation (auto_derive.go). It is best
-// effort and time boxed: approval never fails or waits long on it.
-func (s *Service) afterMemoryApproval(ctx context.Context, actor string, r Record) {
+// afterMemoryApproval is the one hook for a memory that became active (a review,
+// a person's approved -> active, a restore or a supersede): it counts toward
+// automatic derivation (auto_derive.go) and runs the deterministic entity pass.
+// It is best effort and time boxed: approval never fails or waits long on it.
+func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active *Record) {
+	if active == nil {
+		return
+	}
+	r := *active
 	defer func() {
 		if p := recover(); p != nil {
 			slog.Warn("entity extraction after approval panicked", "memory", r.ID)

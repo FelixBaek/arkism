@@ -1188,6 +1188,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	}
 	var result Record
 	committed := "" // the status this call wrote; a replayed review writes none
+	var activated *Record
 	if col == "skill_versions" && in.Status == "approved" {
 		r, e := s.Repo.Get(ctx, col, in.Scope, id)
 		if e != nil {
@@ -1251,6 +1252,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if result.ID == "" {
 			result = r
 		}
+		activated = activatedMemory(col, result) // replays never reach here
 		action := "transition:" + col + ":" + in.Status
 		if review != nil {
 			if e = recordMemoryReview(ctx, tx, id, d.PrincipalID, *review, result); e != nil {
@@ -1267,7 +1269,17 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, e
 	}
 	s.Extensions.afterTransition(ctx, col, committed, result)
+	s.afterMemoryApproval(ctx, d.PrincipalID, activated)
 	return result, nil
+}
+
+// activatedMemory is the memory a committed transition made active (a review's promoted
+// memory, or a person's approved -> active), or nil.
+func activatedMemory(col string, result Record) *Record {
+	if (col == "memory_candidates" || col == colMemories) && result.Status == statusActive {
+		return &result
+	}
+	return nil
 }
 
 func (s *Service) authorizeAutomatedTransition(ctx context.Context, token, col, id string, in ChangeInput, d Decision) error {

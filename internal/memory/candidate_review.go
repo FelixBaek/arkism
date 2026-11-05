@@ -62,14 +62,7 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 	if containsSecret(structuredText(in)) {
 		return Record{}, ErrSecretDetected
 	}
-	r, e := s.transition(ctx, token, "memory_candidates", id, ChangeInput{Scope: in.Scope, ExpectedRevision: in.ExpectedRevision, Status: status}, &in)
-	if e != nil {
-		return Record{}, e
-	}
-	if status == "approved" {
-		s.afterMemoryApproval(ctx, r.ApprovedBy, r)
-	}
-	return r, nil
+	return s.transition(ctx, token, "memory_candidates", id, ChangeInput{Scope: in.Scope, ExpectedRevision: in.ExpectedRevision, Status: status}, &in)
 }
 
 func candidateReviewStatus(in CandidateReviewInput) (string, error) {
