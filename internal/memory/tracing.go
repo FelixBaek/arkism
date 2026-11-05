@@ -260,6 +260,16 @@ func StartTracing(endpoint, service string, sampleRatio float64) (stop func(), e
 
 func (e *spanExporter) run(done chan struct{}) {
 	defer close(done)
+	// stop cancels a send in flight so it does not add its own 5s to drain's budget.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-e.quit:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
 	tick := time.NewTicker(traceFlushEvery)
 	defer tick.Stop()
 	batch := make([]finishedSpan, 0, traceBatchSize)
@@ -267,11 +277,11 @@ func (e *spanExporter) run(done chan struct{}) {
 		select {
 		case fs := <-e.queue:
 			if batch = append(batch, fs); len(batch) >= traceBatchSize {
-				e.flush(context.Background(), batch)
+				e.flush(ctx, batch)
 				batch = batch[:0]
 			}
 		case <-tick.C:
-			e.flush(context.Background(), batch)
+			e.flush(ctx, batch)
 			batch = batch[:0]
 		case <-e.quit:
 			e.drain(batch)
