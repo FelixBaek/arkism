@@ -94,7 +94,8 @@ func run() error {
 		return err
 	}
 	if endpoint := os.Getenv("ARKISM_OTLP_ENDPOINT"); endpoint != "" { // request tracing, off by default
-		stop, err := memory.StartTracing(endpoint, os.Getenv("ARKISM_OTLP_SERVICE_NAME"))
+		ratio, _ := strconv.ParseFloat(os.Getenv("ARKISM_OTLP_SAMPLE_RATIO"), 64) // unset or unreadable keeps every trace
+		stop, err := memory.StartTracing(endpoint, os.Getenv("ARKISM_OTLP_SERVICE_NAME"), ratio)
 		if err != nil {
 			return err
 		}

@@ -43,11 +43,22 @@ type ApproveHook interface {
 // ErrExtensionRefused wraps a hook's refusal; it answers like ErrInvalid.
 var ErrExtensionRefused = errors.New("refused by extension")
 
+// guard runs a refusing hook; a panic counts as a refusal (fail closed).
+func guard(name string, hook func() error) (err error) {
+	defer func() {
+		if recover() != nil {
+			slog.Error("extension hook panicked", "hook", name)
+			err = ErrExtensionRefused
+		}
+	}()
+	return hook()
+}
+
 func (x Extensions) validateCapture(ctx context.Context, actor Decision, in CaptureInput) error {
 	if x.CaptureValidator == nil {
 		return nil
 	}
-	if err := x.CaptureValidator.ValidateCapture(ctx, actor, in); err != nil {
+	if err := guard("capture_validator", func() error { return x.CaptureValidator.ValidateCapture(ctx, actor, in) }); err != nil {
 		slog.Info("capture refused by extension", "error", captureErrorCode(err))
 		return errors.Join(ErrInvalid, ErrExtensionRefused)
 	}
@@ -58,7 +69,7 @@ func (x Extensions) beforeJob(ctx context.Context, job Record) error {
 	if x.JobHook == nil {
 		return nil
 	}
-	if err := x.JobHook.BeforeJob(ctx, job); err != nil {
+	if err := guard("job_hook", func() error { return x.JobHook.BeforeJob(ctx, job) }); err != nil {
 		return errors.Join(ErrUnavailable, ErrExtensionRefused)
 	}
 	return nil

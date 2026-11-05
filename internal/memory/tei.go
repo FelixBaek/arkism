@@ -18,10 +18,10 @@ import (
 
 const (
 	teiProviderName = "tei"
-	// openAIEmbeddingsProvider is the same client speaking the OpenAI-compatible
+	// embeddingsAPIProvider is the same client speaking the common
 	// POST .../embeddings protocol (guide/server.md lists servers that answer it).
-	openAIEmbeddingsProvider = "openai_compatible"
-	teiDimension             = 1024
+	embeddingsAPIProvider = "embeddings_api"
+	teiDimension          = 1024
 	// TeiMaxBatchSize is the hard client-batch ceiling for the TEI CPU
 	// backend: it forces max_batch_requests=4 and dies with exit 139 (bounded
 	// queue panic) when an in-flight batch overflows it. The same ceiling is
@@ -32,12 +32,12 @@ const (
 
 // TEIConfig configures an already-running embedding endpoint: a Text Embeddings
 // Inference /embed URL, or any URL ending in /embeddings that speaks the
-// OpenAI-compatible embeddings protocol. The adapter does not select or deploy weights.
+// embeddings protocol. The adapter does not select or deploy weights.
 type TEIConfig struct {
 	EndpointURL string
 	// APIKey is sent as a bearer token; https (or loopback http) is enforced.
 	APIKey string
-	// SendDimensions asks an OpenAI-compatible server for 1024-dimension vectors
+	// SendDimensions asks an embeddings API server for 1024-dimension vectors
 	// (for models that shorten their output); servers that reject the field leave it off.
 	SendDimensions bool
 	Model          string
@@ -113,7 +113,7 @@ func NewTEIEmbedder(cfg TEIConfig) (*TEIEmbedder, error) {
 		endpoint: cfg.EndpointURL, model: model, revision: revision,
 		queryPrefix: queryPrefix, documentPrefix: documentPrefix,
 		provider: provider, apiKey: strings.TrimSpace(cfg.APIKey), sendDimensions: cfg.SendDimensions,
-		local:       isLoopbackHost(parsed.Hostname()),
+		local:       isPrivateNetworkHost(parsed.Hostname()),
 		space:       fmt.Sprintf("%s:%s:%s:%dd:%x", provider, model, revision, teiDimension, prefixHash[:]),
 		maxBatch:    maxBatch,
 		maxRequest:  positiveOr(cfg.MaxRequestBytes, defaultRequestMax),
@@ -127,7 +127,7 @@ func validTEIMetadata(value string) bool {
 }
 
 // validateTEIEndpoint names the protocol by the path: exactly /embed, or a path
-// ending in /embeddings (OpenAI-compatible).
+// ending in /embeddings (the shared embeddings API shape).
 func validateTEIEndpoint(raw string) (string, error) {
 	if err := validateEndpoint(raw); err != nil {
 		return "", fmt.Errorf("tei endpoint: %w", err)
@@ -140,12 +140,13 @@ func validateTEIEndpoint(raw string) (string, error) {
 	case parsed.Path == "/embed":
 		return teiProviderName, nil
 	case strings.HasSuffix(parsed.Path, "/embeddings"):
-		return openAIEmbeddingsProvider, nil
+		return embeddingsAPIProvider, nil
 	}
 	return "", fmt.Errorf("embedding endpoint must be the /embed or .../embeddings URL: %w", ErrInvalid)
 }
 
-// Local reports whether text stays on this host (a loopback endpoint).
+// Local reports whether text stays on this host or its private network
+// (a loopback or literal private address endpoint).
 func (t *TEIEmbedder) Local() bool { return t.local }
 
 func (t *TEIEmbedder) Space() string { return t.space }
@@ -159,14 +160,14 @@ func (t *TEIEmbedder) Embed(ctx context.Context, texts []string, purpose string)
 	return batch.Items, err
 }
 
-type openAIEmbeddingRequest struct {
+type embeddingsAPIRequest struct {
 	Model          string   `json:"model"`
 	Input          []string `json:"input"`
 	EncodingFormat string   `json:"encoding_format"`
 	Dimensions     int      `json:"dimensions,omitempty"`
 }
 
-type openAIEmbeddingResponse struct {
+type embeddingsAPIResponse struct {
 	Data []struct {
 		Index     *int      `json:"index"`
 		Embedding []float64 `json:"embedding"`
@@ -181,8 +182,8 @@ type openAIEmbeddingResponse struct {
 func (t *TEIEmbedder) post(ctx context.Context, inputs []string) ([][]float64, ProviderUsage, error) {
 	usage := ProviderUsage{Provider: t.provider, Model: t.space, Requests: 1}
 	var payload any = teiRequest{Inputs: inputs}
-	if t.provider == openAIEmbeddingsProvider {
-		req := openAIEmbeddingRequest{Model: t.model, Input: inputs, EncodingFormat: "float"}
+	if t.provider == embeddingsAPIProvider {
+		req := embeddingsAPIRequest{Model: t.model, Input: inputs, EncodingFormat: "float"}
 		if t.sendDimensions {
 			req.Dimensions = teiDimension
 		}
@@ -199,14 +200,14 @@ func (t *TEIEmbedder) post(ctx context.Context, inputs []string) ([][]float64, P
 	if bytes.Contains(body, []byte("null")) {
 		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
 	}
-	if t.provider != openAIEmbeddingsProvider {
+	if t.provider != embeddingsAPIProvider {
 		var vectors [][]float64
 		if err := json.Unmarshal(body, &vectors); err != nil {
 			return nil, usage, fmt.Errorf("tei embeddings: unreadable response: %w", ErrUnavailable)
 		}
 		return vectors, usage, nil
 	}
-	var res openAIEmbeddingResponse
+	var res embeddingsAPIResponse
 	if err := json.Unmarshal(body, &res); err != nil || len(res.Data) != len(inputs) {
 		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
 	}

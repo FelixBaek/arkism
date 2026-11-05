@@ -7,8 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	mrand "math/rand/v2"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +24,8 @@ import (
 // OTLP/HTTP JSON span exporter, standard library only. It is off until
 // StartTracing is called (memoryd: ARKISM_OTLP_ENDPOINT); off, every helper
 // here is a no-op. A span carries names, ids, routes and status codes only,
-// never memory text, queries or tokens.
+// never memory text, queries or tokens. traceparent goes out only to loopback
+// and private-network model servers, never to a hosted provider.
 
 const (
 	spanKindInternal = 1
@@ -34,13 +39,18 @@ const (
 type spanContext struct {
 	TraceID [16]byte
 	SpanID  [8]byte
+	Sampled bool
 }
 
 func (sc spanContext) valid() bool { return sc.TraceID != [16]byte{} && sc.SpanID != [8]byte{} }
 
-// traceparent is the W3C header value of sc (version 00, sampled).
+// traceparent is the W3C header value of sc (version 00).
 func (sc spanContext) traceparent() string {
-	return "00-" + hex.EncodeToString(sc.TraceID[:]) + "-" + hex.EncodeToString(sc.SpanID[:]) + "-01"
+	flags := "-00"
+	if sc.Sampled {
+		flags = "-01"
+	}
+	return "00-" + hex.EncodeToString(sc.TraceID[:]) + "-" + hex.EncodeToString(sc.SpanID[:]) + flags
 }
 
 // parseTraceparent reads a W3C traceparent header; ok is false for anything malformed.
@@ -57,9 +67,11 @@ func parseTraceparent(h string) (spanContext, bool) {
 	if _, err := hex.Decode(sc.SpanID[:], []byte(parts[2])); err != nil {
 		return sc, false
 	}
-	if _, err := hex.DecodeString(parts[3]); err != nil {
+	flags, err := hex.DecodeString(parts[3])
+	if err != nil {
 		return sc, false
 	}
+	sc.Sampled = flags[0]&1 == 1
 	return sc, sc.valid()
 }
 
@@ -85,10 +97,11 @@ func newSpan(ctx context.Context, name string, kind int, parent spanContext) (co
 		return ctx, nil
 	}
 	sp := &span{exporter: exp, name: name, kind: kind, start: time.Now(), attrs: map[string]string{}}
-	if parent.valid() {
-		sp.sc.TraceID, sp.parent = parent.TraceID, parent.SpanID
+	if parent.valid() { // the caller's sampling decision holds for the whole trace
+		sp.sc.TraceID, sp.parent, sp.sc.Sampled = parent.TraceID, parent.SpanID, parent.Sampled
 	} else {
 		_, _ = rand.Read(sp.sc.TraceID[:])
+		sp.sc.Sampled = exp.ratio >= 1 || mrand.Float64() < exp.ratio
 	}
 	_, _ = rand.Read(sp.sc.SpanID[:])
 	return context.WithValue(ctx, spanKey{}, sp), sp
@@ -117,11 +130,24 @@ func startServerSpan(r *http.Request, route string) (*http.Request, *span) {
 	return r.WithContext(ctx), sp
 }
 
-// injectTraceparent marks an outgoing provider request as a child of the span in ctx.
-func injectTraceparent(ctx context.Context, h http.Header) {
-	if sp, ok := ctx.Value(spanKey{}).(*span); ok && sp != nil {
+// injectTraceparent marks an outgoing model request as a child of the span in
+// ctx. Only a loopback or private-network endpoint (a self-hosted server that
+// may join the trace) gets it; a hosted provider learns no trace ids.
+func injectTraceparent(ctx context.Context, endpoint string, h http.Header) {
+	sp, ok := ctx.Value(spanKey{}).(*span)
+	if !ok || sp == nil {
+		return
+	}
+	if u, err := url.Parse(endpoint); err == nil && isPrivateNetworkHost(u.Hostname()) {
 		h.Set("traceparent", sp.sc.traceparent())
 	}
+}
+
+// isPrivateNetworkHost: loopback, or a literal private (RFC 1918 / ULA) address.
+// Host names other than localhost are not resolved, so they count as remote.
+func isPrivateNetworkHost(host string) bool {
+	ip := net.ParseIP(host)
+	return isLoopbackHost(host) || ip != nil && ip.IsPrivate()
 }
 
 func (sp *span) set(key, value string) {
@@ -163,30 +189,61 @@ type finishedSpan struct {
 type spanExporter struct {
 	endpoint string
 	service  string
+	ratio    float64
 	client   *http.Client
 	queue    chan finishedSpan
-	dropped  atomic.Int64
+	quit     chan struct{}
+	// exported, dropped (queue full or stopped) and failed (collector error) spans.
+	exported, dropped, failed atomic.Uint64
 }
 
+// enqueue never blocks and never panics: the queue is never closed.
 func (e *spanExporter) enqueue(sp *span, end time.Time) {
+	if !sp.sc.Sampled {
+		return
+	}
 	select {
+	case <-e.quit:
+		e.dropped.Add(1)
 	case e.queue <- finishedSpan{sp, end}:
 	default:
 		e.dropped.Add(1) // a slow collector never slows a request
 	}
 }
 
+// TracingMetrics counts this process's exported spans; nil when tracing is off.
+type TracingMetrics struct {
+	Exported    uint64  `json:"exported_spans"`
+	Dropped     uint64  `json:"dropped_spans"`
+	Failed      uint64  `json:"failed_spans"`
+	SampleRatio float64 `json:"sample_ratio"`
+}
+
+func tracingMetrics() *TracingMetrics {
+	e := activeTracer.Load()
+	if e == nil {
+		return nil
+	}
+	return &TracingMetrics{Exported: e.exported.Load(), Dropped: e.dropped.Load(), Failed: e.failed.Load(), SampleRatio: e.ratio}
+}
+
 // StartTracing turns tracing on and exports spans to endpoint (an OTLP/HTTP
 // traces URL such as https://collector:4318/v1/traces; plain http only on
-// loopback). stop flushes what is queued and turns tracing off.
-func StartTracing(endpoint, service string) (stop func(), err error) {
+// loopback). sampleRatio in (0,1] keeps that share of new traces (0 or out of
+// range keeps all); a caller's traceparent decides for its own trace. stop
+// flushes what is queued (at most 5 seconds) and turns tracing off.
+func StartTracing(endpoint, service string, sampleRatio float64) (stop func(), err error) {
 	if err := validateEndpoint(endpoint); err != nil {
 		return nil, fmt.Errorf("otlp endpoint: %w", err)
 	}
 	if strings.TrimSpace(service) == "" {
 		service = "arkism-memoryd"
 	}
-	e := &spanExporter{endpoint: endpoint, service: service, client: providerClient(nil, 5*time.Second), queue: make(chan finishedSpan, traceQueueSize)}
+	if !(sampleRatio > 0 && sampleRatio <= 1) {
+		sampleRatio = 1
+	}
+	e := &spanExporter{endpoint: endpoint, service: service, ratio: sampleRatio, client: providerClient(nil, 5*time.Second),
+		queue: make(chan finishedSpan, traceQueueSize), quit: make(chan struct{})}
 	done := make(chan struct{})
 	go e.run(done)
 	activeTracer.Store(e)
@@ -194,7 +251,7 @@ func StartTracing(endpoint, service string) (stop func(), err error) {
 	return func() {
 		once.Do(func() {
 			activeTracer.CompareAndSwap(e, nil)
-			close(e.queue)
+			close(e.quit)
 			<-done
 		})
 	}, nil
@@ -207,46 +264,71 @@ func (e *spanExporter) run(done chan struct{}) {
 	batch := make([]finishedSpan, 0, traceBatchSize)
 	for {
 		select {
-		case fs, ok := <-e.queue:
-			if !ok {
-				e.flush(batch)
-				return
-			}
+		case fs := <-e.queue:
 			if batch = append(batch, fs); len(batch) >= traceBatchSize {
-				e.flush(batch)
+				e.flush(context.Background(), batch)
 				batch = batch[:0]
 			}
 		case <-tick.C:
-			e.flush(batch)
+			e.flush(context.Background(), batch)
 			batch = batch[:0]
+		case <-e.quit:
+			e.drain(batch)
+			return
 		}
 	}
 }
 
-func (e *spanExporter) flush(batch []finishedSpan) {
+// drain sends what is queued at stop within one shared 5-second budget.
+func (e *spanExporter) drain(batch []finishedSpan) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	for {
+		select {
+		case fs := <-e.queue:
+			if batch = append(batch, fs); len(batch) >= traceBatchSize {
+				e.flush(ctx, batch)
+				batch = batch[:0]
+			}
+		default:
+			e.flush(ctx, batch)
+			return
+		}
+	}
+}
+
+func (e *spanExporter) flush(parent context.Context, batch []finishedSpan) {
 	if len(batch) == 0 {
 		return
 	}
+	n := uint64(len(batch))
 	body, err := json.Marshal(otlpPayload(e.service, batch))
 	if err != nil {
+		e.failed.Add(n)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewReader(body))
 	if err != nil {
+		e.failed.Add(n)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := e.client.Do(req)
 	if err != nil {
-		slog.Warn("trace export failed", "spans", len(batch), "error", captureErrorCode(err))
+		e.failed.Add(n)
+		slog.Warn("trace export failed", "spans", n, "error", captureErrorCode(err))
 		return
 	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10)) // lets the connection be reused
 	_ = resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		slog.Warn("trace export refused", "spans", len(batch), "status", resp.StatusCode)
+		e.failed.Add(n)
+		slog.Warn("trace export refused", "spans", n, "status", resp.StatusCode)
+		return
 	}
+	e.exported.Add(n)
 }
 
 type otlpValue struct {

@@ -49338,6 +49338,29 @@
           },
           "requests_scope": {
             "const": "process"
+          },
+          "rerank": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Process rerank calls; present when a reranker is configured. A fallback served the fused order.",
+            "properties": {
+              "calls": {"type": "integer", "minimum": 0},
+              "fallbacks": {"type": "integer", "minimum": 0},
+              "timeouts": {"type": "integer", "minimum": 0}
+            },
+            "required": ["calls", "fallbacks", "timeouts"]
+          },
+          "tracing": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Process span export counters; present while request tracing is on.",
+            "properties": {
+              "exported_spans": {"type": "integer", "minimum": 0},
+              "dropped_spans": {"type": "integer", "minimum": 0},
+              "failed_spans": {"type": "integer", "minimum": 0},
+              "sample_ratio": {"type": "number", "exclusiveMinimum": 0, "maximum": 1}
+            },
+            "required": ["exported_spans", "dropped_spans", "failed_spans", "sample_ratio"]
           }
         },
         "required": [

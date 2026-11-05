@@ -139,7 +139,7 @@ func postBody(ctx context.Context, client *http.Client, endpoint string, header 
 		req.Header[k] = v
 	}
 	req.Header.Set("Content-Type", "application/json")
-	injectTraceparent(ctx, req.Header)
+	injectTraceparent(ctx, endpoint, req.Header)
 	resp, err := client.Do(req)
 	if err != nil {
 		// Keep the transport cause in the chain (deadline, connection

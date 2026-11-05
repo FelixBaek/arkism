@@ -72,3 +72,21 @@ func TestApproveHookPanicDoesNotUndoApproval(t *testing.T) {
 		t.Fatal("approval lost", mem.Status)
 	}
 }
+
+type panicHooks struct{}
+
+func (panicHooks) ValidateCapture(context.Context, Decision, CaptureInput) error { panic("boom") }
+func (panicHooks) BeforeJob(context.Context, Record) error                       { panic("boom") }
+
+// A panicking validator or job hook refuses (fails closed) instead of
+// crashing the request or the worker; erasure never asks the job hook.
+func TestRefusingHooksContainPanics(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Extensions = Extensions{CaptureValidator: panicHooks{}, JobHook: panicHooks{}}
+	if _, err := f.svc.Capture(testCtx, f.human, captureInput(scopeA, "evt-p", explicit("앞으로 답은 짧게 한다."))); !errors.Is(err, ErrExtensionRefused) {
+		t.Fatal("panicking validator", err)
+	}
+	if err := f.svc.Extensions.beforeJob(testCtx, Record{Kind: "embedding"}); !errors.Is(err, ErrExtensionRefused) {
+		t.Fatal("panicking job hook", err)
+	}
+}

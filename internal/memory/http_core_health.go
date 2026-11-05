@@ -46,6 +46,9 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		if s.Reranker != nil {
 			body["rerank"] = s.Reranker.Metrics()
 		}
+		if tracing := tracingMetrics(); tracing != nil {
+			body["tracing"] = tracing
+		}
 		writeJSON(w, http.StatusOK, body)
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {

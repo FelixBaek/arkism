@@ -106,7 +106,7 @@ func (s *Service) embedKnowledgeQuery(ctx context.Context, d Decision, query str
 	return &out[0], nil
 }
 
-// embedderTransferAllowed: loopback TEI keeps text on the host; any other
+// embedderTransferAllowed: loopback or private-network TEI keeps text on your own machines; any other
 // embedder sends it to a provider and needs the decision's external transfer.
 func embedderTransferAllowed(e Embedder, d Decision) bool {
 	if t, ok := e.(*TEIEmbedder); ok && t.Local() {

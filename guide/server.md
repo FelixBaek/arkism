@@ -223,7 +223,7 @@ wiki. What a person approves and how is described in
    | `ARKISM_WEBHOOK_ALLOW_PRIVATE` | `1` lets webhooks reach loopback and private addresses (development only). Link-local and metadata addresses stay refused |
    | `ARKISM_RERANK_URL`, `ARKISM_RERANK_TIMEOUT` | Base URL of a `POST /rerank` service and its timeout (Go duration, at most `1m`). On error or timeout recall keeps the fused order |
    | `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Model name and bearer key of a hosted rerank API. Setting the model switches to the hosted request shape (see [Model providers](#model-providers)) |
-   | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME` | Request tracing (see [Tracing](#tracing)). Off by default |
+   | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME`, `ARKISM_OTLP_SAMPLE_RATIO` | Request tracing (see [Tracing](#tracing)). Off by default |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
 
 4. **Permissions.** Principals registered with `--actions '*'` (the examples
@@ -250,9 +250,9 @@ APIs and self-hosted inference servers work without new code:
 
 | Need | Setting | Protocol |
 |---|---|---|
-| Chat (server model) | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | OpenAI-compatible chat completions |
+| Chat (server model) | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | the common `/chat/completions` protocol |
 | Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embed` | Text Embeddings Inference `POST /embed` |
-| Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embeddings` (for example `https://api.example.com/v1/embeddings`), `TEI_API_KEY` | OpenAI-compatible `POST .../embeddings` `{model, input}` → `{data: [{index, embedding}], usage}` |
+| Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embeddings` (for example `https://api.example.com/v1/embeddings`), `TEI_API_KEY` | `POST .../embeddings` `{model, input}` → `{data: [{index, embedding}], usage}` |
 | Embeddings | `MEMORY_EMBEDDER=ollama` or `gemini` | Their own embedding routes |
 | Rerank | `ARKISM_RERANK_URL` | Text Embeddings Inference `POST /rerank` `{query, texts}` |
 | Rerank | `ARKISM_RERANK_URL` (for example `https://api.example.com/v1`), `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Hosted rerank `POST {url}/rerank` `{model, query, documents, top_n}` → `{results` or `data: [{index, relevance_score}]}` |
@@ -263,8 +263,16 @@ Notes:
   request, set `TEI_SEND_DIMENSIONS=1` to send `dimensions: 1024`; leave it off
   for servers that reject the field.
 - `TEI_QUERY_PREFIX` and `TEI_DOCUMENT_PREFIX` stay required (empty is allowed).
-- Remote endpoints must use https. A loopback endpoint keeps text on the host;
-  any other endpoint needs the caller's `external:transfer` grant, like Gemini.
+- Remote endpoints must use https. A loopback endpoint (`localhost`, `127.0.0.1`,
+  `::1`) or a literal private address (`10.x`, `172.16-31.x`, `192.168.x`,
+  `fd00::/8`) keeps text on your own machines; any other endpoint, including a
+  host name that resolves to a private address, needs the caller's
+  `external:transfer` grant, like `MEMORY_EMBEDDER=gemini`.
+- **Upgrade note.** Before this release every `TEI_ENDPOINT_URL` counted as local.
+  Knowledge search and knowledge indexing through an https `TEI_ENDPOINT_URL` on
+  a public address or a host name now need `external:transfer` on the caller's
+  token. Loopback and literal private-address endpoints are unchanged. Either
+  point `TEI_ENDPOINT_URL` at the private address, or grant `external:transfer`.
 - Each protocol has its own vector space, so switching endpoint or protocol
   needs a reindex (`memoryd --reindex`).
 - Every chat, embedding and rerank call is filed in the usage ledger and in the
@@ -280,11 +288,17 @@ the API exports spans as OTLP JSON. Off when unset; nothing is recorded then.
 - One span per request, named by its route. A valid W3C `traceparent` header on
   the request continues the caller's trace.
 - Child spans for each search lane (`search.lane.exact|fts|vector`) and model call
-  (`model.complete`, `model.embed`, `model.rerank`). Outgoing model requests carry
-  `traceparent`, so a traced inference server joins the same trace.
+  (`model.complete`, `model.embed`, `model.rerank`). Requests to a loopback or
+  private-address model server carry `traceparent`, so a traced inference server
+  joins the same trace; a hosted provider never receives it.
 - Spans hold routes, ids, status and fixed error codes only: no memory text,
   queries or tokens. Spans are batched every 2 seconds; when the collector is
   slow, spans are dropped rather than slowing requests.
+- `ARKISM_OTLP_SAMPLE_RATIO` (0 to 1, default 1) keeps that share of new traces.
+  A caller's `traceparent` decides for its own trace: flags `00` export nothing.
+- `GET /metrics` reports `tracing.exported_spans`, `dropped_spans`, `failed_spans`
+  and `sample_ratio` while tracing is on. Export never fails a request; stop
+  waits at most about 10 seconds for the collector.
 - `ARKISM_OTLP_SERVICE_NAME` sets `service.name` (default `arkism-memoryd`).
 
 ## Host tools and systemd
