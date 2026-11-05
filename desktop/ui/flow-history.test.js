@@ -57,7 +57,8 @@ test("child rows show done state, duration, tokens and meeting rounds", async ()
   const h = await boot({ view: "crew", routes: [["GET", /\/runs\/run1\/result\?/, () => result({ children })]] });
   h.render(); await h.settle(); await firstResult(h);
   const rows = [...box(h).querySelectorAll("button.flow-line")].map((b) => b.textContent);
-  assert.match(rows[0], /^✓10-18 \d\d:32하위 실행출처확인1분 · 9k 토큰 · 열기 →$/);
+  // 05:32Z is the 17th west of UTC-5:32 and the 18th elsewhere: the row shows local time
+  assert.match(rows[0], /^✓10-1[78] \d\d:32하위 실행출처확인1분 · 9k 토큰 · 열기 →$/);
   assert.match(rows[1], /^✓.*회의 결과리서치 회의 · 결론 남라운드 3 · 열기 →$/);
   assert.match(rows[2], /^○.*하위 실행.*실행 중 · 열기 →$/);
   h.closeAll();
