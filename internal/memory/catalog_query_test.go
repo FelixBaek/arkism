@@ -96,6 +96,7 @@ func TestCatalogMemoryGlobalQueryPrivacyAndCursor(t *testing.T) {
 		t.Fatal("anonymous", e)
 	}
 }
+
 // ids names the records to read in one call (불러오기 shows recalled memories by text); denied and unknown ids are just absent.
 func TestCatalogMemoryIDsFilter(t *testing.T) {
 	f := newFixture(t)

@@ -56,7 +56,10 @@ func TestArkParse(t *testing.T) {
 func TestArkHelpBlocksWithoutRecallOrCapture(t *testing.T) {
 	capFake(t)
 	capOnPrompt = true // even with prompt capture on, a command is not captured
-	search = func(string, string, int, float64) ([]any, bool, error) { t.Fatal("recall ran for a command"); return nil, true, nil }
+	search = func(string, string, int, float64) ([]any, bool, error) {
+		t.Fatal("recall ran for a command")
+		return nil, true, nil
+	}
 	v, _ := arkHook(t, "ark:help")
 	if v["decision"] != "block" || !strings.Contains(str(v["reason"]), "ark:remember") || v["systemMessage"] != nil {
 		t.Fatal("help output", v)

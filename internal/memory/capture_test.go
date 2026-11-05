@@ -27,7 +27,6 @@ func (f *fixture) capture(token string, in CaptureInput) []CaptureItem {
 	return out.Items
 }
 
-
 // captureAndReview is explicit setup for tests that need an active memory.
 // Capture itself must leave every extracted claim pending, even for the owner.
 func (f *fixture) captureAndReview(token string, in CaptureInput) []CaptureItem {
