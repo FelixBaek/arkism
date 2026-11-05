@@ -121,6 +121,8 @@ type CreateInput struct {
 	capture         *captureWrite       // Server-owned; omitted from all JSON/BSON input.
 	MemoryContext   *MemoryContext      `json:"memory_context,omitempty" bson:"memory_context,omitempty"`
 	ArchiveMessages []ArchiveMessageRef `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
+	// Entities: memory candidates only; the names apply when the memory is approved.
+	Entities []EntityInput `json:"entities,omitempty"`
 
 	TrustLevel     string      `json:"trust_level,omitempty"`
 	Confidence     *float64    `json:"confidence,omitempty"`
@@ -572,7 +574,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Entities: in.Entities, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -647,7 +649,7 @@ func checkCreateRequest(col string, in *CreateInput, file *textArtifact) error {
 	if !validCandidateTime(col, in) {
 		return ErrInvalid
 	}
-	if !validTags(in.Tags) || createFieldsMisplaced(col, *in, file) || createLabelsInvalid(col, *in) || createFieldsOversized(*in, file) {
+	if !validTags(in.Tags) || !validEntityInputs(in.Entities) || createFieldsMisplaced(col, *in, file) || createLabelsInvalid(col, *in) || createFieldsOversized(*in, file) {
 		return ErrInvalid
 	}
 	return nil
@@ -666,7 +668,7 @@ func normalizeCreateConfidence(col string, in *CreateInput) error {
 
 func createFieldsMisplaced(col string, in CreateInput, file *textArtifact) bool {
 	allowed := map[string]bool{"sources": true, "memory_candidates": true, "agent_runs": true, "tool_calls": true, "evaluations": true, "reflections": true, "memory_relations": true}
-	return len(in.Tags) > 0 && col != "memory_candidates" || !allowed[col] && !isEvalRecordCollection(col) || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
+	return (len(in.Tags) > 0 || len(in.Entities) > 0) && col != "memory_candidates" || !allowed[col] && !isEvalRecordCollection(col) || (file != nil && col != "sources") || (in.Evaluation != nil && col != "evaluations") || (in.Run != nil && col != "agent_runs") || (in.ToolCall != nil && col != "tool_calls") || (in.Reflection != nil && col != colReflections)
 }
 
 func createLabelsInvalid(col string, in CreateInput) bool {

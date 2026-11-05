@@ -131,3 +131,34 @@ func (p *Postgres) ReplaceEntityMentions(ctx context.Context, scope Scope, remov
 	}
 	return nil
 }
+
+// MemoryTags returns the tags of the scope's memories with the given ids (entity graph tag filters).
+func (p *Postgres) MemoryTags(ctx context.Context, scope Scope, ids []string) (map[string][]string, error) {
+	if checkScope(scope) != nil || len(ids) > mentionScanLimit+1 {
+		return nil, ErrInvalid
+	}
+	out := map[string][]string{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := p.q().Query(ctx, `SELECT id, CASE WHEN jsonb_typeof(doc->'tags')='array' THEN doc->'tags' ELSE '[]'::jsonb END FROM memory_records
+ WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND id=ANY($6::text[])`,
+		colMemories, scope.WorkspaceID, scope.ProjectID, scope.UserID, scope.AgentID, ids)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		var data []byte
+		if err = rows.Scan(&id, &data); err != nil {
+			return nil, pgErr(err)
+		}
+		var tags []string
+		if json.Unmarshal(data, &tags) != nil {
+			return nil, ErrInvalid
+		}
+		out[id] = tags
+	}
+	return out, pgErr(rows.Err())
+}

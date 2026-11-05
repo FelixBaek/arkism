@@ -284,12 +284,12 @@ func TestEntityModelProposalsNeedConfirmation(t *testing.T) {
 		t.Fatal("missing model must be a clear error", err)
 	}
 	sent := []Record{{ID: "m1", Text: "lunch at the harbor cafe with mina"}}
-	found := parseEntityModelAnswer("```json\n"+`{"items":[{"i":0,"entities":[{"name":"mina","type":"person"},{"name":"Atlantis","type":"place"},{"name":"cafe","type":"weird"}]}]}`+"\n```", sent)
+	found := parseEntityModelAnswer("```json\n"+`{"items":[{"i":0,"entities":[{"name":"mina","type":"person"},{"name":"Atlantis","type":"place"},{"name":"cafe","type":"weird"}]}]}`+"\n```", sent, SpaceConfig{})
 	if len(found) != 1 || len(found[0].Names) != 1 || found[0].Names[0].Name != "mina" {
 		t.Fatal("model output not validated against the text", found)
 	}
 	found[0].Memory = entityMemory(t, f, repo, "m2", "lunch at the harbor cafe with mina", time.Now().UTC())
-	if _, err := f.svc.applyEntityExtraction(testCtx, scopeA, "human-1", found, false); err != nil {
+	if _, err := f.svc.applyEntityExtraction(testCtx, scopeA, "human-1", SpaceConfig{}, found, false); err != nil {
 		t.Fatal(err)
 	}
 	if len(repo.edges) != 1 || repo.edges[0].Relation != relMentionsProposed {

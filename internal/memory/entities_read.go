@@ -34,6 +34,8 @@ type EntityListInput struct {
 	Type   string
 	Limit  int
 	Cursor string
+	// Similar keeps entities with an open merge proposal (people only see proposals).
+	Similar bool
 }
 
 type EntityList struct {
@@ -75,6 +77,12 @@ type EntityGraphInput struct {
 	Type     string
 	From, To *time.Time
 	Limit    int
+	// Tags, TagsMatch and TagGroups keep mentions from memories whose tags pass (search filters).
+	Tags      []string
+	TagsMatch string
+	TagGroups [][]TagTest
+	// MinCount drops edges mentioned together by fewer memories (default 1).
+	MinCount int
 }
 
 type EntityGraphNode struct {
@@ -137,6 +145,9 @@ func (v *entityView) entity(id string) *NamedEntity {
 	return e
 }
 
+// validEntityTypeFilter: built-in, label and free-form types all have this shape.
+func validEntityTypeFilter(t string) bool { return t == "" || entityTypePattern.MatchString(t) }
+
 func publicEntity(e NamedEntity) NamedEntity {
 	e.Keys, e.Deleted = nil, false
 	if e.Aliases == nil {
@@ -150,6 +161,7 @@ func (v *entityView) summaries() map[string]*EntitySummary {
 	for id, e := range v.g.entities {
 		if v.entity(id) != nil {
 			out[id] = &EntitySummary{NamedEntity: publicEntity(*e)}
+			out[id].Similar = v.liveSimilar(e.Similar)
 		}
 	}
 	for _, m := range v.mentions {
@@ -170,6 +182,20 @@ func (v *entityView) summaries() map[string]*EntitySummary {
 	return out
 }
 
+// liveSimilar is the merge proposals a person may still act on: targets that still stand.
+func (v *entityView) liveSimilar(list []EntitySimilar) []EntitySimilar {
+	if !v.human {
+		return nil
+	}
+	var out []EntitySimilar
+	for _, s := range list {
+		if v.entity(s.ID) != nil {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func entityMatches(e NamedEntity, query, typ string) bool {
 	if typ != "" && e.Type != typ {
 		return false
@@ -184,7 +210,7 @@ func entityMatches(e NamedEntity, query, typ string) bool {
 func (s *Service) ListEntities(ctx context.Context, token string, in EntityListInput) (EntityList, error) {
 	offset, ok := parseOffsetCursor(in.Cursor, math.MaxInt-entityListMax)
 	in.Limit = cmp.Or(in.Limit, entityListDefault)
-	if !ok || in.Limit < 1 || in.Limit > entityListMax || len(in.Query) > 200 || in.Type != "" && !entityTypes[in.Type] {
+	if !ok || in.Limit < 1 || in.Limit > entityListMax || len(in.Query) > 200 || !validEntityTypeFilter(in.Type) {
 		return EntityList{}, ErrInvalid
 	}
 	v, err := s.entityReader(ctx, token, in.Scope, "")
@@ -194,7 +220,7 @@ func (s *Service) ListEntities(ctx context.Context, token string, in EntityListI
 	query := strings.ToLower(strings.TrimSpace(in.Query))
 	items := []EntitySummary{}
 	for _, sum := range v.summaries() {
-		if entityMatches(sum.NamedEntity, query, in.Type) {
+		if entityMatches(sum.NamedEntity, query, in.Type) && (!in.Similar || len(sum.Similar) > 0) {
 			items = append(items, *sum)
 		}
 	}
@@ -302,17 +328,23 @@ func (v *entityView) related(id string) []RelatedEntity {
 // EntityGraphView is the co-occurrence graph: the most mentioned entities and
 // edges weighted by the memories that mention both, bounded in size.
 func (s *Service) EntityGraphView(ctx context.Context, token string, in EntityGraphInput) (EntityGraph, error) {
-	in.Limit = cmp.Or(in.Limit, entityListDefault)
-	if in.Limit < 1 || in.Limit > entityGraphNodesMax || in.Type != "" && !entityTypes[in.Type] || in.From != nil && in.To != nil && in.To.Before(*in.From) {
+	in.Limit, in.MinCount = cmp.Or(in.Limit, entityListDefault), cmp.Or(in.MinCount, 1)
+	filter := SearchFilters{Tags: in.Tags, TagsMatch: in.TagsMatch, TagGroups: in.TagGroups}
+	if in.Limit < 1 || in.Limit > entityGraphNodesMax || !validEntityTypeFilter(in.Type) || in.From != nil && in.To != nil && in.To.Before(*in.From) ||
+		in.MinCount < 1 || in.MinCount > 1000 || !normalizeFilterLabels(&filter) {
 		return EntityGraph{}, ErrInvalid
 	}
 	v, err := s.entityReader(ctx, token, in.Scope, "")
 	if err != nil {
 		return EntityGraph{}, err
 	}
+	tagged, err := s.taggedMemories(ctx, in.Scope, v.mentions, filter)
+	if err != nil {
+		return EntityGraph{}, err
+	}
 	inWindow := func(m EntityMention) bool {
 		return (in.From == nil || !m.EventAt.Before(*in.From)) && (in.To == nil || !m.EventAt.After(*in.To)) &&
-			(in.Type == "" || v.g.entities[m.EntityID].Type == in.Type)
+			(in.Type == "" || v.g.entities[m.EntityID].Type == in.Type) && (tagged == nil || tagged[m.MemoryID])
 	}
 	sets := v.memorySets(inWindow)
 	counts := map[string]int{}
@@ -328,7 +360,7 @@ func (s *Service) EntityGraphView(ctx context.Context, token string, in EntityGr
 	}
 	slices.SortFunc(out.Nodes, func(a, b EntityGraphNode) int { return cmp.Or(b.Mentions-a.Mentions, strings.Compare(a.ID, b.ID)) })
 	out.Nodes = out.Nodes[:min(len(out.Nodes), in.Limit)]
-	out.Edges = graphEdges(sets, out.Nodes)
+	out.Edges = slices.DeleteFunc(graphEdges(sets, out.Nodes), func(e EntityGraphEdge) bool { return e.Weight < in.MinCount })
 	if len(out.Edges) > entityGraphEdgesMax {
 		out.Edges, out.Truncated = out.Edges[:entityGraphEdgesMax], true
 	}
@@ -358,4 +390,36 @@ func graphEdges(sets map[string][]string, nodes []EntityGraphNode) []EntityGraph
 		return cmp.Or(b.Weight-a.Weight, strings.Compare(a.Source, b.Source), strings.Compare(a.Target, b.Target))
 	})
 	return edges
+}
+
+// memoryTagStore reads the tags of memories by id (Postgres.MemoryTags).
+type memoryTagStore interface {
+	MemoryTags(ctx context.Context, scope Scope, ids []string) (map[string][]string, error)
+}
+
+// taggedMemories is the set of mentioning memories whose tags pass the filter; nil without a tag filter.
+func (s *Service) taggedMemories(ctx context.Context, scope Scope, mentions []EntityMention, filter SearchFilters) (map[string]bool, error) {
+	if len(filter.Tags) == 0 && len(filter.TagGroups) == 0 {
+		return nil, nil
+	}
+	store, ok := s.Repo.(memoryTagStore)
+	if !ok {
+		return nil, ErrUnavailable
+	}
+	var ids []string
+	for _, m := range mentions {
+		ids = append(ids, m.MemoryID)
+	}
+	slices.Sort(ids)
+	tags, err := store.MemoryTags(ctx, scope, slices.Compact(ids))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]bool{}
+	for id, t := range tags {
+		if filter.tagsHold(t) {
+			out[id] = true
+		}
+	}
+	return out, nil
 }

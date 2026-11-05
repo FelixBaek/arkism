@@ -17,6 +17,8 @@ type EntityPatchInput struct {
 	Confirm bool `json:"confirm,omitempty"`
 	// SummaryReview approves (the draft becomes the summary) or rejects the summary draft.
 	SummaryReview string `json:"summary_review,omitempty"`
+	// DismissSimilar closes the entity's merge proposals (merging is POST /v1/entities/{id}/merge).
+	DismissSimilar bool `json:"dismiss_similar,omitempty"`
 }
 
 // EntitySummaryInput asks for a summary draft; dry_run returns it without storing.
@@ -66,7 +68,8 @@ func (s *Service) editEntities(ctx context.Context, token string, scope Scope, i
 }
 
 func validEntityPatch(in EntityPatchInput) bool {
-	if in.Name != nil && !validEntityName(normalizeEntityName(*in.Name)) || in.Type != nil && !entityTypes[*in.Type] {
+	// The type's shape is checked here, whether the space allows it in PatchEntity.
+	if in.Name != nil && !validEntityName(normalizeEntityName(*in.Name)) || in.Type != nil && (!entityTypePattern.MatchString(*in.Type) || *in.Type == entityTypeLabel) {
 		return false
 	}
 	if len(in.AddAliases)+len(in.RemoveAliases) > entityMaxAliases {
@@ -80,7 +83,7 @@ func validEntityPatch(in EntityPatchInput) bool {
 	if in.SummaryReview != "" && in.SummaryReview != mmReviewApprove && in.SummaryReview != mmReviewReject {
 		return false
 	}
-	return in.Name != nil || in.Type != nil || len(in.AddAliases)+len(in.RemoveAliases) > 0 || in.Confirm || in.SummaryReview != ""
+	return in.Name != nil || in.Type != nil || len(in.AddAliases)+len(in.RemoveAliases) > 0 || in.Confirm || in.SummaryReview != "" || in.DismissSimilar
 }
 
 // reviewEntitySummary applies a person's decision on the summary draft; approval needs every citation to still stand.
@@ -182,6 +185,9 @@ func patchedEntity(e NamedEntity, in EntityPatchInput) NamedEntity {
 	if in.Confirm {
 		e.Proposed = false
 	}
+	if in.DismissSimilar {
+		e.Similar = nil
+	}
 	e.Keys = entityKeys(e)
 	return e
 }
@@ -207,6 +213,9 @@ func (s *Service) PatchEntity(ctx context.Context, token, id string, in EntityPa
 	err := s.editEntities(ctx, token, in.Scope, id, "update:entities", func(store namedEntityStore, g *entityGraph, actor string, now time.Time) error {
 		e, err := errEntityNotFound(g, id)
 		if err != nil {
+			return err
+		}
+		if err = s.entityTypeChangeAllowed(ctx, in.Scope, e.Type, in.Type); err != nil {
 			return err
 		}
 		next := patchedEntity(*e, in)
@@ -309,4 +318,22 @@ func (s *Service) DeleteEntity(ctx context.Context, token, id string, in EntityS
 		return store.PutNamedEntity(ctx, in.Scope, NamedEntity{ID: id, Type: e.Type, Aliases: []string{}, Deleted: true, Keys: e.Keys, EditedBy: actor, CreatedAt: e.CreatedAt, UpdatedAt: now})
 	})
 	return out, err
+}
+
+// entityTypeChangeAllowed: a new type must be one the space allows; a label stays a label.
+func (s *Service) entityTypeChangeAllowed(ctx context.Context, scope Scope, from string, to *string) error {
+	if to == nil || *to == from {
+		return nil
+	}
+	if from == entityTypeLabel {
+		return ErrInvalid
+	}
+	cfg, err := s.spaceSettings(ctx, scope)
+	if err != nil {
+		return err
+	}
+	if !cfg.entityTypeAllowed(*to) {
+		return ErrInvalid
+	}
+	return nil
 }

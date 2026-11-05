@@ -134,12 +134,8 @@ func validSpaceSettings(c SpaceConfig) error {
 			return ErrInvalid
 		}
 	}
-	for _, r := range c.DefenseRules {
-		if !validDefenseRule(r) {
-			return ErrInvalid
-		}
-	}
-	if !c.AutoDerive.valid() || !c.Audit.valid() {
+	if slices.ContainsFunc(c.DefenseRules, func(r SpaceDefenseRule) bool { return !validDefenseRule(r) }) ||
+		!c.AutoDerive.valid() || !c.Audit.valid() || !slices.Contains(entityResolveModes, c.EntityResolution) || !validEntityLabels(c.EntityLabels) {
 		return ErrInvalid
 	}
 	if containsSecret(c.ExtractionInstructions) {
@@ -203,13 +199,26 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 			c.Audit = nil
 		}
 	}
+	if in.EntityResolution != nil {
+		c.EntityResolution = strings.TrimSpace(*in.EntityResolution)
+	}
+	if in.EntitiesAllowFreeForm != nil || in.resets.entitiesFreeForm {
+		c.EntitiesAllowFreeForm = in.EntitiesAllowFreeForm
+	}
+	if in.EntityFreeTypes != nil || in.resets.entityFreeTypes {
+		c.EntityFreeTypes = in.EntityFreeTypes
+	}
+	if in.EntityLabels != nil {
+		c.EntityLabels = *in.EntityLabels
+	}
 }
 
 // spaceResets are the boolean settings a PATCH hands back to the template or
 // server default by sending null: booleans have no empty value like "" or 0.
 type spaceResets struct {
-	lanes, rerank, rerankModel bool
-	lane                       []string // lanes.<name>: null
+	lanes, rerank, rerankModel        bool
+	entitiesFreeForm, entityFreeTypes bool
+	lane                              []string // lanes.<name>: null
 }
 
 // UnmarshalJSON decodes the input strictly and notes which boolean settings were sent as null.
@@ -224,12 +233,15 @@ func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
 		Lanes       json.RawMessage `json:"lanes"`
 		Rerank      json.RawMessage `json:"rerank"`
 		RerankModel json.RawMessage `json:"rerank_model"`
+		FreeForm    json.RawMessage `json:"entities_allow_free_form"`
+		FreeTypes   json.RawMessage `json:"entity_free_types"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
 	isNull := func(m json.RawMessage) bool { return string(m) == "null" }
-	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel)}
+	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel),
+		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes)}
 	var lanes map[string]json.RawMessage
 	if in.Lanes != nil && json.Unmarshal(raw.Lanes, &lanes) == nil {
 		for _, f := range spaceLaneFields {
@@ -302,9 +314,10 @@ type spaceLayer struct {
 
 // serverSpaceDefaults is the built-in layer every inherited field ends at.
 func (s *Service) serverSpaceDefaults() SpaceConfig {
-	on, graph, rerank, model := true, s.RecallGraph, s.Reranker != nil, false
+	on, graph, rerank, model, freeTypes := true, s.RecallGraph, s.Reranker != nil, false, false
 	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph},
-		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive()}
+		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
+		EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &freeTypes}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -336,6 +349,10 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "mcp_tools", func(c *SpaceConfig) *[]string { return &c.MCPTools }, func(v []string) bool { return len(v) > 0 })
 	inheritSetting(&out, layers, src, "reflect_mission", func(c *SpaceConfig) *string { return &c.ReflectMission }, str)
 	inheritSetting(&out, layers, src, "reflect_disposition", func(c *SpaceConfig) **ReflectDisposition { return &c.ReflectDisposition }, func(v *ReflectDisposition) bool { return v != nil })
+	inheritSetting(&out, layers, src, "entity_resolution", func(c *SpaceConfig) *string { return &c.EntityResolution }, str)
+	inheritSetting(&out, layers, src, "entities_allow_free_form", func(c *SpaceConfig) **bool { return &c.EntitiesAllowFreeForm }, ptr)
+	inheritSetting(&out, layers, src, "entity_free_types", func(c *SpaceConfig) **bool { return &c.EntityFreeTypes }, ptr)
+	inheritSetting(&out, layers, src, "entity_labels", func(c *SpaceConfig) *[]EntityLabelGroup { return &c.EntityLabels }, func(v []EntityLabelGroup) bool { return len(v) > 0 })
 	resolveAutoDerive(&out, layers, src)
 	out.Lanes = &SpaceLanes{}
 	for _, f := range spaceLaneFields {
@@ -518,14 +535,26 @@ func (s *Service) defendCreate(ctx context.Context, token, col string, in *Creat
 	if col != colMemories && col != "memory_candidates" && col != "sources" {
 		return nil
 	}
+	cfg, err := s.spaceSettings(ctx, in.Scope)
+	if err != nil {
+		return err
+	}
 	texts := []*string{&in.Text, &in.Summary}
+	in.Entities = slices.Clone(in.Entities)
+	for i := range in.Entities {
+		texts = append(texts, &in.Entities[i].Name)
+	}
 	var content string
 	if file != nil {
 		content = string(file.content)
 		texts = append(texts, &content)
 	}
-	if err := s.defendSpace(ctx, token, defenseGuard{action: "write:" + col}, in.Scope, texts...); err != nil {
+	if err := s.defendWith(ctx, token, defenseGuard{action: "write:" + col}, in.Scope, cfg.DefenseRules, texts...); err != nil {
 		return err
+	}
+	// Labels of tag groups also become tags, on the candidate a person reviews.
+	if in.Tags = appendMissing(slices.Clone(in.Tags), cfg.labelTags(in.Entities)); !validTags(in.Tags) {
+		return ErrInvalid
 	}
 	if len(content) > maxTextArtifactBytes {
 		return errBlobTooLarge // redaction grew the file past the limit

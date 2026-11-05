@@ -23,12 +23,13 @@ type entityModelAnswer struct {
 			Name string `json:"name"`
 			Type string `json:"type"`
 		} `json:"entities"`
+		Labels []string `json:"labels"`
 	} `json:"items"`
 }
 
 // modelEntityFinds asks the server model, in batches, for names the rules miss.
 // Names must occur in the memory text; the budget gate is the wiki's.
-func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scope, d Decision, memories []Record) ([]memoryEntities, int, error) {
+func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scope, d Decision, cfg SpaceConfig, memories []Record) ([]memoryEntities, int, error) {
 	if s.Wiki == nil {
 		return nil, 0, ErrModelNotConfigured
 	}
@@ -47,14 +48,14 @@ func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scop
 		if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
 			return nil, job.Calls, ErrDenied
 		}
-		answer, err := s.wikiCall(ctx, scope, job, "wiki_entities", entityModelSystem, user)
+		answer, err := s.wikiCall(ctx, scope, job, "wiki_entities", entityModelSystem+cfg.entityModelGuidance(), user)
 		if errors.Is(err, errWikiBudget) {
 			break // keep what earlier batches found
 		}
 		if err != nil {
 			return nil, job.Calls, err
 		}
-		out = append(out, parseEntityModelAnswer(answer, sent)...)
+		out = append(out, parseEntityModelAnswer(answer, sent, cfg)...)
 	}
 	return out, job.Calls, nil
 }
@@ -79,7 +80,8 @@ func entityModelPrompt(batch []Record) (string, []Record) {
 	return structuredText(notes), sent
 }
 
-func parseEntityModelAnswer(answer string, sent []Record) []memoryEntities {
+// parseEntityModelAnswer keeps names that occur in their note and labels the schema allows.
+func parseEntityModelAnswer(answer string, sent []Record, cfg SpaceConfig) []memoryEntities {
 	var parsed entityModelAnswer
 	if !decodeModelJSON(answer, &parsed) {
 		return nil
@@ -96,10 +98,11 @@ func parseEntityModelAnswer(answer string, sent []Record) []memoryEntities {
 		f := memoryEntities{Memory: r, Origin: originModel}
 		for _, e := range item.Entities {
 			name := normalizeEntityName(e.Name)
-			if entityTypes[e.Type] && validEntityName(name) && strings.Contains(lower, strings.ToLower(name)) && len(f.Names) < entityMaxPerMemory {
+			if cfg.freeFormEntities() && cfg.entityTypeAllowed(e.Type) && validEntityName(name) && strings.Contains(lower, strings.ToLower(name)) && len(f.Names) < entityMaxPerMemory {
 				f.Names = append(f.Names, entityCandidate{Name: name, Type: e.Type})
 			}
 		}
+		f.Names = append(f.Names, cfg.labelCandidates(item.Labels[:min(len(item.Labels), entityMaxPerMemory)])...)
 		out = append(out, f)
 	}
 	return out

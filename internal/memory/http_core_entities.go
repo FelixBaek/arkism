@@ -1,8 +1,12 @@
 package memory
 
 import (
+	"cmp"
+	"encoding/json"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,38 +31,54 @@ func (s *Service) coreHTTPPostV1EntitiesExtract(w http.ResponseWriter, r *http.R
 }
 
 func (s *Service) coreHTTPGetV1Entities(w http.ResponseWriter, r *http.Request) {
-	scope, q, err := parseWikiQuery(r.URL.RawQuery, "q", "type", "limit", "cursor")
+	scope, q, err := parseWikiQuery(r.URL.RawQuery, "q", "type", "limit", "cursor", "similar")
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
 	limit, err := optionalInt(q.Get("limit"))
-	if err != nil {
-		respond(w, nil, err)
+	if err != nil || !slices.Contains([]string{"", "true", "false"}, q.Get("similar")) {
+		respond(w, nil, cmp.Or(err, ErrInvalid))
 		return
 	}
-	out, err := s.ListEntities(r.Context(), bearer(r), EntityListInput{Scope: scope, Query: q.Get("q"), Type: q.Get("type"), Limit: limit, Cursor: q.Get("cursor")})
+	out, err := s.ListEntities(r.Context(), bearer(r), EntityListInput{Scope: scope, Query: q.Get("q"), Type: q.Get("type"), Limit: limit, Cursor: q.Get("cursor"), Similar: q.Get("similar") == "true"})
 	respond(w, out, err)
 }
 
 func (s *Service) coreHTTPGetV1EntitiesGraph(w http.ResponseWriter, r *http.Request) {
-	scope, q, err := parseWikiQuery(r.URL.RawQuery, "type", "from", "to", "limit")
-	if err != nil {
-		respond(w, nil, err)
-		return
-	}
-	in := EntityGraphInput{Scope: scope, Type: q.Get("type")}
-	if in.Limit, err = optionalInt(q.Get("limit")); err == nil {
-		if in.From, err = optionalTime(q.Get("from")); err == nil {
-			in.To, err = optionalTime(q.Get("to"))
-		}
-	}
+	in, err := parseEntityGraphQuery(r.URL.RawQuery)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
 	out, err := s.EntityGraphView(r.Context(), bearer(r), in)
 	respond(w, out, err)
+}
+
+// parseEntityGraphQuery reads the graph filters; tags is comma separated, tag_groups is JSON.
+func parseEntityGraphQuery(raw string) (EntityGraphInput, error) {
+	scope, q, err := parseWikiQuery(raw, "type", "from", "to", "limit", "min_count", "tags", "tags_match", "tag_groups")
+	if err != nil {
+		return EntityGraphInput{}, err
+	}
+	in := EntityGraphInput{Scope: scope, Type: q.Get("type"), TagsMatch: q.Get("tags_match")}
+	if tags := q.Get("tags"); tags != "" {
+		in.Tags = strings.Split(tags, ",")
+	}
+	if groups := q.Get("tag_groups"); groups != "" && json.Unmarshal([]byte(groups), &in.TagGroups) != nil {
+		return EntityGraphInput{}, ErrInvalid
+	}
+	if in.Limit, err = optionalInt(q.Get("limit")); err != nil {
+		return EntityGraphInput{}, err
+	}
+	if in.MinCount, err = optionalInt(q.Get("min_count")); err != nil {
+		return EntityGraphInput{}, err
+	}
+	if in.From, err = optionalTime(q.Get("from")); err != nil {
+		return EntityGraphInput{}, err
+	}
+	in.To, err = optionalTime(q.Get("to"))
+	return in, err
 }
 
 func (s *Service) coreHTTPGetV1EntitiesId(w http.ResponseWriter, r *http.Request) {

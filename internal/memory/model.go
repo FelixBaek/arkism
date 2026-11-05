@@ -121,6 +121,9 @@ type Record struct {
 	MemoryTimeline           []MemoryState        `json:"-" bson:"memory_timeline,omitempty"`
 	ArchiveMessages          []ArchiveMessageRef  `json:"archive_messages,omitempty" bson:"archive_messages,omitempty"`
 
+	// Entities are the names the caller stated for a candidate (entity_labels.go EntityInput).
+	Entities []EntityInput `json:"entities,omitempty" bson:"entities,omitempty"`
+
 	KnowledgeRetrieval   *KnowledgeRetrievalLog `json:"knowledge_retrieval,omitempty" bson:"knowledge_retrieval,omitempty"`
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`
 	Wiki                 *WikiRecord            `json:"wiki,omitempty" bson:"wiki,omitempty"`

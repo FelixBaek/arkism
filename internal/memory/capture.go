@@ -69,6 +69,9 @@ type CaptureClaim struct {
 	// locator names where in the source the claim came from (a file page or
 	// chunk); only server-side extraction sets it, clients always get "original".
 	locator string
+
+	// Entities the caller states for this claim (EntityInput); they go on the candidate.
+	Entities []EntityInput `json:"entities,omitempty"`
 }
 
 // classification is nil for a claim without a risk call.
@@ -134,7 +137,7 @@ func validCaptureClaimClassification(c CaptureClaim) bool {
 func validCaptureClaimFields(c CaptureClaim) bool {
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
 		len(c.OccurredFrom) <= 64 && len(c.OccurredTo) <= 64 &&
-		(c.Repo == "" || validRunLabel(c.Repo, 128)) &&
+		(c.Repo == "" || validRunLabel(c.Repo, 128)) && validEntityInputs(c.Entities) &&
 		slices.Contains(captureKinds, c.Kind) && slices.Contains(captureBases, c.Basis) &&
 		(c.Supersedes == nil || c.Supersedes.Collection == "memories" && c.Supersedes.ID != "" && c.Supersedes.Revision > 0)
 }
@@ -302,7 +305,7 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
 		capture:       write,
 		MemoryContext: c.MemoryContext, Occurred: c.occurred,
-		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
+		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags, Entities: c.Entities,
 		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
 		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})

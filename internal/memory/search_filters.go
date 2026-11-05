@@ -207,7 +207,7 @@ func (c SearchCriteria) matches(kind string, tags []string, created, updated tim
 		return true
 	}
 	f := c.Filters
-	if len(f.Tags) > 0 && !tagsMatch(f.TagsMatch, f.Tags, tags) || !tagGroupsMatch(f.TagGroups, tags) {
+	if !f.tagsHold(tags) {
 		return false
 	}
 	for _, bound := range []struct {
@@ -253,6 +253,11 @@ func tagsMatch(mode string, want, have []string) bool {
 		return !slices.ContainsFunc(want, func(tag string) bool { return !has(tag) }) && !slices.ContainsFunc(have, func(tag string) bool { return !slices.Contains(want, tag) })
 	}
 	return slices.ContainsFunc(want, has)
+}
+
+// tagsHold: the tags pass Tags (as TagsMatch says) and every tag group.
+func (f *SearchFilters) tagsHold(tags []string) bool {
+	return (len(f.Tags) == 0 || tagsMatch(f.TagsMatch, f.Tags, tags)) && tagGroupsMatch(f.TagGroups, tags)
 }
 
 func tagGroupsMatch(groups [][]TagTest, have []string) bool {

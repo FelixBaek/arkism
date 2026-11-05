@@ -8904,14 +8904,14 @@
       },
       "put": {
         "summary": "Replace a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "422": {"description": "secret_detected"}},
         "operationId": "putV1SpacesByWorkspaceByProjectConfig"
       },
       "patch": {
         "summary": "Change some of a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "patchV1SpacesByWorkspaceByProjectConfig"
@@ -39654,18 +39654,8 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "person",
-                "project",
-                "repo",
-                "tool",
-                "product",
-                "file",
-                "service",
-                "place",
-                "organization",
-                "concept"
-              ]
+              "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+              "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
             }
           },
           {
@@ -39685,6 +39675,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "similar",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true keeps entities with an open merge proposal (people only)."
           }
         ],
         "responses": {
@@ -39710,18 +39709,8 @@
                               },
                               "type": {
                                 "type": "string",
-                                "enum": [
-                                  "person",
-                                  "project",
-                                  "repo",
-                                  "tool",
-                                  "product",
-                                  "file",
-                                  "service",
-                                  "place",
-                                  "organization",
-                                  "concept"
-                                ]
+                                "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                                "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
                               },
                               "aliases": {
                                 "type": "array",
@@ -39742,6 +39731,33 @@
                               "updated_at": {
                                 "type": "string",
                                 "format": "date-time"
+                              },
+                              "similar": {
+                                "type": "array",
+                                "maxItems": 3,
+                                "items": {
+                                  "type": "object",
+                                  "additionalProperties": false,
+                                  "required": [
+                                    "id",
+                                    "name",
+                                    "score"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "score": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    }
+                                  }
+                                },
+                                "description": "Merge proposals for people: existing entities whose names are similar (trigram similarity), most similar first. Merge with POST /v1/entities/{id}/merge or close with PATCH dismiss_similar. Hidden from agents."
                               }
                             },
                             "required": [
@@ -40146,7 +40162,7 @@
           "Management"
         ],
         "summary": "Entities: co-occurrence graph",
-        "description": "Most mentioned entities (limit 1-100 nodes) and edges weighted by the number of memories mentioning both (at most 500 edges), optionally filtered by type and event-time window (RFC 3339 from/to). Requires read:entities.",
+        "description": "Most mentioned entities (limit 1-100 nodes) and edges weighted by the number of memories mentioning both (at most 500 edges), optionally filtered by type and event-time window (RFC 3339 from/to). Requires read:entities. tags, tags_match and tag_groups keep only mentions from memories whose tags pass, and min_count drops weaker edges.",
         "parameters": [
           {
             "in": "query",
@@ -40186,18 +40202,8 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "person",
-                "project",
-                "repo",
-                "tool",
-                "product",
-                "file",
-                "service",
-                "place",
-                "organization",
-                "concept"
-              ]
+              "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+              "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
             }
           },
           {
@@ -40227,6 +40233,51 @@
               "minimum": 1,
               "maximum": 100
             }
+          },
+          {
+            "in": "query",
+            "name": "min_count",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "description": "Drops edges fewer memories mention together (default 1)."
+          },
+          {
+            "in": "query",
+            "name": "tags",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Comma-separated tags; only mentions from memories whose tags pass count (as in search filters)."
+          },
+          {
+            "in": "query",
+            "name": "tags_match",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "any",
+                "all",
+                "any_strict",
+                "all_strict",
+                "exact"
+              ]
+            },
+            "description": "How tags match (search filters; default any_strict)."
+          },
+          {
+            "in": "query",
+            "name": "tag_groups",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "JSON array of groups of {tags, match, not} tests, as in search filters: every group must pass, any test inside a group."
           }
         ],
         "responses": {
@@ -40461,18 +40512,8 @@
                             },
                             "type": {
                               "type": "string",
-                              "enum": [
-                                "person",
-                                "project",
-                                "repo",
-                                "tool",
-                                "product",
-                                "file",
-                                "service",
-                                "place",
-                                "organization",
-                                "concept"
-                              ]
+                              "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                              "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
                             },
                             "aliases": {
                               "type": "array",
@@ -40499,6 +40540,33 @@
                             "updated_at": {
                               "type": "string",
                               "format": "date-time"
+                            },
+                            "similar": {
+                              "type": "array",
+                              "maxItems": 3,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "id",
+                                  "name",
+                                  "score"
+                                ],
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "score": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1
+                                  }
+                                }
+                              },
+                              "description": "Merge proposals for people: existing entities whose names are similar (trigram similarity), most similar first. Merge with POST /v1/entities/{id}/merge or close with PATCH dismiss_similar. Hidden from agents."
                             }
                           },
                           "required": [
@@ -40743,18 +40811,8 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "person",
-                        "project",
-                        "repo",
-                        "tool",
-                        "product",
-                        "file",
-                        "service",
-                        "place",
-                        "organization",
-                        "concept"
-                      ]
+                      "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                      "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
                     },
                     "aliases": {
                       "type": "array",
@@ -40781,6 +40839,33 @@
                     "updated_at": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "similar": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "name",
+                          "score"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        }
+                      },
+                      "description": "Merge proposals for people: existing entities whose names are similar (trigram similarity), most similar first. Merge with POST /v1/entities/{id}/merge or close with PATCH dismiss_similar. Hidden from agents."
                     }
                   },
                   "required": [
@@ -40929,18 +41014,8 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": [
-                      "person",
-                      "project",
-                      "repo",
-                      "tool",
-                      "product",
-                      "file",
-                      "service",
-                      "place",
-                      "organization",
-                      "concept"
-                    ]
+                    "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                    "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
                   },
                   "add_aliases": {
                     "type": "array",
@@ -40956,6 +41031,10 @@
                   },
                   "confirm": {
                     "type": "boolean"
+                  },
+                  "dismiss_similar": {
+                    "type": "boolean",
+                    "description": "Closes the entity's merge proposals."
                   }
                 },
                 "required": [
@@ -41184,18 +41263,8 @@
                     },
                     "type": {
                       "type": "string",
-                      "enum": [
-                        "person",
-                        "project",
-                        "repo",
-                        "tool",
-                        "product",
-                        "file",
-                        "service",
-                        "place",
-                        "organization",
-                        "concept"
-                      ]
+                      "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                      "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
                     },
                     "aliases": {
                       "type": "array",
@@ -41222,6 +41291,33 @@
                     "updated_at": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "similar": {
+                      "type": "array",
+                      "maxItems": 3,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "name",
+                          "score"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                          }
+                        }
+                      },
+                      "description": "Merge proposals for people: existing entities whose names are similar (trigram similarity), most similar first. Merge with POST /v1/entities/{id}/merge or close with PATCH dismiss_similar. Hidden from agents."
                     }
                   },
                   "required": [
@@ -48160,6 +48256,28 @@
           },
           "memory_context": {
             "$ref": "#/components/schemas/MemoryContext"
+          },
+          "entities": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                  "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
+                }
+              }
+            },
+            "description": "Entities the caller states for this memory, applied literally (no similar-name matching) when the candidate is approved. type defaults to concept; a type the space does not allow is skipped. A label (type label, name key:value) must be in the space's entity_labels; labels of groups with tag true also become the candidate's tags."
           }
         }
       },
@@ -48417,6 +48535,28 @@
           },
           "memory_context": {
             "$ref": "#/components/schemas/MemoryContext"
+          },
+          "entities": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_-]{1,31}$",
+                  "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."
+                }
+              }
+            },
+            "description": "Entities the caller states for this memory, applied literally (no similar-name matching) when the candidate is approved. type defaults to concept; a type the space does not allow is skipped. A label (type label, name key:value) must be in the space's entity_labels; labels of groups with tag true also become the candidate's tags."
           }
         },
         "required": [
@@ -56926,6 +57066,12 @@
           },
           "occurred": {
             "$ref": "#/components/schemas/WireResponseRecallTimeWindow"
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseEntityInput"
+            }
           }
         },
         "additionalProperties": false,
@@ -72536,6 +72682,24 @@
         ],
         "x-go-type": "memory.KnowledgeHistoryPage",
         "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseEntityInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "x-go-type": "memory.EntityInput",
+        "x-go-source": "internal/memory/entity_labels.go",
+        "description": "EntityInput is a named entity the caller states for a memory (a capture claim\nor a candidate). It is reviewed with the candidate and applied when the memory\nis approved, literally: no similar-name matching. Type defaults to concept;\n\"label\" takes a key:value name the space's entity_labels allow."
       }
     },
     "headers": {

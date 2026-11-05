@@ -86,6 +86,12 @@ type SpaceConfig struct {
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
 	// Audit narrows the optional audit events of this space (audit_policy.go); nil records all.
 	Audit *SpaceAudit `json:"audit,omitempty" bson:"audit,omitempty"`
+	// Entity settings (entities_similar.go, entity_labels.go): resolution exact|propose|similar,
+	// free-form names next to labels, types beyond the built-in list, and the label schema.
+	EntityResolution      string             `json:"entity_resolution,omitempty" bson:"entity_resolution,omitempty"`
+	EntitiesAllowFreeForm *bool              `json:"entities_allow_free_form,omitempty" bson:"entities_allow_free_form,omitempty"`
+	EntityFreeTypes       *bool              `json:"entity_free_types,omitempty" bson:"entity_free_types,omitempty"`
+	EntityLabels          []EntityLabelGroup `json:"entity_labels,omitempty" bson:"entity_labels,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -116,7 +122,12 @@ type SpaceConfigInput struct {
 	ReflectMaxTokens       *int                `json:"reflect_max_tokens,omitempty"`
 	AutoDerive             *SpaceAutoDerive    `json:"auto_derive,omitempty"`
 	// Audit replaces the whole block; {} hands it back to recording everything.
-	Audit *SpaceAudit `json:"audit,omitempty"`
+	Audit                 *SpaceAudit `json:"audit,omitempty"`
+	EntityResolution      *string     `json:"entity_resolution,omitempty"`
+	EntitiesAllowFreeForm *bool       `json:"entities_allow_free_form,omitempty"`
+	EntityFreeTypes       *bool       `json:"entity_free_types,omitempty"`
+	// EntityLabels: [] hands the schema back to the template or server default.
+	EntityLabels *[]EntityLabelGroup `json:"entity_labels,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

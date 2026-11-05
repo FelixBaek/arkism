@@ -318,6 +318,23 @@ wiki. What a person approves and how is described in
     until a person lists `add_document` in the space's `mcp_tools`
     (`PATCH /v1/spaces/{workspace}/{project}/config`). Space bundle import is
     now refused for non-human principals.
+12. **Entity names, labels and graph filters.** Extraction now compares a new
+    name with the space's entities by trigram similarity. With the new space
+    setting `entity_resolution` at its default `propose`, a similar name still
+    becomes its own entity and carries `similar` merge proposals that only
+    people see (`GET /v1/entities?similar=true`); merge with
+    `POST /v1/entities/{id}/merge` or close them with `PATCH` `dismiss_similar`.
+    `similar` also links names that differ only in case, punctuation or word
+    order; `exact` turns the comparison off. No model is called for this.
+    `entity_labels` gives a space a classification schema (groups of
+    `value`, `multi-values`, `text` or `multi-text` labels); labels become
+    entities of type `label` named `key:value`, and groups with `tag: true`
+    copy stated labels into the candidate's tags. Captures and candidates
+    accept `entities` [{name, type}] that are applied as written when the
+    memory is approved. `entities_allow_free_form: false` keeps only labels,
+    and `entity_free_types: true` allows types outside the built-in list; both
+    are off the defaults only when set. The entity graph accepts `tags`,
+    `tags_match`, `tag_groups` and `min_count`. No migration is needed.
 
 ## Model providers
 

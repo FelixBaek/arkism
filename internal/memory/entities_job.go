@@ -67,6 +67,10 @@ func (s *Service) ExtractEntities(ctx context.Context, token string, in EntityEx
 	if _, err = s.authorize(ctx, token, "read:memories", in.Scope, "", ""); err != nil {
 		return EntityExtractResult{}, err
 	}
+	cfg, err := s.spaceSettings(ctx, in.Scope)
+	if err != nil {
+		return EntityExtractResult{}, err
+	}
 	rows, err := s.Repo.ListRecordsByStatus(ctx, in.Scope, colMemories, statusActive, in.Limit)
 	if err != nil {
 		return EntityExtractResult{}, err
@@ -76,26 +80,37 @@ func (s *Service) ExtractEntities(ctx context.Context, token string, in EntityEx
 	for _, r := range rows {
 		if entityExtractable(r) && r.Scope == in.Scope {
 			memories = append(memories, r)
-			found = append(found, memoryEntities{Memory: r, Names: extractEntityCandidates(entityText(r)), Origin: originRule})
+			found = append(found, memoryEntityFinds(r, cfg)...)
 		}
 	}
 	calls := 0
 	if in.Model {
 		var more []memoryEntities
-		more, calls, err = s.modelEntityFinds(ctx, token, in.Scope, d, memories)
+		more, calls, err = s.modelEntityFinds(ctx, token, in.Scope, d, cfg, memories)
 		if err != nil {
 			return EntityExtractResult{}, err
 		}
 		found = append(found, more...)
 	}
-	out, err := s.applyEntityExtraction(ctx, in.Scope, d.PrincipalID, found, in.DryRun)
+	out, err := s.applyEntityExtraction(ctx, in.Scope, d.PrincipalID, cfg, found, in.DryRun)
 	out.ModelCalls = calls
 	return out, err
 }
 
+// memoryEntityFinds is what the rules and the memory's stated entities give for one
+// approved memory under the space settings. Each origin is always listed, so names
+// a setting now leaves out lose their edges.
+func memoryEntityFinds(r Record, cfg SpaceConfig) []memoryEntities {
+	rule := memoryEntities{Memory: r, Origin: originRule}
+	if cfg.freeFormEntities() {
+		rule.Names = extractEntityCandidates(entityText(r))
+	}
+	return []memoryEntities{rule, {Memory: r, Names: cfg.inputEntityCandidates(r.Entities), Origin: originInput}}
+}
+
 // applyEntityExtraction resolves found names to entities and makes each
 // memory's edges of that origin match what was found, in one transaction.
-func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor string, found []memoryEntities, dryRun bool) (EntityExtractResult, error) {
+func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor string, cfg SpaceConfig, found []memoryEntities, dryRun bool) (EntityExtractResult, error) {
 	var out EntityExtractResult
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out = EntityExtractResult{DryRun: dryRun}
@@ -114,7 +129,7 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 			// Deduplication needs every entity of the scope in view.
 			return ErrUnavailable
 		}
-		plan := newEntityPlan(g)
+		plan := newEntityPlan(g, cfg.EntityResolution)
 		for _, f := range found {
 			// Names found anywhere in the batch exist before weak ones are linked.
 			for _, c := range f.Names {
@@ -125,7 +140,13 @@ func (s *Service) applyEntityExtraction(ctx context.Context, scope Scope, actor 
 		}
 		for _, f := range found {
 			item := plan.apply(f)
-			out.Memories++
+			if f.Origin == originInput { // the memory's second pass: stated entities
+				if len(f.Names) == 0 {
+					continue
+				}
+			} else {
+				out.Memories++
+			}
 			if dryRun && len(out.Items) < entityPreviewItems {
 				out.Items = append(out.Items, item)
 			}
@@ -146,10 +167,11 @@ type entityPlan struct {
 	add, remove   []EntityMention
 	now           time.Time
 	createdLookup map[string]bool
+	resolution    string // entity_resolution; "" is the server default, propose
 }
 
-func newEntityPlan(g *entityGraph) *entityPlan {
-	p := &entityPlan{g: g, byMemory: map[string][]EntityMention{}, now: time.Now().UTC(), createdLookup: map[string]bool{}}
+func newEntityPlan(g *entityGraph, resolution string) *entityPlan {
+	p := &entityPlan{g: g, byMemory: map[string][]EntityMention{}, now: time.Now().UTC(), createdLookup: map[string]bool{}, resolution: resolution}
 	for _, m := range g.mentions {
 		p.byMemory[m.MemoryID] = append(p.byMemory[m.MemoryID], m)
 	}
@@ -170,7 +192,15 @@ func (p *entityPlan) entityFor(c entityCandidate, origin string) *NamedEntity {
 	if skip || e != nil || c.Weak {
 		return e
 	}
-	e = &NamedEntity{ID: ID(), Name: c.Name, Type: c.Type, Aliases: []string{}, Proposed: origin == originModel, CreatedAt: p.now, UpdatedAt: p.now}
+	// Stated names are taken literally; found names may match a similar existing one.
+	var similar []EntitySimilar
+	if origin != originInput && p.resolution != entityResolveExact {
+		similar = p.g.similar(c.Name, c.Type)
+		if len(similar) > 0 && similar[0].Score == 1 && p.resolution == entityResolveSimilar {
+			return p.g.entities[similar[0].ID] // the same words; only case, punctuation or order differ
+		}
+	}
+	e = &NamedEntity{ID: ID(), Name: c.Name, Type: c.Type, Aliases: []string{}, Proposed: origin == originModel, Similar: similar, CreatedAt: p.now, UpdatedAt: p.now}
 	e.Keys = entityKeys(*e)
 	p.g.add(e)
 	p.created = append(p.created, e)

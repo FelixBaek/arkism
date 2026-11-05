@@ -18,6 +18,8 @@ const (
 	originRule          = "rule"
 	originModel         = "model"
 	originHuman         = "human"
+	// originInput: names the caller stated on the candidate a person approved (EntityInput).
+	originInput = "input"
 	// shortcut: reads and writes load a scope's whole entity graph, bounded here; move the
 	// aggregation into SQL when one scope outgrows these.
 	entityScanLimit  = 5000
@@ -38,8 +40,10 @@ type NamedEntity struct {
 	// Summary is the approved description; SummaryDraft is the model's cited draft a person reviews.
 	Summary      *DerivedRevision `json:"summary,omitempty"`
 	SummaryDraft *DerivedRevision `json:"summary_draft,omitempty"`
-	CreatedAt    time.Time        `json:"created_at"`
-	UpdatedAt    time.Time        `json:"updated_at"`
+	// Similar are merge proposals: existing entities with a similar name (entities_similar.go).
+	Similar   []EntitySimilar `json:"similar,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 // EntityMention is one memory -mentions-> entity edge.
@@ -71,6 +75,7 @@ type entityGraph struct {
 	byKey     map[string][]*NamedEntity
 	mentions  []EntityMention
 	truncated bool
+	grams     map[string]map[string]bool // trigram sets of names, filled by similar
 }
 
 func loadEntityGraph(ctx context.Context, store namedEntityStore, scope Scope) (*entityGraph, error) {
@@ -211,8 +216,12 @@ func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active 
 	}
 	ctx, cancel := context.WithTimeout(ctx, entityApproveMax)
 	defer cancel()
-	found := []memoryEntities{{Memory: r, Names: extractEntityCandidates(entityText(r)), Origin: originRule}}
-	if _, err := s.applyEntityExtraction(ctx, r.Scope, actor, found, false); err != nil && !errors.Is(err, ErrUnavailable) {
+	cfg, err := s.spaceSettings(ctx, r.Scope)
+	if err != nil {
+		slog.Warn("entity extraction after approval: space settings unreadable", "memory", r.ID, "error", err)
+		return
+	}
+	if _, err = s.applyEntityExtraction(ctx, r.Scope, actor, cfg, memoryEntityFinds(r, cfg), false); err != nil && !errors.Is(err, ErrUnavailable) {
 		slog.Warn("entity extraction after approval failed", "memory", r.ID, "error", err)
 	}
 }
