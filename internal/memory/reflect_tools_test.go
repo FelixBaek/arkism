@@ -52,6 +52,36 @@ func TestReflectToolLoopReadsMoreAndTraces(t *testing.T) {
 	}
 }
 
+// One reply may ask for several tools; each is its own trace step and the loop spends one model call.
+func TestReflectParallelToolCalls(t *testing.T) {
+	f, llm := reflectFixture(t)
+	f.activeMemory("alpha needle", "alpha")
+	b := f.activeMemory("bravo fact", "bravo")
+	c := f.activeMemory("charlie fact", "charlie")
+	calls, _ := json.Marshal(map[string]any{"tool_calls": []any{
+		map[string]any{"name": "recall", "args": map[string]any{"query": "bravo"}},
+		map[string]any{"name": "recall", "args": map[string]any{"query": "charlie"}},
+		map[string]any{"name": "write_memory", "args": map[string]any{}},
+	}})
+	llm.answers = []string{string(calls), "ok [" + c.ID + "]"}
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "alpha"})
+	if err != nil || out.Iterations != 2 || len(out.ToolTrace) != 3 || out.ToolTrace[2].Error != "unknown_tool" {
+		t.Fatal(err, out.Iterations, out.ToolTrace)
+	}
+	if !strings.Contains(llm.prompts[1], "bravo fact") || !strings.Contains(llm.prompts[1], "charlie fact") || !slices.Equal(out.CitedMemoryIDs, []string{c.ID}) || slices.Contains(out.CitedMemoryIDs, b.ID) {
+		t.Fatal(out.CitedMemoryIDs)
+	}
+	many := []any{}
+	for range reflectParallelMax + 2 {
+		many = append(many, map[string]any{"name": "mental_models", "args": map[string]any{}})
+	}
+	raw, _ := json.Marshal(map[string]any{"tool_calls": many})
+	got, ok := parseReflectToolCalls(string(raw))
+	if !ok || len(got) != reflectParallelMax {
+		t.Fatal("parallel bound", len(got))
+	}
+}
+
 func TestReflectIterationCap(t *testing.T) {
 	f, llm := reflectFixture(t)
 	f.activeMemory("cap needle", "needle")
@@ -116,7 +146,14 @@ func TestReflectResponseSchema(t *testing.T) {
 			t.Fatal("invalid answer accepted", bad, err)
 		}
 	}
-	for _, bad := range []string{`{"type":"string","pattern":"^a"}`, `{"type":"date"}`, `[1]`, `{"properties":{"a":1}}`, `{"type":"object"} {}`} {
+	bounded := json.RawMessage(`{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"n":{"type":"integer","minimum":1,"maximum":5},"s":{"type":"string","minLength":2,"maxLength":3,"format":"x"}}}`)
+	for answer, ok := range map[string]bool{`{"n":1,"s":"ab"}`: true, `{"n":0}`: false, `{"n":6}`: false, `{"s":"a"}`: false, `{"s":"abcd"}`: false} {
+		llm.answers, llm.prompts = []string{answer}, nil
+		if _, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", ResponseSchema: bounded, MaxIterations: 1}); (err == nil) != ok {
+			t.Fatal("bounds", answer, err)
+		}
+	}
+	for _, bad := range []string{`{"type":"string","pattern":"^a"}`, `{"type":"number","minimum":"1"}`, `{"type":"date"}`, `[1]`, `{"properties":{"a":1}}`, `{"type":"object"} {}`} {
 		llm.prompts = nil
 		if _, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", ResponseSchema: json.RawMessage(bad)}); !errors.Is(err, ErrInvalid) || len(llm.prompts) != 0 {
 			t.Fatal("unsupported schema accepted", bad, err)
@@ -138,6 +175,15 @@ func TestReflectMissionAndDisposition(t *testing.T) {
 	if err != nil || !strings.Contains(out.Prompt.System, mission) || !strings.Contains(out.Prompt.System, "skepticism 5/5") || len(llm.prompts) != 0 {
 		t.Fatal("space guidance", out.Prompt, err)
 	}
+	// prompt_only returns the prompt, so the space's mission needs read:space_configs; a request's own guidance does not.
+	f.svc.Auth = denyAction{f.auth, "read:space_configs"}
+	if _, err = f.svc.Reflect(testCtx, f.agent, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true}); !errors.Is(err, ErrDenied) {
+		t.Fatal("space mission shown without read:space_configs", err)
+	}
+	if out, err = f.svc.Reflect(testCtx, f.agent, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true, Mission: "own", Disposition: &ReflectDisposition{}}); err != nil || strings.Contains(out.Prompt.System, mission) {
+		t.Fatal("request guidance", err)
+	}
+	f.svc.Auth = f.auth
 	llm.answers = []string{"ok"}
 	if _, err = f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", Mission: "Answer for a new hire.", Disposition: &ReflectDisposition{Empathy: 1}}); err != nil {
 		t.Fatal(err)
@@ -173,6 +219,9 @@ func TestReflectEntityToolChecksEachMemory(t *testing.T) {
 	open.Sensitivity = "internal"
 	f.repo.store[colMemories][recKey(open.Scope, open.ID)] = open
 	entityMemory(t, f, repo, "m2", "Postgres root password rotation is manual.", day) // unclassified: never sent
+	bare := entityMemory(t, f, repo, "m3", "Postgres backups run nightly.", day)
+	bare.Sensitivity, bare.Sources = "internal", nil // no sources: skipped, not a failed tool
+	f.repo.store[colMemories][recKey(bare.Scope, bare.ID)] = bare
 	if _, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +229,7 @@ func TestReflectEntityToolChecksEachMemory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(out.ToolTrace[0].IDs, []string{"m1"}) || strings.Contains(llm.prompts[1], "rotation") || !strings.Contains(llm.prompts[1], "stores memories in Postgres") {
+	if !slices.Equal(out.ToolTrace[0].IDs, []string{"m1"}) || out.ToolTrace[0].Error != "" || strings.Contains(llm.prompts[1], "rotation") || strings.Contains(llm.prompts[1], "backups") || !strings.Contains(llm.prompts[1], "stores memories in Postgres") {
 		t.Fatal(out.ToolTrace, llm.prompts[1])
 	}
 }

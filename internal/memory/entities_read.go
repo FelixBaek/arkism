@@ -244,9 +244,10 @@ func (s *Service) GetEntity(ctx context.Context, token string, scope Scope, id s
 }
 
 // entityMemoryRef reads the memory as the caller; unreadable or withheld ones are skipped.
+// ErrInvalid is one memory whose sources do not check out: skip it, not the whole entity.
 func (s *Service) entityMemoryRef(ctx context.Context, token string, scope Scope, e NamedEntity, m EntityMention) (EntityMemoryRef, bool, error) {
 	r, err := s.Get(ctx, token, colMemories, scope, m.MemoryID)
-	if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) {
+	if errors.Is(err, ErrDenied) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) || errors.Is(err, ErrInvalid) {
 		return EntityMemoryRef{}, false, nil
 	}
 	if err != nil {

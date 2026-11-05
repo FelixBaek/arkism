@@ -355,7 +355,9 @@ func TestObservationTransferGateIsPerMemory(t *testing.T) {
 		cur, _ := f.repo.Get(testCtx, colMemories, scopeA, m.ID)
 		all = append(all, cur)
 	}
-	kept, err := f.svc.transferableMemories(testCtx, f.human, scopeA, all)
+	bare := all[0]
+	bare.ID, bare.Sources = "mem-no-sources", nil // skipped like a denial, not a failed run
+	kept, err := f.svc.transferableMemories(testCtx, f.human, scopeA, append(all, bare))
 	if err != nil || len(kept) != 2 || kept[0].ID != ms[0].ID || kept[1].ID != ms[1].ID {
 		t.Fatalf("restricted, unclassified and restricted-source memories must not pass: %v %v", refIDs(memRefs(kept...)), err)
 	}

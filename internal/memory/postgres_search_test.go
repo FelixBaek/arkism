@@ -28,6 +28,20 @@ func TestPostgresSearchPredicatesUseBoundPlaceholders(t *testing.T) {
 	}
 }
 
+// The reflect observations tool searches with Kinds=[observation]; observation rows carry that kind in doc.
+func TestPostgresSearchKindsFilterObservations(t *testing.T) {
+	w, args := pgSearchWhere(SearchCriteria{Kinds: []string{observationKind}}, colObservations, time.Unix(0, 0).UTC(), "", nil)
+	found := false
+	for i, a := range args {
+		if kinds, ok := a.([]string); ok && len(kinds) == 1 && kinds[0] == observationKind {
+			found = strings.Contains(w, fmt.Sprintf("doc->>'kind' = ANY($%d::text[])", 6+i))
+		}
+	}
+	if !found {
+		t.Fatalf("kind predicate missing: %q %v", w, args)
+	}
+}
+
 func TestVectorSQL(t *testing.T) {
 	if got := vectorSQL([]float64{1, 0.25, -2}); got != "[1,0.25,-2]" {
 		t.Fatalf("vectorSQL=%q", got)

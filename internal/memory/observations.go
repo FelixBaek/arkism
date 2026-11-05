@@ -692,7 +692,8 @@ func (s *Service) transferableMemories(ctx context.Context, token string, scope 
 	out := []Record{}
 	for _, m := range members {
 		_, err := s.authorizeTransfer(ctx, token, "context:read", scope, m.ID, m.Sensitivity, wikiDestination, m.Text, m.Sources)
-		if errors.Is(err, ErrDenied) {
+		// ErrInvalid: the memory has no usable sources, so it cannot pass the gate; skip it like a denial.
+		if errors.Is(err, ErrDenied) || errors.Is(err, ErrInvalid) {
 			continue
 		}
 		if err != nil {

@@ -161,7 +161,7 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 	if run.rules, err = s.directives(ctx, in.Scope, "reflect"); err != nil {
 		return ReflectOutput{}, err
 	}
-	if err = s.reflectGuidance(ctx, run); err != nil {
+	if err = s.reflectGuidance(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
 	}
 	run.add(bundle.Items)
@@ -199,9 +199,11 @@ func reflectRetrieved(out ReflectOutput, run *reflectRun) ReflectOutput {
 }
 
 // reflectGuidance fills the mission and disposition: the request's, else the space's (person-set) ones.
-func (s *Service) reflectGuidance(ctx context.Context, run *reflectRun) error {
-	rec, err := s.Repo.Get(ctx, colSpaceConfigs, spaceScope(run.in.Scope), spaceConfigID)
-	view, err := spaceView(spaceScope(run.in.Scope), rec, err)
+// prompt_only hands the prompt back to the caller, so the space's settings then need read:space_configs.
+func (s *Service) reflectGuidance(ctx context.Context, token string, run *reflectRun) error {
+	scope := spaceScope(run.in.Scope)
+	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	view, err := spaceView(scope, rec, err)
 	if err != nil {
 		return err
 	}
@@ -212,7 +214,11 @@ func (s *Service) reflectGuidance(ctx context.Context, run *reflectRun) error {
 	if run.in.Disposition != nil {
 		run.disposition = run.in.Disposition
 	}
-	return nil
+	fromSpace := run.in.Mission == "" && run.mission != "" || run.in.Disposition == nil && run.disposition != nil
+	if run.in.PromptOnly && fromSpace {
+		_, err = s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, "")
+	}
+	return err
 }
 
 // reflectLoop asks the model up to max_iterations times; a tool request runs the tool
@@ -232,7 +238,7 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 		if err != nil {
 			return out, err
 		}
-		call, isTool := parseReflectToolCall(text)
+		calls, isTool := parseReflectToolCalls(text)
 		if !isTool {
 			return reflectFinish(run, text, out)
 		}
@@ -240,12 +246,14 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 			// The last call offered no tools; asking for one anyway is not an answer.
 			return out, errModelAnswer
 		}
-		step, err := s.reflectTool(ctx, token, run, call)
-		if err != nil {
-			return out, err
+		for _, call := range calls {
+			step, err := s.reflectTool(ctx, token, run, call)
+			if err != nil {
+				return out, err
+			}
+			run.trace = append(run.trace, step)
 		}
-		run.trace = append(run.trace, step)
-		out.ToolTrace = append(out.ToolTrace, step)
+		out.ToolTrace = run.trace
 	}
 	return out, errModelAnswer
 }

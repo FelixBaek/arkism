@@ -43525,18 +43525,18 @@
           },
           "prompt_only": {
             "type": "boolean",
-            "description": "Return the exact system/user prompts without any model call."
+            "description": "Return the exact system/user prompts without any model call. When the prompt carries the space's stored reflect_mission or reflect_disposition the caller also needs read:space_configs (403 otherwise)."
           },
           "max_iterations": {
             "type": "integer",
             "minimum": 1,
             "maximum": 8,
             "default": 3,
-            "description": "Model calls allowed. Above 1 the model may call read-only tools (recall with an optional created-time window and causal hop, observations, mental_models, entity, expand) before it answers; each call counts against the daily budget and every record passes the external-transfer check. The last call offers no tools."
+            "description": "Model calls allowed. Above 1 the model may call read-only tools (recall with an optional created-time window and causal hop, observations, mental_models, entity, expand) before it answers; each call counts against the daily budget and every record passes the external-transfer check. One reply may ask for up to 4 tools at once (one model call). The last call offers no tools."
           },
           "response_schema": {
             "type": "object",
-            "description": "Optional JSON Schema (at most 8 KiB) for a JSON answer. Supported keywords: type, properties, required, additionalProperties (boolean), items, enum, minItems, maxItems, title, description; any other keyword is refused with 400. An answer that does not validate is 502 invalid_model_output and is never stored."
+            "description": "Optional JSON Schema (at most 8 KiB) for a JSON answer. Supported keywords: type, properties, required, additionalProperties (boolean), items, enum, minItems, maxItems, minLength, maxLength, minimum, maximum, and the annotations title, description, format, default, examples, $schema; any other keyword is refused with 400. An answer that does not validate is 502 invalid_model_output and is never stored."
           },
           "mission": {
             "type": "string",

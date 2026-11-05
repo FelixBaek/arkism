@@ -2,7 +2,8 @@ package memory
 
 // A small JSON Schema subset for reflect's response_schema: type, properties,
 // required, additionalProperties (boolean), items, enum, minItems/maxItems,
-// plus title/description as notes. A schema using any other keyword is refused
+// minLength/maxLength, minimum/maximum, plus title/description/format/default/
+// examples/$schema as annotations. A schema using any other keyword is refused
 // up front, so a model answer is never reported valid against a rule we skipped.
 
 import (
@@ -10,6 +11,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"unicode/utf8"
 )
 
 const reflectSchemaDepth = 8
@@ -38,8 +40,13 @@ func validSchemaNode(node map[string]any, depth int) bool {
 
 func validSchemaKeyword(key string, v any, depth int) bool {
 	switch key {
-	case "title", "description":
+	case "title", "description", "format", "$schema":
 		_, ok := v.(string)
+		return ok
+	case "default", "examples":
+		return true
+	case "minimum", "maximum":
+		_, ok := v.(float64)
 		return ok
 	case "type":
 		t, ok := v.(string)
@@ -50,7 +57,7 @@ func validSchemaKeyword(key string, v any, depth int) bool {
 	case "enum":
 		list, ok := v.([]any)
 		return ok && len(list) > 0
-	case "minItems", "maxItems":
+	case "minItems", "maxItems", "minLength", "maxLength":
 		n, ok := v.(float64)
 		return ok && n >= 0 && n == math.Trunc(n)
 	case "required":
@@ -61,18 +68,19 @@ func validSchemaKeyword(key string, v any, depth int) bool {
 		return ok && validSchemaNode(sub, depth+1)
 	case "properties":
 		props, ok := v.(map[string]any)
-		if !ok {
-			return false
-		}
-		for _, p := range props {
-			sub, ok := p.(map[string]any)
-			if !ok || !validSchemaNode(sub, depth+1) {
-				return false
-			}
-		}
-		return true
+		return ok && validSchemaProperties(props, depth)
 	}
 	return false
+}
+
+func validSchemaProperties(props map[string]any, depth int) bool {
+	for _, p := range props {
+		sub, ok := p.(map[string]any)
+		if !ok || !validSchemaNode(sub, depth+1) {
+			return false
+		}
+	}
+	return true
 }
 
 // schemaAccepts reports whether v (decoded JSON) is valid against a schema parseReflectSchema accepted.
@@ -86,17 +94,25 @@ func schemaAccepts(schema map[string]any, v any) bool {
 	switch val := v.(type) {
 	case map[string]any:
 		return schemaObjectAccepts(schema, val)
+	case string:
+		n := float64(utf8.RuneCountInString(val))
+		return schemaBound(schema, "minLength", n, false) && schemaBound(schema, "maxLength", n, true)
+	case float64:
+		return schemaBound(schema, "minimum", val, false) && schemaBound(schema, "maximum", val, true)
 	case []any:
-		if n, ok := schema["minItems"].(float64); ok && float64(len(val)) < n {
-			return false
-		}
-		if n, ok := schema["maxItems"].(float64); ok && float64(len(val)) > n {
+		if !schemaBound(schema, "minItems", float64(len(val)), false) || !schemaBound(schema, "maxItems", float64(len(val)), true) {
 			return false
 		}
 		items, _ := schema["items"].(map[string]any)
 		return items == nil || !slices.ContainsFunc(val, func(x any) bool { return !schemaAccepts(items, x) })
 	}
 	return true
+}
+
+// schemaBound reports whether n keeps the schema's lower (or upper) bound keyword, if set.
+func schemaBound(schema map[string]any, key string, n float64, upper bool) bool {
+	b, ok := schema[key].(float64)
+	return !ok || upper && n <= b || !upper && n >= b
 }
 
 func schemaObjectAccepts(schema map[string]any, val map[string]any) bool {

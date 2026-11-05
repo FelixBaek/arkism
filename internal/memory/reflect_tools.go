@@ -18,10 +18,13 @@ const (
 	reflectToolEntity       = "entity"
 	reflectToolExpand       = "expand"
 	reflectMentalModelsMax  = 20
+	// reflectParallelMax bounds the tools one model reply may ask for.
+	reflectParallelMax = 4
 )
 
 const reflectToolsText = "\nTOOLS. If the records are not enough, instead of answering reply with exactly one JSON object and nothing else:\n" +
 	`{"tool_call": {"name": "<tool>", "args": {...}}}` + "\n" +
+	`or, to run up to 4 tools at once, {"tool_calls": [{"name": "<tool>", "args": {...}}, ...]}` + "\n" +
 	"- recall {query, from?, to?, causal?}: search approved memories and observations again; from/to (RFC 3339) bound the creation time, causal adds memories one cause/effect link away.\n" +
 	"- observations {query}: search approved observations only.\n" +
 	"- mental_models {}: read the approved summaries a person keeps for this space.\n" +
@@ -44,15 +47,20 @@ type reflectToolCall struct {
 	Args reflectToolArgs `json:"args"`
 }
 
-// parseReflectToolCall reads a strict {"tool_call": {...}} reply; anything else is an answer.
-func parseReflectToolCall(text string) (reflectToolCall, bool) {
+// parseReflectToolCalls reads a strict {"tool_call": {...}} or {"tool_calls": [...]} reply
+// (calls past reflectParallelMax are dropped); anything else is an answer.
+func parseReflectToolCalls(text string) ([]reflectToolCall, bool) {
 	var env struct {
-		ToolCall *reflectToolCall `json:"tool_call"`
+		ToolCall  *reflectToolCall  `json:"tool_call"`
+		ToolCalls []reflectToolCall `json:"tool_calls"`
 	}
-	if !decodeModelJSON(text, &env) || env.ToolCall == nil {
-		return reflectToolCall{}, false
+	if !decodeModelJSON(text, &env) {
+		return nil, false
 	}
-	return *env.ToolCall, true
+	if env.ToolCall != nil {
+		env.ToolCalls = append(env.ToolCalls, *env.ToolCall)
+	}
+	return env.ToolCalls[:min(len(env.ToolCalls), reflectParallelMax)], len(env.ToolCalls) > 0
 }
 
 // reflectTool runs one tool. A refused or malformed call is reported in the trace for
@@ -172,16 +180,16 @@ func (s *Service) mentalModelTransferable(ctx context.Context, token string, sco
 		}
 	}
 	sent, err := s.transferableMemories(ctx, token, scope, cited)
-	if err == nil && len(sent) == len(m.Active.Citations) {
-		sources := []SourceRef{}
-		for _, r := range sent {
-			sources = append(sources, r.Sources...)
-		}
-		_, err = s.authorizeTransfer(ctx, token, "context:read", scope, m.ID, citedSensitivity(sent, m.Active.Citations), wikiDestination, m.Active.Text, sources)
-		return err == nil, nil
-	}
-	if err != nil && !errors.Is(err, ErrInvalid) {
+	if err != nil || len(sent) != len(m.Active.Citations) {
 		return false, err
 	}
-	return false, nil
+	sources := []SourceRef{}
+	for _, r := range sent {
+		sources = append(sources, r.Sources...)
+	}
+	_, err = s.authorizeTransfer(ctx, token, "context:read", scope, m.ID, citedSensitivity(sent, m.Active.Citations), wikiDestination, m.Active.Text, sources)
+	if errors.Is(err, ErrDenied) || errors.Is(err, ErrInvalid) {
+		return false, nil
+	}
+	return err == nil, err
 }
