@@ -8,6 +8,7 @@ package memory
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -25,6 +26,8 @@ type LLMConfig struct{ Endpoint, APIKey, Model, Protocol string }
 type chatRequest struct {
 	op, provider string // dependency name for errors, provider name for the ledger
 	system, user string
+	imageMIME    string // with image: one picture sent before the user text
+	image        []byte
 	maxTokens    int
 	jsonOut      bool // ask for a JSON object where the protocol has a switch for it
 	timeout      time.Duration
@@ -47,9 +50,14 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 	if c.Protocol == llmProtocolMessages {
 		return c.messagesChat(ctx, client, req)
 	}
-	payload := map[string]any{"model": c.Model, "temperature": 0, "max_tokens": req.maxTokens, "messages": []map[string]string{
+	user := any(req.user)
+	if req.image != nil {
+		user = []map[string]any{{"type": "text", "text": req.user},
+			{"type": "image_url", "image_url": map[string]string{"url": "data:" + req.imageMIME + ";base64," + base64.StdEncoding.EncodeToString(req.image)}}}
+	}
+	payload := map[string]any{"model": c.Model, "temperature": 0, "max_tokens": req.maxTokens, "messages": []map[string]any{
 		{"role": "system", "content": req.system},
-		{"role": "user", "content": req.user},
+		{"role": "user", "content": user},
 	}}
 	if req.jsonOut {
 		payload["response_format"] = map[string]string{"type": "json_object"}
@@ -85,8 +93,13 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 }
 
 func (c LLMConfig) messagesChat(ctx context.Context, client *http.Client, req chatRequest) (chatReply, error) {
+	user := any(req.user)
+	if req.image != nil {
+		user = []map[string]any{{"type": "image", "source": map[string]string{"type": "base64", "media_type": req.imageMIME, "data": base64.StdEncoding.EncodeToString(req.image)}},
+			{"type": "text", "text": req.user}}
+	}
 	payload := map[string]any{"model": c.Model, "temperature": 0, "max_tokens": req.maxTokens, "system": req.system,
-		"messages": []map[string]string{{"role": "user", "content": req.user}}}
+		"messages": []map[string]any{{"role": "user", "content": user}}}
 	encoded, err := json.Marshal(payload)
 	if err != nil || len(encoded) > defaultRequestMax {
 		return chatReply{}, ErrInvalid

@@ -335,17 +335,26 @@ func extractRedactionNote(n int) []ExtractSkip {
 	return []ExtractSkip{{Reason: fmt.Sprintf("privacy_redacted:%d", n)}}
 }
 
+// fileUpload decodes an uploaded file within the file size limit.
+func fileUpload(in FileMemoriesInput) ([]byte, error) {
+	if len(in.ContentBase64) > base64.StdEncoding.EncodedLen(fileExtractMaxFile) {
+		return nil, errBlobTooLarge
+	}
+	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+	if err != nil || len(raw) == 0 {
+		return nil, ErrInvalid
+	}
+	return raw, nil
+}
+
 // extractFilePages reads an uploaded file of any supported format into page texts.
 func extractFilePages(in FileMemoriesInput) ([]string, bool, error) {
 	if _, err := documentMIME(in.Filename, in.MIME); err != nil {
 		return nil, false, err
 	}
-	if len(in.ContentBase64) > base64.StdEncoding.EncodedLen(fileExtractMaxFile) {
-		return nil, false, errBlobTooLarge
-	}
-	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
-	if err != nil || len(raw) == 0 {
-		return nil, false, ErrInvalid
+	raw, err := fileUpload(in)
+	if err != nil {
+		return nil, false, err
 	}
 	return documentPages(in.Filename, raw)
 }
@@ -386,7 +395,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
-	pages, paged, err := extractFilePages(in)
+	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, in)
 	if err == nil {
 		err = s.defendSpace(ctx, "", defenseGuard{action: "write:memory_candidates"}, in.Scope, pagePointers(pages)...)
 	}
@@ -397,7 +406,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
-	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
+	out := FileMemoriesResult{Skipped: append(notes, extractRedactionNote(redacted)...)}
 	if in.DryRun {
 		out.Status = JobStatusDone
 		return out, s.previewChunks(ctx, token, d, in.Scope, chunks, &out)

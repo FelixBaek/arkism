@@ -154,7 +154,9 @@ Keep the file out of Git. All settings:
 | `MEMORY_CAPTURE_MERGE_SIMILARITY` | Cosine similarity (0–1, default 0.92) at which a captured claim gets a merge proposal toward the closest approved memory instead of a plain review entry. Needs an embedder; a person still decides |
 | `MEMORY_BLOB_DIRECTORY` | Folder for attached files. With object storage on, it keeps only the lock and upload staging |
 | `MEMORY_BLOB_S3_ENDPOINT` | Optional S3-compatible object storage URL (https, or http on loopback). Set it with `_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, and optionally `_PREFIX` and `_SESSION_TOKEN` (all `MEMORY_BLOB_S3_*`) to keep attached files there. Deletion and erasure delete the objects. File backups and restore cover only the local folder |
-| `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.doc,.ppt,.xls`). It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
+| `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.epub,.rtf,.odt`). `.doc`, `.xls` and `.ppt` have built-in readers; listed there, the converter reads the files those readers cannot. It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
+| `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images and scanned PDFs (JPEG page images, up to 8 pages) are read by it for memory extraction. Off by default; without it these uploads get 415 |
+| `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
 Values the `arkism` tools read:
@@ -256,10 +258,19 @@ wiki. What a person approves and how is described in
    falls back to a full rewrite and the approved text is not sent. With nothing
    new the refresh answers `404`. The draft still waits for a person. Existing
    models keep `full`.
-6. **File extraction jobs.** Cancel a running extraction with
+6. **Images, scanned PDFs and audio in file extraction (optional).**
+   `MEMORY_FILE_VISION=1` and `MEMORY_TRANSCRIBE_*` are off by default because
+   each file is a model call. The raw file leaves the server only after a
+   `transfer:model_input` decision for destination `external:wiki-llm`
+   (images) or `external:transcription` (audio); grant it with
+   `external:transfer` like other model input. The calls count against the
+   daily model call cap and appear in usage as `wiki_file_vision` and
+   `wiki_file_transcribe`. What the model returns goes through the same
+   privacy filters and becomes review candidates only.
+7. **File extraction jobs.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
-7. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
+8. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
    set, attached files live in the bucket, not in `MEMORY_BLOB_DIRECTORY`.
    The server backup does not copy the bucket, and `memoryd --adopt-restored-blobs`
    refuses to run while object storage is on. Back the bucket up yourself
@@ -267,7 +278,7 @@ wiki. What a person approves and how is described in
    backup, and restore it to the same time as the database. Switch storage
    only on an empty blob folder: blob garbage collection stops with an error
    while digest files are still in the folder.
-7. **Model rerank (optional, off by default).** A search or context build
+9. **Model rerank (optional, off by default).** A search or context build
    that sends `"rerank": "model"`, or any search in a space whose config sets
    `rerank_model: true`, lets the server model reorder the top 20 results.
    `"rerank": false` still turns every reranker off. Each call spends the
@@ -279,7 +290,7 @@ wiki. What a person approves and how is described in
    sent. When anything fails the order stays as it was, and
    `explain.model_rerank` names why. Search, context build and the MCP
    `recall` tool now accept the `rerank` string `"model"` as well as a boolean.
-8. **Time words in more languages.** Recall now reads time words ("yesterday",
+10. **Time words in more languages.** Recall now reads time words ("yesterday",
    "3 months ago", "fin octobre", "Ekim'de") from per-language tables, plus
    ISO weeks (`2026-W44`) and a year alone (`2025년`). Numeric dates with dots
    or dashes are read day first: `03-04-2026` is 3 April, never March 4.

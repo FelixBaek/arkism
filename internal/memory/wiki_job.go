@@ -359,16 +359,24 @@ const wikiDestination = "external:wiki-llm"
 // wikiCall is the budget gate: it refuses before calling when the daily call
 // cap or the job token budget would be passed, and records every call made.
 func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, operation, system, user string) (string, error) {
+	estimate := int64(utf8.RuneCountInString(system)+utf8.RuneCountInString(user))/3 + wikiMaxCallTokens
+	return s.budgetedCall(ctx, scope, job, estimate, func() (string, ProviderUsage, error) {
+		return s.modelCall(ctx, scope, operation, system, user, wikiMaxCallTokens)
+	})
+}
+
+// budgetedCall gates one model call of any kind (text, image, audio) on the
+// daily call cap and the job's token budget, and charges what it spent.
+func (s *Service) budgetedCall(ctx context.Context, scope Scope, job *WikiJob, estimate int64, call func() (string, ProviderUsage, error)) (string, error) {
 	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
 	if err != nil {
 		return "", err
 	}
-	estimate := int64(utf8.RuneCountInString(system)+utf8.RuneCountInString(user))/3 + wikiMaxCallTokens
 	if calls >= wikiDailyCallLimit || job.Tokens+estimate > job.MaxTotalTokens {
 		return "", errWikiBudget
 	}
 	job.Calls++
-	text, usage, err := s.modelCall(ctx, scope, operation, system, user, wikiMaxCallTokens)
+	text, usage, err := call()
 	// Tokens a call spent count against the job even when its answer is rejected.
 	job.Tokens += max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens)
 	return text, err
@@ -380,17 +388,23 @@ func (s *Service) modelCall(ctx context.Context, scope Scope, operation, system,
 	if s.Wiki == nil {
 		return "", ProviderUsage{}, ErrModelNotConfigured
 	}
-	gen := s.Wiki.Generator()
-	reserved, err := s.beginProviderCall(ctx, scope, operation, wikiProvider, gen.Model)
+	return s.ledgerCall(ctx, scope, operation, wikiProvider, s.Wiki.Generator().Model, func(ctx context.Context) (string, ProviderUsage, error) {
+		return s.Wiki.Complete(ctx, system, user, maxTokens)
+	})
+}
+
+// ledgerCall reserves a provider_usage row, makes the call and files what it used.
+func (s *Service) ledgerCall(ctx context.Context, scope Scope, operation, provider, model string, call func(context.Context) (string, ProviderUsage, error)) (string, ProviderUsage, error) {
+	reserved, err := s.beginProviderCall(ctx, scope, operation, provider, model)
 	if err != nil {
 		return "", ProviderUsage{}, err
 	}
-	text, usage, err := s.Wiki.Complete(WithLLMOperation(ctx, operation, scope), system, user, maxTokens)
+	text, usage, err := call(WithLLMOperation(ctx, operation, scope))
 	if usage.Provider == "" {
-		usage.Provider = wikiProvider
+		usage.Provider = provider
 	}
 	if usage.Model == "" {
-		usage.Model = gen.Model
+		usage.Model = model
 	}
 	if usage.Requests == 0 {
 		usage.Requests = 1
@@ -855,14 +869,39 @@ func (s *Service) updateWikiDraft(ctx context.Context, tx Tx, claimed Record, jo
 }
 
 // ChatWikiLLM calls the server model (the skill LLM config, llm_chat.go).
-type ChatWikiLLM struct{ Config LLMConfig }
+// Vision says the operator confirmed the endpoint's model takes image input.
+type ChatWikiLLM struct {
+	Config LLMConfig
+	Vision bool
+}
+
+// VisionLLM is a server model that can also read one image.
+type VisionLLM interface {
+	ImageInput() bool
+	CompleteImage(ctx context.Context, system, user, mime string, image []byte, maxTokens int) (string, ProviderUsage, error)
+}
 
 func (c *ChatWikiLLM) Generator() Generator {
 	return Generator{Model: c.Config.Model, PromptVersion: wikiPromptVersion, PipelineVersion: wikiPipelineVersion}
 }
 
 func (c *ChatWikiLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
-	reply, err := c.Config.chat(ctx, chatRequest{op: "wiki llm", provider: wikiProvider, system: system, user: user, maxTokens: maxTokens, timeout: 120 * time.Second})
+	return c.complete(ctx, chatRequest{system: system, user: user, maxTokens: maxTokens})
+}
+
+func (c *ChatWikiLLM) ImageInput() bool { return c.Vision }
+
+// CompleteImage sends the image as a content part next to the prompt.
+func (c *ChatWikiLLM) CompleteImage(ctx context.Context, system, user, mime string, image []byte, maxTokens int) (string, ProviderUsage, error) {
+	if !c.Vision {
+		return "", ProviderUsage{}, ErrModelNotConfigured
+	}
+	return c.complete(ctx, chatRequest{system: system, user: user, imageMIME: mime, image: image, maxTokens: maxTokens})
+}
+
+func (c *ChatWikiLLM) complete(ctx context.Context, req chatRequest) (string, ProviderUsage, error) {
+	req.op, req.provider, req.timeout = "wiki llm", wikiProvider, 120*time.Second
+	reply, err := c.Config.chat(ctx, req)
 	if err != nil {
 		return "", ProviderUsage{}, err
 	}

@@ -71,14 +71,37 @@ func TraceLLM(svc *Service, inner WikiLLM) WikiLLM {
 func (t *tracedLLM) Generator() Generator { return t.inner.Generator() }
 
 func (t *tracedLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
-	call, traced := ctx.Value(llmCallKey{}).(llmCall)
+	return t.traced(ctx, system+"\n\n"+user, func(ctx context.Context) (string, ProviderUsage, error) {
+		return t.inner.Complete(ctx, system, user, maxTokens)
+	})
+}
+
+func (t *tracedLLM) ImageInput() bool {
+	v, ok := t.inner.(VisionLLM)
+	return ok && v.ImageInput()
+}
+
+// CompleteImage traces the prompt and the image's digest, never its bytes.
+func (t *tracedLLM) CompleteImage(ctx context.Context, system, user, mime string, image []byte, maxTokens int) (string, ProviderUsage, error) {
+	v, ok := t.inner.(VisionLLM)
+	if !ok {
+		return "", ProviderUsage{}, ErrModelNotConfigured
+	}
+	prompt := system + "\n\n" + user + "\n\n[image " + mime + " sha256:" + ContentHash(string(image)) + "]"
+	return t.traced(ctx, prompt, func(ctx context.Context) (string, ProviderUsage, error) {
+		return v.CompleteImage(ctx, system, user, mime, image, maxTokens)
+	})
+}
+
+func (t *tracedLLM) traced(ctx context.Context, prompt string, call func(context.Context) (string, ProviderUsage, error)) (string, ProviderUsage, error) {
+	trace, traced := ctx.Value(llmCallKey{}).(llmCall)
 	ctx, span := startSpan(ctx, "model.complete")
-	span.set("arkism.operation", call.operation)
+	span.set("arkism.operation", trace.operation)
 	start := time.Now()
-	out, usage, err := t.inner.Complete(ctx, system, user, maxTokens)
+	out, usage, err := call(ctx)
 	span.end(err)
 	if traced && t.svc != nil {
-		t.svc.recordLLMRequest(ctx, call.scope, call.operation, t.inner.Generator(), system+"\n\n"+user, out, usage, start, err)
+		t.svc.recordLLMRequest(ctx, trace.scope, trace.operation, t.inner.Generator(), prompt, out, usage, start, err)
 	}
 	return out, usage, err
 }

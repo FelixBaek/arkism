@@ -147,7 +147,8 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
-			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config})
+			// MEMORY_FILE_VISION=1: the model reads uploaded images and scanned PDFs.
+			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1"})
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes
@@ -162,7 +163,11 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		return err
 	}
 	configureDaemonRouting(svc)
-	return nil
+	transcriber, err := memory.TranscriberFromEnv() // MEMORY_TRANSCRIBE_*: uploaded audio becomes text
+	if transcriber != nil {
+		svc.Transcriber = transcriber
+	}
+	return err
 }
 func configureDaemonAnthropic(svc *memory.Service) error {
 	if os.Getenv("ARKISM_ANTHROPIC_SKILL_DRAFTER") != "1" {

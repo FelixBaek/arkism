@@ -59,7 +59,9 @@ type Service struct {
 	SyntheticHandoff  bool
 	BlobDirectory     string
 	// BlobObjects, when set, stores blob bytes there instead of in BlobDirectory.
-	BlobObjects         BlobObjectStore
+	BlobObjects BlobObjectStore
+	// Transcriber, when set, turns uploaded audio into text for memory extraction.
+	Transcriber         Transcriber
 	CandidateDailyLimit int
 	// CaptureMergeSimilarity is the cosine similarity at or above which a captured
 	// claim gets a merge proposal toward the closest approved memory instead of a

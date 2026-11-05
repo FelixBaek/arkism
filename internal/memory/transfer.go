@@ -23,6 +23,15 @@ func (s *Service) authorizeTransfer(ctx context.Context, token, action string, s
 	if err := checkTransferSources(ctx, s.Repo, scope, sensitivity, sources); err != nil {
 		return Decision{}, err
 	}
+	return s.transferDecision(ctx, token, action, scope, id, sensitivity, destination, content)
+}
+
+// transferDecision is the policy half of authorizeTransfer, for input that is
+// not a stored record (an uploaded file going to a model has no sources yet).
+func (s *Service) transferDecision(ctx context.Context, token, action string, scope Scope, id, sensitivity, destination, content string) (Decision, error) {
+	if !transferableContent(sensitivity, content) {
+		return Decision{}, ErrDenied
+	}
 	d, e := s.authorizeAt(ctx, token, action, scope, id, structuredText(map[string]string{"destination": destination, "sensitivity": sensitivity, "content": content}), destination)
 	if e != nil {
 		return Decision{}, e

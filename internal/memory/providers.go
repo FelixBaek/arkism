@@ -128,7 +128,7 @@ func postJSON(ctx context.Context, client *http.Client, endpoint, credential str
 	return postBody(ctx, client, endpoint, header, encoded, maxResponse)
 }
 
-// postBody POSTs exact JSON bytes with extra headers (a signature is over these
+// postBody POSTs exact JSON bytes (or another body the header's Content-Type names) with extra headers (a signature is over these
 // bytes) under postJSON's rules: no redirects, bounded response body.
 func postBody(ctx context.Context, client *http.Client, endpoint string, header http.Header, body []byte, maxResponse int64) ([]byte, int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
@@ -138,7 +138,9 @@ func postBody(ctx context.Context, client *http.Client, endpoint string, header 
 	for k, v := range header {
 		req.Header[k] = v
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	injectTraceparent(ctx, endpoint, req.Header)
 	resp, err := client.Do(req)
 	if err != nil {

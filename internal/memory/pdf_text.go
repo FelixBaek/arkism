@@ -290,10 +290,10 @@ type pdfDoc struct {
 
 var pdfObjHeader = regexp.MustCompile(`(\d+)\s+\d+\s+obj\b`)
 
-// pdfPagesText returns each page's text in page order. Objects are found by
-// scanning, not through the cross-reference table, so a damaged table or an
-// incremental update still reads; a later definition wins.
-func pdfPagesText(raw []byte) ([]string, error) {
+// pdfParse indexes a PDF's objects. Objects are found by scanning, not
+// through the cross-reference table, so a damaged table or an incremental
+// update still reads; a later definition wins.
+func pdfParse(raw []byte) (*pdfDoc, error) {
 	if !bytes.HasPrefix(bytes.TrimLeft(raw, " \r\n\t"), []byte("%PDF-")) {
 		return nil, ErrInvalid
 	}
@@ -320,6 +320,15 @@ func pdfPagesText(raw []byte) ([]string, error) {
 		d.objs[num], pos = v, l.i
 	}
 	d.expandObjectStreams()
+	return d, nil
+}
+
+// pdfPagesText returns each page's text in page order.
+func pdfPagesText(raw []byte) ([]string, error) {
+	d, err := pdfParse(raw)
+	if err != nil {
+		return nil, err
+	}
 	pages := d.pages()
 	out := make([]string, 0, len(pages))
 	found, total := false, 0
@@ -333,6 +342,31 @@ func pdfPagesText(raw []byte) ([]string, error) {
 	}
 	if !found {
 		return nil, errPDFNoText
+	}
+	return out, nil
+}
+
+// pdfPageImages returns each page's largest JPEG image, the form a scanner
+// usually writes a page in; a page without one gets nil.
+// shortcut: JPEG (DCTDecode) only; Flate, CCITT and JBIG2 scans are not read.
+func pdfPageImages(raw []byte) ([][]byte, error) {
+	d, err := pdfParse(raw)
+	if err != nil {
+		return nil, err
+	}
+	pages := d.pages()
+	out := make([][]byte, len(pages))
+	for i, page := range pages {
+		for _, ref := range d.dictOf(d.dictOf(page["Resources"])["XObject"]) {
+			st, ok := d.resolve(ref).(pdfStream)
+			filter := d.resolve(st.dict["Filter"])
+			if arr, single := filter.([]any); single && len(arr) == 1 {
+				filter = d.resolve(arr[0])
+			}
+			if ok && st.dict["Subtype"] == pdfName("Image") && filter == pdfName("DCTDecode") && len(st.data) > len(out[i]) {
+				out[i] = st.data
+			}
+		}
 	}
 	return out, nil
 }
