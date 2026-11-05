@@ -104,7 +104,7 @@ func (s *Service) auditDenial(ctx context.Context, class string, request Authori
 		Kind: class + ":" + request.Action, Status: "active", Revision: 1,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: principal, CreatedByType: role,
 		Target: auditTarget(request),
-		Audit:  auditMeta(ctx, AuditMetadata{RequestID: boundRequestID, Decision: "deny", PolicyDecisionID: policyDecisionID})}
+		Audit:  auditMeta(ctx, role, AuditMetadata{RequestID: boundRequestID, Decision: "deny", PolicyDecisionID: policyDecisionID})}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if _, err := tx.Get(ctx, "audit_events", r.Scope, r.ID); err == nil {
 			return nil

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"fmt"
 	"io"
@@ -77,6 +78,15 @@ func (h *histogramCounts) observe(bounds []float64, v float64) {
 	}
 }
 
+// metricLabel keeps a configured name as a label value; anything unusual,
+// secret-looking or long becomes "other", so a label never carries user text.
+func metricLabel(v string) string {
+	if !validRunLabel(v, 128) || containsSecret(v) {
+		return "other"
+	}
+	return v
+}
+
 type llmMetrics struct {
 	mu     sync.Mutex
 	series map[[3]string]*llmSeries
@@ -88,7 +98,7 @@ type llmMetrics struct {
 func observeLLMCall(operation, provider, model string, ok bool, elapsed time.Duration, usage ProviderUsage) {
 	llmStats.mu.Lock()
 	defer llmStats.mu.Unlock()
-	key := [3]string{operation, provider, model}
+	key := [3]string{metricLabel(operation), metricLabel(provider), metricLabel(model)}
 	s := llmStats.series[key]
 	if s == nil {
 		if len(llmStats.series) >= llmMetricsMaxSeries {
@@ -311,7 +321,8 @@ type PrometheusConfig struct {
 // so a proxied deployment sets a token.
 func (c PrometheusConfig) allowed(r *http.Request) bool {
 	if c.Token != "" {
-		return subtle.ConstantTimeCompare([]byte(bearer(r)), []byte(c.Token)) == 1
+		got, want := sha256.Sum256([]byte(bearer(r))), sha256.Sum256([]byte(c.Token)) // equal lengths: no length leak
+		return subtle.ConstantTimeCompare(got[:], want[:]) == 1
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	return err == nil && isLoopbackHost(host)

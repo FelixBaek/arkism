@@ -304,7 +304,7 @@ func audit(ctx context.Context, tx Tx, scope Scope, actor, action, id string) er
 		return nil // an optional event this space switched off
 	}
 	now := time.Now().UTC()
-	return tx.Insert(ctx, "audit_events", Record{Audit: auditMeta(ctx, AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow"}), ID: ID(), Scope: scope, Kind: action, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
+	return tx.Insert(ctx, "audit_events", Record{Audit: auditMeta(ctx, "", AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow"}), ID: ID(), Scope: scope, Kind: action, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
 }
 
 // Match the Create source-reference limit; bound even legacy/direct DB inputs.

@@ -43,7 +43,7 @@ func recordDecision(ctx context.Context, tx Tx, scope Scope, actor, kind, id, co
 		return ErrSecretDetected
 	}
 	now := time.Now().UTC()
-	return tx.Insert(ctx, "audit_events", Record{Audit: auditMeta(ctx, AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow", ReasonCode: code, Reason: reason}),
+	return tx.Insert(ctx, "audit_events", Record{Audit: auditMeta(ctx, "", AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow", ReasonCode: code, Reason: reason}),
 		ID: ID(), Scope: scope, Kind: decisionKindPrefix + kind, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
 }
 

@@ -250,8 +250,13 @@ func TestSpaceAuditSettingsNeverDropMandatoryEvents(t *testing.T) {
 }
 
 func TestAuditMandatoryClassification(t *testing.T) {
-	for action, want := range map[string]bool{"read:memories": false, "read:sources": true, "read:session_archive_raw": true, "erase:source_memories": true,
-		"export:memories": true, "generate:reflect": false, "decide:x": true, "": true} {
+	for action, want := range map[string]bool{"read:memories": false, "search": false, "preview:delete:memories": false, "read:sources": true,
+		"read:session_archive_raw": true, "read:session_archive_messages": true, "read:session_archives": true, "read:source_derived:memories": true,
+		"erase:source_memories": true, "export:memories": true, "decide:x": true, "": true,
+		// writes, state changes and blocked content are never optional
+		"wiki:edit": true, "wiki:source_removed": true, "inspection:blocked:v1": true, "ingest:replay": true, "propose:memories": true,
+		"set_review_due:memories": true, "start:skill_trials": true, "claim:flow_effect": true, "use:merge_proposals": true,
+		"generate:skills:reuse": true, "extract:entities": true, "judge:user_digests:keep": true, "knowledge:binding": true} {
 		if auditMandatory(action) != want {
 			t.Error(action, want)
 		}
@@ -267,6 +272,7 @@ func TestAuditEventCarriesRequestMetadata(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/x", nil)
 	req.Header.Set(auditTransportHeader, "mcp")
 	ctx := withAuditRequest(testCtx, req, "POST /v1/x", time.Now().Add(-20*time.Millisecond))
+	ctx = context.WithValue(ctx, httpActorKey{}, &httpActor{principal: "agent-1", role: roleAgent})
 	writeAudit(t, f, ctx, "erase:memories")
 	ev := auditRows(f, scopeA)["erase:memories"]
 	if a := ev.Audit; a.Transport != "mcp" || a.Route != "POST /v1/x" || a.Method != http.MethodPost || a.DurationMS < 20 {
@@ -292,6 +298,60 @@ func TestAuditEventCarriesRequestMetadata(t *testing.T) {
 	}
 	if rec = get(f.human, "missing"); rec.Code != http.StatusNotFound {
 		t.Fatal("missing event", rec.Code)
+	}
+}
+
+// A caller cannot forge its transport: only an agent or service principal keeps
+// a declared "mcp", any other label or role is "http", and "system" is never
+// taken from a request.
+func TestAuditTransportIsNotCallerControlled(t *testing.T) {
+	for _, c := range []struct{ header, role, want string }{
+		{"mcp", roleAgent, "mcp"}, {"mcp", roleService, "mcp"}, {"mcp", roleHuman, "http"}, {"mcp", "", "http"},
+		{"MCP", roleAgent, "http"}, {"system", roleService, "http"}, {"", roleAgent, "http"},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+		req.Header.Set(auditTransportHeader, c.header)
+		ctx := withAuditRequest(testCtx, req, "GET /v1/x", time.Now())
+		if got := auditMeta(ctx, c.role, AuditMetadata{}).Transport; got != c.want {
+			t.Errorf("header %q role %q: %q, want %q", c.header, c.role, got, c.want)
+		}
+	}
+	// The role the route check bound to ctx counts the same way.
+	req := httptest.NewRequest(http.MethodGet, "/v1/x", nil)
+	req.Header.Set(auditTransportHeader, "mcp")
+	ctx := context.WithValue(withAuditRequest(testCtx, req, "GET /v1/x", time.Now()), httpActorKey{}, &httpActor{role: roleHuman})
+	if got := auditMeta(ctx, "", AuditMetadata{}).Transport; got != "http" {
+		t.Fatal("human claimed mcp", got)
+	}
+}
+
+// Only a human changes a space's audit block, and even "off" keeps writes.
+func TestAgentCannotSwitchOffSpaceAudit(t *testing.T) {
+	f := newFixture(t)
+	off := false
+	body := strings.NewReader(`{"audit":{"enabled":false}}`)
+	r := httptest.NewRequest(http.MethodPut, "/v1/spaces/"+scopeA.WorkspaceID+"/"+scopeA.ProjectID+"/config", body).WithContext(testCtx)
+	r.Header.Set("Authorization", "Bearer "+f.agent)
+	rec := httptest.NewRecorder()
+	Handler(f.svc).ServeHTTP(rec, r)
+	if rec.Code != http.StatusForbidden {
+		t.Fatal("agent changed space audit", rec.Code, rec.Body)
+	}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.agent, scopeA, SpaceConfigInput{Audit: &SpaceAudit{Enabled: &off}}, false); err == nil {
+		t.Fatal("agent changed space audit through the service")
+	}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{Audit: &SpaceAudit{Enabled: &off, Actions: []string{"*"}}}, false); err != nil {
+		t.Fatal(err)
+	}
+	writeAudit(t, f, testCtx, "wiki:edit", "propose:memories", "read:session_archive_messages", "read:memories")
+	got := auditRows(f, scopeA)
+	for _, kept := range []string{"wiki:edit", "propose:memories", "read:session_archive_messages"} {
+		if _, ok := got[kept]; !ok {
+			t.Error("space admin dropped mandatory event", kept)
+		}
+	}
+	if _, ok := got["read:memories"]; ok {
+		t.Error("optional read kept with audit off")
 	}
 }
 
@@ -424,5 +484,32 @@ func TestOTLPMetricsExport(t *testing.T) {
 	}
 	if got := otlpBuckets([]uint64{1, 3, 3}, 3, 5); strings.Join(got, ",") != "1,2,0,2" {
 		t.Fatal("bucket conversion", got)
+	}
+}
+
+// Metric labels never carry odd or secret-looking names, and the metrics push
+// only goes to https or a loopback collector.
+func TestMetricLabelsAndExportEndpointGuarded(t *testing.T) {
+	for v, want := range map[string]string{"wiki.page": "wiki.page", "gpt-x": "gpt-x", "": "other", "a b\n": "other",
+		"sk-ant-api03-" + strings.Repeat("A", 40): "other", strings.Repeat("m", 200): "other"} {
+		if got := metricLabel(v); got != want {
+			t.Errorf("%q: %q", v, got)
+		}
+	}
+	for _, endpoint := range []string{"http://169.254.169.254/v1/metrics", "http://10.0.0.5:4318/v1/metrics", "file:///etc/passwd", ""} {
+		if stop, err := StartMetricsExport(&Service{}, endpoint, "", time.Hour); err == nil {
+			stop()
+			t.Error("accepted", endpoint)
+		}
+	}
+}
+
+// A ledger that refuses the reservation still lets the picker choose, as before
+// the shared ledger call; the pick is then unrecorded.
+func TestModelPickerWorksWithoutLedger(t *testing.T) {
+	s := &Service{}
+	choice, ok := s.pickModel(testCtx, tracePicker{}, scopeA, "task", []ModelOption{{ID: "fast", Name: "Fast"}})
+	if !ok || choice != "fast" {
+		t.Fatal("pick without ledger", choice, ok)
 	}
 }

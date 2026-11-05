@@ -909,10 +909,16 @@ func (s *Service) pickModel(ctx context.Context, picker ModelPicker, scope Scope
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
 	m := modelCallSpec{scope: scope, operation: "model_routing", kind: "route", provider: provider, model: model, prompt: task + "\n" + structuredText(options)}
-	choice, _, callErr, err := meteredCall(op, s, m, func(ctx context.Context) (string, ProviderUsage, error) {
+	called := false
+	choice, _, callErr, _ := meteredCall(op, s, m, func(ctx context.Context) (string, ProviderUsage, error) {
+		called = true
 		return picker.PickModel(ctx, task, options)
 	})
-	return choice, callErr == nil && err == nil
+	if !called { // the ledger refused the reservation: still pick, unrecorded, as before the shared call
+		choice, _, callErr = picker.PickModel(op, task, options)
+	}
+	// A ledger failure after the call never discards the picked model.
+	return choice, callErr == nil
 }
 
 // ------------------------------------------------------------------ calls

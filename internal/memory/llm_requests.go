@@ -227,9 +227,11 @@ func deleteLLMTracesFor(ctx context.Context, tx Tx, scope Scope, id string) erro
 	if !ok || id == "" {
 		return nil
 	}
+	// Pages by id so a row that row security hides from DELETE cannot loop the walk.
+	before := ""
 	for {
 		rows, err := store.ListScopedRows(ctx, scopedRowQuery{Collection: colLLMRequests, Kind: llmRequestKind, Scope: scope,
-			Path: []string{"llm_request", "document_id"}, Value: id, Limit: 500})
+			Path: []string{"llm_request", "document_id"}, Value: id, Before: before, Limit: 500})
 		if err != nil {
 			return err
 		}
@@ -241,6 +243,7 @@ func deleteLLMTracesFor(ctx context.Context, tx Tx, scope Scope, id string) erro
 		if len(rows) < 500 {
 			return nil
 		}
+		before = rows[len(rows)-1].ID
 	}
 }
 

@@ -496,9 +496,11 @@ open files). They hold no memory text and no scope data.
 
 `GET /v1/audit-events` lists a scope's audit events and
 `GET /v1/audit-events/{id}` reads one (both human `read:audit_events`). Each
-event carries redacted request metadata: `transport` (`mcp` when the caller
-sends `X-Arkism-Transport: mcp`, as the router tools do; `http` for other
-requests; `system` for background work), `method`, the route pattern (never the
+event carries redacted request metadata: `transport` (`mcp` when an agent or
+service token sends `X-Arkism-Transport: mcp`, as the router tools do; `http`
+for every other request, including a person's token that sends the header;
+`system` for background work, never taken from a request; the label is the
+router's claim, not proof), `method`, the route pattern (never the
 raw URL or query) and `duration_ms`. Request and response bodies are never
 captured.
 
@@ -507,16 +509,18 @@ A space can narrow its optional events with an `audit` block in its config
 `{"audit": {"enabled": false}}` drops them, and `{"audit": {"actions":
 ["read:memories", "search:*"]}}` keeps only the listed ones (at most 64; a
 trailing `*` matches a prefix). `{"audit": {}}` records everything again, the
-default. Optional events are routine reads, previews, searches, job progress
-and model usage bookkeeping. These are always recorded, whatever the block
-says (the event's `mandatory` field is `true`):
+default. Only a person can change the block. Optional events are routine
+reads, previews, searches and observations that change nothing stored. These
+are always recorded, whatever the block says (the event's `mandatory` field is
+`true`):
 
 - denials and policy decisions;
 - deletes, erasures, restores, exports, imports, transfers and handoffs,
   privacy requests and holds, settings and policy changes, writes, creates,
-  updates, reviews and maintenance;
-- raw-content reads (`read:session_archive_raw`, `read:artifacts`,
-  `read:sources`);
+  updates, reviews, proposals, job and budget bookkeeping, blocked-content
+  inspections and maintenance;
+- raw-content reads (session archives and their messages, sources, artifacts
+  and source-derived rows);
 - any action added later, until it is listed as optional.
 
 If the space settings cannot be read, the event is recorded.

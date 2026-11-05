@@ -21,23 +21,20 @@ import (
 //     transfers, imports, maintenance, and any verb added later;
 //   - raw-content reads (auditMandatoryReads), even though read is optional.
 //
-// Optional events (routine reads, previews, searches, job progress, model
-// generation and usage bookkeeping) follow the space's audit block: enabled
+// Optional events (routine reads, previews, searches and observations) follow the space's audit block: enabled
 // false drops them, and a non-empty actions list keeps only the actions it
 // names (a trailing * matches a prefix). A space without the block, or whose
 // block cannot be read, records everything: the default is on, and a failure
 // fails toward recording.
 
+// Only verbs that change nothing stored are optional; a verb that writes,
+// claims, settles, extracts or reviews anything stays mandatory.
 var auditOptionalVerbs = map[string]bool{
-	"read": true, "preview": true, "start": true, "stop": true, "finish": true, "observe": true, "refresh": true,
-	"record": true, "claim": true, "settle": true, "reserve": true, "prepare": true, "extract": true, "wiki": true,
-	"knowledge": true, "retrieve": true, "revalidate": true, "inspection": true, "flow_child": true, "flow_delivery": true,
-	"file_extract": true, "ingest": true, "use": true, "search": true, "watch": true, "judge": true,
-	"generate": true, "availability": true, "confirm": true, "set_review_due": true,
-	"stale": true, "propose": true,
+	"read": true, "preview": true, "search": true, "retrieve": true, "watch": true, "observe": true, "availability": true,
 }
 
-var auditMandatoryReads = []string{"read:session_archive_raw", "read:artifacts", "read:sources"}
+// Raw-content reads stay mandatory although read is optional.
+var auditMandatoryReads = []string{"read:session_archive_raw", "read:session_archive_messages", "read:session_archives", "read:artifacts", "read:sources", "read:source_derived"}
 
 const (
 	spaceAuditActionsMax = 64
@@ -106,31 +103,37 @@ type auditRequestInfoKey struct{}
 
 // auditRequestInfo is what the HTTP middleware knows about the request an event belongs to.
 type auditRequestInfo struct {
-	start                    time.Time
-	transport, route, method string
+	start         time.Time
+	mcp           bool // the caller sent X-Arkism-Transport: mcp
+	route, method string
 }
 
-// withAuditRequest binds the request's arrival time, route and transport. The
-// transport is the caller's declared label: "mcp" when the host's tool router
-// sent X-Arkism-Transport: mcp, else "http".
+// withAuditRequest binds the request's arrival time, route and the transport
+// the caller declared. The declaration is only a claim: auditMeta keeps "mcp"
+// for an agent or service principal (the host's tool router) and records every
+// other request as "http". "system" is never taken from a request.
 func withAuditRequest(ctx context.Context, r *http.Request, route string, start time.Time) context.Context {
-	transport := "http"
-	if strings.EqualFold(r.Header.Get(auditTransportHeader), "mcp") {
-		transport = "mcp"
-	}
-	return context.WithValue(ctx, auditRequestInfoKey{}, auditRequestInfo{start: start, transport: transport, route: route, method: r.Method})
+	return context.WithValue(ctx, auditRequestInfoKey{}, auditRequestInfo{start: start, mcp: r.Header.Get(auditTransportHeader) == "mcp", route: route, method: r.Method})
 }
 
 // auditMeta fills an event's request metadata: transport, route, method and
 // the milliseconds from the request's arrival to the event. Work outside a
-// request (workers, timers) is transport "system".
-func auditMeta(ctx context.Context, m AuditMetadata) *AuditMetadata {
+// request (workers, timers) is transport "system". role is the authenticated
+// principal's role; empty reads the role the route check bound to ctx.
+func auditMeta(ctx context.Context, role string, m AuditMetadata) *AuditMetadata {
 	info, ok := ctx.Value(auditRequestInfoKey{}).(auditRequestInfo)
 	if !ok {
 		m.Transport = "system"
 		return &m
 	}
-	m.Transport, m.Route, m.Method = info.transport, info.route, info.method
+	if actor, bound := ctx.Value(httpActorKey{}).(*httpActor); role == "" && bound {
+		role = actor.role
+	}
+	m.Transport = "http"
+	if info.mcp && (role == roleAgent || role == roleService) {
+		m.Transport = "mcp"
+	}
+	m.Route, m.Method = info.route, info.method
 	m.DurationMS = time.Since(info.start).Milliseconds()
 	return &m
 }
