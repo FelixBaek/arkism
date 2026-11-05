@@ -40,7 +40,7 @@ func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scop
 		if len(sent) == 0 {
 			continue
 		}
-		t, err := s.authorizeAt(ctx, token, "generate:entities", scope, "", user, "external:wiki-llm")
+		t, err := s.authorizeAt(ctx, token, "generate:entities", scope, "", user, wikiDestination)
 		if err != nil {
 			return nil, job.Calls, err
 		}

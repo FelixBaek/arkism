@@ -18,7 +18,6 @@ import (
 const (
 	reflectOperation        = "reflect"
 	reflectPromptVersion    = "reflect-v1"
-	reflectDestination      = "external:wiki-llm"
 	reflectDailyCallLimit   = 100
 	reflectDefaultMaxTokens = 1024
 	reflectMaxTokens        = 4096
@@ -74,7 +73,7 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 	search := SearchInput{Scope: in.Scope, Query: in.Query, Limit: in.Limit, Purpose: "answer"}
 	if !in.PromptOnly {
 		// The hits go to the server model: each one passes the external-transfer filter.
-		search.Destination = reflectDestination
+		search.Destination = wikiDestination
 	}
 	if len(in.Tags) > 0 {
 		search.Filters = &SearchFilters{Tags: in.Tags}
@@ -117,7 +116,7 @@ func (s *Service) reflectAnswer(ctx context.Context, token string, in ReflectInp
 		return out, ErrModelBudget
 	}
 	// The memories leave the server for the model: an explicit transfer decision.
-	t, err := s.authorizeAt(ctx, token, "generate:reflect", in.Scope, "", system+"\n"+user, reflectDestination)
+	t, err := s.authorizeAt(ctx, token, "generate:reflect", in.Scope, "", system+"\n"+user, wikiDestination)
 	if err != nil {
 		return out, err
 	}

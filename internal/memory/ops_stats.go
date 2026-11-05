@@ -40,7 +40,7 @@ type StatsTimeseries struct {
 }
 
 // optionalStatCollections are counted only when Collections lists them.
-var optionalStatCollections = []string{"observations", "entities"}
+var optionalStatCollections = []string{colObservations, colMentalModels, "entities"}
 
 var timeseriesCollections = []string{colMemories, "memory_candidates", "sources"}
 

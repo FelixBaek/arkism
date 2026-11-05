@@ -20,7 +20,6 @@ import (
 )
 
 const (
-	wikiLLMDestination  = "external:wiki-llm"
 	wikiMemoryMaxRecall = 40
 	wikiMemoryMaxQuery  = 512
 )
@@ -207,7 +206,7 @@ func (s *Service) wikiMemorySource(ctx context.Context, token string, scope Scop
 			continue
 		}
 		// Each memory leaves the server on its own: classification, source lineage and policy per record.
-		if _, err = s.authorizeTransfer(ctx, token, "context:read", scope, r.ID, r.Sensitivity, wikiLLMDestination, line, r.Sources); err != nil {
+		if _, err = s.authorizeTransfer(ctx, token, "context:read", scope, r.ID, r.Sensitivity, wikiDestination, line, r.Sources); err != nil {
 			continue
 		}
 		b.WriteString(line)

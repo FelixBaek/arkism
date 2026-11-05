@@ -188,7 +188,7 @@ func TestSpaceExportLeavesOutErasedAndPrivate(t *testing.T) {
 	for _, s := range m.Skipped {
 		reasons = append(reasons, s.Section+":"+s.Reason)
 	}
-	for _, want := range []string{"memories:erased", "memories:privacy_excluded", "observations:unknown_collection", "nonsense:not_exportable"} {
+	for _, want := range []string{"memories:erased", "memories:privacy_excluded", "observations:not_exportable", "nonsense:not_exportable"} {
 		if !slices.Contains(reasons, want) {
 			t.Fatalf("skipped %v lacks %s", reasons, want)
 		}
@@ -328,11 +328,15 @@ func TestSpaceAliasStoredShapeMatchesSQL(t *testing.T) {
 	}
 }
 
-func TestSpaceTemplateCarriesDirectivesForHumansOnly(t *testing.T) {
+func TestSpaceTemplateCarriesDefinitionsForHumansOnly(t *testing.T) {
 	f := newFixture(t)
 	in := directiveInput("Units", "Always use metric units.", "both", 7)
 	in.Scope = scopeA
 	if _, err := f.svc.CreateDirective(testCtx, f.human, in); err != nil {
+		t.Fatal(err)
+	}
+	mm := MentalModelInput{Scope: scopeA, Title: "Deploy habits", Query: "how do we deploy", Refresh: "manual"}
+	if _, err := f.svc.CreateMentalModel(testCtx, f.human, mm); err != nil {
 		t.Fatal(err)
 	}
 	bundle := exportBundle(t, f, scopeA, SpaceExportInput{Template: true})
@@ -344,11 +348,15 @@ func TestSpaceTemplateCarriesDirectivesForHumansOnly(t *testing.T) {
 	if got := waitSpaceJob(t, f, scopeA, job.ID).Report; got.Imported != 0 || len(scopeRecords(f, colDirectives, scopeB)) != 0 {
 		t.Fatalf("agent clone wrote a directive: %+v", got)
 	}
-	if report := importBundle(t, f, scopeB, bundle, ""); report.Imported != 1 {
+	if report := importBundle(t, f, scopeB, bundle, ""); report.Imported != 2 {
 		t.Fatalf("human import = %+v", report)
 	}
 	got := scopeRecords(f, colDirectives, scopeB)
 	if len(got) != 1 || got[0].Text != in.Rule || got[0].Directive == nil || got[0].Directive.Priority != 7 || got[0].Directive.AppliesTo != "both" || got[0].Status != "active" {
 		t.Fatalf("imported directive = %+v", got)
+	}
+	models := scopeRecords(f, colMentalModels, scopeB)
+	if len(models) != 1 || models[0].MentalModel == nil || models[0].MentalModel.Query != mm.Query || models[0].MentalModel.Active != nil {
+		t.Fatalf("imported mental model = %+v", models)
 	}
 }

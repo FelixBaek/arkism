@@ -225,7 +225,7 @@ func (s *Service) extractActor(ctx context.Context, token, action string, scope 
 
 // extractChunk sends one privacy-filtered chunk to the model under the budget gate.
 func (s *Service) extractChunk(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]ExtractedClaim, []ExtractSkip, error) {
-	t, err := s.authorizeAt(ctx, token, "generate:memory_candidates", scope, "", ch.Text, "external:wiki-llm")
+	t, err := s.authorizeAt(ctx, token, "generate:memory_candidates", scope, "", ch.Text, wikiDestination)
 	if err != nil {
 		return nil, nil, err
 	}

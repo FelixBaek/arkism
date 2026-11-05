@@ -50,9 +50,10 @@ const (
 
 var (
 	// spaceExportable: collections a bundle may carry. Names missing from
-	// Collections at runtime are skipped and reported, never guessed.
-	spaceExportable   = []string{colMemories, "memory_candidates", "observations", "mental_models", "directives", "entities"}
-	spaceDefinitions  = []string{"directives", "mental_models"}
+	// Collections at runtime are skipped and reported, never guessed. Observations
+	// stay home: they cite memory ids that do not exist in another space.
+	spaceExportable   = []string{colMemories, "memory_candidates", colMentalModels, colDirectives, "entities"}
+	spaceDefinitions  = []string{colDirectives, colMentalModels}
 	spaceAliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
 	spaceSchedules    = []string{"off", "daily", "weekly"}
 	spaceGenerator    = Generator{Model: "none", PromptVersion: "space-bundle-v1", PipelineVersion: "space-import-v1"}
@@ -144,7 +145,9 @@ type SpaceBundleRecord struct {
 	Tags          []string       `json:"tags,omitempty"`
 	MemoryContext *MemoryContext `json:"memory_context,omitempty"`
 	Directive     *Directive     `json:"directive,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
+	// MentalModel carries only the definition; a person refreshes and approves the text in the new space.
+	MentalModel *MentalModelInput `json:"mental_model,omitempty"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 type spaceBundleLine struct {
@@ -434,9 +437,9 @@ func spaceRecordSkip(col string, r Record, now time.Time) string {
 		return "erased"
 	}
 	transferable := transferableContent(r.Sensitivity, recordContent(r))
-	if col == colDirectives && r.Sensitivity == "" {
-		// Directives carry no sensitivity label; a person wrote them and secrets were refused then.
-		transferable = r.Directive != nil && safeTransfer(r.Text+"\n"+r.Directive.Title)
+	if spaceDefinitionCollection(col) && r.Sensitivity == "" {
+		// Definitions carry no sensitivity label; a person wrote them and secrets were refused then.
+		transferable = (r.Directive != nil || r.MentalModel != nil) && safeTransfer(structuredText([]any{r.Text, r.Directive, mentalModelDefinition(r)}))
 	}
 	if r.Sensitivity == "private" || !transferable {
 		return "privacy_excluded"
@@ -543,7 +546,7 @@ func spaceSectionLines(ctx context.Context, repo Repository, scope Scope, name s
 		}
 		lines = append(lines, spaceBundleLine{Section: name, Record: &SpaceBundleRecord{ID: r.ID, Kind: r.Kind, Status: r.Status,
 			Approved: name == colMemories, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords, Tags: r.Tags,
-			MemoryContext: copyMemoryContext(r.MemoryContext), Directive: r.Directive, CreatedAt: r.CreatedAt}})
+			MemoryContext: copyMemoryContext(r.MemoryContext), Directive: r.Directive, MentalModel: mentalModelDefinition(r), CreatedAt: r.CreatedAt}})
 	}
 	skipped := []SpaceSkip{}
 	for _, why := range []string{"erased", "privacy_excluded", "inactive"} {
@@ -916,21 +919,31 @@ func (s *Service) importSpaceConfig(ctx context.Context, d Decision, scope Scope
 // importSpaceDefinition hands a definition to its own collection's create path and rules.
 func (s *Service) importSpaceDefinition(ctx context.Context, token string, scope Scope, line spaceBundleLine, report *SpaceReport) {
 	r := line.Record
-	var err error
-	if line.Section == colDirectives {
-		// Directives are human rules: CreateDirective refuses any non-human importer.
-		err = ErrInvalid
-		if r.Directive != nil {
-			active := r.Status != "inactive"
-			_, err = s.CreateDirective(ctx, token, DirectiveInput{Scope: scope, Title: r.Directive.Title, Rule: r.Text,
-				Priority: r.Directive.Priority, AppliesTo: r.Directive.AppliesTo, Active: &active, Tags: r.Tags})
-		}
-	} else {
-		_, err = s.Create(ctx, token, line.Section, CreateInput{Scope: scope, Kind: r.Kind, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords})
+	// Both are human-written: CreateDirective and CreateMentalModel refuse any non-human importer.
+	err := ErrInvalid
+	switch {
+	case line.Section == colDirectives && r.Directive != nil:
+		active := r.Status != "inactive"
+		_, err = s.CreateDirective(ctx, token, DirectiveInput{Scope: scope, Title: r.Directive.Title, Rule: r.Text,
+			Priority: r.Directive.Priority, AppliesTo: r.Directive.AppliesTo, Active: &active, Tags: r.Tags})
+	case line.Section == colMentalModels && r.MentalModel != nil:
+		in := *r.MentalModel
+		in.Scope, in.ExpectedRevision = scope, 0
+		_, err = s.CreateMentalModel(ctx, token, in)
 	}
 	if err != nil {
 		report.Skipped = append(report.Skipped, SpaceSkip{Section: line.Section, Reason: captureErrorCode(err), Count: 1})
 		return
 	}
 	report.Imported++
+}
+
+func spaceDefinitionCollection(col string) bool { return slices.Contains(spaceDefinitions, col) }
+
+// mentalModelDefinition is the part of a mental model a bundle carries: no model-written text.
+func mentalModelDefinition(r Record) *MentalModelInput {
+	if r.MentalModel == nil {
+		return nil
+	}
+	return &MentalModelInput{Title: r.MentalModel.Title, Query: r.MentalModel.Query, Refresh: r.MentalModel.Refresh}
 }
