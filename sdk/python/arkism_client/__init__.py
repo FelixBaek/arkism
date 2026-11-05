@@ -4,6 +4,7 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 
 class ArkismError(Exception):
@@ -24,17 +25,20 @@ class BaseClient:
         self.timeout = timeout
         self.headers = dict(headers or {})
 
-    def request(self, method, path, query=None, body=None):
-        """Any route, including ones newer than this client."""
+    def request(self, method, path, query=None, body=None, headers=None, form=None):
+        """Any route, including ones newer than this client. form is a list of
+        (name, value, as_json) multipart parts, sent in order instead of a JSON body."""
         url = self.base_url + path
         pairs = [(k, v) for k, v in (query or {}).items() if v is not None]
         if pairs:
             url += "?" + urllib.parse.urlencode(pairs, doseq=True)
-        headers = {"Accept": "application/json", **self.headers}
+        headers = {"Accept": "application/json", **self.headers, **{k: str(v) for k, v in (headers or {}).items() if v is not None}}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
         data = None
-        if body is not None:
+        if form is not None:
+            data, headers["Content-Type"] = _multipart(form)
+        elif body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -43,6 +47,17 @@ class BaseClient:
                 return _decode(res.read())
         except urllib.error.HTTPError as err:
             raise ArkismError(err.code, _decode(err.read())) from None
+
+
+def _multipart(parts):
+    boundary = uuid.uuid4().hex
+    out = []
+    for name, value, as_json in parts:
+        if value is None:
+            continue
+        raw = json.dumps(value).encode() if as_json else value if isinstance(value, bytes) else str(value).encode()
+        out.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n'.encode() + raw + b"\r\n")
+    return b"".join(out) + f"--{boundary}--\r\n".encode(), "multipart/form-data; boundary=" + boundary
 
 
 def _decode(raw):
@@ -241,9 +256,9 @@ class ArkismClient(BaseClient):
         """POST /v1/context/build — Build an approved-memory context with mandatory token encoding and bounded item/token budgets"""
         return self.request("POST", f"/v1/context/build", None, body)
 
-    def post_v1_search(self, body=None):
-        """POST /v1/search — Scoped exact + native text + vector search, separated by purpose"""
-        return self.request("POST", f"/v1/search", None, body)
+    def post_v1_search(self, body=None, headers=None):
+        """POST /v1/search — Scoped exact + native text + vector search, separated by purpose; headers: X-Arkism-Client, X-Arkism-Session"""
+        return self.request("POST", f"/v1/search", None, body, headers=headers)
 
     def post_v1_by_collection(self, collection, body=None):
         """POST /v1/{collection} — Create source, candidate, run, call, evaluation, reflection, relation, skill version or shared evaluation record (eval_tasks, eval_runs, eval_trials, judge_calibrations; an eval_trials record relates to one eval_tasks and one eval_runs record). No direct memory/active writes."""
@@ -861,9 +876,9 @@ class ArkismClient(BaseClient):
         """POST /v1/deletions/export — Export retained deletion targets"""
         return self.request("POST", f"/v1/deletions/export", None, body)
 
-    def post_v1_sources_ingest(self):
-        """POST /v1/sources/ingest — ingest a bounded text file and source atomically in Mongo"""
-        return self.request("POST", f"/v1/sources/ingest", None, None)
+    def post_v1_sources_ingest(self, body=None):
+        """POST /v1/sources/ingest — ingest a bounded text file and source atomically in Mongo; body: {metadata JSON, file bytes or text} sent as multipart in this order"""
+        return self.request("POST", f"/v1/sources/ingest", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', False)]])
 
     def get_v1_sources_by_id_artifacts_by_artifact_id(self, id, artifact_id, query=None):
         """GET /v1/sources/{id}/artifacts/{artifact_id} — Read a scoped original artifact after source, policy and digest verification"""
@@ -1652,3 +1667,7 @@ class ArkismClient(BaseClient):
     def get_v1_knowledge_sources_id_history(self, id, query=None):
         """GET /v1/knowledge/sources/{id}/history — Document versions of a knowledge source"""
         return self.request("GET", f"/v1/knowledge/sources/{urllib.parse.quote(id, safe='')}/history", query, None)
+
+    def get_space_template_schema(self, query=None):
+        """GET /v1/spaces/template-schema — JSON schema of one line of a space template bundle (read:space_configs)"""
+        return self.request("GET", f"/v1/spaces/template-schema", query, None)

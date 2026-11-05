@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from urllib.parse import unquote
 from ci_inputs import input_roots, read_ci_text
@@ -53,18 +54,22 @@ def check_document(doc, meta):
                     pointer(doc, item[name])
     for name, schema in doc.get("components", {}).get("schemas", {}).items():
         Draft202012Validator.check_schema(schema)
-    operations = 0
+    operations, ids = 0, set()
     for path, path_item in doc["paths"].items():
         for method, operation in path_item.items():
             if method not in METHODS:
                 continue
             operations += 1
+            # operationIds are the SDK method names: present, identifiers, unique.
+            op_id = operation.get("operationId", "")
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", op_id) or op_id in ids:
+                raise ValueError(f"missing, invalid or duplicate operationId: {method} {path} (run python3 tools/update_api_contracts.py)")
+            ids.add(op_id)
             parameters = path_item.get("parameters", []) + operation.get("parameters", [])
             resolved = [pointer(doc, p["$ref"]) if "$ref" in p else p for p in parameters]
             identities = [(p["in"], p["name"]) for p in resolved]
             if len(identities) != len(set(identities)):
                 raise ValueError(f"duplicate parameter: {method} {path}")
-            import re
             expected = set(re.findall(r"\{([^}]+)\}", path))
             actual = {p["name"] for p in resolved if p["in"] == "path" and p.get("required")}
             if expected != actual:

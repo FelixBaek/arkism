@@ -169,6 +169,7 @@ def build(doc, manifest, types):
         codes.append("authentication_required")
     # The shared registrar enforces this before decoding every protected route.
     # Keep legacy operations consistent with the stricter management corpus.
+    fill_operation_ids(doc)
     for path in doc["paths"].values():
         for method, operation in path.items():
             if method not in ("get", "post", "put", "patch", "delete", "head", "options") or operation.get("security") == []:
@@ -179,6 +180,24 @@ def build(doc, manifest, types):
                 "content": {JSON_MEDIA: {"schema": {"$ref": "#/components/schemas/Error"}}},
             }
     return doc
+
+
+def fill_operation_ids(doc):
+    """Give every operation without one a stable operationId: the method and the
+    path words (a {param} reads by_param), numbered on a clash, in document order.
+    These are the SDK method names, so an existing id never changes."""
+    seen = {op["operationId"] for item in doc["paths"].values() for op in item.values() if isinstance(op, dict) and "operationId" in op}
+    for path, item in doc["paths"].items():
+        for method in ("get", "post", "put", "patch", "delete"):
+            op = item.get(method)
+            if op is None or "operationId" in op:
+                continue
+            base = method + "".join(w[:1].upper() + w[1:] for w in re.split(r"[^A-Za-z0-9]+", path.replace("{", "by_")) if w)
+            name, n = base, 2
+            while name in seen:
+                name, n = f"{base}{n}", n + 1
+            seen.add(name)
+            op["operationId"] = name
 
 
 def patch_json(raw, old, new, depth=0):

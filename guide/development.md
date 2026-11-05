@@ -232,11 +232,19 @@ python3 tools/generate_sdk.py
 python3 tools/generate_sdk.py --check
 ```
 
-Each route is one method: path parameters first, then the JSON body and query
-object. Routes without an `operationId` get a name from method and path
-(`POST /v1/reflect` → `postV1Reflect` / `post_v1_reflect`). `request(method, path,
-query, body)` reaches any route. A non-2xx answer raises `ArkismError` with the
-status and the server's JSON error body.
+Each route is one method named by its `operationId`: path parameters first, then
+the query object, the body and a `headers` object for documented header
+parameters (for example `X-Arkism-Client` on `POST /v1/search`). A
+`multipart/form-data` body is an object of its parts; the client sends them in
+the order the spec lists them (JSON parts as JSON text, binary parts as given:
+a `Blob` or string in TypeScript, bytes or text in Python). `request(method,
+path, query, body, headers)` reaches any route. A non-2xx answer raises
+`ArkismError` with the status and the server's JSON error body.
+
+Every operation needs a unique `operationId` (`tools/check_openapi.py` fails
+otherwise). `python3 tools/update_api_contracts.py` gives a new route without
+one a stable name from method and path (`POST /v1/reflect` → `postV1Reflect` /
+`post_v1_reflect`, numbered on a clash) and never renames an existing one.
 
 ### Extension hooks
 

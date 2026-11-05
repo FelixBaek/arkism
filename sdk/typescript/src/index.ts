@@ -617,7 +617,7 @@ export type CausalProposeInput = { "scope": Scope; "dry_run"?: boolean; "max_gro
 export type CausalLinkPage = { "items": Array<CausalLink>; "next_cursor"?: string; "truncated": boolean; "authority": string };
 export type CausalProposeResult = { "dry_run": boolean; "groups": number; "proposed": Array<CausalLink>; "rejected": Array<{ "group"?: number; "code"?: "invalid_model_output" | "citation_outside_group" | "self_link" | "invalid_reason" | "invalid_confidence" | "conflict"; "target"?: string }>; "calls": number; "tokens": number; "authority": string };
 export type WireResponseRecallTimeWindow = { "phrase": string; "from": string; "to": string };
-export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number };
+export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string };
 export type WireResponseDocumentChunkPage = { "document_id": string; "job_id": string; "items": (Array<WireResponseDocumentChunk> | null); "total": number; "next_cursor": string };
 export type WireResponseDocumentChunk = { "locator": string; "hash": string; "status": string; "source": WireResponseRef; "candidates": (Array<WireResponseDocumentCandidate> | null) };
 export type WireResponseDocumentCandidate = { "id": string; "status": string; "memory_id"?: string };
@@ -649,6 +649,18 @@ export class ArkismError extends globalThis.Error {
 
 type Query = { [key: string]: string | number | boolean | undefined | null | Array<string | number | boolean> };
 
+/** A multipart body with the parts in the declared order (the server may require it); a part marked json is sent as JSON text. */
+function formData(parts: object, order: Array<[string, boolean]>): FormData {
+  const form = new FormData();
+  const values = parts as { [key: string]: unknown };
+  for (const [name, json] of order) {
+    const value = values[name];
+    if (value === undefined) continue;
+    form.append(name, value instanceof Blob ? value : json ? JSON.stringify(value) : String(value));
+  }
+  return form;
+}
+
 export class ArkismClient {
   private readonly opts: ClientOptions;
 
@@ -657,16 +669,18 @@ export class ArkismClient {
   }
 
   /** Any route, including ones newer than this client. */
-  async request<T = unknown>(method: string, path: string, query?: object, body?: unknown): Promise<T> {
+  async request<T = unknown>(method: string, path: string, query?: object, body?: unknown, extraHeaders?: object): Promise<T> {
     const url = new URL(this.opts.baseUrl + path);
     for (const [k, v] of Object.entries((query ?? {}) as Query)) {
       if (v === undefined || v === null) continue;
       for (const item of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(item));
     }
     const headers: { [key: string]: string } = { Accept: "application/json", ...this.opts.headers };
+    for (const [k, v] of Object.entries(extraHeaders ?? {})) if (v !== undefined && v !== null) headers[k] = String(v);
     if (this.opts.token) headers.Authorization = `Bearer ${this.opts.token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const res = await (this.opts.fetch ?? fetch)(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const form = typeof FormData !== "undefined" && body instanceof FormData; // fetch sets the boundary
+    if (body !== undefined && !form) headers["Content-Type"] = "application/json";
+    const res = await (this.opts.fetch ?? fetch)(url, { method, headers, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body) });
     const text = await res.text();
     let parsed: unknown = text;
     try {
@@ -863,8 +877,8 @@ export class ArkismClient {
     return this.request("POST", `/v1/context/build`, undefined, body);
   }
   /** POST /v1/search — Scoped exact + native text + vector search, separated by purpose */
-  postV1Search(body: SearchInput): Promise<ContextBundle> {
-    return this.request("POST", `/v1/search`, undefined, body);
+  postV1Search(body: SearchInput, headers?: { "X-Arkism-Client"?: string; "X-Arkism-Session"?: string }): Promise<ContextBundle> {
+    return this.request("POST", `/v1/search`, undefined, body, headers);
   }
   /** POST /v1/{collection} — Create source, candidate, run, call, evaluation, reflection, relation, skill version or shared evaluation record (eval_tasks, eval_runs, eval_trials, judge_calibrations; an eval_trials record relates to one eval_tasks and one eval_runs record). No direct memory/active writes. */
   postV1ByCollection(collection: string, body: CreateInput): Promise<Record> {
@@ -1483,8 +1497,8 @@ export class ArkismClient {
     return this.request("POST", `/v1/deletions/export`, undefined, body);
   }
   /** POST /v1/sources/ingest — ingest a bounded text file and source atomically in Mongo */
-  postV1SourcesIngest(): Promise<FileIngestResult> {
-    return this.request("POST", `/v1/sources/ingest`, undefined, undefined);
+  postV1SourcesIngest(body: { "metadata": FileIngestInput; "file": Blob | string }): Promise<FileIngestResult> {
+    return this.request("POST", `/v1/sources/ingest`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", false]]));
   }
   /** GET /v1/sources/{id}/artifacts/{artifact_id} — Read a scoped original artifact after source, policy and digest verification */
   getV1SourcesByIdArtifactsByArtifactId(id: string, artifactId: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<unknown> {
@@ -2273,5 +2287,9 @@ export class ArkismClient {
   /** GET /v1/knowledge/sources/{id}/history — Document versions of a knowledge source */
   get_v1_knowledge_sources_id_history(id: string, query: { "workspace_id": string; "project_id": string; "user_id": string; "agent_id": string; "limit"?: number; "cursor"?: string }): Promise<WireResponseKnowledgeHistoryPage> {
     return this.request("GET", `/v1/knowledge/sources/${encodeURIComponent(id)}/history`, query, undefined);
+  }
+  /** GET /v1/spaces/template-schema — JSON schema of one line of a space template bundle (read:space_configs) */
+  getSpaceTemplateSchema(query: { "workspace_id": string; "project_id": string }): Promise<{ [key: string]: unknown }> {
+    return this.request("GET", `/v1/spaces/template-schema`, query, undefined);
   }
 }

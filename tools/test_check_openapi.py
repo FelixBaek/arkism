@@ -21,9 +21,18 @@ class OpenAPIContracts(unittest.TestCase):
 
     def test_missing_path_parameter_is_rejected(self):
         bad = copy.deepcopy(self.doc)
-        bad["paths"]["/broken/{id}"] = {"get": {"responses": {"200": {"description": "ok"}}}}
+        bad["paths"]["/broken/{id}"] = {"get": {"operationId": "broken", "responses": {"200": {"description": "ok"}}}}
         with self.assertRaisesRegex(ValueError, "path parameter"):
             check_document(bad, self.meta)
+
+    def test_operation_ids_are_required_and_unique(self):
+        for op_id in (None, "getV1Memories", "bad-id"):
+            bad = copy.deepcopy(self.doc)
+            bad["paths"]["/broken"] = {"get": {"responses": {"200": {"description": "ok"}}}}
+            if op_id:
+                bad["paths"]["/broken"]["get"]["operationId"] = op_id
+            with self.assertRaisesRegex(ValueError, "operationId"):
+                check_document(bad, self.meta)
 
     def test_actual_response_validator_is_not_a_noop(self):
         case = {"operation": "GET /v1/memories", "status": 200, "body": {"items": [], "next_cursor": "", "authority": "data_only_untrusted"}}

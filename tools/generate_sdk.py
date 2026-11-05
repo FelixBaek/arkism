@@ -61,26 +61,34 @@ def ts_object(s, depth):
 
 
 def operations(spec):
-    seen = set()
+    """Each operation with its operationId (tools/update_api_contracts.py fills missing
+    ones, tools/check_openapi.py keeps them unique identifiers) and the path-level
+    parameters merged in; the operation's own parameter of the same name wins."""
     for path, item in spec["paths"].items():
         for method in METHODS:
             op = item.get(method)
             if op is None:
                 continue
-            name = op.get("operationId") or method + "".join(w[:1].upper() + w[1:] for w in re.split(r"[^A-Za-z0-9]+", path.replace("{", "by_")) if w)
-            name = re.sub(r"[^A-Za-z0-9_]", "_", name)
-            base, n = name, 2
-            while name in seen:
-                name, n = f"{base}{n}", n + 1
-            seen.add(name)
-            yield name, method, path, op
+            own = op.get("parameters", [])
+            names = {(p.get("in"), p.get("name")) for p in own}
+            shared = [p for p in item.get("parameters", []) if (p.get("in"), p.get("name")) not in names]
+            yield op["operationId"], method, path, dict(op, parameters=shared + own)
 
 
 def body_schema(op):
-    content = (op.get("requestBody") or {}).get("content", {})
-    if "application/json" in content:
-        return content["application/json"].get("schema", {}), op["requestBody"].get("required", False)
-    return None, False
+    """(schema, required, multipart) of the request body; JSON wins when both are offered."""
+    request = op.get("requestBody") or {}
+    content = request.get("content", {})
+    for media, form in (("application/json", False), ("multipart/form-data", True)):
+        if media in content:
+            return content[media].get("schema", {}), request.get("required", False), form
+    return None, False, False
+
+
+def form_parts(schema):
+    """[(name, as_json)] per multipart part in declared order (the server may require
+    it); a binary string part is sent as is, any other part as JSON text."""
+    return [(k, not (v.get("type") == "string" and v.get("format") == "binary")) for k, v in schema.get("properties", {}).items()]
 
 
 def response_schema(op):
@@ -90,28 +98,40 @@ def response_schema(op):
     return None
 
 
+def ts_fields(params):
+    return "; ".join(f"{json.dumps(p['name'])}{'' if p.get('required') else '?'}: {ts_type(p.get('schema'))}" for p in params)
+
+
+def ts_body(schema, form):
+    if not form:
+        return ts_type(schema)
+    required, props = set(schema.get("required", [])), schema.get("properties", {})
+    return "{ " + "; ".join(f"{json.dumps(k)}{'' if k in required else '?'}: {ts_type(props[k]) if as_json else 'Blob | string'}" for k, as_json in form_parts(schema)) + " }"
+
+
 def ts_method(name, method, path, op):
     params = op.get("parameters", [])
     path_params = [p["name"] for p in params if p.get("in") == "path"]
     query = [p for p in params if p.get("in") == "query"]
+    headers = [p for p in params if p.get("in") == "header"]
     args = [f"{camel(p)}: string" for p in path_params]
     optional = []
-    if query:
-        fields = "; ".join(f"{json.dumps(p['name'])}{'' if p.get('required') else '?'}: {ts_type(p.get('schema'))}" for p in query)
-        if any(p.get("required") for p in query):
-            args.append(f"query: {{ {fields} }}")
-        else:
-            optional.append(f"query?: {{ {fields} }}")
-    body, body_required = body_schema(op)
+    for group, arg in ((query, "query"), (headers, "headers")):
+        if group:
+            required = any(p.get("required") for p in group)
+            (args if required else optional).append(f"{arg}{'' if required else '?'}: {{ {ts_fields(group)} }}")
+    body, body_required, form = body_schema(op)
+    send = "undefined"
     if body is not None:
-        (args if body_required else optional).append(f"body{'' if body_required else '?'}: {ts_type(body)}")
+        (args if body_required else optional).append(f"body{'' if body_required else '?'}: {ts_body(body, form)}")
+        send = f"body === undefined ? undefined : formData(body, {json.dumps([[k, j] for k, j in form_parts(body)])})" if form else "body"
     args += optional  # a required parameter cannot follow an optional one
     url = re.sub(r"\{([^}]+)\}", lambda m: "${encodeURIComponent(" + camel(m.group(1)) + ")}", path)
     result = response_schema(op)
     doc = " ".join(str(op.get("summary", "")).split()).replace("*/", "*\\/")
     return (f"  /** {method.upper()} {path}{(' — ' + doc) if doc else ''} */\n"
             f"  {name}({', '.join(args)}): Promise<{ts_type(result) if result else 'unknown'}> {{\n"
-            f"    return this.request({json.dumps(method.upper())}, `{url}`, {'query' if query else 'undefined'}, {'body' if body is not None else 'undefined'});\n"
+            f"    return this.request({json.dumps(method.upper())}, `{url}`, {'query' if query else 'undefined'}, {send}{', headers' if headers else ''});\n"
             "  }\n")
 
 
@@ -143,6 +163,18 @@ export class ArkismError extends globalThis.Error {
 
 type Query = { [key: string]: string | number | boolean | undefined | null | Array<string | number | boolean> };
 
+/** A multipart body with the parts in the declared order (the server may require it); a part marked json is sent as JSON text. */
+function formData(parts: object, order: Array<[string, boolean]>): FormData {
+  const form = new FormData();
+  const values = parts as { [key: string]: unknown };
+  for (const [name, json] of order) {
+    const value = values[name];
+    if (value === undefined) continue;
+    form.append(name, value instanceof Blob ? value : json ? JSON.stringify(value) : String(value));
+  }
+  return form;
+}
+
 export class ArkismClient {
   private readonly opts: ClientOptions;
 
@@ -151,16 +183,18 @@ export class ArkismClient {
   }
 
   /** Any route, including ones newer than this client. */
-  async request<T = unknown>(method: string, path: string, query?: object, body?: unknown): Promise<T> {
+  async request<T = unknown>(method: string, path: string, query?: object, body?: unknown, extraHeaders?: object): Promise<T> {
     const url = new URL(this.opts.baseUrl + path);
     for (const [k, v] of Object.entries((query ?? {}) as Query)) {
       if (v === undefined || v === null) continue;
       for (const item of Array.isArray(v) ? v : [v]) url.searchParams.append(k, String(item));
     }
     const headers: { [key: string]: string } = { Accept: "application/json", ...this.opts.headers };
+    for (const [k, v] of Object.entries(extraHeaders ?? {})) if (v !== undefined && v !== null) headers[k] = String(v);
     if (this.opts.token) headers.Authorization = `Bearer ${this.opts.token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const res = await (this.opts.fetch ?? fetch)(url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    const form = typeof FormData !== "undefined" && body instanceof FormData; // fetch sets the boundary
+    if (body !== undefined && !form) headers["Content-Type"] = "application/json";
+    const res = await (this.opts.fetch ?? fetch)(url, { method, headers, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body) });
     const text = await res.text();
     let parsed: unknown = text;
     try {
@@ -178,6 +212,7 @@ PY_RUNTIME = '''import json
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 
 class ArkismError(Exception):
@@ -198,17 +233,20 @@ class BaseClient:
         self.timeout = timeout
         self.headers = dict(headers or {})
 
-    def request(self, method, path, query=None, body=None):
-        """Any route, including ones newer than this client."""
+    def request(self, method, path, query=None, body=None, headers=None, form=None):
+        """Any route, including ones newer than this client. form is a list of
+        (name, value, as_json) multipart parts, sent in order instead of a JSON body."""
         url = self.base_url + path
         pairs = [(k, v) for k, v in (query or {}).items() if v is not None]
         if pairs:
             url += "?" + urllib.parse.urlencode(pairs, doseq=True)
-        headers = {"Accept": "application/json", **self.headers}
+        headers = {"Accept": "application/json", **self.headers, **{k: str(v) for k, v in (headers or {}).items() if v is not None}}
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
         data = None
-        if body is not None:
+        if form is not None:
+            data, headers["Content-Type"] = _multipart(form)
+        elif body is not None:
             headers["Content-Type"] = "application/json"
             data = json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
@@ -217,6 +255,17 @@ class BaseClient:
                 return _decode(res.read())
         except urllib.error.HTTPError as err:
             raise ArkismError(err.code, _decode(err.read())) from None
+
+
+def _multipart(parts):
+    boundary = uuid.uuid4().hex
+    out = []
+    for name, value, as_json in parts:
+        if value is None:
+            continue
+        raw = json.dumps(value).encode() if as_json else value if isinstance(value, bytes) else str(value).encode()
+        out.append(f'--{boundary}\\r\\nContent-Disposition: form-data; name="{name}"\\r\\n\\r\\n'.encode() + raw + b"\\r\\n")
+    return b"".join(out) + f"--{boundary}--\\r\\n".encode(), "multipart/form-data; boundary=" + boundary
 
 
 def _decode(raw):
@@ -239,17 +288,29 @@ def py_method(name, method, path, op):
     params = op.get("parameters", [])
     path_params = [p["name"] for p in params if p.get("in") == "path"]
     has_query = any(p.get("in") == "query" for p in params)
-    body, _ = body_schema(op)
+    headers = [p["name"] for p in params if p.get("in") == "header"]
+    body, _, form = body_schema(op)
     args = ["self"] + [py_name(camel(p)) for p in path_params]
     if has_query:
         args.append("query=None")
     if body is not None:
         args.append("body=None")
+    if headers:
+        args.append("headers=None")
+    call = ["query" if has_query else "None", "body" if body is not None and not form else "None"]
+    doc = [" ".join(str(op.get("summary", "")).split())]
+    if headers:
+        call.append("headers=headers")
+        doc.append("headers: " + ", ".join(headers))
+    if form:
+        call.append(f"form=None if body is None else [(k, body.get(k), j) for k, j in {form_parts(body)!r}]")
+        doc.append("body: {" + ", ".join(k + (" JSON" if j else " bytes or text") for k, j in form_parts(body)) + "} sent as multipart in this order")
+    doc = "; ".join(d for d in doc if d)
     url = re.sub(r"\{([^}]+)\}", lambda m: "{urllib.parse.quote(" + py_name(camel(m.group(1))) + ", safe='')}", path)
-    doc = " ".join(str(op.get("summary", "")).split()).replace('"""', "'''").replace("\\", "\\\\")
+    doc = doc.replace('"""', "'''").replace("\\", "\\\\")
     return (f"    def {py_name(name)}({', '.join(args)}):\n"
             f'        """{method.upper()} {path}{(" — " + doc) if doc else ""}"""\n'
-            f"        return self.request({json.dumps(method.upper())}, f\"{url}\", {'query' if has_query else 'None'}, {'body' if body is not None else 'None'})\n\n")
+            f"        return self.request({json.dumps(method.upper())}, f\"{url}\", {', '.join(call)})\n\n")
 
 
 def render(spec):
