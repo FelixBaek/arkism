@@ -10,11 +10,11 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const { document, window } = dom.install();
   dom.Element.prototype.setCustomValidity = function (m) { this.validity = m; };
   require("./memory-pages.js");
-  for (const f of ["./digests.js", "./memory-time.js", "./memory-insight.js"]) { delete require.cache[require.resolve(f)]; require(f); } // memory rows come from digests.js
+  for (const f of ["./digests.js", "./memory-time.js", "./knowledge.js", "./memory-insight.js"]) { delete require.cache[require.resolve(f)]; require(f); } // memory rows come from digests.js
   const h = dom.helpers(document);
   for (const id of ["app", "chips", "stats", "table", "detail"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
   const state = { view: "memories", memTab: tab, server: "s", token: "t", scope: { ...SCOPE }, caps: { role } };
-  const calls = [], notices = [], opened = [], asked = [];
+  const calls = [], notices = [], opened = [], asked = [], saved = [];
   window.ask = async (m) => { asked.push(m); return answers.length ? answers.shift() : true; };
   window.askText = async (m) => { asked.push(m); return answers.shift() ?? null; };
   const request = async (path, opts) => {
@@ -28,8 +28,9 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const facts = (pairs) => { const dl = h.el("dl", "facts"); pairs.filter(([, v]) => v).forEach(([k, v]) => dl.append(h.el("dt", "", k), h.el("dd", "", v))); return dl; };
   const callout = (title, text) => { const c = h.el("div", "callout"); c.append(h.el("strong", "", title), h.el("p", "", text)); return c; };
   const view = window.ArkismMemoryInsight({ state, $: h.$, el: h.el, raw: h.raw, icon: h.icon, button: h.button, request, query, detailShell, section, facts, callout, KINDS, kindLabel: (k) => (KINDS[k] || [k])[0],
-    openDetail: () => h.$("#app").classList.add("detail-open"), notice: (m) => notices.push(m), openRecord: (r) => opened.push(r) }, tab);
-  return { view, state, calls, notices, opened, asked, h };
+    openDetail: () => h.$("#app").classList.add("detail-open"), notice: (m) => notices.push(m), openRecord: (r) => opened.push(r),
+    saveFile: (...a) => saved.push(a), fileSize: (n) => `${n} B` }, tab);
+  return { view, state, calls, notices, opened, asked, saved, h };
 }
 const KINDS = { user: ["선호"], procedural: ["작업 규칙"], decision: ["결정"], lesson: ["교훈"], episodic: ["기록"], semantic: ["사실"] };
 const body = (call) => JSON.parse(call[1].body);
@@ -472,4 +473,31 @@ test("ask can leave out picked topics (exclude_mental_model_ids)", async () => {
   form.querySelector('[data-opt="skip:mm2"]').checked = true;
   dom.fire(form, "submit"); await dom.flush();
   assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]).exclude_mental_model_ids, ["mm2"]);
+});
+
+test("search and ask can attach the kept original files: each shows its kind and size and downloads through the artifact route", async () => {
+  const file = { id: "a1", source_id: "src1", kind: "pdf", mime: "application/pdf", bytes: 2048 };
+  const t = setup("search", [["/v1/search", () => ({ items: [{ id: "m4", collection: "memories", kind: "lesson", text: "배포 메모", score: 0.5, attachments: [file] }] })],
+    ["/v1/sources/src1/artifacts/a1?", (_, o) => { assert.equal(o.binary, true); return new Uint8Array([1]); }], ["/v1/memories/m4?", () => memory("m4")]]);
+  t.view.draw();
+  const form = t.h.$("#chips form");
+  t.h.$("#chips input").value = "배포";
+  form.querySelector('[data-opt="attach"]').checked = true;
+  dom.fire(form, "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(t, "/v1/search")[0]).include, ["attachments"]);
+  t.h.$("#table .original-row").click(); await dom.flush();
+  const d = t.h.$("#detail");
+  assert.match(d.textContent, /보관된 원본 파일PDFapplication\/pdf · 2048 B내려받기/);
+  [...d.querySelectorAll("button")].find((b) => b.textContent === "내려받기").click(); await dom.flush();
+  assert.deepEqual(t.saved[0].slice(0, 1), ["a1.pdf"]);
+  assert.ok(t.calls.some(([p]) => p.startsWith("/v1/sources/src1/artifacts/a1?") && p.includes("workspace_id=w")));
+
+  const a = setup("ask", [["/v1/reflect", () => ({ answer: "답", cited_memory_ids: ["m4"], retrieved: [{ id: "m4", kind: "lesson", attachments: [file] }, { id: "m5", kind: "lesson" }] })],
+    ["/v1/memories/", () => memory("m4")]]);
+  a.view.draw();
+  a.h.$("#chips input").value = "배포?";
+  a.h.$("#chips form").querySelector('[data-opt="attach"]').checked = true;
+  dom.fire(a.h.$("#chips form"), "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(a, "/v1/reflect")[0]).include, { attachments: true });
+  assert.match(a.h.$("#table").textContent, /보관된 원본 파일PDF/);
 });

@@ -272,6 +272,9 @@
 .insight-ask { padding: 1rem; }
 .insight-head { margin: 1rem 0 0.5rem; font: 600 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .insight-aliases { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+.insight-file { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid var(--nc-line); }
+.insight-file:last-child { border-bottom: 0; }
+.insight-file > small { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 /* 비슷한 이름: the name, how close, then 합치기 on one line */
 .insight-similar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .insight-similar > strong { flex: 1 1 8rem; min-width: 0; overflow-wrap: anywhere; }

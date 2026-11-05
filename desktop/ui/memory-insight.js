@@ -6,6 +6,17 @@
 window.ArkismMemoryInsight = (ctx, tab) => {
   "use strict";
   const { state, $, el, raw, icon, button, request, query, detailShell, openDetail, notice, section, facts, callout } = ctx;
+  // Files kept with the evidence (include attachments): kind, type, size and the same download as 지식 › 원본 파일.
+  function attachments(list) {
+    const K = window.ArkismKnowledge, box = el("div", "dg-list");
+    for (const a of list.slice(0, 20)) {
+      const row = el("div", "insight-file");
+      row.append(el("span", "", K.ARTIFACT[a.kind] || "파일"), raw(el("small", "meta", [a.mime, ctx.fileSize?.(a.bytes)].filter(Boolean).join(" · "))),
+        K.artifactButton({ button, request, query, saveFile: ctx.saveFile }, a.source_id, a));
+      box.append(row);
+    }
+    return box;
+  }
   const human = () => state.caps?.role === "human";
   const identity = () => JSON.stringify([state.server, state.token, state.scope]);
   const active = () => state.view === "memories" && state.memTab === tab;
@@ -146,7 +157,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       if (shapeTab === "fields") { body.replaceChildren(shapeFields(shape, false)); return; }
       const code = el("textarea", "insight-json insight-code"); code.rows = 10; code.maxLength = 20000; code.spellcheck = false; code.setAttribute("aria-label", "답 모양 JSON");
       code.addEventListener("input", () => code.setCustomValidity(""));
-      body.replaceChildren(opt(code, "schema"), el("p", "meta", "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요."));
+      body.replaceChildren(opt(code, "schema"), el("p", "meta", "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요."));
     }
     fill();
     return box;
@@ -204,7 +215,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
           field("답 길이 한도 (64~4096 토큰)", num("tokens", "64", "4096")), field("이번 질문의 목표", opt(goal, "mission")),
           el("p", "meta", "이번 질문의 성향 (1 낮음 ~ 5 높음, 비워 두면 공간 설정을 따라요)"),
           grid(field("의심하는 정도", num("skepticism", "1", "5")), field("글자 그대로 읽는 정도", num("literalism", "1", "5")), field("마음을 헤아리는 정도", num("empathy", "1", "5"))),
-          check("alldirectives", "태그가 달라도 모든 규칙 지키기"), check("promptonly", "AI에 보내지 않고 보낼 내용만 보기")),
+          check("alldirectives", "태그가 달라도 모든 규칙 지키기"), check("promptonly", "AI에 보내지 않고 보낼 내용만 보기"),
+          check("attach", "찾은 기억에 보관된 원본 파일도 보기")),
         shapeEditor()));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
@@ -252,7 +264,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       ...(tokens ? { max_tokens: tokens } : {}), ...(own ? { mission: own } : {}), ...(schema ? { response_schema: schema } : {}),
       ...(BUDGETS[opts.budget] && opts.budget ? { budget: opts.budget } : {}), ...(facts.length === 1 ? { fact_types: facts } : {}), ...tagFilter(),
       ...(opts.nomodels ? { exclude_mental_models: true } : skip.length ? { exclude_mental_model_ids: skip } : {}), ...(Object.keys(mood).length ? { disposition: mood } : {}),
-      ...(opts.alldirectives ? { apply_all_directives: true } : {}), ...(opts.promptonly ? { prompt_only: true } : {}) };
+      ...(opts.alldirectives ? { apply_all_directives: true } : {}), ...(opts.promptonly ? { prompt_only: true } : {}),
+      ...(opts.attach ? { include: { attachments: true } } : {}) };
   }
   async function ask() {
     if (busy) return;
@@ -337,7 +350,9 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const shown = got.filter((r) => evidence === "all" || String(r.kind || "") === evidence).slice(0, 40), list = el("div", "dg-list");
     for (const r of shown) list.append(memoryLink(r.id));
     const tabs = [["all", "전체", got.length], ...kinds.map((k) => [k, k === "observation" ? "정리된 관찰" : k === "mental_model" ? "생각 정리" : ctx.kindLabel(k) || "기타", got.filter((r) => String(r.kind || "") === k).length])];
+    const files = shown.flatMap((r) => (Array.isArray(r.attachments) ? r.attachments : []));
     return [el("h3", "insight-head", "찾아본 기억"), seg(tabs, evidence, (k) => { evidence = k; paintAsk(); }), list,
+      ...(files.length ? [el("h3", "insight-head", "보관된 원본 파일"), attachments(files)] : []),
       el("p", "meta", `근거로 든 기억 ${shown.filter((r) => cited.has(r.id)).length}개가 이 안에 있어요.`),
       ...(answer.graph_nodes > 0 ? [el("p", "meta", `관계를 따라가 찾은 기억 ${answer.graph_nodes}개`)] : [])];
   }
@@ -362,7 +377,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const when = (v) => { const d = v ? new Date(v) : null; return d && Number.isFinite(d.getTime()) ? d : null; };
   function searchBody() {
     const filter = tagFilter(), at = when(opts.at), from = when(opts.from), to = when(opts.to), min = real(opts.min, 0, 1);
-    const include = Object.keys(PARTS).filter((k) => opts[`part:${k}`]), kinds = picked("kind", Object.keys(ctx.KINDS));
+    const include = [...Object.keys(PARTS).filter((k) => opts[`part:${k}`]), ...(opts.attach ? ["attachments"] : [])], kinds = picked("kind", Object.keys(ctx.KINDS));
     const limit = int(opts.limit, 1, 50), depth = int(opts.depth, 1, 3), budget = int(opts.budget, 1, 64000);
     const weights = Object.fromEntries(LANES.map((l) => [l, real(opts[`w:${l}`], 0.25, 8)]).filter(([, v]) => v !== undefined));
     const floors = Object.fromEntries(["semantic", "keyword", "reranker"].map((k) => [k, real(opts[`floor:${k}`], 0, 1)]).filter(([, v]) => v));
@@ -400,7 +415,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
           grid(...LANES.map((l) => field(laneName(l), num(`w:${l}`, "0.25", "8", "0.25")))),
           field("이어서 따라갈 단계 (1~3)", num("depth", "1", "3")), check("causal", "원인과 결과로 이어진 기억도 찾기")),
         group("결과에 붙일 것", field("결과 전체 토큰 한도 (1~64000)", num("budget", "1", "64000")),
-          ...Object.entries(PARTS).map(([k, l]) => grid(check(`part:${k}`, `${l} 붙이기`), field(`${l} 토큰 한도`, num(`tokens:${k}`, "1", "16384")))))));
+          ...Object.entries(PARTS).map(([k, l]) => grid(check(`part:${k}`, `${l} 붙이기`), field(`${l} 토큰 한도`, num(`tokens:${k}`, "1", "16384")))),
+          check("attach", "보관된 원본 파일 붙이기"))));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         question = input.value.trim(); readOpts(form);
@@ -521,6 +537,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       for (const t of h.source_traces.slice(0, 3)) if (t?.excerpt) src.append(raw(el("p", "quote", t.excerpt)));
       if (src.children.length > 1) body.append(src);
     }
+    if (h.attachments?.length) { const f = section("보관된 원본 파일"); f.append(attachments(h.attachments)); body.append(f); }
     if (h.tags?.length) { const t = section("태그"), chips = el("div", "insight-aliases"); for (const g of h.tags.slice(0, 20)) chips.append(raw(el("span", "chip", g))); t.append(chips); body.append(t); }
   }
 

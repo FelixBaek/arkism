@@ -10,7 +10,23 @@
   {
    "id": "m4",
    "kind": "procedural",
-   "score": 0.91
+   "score": 0.91,
+   "attachments": [
+    {
+     "id": "art-orbit-checklist",
+     "source_id": "src-orbit-release",
+     "kind": "pdf",
+     "mime": "application/pdf",
+     "bytes": 184320
+    },
+    {
+     "id": "art-orbit-screen",
+     "source_id": "src-orbit-release",
+     "kind": "image",
+     "mime": "image/png",
+     "bytes": 96256
+    }
+   ]
   },
   {
    "id": "m7",

@@ -2344,7 +2344,7 @@ export function startApp() {
     kindLabel, originOf, memSelect: memoryList.memSelect, section, facts, segment, go, openRecord: (r) => openIntelligenceRecord(r), reloadMemories: memoryList.reloadMemories });
   // 물어보기 · 검색 살펴보기 · 규칙 · 자주 나온 이름 (memory-insight.js)
   const insight = Object.fromEntries(["ask", "search", "rules", "entities"].map((tab) => [tab, window.ArkismMemoryInsight({ state, $, el, raw, icon, button, request: appApi.request, query: appApi.query,
-    detailShell, openDetail, notice, section, facts, callout, KINDS, kindLabel, openRecord: openIntelligenceRecord }, tab)]));
+    detailShell, openDetail, notice, section, facts, callout, KINDS, kindLabel, openRecord: openIntelligenceRecord, saveFile, fileSize }, tab)]));
   const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
