@@ -1000,17 +1000,19 @@ func recallShape(found []any) ([]any, error) {
 		}
 		if missing := host.MissingPaths(cwd, memoryPathTexts(m)...); len(missing) > 0 {
 			kept = append(kept, host.KV{Key: "path_check", Value: "missing"}, host.KV{Key: "missing_paths", Value: missing})
-			proposePathMissing(m)
+			proposePathMissing(m, cwd, missing)
 		}
 		memories = append(memories, kept)
 	}
 	return memories, nil
 }
 
-// proposePathMissing asks a person whether a procedure whose files are gone should be forgotten.
+// proposePathMissing asks a person whether a procedure whose files are gone should be forgotten,
+// only when every missing path belongs to this repository (a relative one only for a project
+// memory): a general procedure recalled elsewhere, or another machine's path, proves nothing.
 // Best effort: the server keeps one proposal per memory, so a repeat recall adds nothing.
-func proposePathMissing(m map[string]any) {
-	if str(m["kind"]) != "procedural" {
+func proposePathMissing(m map[string]any, cwd string, missing []string) {
+	if str(m["kind"]) != "procedural" || !host.RepoLocalPaths(cwd, str(m["reach"]) == "project", missing) {
 		return
 	}
 	_, _ = proposeInvalidation(map[string]any{"memory_id": m["id"], "revision": m["revision"], "reason": "path_missing"})

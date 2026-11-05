@@ -5591,7 +5591,9 @@
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Vuelve a ordenar una vez más los recuerdos encontrados. Solo se usa cuando el servidor tiene preparada la función de volver a elegir.",
  "서버 모델로 다시 고르기": "Volver a elegir con el modelo del servidor",
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Está activado. En cada búsqueda se llama al modelo del servidor y se gasta presupuesto de modelo.",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "El modelo del servidor lee los 20 primeros recuerdos que encontró y les cambia el orden. Si lo activas, cada búsqueda gasta uso del modelo (presupuesto)."
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "El modelo del servidor lee los 20 primeros recuerdos que encontró y les cambia el orden. Si lo activas, cada búsqueda gasta uso del modelo (presupuesto).",
+ "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Regla — al aprobarla se convierte en una directiva al inicio de cada sesión",
+ "이번만 — 승인해도 7일 뒤 만료": "Solo esta vez — caduca 7 días después de aprobarla"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

@@ -217,7 +217,7 @@ func (s *Service) runClaimedExtractJob(ctx context.Context, token string, d Deci
 		return viewExtractJob(r), err
 	}
 	if r.FileExtract.Settings.Mode == "" { // queued before settings were stored with the job
-		r.FileExtract.Settings, r.FileExtract.Zone = settings.extractBase(), settings.zone().String()
+		r.FileExtract.Settings, r.FileExtract.Zone, r.FileExtract.Language = settings.extractBase(), settings.zone().String(), settings.MemoryLanguage
 	}
 	r, _, err = s.runExtractJob(ctx, token, d, r)
 	if err != nil {

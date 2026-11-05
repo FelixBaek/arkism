@@ -29,8 +29,12 @@ var (
 	claimRules            = []string{"always", "never"}
 	claimDecisionStatuses = []string{"proposed", "confirmed", "dropped"}
 	// temporaryWords are request words that limit a statement to now, in the extractor's
-	// languages; the extractor's own temporary flag covers the rest.
-	temporaryWords = regexp.MustCompile(`(?i)이번만|이번 한 ?번만?|이번에만|오늘만|당분간|일단 지금은|this time only|just this once|only this time|for now\b|for today\b|temporarily`)
+	// languages; the extractor's own temporary flag covers the rest. "temporarily" is left out:
+	// it mostly describes a lasting fact ("when the DB is temporarily down, retry").
+	temporaryWords = regexp.MustCompile(`(?i)이번만|이번 한 ?번만|이번에만|오늘만|당분간|일단 지금은|this time only|just this once|only this time|for now\b|for today only`)
+	// temporaryKinds are the request kinds the words apply to: in a lesson, decision or event
+	// "this time only" describes what happened, and expiring it would lose a lasting memory.
+	temporaryKinds = []string{"user", "procedural"}
 )
 
 // EntityRelationInput is one relation the caller states between two entity names of
@@ -60,8 +64,10 @@ func validClaimExtras(c CaptureClaim) bool {
 	return true
 }
 
-// claimTemporary: the extractor said so, or the claim's own words limit it to now.
-func claimTemporary(c CaptureClaim) bool { return c.Temporary || temporaryWords.MatchString(c.Text) }
+// claimTemporary: the extractor said so, or a request's own words limit it to now.
+func claimTemporary(c CaptureClaim) bool {
+	return c.Temporary || slices.Contains(temporaryKinds, c.Kind) && temporaryWords.MatchString(c.Text)
+}
 
 // claimExtraTags are the system tags of the extraction labels (callers' plain tags cannot hold ':').
 func claimExtraTags(c CaptureClaim) []string {
@@ -121,9 +127,14 @@ func ruleDirective(ctx context.Context, tx Tx, memory Record, d Decision) error 
 	if title == "" || len([]rune(title)) > directiveTitleMaxRunes {
 		title = map[string]string{"always": "항상 지킬 규칙", "never": "하지 말 것"}[rule]
 	}
+	// The directive meets every check a directive created by hand meets (length, private span, secret).
+	in := DirectiveInput{Scope: scope, Title: title, Rule: memory.Text, Priority: ruleDirectivePriority, AppliesTo: "both"}
+	if err := validDirectiveInput(in); err != nil {
+		return err
+	}
 	now := time.Now().UTC()
-	dir := Record{ID: ID(), Scope: scope, Kind: directiveKind, Status: "active", Revision: 1, Text: memory.Text, Tags: []string{},
-		Directive: &Directive{Title: title, Priority: ruleDirectivePriority, AppliesTo: "both"}, Proposal: &Ref{Collection: colMemories, ID: memory.ID, Revision: memory.Revision},
+	dir := Record{ID: ID(), Scope: scope, Kind: directiveKind, Status: "active", Revision: 1, Text: strings.TrimSpace(in.Rule), Tags: []string{},
+		Directive: &Directive{Title: in.Title, Priority: in.Priority, AppliesTo: in.AppliesTo}, Proposal: &Ref{Collection: colMemories, ID: memory.ID, Revision: memory.Revision},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	if err := tx.Insert(ctx, colDirectives, dir); err != nil {
 		return err

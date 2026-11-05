@@ -343,10 +343,14 @@ export function startApp() {
   }
   // A captured correction waits for a person; the memory it corrects stays in use until then.
   const isCorrection = (item) => (item.tags || []).includes("review:pending_correction");
+  // An approved always/never rule also becomes a directive every session opens with, so the reviewer sees that first.
+  const isRule = (item) => (item.tags || []).some((t) => t === "rule:always" || t === "rule:never");
   function waitReason(item) {
+    if (isRule(item)) return ["규칙 — 승인하면 매 세션 맨 앞 지시가 됨", true];
     if ((item.tags || []).includes("review:instruction_like")) return ["명령처럼 보이는 문장 — 내가 확인", true];
     if (isCorrection(item)) return ["정정 대기 — 내가 확인", true];
     if (item.status === "conflicted") return ["기존 기억과 부딪힘", true];
+    if ((item.tags || []).includes("temporary")) return ["이번만 — 승인해도 7일 뒤 만료", false];
     if ((item.tags || []).includes("basis:assistant_result")) return ["에이전트 결과 — 확인 필요", false];
     if ((item.tags || []).includes("basis:inferred")) return ["AI 추측 — 사용자가 말하지 않음", false];
     return ["", false]; // no known reason: say nothing rather than a bare "검토 필요" (10-18 request)
@@ -1053,7 +1057,7 @@ export function startApp() {
   }
 
   // 기억 검토: up to 5 candidates in one view, each set to keep or drop, sent as one review_batch.
-  // A sentence that reads like an instruction starts as "버리기"; everything else starts as "저장".
+  // A sentence that reads like an instruction, or a rule that would become a directive, starts as "버리기"; everything else starts as "저장".
   // The AI's risk call (ADR-0022) only orders the list: high risk first and shown in full, the rest in one line.
   const BATCH = 5;
   const RISK = { high: [0, "주의"], medium: [1, "보통"], low: [2, "낮음"] };
@@ -1062,7 +1066,7 @@ export function startApp() {
   const riskLabel = (c) => RISK[c.classification?.risk] ? `위험도 ${RISK[c.classification.risk][1]}` : "";
   function reviewBatchDetail(body) {
     const list = [...state.data.candidates].sort(byRisk).slice(0, BATCH);
-    const keep = new Map(list.map((c) => [c.id, !(c.tags || []).includes("review:instruction_like")]));
+    const keep = new Map(list.map((c) => [c.id, !(c.tags || []).includes("review:instruction_like") && !isRule(c)]));
     const cards = el("div", "tidy-cards");
     const paint = () => cards.replaceChildren(...list.map((c) => {
       const on = keep.get(c.id);
@@ -1074,7 +1078,7 @@ export function startApp() {
       // two plain buttons per card: what each card does is on the card, not in a toggle the reader has to guess
       const pick = el("div", "sim-pick");
       for (const [v, label] of [[true, "저장"], [false, "버리기"]]) { const b = button(label, `small${on === v ? " primary" : " ghost"}`, null, () => { keep.set(c.id, v); paintAll(); }); b.setAttribute("aria-pressed", String(on === v)); pick.append(b); }
-      card.append(raw(text), el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : ""].filter(Boolean).join(" · ")));
+      card.append(raw(text), el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : "", isRule(c) ? "규칙 — 승인하면 매 세션 맨 앞 지시가 됨" : ""].filter(Boolean).join(" · ")));
       if (open && c.classification.risk_reasons?.length) card.append(el("small", "dim", c.classification.risk_reasons.join(" · ")));
       card.append(pick);
       return card;

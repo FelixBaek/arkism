@@ -5591,7 +5591,9 @@
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Sắp xếp lại thứ tự các ký ức đã tìm được thêm một lần nữa. Chỉ dùng khi máy chủ đã có sẵn tính năng chọn lại.",
  "서버 모델로 다시 고르기": "Chọn lại bằng mô hình của máy chủ",
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm kiếm sẽ gọi mô hình của máy chủ và tốn ngân sách mô hình.",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Mô hình trên máy chủ sẽ đọc 20 ký ức đứng đầu mà nó tìm được rồi sắp xếp lại thứ tự. Khi bật, mỗi lần tìm kiếm sẽ tốn lượng dùng mô hình (ngân sách)."
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Mô hình trên máy chủ sẽ đọc 20 ký ức đứng đầu mà nó tìm được rồi sắp xếp lại thứ tự. Khi bật, mỗi lần tìm kiếm sẽ tốn lượng dùng mô hình (ngân sách).",
+ "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Quy tắc — khi duyệt sẽ thành chỉ thị ở đầu mỗi phiên",
+ "이번만 — 승인해도 7일 뒤 만료": "Chỉ lần này — hết hạn 7 ngày sau khi duyệt"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

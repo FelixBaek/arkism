@@ -85,3 +85,26 @@ func anyExists(paths []string) bool {
 	}
 	return false
 }
+
+// RepoLocalPaths reports whether every path belongs to the repository cwd is in: absolute
+// under its root, or relative when relativeOK (a memory bound to this project). Only such
+// paths say a file is gone; another machine's or another project's path says nothing here.
+func RepoLocalPaths(cwd string, relativeOK bool, paths []string) bool {
+	root := repoRoot(cwd)
+	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil || len(paths) == 0 {
+		return false
+	}
+	for _, p := range paths {
+		switch {
+		case strings.HasPrefix(p, "~/"):
+			return false
+		case filepath.IsAbs(p):
+			if rel, err := filepath.Rel(root, p); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return false
+			}
+		case !relativeOK:
+			return false
+		}
+	}
+	return true
+}

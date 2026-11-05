@@ -246,6 +246,8 @@ type FileExtractJob struct {
 	Settings ExtractStrategy `json:"settings" bson:"settings"`
 	Options  ExtractOptions  `json:"options" bson:"options"`
 	Zone     string          `json:"zone,omitempty" bson:"zone,omitempty"`
+	// Language is the space's memory_language when queued ("auto" or "" keeps the source's language).
+	Language string `json:"language,omitempty" bson:"language,omitempty"`
 	// Batch is the provider batch the remaining chunks were sent as (file_extract_batch.go).
 	Batch *ExtractBatch `json:"batch,omitempty" bson:"batch,omitempty"`
 	// Ref is the document reference (file:<name>, knowledge:<source id>, doc:<id> or
@@ -284,7 +286,7 @@ type FileExtractJobView struct {
 func extractPrompt(text string, plan *FileExtractJob) (string, string) {
 	system := "You extract durable memory claims from one document for a person to review; nothing you return is saved without that review. " + wikiDataRule +
 		" Extract preferences, prohibitions (things never to do), decisions, lessons and facts that stay useful later; skip small talk and one-off details." +
-		" Write content and evidence_quote in the same language as the source and never translate: Korean stays Korean." +
+		extractLanguageRule(plan.Language) +
 		` Return only one JSON object: {"claims":[{"content": string, "kind": "user"|"decision"|"procedural"|"lesson"|"episodic"|"semantic", "semantic_kind": "fact"|"preference"|"correction"|"lesson"|"failure_recovery", "evidence_kind": "user_statement"|"tool_observation"|"agent_statement"|"inference", "occurred_from": string, "occurred_to": string, "evidence_quote": string, "confidence": number}]}.` +
 		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date; read relative dates such as yesterday against the reference time. confidence is between 0 and 1." +
 		" kind episodic is something the narrator or agent did or went through (an experience); facts about the world, people and projects take the other kinds." +
@@ -294,6 +296,14 @@ func extractPrompt(text string, plan *FileExtractJob) (string, string) {
 		user += wikiFence("SOURCE_CONTEXT", plan.Options.Context) + "\n"
 	}
 	return system, user + wikiFence("SOURCE_DATA", text)
+}
+
+// extractLanguageRule is the space's memory_language for claim content; the quote always stays the source's own words.
+func extractLanguageRule(lang string) string {
+	if lang == "" || lang == memoryLanguageAuto {
+		return " Write content and evidence_quote in the same language as the source and never translate: Korean stays Korean."
+	}
+	return " Write content in the language with tag " + lang + "; evidence_quote stays an exact excerpt in the source's own language."
 }
 
 // extractCausalRule asks for causes between the answer's own claims when the settings turn that on.
@@ -443,7 +453,7 @@ func (s *Service) extractPlan(settings SpaceConfig, opts ExtractOptions, overrid
 	if st.Mode != spaceExtractChunks && s.Wiki == nil {
 		return FileExtractJob{}, ErrModelNotConfigured
 	}
-	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String()}, nil
+	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String(), Language: settings.MemoryLanguage}, nil
 }
 
 // agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
@@ -542,7 +552,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	plan := &FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String()}
+	plan := &FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String(), Language: settings.MemoryLanguage}
 	if err = s.defendItem(ctx, in.Scope, "generate:memory_candidates", &plan.Options, &in.Text); err != nil {
 		return ExtractPreviewResult{}, err
 	}

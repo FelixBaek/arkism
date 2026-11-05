@@ -405,3 +405,62 @@ func TestExtractionScenarioKoreanAndEnglish(t *testing.T) {
 		t.Fatalf("after approval: directives %d edges %d", len(list.Items), len(repo.edges))
 	}
 }
+
+// "This time only" words expire a request (user, procedural) but not a lesson, decision or
+// event that only describes one time, nor a fact saying something is temporarily so.
+func TestTemporaryWordsOnlyExpireRequests(t *testing.T) {
+	cases := []struct {
+		kind, text string
+		want       bool
+	}{
+		{"user", "이번만 PR 제목을 영어로 쓴다", true},
+		{"procedural", "For now, deploy from the main branch only", true},
+		{"lesson", "이번만 예외로 테스트를 건너뛰었다가 장애가 났으니 테스트는 건너뛰지 않는다", false},
+		{"episodic", "11월 3일에는 이번 한 번만 수동으로 배포했다", false},
+		{"decision", "검색은 당분간 벡터 점수만 쓰기로 했다", false},
+		{"procedural", "When the database is temporarily unavailable, retry with backoff", false},
+		{"user", "I like the plan for today's standup notes", false},
+	}
+	for _, c := range cases {
+		if got := claimTemporary(CaptureClaim{Kind: c.kind, Text: c.text}); got != c.want {
+			t.Errorf("%s %q: temporary %v, want %v", c.kind, c.text, got, c.want)
+		}
+	}
+	if !claimTemporary(CaptureClaim{Kind: "decision", Text: "x", Temporary: true}) {
+		t.Error("the extractor's own flag was ignored")
+	}
+}
+
+// File extraction writes claim content in the space's memory_language; auto keeps the source's.
+func TestFileExtractPromptFollowsMemoryLanguage(t *testing.T) {
+	auto, _ := extractPrompt("본문", &FileExtractJob{Language: memoryLanguageAuto})
+	unset, _ := extractPrompt("본문", &FileExtractJob{})
+	en, _ := extractPrompt("본문", &FileExtractJob{Language: "en"})
+	if !strings.Contains(auto, "Korean stays Korean") || auto != unset {
+		t.Fatal("auto language rule:", auto)
+	}
+	if !strings.Contains(en, "language with tag en") || strings.Contains(en, "Korean stays Korean") || !strings.Contains(en, "evidence_quote stays an exact excerpt") {
+		t.Fatal("set language rule:", en)
+	}
+}
+
+// A secret an agent writes into a checkpoint decision never becomes a work-state candidate:
+// the checkpoint save refuses it before anything is proposed.
+func TestWorkStateCandidatesDropSecrets(t *testing.T) {
+	f := newFixture(t)
+	on := true
+	putSettings(t, f, scopeA, SpaceConfigInput{ExpectedRevision: -1, WorkStateCandidates: &on})
+	secret := "ghp_" + strings.Repeat("a1B2c3D4e5", 4)
+	save := WorkCheckpointSaveInput{Scope: scopeA, ID: "deploy-key", EventID: "e1", Package: WorkCheckpointPackage{Title: "배포 v2.4.1", Goal: "운영 배포", Repository: "acme/web", Status: "in_progress",
+		Origin: "crew_handoff", Decisions: []string{"배포 토큰은 " + secret + " 로 바꿨다", "운영은 v2.4.1로 배포했다"}}}
+	if _, err := f.svc.SaveWorkCheckpoint(testCtx, f.agent, save); !errors.Is(err, ErrSecretDetected) || len(workStateRows(f)) != 0 {
+		t.Fatalf("secret checkpoint: %v, rows %d", err, len(workStateRows(f)))
+	}
+	save.Package.Decisions = save.Package.Decisions[1:]
+	if _, err := f.svc.SaveWorkCheckpoint(testCtx, f.agent, save); err != nil {
+		t.Fatal(err)
+	}
+	if rows := workStateRows(f); !slices.ContainsFunc(rows, func(r Record) bool { return r.Text == "운영은 v2.4.1로 배포했다" }) {
+		t.Fatal("clean checkpoint proposed nothing", rows)
+	}
+}

@@ -6748,3 +6748,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "It's on. Every search calls the server model and spends the model budget." });
 Object.assign(window.ArkismI18nEN.strings, {
   "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "The server model reads the top 20 found memories and reorders them. When on, every search uses model budget." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Rule — approving it makes it a directive at the top of every session",
+  "이번만 — 승인해도 7일 뒤 만료": "This time only — expires 7 days after approval" });

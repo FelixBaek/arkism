@@ -3,6 +3,8 @@ package skills
 import (
 	"encoding/base64"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -152,15 +154,25 @@ func TestProposeChangeSendsAChangeProposal(t *testing.T) {
 	}
 }
 
-// A recalled procedure that names a file no longer there is flagged and proposed for a person
-// to forget (reason path_missing); other kinds are only flagged.
+// A recalled procedure that names a file of this repository no longer there is flagged and
+// proposed for a person to forget (reason path_missing); other kinds, and paths that cannot be
+// judged here (another machine's, a Windows drive, a general memory's relative path), are only flagged.
 func TestRecallProposesForgettingProcedureWithMissingPath(t *testing.T) {
 	swapRouter(t)
-	t.Chdir(t.TempDir())
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(repo)
 	calls := fakeRequest(t, `{"id":"p1","status":"proposed"}`)
 	found := []any{
-		map[string]any{"id": "m1", "revision": json.Number("2"), "kind": "procedural", "text": "Run /nonexistent/arkism/deploy-old.sh before release."},
-		map[string]any{"id": "m2", "revision": json.Number("1"), "kind": "user", "text": "Keep notes in /nonexistent/arkism/notes.md"},
+		map[string]any{"id": "m1", "revision": json.Number("2"), "kind": "procedural", "text": "Run " + filepath.Join(repo, "scripts", "deploy-old.sh") + " before release."},
+		map[string]any{"id": "m2", "revision": json.Number("1"), "kind": "user", "text": "Keep notes in " + filepath.Join(repo, "notes.md")},
+		map[string]any{"id": "m3", "revision": json.Number("1"), "kind": "procedural", "text": "Run /home/other/arkism/deploy.sh before release."},
+		map[string]any{"id": "m4", "revision": json.Number("1"), "kind": "procedural", "text": `배포 전 C:/Users/felix/tools/check.ps1 를 실행한다.`},
+		map[string]any{"id": "m5", "revision": json.Number("1"), "kind": "procedural", "reach": "general", "text": "Run tools/check_old.py before commit."},
+		map[string]any{"id": "m6", "revision": json.Number("1"), "kind": "procedural", "text": "Keys live in ~/.config/arkism/old.key"},
+		map[string]any{"id": "m7", "revision": json.Number("1"), "kind": "procedural", "reach": "project", "text": "Run tools/gone_check.py before commit."},
 	}
 	out, err := recallShape(found)
 	if err != nil {
@@ -171,12 +183,14 @@ func TestRecallProposesForgettingProcedureWithMissingPath(t *testing.T) {
 			t.Fatal("missing path not flagged", m)
 		}
 	}
-	if len(*calls) != 1 || (*calls)[0].path != "/v1/maintenance_proposals" {
+	if len(*calls) != 2 {
 		t.Fatalf("calls = %+v", *calls)
 	}
-	p := (*calls)[0].payload.(map[string]any)["proposal"].(map[string]any)
-	if p["type"] != "invalidation" || p["reason"] != "path_missing" {
-		t.Fatalf("proposal = %+v", p)
+	for i, want := range []string{"m1", "m7"} {
+		p := (*calls)[i].payload.(map[string]any)["proposal"].(map[string]any)
+		if (*calls)[i].path != "/v1/maintenance_proposals" || p["type"] != "invalidation" || p["reason"] != "path_missing" || asMap(p["memory"])["id"] != want {
+			t.Fatalf("proposal %d = %+v", i, p)
+		}
 	}
 }
 

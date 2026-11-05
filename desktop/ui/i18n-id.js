@@ -5591,7 +5591,9 @@
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Mengurutkan ulang sekali lagi memori yang ditemukan. Hanya dipakai jika server sudah menyiapkan fitur pemilihan ulang.",
  "서버 모델로 다시 고르기": "Pilih ulang dengan model server",
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Sedang aktif. Setiap kali mencari, model server dipanggil dan memakai anggaran model.",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Model server membaca 20 memori teratas yang ditemukan lalu menyusun ulang urutannya. Jika diaktifkan, setiap pencarian akan memakai kuota (anggaran) model."
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Model server membaca 20 memori teratas yang ditemukan lalu menyusun ulang urutannya. Jika diaktifkan, setiap pencarian akan memakai kuota (anggaran) model.",
+ "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Aturan — jika disetujui menjadi arahan di awal setiap sesi",
+ "이번만 — 승인해도 7일 뒤 만료": "Kali ini saja — kedaluwarsa 7 hari setelah disetujui"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

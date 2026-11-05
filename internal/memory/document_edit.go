@@ -265,7 +265,7 @@ func (s *Service) ReprocessDocument(ctx context.Context, token, id string, in Wi
 	}
 	fresh, _, delta := diffExtractChunks(nil, chunks)
 	// The new round keeps the document's settings and options; its progress starts over.
-	plan := FileExtractJob{Label: j.Label, Document: id, Ref: j.Ref, Chunks: fresh, Delta: delta, Settings: j.Settings, Options: j.Options, Zone: j.Zone}
+	plan := FileExtractJob{Label: j.Label, Document: id, Ref: j.Ref, Chunks: fresh, Delta: delta, Settings: j.Settings, Options: j.Options, Zone: j.Zone, Language: j.Language}
 	return s.launchExtract(ctx, token, d, in.Scope, plan, FileMemoriesResult{Skipped: []ExtractSkip{}}, fileExtractSyncChunks)
 }
 

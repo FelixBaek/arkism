@@ -5591,7 +5591,9 @@
  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Sortiert die gefundenen Erinnerungen noch einmal neu. Wird nur genutzt, wenn der Server eine Neusortierung bereitstellt.",
  "서버 모델로 다시 고르기": "Mit Servermodell neu sortieren",
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Ist an. Bei jeder Suche wird das Servermodell aufgerufen und Modellbudget verbraucht.",
- "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Das Servermodell liest die 20 obersten gefundenen Erinnerungen und ordnet sie neu. Wenn aktiviert, verbraucht jede Suche Modellnutzung (Budget)."
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Das Servermodell liest die 20 obersten gefundenen Erinnerungen und ordnet sie neu. Wenn aktiviert, verbraucht jede Suche Modellnutzung (Budget).",
+ "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Regel — nach Freigabe steht sie als Anweisung am Anfang jeder Sitzung",
+ "이번만 — 승인해도 7일 뒤 만료": "Nur dieses Mal — läuft 7 Tage nach Freigabe ab"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
