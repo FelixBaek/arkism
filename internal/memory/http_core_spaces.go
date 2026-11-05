@@ -8,7 +8,7 @@ import (
 // Space routes keep their policies here; init merges them into the one route table.
 var spaceRoutePolicies = map[string]routePolicy{
 	"GET /v1/spaces":                                          {action: "read:memories", scope: routeQuery},
-	"GET /v1/spaces/template-schema":                          {scope: routePublic},
+	"GET /v1/spaces/template-schema":                          {action: "read:space_configs", scope: routeQuery},
 	"GET /v1/spaces/{workspace}/{project}/config":             {action: "read:space_configs", scope: routePath},
 	"PUT /v1/spaces/{workspace}/{project}/config":             {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 	"PATCH /v1/spaces/{workspace}/{project}/config":           {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},

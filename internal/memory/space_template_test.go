@@ -87,7 +87,9 @@ func (s *Service) mustSpace(t *testing.T, scope Scope) SpaceConfig {
 func TestSpaceTemplateSchemaRoute(t *testing.T) {
 	f := newFixture(t)
 	rec := httptest.NewRecorder()
-	handlerMode(f.svc, time.Minute, true).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/spaces/template-schema", nil))
+	req := httptest.NewRequest(http.MethodGet, "/v1/spaces/template-schema?workspace_id=ws-a&project_id=proj-a", nil)
+	req.Header.Set("Authorization", "Bearer "+f.human)
+	handlerMode(f.svc, time.Minute, true).ServeHTTP(rec, req)
 	var got map[string]any
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
 		t.Fatalf("%d %s", rec.Code, rec.Body)

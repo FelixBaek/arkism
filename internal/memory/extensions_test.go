@@ -116,7 +116,7 @@ func TestExtensionRequestHookFailsClosed(t *testing.T) {
 	})
 	h := handlerMode(f.svc, time.Minute, true)
 	for mode, want := range map[string]int{"": http.StatusOK, "refuse": http.StatusForbidden, "panic": http.StatusForbidden} {
-		req := httptest.NewRequest(http.MethodGet, "/v1/spaces/template-schema", strings.NewReader("secret body"))
+		req := httptest.NewRequest(http.MethodGet, "/healthz", strings.NewReader("secret body"))
 		req.Header.Set("X-Test", mode)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
