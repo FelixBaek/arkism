@@ -653,6 +653,7 @@
         sw("exclude_mental_models", "주제 요약은 빼고 답하기", "승인한 주제 요약을 읽지 않고 기억만으로 답해요."),
         sw("tag_scoped_directives", "태그가 맞는 지시만 쓰기", "태그를 붙인 지시는 같은 태그로 물을 때만 따라요."),
         field("도구 한 번에 읽는 양 (토큰)", caps, "비우면 기본값을 써요."),
+        ...decisionModel(kit, edit, "reflect", "답하기 전에 관계없는 기억 거르기", "작은 판정 모델이 질문과 관계없는 기억을 먼저 빼고, 이미 답할 수 있으면 더 찾지 않게 해요."),
         origin("reflect_default_options", () => { d.reflect_default_options = null; redraw(); })];
     }
 
@@ -686,7 +687,8 @@
         kit.line("묶는 방식", "어떤 기억끼리 모아 관찰을 만들지예요.", edit ? select([["", "기본값 · 모두 한 묶음"], ...SCOPE_MODES], c.default_scope_mode || "", "묶는 방식", (v) => set({ default_scope_mode: v || undefined }))
           : readOnly(SCOPE_MODES.find(([k]) => k === c.default_scope_mode)?.[1] || "모두 한 묶음")),
         field("크기", sizes, "비우면 기본값을 써요."),
-        ...decisionModel(kit, edit)];
+        ...decisionModel(kit, edit, "consolidation", "정리 전에 쉬운 것 먼저 거르기", "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요."),
+        origin("decision_models", () => { d.decision_models = null; redraw(); })];
       // the rule lists as JSON: kept in S.rules while being typed, so a half-typed object is not lost on redraw
       if (!edit) {
         out.push(field("정리 전략 규칙 (JSON)", pre(rulesText(c) || "없음")), origin("consolidation"));
@@ -705,17 +707,20 @@
       out.push(origin("consolidation", () => { d.consolidation = null; S.rules = null; redraw(); }));
       return out;
     }
-    // decision_models.consolidation: a small decision engine drops note groups an observation already states before the model is asked
+    // decision_models.<task>: a small decision engine settles easy cases of a task before the server model is asked (off by default)
     const ENGINES = [["off", "쓰지 않기"], ["clef", "clef"], ["jev", "jev"]];
-    function decisionModel(kit, edit) {
-      const d = S.draft, cur = (d ? d.decision_models : S.eff.decision_models)?.consolidation || "";
-      const eff = S.eff.decision_models?.consolidation || "off";
+    function decisionModel(kit, edit, task, title, hint) {
+      const d = S.draft, eff = S.eff.decision_models?.[task] || "off";
+      const own = d?.decision_models?.[task] || "";
       const list = [["", d?.decision_models ? "물려받기" : `물려받기 · ${ENGINES.find(([k]) => k === eff)?.[1] || eff}`], ...ENGINES];
-      const ctl = edit ? select(list, d.decision_models?.consolidation || "", "정리 전에 쉬운 것 먼저 거르기", (v) => { d.decision_models = v ? { ...(d.decision_models || {}), consolidation: v } : null; redraw(); })
-        : readOnly(ENGINES.find(([k]) => k === (cur || eff))?.[1] || eff);
-      const out = [kit.line("정리 전에 쉬운 것 먼저 거르기", "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.", ctl),
-        origin("decision_models", () => { d.decision_models = null; redraw(); })];
-      if ((d?.decision_models?.consolidation || eff) !== "off") out.push(el("p", "pg-hint warn", "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요."));
+      const pick = (v) => {
+        const next = { ...(d.decision_models || S.eff.decision_models || {}) };
+        if (v) next[task] = v; else delete next[task];
+        d.decision_models = Object.keys(next).length ? next : null; redraw();
+      };
+      const ctl = edit ? select(list, own, title, pick) : readOnly(ENGINES.find(([k]) => k === eff)?.[1] || eff);
+      const out = [kit.line(title, hint, ctl)];
+      if ((own || eff) !== "off") out.push(el("p", "pg-hint warn", "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요."));
       return out;
     }
     async function strategyPreview() {
@@ -751,7 +756,9 @@
         out.push(kit.line("관찰 정리 뒤에 고치기", "관찰을 정리하고 나면 요약도 새로 고쳐요.", edit ? kit.sw(!!t.after_consolidation, "관찰 정리 뒤에 고치기", (next) => setT({ after_consolidation: next || undefined })) : onOff(!!t.after_consolidation)));
       }
       out.push(kit.line("가장 짧은 간격", "요약을 이보다 자주 고치지 않아요.", edit ? select(withValue(GAPS, m.min_interval), m.min_interval || "", "가장 짧은 간격", (v) => set({ min_interval: v || undefined })) : readOnly(m.min_interval || "기본값")),
-        origin("mental_model_defaults", () => { d.mental_model_defaults = null; redraw(); }));
+        origin("mental_model_defaults", () => { d.mental_model_defaults = null; redraw(); }),
+        ...decisionModel(kit, edit, "mental_model_refresh", "요약 쓰기 전에 관계없는 기억 거르기", "작은 판정 모델이 주제와 관계없는 기억을 먼저 빼서 요약이 흐려지지 않게 해요."),
+        ...decisionModel(kit, edit, "mental_model_delta", "바뀐 부분만 고칠 때 먼저 거르기", "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요."));
       return out;
     }
     async function cronPreview(cron) {

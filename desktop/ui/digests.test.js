@@ -662,6 +662,43 @@ test("새 주제 만들기 sends only what was filled in; an invalid schedule sa
   assert.equal(t.state.selected, "mm:n1");
 });
 
+test("주제 고치기: tags, recall options, answer shape and the wiki folder go into the save; the folder list comes from the wiki tree", async () => {
+  const m = { id: "x2", revision: 3, title: "배포", query: "배포 순서?", status: "active", folder: "ops", refresh: { mode: "manual", tags: ["deploy"], tag_groups: [[{ tags: ["a"] }]] } };
+  const t = setup({ routes: { "/v1/mental-models?": () => ({ items: [m] }), "/v1/wiki/tree": () => ({ folders: [{ path: "ops", pages: 1 }, { path: "guides", pages: 0 }] }),
+    "/v1/mental-models/x2": (_, o) => ({ id: "x2", ...JSON.parse(o.body) }), "/v1/observations?": () => ({ items: [] }) } });
+  t.state.caps = { role: "human" };
+  t.view.draw(); await dom.flush();
+  seg(t, "직접 정한 주제").click(); await dom.flush();
+  rows(t)[0].click(); await dom.flush();
+  btn(t.h.$("#detail"), "고치기").click(); await dom.flush();
+  const sel = (label) => t.h.$("#detail").querySelectorAll("select").find((s) => s.getAttribute("aria-label") === label);
+  const folder = sel("위키에 두기");
+  assert.deepEqual(folder.querySelectorAll("option").map((o) => o.value), ["\u0000none", "", "ops", "guides"]);
+  assert.match(detailText(t), /자세히/);
+  const inputs = t.h.$("#detail").querySelectorAll("input");
+  dom.input(inputs.find((i) => i.value === "deploy"), "deploy, ops, deploy");
+  dom.input(inputs.find((i) => i.placeholder === "예: 4000"), "3000");
+  inputs.find((i) => i.type === "checkbox" && !i.checked && i.parentElement.textContent.includes("원문 조각")).checked = true;
+  dom.input(sel("읽을 종류"), "observation");
+  dom.input(sel("태그 맞추는 방법"), "all_strict");
+  const areas = t.h.$("#detail").querySelectorAll("textarea");
+  assert.equal(areas[1].value, "a");
+  dom.input(areas[2], "{ bad");
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.match(t.notices.at(-1), /요약 모양 JSON을 읽을 수 없어요/);
+  dom.input(areas[2], '{"type": "object"}');
+  dom.input(folder, "guides");
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/mental-models/x2", "PATCH")[0], { scope: SCOPE, expected_revision: 3, title: "배포", query: "배포 순서?", folder: "guides",
+    refresh: { mode: "manual", tags: ["deploy", "ops"], tags_match: "all_strict", tag_groups: [[{ tags: ["a"] }]], fact_types: ["observation"], include_chunks: true, recall_max_tokens: 3000, response_schema: { type: "object" } } });
+  // taking it out of the wiki sends no_folder
+  t.state.selected = "mm:x2"; t.view.detail(); await dom.flush();
+  btn(t.h.$("#detail"), "고치기").click(); await dom.flush();
+  dom.input(t.h.$("#detail").querySelectorAll("select").find((s) => s.getAttribute("aria-label") === "위키에 두기"), "\u0000none");
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.equal(sent(t, "/v1/mental-models/x2", "PATCH")[1].no_folder, true);
+});
+
 test("기억 정리: by status and scope, history and delete; 지금 정리하기 shows the plan, runs on a click and reports what waits in AI 정리", async () => {
   const ob = (id, tags, o = {}) => ({ id, status: "active", revision: 1, content: `정리 ${id}`, durability: "lasting", tags, source_memories: [{ collection: "memories", id: "m1" }], updated_at: "2026-10-01T00:00:00Z", ...o });
   let release, deleted = 0;
@@ -714,6 +751,15 @@ test("mental model helpers: refreshBody keeps hidden keys, planText/runText, Mar
   assert.deepEqual(D.refreshOf({ refresh: "daily" }), { mode: "daily" });
   assert.deepEqual(D.refreshBody({ mode: "manual", tags: ["a"], cron: "1 1 * * *", budget: "low" }, { mode: "daily", cron: " ", budget: "high", strategy: "delta", after_consolidation: false }),
     { mode: "daily", tags: ["a"], budget: "high", strategy: "delta" });
+  assert.deepEqual(D.refreshBody({ mode: "manual", tags: ["old"], include_chunks: true }, { tags: [], include_chunks: false, fact_types: ["memory"], recall_max_tokens: 500, response_schema: { type: "object" } }),
+    { mode: "manual", fact_types: ["memory"], recall_max_tokens: 500, response_schema: { type: "object" } });
+  const groups = [[{ tags: ["a", "b"], match: "all_strict" }, { tags: ["c"], not: true }], [{ tags: ["d"] }]];
+  assert.deepEqual(D.tagGroups(D.tagGroupsText(groups)), groups);
+  assert.equal(D.tagGroupsText(undefined), "");
+  assert.deepEqual(D.folderBody(null, "\u0000none"), {});
+  assert.deepEqual(D.folderBody("docs", "\u0000none"), { no_folder: true });
+  assert.deepEqual(D.folderBody("docs", "docs"), {});
+  assert.deepEqual(D.folderBody(null, ""), { folder: "" });
   assert.equal(D.planText({ stale_observations: [], groups: [], mental_models: [] }), "지금은 정리할 것이 없어요");
   assert.equal(D.modelMarkdown({ title: "T", query: "Q", active: { text: "본문" } }, ["첫\n줄"]), "# T\n\n> Q\n\n본문\n\n## 근거 기억\n\n- 첫 줄\n");
   assert.match(D.modelMarkdown({ title: "T", query: "Q" }), /아직 승인된 요약이 없어요/);

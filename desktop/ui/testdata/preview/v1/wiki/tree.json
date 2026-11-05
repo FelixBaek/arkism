@@ -6,7 +6,7 @@
   },
   {
    "path": "운영/배포",
-   "pages": 2
+   "pages": 3
   },
   {
    "path": "디자인",
@@ -37,6 +37,15 @@
   {
    "id": "wiki-2",
    "folder": "디자인"
+  },
+  {
+   "id": "mm1",
+   "type": "query",
+   "title": "Orbit 배포 방식",
+   "folder": "운영/배포",
+   "revision": 3,
+   "review_state": "reviewed",
+   "stale": false
   }
  ]
 }

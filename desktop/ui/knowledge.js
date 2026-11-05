@@ -76,11 +76,11 @@ window.ArkismKnowledge = (ctx) => {
     K.state = K.state === "ready" ? "ready" : "loading"; paint();
     const [, p, g, j, t] = await Promise.allSettled([loadSources(), get("/v1/wiki/pages", { state: "all" }), get("/v1/wiki/graph"), get("/v1/wiki/jobs"), get("/v1/wiki/tree")]);
     if (!ticket.live()) return;
-    if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = p.value.items; K.wiki = "ready"; }
+    const tree = t.status === "fulfilled" ? t.value : null; // an older server has no tree: no folders
+    if (p.status === "fulfilled" && Array.isArray(p.value?.items)) { K.pages = [...p.value.items, ...queryPages(tree)]; K.wiki = "ready"; }
     else { K.pages = []; K.wiki = p.status === "rejected" && off(p.reason) ? "off" : "error"; }
     K.links = g.status === "fulfilled" && Array.isArray(g.value?.links) ? g.value.links : [];
     K.jobs = j.status === "fulfilled" && Array.isArray(j.value?.items) ? j.value.items : [];
-    const tree = t.status === "fulfilled" ? t.value : null; // an older server has no tree: no folders
     K.folders = Array.isArray(tree?.folders) ? tree.folders : [];
     K.folderOf = Object.fromEntries((Array.isArray(tree?.pages) ? tree.pages : []).map((x) => [x.id, x.folder || ""]));
     if (K.pg.folder && !K.folders.some((f) => f.path === K.pg.folder)) K.pg.folder = null;
@@ -88,6 +88,12 @@ window.ArkismKnowledge = (ctx) => {
     if (K.pageSel && !K.pages.some((x) => x.id === K.pageSel)) K.pageSel = "";
     for (const id of Object.keys(K.docs)) if (!K.sources.some((x) => x.id === id)) delete K.docs[id];
     paint();
+  }
+  // 질문 페이지: a topic (mental model) placed in a wiki folder; listed with the pages, written and approved in 주제 요약.
+  function queryPages(tree) {
+    return (Array.isArray(tree?.pages) ? tree.pages : []).filter((x) => x?.type === "query" && typeof x.id === "string")
+      .map((x) => ({ id: x.id, query: true, type: "query", slug: x.id, folder: x.folder || "", revision: x.revision, review_state: x.review_state === "proposed" ? "draft" : x.review_state,
+        stale: !!x.stale, reviewed: { title: String(x.title || x.id), text: "", links: [] }, updated_at: "" }));
   }
   async function docs(id, again = false) {
     if (!id || (K.docs[id] && !again)) return;
@@ -816,7 +822,7 @@ window.ArkismKnowledge = (ctx) => {
       () => { const p = alive.find((x) => x.review_state === "draft") || alive.find((x) => x.stale_sources?.length); if (p) openPage(p.id); }));
     const bar = el("div", "v4s-bar");
     bar.append(searchBox("위키 페이지 검색", K.pg.q, (v) => { K.pg.q = v; paint(); }),
-      select("종류", [["", "종류: 모두"], ["entity", "개체"], ["concept", "개념"]], K.pg.type, (v) => { K.pg.type = v; paint(); }),
+      select("종류", [["", "종류: 모두"], ["entity", "개체"], ["concept", "개념"], ["query", "질문 페이지"]], K.pg.type, (v) => { K.pg.type = v; paint(); }),
       select("정렬", [["recent", "최근 고친 순"], ["title", "제목 순"]], K.pg.sort, (v) => { K.pg.sort = v; paint(); }));
     parts.push(bar);
     const n = (f) => alive.filter(f).length;
@@ -827,6 +833,7 @@ window.ArkismKnowledge = (ctx) => {
     const items = filteredPages();
     const list = el("div", "v4s-list");
     for (const p of items) {
+      if (p.query) { list.append(row("v4k-row", K.pageSel === p.id, [text(titleOf(p), p.stale ? "질문 페이지 · 근거가 바뀌었어요" : "질문 페이지 · 주제 요약에서 고쳐요", false), badge(pageState(p))], () => openPage(p.id))); continue; }
       const b = body(p), when = p.locked ? `${ago(p.updated_at)} 잠금` : p.review_state === "draft" ? `${ago(p.updated_at)} AI가 ${p.reviewed ? "고침" : "만듦"}` : `${ago(p.updated_at)} 검토`;
       list.append(row("v4k-row", K.pageSel === p.id, [text(titleOf(p), `링크 ${b.links?.length || 0} · 출처 ${p.knowledge_source_ids?.length || 0} · ${when}`, false), badge(pageState(p))], () => openPage(p.id)));
     }
@@ -839,10 +846,29 @@ window.ArkismKnowledge = (ctx) => {
     if (!K.pageSel && items[0]) K.pageSel = items[0].id;
     pageDetail();
   }
+  // A question page shows its topic's approved summary (GET /v1/mental-models/{id}), read once per open; editing happens in 주제 요약.
+  function queryDetail(p) {
+    const box = detailShell(`위키 · 질문 페이지`);
+    const head = el("div", "v4s-head");
+    head.append(noI18n(el("h2", "", titleOf(p))), el("p", "v4s-lead", ["질문 페이지", p.folder ? `폴더 ${p.folder}` : "맨 위", pageState(p)[0]].join(" · ")));
+    box.append(head);
+    const m = K.query?.[p.id];
+    if (m === undefined) {
+      K.query = { ...K.query, [p.id]: null };
+      get(`/v1/mental-models/${encodeURIComponent(p.id)}`).then((v) => v, () => false).then((v) => { K.query[p.id] = v; if (K.pageSel === p.id) paint(); });
+    }
+    if (p.stale) box.append(card("근거 기억이 바뀌었어요. 주제 요약에서 다시 만들고 승인해 주세요.", []));
+    if (!m) box.append(sec("본문", null, el("p", "meta", m === false ? "불러오지 못했어요." : "불러오는 중…")));
+    else box.append(sec("질문", null, noI18n(el("p", "", m.query || ""))), sec("본문", null, m.active?.text && !m.active.withheld ? wikiText(m.active.text) : el("p", "meta", "아직 승인된 요약이 없어요.")));
+    const acts = el("div", "v4s-actions");
+    acts.append(button("주제 요약에서 열기", "primary", null, () => { state.openTopic = p.id; ctx.go?.("memories", "digests"); }));
+    box.append(sec("고치기", null, el("p", "meta", "질문 페이지는 주제 요약에서 고치고 승인해요. 승인한 글이 여기에 보여요."), acts));
+  }
   function openPage(id) { K.tab = "wiki"; K.doc = ""; K.pageSel = id; K.compare = false; K.edit = null; K.notice = ""; paint(); }
   function pageDetail() {
     const p = K.pages.find((x) => x.id === K.pageSel);
     if (!p) { $("#detail").replaceChildren(); return; }
+    if (p.query) { queryDetail(p); return; }
     const b = body(p), id = encodeURIComponent(p.id);
     const kind = p.review_state === "draft" ? "초안" : pageState(p)[0];
     const box = detailShell(`위키 · ${kind}`);

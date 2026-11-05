@@ -186,7 +186,7 @@ test("recall defaults, capture mode and density and the consolidation decision m
   const tab = S({ state, ...h, request, notice() {}, render() { box = h.el("div"); box.append(...tab.tab(kit)); } });
   tab.tab(kit); await dom.flush(); await dom.flush();
   for (const s of ["후보도 뜻으로 찾기", "다시 고를 때 관련 없는 것 빼기", "다시 고를 때 겹치는 것 합치기", "관찰을 먼저 보여 주기", "원문 조각도 같이 주기", "원문 조각 양",
-    "대화에서 무엇을 뽑을지", "얼마나 촘촘히 뽑을지", "정리 전에 쉬운 것 먼저 거르기"])
+    "대화에서 무엇을 뽑을지", "얼마나 촘촘히 뽑을지", "정리 전에 쉬운 것 먼저 거르기", "답하기 전에 관계없는 기억 거르기", "요약 쓰기 전에 관계없는 기억 거르기", "바뀐 부분만 고칠 때 먼저 거르기"])
     assert.ok(box.textContent.includes(s), s);
   assert.match(box.textContent, /판정할 때마다/, "a decision model on carries its budget note");
   sws["후보도 뜻으로 찾기"](true);
@@ -196,6 +196,9 @@ test("recall defaults, capture mode and density and the consolidation decision m
   const sel = (label) => box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === label);
   const density = sel("얼마나 촘촘히 뽑을지"); density.value = "dense"; dom.fire(density, "change");
   assert.match(box.textContent, /뽑는 모델 사용량/);
+  const delta = sel("바뀐 부분만 고칠 때 먼저 거르기"); delta.value = "jev"; dom.fire(delta, "change");
+  assert.ok(sel("요약 쓰기 전에 관계없는 기억 거르기"), "every task keeps its own control");
+  const back = sel("바뀐 부분만 고칠 때 먼저 거르기"); back.value = ""; dom.fire(back, "change");
   const dm = sel("정리 전에 쉬운 것 먼저 거르기"); dm.value = ""; dom.fire(dm, "change");
   const mode = sel("대화에서 무엇을 뽑을지"); mode.value = ""; dom.fire(mode, "change");
   const chunks = box.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "원문 조각 양"); chunks.value = "800"; dom.fire(chunks, "change");

@@ -150,7 +150,7 @@ const entity = (o = {}) => ({ id: "e1", name: "Alex", type: "person", aliases: [
 
 test("an entity page lists its memories and a person can confirm, rename, drop an alias and merge", async () => {
   const t = setup("entities", [["/v1/entities?", (p) => ({ items: [entity(), entity({ id: "e2", name: "Orbit", type: "project", aliases: [], proposed: false })], next_cursor: "", q: p })],
-    ["/v1/entities/e1?", () => ({ ...entity(), memories: [{ id: "m5", snippet: "Alex는 목록을 좋아해요" }], related: [{ id: "e2", name: "Orbit", type: "project", weight: 1 }], timeline: [] })],
+    ["/v1/entities/e1?", () => ({ ...entity(), first_seen: "2026-10-01T00:00:00Z", last_seen: "2026-10-30T00:00:00Z", memories: [{ id: "m5", snippet: "Alex는 목록을 좋아해요" }], related: [{ id: "e2", name: "Orbit", type: "project", weight: 1 }], timeline: [] })],
     ["/v1/entities/e1/merge", () => entity({ id: "e2" })], ["/v1/entities/e1", () => entity({ proposed: false })], ["/v1/memories/m5?", () => memory("m5")]], { answers: ["Alexander"] });
   t.view.draw(); await dom.flush();
   assert.match(t.h.$("#table").textContent, /사람 · 기억 2개/);
@@ -158,6 +158,7 @@ test("an entity page lists its memories and a person can confirm, rename, drop a
   t.h.$("#table .original-row").click(); await dom.flush();
   assert.match(t.h.$("#detail").textContent, /Alex는 목록을 좋아해요/);
   assert.match(t.h.$("#detail").textContent, /알렉스/);
+  assert.match(t.h.$("#detail").textContent, /처음 나온 때 .*2026.* · 마지막으로 나온 때 .*2026/);
   t.h.$("#detail .dg-item").click(); await dom.flush();
   assert.equal(t.opened[0].id, "m5", "a mention opens the memory");
   dom.buttons(t.h.$("#detail"), "맞아요")[0].click(); await dom.flush();
@@ -460,4 +461,15 @@ test("ask shows the prompt only when asked, and the 답 모양 JSON tab sends it
   assert.deepEqual(sent.response_schema, { type: "object", properties: { 답: { type: "string" } } });
   assert.match(t.h.$("#table").textContent, /AI에 보내지 않았어요/);
   assert.match(t.h.$("#table").textContent, /질문: 배포/);
+});
+
+test("ask can leave out picked topics (exclude_mental_model_ids)", async () => {
+  const t = setup("ask", [["/v1/mental-models?", () => ({ items: [{ id: "mm1", title: "배포 정리" }, { id: "mm2", query: "휴가 규칙?" }] })], ["/v1/reflect", () => ({ answer: "네", cited_memory_ids: [], retrieved: [] })]]);
+  t.view.draw(); await dom.flush();
+  const form = t.h.$("#chips form");
+  assert.match(form.textContent, /읽지 않을 생각 정리/); assert.match(form.textContent, /휴가 규칙\?/);
+  t.h.$("#chips input").value = "배포?";
+  form.querySelector('[data-opt="skip:mm2"]').checked = true;
+  dom.fire(form, "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]).exclude_mental_model_ids, ["mm2"]);
 });

@@ -134,6 +134,8 @@ window.ArkismDigests = (ctx) => {
   }
   function draw() {
     ensure();
+    // 위키 질문 페이지 › 주제 요약에서 열기
+    if (state.openTopic && here()) { filter.view = "models"; filter.q = ""; editing = null; picked = true; state.selected = `mm:${state.openTopic}`; state.openTopic = null; }
     if (filter.view !== "topics") { drawDerived(); return; }
     if (!state.selected && !picked) {
       const first = entries().find((e) => e.cand) || entries()[0];
@@ -701,6 +703,10 @@ window.ArkismDigests = (ctx) => {
   const REVISION = { propose: "AI 제안", refresh: "AI 초안", approve: "승인", edit_approve: "고쳐서 승인", reject: "버림", stale: "근거 바뀜", superseded: "이전 버전", cleared: "비움", delete: "지움" };
   const OBS_STATUS = [["active", "상태: 사용 중"], ["proposed", "상태: 확인 대기"], ["stale", "상태: 근거 바뀜"], ["rejected", "상태: 거절됨"]];
   const BUDGET = [["", "참고할 기억: 기본"], ["low", "참고할 기억: 적게 (10개)"], ["mid", "참고할 기억: 보통 (20개)"], ["high", "참고할 기억: 많이 (40개)"]];
+  const TAG_MATCH = [["", "태그 맞추는 방법: 하나라도 있는 기억"], ["all_strict", "태그 맞추는 방법: 모두 있는 기억"], ["any", "태그 맞추는 방법: 하나라도 있거나 태그 없는 기억"],
+    ["all", "태그 맞추는 방법: 모두 있거나 태그 없는 기억"], ["exact", "태그 맞추는 방법: 태그가 똑같은 기억"]];
+  const FACT_TYPES = [["", "읽을 종류: 기억과 정리 모두"], ["memory", "읽을 종류: 기억만"], ["observation", "읽을 종류: 정리된 관찰만"]];
+  const NO_FOLDER = "\u0000none";
   const MODEL_CODES = { model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." };
   const human = () => state.caps?.role === "human";
   const when = (v) => (v ? new Date(v).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
@@ -855,21 +861,53 @@ window.ArkismDigests = (ctx) => {
     const strategy = ctx.memSelect("고치는 방식", [["", "고치는 방식: 처음부터 다시 쓰기"], ["delta", "고치는 방식: 바뀐 부분만 고치기"]], r.strategy === "delta" ? "delta" : "", () => {});
     const full = input(r.full_refresh_cron, 100, "예: 0 3 1 * *");
     const budget = ctx.memSelect("참고할 기억", BUDGET, r.budget || "", () => {});
+    // 읽을 기억: tags and the wiki folder are on the form; the finer recall options sit under 자세히
+    const D = window.ArkismDigests;
+    const tags = input((r.tags || []).join(", "), 400, "예: 배포, 운영");
+    const match = ctx.memSelect("태그 맞추는 방법", TAG_MATCH, r.tags_match || "", () => {});
+    const groups = dirty(el("textarea")); groups.rows = 2; groups.maxLength = 2000; groups.value = D.tagGroupsText(r.tag_groups); groups.placeholder = "예: 배포+운영 | -연습";
+    const facts = ctx.memSelect("읽을 종류", FACT_TYPES, r.fact_types?.length === 1 ? r.fact_types[0] : "", () => {});
+    const chunks = el("input"); chunks.type = "checkbox"; chunks.checked = !!r.include_chunks;
+    const chunkCheck = el("label", "insight-check"); chunkCheck.append(chunks, el("span", "", "기억의 원문 조각도 같이 읽기"));
+    const recall = input(r.recall_max_tokens ? String(r.recall_max_tokens) : "", 6, "예: 4000"); recall.inputMode = "numeric";
+    const schema = dirty(el("textarea")); schema.rows = 3; schema.maxLength = 8000; schema.spellcheck = false; schema.className = "mono";
+    schema.value = r.response_schema ? JSON.stringify(r.response_schema, null, 2) : ""; schema.placeholder = '{"type": "object", "properties": {"할 일": {"type": "string"}}}';
+    const inWiki = m ? m.folder ?? null : null;
+    const folder = ctx.memSelect("위키에 두기", [[NO_FOLDER, "위키에 두기: 두지 않기"], ["", "위키에 두기: 맨 위"], ...(inWiki ? [[inWiki, `위키에 두기: ${inWiki}`]] : [])], inWiki ?? NO_FOLDER, () => {});
+    void wikiFolders(folder);
     const preview = el("div", "dg-cron");
     const check = el("label", "insight-check");
     check.append(after, el("span", "", "기억 정리가 끝나면 다시 만들기"));
     const more = el("details", "insight-more");
-    more.open = !!(r.cron || r.after_consolidation || r.min_interval || r.strategy || r.full_refresh_cron || r.budget);
+    more.open = !!(r.cron || r.after_consolidation || r.min_interval || r.strategy || r.full_refresh_cron || r.budget || r.tag_groups?.length || r.fact_types?.length || r.include_chunks || r.recall_max_tokens || r.response_schema);
     more.append(el("summary", "", "자세히"), field("일정 (분 시 일 월 요일, UTC)", cron),
-      button("일정 미리보기", "small", null, () => void previewCron(cron.value.trim(), preview)), preview, check, field("최소 간격", gap), strategy, field("전체 다시 쓰기 일정 (UTC)", full), budget);
+      button("일정 미리보기", "small", null, () => void previewCron(cron.value.trim(), preview)), preview, check, field("최소 간격", gap), strategy, field("전체 다시 쓰기 일정 (UTC)", full), budget,
+      match, field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", groups), facts, chunkCheck,
+      field("읽을 기억의 최대 양 (토큰, 비우면 제한 없음)", recall), field("요약 모양 (JSON Schema, 비우면 글로 써요)", schema));
     const form = el("div", "insight-edit");
-    form.append(field("제목", title), field("질문", q), mode, more);
+    form.append(field("제목", title), field("질문", q), field("이 태그가 붙은 기억만 읽기 (쉼표로 나눠요)", tags), mode, folder, more);
     body.append(form);
     const btns = el("div", "d-buttons");
-    btns.append(button("저장", "primary small", null, () => void saveModel(m, btns, { title: title.value.trim(), query: q.value.trim(),
-      refresh: window.ArkismDigests.refreshBody(r, { mode: mode.value, cron: cron.value, after_consolidation: after.checked, min_interval: gap.value, strategy: strategy.value, full_refresh_cron: full.value, budget: budget.value }) })),
+    btns.append(button("저장", "primary small", null, () => {
+      let shape;
+      try { shape = schema.value.trim() ? JSON.parse(schema.value) : undefined; } catch { notice("요약 모양 JSON을 읽을 수 없어요. 중괄호로 감싼 JSON으로 적어 주세요."); return; }
+      const tagList = [...new Set(tags.value.split(",").map((x) => x.trim()).filter(Boolean))];
+      void saveModel(m, btns, { title: title.value.trim(), query: q.value.trim(), ...D.folderBody(inWiki, folder.value),
+        refresh: D.refreshBody(r, { mode: mode.value, cron: cron.value, after_consolidation: after.checked, min_interval: gap.value, strategy: strategy.value, full_refresh_cron: full.value, budget: budget.value,
+          tags: tagList, tags_match: tagList.length ? match.value : "", tag_groups: D.tagGroups(groups.value), fact_types: facts.value ? [facts.value] : [], include_chunks: chunks.checked,
+          recall_max_tokens: Number.parseInt(recall.value, 10) > 0 ? Number.parseInt(recall.value, 10) : undefined, response_schema: shape }) });
+    }),
     button("취소", "ghost small", null, () => { editing = null; if (!m) state.selected = null; detail(); }));
     body.append(btns);
+  }
+  // The wiki folders a topic can sit in (GET /v1/wiki/tree), added to the open form's list; an older server has none.
+  async function wikiFolders(select) {
+    const tree = await request(`/v1/wiki/tree?${query()}`).catch(() => null);
+    const have = new Set([...select.querySelectorAll("option")].map((o) => o.value));
+    for (const f of Array.isArray(tree?.folders) ? tree.folders : []) {
+      if (typeof f?.path !== "string" || have.has(f.path)) continue;
+      const o = el("option", "", `위키에 두기: ${f.path}`); o.value = f.path; select.append(o);
+    }
   }
   async function previewCron(cron, box) {
     if (!cron) { box.replaceChildren(el("p", "meta", "일정을 적으면 다음 실행 시각을 보여 줘요.")); return; }
@@ -1073,10 +1111,22 @@ window.ArkismDigests.refreshOf = (m) => (typeof m?.refresh === "string" ? { mode
 // The rule to save: base keeps what this form does not show (kinds, tags, schema …); an empty field drops its key so the server default applies.
 window.ArkismDigests.refreshBody = (base, v) => {
   const out = { ...base, mode: v.mode || base.mode || "manual" };
-  for (const k of ["cron", "min_interval", "strategy", "full_refresh_cron", "budget"]) { const x = String(v[k] ?? "").trim(); if (x) out[k] = x; else delete out[k]; }
-  if (v.after_consolidation) out.after_consolidation = true; else delete out.after_consolidation;
+  for (const [k, raw] of Object.entries(v)) {
+    if (k === "mode") continue;
+    const x = typeof raw === "string" ? raw.trim() : raw;
+    if (x === "" || x == null || x === false || (Array.isArray(x) && !x.length)) delete out[k]; else out[k] = x;
+  }
   return out;
 };
+// The folder part of a save: keep it (nothing), place it, or take it out of the wiki (no_folder, only when it was in).
+window.ArkismDigests.folderBody = (was, picked) => (picked === "\u0000none" ? (was == null ? {} : { no_folder: true }) : picked === was ? {} : { folder: picked });
+// Tag conditions as text, one line per group: "a+b | -c" = (a and b) or not c. Parsed into search tag_groups and back.
+// shortcut: a stored test with match any or exact over several tags reads back as all_strict; edit as JSON through the API to keep those.
+window.ArkismDigests.tagGroups = (text) => String(text || "").split("\n").map((line) => line.split("|").map((t) => t.trim()).filter(Boolean).map((t) => {
+  const not = t.startsWith("-"), tags = [...new Set(t.replace(/^-\s*/, "").split("+").map((x) => x.trim()).filter(Boolean))];
+  return { tags, ...(tags.length > 1 ? { match: "all_strict" } : {}), ...(not ? { not: true } : {}) };
+}).filter((g) => g.tags.length)).filter((g) => g.length);
+window.ArkismDigests.tagGroupsText = (groups) => (Array.isArray(groups) ? groups : []).map((g) => (Array.isArray(g) ? g : []).map((t) => `${t?.not ? "-" : ""}${(t?.tags || []).join("+")}`).join(" | ")).join("\n");
 // 지금 정리하기, step 1: what a plan_only run found.
 window.ArkismDigests.planEmpty = (p) => !(p.stale_observations?.length || p.groups?.length || p.mental_models?.length);
 window.ArkismDigests.planText = (p) => (window.ArkismDigests.planEmpty(p) ? "지금은 정리할 것이 없어요"

@@ -1021,3 +1021,19 @@ test("wiki folders: pick, create, move, delete with its pages; a page moves, sav
   assert.deepEqual(k.saved.at(-1).slice(0, 1), ["wiki.zip"]); assert.deepEqual([...k.saved.at(-1)[1]], [80, 75]);
   assert.match(k.table().textContent + k.detail().textContent, /위키를 내보냈어요/);
 });
+
+test("wiki: a topic placed in a folder is listed as a question page and opens its approved summary", async () => {
+  const k = await setup({
+    "/v1/wiki/tree": () => ({ folders: [{ path: "운영", pages: 1 }], pages: [{ id: "mm1", type: "query", title: "배포는 어떻게 해요?", folder: "운영", review_state: "approved", stale: true }] }),
+    "/v1/mental-models/mm1": () => ({ id: "mm1", query: "배포는 어떻게 해요?", active: { text: "금요일엔 배포하지 않아요." } })
+  });
+  await k.start();
+  k.table().querySelectorAll(".v4k-seg button")[1].click(); await dom.flush();
+  const row = [...k.table().querySelectorAll(".v4k-row")].find((r) => r.textContent.includes("배포는 어떻게 해요?"));
+  assert.ok(row, "question page row"); assert.match(row.textContent, /질문 페이지 · 근거가 바뀌었어요/);
+  row.click(); await dom.flush(); await dom.flush();
+  assert.match(k.detail().textContent, /금요일엔 배포하지 않아요/); assert.match(k.detail().textContent, /폴더 운영/);
+  assert.equal(k.srv.calls.filter((c) => c.path.startsWith("/v1/mental-models/mm1")).length, 1);
+  await k.press(k.detail(), "주제 요약에서 열기");
+  assert.equal(k.state.openTopic, "mm1"); assert.deepEqual(k.gone.at(-1), ["memories", "digests"]);
+});

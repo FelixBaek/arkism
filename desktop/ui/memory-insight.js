@@ -15,7 +15,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const TITLE = { ask: "물어보기", rules: "규칙", entities: "자주 나온 이름", search: "검색 살펴보기" };
   const loads = globalThis.ArkismKeep.latest();
   // answer: the last reflect or search reply; sent: the search body it answered; mission: the space's reflect mission (undefined until read).
-  let key = "", selected = null, editing = null, busy = false, answer = null, sent = null, failure = null, question = "", q = "", mission;
+  let key = "", selected = null, editing = null, busy = false, answer = null, sent = null, failure = null, question = "", q = "", mission, topics = [];
   // similar: list only names with an open merge proposal (GET /v1/entities?similar=true)
   let similar = false;
   let memo = new Map(), views = new Map();
@@ -32,7 +32,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const pageKey = () => JSON.stringify({ id: identity(), find: tab === "entities" ? q : "", near: tab === "entities" && similar });
   const page = () => { const s = pager.snapshot(); return s.key === pageKey() ? s : { items: [], cursor: "", ready: false, loading: false, error: "" }; };
   const rows = () => page().items;
-  function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; sent = null; failure = null; mission = undefined; memo = new Map(); views = new Map(); }
+  function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; sent = null; failure = null; mission = undefined; topics = []; memo = new Map(); views = new Map(); }
   const live = (ticket, owner) => () => ticket.live() && active() && identity() === owner;
   const formHere = () => $("#chips .insight-form")?.dataset.tab === tab;
 
@@ -199,7 +199,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       form.append(box, go, more(
         group("찾을 기억", field("얼마나 찾아볼까요", choose("budget", BUDGETS)), field("참고할 기억 수 (1~20)", num("limit", "1", "20")),
           grid(check("fact:memory", "기억"), check("fact:observation", "정리된 관찰")), el("p", "meta", "둘 다 비워 두면 둘 다 봐요."),
-          ...tagFields(), check("nomodels", "생각 정리(정신 모델)는 보지 않기")),
+          ...tagFields(), check("nomodels", "생각 정리(정신 모델)는 보지 않기"), skipTopics()),
         group("답하는 방법", field("AI가 더 찾아볼 수 있는 횟수 (1~8, 1이면 처음 찾은 기억만 봐요)", num("iterations", "1", "8")),
           field("답 길이 한도 (64~4096 토큰)", num("tokens", "64", "4096")), field("이번 질문의 목표", opt(goal, "mission")),
           el("p", "meta", "이번 질문의 성향 (1 낮음 ~ 5 높음, 비워 두면 공간 설정을 따라요)"),
@@ -220,6 +220,18 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     }
     paintAsk();
   }
+  // 이것만 빼고 보기: exclude_mental_model_ids, picked from the space's topics (read once per form).
+  function skipTopics() {
+    const box = grid(...topics.map((m) => check(`skip:${m.id}`, m.title || m.query || m.id)));
+    const wrap = el("div"); wrap.append(el("p", "meta", "읽지 않을 생각 정리"), box);
+    if (!topics.length) {
+      wrap.hidden = true;
+      const owner = identity();
+      void request(`/v1/mental-models?${query({ limit: 100 })}`).then((r) => (Array.isArray(r?.items) ? r.items.filter((m) => typeof m?.id === "string") : []), () => [])
+        .then((items) => { if (identity() !== owner || !items.length) return; topics = items; box.replaceChildren(...items.map((m) => check(`skip:${m.id}`, m.title || m.query || m.id))); wrap.hidden = false; });
+    }
+    return wrap;
+  }
   // The space's own reflect mission, so the screen can say the answer follows it. Unreadable means "not shown".
   function readMission() {
     if (mission !== undefined) return;
@@ -233,13 +245,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const BUDGETS = { "": "알아서", low: "조금 (빠르게)", mid: "보통", high: "많이 (꼼꼼하게)" };
   // POST /v1/reflect body: only what was set; the rest stays the server's and the space's default.
   function askBody() {
-    const own = (opts.mission || "").trim(), schema = askSchema(), facts = picked("fact", ["memory", "observation"]);
+    const own = (opts.mission || "").trim(), schema = askSchema(), facts = picked("fact", ["memory", "observation"]), skip = picked("skip", topics.map((m) => m.id));
     const n = int(opts.limit, 1, 20), iter = int(opts.iterations, 1, 8), tokens = int(opts.tokens, 64, 4096);
     const mood = Object.fromEntries(["skepticism", "literalism", "empathy"].map((k) => [k, int(opts[k], 1, 5)]).filter(([, v]) => v));
     return { scope: state.scope, query: question, ...(n ? { limit: n } : {}), ...(iter ? { max_iterations: iter } : {}),
       ...(tokens ? { max_tokens: tokens } : {}), ...(own ? { mission: own } : {}), ...(schema ? { response_schema: schema } : {}),
       ...(BUDGETS[opts.budget] && opts.budget ? { budget: opts.budget } : {}), ...(facts.length === 1 ? { fact_types: facts } : {}), ...tagFilter(),
-      ...(opts.nomodels ? { exclude_mental_models: true } : {}), ...(Object.keys(mood).length ? { disposition: mood } : {}),
+      ...(opts.nomodels ? { exclude_mental_models: true } : skip.length ? { exclude_mental_model_ids: skip } : {}), ...(Object.keys(mood).length ? { disposition: mood } : {}),
       ...(opts.alldirectives ? { apply_all_directives: true } : {}), ...(opts.promptonly ? { prompt_only: true } : {}) };
   }
   async function ask() {
@@ -342,12 +354,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   // The same POST /v1/search agents use, with explain: lanes, each hit's rank per lane, fused and rerank scores.
   const MATCH = { any_strict: "하나라도 있는 기억", all_strict: "모두 있는 기억", any: "하나라도 있거나 태그가 없는 기억", all: "모두 있거나 태그가 없는 기억", exact: "태그가 똑같은 기억" };
   // 태그 조건, one line per condition that must hold: "a+b | -c" = (a and b) or not c.
-  function tagGroups(text) {
-    return String(text || "").split("\n").map((line) => line.split("|").map((t) => t.trim()).filter(Boolean).map((t) => {
-      const not = t.startsWith("-"), tags = [...new Set(t.replace(/^-\s*/, "").split("+").map((x) => x.trim()).filter(Boolean))];
-      return { tags, ...(tags.length > 1 ? { match: "all_strict" } : {}), ...(not ? { not: true } : {}) };
-    }).filter((g) => g.tags.length)).filter((g) => g.length);
-  }
+  const tagGroups = (text) => window.ArkismDigests.tagGroups(text);
   // Lanes a request may weigh (recall_weights.go recallLaneNames), the parts it may attach and the rerank choices.
   const LANES = ["exact", "keyword", "vector", "relation", "temporal", "graph", "causal", "semantic"];
   const PARTS = { sources: "원문 조각", entities: "나온 이름", source_facts: "정리된 관찰의 원래 기억" };
@@ -719,6 +726,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const v = views.get(item.id), e = v || item;
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", `${TYPES[e.type] || e.type}${e.proposed ? " · AI가 찾은 이름이라 확인이 필요해요" : ""}`), raw(el("h2", "", e.name)));
+    if (e.first_seen) head.append(el("p", "meta", `처음 나온 때 ${day(e.first_seen)} · 마지막으로 나온 때 ${day(e.last_seen)}`));
     body.append(head, entitySummary(item.id, v));
     const can = human();
     const aliases = section("다른 이름");
