@@ -166,7 +166,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_FILE_PARSERS`, `MEMORY_FILE_PARSER_ALLOWLIST` | Comma-separated reader order used when a request names none (default `builtin,converter,vision,transcribe` plus configured external readers), and the readers a request may name in `parsers` (default all configured). A reader that cannot read a file hands it to the next; a limit, a refusal or the model budget stops the chain |
 | `MEMORY_FILE_PARSER_JOB_URL` | Optional external reading service (reader `upload_job`) using the upload-and-poll protocol: `POST {url}/upload` (multipart `file`), `GET {url}/{id}` until done, `GET {url}/{id}?expand=markdown_full`. Key in `MEMORY_FILE_PARSER_JOB_API_KEY` |
 | `MEMORY_FILE_PARSER_PRESIGNED_URL` | Optional external reading service (reader `presigned_job`) using the presigned-upload protocol under `{url}/org/{MEMORY_FILE_PARSER_PRESIGNED_ORG}`; token in `MEMORY_FILE_PARSER_PRESIGNED_TOKEN`. Each file needs a `transfer:model_input` decision for destination `external:file_parser`; the file name never leaves the server, a file holding a secret or a private part is never sent, and the upload address the service returns may not be a private address unless the service URL itself is on a private network |
-| `MEMORY_FILE_KEEP_ORIGINALS` | `1` keeps each file uploaded for memory extraction as an attachment of its evidence (needs `MEMORY_BLOB_DIRECTORY` or object storage). Recall and reflect list them with `include: ["attachments"]`; download is `GET /v1/sources/{id}/artifacts/{artifact_id}`. Off by default. Files from agents and files whose text had private or secret parts removed are not kept |
+| `MEMORY_FILE_KEEP_ORIGINALS` | `1` keeps each file uploaded for memory extraction as an attachment of its evidence (needs `MEMORY_BLOB_DIRECTORY` or object storage). Recall lists them with `include: ["attachments"]`, reflect with `include: {"attachments": true}`; download is `GET /v1/sources/{id}/artifacts/{artifact_id}`. Off by default. Files from agents and files whose text had private or secret parts removed are not kept |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
@@ -255,6 +255,7 @@ wiki. What a person approves and how is described in
    | `ARKISM_SPACE_TEMPLATE_AUTO` | `1` applies the default template's directives and mental model definitions to a space by itself: when a person saves the space's first settings (their settings win), or on a person's first stored memory in a space without settings (the template's settings are stored too). The definitions arrive switched off (directives inactive, mental models on manual refresh) until a person turns them on in that space. Each space gets it once per server run; agent writes never apply it, since the definitions are human-only. Off by default. `GET /v1/spaces/template-schema?workspace_id=…&project_id=…` (`read:space_configs`) returns the JSON schema of a template bundle line |
    | `MEMORY_AUTO_DERIVE` | `on` lets the worker run observation, causal link and model name proposals by itself after approvals. Off by default, so an upgrade does not start spending the daily model calls. Needs the server model; results stay proposals for a person. This is the server default: a space's `auto_derive` setting (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) overrides each field |
    | `MEMORY_AUTO_DERIVE_THRESHOLD`, `MEMORY_AUTO_DERIVE_INTERVAL` | Approvals that start a run at once (1-1000, default `10`) and the longest wait after the first counted approval (Go duration, `1m` to `720h`, default `6h`) |
+   | `MEMORY_DERIVE_SCHEDULE` | `on` lets the worker run mental-model triggers (`daily`, `cron`, `full_refresh_cron`, `on_change`, `after_consolidation`) and a space's `consolidation_schedule` without anyone calling consolidate. One job per scope waits for the earliest due time; a model's `min_interval` (or the space's `mental_model_defaults.min_interval`) folds a burst of triggers into one refresh, and an attempt that wrote nothing waits an hour. Off by default, so an upgrade does not start spending the daily model calls. Results stay drafts and proposals for a person |
 
 4. **Permissions.** Principals registered with `--actions '*'` (the examples
    above and the desktop app) need nothing. If you list actions, add these:
@@ -264,7 +265,7 @@ wiki. What a person approves and how is described in
    | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates` |
    | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages`, and for the proposal tools `write:directives`, `write:mental_models`, `write:maintenance_proposals`, `read:jobs`, `transition:jobs`, `read:knowledge_sources`, `read:knowledge_documents`; `add_document` also needs `write:memory_candidates`, `generate:memory_candidates` and `external:transfer` |
    | Service that runs model jobs | the job's write action (`write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `generate:wiki_pages`) plus `search:memories` and `context:read` |
-   | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied` |
+   | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` or `MEMORY_DERIVE_SCHEDULE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied` |
 
    Anything that sends memory text to the server model or out of the server
    also needs `external:transfer`. The audit log names the destination:
@@ -410,6 +411,16 @@ wiki. What a person approves and how is described in
     `meta:<key>=<value>`) and `entities` (names stated on the candidate, linked
     on approval). Jobs queued before this upgrade run with the space's current
     settings.
+
+### Reflect, consolidation and mental-model settings
+
+Three space settings blocks (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) are empty by default, so an upgrade keeps today's behaviour. Each block is inherited whole; sending an empty block clears it.
+
+- `reflect_default_options`: `budget` (`low`, `mid`, `high`), `fact_types`, `exclude_mental_models` and `tools` (token caps per reflect tool) for requests that leave them unset. `tag_scoped_directives: true` (opt-in) applies a tagged directive only to a reflect whose tags share one of its tags; a request's `apply_all_directives` turns that off.
+- `mental_model_defaults`: the `trigger` a mental model created without a refresh mode takes, and a space-wide `min_interval`.
+- `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size` and `parallel` (1-4). More scopes mean more model calls per consolidation run, all counted against the daily limit.
+
+Routes added with them, none of which calls a model: `POST /v1/mental-models/{id}/clear` (people only), `POST /v1/mental-models/cron-preview`, `GET /v1/observations/scopes`, `POST /v1/observations/strategies/preview`, `DELETE /v1/observations` (people only; bulk, audited) and `POST /v1/prompts/preview`.
 
 ## Model providers
 

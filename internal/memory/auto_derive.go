@@ -221,15 +221,5 @@ func (s *Service) autoDerivePass(ctx context.Context, token string, scope Scope,
 	default:
 		_, err = s.ExtractEntities(ctx, token, EntityExtractInput{Scope: scope, Model: true})
 	}
-	switch {
-	case err == nil, errors.Is(err, ErrNotFound), errors.Is(err, errModelAnswer):
-		return "ok", nil
-	case errors.Is(err, ErrModelBudget), errors.Is(err, errWikiBudget):
-		return "model_budget_exceeded", nil
-	case errors.Is(err, ErrDenied):
-		return "denied", nil
-	case errors.Is(err, ErrModelNotConfigured):
-		return "model_not_configured", nil
-	}
-	return "", err
+	return derivePassOutcome(err)
 }

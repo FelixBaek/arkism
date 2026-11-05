@@ -8,6 +8,7 @@ package memory
 // retrieved context count as citations.
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"slices"
@@ -51,11 +52,45 @@ type ReflectInput struct {
 	// Mission and Disposition override the space's reflect_mission and reflect_disposition.
 	Mission     string              `json:"mission,omitempty"`
 	Disposition *ReflectDisposition `json:"disposition,omitempty"`
-	// Include "attachments" lists the files kept with each retrieved memory's evidence.
-	Include []string `json:"include,omitempty"`
+	// Budget (low, mid, high) sets max_iterations and limit when they are unset: 2 and 5, 3 and the
+	// search default, 6 and 20. FactTypes keeps "memory" or "observation" records only.
+	Budget    string   `json:"budget,omitempty"`
+	FactTypes []string `json:"fact_types,omitempty"`
+	// ExcludeMentalModels hides the mental-model tools; ExcludeMentalModelIDs hides those models.
+	ExcludeMentalModels   bool     `json:"exclude_mental_models,omitempty"`
+	ExcludeMentalModelIDs []string `json:"exclude_mental_model_ids,omitempty"`
+	// ApplyAllDirectives applies every reflect directive even where the space scopes tagged
+	// directives to requests sharing a tag (reflect_default_options.tag_scoped_directives).
+	ApplyAllDirectives bool            `json:"apply_all_directives,omitempty"`
+	Include            *ReflectInclude `json:"include,omitempty"`
 	// space is the resolved space settings every reflect search runs with.
 	space *SpaceConfig
 }
+
+// ReflectInclude asks for more in the response: tool_calls.output adds what each tool returned to
+// the trace, attachments the files kept with each retrieved memory's evidence.
+type ReflectInclude struct {
+	ToolCalls ReflectToolCallsInclude `json:"tool_calls"`
+	// Attachments lists the files kept with each retrieved memory's evidence.
+	Attachments bool `json:"attachments,omitempty"`
+}
+
+type ReflectToolCallsInclude struct {
+	Output bool `json:"output"`
+}
+
+// ReflectToolOutput is one record a tool returned, as the model saw it.
+type ReflectToolOutput struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind,omitempty"`
+	Text string `json:"text"`
+}
+
+var reflectBudgetShape = map[string][2]int{"low": {2, 5}, "mid": {reflectDefaultIter, 0}, "high": {6, 20}}
+
+// reflectToolDefaults are the shipped per-tool token caps (approximate tokens).
+var reflectToolDefaults = ReflectToolBudget{RecallMaxTokens: 2048, RecallMaxChunkTokens: 1000, ObservationsMaxTokens: 5000,
+	MentalModelsMaxTokens: 16000, ReadMentalModelsMaxTokens: 6000, ExpandMaxTokens: 4000}
 
 // ReflectDisposition tunes how an answer weighs its records, each 1 (low) to 5 (high); 0 is unset.
 type ReflectDisposition struct {
@@ -80,12 +115,14 @@ type ReflectPrompt struct {
 	User   string `json:"user"`
 }
 
-// ReflectToolStep is one tool the model asked for: its arguments and the ids it got back, never their text.
+// ReflectToolStep is one tool the model asked for: its arguments and the ids it got back;
+// their text only with include.tool_calls.output.
 type ReflectToolStep struct {
-	Tool  string          `json:"tool"`
-	Args  reflectToolArgs `json:"args"`
-	IDs   []string        `json:"ids"`
-	Error string          `json:"error,omitempty"`
+	Tool   string              `json:"tool"`
+	Args   reflectToolArgs     `json:"args"`
+	IDs    []string            `json:"ids"`
+	Error  string              `json:"error,omitempty"`
+	Output []ReflectToolOutput `json:"output,omitempty"`
 }
 
 type ReflectOutput struct {
@@ -108,7 +145,8 @@ type reflectRun struct {
 	rules       []Record
 	mission     string
 	disposition *ReflectDisposition
-	schema      map[string]any
+	schema      *jsonSchema
+	tools       ReflectToolBudget
 	hits        []Hit
 	seen        map[string]bool
 	trace       []ReflectToolStep
@@ -117,7 +155,7 @@ type reflectRun struct {
 func (r *reflectRun) add(hits []Hit) []string {
 	ids := []string{}
 	for _, h := range hits {
-		if h.ID == "" {
+		if h.ID == "" || h.Collection != colMentalModels && h.Collection != "sources" && !factTypeKept(r.in.FactTypes, h.Collection) {
 			continue
 		}
 		ids = append(ids, h.ID)
@@ -139,7 +177,7 @@ func validReflectInput(in *ReflectInput) bool {
 	in.Mission = strings.TrimSpace(in.Mission)
 	return validScope(in.Scope) && in.Limit >= 0 && in.Limit <= 20 && in.MaxTokens >= 64 && in.MaxTokens <= reflectMaxTokens && validReflectTags(*in) &&
 		in.MaxIterations >= 1 && in.MaxIterations <= reflectMaxIter && utf8.RuneCountInString(in.Mission) <= reflectMissionMax && utf8.ValidString(in.Mission) &&
-		in.Disposition.valid() && len(in.ResponseSchema) <= reflectSchemaMax && (len(in.Include) == 0 || slices.Equal(in.Include, []string{"attachments"}))
+		in.Disposition.valid() && len(in.ResponseSchema) <= reflectSchemaMax && validReflectOptions(in)
 }
 
 // validReflectTags checks tags, tags_match and tag_groups as the search would.
@@ -154,8 +192,41 @@ func reflectFilters(in ReflectInput) SearchFilters {
 	return SearchFilters{Tags: in.Tags, TagsMatch: in.TagsMatch, TagGroups: in.TagGroups}
 }
 
+func validReflectOptions(in *ReflectInput) bool {
+	_, budget := reflectBudgetShape[in.Budget]
+	return (in.Budget == "" || budget) && validFactTypes(in.FactTypes) && len(in.ExcludeMentalModelIDs) <= reflectMentalModelsMax &&
+		!slices.ContainsFunc(in.ExcludeMentalModelIDs, func(id string) bool { return !validRunLabel(id, 256) })
+}
+
+// applyReflectDefaults fills what the request left unset from the space's reflect_default_options,
+// then the budget shape; tool token caps come from the space, else the shipped defaults.
+func applyReflectDefaults(in *ReflectInput, run *reflectRun, space SpaceConfig, iterSet, limitSet bool) {
+	run.tools = reflectToolDefaults
+	if d := space.ReflectDefaults; d != nil {
+		in.Budget = cmp.Or(in.Budget, d.Budget)
+		if in.FactTypes == nil {
+			in.FactTypes = d.FactTypes
+		}
+		in.ExcludeMentalModels = in.ExcludeMentalModels || d.ExcludeMentalModels
+		t := d.Tools
+		run.tools = ReflectToolBudget{cmp.Or(t.RecallMaxTokens, run.tools.RecallMaxTokens), cmp.Or(t.RecallMaxChunkTokens, run.tools.RecallMaxChunkTokens),
+			cmp.Or(t.ObservationsMaxTokens, run.tools.ObservationsMaxTokens), cmp.Or(t.MentalModelsMaxTokens, run.tools.MentalModelsMaxTokens),
+			cmp.Or(t.ReadMentalModelsMaxTokens, run.tools.ReadMentalModelsMaxTokens), cmp.Or(t.ExpandMaxTokens, run.tools.ExpandMaxTokens)}
+	}
+	shape, ok := reflectBudgetShape[in.Budget]
+	if !ok {
+		return
+	}
+	if !iterSet {
+		in.MaxIterations = shape[0]
+	}
+	if !limitSet && shape[1] > 0 {
+		in.Limit = shape[1]
+	}
+}
+
 func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (ReflectOutput, error) {
-	spaceTokens := in.MaxTokens == 0
+	spaceTokens, iterSet, limitSet := in.MaxTokens == 0, in.MaxIterations != 0, in.Limit != 0
 	if !validReflectInput(&in) {
 		return ReflectOutput{}, ErrInvalid
 	}
@@ -169,8 +240,10 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 	if spaceTokens {
 		in.MaxTokens = settings.ReflectMaxTokens
 	}
+	run := &reflectRun{seen: map[string]bool{}}
+	applyReflectDefaults(&in, run, settings, iterSet, limitSet)
 	in.space = &settings
-	run := &reflectRun{in: in, seen: map[string]bool{}}
+	run.in = in
 	if len(in.ResponseSchema) > 0 {
 		schema, err := parseReflectSchema(in.ResponseSchema)
 		if err != nil {
@@ -190,6 +263,9 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 	}
 	if run.rules, err = s.directives(ctx, in.Scope, "reflect"); err != nil {
 		return ReflectOutput{}, err
+	}
+	if d := settings.ReflectDefaults; d != nil && d.TagScopedDirectives && !in.ApplyAllDirectives {
+		run.rules = directivesForTags(run.rules, in.Tags)
 	}
 	if err = s.reflectGuidance(ctx, token, run); err != nil {
 		return ReflectOutput{}, err
@@ -218,6 +294,9 @@ func reflectSearch(in ReflectInput, query string) SearchInput {
 	if f := reflectFilters(in); len(f.Tags) > 0 || len(f.TagGroups) > 0 {
 		search.Filters = &f
 	}
+	if slices.Equal(in.FactTypes, []string{"observation"}) {
+		search.Kinds = []string{observationKind}
+	}
 	return search
 }
 
@@ -225,7 +304,7 @@ func reflectSearch(in ReflectInput, query string) SearchInput {
 // attachments each memory also lists the files kept with its evidence.
 func (s *Service) reflectRetrieved(ctx context.Context, token string, out ReflectOutput, run *reflectRun, err error) (ReflectOutput, error) {
 	for _, h := range run.hits {
-		if err == nil && slices.Contains(run.in.Include, "attachments") {
+		if err == nil && run.in.Include != nil && run.in.Include.Attachments {
 			err = s.attachFiles(ctx, token, run.in.Scope, &h)
 		}
 		out.Retrieved = append(out.Retrieved, ReflectRetrieved{ID: h.ID, Kind: h.Kind, Score: h.Score, Attachments: h.Attachments})
@@ -371,10 +450,10 @@ func reflectPrompt(run *reflectRun, final bool) (string, string) {
 		}
 	}
 	if !final {
-		sys.WriteString(reflectToolsText)
+		sys.WriteString(reflectToolsText(run))
 	}
 	if run.schema != nil {
-		raw, _ := json.Marshal(run.schema)
+		raw, _ := json.Marshal(run.schema.root)
 		sys.WriteString("\nGive the final answer as one JSON value, and nothing else, that is valid against this JSON Schema. Write record ids inside string values to cite them.\n" + string(raw) + "\n")
 	}
 	type record struct {

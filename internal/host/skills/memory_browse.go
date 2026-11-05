@@ -125,6 +125,9 @@ func reflectAnswer(args map[string]any) (any, error) {
 	if err := reflectGuidanceArgs(args, payload); err != nil {
 		return nil, err
 	}
+	if err := reflectOptionArgs(args, payload); err != nil {
+		return nil, err
+	}
 	res, err := routerRequest("/v1/reflect", payload)
 	if err != nil {
 		return nil, err
@@ -163,6 +166,36 @@ func reflectGuidanceArgs(args map[string]any, payload map[string]any) error {
 			}
 		}
 		payload["disposition"] = d
+	}
+	return nil
+}
+
+// reflectOptionArgs copies budget, fact_types and the mental-model and directive switches; the server checks them in full.
+func reflectOptionArgs(args map[string]any, payload map[string]any) error {
+	if v, has := args["budget"]; has && v != nil {
+		b, ok := v.(string)
+		if !ok || b != "low" && b != "mid" && b != "high" {
+			return errors.New("budget is low, mid or high")
+		}
+		payload["budget"] = b
+	}
+	for key, max := range map[string]int{"fact_types": 2, "exclude_mental_model_ids": 20} {
+		if v, has := args[key]; has && v != nil {
+			list, ok := v.([]any)
+			if !ok || len(list) > max || slices.ContainsFunc(list, func(x any) bool { s, isStr := x.(string); return !isStr || s == "" || host.Len(s) > 256 }) {
+				return errors.New(key + " must be a short list of strings")
+			}
+			payload[key] = list
+		}
+	}
+	for _, key := range []string{"exclude_mental_models", "apply_all_directives"} {
+		if v, has := args[key]; has && v != nil {
+			b, ok := v.(bool)
+			if !ok {
+				return errors.New(key + " must be true or false")
+			}
+			payload[key] = b
+		}
 	}
 	return nil
 }

@@ -138,6 +138,9 @@ type ObservationConsolidateInput struct {
 	MaxGroups int   `json:"max_groups,omitempty"`
 	// PlanOnly previews the run's strategy: what it would refresh and ask about, with no model call and no write.
 	PlanOnly bool `json:"plan_only,omitempty"`
+	// scopeTags and mission are the observation scope a group is asked in (consolidation_scopes.go).
+	scopeTags []string
+	mission   string
 }
 
 // ConsolidationPlan is what a run would do, in the order it would do it.
@@ -557,15 +560,18 @@ func sameSources(a []Ref, ids []string) bool {
 // propose new ones from memory clusters and refresh due mental models, at most
 // max_groups model calls of each kind. dry_run writes no observation or mental model.
 func (s *Service) ConsolidateObservations(ctx context.Context, token string, in ObservationConsolidateInput) (ObservationConsolidateResult, error) {
-	if in.MaxGroups == 0 {
-		in.MaxGroups = obsGroupsDefault
-	}
-	if in.MaxGroups < 1 || in.MaxGroups > obsGroupsMax {
+	if in.MaxGroups < 0 || in.MaxGroups > obsGroupsMax {
 		return ObservationConsolidateResult{}, ErrInvalid
 	}
 	d, err := s.derivedWriter(ctx, token, colObservations, in.Scope, "")
 	if err != nil {
 		return ObservationConsolidateResult{}, err
+	}
+	if in.MaxGroups == 0 {
+		in.MaxGroups = obsGroupsDefault
+		if c, err := s.spaceSettings(ctx, in.Scope); err == nil && c.Consolidation != nil && c.Consolidation.BatchSize > 0 {
+			in.MaxGroups = c.Consolidation.BatchSize // read only after authorization
+		}
 	}
 	out := ObservationConsolidateResult{DryRun: in.DryRun, Proposed: []ObservationView{}, Refreshed: []ObservationView{}, Rejected: []ObservationRejection{},
 		MentalModels: []MentalModelView{}, Authority: AuthorityDataOnly}
@@ -685,7 +691,7 @@ func (s *Service) refreshStaleObservations(ctx context.Context, token string, d 
 			out.Plan.StaleObservations = append(out.Plan.StaleObservations, r.ID)
 			continue
 		}
-		drafts, err := s.askObservations(ctx, in.Scope, job, members, r.Text)
+		drafts, err := s.askObservations(ctx, in, job, members, r.Text)
 		if err != nil {
 			if errors.Is(err, errModelAnswer) {
 				out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: errModelAnswer.Error(), Target: r.ID})
@@ -730,16 +736,30 @@ func (s *Service) transferableMemories(ctx context.Context, token string, scope 
 	return out, nil
 }
 
-func (s *Service) askObservations(ctx context.Context, scope Scope, job *WikiJob, members []Record, previous string) ([]observationDraft, error) {
+func (s *Service) askObservations(ctx context.Context, in ObservationConsolidateInput, job *WikiJob, members []Record, previous string) ([]observationDraft, error) {
 	var answer observationAnswer
-	settings, err := s.spaceSettings(ctx, scope)
+	system, err := s.observationSystemFor(ctx, in)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.derivedModelCall(ctx, scope, job, "wiki_observation", observationSystem+spaceOwnerGuidance(settings), observationPrompt(members, previous), &answer); err != nil {
+	if err := s.derivedModelCall(ctx, in.Scope, job, "wiki_observation", system, observationPrompt(members, previous), &answer); err != nil {
 		return nil, err
 	}
 	return answer.Observations, nil
+}
+
+// observationSystemFor is the consolidation system prompt: the fixed rules, the scope's
+// (or the space's) observations mission, then the space owner's guidance.
+func (s *Service) observationSystemFor(ctx context.Context, in ObservationConsolidateInput) (string, error) {
+	settings, err := s.spaceSettings(ctx, in.Scope)
+	if err != nil {
+		return "", err
+	}
+	mission := in.mission
+	if mission == "" && settings.Consolidation != nil {
+		mission = settings.Consolidation.ObservationsMission
+	}
+	return observationSystem + missionText(mission) + spaceOwnerGuidance(settings), nil
 }
 
 func (s *Service) proposeObservations(ctx context.Context, token string, d Decision, in ObservationConsolidateInput, job *WikiJob, out *ObservationConsolidateResult) error {
@@ -759,26 +779,39 @@ func (s *Service) proposeObservations(ctx context.Context, token string, d Decis
 		}
 		existing = append(existing, rows...)
 	}
-	asked := 0
-	for _, group := range clusterMemories(members) {
-		if asked >= in.MaxGroups {
-			break
-		}
-		group = group[:min(len(group), obsSourcesMax)]
-		if observationsCover(existing, group) {
-			continue
-		}
-		asked++
-		out.Groups++
-		if out.Plan != nil {
-			out.Plan.Groups = append(out.Plan.Groups, recordIDs(group))
-			continue
-		}
-		if err := s.proposeGroup(ctx, d, in, job, group, out); err != nil {
-			return err
+	settings, err := s.spaceSettings(ctx, in.Scope)
+	if err != nil {
+		return err
+	}
+	block, asks, asked := settings.Consolidation, []obsAsk{}, 0
+	for _, sc := range block.partition(members) {
+		mine := inScope(existing, sc.tags)
+		count := liveObservations(mine)
+		for _, group := range clusterMemories(sc.members) {
+			group = sc.trim(group[:min(len(group), obsSourcesMax)])
+			if asked >= in.MaxGroups || observationsCover(mine, group) {
+				continue
+			}
+			if sc.limit >= 0 && count >= sc.limit {
+				out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "scope_limit", Target: strings.Join(sc.tags, ",")})
+				break
+			}
+			count, asked = count+1, asked+1
+			out.Groups++
+			if out.Plan != nil {
+				out.Plan.Groups = append(out.Plan.Groups, recordIDs(group))
+				continue
+			}
+			scoped := in
+			scoped.scopeTags, scoped.mission = sc.tags, sc.mission
+			asks = append(asks, obsAsk{in: scoped, group: group, n: out.Groups})
 		}
 	}
-	return nil
+	parallel := 1
+	if block != nil {
+		parallel = block.Parallel
+	}
+	return s.runObservationAsks(ctx, d, job, asks, parallel, out)
 }
 
 // observationsCover: a group is not asked about again while every member is cited by one observation (any status but stale).
@@ -791,23 +824,23 @@ func observationsCover(existing []Record, group []Record) bool {
 	return true
 }
 
-func (s *Service) proposeGroup(ctx context.Context, d Decision, in ObservationConsolidateInput, job *WikiJob, group []Record, out *ObservationConsolidateResult) error {
-	drafts, err := s.askObservations(ctx, in.Scope, job, group, "")
+// storeGroupDrafts checks one group's model answer and stores each valid proposal.
+func (s *Service) storeGroupDrafts(ctx context.Context, d Decision, a obsAsk, drafts []observationDraft, err error, out *ObservationConsolidateResult) error {
 	if errors.Is(err, errModelAnswer) {
-		out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: errModelAnswer.Error()})
+		out.Rejected = append(out.Rejected, ObservationRejection{Group: a.n, Code: errModelAnswer.Error()})
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	refs := groupRefs(group)
+	refs := groupRefs(a.group)
 	for _, draft := range drafts[:min(len(drafts), 5)] {
 		cited, code := validObservationDraft(draft, refs)
 		if code != "" {
-			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: code})
+			out.Rejected = append(out.Rejected, ObservationRejection{Group: a.n, Code: code})
 			continue
 		}
-		v, err := s.storeObservation(ctx, d, in, Record{}, draft, cited, group)
+		v, err := s.storeObservation(ctx, d, a.in, Record{}, draft, cited, a.group)
 		if err != nil {
 			return err
 		}
@@ -838,9 +871,13 @@ func (s *Service) storeObservation(ctx context.Context, d Decision, in Observati
 		DurabilityReason: o.DurabilityReason, Confidence: &confidence, Generator: &gen, By: d.PrincipalID, At: now})
 	rec.Observation, rec.Text, rec.Confidence, rec.Generator, rec.Status, rec.UpdatedAt = &o, content, &confidence, &gen, obsProposed, now
 	rec.StaleMark, rec.ApprovedBy, rec.Review, rec.VerificationStatus = nil, "", nil, VerificationCandidate
-	rec.Tags, rec.Sensitivity, rec.Occurred = nil, citedSensitivity(members, cited), citedOccurred(members, cited)
+	scopeTags := in.scopeTags
+	if prior.ID != "" {
+		scopeTags = obsScopeTags(prior.Tags) // a refresh keeps the observation's scope
+	}
+	rec.Tags, rec.Sensitivity, rec.Occurred = slices.Clone(scopeTags), citedSensitivity(members, cited), citedOccurred(members, cited)
 	if instructionLike.MatchString(content) {
-		rec.Tags = []string{"review:instruction_like"}
+		rec.Tags = append(rec.Tags, obsReviewTagPrefix+"instruction_like")
 	}
 	if in.DryRun {
 		rec.Revision = prior.Revision + 1

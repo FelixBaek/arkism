@@ -8,7 +8,7 @@ export type DirectiveList = { "items": Array<Directive>; "next_cursor"?: string 
 export type DirectiveDeleteInput = { "scope": Scope; "expected_revision": number };
 export type DirectiveDeleted = { "deleted": boolean };
 export type DirectiveSection = { "authority": "human_hard_rule"; "notice": string; "items": Array<{ "id": string; "title": string; "rule": string; "priority": number }>; "tokens": number; "omitted"?: Array<string> };
-export type ReflectInput = { "scope": Scope; "query": string; "limit"?: number; "tags"?: Array<string>; "tags_match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "tag_groups"?: Array<Array<TagTest>>; "max_tokens"?: number; "prompt_only"?: boolean; "max_iterations"?: number; "response_schema"?: { [key: string]: unknown }; "mission"?: string; "disposition"?: ReflectDisposition; "include"?: Array<"attachments"> };
+export type ReflectInput = { "scope": Scope; "query": string; "limit"?: number; "tags"?: Array<string>; "tags_match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "tag_groups"?: Array<Array<TagTest>>; "max_tokens"?: number; "prompt_only"?: boolean; "max_iterations"?: number; "response_schema"?: { [key: string]: unknown }; "mission"?: string; "budget"?: "low" | "mid" | "high"; "fact_types"?: Array<"memory" | "observation">; "exclude_mental_models"?: boolean; "exclude_mental_model_ids"?: Array<string>; "apply_all_directives"?: boolean; "include"?: { "tool_calls"?: { "output"?: boolean }; "attachments"?: boolean }; "disposition"?: ReflectDisposition };
 export type ReflectDisposition = { "skepticism"?: number; "literalism"?: number; "empathy"?: number };
 export type ReflectOutput = { "answer": string; "cited_memory_ids": Array<string>; "directives_applied": Array<string>; "retrieved": Array<{ "id": string; "kind": string; "score": number; "attachments"?: Array<{ "id": string; "source_id": string; "kind": string; "mime": string; "bytes": number }> }>; "structured_answer"?: unknown; "tool_trace"?: Array<{ "tool": string; "args": { [key: string]: unknown }; "ids": Array<string>; "error"?: string }>; "iterations"?: number; "usage"?: { [key: string]: unknown }; "generator"?: { [key: string]: unknown }; "prompt"?: { "system": string; "user": string } };
 export type ContextValidationRef = { "collection": "memories"; "id": string; "revision": number; "digest": string; "fingerprint"?: string };
@@ -606,7 +606,7 @@ export type WireResponseWikiTreeFolder = { "path": string; "pages": number };
 export type WireResponseWikiTreePage = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "folder": string; "review_state": string; "locked": boolean };
 export type WireResponseObservationData = { "source_memories": (Array<WireResponseRef> | null); "durability": string; "durability_reason"?: string; "history"?: Array<WireResponseDerivedRevision> };
 export type WireResponseDerivedRevision = { "version": number; "status": string; "action": string; "text": string; "citations": (Array<WireResponseRef> | null); "durability"?: string; "durability_reason"?: string; "confidence"?: number; "generator"?: WireResponseGenerator; "by": string; "at": string; "withheld"?: boolean };
-export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string };
+export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string; "last_full_refresh_at"?: string; "last_outcome"?: WireResponseMentalModelOutcome };
 export type WireResponseDirective = { "title": string; "priority": number; "applies_to": string };
 export type WireResponseFileExtractJob = { "label": string; "sources": (Array<string> | null); "total": number; "next": number; "candidates_created": number; "skipped": (Array<WireResponseExtractSkip> | null); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch; "tags"?: Array<string> };
 export type WireResponseExtractSkip = { "locator"?: string; "reason": string };
@@ -619,7 +619,7 @@ export type CausalProposeInput = { "scope": Scope; "dry_run"?: boolean; "max_gro
 export type CausalLinkPage = { "items": Array<CausalLink>; "next_cursor"?: string; "truncated": boolean; "authority": string };
 export type CausalProposeResult = { "dry_run": boolean; "groups": number; "proposed": Array<CausalLink>; "rejected": Array<{ "group"?: number; "code"?: "invalid_model_output" | "citation_outside_group" | "self_link" | "invalid_reason" | "invalid_confidence" | "conflict"; "target"?: string }>; "calls": number; "tokens": number; "authority": string };
 export type WireResponseRecallTimeWindow = { "phrase": string; "from": string; "to": string };
-export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string };
+export type WireResponseMentalModelRefresh = { "mode": string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<(Array<WireResponseTagTest> | null)>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
 export type WireResponseDocumentChunkPage = { "document_id": string; "job_id": string; "items": (Array<WireResponseDocumentChunk> | null); "total": number; "next_cursor": string };
 export type WireResponseDocumentChunk = { "locator": string; "hash": string; "status": string; "source": WireResponseRef; "candidates": (Array<WireResponseDocumentCandidate> | null) };
 export type WireResponseDocumentCandidate = { "id": string; "status": string; "memory_id"?: string };
@@ -632,6 +632,8 @@ export type WireResponseEntityInput = { "name": string; "type"?: string };
 export type WireResponseExtractStrategy = { "extraction_mode"?: string; "extraction_instructions"?: string; "extraction_mission"?: string; "extraction_chunk_size"?: number; "extract_causal"?: boolean };
 export type WireResponseExtractOptions = { "context"?: string; "timestamp"?: string; "tags"?: Array<string>; "metadata"?: { [key: string]: string }; "entities"?: Array<string>; "strategy"?: string };
 export type WireResponseExtractBatch = { "id": string; "submitted_at": string };
+export type WireResponseTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireResponseTagTest>; "or"?: Array<WireResponseTagTest> };
+export type WireResponseMentalModelOutcome = { "code": string; "trigger": string; "at": string };
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -2327,6 +2329,10 @@ export class ArkismClient {
   getV1Observations(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "proposed" | "active" | "rejected" | "stale"; "durability"?: "momentary" | "lasting"; "source_memory_id"?: string; "q"?: string; "cursor"?: string; "limit"?: number }): Promise<unknown> {
     return this.request("GET", `/v1/observations`, query, undefined);
   }
+  /** DELETE /v1/observations — Delete observations in bulk (human principals only) */
+  deleteObservations(): Promise<unknown> {
+    return this.request("DELETE", `/v1/observations`, undefined, undefined);
+  }
   /** POST /v1/observations/consolidate — Consolidate approved memories into proposed observations (human or service principals) */
   postV1ObservationsConsolidate(): Promise<unknown> {
     return this.request("POST", `/v1/observations/consolidate`, undefined, undefined);
@@ -2378,6 +2384,26 @@ export class ArkismClient {
   /** POST /v1/mental-models/{id}/review — Approve or reject the draft summary (human principals only) */
   postV1MentalModelsByIdReview(id: string): Promise<unknown> {
     return this.request("POST", `/v1/mental-models/${encodeURIComponent(id)}/review`, undefined, undefined);
+  }
+  /** POST /v1/mental-models/{id}/clear — Clear a mental model's summary (human principals only) */
+  clearMentalModel(id: string): Promise<unknown> {
+    return this.request("POST", `/v1/mental-models/${encodeURIComponent(id)}/clear`, undefined, undefined);
+  }
+  /** POST /v1/mental-models/cron-preview — Preview the next firing times of a cron expression (read:mental_models) */
+  previewMentalModelCron(): Promise<unknown> {
+    return this.request("POST", `/v1/mental-models/cron-preview`, undefined, undefined);
+  }
+  /** GET /v1/observations/scopes — Tag scopes of proposed and active observations with counts (read:observations) */
+  listObservationScopes(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<unknown> {
+    return this.request("GET", `/v1/observations/scopes`, query, undefined);
+  }
+  /** POST /v1/observations/strategies/preview — Preview which observation scopes each consolidation strategy takes (read:observations) */
+  previewConsolidationStrategies(): Promise<unknown> {
+    return this.request("POST", `/v1/observations/strategies/preview`, undefined, undefined);
+  }
+  /** POST /v1/prompts/preview — Render the retain, consolidation or reflect prompt the space would send (search:memories) */
+  previewPrompt(): Promise<unknown> {
+    return this.request("POST", `/v1/prompts/preview`, undefined, undefined);
   }
   /** GET /v1/causal-links — Causal links of one status (default candidate, the review queue), newest first (read:memory_relations) */
   getV1CausalLinks(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "candidate" | "active" | "rejected"; "limit"?: number; "cursor"?: string }): Promise<CausalLinkPage> {

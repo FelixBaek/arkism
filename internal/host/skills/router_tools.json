@@ -1782,12 +1782,36 @@
         },
         "response_schema": {
           "type": "object",
-          "description": "JSON Schema for a JSON answer (type, properties, required, additionalProperties, items, enum, minItems, maxItems). The answer is validated; structured_answer holds it."
+          "description": "JSON Schema for a JSON answer: types, enum, const, bounds, pattern, items, prefixItems, contains, properties, patternProperties, additionalProperties, required, allOf, anyOf, oneOf, not, if/then/else and local $ref. The answer is validated; structured_answer holds it."
         },
         "mission": {
           "type": "string",
           "maxLength": 2000,
           "description": "Overrides the space's reflect mission for this call."
+        },
+        "budget": {
+          "type": "string",
+          "enum": ["low", "mid", "high"],
+          "description": "How much the answer may look up when limit and max_iterations are unset: low is quick, high reads more."
+        },
+        "fact_types": {
+          "type": "array",
+          "maxItems": 2,
+          "items": {"type": "string", "enum": ["memory", "observation"]},
+          "description": "Read only memories or only observations"
+        },
+        "exclude_mental_models": {
+          "type": "boolean",
+          "description": "Do not read mental models"
+        },
+        "exclude_mental_model_ids": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {"type": "string", "maxLength": 256}
+        },
+        "apply_all_directives": {
+          "type": "boolean",
+          "description": "Apply every directive even where the space limits tagged directives to matching tags"
         },
         "disposition": {
           "type": "object",

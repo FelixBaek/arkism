@@ -44887,7 +44887,7 @@
         }
       }
     },
-    "/v1/observations": {"get": {"summary": "Observations of one status (default active), newest change first, paginated (read:observations)", "description": "Filters: status proposed|active|rejected|stale, durability momentary|lasting, source_memory_id, q (substring). limit 1-100 (50), cursor from next_cursor; at most 500 rows per status are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["proposed", "active", "rejected", "stale"]}}, {"name": "durability", "in": "query", "schema": {"type": "string", "enum": ["momentary", "lasting"]}}, {"name": "source_memory_id", "in": "query", "schema": {"type": "string"}}, {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, status, revision, content, source_memories, source_memory_ids, durability, durability_reason, confidence, fresh, derived, diff, stale_mark, generator, review}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+    "/v1/observations": {"delete": {"operationId": "deleteObservations", "tags": ["Management"], "summary": "Delete observations in bulk (human principals only)", "description": "Body {scope, ids[1-50]} or {scope, all: true, status?}. Deletes the named observations, or every observation (of one status) up to 500 per call; more is true when some remain. Each deletion is audited. Agents and services cannot call it.", "parameters": [], "responses": {"200": {"description": "{deleted[], more}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "get": {"summary": "Observations of one status (default active), newest change first, paginated (read:observations)", "description": "Filters: status proposed|active|rejected|stale, durability momentary|lasting, source_memory_id, q (substring). limit 1-100 (50), cursor from next_cursor; at most 500 rows per status are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["proposed", "active", "rejected", "stale"]}}, {"name": "durability", "in": "query", "schema": {"type": "string", "enum": ["momentary", "lasting"]}}, {"name": "source_memory_id", "in": "query", "schema": {"type": "string"}}, {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, status, revision, content, source_memories, source_memory_ids, durability, durability_reason, confidence, fresh, derived, diff, stale_mark, generator, review}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1Observations"}},
     "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger).", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1ObservationsConsolidate"}},
@@ -44925,6 +44925,11 @@
         "operationId": "postV1MentalModelsByIdRefresh"}},
     "/v1/mental-models/{id}/review": {"post": {"summary": "Approve or reject the draft summary (human principals only)", "description": "Body {scope, expected_revision, action approve|reject, reason?}. approve rechecks every citation and makes the draft the active revision; the previous active revision is kept in history as superseded.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1MentalModelsByIdReview"}},
+    "/v1/mental-models/{id}/clear": {"post": {"operationId": "clearMentalModel", "tags": ["Management"], "summary": "Clear a mental model's summary (human principals only)", "description": "Body {scope, expected_revision, reason?}. Empties the approved text and any pending draft and resets the refresh times and last outcome; the topic, its trigger and its history stay, and history gains a cleared entry. The next scheduled or manual refresh writes a new draft for review. No model call.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/mental-models/cron-preview": {"post": {"operationId": "previewMentalModelCron", "tags": ["Management"], "summary": "Preview the next firing times of a cron expression (read:mental_models)", "description": "Body {scope, cron (5 fields, UTC), count 1-10 (5), after?}. Lists firing times within a year after `after` (default now). Reads nothing and calls no model.", "parameters": [], "responses": {"200": {"description": "{cron, next[]}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/observations/scopes": {"get": {"operationId": "listObservationScopes", "tags": ["Management"], "summary": "Tag scopes of proposed and active observations with counts (read:observations)", "description": "Each item is one tag set observations are kept under (empty tags: the untagged scope) with proposed and active counts. At most 500 observations per status and 200 scopes are read; truncated says when more exist.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{items[{tags, proposed, active}], truncated, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/observations/strategies/preview": {"post": {"operationId": "previewConsolidationStrategies", "tags": ["Management"], "summary": "Preview which observation scopes each consolidation strategy takes (read:observations)", "description": "Body {scope, consolidation?}. Uses the given consolidation block, or the space's resolved one, over the scope's approved memories. For each strategy and rule: matched scopes, the scopes it takes (the first claiming strategy wins) and up to 5 samples with handled_by. No model call, nothing written.", "parameters": [], "responses": {"200": {"description": "{scopes, unclaimed, strategies[{name, active, claimed, rules[{matched, taken, samples[{tags, count, handled_by}]}]}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/prompts/preview": {"post": {"operationId": "previewPrompt", "tags": ["Management"], "summary": "Render the retain, consolidation or reflect prompt the space would send (search:memories)", "description": "Body {scope, operation retain|consolidation|reflect, tags?}. Built by the same code as the real call with the space's settings, its mission, strategy mission (consolidation, picked by tags) and directives (reflect; needs read:directives); bracketed placeholders stand in for memory text. No model call, nothing written, no record text returned.", "parameters": [], "responses": {"200": {"description": "{operation, system, user, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/causal-links": {
       "post": {
         "summary": "Link two memories as cause and effect (human principals only, write:memory_relations)",
@@ -46441,30 +46446,56 @@
             "minimum": 1,
             "maximum": 8,
             "default": 3,
-            "description": "Model calls allowed. Above 1 the model may call read-only tools (recall with an optional created-time window and causal hop, observations, mental_models, entity, expand) before it answers; each call counts against the daily budget and every record passes the external-transfer check. One reply may ask for up to 4 tools at once (one model call). The last call offers no tools."
+            "description": "Model calls allowed. Above 1 the model may call read-only tools (recall with an optional created-time window and causal hop, observations, mental_models, read_mental_models, entity, expand at memory, chunk or document depth) before it answers; each call counts against the daily budget and every record passes the external-transfer check. One reply may ask for up to 4 tools at once (one model call). The last call offers no tools."
           },
           "response_schema": {
             "type": "object",
-            "description": "Optional JSON Schema (at most 8 KiB) for a JSON answer. Supported keywords: type, properties, required, additionalProperties (boolean), items, enum, minItems, maxItems, minLength, maxLength, minimum, maximum, and the annotations title, description, format, default, examples, $schema; any other keyword is refused with 400. An answer that does not validate is 502 invalid_model_output and is never stored."
+            "description": "Optional JSON Schema (at most 8 KiB, at most 512 nodes and 16 levels deep) for a JSON answer. Supported: type (one or a list), enum, const, numeric bounds (minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf), string bounds and pattern (RE2), array keywords (items as one schema, prefixItems, contains, minContains, maxContains, minItems, maxItems, uniqueItems), object keywords (properties, patternProperties, additionalProperties, propertyNames, required, dependentRequired, dependentSchemas, minProperties, maxProperties), allOf, anyOf, oneOf, not, if/then/else, local $ref into $defs or definitions, and annotations (title, description, format, default, examples, $schema, $comment, deprecated, readOnly, writeOnly). Remote $ref, $id, unevaluated* and items as an array are refused with 400. An answer that does not validate is 502 invalid_model_output and is never stored."
           },
           "mission": {
             "type": "string",
             "maxLength": 2000,
             "description": "Overrides the space's reflect_mission for this call."
           },
-          "disposition": {
-            "$ref": "#/components/schemas/ReflectDisposition"
+          "budget": {
+            "type": "string",
+            "enum": ["low", "mid", "high"],
+            "description": "Shapes the run when max_iterations or limit is unset: low 2 iterations and 5 records, mid as before, high 6 iterations and 20 records. The space's reflect_default_options.budget applies when absent."
+          },
+          "fact_types": {
+            "type": "array",
+            "maxItems": 2,
+            "items": {"type": "string", "enum": ["memory", "observation"]},
+            "description": "Keeps only memories or observations in retrieval and recall tools (mental models and sources are always kept)."
+          },
+          "exclude_mental_models": {
+            "type": "boolean",
+            "description": "Removes the mental_models and read_mental_models tools for this call."
+          },
+          "exclude_mental_model_ids": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {"type": "string"},
+            "description": "Mental models the tools never return."
+          },
+          "apply_all_directives": {
+            "type": "boolean",
+            "description": "Applies every active directive even when the space set reflect_default_options.tag_scoped_directives (tagged directives then apply only when they share a tag with the request)."
           },
           "include": {
-            "type": "array",
-            "maxItems": 1,
-            "items": {
-              "type": "string",
-              "enum": [
-                "attachments"
-              ]
-            },
-            "description": "attachments lists, on each retrieved memory, the files kept with its evidence (as recall include attachments)."
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "tool_calls": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {"output": {"type": "boolean", "description": "Adds each tool call's returned ids and texts to tool_steps."}}
+              },
+              "attachments": {"type": "boolean", "description": "Lists, on each retrieved memory, the files kept with its evidence (as recall include attachments)."}
+            }
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/ReflectDisposition"
           }
         }
       },
@@ -73339,6 +73370,13 @@
           "last_refresh_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "last_full_refresh_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_outcome": {
+            "$ref": "#/components/schemas/WireResponseMentalModelOutcome"
           }
         },
         "additionalProperties": false,
@@ -73863,6 +73901,54 @@
           },
           "strategy": {
             "type": "string"
+          },
+          "full_refresh_cron": {
+            "type": "string"
+          },
+          "budget": {
+            "type": "string"
+          },
+          "fact_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags_match": {
+            "type": "string"
+          },
+          "tag_groups": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WireResponseTagTest"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "include_chunks": {
+            "type": "boolean"
+          },
+          "recall_max_tokens": {
+            "type": "integer"
+          },
+          "response_schema": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
           }
         },
         "additionalProperties": false,
@@ -74269,6 +74355,66 @@
         "x-go-type": "memory.ExtractBatch",
         "x-go-source": "internal/memory/file_extract_batch.go",
         "description": "ExtractBatch is the provider batch a job's remaining chunks were sent as."
+      },
+      "WireResponseTagTest": {
+        "type": "object",
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "match": {
+            "type": "string"
+          },
+          "resolve": {
+            "type": "string"
+          },
+          "not": {
+            "type": "boolean"
+          },
+          "and": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseTagTest"
+            }
+          },
+          "or": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseTagTest"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.TagTest",
+        "x-go-source": "internal/memory/search_filters.go",
+        "description": "TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a\nnested group (every test of And, or any test of Or), negated by Not. Resolve \"fuzzy\" lets a\nleaf's tags also match the space's tags spelled alike (tag_resolve.go)."
+      },
+      "WireResponseMentalModelOutcome": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "trigger",
+          "at"
+        ],
+        "x-go-type": "memory.MentalModelOutcome",
+        "x-go-source": "internal/memory/mental_model_schedule.go",
+        "description": "MentalModelOutcome is how the last refresh attempt ended and what triggered it."
       }
     },
     "headers": {

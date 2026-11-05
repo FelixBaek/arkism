@@ -102,6 +102,10 @@ type SpaceConfig struct {
 	ExtractionStrategies      map[string]ExtractStrategy `json:"extraction_strategies,omitempty" bson:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy string                     `json:"extraction_default_strategy,omitempty" bson:"extraction_default_strategy,omitempty"`
 	DefaultTimezone           string                     `json:"default_timezone,omitempty" bson:"default_timezone,omitempty"`
+	// Reflect, mental-model and consolidation blocks (reflect_models_settings.go).
+	ReflectDefaults     *SpaceReflectDefaults     `json:"reflect_default_options,omitempty" bson:"reflect_default_options,omitempty"`
+	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty" bson:"mental_model_defaults,omitempty"`
+	Consolidation       *SpaceConsolidation       `json:"consolidation,omitempty" bson:"consolidation,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -146,6 +150,9 @@ type SpaceConfigInput struct {
 	ExtractionStrategies      *map[string]ExtractStrategy `json:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy *string                     `json:"extraction_default_strategy,omitempty"`
 	DefaultTimezone           *string                     `json:"default_timezone,omitempty"`
+	ReflectDefaults           *SpaceReflectDefaults       `json:"reflect_default_options,omitempty"`
+	MentalModelDefaults       *SpaceMentalModelDefaults   `json:"mental_model_defaults,omitempty"`
+	Consolidation             *SpaceConsolidation         `json:"consolidation,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }
@@ -397,6 +404,9 @@ func (s *Service) PutSpaceConfig(ctx context.Context, token string, scope Scope,
 	out, err := s.changeSpaceConfig(ctx, scope, d, in.ExpectedRevision, func(c *SpaceConfig) error { return applySpaceConfig(c, in, replace) })
 	if err == nil && out.Revision == 1 {
 		s.autoApplySpaceTemplate(ctx, token, d, scope, true)
+	}
+	if err == nil {
+		s.scheduleDerive(ctx, scope) // the consolidation schedule or a mental-model default may have changed
 	}
 	return out, err
 }

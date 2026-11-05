@@ -248,6 +248,9 @@ func validSpaceSettings(c SpaceConfig) error {
 		!c.AutoDerive.valid() || !c.Audit.valid() || !slices.Contains(entityResolveModes, c.EntityResolution) || !validEntityLabels(c.EntityLabels) {
 		return ErrInvalid
 	}
+	if err := validReflectModelSettings(c); err != nil {
+		return err
+	}
 	return validExtractionSettings(c)
 }
 
@@ -322,6 +325,7 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 		c.RecallLaneWeights = *in.RecallLaneWeights // {} hands the weights back
 	}
 	applyExtractionInput(c, in)
+	applyReflectModelBlocks(c, in)
 }
 
 // applyExtractionInput copies the extraction fields a PUT or PATCH sent.
@@ -492,6 +496,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "entity_labels", func(c *SpaceConfig) *[]EntityLabelGroup { return &c.EntityLabels }, func(v []EntityLabelGroup) bool { return len(v) > 0 })
 	resolveAutoDerive(&out, layers, src)
 	resolveExtraction(&out, layers, src)
+	resolveReflectModelBlocks(&out, layers, src)
 	out.Lanes = &SpaceLanes{}
 	for _, f := range spaceLaneFields {
 		inheritSetting(&out, layers, src, "lanes."+f.name, func(c *SpaceConfig) **bool {

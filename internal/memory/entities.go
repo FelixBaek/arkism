@@ -211,6 +211,7 @@ func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active 
 		}
 	}()
 	s.noteApprovedMemory(ctx, r.Scope)
+	s.scheduleDerive(ctx, r.Scope)
 	if _, err := s.entityStore(); err != nil || !entityExtractable(r) || ctx.Err() != nil {
 		return // no entity store, nothing approved to read, or the request is over
 	}

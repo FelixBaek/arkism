@@ -70,9 +70,9 @@ func TestUploadedOriginalAttachedToRecall(t *testing.T) {
 	if !validInclude([]string{"sources", "entities", "attachments"}, nil) || validInclude([]string{"attachments", "attachments"}, nil) {
 		t.Fatal("include validation")
 	}
-	r := ReflectInput{Scope: scopeA, Query: "q", Include: []string{"sources"}}
-	if validReflectInput(&r) {
-		t.Fatal("reflect takes only attachments")
+	run := &reflectRun{in: ReflectInput{Scope: scopeA, Include: &ReflectInclude{Attachments: true}}, hits: []Hit{{ID: m.ID, Collection: colMemories, Origin: "memory"}}}
+	if r, err := f.svc.reflectRetrieved(testCtx, f.human, ReflectOutput{}, run, nil); err != nil || len(r.Retrieved) != 1 || len(r.Retrieved[0].Attachments) != 1 {
+		t.Fatalf("reflect attachments %+v %v", r.Retrieved, err)
 	}
 	// A redacted upload keeps no original: the file still holds what was removed.
 	f2, _ := wikiFixture(t, extractAnswer())

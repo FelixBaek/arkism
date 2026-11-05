@@ -8,7 +8,9 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -17,20 +19,37 @@ const (
 	reflectToolMentalModels = "mental_models"
 	reflectToolEntity       = "entity"
 	reflectToolExpand       = "expand"
+	reflectToolReadModels   = "read_mental_models"
 	reflectMentalModelsMax  = 20
+	reflectExpandIDsMax     = 5
+	reflectSnippetRunes     = 300
 	// reflectParallelMax bounds the tools one model reply may ask for.
 	reflectParallelMax = 4
 )
 
-const reflectToolsText = "\nTOOLS. If the records are not enough, instead of answering reply with exactly one JSON object and nothing else:\n" +
-	`{"tool_call": {"name": "<tool>", "args": {...}}}` + "\n" +
-	`or, to run up to 4 tools at once, {"tool_calls": [{"name": "<tool>", "args": {...}}, ...]}` + "\n" +
-	"- recall {query, from?, to?, causal?}: search approved memories and observations again; from/to (RFC 3339) bound the creation time, causal adds memories one cause/effect link away.\n" +
-	"- observations {query}: search approved observations only.\n" +
-	"- mental_models {}: read the approved summaries a person keeps for this space.\n" +
-	"- entity {name}: read memories that mention a named person, product, place or thing.\n" +
-	"- expand {id}: read memories linked to a record id you already have.\n" +
-	"Call a tool only when it can add something; answer as soon as the records suffice.\n"
+// reflectToolLines describe each tool to the model; reflectToolsText leaves out the ones this reflect excludes.
+var reflectToolLines = []struct{ name, text string }{
+	{reflectToolRecall, "- recall {query, from?, to?, causal?, max_tokens?, max_chunk_tokens?}: search approved memories and observations again; from/to (RFC 3339) bound the creation time, causal adds memories one cause/effect link away.\n"},
+	{reflectToolObservations, "- observations {query, max_tokens?}: search approved observations only.\n"},
+	{reflectToolMentalModels, "- mental_models {max_tokens?}: list the approved summaries a person keeps for this space, as short snippets with ids.\n"},
+	{reflectToolReadModels, "- read_mental_models {ids, max_tokens?}: read those summaries in full.\n"},
+	{reflectToolEntity, "- entity {name}: read memories that mention a named person, product, place or thing.\n"},
+	{reflectToolExpand, "- expand {ids, depth?, max_tokens?}: for memory ids you already have, depth memory (default) reads linked memories, chunk the source passages they came from, document the whole source.\n"},
+}
+
+func reflectToolsText(run *reflectRun) string {
+	var b strings.Builder
+	b.WriteString("\nTOOLS. If the records are not enough, instead of answering reply with exactly one JSON object and nothing else:\n" +
+		`{"tool_call": {"name": "<tool>", "args": {...}}}` + "\n" +
+		`or, to run up to 4 tools at once, {"tool_calls": [{"name": "<tool>", "args": {...}}, ...]}` + "\n")
+	for _, t := range reflectToolLines {
+		if run.toolExcluded(t.name) == "" {
+			b.WriteString(t.text)
+		}
+	}
+	b.WriteString("max_tokens caps what one call returns. Call a tool only when it can add something; answer as soon as the records suffice.\n")
+	return b.String()
+}
 
 // reflectToolArgs are the only arguments a tool takes; unknown fields are refused.
 type reflectToolArgs struct {
@@ -40,6 +59,11 @@ type reflectToolArgs struct {
 	Causal bool       `json:"causal,omitempty"`
 	ID     string     `json:"id,omitempty"`
 	Name   string     `json:"name,omitempty"`
+	// IDs name mental models (read_mental_models) or memories (expand).
+	IDs            []string `json:"ids,omitempty"`
+	Depth          string   `json:"depth,omitempty"`
+	MaxTokens      int      `json:"max_tokens,omitempty"`
+	MaxChunkTokens int      `json:"max_chunk_tokens,omitempty"`
 }
 
 type reflectToolCall struct {
@@ -67,21 +91,25 @@ func parseReflectToolCalls(text string) ([]reflectToolCall, bool) {
 // the model to see; only a failure of the server itself stops the reflect.
 func (s *Service) reflectTool(ctx context.Context, token string, run *reflectRun, call reflectToolCall) (ReflectToolStep, error) {
 	step := ReflectToolStep{Tool: call.Name, Args: call.Args, IDs: []string{}}
+	if step.Error = run.toolExcluded(call.Name); step.Error != "" {
+		return step, nil
+	}
 	var hits []Hit
 	var err error
 	switch call.Name {
 	case reflectToolRecall, reflectToolObservations:
 		hits, err = s.reflectRecall(ctx, token, run.in, call)
-	case reflectToolMentalModels:
-		hits, err = s.reflectMentalModels(ctx, token, run.in.Scope)
+	case reflectToolMentalModels, reflectToolReadModels:
+		hits, err = s.reflectMentalModels(ctx, token, run, call)
 	case reflectToolEntity:
 		hits, err = s.reflectEntity(ctx, token, run.in.Scope, call.Args.Name)
 	case reflectToolExpand:
-		hits, err = s.reflectExpand(ctx, token, run, call.Args.ID)
+		hits, err = s.reflectExpand(ctx, token, run, call.Args)
 	default:
 		step.Error = "unknown_tool"
 		return step, nil
 	}
+	hits = packToolHits(hits, run.toolTokens(call), run.chunkTokens(call))
 	switch {
 	case errors.Is(err, ErrInvalid), errors.Is(err, ErrNotFound), errors.Is(err, ErrConflict):
 		step.Error = "invalid_arguments"
@@ -91,14 +119,89 @@ func (s *Service) reflectTool(ctx context.Context, token string, run *reflectRun
 		return step, err
 	}
 	step.IDs = run.add(hits)
+	if run.in.Include != nil && run.in.Include.ToolCalls.Output {
+		step.Output = hitTexts(hits, run)
+	}
 	return step, nil
+}
+
+// toolExcluded is why this reflect may not call a tool ("excluded"), or "".
+func (r *reflectRun) toolExcluded(name string) string {
+	mm := name == reflectToolMentalModels || name == reflectToolReadModels
+	if mm && r.in.ExcludeMentalModels || name == reflectToolObservations && !factTypeKept(r.in.FactTypes, colObservations) {
+		return "excluded"
+	}
+	return ""
+}
+
+// toolTokens is the tool's token cap: the call's max_tokens, else the space's, else the shipped default.
+func (r *reflectRun) toolTokens(call reflectToolCall) int {
+	if n := call.Args.MaxTokens; n > 0 {
+		return min(max(n, 64), reflectMaxPromptTokens)
+	}
+	t := r.tools
+	switch call.Name {
+	case reflectToolRecall:
+		return t.RecallMaxTokens
+	case reflectToolObservations:
+		return t.ObservationsMaxTokens
+	case reflectToolMentalModels:
+		return t.MentalModelsMaxTokens
+	case reflectToolReadModels:
+		return t.ReadMentalModelsMaxTokens
+	}
+	return t.ExpandMaxTokens
+}
+
+func (r *reflectRun) chunkTokens(call reflectToolCall) int {
+	if n := call.Args.MaxChunkTokens; n > 0 {
+		return min(max(n, 16), reflectMaxPromptTokens)
+	}
+	if call.Name == reflectToolRecall || call.Name == reflectToolExpand {
+		return r.tools.RecallMaxChunkTokens
+	}
+	return 0
+}
+
+// approxTokens counts about three characters a token, as the reflect prompt cap does.
+func approxTokens(text string) int { return utf8.RuneCountInString(text)/3 + 1 }
+
+// packToolHits cuts each text to chunk tokens (0 keeps it whole) and keeps hits, in order, while they fit in budget.
+func packToolHits(hits []Hit, budget, chunk int) []Hit {
+	out, used := []Hit{}, 0
+	for _, h := range hits {
+		if chunk > 0 && approxTokens(h.Text) > chunk {
+			h.Text = string([]rune(h.Text)[:chunk*3])
+		}
+		n := approxTokens(h.Text)
+		if budget > 0 && used+n > budget {
+			continue // a smaller later hit may still fit
+		}
+		used += n
+		out = append(out, h)
+	}
+	return out
+}
+
+// hitTexts is what a tool returned, for the caller's trace (include.tool_calls.output); fact types already applied.
+func hitTexts(hits []Hit, run *reflectRun) []ReflectToolOutput {
+	out := []ReflectToolOutput{}
+	for _, h := range hits {
+		if h.Collection == colMentalModels || factTypeKept(run.in.FactTypes, h.Collection) {
+			out = append(out, ReflectToolOutput{ID: h.ID, Kind: h.Kind, Text: h.Text})
+		}
+	}
+	return out
 }
 
 func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInput, call reflectToolCall) ([]Hit, error) {
 	search := reflectSearch(in, call.Args.Query)
 	search.ExpandCausal = call.Args.Causal
 	if call.Args.From != nil || call.Args.To != nil {
-		f := reflectFilters(in)
+		f := SearchFilters{}
+		if search.Filters != nil {
+			f = *search.Filters
+		}
 		f.CreatedFrom, f.CreatedTo = call.Args.From, call.Args.To
 		search.Filters = &f
 	}
@@ -109,16 +212,78 @@ func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInp
 	return bundle.Items, err
 }
 
-// reflectExpand follows the relation graph from a memory this reflect already retrieved.
-func (s *Service) reflectExpand(ctx context.Context, token string, run *reflectRun, id string) ([]Hit, error) {
-	i := slices.IndexFunc(run.hits, func(h Hit) bool { return h.ID == id && h.Collection == colMemories })
-	if i < 0 {
+// reflectExpand reads around memories this reflect already retrieved: linked memories
+// (depth memory, the relation graph), their source passages (chunk) or whole sources (document).
+func (s *Service) reflectExpand(ctx context.Context, token string, run *reflectRun, args reflectToolArgs) ([]Hit, error) {
+	ids := args.IDs
+	if args.ID != "" {
+		ids = append([]string{args.ID}, ids...)
+	}
+	if len(ids) == 0 || len(ids) > reflectExpandIDsMax || !slices.Contains([]string{"", "memory", "chunk", "document"}, args.Depth) {
 		return nil, ErrInvalid
 	}
-	search := reflectSearch(run.in, run.in.Query)
-	search.RelatedTo = &Ref{Collection: colMemories, ID: id, Revision: run.hits[i].Revision}
-	bundle, err := s.Search(ctx, token, search)
-	return bundle.Items, err
+	out := []Hit{}
+	for _, id := range ids {
+		i := slices.IndexFunc(run.hits, func(h Hit) bool { return h.ID == id && h.Collection == colMemories })
+		if i < 0 {
+			return nil, ErrInvalid
+		}
+		var hits []Hit
+		var err error
+		if args.Depth == "" || args.Depth == "memory" {
+			search := reflectSearch(run.in, run.in.Query)
+			search.RelatedTo = &Ref{Collection: colMemories, ID: id, Revision: run.hits[i].Revision}
+			var bundle ContextBundle
+			bundle, err = s.Search(ctx, token, search)
+			hits = bundle.Items
+		} else {
+			hits, err = s.reflectSources(ctx, token, run.in.Scope, id, args.Depth == "document")
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, hits...)
+	}
+	return out, nil
+}
+
+// reflectSources reads a memory's source passages (the spans it was taken from) or, for
+// document, each whole source. A whole source passes the transfer gate on its own.
+func (s *Service) reflectSources(ctx context.Context, token string, scope Scope, id string, document bool) ([]Hit, error) {
+	trace, err := s.traceRecordSources(ctx, token, scope, id, colMemories, 8)
+	if err != nil {
+		return nil, err
+	}
+	mem, err := s.Repo.Get(ctx, colMemories, scope, id)
+	if err != nil {
+		return nil, err
+	}
+	hits, kind := []Hit{}, "source_chunk"
+	if document {
+		kind = "source_document"
+	}
+	for _, src := range trace.Sources {
+		text := src.Excerpt
+		if document && src.Source != nil {
+			text = s.transferableSource(ctx, token, scope, mem, *src.Source)
+		}
+		if text == "" || containsSecret(text) {
+			continue
+		}
+		hits = append(hits, Hit{ID: "src_" + src.SourceID + ":" + id, Collection: "sources", Kind: kind, Text: redactSessionPrivate(text)})
+	}
+	return hits, nil
+}
+
+func (s *Service) transferableSource(ctx context.Context, token string, scope Scope, mem Record, ref Ref) string {
+	src, err := s.Repo.Get(ctx, ref.Collection, scope, ref.ID)
+	if err != nil || src.ContentErased || src.PrivacyQuarantined {
+		return ""
+	}
+	if _, err := s.authorizeTransfer(ctx, token, "context:read", scope, src.ID, mem.Sensitivity, wikiDestination, src.Text, mem.Sources); err != nil {
+		return ""
+	}
+	return src.Text
 }
 
 // reflectEntity reads the approved memories that mention the best-matching entity.
@@ -151,20 +316,32 @@ func (s *Service) reflectEntity(ctx context.Context, token string, scope Scope, 
 // reflectMentalModels returns the approved summaries whose every citation may go to
 // the model; the summary then passes the gate at its citations' highest sensitivity
 // with their sources. A summary that fails any check is left out, as search filters a hit.
-func (s *Service) reflectMentalModels(ctx context.Context, token string, scope Scope) ([]Hit, error) {
-	page, err := s.ListMentalModels(ctx, token, scope, "", "", reflectMentalModelsMax)
+// mental_models returns snippets, read_mental_models the named summaries in full;
+// exclude_mental_model_ids are never returned.
+func (s *Service) reflectMentalModels(ctx context.Context, token string, run *reflectRun, call reflectToolCall) ([]Hit, error) {
+	read := call.Name == reflectToolReadModels
+	if read && (len(call.Args.IDs) == 0 || len(call.Args.IDs) > reflectMentalModelsMax) {
+		return nil, ErrInvalid
+	}
+	page, err := s.ListMentalModels(ctx, token, run.in.Scope, "", "", reflectMentalModelsMax)
 	if err != nil {
 		return nil, err
 	}
 	hits := []Hit{}
 	for _, m := range page.Items {
-		ok, err := s.mentalModelTransferable(ctx, token, scope, m)
+		if slices.Contains(run.in.ExcludeMentalModelIDs, m.ID) || read && !slices.Contains(call.Args.IDs, m.ID) {
+			continue
+		}
+		ok, err := s.mentalModelTransferable(ctx, token, run.in.Scope, m)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			at := m.Active.At
-			hits = append(hits, Hit{ID: m.ID, Collection: colMentalModels, Kind: mentalModelKind, Revision: m.Revision, Text: m.Title + ": " + m.Active.Text, EffectiveAt: &at})
+			at, text := m.Active.At, m.Active.Text
+			if !read {
+				text = runeCutString(text, reflectSnippetRunes)
+			}
+			hits = append(hits, Hit{ID: m.ID, Collection: colMentalModels, Kind: mentalModelKind, Revision: m.Revision, Text: m.Title + ": " + text, EffectiveAt: &at})
 		}
 	}
 	return hits, nil

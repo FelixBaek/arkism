@@ -370,7 +370,7 @@ func (f *fakeRepo) ClaimJob(_ context.Context, now time.Time, lease time.Duratio
 	for _, job := range f.rowsLocked("jobs") {
 		runnable := job.Status == JobStatusPending || job.Status == JobStatusRetry ||
 			(job.Status == JobStatusRunning && !job.LeaseUntil.After(now))
-		if (job.Kind != "embedding" && job.Kind != webhookDeliveryKind && job.Kind != autoDeriveJobKind && job.Kind != sourceMemoryErasureKind && job.Kind != sourceRecordErasureKind && job.Kind != sourceSkillErasureKind && job.Kind != sourceRelationErasureKind && job.Kind != sourceMemoryDependentsErasureKind && !isMemoryErasureKind(job.Kind)) || !runnable {
+		if (job.Kind != "embedding" && job.Kind != webhookDeliveryKind && job.Kind != autoDeriveJobKind && job.Kind != deriveScheduleKind && job.Kind != sourceMemoryErasureKind && job.Kind != sourceRecordErasureKind && job.Kind != sourceSkillErasureKind && job.Kind != sourceRelationErasureKind && job.Kind != sourceMemoryDependentsErasureKind && !isMemoryErasureKind(job.Kind)) || !runnable {
 			continue
 		}
 		job.Status = JobStatusRunning

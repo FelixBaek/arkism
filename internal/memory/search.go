@@ -839,6 +839,11 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		handled = e == nil
 		return e
 	}
+	if job.Kind == deriveScheduleKind {
+		e = s.runDeriveSchedule(ctx, workerToken, job)
+		handled = e == nil
+		return e
+	}
 	if job.Kind != "embedding" {
 		return ErrInvalid
 	}

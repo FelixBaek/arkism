@@ -25,7 +25,11 @@ type storeField struct {
 	omitEmpty bool
 }
 
-var timeType = reflect.TypeOf(time.Time{})
+var (
+	timeType = reflect.TypeOf(time.Time{})
+	// rawType is stored as the JSON it holds (a person's JSON Schema), not as binary.
+	rawType = reflect.TypeOf(json.RawMessage(nil))
+)
 
 func storeFields(t reflect.Type) []storeField {
 	out := make([]storeField, 0, t.NumField())
@@ -93,6 +97,9 @@ func storeWrite(b *bytes.Buffer, v reflect.Value) error {
 	if !v.IsValid() {
 		b.WriteString("null")
 		return nil
+	}
+	if v.Type() == rawType {
+		return storeWriteRaw(b, v.Bytes())
 	}
 	if v.Type() == timeType {
 		ms := v.Interface().(time.Time).UnixMilli()
@@ -182,6 +189,9 @@ func storeAssign(v reflect.Value, raw any) error {
 	}
 	if storeAssignLegacy(v, raw) {
 		return nil
+	}
+	if v.Type() == rawType {
+		return storeAssignRaw(v, raw)
 	}
 	if v.Type() == timeType {
 		t, err := storeTime(raw)
@@ -282,6 +292,26 @@ func storeWriteMap(b *bytes.Buffer, v reflect.Value) error {
 		}
 	}
 	b.WriteByte('}')
+	return nil
+}
+
+func storeWriteRaw(b *bytes.Buffer, raw []byte) error {
+	if len(raw) == 0 {
+		b.WriteString("null")
+		return nil
+	}
+	if err := json.Compact(b, raw); err != nil {
+		return fmt.Errorf("store codec: invalid JSON field: %w", ErrInvalid)
+	}
+	return nil
+}
+
+func storeAssignRaw(v reflect.Value, raw any) error {
+	text, err := json.Marshal(raw)
+	if err != nil {
+		return ErrUnavailable
+	}
+	v.SetBytes(text)
 	return nil
 }
 

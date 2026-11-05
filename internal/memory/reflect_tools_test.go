@@ -153,7 +153,7 @@ func TestReflectResponseSchema(t *testing.T) {
 			t.Fatal("bounds", answer, err)
 		}
 	}
-	for _, bad := range []string{`{"type":"string","pattern":"^a"}`, `{"type":"number","minimum":"1"}`, `{"type":"date"}`, `[1]`, `{"properties":{"a":1}}`, `{"type":"object"} {}`} {
+	for _, bad := range []string{`{"type":"string","pattern":"("}`, `{"$ref":"https://example.invalid/s"}`, `{"unevaluatedProperties":false}`, `{"type":"number","minimum":"1"}`, `{"type":"date"}`, `[1]`, `{"properties":{"a":1}}`, `{"type":"object"} {}`} {
 		llm.prompts = nil
 		if _, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", ResponseSchema: json.RawMessage(bad)}); !errors.Is(err, ErrInvalid) || len(llm.prompts) != 0 {
 			t.Fatal("unsupported schema accepted", bad, err)

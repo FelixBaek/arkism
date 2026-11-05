@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -68,6 +69,22 @@ type MentalModelRefresh struct {
 	Tags               []string `json:"tags,omitempty" bson:"tags,omitempty"`
 	MaxTokens          int64    `json:"max_tokens,omitempty" bson:"max_tokens,omitempty"`
 	Strategy           string   `json:"strategy,omitempty" bson:"strategy,omitempty"`
+	// FullRefreshCron (5 fields, UTC) rewrites the summary from scratch on a schedule, even
+	// with strategy delta; it skips a tick when nothing was refreshed since the last full one.
+	FullRefreshCron string `json:"full_refresh_cron,omitempty" bson:"full_refresh_cron,omitempty"`
+	// Budget sets how much a refresh recalls: low 10, mid 20 (default), high 40 records.
+	Budget string `json:"budget,omitempty" bson:"budget,omitempty"`
+	// FactTypes narrows the recall to "memory" or "observation" records.
+	FactTypes []string `json:"fact_types,omitempty" bson:"fact_types,omitempty"`
+	// TagsMatch and TagGroups apply to Tags as in search filters.
+	TagsMatch string      `json:"tags_match,omitempty" bson:"tags_match,omitempty"`
+	TagGroups [][]TagTest `json:"tag_groups,omitempty" bson:"tag_groups,omitempty"`
+	// IncludeChunks adds each recalled memory's source excerpts to the prompt.
+	IncludeChunks bool `json:"include_chunks,omitempty" bson:"include_chunks,omitempty"`
+	// RecallMaxTokens caps the recalled records (cl100k_base tokens).
+	RecallMaxTokens int `json:"recall_max_tokens,omitempty" bson:"recall_max_tokens,omitempty"`
+	// ResponseSchema makes the summary one JSON value valid against this JSON Schema (reflect_schema.go).
+	ResponseSchema json.RawMessage `json:"response_schema,omitempty" bson:"response_schema,omitempty"`
 }
 
 func (r *MentalModelRefresh) UnmarshalJSON(b []byte) error {
@@ -102,7 +119,7 @@ func validMentalModelRefresh(r MentalModelRefresh) bool {
 			return false
 		}
 	}
-	return true
+	return validMentalModelRecall(r)
 }
 
 // MentalModelData is the mental-model part of a record.
@@ -114,6 +131,9 @@ type MentalModelData struct {
 	Draft         *DerivedRevision   `json:"draft,omitempty" bson:"draft,omitempty"`
 	History       []DerivedRevision  `json:"history,omitempty" bson:"history,omitempty"`
 	LastRefreshAt *time.Time         `json:"last_refresh_at,omitempty" bson:"last_refresh_at,omitempty"`
+	// LastFullRefreshAt is the last full_refresh_cron rewrite; LastOutcome how the last attempt ended.
+	LastFullRefreshAt *time.Time          `json:"last_full_refresh_at,omitempty" bson:"last_full_refresh_at,omitempty"`
+	LastOutcome       *MentalModelOutcome `json:"last_outcome,omitempty" bson:"last_outcome,omitempty"`
 }
 
 type MentalModelView struct {
@@ -130,12 +150,15 @@ type MentalModelView struct {
 	LastRefreshAt *time.Time         `json:"last_refresh_at,omitempty"`
 	// Stale: the approved text no longer matches its sources ("sources_changed": a cited
 	// record is gone or no longer approved) or newer approved memories exist ("new_memories").
-	Stale       bool      `json:"stale"`
-	StaleReason string    `json:"stale_reason,omitempty"`
-	DryRun      bool      `json:"dry_run,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Authority   string    `json:"authority"`
+	Stale       bool   `json:"stale"`
+	StaleReason string `json:"stale_reason,omitempty"`
+	// LastOutcome is how the last refresh attempt ended; NextRefreshAt when the scheduler next runs it.
+	LastOutcome   *MentalModelOutcome `json:"last_outcome,omitempty"`
+	NextRefreshAt *time.Time          `json:"next_refresh_at,omitempty"`
+	DryRun        bool                `json:"dry_run,omitempty"`
+	CreatedAt     time.Time           `json:"created_at"`
+	UpdatedAt     time.Time           `json:"updated_at"`
+	Authority     string              `json:"authority"`
 }
 
 type MentalModelPage struct {
@@ -186,6 +209,12 @@ func (s *Service) mentalModelView(ctx context.Context, r Record) MentalModelView
 	v := MentalModelView{ID: r.ID, Scope: r.Scope, Revision: r.Revision, Title: m.Title, Query: m.Query, Refresh: m.Refresh, Status: r.Status, Active: m.Active, Draft: m.Draft,
 		LastRefreshAt: m.LastRefreshAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Authority: AuthorityDataOnly}
 	v.Stale, v.StaleReason = s.mentalModelStale(ctx, r)
+	v.LastOutcome = m.LastOutcome
+	if r.Status == statusActive {
+		if next, ok := mentalModelNextAt(&m, latestApprovedMemory(ctx, s.Repo, r.Scope), latestObservationChange(ctx, s.Repo, r.Scope), time.Now().UTC(), 0); ok {
+			v.NextRefreshAt = &next
+		}
+	}
 	if m.Draft != nil {
 		before := ""
 		if m.Active != nil {
@@ -219,6 +248,11 @@ func (s *Service) CreateMentalModel(ctx context.Context, token string, in Mental
 	if err != nil {
 		return MentalModelView{}, err
 	}
+	if in.Refresh.Mode == "" {
+		if c, err := s.spaceSettings(ctx, in.Scope); err == nil && c.MentalModelDefaults != nil && c.MentalModelDefaults.Trigger != nil {
+			in.Refresh = *c.MentalModelDefaults.Trigger // the space's default trigger (validated when saved) for a model created without one
+		}
+	}
 	status, approvedBy := statusActive, d.PrincipalID
 	if d.Role == roleAgent {
 		status, approvedBy = obsProposed, ""
@@ -248,6 +282,7 @@ func (s *Service) CreateMentalModel(ctx context.Context, token string, in Mental
 	if err != nil {
 		return MentalModelView{}, err
 	}
+	s.scheduleDerive(ctx, in.Scope)
 	return s.mentalModelView(ctx, r), nil
 }
 
@@ -362,6 +397,7 @@ func (s *Service) UpdateMentalModel(ctx context.Context, token, id string, in Me
 	if err != nil {
 		return MentalModelView{}, err
 	}
+	s.scheduleDerive(ctx, in.Scope)
 	return s.mentalModelView(ctx, r), nil
 }
 
@@ -446,17 +482,22 @@ func (s *Service) RefreshMentalModel(ctx context.Context, token, id string, in M
 	if r.Status == obsProposed {
 		return MentalModelView{}, ErrConflict // no model call for a topic nobody approved yet
 	}
-	return s.refreshMentalModel(ctx, token, d, r, in.DryRun, &WikiJob{MaxTotalTokens: obsRunTokens})
+	return s.refreshMentalModel(ctx, token, d, r, in.DryRun, mmTriggerManual, &WikiJob{MaxTotalTokens: obsRunTokens})
 }
 
-func (s *Service) refreshMentalModel(ctx context.Context, token string, d Decision, r Record, dryRun bool, job *WikiJob) (MentalModelView, error) {
+// refreshMentalModel asks for a draft. trigger names why (manual, a scheduled trigger);
+// full_refresh_cron rewrites from scratch. A draft equal to the approved text is not stored.
+func (s *Service) refreshMentalModel(ctx context.Context, token string, d Decision, r Record, dryRun bool, trigger string, job *WikiJob) (MentalModelView, error) {
 	m := r.MentalModel
-	req := summaryRequest{scope: r.Scope, title: m.Title, query: m.Query, kinds: m.Refresh.Kinds, tags: m.Refresh.Tags, maxTokens: m.Refresh.MaxTokens}
-	if m.Refresh.Strategy == mmStrategyDelta {
+	req := summaryRequestFor(r)
+	if m.Refresh.Strategy == mmStrategyDelta && trigger != mmTriggerFullCron {
 		req.base = m.Active
 	}
 	draft, err := s.citedSummaryDraft(ctx, token, d, req, job)
 	if err != nil {
+		if !dryRun {
+			s.noteRefreshOutcome(ctx, d, r, trigger, err)
+		}
 		return MentalModelView{}, err
 	}
 	if dryRun {
@@ -469,9 +510,17 @@ func (s *Service) refreshMentalModel(ctx context.Context, token string, d Decisi
 	now := draft.At
 	out, err := s.mentalModelWrite(ctx, d, r.Scope, r.ID, r.Revision, "refresh", func(r *Record) error {
 		m := r.MentalModel
+		m.LastRefreshAt, m.LastOutcome = &now, &MentalModelOutcome{Code: mmOutcomeWritten, Trigger: trigger, At: now}
+		if trigger == mmTriggerFullCron {
+			m.LastFullRefreshAt = &now
+		}
+		if m.Active != nil && m.Active.Text == draft.Text {
+			m.LastOutcome.Code = mmOutcomeSame // nothing for a person to review
+			return nil
+		}
 		m.History = appendRevision(m.History, *draft)
 		draft.Version = m.History[len(m.History)-1].Version
-		m.Draft, m.LastRefreshAt = draft, &now
+		m.Draft = draft
 		return nil
 	})
 	if err != nil {
@@ -488,22 +537,38 @@ type summaryRequest struct {
 	maxTokens    int64
 	// base, when set, is the approved revision a delta refresh edits (mental_model_delta.go).
 	base *DerivedRevision
+	// The mental-model recall options (MentalModelRefresh) and the answer schema.
+	limit         int
+	tagsMatch     string
+	tagGroups     [][]TagTest
+	includeChunks bool
+	recallTokens  int
+	schema        json.RawMessage
+	factTypes     []string
+}
+
+func summaryRequestFor(r Record) summaryRequest {
+	m := r.MentalModel
+	f := m.Refresh
+	req := summaryRequest{scope: r.Scope, title: m.Title, query: m.Query, kinds: f.Kinds, tags: f.Tags, maxTokens: f.MaxTokens,
+		limit: mmBudgetRecall[f.Budget], tagsMatch: f.TagsMatch, tagGroups: f.TagGroups, includeChunks: f.IncludeChunks, recallTokens: f.RecallMaxTokens,
+		schema: f.ResponseSchema, factTypes: f.FactTypes}
+	if slices.Equal(f.FactTypes, []string{"observation"}) && len(f.Kinds) == 0 {
+		req.kinds = []string{observationKind}
+	}
+	return req
 }
 
 // citedSummaryDraft recalls the query over approved memories and observations (every hit
 // passes the transfer gate to the server model) and asks for a cited summary. The result is
 // a draft revision; only a person makes it active.
 func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decision, req summaryRequest, job *WikiJob) (*DerivedRevision, error) {
-	search := SearchInput{Scope: req.scope, Query: req.query, Limit: mmRecall, Destination: wikiDestination}
-	search.Kinds = req.kinds
-	if len(req.tags) > 0 {
-		search.Filters = &SearchFilters{Tags: req.tags}
-	}
-	bundle, err := s.Search(ctx, token, search)
+	bundle, err := s.Search(ctx, token, summarySearch(req))
 	if err != nil {
 		return nil, err
 	}
 	hits := recallableHits(bundle.Items)
+	maps.DeleteFunc(hits, func(_ string, h Hit) bool { return !factTypeKept(req.factTypes, h.Collection) })
 	if len(hits) == 0 {
 		return nil, ErrNotFound
 	}
@@ -518,6 +583,16 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 		call = &WikiJob{MaxTotalTokens: min(req.maxTokens, job.MaxTotalTokens-job.Tokens)}
 		defer func() { job.Calls, job.Tokens = job.Calls+call.Calls, job.Tokens+call.Tokens }()
 	}
+	var schema *jsonSchema
+	if schemaSet(req.schema) {
+		if schema, err = parseReflectSchema(req.schema); err != nil {
+			return nil, err
+		}
+		system += mentalModelSchemaRule(schema)
+	}
+	if req.includeChunks {
+		prompt += s.summaryChunks(ctx, token, req.scope, bundle.Items)
+	}
 	var answer mentalModelAnswer
 	if err := s.derivedModelCall(ctx, req.scope, call, "wiki_mental_model", system, prompt, &answer); err != nil {
 		return nil, err
@@ -525,6 +600,11 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 	cited, err := validMentalModelAnswer(answer, hits)
 	if err != nil {
 		return nil, err
+	}
+	if schema != nil {
+		if answer.Summary, err = structuredSummary(schema, answer.Summary); err != nil {
+			return nil, err
+		}
 	}
 	gen := s.Wiki.Generator()
 	gen.PromptVersion = mmPromptVersion
@@ -602,46 +682,6 @@ func (s *Service) citationsStand(ctx context.Context, scope Scope, refs []Ref) b
 	return true
 }
 
-// mentalModelDue: a model never refreshed is due unless it is manual only; after that daily
-// ones a day after the last refresh, on_change ones once an approved memory changed after it,
-// after_consolidation ones once an observation changed after it, cron ones on a schedule tick
-// when an approved memory changed after it. min_interval holds every trigger back.
-func mentalModelDue(m *MentalModelData, latest, latestObservation, now time.Time) bool {
-	r := m.Refresh
-	if m.LastRefreshAt == nil {
-		return r.Mode != mmRefreshManual || r.Cron != "" || r.AfterConsolidation
-	}
-	last := *m.LastRefreshAt
-	if gap, err := time.ParseDuration(r.MinInterval); err == nil && now.Sub(last) < gap {
-		return false
-	}
-	switch {
-	case r.Mode == mmRefreshDaily && now.Sub(last) >= mmDailyInterval,
-		r.Mode == mmRefreshChange && latest.After(last),
-		r.AfterConsolidation && latestObservation.After(last):
-		return true
-	}
-	return r.Cron != "" && latest.After(last) && cronTickedSince(r.Cron, last, now)
-}
-
-// cronTickedSince reports whether the schedule fired in (last, now], in UTC.
-func cronTickedSince(spec string, last, now time.Time) bool {
-	c, err := crewrun.ParseCron(spec)
-	if err != nil {
-		return false
-	}
-	from := last.UTC().Truncate(time.Minute).Add(time.Minute)
-	if now.Sub(from) > 366*24*time.Hour {
-		return true // every valid schedule fires within a year
-	}
-	for t := from; !t.After(now); t = t.Add(time.Minute) {
-		if c.Match(t) {
-			return true
-		}
-	}
-	return false
-}
-
 // latestObservationChange is when the scope's newest proposed or active observation last changed.
 func latestObservationChange(ctx context.Context, lister statusLister, scope Scope) time.Time {
 	out := time.Time{}
@@ -678,12 +718,20 @@ func (s *Service) refreshDueMentalModels(ctx context.Context, token string, d De
 	if err != nil {
 		return err
 	}
+	gap := time.Duration(0)
+	if c, err := s.spaceSettings(ctx, in.Scope); err == nil {
+		gap = mentalModelSpaceGap(c)
+	}
 	latest, latestObs, now, done := latestApprovedMemory(ctx, s.Repo, in.Scope), latestObservationChange(ctx, s.Repo, in.Scope), time.Now().UTC(), 0
 	for _, r := range rows {
 		if done >= in.MaxGroups {
 			break
 		}
-		if r.MentalModel == nil || r.MentalModel.Draft != nil || !mentalModelDue(r.MentalModel, latest, latestObs, now) {
+		if r.MentalModel == nil || r.MentalModel.Draft != nil || now.Before(mentalModelHold(r.MentalModel, gap)) {
+			continue
+		}
+		trigger := mentalModelTrigger(r.MentalModel, latest, latestObs, now)
+		if trigger == "" {
 			continue
 		}
 		done++
@@ -691,7 +739,7 @@ func (s *Service) refreshDueMentalModels(ctx context.Context, token string, d De
 			out.Plan.MentalModels = append(out.Plan.MentalModels, r.ID)
 			continue
 		}
-		v, err := s.refreshMentalModel(ctx, token, d, r, in.DryRun, job)
+		v, err := s.refreshMentalModel(ctx, token, d, r, in.DryRun, trigger, job)
 		if errors.Is(err, errModelAnswer) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrConflict) || errors.Is(err, ErrSecretDetected) {
 			continue
 		}

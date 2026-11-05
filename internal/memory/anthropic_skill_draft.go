@@ -35,13 +35,24 @@ func draftSchema(t reflect.Type) map[string]any { return jsonSchemaOf(t, true) }
 // jsonSchemaOf describes a Go type as JSON Schema. strict requires every field
 // (structured model output); otherwise omitempty fields are optional.
 func jsonSchemaOf(t reflect.Type, strict bool) map[string]any {
+	return jsonSchemaWalk(t, strict, map[reflect.Type]bool{})
+}
+
+// jsonSchemaWalk is jsonSchemaOf with the structs being described; a recursive type
+// (a tag test's and/or) is described once and its inner repeats as a plain object.
+func jsonSchemaWalk(t reflect.Type, strict bool, open map[reflect.Type]bool) map[string]any {
 	if t == reflect.TypeOf(time.Time{}) {
 		return map[string]any{"type": "string", "format": "date-time"}
 	}
 	switch t.Kind() {
 	case reflect.Pointer:
-		return jsonSchemaOf(t.Elem(), strict)
+		return jsonSchemaWalk(t.Elem(), strict, open)
 	case reflect.Struct:
+		if open[t] {
+			return map[string]any{"type": "object"}
+		}
+		open[t] = true
+		defer delete(open, t)
 		properties := map[string]any{}
 		required := []string{}
 		for i := 0; i < t.NumField(); i++ {
@@ -50,17 +61,17 @@ func jsonSchemaOf(t reflect.Type, strict bool) map[string]any {
 			if tag[0] == "" || tag[0] == "-" {
 				continue
 			}
-			properties[tag[0]] = jsonSchemaOf(f.Type, strict)
+			properties[tag[0]] = jsonSchemaWalk(f.Type, strict, open)
 			if strict || !slices.Contains(tag[1:], "omitempty") {
 				required = append(required, tag[0])
 			}
 		}
 		return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
 	case reflect.Slice:
-		return map[string]any{"type": "array", "items": jsonSchemaOf(t.Elem(), strict)}
+		return map[string]any{"type": "array", "items": jsonSchemaWalk(t.Elem(), strict, open)}
 	case reflect.Map:
 		if !strict {
-			return map[string]any{"type": "object", "additionalProperties": jsonSchemaOf(t.Elem(), strict)}
+			return map[string]any{"type": "object", "additionalProperties": jsonSchemaWalk(t.Elem(), strict, open)}
 		}
 		return map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}, "additionalProperties": false}
 	case reflect.Bool:

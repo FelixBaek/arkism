@@ -1690,6 +1690,10 @@ class ArkismClient(BaseClient):
         """GET /v1/observations — Observations of one status (default active), newest change first, paginated (read:observations)"""
         return self.request("GET", f"/v1/observations", query, None)
 
+    def delete_observations(self):
+        """DELETE /v1/observations — Delete observations in bulk (human principals only)"""
+        return self.request("DELETE", f"/v1/observations", None, None)
+
     def post_v1_observations_consolidate(self):
         """POST /v1/observations/consolidate — Consolidate approved memories into proposed observations (human or service principals)"""
         return self.request("POST", f"/v1/observations/consolidate", None, None)
@@ -1741,6 +1745,26 @@ class ArkismClient(BaseClient):
     def post_v1_mental_models_by_id_review(self, id):
         """POST /v1/mental-models/{id}/review — Approve or reject the draft summary (human principals only)"""
         return self.request("POST", f"/v1/mental-models/{urllib.parse.quote(id, safe='')}/review", None, None)
+
+    def clear_mental_model(self, id):
+        """POST /v1/mental-models/{id}/clear — Clear a mental model's summary (human principals only)"""
+        return self.request("POST", f"/v1/mental-models/{urllib.parse.quote(id, safe='')}/clear", None, None)
+
+    def preview_mental_model_cron(self):
+        """POST /v1/mental-models/cron-preview — Preview the next firing times of a cron expression (read:mental_models)"""
+        return self.request("POST", f"/v1/mental-models/cron-preview", None, None)
+
+    def list_observation_scopes(self, query=None):
+        """GET /v1/observations/scopes — Tag scopes of proposed and active observations with counts (read:observations)"""
+        return self.request("GET", f"/v1/observations/scopes", query, None)
+
+    def preview_consolidation_strategies(self):
+        """POST /v1/observations/strategies/preview — Preview which observation scopes each consolidation strategy takes (read:observations)"""
+        return self.request("POST", f"/v1/observations/strategies/preview", None, None)
+
+    def preview_prompt(self):
+        """POST /v1/prompts/preview — Render the retain, consolidation or reflect prompt the space would send (search:memories)"""
+        return self.request("POST", f"/v1/prompts/preview", None, None)
 
     def get_v1_causal_links(self, query=None):
         """GET /v1/causal-links — Causal links of one status (default candidate, the review queue), newest first (read:memory_relations)"""

@@ -53,6 +53,7 @@ type daemonWorkerStep struct {
 	expiryScope              memory.Scope
 	expiryDays               int
 	nextSweep, nextWatch     time.Time
+	nextDeriveSeed           time.Time
 }
 
 func serveDaemonWorker(ctx context.Context, svc *memory.Service, cfg daemonOptions, control *desktopcontrol.Controller) error {
@@ -92,6 +93,13 @@ func (w *daemonWorkerStep) run(ctx context.Context) {
 			slog.Warn("skill watch check deferred; retried next hour")
 		}
 		w.nextWatch = time.Now().Add(time.Hour)
+	}
+	// The derive scheduler (MEMORY_DERIVE_SCHEDULE=on) also covers scopes written before it ran.
+	if !w.recovery && time.Now().After(w.nextDeriveSeed) {
+		if _, err := w.service.SeedDeriveSchedules(op); err != nil {
+			slog.Warn("derive schedule seed deferred; retried next hour")
+		}
+		w.nextDeriveSeed = time.Now().Add(time.Hour)
 	}
 	slog.Debug("memory worker iteration")
 	if err := w.service.WorkOnce(op, w.token); err != nil && !errors.Is(err, memory.ErrNotFound) {

@@ -82,14 +82,36 @@ func parseCronField(field string, lo, hi int, set *[64]bool) error {
 
 // Match reports whether t (in its own location) is a firing minute.
 func (c *Cron) Match(t time.Time) bool {
-	if !c.minute[t.Minute()] || !c.hour[t.Hour()] || !c.month[int(t.Month())] {
-		return false
-	}
-	// Vixie cron: when either day field starts with "*" both must match
-	// (so "*/2" still limits the days); otherwise either may.
+	return c.minute[t.Minute()] && c.hour[t.Hour()] && c.month[int(t.Month())] && c.dayMatch(t)
+}
+
+// dayMatch follows Vixie cron: when either day field starts with "*" both must
+// match (so "*/2" still limits the days); otherwise either may.
+func (c *Cron) dayMatch(t time.Time) bool {
 	dom, dow := c.dom[t.Day()], c.dow[int(t.Weekday())]
 	if c.domAny || c.dowAny {
 		return dom && dow
 	}
 	return dom || dow
+}
+
+// Next is the first firing minute after t (in t's location), searched up to a
+// year ahead; false when the schedule does not fire in that year (say "0 0 30 2 *").
+// It skips whole days and hours that cannot match, so it stays cheap.
+func (c *Cron) Next(after time.Time) (time.Time, bool) {
+	t := after.Truncate(time.Minute).Add(time.Minute)
+	end := after.Add(366 * 24 * time.Hour)
+	for !t.After(end) {
+		switch {
+		case !c.month[int(t.Month())] || !c.dayMatch(t):
+			t = time.Date(t.Year(), t.Month(), t.Day()+1, 0, 0, 0, 0, t.Location())
+		case !c.hour[t.Hour()]:
+			t = time.Date(t.Year(), t.Month(), t.Day(), t.Hour()+1, 0, 0, 0, t.Location())
+		case !c.minute[t.Minute()]:
+			t = t.Add(time.Minute)
+		default:
+			return t, true
+		}
+	}
+	return time.Time{}, false
 }

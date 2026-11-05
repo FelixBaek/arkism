@@ -296,6 +296,13 @@ func (s *Service) directives(ctx context.Context, scope Scope, target string) ([
 	return out, nil
 }
 
+// directivesForTags keeps the untagged directives and the tagged ones sharing a tag with the request.
+func directivesForTags(rows []Record, tags []string) []Record {
+	return slices.DeleteFunc(slices.Clone(rows), func(r Record) bool {
+		return len(r.Tags) > 0 && !slices.ContainsFunc(r.Tags, func(t string) bool { return slices.Contains(tags, t) })
+	})
+}
+
 // DirectiveRule is one directive as handed to a model or an agent.
 type DirectiveRule struct {
 	ID       string `json:"id"`
