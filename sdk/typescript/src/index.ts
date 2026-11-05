@@ -445,7 +445,7 @@ export type WireRequestModelCallUsage = { "model"?: string; "requests"?: number;
 export type WireRequestDigestJudgeInput = { "scope"?: WireRequestScope; "judged"?: (Array<WireRequestRef> | null); "verdict"?: string; "usage"?: (WireRequestModelCallUsage | null) };
 export type WireResponseDigestRecallPage = { "items": (Array<WireResponseDigestView> | null); "notice": string; "authority": string };
 export type WireRequestDigestRecallInput = { "scope"?: WireRequestScope; "query"?: string; "limit"?: number };
-export type WireResponseKnowledgeSourceList = { "scope": WireResponseScope; "items": (Array<WireResponseKnowledgeSourceSummary> | null); "truncated": boolean };
+export type WireResponseKnowledgeSourceList = { "scope": WireResponseScope; "items": (Array<WireResponseKnowledgeSourceSummary> | null); "truncated": boolean; "next_cursor"?: string };
 export type WireResponseKnowledgeSourceSummary = { "id": string; "revision": number; "status": string; "lifecycle_status": string; "trust_level": string; "display_name": string; "source_type": string; "format": string; "synthetic": boolean; "source_version": string; "document_id": string; "document_count": number; "chunk_count": number; "approved_by"?: string; "created_at": string; "updated_at": string; "bindings": (Array<WireResponseKnowledgeBindingSummary> | null) };
 export type WireResponseKnowledgeBindingSummary = { "id": string; "revision": number; "status": string; "lifecycle_status": string; "specialist_profile_id": string; "specialist_profile_version_id": string; "skill_id"?: string; "access_mode": string; "valid_from"?: string; "valid_to"?: string };
 export type WireResponseKnowledgeDocumentList = { "scope": WireResponseScope; "source_id": string; "items": (Array<WireResponseKnowledgeDocumentSummary> | null) };
@@ -1849,7 +1849,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/digests/recall`, undefined, body);
   }
   /** GET /v1/knowledge/sources — List knowledge source metadata */
-  get_v1_knowledge_sources(query: { "workspace_id": string; "project_id": string; "user_id": string; "agent_id": string; "limit"?: number }): Promise<WireResponseKnowledgeSourceList> {
+  get_v1_knowledge_sources(query: { "workspace_id": string; "project_id": string; "user_id": string; "agent_id": string; "limit"?: number; "cursor"?: string }): Promise<WireResponseKnowledgeSourceList> {
     return this.request("GET", `/v1/knowledge/sources`, query, undefined);
   }
   /** GET /v1/knowledge/documents — List stored document versions */

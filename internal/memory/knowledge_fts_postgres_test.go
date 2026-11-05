@@ -35,7 +35,7 @@ func TestPostgresKnowledgeEndToEndUsesFullTextSearch(t *testing.T) {
 	if err != nil || len(search.BindingIDs) != 1 || search.BindingIDs[0] != b.ID || len(search.Receipt.Context.Items) < 2 || search.Receipt.Context.Items[0].SectionPath != "인쇄 가이드 > 색상 > CMYK" {
 		t.Fatalf("postgres search: %v %+v", err, search)
 	}
-	sources, err := f.svc.ListKnowledgeSources(testCtx, f.human, req.Scope, 0)
+	sources, err := f.svc.ListKnowledgeSources(testCtx, f.human, req.Scope, "", 0)
 	if err != nil || len(sources.Items) != 1 || len(sources.Items[0].Bindings) != 1 {
 		t.Fatalf("list sources: %v %+v", err, sources)
 	}

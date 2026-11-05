@@ -120,26 +120,32 @@ func (s *Service) CreateDirective(ctx context.Context, token string, in Directiv
 	status := directiveStatus(in.Active)
 	if d.Role == roleAgent {
 		status = obsProposed
+		// An agent's text passes the space's defense rules like any other ingestion.
+		if err = s.defendSpace(ctx, "", defenseGuard{}, in.Scope, &in.Title, &in.Rule); err != nil {
+			return DirectiveView{}, err
+		}
+		if err = validDirectiveInput(in); err != nil {
+			return DirectiveView{}, err
+		}
 	}
 	now := time.Now().UTC()
 	r := Record{ID: ID(), Scope: projectScope(in.Scope), Kind: directiveKind, Status: status, Revision: 1,
 		Text: strings.TrimSpace(in.Rule), Tags: in.Tags, Directive: &Directive{Title: strings.TrimSpace(in.Title), Priority: in.Priority, AppliesTo: in.AppliesTo},
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
-	// shortcut: the per-scope cap is checked outside the transaction, so two racing creates may pass it by one.
+	// shortcut: the total per-scope cap is checked outside the transaction, so two racing creates may pass it by one.
 	existing, err := s.Repo.ListRecords(ctx, r.Scope, colDirectives, directiveMaxPerScope)
 	if err != nil {
 		return DirectiveView{}, err
 	}
-	proposed := 0
-	for _, e := range existing {
-		if e.Status == obsProposed {
-			proposed++
-		}
-	}
-	if len(existing) >= directiveMaxPerScope || status == obsProposed && proposed >= directiveProposedMax {
+	if len(existing) >= directiveMaxPerScope {
 		return DirectiveView{}, ErrConflict
 	}
-	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
+		if status == obsProposed {
+			if err := proposalCapReached(ctx, tx, r.Scope, colDirectives, directiveProposedMax); err != nil {
+				return err
+			}
+		}
 		if err := tx.Insert(ctx, colDirectives, r); err != nil {
 			return err
 		}
@@ -300,4 +306,22 @@ type DirectiveRule struct {
 
 func directiveRule(r Record) DirectiveRule {
 	return DirectiveRule{ID: r.ID, Title: r.Directive.Title, Rule: r.Text, Priority: r.Directive.Priority}
+}
+
+// proposalCapReached refuses an agent proposal once a scope holds max open ones of a
+// collection. It counts inside the insert's serializable transaction, so two racing
+// proposals cannot both take the last slot (one is retried and then sees the other).
+func proposalCapReached(ctx context.Context, tx Tx, scope Scope, col string, max int) error {
+	lister := listerOf(ctx, tx)
+	if lister == nil {
+		return ErrUnavailable
+	}
+	open, err := lister.ListRecordsByStatus(ctx, scope, col, obsProposed, max)
+	if err != nil {
+		return err
+	}
+	if len(open) >= max {
+		return ErrConflict
+	}
+	return nil
 }

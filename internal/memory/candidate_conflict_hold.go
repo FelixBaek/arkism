@@ -137,7 +137,7 @@ func (s *Service) finishCaptureCorrection(ctx context.Context, token string, in 
 			return item, e
 		}
 		if candidate.ConflictID == "" {
-			_, e = s.Conflict(ctx, token, ConflictInput{Scope: scope, Action: "mark", Reason: "Captured user correction", Hold: "second", Memories: []Ref{*claim.Supersedes, *pointer.Target}})
+			e = s.markCaptureCorrection(ctx, token, ConflictInput{Scope: scope, Action: "mark", Reason: "Captured user correction", Hold: "second", Memories: []Ref{*claim.Supersedes, *pointer.Target}})
 			if e != nil {
 				return item, e
 			}
@@ -166,4 +166,26 @@ func (s *Service) finishCaptureCorrection(ctx context.Context, token string, in 
 	item.Reason = "conflict_review"
 	item.CandidateID = pointer.Target.ID
 	return item, nil
+}
+
+// markCaptureCorrection holds a correction candidate against the memory it would replace.
+// A person marks it as themselves. An agent's correction is marked under the agent's own
+// name with only the candidate held: the memory stays in use, and only a person's
+// resolution can make the candidate replace it.
+func (s *Service) markCaptureCorrection(ctx context.Context, token string, in ConflictInput) error {
+	d, err := s.authorize(ctx, token, "read:memory_candidates", in.Scope, "", "")
+	if err != nil {
+		return err
+	}
+	if d.Role != roleAgent {
+		_, err = s.Conflict(ctx, token, in)
+		return err
+	}
+	if _, err = s.authorize(ctx, token, "read:"+colMemories, in.Scope, in.Memories[0].ID, ""); err != nil {
+		return err
+	}
+	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		_, err := applyConflictAs(ctx, tx, in, d.PrincipalID, d.Role, -1)
+		return err
+	})
 }

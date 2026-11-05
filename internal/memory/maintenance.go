@@ -119,7 +119,11 @@ func proposalRefs(p MaintenanceProposal) []Ref {
 
 // proposalID is one record per pair, or per memory for a signal proposal (NUL is no valid id).
 func proposalID(scope Scope, p MaintenanceProposal) string {
-	if isSignalProposal(p) {
+	switch {
+	case p.Type == invalidationType:
+		// Its own id: an agent's question never stands in for (or blocks) a stored signal's proposal.
+		return pairID(scope, "\x00invalidation", p.Memory.ID)
+	case isSignalProposal(p):
 		return pairID(scope, "\x00signal", p.Memory.ID)
 	}
 	return pairID(scope, p.Keep.ID, p.Retire.ID)

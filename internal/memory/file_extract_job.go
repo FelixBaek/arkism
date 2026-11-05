@@ -102,10 +102,14 @@ func (s *Service) GetFileExtractJob(ctx context.Context, token string, scope Sco
 	if !validRunLabel(id, 256) {
 		return FileExtractJobView{}, ErrInvalid
 	}
-	if _, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, id, ""); err != nil {
+	d, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, id, "")
+	if err != nil {
 		return FileExtractJobView{}, err
 	}
 	r, err := s.extractJob(ctx, s.Repo, scope, id)
+	if err == nil && !ownsJob(d, r) {
+		err = ErrNotFound // an agent sees only the jobs it started
+	}
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
@@ -137,6 +141,9 @@ func (s *Service) claimExtractJob(ctx context.Context, d Decision, scope Scope, 
 		claimed = r
 		// The run captures candidates under the runner's name, so only the
 		// person who uploaded the file may run it.
+		if !ownsJob(d, r) {
+			return ErrNotFound // an agent is not told another principal's job exists
+		}
 		if r.FileExtract.RequestedBy != d.PrincipalID {
 			return ErrDenied
 		}

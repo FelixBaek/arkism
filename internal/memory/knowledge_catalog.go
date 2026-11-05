@@ -18,6 +18,7 @@ import (
 const (
 	knowledgeListDefault      = 100
 	knowledgeListMax          = 500
+	knowledgeSourceScanMax    = 1000 // rows one source list reads, so the last cursor is 999
 	knowledgeBindingScanLimit = 1000
 	knowledgeSearchBindings   = 8
 )
@@ -56,9 +57,10 @@ type KnowledgeSourceSummary struct {
 }
 
 type KnowledgeSourceList struct {
-	Scope     Scope                    `json:"scope"`
-	Items     []KnowledgeSourceSummary `json:"items"`
-	Truncated bool                     `json:"truncated"`
+	Scope      Scope                    `json:"scope"`
+	Items      []KnowledgeSourceSummary `json:"items"`
+	Truncated  bool                     `json:"truncated"`
+	NextCursor string                   `json:"next_cursor,omitempty"`
 }
 
 type KnowledgeDocumentSummary struct {
@@ -108,24 +110,27 @@ func (s *Service) liveKnowledgeBindings(ctx context.Context, scope Scope) ([]Rec
 	return out, nil
 }
 
-func (s *Service) ListKnowledgeSources(ctx context.Context, token string, scope Scope, limit int) (KnowledgeSourceList, error) {
+// ListKnowledgeSources pages a scope's sources, newest first; cursor is an offset.
+func (s *Service) ListKnowledgeSources(ctx context.Context, token string, scope Scope, cursor string, limit int) (KnowledgeSourceList, error) {
 	out := KnowledgeSourceList{Scope: scope, Items: []KnowledgeSourceSummary{}}
 	if limit == 0 {
 		limit = knowledgeListDefault
 	}
-	if limit < 1 || limit > knowledgeListMax {
+	offset, ok := parseOffsetCursor(cursor, knowledgeSourceScanMax-1)
+	if limit < 1 || limit > knowledgeListMax || !ok {
 		return out, ErrInvalid
 	}
 	if _, err := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeSources, scope, ""); err != nil {
 		return out, err
 	}
-	rows, err := s.Repo.ListRecords(ctx, scope, colKnowledgeSources, limit+1)
+	scan := min(offset+limit+1, knowledgeSourceScanMax)
+	rows, err := s.Repo.ListRecords(ctx, scope, colKnowledgeSources, scan)
 	if err != nil {
 		return out, err
 	}
-	if len(rows) > limit {
-		rows, out.Truncated = rows[:limit], true
-	}
+	// A full scan means more rows may follow, even past the last offset a cursor reaches.
+	out.Truncated = len(rows) == scan
+	rows, out.NextCursor = offsetPage(rows, offset, limit)
 	bindings := map[string][]KnowledgeBindingSummary{}
 	if _, err := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeBindings, scope, ""); err == nil {
 		all, err := s.liveKnowledgeBindings(ctx, scope)
@@ -273,36 +278,30 @@ func (s *Service) SearchKnowledge(ctx context.Context, token string, in Knowledg
 }
 
 // parseKnowledgeListQuery reads the scope plus at most one extra key.
-func parseKnowledgeListQuery(raw, extra string) (Scope, string, error) {
+// parseKnowledgeListQuery reads the scope and the named extra parameters; any other key is refused.
+func parseKnowledgeListQuery(raw string, extras ...string) (Scope, url.Values, error) {
 	q, err := url.ParseQuery(raw)
 	if err != nil {
-		return Scope{}, "", ErrInvalid
+		return Scope{}, nil, ErrInvalid
 	}
-	value := ""
 	for key, values := range q {
-		if len(values) != 1 {
-			return Scope{}, "", ErrInvalid
-		}
-		switch key {
-		case "workspace_id", "project_id", "user_id", "agent_id":
-		case extra:
-			value = values[0]
-		default:
-			return Scope{}, "", ErrInvalid
+		known := slices.Contains([]string{"workspace_id", "project_id", "user_id", "agent_id"}, key) || slices.Contains(extras, key)
+		if len(values) != 1 || !known {
+			return Scope{}, nil, ErrInvalid
 		}
 	}
 	scope := Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}
 	if !validScope(scope) {
-		return Scope{}, "", ErrInvalid
+		return Scope{}, nil, ErrInvalid
 	}
-	return scope, value, nil
+	return scope, q, nil
 }
 
 func (s *Service) registerKnowledgeCatalogHTTP(mux routeRegistrar) {
 	mux.HandleFunc("GET /v1/knowledge/sources", func(w http.ResponseWriter, r *http.Request) {
-		scope, raw, err := parseKnowledgeListQuery(r.URL.RawQuery, "limit")
+		scope, q, err := parseKnowledgeListQuery(r.URL.RawQuery, "limit", "cursor")
 		limit := 0
-		if err == nil && raw != "" {
+		if raw := q.Get("limit"); err == nil && raw != "" {
 			if limit, err = strconv.Atoi(raw); err != nil || limit < 1 {
 				err = ErrInvalid
 			}
@@ -311,11 +310,12 @@ func (s *Service) registerKnowledgeCatalogHTTP(mux routeRegistrar) {
 			respond(w, nil, ErrInvalid)
 			return
 		}
-		out, err := s.ListKnowledgeSources(r.Context(), bearer(r), scope, limit)
+		out, err := s.ListKnowledgeSources(r.Context(), bearer(r), scope, q.Get("cursor"), limit)
 		respond(w, out, err)
 	})
 	mux.HandleFunc("GET /v1/knowledge/documents", func(w http.ResponseWriter, r *http.Request) {
-		scope, source, err := parseKnowledgeListQuery(r.URL.RawQuery, "source")
+		scope, q, err := parseKnowledgeListQuery(r.URL.RawQuery, "source")
+		source := q.Get("source")
 		if err != nil || source == "" {
 			respond(w, nil, ErrInvalid)
 			return

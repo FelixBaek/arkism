@@ -222,20 +222,24 @@ func (s *Service) CreateMentalModel(ctx context.Context, token string, in Mental
 	status, approvedBy := statusActive, d.PrincipalID
 	if d.Role == roleAgent {
 		status, approvedBy = obsProposed, ""
-		// shortcut: the cap is read outside the insert transaction, so racing proposals may pass it by one.
-		open, err := s.Repo.ListRecordsByStatus(ctx, in.Scope, colMentalModels, obsProposed, mmProposedMax)
-		if err != nil {
+		// An agent's text passes the space's defense rules like any other ingestion.
+		if err = s.defendSpace(ctx, "", defenseGuard{}, in.Scope, &in.Title, &in.Query); err != nil {
 			return MentalModelView{}, err
 		}
-		if len(open) >= mmProposedMax {
-			return MentalModelView{}, ErrConflict
+		if err = validMentalModelInput(in); err != nil {
+			return MentalModelView{}, err
 		}
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	r := Record{ID: "mm_" + ID(), Scope: in.Scope, Kind: mentalModelKind, Status: status, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		CreatedBy: d.PrincipalID, CreatedByType: d.Role, ApprovedBy: approvedBy,
 		MentalModel: &MentalModelData{Title: strings.TrimSpace(in.Title), Query: strings.TrimSpace(in.Query), Refresh: in.Refresh}}
-	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
+		if status == obsProposed {
+			if err := proposalCapReached(ctx, tx, in.Scope, colMentalModels, mmProposedMax); err != nil {
+				return err
+			}
+		}
 		if err := tx.Insert(ctx, colMentalModels, r); err != nil {
 			return err
 		}

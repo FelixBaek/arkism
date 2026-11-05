@@ -330,8 +330,14 @@ func TestKnowledgeListEndpoints(t *testing.T) {
 	if strings.Contains(string(raw), "배포절차") {
 		t.Fatal("document list leaks file content")
 	}
+	// The cursor is an offset: past the one source, the page is empty and ends the list.
+	if code, out = knowledgeHTTP(t, f, "GET", "/v1/knowledge/sources?"+knowledgeScopeQuery(req.Scope)+"&limit=1&cursor=1", f.human, ""); code != 200 || len(out["items"].([]any)) != 0 || out["next_cursor"] != nil || out["truncated"] != false {
+		t.Fatal("cursor page", code, out)
+	}
 	for _, path := range []string{
 		"/v1/knowledge/sources?" + knowledgeScopeQuery(req.Scope) + "&limit=0",
+		"/v1/knowledge/sources?" + knowledgeScopeQuery(req.Scope) + "&cursor=-1",
+		"/v1/knowledge/sources?" + knowledgeScopeQuery(req.Scope) + "&cursor=1000",
 		"/v1/knowledge/sources?" + knowledgeScopeQuery(req.Scope) + "&extra=1",
 		"/v1/knowledge/documents?" + knowledgeScopeQuery(req.Scope),
 		"/v1/knowledge/sources?workspace_id=" + req.Scope.WorkspaceID,

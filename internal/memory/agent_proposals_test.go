@@ -3,7 +3,10 @@ package memory
 import (
 	"encoding/base64"
 	"errors"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 // Agents may propose directives, mental models, invalidations and file candidates and
@@ -165,5 +168,100 @@ func TestAgentFileUploadNeedsTheSpaceToListTheTool(t *testing.T) {
 	}
 	if _, err = f.svc.ExtractPreview(testCtx, f.agent, ExtractPreviewInput{Scope: scopeA, Text: extractKoreanSource}); !errors.Is(err, ErrDenied) {
 		t.Fatal("preview stays human-only", err)
+	}
+}
+
+func TestAgentMemoryUpdateWaitsForAPersonsResolution(t *testing.T) {
+	f := newFixture(t)
+	old := f.captureAndReview(f.human, captureInput(scopeA, "evt-o", explicit("기본 테마는 다크")))[0]
+	mem := f.get(f.human, colMemories, scopeA, old.MemoryID)
+	fix := explicit("기본 테마는 paper 라이트")
+	fix.Basis = "inferred"
+	fix.Supersedes = &Ref{Collection: colMemories, ID: mem.ID, Revision: mem.Revision}
+	got := f.capture(f.agent, captureInput(scopeA, "evt-c", fix))
+	if got[0].Status != "candidate" || got[0].Reason != "conflict_review" {
+		t.Fatal("an agent's correction is not held for review", got)
+	}
+	held := f.get(f.human, colMemories, scopeA, mem.ID)
+	if held.Status != statusActive || held.ConflictID == "" || held.Text != mem.Text {
+		t.Fatal("the old memory left use or changed", held.Status, held.ConflictID)
+	}
+	rel := f.get(f.human, "memory_relations", scopeA, held.ConflictID)
+	cand := f.get(f.human, "memory_candidates", scopeA, got[0].CandidateID)
+	review := CandidateReviewInput{Scope: scopeA, ExpectedRevision: cand.Revision, Action: "approve", OperationID: "agent-fix",
+		Conflict: &CandidateReviewConflict{ID: rel.ID, ExpectedRevision: rel.Revision, Memory: Ref{colMemories, held.ID, held.Revision}, Resolution: "replace_old", Reason: "person agrees"}}
+	if _, err := f.svc.ReviewCandidate(testCtx, f.agent, cand.ID, review); !errors.Is(err, ErrDenied) {
+		t.Fatal("agent approved its own correction", err)
+	}
+	if _, err := f.svc.ReviewCandidate(testCtx, f.human, cand.ID, review); err != nil {
+		t.Fatal(err)
+	}
+	if f.get(f.human, colMemories, scopeA, mem.ID).Status != "superseded" {
+		t.Fatal("a person's approval did not replace the memory")
+	}
+}
+
+func TestAgentProposalTextPassesDefenseRules(t *testing.T) {
+	f := newFixture(t)
+	rules := []SpaceDefenseRule{{Pattern: `(?i)falcon`, Action: "redact"}, {Pattern: `\bINC-\d+\b`, Action: "block"}}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{DefenseRules: &rules}, false); err != nil {
+		t.Fatal(err)
+	}
+	d, err := f.svc.CreateDirective(testCtx, f.agent, directiveInput("Falcon", "Ship falcon builds first.", "both", 5))
+	if err != nil || strings.Contains(strings.ToLower(d.Title+d.Rule), "falcon") {
+		t.Fatal("directive proposal not redacted", d, err)
+	}
+	if _, err = f.svc.CreateDirective(testCtx, f.agent, directiveInput("t", "See INC-42.", "both", 5)); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatal("blocked directive proposal stored", err)
+	}
+	mm, err := f.svc.CreateMentalModel(testCtx, f.agent, MentalModelInput{Scope: scopeA, Title: "Falcon", Query: "falcon deploys", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
+	if err != nil || strings.Contains(strings.ToLower(mm.Title+mm.Query), "falcon") {
+		t.Fatal("mental model proposal not redacted", mm, err)
+	}
+	if h, err := f.svc.CreateDirective(testCtx, f.human, directiveInput("Falcon", "Ship falcon builds first.", "both", 5)); err != nil || h.Title != "Falcon" {
+		t.Fatal("a person's directive changed", h, err)
+	}
+}
+
+func TestAgentInvalidationKeepsItsOwnRecord(t *testing.T) {
+	m := Ref{Collection: colMemories, ID: "m1", Revision: 1}
+	inv := MaintenanceProposal{Type: invalidationType, Memory: &m, Reason: "outdated"}
+	sig := MaintenanceProposal{Type: "rule_often_violated", Memory: &m, Reason: "low_pass_rate"}
+	if proposalID(scopeA, inv) == proposalID(scopeA, sig) {
+		t.Fatal("an invalidation shares the signal proposal's record")
+	}
+}
+
+func TestAgentFileJobOfAnotherIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	f.put(colJobs, Record{ID: "fj", Kind: fileExtractJobKind, Status: JobStatusFailed, CreatedBy: "human-1", FileExtract: &FileExtractJob{RequestedBy: "human-1"}})
+	if _, err := f.svc.GetFileExtractJob(testCtx, f.agent, scopeA, "fj"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("agent read another's file job", err)
+	}
+	if _, err := f.svc.GetFileExtractJob(testCtx, f.human, scopeA, "fj"); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.Wiki = &fakeWikiLLM{}
+	tools := []string{agentUploadTool}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{MCPTools: &tools}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.RunFileExtractJob(testCtx, f.agent, scopeA, "fj"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("agent ran another's file job", err)
+	}
+}
+
+func TestKnowledgeSourceListPagesByCursor(t *testing.T) {
+	f, ing, _, req := knowledgeRealFixture(t)
+	for i := 0; i < 2; i++ {
+		f.put(colKnowledgeSources, Record{ID: "ks" + strconv.Itoa(i), Scope: req.Scope, Kind: "file", Status: statusActive, CreatedAt: time.Unix(int64(i+1), 0)})
+	}
+	first, err := f.svc.ListKnowledgeSources(testCtx, f.human, req.Scope, "", 2)
+	if err != nil || first.NextCursor != "2" || !first.Truncated || len(first.Items) != 1 || first.Items[0].ID != ing.Source.ID {
+		t.Fatalf("first page %+v %v", first, err)
+	}
+	last, err := f.svc.ListKnowledgeSources(testCtx, f.human, req.Scope, first.NextCursor, 2)
+	if err != nil || last.NextCursor != "" || last.Truncated {
+		t.Fatalf("last page %+v %v", last, err)
 	}
 }

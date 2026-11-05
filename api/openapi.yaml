@@ -26804,7 +26804,7 @@
           "Management"
         ],
         "summary": "List knowledge source metadata",
-        "description": "Metadata only, no original file or chunk text. truncated signals the list limit.",
+        "description": "Metadata only, no original file or chunk text. next_cursor pages on; truncated signals the scan limit.",
         "parameters": [
           {
             "in": "query",
@@ -26847,6 +26847,15 @@
               "minimum": 1,
               "maximum": 500,
               "default": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "description": "Opaque next_cursor of the previous page",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -65539,6 +65548,9 @@
           },
           "truncated": {
             "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
