@@ -7564,3 +7564,33 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "글 칸 {0}": "Text part {0}",
   "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} You can pick several files at once." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "아직 실행 안 했어요": "Not run yet",
+  "보낸 내용": "What was sent",
+  "한 실행만 보는 중 · 모두 보기": "Showing one run · Show all",
+  "이 실행의 호출 모두 보기": "Show every call in this run",
+  "전략은 16개까지 둘 수 있어요.": "You can have up to 16 strategies.",
+  "전략마다 64자 안의 이름을 넣어 주세요.": "Give each strategy a name of up to 64 characters.",
+  "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Two strategies have the same name. Rename one.",
+  "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Give each strategy 1 to 8 tag rules.",
+  "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Give each tag rule 1 to 16 tags.",
+  "자세히 · JSON으로 보기": "More · View as JSON",
+  "자세히 · JSON으로 직접 고치기": "More · Edit as JSON",
+  "이 태그가 모두 있는 묶음": "Groups with all these tags",
+  "딱 이 태그만 있는 묶음": "Groups with only these tags",
+  "정리 전략": "Consolidation strategies",
+  "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "Strategies higher up pick first. A strategy takes the memory groups that fit its tag rules and makes observations from them. A * at the end of a tag matches every tag that starts the same way.",
+  "전략 이름": "Strategy name",
+  "예: bugs": "e.g. bugs",
+  "이 전략을 지울까요? 저장해야 반영돼요.": "Delete this strategy? It takes effect when you save.",
+  "예: bug*, 배포": "e.g. bug*, deploy",
+  "맞추는 방식": "How to match",
+  "태그 규칙 더하기": "Add tag rule",
+  "전략 더하기": "Add strategy" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "기다림 {0}": "{0} waiting",
+  "묶음 {0}개 맡음": "Takes {0} groups" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "모델 예산을 다 써서 멈췄어요.": "Stopped: the model budget ran out.",
+  "서버 모델이 없어 멈췄어요.": "Stopped: no server model is set up.",
+  "작업 계정에 권한이 없어 멈췄어요.": "Stopped: the worker account lacks permission." });

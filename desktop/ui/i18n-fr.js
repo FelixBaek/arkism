@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Afficher aussi les fichiers originaux conservés des souvenirs trouvés",
  "보관된 원본 파일": "Fichiers originaux conservés",
  "보관된 원본 파일 붙이기": "Joindre les fichiers originaux conservés",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Affiche quelques candidats pas encore approuvés, avec la mention « non approuvé ». Ils ne sont pas utilisés comme des souvenirs confirmés. Activé par défaut."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Affiche quelques candidats pas encore approuvés, avec la mention « non approuvé ». Ils ne sont pas utilisés comme des souvenirs confirmés. Activé par défaut.",
+ "아직 실행 안 했어요": "Pas encore exécuté",
+ "보낸 내용": "Contenu envoyé",
+ "한 실행만 보는 중 · 모두 보기": "Une seule exécution affichée · Tout afficher",
+ "이 실행의 호출 모두 보기": "Afficher tous les appels de cette exécution",
+ "전략은 16개까지 둘 수 있어요.": "Vous pouvez avoir jusqu'à 16 stratégies.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Donnez à chaque stratégie un nom de 64 caractères maximum.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Deux stratégies portent le même nom. Veuillez en renommer une.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Ajoutez de 1 à 8 règles de tags à chaque stratégie.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Ajoutez de 1 à 16 tags à chaque règle de tags.",
+ "자세히 · JSON으로 보기": "Détails · Voir en JSON",
+ "자세히 · JSON으로 직접 고치기": "Détails · Modifier directement en JSON",
+ "이 태그가 모두 있는 묶음": "Groupes ayant tous ces tags",
+ "딱 이 태그만 있는 묶음": "Groupes ayant uniquement ces tags",
+ "정리 전략": "Stratégies de consolidation",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "La stratégie placée le plus haut choisit en premier. Une stratégie prend en charge les groupes de souvenirs qui correspondent à ses règles de tags et en crée des observations. Un * à la fin d'un tag correspond à tous les tags qui commencent de la même façon.",
+ "전략 이름": "Nom de la stratégie",
+ "예: bugs": "Ex. : bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "Supprimer cette stratégie ? La suppression ne sera effective qu'après l'enregistrement.",
+ "예: bug*, 배포": "Ex. : bug*, déploiement",
+ "맞추는 방식": "Mode de correspondance",
+ "태그 규칙 더하기": "Ajouter une règle de tags",
+ "전략 더하기": "Ajouter une stratégie",
+ "모델 예산을 다 써서 멈췄어요.": "L'arrêt est dû à l'épuisement du budget du modèle.",
+ "서버 모델이 없어 멈췄어요.": "L'arrêt est dû à l'absence de modèle serveur.",
+ "작업 계정에 권한이 없어 멈췄어요.": "L'arrêt est dû à un manque d'autorisations du compte de travail."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Dossier {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Première apparition {0} · Dernière apparition {1}",
  "글 칸 {0}": "Bloc de texte {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Vous pouvez choisir plusieurs fichiers à la fois."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Vous pouvez choisir plusieurs fichiers à la fois.",
+ "기다림 {0}": "En attente : {0}",
+ "묶음 {0}개 맡음": "Prend en charge {0} groupes"
  }
 };

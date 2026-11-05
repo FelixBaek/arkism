@@ -92,9 +92,25 @@
     if (!o || typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => !RULE_KEYS.includes(k) || !Array.isArray(o[k]))) return null;
     return o;
   }
+  // 정리 전략 편집: tags typed as one comma list; list order is priority (the first strategy whose rule fits a note group takes it)
+  const tagList = (text) => [...new Set(String(text || "").split(",").map((s) => s.trim()).filter(Boolean))];
+  const moveAt = (list, i, by) => { const out = [...list], j = i + by; if (j >= 0 && j < out.length) [out[i], out[j]] = [out[j], out[i]]; return out; };
+  // what the server would refuse (ConsolidationStrategy.valid), said before saving; "" when the list is fine
+  function strategyIssue(list) {
+    const names = new Set();
+    if ((list || []).length > 16) return "전략은 16개까지 둘 수 있어요.";
+    for (const st of list || []) {
+      if (!st.name || st.name.length > 64) return "전략마다 64자 안의 이름을 넣어 주세요.";
+      if (names.has(st.name)) return "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.";
+      names.add(st.name);
+      if (!st.scopes?.length || st.scopes.length > 8) return "전략마다 태그 규칙을 1~8개 넣어 주세요.";
+      if (st.scopes.some((r) => !r.tags?.length || r.tags.length > 16)) return "태그 규칙마다 태그를 1~16개 넣어 주세요.";
+    }
+    return "";
+  }
   // a renamed strategy keeps its place
   const renameKey = (map, from, to) => Object.fromEntries(Object.entries(map || {}).map(([k, v]) => [k === from ? to : k, v]));
-  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL, extractOverrides, labelValues, rulesText, parseRules, renameKey };
+  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL, extractOverrides, labelValues, rulesText, parseRules, renameKey, tagList, moveAt, strategyIssue };
 
   // ------------------------------------------------------------ the tab
   function create(ctx) {
@@ -689,9 +705,10 @@
         field("크기", sizes, "비우면 기본값을 써요."),
         ...decisionModel(kit, edit, "consolidation", "정리 전에 쉬운 것 먼저 거르기", "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요."),
         origin("decision_models", () => { d.decision_models = null; redraw(); })];
+      out.push(strategyEditor(c, edit, set));
       // the rule lists as JSON: kept in S.rules while being typed, so a half-typed object is not lost on redraw
       if (!edit) {
-        out.push(field("정리 전략 규칙 (JSON)", pre(rulesText(c) || "없음")), origin("consolidation"));
+        out.push(kit.more("자세히 · JSON으로 보기", field("정리 전략 규칙 (JSON)", pre(rulesText(c) || "없음"))), origin("consolidation"));
         return out;
       }
       if (S.rules === null) S.rules = rulesText(c);
@@ -700,12 +717,48 @@
       const bad = parseRules(S.rules) === null;
       rules.addEventListener("input", () => { S.rules = rules.value; });
       rules.addEventListener("change", () => { const r = parseRules(rules.value); if (r) set({ default_scopes: undefined, strategies: undefined, scope_limits: undefined, ...r }); else redraw(); });
-      out.push(field("정리 전략 규칙 (JSON)", rules, "default_scopes · strategies · scope_limits 를 적어요. 태그 모양으로 어떤 전략이 어떤 묶음을 맡을지 정해요."));
-      if (bad) out.push(el("small", "warn", "JSON을 읽을 수 없거나 모르는 이름이 있어요. 저장하지 않았어요."));
       out.push(button("전략 미리 보기", "ghost", null, () => void strategyPreview()));
       if (S.trial.strat) out.push(S.trial.strat);
+      out.push(kit.more("자세히 · JSON으로 직접 고치기", field("정리 전략 규칙 (JSON)", rules, "default_scopes · strategies · scope_limits 를 적어요. 태그 모양으로 어떤 전략이 어떤 묶음을 맡을지 정해요."),
+        ...(bad ? [el("small", "warn", "JSON을 읽을 수 없거나 모르는 이름이 있어요. 저장하지 않았어요.")] : [])));
       out.push(origin("consolidation", () => { d.consolidation = null; S.rules = null; redraw(); }));
       return out;
+    }
+    // 정리 전략: one card per strategy, the first whose tag rule fits a note group takes it; 맡은 묶음 counts come from the last 전략 미리 보기
+    const MATCH = [["", "이 태그가 모두 있는 묶음"], ["exact", "딱 이 태그만 있는 묶음"]];
+    function strategyEditor(c, edit, set) {
+      const list = c.strategies || [], counts = S.trial.stratCounts || {};
+      const save = (next) => { S.rules = null; set({ strategies: next.length ? next : undefined }); };
+      const put = (i, part) => save(list.map((st, k) => (k === i ? { ...st, ...part } : st)));
+      const box = el("div", "field wide sp-strats", "정리 전략");
+      box.append(el("small", "", "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요."));
+      if (!list.length) box.append(el("p", "pg-hint", "전략이 없어 모두 기본 방식으로 정리해요."));
+      list.forEach((st, i) => {
+        const card = el("div", "sp-strat"), head = el("div", "sp-strat-row");
+        head.append(textBox(st.name, 64, "전략 이름", "예: bugs", edit, (v) => { S.trial.stratCounts = renameKey(counts, st.name, v); put(i, { name: v }); }));
+        if (counts[st.name] != null) head.append(el("small", "sp-strat-count", `묶음 ${counts[st.name]}개 맡음`));
+        if (edit) {
+          const up = button("위로", "ghost small", null, () => save(moveAt(list, i, -1))), down = button("아래로", "ghost small", null, () => save(moveAt(list, i, 1)));
+          up.disabled = i === 0; down.disabled = i === list.length - 1;
+          head.append(up, down, button("지우기", "ghost small", null, async () => { if (await window.ask("이 전략을 지울까요? 저장해야 반영돼요.", "지우기")) save(list.filter((_, k) => k !== i)); }));
+        }
+        card.append(head);
+        const rules = st.scopes || [];
+        const putRule = (j, part) => put(i, { scopes: rules.map((r, k) => (k === j ? { ...r, ...part } : r)) });
+        rules.forEach((r, j) => {
+          const line = el("div", "sp-strat-row");
+          line.append(textBox((r.tags || []).join(", "), 2000, "태그", "예: bug*, 배포", edit, (v) => putRule(j, { tags: tagList(v) })),
+            edit ? select(MATCH, r.tags_match === "exact" ? "exact" : "", "맞추는 방식", (v) => putRule(j, { tags_match: v || undefined })) : readOnly(MATCH.find(([k]) => k === (r.tags_match === "exact" ? "exact" : ""))[1]));
+          if (edit && rules.length > 1) line.append(button("빼기", "ghost small", null, () => put(i, { scopes: rules.filter((_, k) => k !== j) })));
+          card.append(line);
+        });
+        if (edit && rules.length < 8) card.append(button("태그 규칙 더하기", "ghost small", null, () => put(i, { scopes: [...rules, { tags: [] }] })));
+        box.append(card);
+      });
+      const issue = strategyIssue(list);
+      if (issue) box.append(el("small", "warn", issue));
+      if (edit && list.length < 16) box.append(button("전략 더하기", "ghost small", null, () => save([...list, { name: `rule-${list.length + 1}`, scopes: [{ tags: [] }] }])));
+      return box;
     }
     // decision_models.<task>: a small decision engine settles easy cases of a task before the server model is asked (off by default)
     const ENGINES = [["off", "쓰지 않기"], ["clef", "clef"], ["jev", "jev"]];
@@ -731,6 +784,7 @@
         const r = await request("/v1/observations/strategies/preview", { method: "POST", body: JSON.stringify(body) });
         box.append(el("strong", "", `묶음 ${r.scopes ?? 0}개 · 맡은 전략 없음 ${r.unclaimed ?? 0}개`));
         for (const st of r.strategies || []) box.append(el("small", "", `${st.name} · 묶음 ${st.claimed ?? 0}개 맡음`));
+        S.trial.stratCounts = Object.fromEntries((r.strategies || []).map((st) => [st.name, st.claimed ?? 0]));
         if (!(r.strategies || []).length) box.append(el("small", "", "전략이 없어 모두 기본 방식으로 정리해요."));
       } catch (e) { box.append(el("small", "warn", errText(e))); }
       S.trial.strat = box; redraw();

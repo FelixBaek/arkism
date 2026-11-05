@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Ver también los archivos originales guardados de los recuerdos encontrados",
  "보관된 원본 파일": "Archivos originales guardados",
  "보관된 원본 파일 붙이기": "Adjuntar los archivos originales guardados",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Muestra algunos candidatos que aún no has aprobado, con la etiqueta «sin aprobar». No se usan como recuerdos confirmados. Viene activado al principio."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Muestra algunos candidatos que aún no has aprobado, con la etiqueta «sin aprobar». No se usan como recuerdos confirmados. Viene activado al principio.",
+ "아직 실행 안 했어요": "Aún no se ha ejecutado",
+ "보낸 내용": "Lo que se envió",
+ "한 실행만 보는 중 · 모두 보기": "Viendo solo una ejecución · Ver todas",
+ "이 실행의 호출 모두 보기": "Ver todas las llamadas de esta ejecución",
+ "전략은 16개까지 둘 수 있어요.": "Puedes tener hasta 16 estrategias.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Ponle a cada estrategia un nombre de hasta 64 caracteres.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Hay dos estrategias con el mismo nombre. Cambia uno.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Añade de 1 a 8 reglas de etiquetas a cada estrategia.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Añade de 1 a 16 etiquetas a cada regla de etiquetas.",
+ "자세히 · JSON으로 보기": "Más · Ver como JSON",
+ "자세히 · JSON으로 직접 고치기": "Más · Editar directamente como JSON",
+ "이 태그가 모두 있는 묶음": "Grupos que tienen todas estas etiquetas",
+ "딱 이 태그만 있는 묶음": "Grupos que tienen solo estas etiquetas",
+ "정리 전략": "Estrategias de organización",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "La estrategia que está más arriba elige primero. Cada estrategia se encarga de los grupos de recuerdos que cumplen sus reglas de etiquetas y crea observaciones a partir de ellos. Si pones * al final de una etiqueta, coincide con todas las etiquetas que empiezan igual.",
+ "전략 이름": "Nombre de la estrategia",
+ "예: bugs": "Ej.: bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "¿Quieres eliminar esta estrategia? Se aplicará cuando guardes.",
+ "예: bug*, 배포": "Ej.: bug*, despliegue",
+ "맞추는 방식": "Forma de coincidir",
+ "태그 규칙 더하기": "Añadir regla de etiquetas",
+ "전략 더하기": "Añadir estrategia",
+ "모델 예산을 다 써서 멈췄어요.": "Se detuvo porque se agotó el presupuesto del modelo.",
+ "서버 모델이 없어 멈췄어요.": "Se detuvo porque no hay ningún modelo de servidor.",
+ "작업 계정에 권한이 없어 멈췄어요.": "Se detuvo porque la cuenta de trabajo no tiene permisos."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Carpeta {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Visto por primera vez {0} · Visto por última vez {1}",
  "글 칸 {0}": "Parte de texto {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Puedes elegir varios archivos a la vez."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Puedes elegir varios archivos a la vez.",
+ "기다림 {0}": "En espera: {0}",
+ "묶음 {0}개 맡음": "Se encarga de {0} grupos"
  }
 };

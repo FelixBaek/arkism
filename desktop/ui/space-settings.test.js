@@ -242,3 +242,46 @@ test("recall budget, extraction sizes and document text: set in 자세히, saved
   assert.deepEqual(S.configPatch({ recall_budget: { function: "fixed" }, store_document_text: false }, { recall_budget: null, store_document_text: null }),
     { recall_budget: {}, store_document_text: null });
 });
+
+test("정리 전략 편집: order is priority, tags as a comma list, delete asks first, the preview count shows on the card, the save sends the list", async () => {
+  const state = { view: "settings", settingsTab: "space", server: "s", scope: { workspace_id: "w", project_id: "p" }, caps: { actions: {} } };
+  const sent = [];
+  const stored = { consolidation: { batch_size: 2, strategies: [{ name: "bugs", scopes: [{ tags: ["bug*"] }] }, { name: "ops", scopes: [{ tags: ["deploy"], tags_match: "exact" }] }] } };
+  const request = async (path, o) => {
+    if (o?.method) { sent.push([path, JSON.parse(o.body)]); return path.includes("/strategies/preview") ? { scopes: 3, unclaimed: 1, strategies: [{ name: "ops", claimed: 2 }, { name: "bugs", claimed: 0 }] } : {}; }
+    if (path.endsWith("/config")) return { revision: 2, config: structuredClone(stored) };
+    return { revision: 2, config: structuredClone(stored), sources: { consolidation: "space" } };
+  };
+  const kit = { side() {}, sideSec: () => h.el("div"), kvRow: () => h.el("div"), sideNote: () => h.el("p"), group: (t) => h.el("section", "", t),
+    line: (title, hint, ctl) => { const r = h.el("div", "", title); r.append(h.el("small", "", hint), ctl); return r; },
+    more: (s, ...n) => { const d = h.el("details", "", s); d.append(...n); return d; }, spaceJob: async () => ({}), sw: (on, label) => h.el("button", "", `sw:${label}:${on}`) };
+  let box;
+  const tab = S({ state, ...h, request, notice() {}, render() { box = h.el("div"); box.append(...tab.tab(kit)); } });
+  tab.tab(kit); await dom.flush(); await dom.flush();
+  const cards = () => box.querySelectorAll(".sp-strat");
+  const btnIn = (root, t) => root.querySelectorAll("button").filter((b) => b.textContent === t);
+  assert.equal(cards().length, 2);
+  assert.ok(btnIn(cards()[0], "위로")[0].disabled, "the first strategy cannot move up");
+  btnIn(cards()[0], "아래로")[0].click();
+  assert.deepEqual(cards().map((c) => c.querySelector("input").value), ["ops", "bugs"]);
+  const tags = cards()[1].querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "태그");
+  tags.value = "bug*, crash, bug*"; dom.fire(tags, "change");
+  btnIn(box, "전략 더하기")[0].click();
+  assert.match(box.textContent, /태그 규칙마다 태그를 1~16개 넣어 주세요/, "an empty rule is named before saving");
+  let asked = 0;
+  window.ask = async () => { asked++; return false; };
+  btnIn(cards()[2], "지우기")[0].click(); await dom.flush();
+  assert.equal(cards().length, 3, "a refused question keeps the strategy");
+  window.ask = async () => { asked++; return true; };
+  btnIn(cards()[2], "지우기")[0].click(); await dom.flush();
+  assert.equal(asked, 2); assert.equal(cards().length, 2);
+  btnIn(box, "전략 미리 보기")[0].click(); await dom.flush(); await dom.flush();
+  assert.deepEqual(sent.at(-1)[1].consolidation.strategies.map((s) => s.name), ["ops", "bugs"], "the preview runs on the unsaved order");
+  assert.match(cards()[0].textContent, /묶음 2개 맡음/);
+  btnIn(box, "저장")[0].click(); await dom.flush();
+  assert.deepEqual(sent.at(-1), ["/v1/spaces/w/p/config", { expected_revision: 2, consolidation: { batch_size: 2,
+    strategies: [{ name: "ops", scopes: [{ tags: ["deploy"], tags_match: "exact" }] }, { name: "bugs", scopes: [{ tags: ["bug*", "crash"] }] }] } }]);
+  assert.deepEqual(S.moveAt([1, 2, 3], 0, -1), [1, 2, 3]); assert.deepEqual(S.tagList(" a, ,b,a "), ["a", "b"]);
+  assert.equal(S.strategyIssue([{ name: "x", scopes: [{ tags: ["a"] }] }, { name: "x", scopes: [{ tags: ["b"] }] }]), "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.");
+  assert.equal(S.strategyIssue([]), "");
+});

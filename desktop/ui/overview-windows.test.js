@@ -240,7 +240,7 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
   const dlg = last("dialog.ov-wide-win"), text = () => dlg.textContent;
   assert.match(text(), /0개쓰는 기억/, "a present status map without active means zero");
   assert.match(text(), /대화에서 자동으로 붙어 바꿀 수 없어요/);
-  assert.match(text(), /실패기억 정리마지막 실행 [^·]+ · 실패 1/, "the consolidation line shows its last pass and the failure");
+  assert.match(text(), /실패기억 정리마지막 실행 [^·]+ · 실패 1 · 모델 예산을 다 써서 멈췄어요\./, "the consolidation line shows its last pass, the failure and why");
   assert.match(text(), /직접 정한 주제아직 실행 안 했어요 · 기다림 1/);
   const btn = (root, t) => [root, ...root.querySelectorAll("button")].find((b) => b.tagName === "BUTTON" && b.textContent.trim() === t);
   btn(dlg, "이름 바꾸기").click();

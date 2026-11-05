@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Xem cả tệp gốc được lưu cùng các ký ức tìm thấy",
  "보관된 원본 파일": "Tệp gốc đã lưu",
  "보관된 원본 파일 붙이기": "Đính kèm tệp gốc đã lưu",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Hiển thị vài ứng viên chưa được duyệt, kèm nhãn ‘chưa duyệt’. Chúng không được dùng như ký ức đã xác nhận. Mặc định là bật."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Hiển thị vài ứng viên chưa được duyệt, kèm nhãn ‘chưa duyệt’. Chúng không được dùng như ký ức đã xác nhận. Mặc định là bật.",
+ "아직 실행 안 했어요": "Chưa chạy lần nào",
+ "보낸 내용": "Nội dung đã gửi",
+ "한 실행만 보는 중 · 모두 보기": "Đang xem một lần chạy · Xem tất cả",
+ "이 실행의 호출 모두 보기": "Xem mọi lệnh gọi của lần chạy này",
+ "전략은 16개까지 둘 수 있어요.": "Bạn có thể đặt tối đa 16 chiến lược.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Hãy đặt cho mỗi chiến lược một tên dài tối đa 64 ký tự.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Có hai chiến lược trùng tên. Hãy đổi tên một trong hai.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Hãy thêm 1~8 quy tắc thẻ cho mỗi chiến lược.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Hãy thêm 1~16 thẻ cho mỗi quy tắc thẻ.",
+ "자세히 · JSON으로 보기": "Chi tiết · Xem dưới dạng JSON",
+ "자세히 · JSON으로 직접 고치기": "Chi tiết · Tự sửa bằng JSON",
+ "이 태그가 모두 있는 묶음": "Nhóm có đủ tất cả các thẻ này",
+ "딱 이 태그만 있는 묶음": "Nhóm chỉ có đúng các thẻ này",
+ "정리 전략": "Chiến lược tổng hợp",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "Chiến lược ở trên được chọn trước. Chiến lược sẽ nhận các nhóm ký ức khớp với quy tắc thẻ của nó và tạo ra các quan sát. Thêm * vào cuối thẻ thì sẽ khớp mọi thẻ bắt đầu giống phần phía trước.",
+ "전략 이름": "Tên chiến lược",
+ "예: bugs": "Ví dụ: bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "Xóa chiến lược này nhé? Thay đổi chỉ có hiệu lực sau khi bạn lưu.",
+ "예: bug*, 배포": "Ví dụ: bug*, triển khai",
+ "맞추는 방식": "Cách khớp",
+ "태그 규칙 더하기": "Thêm quy tắc thẻ",
+ "전략 더하기": "Thêm chiến lược",
+ "모델 예산을 다 써서 멈췄어요.": "Đã dừng vì ngân sách model đã dùng hết.",
+ "서버 모델이 없어 멈췄어요.": "Đã dừng vì chưa có model máy chủ.",
+ "작업 계정에 권한이 없어 멈췄어요.": "Đã dừng vì tài khoản làm việc không có quyền."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Thư mục {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Xuất hiện lần đầu {0} · Xuất hiện lần cuối {1}",
  "글 칸 {0}": "Phần chữ {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Bạn có thể chọn nhiều tệp cùng lúc."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Bạn có thể chọn nhiều tệp cùng lúc.",
+ "기다림 {0}": "Đang chờ {0}",
+ "묶음 {0}개 맡음": "Nhận {0} nhóm"
  }
 };

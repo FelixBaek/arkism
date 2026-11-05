@@ -1247,7 +1247,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (ad.status === "fulfilled" || ds.status === "fulfilled" || mm.status === "fulfilled") {
       const sync = M.syncStatus([...(ad.value?.items || []), ...(ds.value?.items || [])], mm.value?.items);
       const line = (x) => [x.last ? `${tr("마지막 실행")} ${ago(x.last)}` : tr("아직 실행 안 했어요"), x.waiting ? tr(`기다림 ${num(x.waiting)}`) : "", x.failed ? tr(`실패 ${num(x.failed)}`) : ""].filter(Boolean).join(" · ");
-      upkeep.append(row(sync.consolidation.failed ? "실패" : "", "기억 정리", line(sync.consolidation)), row(sync.topics.failed ? "실패" : "", "직접 정한 주제", line(sync.topics)));
+      const why = { model_budget_exceeded: "모델 예산을 다 써서 멈췄어요.", model_not_configured: "서버 모델이 없어 멈췄어요.", denied: "작업 계정에 권한이 없어 멈췄어요." }[sync.consolidation.reason];
+      upkeep.append(row(sync.consolidation.failed ? "실패" : "", "기억 정리", [line(sync.consolidation), why && tr(why)].filter(Boolean).join(" · ")), row(sync.topics.failed ? "실패" : "", "직접 정한 주제", line(sync.topics)));
     }
     upkeep.append(row("", "모든 작업", "기다리는 일, 도는 일, 끝난 일을 모두 봐요.", "", [button("작업 보기", "small", null, () => wideOps("", "jobs"))]));
     // the model test itself lives in 설정 › 에이전트 (models.js testModel); this only takes the person there
@@ -1352,7 +1353,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (!d.isConnected) return;
       const a = M.auditLine(x), who = x.actor_type === "human" ? tr("사람") : x.actor_type === "agent" ? tr("에이전트") : tr("서비스");
       right.replaceChildren(el("h3", "", a.what || tr("기타 활동")), facts([["언제", stamp(x.created_at)], ["누가", `${x.actor || "—"} · ${who}`], ["결과", x.decision === "deny" || x.decision === "denied" ? tr("막힘") : x.decision ? tr("허용") : ""],
-        ["어디서", transportLabel(x.transport) ? tr(transportLabel(x.transport)) : x.transport], ["요청", [x.method, x.route].filter(Boolean).join(" ")], ["걸린 시간", x.duration_ms ? `${num(x.duration_ms)}ms` : ""],
+        ["어디서", transportLabel(x.transport) ? tr(transportLabel(x.transport)) : x.transport], ["요청", String(x.route || "").startsWith(`${x.method} `) ? x.route : [x.method, x.route].filter(Boolean).join(" ")], ["걸린 시간", x.duration_ms ? `${num(x.duration_ms)}ms` : ""],
         ["대상", [x.target?.collection, x.target?.id].filter(Boolean).join(" · ")], ["코드", x.action], ["이유 코드", x.reason_code], ["요청 ID", x.request_id], ["꼭 남는 기록", x.mandatory ? tr("예 — 끌 수 없어요") : ""]]));
       // only when the server keeps bodies (ARKISM_AUDIT_BODIES); already redacted and capped
       if (x.request_body) { const pre = el("pre", "mono ov-ops-text", x.request_body); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", "보낸 내용"), pre); }

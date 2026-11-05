@@ -145,7 +145,8 @@
     const js = jobs || [], ms = (models || []).filter((m) => m.status !== "proposed");
     return {
       consolidation: { waiting: js.filter((j) => ["pending", "retry", "running"].includes(j.status)).length,
-        failed: js.filter((j) => j.status === "failed" || (j.outcome && j.outcome !== "ok")).length, last: newest(js.map((j) => j.last_run)) },
+        failed: js.filter((j) => j.status === "failed" || (j.outcome && j.outcome !== "ok")).length, last: newest(js.map((j) => j.last_run)),
+        reason: js.filter((j) => j.outcome && j.outcome !== "ok").sort((a, b) => String(a.last_run).localeCompare(String(b.last_run))).at(-1)?.outcome || "" },
       topics: { waiting: ms.filter((m) => m.stale).length, failed: ms.filter((m) => /^refresh_failed/.test(m.last_outcome?.code || "")).length, last: newest(ms.map((m) => m.last_refresh_at)) },
     };
   }

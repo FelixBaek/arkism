@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Auch die gespeicherten Originaldateien der gefundenen Erinnerungen anzeigen",
  "보관된 원본 파일": "Gespeicherte Originaldateien",
  "보관된 원본 파일 붙이기": "Gespeicherte Originaldateien anhängen",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Zeigt ein paar noch nicht freigegebene Kandidaten mit dem Hinweis „Noch nicht freigegeben“ an. Sie werden nicht wie bestätigte Erinnerungen behandelt. Standardmäßig ist das eingeschaltet."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Zeigt ein paar noch nicht freigegebene Kandidaten mit dem Hinweis „Noch nicht freigegeben“ an. Sie werden nicht wie bestätigte Erinnerungen behandelt. Standardmäßig ist das eingeschaltet.",
+ "아직 실행 안 했어요": "Noch nicht ausgeführt",
+ "보낸 내용": "Gesendeter Inhalt",
+ "한 실행만 보는 중 · 모두 보기": "Nur ein Lauf wird angezeigt · Alle anzeigen",
+ "이 실행의 호출 모두 보기": "Alle Aufrufe dieses Laufs anzeigen",
+ "전략은 16개까지 둘 수 있어요.": "Du kannst bis zu 16 Strategien haben.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Gib jeder Strategie einen Namen mit höchstens 64 Zeichen.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Zwei Strategien haben denselben Namen. Bitte benenne eine um.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Gib jeder Strategie 1 bis 8 Tag-Regeln.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Gib jeder Tag-Regel 1 bis 16 Tags.",
+ "자세히 · JSON으로 보기": "Mehr · Als JSON ansehen",
+ "자세히 · JSON으로 직접 고치기": "Mehr · Direkt als JSON bearbeiten",
+ "이 태그가 모두 있는 묶음": "Gruppen mit allen diesen Tags",
+ "딱 이 태그만 있는 묶음": "Gruppen mit genau diesen Tags",
+ "정리 전략": "Konsolidierungsstrategien",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "Strategien weiter oben wählen zuerst. Eine Strategie übernimmt die Erinnerungsgruppen, die zu ihren Tag-Regeln passen, und erstellt daraus Beobachtungen. Ein * am Ende eines Tags steht für alle Tags, die gleich beginnen.",
+ "전략 이름": "Name der Strategie",
+ "예: bugs": "z. B. bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "Diese Strategie löschen? Die Änderung gilt erst nach dem Speichern.",
+ "예: bug*, 배포": "z. B. bug*, Deployment",
+ "맞추는 방식": "Art des Abgleichs",
+ "태그 규칙 더하기": "Tag-Regel hinzufügen",
+ "전략 더하기": "Strategie hinzufügen",
+ "모델 예산을 다 써서 멈췄어요.": "Gestoppt: Das Modellbudget ist aufgebraucht.",
+ "서버 모델이 없어 멈췄어요.": "Gestoppt: Es ist kein Servermodell eingerichtet.",
+ "작업 계정에 권한이 없어 멈췄어요.": "Gestoppt: Dem Arbeitskonto fehlt die Berechtigung."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Ordner {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Zuerst gesehen {0} · Zuletzt gesehen {1}",
  "글 칸 {0}": "Textfeld {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Du kannst mehrere Dateien auf einmal auswählen."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Du kannst mehrere Dateien auf einmal auswählen.",
+ "기다림 {0}": "{0} wartend",
+ "묶음 {0}개 맡음": "Übernimmt {0} Gruppen"
  }
 };

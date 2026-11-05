@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Mostrar também os arquivos originais guardados das memórias encontradas",
  "보관된 원본 파일": "Arquivos originais guardados",
  "보관된 원본 파일 붙이기": "Anexar os arquivos originais guardados",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Mostra alguns candidatos que ainda não foram aprovados, com a marca ‘não aprovado’. Eles não são usados como memórias confirmadas. Vem ativado no início."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Mostra alguns candidatos que ainda não foram aprovados, com a marca ‘não aprovado’. Eles não são usados como memórias confirmadas. Vem ativado no início.",
+ "아직 실행 안 했어요": "Ainda não foi executado",
+ "보낸 내용": "O que foi enviado",
+ "한 실행만 보는 중 · 모두 보기": "Mostrando só uma execução · Ver tudo",
+ "이 실행의 호출 모두 보기": "Ver todas as chamadas desta execução",
+ "전략은 16개까지 둘 수 있어요.": "Você pode ter até 16 estratégias.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Dê a cada estratégia um nome de até 64 caracteres.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Há duas estratégias com o mesmo nome. Troque o nome de uma delas.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Coloque de 1 a 8 regras de tag em cada estratégia.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Coloque de 1 a 16 tags em cada regra de tag.",
+ "자세히 · JSON으로 보기": "Mais detalhes · Ver como JSON",
+ "자세히 · JSON으로 직접 고치기": "Mais detalhes · Editar direto no JSON",
+ "이 태그가 모두 있는 묶음": "Grupos que têm todas estas tags",
+ "딱 이 태그만 있는 묶음": "Grupos que têm só estas tags",
+ "정리 전략": "Estratégias de organização",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "A estratégia que está mais acima escolhe primeiro. Ela assume os grupos de memórias que combinam com as regras de tag e cria observações a partir deles. Um * no fim da tag vale para todas as tags que começam igual.",
+ "전략 이름": "Nome da estratégia",
+ "예: bugs": "Ex.: bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "Excluir esta estratégia? A mudança só vale depois que você salvar.",
+ "예: bug*, 배포": "Ex.: bug*, deploy",
+ "맞추는 방식": "Jeito de combinar",
+ "태그 규칙 더하기": "Adicionar regra de tag",
+ "전략 더하기": "Adicionar estratégia",
+ "모델 예산을 다 써서 멈췄어요.": "Parei porque o orçamento do modelo acabou.",
+ "서버 모델이 없어 멈췄어요.": "Parei porque não há nenhum modelo de servidor configurado.",
+ "작업 계정에 권한이 없어 멈췄어요.": "Parei porque a conta de trabalho não tem permissão."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Pasta {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Visto pela primeira vez em {0} · Visto pela última vez em {1}",
  "글 칸 {0}": "Parte de texto {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Você pode escolher vários arquivos de uma vez."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Você pode escolher vários arquivos de uma vez.",
+ "기다림 {0}": "Em espera: {0}",
+ "묶음 {0}개 맡음": "Assume {0} grupos"
  }
 };

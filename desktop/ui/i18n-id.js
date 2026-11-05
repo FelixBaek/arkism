@@ -6295,7 +6295,32 @@
  "찾은 기억에 보관된 원본 파일도 보기": "Tampilkan juga file asli yang tersimpan dari memori yang ditemukan",
  "보관된 원본 파일": "File asli yang tersimpan",
  "보관된 원본 파일 붙이기": "Lampirkan file asli yang tersimpan",
- "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Menampilkan beberapa kandidat yang belum disetujui, dengan tanda ‘belum disetujui’. Kandidat ini tidak diperlakukan seperti memori yang sudah pasti. Awalnya aktif."
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Menampilkan beberapa kandidat yang belum disetujui, dengan tanda ‘belum disetujui’. Kandidat ini tidak diperlakukan seperti memori yang sudah pasti. Awalnya aktif.",
+ "아직 실행 안 했어요": "Belum dijalankan",
+ "보낸 내용": "Isi yang dikirim",
+ "한 실행만 보는 중 · 모두 보기": "Hanya melihat satu proses · Lihat semua",
+ "이 실행의 호출 모두 보기": "Lihat semua panggilan di proses ini",
+ "전략은 16개까지 둘 수 있어요.": "Anda bisa punya hingga 16 strategi.",
+ "전략마다 64자 안의 이름을 넣어 주세요.": "Beri setiap strategi nama maksimal 64 karakter.",
+ "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.": "Ada dua strategi dengan nama yang sama. Silakan ganti salah satu namanya.",
+ "전략마다 태그 규칙을 1~8개 넣어 주세요.": "Beri setiap strategi 1–8 aturan tag.",
+ "태그 규칙마다 태그를 1~16개 넣어 주세요.": "Beri setiap aturan tag 1–16 tag.",
+ "자세히 · JSON으로 보기": "Selengkapnya · Lihat sebagai JSON",
+ "자세히 · JSON으로 직접 고치기": "Selengkapnya · Ubah langsung lewat JSON",
+ "이 태그가 모두 있는 묶음": "Kelompok yang punya semua tag ini",
+ "딱 이 태그만 있는 묶음": "Kelompok yang hanya punya tag ini",
+ "정리 전략": "Strategi perapian",
+ "위에 있는 전략이 먼저 골라요. 태그 규칙에 맞는 기억 묶음을 그 전략이 맡아 관찰을 만들어요. 태그 끝에 *를 붙이면 그 앞이 같은 태그 모두예요.": "Strategi yang lebih atas memilih lebih dulu. Strategi mengambil kelompok memori yang cocok dengan aturan tagnya, lalu membuat observasi dari kelompok itu. Jika Anda menaruh * di akhir tag, semua tag dengan awalan yang sama ikut cocok.",
+ "전략 이름": "Nama strategi",
+ "예: bugs": "Contoh: bugs",
+ "이 전략을 지울까요? 저장해야 반영돼요.": "Hapus strategi ini? Perubahan baru berlaku setelah disimpan.",
+ "예: bug*, 배포": "Contoh: bug*, deploy",
+ "맞추는 방식": "Cara mencocokkan",
+ "태그 규칙 더하기": "Tambah aturan tag",
+ "전략 더하기": "Tambah strategi",
+ "모델 예산을 다 써서 멈췄어요.": "Berhenti karena anggaran model sudah habis.",
+ "서버 모델이 없어 멈췄어요.": "Berhenti karena tidak ada model server.",
+ "작업 계정에 권한이 없어 멈췄어요.": "Berhenti karena akun pekerja tidak punya izin."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7557,6 +7582,8 @@
  "폴더 {0}": "Folder {0}",
  "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Pertama muncul {0} · Terakhir muncul {1}",
  "글 칸 {0}": "Kolom teks {0}",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Anda bisa memilih beberapa file sekaligus."
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Anda bisa memilih beberapa file sekaligus.",
+ "기다림 {0}": "Menunggu {0}",
+ "묶음 {0}개 맡음": "Menangani {0} kelompok"
  }
 };
