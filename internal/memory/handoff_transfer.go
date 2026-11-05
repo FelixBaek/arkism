@@ -31,7 +31,7 @@ type HandoffTransferOutput struct {
 }
 
 func (s *Service) authorizeHandoffContent(ctx context.Context, token string, in HandoffTransferInput, id, sensitivity, content string) (Decision, error) {
-	if sensitivity == "" || !validSensitivity(sensitivity) || sensitivity == "restricted" || !safeTransfer(content) {
+	if !transferableContent(sensitivity, content) {
 		return Decision{}, ErrDenied
 	}
 	d, e := s.authorizeAt(ctx, token, "transfer:model_input", in.Scope, id, structuredText(map[string]string{"destination": in.Destination, "sensitivity": sensitivity, "content": content}), in.Destination)

@@ -25,6 +25,9 @@ const (
 	routeQuery
 	routeJSON
 	routeMultipart
+	// routePath reads workspace and project from the {workspace}/{project} path
+	// segments; a project written "@alias" is resolved to the space that owns it.
+	routePath
 )
 
 // routePolicy is the coarse route permission. Service methods retain their
@@ -125,6 +128,11 @@ func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, pol
 	if err != nil {
 		return Decision{}, err
 	}
+	if policy.scope == routePath {
+		if scope, err = s.resolveSpace(r.Context(), scope); err != nil {
+			return Decision{}, err
+		}
+	}
 	actions, err := policy.requestActions(r, input)
 	if err != nil {
 		return Decision{}, err
@@ -185,6 +193,13 @@ func (policy routePolicy) requestScope(w http.ResponseWriter, r *http.Request) (
 	}
 	if policy.scope == routeMultipart {
 		return readMultipartRouteScope(w, r)
+	}
+	if policy.scope == routePath {
+		scope := Scope{WorkspaceID: r.PathValue("workspace"), ProjectID: r.PathValue("project")}
+		if !validScope(scope) {
+			return Scope{}, routeInput{}, ErrInvalid
+		}
+		return scope, routeInput{}, nil
 	}
 	if policy.scope != routeJSON || policy.limit < 1 {
 		return Scope{}, routeInput{}, ErrDenied

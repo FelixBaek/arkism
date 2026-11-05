@@ -262,6 +262,10 @@ type Record struct {
 	// RejectScore is the review classifier's advice when the queue is listed; never stored.
 	RejectScore *float64 `json:"reject_score,omitempty" bson:"-"`
 
+	// SpaceConfig is a space's settings (space_configs); SpaceJob a space export/import/clone job (jobs). See spaces.go.
+	SpaceConfig *SpaceConfig `json:"-" bson:"space_config,omitempty"`
+	SpaceJob    *SpaceJob    `json:"-" bson:"space_job,omitempty"`
+
 	// RoutingAttribution is an RTE-06 step record (jobs, kind routing_attribution).
 	RoutingAttribution *RoutingAttribution `json:"routing_attribution,omitempty" bson:"routing_attribution,omitempty"`
 }

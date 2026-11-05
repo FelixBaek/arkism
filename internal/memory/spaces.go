@@ -1,0 +1,872 @@
+package memory
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Memory spaces: one workspace+project scope seen as a unit a person can name,
+// configure, export, import and clone. A space is the project-level scope
+// (user_id and agent_id empty); user and agent sub-scopes are not part of it.
+//
+// Settings live in space_configs, a private collection only these routes
+// touch. Export, import and clone are rows in jobs (kinds the job worker never
+// claims) run in the background; an export keeps its bundle on the job row.
+//
+// Bundle: JSON lines. Line 1 is the manifest (format, version, counts and the
+// sha256 of every following byte); each later line is one config or record.
+// Imported memories go through the ordinary capture path, so privacy and secret
+// checks, dedupe and per-event idempotency apply, and they arrive as
+// candidates. Only a person may import as approved, and only records the
+// bundle marks approved.
+
+const (
+	colSpaceConfigs       = "space_configs"
+	spaceConfigID         = "space-config"
+	spaceJobExport        = "space_export"
+	spaceJobImport        = "space_import"
+	spaceJobClone         = "space_clone"
+	spaceBundleFormat     = "arkism.space.bundle"
+	spaceBundleVersion    = 1
+	spaceBundleMaxBytes   = 8 << 20
+	spaceBundleMaxRecords = 5000
+	spaceAliasMax         = 16
+	spaceListMax          = 200
+	spaceImportChunk      = 32
+	spaceJobTimeout       = 10 * time.Minute
+	spaceExportTTL        = 24 * time.Hour
+	spaceSectionConfig    = "config"
+)
+
+var (
+	// spaceExportable: collections a bundle may carry. Names missing from
+	// Collections at runtime are skipped and reported, never guessed.
+	spaceExportable   = []string{colMemories, "memory_candidates", "observations", "mental_models", "directives", "entities"}
+	spaceDefinitions  = []string{"directives", "mental_models"}
+	spaceAliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
+	spaceSchedules    = []string{"off", "daily", "weekly"}
+	spaceGenerator    = Generator{Model: "none", PromptVersion: "space-bundle-v1", PipelineVersion: "space-import-v1"}
+)
+
+type SpaceConfig struct {
+	DisplayName           string   `json:"display_name" bson:"display_name"`
+	Aliases               []string `json:"aliases" bson:"aliases"`
+	DefaultReach          string   `json:"default_reach" bson:"default_reach"`
+	ExtractionEnabled     bool     `json:"extraction_enabled" bson:"extraction_enabled"`
+	RerankEnabled         bool     `json:"rerank_enabled" bson:"rerank_enabled"`
+	ConsolidationSchedule string   `json:"consolidation_schedule" bson:"consolidation_schedule"`
+	Notes                 string   `json:"notes" bson:"notes"`
+}
+
+func defaultSpaceConfig() SpaceConfig {
+	return SpaceConfig{Aliases: []string{}, ExtractionEnabled: true, ConsolidationSchedule: "off"}
+}
+
+// SpaceConfigInput is PUT (unset fields take defaults) or PATCH (unset fields stay).
+type SpaceConfigInput struct {
+	ExpectedRevision      int64   `json:"expected_revision"`
+	DisplayName           *string `json:"display_name,omitempty"`
+	DefaultReach          *string `json:"default_reach,omitempty"`
+	ExtractionEnabled     *bool   `json:"extraction_enabled,omitempty"`
+	RerankEnabled         *bool   `json:"rerank_enabled,omitempty"`
+	ConsolidationSchedule *string `json:"consolidation_schedule,omitempty"`
+	Notes                 *string `json:"notes,omitempty"`
+}
+
+type SpaceView struct {
+	WorkspaceID string           `json:"workspace_id"`
+	ProjectID   string           `json:"project_id"`
+	Revision    int64            `json:"revision"`
+	Config      SpaceConfig      `json:"config"`
+	Counts      map[string]int64 `json:"counts,omitempty"`
+}
+
+type SpacePage struct {
+	Items []SpaceView `json:"items"`
+	Next  string      `json:"next,omitempty"`
+}
+
+type SpaceCount struct {
+	ProjectID  string
+	Collection string
+	Count      int64
+}
+
+// spaceStore is the cross-project read a space list and alias lookup need.
+// Row-level security still limits both to the caller's permitted projects.
+type spaceStore interface {
+	SpaceCounts(ctx context.Context, workspace, after string, collections []string, limit int) ([]SpaceCount, error)
+	SpaceAliasOwners(ctx context.Context, workspace, alias string) ([]Record, error)
+}
+
+type SpaceSection struct {
+	Name  string `json:"name" bson:"name"`
+	Count int    `json:"count" bson:"count"`
+}
+
+type SpaceSkip struct {
+	Section string `json:"section" bson:"section"`
+	Reason  string `json:"reason" bson:"reason"`
+	Count   int    `json:"count" bson:"count"`
+}
+
+type SpaceManifest struct {
+	Format        string         `json:"format" bson:"format"`
+	FormatVersion int            `json:"format_version" bson:"format_version"`
+	BundleID      string         `json:"bundle_id" bson:"bundle_id"`
+	Template      bool           `json:"template" bson:"template"`
+	Source        Scope          `json:"source" bson:"source"`
+	CreatedAt     time.Time      `json:"created_at" bson:"created_at"`
+	Sections      []SpaceSection `json:"sections" bson:"sections"`
+	Skipped       []SpaceSkip    `json:"skipped" bson:"skipped"`
+	SHA256        string         `json:"sha256" bson:"sha256"`
+}
+
+// SpaceBundleRecord is the portable shape of one exported record.
+type SpaceBundleRecord struct {
+	ID            string         `json:"id"`
+	Kind          string         `json:"kind"`
+	Status        string         `json:"status"`
+	Approved      bool           `json:"approved"`
+	Text          string         `json:"text"`
+	Summary       string         `json:"summary,omitempty"`
+	Keywords      []string       `json:"keywords,omitempty"`
+	Tags          []string       `json:"tags,omitempty"`
+	MemoryContext *MemoryContext `json:"memory_context,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+}
+
+type spaceBundleLine struct {
+	Manifest *SpaceManifest     `json:"manifest,omitempty"`
+	Section  string             `json:"section,omitempty"`
+	Config   *SpaceConfig       `json:"config,omitempty"`
+	Record   *SpaceBundleRecord `json:"record,omitempty"`
+}
+
+// SpaceReport is what an import or clone did, per section.
+type SpaceReport struct {
+	Imported int         `json:"imported" bson:"imported"`
+	Approved int         `json:"approved" bson:"approved"`
+	Merged   int         `json:"merged" bson:"merged"`
+	Rejected int         `json:"rejected" bson:"rejected"`
+	Config   string      `json:"config,omitempty" bson:"config,omitempty"`
+	Skipped  []SpaceSkip `json:"skipped" bson:"skipped"`
+}
+
+type SpaceJob struct {
+	Kind       string         `json:"kind" bson:"kind"`
+	State      string         `json:"state" bson:"state"` // queued | done | failed
+	Include    []string       `json:"include,omitempty" bson:"include,omitempty"`
+	Template   bool           `json:"template" bson:"template"`
+	ImportAs   string         `json:"import_as,omitempty" bson:"import_as,omitempty"`
+	Target     *Scope         `json:"target,omitempty" bson:"target,omitempty"`
+	BundleID   string         `json:"bundle_id,omitempty" bson:"bundle_id,omitempty"`
+	Manifest   *SpaceManifest `json:"manifest,omitempty" bson:"manifest,omitempty"`
+	Report     *SpaceReport   `json:"report,omitempty" bson:"report,omitempty"`
+	Error      string         `json:"error,omitempty" bson:"error,omitempty"`
+	FinishedAt *time.Time     `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
+	Bundle     string         `json:"-" bson:"bundle,omitempty"`
+}
+
+type SpaceJobView struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	ProjectID   string `json:"project_id"`
+	SpaceJob
+}
+
+type SpaceExportInput struct {
+	Include  []string `json:"include,omitempty"`
+	Template bool     `json:"template,omitempty"`
+}
+
+type SpaceImportInput struct {
+	Bundle   string `json:"bundle"`
+	ImportAs string `json:"import_as,omitempty"`
+}
+
+type SpaceCloneInput struct {
+	Target   Scope    `json:"target"`
+	Include  []string `json:"include,omitempty"`
+	ImportAs string   `json:"import_as,omitempty"`
+}
+
+func validImportAs(v string) bool { return v == "" || v == "candidate" || v == "approved" }
+
+// spaceScope is the project-level scope of a space.
+func spaceScope(s Scope) Scope { return Scope{WorkspaceID: s.WorkspaceID, ProjectID: s.ProjectID} }
+
+// resolveSpace maps "@alias" in the project position to the space that owns
+// the alias; any other project name is taken literally.
+func (s *Service) resolveSpace(ctx context.Context, scope Scope) (Scope, error) {
+	scope = spaceScope(scope)
+	alias, ok := strings.CutPrefix(scope.ProjectID, "@")
+	if !ok {
+		return scope, nil
+	}
+	if !spaceAliasPattern.MatchString(alias) {
+		return Scope{}, ErrInvalid
+	}
+	store, ok := s.Repo.(spaceStore)
+	if !ok {
+		return Scope{}, ErrUnavailable
+	}
+	owners, err := store.SpaceAliasOwners(ctx, scope.WorkspaceID, alias)
+	switch {
+	case err != nil:
+		return Scope{}, err
+	case len(owners) == 0:
+		return Scope{}, ErrNotFound
+	case len(owners) > 1:
+		return Scope{}, ErrConflict
+	}
+	return spaceScope(owners[0].Scope), nil
+}
+
+// ListSpaces pages the spaces of the caller's workspace the caller may read, by project id.
+func (s *Service) ListSpaces(ctx context.Context, token string, scope Scope, after string, limit int) (SpacePage, error) {
+	if limit < 1 || limit > spaceListMax {
+		limit = spaceListMax
+	}
+	if _, err := s.authorize(ctx, token, "read:memories", spaceScope(scope), "", ""); err != nil {
+		return SpacePage{}, err
+	}
+	store, ok := s.Repo.(spaceStore)
+	if !ok {
+		return SpacePage{}, ErrUnavailable
+	}
+	rows, err := store.SpaceCounts(ctx, scope.WorkspaceID, after, append(slices.Clone(spaceExportable), colSpaceConfigs), limit+1)
+	if err != nil {
+		return SpacePage{}, err
+	}
+	counts, order := map[string]map[string]int64{}, []string{}
+	for _, row := range rows {
+		if counts[row.ProjectID] == nil {
+			counts[row.ProjectID] = map[string]int64{}
+			order = append(order, row.ProjectID)
+		}
+		if row.Collection != colSpaceConfigs {
+			counts[row.ProjectID][row.Collection] = row.Count
+		}
+	}
+	page := SpacePage{Items: []SpaceView{}}
+	if len(order) > limit {
+		order, page.Next = order[:limit], order[limit-1]
+	}
+	for _, project := range order {
+		view, err := s.GetSpaceConfig(ctx, token, Scope{WorkspaceID: scope.WorkspaceID, ProjectID: project})
+		if errors.Is(err, ErrDenied) {
+			continue
+		}
+		if err != nil {
+			return SpacePage{}, err
+		}
+		view.Counts = counts[project]
+		page.Items = append(page.Items, view)
+	}
+	return page, nil
+}
+
+func (s *Service) GetSpaceConfig(ctx context.Context, token string, scope Scope) (SpaceView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceView{}, err
+	}
+	if _, err = s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, ""); err != nil {
+		return SpaceView{}, err
+	}
+	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	return spaceView(scope, rec, err)
+}
+
+func spaceView(scope Scope, rec Record, err error) (SpaceView, error) {
+	view := SpaceView{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, Config: defaultSpaceConfig()}
+	if errors.Is(err, ErrNotFound) {
+		return view, nil
+	}
+	if err != nil {
+		return SpaceView{}, err
+	}
+	if rec.SpaceConfig == nil {
+		return SpaceView{}, ErrUnavailable
+	}
+	view.Revision, view.Config = rec.Revision, *rec.SpaceConfig
+	return view, nil
+}
+
+// PutSpaceConfig replaces (replace) or patches the settings; human principals only.
+func (s *Service) PutSpaceConfig(ctx context.Context, token string, scope Scope, in SpaceConfigInput, replace bool) (SpaceView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceView{}, err
+	}
+	d, err := s.mergeHuman(ctx, token, "write:"+colSpaceConfigs, scope, spaceConfigID)
+	if err != nil {
+		return SpaceView{}, err
+	}
+	return s.changeSpaceConfig(ctx, scope, d, in.ExpectedRevision, func(c *SpaceConfig) error { return applySpaceConfig(c, in, replace) })
+}
+
+func applySpaceConfig(c *SpaceConfig, in SpaceConfigInput, replace bool) error {
+	if replace {
+		aliases := c.Aliases
+		*c = defaultSpaceConfig()
+		c.Aliases = aliases
+	}
+	set := func(dst *string, v *string) {
+		if v != nil {
+			*dst = strings.TrimSpace(*v)
+		}
+	}
+	set(&c.DisplayName, in.DisplayName)
+	set(&c.DefaultReach, in.DefaultReach)
+	set(&c.ConsolidationSchedule, in.ConsolidationSchedule)
+	set(&c.Notes, in.Notes)
+	if in.ExtractionEnabled != nil {
+		c.ExtractionEnabled = *in.ExtractionEnabled
+	}
+	if in.RerankEnabled != nil {
+		c.RerankEnabled = *in.RerankEnabled
+	}
+	return validSpaceConfig(*c)
+}
+
+func validSpaceConfig(c SpaceConfig) error {
+	if len(c.DisplayName) > 256 || len(c.Notes) > 4000 || len(c.Aliases) > spaceAliasMax ||
+		!slices.Contains([]string{"", ReachPersonal, ReachGeneral, ReachProject}, c.DefaultReach) || !slices.Contains(spaceSchedules, c.ConsolidationSchedule) {
+		return ErrInvalid
+	}
+	if containsSecret(c.DisplayName) || containsSecret(c.Notes) {
+		return ErrSecretDetected
+	}
+	return nil
+}
+
+// changeSpaceConfig applies change to the stored (or default) config under a revision check.
+func (s *Service) changeSpaceConfig(ctx context.Context, scope Scope, d Decision, expected int64, change func(*SpaceConfig) error) (SpaceView, error) {
+	var out Record
+	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		rec, err := tx.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+		fresh := errors.Is(err, ErrNotFound)
+		if err != nil && !fresh {
+			return err
+		}
+		if expected >= 0 && rec.Revision != expected {
+			return ErrConflict
+		}
+		now := time.Now().UTC()
+		config := defaultSpaceConfig()
+		if !fresh && rec.SpaceConfig != nil {
+			config = *rec.SpaceConfig
+			config.Aliases = slices.Clone(config.Aliases)
+		}
+		if err = change(&config); err != nil {
+			return err
+		}
+		if fresh {
+			rec = Record{ID: spaceConfigID, Scope: scope, Kind: "space_config", Status: statusActive, CreatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
+		}
+		rec.SpaceConfig, rec.UpdatedAt, rec.Revision = &config, now, rec.Revision+1
+		if fresh {
+			err = tx.Insert(ctx, colSpaceConfigs, rec)
+		} else {
+			err = tx.Replace(ctx, colSpaceConfigs, rec, rec.Revision-1)
+		}
+		if err != nil {
+			return err
+		}
+		out = rec
+		return audit(ctx, tx, scope, d.PrincipalID, "write:"+colSpaceConfigs, spaceConfigID)
+	})
+	return spaceView(scope, out, err)
+}
+
+// SetSpaceAlias adds (add) or removes an alias; an alias names one space per workspace.
+func (s *Service) SetSpaceAlias(ctx context.Context, token string, scope Scope, alias string, add bool) (SpaceView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceView{}, err
+	}
+	if !spaceAliasPattern.MatchString(alias) {
+		return SpaceView{}, ErrInvalid
+	}
+	d, err := s.mergeHuman(ctx, token, "write:"+colSpaceConfigs, scope, spaceConfigID)
+	if err != nil {
+		return SpaceView{}, err
+	}
+	if add {
+		owner, err := s.resolveSpace(ctx, Scope{WorkspaceID: scope.WorkspaceID, ProjectID: "@" + alias})
+		if err == nil && owner != scope || errors.Is(err, ErrConflict) {
+			return SpaceView{}, ErrHandleTaken
+		}
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return SpaceView{}, err
+		}
+	}
+	return s.changeSpaceConfig(ctx, scope, d, -1, func(c *SpaceConfig) error {
+		c.Aliases = slices.DeleteFunc(c.Aliases, func(a string) bool { return a == alias })
+		if add {
+			c.Aliases = append(c.Aliases, alias)
+		}
+		return validSpaceConfig(*c)
+	})
+}
+
+// spaceRecordSkip says why a stored record stays out of a bundle ("" = it goes in).
+func spaceRecordSkip(col string, r Record, now time.Time) string {
+	if r.ContentErased || r.PrivacyQuarantined || r.PrivacyDeletion != nil || r.Removal != nil {
+		return "erased"
+	}
+	if r.Sensitivity == "private" || !transferableContent(r.Sensitivity, recordContent(r)) {
+		return "privacy_excluded"
+	}
+	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
+		return "inactive"
+	}
+	switch col {
+	case colMemories:
+		if r.Status != "approved" && r.Status != statusActive {
+			return "inactive"
+		}
+	case "memory_candidates":
+		if r.Status != "candidate" {
+			return "inactive"
+		}
+	default:
+		if slices.Contains([]string{"rejected", "expired", "superseded"}, r.Status) {
+			return "inactive"
+		}
+	}
+	return ""
+}
+
+func spaceSections(in SpaceExportInput) []string {
+	if in.Template {
+		return append([]string{spaceSectionConfig}, spaceDefinitions...)
+	}
+	if len(in.Include) == 0 {
+		return append([]string{spaceSectionConfig}, spaceExportable...)
+	}
+	return in.Include
+}
+
+func validSpaceInclude(include []string) bool {
+	if len(include) > 32 {
+		return false
+	}
+	for i, name := range include {
+		if !validRunLabel(name, 64) || slices.Contains(include[:i], name) {
+			return false
+		}
+	}
+	return true
+}
+
+// buildSpaceBundle writes the bundle of one space; it reads only that exact scope.
+func buildSpaceBundle(ctx context.Context, repo Repository, scope Scope, in SpaceExportInput, bundleID string, now time.Time) (string, SpaceManifest, error) {
+	manifest := SpaceManifest{Format: spaceBundleFormat, FormatVersion: spaceBundleVersion, BundleID: bundleID, Template: in.Template, Source: scope, CreatedAt: now, Sections: []SpaceSection{}, Skipped: []SpaceSkip{}}
+	var body bytes.Buffer
+	enc := json.NewEncoder(&body)
+	total := 0
+	for _, name := range spaceSections(in) {
+		lines, skipped, err := spaceSectionLines(ctx, repo, scope, name, now)
+		if err != nil {
+			return "", SpaceManifest{}, err
+		}
+		manifest.Skipped = append(manifest.Skipped, skipped...)
+		if total+len(lines) > spaceBundleMaxRecords {
+			return "", SpaceManifest{}, errBlobTooLarge
+		}
+		total += len(lines)
+		for _, line := range lines {
+			if err = enc.Encode(line); err != nil {
+				return "", SpaceManifest{}, ErrUnavailable
+			}
+		}
+		manifest.Sections = append(manifest.Sections, SpaceSection{Name: name, Count: len(lines)})
+	}
+	sum := sha256.Sum256(body.Bytes())
+	manifest.SHA256 = hex.EncodeToString(sum[:])
+	head, _ := json.Marshal(spaceBundleLine{Manifest: &manifest})
+	if len(head)+1+body.Len() > spaceBundleMaxBytes {
+		return "", SpaceManifest{}, errBlobTooLarge
+	}
+	return string(head) + "\n" + body.String(), manifest, nil
+}
+
+func spaceSectionLines(ctx context.Context, repo Repository, scope Scope, name string, now time.Time) ([]spaceBundleLine, []SpaceSkip, error) {
+	if name == spaceSectionConfig {
+		rec, err := repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+		if errors.Is(err, ErrNotFound) || err == nil && rec.SpaceConfig == nil {
+			return nil, nil, nil
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return []spaceBundleLine{{Section: name, Config: rec.SpaceConfig}}, nil, nil
+	}
+	if !slices.Contains(spaceExportable, name) {
+		return nil, []SpaceSkip{{Section: name, Reason: "not_exportable", Count: 1}}, nil
+	}
+	if !slices.Contains(Collections, name) {
+		return nil, []SpaceSkip{{Section: name, Reason: "unknown_collection", Count: 1}}, nil
+	}
+	rows, err := collectCatalogRecords(ctx, repo, scope, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	lines, reasons := []spaceBundleLine{}, map[string]int{}
+	for _, r := range rows {
+		if why := spaceRecordSkip(name, r, now); why != "" {
+			reasons[why]++
+			continue
+		}
+		lines = append(lines, spaceBundleLine{Section: name, Record: &SpaceBundleRecord{ID: r.ID, Kind: r.Kind, Status: r.Status,
+			Approved: name == colMemories, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords, Tags: r.Tags,
+			MemoryContext: copyMemoryContext(r.MemoryContext), CreatedAt: r.CreatedAt}})
+	}
+	skipped := []SpaceSkip{}
+	for _, why := range []string{"erased", "privacy_excluded", "inactive"} {
+		if reasons[why] > 0 {
+			skipped = append(skipped, SpaceSkip{Section: name, Reason: why, Count: reasons[why]})
+		}
+	}
+	return lines, skipped, nil
+}
+
+// parseSpaceBundle checks the manifest, format version and sha256 before any line is used.
+func parseSpaceBundle(bundle string) (SpaceManifest, []spaceBundleLine, error) {
+	head, body, ok := strings.Cut(bundle, "\n")
+	var first spaceBundleLine
+	if !ok || len(bundle) > spaceBundleMaxBytes || json.Unmarshal([]byte(head), &first) != nil || first.Manifest == nil {
+		return SpaceManifest{}, nil, ErrInvalid
+	}
+	m := *first.Manifest
+	sum := sha256.Sum256([]byte(body))
+	if m.Format != spaceBundleFormat || m.FormatVersion != spaceBundleVersion || !validRunLabel(m.BundleID, 64) || m.SHA256 != hex.EncodeToString(sum[:]) {
+		return SpaceManifest{}, nil, ErrInvalid
+	}
+	dec := json.NewDecoder(strings.NewReader(body))
+	dec.DisallowUnknownFields()
+	lines := []spaceBundleLine{}
+	for dec.More() {
+		var line spaceBundleLine
+		if dec.Decode(&line) != nil || line.Manifest != nil || len(lines) >= spaceBundleMaxRecords {
+			return SpaceManifest{}, nil, ErrInvalid
+		}
+		lines = append(lines, line)
+	}
+	return m, lines, nil
+}
+
+// ExportSpace starts an export job of one space.
+func (s *Service) ExportSpace(ctx context.Context, token string, scope Scope, in SpaceExportInput) (SpaceJobView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	if !validSpaceInclude(in.Include) {
+		return SpaceJobView{}, ErrInvalid
+	}
+	d, err := s.authorize(ctx, token, "read:memories", scope, "", "")
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	// The bundle leaves the server: the same external-transfer grant other transfers need.
+	if !d.ExternalTransfer || !d.ContentSafe {
+		return SpaceJobView{}, ErrDenied
+	}
+	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Template: in.Template, BundleID: "sb_" + ID()}
+	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
+		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, in, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
+		job.Bundle, job.Manifest = bundle, &manifest
+		return err
+	})
+}
+
+// ImportSpace verifies a bundle and starts its import into a space; human principals only.
+func (s *Service) ImportSpace(ctx context.Context, token string, scope Scope, in SpaceImportInput) (SpaceJobView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	if !validImportAs(in.ImportAs) {
+		return SpaceJobView{}, ErrInvalid
+	}
+	d, err := s.mergeHuman(ctx, token, "write:memory_candidates", scope, "")
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	manifest, lines, err := parseSpaceBundle(in.Bundle)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	job := SpaceJob{Kind: spaceJobImport, ImportAs: in.ImportAs, Template: manifest.Template, BundleID: manifest.BundleID, Manifest: &manifest}
+	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
+		report, err := s.importSpaceLines(ctx, token, d, scope, manifest, lines, in.ImportAs == "approved")
+		job.Report = &report
+		return err
+	})
+}
+
+// CloneSpace copies one space into another (export then import, inside the server).
+// Copies arrive as candidates; approved stays approved only for a human caller who asks.
+func (s *Service) CloneSpace(ctx context.Context, token string, scope Scope, in SpaceCloneInput) (SpaceJobView, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	if !validScope(in.Target) || !validSpaceInclude(in.Include) || !validImportAs(in.ImportAs) {
+		return SpaceJobView{}, ErrInvalid
+	}
+	target, err := s.resolveSpace(ctx, in.Target)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	if target == scope {
+		return SpaceJobView{}, ErrInvalid
+	}
+	d, err := s.authorize(ctx, token, "read:memories", scope, "", "")
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	td, err := s.authorize(ctx, token, "write:memory_candidates", target, "", "")
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	approved := in.ImportAs == "approved"
+	if approved && (d.Role != roleHuman || td.Role != roleHuman) {
+		return SpaceJobView{}, ErrDenied
+	}
+	job := SpaceJob{Kind: spaceJobClone, Include: in.Include, ImportAs: in.ImportAs, Target: &target, BundleID: "sb_" + ID()}
+	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
+		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, SpaceExportInput{Include: in.Include}, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
+		if err != nil {
+			return err
+		}
+		job.Manifest = &manifest
+		_, lines, err := parseSpaceBundle(bundle)
+		if err != nil {
+			return err
+		}
+		report, err := s.importSpaceLines(ctx, token, td, target, manifest, lines, approved)
+		job.Report = &report
+		return err
+	})
+}
+
+// startSpaceJob stores a queued job and runs it in the background with the caller's request values.
+func (s *Service) startSpaceJob(ctx context.Context, scope Scope, d Decision, job SpaceJob, run func(context.Context, *SpaceJob) error) (SpaceJobView, error) {
+	now := time.Now().UTC()
+	job.State = "queued"
+	rec := Record{ID: "spj_" + ID(), Scope: scope, Kind: job.Kind, Status: JobStatusDone, Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role, SpaceJob: &job}
+	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if err := tx.Insert(ctx, colJobs, rec); err != nil {
+			return err
+		}
+		return audit(ctx, tx, scope, d.PrincipalID, "start:"+job.Kind, rec.ID)
+	})
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	go func() {
+		runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), spaceJobTimeout)
+		defer cancel()
+		result := job
+		err := run(runCtx, &result)
+		finished := time.Now().UTC()
+		result.State, result.FinishedAt = "done", &finished
+		if err != nil {
+			result.State, result.Error, result.Bundle = "failed", captureErrorCode(err), ""
+		}
+		_ = s.Repo.Transaction(runCtx, func(ctx context.Context, tx Tx) error {
+			cur, err := tx.Get(ctx, colJobs, scope, rec.ID)
+			if err != nil {
+				return err
+			}
+			cur.SpaceJob, cur.UpdatedAt, cur.Revision = &result, finished, cur.Revision+1
+			return tx.Replace(ctx, colJobs, cur, cur.Revision-1)
+		})
+	}()
+	return SpaceJobView{ID: rec.ID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, SpaceJob: job}, nil
+}
+
+func (s *Service) spaceJob(ctx context.Context, token string, scope Scope, id string) (Record, Decision, error) {
+	scope, err := s.resolveSpace(ctx, scope)
+	if err != nil {
+		return Record{}, Decision{}, err
+	}
+	d, err := s.authorize(ctx, token, "read:memories", scope, id, "")
+	if err != nil {
+		return Record{}, Decision{}, err
+	}
+	rec, err := s.Repo.Get(ctx, colJobs, scope, id)
+	if err != nil {
+		return Record{}, Decision{}, err
+	}
+	if rec.SpaceJob == nil || !strings.HasPrefix(rec.Kind, "space_") {
+		return Record{}, Decision{}, ErrNotFound
+	}
+	return rec, d, nil
+}
+
+func (s *Service) GetSpaceJob(ctx context.Context, token string, scope Scope, id string) (SpaceJobView, error) {
+	rec, _, err := s.spaceJob(ctx, token, scope, id)
+	if err != nil {
+		return SpaceJobView{}, err
+	}
+	return SpaceJobView{ID: rec.ID, WorkspaceID: rec.Scope.WorkspaceID, ProjectID: rec.Scope.ProjectID, SpaceJob: *rec.SpaceJob}, nil
+}
+
+// DownloadSpaceExport returns a finished export bundle. A record erased, made
+// private or retired since the export makes the bundle stale: export again.
+func (s *Service) DownloadSpaceExport(ctx context.Context, token string, scope Scope, id string) (string, error) {
+	rec, d, err := s.spaceJob(ctx, token, scope, id)
+	if err != nil {
+		return "", err
+	}
+	job := rec.SpaceJob
+	if rec.Kind != spaceJobExport || job.State != "done" || job.Bundle == "" || time.Since(rec.CreatedAt) > spaceExportTTL {
+		return "", ErrNotFound
+	}
+	if !d.ExternalTransfer || !d.ContentSafe {
+		return "", ErrDenied
+	}
+	_, lines, err := parseSpaceBundle(job.Bundle)
+	if err != nil {
+		return "", ErrUnavailable
+	}
+	now := time.Now().UTC()
+	for _, line := range lines {
+		if line.Record == nil {
+			continue
+		}
+		cur, err := s.Repo.Get(ctx, line.Section, rec.Scope, line.Record.ID)
+		if errors.Is(err, ErrNotFound) || err == nil && spaceRecordSkip(line.Section, cur, now) != "" {
+			return "", ErrConflict
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return job.Bundle, nil
+}
+
+// importSpaceLines brings bundle lines into a space. Memories go through Capture
+// in chunks of one event each ("space-import:<bundle>:<n>"), so a re-import of
+// the same bundle is a duplicate event and stores nothing twice.
+func (s *Service) importSpaceLines(ctx context.Context, token string, d Decision, scope Scope, m SpaceManifest, lines []spaceBundleLine, approved bool) (SpaceReport, error) {
+	report := SpaceReport{Skipped: []SpaceSkip{}}
+	var claims []CaptureClaim
+	var origin []*SpaceBundleRecord
+	for _, line := range lines {
+		switch {
+		case line.Section == spaceSectionConfig && line.Config != nil:
+			report.Config = s.importSpaceConfig(ctx, d, scope, *line.Config)
+		case line.Record != nil && (line.Section == colMemories || line.Section == "memory_candidates"):
+			claims, origin = append(claims, spaceClaim(m.BundleID, line.Section, *line.Record)), append(origin, line.Record)
+		case line.Record != nil && slices.Contains(spaceDefinitions, line.Section) && slices.Contains(Collections, line.Section):
+			s.importSpaceDefinition(ctx, token, scope, line, &report)
+		default:
+			report.Skipped = append(report.Skipped, SpaceSkip{Section: line.Section, Reason: "unknown_section", Count: 1})
+		}
+	}
+	for start := 0; start < len(claims); start += spaceImportChunk {
+		end := min(start+spaceImportChunk, len(claims))
+		if err := s.importSpaceChunk(ctx, token, scope, m, start/spaceImportChunk, claims[start:end], origin[start:end], approved, &report); err != nil {
+			return report, err
+		}
+	}
+	return report, nil
+}
+
+// spaceClaim keeps the provenance: the bundle id rides on the capture event and
+// source, the original collection and id in the candidate's summary.
+func spaceClaim(bundleID, section string, r SpaceBundleRecord) CaptureClaim {
+	kind := r.Kind
+	if !slices.Contains(captureKinds, kind) {
+		kind = "semantic"
+	}
+	subject := "import"
+	if len(r.Keywords) > 0 && validRunLabel(r.Keywords[0], 128) {
+		subject = r.Keywords[0]
+	}
+	c := CaptureClaim{Subject: subject, Text: r.Text, Kind: kind, Basis: "inferred", MemoryContext: copyMemoryContext(r.MemoryContext),
+		Reason: cutUTF8("space bundle "+bundleID+" original "+section+"/"+r.ID, 500)}
+	if !validCaptureClaim(c) {
+		c.MemoryContext = nil
+	}
+	return c
+}
+
+func (s *Service) importSpaceChunk(ctx context.Context, token string, scope Scope, m SpaceManifest, n int, claims []CaptureClaim, origin []*SpaceBundleRecord, approved bool, report *SpaceReport) error {
+	at := m.CreatedAt.UTC().Truncate(time.Millisecond)
+	if at.After(time.Now()) || at.IsZero() {
+		at = time.Now().UTC().Truncate(time.Millisecond)
+	}
+	gen := spaceGenerator
+	out, err := s.Capture(ctx, token, CaptureInput{Scope: scope, Claims: claims, Generator: &gen,
+		Event: CaptureEvent{ID: "space-import:" + m.BundleID + ":" + strconv.Itoa(n), Type: "backfill", OriginProduct: "space_import", SessionID: m.BundleID, OccurredAt: &at}})
+	if err != nil {
+		return err
+	}
+	for i, item := range out.Items {
+		switch item.Status {
+		case "candidate":
+			report.Imported++
+			if approved && origin[i].Approved && item.Reason == "review_required" && s.approveImported(ctx, token, scope, item.CandidateID) == nil {
+				report.Approved++
+			}
+		case "merged":
+			report.Merged++
+		default:
+			report.Rejected++
+		}
+	}
+	return nil
+}
+
+// approveImported is the person's own approval, through the ordinary review transition.
+func (s *Service) approveImported(ctx context.Context, token string, scope Scope, id string) error {
+	cand, err := s.Repo.Get(ctx, "memory_candidates", scope, id)
+	if err != nil {
+		return err
+	}
+	_, err = s.Transition(ctx, token, "memory_candidates", id, ChangeInput{Scope: scope, ExpectedRevision: cand.Revision, Status: "approved"})
+	return err
+}
+
+// importSpaceConfig sets a bundle's settings only on a space that has none; aliases stay with their source space.
+func (s *Service) importSpaceConfig(ctx context.Context, d Decision, scope Scope, c SpaceConfig) string {
+	if d.Role != roleHuman {
+		return "skipped_not_human"
+	}
+	c.Aliases = []string{}
+	if validSpaceConfig(c) != nil {
+		return "invalid"
+	}
+	if _, err := s.changeSpaceConfig(ctx, scope, d, 0, func(dst *SpaceConfig) error { *dst = c; return nil }); err != nil {
+		return "kept_existing"
+	}
+	return "applied"
+}
+
+// importSpaceDefinition hands a definition to its own collection's create path and rules.
+func (s *Service) importSpaceDefinition(ctx context.Context, token string, scope Scope, line spaceBundleLine, report *SpaceReport) {
+	r := line.Record
+	_, err := s.Create(ctx, token, line.Section, CreateInput{Scope: scope, Kind: r.Kind, Text: r.Text, Summary: r.Summary, Keywords: r.Keywords})
+	if err != nil {
+		report.Skipped = append(report.Skipped, SpaceSkip{Section: line.Section, Reason: captureErrorCode(err), Count: 1})
+		return
+	}
+	report.Imported++
+}

@@ -193,7 +193,7 @@ func modelTransferRoutes(mux routeRegistrar, s *Service) {
 // Their exact read authorization, privacy state and fences are checked by the
 // caller. Derived source-backed records still use authorizeTransfer unchanged.
 func (s *Service) authorizeArchiveModelContent(ctx context.Context, token string, scope Scope, id, sensitivity, content string) (Decision, error) {
-	if sensitivity == "" || !validSensitivity(sensitivity) || sensitivity == "restricted" || !safeTransfer(content) {
+	if !transferableContent(sensitivity, content) {
 		return Decision{}, ErrDenied
 	}
 	d, e := s.authorizeAt(ctx, token, "transfer:model_input", scope, id, structuredText(map[string]string{"destination": "external:anthropic", "sensitivity": sensitivity, "content": content}), "external:anthropic")
