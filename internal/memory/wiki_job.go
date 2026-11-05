@@ -454,8 +454,10 @@ func (s *Service) RunWikiJob(ctx context.Context, token string, scope Scope, id 
 	}
 	job := *claimed.Wiki.Job
 	jobCtx, sp := startJobSpan(ctx, "job.wiki", claimed.ID)
+	start := time.Now()
 	result, runErr := s.buildWiki(jobCtx, token, d, claimed, &job)
 	sp.end(runErr)
+	observeOperation(wikiJobKind, runErr, time.Since(start))
 	return s.finishWikiJob(ctx, d, claimed, job, result, runErr)
 }
 

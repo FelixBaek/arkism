@@ -818,6 +818,7 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 	if e != nil {
 		return e
 	}
+	defer func(start time.Time) { observeOperation(job.Kind, result, time.Since(start)) }(time.Now())
 	success := false
 	handled := false
 	defer func() {

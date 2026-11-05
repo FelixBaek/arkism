@@ -814,13 +814,18 @@ memories it read and created.
 
 `GET /metrics` (`ops:metrics`) stays the scoped JSON view. Two opt-in exports
 add process-wide counters (requests and requests in flight, model calls with
-input, output and cached input token histograms per operation, rerank,
-recall lane and file extraction stage durations, job queue backlog, running,
+input, output, cached input and reasoning (thinking) token histograms per
+operation, rerank, recall lane and file extraction stage durations, finished
+background jobs by kind and outcome with their run time
+(`arkism_operations_total`, `arkism_operation_duration_seconds`), documents
+handed to memory extraction by source (`arkism_documents_ingested_total`:
+text, file, knowledge, reprocess), job queue backlog, running,
 failed and oldest-waiting gauges by job kind, tracing, database pool,
 goroutines, heap, GC, CPU, RSS and open files). They hold no memory text and
 no scope data. The queue gauges are counted with the server's own store
 binding on each scrape (2 s limit; `arkism_job_queue_stats_up` is 0 when the
-count failed); cached input tokens appear only when the provider reports them.
+count failed); cached input and reasoning tokens appear only when the provider
+reports them.
 
 - `ARKISM_PROMETHEUS=1` serves `GET /metrics/prometheus` in Prometheus text
   format. With `ARKISM_PROMETHEUS_TOKEN` set, scrapers send it as

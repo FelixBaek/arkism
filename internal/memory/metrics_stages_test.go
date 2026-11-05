@@ -33,7 +33,7 @@ func TestStageAndQueueMetrics(t *testing.T) {
 	extractUpload(t, f, "규칙 문단입니다.")
 	body := promText(stageFamilies())
 	for _, want := range []string{`arkism_recall_lane_duration_seconds_bucket{lane="vector",le="0.05"}`, `arkism_extract_stage_duration_seconds_count{stage="parse"}`,
-		`arkism_extract_stage_duration_seconds_count{stage="model"}`, `arkism_extract_stage_duration_seconds_count{stage="capture"}`} {
+		`arkism_extract_stage_duration_seconds_count{stage="model"}`, `arkism_extract_stage_duration_seconds_count{stage="capture"}`, `arkism_documents_ingested_total{source="file"}`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("missing %q in\n%s", want, body)
 		}
@@ -60,6 +60,23 @@ func TestStageAndQueueMetrics(t *testing.T) {
 	Handler(f.svc).ServeHTTP(rec, r)
 	if !strings.Contains(rec.Body.String(), "arkism_http_requests_in_flight 1") {
 		t.Fatalf("in-flight gauge missing:\n%s", rec.Body.String())
+	}
+}
+
+func TestOperationAndReasoningMetrics(t *testing.T) {
+	observeOperation("embedding", nil, 20*time.Millisecond)
+	observeOperation("embedding", errors.New("down"), time.Millisecond)
+	observeOperation("odd kind\n", nil, time.Millisecond)
+	body := promText(stageFamilies())
+	for _, want := range []string{`arkism_operations_total{kind="embedding",outcome="error"} 1`, `arkism_operation_duration_seconds_count{kind="embedding",outcome="ok"} 1`,
+		`arkism_operation_duration_seconds_bucket{kind="embedding",outcome="ok",le="0.05"} 1`, `arkism_operations_total{kind="other",outcome="ok"}`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("missing %q in\n%s", want, body)
+		}
+	}
+	observeLLMCall("think.test", "p", "m", true, time.Millisecond, ProviderUsage{OutputTokens: 300, ReasoningTokens: 200})
+	if body := promText(llmFamilies()); !strings.Contains(body, `arkism_llm_reasoning_tokens_sum{operation="think.test",provider="p",model="m"} 200`) {
+		t.Fatalf("reasoning series missing:\n%s", body)
 	}
 }
 

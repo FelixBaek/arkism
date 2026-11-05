@@ -58,6 +58,7 @@ type llmSeries struct {
 	duration                  histogramCounts
 	inputTokens, outputTokens histogramCounts
 	cachedTokens              histogramCounts
+	reasoningTokens           histogramCounts
 }
 
 type histogramCounts struct {
@@ -117,6 +118,7 @@ func observeLLMCall(operation, provider, model string, ok bool, elapsed time.Dur
 	s.inputTokens.observe(llmTokenBounds, float64(usage.InputTokens))
 	s.outputTokens.observe(llmTokenBounds, float64(usage.OutputTokens))
 	s.cachedTokens.observe(llmTokenBounds, float64(usage.CachedInputTokens))
+	s.reasoningTokens.observe(llmTokenBounds, float64(usage.ReasoningTokens))
 }
 
 func llmFamilies() []metricFamily {
@@ -127,6 +129,7 @@ func llmFamilies() []metricFamily {
 	in := metricFamily{name: "arkism_llm_input_tokens", help: "Input tokens per model call.", kind: "histogram", bounds: llmTokenBounds}
 	out := metricFamily{name: "arkism_llm_output_tokens", help: "Output tokens per model call.", kind: "histogram", bounds: llmTokenBounds}
 	cached := metricFamily{name: "arkism_llm_cached_input_tokens", help: "Input tokens per model call the provider served from its prompt cache.", kind: "histogram", bounds: llmTokenBounds}
+	reasoning := metricFamily{name: "arkism_llm_reasoning_tokens", help: "Output tokens per model call the model spent thinking, when the provider says.", kind: "histogram", bounds: llmTokenBounds}
 	for key, s := range llmStats.series {
 		labels := [][2]string{{"operation", key[0]}, {"provider", key[1]}, {"model", key[2]}}
 		calls.points = append(calls.points,
@@ -136,10 +139,11 @@ func llmFamilies() []metricFamily {
 		in.points = append(in.points, histogramPoint(labels, s.inputTokens))
 		out.points = append(out.points, histogramPoint(labels, s.outputTokens))
 		cached.points = append(cached.points, histogramPoint(labels, s.cachedTokens))
+		reasoning.points = append(reasoning.points, histogramPoint(labels, s.reasoningTokens))
 	}
 	dropped := metricFamily{name: "arkism_llm_calls_unlabeled_total", help: "Model calls not counted by label set (series cap reached).", kind: "counter",
 		points: []metricPoint{{value: float64(llmStats.overflow)}}}
-	return []metricFamily{calls, dur, in, out, cached, dropped}
+	return []metricFamily{calls, dur, in, out, cached, reasoning, dropped}
 }
 
 func slicesClone(l [][2]string) [][2]string { return append([][2]string(nil), l...) }

@@ -230,7 +230,10 @@ func (s *Service) runClaimedExtractJob(ctx context.Context, token string, d Deci
 // saved as failed with, err a failure to save. A done chunk drops its text.
 func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r Record) (_ Record, runErr, err error) {
 	ctx, sp := startJobSpan(ctx, "job.file_extract", r.ID)
-	defer func() { sp.end(cmp.Or(runErr, err)) }()
+	defer func(start time.Time) {
+		sp.end(cmp.Or(runErr, err))
+		observeOperation(fileExtractJobKind, cmp.Or(runErr, err), time.Since(start))
+	}(time.Now())
 	job := r.FileExtract
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
 	var answers map[int]ExtractPreviewResult

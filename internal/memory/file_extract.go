@@ -936,7 +936,15 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 		}
 	}
 	plan.Document, plan.Ref, plan.Chunks, plan.Kept, plan.Delta = docID, docRef, fresh, kept, delta
-	return s.launchExtract(ctx, token, d, scope, plan, out, sync)
+	out, err = s.launchExtract(ctx, token, d, scope, plan, out, sync)
+	if err == nil {
+		source, _, _ := strings.Cut(docRef, ":")
+		if round != "" {
+			source = "reprocess"
+		}
+		observeDocument(source)
+	}
+	return out, err
 }
 
 // launchExtract records the planned document job (document, chunks and delta filled
