@@ -159,9 +159,17 @@
     return { translate: (s) => tr(s, 0), patterns, exact };
   }
 
+  // One literal import per language: the bundler makes each a lazy chunk, and only these files can ever load
+  // (a template path would pull every i18n-*.js, Node helpers included, into the bundle). Same codes as look.js (i18n.test.js).
+  const DICTIONARIES = {
+    en: () => import("./i18n-en.js"), ja: () => import("./i18n-ja.js"), "zh-CN": () => import("./i18n-zh-CN.js"), "zh-TW": () => import("./i18n-zh-TW.js"),
+    es: () => import("./i18n-es.js"), de: () => import("./i18n-de.js"), fr: () => import("./i18n-fr.js"), pt: () => import("./i18n-pt.js"),
+    vi: () => import("./i18n-vi.js"), id: () => import("./i18n-id.js")
+  };
+
   // Node(테스트)에서는 번역기만 쓴다.
   if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) {
-    module.exports = { makeTranslator, compile, HANGUL };
+    module.exports = { makeTranslator, compile, HANGUL, DICTIONARIES: Object.keys(DICTIONARIES) };
     if (typeof document === "undefined") return;
   }
 
@@ -169,9 +177,8 @@
   const translate = (text) => translator.translate(text);
   const dictionaryTasks = new Map(); // code → Promise<translator>; a failed load is tried again next time
   const switches = globalThis.ArkismKeep.latest(); // the last language picked wins over a dictionary still loading
-  const LANG_CODE = /^[a-z]{2}(-[A-Z]{2})?$/; // also keeps the import path to one file next to this one
   function dictionary(code) {
-    if (!dictionaryTasks.has(code)) dictionaryTasks.set(code, import(`./i18n-${code}.js`).then(() => makeTranslator(root.ArkismI18nDicts[code]))
+    if (!dictionaryTasks.has(code)) dictionaryTasks.set(code, DICTIONARIES[code]().then(() => makeTranslator(root.ArkismI18nDicts[code]))
       .catch((error) => { dictionaryTasks.delete(code); throw error; }));
     return dictionaryTasks.get(code);
   }
@@ -263,7 +270,7 @@
 
   let titleOrig = null;
   async function setLang(next) {
-    next = LANG_CODE.test(next) ? next : "ko";
+    next = Object.hasOwn(DICTIONARIES, next) ? next : "ko";
     const sequence = switches.begin();
     let loaded = null;
     if (next !== "ko") {

@@ -21,11 +21,11 @@
 .v4s-meta .mono { font: 400 calc(11px * var(--fs, 1))/1.5 var(--mono); }
 .v4s-meta .copy-path { overflow: hidden; text-overflow: ellipsis; }
 .v4s-meta .copy-chip { margin-left: 0; font-size: 11px; color: var(--nc-muted); border-color: var(--nc-line); }
-.v4s-uses { flex: none; width: 44px; text-align: right; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
+.v4s-uses { flex: none; min-width: 2.75rem; white-space: nowrap; text-align: right; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .v4s-badge { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border: 1px solid var(--nc-line); border-radius: 999px; font: 500 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); white-space: nowrap; }
 .v4s-badge.amber { background: var(--nc-amber-bg); border-color: transparent; color: var(--nc-amber); }
 .v4s-badge.has-dot::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.v4s-agents { flex: none; display: flex; align-items: center; gap: 6px; width: 126px; }
+.v4s-agents { flex: none; display: flex; align-items: center; gap: 6px; min-width: 7.875rem; } /* seven agents are wider than 126px: grow, never overlap the count */
 .v4s-agents .agent-tile, .v4s-agent .agent-tile { width: 16px; height: 16px; border: 0; background: none; border-radius: 4px; }
 .v4s-agents .agent-tile img, .v4s-agents .agent-tile svg, .v4s-agent .agent-tile img, .v4s-agent .agent-tile svg { width: 15px; height: 15px; }
 .v4s-foot { margin: -8px 0 0; font: 400 12px/1.5 var(--sans); color: var(--nc-quiet); }

@@ -755,7 +755,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .rt-ctl-head .icon { width: 16px; height: 16px; color: var(--text-2); }
 .rt-card .dim { margin: 0; font-size: calc(12px * var(--fs, 1)); color: var(--text-2); }
 .rt-kv { display: flex; align-items: center; gap: 12px; font-size: calc(12px * var(--fs, 1)); }
-.rt-kv > span:first-child { width: 84px; flex: none; color: var(--text-3); font-size: calc(11.5px * var(--fs, 1)); }
+.rt-kv > span:first-child { width: 84px; flex: none; hyphens: auto; /* long compound words (de) break at a syllable, not mid-letter */ color: var(--text-3); font-size: calc(11.5px * var(--fs, 1)); }
 .rt-kv b { font-weight: 400; }
 .rt-chain { display: inline-flex; align-items: center; gap: 4px; }
 .rt-chain .icon { width: 12px; height: 12px; color: var(--text-3); }

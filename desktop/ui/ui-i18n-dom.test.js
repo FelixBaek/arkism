@@ -160,8 +160,10 @@ test("another language replaces the current one from the Korean source, and a ba
   assert.equal(await I.setLang("ko"), true);
   assert.equal($("nav button").textContent, "저장");
   assert.equal(late.textContent, "닫기");
-  const warn = console.warn; console.warn = () => {};
-  try { assert.equal(await I.setLang("xx"), false); } finally { console.warn = warn; } // no such dictionary
+  assert.equal(await I.setLang("en"), true);
+  assert.equal(await I.setLang("xx"), true); // no such dictionary: Korean, nothing is fetched
+  assert.equal(I.lang(), "ko");
+  assert.equal($("nav button").textContent, "저장");
   assert.equal(await I.setLang("../i18n-en"), true); // not a language code: Korean
   assert.equal(I.lang(), "ko");
 });

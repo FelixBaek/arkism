@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 const { extract, stale } = require("./i18n-extract.js");
-const { makeTranslator, HANGUL } = require("./i18n.js");
+const { makeTranslator, HANGUL, DICTIONARIES } = require("./i18n.js");
 
 // look.js owns the language list; run it with just enough of a page around it.
 function languages() {
@@ -35,6 +35,7 @@ test("each language in the picker has one dictionary file, and no file is left w
   const files = fs.readdirSync(__dirname).filter((f) => /^i18n-.+\.js$/.test(f) && !/^i18n-extract\.js$|\.test\.js$/.test(f)).map((f) => f.slice(5, -3));
   assert.deepEqual(files.sort(), [...codes].sort());
   for (const c of codes) assert.ok(dicts[c]?.strings && dicts[c]?.patterns, `${c}: registers { strings, patterns }`);
+  assert.deepEqual([...DICTIONARIES].sort(), [...codes].sort(), "i18n.js DICTIONARIES loads exactly the picker's languages");
 });
 
 test("every static string has its own English entry", () => {
@@ -65,6 +66,12 @@ test("no English entry outlives its Korean", () => {
 for (const code of codes.filter((c) => c !== "en")) {
   test(`${code}: exactly the English keys, translated, with the same placeholders`, () => {
     const d = dicts[code], bad = [];
+    // An English fallback (tools/i18n_sync.mjs --fallback) is allowed only where it is listed, and only while it is the English.
+    for (const ko of d.fallback || []) {
+      const kind = Object.hasOwn(dict.strings, ko) ? "strings" : "patterns";
+      if (d[kind][ko] !== dict[kind][ko]) bad.push(`fallback is not the English: ${ko}`);
+    }
+    if (d.fallback?.length) console.log(`  ${code}: ${d.fallback.length} entries still show English (fallback)`);
     for (const kind of ["strings", "patterns"]) {
       const want = Object.keys(dict[kind]), have = new Set(Object.keys(d[kind]));
       const missing = want.filter((k) => !have.has(k)), extra = [...have].filter((k) => !Object.hasOwn(dict[kind], k));
@@ -76,11 +83,19 @@ for (const code of codes.filter((c) => c !== "en")) {
       }
     }
     if (bad.length) console.log(`  ${code}:\n` + bad.slice(0, 40).map((b) => `   - ${b}`).join("\n"));
-    assert.equal(bad.length, 0, `${code}: ${bad.length} problems; add the missing keys to i18n-${code}.js`);
+    assert.equal(bad.length, 0, `${code}: ${bad.length} problems; run node tools/i18n_sync.mjs (see guide/development.md)`);
   });
 }
 
 test("menu names stay English in every language", () => {
+  // The rail and the folded-rail location are written in English, so no dictionary can reach them.
+  const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8"), shell = fs.readFileSync(path.join(__dirname, "shell.js"), "utf8");
+  for (const menu of ["home", "memory", "agent", "router", "connect"]) {
+    const rail = new RegExp(`data-menu="${menu}"[^>]*>.*?<span>([^<]*)</span>`).exec(html)?.[1];
+    assert.match(rail || "", /^(Home|Memory|Flow|Router|Tools)$/, `rail ${menu}`);
+    assert.match(new RegExp(`${menu}: \\{ label: "([^"]+)"`).exec(shell)?.[1] || "", /^(HOME|MEMORY|FLOW|ROUTER|TOOLS)$/, `shell ${menu}`);
+  }
+  // Korean words that name a menu elsewhere (the Home tab, flow and tool mentions) map to the English menu name.
   for (const code of codes) for (const [ko, en] of [["홈", "Home"], ["흐름", "Flow"], ["도구", "Tools"]]) assert.equal(dicts[code].strings[ko], en, `${code}: ${ko}`);
 });
 

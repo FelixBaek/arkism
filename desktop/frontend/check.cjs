@@ -16,5 +16,6 @@ assert.ok(!fs.existsSync(path.join(dest, "node_modules")));
 assert.ok(!fs.existsSync(path.join(dest, "testdata")));
 assert.ok(!fs.existsSync(path.join(dest, "app.js")));
 const assets = fs.readdirSync(path.join(dest, "assets"));
-assert.ok(assets.some(name => name.startsWith("i18n-en-")), "English must remain a separate lazy chunk");
+for (const code of require(path.join(desktop, "ui", "i18n.js")).DICTIONARIES) assert.ok(assets.some(name => name.startsWith(`i18n-${code}-`)), `${code} must remain a separate lazy chunk`);
+assert.ok(!assets.some(name => name.startsWith("i18n-extract")), "Node-only helpers stay out of the bundle");
 console.log(`Frontend manifest and product asset checks passed (${manifest.inputs.length} inputs, ${manifest.outputBytes} script bytes)`);

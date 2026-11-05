@@ -208,7 +208,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "태그를 불러오지 못했어요.": "Couldn't load tags.",
   "아직 태그가 붙은 기억이 없어요.": "No memory has a tag yet.",
   "이름을 바꾸면 그 태그가 붙은 기억이 모두 바뀌어요. 있는 태그 이름으로 바꾸면 둘이 합쳐져요.": "Renaming changes every memory with that tag. Renaming to an existing tag merges the two.",
-  "이름 바꾸기": "Rename",
   "파일에서 기억 후보 만들기": "Memory candidates from a file",
   "웹훅 알림": "Webhook notice",
   "새 태그 이름": "New tag name",
