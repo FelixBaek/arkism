@@ -12,7 +12,9 @@
    "phrase": "10월",
    "from": "2026-09-30T15:00:00Z",
    "to": "2026-10-31T15:00:00Z"
-  }
+  },
+  "reranked": true,
+  "min_score_dropped": 2
  },
  "items": [
   {
@@ -28,7 +30,16 @@
    "lanes": [
     "keyword",
     "temporal"
-   ]
+   ],
+   "explain": {
+    "lane_ranks": {
+     "keyword": 1,
+     "temporal": 2
+    },
+    "fused_score": 0.033,
+    "rerank_score": 0.91
+   },
+   "score": 0.91
   },
   {
    "id": "x1",
@@ -40,7 +51,16 @@
    "lanes": [
     "vector",
     "temporal"
-   ]
+   ],
+   "explain": {
+    "lane_ranks": {
+     "vector": 2,
+     "temporal": 3
+    },
+    "fused_score": 0.029,
+    "rerank_score": 0.8
+   },
+   "score": 0.8
   },
   {
    "id": "m1",
@@ -51,7 +71,15 @@
    "created_at": "2026-10-13T11:16:34Z",
    "lanes": [
     "temporal"
-   ]
+   ],
+   "explain": {
+    "lane_ranks": {
+     "temporal": 3
+    },
+    "fused_score": 0.025,
+    "rerank_score": 0.69
+   },
+   "score": 0.69
   },
   {
    "id": "m9",
@@ -62,7 +90,15 @@
    "created_at": "2026-09-03T13:16:34Z",
    "lanes": [
     "keyword"
-   ]
+   ],
+   "explain": {
+    "lane_ranks": {
+     "keyword": 4
+    },
+    "fused_score": 0.021,
+    "rerank_score": 0.58
+   },
+   "score": 0.58
   },
   {
    "id": "ob1",
@@ -79,7 +115,16 @@
    "lanes": [
     "vector",
     "temporal"
-   ]
+   ],
+   "explain": {
+    "lane_ranks": {
+     "vector": 1,
+     "temporal": 2
+    },
+    "fused_score": 0.017,
+    "rerank_score": 0.47
+   },
+   "score": 0.47
   }
  ]
 }

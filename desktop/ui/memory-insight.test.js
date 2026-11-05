@@ -10,7 +10,7 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const { document, window } = dom.install();
   dom.Element.prototype.setCustomValidity = function (m) { this.validity = m; };
   require("./memory-pages.js");
-  for (const f of ["./digests.js", "./memory-insight.js"]) { delete require.cache[require.resolve(f)]; require(f); } // memory rows come from digests.js
+  for (const f of ["./digests.js", "./memory-time.js", "./memory-insight.js"]) { delete require.cache[require.resolve(f)]; require(f); } // memory rows come from digests.js
   const h = dom.helpers(document);
   for (const id of ["app", "chips", "stats", "table", "detail"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
   const state = { view: "memories", memTab: tab, server: "s", token: "t", scope: { ...SCOPE }, caps: { role } };
@@ -32,6 +32,7 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   return { view, state, calls, notices, opened, asked, h };
 }
 const body = (call) => JSON.parse(call[1].body);
+const sentTo = (t, path) => t.calls.filter(([p]) => p === path);
 const err = (code, status) => { const e = new Error(code); e.status = status; return e; };
 const memory = (id, o = {}) => ({ id, text: `기억 ${id}`, status: "active", revision: 1, ...o });
 
@@ -42,10 +43,10 @@ test("ask sends the question, shows the answer and opens a cited memory", async 
   assert.match(t.h.$("#table").textContent, /승인된 기억만 보고 답해요/);
   const input = t.h.$("#chips input");
   input.value = "  "; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
-  assert.equal(t.calls.length, 0, "an empty question is not sent");
+  assert.equal(sentTo(t, "/v1/reflect").length, 0, "an empty question is not sent");
   input.value = "배포 전에 뭐 해?"; t.h.$("#chips input[type=number]").value = "5";
   dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
-  assert.deepEqual(body(t.calls[0]), { scope: SCOPE, query: "배포 전에 뭐 해?", limit: 5 });
+  assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]), { scope: SCOPE, query: "배포 전에 뭐 해?", limit: 5 });
   assert.match(t.h.$("#table").textContent, /스테이징에서 먼저 확인해요/);
   assert.match(t.h.$("#table").textContent, /근거 기억 2개/);
   assert.equal(t.h.$("#table .insight-answer p").getAttribute("data-no-i18n"), "", "the answer is data, never translated");
@@ -61,7 +62,7 @@ test("ask says a model must be set up when the server has none, and other failur
   const t = setup("ask", [["/v1/reflect", () => { throw fail; }]]);
   t.view.draw();
   t.h.$("#chips input").value = "질문"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
-  assert.equal(body(t.calls[0]).limit, undefined, "the server picks how many memories to use");
+  assert.equal(body(sentTo(t, "/v1/reflect")[0]).limit, undefined, "the server picks how many memories to use");
   assert.match(t.h.$("#table .callout").textContent, /모델 설정 필요/);
   fail = err("model_budget_exceeded", 429);
   dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
@@ -156,4 +157,103 @@ test("the entity search goes to the server and an empty result says so", async (
   t.h.$("#chips input").value = "orb"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
   assert.match(t.calls.at(-1)[0], /q=orb/);
   assert.match(t.h.$("#table").textContent, /검색과 맞는 이름이 없어요/);
+});
+
+test("ask sends the 자세히 options and a field list as a JSON schema, then shows steps, the structured answer and the space mission", async () => {
+  const t = setup("ask", [["/v1/spaces/w/p/config/effective", () => ({ config: { reflect_mission: "배포 안전을 먼저 본다" } })],
+    ["/v1/reflect", () => ({ answer: '{"할 일":"스테이징 확인","급함":true}', structured_answer: { "할 일": "스테이징 확인", "급함": true }, cited_memory_ids: ["m4"], directives_applied: [], retrieved: [{ id: "m4", kind: "lesson", score: 0.9 }],
+      tool_trace: [{ tool: "recall", args: { query: "배포 순서" }, ids: ["m4"] }, { tool: "entity", args: { name: "Orbit" }, ids: [], error: "denied" }], iterations: 3, usage: { total_tokens: 812 } })],
+    ["/v1/memories/m4?", () => memory("m4")]]);
+  t.view.draw(); await dom.flush();
+  assert.match(t.h.$("#table .insight-mission").textContent, /배포 안전을 먼저 본다/, "the space mission is shown before asking");
+  const form = t.h.$("#chips form");
+  t.h.$("#chips input").value = "배포 전에 뭐 해?";
+  form.querySelector("[data-opt=iterations]").value = "5";
+  form.querySelector("[data-opt=tokens]").value = "10"; // out of range: the server default stays
+  const add = [...form.querySelectorAll("button")].find((b) => b.textContent === "칸 추가");
+  add.click(); add.click(); add.click();
+  const names = form.querySelectorAll(".insight-shape-row input:not([type])"), kinds = form.querySelectorAll(".insight-shape-row select");
+  names[0].value = "할 일"; dom.fire(names[0], "input");
+  names[1].value = "급함"; dom.fire(names[1], "input"); kinds[1].value = "boolean"; dom.fire(kinds[1], "change");
+  const must = form.querySelectorAll(".insight-shape-row input[type=checkbox]")[1]; must.checked = false; dom.fire(must, "change");
+  dom.fire(form, "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]), { scope: SCOPE, query: "배포 전에 뭐 해?", max_iterations: 5,
+    response_schema: { type: "object", properties: { "할 일": { type: "string" }, "급함": { type: "boolean" } }, required: ["할 일"], additionalProperties: false } }, "the empty third field is left out");
+  const table = t.h.$("#table");
+  assert.match(table.querySelector(".insight-answer").textContent, /스테이징 확인/);
+  assert.match(table.querySelector(".insight-answer").textContent, /예/, "a yes/no field reads as words");
+  assert.match(table.textContent, /AI가 더 찾아본 과정 2번/);
+  assert.match(table.textContent, /기억 다시 찾기 · 배포 순서/);
+  assert.match(table.textContent, /권한이 없어 건너뛰었어요/);
+  assert.match(table.textContent, /이 공간의 목표에 맞춰 답해요/);
+  assert.match(table.querySelector(".insight-json").textContent, /"total_tokens": 812/);
+  assert.match(table.textContent, /AI 호출3번/);
+});
+
+test("ask with its own mission says so, and a schema miss is explained", async () => {
+  const fail = err("invalid_model_output", 502);
+  const t = setup("ask", [["/v1/reflect", () => { throw fail; }]]);
+  t.view.draw(); await dom.flush();
+  t.h.$("#chips input").value = "질문"; t.h.$("#chips [data-opt=mission]").value = "짧게 답한다";
+  dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
+  assert.equal(body(sentTo(t, "/v1/reflect")[0]).mission, "짧게 답한다");
+  assert.match(t.h.$("#table .callout").textContent, /답 모양에 맞는 답/);
+});
+
+test("search 살펴보기 sends explain with the 자세히 options and shows lanes, ranks and scores; JSON copies", async () => {
+  const hit = { id: "m4", collection: "memories", kind: "lesson", status: "active", text: "배포 전에는 스테이징에서 확인한다.", score: 0.82, lanes: ["keyword", "graph"],
+    explain: { lane_ranks: { keyword: 1, graph: 2 }, fused_score: 0.0245, rerank_score: 0.82, graph_hops: 2 }, entities: [{ id: "e1", name: "Orbit", type: "project" }],
+    source_traces: [{ excerpt: "스테이징 먼저 보자" }], tags: ["배포"] };
+  const t = setup("search", [["/v1/search", () => ({ authority: "data_only_untrusted", context_id: "c1", items: [hit],
+    explain: { lanes: ["exact", "keyword", "vector", "graph"], reranked: true, min_score_dropped: 3, time_window: { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" } } })],
+    ["/v1/memories/m4?", () => memory("m4")]]);
+  let copied = "";
+  t.view.draw();
+  t.h.$("#table").ownerDocument.defaultView = { navigator: { clipboard: { writeText: async (x) => { copied = x; } } } }; // the button's own window
+
+  assert.match(t.h.$("#table").textContent, /에이전트가 기억을 찾을 때와 똑같이/);
+  const form = t.h.$("#chips form");
+  t.h.$("#chips input").value = "지난주 배포";
+  form.querySelector("[data-opt=limit]").value = "20"; form.querySelector("[data-opt=depth]").value = "3"; form.querySelector("[data-opt=min]").value = "0.2";
+  form.querySelector("[data-opt=at]").value = "2026-11-03T09:00";
+  form.querySelector("[data-opt=tags]").value = "배포, 운영, 배포"; form.querySelector("[data-opt=match]").value = "all_strict";
+  form.querySelector("[data-opt=groups]").value = "a+b | -c\n\n d ";
+  for (const k of ["sources", "entities", "observations", "norerank"]) form.querySelector(`[data-opt=${k}]`).checked = true;
+  dom.fire(form, "submit"); await dom.flush();
+  const sent = body(sentTo(t, "/v1/search")[0]);
+  assert.equal(sent.explain, true);
+  assert.equal(sent.query_time, new Date("2026-11-03T09:00").toISOString());
+  delete sent.query_time;
+  assert.deepEqual(sent, { scope: SCOPE, query: "지난주 배포", explain: true, limit: 20, graph_depth: 3, min_score: 0.2,
+    filters: { tags: ["배포", "운영"], tags_match: "all_strict", tag_groups: [[{ tags: ["a", "b"], match: "all_strict" }, { tags: ["c"], not: true }], [{ tags: ["d"] }]] },
+    include: ["sources", "entities"], prefer_observations: true, rerank: false });
+  const table = t.h.$("#table");
+  assert.match(table.textContent, /같은 문구, 단어, 비슷한 뜻, 이어진 기억/);
+  assert.match(table.textContent, /‘지난주’/);
+  assert.match(table.textContent, /AI로 다시 매겼어요/);
+  assert.match(table.textContent, /점수가 낮아 뺀 기억3개/);
+  const row = table.querySelector(".original-row");
+  assert.match(row.textContent, /단어 1위 · 이어진 기억 2위 · 2단계 이어짐/);
+  row.click(); await dom.flush();
+  const d = t.h.$("#detail");
+  assert.match(d.textContent, /1위로 찾은 기억/);
+  assert.match(d.textContent, /합친 점수0\.0245/);
+  assert.match(d.textContent, /AI가 다시 매긴 점수0\.82/);
+  assert.match(d.textContent, /Orbit/);
+  assert.match(d.textContent, /스테이징 먼저 보자/);
+  d.querySelector(".dg-item").click(); await dom.flush();
+  assert.equal(t.opened[0].id, "m4");
+  [...table.querySelectorAll("button")].find((b) => b.textContent === "JSON 복사").click(); await dom.flush();
+  assert.equal(JSON.parse(copied).request.query, "지난주 배포");
+  assert.equal(JSON.parse(copied).response.items[0].id, "m4");
+});
+
+test("search 살펴보기 sends only explain by default and says when the server refuses the options", async () => {
+  const t = setup("search", [["/v1/search", () => { throw err("invalid_request", 400); }]]);
+  t.view.draw();
+  t.h.$("#chips input").value = "  "; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
+  assert.equal(sentTo(t, "/v1/search").length, 0);
+  t.h.$("#chips input").value = "배포"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(t, "/v1/search")[0]), { scope: SCOPE, query: "배포", explain: true });
+  assert.match(t.h.$("#table .callout").textContent, /찾을 수 없는 설정/);
 });

@@ -11,9 +11,9 @@ export function createMemoryList(deps) {
   // One name per review concept across the app: 새 기억 확인 · 서로 다른 기억 · 합치기 제안. 승인 경로 has nothing to decide, so it is a 모아보기 view.
   const MEM_CHECK = [["candidate", "새 기억 확인"], ["conflicted", "서로 다른 기억"], ["merge", "합치기 제안"], ["notes", "AI 정리"], ["idle", "다시 볼 기억"]];
  // merge, notes: digests.js
-  const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"], ["ask", "물어보기"], ["rules", "규칙"], ["entities", "자주 나온 이름"]];
+  const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"], ["ask", "물어보기"], ["search", "검색 살펴보기"], ["rules", "규칙"], ["entities", "자주 나온 이름"]];
 
-  const memPanels = () => ({ relations: deps.relations, traits: deps.traits, reflections: deps.reflections, past: deps.memoryTime, originals: deps.originals, ask: deps.insight.ask, rules: deps.insight.rules, entities: deps.insight.entities }); // insight: memory-insight.js
+  const memPanels = () => ({ relations: deps.relations, traits: deps.traits, reflections: deps.reflections, past: deps.memoryTime, originals: deps.originals, ask: deps.insight.ask, search: deps.insight.search, rules: deps.insight.rules, entities: deps.insight.entities }); // insight: memory-insight.js
 
   // Each is a serverCount(): the server total or "N+" while more pages wait, "—" when the list failed (#465), never the first page as the whole.
   function checkCounts() {
@@ -44,7 +44,7 @@ export function createMemoryList(deps) {
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
       reflections: "작업하면서 얻은 해석이에요. 사실이나 실행 승인으로 쓰지 않아요.", past: "정한 시각에 쓰이던 기억을 그대로 보여 줘요. 지금 지시로는 쓰지 않아요.",
       originals: "에이전트와 나눈 대화예요. 7일 보관하고, 기억이 실제로 쓰이면 그때부터 다시 7일을 세요.",
-      ask: "궁금한 것을 물으면 승인된 기억만 보고 답해요. 답에는 근거 기억이 붙어요.", rules: "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 규칙이에요. 사람만 적고 바꿀 수 있어요.",
+      ask: "궁금한 것을 물으면 승인된 기억만 보고 답해요. 답에는 근거 기억이 붙어요.", search: "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.", rules: "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 규칙이에요. 사람만 적고 바꿀 수 있어요.",
       entities: "기억에 자주 나온 사람·도구·프로젝트 이름이에요. 고르면 그 이름이 나온 기억을 볼 수 있어요." }[t];
     if (look) return [MEM_LOOK.find(([k]) => k === t)[1], look, ""];
     const w = deps.memUse();

@@ -3,7 +3,7 @@ window.ArkismMemoryTime = (ctx) => {
   const { state, $, el, icon, button, request, detailShell, openDetail, query: scopeQuery, openRecord } = ctx;
   // 시간순: memories laid out by when they happened, in three lanes; the time words go to the server's parser (POST /v1/search explain)
   const LANES = { all: "전체", facts: "사실", events: "겪은 일", observations: "정리된 관찰" };
-  const FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억" };
+  const FOUND = window.ArkismMemoryTime.FOUND;
   const laneOf = (h) => h.derived || h.collection !== "memories" ? "observations" : h.kind === "episodic" || h.kind === "raw" || (h.tags || []).some((t) => t.startsWith("session:")) ? "events" : "facts";
   // the server's event-time order (recall_time.go hitEventTime): occurred (the days the content states), observed_at, valid_from, then effective_at / created_at
   const eventAt = (h) => {
@@ -208,3 +208,5 @@ window.ArkismMemoryTime = (ctx) => {
   function close() { const index = (mode === "line" ? shownRows : rows).indexOf(selected); selected = null; paint(); detail(); if (index >= 0) $("#table").querySelectorAll(".original-row")[index]?.focus(); }
   return { draw, reset, detail, close };
 };
+// How a search lane found a memory, in plain words; also the 검색 살펴보기 screen (memory-insight.js).
+window.ArkismMemoryTime.FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억", causal: "원인과 결과" };

@@ -17,5 +17,35 @@
    "kind": "lesson",
    "score": 0.55
   }
- ]
+ ],
+ "tool_trace": [
+  {
+   "tool": "recall",
+   "args": {
+    "query": "Orbit 배포 순서"
+   },
+   "ids": [
+    "m4",
+    "x1"
+   ]
+  },
+  {
+   "tool": "entity",
+   "args": {
+    "name": "Orbit"
+   },
+   "ids": [
+    "m1"
+   ]
+  }
+ ],
+ "iterations": 3,
+ "usage": {
+  "provider": "server",
+  "model": "sonnet",
+  "requests": 3,
+  "input_tokens": 2140,
+  "output_tokens": 188,
+  "total_tokens": 2328
+ }
 }

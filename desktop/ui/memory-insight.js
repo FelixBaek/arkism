@@ -1,5 +1,6 @@
 // @ts-check
-// MEMORY › 기억 › 모아보기: 물어보기 (POST /v1/reflect), 규칙 (/v1/directives), 자주 나온 이름 (/v1/entities).
+// MEMORY › 기억 › 모아보기: 물어보기 (POST /v1/reflect), 규칙 (/v1/directives), 자주 나온 이름 (/v1/entities),
+// 검색 살펴보기 (POST /v1/search with explain: which lane found each memory and how it scored).
 // Same panel shape as intelligence.js (draw · reset · detail · close). Server text is data: drawn as plain text, never markup.
 // Rules and name edits are a person's own writes, so only a human session sees those buttons (the server refuses the rest).
 window.ArkismMemoryInsight = (ctx, tab) => {
@@ -11,10 +12,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const day = (v) => (v ? new Date(v).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "—");
   const APPLIES = { both: "답할 때와 에이전트에 기억을 줄 때", reflect: "물어보기에 답할 때만", context: "에이전트에 기억을 줄 때만" };
   const TYPES = { person: "사람", project: "프로젝트", repo: "저장소", tool: "도구", product: "제품", file: "파일", service: "서비스", place: "장소", organization: "단체", concept: "개념" };
-  const TITLE = { ask: "물어보기", rules: "규칙", entities: "자주 나온 이름" };
+  const TITLE = { ask: "물어보기", rules: "규칙", entities: "자주 나온 이름", search: "검색 살펴보기" };
   const loads = globalThis.ArkismKeep.latest();
-  let key = "", selected = null, editing = null, busy = false, answer = null, failure = null, question = "", limit = "", q = "";
+  // answer: the last reflect or search reply; sent: the search body it answered; mission: the space's reflect mission (undefined until read).
+  let key = "", selected = null, editing = null, busy = false, answer = null, sent = null, failure = null, question = "", q = "", mission;
   let memo = new Map(), views = new Map();
+  // form options under 자세히, kept per tab across redraws; shape: the 답 모양 fields [{ name, type, required }]
+  const opts = { match: "any_strict" }, shape = [];
   // 규칙 · 자주 나온 이름 pages go through the shared cursor pager (memory-pages.js): order, repeats and stale reads handled there.
   const pager = window.ArkismMemoryPages.create(async (k, at) => {
     const { find } = JSON.parse(k);
@@ -26,7 +30,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const pageKey = () => JSON.stringify({ id: identity(), find: tab === "entities" ? q : "" });
   const page = () => { const s = pager.snapshot(); return s.key === pageKey() ? s : { items: [], cursor: "", ready: false, loading: false, error: "" }; };
   const rows = () => page().items;
-  function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; failure = null; memo = new Map(); views = new Map(); }
+  function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; sent = null; failure = null; mission = undefined; memo = new Map(); views = new Map(); }
   const live = (ticket, owner) => () => ticket.live() && active() && identity() === owner;
   const formHere = () => $("#chips .insight-form")?.dataset.tab === tab;
 
@@ -47,8 +51,64 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function more(...nodes) { const d = el("details", "insight-more"); d.append(el("summary", "", "자세히"), ...nodes); return d; }
   function field(label, input) { const l = el("label", "insight-field"); l.append(el("span", "", label), input); return l; }
+  // An option input under 자세히: starts from opts, read back on submit (readOpts).
+  function opt(node, name) { node.dataset.opt = name; if (node.type === "checkbox") node.checked = !!opts[name]; else node.value = opts[name] ?? ""; return node; }
+  const readOpts = (form) => form.querySelectorAll("[data-opt]").forEach((n) => { opts[n.dataset.opt] = n.type === "checkbox" ? n.checked : n.value; });
+  function num(name, min, max, step = "1") { const n = el("input"); n.type = "number"; n.min = min; n.max = max; n.step = step; n.placeholder = "알아서"; return opt(n, name); }
+  function check(name, label) { const l = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; l.append(opt(c, name), el("span", "", label)); return l; }
+  const int = (v, min, max) => { const n = v === "" || v == null ? NaN : Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : undefined; };
+  // The whole exchange as JSON, for a bug report or a second look; server text stays data.
+  function jsonView(obj) {
+    const text = JSON.stringify(obj, null, 2), pre = raw(el("pre", "insight-json", text));
+    // its own window: a popout has the focus; a missing API rejects too
+    const copy = button("JSON 복사", "small", null, () => Promise.resolve().then(() => copy.ownerDocument.defaultView.navigator.clipboard.writeText(text))
+      .then(() => notice("복사했어요."), () => notice("복사하지 못했어요. 글자를 직접 골라 복사해 주세요.")));
+    return [copy, pre];
+  }
+  // name → value rows of server data (a structured answer), never translated
+  function dataFacts(entries) {
+    const dl = el("dl", "facts");
+    const show = (v) => (Array.isArray(v) ? v.map(show).join(", ") : v === true ? "예" : v === false ? "아니오" : v && typeof v === "object" ? JSON.stringify(v) : String(v ?? "—"));
+    for (const [k, v] of entries) dl.append(raw(el("dt", "", k)), typeof v === "boolean" ? el("dd", "", show(v)) : raw(el("dd", "", show(v))));
+    return dl;
+  }
 
   // ------------------------------------------------------------ 물어보기
+  // 답 모양: a few named fields become the small JSON schema subset POST /v1/reflect accepts (reflect_schema.go).
+  const SHAPES = { string: "글", number: "숫자", integer: "정수", boolean: "예/아니오", list: "글 목록" };
+  function schemaOf(fields) {
+    const properties = {}, required = new Set();
+    for (const f of fields) {
+      const name = f.name.trim().slice(0, 64);
+      if (!name) continue;
+      properties[name] = f.type === "list" ? { type: "array", items: { type: "string" } } : { type: SHAPES[f.type] ? f.type : "string" };
+      if (f.required) required.add(name);
+    }
+    return Object.keys(properties).length ? { type: "object", properties, required: [...required], additionalProperties: false } : undefined;
+  }
+  function shapeEditor() {
+    const box = el("div", "insight-shape"), rows = el("div", "insight-shape-rows");
+    const add = button("칸 추가", "small", null, () => { if (shape.length < 20) { shape.push({ name: "", type: "string", required: true }); fill(); rows.querySelector(".insight-shape-row:last-child input")?.focus(); } });
+    function fill() {
+      rows.replaceChildren(...shape.map((f, i) => {
+        const row = el("div", "insight-shape-row");
+        const name = el("input"); name.maxLength = 64; name.value = f.name; name.placeholder = "칸 이름 (예: 할 일)"; name.setAttribute("aria-label", "칸 이름");
+        name.addEventListener("input", () => { f.name = name.value; });
+        const type = el("select"); type.setAttribute("aria-label", "칸 종류");
+        for (const [k, l] of Object.entries(SHAPES)) { const o = el("option", "", l); o.value = k; type.append(o); }
+        type.value = f.type; type.addEventListener("change", () => { f.type = type.value; });
+        const must = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; c.checked = f.required;
+        c.addEventListener("change", () => { f.required = c.checked; }); must.append(c, el("span", "", "꼭 채우기"));
+        const drop = button("빼기", "ghost small", null, () => { shape.splice(i, 1); fill(); }); drop.setAttribute("aria-label", "이 칸 빼기");
+        row.append(name, type, must, drop);
+        return row;
+      }));
+      add.disabled = shape.length >= 20;
+    }
+    fill();
+    box.append(el("span", "", "답 모양 (비워 두면 글로 답해요)"), rows, add);
+    return box;
+  }
   function drawAsk() {
     if (!formHere()) {
       const form = el("form", "original-search insight-form"); form.dataset.tab = tab;
@@ -56,30 +116,45 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       const input = el("input"); input.type = "text"; input.maxLength = 4000; input.value = question;
       input.placeholder = "궁금한 것 (예: 배포 전에 늘 하는 일은?)"; input.setAttribute("aria-label", "물어볼 내용");
       box.append(icon("magnifying-glass"), input);
-      const n = el("input"); n.type = "number"; n.min = "1"; n.max = "20"; n.value = limit; n.placeholder = "알아서";
       const go = button("물어보기", "primary small"); go.type = "submit";
-      form.append(box, go, more(field("참고할 기억 수 (1~20)", n)));
+      const goal = el("textarea"); goal.maxLength = 2000; goal.rows = 2; goal.placeholder = "비워 두면 이 공간의 목표를 써요";
+      form.append(box, go, more(field("참고할 기억 수 (1~20)", num("limit", "1", "20")),
+        field("AI가 더 찾아볼 수 있는 횟수 (1~8, 1이면 처음 찾은 기억만 봐요)", num("iterations", "1", "8")),
+        field("답 길이 한도 (64~4096 토큰)", num("tokens", "64", "4096")), field("이번 질문의 목표", opt(goal, "mission")), shapeEditor()));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
-        question = input.value.trim(); limit = n.value;
+        question = input.value.trim(); readOpts(form);
         if (!question) { input.setCustomValidity("물어볼 내용을 적어 주세요."); input.reportValidity(); return; }
         void ask();
       });
       input.addEventListener("input", () => input.setCustomValidity(""));
       $("#chips").replaceChildren(form);
+      readMission();
     }
     paintAsk();
+  }
+  // The space's own reflect mission, so the screen can say the answer follows it. Unreadable means "not shown".
+  function readMission() {
+    if (mission !== undefined) return;
+    const { workspace_id: w, project_id: p } = state.scope || {}, owner = identity();
+    mission = "";
+    if (!w || !p) return;
+    request(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`)
+      .then((r) => (typeof r?.config?.reflect_mission === "string" ? r.config.reflect_mission.trim() : ""), () => "")
+      .then((m) => { if (identity() !== owner || !m) return; mission = m; if (active()) paintAsk(); });
   }
   async function ask() {
     if (busy) return;
     const now = live(loads.begin(), identity());
     busy = true; failure = null; answer = null; paintAsk();
     try {
-      const n = Number(limit);
-      const out = await request("/v1/reflect", { method: "POST", body: JSON.stringify({ scope: state.scope, query: question, ...(Number.isInteger(n) && n >= 1 && n <= 20 ? { limit: n } : {}) }) });
+      const own = (opts.mission || "").trim(), schema = schemaOf(shape);
+      const n = int(opts.limit, 1, 20), iter = int(opts.iterations, 1, 8), tokens = int(opts.tokens, 64, 4096);
+      const out = await request("/v1/reflect", { method: "POST", body: JSON.stringify({ scope: state.scope, query: question, ...(n ? { limit: n } : {}), ...(iter ? { max_iterations: iter } : {}),
+        ...(tokens ? { max_tokens: tokens } : {}), ...(own ? { mission: own } : {}), ...(schema ? { response_schema: schema } : {}) }) });
       if (!now()) return;
       if (typeof out?.answer !== "string" || !Array.isArray(out.cited_memory_ids) || out.cited_memory_ids.some((id) => typeof id !== "string" || !id)) throw new Error("invalid_response");
-      answer = out;
+      answer = { ...out, mission_used: own ? "own" : mission ? "space" : "" };
     } catch (e) { if (now()) failure = e; }
     finally { if (now()) { busy = false; paintAsk(); } }
   }
@@ -88,22 +163,173 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (code === "model_not_configured") return callout("모델 설정 필요", "서버에 답을 쓸 AI 모델이 아직 연결되지 않았어요. 서버에서 모델을 정하면 물어볼 수 있어요.");
     if (code === "model_budget_exceeded") return callout("오늘 쓸 AI 사용량을 다 썼어요", "내일 다시 물어보거나 질문을 짧게 줄여 주세요.");
     if (code === "access_denied") return callout("물어볼 수 없는 계정이에요", "이 계정에는 기억을 읽거나 AI에 보낼 권한이 없어요.");
+    if (code === "invalid_model_output") return callout("정한 답 모양에 맞는 답을 받지 못했어요", "칸을 줄이거나 '꼭 채우기'를 풀고 다시 물어봐 주세요.");
+    if (code === "invalid_request") return callout("물어볼 수 없는 설정이에요", "자세히에서 바꾼 값을 확인해 주세요. 칸 이름은 서로 달라야 해요.");
     return callout("답을 받지 못했어요", "잠시 뒤 다시 물어봐 주세요.");
+  }
+  // One step the model took before answering: what it looked for, and what came back.
+  const TOOLS = { recall: "기억 다시 찾기", observations: "정리된 관찰 찾기", mental_models: "생각 정리 읽기", entity: "이름으로 찾기", expand: "이어진 기억 펼치기" };
+  const TOOL_ERRORS = { unknown_tool: "없는 방법이라 건너뛰었어요", invalid_arguments: "요청이 맞지 않아 건너뛰었어요", denied: "권한이 없어 건너뛰었어요" };
+  function toolStep(step) {
+    const li = el("li", "insight-step"), args = step.args || {};
+    const what = args.query || args.name || "";
+    const line = el("p", "", TOOLS[step.tool] || step.tool);
+    if (what) line.append(" · ", raw(el("span", "", what)));
+    li.append(line, el("small", "meta", step.error ? TOOL_ERRORS[step.error] || step.error : step.ids?.length ? `${step.ids.length}개 찾음` : "찾은 것 없음"));
+    if (step.ids?.length) { const list = el("div", "dg-list"); for (const id of step.ids.slice(0, 5)) list.append(memoryLink(id)); li.append(list); }
+    return li;
+  }
+  function missionLine(own) {
+    if (own) return el("p", "meta insight-mission", "이번 질문의 목표에 맞춰 답해요.");
+    if (!mission) return null;
+    const p = el("p", "meta insight-mission", "이 공간의 목표에 맞춰 답해요: ");
+    p.append(raw(el("span", "", mission)));
+    return p;
   }
   function paintAsk() {
     const table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(busy));
     const status = el("p", "meta original-notice", busy ? "기억에서 답을 찾는 중…" : !answer && !failure ? "승인된 기억만 보고 답해요. 답은 저장하지 않아요." : "");
     status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status); // an empty line draws as a bare bordered bar
     if (failure) { table.append(askError(failure)); return; }
-    if (!answer) return;
-    const box = el("div", "quote dg-quote insight-answer");
-    box.append(raw(el("p", "", answer.answer || "답할 만한 기억을 찾지 못했어요.")));
+    if (!answer) { const m = missionLine((opts.mission || "").trim()); if (m) table.append(m); return; }
+    const box = el("div", "quote dg-quote insight-answer"), shaped = answer.structured_answer;
+    if (shaped && typeof shaped === "object" && !Array.isArray(shaped)) box.append(dataFacts(Object.entries(shaped)));
+    else box.append(raw(el("p", "", answer.answer || "답할 만한 기억을 찾지 못했어요.")));
     const ids = answer.cited_memory_ids.slice(0, 20), list = el("div", "dg-list");
     for (const id of ids) list.append(memoryLink(id));
     const card = el("div", "insight-ask");
-    card.append(box, el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list,
-      more(facts([["찾아본 기억", `${answer.retrieved?.length || 0}개`], ["지킨 규칙", `${answer.directives_applied?.length || 0}개`]])));
+    const m = missionLine(answer.mission_used === "own");
+    card.append(box, ...(m ? [m] : []), el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list);
+    const steps = Array.isArray(answer.tool_trace) ? answer.tool_trace : [];
+    if (steps.length) { const ol = el("ol", "insight-steps"); for (const s of steps.slice(0, 32)) ol.append(toolStep(s)); card.append(el("h3", "insight-head", `AI가 더 찾아본 과정 ${steps.length}번`), ol); }
+    const { mission_used: _, ...reply } = answer;
+    card.append(more(facts([["찾아본 기억", `${answer.retrieved?.length || 0}개`], ["지킨 규칙", `${answer.directives_applied?.length || 0}개`],
+      ["AI 호출", answer.iterations ? `${answer.iterations}번` : ""], ["쓴 토큰", answer.usage?.total_tokens ? `${answer.usage.total_tokens}` : ""]]), ...jsonView(reply)));
     table.append(card);
+  }
+
+  // ------------------------------------------------------------ 검색 살펴보기
+  // The same POST /v1/search agents use, with explain: lanes, each hit's rank per lane, fused and rerank scores.
+  const MATCH = { any_strict: "하나라도 있는 기억", all_strict: "모두 있는 기억", any: "하나라도 있거나 태그가 없는 기억", all: "모두 있거나 태그가 없는 기억", exact: "태그가 똑같은 기억" };
+  // 태그 조건, one line per condition that must hold: "a+b | -c" = (a and b) or not c.
+  function tagGroups(text) {
+    return String(text || "").split("\n").map((line) => line.split("|").map((t) => t.trim()).filter(Boolean).map((t) => {
+      const not = t.startsWith("-"), tags = [...new Set(t.replace(/^-\s*/, "").split("+").map((x) => x.trim()).filter(Boolean))];
+      return { tags, ...(tags.length > 1 ? { match: "all_strict" } : {}), ...(not ? { not: true } : {}) };
+    }).filter((g) => g.tags.length)).filter((g) => g.length);
+  }
+  function searchBody() {
+    const tags = [...new Set(String(opts.tags || "").split(",").map((t) => t.trim()).filter(Boolean))], groups = tagGroups(opts.groups);
+    const at = opts.at ? new Date(opts.at) : null, min = opts.min === "" || opts.min == null ? NaN : Number(opts.min);
+    const include = [opts.sources && "sources", opts.entities && "entities"].filter(Boolean);
+    const limit = int(opts.limit, 1, 50), depth = int(opts.depth, 1, 3);
+    return { scope: state.scope, query: question, explain: true, ...(limit ? { limit } : {}), ...(depth ? { graph_depth: depth } : {}),
+      ...(at && Number.isFinite(at.getTime()) ? { query_time: at.toISOString() } : {}), ...(min > 0 && min <= 1 ? { min_score: min } : {}),
+      ...(tags.length || groups.length ? { filters: { ...(tags.length ? { tags, tags_match: MATCH[opts.match] ? opts.match : "any_strict" } : {}), ...(groups.length ? { tag_groups: groups } : {}) } } : {}),
+      ...(include.length ? { include } : {}), ...(opts.observations ? { prefer_observations: true } : {}), ...(opts.causal ? { expand_causal: true } : {}), ...(opts.norerank ? { rerank: false } : {}) };
+  }
+  function drawSearch() {
+    if (!formHere()) {
+      const form = el("form", "original-search insight-form"); form.dataset.tab = tab;
+      const box = el("label", "panel-search");
+      const input = el("input"); input.type = "search"; input.maxLength = 1000; input.value = question;
+      input.placeholder = "검색어 (예: 지난주 배포 문제)"; input.setAttribute("aria-label", "검색어");
+      box.append(icon("magnifying-glass"), input);
+      const go = button("찾아보기", "primary small"); go.type = "submit";
+      const at = el("input"); at.type = "datetime-local";
+      const match = el("select");
+      for (const [k, l] of Object.entries(MATCH)) { const o = el("option", "", l); o.value = k; match.append(o); }
+      const groups = el("textarea"); groups.rows = 2; groups.maxLength = 2000; groups.placeholder = "예: 배포+운영 | -연습";
+      form.append(box, go, more(field("찾을 기억 수 (1~50)", num("limit", "1", "50")), field("이 시각 기준으로 찾기 (‘어제’ 같은 말도 이때로 읽어요)", opt(at, "at")),
+        field("이어서 따라갈 단계 (1~3)", num("depth", "1", "3")), field("이 점수보다 낮으면 빼기 (0~1)", num("min", "0", "1", "0.01")),
+        field("태그 (쉼표로 나눠요)", opt(el("input"), "tags")), field("태그 맞추는 방법", opt(match, "match")),
+        field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", opt(groups, "groups")),
+        check("sources", "원문 조각 붙이기"), check("entities", "나온 이름 붙이기"), check("observations", "정리된 관찰이 있으면 그 원래 기억은 빼기"),
+        check("causal", "원인과 결과로 이어진 기억도 찾기"), check("norerank", "AI로 순서 다시 매기지 않기")));
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        question = input.value.trim(); readOpts(form);
+        if (!question) { input.setCustomValidity("검색어를 적어 주세요."); input.reportValidity(); return; }
+        void search();
+      });
+      input.addEventListener("input", () => input.setCustomValidity(""));
+      $("#chips").replaceChildren(form);
+    }
+    paintSearch();
+  }
+  async function search() {
+    if (busy) return;
+    const now = live(loads.begin(), identity()), body = searchBody();
+    busy = true; failure = null; answer = null; sent = body; selected = null; paintSearch();
+    try {
+      const out = await request("/v1/search", { method: "POST", body: JSON.stringify(body) });
+      if (!now()) return;
+      if (!Array.isArray(out?.items)) throw new Error("invalid_response");
+      answer = out;
+    } catch (e) { if (now()) failure = e; }
+    finally { if (now()) { busy = false; paintSearch(); detail(); } }
+  }
+  const lanesText = (lanes) => (lanes || []).map((l) => window.ArkismMemoryTime.FOUND[l] || l).join(", ");
+  const score = (v) => (typeof v === "number" ? v.toFixed(v < 0.1 ? 4 : 2) : "");
+  function hitMeta(h) {
+    const ranks = Object.entries(h.explain?.lane_ranks || {}).map(([l, r]) => `${window.ArkismMemoryTime.FOUND[l] || l} ${r}위`);
+    return [ranks.join(" · ") || lanesText(h.lanes), h.explain?.graph_hops ? `${h.explain.graph_hops}단계 이어짐` : ""].filter(Boolean).join(" · ");
+  }
+  function searchSummary() {
+    const x = answer.explain || {}, w = x.time_window;
+    const range = w ? `‘${w.phrase}’ → ${day(w.from)} ~ ${day(new Date(Date.parse(w.to) - 1).toISOString())}` : "";
+    return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["때를 읽은 말", range], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
+      ["점수가 낮아 뺀 기억", x.min_score_dropped ? `${x.min_score_dropped}개` : ""], ["못 쓴 방법", (answer.degraded || []).join(", ")]]);
+  }
+  function searchError(e) {
+    const code = e?.message;
+    if (code === "access_denied") return callout("찾아볼 수 없는 계정이에요", "이 계정에는 기억을 찾을 권한이 없어요.");
+    if (code === "invalid_request") return callout("찾을 수 없는 설정이에요", "자세히에서 바꾼 값(태그, 기준 시각, 태그 조건)을 확인해 주세요.");
+    return callout("찾지 못했어요", "잠시 뒤 다시 찾아봐 주세요.");
+  }
+  function paintSearch() {
+    if (!active()) return;
+    const table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(busy));
+    const items = answer?.items || [];
+    const status = el("p", "meta original-notice", busy ? "찾는 중…" : failure ? "" : !answer ? "에이전트가 기억을 찾을 때와 똑같이 찾고, 어떤 방법으로 몇 위에 찾았는지 보여 줘요." : !items.length ? "맞는 기억이 없어요." : "");
+    status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status);
+    if (failure) { table.append(searchError(failure)); return; }
+    if (!answer) return;
+    const card = el("div", "insight-ask");
+    card.append(searchSummary());
+    table.append(card);
+    items.forEach((h, i) => table.append(listRow(h, h.text || h.summary || h.id, hitMeta(h), score(h.explain?.rerank_score ?? h.score) || `${i + 1}위`)));
+    const box = el("div", "insight-ask");
+    box.append(more(...jsonView({ request: sent, response: answer })));
+    table.append(box);
+  }
+  function searchDetail(body) {
+    const h = selected;
+    if (!h) { body.append(el("h2", "", "검색 살펴보기"), el("p", "lead", "검색어를 넣으면 에이전트가 받는 결과와 같은 순서로 보여 줘요. 기억을 고르면 어떤 방법으로 찾았고 점수가 몇인지 볼 수 있어요.")); return; }
+    const rank = (answer?.items || []).indexOf(h) + 1, x = h.explain || {};
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", "검색 살펴보기"), el("h2", "", rank ? `${rank}위로 찾은 기억` : "찾은 기억"));
+    body.append(head);
+    if (h.collection === "memories") { const open = section("기억"), list = el("div", "dg-list"); list.append(memoryLink(h.id, h.text || h.summary)); open.append(list); body.append(open); }
+    else body.append(raw(el("p", "original-text", h.text || h.summary || h.id)));
+    const how = section("찾은 방법");
+    how.append(facts([...Object.entries(x.lane_ranks || {}).map(([l, r]) => [window.ArkismMemoryTime.FOUND[l] || l, `${r}위`]),
+      ["이어서 찾은 단계", x.graph_hops ? `${x.graph_hops}단계` : ""]]));
+    const points = section("점수");
+    points.append(facts([["합친 점수", score(x.fused_score)], ["AI가 다시 매긴 점수", score(x.rerank_score)], ["최종 점수", score(h.score)]]),
+      el("p", "meta", "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요."));
+    body.append(how, points);
+    if (h.entities?.length) {
+      const names = section("나온 이름"), chips = el("div", "insight-aliases");
+      for (const n of h.entities.slice(0, 10)) { const c = el("span", "chip"); c.append(raw(el("span", "", n.name))); chips.append(c); }
+      names.append(chips); body.append(names);
+    }
+    if (h.source_traces?.length) {
+      const src = section("원문 조각");
+      for (const t of h.source_traces.slice(0, 3)) if (t?.excerpt) src.append(raw(el("p", "quote", t.excerpt)));
+      if (src.children.length > 1) body.append(src);
+    }
+    if (h.tags?.length) { const t = section("태그"), chips = el("div", "insight-aliases"); for (const g of h.tags.slice(0, 20)) chips.append(raw(el("span", "chip", g))); t.append(chips); body.append(t); }
   }
 
   // ------------------------------------------------------------ 규칙 · 자주 나온 이름 (lists)
@@ -140,7 +366,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const body = el("span", "original-body");
     body.append(raw(el("strong", "", title)), el("span", "meta", meta));
     row.append(body, el("span", `mem-badge${warn ? " warn" : ""}`, badge));
-    row.addEventListener("click", () => { selected = item; editing = null; paintList(); openDetail(); detail(); const h = $("#detail h2"); if (h) { h.tabIndex = -1; h.focus(); } });
+    row.addEventListener("click", () => { selected = item; editing = null; paint(); openDetail(); detail(); const h = $("#detail h2"); if (h) { h.tabIndex = -1; h.focus(); } });
     return row;
   }
   function paintList() {
@@ -302,17 +528,19 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
 
   // ------------------------------------------------------------ panel
+  const paint = () => (tab === "search" ? paintSearch() : paintList());
   function draw() {
     if (key !== identity()) { reset(); key = identity(); }
     $("#stats").replaceChildren();
-    if (tab === "ask") drawAsk(); else drawList();
+    if (tab === "ask") drawAsk(); else if (tab === "search") drawSearch(); else drawList();
   }
   function detail() {
     const body = detailShell(TITLE[tab]);
     if (tab === "ask") { body.append(el("h2", "", "물어보기"), el("p", "lead", "승인된 기억만 보고 답해요. 근거 기억을 누르면 그 기억을 열어요. 답은 저장하지 않아요.")); return; }
     if (tab === "rules") { if (editing) ruleForm(body); else ruleDetail(body); return; }
+    if (tab === "search") { searchDetail(body); return; }
     entityDetail(body);
   }
-  function close() { selected = null; editing = null; if (tab !== "ask") paintList(); detail(); }
+  function close() { selected = null; editing = null; if (tab !== "ask") paint(); detail(); }
   return { draw, reset, detail, close };
 };

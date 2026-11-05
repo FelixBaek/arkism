@@ -31,7 +31,7 @@ function setup(overrides = {}) {
     approvalUnproven: (m) => !!m.unproven, idle: (m) => !!m.idle,
     digests: { mergeCount: () => 0, notesCount: () => 0, title: () => "주제 3개", draw: () => log.push("digests"), drawMerge: () => log.push("merge"), drawNotes: () => log.push("notes") },
     relations: panel("relations"), traits: panel("traits"), reflections: panel("reflections"), memoryTime: panel("past"), originals: panel("originals"),
-    insight: { ask: panel("ask"), rules: panel("rules"), entities: panel("entities") },
+    insight: { ask: panel("ask"), search: panel("search"), rules: panel("rules"), entities: panel("entities") },
     catalogQuery: { snapshot: snap, ensure: (n) => log.push(`ensure:${n}`), more: async (n) => log.push(`more:${n}`), refreshVisible: async () => log.push("refreshVisible") },
     memUse: () => null, memoryCount: () => 7,
     go: (...a) => gone.push(a),
@@ -134,7 +134,7 @@ test("the main list draws check card, filters, chips, badges, paging and empty s
   dom.input(repo, "o/r"); assert.equal(deps.memory.repo, "o/r");
   // 모아보기 is a row of chips: one tap opens that view
   const look = controls.querySelector(".mem-look");
-  assert.deepEqual(look.querySelectorAll("button").map((c) => c.textContent), ["승인 기록", "주제 요약", "작업 관계", "사용자 특성", "반성 교훈", "과거 시점", "대화", "물어보기", "규칙", "자주 나온 이름"]);
+  assert.deepEqual(look.querySelectorAll("button").map((c) => c.textContent), ["승인 기록", "주제 요약", "작업 관계", "사용자 특성", "반성 교훈", "과거 시점", "대화", "물어보기", "검색 살펴보기", "규칙", "자주 나온 이름"]);
   dom.buttons(look, "사용자 특성")[0].click(); assert.deepEqual(env.gone.at(-1), ["memories", "traits"]);
   assert.equal(dom.buttons(controls, "기억 추가").length, 1); // in the toolbar, not alone above the panel
   dom.input(sort, "used"); assert.equal(deps.memory.sort, "used");
