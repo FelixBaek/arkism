@@ -600,7 +600,15 @@ func resolveAutoDerive(out *SpaceConfig, layers []spaceLayer, src map[string]str
 // spaceSettings is the resolved settings of the space scope belongs to (internal read, no authorization).
 // It is the accessor other features read their per-space settings through.
 func (s *Service) spaceSettings(ctx context.Context, scope Scope) (SpaceConfig, error) {
-	rec, err := s.Repo.Get(ctx, colSpaceConfigs, spaceScope(scope), spaceConfigID)
+	return s.spaceSettingsFrom(ctx, s.Repo, scope)
+}
+
+// spaceSettingsFrom reads through r; a caller inside a transaction passes the Tx so the read
+// does not wait on a second pool connection the open transaction may be holding.
+func (s *Service) spaceSettingsFrom(ctx context.Context, r interface {
+	Get(context.Context, string, Scope, string) (Record, error)
+}, scope Scope) (SpaceConfig, error) {
+	rec, err := r.Get(ctx, colSpaceConfigs, spaceScope(scope), spaceConfigID)
 	view, err := spaceView(spaceScope(scope), rec, err)
 	if err != nil {
 		return SpaceConfig{}, err

@@ -113,7 +113,7 @@ func (s *Service) enqueueProvisional(ctx context.Context, tx Tx, col string, r R
 	if col != "memory_candidates" || s.Embedder == nil || r.Status != "candidate" || r.Sensitivity == "restricted" {
 		return nil
 	}
-	settings, err := s.spaceSettings(ctx, r.Scope)
+	settings, err := s.spaceSettingsFrom(ctx, tx, r.Scope)
 	if q := settings.recallQuality(); err != nil || !q.provisionalOn() || !q.ProvisionalVectors {
 		return nil
 	}
