@@ -21,7 +21,14 @@ const (
 	// embeddingsAPIProvider is the same client speaking the common
 	// POST .../embeddings protocol (guide/server.md lists servers that answer it).
 	embeddingsAPIProvider = "embeddings_api"
-	teiDimension          = 1024
+	// EmbedTextsProtocol is the hosted shape {model, texts, input_type:
+	// search_query|search_document, embedding_types:["float"]} answered by
+	// {embeddings: {float: [[...]]}, meta: {billed_units: {input_tokens}}}.
+	EmbedTextsProtocol = "embed_texts"
+	// EmbedPassageProtocol is the embeddings shape plus input_type query|passage and
+	// truncate END (over-long input is cut, not refused), answered like embeddings.
+	EmbedPassageProtocol = "embed_passage"
+	teiDimension         = 1024
 	// TeiMaxBatchSize is the hard client-batch ceiling for the TEI CPU
 	// backend: it forces max_batch_requests=4 and dies with exit 139 (bounded
 	// queue panic) when an in-flight batch overflows it. The same ceiling is
@@ -35,6 +42,9 @@ const (
 // embeddings protocol. The adapter does not select or deploy weights.
 type TEIConfig struct {
 	EndpointURL string
+	// Protocol, when set (EmbedTextsProtocol, EmbedPassageProtocol), names the
+	// request shape for any endpoint URL; empty picks it from the path.
+	Protocol string
 	// APIKey is sent as a bearer token; https (or loopback http) is enforced.
 	APIKey string
 	// SendDimensions asks an embeddings API server for 1024-dimension vectors
@@ -86,7 +96,7 @@ func ValidateTEIBatchLimits(clientBatch, queueBatch, serverBatch int) error {
 }
 
 func NewTEIEmbedder(cfg TEIConfig) (*TEIEmbedder, error) {
-	provider, err := validateTEIEndpoint(cfg.EndpointURL)
+	provider, err := validateTEIEndpoint(cfg.EndpointURL, cfg.Protocol)
 	if err != nil {
 		return nil, err
 	}
@@ -126,9 +136,9 @@ func validTEIMetadata(value string) bool {
 	return value != "" && len(value) <= 256 && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
-// validateTEIEndpoint names the protocol by the path: exactly /embed, or a path
-// ending in /embeddings (the shared embeddings API shape).
-func validateTEIEndpoint(raw string) (string, error) {
+// validateTEIEndpoint names the protocol: the explicit one, else by the path:
+// exactly /embed, or a path ending in /embeddings (the shared embeddings API shape).
+func validateTEIEndpoint(raw, protocol string) (string, error) {
 	if err := validateEndpoint(raw); err != nil {
 		return "", fmt.Errorf("tei endpoint: %w", err)
 	}
@@ -137,6 +147,10 @@ func validateTEIEndpoint(raw string) (string, error) {
 		return "", fmt.Errorf("embedding endpoint must be a plain URL: %w", ErrInvalid)
 	}
 	switch {
+	case protocol == EmbedTextsProtocol || protocol == EmbedPassageProtocol:
+		return protocol, nil
+	case protocol != "":
+		return "", fmt.Errorf("embedding protocol %q: %w", protocol, ErrInvalid)
 	case parsed.Path == "/embed":
 		return teiProviderName, nil
 	case strings.HasSuffix(parsed.Path, "/embeddings"):
@@ -167,6 +181,31 @@ type embeddingsAPIRequest struct {
 	Dimensions     int      `json:"dimensions,omitempty"`
 }
 
+type embedPassageRequest struct {
+	embeddingsAPIRequest
+	InputType string `json:"input_type"`
+	Truncate  string `json:"truncate"`
+}
+
+type embedTextsRequest struct {
+	Model           string   `json:"model"`
+	Texts           []string `json:"texts"`
+	InputType       string   `json:"input_type"`
+	EmbeddingTypes  []string `json:"embedding_types"`
+	OutputDimension int      `json:"output_dimension,omitempty"`
+}
+
+type embedTextsResponse struct {
+	Embeddings struct {
+		Float json.RawMessage `json:"float"`
+	} `json:"embeddings"`
+	Meta struct {
+		BilledUnits struct {
+			InputTokens int64 `json:"input_tokens"`
+		} `json:"billed_units"`
+	} `json:"meta"`
+}
+
 type embeddingsAPIResponse struct {
 	Data []struct {
 		Index     *int      `json:"index"`
@@ -178,29 +217,57 @@ type embeddingsAPIResponse struct {
 	} `json:"usage"`
 }
 
-// post sends inputs in this endpoint's protocol and returns vectors in input order.
-func (t *TEIEmbedder) post(ctx context.Context, inputs []string) ([][]float64, ProviderUsage, error) {
-	usage := ProviderUsage{Provider: t.provider, Model: t.space, Requests: 1}
-	var payload any = teiRequest{Inputs: inputs}
-	if t.provider == embeddingsAPIProvider {
-		req := embeddingsAPIRequest{Model: t.model, Input: inputs, EncodingFormat: "float"}
-		if t.sendDimensions {
-			req.Dimensions = teiDimension
-		}
-		payload = req
+// parseEmbedTexts reads the embed_texts answer. The reply echoes the input texts,
+// so only the vectors are checked for null.
+func parseEmbedTexts(body []byte, usage ProviderUsage) ([][]float64, ProviderUsage, error) {
+	var res embedTextsResponse
+	var vectors [][]float64
+	if json.Unmarshal(body, &res) != nil || bytes.Contains(res.Embeddings.Float, []byte("null")) || json.Unmarshal(res.Embeddings.Float, &vectors) != nil {
+		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
 	}
-	body, status, err := postJSON(ctx, t.client, t.endpoint, t.apiKey, payload, t.maxRequest, t.maxResponse)
+	if n := res.Meta.BilledUnits.InputTokens; n > 0 {
+		usage.InputTokens, usage.TotalTokens = n, n
+	}
+	return vectors, usage, nil
+}
+
+// payload is the request body of this endpoint's protocol.
+func (t *TEIEmbedder) payload(inputs []string, purpose string) any {
+	dimensions := 0
+	if t.sendDimensions {
+		dimensions = teiDimension
+	}
+	switch t.provider {
+	case embeddingsAPIProvider:
+		return embeddingsAPIRequest{Model: t.model, Input: inputs, EncodingFormat: "float", Dimensions: dimensions}
+	case EmbedPassageProtocol:
+		inputType := map[string]string{embedInputQuery: "query", embedInputDocument: "passage"}[purpose]
+		return embedPassageRequest{embeddingsAPIRequest{Model: t.model, Input: inputs, EncodingFormat: "float", Dimensions: dimensions}, inputType, "END"}
+	case EmbedTextsProtocol:
+		inputType := map[string]string{embedInputQuery: "search_query", embedInputDocument: "search_document"}[purpose]
+		return embedTextsRequest{Model: t.model, Texts: inputs, InputType: inputType, EmbeddingTypes: []string{"float"}, OutputDimension: dimensions}
+	}
+	return teiRequest{Inputs: inputs}
+}
+
+// post sends inputs in this endpoint's protocol and returns vectors in input order.
+func (t *TEIEmbedder) post(ctx context.Context, inputs []string, purpose string) ([][]float64, ProviderUsage, error) {
+	usage := ProviderUsage{Provider: t.provider, Model: t.space, Requests: 1}
+	body, status, err := postJSON(ctx, t.client, t.endpoint, t.apiKey, t.payload(inputs, purpose), t.maxRequest, t.maxResponse)
 	if err != nil {
 		return nil, usage, err
 	}
 	if status != http.StatusOK {
 		return nil, usage, dependencyStatusError(t.provider+" embeddings", status)
 	}
+	if t.provider == EmbedTextsProtocol {
+		return parseEmbedTexts(body, usage)
+	}
 	// encoding/json turns null numeric components into zero; a numeric vector must not contain null.
 	if bytes.Contains(body, []byte("null")) {
 		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
 	}
-	if t.provider != embeddingsAPIProvider {
+	if t.provider == teiProviderName {
 		var vectors [][]float64
 		if err := json.Unmarshal(body, &vectors); err != nil {
 			return nil, usage, fmt.Errorf("tei embeddings: unreadable response: %w", ErrUnavailable)
@@ -245,7 +312,7 @@ func (t *TEIEmbedder) EmbedMeasured(ctx context.Context, texts []string, purpose
 		}
 		inputs[i] = prefix + text
 	}
-	vectors, usage, err := t.post(ctx, inputs)
+	vectors, usage, err := t.post(ctx, inputs, purpose)
 	if err != nil {
 		return EmbeddingBatch{Usage: usage}, err
 	}

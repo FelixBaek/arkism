@@ -33,7 +33,7 @@ func syntheticEmbedderAllowed() error {
 	}
 	endpoint := ""
 	switch embedder {
-	case "tei":
+	case "tei", memory.EmbedTextsProtocol, memory.EmbedPassageProtocol:
 		endpoint = os.Getenv("TEI_ENDPOINT_URL")
 	case "ollama":
 		endpoint = os.Getenv("OLLAMA_ENDPOINT_URL")
@@ -70,42 +70,8 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 	switch provider {
 	case "none":
 		return nil, nil
-	case "tei":
-		query, querySet := os.LookupEnv("TEI_QUERY_PREFIX")
-		document, documentSet := os.LookupEnv("TEI_DOCUMENT_PREFIX")
-		if !querySet || !documentSet {
-			return nil, memory.ErrInvalid
-		}
-		// An env file cannot hold a newline, and instruction-tuned models (such as
-		// Qwen3) put one between the instruction and the query: write it as \n.
-		query, document = strings.ReplaceAll(query, `\n`, "\n"), strings.ReplaceAll(document, `\n`, "\n")
-		// The client batch, the service-side index queue batch and the TEI
-		// server's max-client-batch-size must all stay at the same CPU backend
-		// ceiling. A mismatch is a startup failure, not a runtime surprise.
-		clientBatch := memory.TeiMaxBatchSize
-		if raw := os.Getenv("TEI_MAX_BATCH"); raw != "" {
-			parsed, err := strconv.Atoi(raw)
-			if err != nil {
-				return nil, fmt.Errorf("TEI_MAX_BATCH: %w", memory.ErrInvalid)
-			}
-			clientBatch = parsed
-		}
-		serverBatch := clientBatch
-		if raw := os.Getenv("TEI_SERVER_MAX_CLIENT_BATCH"); raw != "" {
-			parsed, err := strconv.Atoi(raw)
-			if err != nil {
-				return nil, fmt.Errorf("TEI_SERVER_MAX_CLIENT_BATCH: %w", memory.ErrInvalid)
-			}
-			serverBatch = parsed
-		}
-		if err := memory.ValidateTEIBatchLimits(clientBatch, memory.KnowledgeIndexBatch, serverBatch); err != nil {
-			return nil, err
-		}
-		return memory.NewTEIEmbedder(memory.TEIConfig{
-			EndpointURL: os.Getenv("TEI_ENDPOINT_URL"), Model: os.Getenv("TEI_MODEL"), Revision: os.Getenv("TEI_REVISION"),
-			Prefixes: map[string]string{"query": query, "document": document}, MaxBatchSize: clientBatch,
-			APIKey: os.Getenv("TEI_API_KEY"), SendDimensions: os.Getenv("TEI_SEND_DIMENSIONS") == "1",
-		})
+	case "tei", memory.EmbedTextsProtocol, memory.EmbedPassageProtocol:
+		return configuredTEIEmbedder(provider)
 	case "ollama":
 		// Loopback only, like TEI: text never leaves the host. The defaults are
 		// the Qwen3-Embedding instruction a TEI deployment would use; an
@@ -127,9 +93,56 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 	}
 }
 
+// configuredTEIEmbedder reads TEI_* for the tei protocol (picked by URL path)
+// or one of the hosted embedding protocols named by MEMORY_EMBEDDER.
+func configuredTEIEmbedder(provider string) (memory.Embedder, error) {
+	query, querySet := os.LookupEnv("TEI_QUERY_PREFIX")
+	document, documentSet := os.LookupEnv("TEI_DOCUMENT_PREFIX")
+	// The hosted protocols carry the purpose as input_type, so their prefixes default to none.
+	if provider == "tei" && (!querySet || !documentSet) {
+		return nil, memory.ErrInvalid
+	}
+	protocol := provider // "tei" picks the protocol from the URL path
+	if provider == "tei" {
+		protocol = ""
+	}
+	// An env file cannot hold a newline, and instruction-tuned models (such as
+	// Qwen3) put one between the instruction and the query: write it as \n.
+	query, document = strings.ReplaceAll(query, `\n`, "\n"), strings.ReplaceAll(document, `\n`, "\n")
+	// The client batch, the service-side index queue batch and the TEI
+	// server's max-client-batch-size must all stay at the same CPU backend
+	// ceiling. A mismatch is a startup failure, not a runtime surprise.
+	clientBatch := memory.TeiMaxBatchSize
+	if raw := os.Getenv("TEI_MAX_BATCH"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("TEI_MAX_BATCH: %w", memory.ErrInvalid)
+		}
+		clientBatch = parsed
+	}
+	serverBatch := clientBatch
+	if raw := os.Getenv("TEI_SERVER_MAX_CLIENT_BATCH"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			return nil, fmt.Errorf("TEI_SERVER_MAX_CLIENT_BATCH: %w", memory.ErrInvalid)
+		}
+		serverBatch = parsed
+	}
+	if err := memory.ValidateTEIBatchLimits(clientBatch, memory.KnowledgeIndexBatch, serverBatch); err != nil {
+		return nil, err
+	}
+	return memory.NewTEIEmbedder(memory.TEIConfig{
+		EndpointURL: os.Getenv("TEI_ENDPOINT_URL"), Protocol: protocol, Model: os.Getenv("TEI_MODEL"), Revision: os.Getenv("TEI_REVISION"),
+		Prefixes: map[string]string{"query": query, "document": document}, MaxBatchSize: clientBatch,
+		APIKey: os.Getenv("TEI_API_KEY"), SendDimensions: os.Getenv("TEI_SEND_DIMENSIONS") == "1",
+	})
+}
+
 // configuredReranker reads ARKISM_RERANK_URL (base URL of a POST /rerank service), the
 // optional ARKISM_RERANK_MODEL (switches to the hosted model/documents protocol),
-// ARKISM_RERANK_API_KEY and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables
+// ARKISM_RERANK_API_KEY (or ARKISM_RERANK_API_KEY_FILE, re-read per call),
+// ARKISM_RERANK_PROTOCOL (passages or records: URL is then the full endpoint)
+// and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables
 // reranking unless ARKISM_RERANK_LOCAL=1 asks for the in-process lexical reranker.
 func configuredReranker() (*memory.TEIReranker, error) {
 	raw := os.Getenv("ARKISM_RERANK_URL")
@@ -147,7 +160,8 @@ func configuredReranker() (*memory.TEIReranker, error) {
 		}
 		timeout = parsed
 	}
-	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Model: os.Getenv("ARKISM_RERANK_MODEL"), APIKey: os.Getenv("ARKISM_RERANK_API_KEY"), Timeout: timeout})
+	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Model: os.Getenv("ARKISM_RERANK_MODEL"), APIKey: os.Getenv("ARKISM_RERANK_API_KEY"),
+		APIKeyFile: os.Getenv("ARKISM_RERANK_API_KEY_FILE"), Protocol: os.Getenv("ARKISM_RERANK_PROTOCOL"), Timeout: timeout})
 }
 
 // PostgreSQL permissions are canonical; the other authorizers serve non-Postgres test wiring.

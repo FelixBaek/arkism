@@ -137,7 +137,7 @@ A minimal env file, with fake values:
 ```sh
 MEMORY_STORE=postgres
 MEMORY_DATABASE_URL=postgres://arkism_app:change-me@127.0.0.1:5432/arkism?sslmode=disable
-MEMORY_EMBEDDER=none                  # none | tei | ollama | gemini; the worker needs one
+MEMORY_EMBEDDER=none                  # none | tei | embed_texts | embed_passage | ollama | gemini; the worker needs one
 MEMORY_LOCAL_STANDALONE=true          # API listens on loopback only
 MEMORY_WORKER_TOKEN=example-worker-token
 ```
@@ -147,7 +147,8 @@ Keep the file out of Git. All settings:
 | Name | Meaning |
 |---|---|
 | `MEMORY_DATABASE_URL` | Postgres connection (required). API and worker use the `arkism_app` role |
-| `MEMORY_EMBEDDER` | `none`, `tei`, `ollama` or `gemini`. Required for the worker |
+| `MEMORY_EMBEDDER` | `none`, `tei`, `embed_texts`, `embed_passage`, `ollama` or `gemini`. Required for the worker (see [Model providers](#model-providers)) |
+| `ARKISM_MODEL_SIDECAR` | Optional local model server memoryd starts and stops itself, as a JSON argv array (for example `["/opt/models/server","--port","8089"]`). See [Local models](#local-models) |
 | `MEMORY_LOCAL_STANDALONE` | `true` for single-owner mode. The API then listens on loopback only |
 | `MEMORY_WORKER_TOKEN` | Service token for the worker and readiness checks |
 | `MEMORY_CANDIDATE_DAILY_LIMIT` | Daily cap (1–100000) for AI-written memory candidates. Unset means none are accepted |
@@ -216,7 +217,9 @@ wiki. What a person approves and how is described in
    | Name | Meaning |
    |---|---|
    | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | Chat model the server calls |
-   | `SKILL_LLM_PROTOCOL` | Empty for the common chat-completions protocol, `messages` for the messages protocol (see [Model providers](#model-providers)). Any other value stops startup |
+   | `SKILL_LLM_PROTOCOL` | Empty for the common chat-completions protocol, `messages` for the messages protocol, `responses` for the responses protocol (see [Model providers](#model-providers)). Any other value stops startup |
+   | `SKILL_LLM_BASE_URL` | Base URL instead of `SKILL_LLM_ENDPOINT_URL` (for example `https://api.example.com/v1`); the protocol's path (`/chat/completions`, `/messages`, `/responses`) is added. Setting both stops startup |
+   | `SKILL_LLM_PRESET` | `local`, `ollama`, `proxy` or `gateway`: a known kind of server, so no endpoint is needed (see [Server model presets](#server-model-presets)). Unset by default |
    | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
    | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
 
@@ -230,6 +233,8 @@ wiki. What a person approves and how is described in
    | `ARKISM_WEBHOOK_ALLOW_PRIVATE` | `1` lets webhooks reach loopback and private addresses (development only). Link-local and metadata addresses stay refused |
    | `ARKISM_RERANK_URL`, `ARKISM_RERANK_TIMEOUT` | Base URL of a `POST /rerank` service and its timeout (Go duration, at most `1m`). On error or timeout recall keeps the fused order |
    | `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Model name and bearer key of a hosted rerank API. Setting the model switches to the hosted request shape (see [Model providers](#model-providers)) |
+   | `ARKISM_RERANK_PROTOCOL` | Empty, `passages` or `records`: two other hosted rerank shapes. With either, `ARKISM_RERANK_URL` is the full endpoint and `ARKISM_RERANK_MODEL` is required. Any other value stops startup |
+   | `ARKISM_RERANK_API_KEY_FILE` | File holding the rerank bearer key, read on every call instead of `ARKISM_RERANK_API_KEY`, so a short-lived access token can be rotated on disk without a restart |
    | `ARKISM_RERANK_LOCAL` | `1` without `ARKISM_RERANK_URL` turns on an in-process lexical (BM25) reranker. It sends nothing off the server, so it does not need `external:transfer`; it is weaker than a cross-encoder. Off by default, so an upgrade does not change recall order. Calls are filed in the usage ledger as provider `local`, model `lexical` |
    | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME`, `ARKISM_OTLP_SAMPLE_RATIO` | Request tracing (see [Tracing](#tracing)). Off by default |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
@@ -319,11 +324,16 @@ APIs and self-hosted inference servers work without new code:
 |---|---|---|
 | Chat (server model) | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | the common `/chat/completions` protocol |
 | Chat (server model) | the same, plus `SKILL_LLM_PROTOCOL=messages` | Messages protocol `POST {url}` `{model, max_tokens, system, messages}` with the key in `x-api-key` and the protocol version header `2023-06-01` → `{content: [{type, text}], stop_reason, usage}` |
+| Chat (server model) | the same, plus `SKILL_LLM_PROTOCOL=responses` | Responses protocol `POST {url}` `{model, instructions, input: [{role, content: [input_text, input_image]}], max_output_tokens, store: false}` (JSON answers add `text.format: json_object`; no temperature, which reasoning models refuse) → `{status, output: [{type: message, content: [{type: output_text, text}]}], usage}`. `status: incomplete` counts as cut off |
 | Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embed` | Text Embeddings Inference `POST /embed` |
 | Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embeddings` (for example `https://api.example.com/v1/embeddings`), `TEI_API_KEY` | `POST .../embeddings` `{model, input}` → `{data: [{index, embedding}], usage}` |
+| Embeddings | `MEMORY_EMBEDDER=embed_texts`, `TEI_ENDPOINT_URL` (the full URL, for example `https://api.example.com/v2/embed`), `TEI_MODEL`, `TEI_API_KEY` | `POST {url}` `{model, texts, input_type: search_query or search_document, embedding_types: [float]}` (`output_dimension: 1024` with `TEI_SEND_DIMENSIONS=1`) → `{embeddings: {float: [[...]]}, meta: {billed_units: {input_tokens}}}` |
+| Embeddings | `MEMORY_EMBEDDER=embed_passage`, `TEI_ENDPOINT_URL` (for example `https://api.example.com/v1/embeddings`), `TEI_MODEL`, `TEI_API_KEY` | The `.../embeddings` protocol plus `input_type: query or passage` and `truncate: END` (over-long text is cut instead of refused) |
 | Embeddings | `MEMORY_EMBEDDER=ollama` or `gemini` | Their own embedding routes |
 | Rerank | `ARKISM_RERANK_URL` | Text Embeddings Inference `POST /rerank` `{query, texts}` |
 | Rerank | `ARKISM_RERANK_URL` (for example `https://api.example.com/v1`), `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Hosted rerank `POST {url}/rerank` `{model, query, documents, top_n}` → `{results` or `data: [{index, relevance_score}]}` |
+| Rerank | `ARKISM_RERANK_PROTOCOL=passages`, `ARKISM_RERANK_URL` (full URL, for example `https://api.example.com/v1/retrieval/<model>/reranking`), `ARKISM_RERANK_MODEL`, key | `POST {url}` `{model, query: {text}, passages: [{text}], truncate: END}` → `{rankings: [{index, logit}]}`; each logit becomes a 0–1 score through a sigmoid |
+| Rerank | `ARKISM_RERANK_PROTOCOL=records`, `ARKISM_RERANK_URL` (full URL of the ranking config's `:rank` method), `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY_FILE` | `POST {url}` `{model, query, records: [{id, content}], topN}` → `{records: [{id, score}]}`. These services take a short-lived access token: keep it fresh in the key file (for example from a timer) |
 | Rerank | `ARKISM_RERANK_LOCAL=1`, no URL | In-process lexical BM25 over the hit texts, best text scaled to 1 |
 
 Notes:
@@ -331,7 +341,12 @@ Notes:
 - Vectors must have 1024 dimensions. For a model that shortens its output on
   request, set `TEI_SEND_DIMENSIONS=1` to send `dimensions: 1024`; leave it off
   for servers that reject the field.
-- `TEI_QUERY_PREFIX` and `TEI_DOCUMENT_PREFIX` stay required (empty is allowed).
+- `TEI_QUERY_PREFIX` and `TEI_DOCUMENT_PREFIX` stay required (empty is allowed)
+  for `tei`. `embed_texts` and `embed_passage` send the purpose as
+  `input_type`, so their prefixes default to empty.
+- A proxy gateway that fronts many hosted models serves the
+  same `.../embeddings` and `.../rerank` routes: point `TEI_ENDPOINT_URL` and
+  `ARKISM_RERANK_URL` at it like any other host.
 - Remote endpoints must use https. A loopback endpoint (`localhost`, `127.0.0.1`,
   `::1`) or a literal private address (`10.x`, `172.16-31.x`, `192.168.x`,
   `fd00::/8`) keeps text on your own machines; any other endpoint, including a
@@ -346,7 +361,67 @@ Notes:
   needs a reindex (`memoryd --reindex`).
 - Every chat, embedding and rerank call is filed in the usage ledger and in the
   model call traces (`GET /v1/llm-requests`, operations `embed` and `rerank`
-  besides the chat steps), with tokens when the provider reports them.
+  besides the chat steps), with tokens when the provider reports them. The
+  rerank protocols are filed as provider `rerank_passages` and `rerank_records`.
+- **Upgrade note.** The new protocols, presets and the sidecar are all off
+  until set; existing settings behave as before. A set but unknown
+  `SKILL_LLM_PRESET` or `ARKISM_RERANK_PROTOCOL` now stops startup.
+
+### Server model presets
+
+`SKILL_LLM_PRESET` names a kind of server, so only the model (and a key where
+one is needed) has to be set. `SKILL_LLM_BASE_URL` overrides the preset's
+address; `SKILL_LLM_PROTOCOL` still picks the protocol and its path.
+
+| Preset | Address | Key | Default model |
+|---|---|---|---|
+| `local` | `http://127.0.0.1:8080/v1` (a single-model inference server on this machine) | none | `local` |
+| `ollama` | `http://127.0.0.1:11434/v1` (the local model runner) | none | set `SKILL_LLM_MODEL` |
+| `proxy` | `http://127.0.0.1:4000/v1` (a chat-completions proxy gateway in front of many hosted models) | `SKILL_LLM_API_KEY` if the proxy wants one | set `SKILL_LLM_MODEL` |
+| `gateway` | this host's model gateway, `http://` + `ARKISM_GATEWAY_LISTEN` (default `127.0.0.1:8099`) + `/v1` | the gateway's local token, sent as `x-arkism-gateway-token`: `SKILL_LLM_API_KEY`, else `ARKISM_GATEWAY_TOKEN`, else the token file (`ARKISM_GATEWAY_TOKEN_FILE`) | `group/auto` |
+
+A preset without a key is accepted only on a loopback address, so a key-free
+call never leaves the machine. Hosted APIs that speak one of the three
+protocols need no preset: set `SKILL_LLM_BASE_URL` (or the full
+`SKILL_LLM_ENDPOINT_URL`), `SKILL_LLM_API_KEY` and `SKILL_LLM_MODEL`.
+
+The `gateway` preset lets the server model use the subscription accounts
+signed in on this host (the same accounts agents use through the gateway),
+with the gateway's failover, limits and usage records. It works when memoryd
+runs on the same machine as the gateway; a container needs host networking
+or a loopback forward, since the gateway listens on loopback only. Model names
+are the gateway's (`provider/model` or `group/<name>`). Subscription logins
+the gateway does not have (other editors' or vendors' device logins) are not
+offered: each needs its own sign-in flow, token refresh and terms check in the
+gateway first, and the server would only reach them through it.
+
+### Local models
+
+Neural embedding models and cross-encoders do not run inside memoryd: that
+needs a native inference runtime and model weights, which would tie every
+build and install to them. Run a local inference server instead, either
+yourself or as a sidecar memoryd manages:
+
+| Name | Meaning |
+|---|---|
+| `ARKISM_MODEL_SIDECAR` | JSON argv array of the server to start, for example `["/opt/models/server","--model","/opt/models/embed.gguf","--embedding","--port","8089"]`. Started without a shell |
+| `ARKISM_MODEL_SIDECAR_READY_URL` | Loopback `http` URL that answers 200 once the server is ready (for example `http://127.0.0.1:8089/health`). Required with the sidecar |
+| `ARKISM_MODEL_SIDECAR_WAIT` | How long startup waits for it (Go duration, default `2m`, at most `30m`) |
+| `ARKISM_MODEL_SIDECAR_ENV` | Comma-separated names of extra environment variables the sidecar may see. It otherwise gets only `PATH`, `HOME`, `TMPDIR`, `LANG` (and the Windows equivalents), never the server's secrets |
+
+memoryd starts the command only when the ready URL does not answer yet (so the
+API server and the worker can share one environment file), stops it on exit,
+and refuses to start if it exits or is not ready in time. A sidecar that dies
+later is not restarted; calls to it fail (recall keeps the fused order) until
+memoryd restarts. Point the providers at it:
+
+- embeddings: `MEMORY_EMBEDDER=tei` with `TEI_ENDPOINT_URL=http://127.0.0.1:8089/embed`,
+  or `.../v1/embeddings` for servers that speak that protocol;
+- rerank: `ARKISM_RERANK_URL=http://127.0.0.1:8089` (`/rerank`), or the hosted
+  shape with `ARKISM_RERANK_MODEL` for servers that answer `{model, query, documents}`;
+- chat: `SKILL_LLM_PRESET=local` with `SKILL_LLM_BASE_URL=http://127.0.0.1:8089/v1`.
+
+Loopback endpoints keep text on the machine, so they need no `external:transfer`.
 
 ## Tracing
 

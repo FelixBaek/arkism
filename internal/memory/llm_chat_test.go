@@ -84,3 +84,95 @@ func TestLLMChatImagePartsKeylessAndLenientUsage(t *testing.T) {
 		t.Fatalf("messages image part: %v", part)
 	}
 }
+
+func TestLLMChatResponsesProtocol(t *testing.T) {
+	var got map[string]any
+	status := "completed"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = nil
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		if r.Header.Get("Authorization") != "Bearer k" {
+			t.Errorf("auth = %q", r.Header.Get("Authorization"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "output": []any{
+			map[string]any{"type": "reasoning", "content": []any{map[string]any{"type": "output_text", "text": "hidden"}}},
+			map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": "hel"}, map[string]any{"type": "output_text", "text": "lo"}}}},
+			"usage": map[string]any{"input_tokens": 4, "output_tokens": 2, "total_tokens": 6}})
+	}))
+	defer server.Close()
+	cfg := LLMConfig{Endpoint: server.URL, APIKey: "k", Model: "m", Protocol: llmProtocolResponses}
+	reply, err := cfg.chat(testCtx, chatRequest{provider: "p", system: "sys", user: "hi", imageMIME: "image/png", image: []byte("PNG"), maxTokens: 9, jsonOut: true})
+	if err != nil || reply.text != "hello" || !reply.complete || reply.usage != (ProviderUsage{Provider: "p", Model: "m", Requests: 1, InputTokens: 4, OutputTokens: 2, TotalTokens: 6}) {
+		t.Fatalf("%+v %v", reply, err)
+	}
+	content := got["input"].([]any)[0].(map[string]any)["content"].([]any)
+	if got["instructions"] != "sys" || got["max_output_tokens"] != float64(9) || got["store"] != false || got["temperature"] != nil ||
+		content[0].(map[string]any)["text"] != "hi" || content[1].(map[string]any)["image_url"] != "data:image/png;base64,UE5H" ||
+		got["text"].(map[string]any)["format"].(map[string]any)["type"] != "json_object" {
+		t.Fatalf("request = %v", got)
+	}
+	status = "incomplete"
+	if reply, err = cfg.chat(testCtx, chatRequest{provider: "p", user: "hi", maxTokens: 9}); err != nil || reply.complete {
+		t.Fatalf("a cut-off answer is not complete: %+v %v", reply, err)
+	}
+	status = "failed"
+	if _, err = cfg.chat(testCtx, chatRequest{provider: "p", user: "hi", maxTokens: 9}); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("failed status: %v", err)
+	}
+}
+
+func TestApplyLLMPreset(t *testing.T) {
+	var header http.Header
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header
+		if r.URL.Path != "/v1/chat/completions" && r.URL.Path != "/v1/responses" {
+			t.Errorf("path = %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"status": "completed", "choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]any{"content": "ok"}}},
+			"usage": map[string]any{"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}})
+	}))
+	defer server.Close()
+	// Gateway: the host gateway's base, its token in the gateway header, the auto group by default.
+	gw, err := ApplyLLMPreset(LLMConfig{APIKey: "tok"}, "gateway", "", server.URL)
+	if err != nil || gw.Endpoint != server.URL+"/v1/chat/completions" || gw.Model != "group/auto" || gw.Keyless || !gw.Configured() {
+		t.Fatalf("gateway preset: %+v %v", gw, err)
+	}
+	if _, err := gw.chat(testCtx, chatRequest{provider: "p", user: "x", maxTokens: 9}); err != nil || header.Get("x-arkism-gateway-token") != "tok" || header.Get("Authorization") != "" {
+		t.Fatalf("gateway call: %v %v", err, header)
+	}
+	if (LLMConfig{Endpoint: gw.Endpoint, Model: "m", KeyHeader: gw.KeyHeader}).Configured() {
+		t.Fatal("the gateway preset needs its token")
+	}
+	// A local preset pointed at another loopback base works without a key.
+	local, err := ApplyLLMPreset(LLMConfig{}, "local", server.URL+"/v1/", "")
+	if err != nil || local.Model != "local" || !local.Keyless || !local.Configured() {
+		t.Fatalf("local preset: %+v %v", local, err)
+	}
+	if _, err := local.chat(testCtx, chatRequest{provider: "p", user: "x", maxTokens: 9}); err != nil || header.Get("Authorization") != "" {
+		t.Fatalf("keyless call: %v %v", err, header)
+	}
+	// A base URL takes the protocol's path; presets keep their default addresses.
+	resp, err := ApplyLLMPreset(LLMConfig{APIKey: "k", Model: "m", Protocol: llmProtocolResponses}, "", server.URL+"/v1", "")
+	if err != nil || resp.Endpoint != server.URL+"/v1/responses" {
+		t.Fatalf("base url: %+v %v", resp, err)
+	}
+	if c, _ := ApplyLLMPreset(LLMConfig{Model: "q"}, "ollama", "", ""); c.Endpoint != "http://127.0.0.1:11434/v1/chat/completions" || c.Model != "q" {
+		t.Fatalf("ollama preset: %+v", c)
+	}
+	if c, _ := ApplyLLMPreset(LLMConfig{Protocol: llmProtocolMessages}, "proxy", "", ""); c.Endpoint != "http://127.0.0.1:4000/v1/messages" {
+		t.Fatalf("proxy preset: %+v", c)
+	}
+	// Keyless never reaches a remote host; bad names and double endpoints stop startup.
+	remote, _ := ApplyLLMPreset(LLMConfig{}, "proxy", "https://models.example.com/v1", "")
+	if remote.Configured() {
+		t.Fatal("keyless remote endpoint must not be usable")
+	}
+	for _, bad := range []struct {
+		c            LLMConfig
+		preset, base string
+	}{{LLMConfig{}, "other", ""}, {LLMConfig{Endpoint: server.URL}, "", server.URL}, {LLMConfig{Protocol: "other"}, "", ""}, {LLMConfig{}, "", "http://models.example.com/v1"}} {
+		if _, err := ApplyLLMPreset(bad.c, bad.preset, bad.base, ""); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%+v: %v", bad, err)
+		}
+	}
+}

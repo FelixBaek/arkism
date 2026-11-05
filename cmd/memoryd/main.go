@@ -82,10 +82,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	embed, err := configuredEmbedder(cfg.Worker, cfg.Recovery)
+	embed, stopSidecar, err := startModels(ctx, cfg)
 	if err != nil {
 		return err
 	}
+	defer stopSidecar()
 	if cfg.Reindex {
 		return runDaemonReindex(ctx, pg, embed)
 	}
