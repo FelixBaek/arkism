@@ -59,6 +59,11 @@ type CaptureClaim struct {
 	RiskReasons  []string `json:"risk_reasons,omitempty"`
 	EvidenceSpan string   `json:"evidence_span,omitempty"`
 	DupHint      string   `json:"dup_hint,omitempty"`
+	// OccurredFrom/OccurredTo are the event dates the content states (a day, month or RFC 3339
+	// time; relative words are read against the event time). Bad dates are dropped, not trusted.
+	OccurredFrom string `json:"occurred_from,omitempty"`
+	OccurredTo   string `json:"occurred_to,omitempty"`
+	occurred     *RecallTimeWindow
 	// locator names where in the source the claim came from (a file page or
 	// chunk); only server-side extraction sets it, clients always get "original".
 	locator string
@@ -126,6 +131,7 @@ func validCaptureClaimClassification(c CaptureClaim) bool {
 
 func validCaptureClaimFields(c CaptureClaim) bool {
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
+		len(c.OccurredFrom) <= 64 && len(c.OccurredTo) <= 64 &&
 		(c.Repo == "" || validRunLabel(c.Repo, 128)) &&
 		slices.Contains(captureKinds, c.Kind) && slices.Contains(captureBases, c.Basis) &&
 		(c.Supersedes == nil || c.Supersedes.Collection == "memories" && c.Supersedes.ID != "" && c.Supersedes.Revision > 0)
@@ -259,8 +265,8 @@ func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInpu
 	tags, suspect := captureTags(in, c)
 	cand, err := s.Create(ctx, token, "memory_candidates", CreateInput{
 		capture:       write,
-		MemoryContext: c.MemoryContext,
-		Scope:         scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
+		MemoryContext: c.MemoryContext, Occurred: c.occurred,
+		Scope: scope, Kind: c.Kind, Text: c.Text, Summary: c.Reason, Keywords: []string{c.Subject}, Tags: tags,
 		Sources: canonicalSources, Confidence: c.Confidence, Generated: true, Generator: in.Generator,
 		SourceEventID: src.ID, Relations: c.SourceRefs, OnSecret: "block", Classification: c.classification(),
 	})
@@ -321,9 +327,10 @@ func captureClaimScope(ctx context.Context, in CaptureInput, c CaptureClaim) (co
 }
 
 // captureClaimKeys stamps the claim's own memory context copy with the event
-// time and returns it with the evidence-bound key and the legacy key.
+// time, resolves its event span against that time, and returns it with the evidence-bound key and the legacy key.
 func captureClaimKeys(in CaptureInput, c CaptureClaim, scope Scope) (CaptureClaim, string, string) {
 	c.MemoryContext = copyMemoryContext(c.MemoryContext)
+	c.occurred = resolveOccurred(c.OccurredFrom, c.OccurredTo, c.Text, in.Event.OccurredAt.In(usageZone()))
 	if c.MemoryContext != nil {
 		at := in.Event.OccurredAt.UTC().Truncate(time.Millisecond)
 		c.MemoryContext.ObservedAt = &at

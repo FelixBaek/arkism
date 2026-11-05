@@ -10,13 +10,14 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 const extractKoreanSource = "# 작업 규칙\n배포 전에 항상 테스트를 실행한다.\n\n선택 상태에는 주황 강조선을 쓰지 않는다."
 
 func extractAnswer(claims ...string) string { return `{"claims":[` + strings.Join(claims, ",") + `]}` }
 
-const extractRuleClaim = `{"content":"선택 상태에 주황 강조선을 쓰지 않는다","kind":"user","semantic_kind":"preference","evidence_kind":"user_statement","observed_at":"2026-10-25","evidence_quote":"선택 상태에는 주황 강조선을 쓰지 않는다.","confidence":0.9}`
+const extractRuleClaim = `{"content":"선택 상태에 주황 강조선을 쓰지 않는다","kind":"user","semantic_kind":"preference","evidence_kind":"user_statement","occurred_from":"2026-10-25","occurred_to":"2026-10-25","evidence_quote":"선택 상태에는 주황 강조선을 쓰지 않는다.","confidence":0.9}`
 
 func extractRows(f *fixture) int {
 	return len(f.repo.rows("sources")) + len(f.repo.rows("memory_candidates")) + len(f.repo.rows("jobs"))
@@ -28,14 +29,21 @@ func TestParseExtractedClaimsIsStrict(t *testing.T) {
 		strings.Replace(extractRuleClaim, `0.9}`, `0.9,"extra":1}`, 1),
 		strings.Replace(extractRuleClaim, `0.9}`, `2}`, 1),
 		strings.Replace(extractRuleClaim, `강조선을 쓰지 않는다."`, `강조선은 멋지다."`, 1), // quote not in the source
-		strings.Replace(extractRuleClaim, `2026-10-25`, `2999-01-01`, 1),
 		strings.Replace(extractRuleClaim, `"semantic_kind":"preference"`, `"semantic_kind":"wish"`, 1),
 		strings.Replace(extractRuleClaim, `0.9}`, `0.9,"locator":"page:9"}`, 1),
 		`"just a string"`,
 	}
 	claims, skipped, ok := parseExtractedClaims("```json\n"+extractAnswer(append([]string{extractRuleClaim}, bad...)...)+"\n```", extractKoreanSource, "chunk:1")
-	if !ok || len(claims) != 1 || len(skipped) != len(bad) || claims[0].Locator != "chunk:1" || claims[0].ObservedAt != "2026-10-25" {
+	if !ok || len(claims) != 1 || len(skipped) != len(bad) || claims[0].Locator != "chunk:1" || claims[0].OccurredFrom != "2026-10-25" {
 		t.Fatalf("claims %+v skipped %+v ok %v", claims, skipped, ok)
+	}
+	// A far-future or reversed event date is dropped; the claim itself stays.
+	for _, dates := range [][2]string{{"2999-01-01", "2999-01-01"}, {"2026-10-25", "2026-10-01"}, {"someday", ""}} {
+		claim := strings.Replace(extractRuleClaim, `"occurred_from":"2026-10-25","occurred_to":"2026-10-25"`, `"occurred_from":"`+dates[0]+`","occurred_to":"`+dates[1]+`"`, 1)
+		claims, _, _ := parseExtractedClaims(extractAnswer(claim), extractKoreanSource, "chunk:1")
+		if len(claims) != 1 || claims[0].OccurredFrom != "" || claims[0].OccurredTo != "" {
+			t.Fatalf("%v kept: %+v", dates, claims)
+		}
 	}
 	for _, answer := range []string{"not json", extractAnswer() + "{}", `{"claims":[],"note":"x"}`} {
 		if _, _, ok := parseExtractedClaims(answer, extractKoreanSource, "chunk:1"); ok {
@@ -95,7 +103,8 @@ func TestFileMemoriesDryRunAndCapture(t *testing.T) {
 		t.Fatalf("extract %+v %v", out, err)
 	}
 	cands := f.repo.rows("memory_candidates")
-	if len(cands) != 1 || cands[0].Status != "candidate" || cands[0].Text != "선택 상태에 주황 강조선을 쓰지 않는다" || cands[0].MemoryContext == nil || cands[0].MemoryContext.ValidFrom != "2026-10-25" {
+	if len(cands) != 1 || cands[0].Status != "candidate" || cands[0].Text != "선택 상태에 주황 강조선을 쓰지 않는다" || cands[0].MemoryContext == nil || cands[0].MemoryContext.ValidFrom != "" ||
+		cands[0].Occurred == nil || !cands[0].Occurred.From.Equal(time.Date(2026, 10, 25, 0, 0, 0, 0, usageZone())) || !cands[0].Occurred.To.Equal(time.Date(2026, 10, 26, 0, 0, 0, 0, usageZone())) {
 		t.Fatalf("candidates %+v", cands)
 	}
 	found := false

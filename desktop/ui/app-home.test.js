@@ -363,6 +363,22 @@ test("overview: 승인 대기 lets the person pick the reach, defaulting to the 
   } finally { off6(); await closeAll(); }
 });
 
+// #3: the event days go with 승인 only when the person changed them
+test("overview: 승인 대기 sends the event days the person set", async () => {
+  const sent = () => app.apiCalls.filter(([, p]) => p === "/v1/memory_candidates/c5/review").map(([, , b]) => JSON.parse(String(b)));
+  const off = route("POST", "/v1/memory_candidates/c5/review", () => fail(500, "boom"));
+  try {
+    const d = await reviewOf("Alex는 주로");
+    assert.match(text(d), /일어난 때/);
+    await press("그대로 승인", d, 30);
+    assert.equal(sent().at(-1).occurred, undefined, "untouched sends nothing");
+    [...win().querySelectorAll("input")].find((i) => i.getAttribute("aria-label") === "일어난 첫날").value = "2026-11-01";
+    await press("그대로 승인", win(), 30);
+    const o = sent().at(-1).occurred;
+    assert.equal(new Date(o.to) - new Date(o.from), 86400000, "one day filled is that day");
+  } finally { off(); await closeAll(); }
+});
+
 test("overview: 승인 대기 detail shows the AI judgement, merge, edit, reject and conflict paths", async () => {
   const merge = { id: "mpx", revision: 3, merge: { proposal: { action: "merge", candidate: { id: "c3" }, targets: [{ id: "m1" }] } } };
   const offMerge = route("GET", "/v1/merge_proposals", () => ok({ items: [merge] }));

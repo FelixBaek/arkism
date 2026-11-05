@@ -19,6 +19,8 @@ type CandidateReviewInput struct {
 	// Reach is the reviewer's pick on approve/edit_approve; empty keeps the kind default (memoryReach).
 	Reach        string `json:"reach,omitempty"`
 	ReachProject string `json:"reach_project,omitempty"`
+	// Occurred, on approve/edit_approve, is the reviewer's event span for the memory; {} clears the extracted one.
+	Occurred *RecallTimeWindow `json:"occurred,omitempty"`
 }
 type ReviewDecision struct {
 	ReceiptID string    `json:"receipt_id,omitempty" bson:"receipt_id,omitempty"`
@@ -69,7 +71,7 @@ func candidateReviewStatus(in CandidateReviewInput) (string, error) {
 	if in.ReasonCode != "" && (in.Action != "reject" || !removalReasons[in.ReasonCode]) {
 		return "", ErrInvalid
 	}
-	if !validReviewReach(in) {
+	if !validReviewReach(in) || !validReviewOccurred(in) {
 		return "", ErrInvalid
 	}
 	switch in.Action {
@@ -90,6 +92,11 @@ func candidateReviewStatus(in CandidateReviewInput) (string, error) {
 		return "", ErrInvalid
 	}
 	return "approved", nil
+}
+
+// validReviewOccurred: a reviewer's event span goes only with an approval; {} clears it.
+func validReviewOccurred(in CandidateReviewInput) bool {
+	return in.Occurred == nil || in.Action != "reject" && (*in.Occurred == RecallTimeWindow{} || validOccurred(in.Occurred, time.Now()))
 }
 
 // validReviewReach: reach goes only with an approval, and project needs its project key.

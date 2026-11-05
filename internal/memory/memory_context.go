@@ -118,3 +118,40 @@ func (s *Service) validateMemoryContextEvidence(ctx context.Context, token strin
 	}
 	return headers, nil
 }
+
+// occurredMaxAhead bounds how far past its source an event may lie: a planned date, not a typo.
+const occurredMaxAhead = 366 * 24 * time.Hour
+
+// validOccurred accepts no span, or a non-empty span within the storable years that starts
+// no later than occurredMaxAhead after ref. A zero From is only valid as a reviewer's "clear".
+func validOccurred(w *RecallTimeWindow, ref time.Time) bool {
+	return w == nil || utf8.ValidString(w.Phrase) && utf8.RuneCountInString(w.Phrase) <= 64 && w.From.Before(w.To) && storableTime(w.From) && storableTime(w.To) && !w.From.After(ref.Add(occurredMaxAhead))
+}
+
+// resolveOccurred is a claim's event span. Dates the extractor gave (a day, a month, an
+// RFC 3339 time or a time word) are read with recall's time parser against the source
+// time ref, inclusive of to; an unreadable or implausible pair is dropped. Without
+// usable dates the first time phrase in text is read the same way ("어제" in a
+// message of 11-02 is 11-01), keeping the phrase so a reviewer sees why.
+func resolveOccurred(from, to, text string, ref time.Time) *RecallTimeWindow {
+	from, to = strings.TrimSpace(from), strings.TrimSpace(to)
+	if from == "" {
+		from = to
+	}
+	if to == "" {
+		to = from
+	}
+	if a, ok := parseTimeIntent(from, ref); ok {
+		if b, ok := parseTimeIntent(to, ref); ok {
+			if w := (&RecallTimeWindow{From: a.From, To: b.To}); validOccurred(w, ref) {
+				return w
+			}
+		}
+	}
+	if w, ok := parseTimeIntent(text, ref); ok {
+		if out := (&RecallTimeWindow{Phrase: runeCutString(w.Phrase, 64), From: w.From, To: w.To}); validOccurred(out, ref) {
+			return out
+		}
+	}
+	return nil
+}

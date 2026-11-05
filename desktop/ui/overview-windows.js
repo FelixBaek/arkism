@@ -803,6 +803,21 @@ window.ArkismOverviewWindows = (ctx, env) => {
       }
       function paintReach() { for (const [val, b] of reachBtns) { b.classList.toggle("on", val === dr.reach); b.setAttribute("aria-pressed", String(val === dr.reach)); } whereNow.textContent = REACH_WHERE[dr.reach || kindReach] || REACH_WHERE.general; }
       if (rs) paintReach();
+      // 일어난 때 (#3): the event days the server read from the content; the person fixes or empties them, and they go with 승인 / 고쳐서 저장
+      const day0 = (t) => { const x = new Date(t); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+      const oc = c.occurred, ocFrom = el("input"), ocTo = el("input");
+      ocFrom.type = ocTo.type = "date"; ocFrom.setAttribute("aria-label", "일어난 첫날"); ocTo.setAttribute("aria-label", "일어난 마지막 날");
+      if (oc?.from) { ocFrom.value = day0(oc.from); ocTo.value = day0(Date.parse(oc.to) - 1); }
+      const ocWas = `${ocFrom.value}~${ocTo.value}`;
+      const occurredExtra = () => { // unchanged sends nothing; emptied sends {} (clear); one day filled means that day
+        if (`${ocFrom.value}~${ocTo.value}` === ocWas) return {};
+        const a = ocFrom.value || ocTo.value, b = ocTo.value || ocFrom.value;
+        if (!a) return { occurred: {} };
+        const to = new Date(`${b}T00:00`); to.setDate(to.getDate() + 1);
+        return { occurred: { from: new Date(`${a}T00:00`).toISOString(), to: to.toISOString() } };
+      };
+      const ocRow = el("div", "ov-wide-chips"); ocRow.append(ocFrom, el("span", "", "~"), ocTo);
+      sec(decide1, oc?.phrase ? `일어난 때 · 글의 "${oc.phrase}"를 보고 정했어요` : "일어난 때", ocRow, el("p", "", oc?.from ? "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요." : "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요."));
       const oldId = mp?.merge?.proposal?.targets?.[0]?.id || k?.dup_hint, oldMem = oldId && D().memories.find((m) => m.id === oldId);
       if (oldMem) {
         const cmp = el("div", "ov-detail-list"), nw = el("div", "ov-cmp diff-add"), od = el("div", "ov-cmp diff-del"), u = usage(oldId), n = u ? u.d30 || u.d7 || 0 : 0;
@@ -820,8 +835,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
           catch (er) { st.textContent = er.message === "revision_conflict" ? "후보나 대상 기억이 바뀌어 이 제안은 낡았어요." : `합치지 못했어요: ${er.message}`; act.querySelectorAll("button").forEach((b) => (b.disabled = false)); mb.focus(); }
         }));
         const typed = () => edit.value.trim();
-        act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve", reachExtra())),
-          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text || (dropWhy && typed() === dropWhy)) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed(), ...reachExtra() }).catch(() => {}); }),
+        act.append(mk("approve", mp || oldMem ? "새 기억으로 승인" : "그대로 승인", () => go1("approve", { ...reachExtra(), ...occurredExtra() })),
+          mk("fix", "고쳐서 저장", () => { if (!typed() || typed() === c.text || (dropWhy && typed() === dropWhy)) { st.textContent = tr("위 칸에 고친 내용을 쓰세요."); edit.focus(); return; } go1("edit_approve", { content: typed(), ...reachExtra(), ...occurredExtra() }).catch(() => {}); }),
           // a typed note goes with the reject as is; an empty box still asks why (the server needs a reason)
           mk("reject", "버리기", () => (typed() ? go1("reject", { reason: typed() }) : DR().openAfter(act, { title: "왜 버리나요?", confirmLabel: "버리기", onConfirm: (why) => go1("reject", DR().rejectFields(why)) }))),
           ...(DR().maybeStale(c, [oldMem]) ? [DR().staleHint()] : []));

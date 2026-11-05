@@ -327,6 +327,24 @@ func TestCaptureClaimWithoutALiteralQuoteIsOnlyAnInference(t *testing.T) {
 	}
 }
 
+func TestCaptureClaimCarriesTheEventDatesTheExtractorGave(t *testing.T) {
+	raw := []any{
+		map[string]any{"subject": "deploy", "text": "2026-11-01에 Demo를 배포했다.", "kind": "decision", "quote": "어제 Demo 배포했어", "occurred_from": " 2026-11-01 ", "occurred_to": "2026-11-01"},
+		map[string]any{"subject": "ui", "text": "Demo 기본 UI는 다크 테마다.", "kind": "decision", "quote": "어제 Demo 배포했어", "occurred_from": "", "occurred_to": nil},
+	}
+	claims, err := buildClaims(raw, "어제 Demo 배포했어", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, second := claims[0].(map[string]any), claims[1].(map[string]any)
+	if first["occurred_from"] != "2026-11-01" || first["occurred_to"] != "2026-11-01" || second["occurred_from"] != nil || second["occurred_to"] != nil {
+		t.Fatal(first, second)
+	}
+	if !strings.Contains(claimsSchema, `"occurred_from"`) || !strings.Contains(extractPrompt, "occurred_from") {
+		t.Fatal("the extraction asks for event dates")
+	}
+}
+
 func TestCaptureOneOffRequestsNeverReachTheExtractor(t *testing.T) {
 	if cueRE.MatchString("테스트 추가해줘") || !cueRE.MatchString("커밋 메시지는 항상 한국어로 써") {
 		t.Fatal()

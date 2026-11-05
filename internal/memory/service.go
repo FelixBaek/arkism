@@ -130,6 +130,7 @@ type CreateInput struct {
 	Sources        []SourceRef              `json:"sources"`
 	Relations      []Ref                    `json:"relations"`
 	EffectiveAt    *time.Time               `json:"effective_at,omitempty"`
+	Occurred       *RecallTimeWindow        `json:"occurred,omitempty"`
 	ExpiresAt      *time.Time               `json:"expires_at"`
 	SkillID        string                   `json:"skill_id"`
 	BaseVersion    string                   `json:"base_version"`
@@ -547,7 +548,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if e = normalizeCreateTimes(col, &in, now); e != nil {
 		return Record{}, e
 	}
-	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
+	r := Record{MemoryContext: copyMemoryContext(in.MemoryContext), ArchiveMessages: append([]ArchiveMessageRef(nil), in.ArchiveMessages...), Confidence: in.Confidence, Evaluation: in.Evaluation, Run: in.Run, ToolCall: in.ToolCall, OriginProduct: in.OriginProduct, SourceRef: in.SourceRef, SourceEventID: in.SourceEventID, TraceID: in.TraceID, CollectedAt: in.CollectedAt, Generator: in.Generator, CreatedByType: d.Role, Sensitivity: in.Sensitivity, Inspection: &inspection, ID: ID(), Scope: in.Scope, Kind: in.Kind, Status: "active", Revision: 1, Text: in.Text, Summary: in.Summary, Keywords: in.Keywords, Tags: in.Tags, Sources: in.Sources, Relations: in.Relations, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, Trust: 0.5, EffectiveAt: in.EffectiveAt, Occurred: in.Occurred, ExpiresAt: in.ExpiresAt, SkillID: in.SkillID, BaseVersion: in.BaseVersion, Target: in.Target, Passed: in.Passed, Reflection: in.Reflection}
 	if r.ExpiresAt != nil && !r.ExpiresAt.After(now) {
 		return Record{}, ErrInvalid
 	}
@@ -619,7 +620,7 @@ func checkCreateRequest(col string, in *CreateInput, file *textArtifact) error {
 	if in.IdempotencyKey != "" && (col != "sources" || !idempotencyPattern.MatchString(in.IdempotencyKey)) {
 		return ErrInvalid
 	}
-	if !validMemoryContext(in.MemoryContext, time.Now().UTC()) || in.MemoryContext != nil && col != "memory_candidates" {
+	if !validCandidateTime(col, in) {
 		return ErrInvalid
 	}
 	if !validTags(in.Tags) || createFieldsMisplaced(col, *in, file) || createLabelsInvalid(col, *in) || createFieldsOversized(*in, file) {
@@ -1351,6 +1352,12 @@ func applyTransition(ctx context.Context, tx Tx, col string, in ChangeInput, r *
 	return nil
 }
 
+// validCandidateTime: memory context and event span are candidate fields, checked as given.
+func validCandidateTime(col string, in *CreateInput) bool {
+	now := time.Now().UTC()
+	return validMemoryContext(in.MemoryContext, now) && validOccurred(in.Occurred, now) && (col == "memory_candidates" || in.MemoryContext == nil && in.Occurred == nil)
+}
+
 func applyReviewDecision(r *Record, review CandidateReviewInput, d Decision) {
 	r.Review = &ReviewDecision{ReceiptID: ID(), ActorRole: d.Role, Channel: "explicit_review_api", Action: review.Action, By: d.PrincipalID, At: r.UpdatedAt, Reason: review.Reason, ReasonCode: review.ReasonCode}
 	if d.Role == roleHuman {
@@ -1426,6 +1433,13 @@ func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *Cand
 			memory.ReachSuggestion = &sg
 		}
 		memory.ContentHash = ContentHash(memory.Text)
+		if review.Occurred != nil { // the reviewer's date replaces the extracted one; an empty span clears it
+			memory.Occurred = nil
+			if !review.Occurred.From.IsZero() {
+				o := *review.Occurred
+				memory.Occurred = &o
+			}
+		}
 		if review.Reach != "" {
 			memory.Reach, memory.ReachProject, memory.ReachOrigin = review.Reach, review.ReachProject, reachOriginHuman
 		}
@@ -1737,7 +1751,7 @@ func HitFromRecord(col string, r Record) Hit {
 	if col == colMemories || col == "memory_candidates" {
 		normalizeMemoryProvenance(&r)
 	}
-	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
+	hit := Hit{MemoryContext: copyMemoryContext(r.MemoryContext), TrustLevel: r.TrustLevel, CreatedBy: r.CreatedBy, CreatedAt: &r.CreatedAt, Tags: r.Tags, EffectiveAt: r.EffectiveAt, Occurred: r.Occurred, Digest: ContentHash(recordContent(r)), Kind: r.Kind, Sensitivity: r.Sensitivity, ID: r.ID, Collection: col, Origin: origin, Scope: r.Scope, Status: r.Status, Revision: r.Revision, Text: r.Text, Summary: r.Summary, Sources: r.Sources, SourceEventID: r.SourceEventID, TraceID: r.TraceID, VerificationStatus: r.VerificationStatus, UpdatedAt: r.UpdatedAt, Trust: r.Trust, Relations: r.Relations, Authority: "data_only_untrusted"}
 	if col == colMemories {
 		hit.ApprovalOrigin = memoryApprovalOrigin(r)
 		hit.Reach, hit.ReachProject = memoryReach(r), r.ReachProject

@@ -320,7 +320,7 @@ test("시간순 opens first, offers examples and sends the time words to the ser
 test("시간순 sorts by event time, groups by day, splits lanes and opens the memory", async () => {
   const items = [
     { id: "f", collection: "memories", kind: "decision", text: "배포는 금요일에 안 한다", created_at: "2026-10-20T01:00:00Z", memory_context: { observed_at: "2026-10-28T03:00:00Z" }, lanes: ["temporal"] },
-    { id: "e", collection: "memories", kind: "episodic", text: "결제 오류를 고쳤다", created_at: "2026-10-30T05:00:00Z", lanes: ["keyword", "temporal"] },
+    { id: "e", collection: "memories", kind: "episodic", text: "결제 오류를 고쳤다", created_at: "2026-09-10T05:00:00Z", occurred: { from: "2026-10-30T05:00:00Z", to: "2026-10-31T05:00:00Z" }, lanes: ["keyword", "temporal"] },
     { id: "o", collection: "observations", derived: true, kind: "semantic", text: "주로 오후에 배포한다", source_ids: ["f", "e"], updated_at: "2026-10-29T05:00:00Z" },
     { id: "old", collection: "memories", kind: "user", text: "예전 기억", created_at: "2026-09-01T05:00:00Z", lanes: ["vector"] }
   ];

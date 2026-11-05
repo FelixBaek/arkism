@@ -189,9 +189,12 @@ func yearSpan(now time.Time, offset int) (time.Time, time.Time, bool) {
 	return from, from.AddDate(1, 0, 0), true
 }
 
-// hitEventTime is when a memory happened: its observed_at, then a dated valid_from,
-// then its content time (hitContentTime).
+// hitEventTime is when a memory happened: the start of the event span its content
+// states (occurred), its observed_at, then a dated valid_from, then its content time (hitContentTime).
 func hitEventTime(h Hit, loc *time.Location) time.Time {
+	if h.Occurred != nil && !h.Occurred.From.IsZero() {
+		return h.Occurred.From
+	}
 	if c := h.MemoryContext; c != nil {
 		if c.ObservedAt != nil && !c.ObservedAt.IsZero() {
 			return *c.ObservedAt
@@ -209,3 +212,12 @@ func hitEventTime(h Hit, loc *time.Location) time.Time {
 }
 
 func inWindow(t time.Time, w timeWindow) bool { return !t.Before(w.From) && t.Before(w.To) }
+
+// hitInWindow: a stated event span counts when it overlaps w ("last week" finds a
+// three-day outage that began the Sunday before); other hits by their event time.
+func hitInWindow(h Hit, w timeWindow, loc *time.Location) bool {
+	if o := h.Occurred; o != nil && !o.From.IsZero() {
+		return o.From.Before(w.To) && w.From.Before(o.To)
+	}
+	return inWindow(hitEventTime(h, loc), w)
+}

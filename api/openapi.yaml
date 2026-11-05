@@ -38299,7 +38299,7 @@
           "Management"
         ],
         "summary": "Preview claims from text (dry run)",
-        "description": "Proposes claims (content, kind, semantic_kind, evidence_kind, observed_at, evidence_quote, confidence) from at most 64 KiB of text. Nothing is stored except the model usage record. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Proposes claims (content, kind, semantic_kind, evidence_kind, occurred_from, occurred_to, evidence_quote, confidence) from at most 64 KiB of text. Nothing is stored except the model usage record. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -46171,6 +46171,7 @@
             "readOnly": true,
             "description": "memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
+          "occurred": {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"phrase": {"type": "string", "maxLength": 64}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}, "readOnly": true, "description": "When the content says the event happened, [from, to); phrase is the text it was read from, empty when the extractor or a reviewer gave the dates. Recall time windows match on overlap with it before observed_at, valid_from and stored times."},
           "reach_project": {
             "type": "string",
             "readOnly": true,
@@ -46447,6 +46448,8 @@
           "risk_reasons": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 1000}},
           "evidence_span": {"type": "string", "maxLength": 8000},
           "dup_hint": {"type": "string", "maxLength": 2000},
+          "occurred_from": {"type": "string", "maxLength": 64, "description": "First day the event the claim describes happened: YYYY-MM-DD, YYYY-MM, RFC 3339 or a time word, read against event.occurred_at. A reversed, unreadable or more than a year later date is dropped; without one the first time phrase in text is used (stored as occurred)."},
+          "occurred_to": {"type": "string", "maxLength": 64, "description": "Last day (inclusive) of the event; empty means the same as occurred_from."},
           "subject": {
             "type": "string",
             "maxLength": 128
@@ -47610,6 +47613,7 @@
             "readOnly": true,
             "description": "memory reach within the same Scope. Missing on old rows is read as personal for kind user, general otherwise."
           },
+          "occurred": {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"phrase": {"type": "string", "maxLength": 64}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}, "readOnly": true, "description": "When the content says the event happened, [from, to); phrase is the text it was read from, empty when the extractor or a reviewer gave the dates. Recall time windows match on overlap with it before observed_at, valid_from and stored times."},
           "reach_project": {
             "type": "string",
             "readOnly": true,
@@ -49313,6 +49317,7 @@
             "maxLength": 256,
             "description": "Required with reach=project (the project key, stored lowercased); must be empty otherwise."
           },
+          "occurred": {"type": "object", "additionalProperties": false, "required": ["from", "to"], "properties": {"phrase": {"type": "string", "maxLength": 64}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}, "description": "Optional, approve and edit_approve only (reject 400). The reviewer's event span [from, to) for the memory, replacing the extracted one; {} clears it. from must be before to and at most a year ahead."},
           "automated": {
             "type": "boolean",
             "default": false,
@@ -55151,6 +55156,9 @@
           },
           "file_extract": {
             "$ref": "#/components/schemas/WireResponseFileExtractJob"
+          },
+          "occurred": {
+            "$ref": "#/components/schemas/WireResponseRecallTimeWindow"
           }
         },
         "additionalProperties": false,
@@ -70340,6 +70348,30 @@
             "type": "string"
           }
         }
+      },
+      "WireResponseRecallTimeWindow": {
+        "type": "object",
+        "properties": {
+          "phrase": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "phrase",
+          "from",
+          "to"
+        ],
+        "x-go-type": "memory.RecallTimeWindow",
+        "x-go-source": "internal/memory/recall_lanes.go"
       }
     },
     "headers": {

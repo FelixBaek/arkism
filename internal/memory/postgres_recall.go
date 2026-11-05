@@ -9,7 +9,8 @@ import (
 // recallWindowSQL keeps rows with any event-time field in the window, a superset;
 // windowHits then applies hitEventTime's precedence exactly. Stored times are
 // {"$date": ...} objects (storecodec.go), so each is read through ->>'$date'.
-const recallWindowSQL = `((doc->'memory_context'->'observed_at'->>'$date')::timestamptz >= $%d AND (doc->'memory_context'->'observed_at'->>'$date')::timestamptz < $%d
+const recallWindowSQL = `((doc->'occurred'->'from'->>'$date')::timestamptz < $%d AND (doc->'occurred'->'to'->>'$date')::timestamptz > $%d
+ OR (doc->'memory_context'->'observed_at'->>'$date')::timestamptz >= $%d AND (doc->'memory_context'->'observed_at'->>'$date')::timestamptz < $%d
  OR left(doc->'memory_context'->>'valid_from',10) BETWEEN $%d AND $%d
  OR (doc->'effective_at'->>'$date')::timestamptz >= $%d AND (doc->'effective_at'->>'$date')::timestamptz < $%d
  OR (doc->'created_at'->>'$date')::timestamptz >= $%d AND (doc->'created_at'->>'$date')::timestamptz < $%d)`
@@ -25,7 +26,7 @@ func (p *Postgres) SearchMemoriesInWindow(ctx context.Context, in SearchInput, f
 	now := time.Now().UTC()
 	loc := from.Location()
 	// valid_from dates get a day of slack each side: an RFC3339 value in another offset can carry the neighbouring date.
-	args := []any{from, to, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly), from, to, from, to}
+	args := []any{to, from, from, to, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly), from, to, from, to}
 	where, params := pgSearchWhere(criteria, colMemories, now, recallWindowSQL, args)
 	rows, err := p.selectRecords(ctx, colMemories, in.Scope, where, params, "updated_at DESC, id ASC", in.Limit*5)
 	if err != nil {
@@ -41,7 +42,7 @@ func windowHits(rows []Record, criteria SearchCriteria, now time.Time, w timeWin
 		if r.ApprovedBy == "" || !criteria.matchesRecord(r) || !searchableLive(r, colMemories, "", now, nil, false) {
 			continue
 		}
-		if h := searchHit(r, colMemories, reasonTemporal); inWindow(hitEventTime(h, loc), w) {
+		if h := searchHit(r, colMemories, reasonTemporal); hitInWindow(h, w, loc) {
 			hits = append(hits, h)
 		}
 	}

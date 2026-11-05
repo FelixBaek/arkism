@@ -31,7 +31,7 @@ import (
 const (
 	fileExtractJobKind         = "file_memory_extract"
 	fileExtractDocKind         = "file_memory_extract_doc"
-	fileExtractPromptVersion   = "file-extract-v1"
+	fileExtractPromptVersion   = "file-extract-v2"
 	fileExtractPipelineVersion = "arkism-file-extract-v1"
 	// The wiki_ prefix puts these calls under the wiki model's daily call cap.
 	fileExtractOperation   = "wiki_memory_extract"
@@ -51,7 +51,6 @@ const (
 var (
 	extractSemanticKinds = []string{"fact", "preference", "correction", "lesson", "failure_recovery"}
 	extractEvidenceKinds = []string{"user_statement", "tool_observation", "agent_statement", "inference"}
-	extractDateLayouts   = []string{time.RFC3339, time.DateOnly, "2006-01"}
 )
 
 // ExtractedClaim is one model-proposed claim; it is a proposal, never a memory.
@@ -60,7 +59,8 @@ type ExtractedClaim struct {
 	Kind          string  `json:"kind"`
 	SemanticKind  string  `json:"semantic_kind"`
 	EvidenceKind  string  `json:"evidence_kind"`
-	ObservedAt    string  `json:"observed_at,omitempty"`
+	OccurredFrom  string  `json:"occurred_from,omitempty"`
+	OccurredTo    string  `json:"occurred_to,omitempty"`
 	EvidenceQuote string  `json:"evidence_quote"`
 	Confidence    float64 `json:"confidence"`
 	Locator       string  `json:"locator,omitempty"`
@@ -162,18 +162,18 @@ func extractPrompt(text string) (string, string) {
 	system := "You extract durable memory claims from one document for a person to review; nothing you return is saved without that review. " + wikiDataRule +
 		" Extract preferences, prohibitions (things never to do), decisions, lessons and facts that stay useful later; skip small talk and one-off details." +
 		" Write content and evidence_quote in the same language as the source and never translate: Korean stays Korean." +
-		` Return only one JSON object: {"claims":[{"content": string, "kind": "user"|"decision"|"procedural"|"lesson"|"episodic"|"semantic", "semantic_kind": "fact"|"preference"|"correction"|"lesson"|"failure_recovery", "evidence_kind": "user_statement"|"tool_observation"|"agent_statement"|"inference", "observed_at": string, "evidence_quote": string, "confidence": number}]}.` +
-		" evidence_quote is an exact excerpt of the source, at most 300 characters. observed_at is the event date the source states (YYYY-MM-DD, YYYY-MM or RFC 3339), or an empty string. confidence is between 0 and 1. At most 32 claims; answer {\"claims\":[]} when nothing qualifies."
+		` Return only one JSON object: {"claims":[{"content": string, "kind": "user"|"decision"|"procedural"|"lesson"|"episodic"|"semantic", "semantic_kind": "fact"|"preference"|"correction"|"lesson"|"failure_recovery", "evidence_kind": "user_statement"|"tool_observation"|"agent_statement"|"inference", "occurred_from": string, "occurred_to": string, "evidence_quote": string, "confidence": number}]}.` +
+		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date. confidence is between 0 and 1. At most 32 claims; answer {\"claims\":[]} when nothing qualifies."
 	return system, wikiFence("SOURCE_DATA", text)
 }
 
 func extractSpaces(s string) string { return strings.Join(strings.Fields(s), " ") }
 
-func validExtractedClaim(c ExtractedClaim, source string, now time.Time) bool {
+func validExtractedClaim(c ExtractedClaim, source string) bool {
 	content := strings.TrimSpace(c.Content)
 	if content == "" || len(content) > 4000 || !utf8.ValidString(content) || strings.ContainsRune(content, 0) || c.Locator != "" ||
 		!slices.Contains(captureKinds, c.Kind) || !slices.Contains(extractSemanticKinds, c.SemanticKind) || !slices.Contains(extractEvidenceKinds, c.EvidenceKind) ||
-		math.IsNaN(c.Confidence) || c.Confidence < 0 || c.Confidence > 1 || len(c.ObservedAt) > 64 {
+		math.IsNaN(c.Confidence) || c.Confidence < 0 || c.Confidence > 1 || len(c.OccurredFrom) > 64 || len(c.OccurredTo) > 64 {
 		return false
 	}
 	quote := extractSpaces(c.EvidenceQuote)
@@ -181,10 +181,7 @@ func validExtractedClaim(c ExtractedClaim, source string, now time.Time) bool {
 	if quote == "" || len(c.EvidenceQuote) > 1200 || !strings.Contains(extractSpaces(source), quote) {
 		return false
 	}
-	return c.ObservedAt == "" || slices.ContainsFunc(extractDateLayouts, func(layout string) bool {
-		t, err := time.Parse(layout, c.ObservedAt)
-		return err == nil && storableTime(t) && !t.After(now)
-	})
+	return true
 }
 
 // parseExtractedClaims keeps the well-formed claims of a strict JSON answer and
@@ -197,18 +194,21 @@ func parseExtractedClaims(answer, source, locator string) ([]ExtractedClaim, []E
 		return nil, nil, false
 	}
 	claims, skipped := []ExtractedClaim{}, []ExtractSkip{}
-	now := time.Now().UTC()
+	now := time.Now().In(usageZone())
 	for i, item := range raw.Claims {
 		if i >= fileExtractMaxClaims {
 			skipped = append(skipped, ExtractSkip{Locator: locator, Reason: "too_many_claims"})
 			break
 		}
 		var c ExtractedClaim
-		if !decodeModelJSON(string(item), &c) || !validExtractedClaim(c, source, now) {
+		if !decodeModelJSON(string(item), &c) || !validExtractedClaim(c, source) {
 			skipped = append(skipped, ExtractSkip{Locator: locator, Reason: "malformed_claim"})
 			continue
 		}
 		c.Content, c.Locator = strings.TrimSpace(c.Content), locator
+		if (c.OccurredFrom != "" || c.OccurredTo != "") && resolveOccurred(c.OccurredFrom, c.OccurredTo, "", now) == nil {
+			c.OccurredFrom, c.OccurredTo = "", "" // an impossible or far-future date is not shown or stored
+		}
 		claims = append(claims, c)
 	}
 	return claims, skipped, true
@@ -533,9 +533,9 @@ func (s *Service) captureExtracted(ctx context.Context, token string, scope Scop
 		confidence := c.Confidence
 		in.Claims = append(in.Claims, CaptureClaim{Subject: "file-extract", Text: c.Content, Kind: c.Kind, Basis: "inferred", Confidence: &confidence,
 			Reason:     ch.Locator + ": " + runeCutString(extractSpaces(c.EvidenceQuote), fileExtractQuoteRunes),
-			SourceRefs: []Ref{ch.Source}, locator: ch.Locator,
+			SourceRefs: []Ref{ch.Source}, locator: ch.Locator, OccurredFrom: c.OccurredFrom, OccurredTo: c.OccurredTo,
 			// The document was read by a model, so the evidence is inference whatever the model labelled it.
-			MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: c.SemanticKind, ValidFrom: c.ObservedAt}})
+			MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: c.SemanticKind}})
 	}
 	res, err := s.Capture(ctx, token, in)
 	if err != nil {

@@ -207,13 +207,15 @@ type Record struct {
 	CreatedAt          time.Time                `json:"created_at" bson:"created_at"`
 	UpdatedAt          time.Time                `json:"updated_at" bson:"updated_at"`
 	EffectiveAt        *time.Time               `json:"effective_at,omitempty" bson:"effective_at,omitempty"`
-	ExpiresAt          *time.Time               `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
-	ReviewDueAt        *time.Time               `json:"review_due_at,omitempty" bson:"review_due_at,omitempty"`
-	CreatedBy          string                   `json:"created_by" bson:"created_by"`
-	Trust              float64                  `json:"trust" bson:"trust"`
-	SkillID            string                   `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
-	ActiveVersion      string                   `json:"active_version,omitempty" bson:"active_version,omitempty"`
-	BaseVersion        string                   `json:"base_version,omitempty" bson:"base_version,omitempty"`
+	// Occurred is when the content says the event happened (memory_context.go resolveOccurred), not when it was recorded.
+	Occurred      *RecallTimeWindow `json:"occurred,omitempty" bson:"occurred,omitempty"`
+	ExpiresAt     *time.Time        `json:"expires_at,omitempty" bson:"expires_at,omitempty"`
+	ReviewDueAt   *time.Time        `json:"review_due_at,omitempty" bson:"review_due_at,omitempty"`
+	CreatedBy     string            `json:"created_by" bson:"created_by"`
+	Trust         float64           `json:"trust" bson:"trust"`
+	SkillID       string            `json:"skill_id,omitempty" bson:"skill_id,omitempty"`
+	ActiveVersion string            `json:"active_version,omitempty" bson:"active_version,omitempty"`
+	BaseVersion   string            `json:"base_version,omitempty" bson:"base_version,omitempty"`
 	// Skill hub: ordered version IDs on the parent skill (index+1 is the
 	// public version number), import origin and runtime compatibility on a
 	// version. Content stays immutable; only lifecycle status moves.
@@ -401,6 +403,8 @@ type MeteredEmbedder interface {
 	EmbedMeasured(context.Context, []string, string) (EmbeddingBatch, error)
 }
 type Hit struct {
+	Occurred *RecallTimeWindow `json:"occurred,omitempty" bson:"occurred,omitempty"`
+
 	ProofCount      int        `json:"proof_count,omitempty" bson:"-"`
 	LastConfirmedAt *time.Time `json:"last_confirmed_at,omitempty" bson:"-"`
 

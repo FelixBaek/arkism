@@ -410,7 +410,8 @@ const observationSystem = "You consolidate approved memory notes into observatio
 
 // derivedTimeRule: the server orders and dates the notes, so the model need not guess which is newer.
 const derivedTimeRule = "Each note carries the date it took effect, computed by the server. When a newer note changes, replaces or ends what an older note says, " +
-	"state that it changed or ended and when, cite both notes, and never present the older value as current."
+	"state that it changed or ended and when, cite both notes, and never present the older value as current. " +
+	"A note may also carry the days the event it describes happened (happened: first .. last); date events by that."
 
 func observationPrompt(members []Record, previous string) string {
 	var b strings.Builder
@@ -420,7 +421,7 @@ func observationPrompt(members []Record, previous string) string {
 	}
 	var data strings.Builder
 	for _, m := range byContentTime(members) {
-		data.WriteString("- id: " + m.ID + "\n  date: " + memoryDate(m) + "\n  text: " + strings.ReplaceAll(m.Text, "\n", " ") + "\n")
+		data.WriteString("- id: " + m.ID + "\n  date: " + memoryDate(m) + occurredLine(m.Occurred) + "\n  text: " + strings.ReplaceAll(m.Text, "\n", " ") + "\n")
 	}
 	b.WriteString(wikiFence("MEMORY_DATA", data.String()))
 	return b.String()
@@ -457,6 +458,14 @@ func validObservationDraft(d observationDraft, group map[string]Ref) ([]Ref, str
 		refs = append(refs, ref)
 	}
 	return refs, ""
+}
+
+// occurredLine is the event span a note states, in the server's calendar (To is exclusive).
+func occurredLine(o *RecallTimeWindow) string {
+	if o == nil || o.From.IsZero() {
+		return ""
+	}
+	return "\n  happened: " + o.From.In(usageZone()).Format(time.DateOnly) + " .. " + o.To.Add(-time.Nanosecond).In(usageZone()).Format(time.DateOnly)
 }
 
 func memoryDate(m Record) string {

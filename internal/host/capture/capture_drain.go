@@ -33,6 +33,8 @@ Rules:
 - Record the content itself, not the user's action: not "the user asked for X" but what X is.
 - Only the user's words count: never extract something the assistant said, proposed or restated, even if the user agreed with "응".
 - A change keeps both sides: "<what> uses Y instead of X". Turn relative dates (today, next week) into absolute ones using TODAY.
+- occurred_from / occurred_to: the days the event the claim describes happened, as YYYY-MM-DD (YYYY-MM for a whole month),
+  resolved against TODAY; the same day twice for one day. Use empty strings for a standing rule or an undated statement.
 - Preserve every condition, exception, negation, uncertainty and stated change-effective time in text itself.
   Do not turn a conditional or tentative statement into an unconditional rule. Do not invent a date, domain or certainty.
 - memory_context is optional and normally null. Supply it only for material applicability, uncertainty or a stated
@@ -56,7 +58,7 @@ Rules:
 - Never output secrets, tokens, passwords or keys. If nothing qualifies, return {"claims":[]}.`
 
 // Enforced by the CLI (structured outputs); the prompts only explain the fields.
-const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, ` + riskProps + `, ` + claimContextSchema + `}}}}}`
+const claimsSchema = `{"type": "object", "additionalProperties": false, "required": ["claims"], "properties": {"claims": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subject", "text", "kind", "quote", "reason", "confidence", "supersedes_id", "risk", "risk_reasons", "dup_hint", "occurred_from", "occurred_to"], "properties": {"subject": {"type": "string"}, "text": {"type": "string"}, "kind": {"type": "string", "enum": ["user", "decision", "procedural", "lesson"]}, "quote": {"type": "string"}, "reason": {"type": "string"}, "confidence": {"type": "number"}, "supersedes_id": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "occurred_from": {"type": "string", "maxLength": 64}, "occurred_to": {"type": "string", "maxLength": 64}, ` + riskProps + `, ` + claimContextSchema + `}}}}}`
 
 // riskRules and riskProps ask the extraction call for a risk call too (ADR-0022): it only orders the review
 // list, a person approves. Asked here so classifying costs no extra model call.
@@ -200,6 +202,7 @@ func buildClaim(c map[string]any, text, userText string, related []map[string]an
 		f, _ := num(conf)
 		claim["confidence"] = min(max(f, 0), 1)
 	}
+	claimEventDates(c, claim)
 	var sup map[string]any
 	for _, r := range related { // {r["id"]: r} keeps the last row per id
 		if id := hashable(c["supersedes_id"]); id != nil && eq(r["id"], id) {
@@ -223,6 +226,16 @@ func buildClaim(c map[string]any, text, userText string, related []map[string]an
 		}
 	}
 	return claim, nil
+}
+
+// claimEventDates copies the extractor's event dates; the server checks them against the
+// message time and drops implausible ones.
+func claimEventDates(c, claim map[string]any) {
+	for _, k := range []string{"occurred_from", "occurred_to"} {
+		if d := pyStrip(str(or(c[k], ""))); d != "" {
+			claim[k] = head(d, 64)
+		}
+	}
 }
 
 // hashable is v when Python could use it as a dict key, else nil.

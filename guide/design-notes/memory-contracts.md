@@ -4,7 +4,7 @@ Implementation contracts retained from the development guide. For layout, checks
 
 ## Skill improvement generation
 
-New memory extraction uses `capture-extract-v5` and `harness-session-v6`.
+New memory extraction uses `capture-extract-v6` and `harness-session-v6`.
 One-off permissions, budgets and assignment corrections belong in session state;
 durable candidates retain the named project and every condition. Session
 user-statement context fields must be supported by verbatim quotes from the same

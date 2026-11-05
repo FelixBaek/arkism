@@ -294,7 +294,7 @@ func mentalModelPrompt(m MentalModelData, hits []Hit) string {
 	hits = slices.Clone(hits)
 	slices.SortStableFunc(hits, func(a, b Hit) int { return hitContentTime(a).Compare(hitContentTime(b)) }) // oldest first, dated by the server
 	for _, h := range hits {
-		data.WriteString("- id: " + h.ID + "\n  kind: " + h.Collection + "\n  date: " + hitContentTime(h).UTC().Format(time.DateOnly) + "\n  text: " + strings.ReplaceAll(h.Text, "\n", " ") + "\n")
+		data.WriteString("- id: " + h.ID + "\n  kind: " + h.Collection + "\n  date: " + hitContentTime(h).UTC().Format(time.DateOnly) + occurredLine(h.Occurred) + "\n  text: " + strings.ReplaceAll(h.Text, "\n", " ") + "\n")
 	}
 	return wikiFence("TOPIC", m.Title+"\n"+m.Query) + "\n\n" + wikiFence("RECALLED_DATA", data.String())
 }

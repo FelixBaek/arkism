@@ -5,10 +5,10 @@ window.ArkismMemoryTime = (ctx) => {
   const LANES = { all: "전체", facts: "사실", events: "겪은 일", observations: "정리된 관찰" };
   const FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억" };
   const laneOf = (h) => h.derived || h.collection !== "memories" ? "observations" : h.kind === "episodic" || h.kind === "raw" || (h.tags || []).some((t) => t.startsWith("session:")) ? "events" : "facts";
-  // the server's event-time order (recall_time.go hitEventTime): observed_at, valid_from, then effective_at / created_at
+  // the server's event-time order (recall_time.go hitEventTime): occurred (the days the content states), observed_at, valid_from, then effective_at / created_at
   const eventAt = (h) => {
     const c = h.memory_context || {};
-    for (const [v, what] of [[c.observed_at, "일어난 때"], [c.valid_from, "맞기 시작한 때"], [h.effective_at, "적용된 때"], [h.created_at, "저장한 때"], [h.updated_at, "저장한 때"]]) { const t = v ? Date.parse(v) : NaN; if (Number.isFinite(t)) return { t, what }; }
+    for (const [v, what] of [[h.occurred?.from, "일어난 때"], [c.observed_at, "일어난 때"], [c.valid_from, "맞기 시작한 때"], [h.effective_at, "적용된 때"], [h.created_at, "저장한 때"], [h.updated_at, "저장한 때"]]) { const t = v ? Date.parse(v) : NaN; if (Number.isFinite(t)) return { t, what }; }
     return { t: 0, what: "" };
   };
   const day = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
