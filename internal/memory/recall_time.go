@@ -344,7 +344,7 @@ func (r timeRule) foreignWord(phrase string, score []int) bool {
 }
 
 // parseTimeIntent finds the first time phrase in query (numeric forms, then the
-// languages of timeLexicons) and resolves it against now, whose location is the
+// languages of timeLexicons, then the CLDR fallback) and resolves it against now, whose location is the
 // reader's calendar.
 func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
 	q := foldTimeText(strings.Join(strings.Fields(query), " "))
@@ -362,7 +362,7 @@ func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
 			}
 		}
 	}
-	return timeWindow{}, false
+	return cldrTimeIntent(q, now) // other languages, only when no hand-tuned rule matched
 }
 
 // agoSpan is the day, week, month or year (unit 0..3) n units before now's.
