@@ -373,6 +373,54 @@ func TestRecallContextBuildPassesExplainAndTimezone(t *testing.T) {
 	}
 }
 
+// The chain tries each configured reranker in order and records every step:
+// a failed remote hands over to the next, a request that may not send text
+// skips remotes for the local one, and when all fail the fused order stays.
+func TestRecallRerankFallbackChain(t *testing.T) {
+	d := Decision{ExternalTransfer: true, ContentSafe: true}
+	in := SearchInput{Scope: scopeA, Query: "third", Limit: 3}
+	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusBadGateway) }))
+	defer down.Close()
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[{"index":0,"score":0.0},{"index":1,"score":0.1},{"index":2,"score":1.0}]`))
+	}))
+	defer up.Close()
+	f := newFixture(t)
+	first, _ := NewTEIReranker(TEIRerankConfig{URL: down.URL})
+	second, _ := NewTEIReranker(TEIRerankConfig{URL: up.URL})
+	f.svc.Reranker = first.WithFallback(second.WithFallback(NewLocalReranker()))
+	outcomes := func(tr *recallTrace) string {
+		parts := []string{}
+		for _, st := range tr.chain {
+			parts = append(parts, st.Outcome)
+		}
+		return strings.Join(parts, ",")
+	}
+	trace := &recallTrace{explain: true, rerank: map[string]float64{}}
+	rows, err := f.svc.rerankRows(testCtx, in, d, rerankRowsFixture(), trace)
+	if err != nil || rows[0].ID != "c" || !trace.reranked || outcomes(trace) != "failed,ok" || first.Metrics().Fallbacks != 1 || second.Metrics().Calls != 1 {
+		t.Fatalf("%v %q %v", rows, outcomes(trace), err)
+	}
+	out := ContextBundle{}
+	trace.annotate(&out, nil)
+	if out.Explain == nil || len(out.Explain.RerankChain) != 2 || out.Explain.RerankChain[1].Provider == "" {
+		t.Fatalf("explain chain %+v", out.Explain)
+	}
+	// Without transfer permission only the local stage runs.
+	trace = &recallTrace{rerank: map[string]float64{}}
+	if rows, err = f.svc.rerankRows(testCtx, in, Decision{}, rerankRowsFixture(), trace); err != nil || rows[0].ID != "c" ||
+		outcomes(trace) != "not_allowed,not_allowed,ok" || trace.chain[2].Model != "lexical" || first.Metrics().Calls != 1 {
+		t.Fatalf("%v %q %v", rows, outcomes(trace), err)
+	}
+	// Every stage failing keeps the fused order.
+	again, _ := NewTEIReranker(TEIRerankConfig{URL: down.URL})
+	f.svc.Reranker = first.WithFallback(again)
+	trace = &recallTrace{rerank: map[string]float64{}}
+	if rows, err = f.svc.rerankRows(testCtx, in, d, rerankRowsFixture(), trace); err != nil || rows[0].ID != "a" || trace.reranked || outcomes(trace) != "failed,failed" {
+		t.Fatalf("%v %q %v", rows, outcomes(trace), err)
+	}
+}
+
 func TestLocalLexicalRerank(t *testing.T) {
 	f := newFixture(t)
 	f.svc.Reranker = NewLocalReranker()

@@ -57,6 +57,16 @@ type RecallExplain struct {
 	LaneWeights map[string]float64 `json:"lane_weights,omitempty"`
 	// LaneMS is each lane's wall time in whole milliseconds (all collections summed), plus rerank when it ran.
 	LaneMS map[string]int64 `json:"lane_ms,omitempty"`
+	// RerankChain is each configured reranker tried, in order, with its outcome:
+	// ok, failed, or not_allowed (the request may not send text to it).
+	RerankChain []RerankStage `json:"rerank_chain,omitempty"`
+}
+
+// RerankStage is one reranker of the fallback chain and what it did for this search.
+type RerankStage struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	Outcome  string `json:"outcome"`
 }
 
 type RecallTimeWindow struct {
@@ -73,6 +83,7 @@ type recallTrace struct {
 	fused    map[string]float64
 	rerank   map[string]float64
 	reranked bool
+	chain    []RerankStage
 	// modelRerank is the model rerank outcome (recall_model_rerank.go); modelRank its 1-based order.
 	modelRerank string
 	modelRank   map[string]int
@@ -335,14 +346,15 @@ func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []s
 	return clean(hits)
 }
 
-// rerankRows reorders the fused head by the reranker (blend above). A reranker failure
-// keeps the fused order; only a usage-ledger failure is returned, as for the query
-// embedding. Text is sent only when the vector lane could send the query too, and
-// only for hits the embedding worker would send (not restricted, safe to transfer);
-// the local reranker sends nothing, so it skips the transfer decision but keeps the
-// text filters (call traces may keep the text).
+// rerankRows reorders the fused head by the first reranker of the chain that
+// answers (blend above); when every one fails the fused order stays. Only a
+// usage-ledger failure is returned, as for the query embedding. Text is sent to a
+// remote reranker only when the vector lane could send the query too, and only for
+// hits the embedding worker would send (not restricted, safe to transfer); a local
+// reranker sends nothing, so it skips the transfer decision but keeps the text
+// filters (call traces may keep the text).
 func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
-	if s.Reranker == nil || in.Rerank == rerankOff || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(s.Reranker.local || d.ExternalTransfer && d.ContentSafe) || !safeTransfer(in.Query) {
+	if s.Reranker == nil || in.Rerank == rerankOff || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !safeTransfer(in.Query) {
 		return rows, nil
 	}
 	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])
@@ -350,13 +362,27 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 		return rows, nil
 	}
 	start := time.Now()
-	scores, err, e := s.meteredRerank(ctx, in.Scope, in.Query, texts)
-	trace.clock.since("rerank", start)
-	if e != nil {
-		return nil, e
+	var scores []float64
+	for r := s.Reranker; r != nil && scores == nil; r = r.next {
+		u, outcome := r.usage(), "ok"
+		if !(r.local || d.ExternalTransfer && d.ContentSafe) {
+			trace.chain = append(trace.chain, RerankStage{Provider: u.Provider, Model: u.Model, Outcome: "not_allowed"})
+			continue
+		}
+		got, err, e := s.meteredRerank(ctx, r, in.Scope, in.Query, texts)
+		if e != nil {
+			return nil, e
+		}
+		if err != nil {
+			r.fellBack(err)
+			outcome = "failed"
+		} else {
+			scores = got
+		}
+		trace.chain = append(trace.chain, RerankStage{Provider: u.Provider, Model: u.Model, Outcome: outcome})
 	}
-	if err != nil {
-		s.Reranker.fellBack(err)
+	trace.clock.since("rerank", start)
+	if scores == nil {
 		return rows, nil
 	}
 	best := rows[0].Score
@@ -421,7 +447,7 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		out.Items[i].Explain = e
 	}
 	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped,
-		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis()}
+		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis(), RerankChain: t.chain}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}

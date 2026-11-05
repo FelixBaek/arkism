@@ -55,6 +55,14 @@ type TEIReranker struct {
 	endpoint, model, apiKey, protocol, keyFile string
 	client                                     *http.Client
 	metrics                                    rerankCounters
+	// next is tried when this reranker fails (WithFallback).
+	next *TEIReranker
+}
+
+// WithFallback sets the reranker tried when t fails, and returns t.
+func (t *TEIReranker) WithFallback(next *TEIReranker) *TEIReranker {
+	t.next = next
+	return t
 }
 
 func NewTEIReranker(cfg TEIRerankConfig) (*TEIReranker, error) {

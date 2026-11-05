@@ -102,11 +102,11 @@ func (s *Service) meteredEmbed(ctx context.Context, scope Scope, operation strin
 }
 
 // meteredRerank is meteredEmbed for the reranker: operation "rerank".
-func (s *Service) meteredRerank(ctx context.Context, scope Scope, query string, texts []string) ([]float64, error, error) {
-	usage := s.Reranker.usage()
+func (s *Service) meteredRerank(ctx context.Context, r *TEIReranker, scope Scope, query string, texts []string) ([]float64, error, error) {
+	usage := r.usage()
 	m := modelCallSpec{scope: scope, operation: "rerank", kind: "rerank", provider: usage.Provider, model: usage.Model, prompt: query + "\n" + strings.Join(texts, "\n")}
 	scores, _, callErr, err := meteredCall(ctx, s, m, func(ctx context.Context) ([]float64, ProviderUsage, error) {
-		scores, err := s.Reranker.Rerank(ctx, query, texts)
+		scores, err := r.Rerank(ctx, query, texts)
 		return scores, usage, err
 	})
 	return scores, callErr, err

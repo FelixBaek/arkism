@@ -89,7 +89,7 @@ func TestTracingExportsRequestAndModelSpans(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil).WithContext(testCtx)
 	req.Header.Set("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
 	req, server := startServerSpan(req, "GET /x")
-	if _, callErr, _ := f.svc.meteredRerank(req.Context(), scopeA, "q", []string{"a", "b"}); callErr == nil {
+	if _, callErr, _ := f.svc.meteredRerank(req.Context(), f.svc.Reranker, scopeA, "q", []string{"a", "b"}); callErr == nil {
 		t.Fatal("provider failure lost")
 	}
 	server.endHTTP(http.StatusOK)

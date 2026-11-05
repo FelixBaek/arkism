@@ -52587,6 +52587,7 @@
               "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options); omitted when none."},
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
+              "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }
           },
@@ -53503,6 +53504,7 @@
               "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options); omitted when none."},
               "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
+              "rerank_chain": {"type": "array", "maxItems": 3, "description": "Each configured reranker tried, in order: ok (its scores were used), failed (the next one was tried) or not_allowed (the request may not send text to it). Omitted when reranking did not run.", "items": {"type": "object", "properties": {"provider": {"type": "string"}, "model": {"type": "string"}, "outcome": {"type": "string", "enum": ["ok", "failed", "not_allowed"]}}}},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }
           },
@@ -75066,6 +75068,10 @@
                     "output_tokens": {
                       "type": "integer"
                     },
+                    "cached_input_tokens": {
+                      "type": "integer",
+                      "description": "Part of input_tokens the provider served from its prompt cache; omitted when none was reported."
+                    },
                     "total_tokens": {
                       "type": "integer"
                     },
@@ -75177,6 +75183,9 @@
                   "type": "integer"
                 },
                 "output_tokens": {
+                  "type": "integer"
+                },
+                "cached_input_tokens": {
                   "type": "integer"
                 },
                 "total_tokens": {

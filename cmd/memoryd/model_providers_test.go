@@ -166,8 +166,22 @@ func TestHostedEmbedderAndRerankerSettings(t *testing.T) {
 	if r, err := configuredReranker(); err != nil || r == nil {
 		t.Fatal("records reranker", err)
 	}
+	t.Setenv("ARKISM_RERANK_FALLBACK_URL", "https://backup.example.com")
+	t.Setenv("ARKISM_RERANK_FALLBACK_PROTOCOL", "other")
+	if _, err := configuredReranker(); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatal("a bad fallback reranker is refused", err)
+	}
+	t.Setenv("ARKISM_RERANK_FALLBACK_PROTOCOL", "")
+	t.Setenv("ARKISM_RERANK_LOCAL", "1")
+	if r, err := configuredReranker(); err != nil || r == nil {
+		t.Fatal("rerank chain", err)
+	}
 	t.Setenv("ARKISM_RERANK_PROTOCOL", "other")
 	if _, err := configuredReranker(); !errors.Is(err, memory.ErrInvalid) {
 		t.Fatal("unknown rerank protocol", err)
+	}
+	t.Setenv("ARKISM_RERANK_URL", "")
+	if _, err := configuredReranker(); !errors.Is(err, memory.ErrInvalid) {
+		t.Fatal("a fallback without a first reranker", err)
 	}
 }

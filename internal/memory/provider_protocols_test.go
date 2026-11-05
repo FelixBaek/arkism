@@ -108,7 +108,7 @@ func TestEmbedAndRerankCallsAreTraced(t *testing.T) {
 	down := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
 	defer down.Close()
 	f.svc.Reranker, _ = NewTEIReranker(TEIRerankConfig{URL: down.URL})
-	if _, callErr, err := f.svc.meteredRerank(testCtx, scopeA, "q", []string{"a", "b"}); callErr == nil || err != nil {
+	if _, callErr, err := f.svc.meteredRerank(testCtx, f.svc.Reranker, scopeA, "q", []string{"a", "b"}); callErr == nil || err != nil {
 		t.Fatal("rerank failure", callErr, err)
 	}
 	embeds, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Operation: "embedding_query"})

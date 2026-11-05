@@ -144,9 +144,14 @@ func configuredTEIEmbedder(provider string) (memory.Embedder, error) {
 // ARKISM_RERANK_PROTOCOL (passages or records: URL is then the full endpoint)
 // and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables
 // reranking unless ARKISM_RERANK_LOCAL=1 asks for the in-process lexical reranker.
+// ARKISM_RERANK_FALLBACK_URL (with the same _MODEL, _API_KEY, _API_KEY_FILE and
+// _PROTOCOL suffixes) is tried when the first fails, and ARKISM_RERANK_LOCAL=1 next
+// to a URL adds the lexical reranker as the last stage; after them the fused order stays.
 func configuredReranker() (*memory.TEIReranker, error) {
-	raw := os.Getenv("ARKISM_RERANK_URL")
-	if raw == "" {
+	if os.Getenv("ARKISM_RERANK_URL") == "" {
+		if os.Getenv("ARKISM_RERANK_FALLBACK_URL") != "" {
+			return nil, fmt.Errorf("ARKISM_RERANK_FALLBACK_URL needs ARKISM_RERANK_URL: %w", memory.ErrInvalid)
+		}
 		if os.Getenv("ARKISM_RERANK_LOCAL") == "1" {
 			return memory.NewLocalReranker(), nil
 		}
@@ -160,8 +165,22 @@ func configuredReranker() (*memory.TEIReranker, error) {
 		}
 		timeout = parsed
 	}
-	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Model: os.Getenv("ARKISM_RERANK_MODEL"), APIKey: os.Getenv("ARKISM_RERANK_API_KEY"),
-		APIKeyFile: os.Getenv("ARKISM_RERANK_API_KEY_FILE"), Protocol: os.Getenv("ARKISM_RERANK_PROTOCOL"), Timeout: timeout})
+	var last *memory.TEIReranker
+	if os.Getenv("ARKISM_RERANK_LOCAL") == "1" {
+		last = memory.NewLocalReranker()
+	}
+	for _, prefix := range []string{"ARKISM_RERANK_FALLBACK", "ARKISM_RERANK"} {
+		if os.Getenv(prefix+"_URL") == "" {
+			continue
+		}
+		r, err := memory.NewTEIReranker(memory.TEIRerankConfig{URL: os.Getenv(prefix + "_URL"), Model: os.Getenv(prefix + "_MODEL"), APIKey: os.Getenv(prefix + "_API_KEY"),
+			APIKeyFile: os.Getenv(prefix + "_API_KEY_FILE"), Protocol: os.Getenv(prefix + "_PROTOCOL"), Timeout: timeout})
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", prefix, err)
+		}
+		last = r.WithFallback(last)
+	}
+	return last, nil
 }
 
 // PostgreSQL permissions are canonical; the other authorizers serve non-Postgres test wiring.
