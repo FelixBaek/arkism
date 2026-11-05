@@ -265,7 +265,7 @@ wiki. What a person approves and how is described in
    | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates` |
    | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages`, and for the proposal tools `write:directives`, `write:mental_models`, `write:maintenance_proposals`, `read:jobs`, `transition:jobs`, `read:knowledge_sources`, `read:knowledge_documents`; `add_document` also needs `write:memory_candidates`, `generate:memory_candidates` and `external:transfer` |
    | Service that runs model jobs | the job's write action (`write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `generate:wiki_pages`) plus `search:memories` and `context:read` |
-   | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` or `MEMORY_DERIVE_SCHEDULE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied` |
+   | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` or `MEMORY_DERIVE_SCHEDULE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `read:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied`; a scheduled run names the missing action (job outcome `denied:<action>`, and a warning in the worker log) and waits an hour |
 
    Anything that sends memory text to the server model or out of the server
    also needs `external:transfer`. The audit log names the destination:
@@ -418,9 +418,19 @@ Three space settings blocks (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`
 
 - `reflect_default_options`: `budget` (`low`, `mid`, `high`), `fact_types`, `exclude_mental_models` and `tools` (token caps per reflect tool) for requests that leave them unset. `tag_scoped_directives: true` (opt-in) applies a tagged directive only to a reflect whose tags share one of its tags; a request's `apply_all_directives` turns that off.
 - `mental_model_defaults`: the `trigger` a mental model created without a refresh mode takes, and a space-wide `min_interval`.
-- `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size` and `parallel` (1-4). More scopes mean more model calls per consolidation run, all counted against the daily limit.
+- `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size` and `parallel` (1-4). More scopes mean more model calls per consolidation run, all counted against the daily limit; one run or preview builds at most 1000 scopes.
 
-Routes added with them, none of which calls a model: `POST /v1/mental-models/{id}/clear` (people only), `POST /v1/mental-models/cron-preview`, `GET /v1/observations/scopes`, `POST /v1/observations/strategies/preview`, `DELETE /v1/observations` (people only; bulk, audited) and `POST /v1/prompts/preview`.
+The server cannot grant its own worker these actions (principals are registered with the schema owner's connection). A worker registered with `--actions '*'` needs nothing; a narrowed one is registered again with the scheduler's actions, for example:
+
+```sh
+MEMORY_PRINCIPAL_TOKEN="$(cat "$HOME/.local/share/arkism-admin/worker-token")" go run ./cmd/memory-principal \
+  --principal worker --role service --organization default --project default \
+  --actions 'write:observations,write:mental_models,search:memories,read:memories,context:read,external:transfer'
+```
+
+Parallel consolidation (`parallel` above 1) reserves each call against the daily model call limit before it starts, so a run never passes it.
+
+Routes added with them, none of which calls a model: `POST /v1/mental-models/{id}/clear` (people only), `POST /v1/mental-models/cron-preview`, `GET /v1/observations/scopes`, `POST /v1/observations/strategies/preview`, `DELETE /v1/observations` (people only; bulk, audited; rows keep their history with status `deleted`) and `POST /v1/prompts/preview`.
 
 ## Model providers
 

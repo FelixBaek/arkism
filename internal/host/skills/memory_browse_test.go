@@ -57,6 +57,28 @@ func TestReflectPassesLoopSchemaAndMission(t *testing.T) {
 	}
 }
 
+func TestReflectPassesBudgetFactTypesAndInclude(t *testing.T) {
+	swapRouter(t)
+	calls := fakeRequest(t, `{"answer":"a","cited_memory_ids":[],"directives_applied":[],"retrieved":[]}`)
+	args := `{"query":"q","budget":"low","fact_types":["observation"],"exclude_mental_model_ids":["mm1"],"exclude_mental_models":false,"apply_all_directives":true,"include":{"tool_calls":{"output":true}}}`
+	call(t, "reflect", args)
+	want := map[string]any{"scope": host.Scope(), "query": "q", "budget": "low", "fact_types": []any{"observation"}, "exclude_mental_model_ids": []any{"mm1"},
+		"exclude_mental_models": false, "apply_all_directives": true, "include": map[string]any{"tool_calls": map[string]any{"output": true}}}
+	if len(*calls) != 1 || canon(t, (*calls)[0].payload) != canon(t, want) {
+		t.Fatal(*calls)
+	}
+	*calls = nil
+	for _, bad := range []string{`{"query":"q","budget":"max"}`, `{"query":"q","include":{"chunks":true}}`, `{"query":"q","include":{"tool_calls":{"output":"yes"}}}`,
+		`{"query":"q","include":{"tool_calls":{"output":true,"x":1}}}`, `{"query":"q","apply_all_directives":"yes"}`} {
+		if _, err := callTool("reflect", j(t, bad)); err == nil {
+			t.Fatal(bad)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatal("network before validation")
+	}
+}
+
 func TestBrowseMemoryListsEachKindReadOnly(t *testing.T) {
 	swapRouter(t)
 	scope := scopeQueryAll()

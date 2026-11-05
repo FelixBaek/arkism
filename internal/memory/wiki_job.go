@@ -356,6 +356,34 @@ var errWikiBudget = errors.New("wiki_budget_exceeded")
 // wikiDestination is the transfer destination of every server-side wiki model call.
 const wikiDestination = "external:wiki-llm"
 
+// reserveWikiCall takes one of the scope's daily calls: the ledger count and the calls
+// in flight are read under one lock, so calls started together (parallel consolidation)
+// cannot pass the cap. release runs after the call, when its ledger row exists.
+// shortcut: the in-flight count is per process; one memoryd per database is assumed.
+func (s *Service) reserveWikiCall(ctx context.Context, scope Scope) (func(), error) {
+	s.wikiCallMu.Lock()
+	defer s.wikiCallMu.Unlock()
+	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	key := structuredText(scope)
+	if calls+s.wikiInflight[key] >= wikiDailyCallLimit {
+		return nil, errWikiBudget
+	}
+	if s.wikiInflight == nil {
+		s.wikiInflight = map[string]int{}
+	}
+	s.wikiInflight[key]++
+	return func() {
+		s.wikiCallMu.Lock()
+		defer s.wikiCallMu.Unlock()
+		if s.wikiInflight[key]--; s.wikiInflight[key] <= 0 {
+			delete(s.wikiInflight, key)
+		}
+	}, nil
+}
+
 // wikiCall is the budget gate: it refuses before calling when the daily call
 // cap or the job token budget would be passed, and records every call made.
 func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, operation, system, user string) (string, error) {
@@ -368,13 +396,14 @@ func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, opera
 // budgetedCall gates one model call of any kind (text, image, audio) on the
 // daily call cap and the job's token budget, and charges what it spent.
 func (s *Service) budgetedCall(ctx context.Context, scope Scope, job *WikiJob, estimate int64, call func() (string, ProviderUsage, error)) (string, error) {
-	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
+	if job.Tokens+estimate > job.MaxTotalTokens {
+		return "", errWikiBudget
+	}
+	release, err := s.reserveWikiCall(ctx, scope)
 	if err != nil {
 		return "", err
 	}
-	if calls >= wikiDailyCallLimit || job.Tokens+estimate > job.MaxTotalTokens {
-		return "", errWikiBudget
-	}
+	defer release()
 	job.Calls++
 	text, usage, err := call()
 	// Tokens a call spent count against the job even when its answer is rejected.

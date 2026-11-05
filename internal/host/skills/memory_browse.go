@@ -188,6 +188,9 @@ func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 			payload[key] = list
 		}
 	}
+	if err := reflectIncludeArg(args, payload); err != nil {
+		return err
+	}
 	for _, key := range []string{"exclude_mental_models", "apply_all_directives"} {
 		if v, has := args[key]; has && v != nil {
 			b, ok := v.(bool)
@@ -197,6 +200,22 @@ func reflectOptionArgs(args map[string]any, payload map[string]any) error {
 			payload[key] = b
 		}
 	}
+	return nil
+}
+
+// reflectIncludeArg copies include, whose one option is tool_calls.output (what each tool returned).
+func reflectIncludeArg(args map[string]any, payload map[string]any) error {
+	v, has := args["include"]
+	if !has || v == nil {
+		return nil
+	}
+	inc, ok := v.(map[string]any)
+	calls, okCalls := inc["tool_calls"].(map[string]any)
+	output, okOut := calls["output"].(bool)
+	if !ok || len(inc) != 1 || !okCalls || len(calls) != 1 || !okOut {
+		return errors.New("include takes only tool_calls.output (true or false)")
+	}
+	payload["include"] = map[string]any{"tool_calls": map[string]any{"output": output}}
 	return nil
 }
 

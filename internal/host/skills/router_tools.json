@@ -1813,6 +1813,22 @@
           "type": "boolean",
           "description": "Apply every directive even where the space limits tagged directives to matching tags"
         },
+        "include": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tool_calls": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "output": {
+                  "type": "boolean",
+                  "description": "Add what each tool call returned (ids and texts) to tool_trace"
+                }
+              }
+            }
+          }
+        },
         "disposition": {
           "type": "object",
           "additionalProperties": false,

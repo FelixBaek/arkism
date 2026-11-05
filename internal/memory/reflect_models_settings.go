@@ -20,6 +20,7 @@ const (
 	consolidationParallelMax   = 4
 	consolidationScopeMax      = 8 // tags in one observation scope
 	consolidationMissionMax    = 2000
+	consolidationScopesMax     = 1000 // distinct scopes one run or preview builds (all_combinations grows fast)
 )
 
 var (

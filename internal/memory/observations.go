@@ -34,6 +34,9 @@ const (
 	obsActive   = statusActive
 	obsRejected = "rejected"
 	obsStale    = "stale"
+	// obsDeleted: a person's bulk delete retires the row with its history; it is never
+	// recalled, refreshed or counted as covering its memories, so consolidation may propose again.
+	obsDeleted = "deleted"
 
 	obsContentMax    = 1000
 	obsReasonMax     = 300
@@ -50,7 +53,7 @@ const (
 )
 
 var (
-	obsStatuses    = []string{obsProposed, obsActive, obsRejected, obsStale}
+	obsStatuses    = []string{obsProposed, obsActive, obsRejected, obsStale, obsDeleted}
 	obsDurability  = []string{"momentary", "lasting"}
 	obsActions     = []string{"approve", "reject", "edit"}
 	errModelAnswer = errors.New("invalid_model_output")

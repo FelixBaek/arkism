@@ -82,8 +82,11 @@ type Service struct {
 	Pickers       map[string]ModelPicker
 	searchCommits searchCommitGate
 	analysisMu    sync.Mutex
-	draftMu       sync.Mutex
-	providerKeys  providerKeyHold
+	// wikiCallMu guards wikiInflight: server-model calls started but not yet in the ledger, per scope.
+	wikiCallMu   sync.Mutex
+	wikiInflight map[string]int
+	draftMu      sync.Mutex
+	providerKeys providerKeyHold
 	// discordTokens holds typed Discord bot tokens until the host collects them, like providerKeys.
 	discordTokens providerKeyHold
 	Repo          Repository

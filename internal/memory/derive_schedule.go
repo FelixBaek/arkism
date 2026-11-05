@@ -196,7 +196,13 @@ func (s *Service) derivePass(ctx context.Context, token string, scope Scope, sta
 	if err != nil {
 		return "", err
 	}
-	if at, ok := consolidationDue(c, scope, *state, now); ok && !now.Before(at) {
+	at, ok := consolidationDue(c, scope, *state, now)
+	consolidate := ok && !now.Before(at)
+	if missing := s.missingDeriveGrant(ctx, token, scope, consolidate); missing != "" {
+		slog.Warn("derive schedule: the worker token lacks a grant; see guide/server.md", "action", missing)
+		return "denied:" + missing, nil
+	}
+	if consolidate {
 		_, err = s.ConsolidateObservations(ctx, token, ObservationConsolidateInput{Scope: scope})
 		state.LastConsolidation = &now
 		return derivePassOutcome(err)
@@ -207,6 +213,25 @@ func (s *Service) derivePass(ctx context.Context, token string, scope Scope, sta
 		err = s.refreshDueMentalModels(ctx, token, d, ObservationConsolidateInput{Scope: scope, MaxGroups: obsGroupsMax}, &WikiJob{MaxTotalTokens: obsRunTokens}, &out)
 	}
 	return derivePassOutcome(err)
+}
+
+// deriveGrants are the worker actions a scheduled pass needs (guide/server.md, MEMORY_DERIVE_SCHEDULE).
+// The app cannot grant them itself: principals are registered with the schema owner's connection.
+var deriveGrants = []string{"write:mental_models", "search:memories", "read:memories", "context:read"}
+
+// missingDeriveGrant names the first needed action the worker token is denied, so the job's
+// outcome says what to grant instead of a run that silently reads nothing.
+func (s *Service) missingDeriveGrant(ctx context.Context, token string, scope Scope, consolidate bool) string {
+	grants := deriveGrants
+	if consolidate {
+		grants = append([]string{"write:observations"}, grants...)
+	}
+	for _, action := range grants {
+		if _, err := s.authorize(ctx, token, action, scope, "", ""); errors.Is(err, ErrDenied) {
+			return action
+		}
+	}
+	return ""
 }
 
 // derivePassOutcome names how a derivation pass ended; an error it does not name is returned to be retried.

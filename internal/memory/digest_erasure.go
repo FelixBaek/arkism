@@ -92,7 +92,10 @@ func eraseMemoryFromObservations(ctx context.Context, tx Tx, lister statusLister
 			o.DurabilityReason = ""
 			prev := cur.Revision
 			cur.Observation, cur.Text, cur.Summary, cur.Keywords, cur.KeywordsLower, cur.Embedding = &o, "", "", nil, nil, nil
-			cur.Status, cur.ContentErased, cur.Revision, cur.UpdatedAt = obsStale, true, cur.Revision+1, now
+			if cur.Status != obsDeleted { // a deleted one stays deleted, so no refresh revives it
+				cur.Status = obsStale
+			}
+			cur.ContentErased, cur.Revision, cur.UpdatedAt = true, cur.Revision+1, now
 			if err := tx.Replace(ctx, colObservations, cur, prev); err != nil {
 				return nil, err
 			}

@@ -147,15 +147,15 @@ func previewStrategy(block *SpaceConsolidation, i int, st ConsolidationStrategy,
 				continue
 			}
 			r.Matched++
-			winner, by := block.strategyFor(sc.tags)
+			// partition already picked each scope's strategy (the first that claims it).
 			first := slices.IndexFunc(st.Scopes, func(x ObservationTagRule) bool { return x.matches(sc.tags) })
-			if winner == i && first == j {
+			if sc.strategy == &block.Strategies[i] && first == j {
 				r.Taken++
 			}
 			if len(r.Samples) < strategySamplesMax {
 				sample := StrategyPreviewSample{Tags: sc.tags, Count: len(sc.members)}
-				if by != nil {
-					sample.HandledBy = by.Name
+				if sc.strategy != nil {
+					sample.HandledBy = sc.strategy.Name
 				}
 				r.Samples = append(r.Samples, sample)
 			}
@@ -181,10 +181,12 @@ type ObservationDeleteResult struct {
 	More bool `json:"more,omitempty"`
 }
 
-// DeleteObservations is a person's bulk delete: named ids (up to 50) or all (up to 500 a call),
-// each audited. A deleted observation is gone, not archived; consolidation may propose it again.
+// DeleteObservations is a person's bulk delete: named ids (up to 50) or all (up to 500 a call).
+// Like a review, each one keeps its row and history and is audited: it moves to status deleted,
+// which is never recalled, refreshed or counted as covering its memories, so consolidation may
+// propose it again. Already deleted ones are skipped.
 func (s *Service) DeleteObservations(ctx context.Context, token string, in ObservationDeleteInput) (ObservationDeleteResult, error) {
-	if !validScope(in.Scope) || in.All == (len(in.IDs) > 0) || len(in.IDs) > obsBatchMax || in.Status != "" && (!in.All || !slices.Contains(obsStatuses, in.Status)) ||
+	if !validScope(in.Scope) || in.All == (len(in.IDs) > 0) || len(in.IDs) > obsBatchMax || in.Status != "" && (!in.All || !slices.Contains(obsLiveStatuses, in.Status)) ||
 		slices.ContainsFunc(in.IDs, func(id string) bool { return !validRunLabel(id, 256) }) {
 		return ObservationDeleteResult{}, ErrInvalid
 	}
@@ -199,15 +201,17 @@ func (s *Service) DeleteObservations(ctx context.Context, token string, in Obser
 	out := ObservationDeleteResult{Deleted: []string{}, More: more}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out.Deleted = out.Deleted[:0]
+		now := time.Now().UTC().Truncate(time.Millisecond)
 		for _, id := range ids {
 			r, err := tx.Get(ctx, colObservations, in.Scope, id)
 			if err != nil {
 				return err
 			}
-			if err := tx.Delete(ctx, colObservations, in.Scope, r.ID, r.Revision); err != nil {
-				return err
+			if r.Observation == nil || r.Status == obsDeleted {
+				continue
 			}
-			if err := audit(ctx, tx, in.Scope, d.PrincipalID, "delete:"+colObservations, r.ID); err != nil {
+			r.Review = &ReviewDecision{Action: "delete", By: d.PrincipalID, ActorRole: d.Role, At: now}
+			if err := replaceObservation(ctx, tx, r, obsDeleted, "delete", d.PrincipalID, now); err != nil {
 				return err
 			}
 			out.Deleted = append(out.Deleted, r.ID)
@@ -217,12 +221,15 @@ func (s *Service) DeleteObservations(ctx context.Context, token string, in Obser
 	return out, err
 }
 
+// obsLiveStatuses are the statuses a bulk delete takes (every one but deleted).
+var obsLiveStatuses = []string{obsProposed, obsActive, obsRejected, obsStale}
+
 // observationsToDelete is the named ids, or up to obsListLimit listed ids and whether more remain.
 func (s *Service) observationsToDelete(ctx context.Context, in ObservationDeleteInput) ([]string, bool, error) {
 	if !in.All {
 		return slices.Compact(slices.Sorted(slices.Values(in.IDs))), false, nil
 	}
-	statuses := obsStatuses
+	statuses := obsLiveStatuses
 	if in.Status != "" {
 		statuses = []string{in.Status}
 	}
@@ -311,7 +318,7 @@ func (s *Service) previewReflectPrompt(ctx context.Context, token string, in Pro
 	if d := settings.ReflectDefaults; d != nil && d.TagScopedDirectives {
 		rules = directivesForTags(rules, in.Tags)
 	}
-	run := &reflectRun{in: ReflectInput{Scope: in.Scope, Query: "[question]", Tags: in.Tags, space: &settings}, rules: rules, seen: map[string]bool{}}
+	run := &reflectRun{in: ReflectInput{Scope: in.Scope, Query: "[question]", Tags: in.Tags, PromptOnly: true, space: &settings}, rules: rules, seen: map[string]bool{}}
 	if err := s.reflectGuidance(ctx, token, run); err != nil {
 		return "", "", err
 	}

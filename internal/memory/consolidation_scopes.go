@@ -8,7 +8,6 @@ package memory
 
 import (
 	"context"
-	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -27,10 +26,28 @@ type obsScope struct {
 	mission  string
 }
 
+// globMatch matches * (any run) and ? (one character) without compiling anything:
+// strategy globs run once per scope and tag, and the preview takes globs from the caller.
 func globMatch(glob, tag string) bool {
-	pattern := "^" + strings.NewReplacer(`\*`, ".*", `\?`, ".").Replace(regexp.QuoteMeta(glob)) + "$"
-	ok, err := regexp.MatchString(pattern, tag)
-	return err == nil && ok
+	g, t := []rune(glob), []rune(tag)
+	gi, ti, star, mark := 0, 0, -1, 0
+	for ti < len(t) {
+		switch {
+		case gi < len(g) && (g[gi] == '?' || g[gi] == t[ti]):
+			gi, ti = gi+1, ti+1
+		case gi < len(g) && g[gi] == '*':
+			star, mark, gi = gi, ti, gi+1
+		case star >= 0:
+			mark++
+			gi, ti = star+1, mark
+		default:
+			return false
+		}
+	}
+	for gi < len(g) && g[gi] == '*' {
+		gi++
+	}
+	return gi == len(g)
 }
 
 func anyGlob(globs []string, tag string) bool {
@@ -136,6 +153,9 @@ func (c *SpaceConsolidation) partition(members []Record) []obsScope {
 	for _, m := range members {
 		for _, tags := range c.scopesOf(m.Tags) {
 			k := obsScopeKey(tags)
+			if byKey[k] == nil && len(byKey) >= consolidationScopesMax {
+				continue // shortcut: scopes past the cap are left out of this run; raise the cap if spaces need more
+			}
 			if byKey[k] == nil {
 				_, st := c.strategyFor(tags)
 				byKey[k] = &obsScope{tags: tags, strategy: st, limit: c.limitFor(tags, st), mission: consolidationMission(c, st)}
@@ -237,11 +257,12 @@ func (s *Service) runObservationAsks(ctx context.Context, d Decision, job *WikiJ
 		}()
 	}
 	wg.Wait()
+	var first error // every answer already paid for is stored before the first failure is returned
 	for i, a := range asks {
 		job.Calls, job.Tokens = job.Calls+jobs[i].Calls, job.Tokens+jobs[i].Tokens
-		if err := s.storeGroupDrafts(ctx, d, a, drafts[i], errs[i], out); err != nil {
-			return err
+		if err := s.storeGroupDrafts(ctx, d, a, drafts[i], errs[i], out); err != nil && first == nil {
+			first = err
 		}
 	}
-	return nil
+	return first
 }

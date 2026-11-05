@@ -10,7 +10,7 @@ export type DirectiveDeleted = { "deleted": boolean };
 export type DirectiveSection = { "authority": "human_hard_rule"; "notice": string; "items": Array<{ "id": string; "title": string; "rule": string; "priority": number }>; "tokens": number; "omitted"?: Array<string> };
 export type ReflectInput = { "scope": Scope; "query": string; "limit"?: number; "tags"?: Array<string>; "tags_match"?: "any" | "all" | "any_strict" | "all_strict" | "exact"; "tag_groups"?: Array<Array<TagTest>>; "max_tokens"?: number; "prompt_only"?: boolean; "max_iterations"?: number; "response_schema"?: { [key: string]: unknown }; "mission"?: string; "budget"?: "low" | "mid" | "high"; "fact_types"?: Array<"memory" | "observation">; "exclude_mental_models"?: boolean; "exclude_mental_model_ids"?: Array<string>; "apply_all_directives"?: boolean; "include"?: { "tool_calls"?: { "output"?: boolean }; "attachments"?: boolean }; "disposition"?: ReflectDisposition };
 export type ReflectDisposition = { "skepticism"?: number; "literalism"?: number; "empathy"?: number };
-export type ReflectOutput = { "answer": string; "cited_memory_ids": Array<string>; "directives_applied": Array<string>; "retrieved": Array<{ "id": string; "kind": string; "score": number; "attachments"?: Array<{ "id": string; "source_id": string; "kind": string; "mime": string; "bytes": number }> }>; "structured_answer"?: unknown; "tool_trace"?: Array<{ "tool": string; "args": { [key: string]: unknown }; "ids": Array<string>; "error"?: string }>; "iterations"?: number; "usage"?: { [key: string]: unknown }; "generator"?: { [key: string]: unknown }; "prompt"?: { "system": string; "user": string } };
+export type ReflectOutput = { "answer": string; "cited_memory_ids": Array<string>; "directives_applied": Array<string>; "retrieved": Array<{ "id": string; "kind": string; "score": number; "attachments"?: Array<{ "id": string; "source_id": string; "kind": string; "mime": string; "bytes": number }> }>; "structured_answer"?: unknown; "tool_trace"?: Array<{ "tool": string; "args": { [key: string]: unknown }; "ids": Array<string>; "error"?: string; "output"?: Array<{ "id": string; "kind"?: string; "text": string }> }>; "iterations"?: number; "usage"?: { [key: string]: unknown }; "generator"?: { [key: string]: unknown }; "prompt"?: { "system": string; "user": string } };
 export type ContextValidationRef = { "collection": "memories"; "id": string; "revision": number; "digest": string; "fingerprint"?: string };
 export type ContextValidationInput = { "scope": Scope; "renderer": "capture-stable-v2"; "block_hash": string; "fingerprint"?: string; "refs": Array<ContextValidationRef> };
 export type ContextValidationItem = { "collection": "memories"; "id": string; "revision": number; "status": "valid" | "unavailable"; "fingerprint"?: string };
@@ -2326,12 +2326,12 @@ export class ArkismClient {
     return this.request("GET", `/v1/wiki/export`, query, undefined);
   }
   /** GET /v1/observations — Observations of one status (default active), newest change first, paginated (read:observations) */
-  getV1Observations(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "proposed" | "active" | "rejected" | "stale"; "durability"?: "momentary" | "lasting"; "source_memory_id"?: string; "q"?: string; "cursor"?: string; "limit"?: number }): Promise<unknown> {
+  getV1Observations(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "proposed" | "active" | "rejected" | "stale" | "deleted"; "durability"?: "momentary" | "lasting"; "source_memory_id"?: string; "q"?: string; "cursor"?: string; "limit"?: number }): Promise<unknown> {
     return this.request("GET", `/v1/observations`, query, undefined);
   }
   /** DELETE /v1/observations — Delete observations in bulk (human principals only) */
-  deleteObservations(): Promise<unknown> {
-    return this.request("DELETE", `/v1/observations`, undefined, undefined);
+  deleteObservations(body: { "scope": Scope; "ids"?: Array<string>; "all"?: boolean; "status"?: "proposed" | "active" | "rejected" | "stale" }): Promise<unknown> {
+    return this.request("DELETE", `/v1/observations`, undefined, body);
   }
   /** POST /v1/observations/consolidate — Consolidate approved memories into proposed observations (human or service principals) */
   postV1ObservationsConsolidate(): Promise<unknown> {
@@ -2386,24 +2386,24 @@ export class ArkismClient {
     return this.request("POST", `/v1/mental-models/${encodeURIComponent(id)}/review`, undefined, undefined);
   }
   /** POST /v1/mental-models/{id}/clear — Clear a mental model's summary (human principals only) */
-  clearMentalModel(id: string): Promise<unknown> {
-    return this.request("POST", `/v1/mental-models/${encodeURIComponent(id)}/clear`, undefined, undefined);
+  clearMentalModel(id: string, body: { "scope": Scope; "expected_revision": number; "reason"?: string }): Promise<unknown> {
+    return this.request("POST", `/v1/mental-models/${encodeURIComponent(id)}/clear`, undefined, body);
   }
   /** POST /v1/mental-models/cron-preview — Preview the next firing times of a cron expression (read:mental_models) */
-  previewMentalModelCron(): Promise<unknown> {
-    return this.request("POST", `/v1/mental-models/cron-preview`, undefined, undefined);
+  previewMentalModelCron(body: { "scope": Scope; "cron": string; "count"?: number; "after"?: string }): Promise<unknown> {
+    return this.request("POST", `/v1/mental-models/cron-preview`, undefined, body);
   }
   /** GET /v1/observations/scopes — Tag scopes of proposed and active observations with counts (read:observations) */
   listObservationScopes(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<unknown> {
     return this.request("GET", `/v1/observations/scopes`, query, undefined);
   }
   /** POST /v1/observations/strategies/preview — Preview which observation scopes each consolidation strategy takes (read:observations) */
-  previewConsolidationStrategies(): Promise<unknown> {
-    return this.request("POST", `/v1/observations/strategies/preview`, undefined, undefined);
+  previewConsolidationStrategies(body: { "scope": Scope; "consolidation"?: { [key: string]: unknown } }): Promise<unknown> {
+    return this.request("POST", `/v1/observations/strategies/preview`, undefined, body);
   }
   /** POST /v1/prompts/preview — Render the retain, consolidation or reflect prompt the space would send (search:memories) */
-  previewPrompt(): Promise<unknown> {
-    return this.request("POST", `/v1/prompts/preview`, undefined, undefined);
+  previewPrompt(body: { "scope": Scope; "operation": "retain" | "consolidation" | "reflect"; "tags"?: Array<string> }): Promise<unknown> {
+    return this.request("POST", `/v1/prompts/preview`, undefined, body);
   }
   /** GET /v1/causal-links — Causal links of one status (default candidate, the review queue), newest first (read:memory_relations) */
   getV1CausalLinks(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "candidate" | "active" | "rejected"; "limit"?: number; "cursor"?: string }): Promise<CausalLinkPage> {

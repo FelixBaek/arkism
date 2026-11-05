@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -85,6 +87,18 @@ func TestConsolidationScopesAndStrategies(t *testing.T) {
 	if got := (*SpaceConsolidation)(nil).scopesOf([]string{"a"}); len(got) != 1 || got[0] != nil {
 		t.Fatal("no block keeps one shared scope")
 	}
+	for glob, tags := range map[string][2]string{"proj:*": {"proj:a", "proj"}, "a?c": {"abc", "ac"}, "*x*y": {"axbxy", "axyb"}, "*": {"", ""}, "a.b": {"a.b", "aXb"}, "[x]": {"[x]", "x"}} {
+		if !globMatch(glob, tags[0]) || tags[1] != "" && globMatch(glob, tags[1]) {
+			t.Fatalf("glob %q", glob)
+		}
+	}
+	many := []Record{}
+	for i := range 200 {
+		many = append(many, Record{ID: strconv.Itoa(i), Tags: []string{"t" + strconv.Itoa(i), "a", "b", "c", "d", "e", "f", "g"}})
+	}
+	if n := len((&SpaceConsolidation{DefaultScopeMode: "all_combinations"}).partition(many)); n != consolidationScopesMax {
+		t.Fatalf("scopes are capped: %d", n)
+	}
 	bad := []SpaceConsolidation{{DefaultScopeMode: "nope"}, {Parallel: 9}, {Strategies: []ConsolidationStrategy{{Name: "x"}}}, {ScopeLimits: []ObservationScopeLimit{{Scope: []string{""}}}}}
 	for _, b := range bad {
 		if b.valid() {
@@ -138,8 +152,76 @@ func TestConsolidationPerTagMissionPreviewScopesAndDelete(t *testing.T) {
 		t.Fatal("ids and all together are refused")
 	}
 	del, err := f.svc.DeleteObservations(testCtx, f.human, ObservationDeleteInput{Scope: scopeA, All: true, Status: obsProposed})
-	if err != nil || len(del.Deleted) != 1 || del.More || len(f.repo.rows(colObservations)) != 0 {
+	if err != nil || len(del.Deleted) != 1 || del.More {
 		t.Fatalf("delete %+v %v", del, err)
+	}
+	// The row and its history stay (status deleted), but it no longer covers its memories.
+	kept, err := f.repo.Get(testCtx, colObservations, scopeA, del.Deleted[0])
+	if err != nil || kept.Status != obsDeleted || kept.Text == "" || len(kept.Observation.History) < 2 || kept.Observation.History[len(kept.Observation.History)-1].Action != "delete" {
+		t.Fatalf("a deleted observation keeps its record: %+v %v", kept, err)
+	}
+	if again, err := f.svc.DeleteObservations(testCtx, f.human, ObservationDeleteInput{Scope: scopeA, IDs: del.Deleted}); err != nil || len(again.Deleted) != 0 {
+		t.Fatalf("deleting twice changes nothing: %+v %v", again, err)
+	}
+	if _, err := f.svc.DeleteObservations(testCtx, f.human, ObservationDeleteInput{Scope: scopeA, All: true, Status: obsDeleted}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("deleted is not a status to delete")
+	}
+	llm.answers = append(llm.answers, obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID)))
+	if out, err := f.consolidate(f.human, false); err != nil || len(out.Proposed) != 1 {
+		t.Fatalf("consolidation proposes again after a delete: %+v %v", out, err)
+	}
+}
+
+// syncWikiLLM is a fake server model safe for parallel calls.
+type syncWikiLLM struct {
+	mu    sync.Mutex
+	calls int
+	reply string
+}
+
+func (f *syncWikiLLM) Generator() Generator { return Generator{Model: "fake-wiki"} }
+
+func (f *syncWikiLLM) Complete(context.Context, string, string, int) (string, ProviderUsage, error) {
+	f.mu.Lock()
+	f.calls++
+	f.mu.Unlock()
+	time.Sleep(20 * time.Millisecond) // let the parallel asks overlap
+	return f.reply, ProviderUsage{Provider: wikiProvider, Model: "fake-wiki", Requests: 1, TotalTokens: 10}, nil
+}
+
+func TestParallelConsolidationKeepsDailyCap(t *testing.T) {
+	f, _, ms := obsFixture(t)
+	for _, m := range ms[:3] {
+		f.editRecord(colMemories, m.ID, func(r *Record) { r.Tags = []string{"a", "b", "c", "d"} })
+	}
+	block := &SpaceConsolidation{DefaultScopeMode: "per_tag", Parallel: 4, BatchSize: 4}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{Consolidation: block}, false); err != nil {
+		t.Fatal(err)
+	}
+	for range wikiDailyCallLimit - 1 {
+		r, err := f.svc.beginProviderCall(testCtx, scopeA, "wiki_write", wikiProvider, "fake-wiki")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = f.svc.finishProviderCall(testCtx, r, ProviderUsage{Provider: wikiProvider, Model: "fake-wiki", Requests: 1}, true)
+	}
+	// A call in flight is not in the ledger yet; the reservation still counts it.
+	release, err := f.svc.reserveWikiCall(testCtx, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.reserveWikiCall(testCtx, scopeA); !errors.Is(err, errWikiBudget) {
+		t.Fatalf("the last call is taken while one is in flight: %v", err)
+	}
+	release()
+	llm := &syncWikiLLM{reply: `{"observations": []}`}
+	f.svc.Wiki = llm
+	_, err = f.consolidate(f.human, false)
+	if !errors.Is(err, ErrModelBudget) || llm.calls != 1 {
+		t.Fatalf("four parallel asks with one call left make one call: calls=%d %v", llm.calls, err)
+	}
+	if calls, _ := f.svc.wikiDailyCalls(testCtx, scopeA, time.Now()); calls != wikiDailyCallLimit || len(f.svc.wikiInflight) != 0 {
+		t.Fatalf("the ledger ends at the cap and nothing stays reserved: %d %v", calls, f.svc.wikiInflight)
 	}
 }
 
@@ -206,10 +288,14 @@ func TestDeriveScheduleQueuesAndRuns(t *testing.T) {
 	t.Setenv("MEMORY_DERIVE_SCHEDULE", "on")
 	f, llm, ms := obsFixture(t)
 	worker := f.auth.actors[f.work]
-	for _, verb := range []string{"write", "search", "context"} { // the grants guide/server.md lists for the worker
+	for _, verb := range []string{"write", "context"} {
 		worker.verbs[verb] = true
 	}
 	f.auth.actors[f.work] = worker
+	if outcome, err := f.svc.derivePass(testCtx, f.work, scopeA, &DeriveScheduleJob{}, time.Now().UTC()); err != nil || outcome != "denied:search:memories" {
+		t.Fatalf("a missing worker grant is named: %q %v", outcome, err)
+	}
+	worker.verbs["search"] = true // with the grants guide/server.md lists for the worker
 	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshDaily}})
 	if err != nil {
 		t.Fatal(err)
@@ -283,6 +369,18 @@ func TestPromptPreviewCallsNoModel(t *testing.T) {
 			t.Fatal("no record text is returned")
 		}
 	}
+	f.svc.Auth = denyAction{f.auth, "read:space_configs"}
+	if _, err := f.svc.PreviewPrompt(testCtx, f.agent, PromptPreviewInput{Scope: scopeA, Operation: "reflect"}); err != nil {
+		t.Fatalf("without a space mission no space read is needed: %v", err)
+	}
+	spaceMission := "Answer for the deploy team."
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, ReflectMission: &spaceMission}, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.PreviewPrompt(testCtx, f.agent, PromptPreviewInput{Scope: scopeA, Operation: "reflect"}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("the space mission needs read:space_configs, as reflect prompt_only does: %v", err)
+	}
+	f.svc.Auth = f.auth
 	if _, err := f.svc.PreviewPrompt(testCtx, f.human, PromptPreviewInput{Scope: scopeA, Operation: "other"}); !errors.Is(err, ErrInvalid) {
 		t.Fatal("unknown operation")
 	}
