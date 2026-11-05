@@ -95,8 +95,11 @@ type extToolSpec struct {
 }
 
 type extDescription struct {
-	Operations []string         `json:"operations"`
-	Tenant     bool             `json:"tenant"`
+	Operations []string `json:"operations"`
+	Tenant     bool     `json:"tenant"`
+	// LLMRequest asks before every model call (llm_request: allow, or another model); ModelCall hears each outcome (model_call).
+	LLMRequest bool             `json:"llm_request"`
+	ModelCall  bool             `json:"model_call"`
 	Routes     []ExtensionRoute `json:"routes"`
 	Tools      []extToolSpec    `json:"tools"`
 }
@@ -246,6 +249,9 @@ func (p *ProcessExtensions) Apply(x *Extensions) {
 		if len(e.desc.Routes) > 0 || len(e.desc.Tools) > 0 {
 			x.Endpoints = p
 		}
+		if e.desc.LLMRequest || e.desc.ModelCall {
+			x.ModelCallHook = p
+		}
 	}
 }
 
@@ -281,12 +287,13 @@ func (e *processExtension) ask(ctx context.Context, method string, params any) (
 }
 
 // allowed asks one extension a yes/no question; a failure follows its fail setting and says so.
-func (e *processExtension) allowed(ctx context.Context, method string, params any) (allow, failed bool) {
+// more, when not nil, also receives the answer's other fields.
+func (e *processExtension) allowed(ctx context.Context, method string, params, more any) (allow, failed bool) {
 	raw, err := e.ask(ctx, method, params)
 	var answer struct {
 		Allow *bool `json:"allow"`
 	}
-	if err != nil || json.Unmarshal(raw, &answer) != nil || answer.Allow == nil {
+	if err != nil || json.Unmarshal(raw, &answer) != nil || answer.Allow == nil || more != nil && json.Unmarshal(raw, more) != nil {
 		return e.failOpen, true
 	}
 	return *answer.Allow, false
@@ -297,7 +304,7 @@ func (p *ProcessExtensions) BeforeOperation(ctx context.Context, actor Decision,
 		if !slices.Contains(e.desc.Operations, op) {
 			continue
 		}
-		if allow, _ := e.allowed(ctx, "operation", map[string]any{"phase": "before", "operation": op, "actor": extActor(actor), "scope": actor.Scope, "input": input}); !allow {
+		if allow, _ := e.allowed(ctx, "operation", map[string]any{"phase": "before", "operation": op, "actor": extActor(actor), "scope": actor.Scope, "input": input}, nil); !allow {
 			return fmt.Errorf("%s refused %s: %w", e.cfg.Name, op, ErrExtensionRefused)
 		}
 	}
@@ -319,6 +326,37 @@ func (p *ProcessExtensions) AfterOperation(ctx context.Context, actor Decision, 
 	}
 }
 
+// BeforeModelCall asks each llm_request extension in turn; a later one sees the
+// model an earlier one named. A failure follows the extension's fail setting.
+func (p *ProcessExtensions) BeforeModelCall(ctx context.Context, call ModelCall) (string, error) {
+	model := ""
+	for _, e := range p.list {
+		if !e.desc.LLMRequest {
+			continue
+		}
+		var answer struct {
+			Model string `json:"model"`
+		}
+		allow, failed := e.allowed(ctx, "llm_request", call, &answer)
+		if !allow {
+			return "", fmt.Errorf("%s refused a %s model call: %w", e.cfg.Name, call.Operation, ErrExtensionRefused)
+		}
+		if !failed && answer.Model != "" {
+			model, call.Model = answer.Model, answer.Model
+		}
+	}
+	return model, nil
+}
+
+// AfterModelCall tells each model_call extension how a call went; answers and failures change nothing.
+func (p *ProcessExtensions) AfterModelCall(ctx context.Context, call ModelCall, result ModelCallResult) {
+	for _, e := range p.list {
+		if e.desc.ModelCall {
+			_, _ = e.ask(ctx, "model_call", map[string]any{"call": call, "result": result})
+		}
+	}
+}
+
 // CheckTenant asks the tenant extensions once per principal, space and action every 30 seconds.
 // The key holds everything the extension is told, so one answer never stands in for another
 // caller; an answer that failed (fail open or closed) is not kept.
@@ -334,7 +372,7 @@ func (p *ProcessExtensions) CheckTenant(ctx context.Context, actor Decision, act
 			if !e.desc.Tenant {
 				continue
 			}
-			allow, failed := e.allowed(ctx, "tenant", map[string]any{"actor": extActor(actor), "scope": actor.Scope, "action": action})
+			allow, failed := e.allowed(ctx, "tenant", map[string]any{"actor": extActor(actor), "scope": actor.Scope, "action": action}, nil)
 			keep = keep && !failed
 			if !allow {
 				cached.allow = false

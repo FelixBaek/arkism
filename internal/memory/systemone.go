@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -475,7 +476,7 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 		return out, usage, callErr
 	})
 	if !called {
-		return SystemOneResult{}, finishErr // the ledger refused the reservation
+		return SystemOneResult{}, cmp.Or(finishErr, failed) // the ledger or an extension refused the call
 	}
 	latency := time.Since(started).Milliseconds()
 	success := failed == nil

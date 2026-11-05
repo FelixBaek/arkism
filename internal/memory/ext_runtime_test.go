@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -455,5 +456,75 @@ func TestExtensionDataStore(t *testing.T) {
 		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != want {
 			t.Fatal("key cap", i, rec.Code, rec.Body)
 		}
+	}
+}
+
+// An llm_request extension refuses one operation and moves the others to another
+// model on the same endpoint; a model_call extension hears each outcome.
+func TestModelCallExtensionRewritesDeniesAndRecords(t *testing.T) {
+	var mu sync.Mutex
+	var recorded []json.RawMessage
+	ext := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID     int64           `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		var result any
+		switch req.Method {
+		case "describe":
+			result = map[string]any{"llm_request": true, "model_call": true}
+		case "llm_request":
+			var call ModelCall
+			_ = json.Unmarshal(req.Params, &call)
+			result = map[string]any{"allow": call.Operation != "blocked_op" && call.PromptChars > 0 && call.PromptSHA256 != "", "model": "small-model"}
+		case "model_call":
+			mu.Lock()
+			recorded = append(recorded, req.Params)
+			mu.Unlock()
+			result = map[string]any{}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": req.ID, "result": result})
+	}))
+	defer ext.Close()
+	var sent []string
+	chat := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct{ Model string }
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		sent = append(sent, req.Model)
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]any{"content": "ok"}}},
+			"usage": map[string]any{"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12, "prompt_tokens_details": map[string]any{"cached_tokens": 4}}})
+	}))
+	defer chat.Close()
+	f := newFixture(t)
+	loadExtensions(t, f, ProcessExtensionConfig{Name: "gate", URL: ext.URL, AllowPrivate: true})
+	cfg := LLMConfig{Endpoint: chat.URL, APIKey: "k", Model: "big-model"}
+	call := func(op, kind string) (string, error) {
+		m := modelCallSpec{scope: scopeA, operation: op, kind: kind, provider: "skill_llm", model: cfg.Model, prompt: "hello"}
+		text, _, err := f.svc.ledgerCall(testCtx, m, func(ctx context.Context) (string, ProviderUsage, error) {
+			reply, err := cfg.chat(ctx, chatRequest{op: op, provider: "skill_llm", user: "hello", maxTokens: 16})
+			return reply.text, reply.usage, err
+		})
+		return text, err
+	}
+	if text, err := call("allowed_op", "analyze"); err != nil || text != "ok" || len(sent) != 1 || sent[0] != "small-model" {
+		t.Fatalf("rewrite: %q %v %v", text, err, sent)
+	}
+	if _, err := call("blocked_op", "analyze"); !errors.Is(err, ErrExtensionRefused) || len(sent) != 1 {
+		t.Fatalf("refused call was made: %v %v", err, sent)
+	}
+	if _, err := call("allowed_op", "judge"); err != nil || sent[1] != "big-model" {
+		t.Fatalf("a kind that is not rewritable kept its model: %v %v", err, sent)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(recorded) != 2 || !strings.Contains(string(recorded[0]), `"model":"small-model"`) || !strings.Contains(string(recorded[0]), `"cached_input_tokens":4`) ||
+		strings.Contains(string(recorded[0]), "hello") {
+		t.Fatalf("model_call records %s", recorded)
+	}
+	rows := scopeRecords(f, colLLMRequests, scopeA)
+	if len(rows) != 2 {
+		t.Fatalf("traced %d calls, want 2 (the refused one was never made)", len(rows))
 	}
 }

@@ -81,6 +81,9 @@ func loopbackURL(raw string) bool {
 }
 
 func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error) {
+	if model, ok := ctx.Value(modelOverrideKey{}).(string); ok {
+		c.Model = model // a model call extension named another model on this endpoint
+	}
 	if !c.usable(req) {
 		return chatReply{}, ErrUnavailable
 	}

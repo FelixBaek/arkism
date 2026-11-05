@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
+	"unicode/utf8"
 )
 
 // Extensions let a program add its own checks and reactions without a fork: set
@@ -30,6 +32,9 @@ type Extensions struct {
 	RequestHook RequestHook
 	// TenantHook may refuse a principal a space its grants allow (it only narrows).
 	TenantHook TenantHook
+	// ModelCallHook may refuse a server-side model call or name another model
+	// on the same endpoint, and hears each call's outcome.
+	ModelCallHook ModelCallHook
 	// Endpoints adds HTTP routes under /v1/ext/{extension}/ and MCP tools named
 	// ext_{extension}_{tool}; Arkism authorizes every call first (http_core_ext.go).
 	Endpoints ExtensionEndpoints
@@ -125,6 +130,96 @@ type JobHook interface {
 // the approval; a panic in it is contained and logged.
 type ApproveHook interface {
 	AfterApprove(ctx context.Context, approved Record)
+}
+
+// ModelCall is what a ModelCallHook learns about one model call: never the prompt,
+// only its size and hash.
+type ModelCall struct {
+	Scope        Scope  `json:"scope"`
+	Operation    string `json:"operation"`
+	Kind         string `json:"kind"`
+	Provider     string `json:"provider"`
+	Model        string `json:"model"`
+	PromptChars  int    `json:"prompt_chars"`
+	PromptSHA256 string `json:"prompt_sha256"`
+	// Rewritable says whether an answer naming another model is honoured.
+	Rewritable bool `json:"rewritable"`
+}
+
+// ModelCallResult is one finished call's outcome.
+type ModelCallResult struct {
+	OK                bool   `json:"ok"`
+	Error             string `json:"error,omitempty"`
+	Model             string `json:"model"`
+	InputTokens       int64  `json:"input_tokens"`
+	OutputTokens      int64  `json:"output_tokens"`
+	CachedInputTokens int64  `json:"cached_input_tokens"`
+	LatencyMS         int64  `json:"latency_ms"`
+}
+
+// ModelCallHook runs around every metered model call. BeforeModelCall may
+// refuse it (the call is not made) or return another model name, honoured only
+// for chat models (Rewritable); AfterModelCall is an observer.
+type ModelCallHook interface {
+	BeforeModelCall(ctx context.Context, call ModelCall) (model string, err error)
+	AfterModelCall(ctx context.Context, call ModelCall, result ModelCallResult)
+}
+
+// rewritableModelKinds are the call kinds made through LLMConfig.chat, which reads the override.
+var rewritableModelKinds = map[string]bool{"complete": true, "image": true, "analyze": true, "draft": true, "route": true}
+
+type modelOverrideKey struct{}
+
+func modelCallView(m modelCallSpec) ModelCall {
+	return ModelCall{Scope: m.scope, Operation: m.operation, Kind: m.kind, Provider: m.provider, Model: m.model,
+		PromptChars: utf8.RuneCountInString(m.prompt), PromptSHA256: ContentHash(m.prompt), Rewritable: rewritableModelKinds[m.kind]}
+}
+
+// beforeModelCall runs ModelCallHook; a refusal, a panic or an unusable model name refuses the call.
+// A model named for a kind that is not Rewritable is ignored. A rewrite changes m's model and travels in the returned ctx to LLMConfig.chat.
+func (x Extensions) beforeModelCall(ctx context.Context, m *modelCallSpec) (context.Context, error) {
+	if x.ModelCallHook == nil {
+		return ctx, nil
+	}
+	call := modelCallView(*m)
+	var model string
+	err := guard("model_call_hook", func() (err error) {
+		model, err = x.ModelCallHook.BeforeModelCall(ctx, call)
+		return err
+	})
+	if !call.Rewritable {
+		model = "" // only chat models read the override
+	}
+	if err == nil && model != "" && (!validRunLabel(model, 128) || containsSecret(model)) {
+		err = ErrInvalid
+	}
+	if err != nil {
+		slog.Info("model call refused by extension", "operation", m.operation)
+		return ctx, errors.Join(ErrUnavailable, ErrExtensionRefused)
+	}
+	if model == "" || model == m.model {
+		return ctx, nil
+	}
+	m.model = model
+	return context.WithValue(ctx, modelOverrideKey{}, model), nil
+}
+
+// afterModelCall tells ModelCallHook how a call went; a panic is contained.
+func (x Extensions) afterModelCall(ctx context.Context, m modelCallSpec, usage ProviderUsage, elapsed time.Duration, callErr error) {
+	if x.ModelCallHook == nil {
+		return
+	}
+	defer func() {
+		if recover() != nil {
+			slog.Error("model call hook panicked", "operation", m.operation)
+		}
+	}()
+	result := ModelCallResult{OK: callErr == nil, Model: usage.Model, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,
+		CachedInputTokens: usage.CachedInputTokens, LatencyMS: elapsed.Milliseconds()}
+	if callErr != nil {
+		result.Error = captureErrorCode(callErr)
+	}
+	x.ModelCallHook.AfterModelCall(context.WithoutCancel(ctx), modelCallView(m), result)
 }
 
 // ErrExtensionRefused wraps a hook's refusal; it answers like ErrInvalid.

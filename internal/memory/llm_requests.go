@@ -79,6 +79,10 @@ type modelCallSpec struct {
 // failure (filed as unsuccessful); err is a ledger failure, and with a ledger
 // failure before the call the call is not made.
 func meteredCall[T any](ctx context.Context, s *Service, m modelCallSpec, call func(context.Context) (T, ProviderUsage, error)) (out T, usage ProviderUsage, callErr, err error) {
+	// An extension's refusal is a failed call that was never made, so callers take their fallbacks.
+	if ctx, callErr = s.Extensions.beforeModelCall(ctx, &m); callErr != nil {
+		return out, ProviderUsage{}, callErr, nil
+	}
 	rows, err := s.reserveProviderCalls(ctx, m.scope, m.operation, m.provider, m.model, 1, operationCap(m.operation))
 	if err != nil {
 		return out, ProviderUsage{}, nil, err
@@ -103,6 +107,7 @@ func (s *Service) fileModelCall(ctx context.Context, sp *span, m modelCallSpec, 
 	setGenAI(sp, m, usage)
 	sp.end(callErr)
 	observeLLMCall(m.operation, usage.Provider, usage.Model, callErr == nil, time.Since(start), usage)
+	s.Extensions.afterModelCall(ctx, m, usage, time.Since(start), callErr)
 	s.recordLLMRequest(ctx, m, sp, text, usage, start, callErr)
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()

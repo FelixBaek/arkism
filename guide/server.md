@@ -434,6 +434,16 @@ wiki. What a person approves and how is described in
     mental model refresh and update (`before` can refuse, `after` only
     observes; results are sent only with `"send_results": true`), `tenant` for
     each authorized action (answers cached 30 seconds), `route` and `tool`.
+    An extension whose `describe` answers `"llm_request": true` is asked
+    `llm_request` before every server-side model call with `{scope, operation,
+    kind, provider, model, prompt_chars, prompt_sha256, rewritable}` (never the
+    prompt) and answers `{allow, model?}`: a refusal means the call is not made
+    and the feature takes its fallback; a `model` moves a chat call (`rewritable`
+    true: kinds complete, image, analyze, draft, route) to that model on the
+    same endpoint and is ignored for other kinds. `"model_call": true` hears
+    `model_call` after each call with `{call, result}` (ok, error code, model,
+    input, output and cached tokens, latency); it only observes. Both run in
+    the caller's request or job, so keep them fast.
     Each call has `timeout` (default 2s, at most 30s); on failure `fail:"closed"`
     (the default) refuses and `fail:"open"` lets operations and tenant checks
     pass. Declared routes are served at

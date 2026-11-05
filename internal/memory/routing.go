@@ -914,7 +914,7 @@ func (s *Service) pickModel(ctx context.Context, picker ModelPicker, scope Scope
 		called = true
 		return picker.PickModel(ctx, task, options)
 	})
-	if !called { // the ledger refused the reservation: still pick, unrecorded, as before the shared call
+	if !called && callErr == nil { // the ledger refused the reservation: still pick, unrecorded, as before the shared call
 		choice, _, callErr = picker.PickModel(op, task, options)
 	}
 	// A ledger failure after the call never discards the picked model.
