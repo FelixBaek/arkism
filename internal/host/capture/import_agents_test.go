@@ -125,6 +125,36 @@ func TestImportAgentsReadsHermesMemories(t *testing.T) {
 		got["Prefers short Korean reports."] != "user" {
 		t.Fatal(got)
 	}
+	// They take the capture route every agent's import takes: inferred backfill claims the server's
+	// private and secret checks see and keeps as candidates.
+	var hermes []importStatement
+	for _, s := range stmts {
+		if s.Origin == "hermes" {
+			hermes = append(hermes, s)
+		}
+	}
+	routes := map[string]int{}
+	capPost = func(path string, body any, _ time.Duration) (map[string]any, error) {
+		raw, _ := json.Marshal(body)
+		var m map[string]any
+		_ = json.Unmarshal(raw, &m)
+		routes[path]++
+		ev := m["event"].(map[string]any)
+		items := []any{}
+		for _, c := range m["claims"].([]any) {
+			if c.(map[string]any)["basis"] != "inferred" || ev["type"] != "backfill" || ev["origin_product"] != "hermes" {
+				t.Errorf("claim %v event %v", c, ev)
+			}
+			items = append(items, map[string]any{"status": "candidate"})
+		}
+		return map[string]any{"items": items}, nil
+	}
+	t.Cleanup(func() {
+		capPost = func(p string, b any, d time.Duration) (map[string]any, error) { return host.Post(p, b, d) }
+	})
+	if res := importSend(hermes, 0); res.Candidates != 3 || len(routes) != 1 || routes["/v1/capture"] == 0 {
+		t.Fatal(res, routes)
+	}
 }
 
 func TestImportAgentsFrontmatterKinds(t *testing.T) {
