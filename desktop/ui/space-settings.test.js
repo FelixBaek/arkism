@@ -167,3 +167,39 @@ test("a person edits the new groups: a block starts from the resolved value, on/
   box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
   assert.equal(sent.at(-1)[1].extract_causal, null);
 });
+
+test("recall defaults, capture mode and density and the consolidation decision model are reachable, with budget notes, and go back to inherit", async () => {
+  const state = { view: "settings", settingsTab: "space", server: "s", scope: { workspace_id: "w", project_id: "p" }, caps: { actions: {} } };
+  const sent = [];
+  const stored = { capture_mode: "assistant_results", decision_models: { consolidation: "clef" } };
+  const request = async (path, o) => {
+    if (o?.method) { sent.push([path, JSON.parse(o.body)]); return {}; }
+    if (path.endsWith("/config")) return { revision: 2, config: structuredClone(stored) };
+    return { revision: 2, config: { ...stored, capture_density: "durable", recall_quality: { conflict_pending: "attach" } }, sources: { capture_mode: "space", decision_models: "space" } };
+  };
+  const line = (title, hint, ctl) => { const r = h.el("div", "", title); r.append(h.el("small", "", hint), ctl); return r; };
+  const sws = {};
+  const kit = { side() {}, sideSec: () => h.el("div"), kvRow: () => h.el("div"), sideNote: () => h.el("p"), group: (t) => h.el("section", "", t), line,
+    more: (s, ...n) => { const d = h.el("details", "", s); d.append(...n); return d; }, spaceJob: async () => ({}),
+    sw: (on, label, set) => { const b = h.el("button", "", `sw:${label}:${on}`); sws[label] = set; return b; } };
+  let box;
+  const tab = S({ state, ...h, request, notice() {}, render() { box = h.el("div"); box.append(...tab.tab(kit)); } });
+  tab.tab(kit); await dom.flush(); await dom.flush();
+  for (const s of ["후보도 뜻으로 찾기", "다시 고를 때 관련 없는 것 빼기", "다시 고를 때 겹치는 것 합치기", "관찰을 먼저 보여 주기", "원문 조각도 같이 주기", "원문 조각 양",
+    "대화에서 무엇을 뽑을지", "얼마나 촘촘히 뽑을지", "정리 전에 쉬운 것 먼저 거르기"])
+    assert.ok(box.textContent.includes(s), s);
+  assert.match(box.textContent, /판정할 때마다/, "a decision model on carries its budget note");
+  sws["후보도 뜻으로 찾기"](true);
+  assert.match(box.textContent, /임베딩을 만들어 모델 예산을 써요/);
+  sws["다시 고를 때 겹치는 것 합치기"](true);
+  sws["관찰을 먼저 보여 주기"](true);
+  const sel = (label) => box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === label);
+  const density = sel("얼마나 촘촘히 뽑을지"); density.value = "dense"; dom.fire(density, "change");
+  assert.match(box.textContent, /뽑는 모델 사용량/);
+  const dm = sel("정리 전에 쉬운 것 먼저 거르기"); dm.value = ""; dom.fire(dm, "change");
+  const mode = sel("대화에서 무엇을 뽑을지"); mode.value = ""; dom.fire(mode, "change");
+  const chunks = box.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "원문 조각 양"); chunks.value = "800"; dom.fire(chunks, "change");
+  box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
+  assert.deepEqual(sent[0], ["/v1/spaces/w/p/config", { expected_revision: 2, capture_mode: "", capture_density: "dense", decision_models: {},
+    recall_quality: { conflict_pending: "attach", provisional_vectors: true, rerank_options: { dedup: true }, prefer_observations: true, chunks_max_tokens: 800 } }]);
+});

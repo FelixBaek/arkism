@@ -18,7 +18,7 @@
     lanes: null, rerank: null, rerank_model: null, recall_budget_tokens: 0, reflect_max_tokens: 0,
     extraction_mission: "", extraction_chunk_size: 0, extract_causal: null, extraction_strategies: {}, extraction_default_strategy: "", default_timezone: "", memory_language: "",
     work_state_candidates: null, recall_session_archives: null, recall_lane_weights: {}, audit: {}, entity_resolution: "", entities_allow_free_form: null, entity_free_types: null,
-    entity_labels: [], reflect_default_options: {}, mental_model_defaults: {}, consolidation: {}, recall_quality: {} };
+    entity_labels: [], reflect_default_options: {}, mental_model_defaults: {}, consolidation: {}, recall_quality: {}, capture_mode: "", capture_density: "", decision_models: {} };
   // empty all the way down ({tools: {}} is as empty as {}); false is a value
   const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) ? !v.length : typeof v === "object" && Object.values(v).every(unset));
   // a named strategy with nothing set is still a name an item can pick
@@ -240,11 +240,16 @@
         ...choice(kit, "memory_language", LANGS(), "기억을 쓰는 언어", "후보를 어떤 언어로 적을지예요. ‘말한 언어 그대로’는 내가 쓴 말을 따라요."),
         ...choice(kit, "default_timezone", ZONES(), "기준 시간대", "‘어제’·‘지난주’ 같은 말을 날짜로 바꿀 때 쓰는 시간대예요."),
         ...flag(kit, "work_state_candidates", "작업 상태를 후보로", "작업 중간 저장과 인계를 ‘지금 어디까지 했는지’ 후보로 만들어요. 처음에는 꺼져 있어요."),
+        ...choice(kit, "capture_mode", CAPTURE_MODES, "대화에서 무엇을 뽑을지", "에이전트가 확인한 사실·도구 결과·다른 사람의 말도 후보로 만들지예요. 후보는 내가 승인해야 기억이 돼요."),
+        ...choice(kit, "capture_density", DENSITIES, "얼마나 촘촘히 뽑을지", "촘촘할수록 후보가 많아져요."),
+        ...(["balanced", "dense"].includes(S.draft?.capture_density || S.eff.capture_density) ? [el("p", "pg-hint warn", "후보가 많아지는 만큼 뽑는 모델 사용량(예산)을 더 써요.")] : []),
         ...strategies(kit)));
       if (human()) g.append(kit.more("자세히 · 뽑기 시험해 보기", ...trialBox(kit)));
       return g;
     }
 
+    const CAPTURE_MODES = [["user", "내가 한 말만"], ["assistant_results", "에이전트가 확인한 결과까지"]];
+    const DENSITIES = [["durable", "오래 쓸 것만"], ["balanced", "보통"], ["dense", "촘촘하게"]];
     const LANG_LIST = [["auto", "말한 언어 그대로"], ["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh", "中文"], ["es", "Español"], ["de", "Deutsch"], ["fr", "Français"], ["pt", "Português"]];
     // a stored value outside the list still shows as itself
     const withValue = (list, ...vals) => [...list, ...vals.filter((v) => v && !list.some(([k]) => k === v)).map((v) => [v, v])];
@@ -545,8 +550,25 @@
           edit ? select(CONFLICT, q.conflict_pending || "attach", "정정을 기다리는 기억", (v) => setBlock("recall_quality", { conflict_pending: v === "attach" ? undefined : v })) : readOnly(CONFLICT.find(([k]) => k === (q.conflict_pending || "attach"))[1])),
         qsw("provisional", "승인 전 후보도 보여 주기", "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요.", !!q.provisional),
         qsw("auto_close_on_correction", "정정되면 옛 사실 끝내기 제안", "정정을 승인하면 옛 기억에 끝난 날짜를 붙이자고 제안해요. 내가 승인해야 바뀌어요.", !!q.auto_close_on_correction),
+        ...recallDefaults(kit, q, edit),
         origin("recall_quality", () => { d.recall_quality = null; redraw(); })));
       return g;
+    }
+
+    // recall_quality's recall defaults: what a search takes for what it leaves unset (provisional_vectors spends embedding calls)
+    function recallDefaults(kit, q, edit) {
+      const qsw = (k, title, hint, on) => kit.line(title, hint, edit ? kit.sw(on, title, (next) => setBlock("recall_quality", { [k]: next || undefined })) : onOff(on));
+      const ro = q.rerank_options || {};
+      const rsw = (k, title, hint) => kit.line(title, hint, edit ? kit.sw(!!ro[k], title, (next) => { const o = { ...ro, [k]: next || undefined }; setBlock("recall_quality", { rerank_options: unset(o) ? undefined : o }); }) : onOff(!!ro[k]));
+      const out = [qsw("provisional_vectors", "후보도 뜻으로 찾기", "새 후보를 임베딩해 뜻으로 찾는 길에도 걸리게 해요. 처음에는 꺼져 있어요.", !!q.provisional_vectors)];
+      if (q.provisional_vectors) out.push(el("p", "pg-hint warn", "켜져 있어요. 후보가 들어올 때마다 임베딩을 만들어 모델 예산을 써요."));
+      out.push(rsw("prune", "다시 고를 때 관련 없는 것 빼기", "서버 모델로 다시 고를 때 질문과 먼 기억을 빼요."),
+        rsw("dedup", "다시 고를 때 겹치는 것 합치기", "서버 모델로 다시 고를 때 같은 내용을 하나만 남겨요."),
+        qsw("prefer_observations", "관찰을 먼저 보여 주기", "정리된 관찰이 있으면 그 바탕 기억보다 앞에 둬요.", !!q.prefer_observations),
+        qsw("include_chunks", "원문 조각도 같이 주기", "찾은 기억이 나온 문서의 원문 조각을 함께 넘겨요.", !!q.include_chunks),
+        kit.line("원문 조각 양", "원문 조각에 쓸 토큰 수예요 (1~16384). 비우면 기본값을 써요.",
+          numberBox(q.chunks_max_tokens, 1, 16384, "", "원문 조각 양", edit, (n) => setBlock("recall_quality", { chunks_max_tokens: n || undefined }))));
+      return out;
     }
 
     const LEVELS = [["0", "정하지 않음"], ["1", "1 · 아주 낮게"], ["2", "2"], ["3", "3 · 보통"], ["4", "4"], ["5", "5 · 아주 높게"]];
@@ -621,7 +643,8 @@
         field("관찰을 만들 때 목표", edit ? area(c.observations_mission, 2000, "관찰을 만들 때 목표", "예: 반복되는 실수와 그 해결을 관찰로 남겨요.", (v) => set({ observations_mission: v || undefined })) : readOnly(c.observations_mission || "없음")),
         kit.line("묶는 방식", "어떤 기억끼리 모아 관찰을 만들지예요.", edit ? select([["", "기본값 · 모두 한 묶음"], ...SCOPE_MODES], c.default_scope_mode || "", "묶는 방식", (v) => set({ default_scope_mode: v || undefined }))
           : readOnly(SCOPE_MODES.find(([k]) => k === c.default_scope_mode)?.[1] || "모두 한 묶음")),
-        field("크기", sizes, "비우면 기본값을 써요.")];
+        field("크기", sizes, "비우면 기본값을 써요."),
+        ...decisionModel(kit, edit)];
       // the rule lists as JSON: kept in S.rules while being typed, so a half-typed object is not lost on redraw
       if (!edit) {
         out.push(field("정리 전략 규칙 (JSON)", pre(rulesText(c) || "없음")), origin("consolidation"));
@@ -638,6 +661,19 @@
       out.push(button("전략 미리 보기", "ghost", null, () => void strategyPreview()));
       if (S.trial.strat) out.push(S.trial.strat);
       out.push(origin("consolidation", () => { d.consolidation = null; S.rules = null; redraw(); }));
+      return out;
+    }
+    // decision_models.consolidation: a small decision engine drops note groups an observation already states before the model is asked
+    const ENGINES = [["off", "쓰지 않기"], ["clef", "clef"], ["jev", "jev"]];
+    function decisionModel(kit, edit) {
+      const d = S.draft, cur = (d ? d.decision_models : S.eff.decision_models)?.consolidation || "";
+      const eff = S.eff.decision_models?.consolidation || "off";
+      const list = [["", d?.decision_models ? "물려받기" : `물려받기 · ${ENGINES.find(([k]) => k === eff)?.[1] || eff}`], ...ENGINES];
+      const ctl = edit ? select(list, d.decision_models?.consolidation || "", "정리 전에 쉬운 것 먼저 거르기", (v) => { d.decision_models = v ? { ...(d.decision_models || {}), consolidation: v } : null; redraw(); })
+        : readOnly(ENGINES.find(([k]) => k === (cur || eff))?.[1] || eff);
+      const out = [kit.line("정리 전에 쉬운 것 먼저 거르기", "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.", ctl),
+        origin("decision_models", () => { d.decision_models = null; redraw(); })];
+      if ((d?.decision_models?.consolidation || eff) !== "off") out.push(el("p", "pg-hint warn", "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요."));
       return out;
     }
     async function strategyPreview() {

@@ -7403,3 +7403,30 @@ Object.assign(window.ArkismI18nEN.strings, {
   "검토 중": "In review" });
 Object.assign(window.ArkismI18nEN.patterns, {
   "이전 {0}개": "{0} earlier" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "대화에서 무엇을 뽑을지": "What to capture from conversations",
+  "에이전트가 확인한 사실·도구 결과·다른 사람의 말도 후보로 만들지예요. 후보는 내가 승인해야 기억이 돼요.": "Whether facts the agent confirmed, tool results and what other people said also become candidates. A candidate becomes a memory only after you approve it.",
+  "얼마나 촘촘히 뽑을지": "How densely to capture",
+  "촘촘할수록 후보가 많아져요.": "The denser, the more candidates you get.",
+  "후보가 많아지는 만큼 뽑는 모델 사용량(예산)을 더 써요.": "More candidates means more extraction model usage (budget).",
+  "내가 한 말만": "Only what I said",
+  "에이전트가 확인한 결과까지": "Also results the agent confirmed",
+  "오래 쓸 것만": "Only lasting things",
+  "촘촘하게": "Dense",
+  "후보도 뜻으로 찾기": "Find candidates by meaning too",
+  "새 후보를 임베딩해 뜻으로 찾는 길에도 걸리게 해요. 처음에는 꺼져 있어요.": "Embeds new candidates so search by meaning finds them too. Off at first.",
+  "켜져 있어요. 후보가 들어올 때마다 임베딩을 만들어 모델 예산을 써요.": "It is on. Every incoming candidate gets an embedding, which spends model budget.",
+  "다시 고를 때 관련 없는 것 빼기": "Drop unrelated results when re-ranking",
+  "서버 모델로 다시 고를 때 질문과 먼 기억을 빼요.": "When the server model re-ranks, memories far from the question are dropped.",
+  "다시 고를 때 겹치는 것 합치기": "Merge duplicates when re-ranking",
+  "서버 모델로 다시 고를 때 같은 내용을 하나만 남겨요.": "When the server model re-ranks, only one of each identical content is kept.",
+  "관찰을 먼저 보여 주기": "Show observations first",
+  "정리된 관찰이 있으면 그 바탕 기억보다 앞에 둬요.": "When a consolidated observation exists, it comes before the memories it is based on.",
+  "원문 조각도 같이 주기": "Include source excerpts",
+  "찾은 기억이 나온 문서의 원문 조각을 함께 넘겨요.": "Also hands over excerpts of the documents the found memories came from.",
+  "원문 조각 양": "Source excerpt size",
+  "원문 조각에 쓸 토큰 수예요 (1~16384). 비우면 기본값을 써요.": "Tokens to spend on source excerpts (1–16384). Leave empty for the default.",
+  "쓰지 않기": "Don't use",
+  "정리 전에 쉬운 것 먼저 거르기": "Filter easy cases before consolidating",
+  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "A small decision model first filters out what an observation already says and small talk, so fewer server model calls are made. It never writes anything.",
+  "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "It is on. Each decision counts toward the server model's daily usage limit." });
