@@ -168,10 +168,12 @@ type entityPlan struct {
 	now           time.Time
 	createdLookup map[string]bool
 	resolution    string // entity_resolution; "" is the server default, propose
+	// similarLeft bounds the name comparisons of one request (entitySimilarBudget).
+	similarLeft int
 }
 
 func newEntityPlan(g *entityGraph, resolution string) *entityPlan {
-	p := &entityPlan{g: g, byMemory: map[string][]EntityMention{}, now: time.Now().UTC(), createdLookup: map[string]bool{}, resolution: resolution}
+	p := &entityPlan{g: g, byMemory: map[string][]EntityMention{}, now: time.Now().UTC(), createdLookup: map[string]bool{}, resolution: resolution, similarLeft: entitySimilarBudget}
 	for _, m := range g.mentions {
 		p.byMemory[m.MemoryID] = append(p.byMemory[m.MemoryID], m)
 	}
@@ -194,7 +196,8 @@ func (p *entityPlan) entityFor(c entityCandidate, origin string) *NamedEntity {
 	}
 	// Stated names are taken literally; found names may match a similar existing one.
 	var similar []EntitySimilar
-	if origin != originInput && p.resolution != entityResolveExact {
+	if origin != originInput && p.resolution != entityResolveExact && p.similarLeft >= len(p.g.entities) {
+		p.similarLeft -= len(p.g.entities)
 		similar = p.g.similar(c.Name, c.Type)
 		if len(similar) > 0 && similar[0].Score == 1 && p.resolution == entityResolveSimilar {
 			return p.g.entities[similar[0].ID] // the same words; only case, punctuation or order differ

@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -291,5 +292,36 @@ func TestSpaceEntitySettings(t *testing.T) {
 		if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, in, false); !errors.Is(err, ErrInvalid) {
 			t.Fatal("invalid entity setting accepted", err)
 		}
+	}
+}
+
+// A large batch stops comparing names once the request's budget is spent, so
+// extraction stays bounded instead of comparing every new name with every entity.
+func TestEntitySimilarBudgetBoundsBatch(t *testing.T) {
+	g := &entityGraph{entities: map[string]*NamedEntity{}, byKey: map[string][]*NamedEntity{}}
+	for i := range 5000 {
+		e := &NamedEntity{ID: fmt.Sprintf("e%05d", i), Name: fmt.Sprintf("Service Alpha%d", i), Type: entityTypeConcept}
+		e.Keys = entityKeys(*e)
+		g.add(e)
+	}
+	p := newEntityPlan(g, entityResolvePropose)
+	var first, last *NamedEntity
+	for i := range 400 {
+		e := p.entityFor(entityCandidate{Name: fmt.Sprintf("Service Alpha%dq", i), Type: entityTypeConcept}, originRule)
+		if i == 0 {
+			first = e
+		}
+		last = e
+	}
+	if len(first.Similar) == 0 || len(last.Similar) != 0 || p.similarLeft < 0 || p.similarLeft >= len(g.entities) {
+		t.Fatalf("first=%v last=%v left=%d", first.Similar, last.Similar, p.similarLeft)
+	}
+}
+
+// Stated names the secret scan or a defense rule redacted never become entities.
+func TestStatedEntityRedactedNamesDropped(t *testing.T) {
+	got := SpaceConfig{}.inputEntityCandidates([]EntityInput{{Name: "deploy key [REDACTED]"}, {Name: "token [redacted]"}, {Name: "Billing API"}})
+	if len(got) != 1 || got[0].Name != "Billing API" {
+		t.Fatalf("got %+v", got)
 	}
 }

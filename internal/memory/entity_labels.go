@@ -122,7 +122,7 @@ func (c SpaceConfig) label(name string) (string, EntityLabelGroup, bool) {
 		value = g.Values[j].Value
 	}
 	out := key + ":" + value
-	return out, g, validEntityName(out) && !strings.Contains(out, spaceRedactMark)
+	return out, g, validEntityName(out) && !redactedName(name)
 }
 
 // labelCandidates keeps the labels the schema allows, one per single-valued group.
@@ -159,7 +159,7 @@ func (c SpaceConfig) inputEntityCandidates(list []EntityInput) []entityCandidate
 		switch {
 		case typ == entityTypeLabel:
 			labels = append(labels, name)
-		case c.entityTypeAllowed(typ) && validEntityName(name) && !strings.Contains(name, spaceRedactMark):
+		case c.entityTypeAllowed(typ) && validEntityName(name) && !redactedName(e.Name):
 			out = append(out, entityCandidate{Name: name, Type: typ})
 		}
 	}
@@ -223,3 +223,6 @@ func (c SpaceConfig) entityLabelPrompt() string {
 	}
 	return out
 }
+
+// redactedName: a stated name a defense rule ("[redacted]") or the secret scan ("[REDACTED]") cut is dropped.
+func redactedName(name string) bool { return strings.Contains(strings.ToLower(name), spaceRedactMark) }

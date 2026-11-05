@@ -27,6 +27,10 @@ const (
 	// entityWordSimilarMin: two words are the same word when equal, one a prefix of the other, or this similar.
 	entityWordSimilarMin = 0.5
 	entitySimilarMax     = 3
+	// entitySimilarBudget caps the entity comparisons of one extraction (about half a
+	// second); later new names of a large batch become entities without proposals.
+	// shortcut: a full scan per name, bounded here; index trigrams if spaces outgrow it.
+	entitySimilarBudget = 1_000_000
 )
 
 var entityResolveModes = []string{"", entityResolveExact, entityResolvePropose, entityResolveSimilar}
