@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -609,7 +610,7 @@ func TestWebhookDefenseAndConsolidationEvents(t *testing.T) {
 	if _, err := f.consolidate(f.human, false); err != nil {
 		t.Fatal(err)
 	}
-	if ev := queuedEvents(f); len(ev) != 3 || ev[2] != EventConsolidationCompleted {
+	if ev := queuedEvents(f); len(ev) != 3 || !slices.Contains(ev, EventConsolidationCompleted) { // queued rows have no order
 		t.Fatal("consolidation event", ev)
 	}
 }
