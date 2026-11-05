@@ -90,6 +90,8 @@ async function setup(over, stateOver = {}) {
     remoteCollection: (read) => createRemoteCollection({ state, read, createPager }),
     virtualList: createVirtualList()
   };
+  require("./catalog.js");
+  ctx.fileSize = window.ArkismCatalog.fileSize;
   require("./knowledge.js");
   view = window.ArkismKnowledge(ctx);
   const files = (picked.length = 0, picked);

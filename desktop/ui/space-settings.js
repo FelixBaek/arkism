@@ -250,7 +250,8 @@
 
     const CAPTURE_MODES = [["user", "내가 한 말만"], ["assistant_results", "에이전트가 확인한 결과까지"]];
     const DENSITIES = [["durable", "오래 쓸 것만"], ["balanced", "보통"], ["dense", "촘촘하게"]];
-    const LANG_LIST = [["auto", "말한 언어 그대로"], ["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh", "中文"], ["es", "Español"], ["de", "Deutsch"], ["fr", "Français"], ["pt", "Português"]];
+    // the app's own language list (look.js); the server takes any language tag
+    const LANG_LIST = [["auto", "말한 언어 그대로"], ...(window.ArkismLook?.languages || [])];
     // a stored value outside the list still shows as itself
     const withValue = (list, ...vals) => [...list, ...vals.filter((v) => v && !list.some(([k]) => k === v)).map((v) => [v, v])];
     const LANGS = () => withValue(LANG_LIST, S.draft?.memory_language, S.eff.memory_language);

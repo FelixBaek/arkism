@@ -43,12 +43,13 @@
     if ([repo, ...rest].some((x) => !SEG.test(x) || x === "." || x === "..")) return "";
     return [owner, repo, ...rest].join("/") + (ref ? `@${ref}` : "");
   }
-  const size = (n) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)}MB` : n >= 1024 ? `${Math.round(n / 1024)}KB` : `${n}B`);
   const readDetail = (q) => { try { return JSON.parse(q?.detail || "null"); } catch (_) { return null; } };
 
   // The built-in scan's verdict on a previewed skill (skillinstall.go previewDetail): [badge, line] or null when safe.
   const SCAN = { DO_NOT_INSTALL: ["보안 위험", "위험한 내용이 있어요. 설치해도 직접 켜기 전까지 Arkism이 추천하지 않아요."], CAUTION: ["보안 주의", "조심할 내용이 있어요. 아래 이유를 확인해 주세요."] };
 
+  // The one file-size label: the catalog's installs, and through app.js the backups and documents.
+  const size = (n) => (n >= 1 << 20 ? `${(n / (1 << 20)).toFixed(1)}MB` : n >= 1024 ? `${Math.round(n / 1024)}KB` : `${n || 0}B`);
   function factory({ state, el, button, request, notice, agentLogo, reload, pollTools, shownAgents, findingText = (x) => x }) {
     const post = (body) => request("/v1/agent_tools/requests", { method: "POST", body: JSON.stringify({ scope: state.scope, enabled: true, ...body }) });
     // settle waits for the host (it applies requests about once a minute) until every id is finished; null on timeout.
@@ -344,6 +345,7 @@
     return { openInstall, installPage, installButton: () => button("설치", "", "plus", openInstall), presetField, watchAdd };
   }
   factory.parseSource = parseSource;
+  factory.fileSize = size;
   factory.PRESETS = PRESETS;
   factory.TARGETS = TARGETS;
   factory.size = size;

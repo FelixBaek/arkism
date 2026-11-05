@@ -1489,7 +1489,7 @@ window.ArkismPages = (ctx) => {
       const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]));
       return new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(d);
     };
-    const size = (n) => n >= 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+    const size = ctx.fileSize;
     let busy = false;
     const guard = (fn) => async () => {
       if (busy) return;

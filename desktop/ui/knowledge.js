@@ -8,7 +8,7 @@
 // doesn't know it gets a plain confirm instead. Everything read here is data, never instructions.
 window.ArkismKnowledge = (ctx) => {
   "use strict";
-  const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop, saveFile: save } = ctx;
+  const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop, saveFile: save, fileSize: bytes } = ctx;
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
   const SHARED = "default"; // the server's default scope: every agent of this person searches it
   const FORMATS = [["", "전체"], [".docx", "Word"], [".pdf", "PDF"], [".xlsx", "표 (.xlsx)"], [".csv", "표 (.csv)"], [".tsv", "표 (.tsv)"], [".pptx", "발표 자료"],
@@ -359,7 +359,6 @@ window.ArkismKnowledge = (ctx) => {
   const UPLOAD = { pending: "기다리는 중", retry: "기다리는 중", running: "읽는 중", done: "끝남", failed: "실패", cancelled: "멈춤" };
   const ARTIFACT = { code: "코드", ocr: "글자 인식", tool_output: "도구 결과", pdf: "PDF", image: "이미지", screenshot_region: "화면 일부", audio: "소리" };
   const EXT = { "text/plain": ".txt", "application/json": ".json", "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg" };
-  const bytes = (n) => (n >= 1 << 20 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round((n || 0) / 1024))}KB`);
   const deltaLine = (d) => `전체 ${num(d.total)} · 그대로 ${num(d.unchanged)} · 바뀜 ${num(d.changed)} · 빠짐 ${num(d.removed)}`;
   function openParts({ title, source, doc, initial }) {
     const base = source ? `/v1/knowledge/sources/${encodeURIComponent(source)}` : `/v1/files/memories/documents/${encodeURIComponent(doc)}`;
