@@ -41,7 +41,7 @@
 데스크톱 앱 없이도 `memoryd`가 같은 화면을 내부망의 브라우저에 보여 줄 수 있어요. 기본은 꺼져 있어요.
 
 1. 화면을 한 번 빌드해요: `npm ci --prefix desktop/frontend --no-audit --no-fund && node desktop/frontend/build.cjs` (결과: `desktop/ui-dist`).
-2. 그 폴더를 서버에 복사하고 `memoryd`에 `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui`를 넣은 뒤 다시 시작해요. 이제 `GET /`는 `/app/`으로 넘어가요.
+2. 그 폴더를 서버에 복사하고 `memoryd`에 `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui`를 넣은 뒤 다시 시작해요. 이제 `GET /`는 `/app/`으로 넘어가요. 빌드한 폴더가 아니면(`.arkism-frontend-output` 파일이 없으면) `memoryd`가 시작하지 않아요. 테스트 파일이 든 소스 폴더를 실수로 내보내지 않게 하려는 거예요.
 3. 내부망에서 `memoryd`에 닿게 해요(`--listen` 또는 TLS 리버스 프록시). 인터넷에 열지 마세요.
 4. `http://서버주소:8091/app/`을 열고 Arkism 접속 토큰을 붙여 넣어요. 토큰은 그 탭에만 남고(세션 저장소), Bearer 헤더로만 보내요. `/v1` 권한 검사는 그대로예요.
 

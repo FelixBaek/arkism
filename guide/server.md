@@ -54,7 +54,7 @@ The SSH user needs to be root, or have passwordless sudo (`sudo -n`) for the cop
 Without the desktop app, `memoryd` can serve the same screens to a browser on your private network. It is off by default.
 
 1. Build the UI once: `npm ci --prefix desktop/frontend --no-audit --no-fund && node desktop/frontend/build.cjs` (output: `desktop/ui-dist`).
-2. Copy that folder to the server and set `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui` for `memoryd`, then restart it. `GET /` now redirects to `/app/`.
+2. Copy that folder to the server and set `ARKISM_WEB_UI_DIR=/srv/arkism/web-ui` for `memoryd`, then restart it. `GET /` now redirects to `/app/`. `memoryd` refuses to start if the folder is not a build (it has no `.arkism-frontend-output` file), so the source folder with its tests is never served.
 3. Make `memoryd` reachable from your network (`--listen`, or a reverse proxy with TLS). Do not expose it to the internet.
 4. Open `http://my-server:8091/app/` and paste an Arkism access token. The browser keeps it only for that tab (session storage) and sends it as a Bearer header; `/v1` authorization does not change.
 

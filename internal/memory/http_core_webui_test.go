@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,12 +16,12 @@ func webUIFixture(t *testing.T) (*fixture, string) {
 	base := t.TempDir()
 	dir := filepath.Join(base, "ui")
 	files := map[string]string{
-		"index.html":           "<!doctype html><title>Arkism</title>",
-		"assets/entry.js":      "export {};",
-		"app.css":              "body{}",
-		"fonts/a.woff2":        "w",
-		".arkism-frontend-out": "marker",
-		"notes.txt":            "private",
+		"index.html":      "<!doctype html><title>Arkism</title>",
+		"assets/entry.js": "export {};",
+		"app.css":         "body{}",
+		"fonts/a.woff2":   "w",
+		webUIBuildMarker:  "arkism-frontend-v1",
+		"notes.txt":       "private",
 	}
 	for name, body := range files {
 		p := filepath.Join(dir, name)
@@ -37,7 +38,9 @@ func webUIFixture(t *testing.T) (*fixture, string) {
 	if err := os.Symlink(filepath.Join(base, "secret.js"), filepath.Join(dir, "link.js")); err != nil {
 		t.Fatal(err)
 	}
-	f.svc.WebUIDir = dir
+	if err := f.svc.SetWebUIDir(dir); err != nil {
+		t.Fatal(err)
+	}
 	return f, dir
 }
 
@@ -93,10 +96,10 @@ func TestWebUINeverLeavesItsDirectory(t *testing.T) {
 	h := Handler(f.svc)
 	for _, target := range []string{
 		"/app/../secret.js", "/app/%2e%2e/secret.js", "/app/assets/../../secret.js", "/app/..%2fsecret.js",
-		"/app/link.js",              // symlink out of the directory
-		"/app/.arkism-frontend-out", // hidden file
-		"/app/notes.txt",            // not a product asset type
-		"/app/assets/",              // no directory listings
+		"/app/link.js",             // symlink out of the directory
+		"/app/" + webUIBuildMarker, // hidden file
+		"/app/notes.txt",           // not a product asset type
+		"/app/assets/",             // no directory listings
 		"/app/assets", "/app/missing.js", "/app/a%5c..%5csecret.js",
 	} {
 		w := webUIGet(h, target)
@@ -110,5 +113,50 @@ func TestWebUILeavesAPIAuthorizationUnchanged(t *testing.T) {
 	f, _ := webUIFixture(t)
 	if w := webUIGet(Handler(f.svc), "/v1/capabilities?workspace_id=ws-a&project_id=proj-a"); w.Code != http.StatusUnauthorized {
 		t.Fatalf("anonymous /v1 with web UI on: %d", w.Code)
+	}
+}
+
+func TestWebUIRefusesAFolderThatIsNotABuild(t *testing.T) {
+	src := t.TempDir() // like desktop/ui: sources and tests, no build marker
+	if err := os.WriteFile(filepath.Join(src, "app.test.js"), []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svc := newFixture(t).svc
+	if err := svc.SetWebUIDir(src); err == nil || svc.WebUIDir != "" {
+		t.Fatalf("source folder accepted: err=%v dir=%q", err, svc.WebUIDir)
+	}
+	if err := svc.SetWebUIDir(""); err != nil || svc.WebUIDir != "" {
+		t.Fatalf("empty must stay off: %v", err)
+	}
+}
+
+// The browser must load the same images and fonts as the desktop shell, or covers and the web font break there.
+func TestWebUICSPMatchesTheDesktopImageAndFontSources(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "desktop", "src-tauri", "tauri.conf.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var conf struct {
+		App struct {
+			Security struct {
+				CSP string `json:"csp"`
+			} `json:"security"`
+		} `json:"app"`
+	}
+	if err := json.Unmarshal(raw, &conf); err != nil || conf.App.Security.CSP == "" {
+		t.Fatalf("desktop CSP not found: %v", err)
+	}
+	directive := func(csp, name string) string {
+		for _, part := range strings.Split(csp, ";") {
+			if part = strings.TrimSpace(part); strings.HasPrefix(part, name+" ") {
+				return part
+			}
+		}
+		return ""
+	}
+	for _, name := range []string{"img-src", "font-src", "style-src", "script-src"} {
+		if got, want := directive(webUICSP, name), directive(conf.App.Security.CSP, name); got != want {
+			t.Errorf("%s: web %q, desktop %q", name, got, want)
+		}
 	}
 }

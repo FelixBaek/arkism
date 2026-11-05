@@ -17471,7 +17471,7 @@
     "/app/": {
       "get": {
         "summary": "Web UI static assets",
-        "description": "Serves the built desktop UI from ARKISM_WEB_UI_DIR to a plain browser; disabled (404) when unset. Only html, js, mjs, css, svg, png, ico and woff2 files inside that directory are served: hidden files, directories and paths outside it are 404. Responses carry Content-Security-Policy (default-src 'self'; connect-src 'self'; frame-ancestors 'none'), nosniff and Referrer-Policy no-referrer. The UI keeps the pasted access token in sessionStorage and sends it as a Bearer header; /v1 authorization is unchanged.",
+        "description": "Serves the built desktop UI from ARKISM_WEB_UI_DIR to a plain browser; disabled (404) when unset. Only html, js, mjs, css, svg, png, ico and woff2 files inside that directory are served: hidden files, directories and paths outside it are 404. memoryd refuses to start when the directory has no .arkism-frontend-output build marker. Responses carry Content-Security-Policy (default-src 'self'; connect-src 'self'; frame-ancestors 'none'; image and font hosts as in the desktop app), nosniff and Referrer-Policy no-referrer. The UI keeps the pasted access token in sessionStorage and sends it as a Bearer header; /v1 authorization is unchanged.",
         "security": [],
         "responses": {
           "200": {
