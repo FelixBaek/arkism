@@ -46,6 +46,9 @@ var documentFormats = map[string]documentFormat{
 	".xlsx": {mime: xlsxMIME, read: xlsxPages},
 	".pptx": {mime: pptxMIME, read: pptxPages},
 	".eml":  {mime: "message/rfc822", read: textPage(emlText)},
+	".doc":  {mime: "application/msword", read: docPages},
+	".xls":  {mime: "application/vnd.ms-excel", read: xlsPages},
+	".ppt":  {mime: "application/vnd.ms-powerpoint", read: pptPages},
 }
 
 // documentMIME checks a file name and the MIME type the client gave (may be
@@ -83,7 +86,12 @@ func documentPages(filename string, raw []byte) ([]string, bool, error) {
 	f, known := documentFormats[ext]
 	switch {
 	case known && f.read != nil:
-		return f.read(raw)
+		pages, paged, err := f.read(raw)
+		if err != nil && !errors.Is(err, errBlobTooLarge) && converterHandles(ext) {
+			text, cerr := convertDocument(ext, raw) // the operator's converter reads what the built-in reader cannot
+			return []string{text}, false, cerr
+		}
+		return pages, paged, err
 	case known:
 		if !utf8.Valid(raw) || slices.Contains(raw, 0) {
 			return nil, false, ErrInvalid

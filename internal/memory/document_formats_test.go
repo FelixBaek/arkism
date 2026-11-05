@@ -86,7 +86,7 @@ func TestDocumentReaders(t *testing.T) {
 			t.Fatalf("%s: %v", name, err)
 		}
 	}
-	if _, _, err := documentPages("a.doc", []byte("x")); !errors.Is(err, errUnsupportedFormat) {
+	if _, _, err := documentPages("a.rtf", []byte("x")); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatalf("unknown format: %v", err)
 	}
 	if code, status := errorResponse(errUnsupportedFormat); code != "unsupported_media_type" || status != 415 {
@@ -111,12 +111,13 @@ func TestDocumentConverter(t *testing.T) {
 	t.Setenv("SECRET_TOKEN", "x")
 	t.Setenv("MEMORY_DOCUMENT_CONVERTER", script)
 	t.Setenv("MEMORY_DOCUMENT_CONVERTER_EXTENSIONS", ".doc, .rtf")
-	if mime, err := documentMIME("a.doc", ""); err != nil || mime != "application/octet-stream" {
+	if mime, err := documentMIME("a.rtf", ""); err != nil || mime != "application/octet-stream" {
 		t.Fatal(mime, err)
 	}
 	if _, err := documentMIME("a.exe", ""); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatal(err)
 	}
+	// Not a compound file: the built-in .doc reader fails and the converter reads it.
 	text, err := documentText("a.doc", []byte("본문 한 줄\n"))
 	if err != nil || text != "# converted\n본문 한 줄" {
 		t.Fatalf("%q %v", text, err)

@@ -2,7 +2,8 @@ package memory
 
 // An operator may name one external converter for formats the built-in
 // readers do not cover (MEMORY_DOCUMENT_CONVERTER, an absolute path, and
-// MEMORY_DOCUMENT_CONVERTER_EXTENSIONS, e.g. ".doc,.ppt,.xls,.epub"). It runs
+// MEMORY_DOCUMENT_CONVERTER_EXTENSIONS, e.g. ".epub,.rtf,.odt"; for .doc,
+// .xls and .ppt it is the fallback when the built-in reader fails). It runs
 // without a shell, with an empty environment, in a private temporary folder,
 // under a time limit and an output limit, and must print the text (Markdown or
 // plain) to standard output. Without it those formats are unsupported.
