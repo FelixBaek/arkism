@@ -634,6 +634,45 @@ export interface ClientOptions {
   token?: string;
   headers?: { [key: string]: string };
   fetch?: typeof fetch;
+  /** Retry on 429 and 503 (on by default, see RetryOptions). */
+  retry?: RetryOptions;
+}
+
+/** Retry for 429 (rate limited) and 503 (busy or briefly unavailable) answers. */
+export interface RetryOptions {
+  /** Extra attempts after the first (default 2; 0 turns retry off). */
+  retries?: number;
+  /** Wait before the first retry when the answer has no Retry-After, doubled each time (default 500 ms). */
+  baseDelayMs?: number;
+  /** Longest single wait, a longer Retry-After included (default 30000 ms). */
+  maxDelayMs?: number;
+  /** Test seam: how to wait. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+/** Milliseconds a Retry-After header asks for (seconds or an HTTP date), or undefined. */
+export function retryAfterMs(value: string | null, now = Date.now()): number | undefined {
+  if (!value) return undefined;
+  const text = value.trim();
+  if (/^[0-9]+$/.test(text)) return Number(text) * 1000;
+  const at = Date.parse(text);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+}
+
+/** Options of remember(): the claim's fields besides the text, and the event's labels. */
+export interface RememberOptions {
+  kind?: "user" | "decision" | "procedural" | "lesson" | "episodic" | "semantic";
+  subject?: string;
+  reason?: string;
+  basis?: "explicit_user" | "assistant_result" | "inferred";
+  origin?: string;
+  sessionId?: string;
+}
+
+/** One page of a cursor-paged list. */
+export interface CursorPage<T> {
+  items: T[];
+  next_cursor?: string | null;
 }
 
 /** A non-2xx answer; body is the server's JSON error ({code, ...}) when it sent one. */
@@ -680,7 +719,18 @@ export class ArkismClient {
     if (this.opts.token) headers.Authorization = `Bearer ${this.opts.token}`;
     const form = typeof FormData !== "undefined" && body instanceof FormData; // fetch sets the boundary
     if (body !== undefined && !form) headers["Content-Type"] = "application/json";
-    const res = await (this.opts.fetch ?? fetch)(url, { method, headers, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body) });
+    const init = { method, headers, body: body === undefined ? undefined : form ? (body as FormData) : JSON.stringify(body) };
+    const retry = this.opts.retry ?? {};
+    const retries = Math.max(0, retry.retries ?? 2);
+    const maxDelay = Math.max(0, retry.maxDelayMs ?? 30000);
+    const sleep = retry.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+    let res = await (this.opts.fetch ?? fetch)(url, init);
+    for (let attempt = 0; attempt < retries && (res.status === 429 || res.status === 503); attempt++) {
+      const wait = retryAfterMs(res.headers.get("Retry-After")) ?? (retry.baseDelayMs ?? 500) * 2 ** attempt;
+      await res.body?.cancel();
+      await sleep(Math.min(wait, maxDelay));
+      res = await (this.opts.fetch ?? fetch)(url, init);
+    }
     const text = await res.text();
     let parsed: unknown = text;
     try {
@@ -690,6 +740,37 @@ export class ArkismClient {
     }
     if (!res.ok) throw new ArkismError(res.status, parsed);
     return parsed as T;
+  }
+
+  /** Recall: the scope's memories that answer query (POST /v1/search); options are the other SearchInput fields. */
+  recall(scope: Scope, query: string, options?: Omit<SearchInput, "scope" | "query">): Promise<ContextBundle> {
+    return this.request("POST", "/v1/search", undefined, { ...options, scope, query });
+  }
+
+  /** Remember: propose one memory (POST /v1/capture, explicit_remember). It waits as a candidate until a person approves it. */
+  remember(scope: Scope, text: string, options: RememberOptions = {}): Promise<unknown> {
+    const event = { id: "sdk:" + globalThis.crypto.randomUUID(), type: "explicit_remember", origin_product: options.origin ?? "sdk",
+      occurred_at: new Date().toISOString(), ...(options.sessionId ? { session_id: options.sessionId } : {}) };
+    const claim = { subject: options.subject ?? "memory", text, kind: options.kind ?? "semantic", basis: options.basis ?? "inferred",
+      reason: options.reason ?? "Saved through the client library; a person reviews it." };
+    const generator = { model: "client-library", prompt_version: "sdk-remember-v1", pipeline_version: "sdk-v1" };
+    return this.request("POST", "/v1/capture", undefined, { scope, event, claims: [claim], generator });
+  }
+
+  /** Reflect: an answer drawn from the scope's memories (POST /v1/reflect); options are the other ReflectInput fields. */
+  reflect(scope: Scope, query: string, options?: Omit<ReflectInput, "scope" | "query">): Promise<ReflectOutput> {
+    return this.request("POST", "/v1/reflect", undefined, { ...options, scope, query });
+  }
+
+  /** Every item of a cursor-paged list: calls page(cursor) and follows next_cursor until it is empty (at most maxPages pages). */
+  async *pages<T>(page: (cursor?: string) => Promise<CursorPage<T>>, maxPages = 1000): AsyncGenerator<T> {
+    let cursor: string | undefined;
+    for (let n = 0; n < maxPages; n++) {
+      const got = await page(cursor);
+      yield* got.items;
+      if (!got.next_cursor) return;
+      cursor = got.next_cursor;
+    }
   }
 
   /** POST /v1/reflect — Answer a question from approved memory under person-written directives (search:memories; the model call also needs generate:reflect and external transfer) */

@@ -1,10 +1,38 @@
 {
   "name": "arkism-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Typed client for the Arkism memory server API (generated from api/openapi.yaml)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FelixBaek/arkism.git",
+    "directory": "sdk/typescript"
+  },
+  "homepage": "https://github.com/FelixBaek/arkism/blob/main/guide/development.md#client-libraries",
+  "keywords": ["arkism", "memory", "agents", "api-client"],
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "files": ["src"]
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

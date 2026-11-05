@@ -241,6 +241,30 @@ a `Blob` or string in TypeScript, bytes or text in Python). `request(method,
 path, query, body, headers)` reaches any route. A non-2xx answer raises
 `ArkismError` with the status and the server's JSON error body.
 
+Both clients retry `429` and `503` answers: up to 2 extra attempts by default,
+waiting what `Retry-After` asks (seconds or an HTTP date) or a doubling delay
+from 500 ms, never longer than 30 s at once. Set it per client: TypeScript
+`retry: {retries, baseDelayMs, maxDelayMs}`, Python `retries=`, `base_delay=`,
+`max_delay=` (seconds); `retries` 0 turns it off. Besides the per-route methods
+they have helpers: `recall(scope, query, options)` (`POST /v1/search`),
+`reflect(scope, query, options)` (`POST /v1/reflect`), `remember(scope, text,
+options)` (one `explicit_remember` capture; it stays a candidate until a person
+approves it) and `pages(page)`, which yields every item of a cursor-paged list
+by following `next_cursor` (for example
+`client.pages(cursor => client.getV1Memories({workspace_id, project_id, cursor}))`).
+The runtime and helpers live in `tools/generate_sdk.py`.
+
+Offline tests (fake fetch, local fake server):
+
+```bash
+python3 -m unittest discover -s sdk/python/tests
+node --experimental-strip-types --test sdk/typescript/test/*.test.ts
+```
+
+Both packages carry publishing metadata (`sdk/typescript/package.json` builds
+`dist/` with `npm run build`; `sdk/python/pyproject.toml` builds a wheel) but
+are not published to a registry yet. Bump both versions together.
+
 Every operation needs a unique `operationId` (`tools/check_openapi.py` fails
 otherwise). `python3 tools/update_api_contracts.py` gives a new route without
 one a stable name from method and path (`POST /v1/reflect` → `postV1Reflect` /

@@ -1,11 +1,25 @@
 [project]
 name = "arkism-client"
-version = "0.1.0"
+version = "0.2.0"
 description = "Thin client for the Arkism memory server API (generated from api/openapi.yaml)"
 license = "MIT"
 requires-python = ">=3.9"
 dependencies = []
+keywords = ["arkism", "memory", "agents", "api-client"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+]
+
+[project.urls]
+Homepage = "https://github.com/FelixBaek/arkism"
+Documentation = "https://github.com/FelixBaek/arkism/blob/main/guide/development.md#client-libraries"
+Source = "https://github.com/FelixBaek/arkism/tree/main/sdk/python"
+
+[tool.setuptools]
+packages = ["arkism_client"]
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
