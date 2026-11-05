@@ -371,11 +371,21 @@ window.ArkismKnowledge = (ctx) => {
       } catch (e) { P.error = errText(e); }
       P.busy = false; P.read = true; redraw();
     }
-    const item = (head, meta, ...kids) => { const c = el("article", "v4k-ev"), top = el("div", "v4k-ev-top"); top.append(noI18n(el("span", "mono", head)), el("small", "", meta.filter(Boolean).join(" · "))); c.append(top, ...kids.filter(Boolean)); return c; };
+    // head: a name or place drawn as is, or a node of its own (a document chunk's 쪽 is translated)
+    const item = (head, meta, ...kids) => { const c = el("article", "v4k-ev"), top = el("div", "v4k-ev-top"); top.append(typeof head === "string" ? noI18n(el("span", "mono", head)) : head, el("small", "", meta.filter(Boolean).join(" · "))); c.append(top, ...kids.filter(Boolean)); return c; };
     const chunk = (x) => source
       ? item(`#${x.chunk_index + 1}${x.section_path ? ` · ${x.section_path}` : ""}`, [CHUNK[x.status] || x.status, `${num(x.token_estimate)} 토큰`, x.hash?.slice(0, 12)],
         x.text_withheld ? el("p", "meta", "내용을 가렸어요. 비공개·격리된 부분이거나 사람만 볼 수 있는 내용이에요.") : noI18n(el("p", "", x.text)))
-      : item(x.locator, [CHUNK[x.status] || x.status, x.hash?.slice(0, 12)], candidates(x.candidates || []));
+      : item(place(x.locator), [CHUNK[x.status] || x.status, x.hash?.slice(0, 12)], candidates(x.candidates || []));
+    // the server's locator ("chunk:3", "page:2/chunk:1") in plain words: #3, 2쪽 #1
+    function place(loc = "") {
+      const p = /page:(\d+)/.exec(loc), c = /chunk:(\d+)/.exec(loc);
+      if (!c) return loc;
+      const head = el("span", "mono");
+      if (p) head.append(el("span", "", `${p[1]}쪽`), " ");
+      head.append(noI18n(el("span", "", `#${c[1]}`)));
+      return head;
+    }
     function candidates(list) {
       if (!list.length) return el("p", "meta", "이 부분에서 만든 기억 후보가 없어요.");
       const box = el("div", "v4k-chips");
@@ -507,9 +517,9 @@ window.ArkismKnowledge = (ctx) => {
     box.append(wikiSection(s));
     box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["확인한 사람", s.approved_by || "", true], ["올린 때", ago(s.created_at)]])));
     const tools = el("div", "v4s-actions");
-    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("이 자료로 기억 후보 만들기", "", null, () => extractFromSource(s)),
-      button("부분·이력 보기", "", null, () => openParts({ title: s.display_name, source: s.id })));
-    for (const b of tools.children) b.disabled = (K.busy && !b.textContent.includes("이력")) || (b.textContent.includes("기억 후보") && !!K.extract?.active);
+    const upload = button("새 버전 올리기", "", null, () => pickFile(s)), extract = button("이 자료로 기억 후보 만들기", "", null, () => extractFromSource(s));
+    upload.disabled = K.busy; extract.disabled = K.busy || !!K.extract?.active; // 부분·이력 only reads, so it stays open
+    tools.append(upload, extract, button("부분·이력 보기", "", null, () => openParts({ title: s.display_name, source: s.id })));
     box.append(sec("관리", null, tools, noticeLine(), el("p", "meta", "AI는 자료를 지시가 아닌 참고로만 읽어요.")));
     // 자세히: specialist bindings and index facts for people who need them
     const more = el("details", "v4k-more");

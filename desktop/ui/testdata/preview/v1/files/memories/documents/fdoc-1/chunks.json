@@ -3,7 +3,7 @@
  "next_cursor": "",
  "items": [
   {
-   "locator": "chunk:0",
+   "locator": "chunk:1",
    "hash": "9f2c41d0a7b3e5f1",
    "status": "extracted",
    "candidates": [
@@ -19,7 +19,7 @@
    ]
   },
   {
-   "locator": "chunk:1",
+   "locator": "chunk:2",
    "hash": "3b8e07c2d19f4a66",
    "status": "unchanged",
    "candidates": [
@@ -30,13 +30,13 @@
    ]
   },
   {
-   "locator": "chunk:2",
+   "locator": "page:2/chunk:1",
    "hash": "c71d5e9a02f84b13",
    "status": "pending",
    "candidates": []
   },
   {
-   "locator": "chunk:3",
+   "locator": "page:2/chunk:2",
    "hash": "5a40e6b8c3d21f97",
    "status": "extracted",
    "candidates": [

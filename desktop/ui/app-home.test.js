@@ -375,7 +375,9 @@ test("overview: 승인 대기 sends the event days the person set", async () => 
     [...win().querySelectorAll("input")].find((i) => i.getAttribute("aria-label") === "일어난 첫날").value = "2026-11-01";
     await press("그대로 승인", win(), 30);
     const o = sent().at(-1).occurred;
-    assert.equal(new Date(o.to) - new Date(o.from), 86400000, "one day filled is that day");
+    // one day filled is that day, from the viewer's midnight to the next (25 hours where the clocks go back that night)
+    assert.match(o.from, /^2026-11-01T00:00:00[+-]\d\d:\d\d$/); assert.match(o.to, /^2026-11-02T00:00:00[+-]\d\d:\d\d$/);
+    assert.equal(app.window.ArkismMemoryTime.span(o), "2026년 11월 1일", "and reads back as that one day");
   } finally { off(); await closeAll(); }
 });
 
@@ -588,6 +590,8 @@ test("an older server: one banner, and 지우기 offers no 둘 다", async () =>
 test("overview: 쓰는 중인 기억 window filters, picks, edits and deletes", async () => {
   await openWindow({ wide: "active" }); await app.settle(50); let d = win();
   assert.match(text(d), /쓰는 중인 기억/);
+  // a memory that states when it happened shows that day (cut at the server's midnight, +09:00 here) instead of the day it was saved
+  assert.match(text(d), /일어난 때 2026년 10월 3일/);
   const sorter = d.querySelector("select.ov-wide-sort");
   for (const v of ["new", "old", "used"]) { sorter.value = v; app.dom.fire(sorter, "change"); await app.settle(20); }
   app.dom.type(d.querySelector(".ov-wide-search"), "Orbit"); await app.settle(30);
@@ -970,7 +974,7 @@ test("overview: the screen's chips, steps and cards open windows; motion follows
   await openWindow({ key: "collect" }); await closeAll();
   const table = app.$("#table");
   // 확인해 주세요 leaves for the review list (MEMORY has no tab line); the others open windows
-  for (const c of [...table.querySelectorAll(".ov-chip")].filter((c) => !/확인해 주세요/.test(text(c)))) { c.click(); await app.settle(30); assert.ok(win(), text(c)); await closeAll(); }
+  for (const c of [...table.querySelectorAll(".ov-chip")].filter((c) => !/확인해 주세요|자주 나온 이름/.test(text(c)))) { c.click(); await app.settle(30); assert.ok(win(), text(c)); await closeAll(); }
   table.querySelector(".ov-step").click(); await app.settle(); assert.ok(win()); await closeAll();
   table.querySelector(".ov-card").click(); await app.settle(); assert.ok(win()); await closeAll();
   // the nerve firing runs on its interval while shown, stops when hidden or on reduced motion
@@ -987,6 +991,10 @@ test("overview: the screen's chips, steps and cards open windows; motion follows
   // the head's 새로고침 reads the sessions again
   const refresh = btn("새로고침"); if (refresh) { refresh.click(); await app.settle(50); }
   assert.match(text(table), /기억 처리/);
+  // 자주 나온 이름 is a way into its list (memory-insight.js), not a window
+  [...table.querySelectorAll(".ov-chip")].find((c) => /자주 나온 이름/.test(text(c))).click(); await app.settle(50);
+  assert.equal(win(), null);
+  assert.match(text(app.$("#detail")), /이름을 고르세요/);
 });
 
 // ------------------------------------------------------------ home

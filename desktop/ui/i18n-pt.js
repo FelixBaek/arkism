@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Criar novo rascunho de resumo",
  "AI에게 요약 초안 쓰게 하기": "Pedir à IA um rascunho de resumo",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "O rascunho de resumo está pronto. Leia e aprove.",
- "확인을 기다리는 초안이 이미 있어요.": "Já existe um rascunho aguardando confirmação."
+ "확인을 기다리는 초안이 이미 있어요.": "Já existe um rascunho aguardando confirmação.",
+ "사람·도구": "Pessoas · ferramentas"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Sugestão {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} partes removidas · as sugestões delas continuam como estão",
  "{0} 승인 · 근거 기억 {1}개": "Aprovado {0} · {1} memórias citadas",
- "일어난 때 · {0}": "Aconteceu · {0}"
+ "일어난 때 · {0}": "Aconteceu · {0}",
+ "{0}쪽": "página {0}"
  }
 };

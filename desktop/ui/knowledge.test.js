@@ -761,7 +761,7 @@ test("부분·이력 window: a source's chunks (withheld text hidden), its versi
         { id: "c2", chunk_index: 1, hash: "h2", token_estimate: 8, status: "quarantined", text_withheld: true }], total: 3, next_cursor: "50", extract_document_id: "doc1" }),
     "/v1/knowledge/sources/s2/history": () => ({ items: [{ id: "d2", filename: "b.txt", current: true, chunk_count: 2, created_at: T }], total: 1, next_cursor: "" }),
     "/v1/files/memories/documents/doc1/chunks": () => ({ items: [{ locator: "chunk:1", hash: "x1", status: "extracted", candidates: [{ id: "k1", status: "candidate" }, { id: "k2", status: "approved", memory_id: "k2" }] },
-      { locator: "chunk:2", hash: "x2", status: "unchanged", candidates: [] }], total: 2, next_cursor: "" }),
+      { locator: "page:2/chunk:2", hash: "x2", status: "unchanged", candidates: [] }], total: 2, next_cursor: "" }),
     "/v1/files/memories/documents/doc1/history": () => ({ items: [{ job_id: "j2", status: "done", label: "b.txt", candidates_created: 2, created_at: T,
       delta: { chunks_total: 2, chunks_unchanged: 1, chunks_changed: 1, chunks_removed: 1, removed_sources: [{ locator: "chunk:3", candidate_ids: ["k9"] }] } }], next_cursor: "" })
   });
@@ -782,7 +782,7 @@ test("부분·이력 window: a source's chunks (withheld text hidden), its versi
   await k.press(dlg(), "부분");
   await k.press(dlg(), "이 자료로 만든 기억 후보 보기"); await dom.flush();
   t = dlg().textContent;
-  assert.match(t, /chunk:1/); assert.match(t, /후보 1 · 확인 대기/); assert.match(t, /후보 2 · 승인됨/); assert.match(t, /이 부분에서 만든 기억 후보가 없어요/);
+  assert.match(t, /#1/); assert.match(t, /2쪽/); assert.doesNotMatch(t, /chunk:/); assert.match(t, /후보 1 · 확인 대기/); assert.match(t, /후보 2 · 승인됨/); assert.match(t, /이 부분에서 만든 기억 후보가 없어요/);
   await k.press(dlg(), "올린 이력"); await dom.flush();
   t = dlg().textContent;
   assert.match(t, /끝남/); assert.match(t, /기억 후보 2개/); assert.match(t, /전체 2 · 그대로 1 · 바뀜 1 · 빠짐 1/); assert.match(t, /빠진 부분 1곳/);

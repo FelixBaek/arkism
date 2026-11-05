@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Buat draf ringkasan baru",
  "AI에게 요약 초안 쓰게 하기": "Minta AI menulis draf ringkasan",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Draf ringkasan sudah dibuat. Silakan baca lalu setujui.",
- "확인을 기다리는 초안이 이미 있어요.": "Sudah ada draf yang menunggu diperiksa."
+ "확인을 기다리는 초안이 이미 있어요.": "Sudah ada draf yang menunggu diperiksa.",
+ "사람·도구": "Orang · alat"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Kandidat {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} bagian hilang · kandidatnya tetap ada",
  "{0} 승인 · 근거 기억 {1}개": "Disetujui {0} · {1} memori dasar",
- "일어난 때 · {0}": "Terjadi pada · {0}"
+ "일어난 때 · {0}": "Terjadi pada · {0}",
+ "{0}쪽": "halaman {0}"
  }
 };

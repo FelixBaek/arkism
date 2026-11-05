@@ -5,8 +5,9 @@ window.ArkismMemoryTime = (ctx) => {
   const LANES = { all: "전체", facts: "사실", events: "겪은 일", observations: "정리된 관찰" };
   const FOUND = window.ArkismMemoryTime.FOUND;
   const laneOf = (h) => h.derived || h.collection !== "memories" ? "observations" : h.kind === "episodic" || h.kind === "raw" || (h.tags || []).some((t) => t.startsWith("session:")) ? "events" : "facts";
-  const { eventAt, span } = window.ArkismMemoryTime;
-  const day = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
+  const { eventAt, span, boundDay } = window.ArkismMemoryTime;
+  const DAY = { year: "numeric", month: "long", day: "numeric", weekday: "short" };
+  const day = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", DAY);
   const identity = () => JSON.stringify([state.server, state.token, state.scope]);
   const active = () => state.view === "memories" && state.memTab === "past";
   const date = (value) => new Date(value).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
@@ -88,7 +89,7 @@ window.ArkismMemoryTime = (ctx) => {
     const from = win ? Date.parse(win.from) : 0, to = win ? Date.parse(win.to) : 0;
     let last = ""; shownRows = shown.map(([h]) => h);
     for (const [h, at] of shown) {
-      const d = at.t ? day(at.t) : "날짜 모름";
+      const d = h.occurred?.from ? boundDay(h.occurred.from, DAY) : at.t ? day(at.t) : "날짜 모름"; // an occurred day as the server cut it (boundDay)
       if (d !== last) { const head = el("h3", "mem-time-day", d); head.setAttribute("data-no-i18n", ""); table.append(head); last = d; }
       const row = el("button", `original-row${selected === h ? " selected" : ""}`); row.type = "button";
       const body = el("span", "original-body"), text = el("strong", "", h.text || h.summary || "본문 없음"); text.setAttribute("data-no-i18n", "");
@@ -211,11 +212,24 @@ window.ArkismMemoryTime.eventAt = (h) => {
   for (const [v, what] of [[h.occurred?.from, "일어난 때"], [c.observed_at, "일어난 때"], [c.valid_from, "맞기 시작한 때"], [h.effective_at, "적용된 때"], [h.created_at, "저장한 때"], [h.updated_at, "저장한 때"]]) { const t = v ? Date.parse(v) : NaN; if (Number.isFinite(t)) return { t, what }; }
   return { t: 0, what: "" };
 };
-// An event span {from, to} (to is exclusive): one day, or "first ~ last day"; "" when there is none.
+// The calendar day of a server time in the offset it was written with ("…+09:00"): an occurred span is cut at the
+// midnights of the zone that read it, so the viewer's own zone must not move its days. iso: "YYYY-MM-DD" (a date input's
+// value), else the day in words (opts: toLocaleDateString's). shift: ms added first (−1 reads an exclusive end).
+window.ArkismMemoryTime.boundDay = (s, opts = { year: "numeric", month: "long", day: "numeric" }, shift = 0, iso = false) => {
+  const t = Date.parse(s || ""), m = /([+-])(\d\d):(\d\d)$/.exec(s || "");
+  if (!Number.isFinite(t)) return "";
+  const at = new Date(t + shift + (m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) * 6e4 : 0));
+  return iso ? at.toISOString().slice(0, 10) : at.toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { ...opts, timeZone: "UTC" });
+};
+// The viewer's midnight starting a "YYYY-MM-DD" day (plus days), written with the viewer's offset so boundDay reads it back
+// as that same day wherever it is shown.
+window.ArkismMemoryTime.dayStart = (day, plus = 0) => {
+  const [y, mo, d] = day.split("-").map(Number), date = new Date(Date.UTC(y, mo - 1, d + plus)).toISOString().slice(0, 10);
+  const off = -new Date(`${date}T00:00`).getTimezoneOffset(), p = (n) => String(Math.trunc(Math.abs(n))).padStart(2, "0");
+  return `${date}T00:00:00${off < 0 ? "-" : "+"}${p(off / 60)}:${p(off % 60)}`;
+};
+// An event span {from, to} ([from, to): the last day is to − 1 ms): one day, or "first ~ last day"; "" when there is none.
 window.ArkismMemoryTime.span = (o) => {
-  // the last day is counted from "from" in whole days, so a span cut at another zone's midnight does not spill a day
-  const a = Date.parse(o?.from || ""), days = Math.round((Date.parse(o?.to || "") - a) / 864e5), b = a + (days - 1) * 864e5;
-  if (!Number.isFinite(a)) return "";
-  const f = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric" });
-  return !(days > 1) ? f(a) : `${f(a)} ~ ${f(b)}`;
+  const { boundDay } = window.ArkismMemoryTime, a = boundDay(o?.from), b = o?.to && Date.parse(o.to) > Date.parse(o.from) ? boundDay(o.to, undefined, -1) : a;
+  return !a || !b || a === b ? a : `${a} ~ ${b}`;
 };

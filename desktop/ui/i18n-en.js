@@ -6724,3 +6724,5 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} parts removed · their candidates stay as they are",
   "{0} 승인 · 근거 기억 {1}개": "Approved {0} · {1} cited memories",
   "일어난 때 · {0}": "Happened · {0}" });
+Object.assign(window.ArkismI18nEN.strings, { "사람·도구": "People · tools" });
+Object.assign(window.ArkismI18nEN.patterns, { "{0}쪽": "page {0}" });

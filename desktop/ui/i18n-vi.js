@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Tạo bản nháp tóm tắt mới",
  "AI에게 요약 초안 쓰게 하기": "Nhờ AI viết bản nháp tóm tắt",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Đã tạo bản nháp tóm tắt. Bạn hãy đọc và duyệt nhé.",
- "확인을 기다리는 초안이 이미 있어요.": "Đã có một bản nháp đang chờ bạn xem."
+ "확인을 기다리는 초안이 이미 있어요.": "Đã có một bản nháp đang chờ bạn xem.",
+ "사람·도구": "Người · công cụ"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Ứng viên {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} phần bị thiếu · các ứng viên của phần đó vẫn được giữ nguyên",
  "{0} 승인 · 근거 기억 {1}개": "Đã duyệt {0} · {1} ký ức làm căn cứ",
- "일어난 때 · {0}": "Xảy ra lúc · {0}"
+ "일어난 때 · {0}": "Xảy ra lúc · {0}",
+ "{0}쪽": "trang {0}"
  }
 };

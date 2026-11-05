@@ -32,6 +32,9 @@ await p.addInitScript(([origin, theme, remote, gw, lang, winbar]) => { // GWTOKE
     if (cmd === "api") { const r = await fetch(a.base + a.path, { method: a.method, body: a.body == null ? undefined : (typeof a.body === "string" ? a.body : JSON.stringify(a.body)) }); return { status: r.status, body: await r.text() }; }
     throw new Error("preview: " + cmd);
   } } };
+  // The app opens a poppable window (data-popout) in its own OS window at once (popup-drag.js); the screenshot only sees
+  // this page, so no window opens here and the popup stays in the page, as it does when a window cannot open.
+  window.open = () => null;
   // WINBAR=1: a stand-in desktop window, so the 창 버튼 strip (window-controls.js) shows as in the app
   if (winbar) window.__TAURI__.window = { getCurrentWindow: () => ({ isMaximized: async () => false, onResized: async () => {}, minimize() {}, toggleMaximize: async () => {}, close() {} }) };
 }, [new URL(url).origin, theme || "", process.env.REMOTE || "", process.env.GWTOKEN || "", process.env.UILANG || "", process.env.WINBAR || ""]);

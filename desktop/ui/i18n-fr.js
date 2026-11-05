@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Créer un nouveau brouillon de résumé",
  "AI에게 요약 초안 쓰게 하기": "Demander à l'IA d'écrire un brouillon de résumé",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Un brouillon de résumé est prêt. Lisez-le, puis approuvez-le.",
- "확인을 기다리는 초안이 이미 있어요.": "Un brouillon attend déjà votre vérification."
+ "확인을 기다리는 초안이 이미 있어요.": "Un brouillon attend déjà votre vérification.",
+ "사람·도구": "Personnes · outils"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Candidat {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} parties manquantes · leurs candidats restent tels quels",
  "{0} 승인 · 근거 기억 {1}개": "Approuvé {0} · {1} souvenirs cités",
- "일어난 때 · {0}": "Survenu · {0}"
+ "일어난 때 · {0}": "Survenu · {0}",
+ "{0}쪽": "page {0}"
  }
 };

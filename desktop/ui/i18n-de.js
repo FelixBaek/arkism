@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Neuen Zusammenfassungsentwurf erstellen",
  "AI에게 요약 초안 쓰게 하기": "KI einen Zusammenfassungsentwurf schreiben lassen",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Der Zusammenfassungsentwurf ist fertig. Lies ihn durch und gib ihn frei.",
- "확인을 기다리는 초안이 이미 있어요.": "Es wartet bereits ein Entwurf auf deine Prüfung."
+ "확인을 기다리는 초안이 이미 있어요.": "Es wartet bereits ein Entwurf auf deine Prüfung.",
+ "사람·도구": "Personen · Tools"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Kandidat {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} fehlende Teile · ihre Kandidaten bleiben erhalten",
  "{0} 승인 · 근거 기억 {1}개": "{0} freigegeben · {1} zugrunde liegende Erinnerungen",
- "일어난 때 · {0}": "Passiert · {0}"
+ "일어난 때 · {0}": "Passiert · {0}",
+ "{0}쪽": "Seite {0}"
  }
 };

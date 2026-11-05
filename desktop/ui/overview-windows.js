@@ -804,17 +804,17 @@ window.ArkismOverviewWindows = (ctx, env) => {
       function paintReach() { for (const [val, b] of reachBtns) { b.classList.toggle("on", val === dr.reach); b.setAttribute("aria-pressed", String(val === dr.reach)); } whereNow.textContent = REACH_WHERE[dr.reach || kindReach] || REACH_WHERE.general; }
       if (rs) paintReach();
       // 일어난 때 (#3): the event days the server read from the content; the person fixes or empties them, and they go with 승인 / 고쳐서 저장
-      const day0 = (t) => { const x = new Date(t); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+      // the days as the server cut them ([from, to), in the bounds' own offset); a person's pick goes back at their own midnights
+      const { boundDay, dayStart } = window.ArkismMemoryTime;
       const oc = c.occurred, ocFrom = el("input"), ocTo = el("input");
       ocFrom.type = ocTo.type = "date"; ocFrom.setAttribute("aria-label", "일어난 첫날"); ocTo.setAttribute("aria-label", "일어난 마지막 날");
-      if (oc?.from) { ocFrom.value = day0(oc.from); ocTo.value = day0(Date.parse(oc.to) - 1); }
+      if (oc?.from) { ocFrom.value = boundDay(oc.from, undefined, 0, true); ocTo.value = boundDay(oc.to, undefined, -1, true) || ocFrom.value; }
       const ocWas = `${ocFrom.value}~${ocTo.value}`;
       const occurredExtra = () => { // unchanged sends nothing; emptied sends {} (clear); one day filled means that day
         if (`${ocFrom.value}~${ocTo.value}` === ocWas) return {};
         const a = ocFrom.value || ocTo.value, b = ocTo.value || ocFrom.value;
         if (!a) return { occurred: {} };
-        const to = new Date(`${b}T00:00`); to.setDate(to.getDate() + 1);
-        return { occurred: { from: new Date(`${a}T00:00`).toISOString(), to: to.toISOString() } };
+        return { occurred: { from: dayStart(a), to: dayStart(b, 1) } };
       };
       const ocRow = el("div", "ov-wide-chips"); ocRow.append(ocFrom, el("span", "", "~"), ocTo);
       sec(decide1, oc?.phrase ? `일어난 때 · 글의 "${oc.phrase}"를 보고 정했어요` : "일어난 때", ocRow, el("p", "", oc?.from ? "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요." : "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요."));
@@ -890,9 +890,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     search.addEventListener("input", () => { q = search.value.trim(); paint(); });
     function detailFor(m) {
       detail.replaceChildren(); if (!m) return;
-      const h = el("div", "ov-detail-head"); h.append(tagEl(kind(m.kind)), el("small", "", `${m.created_by_type === "agent" ? "AI가 모음" : "사람이 만듦"} · ${ago(m.created_at)}`));
-      const when = window.ArkismMemoryTime.span(m.occurred);
-      if (when) h.append(el("small", "", `일어난 때 ${when}`));
+      const when = window.ArkismMemoryTime.span(m.occurred), h = el("div", "ov-detail-head");
+      h.append(tagEl(kind(m.kind)), el("small", "", [m.created_by_type === "agent" ? "AI가 모음" : "사람이 만듦", ago(m.created_at), when && `일어난 때 ${when}`].filter(Boolean).join(" · ")));
       detail.append(h, el("h3", "", m.text));
       const sec = (title, ...nodes) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...nodes); detail.append(s); };
       const u = usage(m.id), wu = w?.items?.find((x) => x.id === m.id), f = el("div", "ov-detail-facts");

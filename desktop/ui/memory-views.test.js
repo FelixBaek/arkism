@@ -400,5 +400,19 @@ test("an occurred span reads as one day or a range (to is exclusive), and occurr
   assert.equal(span({ from: "2026-03-04T00:00:00Z", to: "2026-03-05T00:00:00Z" }), "2026년 3월 4일");
   assert.equal(span({ from: "2026-03-04T00:00:00Z", to: "2026-03-08T00:00:00Z" }), "2026년 3월 4일 ~ 2026년 3월 7일");
   assert.equal(span({ from: "2026-03-04T00:00:00Z" }), "2026년 3월 4일");
+  // the days are read in the bounds' own offset, whatever the viewer's zone (run under TZ=America/Los_Angeles too)
+  assert.equal(span({ from: "2026-03-04T00:00:00+09:00", to: "2026-03-05T00:00:00+09:00" }), "2026년 3월 4일");
+  assert.equal(span({ from: "2026-03-04T00:00:00+09:00", to: "2026-03-07T00:00:00+09:00" }), "2026년 3월 4일 ~ 2026년 3월 6일");
+  assert.equal(span({ from: "2026-02-28T00:00:00-05:00", to: "2026-03-02T00:00:00-05:00" }), "2026년 2월 28일 ~ 2026년 3월 1일");
+  assert.equal(span({ from: "2026-03-04T00:00:00Z", to: "2026-03-04T00:00:00Z" }), "2026년 3월 4일", "an empty span is its first day");
+  assert.equal(window.ArkismMemoryTime.boundDay("nope"), "");
+  // a picked day goes out at the viewer's own midnight with its offset and reads back as the same day
+  const { dayStart } = window.ArkismMemoryTime;
+  for (const d of ["2026-03-04", "2026-11-01", "2026-12-31"]) {
+    assert.match(dayStart(d), new RegExp(`^${d}T00:00:00[+-]\\d\\d:\\d\\d$`));
+    assert.equal(window.ArkismMemoryTime.boundDay(dayStart(d), undefined, 0, true), d);
+    assert.equal(window.ArkismMemoryTime.boundDay(dayStart(d, 1), undefined, -1, true), d);
+  }
+  assert.match(dayStart("2026-12-31", 1), /^2027-01-01T/);
   assert.equal(eventAt({ occurred: { from: "2026-03-04T00:00:00Z" }, created_at: "2026-05-01T00:00:00Z" }).what, "일어난 때");
 });

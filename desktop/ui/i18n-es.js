@@ -5573,7 +5573,8 @@
  "새 요약 초안 만들기": "Crear un nuevo borrador de resumen",
  "AI에게 요약 초안 쓰게 하기": "Pedir a la IA un borrador de resumen",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Ya hay un borrador de resumen. Léelo y apruébalo.",
- "확인을 기다리는 초안이 이미 있어요.": "Ya hay un borrador esperando revisión."
+ "확인을 기다리는 초안이 이미 있어요.": "Ya hay un borrador esperando revisión.",
+ "사람·도구": "Personas · herramientas"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -6753,6 +6754,7 @@
  "후보 {0} · {1}": "Candidato {0} · {1}",
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} partes omitidas · sus candidatos se conservan",
  "{0} 승인 · 근거 기억 {1}개": "Aprobado {0} · {1} recuerdos de base",
- "일어난 때 · {0}": "Ocurrió · {0}"
+ "일어난 때 · {0}": "Ocurrió · {0}",
+ "{0}쪽": "página {0}"
  }
 };

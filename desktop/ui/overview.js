@@ -304,7 +304,8 @@ window.ArkismOverview = (ctx) => {
       chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
       chip("기억 관리", "숫자·태그", () => openWide("ops")),
-      chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
+      chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map")), // the map draws at most MAP_NODES (#181)
+      chip("자주 나온 이름", "사람·도구", () => go("memories", "entities"))); // memory-insight.js: names, their summaries and summary drafts
   }
 
   // Random firing: three nerve paths every 520 ms; stops itself once the screen is gone or hidden.
