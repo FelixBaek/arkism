@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -284,5 +285,77 @@ func TestWikiSearchVectorLaneAndFallback(t *testing.T) {
 	plain, err := f.svc.SearchWiki(testCtx, f.agent, query)
 	if err != nil || len(plain.Items) != len(before.Items) || plain.Items[0].ID != before.Items[0].ID || plain.Items[0].Score != before.Items[0].Score || plain.Items[0].Reason != "text_match" {
 		t.Fatalf("fallback: %+v vs %+v %v", plain, before, err)
+	}
+}
+
+// Each recalled memory is a separate external transfer: a restricted memory,
+// one derived from a restricted source and an unclassified one never reach the
+// model even though the fenced prompt as a whole looks safe.
+func TestWikiFromMemoriesTransferIsCheckedPerMemory(t *testing.T) {
+	f, llm := wikiMemoryFixture(t)
+	ok := f.activeMemory("Bleed allowed fact", "bleed")
+	restricted := f.activeMemory("Bleed restricted fact", "bleed")
+	derived := f.activeMemory("Bleed derived fact", "bleed")
+	unclassified := f.activeMemory("Bleed unclassified fact", "bleed")
+	set := func(col string, r Record, sensitivity string) {
+		r.Sensitivity = sensitivity
+		f.repo.store[col][recKey(r.Scope, r.ID)] = r
+	}
+	set("memories", restricted, "restricted")
+	set("memories", unclassified, "")
+	// Same-text fixture sources share one id; give the derived memory its own.
+	src := f.create(f.human, "sources", sourceInput(CreateInput{Scope: scopeA, Text: "a restricted original"}))
+	set("sources", src, "restricted")
+	derived.Sources = refs(src)
+	set("memories", derived, derived.Sensitivity)
+	llm.answers = wikiMemoryAnswers(ok.ID)
+	dry, err := f.svc.BuildWikiFromMemories(testCtx, f.human, WikiMemoryBuildInput{Scope: ok.Scope, Query: "bleed", DryRun: true})
+	if err != nil || !slices.Equal(dry.MemoryIDs, []string{ok.ID}) {
+		t.Fatalf("recalled: %+v %v", dry.MemoryIDs, err)
+	}
+	for _, p := range llm.prompts {
+		for _, bad := range []string{"restricted fact", "derived fact", "unclassified fact"} {
+			if strings.Contains(p, bad) {
+				t.Fatalf("%q sent to the model", bad)
+			}
+		}
+	}
+
+	// A runner the policy does not let send content out recalls nothing.
+	who := f.auth.actors[f.human]
+	who.external = false
+	f.auth.actors[f.human] = who
+	if _, err = f.svc.BuildWikiFromMemories(testCtx, f.human, WikiMemoryBuildInput{Scope: ok.Scope, Query: "bleed", DryRun: true}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("no transfer permission: %v", err)
+	}
+}
+
+// Past the row window the tree says it is truncated, and a slug rename is
+// refused because an inbound link could be outside the window.
+func TestWikiTreeAndRenameAtTheRowCap(t *testing.T) {
+	f, scope := wikiPrintReviewed(t)
+	bleed := wikiPageID(scope, "bleed")
+	tree, err := f.svc.WikiTree(testCtx, f.human, scope)
+	if err != nil || tree.Truncated {
+		t.Fatalf("small tree: %+v %v", tree.Truncated, err)
+	}
+	for i := range wikiListLimit + 1 {
+		id := fmt.Sprintf("filler-%d", i)
+		filler := Record{ID: id, Scope: scope, Kind: "wiki_link", Status: "active", Revision: 1,
+			Wiki: &WikiRecord{Link: &WikiLink{FromID: id, ToID: id + "-to"}}}
+		if err = f.repo.Insert(testCtx, colWikiLinks, filler); err != nil {
+			t.Fatal(err)
+		}
+		filler.Kind, filler.Wiki = "wiki_folder", &WikiRecord{Folder: &WikiFolder{Path: id}}
+		if err = f.repo.Insert(testCtx, colWikiPages, filler); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if tree, err = f.svc.WikiTree(testCtx, f.human, scope); err != nil || !tree.Truncated {
+		t.Fatalf("full tree not marked: %v", err)
+	}
+	page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, bleed)
+	if _, err = f.svc.PatchWikiPage(testCtx, f.human, bleed, WikiPagePatchInput{Scope: scope, ExpectedRevision: page.Revision, Title: "Bleed Margin"}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("rename past the link window: %v", err)
 	}
 }

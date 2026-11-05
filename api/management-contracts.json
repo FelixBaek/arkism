@@ -820,7 +820,7 @@
       "response": "WikiMemoryBuildResult",
       "summary": "Wiki: build_from_memories",
       "query": {},
-      "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. Answers model_not_configured (503) when no wiki model is set.",
+      "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. Answers model_not_configured (503) when no wiki model is set. topic and entity_name are search text like query (no cluster or entity lookup). The job runner token recalls the memories with its own permissions: it needs search and context read on memories in the scope and external transfer to external:wiki-llm; each memory is checked on its own (restricted or unclassified memories, memories with restricted sources and secrets are left out, private spans are masked) and a run that may send none fails with not_found.",
       "required_body": [
         "scope"
       ]
@@ -845,7 +845,7 @@
       "response": "WikiPageView",
       "summary": "Wiki: move or rename a page",
       "query": {},
-      "description": "A person moves a page to a folder (\"\" is the root) and/or renames it, with matching expected_revision. A rename that changes the slug gives the page a new id and answers 409 while reviewed pages still link to it or the new id is taken. The body text is not changed.",
+      "description": "A person moves a page to a folder (\"\" is the root) and/or renames it, with matching expected_revision. A rename that changes the slug gives the page a new id and answers 409 while reviewed pages still link to it, the new id is taken, or the scope has more than 1,000 link rows to check. The body text is not changed.",
       "required_body": [
         "scope",
         "expected_revision"
@@ -858,7 +858,7 @@
       "response": "WikiTree",
       "summary": "Wiki: tree",
       "query": {},
-      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records; truncated is true when newer rows filled the window and older ones were left out. Unknown or repeated query parameters are rejected."
     },
     {
       "method": "post",

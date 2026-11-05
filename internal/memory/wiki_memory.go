@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	wikiLLMDestination  = "external:wiki-llm"
 	wikiMemoryMaxRecall = 40
 	wikiMemoryMaxQuery  = 512
 )
@@ -188,7 +189,8 @@ func (s *Service) buildWikiFromMemories(ctx context.Context, token string, d Dec
 // wikiMemorySource recalls live memories for the query through the normal
 // search path (so the caller's search permission applies) and fences each as
 // "[mem:ID] summary: text". Private spans are masked; memories that are
-// restricted, erased or carry a secret are left out.
+// erased, carry a secret or fail the per-record external transfer check
+// (restricted or unclassified, restricted sources, policy) are left out.
 func (s *Service) wikiMemorySource(ctx context.Context, token string, scope Scope, query string) (string, []string, error) {
 	bundle, err := s.Search(ctx, token, SearchInput{Scope: scope, Query: query, Limit: wikiMemoryMaxRecall, MaxChars: 64000})
 	if err != nil {
@@ -201,11 +203,15 @@ func (s *Service) wikiMemorySource(ctx context.Context, token string, scope Scop
 			continue
 		}
 		r, err := s.Repo.Get(ctx, colMemories, scope, hit.ID)
-		if err != nil || !live(r) || r.ContentErased || r.Sensitivity == "restricted" {
+		if err != nil || !live(r) || r.ContentErased {
 			continue
 		}
 		line := "[mem:" + r.ID + "] " + redactSessionPrivate(strings.TrimSpace(r.Summary+": "+r.Text)) + "\n"
-		if containsSecret(line) || !safeTransfer(line) || utf8.RuneCountInString(b.String()+line) > wikiMaxSourceRunes {
+		if containsSecret(line) || utf8.RuneCountInString(b.String()+line) > wikiMaxSourceRunes {
+			continue
+		}
+		// Each memory leaves the server on its own: classification, source lineage and policy per record.
+		if _, err = s.authorizeTransfer(ctx, token, "context:read", scope, r.ID, r.Sensitivity, wikiLLMDestination, line, r.Sources); err != nil {
 			continue
 		}
 		b.WriteString(line)

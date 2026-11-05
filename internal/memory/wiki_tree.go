@@ -60,6 +60,8 @@ type WikiTree struct {
 	Folders   []WikiTreeFolder `json:"folders"`
 	Pages     []WikiTreePage   `json:"pages"`
 	Authority string           `json:"authority"`
+	// Truncated: the scope has more than wikiListLimit wiki rows; only the newest are listed.
+	Truncated bool `json:"truncated"`
 }
 
 // normalizeWikiFolder trims spaces and outer slashes; "" is the root. A
@@ -132,16 +134,21 @@ func (s *Service) CreateWikiFolder(ctx context.Context, token string, in WikiFol
 }
 
 // WikiTree lists folders and pages; people see drafts, other roles only
-// servable reviewed pages. Bounded by wikiListLimit rows like ListWikiPages.
+// servable reviewed pages. Bounded by wikiListLimit rows like ListWikiPages;
+// Truncated says when rows were left out.
 func (s *Service) WikiTree(ctx context.Context, token string, scope Scope) (WikiTree, error) {
 	out := WikiTree{Folders: []WikiTreeFolder{}, Pages: []WikiTreePage{}, Authority: wikiAuthority}
 	d, err := s.wikiAuthorize(ctx, token, "read:"+colWikiPages, scope, "", "")
 	if err != nil {
 		return out, err
 	}
-	rows, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit)
+	rows, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit+1)
 	if err != nil {
 		return out, err
+	}
+	// shortcut: no cursor, the newest wikiListLimit rows; add one when wikis outgrow it.
+	if len(rows) > wikiListLimit {
+		rows, out.Truncated = rows[:wikiListLimit], true
 	}
 	counts := map[string]int{}
 	for _, r := range rows {
@@ -276,9 +283,13 @@ func (s *Service) wikiRenameFree(ctx context.Context, tx Tx, scope Scope, from, 
 	} else if !errors.Is(err, ErrNotFound) {
 		return err
 	}
-	links, err := s.Repo.ListRecords(ctx, scope, colWikiLinks, wikiListLimit)
+	links, err := s.Repo.ListRecords(ctx, scope, colWikiLinks, wikiListLimit+1)
 	if err != nil {
 		return err
+	}
+	// A full window may hide an inbound link: refuse rather than leave one dangling.
+	if len(links) > wikiListLimit {
+		return ErrConflict
 	}
 	for _, l := range links {
 		if l.Wiki != nil && l.Wiki.Link != nil && l.Wiki.Link.ToID == from && l.Wiki.Link.FromID != from {

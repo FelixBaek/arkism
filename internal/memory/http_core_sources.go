@@ -2,7 +2,6 @@ package memory
 
 import (
 	"net/http"
-	"strconv"
 )
 
 func registerSourcesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
@@ -45,11 +44,7 @@ func registerSourcesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetri
 			respond(w, nil, err)
 			return
 		}
-		w.Header().Set(headerContentType, "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="artifact.bin"`)
-		w.Header().Set("Content-Length", strconv.Itoa(len(content)))
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(content)
+		writeAttachment(w, "application/octet-stream", "artifact.bin", content)
 	})
 	mux.HandleFunc("POST /v1/sources/ingest", func(w http.ResponseWriter, r *http.Request) {
 		if bearer(r) == "" {
