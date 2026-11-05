@@ -124,15 +124,86 @@ func embeddingProvider(embedder Embedder) string {
 }
 
 func (s *Service) beginProviderCall(ctx context.Context, scope Scope, operation, provider, model string) (Record, error) {
-	if s.Repo == nil || !validScope(scope) || operation == "" || provider == "" || model == "" {
-		return Record{}, ErrUnavailable
-	}
-	now := time.Now().UTC()
-	r := Record{ID: ID(), Scope: scope, Kind: providerUsageKind, Status: JobStatusPending, Revision: 1, Cost: &ProviderCost{Operation: operation, Provider: provider, Model: model, Requests: 1}, CreatedAt: now, UpdatedAt: now, CreatedBy: "memoryd", CreatedByType: "service"}
-	if err := s.Repo.Insert(ctx, colProviderUsage, r); err != nil {
+	rows, err := s.reserveProviderCalls(ctx, scope, operation, provider, model, 1, callCap{})
+	if err != nil {
 		return Record{}, err
 	}
-	return r, nil
+	return rows[0], nil
+}
+
+// callCap is a daily call limit: the scope's provider calls of this UTC day whose
+// operation starts with prefix. The zero cap limits nothing.
+type callCap struct {
+	prefix string
+	limit  int
+}
+
+// operationCap is the daily cap a metered operation reserves under: the server model's
+// wiki_ operations (wiki, extraction, media) share one; reflect and model rerank have their own.
+func operationCap(operation string) callCap {
+	switch {
+	case strings.HasPrefix(operation, "wiki_"):
+		return callCap{prefix: "wiki_", limit: wikiDailyCallLimit}
+	case operation == reflectOperation:
+		return callCap{prefix: reflectOperation, limit: reflectDailyCallLimit}
+	case operation == modelRerankOperation:
+		return callCap{prefix: modelRerankOperation, limit: modelRerankDailyCalls}
+	}
+	return callCap{}
+}
+
+// providerLedgerLocker serializes capped reservations of one scope until the transaction ends.
+type providerLedgerLocker interface {
+	LockProviderLedger(context.Context, Scope) error
+}
+
+// reserveProviderCalls is the one budget reservation: n pending provider_usage rows for
+// operation, all or none. Under a cap the rows are inserted only while the day's calls
+// under the cap's prefix plus n stay within its limit (else ErrModelBudget). Counting and
+// inserting are one step, under ledgerMu in this process and a transaction-scoped database
+// lock per scope with Postgres, so neither two requests nor two processes on one database
+// can both pass the cap. A row counts from insertion: a call in flight or a batch waiting
+// for its answers already holds its place until finishProviderCall settles it.
+func (s *Service) reserveProviderCalls(ctx context.Context, scope Scope, operation, provider, model string, n int, c callCap) ([]Record, error) {
+	if s.Repo == nil || !validScope(scope) || operation == "" || provider == "" || model == "" || n < 1 {
+		return nil, ErrUnavailable
+	}
+	now := time.Now().UTC()
+	rows := make([]Record, n)
+	for i := range rows {
+		rows[i] = Record{ID: ID(), Scope: scope, Kind: providerUsageKind, Status: JobStatusPending, Revision: 1, Cost: &ProviderCost{Operation: operation, Provider: provider, Model: model, Requests: 1}, CreatedAt: now, UpdatedAt: now, CreatedBy: "memoryd", CreatedByType: "service"}
+	}
+	if c.limit == 0 {
+		for _, r := range rows {
+			if err := s.Repo.Insert(ctx, colProviderUsage, r); err != nil {
+				return nil, err
+			}
+		}
+		return rows, nil
+	}
+	s.ledgerMu.Lock()
+	defer s.ledgerMu.Unlock()
+	return rows, s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		if l, ok := tx.(providerLedgerLocker); ok {
+			if err := l.LockProviderLedger(ctx, scope); err != nil {
+				return err
+			}
+		}
+		// Read after the lock, outside the transaction's snapshot: every reservation that held the lock before is committed.
+		calls, err := s.dailyModelCalls(ctx, scope, c.prefix, now)
+		if err != nil {
+			return err
+		}
+		if calls+n > c.limit {
+			return ErrModelBudget
+		}
+		for _, r := range rows {
+			if err = tx.Insert(ctx, colProviderUsage, r); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Service) finishProviderCall(ctx context.Context, reserved Record, usage ProviderUsage, success bool) error {

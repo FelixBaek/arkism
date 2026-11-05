@@ -320,7 +320,7 @@ func (s *Service) readImages(ctx context.Context, token string, d Decision, f up
 		if err := s.authorizeMedia(ctx, token, d, f.Scope, wikiDestination, f.Name, mime, img); err != nil {
 			return nil, err
 		}
-		text, err := s.budgetedCall(ctx, f.Scope, budget, fileVisionImageCost+wikiMaxCallTokens, func() (string, ProviderUsage, error) {
+		text, err := s.budgetedCall(budget, fileVisionImageCost+wikiMaxCallTokens, func() (string, ProviderUsage, error) {
 			// The trace keeps the image's digest, never its bytes.
 			m := modelCallSpec{scope: f.Scope, operation: fileVisionOperation, kind: "image", provider: wikiProvider, model: s.Wiki.Generator().Model,
 				prompt: fileVisionSystem + "\n\n" + fileVisionPrompt + "\n\n[image " + mime + " sha256:" + ContentHash(string(img)) + "]"}
@@ -370,7 +370,7 @@ func (s *Service) transcribeFile(ctx context.Context, token string, d Decision, 
 		return "", err
 	}
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
-	text, err := s.budgetedCall(ctx, f.Scope, budget, wikiMaxCallTokens, func() (string, ProviderUsage, error) {
+	text, err := s.budgetedCall(budget, wikiMaxCallTokens, func() (string, ProviderUsage, error) {
 		m := modelCallSpec{scope: f.Scope, operation: fileTranscribeOperation, kind: "transcribe", provider: transcribeProvider, model: s.Transcriber.Model(),
 			prompt: "[audio " + f.MIME + " sha256:" + ContentHash(string(f.Raw)) + "]"}
 		return s.ledgerCall(ctx, m, func(ctx context.Context) (string, ProviderUsage, error) {

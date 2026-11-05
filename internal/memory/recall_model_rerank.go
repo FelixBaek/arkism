@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 )
 
 // Model rerank: an opt-in lane where the server model (Service.Wiki) reorders the
@@ -126,10 +125,6 @@ func (s *Service) modelRerankOrder(ctx context.Context, token string, in SearchI
 		return "nothing_to_send", nil, nil
 	}
 	ledger := projectScope(in.Scope)
-	// shortcut: the cap is read from the newest ledger rows outside a transaction (as reflect's), so a burst may pass it slightly.
-	if calls, err := s.dailyModelCalls(ctx, ledger, modelRerankOperation, time.Now()); err != nil || calls >= modelRerankDailyCalls {
-		return "budget_exceeded", nil, nil
-	}
 	opts := RerankOptions{}
 	if in.RerankOptions != nil {
 		opts = *in.RerankOptions

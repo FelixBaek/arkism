@@ -407,12 +407,8 @@ func reflectFinish(run *reflectRun, text string, out ReflectOutput) (ReflectOutp
 // reflectCall is the budget gate, the transfer decision and one recorded model call.
 func (s *Service) reflectCall(ctx context.Context, token string, in ReflectInput, system, user string) (string, ProviderUsage, error) {
 	ledger := projectScope(in.Scope)
-	// shortcut: the cap is read outside a transaction from the newest ledger rows (as the wiki gate), so a burst may pass it slightly; move to a counter row if that matters.
-	calls, err := s.dailyModelCalls(ctx, ledger, reflectOperation, time.Now())
-	if err != nil {
-		return "", ProviderUsage{}, err
-	}
-	if calls >= reflectDailyCallLimit || utf8.RuneCountInString(system+user)/3 > reflectMaxPromptTokens {
+	// The daily call cap is reserved with the call's ledger row (operationCap).
+	if utf8.RuneCountInString(system+user)/3 > reflectMaxPromptTokens {
 		return "", ProviderUsage{}, ErrModelBudget
 	}
 	// The memories leave the server for the model: an explicit transfer decision.

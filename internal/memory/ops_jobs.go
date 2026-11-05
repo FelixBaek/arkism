@@ -100,13 +100,23 @@ func (s *Service) GetOperation(ctx context.Context, token string, scope Scope, i
 // lease: the revision moves on, so the holder's finish is refused and the
 // claim queries (which only take pending/retry/expired-running) skip it.
 func (s *Service) CancelOperation(ctx context.Context, token, id string, in OperationChangeInput) (OperationView, error) {
-	return s.changeOperation(ctx, token, id, in, "transition:jobs", "cancel:jobs", true, func(r *Record) (bool, error) {
+	var reserved map[string]string
+	out, err := s.changeOperation(ctx, token, id, in, "transition:jobs", "cancel:jobs", true, func(r *Record) (bool, error) {
 		if r.Status != JobStatusPending && r.Status != JobStatusRetry && r.Status != JobStatusRunning {
 			return false, ErrConflict
 		}
 		r.Status, r.LeaseToken, r.LeaseUntil, r.RunAt = JobStatusCancelled, "", time.Time{}, nil
+		reserved = nil
+		if r.Kind == fileExtractJobKind && r.FileExtract != nil && r.FileExtract.Batch != nil {
+			reserved, r.FileExtract.Batch = r.FileExtract.Batch.Reserved, nil // its answers are never filed now
+		}
 		return false, nil
 	})
+	if err == nil {
+		// The batch's reserved ledger rows close as unanswered calls, so they stop holding the day's cap.
+		s.releaseExtractCalls(context.WithoutCancel(ctx), in.Scope, reserved)
+	}
+	return out, err
 }
 
 // RetryOperation requeues failed work with fresh attempts, at most

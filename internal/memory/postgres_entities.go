@@ -17,6 +17,15 @@ func (p *Postgres) LockNamedEntities(ctx context.Context, scope Scope) error {
 	return pgErr(err)
 }
 
+// LockProviderLedger serializes capped provider-call reservations of one scope until the transaction ends.
+func (p *Postgres) LockProviderLedger(ctx context.Context, scope Scope) error {
+	if checkScope(scope) != nil {
+		return ErrInvalid
+	}
+	_, err := p.q().Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "arkism.provider_ledger:"+structuredText(scope))
+	return pgErr(err)
+}
+
 // namedEntityLockKey is text Postgres accepts (no NUL byte); the scope JSON keeps scopes apart.
 func namedEntityLockKey(scope Scope) string { return "arkism.named_entities:" + structuredText(scope) }
 

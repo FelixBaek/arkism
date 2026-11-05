@@ -396,6 +396,19 @@ func TestExtractBatchesReserveTheDailyCapAtomically(t *testing.T) {
 	if pending != 1 || budget != 1 || llm.batches != 1 || len(f.repo.rows(colProviderUsage)) != n {
 		t.Fatalf("pending %d budget %d batches %d ledger %d views %+v", pending, budget, llm.batches, len(f.repo.rows(colProviderUsage)), views)
 	}
+	// Cancelling the waiting batch closes its reserved rows: none stays pending.
+	for i, v := range views {
+		if extractBatchWaiting(v) {
+			if _, err := f.svc.CancelOperation(testCtx, f.human, ids[i], OperationChangeInput{Scope: scopeA}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, r := range f.repo.rows(colProviderUsage) {
+		if r.Status == JobStatusPending {
+			t.Fatalf("a cancelled batch left a pending ledger row %+v", r)
+		}
+	}
 }
 
 func TestExtractBatchResumesOnOwnerPollAndDropsWhenTurnedOff(t *testing.T) {

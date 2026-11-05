@@ -198,30 +198,28 @@ func TestParallelConsolidationKeepsDailyCap(t *testing.T) {
 	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{Consolidation: block}, false); err != nil {
 		t.Fatal(err)
 	}
-	for range wikiDailyCallLimit - 1 {
+	for range wikiDailyCallLimit - 2 {
 		r, err := f.svc.beginProviderCall(testCtx, scopeA, "wiki_write", wikiProvider, "fake-wiki")
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = f.svc.finishProviderCall(testCtx, r, ProviderUsage{Provider: wikiProvider, Model: "fake-wiki", Requests: 1}, true)
 	}
-	// A call in flight is not in the ledger yet; the reservation still counts it.
-	release, err := f.svc.reserveWikiCall(testCtx, scopeA)
-	if err != nil {
+	// A call in flight holds its pending ledger row; the reservation counts it.
+	if _, err := f.svc.reserveProviderCalls(testCtx, scopeA, "wiki_write", wikiProvider, "fake-wiki", 1, operationCap("wiki_write")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.reserveWikiCall(testCtx, scopeA); !errors.Is(err, errWikiBudget) {
-		t.Fatalf("the last call is taken while one is in flight: %v", err)
+	if _, err := f.svc.reserveProviderCalls(testCtx, scopeA, "wiki_write", wikiProvider, "fake-wiki", 2, operationCap("wiki_write")); !errors.Is(err, ErrModelBudget) {
+		t.Fatalf("two calls are reserved with one left: %v", err)
 	}
-	release()
 	llm := &syncWikiLLM{reply: `{"observations": []}`}
 	f.svc.Wiki = llm
-	_, err = f.consolidate(f.human, false)
+	_, err := f.consolidate(f.human, false)
 	if !errors.Is(err, ErrModelBudget) || llm.calls != 1 {
 		t.Fatalf("four parallel asks with one call left make one call: calls=%d %v", llm.calls, err)
 	}
-	if calls, _ := f.svc.wikiDailyCalls(testCtx, scopeA, time.Now()); calls != wikiDailyCallLimit || len(f.svc.wikiInflight) != 0 {
-		t.Fatalf("the ledger ends at the cap and nothing stays reserved: %d %v", calls, f.svc.wikiInflight)
+	if calls, _ := f.svc.wikiDailyCalls(testCtx, scopeA, time.Now()); calls != wikiDailyCallLimit {
+		t.Fatalf("the ledger ends at the cap: %d", calls)
 	}
 }
 

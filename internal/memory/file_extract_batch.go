@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -136,9 +135,13 @@ func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decisi
 		system, user := extractPrompt(job.Chunks[i].Text, job)
 		prompts, ids = append(prompts, BatchPrompt{ID: extractBatchID(i), System: system, User: user}), append(ids, extractBatchID(i))
 	}
-	reserved, err := s.reserveExtractCalls(ctx, scope, ids)
+	rows, err := s.reserveProviderCalls(ctx, scope, fileExtractOperation, wikiProvider, s.Wiki.Generator().Model, len(ids), operationCap(fileExtractOperation))
 	if err != nil {
 		return err
+	}
+	reserved := map[string]string{}
+	for i, id := range ids {
+		reserved[id] = rows[i].ID
 	}
 	id, err := b.SubmitBatch(ctx, prompts, wikiMaxCallTokens)
 	if err != nil {
@@ -147,35 +150,6 @@ func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decisi
 	}
 	job.Batch = &ExtractBatch{ID: id, SubmittedAt: time.Now().UTC(), Reserved: reserved}
 	return errExtractBatchPending
-}
-
-// extractBudgetMu makes counting the day's calls and reserving a batch's rows one step, so
-// two batches submitted at once cannot both pass the cap.
-// shortcut: guards one server process; several processes on one database would need a database lock.
-var extractBudgetMu sync.Mutex
-
-// reserveExtractCalls reserves one pending ledger row per prompt id, all or none, within
-// the day's call cap; the rows count against the cap from now on.
-func (s *Service) reserveExtractCalls(ctx context.Context, scope Scope, ids []string) (map[string]string, error) {
-	extractBudgetMu.Lock()
-	defer extractBudgetMu.Unlock()
-	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
-	if err != nil {
-		return nil, err
-	}
-	if calls+len(ids) > wikiDailyCallLimit {
-		return nil, ErrModelBudget
-	}
-	out := map[string]string{}
-	for _, id := range ids {
-		r, err := s.beginProviderCall(ctx, scope, fileExtractOperation, wikiProvider, s.Wiki.Generator().Model)
-		if err != nil {
-			s.releaseExtractCalls(ctx, scope, out)
-			return nil, err
-		}
-		out[id] = r.ID
-	}
-	return out, nil
 }
 
 // releaseExtractCalls closes reserved rows whose prompts were never answered as failed calls.

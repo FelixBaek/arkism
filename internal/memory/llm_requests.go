@@ -77,10 +77,11 @@ type modelCallSpec struct {
 // failure (filed as unsuccessful); err is a ledger failure, and with a ledger
 // failure before the call the call is not made.
 func meteredCall[T any](ctx context.Context, s *Service, m modelCallSpec, call func(context.Context) (T, ProviderUsage, error)) (out T, usage ProviderUsage, callErr, err error) {
-	reserved, err := s.beginProviderCall(ctx, m.scope, m.operation, m.provider, m.model)
+	rows, err := s.reserveProviderCalls(ctx, m.scope, m.operation, m.provider, m.model, 1, operationCap(m.operation))
 	if err != nil {
 		return out, ProviderUsage{}, nil, err
 	}
+	reserved := rows[0]
 	ctx, sp := startSpan(ctx, "model."+m.kind)
 	start := time.Now()
 	out, usage, callErr = call(ctx)
