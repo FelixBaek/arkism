@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -16,9 +17,11 @@ import (
 // when no hand-tuned rule matched, so the 27 hand-tuned languages and their false-positive
 // guards decide first. Phrases are matched as whole words, not regexps:
 //   - a month name needs a day (1..31) right before or after it, or a 4-digit year next to it;
-//   - a one-word relative or weekday phrase needs at least cldrSingleMin letters and must
-//     not be a hand-tuned stop word or month name ("mars", "jana");
-//   - a one-word Latin "this <weekday>" is the bare weekday name in some locales ("monday"), so it is skipped;
+//   - a one-word phrase (month names too: "out", "here", "masa") needs at least cldrSingleMin
+//     letters and must not be a hand-tuned stop word or month name ("mars", "jana") or a
+//     known false friend (cldrFalseFriends);
+//   - a one-word Latin-script "this <weekday>" is the bare weekday name in some locales
+//     ("monday", "måndag"), so it is skipped;
 //   - phrases two tables (or two locales) read differently were dropped.
 //
 // shortcut: scripts written without spaces (Lao, Khmer, Burmese) are not split into words
@@ -84,7 +87,7 @@ func cldrLine(line string, guard map[string]bool) (string, cldrTimeEntry, bool) 
 	switch {
 	case e.kind == 'a' != (e.numAt >= 0), guard[one] && (single || e.kind == 'm'):
 		return "", cldrTimeEntry{}, false
-	case single && e.kind != 'm' && utf8.RuneCountInString(one) < cldrSingleMin, single && e.kind == 't' && isASCIIWord(one):
+	case single && utf8.RuneCountInString(one) < cldrSingleMin, single && e.kind == 't' && isLatinWord(one), cldrFalseFriends[one]:
 		return "", cldrTimeEntry{}, false
 	}
 	return one, e, true
@@ -173,9 +176,14 @@ func cldrMonthSpan(raw []string, at, n, month int, now time.Time) (time.Time, ti
 	return time.Time{}, time.Time{}, false
 }
 
-func isASCIIWord(s string) bool {
+// cldrFalseFriends are CLDR time words that are ordinary words in a common language
+// ("hitte" is Dutch for heat, "danes" English, "kamari"/"wingi" Swahili).
+// shortcut: hand-picked from a multilingual corpus test, extend it when a new collision is reported.
+var cldrFalseFriends = map[string]bool{"hitte": true, "danes": true, "kamari": true, "wingi": true}
+
+func isLatinWord(s string) bool {
 	for _, r := range s {
-		if r >= utf8.RuneSelf {
+		if unicode.IsLetter(r) && !unicode.Is(unicode.Latin, r) {
 			return false
 		}
 	}
