@@ -493,6 +493,27 @@ func citedSensitivity(members []Record, cited []Ref) string {
 	return out
 }
 
+// citedOccurred spans the event days the cited memories state, so an observation is dated like its notes.
+func citedOccurred(members []Record, cited []Ref) *RecallTimeWindow {
+	var out *RecallTimeWindow
+	for _, m := range members {
+		o := m.Occurred
+		if o == nil || o.From.IsZero() || !namesMemory(cited, m.ID) {
+			continue
+		}
+		if out == nil {
+			out = &RecallTimeWindow{From: o.From, To: o.To}
+		}
+		if o.From.Before(out.From) {
+			out.From = o.From
+		}
+		if o.To.After(out.To) {
+			out.To = o.To
+		}
+	}
+	return out
+}
+
 func groupRefs(members []Record) map[string]Ref {
 	out := map[string]Ref{}
 	for _, m := range members {
@@ -655,7 +676,7 @@ func (s *Service) refreshStaleObservations(ctx context.Context, token string, d 
 			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: code, Target: r.ID})
 			continue
 		}
-		v, err := s.storeObservation(ctx, d, in, r, drafts[0], refs, citedSensitivity(members, refs))
+		v, err := s.storeObservation(ctx, d, in, r, drafts[0], refs, members)
 		if err != nil {
 			return err
 		}
@@ -751,7 +772,7 @@ func (s *Service) proposeGroup(ctx context.Context, d Decision, in ObservationCo
 			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: code})
 			continue
 		}
-		v, err := s.storeObservation(ctx, d, in, Record{}, draft, cited, citedSensitivity(group, cited))
+		v, err := s.storeObservation(ctx, d, in, Record{}, draft, cited, group)
 		if err != nil {
 			return err
 		}
@@ -762,7 +783,7 @@ func (s *Service) proposeGroup(ctx context.Context, d Decision, in ObservationCo
 
 // storeObservation writes a proposal: a new record, or a refresh of the stale
 // record prior. In a dry run it only returns what would be stored.
-func (s *Service) storeObservation(ctx context.Context, d Decision, in ObservationConsolidateInput, prior Record, draft observationDraft, cited []Ref, sensitivity string) (ObservationView, error) {
+func (s *Service) storeObservation(ctx context.Context, d Decision, in ObservationConsolidateInput, prior Record, draft observationDraft, cited []Ref, members []Record) (ObservationView, error) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	gen := s.Wiki.Generator()
 	gen.PromptVersion = obsPromptVersion
@@ -782,7 +803,7 @@ func (s *Service) storeObservation(ctx context.Context, d Decision, in Observati
 		DurabilityReason: o.DurabilityReason, Confidence: &confidence, Generator: &gen, By: d.PrincipalID, At: now})
 	rec.Observation, rec.Text, rec.Confidence, rec.Generator, rec.Status, rec.UpdatedAt = &o, content, &confidence, &gen, obsProposed, now
 	rec.StaleMark, rec.ApprovedBy, rec.Review, rec.VerificationStatus = nil, "", nil, VerificationCandidate
-	rec.Tags, rec.Sensitivity = nil, sensitivity
+	rec.Tags, rec.Sensitivity, rec.Occurred = nil, citedSensitivity(members, cited), citedOccurred(members, cited)
 	if instructionLike.MatchString(content) {
 		rec.Tags = []string{"review:instruction_like"}
 	}

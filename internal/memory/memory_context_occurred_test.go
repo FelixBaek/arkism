@@ -3,8 +3,8 @@ package memory
 import (
 	"encoding/json"
 	"errors"
-	"strings"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -123,5 +123,41 @@ func TestRecallWindowSQLReadsTheStoredEventSpan(t *testing.T) {
 		if v, _ := d.Occurred[k].(map[string]any); v["$date"] == nil || !strings.Contains(recallWindowSQL, "doc->'occurred'->'"+k+"'->>'$date'") {
 			t.Fatalf("%s: stored %v", k, d.Occurred)
 		}
+	}
+}
+
+func TestFileClaimsTakeOnlyTheExtractorsDates(t *testing.T) {
+	at := time.Date(2026, 11, 2, 1, 0, 0, 0, time.UTC)
+	in := CaptureInput{Event: CaptureEvent{OccurredAt: &at}}
+	session, _, _ := captureClaimKeys(in, CaptureClaim{Text: "어제 배포했다"}, scopeA)
+	file, _, _ := captureClaimKeys(in, CaptureClaim{Text: "어제 배포했다", locator: "chunk:1"}, scopeA)
+	dated, _, _ := captureClaimKeys(in, CaptureClaim{Text: "어제 배포했다", locator: "chunk:1", OccurredFrom: "2024-03-05"}, scopeA)
+	// a file is read later than it was written, so its relative words say nothing about the read day
+	if session.occurred == nil || file.occurred != nil || dated.occurred == nil || !dated.occurred.From.Equal(seoulDay(2024, 3, 5)) {
+		t.Fatal(session.occurred, file.occurred, dated.occurred)
+	}
+}
+
+func TestObservationSpansTheEventDaysOfItsCitedNotes(t *testing.T) {
+	m := func(id string, o *RecallTimeWindow) Record { return Record{ID: id, Occurred: o} }
+	members := []Record{
+		m("a", &RecallTimeWindow{Phrase: "어제", From: seoulDay(2026, 10, 25), To: seoulDay(2026, 10, 26)}),
+		m("b", &RecallTimeWindow{From: seoulDay(2026, 10, 20), To: seoulDay(2026, 10, 22)}),
+		m("c", nil),
+		m("x", &RecallTimeWindow{From: seoulDay(2026, 1, 1), To: seoulDay(2026, 1, 2)}), // not cited
+	}
+	cite := func(ids ...string) []Ref {
+		out := []Ref{}
+		for _, id := range ids {
+			out = append(out, Ref{Collection: colMemories, ID: id, Revision: 1})
+		}
+		return out
+	}
+	got := citedOccurred(members, cite("a", "b", "c"))
+	if got == nil || !got.From.Equal(seoulDay(2026, 10, 20)) || !got.To.Equal(seoulDay(2026, 10, 26)) || got.Phrase != "" {
+		t.Fatal(got)
+	}
+	if citedOccurred(members, cite("c")) != nil {
+		t.Fatal("undated notes give an undated observation")
 	}
 }

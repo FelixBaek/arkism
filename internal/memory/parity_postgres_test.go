@@ -201,3 +201,30 @@ func TestPostgresCausalReviewAndDocumentDelta(t *testing.T) {
 		t.Fatalf("unchanged re-upload called the model: %d %+v", len(llm.prompts), same.Delta)
 	}
 }
+
+// The window query reads the stored event span on overlap, half-open, and still finds
+// older file-extract memories whose event date sits in memory_context.valid_from.
+func TestPostgresRecallWindowReadsTheEventSpan(t *testing.T) {
+	f, p := pgFixture(t)
+	saved := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+	put := func(id string, o *RecallTimeWindow, mc *MemoryContext) {
+		src := f.create(f.human, "sources", sourceInput(CreateInput{Scope: scopeA, Text: "source for " + id}))
+		r := Record{ID: id, Scope: scopeA, Kind: "episodic", Text: id, Status: statusActive, ApprovedBy: "human-1", Revision: 1, Sources: refs(src), CreatedAt: saved, UpdatedAt: saved, Occurred: o, MemoryContext: mc}
+		if err := p.Insert(testCtx, colMemories, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("span", &RecallTimeWindow{From: seoulDay(2026, 10, 25), To: seoulDay(2026, 10, 28)}, nil)
+	put("before", &RecallTimeWindow{From: seoulDay(2026, 10, 25), To: seoulDay(2026, 10, 26)}, nil)
+	put("outside", &RecallTimeWindow{From: seoulDay(2026, 9, 1), To: seoulDay(2026, 9, 3)}, nil)
+	put("legacy", nil, &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: "fact", ValidFrom: "2026-10-27"})
+	hits, err := p.SearchMemoriesInWindow(testCtx, SearchInput{Scope: scopeA, Limit: 10}, seoulDay(2026, 10, 26), seoulDay(2026, 11, 2))
+	got := []string{}
+	for _, h := range hits {
+		got = append(got, h.ID)
+	}
+	slices.Sort(got)
+	if err != nil || !slices.Equal(got, []string{"legacy", "span"}) {
+		t.Fatal(got, err)
+	}
+}

@@ -6378,3 +6378,7 @@ Object.assign(window.ArkismI18nEN.strings, { "이름 언급": "Name mention", "�
   "나온 기억": "Memories", "처음": "First", "이 이름의 자세한 내용을 불러오지 못했어요.": "Couldn't load this name's details.", "다른 이름": "Other names", "정리한 내용": "Summary",
   "● 사람이 승인한 관찰이에요": "● An observation a person approved", "지도에 있는 기억과 이어지지 않았어요.": "Not linked to any memory on the map.", "원인→결과": "Cause → effect", "원인": "Cause" });
 Object.assign(window.ArkismI18nEN.patterns, { "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "An observation summarizing several memories. Based on {0} memories", "기억 {0}개에 나옴": "In {0} memories", "바탕 기억 {0}개": "Based on {0} memories" });
+// 일어난 때 on 승인 대기 (overview-windows.js)
+Object.assign(window.ArkismI18nEN.strings, { "일어난 첫날": "First day it happened", "일어난 마지막 날": "Last day it happened",
+  "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요.": "If it's wrong, fix or clear it. It's saved when you approve.", "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요.": "If it happened on a date, add it. You can leave it empty." });
+Object.assign(window.ArkismI18nEN.patterns, { "일어난 때 · 글의 \"{0}\"를 보고 정했어요": "Happened · set from \"{0}\" in the text" });

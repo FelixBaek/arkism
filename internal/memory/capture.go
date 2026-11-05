@@ -330,7 +330,11 @@ func captureClaimScope(ctx context.Context, in CaptureInput, c CaptureClaim) (co
 // time, resolves its event span against that time, and returns it with the evidence-bound key and the legacy key.
 func captureClaimKeys(in CaptureInput, c CaptureClaim, scope Scope) (CaptureClaim, string, string) {
 	c.MemoryContext = copyMemoryContext(c.MemoryContext)
-	c.occurred = resolveOccurred(c.OccurredFrom, c.OccurredTo, c.Text, in.Event.OccurredAt.In(usageZone()))
+	text := c.Text
+	if c.locator != "" { // a file's claim was read later than the file was written: "어제" there is not the day before the read
+		text = ""
+	}
+	c.occurred = resolveOccurred(c.OccurredFrom, c.OccurredTo, text, in.Event.OccurredAt.In(usageZone()))
 	if c.MemoryContext != nil {
 		at := in.Event.OccurredAt.UTC().Truncate(time.Millisecond)
 		c.MemoryContext.ObservedAt = &at
