@@ -193,3 +193,35 @@ func TestContextBuildIncludesDirectives(t *testing.T) {
 		t.Fatal(pack.Directives, pack.TokensUsed, err)
 	}
 }
+
+// A memory the external-transfer policy refuses never reaches the model; the
+// prompt-only preview, which stays with the caller, still shows it.
+func TestReflectSendsOnlyTransferableMemories(t *testing.T) {
+	f, llm := reflectFixture(t, "ok")
+	f.activeMemory("open needle fact", "needle")
+	r := f.activeMemory("restricted needle fact", "needle")
+	r.Sensitivity = "restricted"
+	f.repo.store[colMemories][recKey(r.Scope, r.ID)] = r
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle"})
+	if err != nil || len(llm.prompts) != 1 || strings.Contains(llm.prompts[0], "restricted needle") || !strings.Contains(llm.prompts[0], "open needle") {
+		t.Fatal("restricted memory sent", err, llm.prompts)
+	}
+	for _, h := range out.Retrieved {
+		if h.ID == r.ID {
+			t.Fatal("restricted memory listed")
+		}
+	}
+	preview, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true})
+	if err != nil || !strings.Contains(preview.Prompt.User, "restricted needle") || len(llm.prompts) != 1 {
+		t.Fatal("preview", err)
+	}
+}
+
+// A malformed answer still spent tokens; they count against the wiki job.
+func TestWikiCallCountsTokensOfRejectedAnswer(t *testing.T) {
+	f, _ := wikiFixture(t, string([]byte{0xff, 0xfe}))
+	job := &WikiJob{MaxTotalTokens: 1 << 20}
+	if _, err := f.svc.wikiCall(testCtx, projectScope(scopeA), job, "wiki_analyse", "s", "u"); !errors.Is(err, ErrUnavailable) || job.Tokens != 150 || job.Calls != 1 {
+		t.Fatal(err, job.Tokens, job.Calls)
+	}
+}

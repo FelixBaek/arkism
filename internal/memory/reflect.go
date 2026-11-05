@@ -18,6 +18,7 @@ import (
 const (
 	reflectOperation        = "reflect"
 	reflectPromptVersion    = "reflect-v1"
+	reflectDestination      = "external:wiki-llm"
 	reflectDailyCallLimit   = 100
 	reflectDefaultMaxTokens = 1024
 	reflectMaxTokens        = 4096
@@ -71,6 +72,10 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 		return ReflectOutput{}, ErrModelNotConfigured
 	}
 	search := SearchInput{Scope: in.Scope, Query: in.Query, Limit: in.Limit, Purpose: "answer"}
+	if !in.PromptOnly {
+		// The hits go to the server model: each one passes the external-transfer filter.
+		search.Destination = reflectDestination
+	}
 	if len(in.Tags) > 0 {
 		search.Filters = &SearchFilters{Tags: in.Tags}
 	}
@@ -103,6 +108,7 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 // reflectAnswer is the budget gate, the transfer decision and the model call.
 func (s *Service) reflectAnswer(ctx context.Context, token string, in ReflectInput, system, user string, hits []Hit, out ReflectOutput) (ReflectOutput, error) {
 	ledger := projectScope(in.Scope)
+	// shortcut: the cap is read outside a transaction from the newest ledger rows (as the wiki gate), so a burst may pass it slightly; move to a counter row if that matters.
 	calls, err := s.dailyModelCalls(ctx, ledger, reflectOperation, time.Now())
 	if err != nil {
 		return out, err
@@ -111,7 +117,7 @@ func (s *Service) reflectAnswer(ctx context.Context, token string, in ReflectInp
 		return out, ErrModelBudget
 	}
 	// The memories leave the server for the model: an explicit transfer decision.
-	t, err := s.authorizeAt(ctx, token, "generate:reflect", in.Scope, "", system+"\n"+user, "external:wiki-llm")
+	t, err := s.authorizeAt(ctx, token, "generate:reflect", in.Scope, "", system+"\n"+user, reflectDestination)
 	if err != nil {
 		return out, err
 	}

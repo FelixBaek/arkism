@@ -344,11 +344,9 @@ func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, opera
 	}
 	job.Calls++
 	text, usage, err := s.modelCall(ctx, scope, operation, system, user, wikiMaxCallTokens)
-	if err != nil {
-		return "", err
-	}
+	// Tokens a call spent count against the job even when its answer is rejected.
 	job.Tokens += max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens)
-	return text, nil
+	return text, err
 }
 
 // modelCall makes one call to the configured server model (Service.Wiki) and
