@@ -246,6 +246,9 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 		}
 	}
 	for job.Next < len(job.Chunks) {
+		if _, ok := answers[job.Next]; answers != nil && !ok {
+			return s.runExtractJob(ctx, token, d, r) // the batch ended before the job: send the next one
+		}
 		ids, skipped, runErr := s.nextExtractChunk(ctx, token, d, r.Scope, budget, job, answers)
 		job.Calls, job.Tokens = job.Calls+budget.Calls, job.Tokens+budget.Tokens
 		budget.Calls, budget.Tokens = 0, 0
@@ -319,7 +322,7 @@ func (s *Service) extractKnowledge(ctx context.Context, token, id string, in Kno
 	if err = s.defendSpace(ctx, "", defenseGuard{action: "write:memory_candidates"}, in.Scope, &text); err != nil {
 		return FileMemoriesResult{}, err
 	}
-	chunks, redacted, err := extractFileChunks([]string{text}, false, extractChunkRunes(plan.Settings))
+	chunks, redacted, err := extractFileChunks([]string{text}, false, plan.Settings)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

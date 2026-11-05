@@ -318,6 +318,17 @@ wiki. What a person approves and how is described in
    and its upload jobs, rejects its waiting candidates (audited) and leaves
    approved memories and their evidence in place. An agent's document list
    shows only the documents it uploaded.
+   The list takes `from` and `to` (RFC 3339) to keep documents first added
+   in that period. `GET /v1/files/memories/documents/{id}/text` (people only)
+   shows a document's text; `PUT` on the same path (the uploader) replaces it
+   and extracts only the chunks that changed, spending model calls like an
+   upload and only creating candidates. `POST /v1/files/memories/documents/export`
+   (people with the space export permission) zips up to 200 picked documents
+   (8 MiB at most) and `POST /v1/files/memories/documents/import` restores such
+   a zip without a model call. A space export takes `document_ids` to carry
+   only some documents, and an import's `document_conflict` (zip import:
+   `conflict`) says what a document of the same name does: `replace` (the
+   default, as before), `skip`, or `new_id` (keep both).
 8. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`,
    `MEMORY_BLOB_SHAREDKEY_*` or `MEMORY_BLOB_SERVICE_ACCOUNT_*` set, attached files live in the bucket, not in
    `MEMORY_BLOB_DIRECTORY`. The server backup does not copy the bucket; with the
@@ -599,7 +610,14 @@ Three space settings blocks (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`
 
 - `reflect_default_options`: `budget` (`low`, `mid`, `high`), `fact_types`, `exclude_mental_models` and `tools` (token caps per reflect tool) for requests that leave them unset. `tag_scoped_directives: true` (opt-in) applies a tagged directive only to a reflect whose tags share one of its tags; a request's `apply_all_directives` turns that off.
 - `mental_model_defaults`: the `trigger` a mental model created without a refresh mode takes, and a space-wide `min_interval`.
+- `recall_budget`: how many records reflect and mental-model refreshes recall for each budget level when the call sets no limit. `function: fixed` (the default) takes `fixed_low`/`fixed_mid`/`fixed_high` (0-50; 0 keeps the shipped count: low 5 and high 20 for reflect, 10/20/40 for mental models); `adaptive` takes `round(max_tokens x adaptive_<level>)` (ratios 0-1) clamped to `min`..`max` (0-50; defaults 1 and 50). Reflect reads at most 20. Unset keeps today's behaviour.
 - `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size` and `parallel` (1-4). More scopes mean more model calls per consolidation run, all counted against the daily limit; one run or preview builds at most 1000 scopes.
+
+Three extraction settings (plain fields, inherited one by one; the first two also go in `extraction_strategies`) keep today's behaviour unless set:
+
+- `extraction_batch_size` (0-1000, 0 = all chunks): with `MEMORY_EXTRACT_BATCH=1`, how many chunks one provider batch sends; the next batch goes out when the answers of the last one are in.
+- `extraction_images_per_chunk` (0-64, 0 = no cap): a chunk holding that many image readings ends there and the next image starts a new chunk.
+- `store_document_text` (default `true`, `null` inherits): `false` keeps only each chunk's locator as evidence and does not keep the uploaded original. Candidates are still extracted, but the document's text can no longer be shown, reprocessed or exported (409 or skipped `not_live`); editing the text with new text still works.
 
 The server cannot grant its own worker these actions (principals are registered with the schema owner's connection). A worker registered with `--actions '*'` needs nothing; a narrowed one is registered again with the scheduler's actions, for example:
 

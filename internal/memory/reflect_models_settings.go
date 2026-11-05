@@ -6,6 +6,8 @@ package memory
 // today's behaviour and spends no extra model calls.
 
 import (
+	"cmp"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -48,6 +50,61 @@ type ReflectToolBudget struct {
 	MentalModelsMaxTokens     int `json:"mental_models_max_tokens,omitempty" bson:"mental_models_max_tokens,omitempty"`
 	ReadMentalModelsMaxTokens int `json:"read_mental_models_max_tokens,omitempty" bson:"read_mental_models_max_tokens,omitempty"`
 	ExpandMaxTokens           int `json:"expand_max_tokens,omitempty" bson:"expand_max_tokens,omitempty"`
+}
+
+// SpaceRecallBudget maps a budget level (low, mid, high) to how many records a reflect or
+// mental-model recall reads when the request sets no limit. fixed takes the level's count;
+// adaptive takes round(recall tokens x the level's ratio), clamped to [min, max]. Unset
+// (the default) keeps the shipped mapping; an unset level keeps its shipped count.
+type SpaceRecallBudget struct {
+	Function     string  `json:"function,omitempty" bson:"function,omitempty"` // fixed (default) | adaptive
+	FixedLow     int     `json:"fixed_low,omitempty" bson:"fixed_low,omitempty"`
+	FixedMid     int     `json:"fixed_mid,omitempty" bson:"fixed_mid,omitempty"`
+	FixedHigh    int     `json:"fixed_high,omitempty" bson:"fixed_high,omitempty"`
+	AdaptiveLow  float64 `json:"adaptive_low,omitempty" bson:"adaptive_low,omitempty"`
+	AdaptiveMid  float64 `json:"adaptive_mid,omitempty" bson:"adaptive_mid,omitempty"`
+	AdaptiveHigh float64 `json:"adaptive_high,omitempty" bson:"adaptive_high,omitempty"`
+	Min          int     `json:"min,omitempty" bson:"min,omitempty"`
+	Max          int     `json:"max,omitempty" bson:"max,omitempty"`
+}
+
+// recallBudgetMax is the search limit ceiling a budget can reach.
+const recallBudgetMax = 50
+
+var recallBudgetFunctions = []string{"", "fixed", "adaptive"}
+
+func (b *SpaceRecallBudget) valid() bool {
+	if b == nil {
+		return true
+	}
+	counts := []int{b.FixedLow, b.FixedMid, b.FixedHigh, b.Min, b.Max}
+	ratios := []float64{b.AdaptiveLow, b.AdaptiveMid, b.AdaptiveHigh}
+	return slices.Contains(recallBudgetFunctions, b.Function) && (b.Min == 0 || b.Max == 0 || b.Min <= b.Max) &&
+		!slices.ContainsFunc(counts, func(n int) bool { return n < 0 || n > recallBudgetMax }) &&
+		!slices.ContainsFunc(ratios, func(r float64) bool { return r < 0 || r > 1 })
+}
+
+// limit is the records a recall at level reads, or shipped when the space sets no budget
+// (shipped is the caller's own count for the level; 0 means the search default).
+// tokens is the answer's max_tokens, the base of the adaptive ratio (round(tokens × ratio),
+// clamped to [min, max]).
+func (b *SpaceRecallBudget) limit(level string, tokens, shipped int) int {
+	if b == nil {
+		return shipped
+	}
+	idx := slices.Index(reflectBudgets, cmp.Or(level, "mid"))
+	if idx < 0 {
+		return shipped
+	}
+	if b.Function != "adaptive" {
+		return cmp.Or([]int{b.FixedLow, b.FixedMid, b.FixedHigh}[idx], shipped)
+	}
+	ratio := []float64{b.AdaptiveLow, b.AdaptiveMid, b.AdaptiveHigh}[idx]
+	if ratio == 0 {
+		return shipped
+	}
+	n := int(math.Round(float64(tokens) * ratio))
+	return max(cmp.Or(b.Min, 1), min(cmp.Or(b.Max, recallBudgetMax), n))
 }
 
 // SpaceMentalModelDefaults is the trigger a mental model created without a refresh mode takes,
@@ -96,7 +153,7 @@ type ObservationScopeLimit struct {
 }
 
 func validReflectModelSettings(c SpaceConfig) error {
-	if !c.ReflectDefaults.valid() || !c.MentalModelDefaults.valid() || !c.Consolidation.valid() || !c.RecallQuality.valid() {
+	if !c.ReflectDefaults.valid() || !c.MentalModelDefaults.valid() || !c.Consolidation.valid() || !c.RecallQuality.valid() || !c.RecallBudget.valid() {
 		return ErrInvalid
 	}
 	if c.Consolidation != nil && containsSecret(consolidationMissions(c.Consolidation)) {
@@ -173,12 +230,13 @@ func consolidationMissions(c *SpaceConsolidation) string {
 	return strings.Join(parts, "\n")
 }
 
-// resolveReflectModelBlocks fills the three blocks from the first layer that sets each.
+// resolveReflectModelBlocks fills the blocks from the first layer that sets each.
 func resolveReflectModelBlocks(out *SpaceConfig, layers []spaceLayer, src map[string]string) {
 	inheritSetting(out, layers, src, "reflect_default_options", func(c *SpaceConfig) **SpaceReflectDefaults { return &c.ReflectDefaults }, func(v *SpaceReflectDefaults) bool { return v != nil })
 	inheritSetting(out, layers, src, "mental_model_defaults", func(c *SpaceConfig) **SpaceMentalModelDefaults { return &c.MentalModelDefaults }, func(v *SpaceMentalModelDefaults) bool { return v != nil })
 	inheritSetting(out, layers, src, "consolidation", func(c *SpaceConfig) **SpaceConsolidation { return &c.Consolidation }, func(v *SpaceConsolidation) bool { return v != nil })
 	inheritSetting(out, layers, src, "recall_quality", func(c *SpaceConfig) **SpaceRecallQuality { return &c.RecallQuality }, func(v *SpaceRecallQuality) bool { return v != nil })
+	inheritSetting(out, layers, src, "recall_budget", func(c *SpaceConfig) **SpaceRecallBudget { return &c.RecallBudget }, func(v *SpaceRecallBudget) bool { return v != nil })
 }
 
 // applyReflectModelBlocks copies the blocks a PUT or PATCH sent; an empty block clears it (back to inherited).
@@ -187,6 +245,7 @@ func applyReflectModelBlocks(c *SpaceConfig, in SpaceConfigInput) {
 	c.MentalModelDefaults = replaceBlock(c.MentalModelDefaults, in.MentalModelDefaults)
 	c.Consolidation = replaceBlock(c.Consolidation, in.Consolidation)
 	c.RecallQuality = replaceBlock(c.RecallQuality, in.RecallQuality)
+	c.RecallBudget = replaceBlock(c.RecallBudget, in.RecallBudget)
 }
 
 func replaceBlock[T any](cur, in *T) *T {

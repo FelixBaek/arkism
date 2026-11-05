@@ -525,6 +525,11 @@ func (s *Service) refreshMentalModelByID(ctx context.Context, token, id string, 
 func (s *Service) refreshMentalModel(ctx context.Context, token string, d Decision, r Record, dryRun bool, trigger string, job *WikiJob) (MentalModelView, error) {
 	m := r.MentalModel
 	req := summaryRequestFor(r)
+	settings, err := s.spaceSettings(ctx, r.Scope)
+	if err != nil {
+		return MentalModelView{}, err
+	}
+	req.limit = settings.RecallBudget.limit(m.Refresh.Budget, int(m.Refresh.MaxTokens), req.limit)
 	if m.Refresh.Strategy == mmStrategyDelta && trigger != mmTriggerFullCron {
 		req.base = m.Active
 	}

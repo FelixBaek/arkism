@@ -42,6 +42,7 @@ const (
 	spaceExtractChunks   = "chunks"
 	spaceChunkMin        = 500
 	spaceChunkMax        = 12000
+	spaceBatchMax        = 1000
 	spaceStrategiesMax   = 16
 	spaceDefenseMaxText  = 8 << 20
 	spaceInstructionsMax = 2000
@@ -97,12 +98,17 @@ type ExtractStrategy struct {
 	Mission      string `json:"extraction_mission,omitempty" bson:"extraction_mission,omitempty"`
 	ChunkSize    int    `json:"extraction_chunk_size,omitempty" bson:"extraction_chunk_size,omitempty"`
 	Causal       *bool  `json:"extract_causal,omitempty" bson:"extract_causal,omitempty"`
+	// BatchSize caps the chunks one provider batch carries (batch mode only); 0 sends all that are left.
+	BatchSize int `json:"extraction_batch_size,omitempty" bson:"extraction_batch_size,omitempty"`
+	// ImagesPerChunk caps the image readings one chunk holds; 0 leaves chunks to their size alone.
+	ImagesPerChunk int `json:"extraction_images_per_chunk,omitempty" bson:"extraction_images_per_chunk,omitempty"`
 }
 
 // over lays the fields st sets over base.
 func (st ExtractStrategy) over(base ExtractStrategy) ExtractStrategy {
 	base.Mode, base.Instructions, base.Mission = cmp.Or(st.Mode, base.Mode), cmp.Or(st.Instructions, base.Instructions), cmp.Or(st.Mission, base.Mission)
 	base.ChunkSize = cmp.Or(st.ChunkSize, base.ChunkSize)
+	base.BatchSize, base.ImagesPerChunk = cmp.Or(st.BatchSize, base.BatchSize), cmp.Or(st.ImagesPerChunk, base.ImagesPerChunk)
 	if st.Causal != nil {
 		base.Causal = st.Causal
 	}
@@ -111,7 +117,8 @@ func (st ExtractStrategy) over(base ExtractStrategy) ExtractStrategy {
 
 // validExtractStrategy checks a strategy as stored; a resolved one must also name a mode.
 func validExtractStrategy(st ExtractStrategy) error {
-	if !slices.Contains(spaceExtractModes, st.Mode) || st.ChunkSize != 0 && (st.ChunkSize < spaceChunkMin || st.ChunkSize > spaceChunkMax) {
+	if !slices.Contains(spaceExtractModes, st.Mode) || st.ChunkSize != 0 && (st.ChunkSize < spaceChunkMin || st.ChunkSize > spaceChunkMax) ||
+		st.BatchSize < 0 || st.BatchSize > spaceBatchMax || st.ImagesPerChunk < 0 || st.ImagesPerChunk > ingestMaxBlocks {
 		return ErrInvalid
 	}
 	for _, text := range []string{st.Instructions, st.Mission} {
@@ -156,7 +163,8 @@ func validExtractionSettings(c SpaceConfig) error {
 
 // extractBase is the space's own extraction settings as a strategy.
 func (c SpaceConfig) extractBase() ExtractStrategy {
-	return ExtractStrategy{Mode: c.ExtractionMode, Instructions: c.ExtractionInstructions, Mission: c.ExtractionMission, ChunkSize: c.ExtractionChunkSize, Causal: c.ExtractCausal}
+	return ExtractStrategy{Mode: c.ExtractionMode, Instructions: c.ExtractionInstructions, Mission: c.ExtractionMission, ChunkSize: c.ExtractionChunkSize, Causal: c.ExtractCausal,
+		BatchSize: c.ExtractionBatchSize, ImagesPerChunk: c.ExtractionImagesPerChunk}
 }
 
 // extractStrategy is the resolved space's extraction settings with the named strategy
@@ -181,6 +189,11 @@ func (c SpaceConfig) extractStrategy(name string, override *ExtractStrategy) (Ex
 	}
 	out.Mode, out.ChunkSize = cmp.Or(out.Mode, spaceExtractConcise), cmp.Or(out.ChunkSize, fileExtractChunkRunes)
 	return out, nil
+}
+
+// keepsDocumentText: store_document_text is on (the default).
+func (c SpaceConfig) keepsDocumentText() bool {
+	return c.StoreDocumentText == nil || *c.StoreDocumentText
 }
 
 // zone is the space's time zone for reading dates; the server's when unset.
@@ -358,6 +371,15 @@ func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.ExtractionChunkSize != nil {
 		c.ExtractionChunkSize = *in.ExtractionChunkSize
 	}
+	if in.ExtractionBatchSize != nil {
+		c.ExtractionBatchSize = *in.ExtractionBatchSize
+	}
+	if in.ExtractionImagesPerChunk != nil {
+		c.ExtractionImagesPerChunk = *in.ExtractionImagesPerChunk
+	}
+	if in.StoreDocumentText != nil || in.resets.storeText {
+		c.StoreDocumentText = in.StoreDocumentText
+	}
 	if in.ExtractCausal != nil || in.resets.extractCausal {
 		c.ExtractCausal = in.ExtractCausal
 	}
@@ -395,7 +417,7 @@ func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
 type spaceResets struct {
 	lanes, rerank, rerankModel, extractCausal bool
 	entitiesFreeForm, entityFreeTypes         bool
-	workState, sessionArchives                bool
+	workState, sessionArchives, storeText     bool
 	lane                                      []string // lanes.<name>: null
 }
 
@@ -416,6 +438,7 @@ func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
 		Causal      json.RawMessage `json:"extract_causal"`
 		WorkState   json.RawMessage `json:"work_state_candidates"`
 		Archives    json.RawMessage `json:"recall_session_archives"`
+		StoreText   json.RawMessage `json:"store_document_text"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
@@ -423,7 +446,7 @@ func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
 	isNull := func(m json.RawMessage) bool { return string(m) == "null" }
 	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel),
 		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes), extractCausal: isNull(raw.Causal),
-		workState: isNull(raw.WorkState), sessionArchives: isNull(raw.Archives)}
+		workState: isNull(raw.WorkState), sessionArchives: isNull(raw.Archives), storeText: isNull(raw.StoreText)}
 	var lanes map[string]json.RawMessage
 	if in.Lanes != nil && json.Unmarshal(raw.Lanes, &lanes) == nil {
 		for _, f := range spaceLaneFields {
@@ -502,7 +525,7 @@ func (s *Service) serverSpaceDefaults() SpaceConfig {
 		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
 		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off,
 		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String(),
-		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, RecallSessionArchives: &off,
+		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, StoreDocumentText: &on, RecallSessionArchives: &off,
 		CaptureMode: captureModeUser, CaptureDensity: captureDensityDurable, DecisionModels: map[string]string{decisionTaskConsolidation: decisionModelOff}}
 }
 
@@ -570,6 +593,9 @@ func resolveExtraction(out *SpaceConfig, layers []spaceLayer, src map[string]str
 	str := func(v string) bool { return v != "" }
 	inheritSetting(out, layers, src, "extraction_mission", func(c *SpaceConfig) *string { return &c.ExtractionMission }, str)
 	inheritSetting(out, layers, src, "extraction_chunk_size", func(c *SpaceConfig) *int { return &c.ExtractionChunkSize }, func(v int) bool { return v != 0 })
+	inheritSetting(out, layers, src, "extraction_batch_size", func(c *SpaceConfig) *int { return &c.ExtractionBatchSize }, func(v int) bool { return v != 0 })
+	inheritSetting(out, layers, src, "extraction_images_per_chunk", func(c *SpaceConfig) *int { return &c.ExtractionImagesPerChunk }, func(v int) bool { return v != 0 })
+	inheritSetting(out, layers, src, "store_document_text", func(c *SpaceConfig) **bool { return &c.StoreDocumentText }, func(v *bool) bool { return v != nil })
 	inheritSetting(out, layers, src, "extract_causal", func(c *SpaceConfig) **bool { return &c.ExtractCausal }, func(v *bool) bool { return v != nil })
 	inheritSetting(out, layers, src, "extraction_strategies", func(c *SpaceConfig) *map[string]ExtractStrategy { return &c.ExtractionStrategies },
 		func(v map[string]ExtractStrategy) bool { return len(v) > 0 })

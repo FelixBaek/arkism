@@ -58,6 +58,15 @@ type ExtractBatch struct {
 
 func extractBatchID(i int) string { return "chunk-" + strconv.Itoa(i) }
 
+// extractBatchEnd is the chunk after the job's current batch: the space's
+// extraction_batch_size chunks from the next one, or all that are left.
+func extractBatchEnd(job *FileExtractJob) int {
+	if n := job.Settings.BatchSize; n > 0 {
+		return min(len(job.Chunks), job.Next+n)
+	}
+	return len(job.Chunks)
+}
+
 // extractBatcher is the batch client for job, or nil when the job calls the model per chunk:
 // batching is off, the mode calls no model, or only a request's worth of chunks is left.
 // A batch submitted before batching was turned off is dropped and the job goes on per chunk.
@@ -94,7 +103,7 @@ func (s *Service) extractBatchAnswers(ctx context.Context, token string, d Decis
 		return nil, cmp.Or(err, ErrUnavailable)
 	}
 	out := map[int]ExtractPreviewResult{}
-	for i := job.Next; i < len(job.Chunks); i++ {
+	for i := job.Next; i < extractBatchEnd(job); i++ {
 		ch, a := job.Chunks[i], got[extractBatchID(i)]
 		ok := !a.Failed && a.Text != "" && len(a.Text) <= 256<<10 && utf8.ValidString(a.Text)
 		if err = s.fileBatchAnswer(ctx, scope, job, i, a, ok); err != nil {
@@ -129,7 +138,7 @@ func (s *Service) fileBatchAnswer(ctx context.Context, scope Scope, job *FileExt
 // chunk within the day's call cap, then submits them as one batch.
 func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decision, scope Scope, b BatchLLM, job *FileExtractJob) error {
 	prompts, ids := []BatchPrompt{}, []string{}
-	for i := job.Next; i < len(job.Chunks); i++ {
+	for i := job.Next; i < extractBatchEnd(job); i++ {
 		if err := s.modelTransfer(ctx, token, d, "generate:memory_candidates", scope, "", job.Chunks[i].Text); err != nil {
 			return err
 		}

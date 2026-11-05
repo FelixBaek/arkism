@@ -248,6 +248,8 @@ type FileExtractJob struct {
 	Zone     string          `json:"zone,omitempty" bson:"zone,omitempty"`
 	// Language is the space's memory_language when queued ("auto" or "" keeps the source's language).
 	Language string `json:"language,omitempty" bson:"language,omitempty"`
+	// DropText: the space's store_document_text was off when queued, so its sources keep only locators.
+	DropText bool `json:"-" bson:"drop_text,omitempty"`
 	// Batch is the provider batch the remaining chunks were sent as (file_extract_batch.go).
 	Batch *ExtractBatch `json:"batch,omitempty" bson:"batch,omitempty"`
 	// Ref is the document reference (file:<name>, knowledge:<source id>, doc:<id> or
@@ -408,17 +410,43 @@ func extractChunkRunes(st ExtractStrategy) int {
 	return size
 }
 
-// extractChunks packs each page into chunks of size runes; paged text gets page locators.
-func extractChunks(pages []string, paged bool, size int) []FileExtractChunk {
+// extractChunks packs each page into chunks of st's size, at most st.ImagesPerChunk image
+// readings each when set; paged text gets page locators.
+func extractChunks(pages []string, paged bool, st ExtractStrategy) []FileExtractChunk {
 	out := []FileExtractChunk{}
 	for p, page := range pages {
-		for c, piece := range knowledgePackParagraphs(knowledgeParagraphs(strings.Split(page, "\n"), false), size) {
+		pieces := knowledgePackParagraphs(knowledgeParagraphs(strings.Split(page, "\n"), false), extractChunkRunes(st))
+		for c, piece := range capChunkImages(pieces, st.ImagesPerChunk) {
 			locator := fmt.Sprintf("chunk:%d", c+1)
 			if paged {
 				locator = fmt.Sprintf("page:%d/chunk:%d", p+1, c+1)
 			}
 			out = append(out, FileExtractChunk{Locator: locator, Text: piece, Hash: ContentHash(extractSpaces(piece))})
 		}
+	}
+	return out
+}
+
+// capChunkImages splits each piece before the paragraph that would bring its image
+// readings (paragraphs blockPages starts with "[image ") over limit; 0 keeps the pieces.
+func capChunkImages(pieces []string, limit int) []string {
+	if limit <= 0 {
+		return pieces
+	}
+	out := []string{}
+	for _, piece := range pieces {
+		cur, images := []string{}, 0
+		for _, para := range strings.Split(piece, "\n\n") {
+			image := strings.HasPrefix(para, "[image ")
+			if image && images == limit && len(cur) > 0 {
+				out, cur, images = append(out, strings.Join(cur, "\n\n")), nil, 0
+			}
+			if image {
+				images++
+			}
+			cur = append(cur, para)
+		}
+		out = append(out, strings.Join(cur, "\n\n"))
 	}
 	return out
 }
@@ -453,7 +481,7 @@ func (s *Service) extractPlan(settings SpaceConfig, opts ExtractOptions, overrid
 	if st.Mode != spaceExtractChunks && s.Wiki == nil {
 		return FileExtractJob{}, ErrModelNotConfigured
 	}
-	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String(), Language: settings.MemoryLanguage}, nil
+	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String(), Language: settings.MemoryLanguage, DropText: !settings.keepsDocumentText()}, nil
 }
 
 // agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
@@ -557,7 +585,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 		return ExtractPreviewResult{}, err
 	}
 	text, redacted := extractClean(in.Text)
-	chunks := extractChunks([]string{text}, false, extractChunkRunes(st))
+	chunks := extractChunks([]string{text}, false, st)
 	if in.PromptOnly {
 		return ExtractPreviewResult{Claims: []ExtractedClaim{}, Skipped: extractRedactionNote(redacted), Prompt: extractPromptView(settings, in.Strategy, plan, chunks)}, nil
 	}
@@ -654,7 +682,7 @@ func pagePointers(pages []string) []*string {
 
 // extractFileChunks applies the privacy filter page by page and enforces size limits;
 // smaller chunks allow more of them, so the text a document may hold stays the same.
-func extractFileChunks(pages []string, paged bool, size int) ([]FileExtractChunk, int, error) {
+func extractFileChunks(pages []string, paged bool, st ExtractStrategy) ([]FileExtractChunk, int, error) {
 	redacted, total := 0, 0
 	for i := range pages {
 		var n int
@@ -662,8 +690,8 @@ func extractFileChunks(pages []string, paged bool, size int) ([]FileExtractChunk
 		redacted += n
 		total += len(pages[i])
 	}
-	chunks := extractChunks(pages, paged, size)
-	if total > fileExtractMaxText || len(chunks) > fileExtractMaxChunks*fileExtractChunkRunes/size {
+	chunks := extractChunks(pages, paged, st)
+	if total > fileExtractMaxText || len(chunks) > fileExtractMaxChunks*fileExtractChunkRunes/extractChunkRunes(st) {
 		return nil, 0, errBlobTooLarge
 	}
 	if len(chunks) == 0 {
@@ -715,7 +743,7 @@ func (s *Service) extractUploaded(ctx context.Context, token string, d Decision,
 	if f.DryRun && len(pages) == 0 {
 		return FileMemoriesResult{Status: JobStatusDone, Skipped: notes}, nil
 	}
-	chunks, redacted, err := extractFileChunks(pages, paged, extractChunkRunes(plan.Settings))
+	chunks, redacted, err := extractFileChunks(pages, paged, plan.Settings)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
@@ -726,7 +754,7 @@ func (s *Service) extractUploaded(ctx context.Context, token string, d Decision,
 	}
 	plan.Label = f.Name
 	out, err = s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, "", chunks, out, fileExtractSyncChunks, false)
-	if err == nil {
+	if err == nil && !plan.DropText {
 		s.keepOriginal(ctx, d, f, &out, redacted)
 	}
 	return out, err
@@ -827,7 +855,7 @@ func (s *Service) ingestItem(ctx context.Context, token string, d Decision, scop
 	if err = s.defendItem(ctx, scope, "write:memory_candidates", &plan.Options, &text); err != nil {
 		return FileMemoriesResult{}, err
 	}
-	chunks, redacted, err := extractFileChunks([]string{text}, false, extractChunkRunes(plan.Settings))
+	chunks, redacted, err := extractFileChunks([]string{text}, false, plan.Settings)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
@@ -840,14 +868,18 @@ func (s *Service) ingestItem(ctx context.Context, token string, d Decision, scop
 }
 
 // storeExtractSources stores the filtered text as source evidence, in parts
-// small enough for a source record, and points every chunk at its part.
-func (s *Service) storeExtractSources(ctx context.Context, token string, scope Scope, label string, chunks []FileExtractChunk) error {
+// small enough for a source record, and points every chunk at its part. With
+// dropText (store_document_text off) a part keeps only its chunks' locators.
+func (s *Service) storeExtractSources(ctx context.Context, token string, scope Scope, label string, chunks []FileExtractChunk, dropText bool) error {
 	now := time.Now().UTC()
 	for start := 0; start < len(chunks); {
 		end, size := start, 0
 		var text strings.Builder
 		for end < len(chunks) && (end == start || size+len(chunks[end].Text)+64 <= fileExtractSourceBytes) {
 			part := "[" + chunks[end].Locator + "]\n" + chunks[end].Text + "\n\n"
+			if dropText {
+				part = "[" + chunks[end].Locator + "]\n\n"
+			}
 			text.WriteString(part)
 			size += len(part)
 			end++
@@ -899,7 +931,7 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	}
 	fresh, kept, delta := diffExtractChunks(prev, chunks)
 	if len(fresh) > 0 && fresh[0].Source.ID == "" {
-		if err = s.storeExtractSources(ctx, token, scope, plan.Label, fresh); err != nil {
+		if err = s.storeExtractSources(ctx, token, scope, plan.Label, fresh, plan.DropText); err != nil {
 			return FileMemoriesResult{}, err
 		}
 	}

@@ -66,7 +66,7 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 	}
 	cursor, scanned := page.Cursor, 0
 	for {
-		rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, Cursor: cursor, Limit: page.Limit - len(out.Items)}, "jobs")
+		rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, From: page.From, To: page.To, Cursor: cursor, Limit: page.Limit - len(out.Items)}, "jobs")
 		if err != nil {
 			return out, err
 		}

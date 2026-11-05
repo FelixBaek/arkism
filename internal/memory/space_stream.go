@@ -74,7 +74,7 @@ func (s *Service) writeSpaceBundle(ctx context.Context, token string, d Decision
 	}
 	h := sha256.New()
 	out := io.MultiWriter(bw, h)
-	sections, skipped, err := s.eachSpaceLine(ctx, token, d, scope, spaceSections(in), at, func(l spaceBundleLine) error {
+	sections, skipped, err := s.eachSpaceLine(ctx, token, d, scope, spaceSections(in), in.DocumentIDs, at, func(l spaceBundleLine) error {
 		b, err := json.Marshal(l)
 		switch {
 		case err != nil:
@@ -101,7 +101,8 @@ func (s *Service) writeSpaceBundle(ctx context.Context, token string, d Decision
 }
 
 // eachSpaceLine emits the lines of every section in order and returns the per-section counts and skips.
-func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, scope Scope, sections []string, now time.Time, emit func(spaceBundleLine) error) ([]SpaceSection, []SpaceSkip, error) {
+// docs, when set, narrows the documents section to those documents.
+func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, scope Scope, sections, docs []string, now time.Time, emit func(spaceBundleLine) error) ([]SpaceSection, []SpaceSkip, error) {
 	counts := []SpaceSection{}
 	report := SpaceReport{Skipped: []SpaceSkip{}}
 	for _, name := range sections {
@@ -117,7 +118,7 @@ func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, s
 			}
 			return err
 		}
-		if err := s.emitSpaceSection(ctx, token, d, scope, name, now, count, &report); err != nil {
+		if err := s.emitSpaceSection(ctx, token, d, scope, name, docs, now, count, &report); err != nil {
 			return nil, nil, err
 		}
 		counts = append(counts, SpaceSection{Name: name, Count: n})
@@ -125,7 +126,7 @@ func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, s
 	return counts, report.Skipped, nil
 }
 
-func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision, scope Scope, name string, now time.Time, emit func(spaceBundleLine) error, report *SpaceReport) error {
+func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision, scope Scope, name string, docs []string, now time.Time, emit func(spaceBundleLine) error, report *SpaceReport) error {
 	repo := s.Repo
 	switch {
 	case name == spaceSectionConfig:
@@ -136,7 +137,7 @@ func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision
 	case slices.Contains(spaceFiles, name):
 		return s.emitSpaceFiles(ctx, token, d, scope, name, emit, report)
 	case name == spaceSectionDocuments:
-		return s.emitSpaceDocuments(ctx, d, scope, emit, report)
+		return s.emitSpaceDocuments(ctx, d, scope, docs, emit, report)
 	case name == colLLMRequests:
 		return emitLLMRequests(ctx, repo, scope, emit)
 	case name == "audit_events":
@@ -351,6 +352,7 @@ type spaceImporter struct {
 	approved bool
 	// template keeps only settings and definitions; history accepts history rows (a clone inside the server).
 	template, history bool
+	conflict          string // document conflict policy (validDocConflict)
 	claims            []CaptureClaim
 	origin            []bool
 	chunk             int

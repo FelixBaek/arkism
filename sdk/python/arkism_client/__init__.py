@@ -1814,6 +1814,22 @@ class ArkismClient(BaseClient):
         """POST /v1/causal-links/{id}/review — A person's decision on a causal link (human principals only, write:memory_relations)"""
         return self.request("POST", f"/v1/causal-links/{urllib.parse.quote(id, safe='')}/review", None, body)
 
+    def get_file_extract_document_text(self, id, query=None):
+        """GET /v1/files/memories/documents/{id}/text — Read a document's text"""
+        return self.request("GET", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/text", query, None)
+
+    def edit_file_extract_document_text(self, id, body=None):
+        """PUT /v1/files/memories/documents/{id}/text — Edit a document's text and extract the changes"""
+        return self.request("PUT", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/text", None, body)
+
+    def export_file_extract_documents(self, body=None):
+        """POST /v1/files/memories/documents/export — Export picked documents as a zip"""
+        return self.request("POST", f"/v1/files/memories/documents/export", None, body)
+
+    def import_file_extract_documents(self, body=None):
+        """POST /v1/files/memories/documents/import — Import a documents zip"""
+        return self.request("POST", f"/v1/files/memories/documents/import", None, body)
+
     def get_v1_files_memories_documents_id_chunks(self, id, query=None):
         """GET /v1/files/memories/documents/{id}/chunks — Chunks of an uploaded document"""
         return self.request("GET", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/chunks", query, None)

@@ -148,12 +148,12 @@ func (s *Service) coreHTTPPostV1SpacesExport(w http.ResponseWriter, r *http.Requ
 
 // coreHTTPPostV1SpacesImport takes a JSON body ({bundle, ...}, up to 8 MB) or,
 // as application/x-ndjson, the bundle itself of any size up to 1 GiB with the
-// options in the query (import_as, as_template).
+// options in the query (import_as, as_template, document_conflict).
 func (s *Service) coreHTTPPostV1SpacesImport(w http.ResponseWriter, r *http.Request) {
 	if mt, _, _ := mime.ParseMediaType(r.Header.Get(headerContentType)); mt == "application/x-ndjson" {
 		extendSpaceTransfer(w)
 		q := r.URL.Query()
-		in := SpaceImportInput{ImportAs: q.Get("import_as"), AsTemplate: q.Get("as_template") == "true"}
+		in := SpaceImportInput{ImportAs: q.Get("import_as"), AsTemplate: q.Get("as_template") == "true", DocumentConflict: q.Get("document_conflict")}
 		out, err := s.ImportSpaceStream(r.Context(), bearer(r), pathSpace(r), in, http.MaxBytesReader(w, r.Body, spaceStreamMaxBytes))
 		respondAccepted(w, out, err)
 		return

@@ -224,14 +224,12 @@ func applyReflectDefaults(in *ReflectInput, run *reflectRun, space SpaceConfig, 
 			cmp.Or(t.ReadMentalModelsMaxTokens, run.tools.ReadMentalModelsMaxTokens), cmp.Or(t.ExpandMaxTokens, run.tools.ExpandMaxTokens)}
 	}
 	shape, ok := reflectBudgetShape[in.Budget]
-	if !ok {
-		return
-	}
-	if !iterSet {
+	if ok && !iterSet {
 		in.MaxIterations = shape[0]
 	}
-	if !limitSet && shape[1] > 0 {
-		in.Limit = shape[1]
+	// The space's recall budget (nil keeps the shipped shape) sizes the recall when the call sets no limit.
+	if n := space.RecallBudget.limit(in.Budget, in.MaxTokens, shape[1]); !limitSet && n > 0 {
+		in.Limit = min(n, 20)
 	}
 }
 

@@ -93,15 +93,20 @@ type DocumentPage struct {
 	Tag    string // the document list only
 	// Q is the document list's text filter over name, tags and chunk text, case-insensitive (at most 200 bytes).
 	Q string
+	// From and To bound when the document was first added (the document list only; zero is open).
+	From, To time.Time
 }
 
 // parseDocumentQuery reads the scope plus cursor and limit (1..200, default 50).
 func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
-	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag", "q")
+	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag", "q", "from", "to")
 	if err != nil {
 		return Scope{}, DocumentPage{}, err
 	}
 	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag"), Q: strings.TrimSpace(q.Get("q"))}
+	if page.From, page.To, err = parseOpsRange(q, false); err != nil {
+		return Scope{}, DocumentPage{}, err
+	}
 	if v := q.Get("limit"); v != "" {
 		n, e := strconv.Atoi(v)
 		if e != nil || n < 1 || n > documentPageMax {

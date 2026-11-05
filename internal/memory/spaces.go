@@ -104,6 +104,8 @@ type SpaceConfig struct {
 	// causal candidates, named strategies an item may pick, and the zone dates are read in.
 	ExtractionMission         string                     `json:"extraction_mission,omitempty" bson:"extraction_mission,omitempty"`
 	ExtractionChunkSize       int                        `json:"extraction_chunk_size,omitempty" bson:"extraction_chunk_size,omitempty"`
+	ExtractionBatchSize       int                        `json:"extraction_batch_size,omitempty" bson:"extraction_batch_size,omitempty"`
+	ExtractionImagesPerChunk  int                        `json:"extraction_images_per_chunk,omitempty" bson:"extraction_images_per_chunk,omitempty"`
 	ExtractCausal             *bool                      `json:"extract_causal,omitempty" bson:"extract_causal,omitempty"`
 	ExtractionStrategies      map[string]ExtractStrategy `json:"extraction_strategies,omitempty" bson:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy string                     `json:"extraction_default_strategy,omitempty" bson:"extraction_default_strategy,omitempty"`
@@ -129,6 +131,11 @@ type SpaceConfig struct {
 	Consolidation       *SpaceConsolidation       `json:"consolidation,omitempty" bson:"consolidation,omitempty"`
 	// RecallQuality: relevance gate, pending corrections, provisional candidates, closing corrected facts (recall_quality.go).
 	RecallQuality *SpaceRecallQuality `json:"recall_quality,omitempty" bson:"recall_quality,omitempty"`
+	// RecallBudget maps reflect and mental-model budget levels to recall sizes (reflect_models_settings.go).
+	RecallBudget *SpaceRecallBudget `json:"recall_budget,omitempty" bson:"recall_budget,omitempty"`
+	// StoreDocumentText (default on, null inherits): off keeps no extracted document text as
+	// evidence once its chunks are extracted, so a document cannot be reprocessed, edited or exported.
+	StoreDocumentText *bool `json:"store_document_text,omitempty" bson:"store_document_text,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -169,6 +176,8 @@ type SpaceConfigInput struct {
 	// Extraction settings; an extraction_strategies map replaces the stored one ({} clears it).
 	ExtractionMission         *string                     `json:"extraction_mission,omitempty"`
 	ExtractionChunkSize       *int                        `json:"extraction_chunk_size,omitempty"`
+	ExtractionBatchSize       *int                        `json:"extraction_batch_size,omitempty"`
+	ExtractionImagesPerChunk  *int                        `json:"extraction_images_per_chunk,omitempty"`
 	ExtractCausal             *bool                       `json:"extract_causal,omitempty"`
 	ExtractionStrategies      *map[string]ExtractStrategy `json:"extraction_strategies,omitempty"`
 	ExtractionDefaultStrategy *string                     `json:"extraction_default_strategy,omitempty"`
@@ -184,6 +193,8 @@ type SpaceConfigInput struct {
 	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty"`
 	Consolidation       *SpaceConsolidation       `json:"consolidation,omitempty"`
 	RecallQuality       *SpaceRecallQuality       `json:"recall_quality,omitempty"`
+	RecallBudget        *SpaceRecallBudget        `json:"recall_budget,omitempty"`
+	StoreDocumentText   *bool                     `json:"store_document_text,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }
@@ -285,18 +296,20 @@ type SpaceReport struct {
 }
 
 type SpaceJob struct {
-	Kind       string         `json:"kind" bson:"kind"`
-	State      string         `json:"state" bson:"state"` // queued | done | failed
-	Include    []string       `json:"include,omitempty" bson:"include,omitempty"`
-	Parts      []string       `json:"parts,omitempty" bson:"parts,omitempty"`
-	Template   bool           `json:"template" bson:"template"`
-	ImportAs   string         `json:"import_as,omitempty" bson:"import_as,omitempty"`
-	Target     *Scope         `json:"target,omitempty" bson:"target,omitempty"`
-	BundleID   string         `json:"bundle_id,omitempty" bson:"bundle_id,omitempty"`
-	Manifest   *SpaceManifest `json:"manifest,omitempty" bson:"manifest,omitempty"`
-	Report     *SpaceReport   `json:"report,omitempty" bson:"report,omitempty"`
-	Error      string         `json:"error,omitempty" bson:"error,omitempty"`
-	FinishedAt *time.Time     `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
+	Kind     string   `json:"kind" bson:"kind"`
+	State    string   `json:"state" bson:"state"` // queued | done | failed
+	Include  []string `json:"include,omitempty" bson:"include,omitempty"`
+	Parts    []string `json:"parts,omitempty" bson:"parts,omitempty"`
+	Template bool     `json:"template" bson:"template"`
+	// DocumentIDs narrows the documents part to these documents.
+	DocumentIDs []string       `json:"document_ids,omitempty" bson:"document_ids,omitempty"`
+	ImportAs    string         `json:"import_as,omitempty" bson:"import_as,omitempty"`
+	Target      *Scope         `json:"target,omitempty" bson:"target,omitempty"`
+	BundleID    string         `json:"bundle_id,omitempty" bson:"bundle_id,omitempty"`
+	Manifest    *SpaceManifest `json:"manifest,omitempty" bson:"manifest,omitempty"`
+	Report      *SpaceReport   `json:"report,omitempty" bson:"report,omitempty"`
+	Error       string         `json:"error,omitempty" bson:"error,omitempty"`
+	FinishedAt  *time.Time     `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
 	// Bundle is the text older exports kept on the row; a download clears it.
 	Bundle string `json:"-" bson:"bundle,omitempty"`
 }
@@ -315,6 +328,8 @@ type SpaceExportInput struct {
 	Include  []string `json:"include,omitempty"`
 	Parts    []string `json:"parts,omitempty"`
 	Template bool     `json:"template,omitempty"`
+	// DocumentIDs exports only these documents in the documents part (at most 200).
+	DocumentIDs []string `json:"document_ids,omitempty"`
 }
 
 type SpaceImportInput struct {
@@ -324,6 +339,9 @@ type SpaceImportInput struct {
 	DefaultTemplate bool `json:"default_template,omitempty"`
 	// AsTemplate takes only the settings and definitions of any bundle, under the template rule (a space without settings).
 	AsTemplate bool `json:"as_template,omitempty"`
+	// DocumentConflict says what a bundle document does when one of the same name exists:
+	// replace (default), skip or new_id (keep both).
+	DocumentConflict string `json:"document_conflict,omitempty"`
 }
 
 type SpaceCloneInput struct {
@@ -670,7 +688,7 @@ func validSpaceInclude(include []string) bool {
 }
 
 func validSpaceExport(in SpaceExportInput) bool {
-	if !validSpaceInclude(in.Include) || len(in.Parts) > 0 && (len(in.Include) > 0 || in.Template) {
+	if !validSpaceInclude(in.Include) || len(in.Parts) > 0 && (len(in.Include) > 0 || in.Template) || !validDocumentPick(in) {
 		return false
 	}
 	for i, p := range in.Parts {
@@ -694,7 +712,7 @@ func (s *Service) ExportSpace(ctx context.Context, token string, scope Scope, in
 	if err != nil {
 		return SpaceJobView{}, err
 	}
-	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Parts: in.Parts, Template: in.Template, BundleID: "sb_" + ID()}
+	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Parts: in.Parts, Template: in.Template, DocumentIDs: in.DocumentIDs, BundleID: "sb_" + ID()}
 	// The job counts what the bundle holds now; the download streams it fresh.
 	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
 		manifest, err := s.writeSpaceBundle(ctx, token, d, scope, in, job.BundleID, time.Now().UTC().Truncate(time.Millisecond), io.Discard)
@@ -722,7 +740,7 @@ func (s *Service) importSpace(ctx context.Context, token string, scope Scope, in
 	if err != nil {
 		return SpaceJobView{}, err
 	}
-	if !validImportAs(in.ImportAs) {
+	if !validImportAs(in.ImportAs) || !validDocConflict(in.DocumentConflict) {
 		return SpaceJobView{}, ErrInvalid
 	}
 	d, err := s.mergeHuman(ctx, token, "write:memory_candidates", scope, "")
@@ -742,7 +760,7 @@ func (s *Service) importSpace(ctx context.Context, token string, scope Scope, in
 	job := SpaceJob{Kind: spaceJobImport, ImportAs: in.ImportAs, Template: template, BundleID: manifest.BundleID, Manifest: &manifest}
 	view, err := s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
 		defer src.done()
-		imp := &spaceImporter{s: s, token: token, d: d, scope: scope, m: manifest, approved: in.ImportAs == "approved", template: in.AsTemplate}
+		imp := &spaceImporter{s: s, token: token, d: d, scope: scope, m: manifest, approved: in.ImportAs == "approved", template: in.AsTemplate, conflict: in.DocumentConflict}
 		report, err := s.runSpaceImport(ctx, imp, src.lines())
 		job.Report = &report
 		return err
@@ -824,7 +842,7 @@ func (s *Service) CloneSpace(ctx context.Context, token string, scope Scope, in 
 		imp := &spaceImporter{s: s, token: token, d: td, scope: target, m: manifest, approved: approved, history: true}
 		report, err := s.runSpaceImport(ctx, imp, func(yield func(spaceBundleLine) error) error {
 			var err error
-			manifest.Sections, manifest.Skipped, err = s.eachSpaceLine(ctx, token, d, scope, spaceSections(export), now, yield)
+			manifest.Sections, manifest.Skipped, err = s.eachSpaceLine(ctx, token, d, scope, spaceSections(export), nil, now, yield)
 			return err
 		})
 		job.Manifest, job.Report = &manifest, &report
@@ -933,7 +951,7 @@ func (s *Service) DownloadSpaceExport(ctx context.Context, token string, scope S
 	if err != nil {
 		return nil, err
 	}
-	in := SpaceExportInput{Include: job.Include, Parts: job.Parts, Template: job.Template}
+	in := SpaceExportInput{Include: job.Include, Parts: job.Parts, Template: job.Template, DocumentIDs: job.DocumentIDs}
 	return func(w io.Writer) error {
 		_, err := s.writeSpaceBundle(ctx, token, d, rec.Scope, in, job.BundleID, job.Manifest.CreatedAt, w)
 		return err
