@@ -1,6 +1,21 @@
 package memory
 
-import "net/http"
+import (
+	"net/http"
+	"strconv"
+)
+
+// Kept beside the routes so the shared policy table needs no edit.
+func init() {
+	human := []string{roleHuman}
+	for pattern, p := range map[string]routePolicy{
+		"PATCH /v1/wiki/folders":     {action: "write:wiki_pages", scope: routeJSON, limit: 16 << 10, roles: human},
+		"DELETE /v1/wiki/folders":    {action: "write:wiki_pages", scope: routeQuery, roles: human},
+		"DELETE /v1/wiki/pages/{id}": {action: "write:wiki_pages", scope: routeQuery, roles: human},
+	} {
+		httpRoutePolicies[pattern] = p
+	}
+}
 
 // Wiki routes for memory-built pages, the folder tree, page move/rename and
 // the markdown export (wiki_memory.go, wiki_tree.go, wiki_export.go).
@@ -28,6 +43,34 @@ func registerMemwikiCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) 
 			return
 		}
 		out, e := s.CreateWikiFolder(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("PATCH /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
+		var in WikiFolderMoveInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.MoveWikiFolder(r.Context(), bearer(r), in)
+		respond(w, out, e)
+	})
+	mux.HandleFunc("DELETE /v1/wiki/folders", func(w http.ResponseWriter, r *http.Request) {
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "path", "recursive")
+		recursive := q.Get("recursive")
+		if e != nil || recursive != "" && recursive != "true" && recursive != "false" {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		out, e := s.DeleteWikiFolder(r.Context(), bearer(r), WikiFolderDeleteInput{Scope: scope, Path: q.Get("path"), Recursive: recursive == "true"})
+		respond(w, out, e)
+	})
+	mux.HandleFunc("DELETE /v1/wiki/pages/{id}", func(w http.ResponseWriter, r *http.Request) {
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "expected_revision")
+		rev, err := strconv.ParseInt(q.Get("expected_revision"), 10, 64)
+		if e != nil || err != nil {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		out, e := s.DeleteWikiPage(r.Context(), bearer(r), r.PathValue("id"), WikiPageDeleteInput{Scope: scope, ExpectedRevision: rev})
 		respond(w, out, e)
 	})
 	mux.HandleFunc("PATCH /v1/wiki/pages/{id}", func(w http.ResponseWriter, r *http.Request) {

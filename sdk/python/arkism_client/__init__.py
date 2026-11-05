@@ -1434,6 +1434,10 @@ class ArkismClient(BaseClient):
         """PATCH /v1/wiki/pages/{id} — Wiki: move or rename a page"""
         return self.request("PATCH", f"/v1/wiki/pages/{urllib.parse.quote(id, safe='')}", None, body)
 
+    def delete_v1_wiki_pages_id(self, id, query=None):
+        """DELETE /v1/wiki/pages/{id} — Wiki: delete a page"""
+        return self.request("DELETE", f"/v1/wiki/pages/{urllib.parse.quote(id, safe='')}", query, None)
+
     def get_v1_wiki_graph(self, query=None):
         """GET /v1/wiki/graph — Wiki: graph"""
         return self.request("GET", f"/v1/wiki/graph", query, None)
@@ -1677,6 +1681,14 @@ class ArkismClient(BaseClient):
     def post_v1_wiki_folders(self, body=None):
         """POST /v1/wiki/folders — Wiki: folders"""
         return self.request("POST", f"/v1/wiki/folders", None, body)
+
+    def patch_v1_wiki_folders(self, body=None):
+        """PATCH /v1/wiki/folders — Wiki: rename or move a folder"""
+        return self.request("PATCH", f"/v1/wiki/folders", None, body)
+
+    def delete_v1_wiki_folders(self, query=None):
+        """DELETE /v1/wiki/folders — Wiki: delete a folder"""
+        return self.request("DELETE", f"/v1/wiki/folders", query, None)
 
     def post_v1_wiki_build_from_memories(self, body=None):
         """POST /v1/wiki/build_from_memories — Wiki: build_from_memories"""

@@ -852,6 +852,88 @@
       ]
     },
     {
+      "method": "patch",
+      "path": "/v1/wiki/folders",
+      "request": "WikiFolderMoveInput",
+      "response": "WikiFolderMoveResult",
+      "summary": "Wiki: rename or move a folder",
+      "query": {},
+      "description": "A person renames or moves a folder to a new full path; its empty folders, pages and query pages (mental models placed in the wiki) take the new path in one transaction. Moving a folder into itself, or a result deeper than 8 levels, answers 400; a scope with more than 1,000 wiki rows or 200 mental models answers 409 rather than move part of a folder.",
+      "required_body": [
+        "scope",
+        "from",
+        "to"
+      ]
+    },
+    {
+      "method": "delete",
+      "path": "/v1/wiki/folders",
+      "request": null,
+      "response": "WikiCleanupResult",
+      "summary": "Wiki: delete a folder",
+      "query": {
+        "workspace_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "string",
+          "enum": [
+            "true",
+            "false"
+          ]
+        }
+      },
+      "required_query": [
+        "workspace_id",
+        "project_id",
+        "path"
+      ],
+      "description": "A person deletes a folder. A folder that still holds pages or query pages answers 409 unless recursive=true, which also deletes them: pages become erased deleted rows, links to them in remaining pages become plain text, query pages are deleted with their mental model."
+    },
+    {
+      "method": "delete",
+      "path": "/v1/wiki/pages/{id}",
+      "request": null,
+      "response": "WikiCleanupResult",
+      "summary": "Wiki: delete a page",
+      "query": {
+        "workspace_id": {
+          "type": "string"
+        },
+        "project_id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": "string"
+        },
+        "agent_id": {
+          "type": "string"
+        },
+        "expected_revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required_query": [
+        "workspace_id",
+        "project_id",
+        "expected_revision"
+      ],
+      "description": "A person deletes one page at its expected_revision, locked pages included. The page becomes an erased deleted row and links to it in other pages become plain text. A mental model id (mm_...) deletes that query page's mental model."
+    },
+    {
       "method": "get",
       "path": "/v1/wiki/tree",
       "request": null,

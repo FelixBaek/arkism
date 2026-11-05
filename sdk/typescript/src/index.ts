@@ -603,10 +603,10 @@ export type WireResponseWikiMemoryBuildResult = { "dry_run": boolean; "job"?: Wi
 export type WireResponseWikiMemoryRequest = { "query"?: string; "topic"?: string; "entity_name"?: string; "memory_ids"?: Array<string> };
 export type WireResponseWikiTree = { "folders": (Array<WireResponseWikiTreeFolder> | null); "pages": (Array<WireResponseWikiTreePage> | null); "authority": string; "truncated": boolean };
 export type WireResponseWikiTreeFolder = { "path": string; "pages": number };
-export type WireResponseWikiTreePage = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "folder": string; "review_state": string; "locked": boolean };
+export type WireResponseWikiTreePage = { "id": string; "revision": number; "slug": string; "type": string; "title": string; "folder": string; "review_state": string; "locked": boolean; "stale"?: boolean };
 export type WireResponseObservationData = { "source_memories": (Array<WireResponseRef> | null); "durability": string; "durability_reason"?: string; "history"?: Array<WireResponseDerivedRevision> };
 export type WireResponseDerivedRevision = { "version": number; "status": string; "action": string; "text": string; "citations": (Array<WireResponseRef> | null); "durability"?: string; "durability_reason"?: string; "confidence"?: number; "generator"?: WireResponseGenerator; "by": string; "at": string; "withheld"?: boolean };
-export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string; "last_full_refresh_at"?: string; "last_outcome"?: WireResponseMentalModelOutcome };
+export type WireResponseMentalModelData = { "title": string; "query": string; "refresh": WireResponseMentalModelRefresh; "active"?: WireResponseDerivedRevision; "draft"?: WireResponseDerivedRevision; "history"?: Array<WireResponseDerivedRevision>; "last_refresh_at"?: string; "last_full_refresh_at"?: string; "last_outcome"?: WireResponseMentalModelOutcome; "folder"?: string };
 export type WireResponseDirective = { "title": string; "priority": number; "applies_to": string };
 export type WireResponseFileExtractJob = { "label": string; "sources": (Array<string> | null); "total": number; "next": number; "candidates_created": number; "skipped": (Array<WireResponseExtractSkip> | null); "calls": number; "tokens": number; "error"?: string; "requested_by": string; "delta": WireResponseFileExtractDelta; "document"?: string; "previous"?: string; "settings": WireResponseExtractStrategy; "options": WireResponseExtractOptions; "zone"?: string; "batch"?: WireResponseExtractBatch; "tags"?: Array<string> };
 export type WireResponseExtractSkip = { "locator"?: string; "reason": string };
@@ -641,6 +641,8 @@ export type WireResponseExtDataPage = { "items": (Array<WireResponseExtDataItem>
 export type WireResponseExtDataItem = { "key": string; "value": ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "revision": number; "updated_at": string; "updated_by": string };
 export type WireRequestExtDataChange = { "scope"?: WireRequestScope; "changes"?: (Array<WireRequestExtDataOp> | null) };
 export type WireRequestExtDataOp = { "op"?: string; "key"?: string; "value"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "expected_revision"?: number };
+export type WireResponseWikiFolderMoveResult = { "path": string; "moved": (Array<string> | null) };
+export type WireRequestWikiFolderMoveInput = { "scope"?: WireRequestScope; "from"?: string; "to"?: string };
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -2080,6 +2082,10 @@ export class ArkismClient {
   patch_v1_wiki_pages_id(id: string, body: (WireRequestWikiPagePatchInput & unknown)): Promise<WireResponseWikiPageView> {
     return this.request("PATCH", `/v1/wiki/pages/${encodeURIComponent(id)}`, undefined, body);
   }
+  /** DELETE /v1/wiki/pages/{id} — Wiki: delete a page */
+  delete_v1_wiki_pages_id(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "expected_revision": number }): Promise<WireResponseWikiCleanupResult> {
+    return this.request("DELETE", `/v1/wiki/pages/${encodeURIComponent(id)}`, query, undefined);
+  }
   /** GET /v1/wiki/graph — Wiki: graph */
   get_v1_wiki_graph(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<WikiGraphEnvelope> {
     return this.request("GET", `/v1/wiki/graph`, query, undefined);
@@ -2323,6 +2329,14 @@ export class ArkismClient {
   /** POST /v1/wiki/folders — Wiki: folders */
   post_v1_wiki_folders(body: (WireRequestWikiFolderInput & unknown)): Promise<WireResponseWikiTreeFolder> {
     return this.request("POST", `/v1/wiki/folders`, undefined, body);
+  }
+  /** PATCH /v1/wiki/folders — Wiki: rename or move a folder */
+  patch_v1_wiki_folders(body: (WireRequestWikiFolderMoveInput & unknown)): Promise<WireResponseWikiFolderMoveResult> {
+    return this.request("PATCH", `/v1/wiki/folders`, undefined, body);
+  }
+  /** DELETE /v1/wiki/folders — Wiki: delete a folder */
+  delete_v1_wiki_folders(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "path": string; "recursive"?: "true" | "false" }): Promise<WireResponseWikiCleanupResult> {
+    return this.request("DELETE", `/v1/wiki/folders`, query, undefined);
   }
   /** POST /v1/wiki/build_from_memories — Wiki: build_from_memories */
   post_v1_wiki_build_from_memories(body: (WireRequestWikiMemoryBuildInput & unknown)): Promise<WireResponseWikiMemoryBuildResult> {

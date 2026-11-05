@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -357,5 +358,130 @@ func TestWikiTreeAndRenameAtTheRowCap(t *testing.T) {
 	page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, bleed)
 	if _, err = f.svc.PatchWikiPage(testCtx, f.human, bleed, WikiPagePatchInput{Scope: scope, ExpectedRevision: page.Revision, Title: "Bleed Margin"}); !errors.Is(err, ErrConflict) {
 		t.Fatalf("rename past the link window: %v", err)
+	}
+}
+
+func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
+	f, scope := wikiPrintReviewed(t)
+	bleed, a3 := wikiPageID(scope, "bleed"), wikiPageID(scope, "a3-paper")
+	for _, id := range []string{bleed, a3} {
+		page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, id)
+		folder := "docs/print"
+		if _, err := f.svc.PatchWikiPage(testCtx, f.human, id, WikiPagePatchInput{Scope: scope, ExpectedRevision: page.Revision, Folder: &folder}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.svc.CreateWikiFolder(testCtx, f.human, WikiFolderInput{Scope: scope, Path: "docs/print/extra"}); err != nil {
+		t.Fatal(err)
+	}
+	docs, root := "docs", ""
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scope, Title: "Print rules", Query: "print rules", Refresh: MentalModelRefresh{Mode: "manual"}, Folder: &docs})
+	if err != nil || mm.Folder == nil || *mm.Folder != "docs" {
+		t.Fatal("query page", err, mm)
+	}
+	loose, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scope, Title: "Loose", Query: "loose", Refresh: MentalModelRefresh{Mode: "manual"}, Folder: &root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree, err := f.svc.WikiTree(testCtx, f.human, scope)
+	if err != nil || len(tree.Pages) != 4 || !slices.ContainsFunc(tree.Pages, func(p WikiTreePage) bool { return p.ID == mm.ID && p.Type == "query" && p.Folder == "docs" }) {
+		t.Fatalf("tree with query pages %+v %v", tree.Pages, err)
+	}
+	if agentTree, _ := f.svc.WikiTree(testCtx, f.agent, scope); slices.ContainsFunc(agentTree.Pages, func(p WikiTreePage) bool { return p.Type == "query" }) {
+		t.Fatal("agent saw a query page with no approved text")
+	}
+
+	for _, bad := range []WikiFolderMoveInput{{From: "docs", To: "docs/inner"}, {From: "docs", To: "docs"}, {From: "", To: "x"}, {From: "docs", To: strings.Repeat("a/", 7) + "b"}} {
+		bad.Scope = scope
+		if _, err = f.svc.MoveWikiFolder(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("move %+v: %v", bad, err)
+		}
+	}
+	if _, err = f.svc.MoveWikiFolder(testCtx, f.agent, WikiFolderMoveInput{Scope: scope, From: "docs", To: "manual"}); !errors.Is(err, ErrDenied) {
+		t.Fatal("agent moved a folder", err)
+	}
+	moved, err := f.svc.MoveWikiFolder(testCtx, f.human, WikiFolderMoveInput{Scope: scope, From: "docs", To: "manual/docs"})
+	if err != nil || len(moved.Moved) != 3 {
+		t.Fatal("move", err, moved)
+	}
+	tree, _ = f.svc.WikiTree(testCtx, f.human, scope)
+	paths := []string{}
+	for _, fo := range tree.Folders {
+		paths = append(paths, fo.Path)
+	}
+	if !slices.Equal(paths, []string{"manual", "manual/docs", "manual/docs/print", "manual/docs/print/extra"}) {
+		t.Fatal("folders after move", paths)
+	}
+	if links, _ := f.svc.WikiGraph(testCtx, f.agent, scope); len(links) != 1 {
+		t.Fatal("move broke links", links)
+	}
+
+	if _, err = f.svc.DeleteWikiFolder(testCtx, f.human, WikiFolderDeleteInput{Scope: scope, Path: "manual/docs"}); !errors.Is(err, ErrConflict) {
+		t.Fatal("non-empty folder deleted without recursive", err)
+	}
+	if _, err = f.svc.DeleteWikiFolder(testCtx, f.human, WikiFolderDeleteInput{Scope: scope, Path: "manual/docs/print/extra"}); err != nil {
+		t.Fatal("empty folder delete", err)
+	}
+
+	a3page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, a3)
+	if _, err = f.svc.DeleteWikiPage(testCtx, f.agent, a3, WikiPageDeleteInput{Scope: scope, ExpectedRevision: a3page.Revision}); !errors.Is(err, ErrDenied) {
+		t.Fatal("agent deleted a page", err)
+	}
+	if _, err = f.svc.DeleteWikiPage(testCtx, f.human, a3, WikiPageDeleteInput{Scope: scope, ExpectedRevision: a3page.Revision - 1}); !errors.Is(err, ErrConflict) {
+		t.Fatal("stale delete", err)
+	}
+	gone, err := f.svc.DeleteWikiPage(testCtx, f.human, a3, WikiPageDeleteInput{Scope: scope, ExpectedRevision: a3page.Revision})
+	if err != nil || !slices.Equal(gone.Deleted, []string{a3}) || !slices.Equal(gone.Unlinked, []string{bleed}) {
+		t.Fatal("page delete", err, gone)
+	}
+	if links, _ := f.svc.WikiGraph(testCtx, f.agent, scope); len(links) != 0 {
+		t.Fatal("link to deleted page kept", links)
+	}
+	if _, err = f.svc.DeleteWikiPage(testCtx, f.human, loose.ID, WikiPageDeleteInput{Scope: scope, ExpectedRevision: loose.Revision}); err != nil {
+		t.Fatal("query page delete", err)
+	}
+	all, err := f.svc.DeleteWikiFolder(testCtx, f.human, WikiFolderDeleteInput{Scope: scope, Path: "manual", Recursive: true})
+	if err != nil || len(all.Deleted) != 2 {
+		t.Fatal("recursive delete", err, all)
+	}
+	if tree, _ = f.svc.WikiTree(testCtx, f.human, scope); len(tree.Pages) != 0 || len(tree.Folders) != 0 {
+		t.Fatalf("tree after recursive delete %+v", tree)
+	}
+}
+
+func TestWikiFolderAndPageDeleteHTTP(t *testing.T) {
+	f, scope := wikiPrintReviewed(t)
+	h := Handler(f.svc)
+	do := func(method, path, token, body string) int {
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		return w.Code
+	}
+	q := "workspace_id=" + scope.WorkspaceID + "&project_id=" + scope.ProjectID + "&user_id=" + scope.UserID + "&agent_id=" + scope.AgentID
+	bleed := wikiPageID(scope, "bleed")
+	page, _ := f.svc.GetWikiPage(testCtx, f.human, scope, bleed)
+	folder := "docs"
+	if _, err := f.svc.PatchWikiPage(testCtx, f.human, bleed, WikiPagePatchInput{Scope: scope, ExpectedRevision: page.Revision, Folder: &folder}); err != nil {
+		t.Fatal(err)
+	}
+	if code := do("PATCH", "/v1/wiki/folders", f.human, `{"scope":`+structuredText(scope)+`,"from":"docs","to":"guide"}`); code != 200 {
+		t.Fatal("move folder", code)
+	}
+	if code := do("DELETE", "/v1/wiki/folders?"+q+"&path=guide&recursive=maybe", f.human, ""); code != 400 {
+		t.Fatal("bad recursive flag", code)
+	}
+	if code := do("DELETE", "/v1/wiki/folders?"+q+"&path=guide", f.human, ""); code != 409 {
+		t.Fatal("non-empty folder", code)
+	}
+	if code := do("DELETE", "/v1/wiki/pages/"+bleed+"?"+q+"&expected_revision=x", f.human, ""); code != 400 {
+		t.Fatal("bad revision", code)
+	}
+	if code := do("DELETE", "/v1/wiki/folders?"+q+"&path=guide&recursive=true", f.agent, ""); code != 403 {
+		t.Fatal("agent delete", code)
+	}
+	if code := do("DELETE", "/v1/wiki/folders?"+q+"&path=guide&recursive=true", f.human, ""); code != 200 {
+		t.Fatal("recursive delete", code)
 	}
 }

@@ -641,14 +641,8 @@ func (s *Service) detachWikiSource(ctx context.Context, tx Tx, scope Scope, d De
 		p.SourceIDs = slices.DeleteFunc(append([]string{}, p.SourceIDs...), func(x string) bool { return x == sourceID })
 		r.Sources = slices.DeleteFunc(append([]SourceRef{}, r.Sources...), func(x SourceRef) bool { return x.SourceID == anchor })
 		if len(p.SourceIDs) == 0 && !p.Locked {
-			old := p.Reviewed
-			p.ReviewState, p.Draft, p.Reviewed, p.StaleSources = "deleted", nil, nil, nil
-			r.Status, r.Text, r.Summary, r.ContentErased = "deleted", "", "", true
 			r.Wiki = &WikiRecord{Page: &p}
-			if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
-				return nil, err
-			}
-			if err = syncWikiLinks(ctx, tx, scope, r, old, d.PrincipalID); err != nil {
+			if err = s.deleteWikiPageRow(ctx, tx, scope, &r, d.PrincipalID); err != nil {
 				return nil, err
 			}
 			deleted[p.Slug] = r.ID
@@ -665,6 +659,19 @@ func (s *Service) detachWikiSource(ctx context.Context, tx Tx, scope Scope, d De
 		out.Detached = append(out.Detached, r.ID)
 	}
 	return deleted, nil
+}
+
+// deleteWikiPageRow turns page r into an erased "deleted" row and drops its link rows.
+func (s *Service) deleteWikiPageRow(ctx context.Context, tx Tx, scope Scope, r *Record, actor string) error {
+	p := *r.Wiki.Page
+	old := p.Reviewed
+	p.ReviewState, p.Draft, p.Reviewed, p.StaleSources = "deleted", nil, nil, nil
+	r.Status, r.Text, r.Summary, r.ContentErased = "deleted", "", "", true
+	r.Wiki = &WikiRecord{Page: &p}
+	if err := s.replaceWikiPage(ctx, tx, r); err != nil {
+		return err
+	}
+	return syncWikiLinks(ctx, tx, scope, *r, old, actor)
 }
 
 // unlinkDeletedWikiPages removes links to the deleted pages from the pages that remain.

@@ -134,6 +134,8 @@ type MentalModelData struct {
 	// LastFullRefreshAt is the last full_refresh_cron rewrite; LastOutcome how the last attempt ended.
 	LastFullRefreshAt *time.Time          `json:"last_full_refresh_at,omitempty" bson:"last_full_refresh_at,omitempty"`
 	LastOutcome       *MentalModelOutcome `json:"last_outcome,omitempty" bson:"last_outcome,omitempty"`
+	// Folder places the model in the wiki tree as a query page ("" = root); nil keeps it out.
+	Folder *string `json:"folder,omitempty" bson:"folder,omitempty"`
 }
 
 type MentalModelView struct {
@@ -148,6 +150,7 @@ type MentalModelView struct {
 	Draft         *DerivedRevision   `json:"draft,omitempty"`
 	DraftDiff     []DigestDiffLine   `json:"draft_diff,omitempty"`
 	LastRefreshAt *time.Time         `json:"last_refresh_at,omitempty"`
+	Folder        *string            `json:"folder,omitempty"`
 	// Stale: the approved text no longer matches its sources ("sources_changed": a cited
 	// record is gone or no longer approved) or newer approved memories exist ("new_memories").
 	Stale       bool   `json:"stale"`
@@ -179,6 +182,8 @@ type MentalModelInput struct {
 	Title            string             `json:"title"`
 	Query            string             `json:"query"`
 	Refresh          MentalModelRefresh `json:"refresh"`
+	// Folder puts the model in the wiki tree as a query page; omitted on update keeps it.
+	Folder *string `json:"folder,omitempty"`
 }
 
 type MentalModelRefreshInput struct {
@@ -207,7 +212,7 @@ func (s *Service) mentalModelView(ctx context.Context, r Record) MentalModelView
 	}
 	m.Active, m.Draft = s.withholdGone(ctx, r.Scope, m.Active), s.withholdGone(ctx, r.Scope, m.Draft)
 	v := MentalModelView{ID: r.ID, Scope: r.Scope, Revision: r.Revision, Title: m.Title, Query: m.Query, Refresh: m.Refresh, Status: r.Status, Active: m.Active, Draft: m.Draft,
-		LastRefreshAt: m.LastRefreshAt, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Authority: AuthorityDataOnly}
+		LastRefreshAt: m.LastRefreshAt, Folder: m.Folder, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Authority: AuthorityDataOnly}
 	v.Stale, v.StaleReason = s.mentalModelStale(ctx, r)
 	v.LastOutcome = m.LastOutcome
 	if r.Status == statusActive {
@@ -237,7 +242,21 @@ func validMentalModelInput(in MentalModelInput) error {
 	case containsSecret(title) || containsSecret(query) || redactSessionPrivate(title+"\n"+query) != title+"\n"+query:
 		return ErrSecretDetected
 	}
+	if in.Folder != nil {
+		if _, ok := normalizeWikiFolder(*in.Folder); !ok {
+			return ErrInvalid
+		}
+	}
 	return nil
+}
+
+// mentalModelFolder is the normalized wiki folder of a validated input (nil when none).
+func mentalModelFolder(in MentalModelInput) *string {
+	if in.Folder == nil {
+		return nil
+	}
+	path, _ := normalizeWikiFolder(*in.Folder)
+	return &path
 }
 
 func (s *Service) CreateMentalModel(ctx context.Context, token string, in MentalModelInput) (MentalModelView, error) {
@@ -267,7 +286,7 @@ func (s *Service) CreateMentalModel(ctx context.Context, token string, in Mental
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	r := Record{ID: "mm_" + ID(), Scope: in.Scope, Kind: mentalModelKind, Status: status, Revision: 1, CreatedAt: now, UpdatedAt: now,
 		CreatedBy: d.PrincipalID, CreatedByType: d.Role, ApprovedBy: approvedBy,
-		MentalModel: &MentalModelData{Title: strings.TrimSpace(in.Title), Query: strings.TrimSpace(in.Query), Refresh: in.Refresh}}
+		MentalModel: &MentalModelData{Title: strings.TrimSpace(in.Title), Query: strings.TrimSpace(in.Query), Refresh: in.Refresh, Folder: mentalModelFolder(in)}}
 	err = s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
 		if status == obsProposed {
 			if err := proposalCapReached(ctx, tx, in.Scope, colMentalModels, mmProposedMax); err != nil {
@@ -399,6 +418,9 @@ func (s *Service) updateMentalModel(ctx context.Context, token, id string, in Me
 			r.Status, r.ApprovedBy = statusActive, d.PrincipalID
 		}
 		r.MentalModel.Title, r.MentalModel.Query, r.MentalModel.Refresh = strings.TrimSpace(in.Title), strings.TrimSpace(in.Query), in.Refresh
+		if in.Folder != nil {
+			r.MentalModel.Folder = mentalModelFolder(in)
+		}
 		return nil
 	})
 	if err != nil {

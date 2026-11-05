@@ -54,6 +54,9 @@ type WikiTreePage struct {
 	Folder      string `json:"folder"`
 	ReviewState string `json:"review_state"`
 	Locked      bool   `json:"locked"`
+	// Stale is set on a query page (type "query", id = mental model id) whose text
+	// is behind its sources; a refresh writes a draft a person reviews.
+	Stale bool `json:"stale,omitempty"`
 }
 
 type WikiTree struct {
@@ -168,6 +171,17 @@ func (s *Service) WikiTree(ctx context.Context, token string, scope Scope) (Wiki
 		counts[p.Folder]++
 		out.Pages = append(out.Pages, WikiTreePage{ID: r.ID, Revision: r.Revision, Slug: p.Slug, Type: p.Type, Title: wikiTitle(*p), Folder: p.Folder, ReviewState: p.ReviewState, Locked: p.Locked})
 	}
+	queries, err := s.wikiQueryPages(ctx, token, scope, d.Role == roleHuman)
+	if err != nil {
+		return out, err
+	}
+	for _, q := range queries {
+		for _, f := range wikiFolderAncestors(q.Folder) {
+			counts[f] += 0
+		}
+		counts[q.Folder]++
+	}
+	out.Pages = append(out.Pages, queries...)
 	for path, n := range counts {
 		if path != "" {
 			out.Folders = append(out.Folders, WikiTreeFolder{Path: path, Pages: n})
@@ -297,4 +311,333 @@ func (s *Service) wikiRenameFree(ctx context.Context, tx Tx, scope Scope, from, 
 		}
 	}
 	return nil
+}
+
+// wikiQueryPages are the mental models placed in the wiki (a folder set): people
+// see proposals and drafts too, other roles only models with approved text. A
+// caller that may not read mental models gets none.
+func (s *Service) wikiQueryPages(ctx context.Context, token string, scope Scope, human bool) ([]WikiTreePage, error) {
+	if _, err := s.authorize(ctx, token, "read:"+colMentalModels, scope, "", ""); err != nil {
+		return nil, nil
+	}
+	rows, _, err := s.wikiFolderModels(ctx, scope, human)
+	if err != nil {
+		return nil, err
+	}
+	out := []WikiTreePage{}
+	for _, r := range rows {
+		m := r.MentalModel
+		if !human && (r.Status != statusActive || m.Active == nil) {
+			continue
+		}
+		state := "reviewed"
+		switch {
+		case r.Status == obsProposed:
+			state = "proposed"
+		case m.Draft != nil:
+			state = "draft"
+		}
+		stale, _ := s.mentalModelStale(ctx, r)
+		out = append(out, WikiTreePage{ID: r.ID, Revision: r.Revision, Type: "query", Title: m.Title, Folder: *m.Folder, ReviewState: state, Stale: stale})
+	}
+	return out, nil
+}
+
+// wikiFolderModels lists the scope's mental models that sit in the wiki; full
+// reports the list was cut at mmListLimit (folder changes refuse then).
+func (s *Service) wikiFolderModels(ctx context.Context, scope Scope, withProposed bool) ([]Record, bool, error) {
+	statuses := []string{statusActive}
+	if withProposed {
+		statuses = append(statuses, obsProposed)
+	}
+	out, full := []Record{}, false
+	for _, status := range statuses {
+		rows, err := s.Repo.ListRecordsByStatus(ctx, scope, colMentalModels, status, mmListLimit)
+		if err != nil {
+			return nil, false, err
+		}
+		full = full || len(rows) >= mmListLimit
+		for _, r := range rows {
+			if r.Scope == scope && r.MentalModel != nil && r.MentalModel.Folder != nil {
+				out = append(out, r)
+			}
+		}
+	}
+	return out, full, nil
+}
+
+// WikiFolderMoveInput renames or moves folder From, with everything under it, to To.
+type WikiFolderMoveInput struct {
+	Scope Scope  `json:"scope"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+type WikiFolderDeleteInput struct {
+	Scope     Scope  `json:"scope"`
+	Path      string `json:"path"`
+	Recursive bool   `json:"recursive,omitempty"`
+}
+
+type WikiPageDeleteInput struct {
+	Scope            Scope `json:"scope"`
+	ExpectedRevision int64 `json:"expected_revision"`
+}
+
+// WikiFolderMoveResult names the folder's new path and the page and query-page ids moved.
+type WikiFolderMoveResult struct {
+	Path  string   `json:"path"`
+	Moved []string `json:"moved"`
+}
+
+// wikiInFolder: folder is path or lies under it.
+func wikiInFolder(folder, path string) bool {
+	return folder == path || strings.HasPrefix(folder, path+"/")
+}
+
+// wikiFolderSet is everything a folder change touches, read before its transaction.
+type wikiFolderSet struct {
+	rows    []Record // every wiki row, for unlinking
+	folders []Record // folder rows under the path
+	pages   []Record // live pages under the path
+	models  []Record // query pages under the path
+}
+
+// readWikiFolder collects the rows under path. A change over a cut list could
+// leave part of a folder behind, so a full window is refused.
+func (s *Service) readWikiFolder(ctx context.Context, scope Scope, path string) (wikiFolderSet, error) {
+	var set wikiFolderSet
+	rows, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit+1)
+	if err != nil {
+		return set, err
+	}
+	models, full, err := s.wikiFolderModels(ctx, scope, true)
+	if err != nil {
+		return set, err
+	}
+	if len(rows) > wikiListLimit || full {
+		return set, ErrConflict
+	}
+	set.rows = rows
+	for _, r := range rows {
+		if r.Wiki != nil && r.Wiki.Folder != nil && wikiInFolder(r.Wiki.Folder.Path, path) {
+			set.folders = append(set.folders, r)
+		} else if p := wikiPageOf(r); p != nil && r.Status != "deleted" && wikiInFolder(p.Folder, path) {
+			set.pages = append(set.pages, r)
+		}
+	}
+	for _, r := range models {
+		if wikiInFolder(*r.MentalModel.Folder, path) {
+			set.models = append(set.models, r)
+		}
+	}
+	return set, nil
+}
+
+// MoveWikiFolder renames or moves a folder (a person only): its folder rows,
+// pages and query pages take the new path in one transaction. Moving a folder
+// into itself is refused; a rebased path must still be a valid folder.
+func (s *Service) MoveWikiFolder(ctx context.Context, token string, in WikiFolderMoveInput) (WikiFolderMoveResult, error) {
+	from, okFrom := normalizeWikiFolder(in.From)
+	to, okTo := normalizeWikiFolder(in.To)
+	if !okFrom || !okTo || from == "" || to == "" || wikiInFolder(to, from) {
+		return WikiFolderMoveResult{}, ErrInvalid
+	}
+	d, err := s.wikiAuthorize(ctx, token, "write:"+colWikiPages, in.Scope, wikiFolderID(in.Scope, from), from+"\n"+to, "human")
+	if err != nil {
+		return WikiFolderMoveResult{}, err
+	}
+	set, err := s.readWikiFolder(ctx, in.Scope, from)
+	if err != nil {
+		return WikiFolderMoveResult{}, err
+	}
+	rebase := func(folder string) (string, error) {
+		path, ok := normalizeWikiFolder(to + folder[len(from):])
+		if !ok {
+			return "", ErrInvalid
+		}
+		return path, nil
+	}
+	out := WikiFolderMoveResult{Path: to, Moved: []string{}}
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		out.Moved = []string{}
+		if err := s.moveWikiFolderRows(ctx, tx, in.Scope, set.folders, rebase); err != nil {
+			return err
+		}
+		for _, seen := range set.pages {
+			r, err := s.getWikiPage(ctx, tx, in.Scope, seen.ID)
+			if err != nil {
+				return err
+			}
+			p := *r.Wiki.Page
+			if p.Folder, err = rebase(p.Folder); err != nil {
+				return err
+			}
+			r.Wiki = &WikiRecord{Page: &p}
+			if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+				return err
+			}
+			out.Moved = append(out.Moved, r.ID)
+		}
+		for _, seen := range set.models {
+			if err := moveWikiQueryPage(ctx, tx, in.Scope, seen, rebase); err != nil {
+				return err
+			}
+			out.Moved = append(out.Moved, seen.ID)
+		}
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:folder_moved", wikiFolderID(in.Scope, to))
+	})
+	if err != nil {
+		return WikiFolderMoveResult{}, err
+	}
+	return out, nil
+}
+
+// moveWikiFolderRows re-keys the folder rows (their id is the path's hash).
+func (s *Service) moveWikiFolderRows(ctx context.Context, tx Tx, scope Scope, folders []Record, rebase func(string) (string, error)) error {
+	for _, r := range folders {
+		path, err := rebase(r.Wiki.Folder.Path)
+		if err != nil {
+			return err
+		}
+		if err = tx.Delete(ctx, colWikiPages, scope, r.ID, r.Revision); err != nil {
+			return err
+		}
+		id := wikiFolderID(scope, path)
+		if _, err = tx.Get(ctx, colWikiPages, scope, id); err == nil {
+			continue // the target folder already exists
+		} else if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		r.ID, r.Revision, r.UpdatedAt = id, 1, time.Now().UTC()
+		r.Wiki = &WikiRecord{Folder: &WikiFolder{Path: path}}
+		if err = tx.Insert(ctx, colWikiPages, r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func moveWikiQueryPage(ctx context.Context, tx Tx, scope Scope, seen Record, rebase func(string) (string, error)) error {
+	r, err := tx.Get(ctx, colMentalModels, scope, seen.ID)
+	if err != nil {
+		return err
+	}
+	if r.Revision != seen.Revision || r.MentalModel == nil || r.MentalModel.Folder == nil {
+		return ErrConflict
+	}
+	path, err := rebase(*r.MentalModel.Folder)
+	if err != nil {
+		return err
+	}
+	m := *r.MentalModel
+	m.Folder = &path
+	prev := r.Revision
+	r.MentalModel, r.Revision, r.UpdatedAt = &m, r.Revision+1, time.Now().UTC().Truncate(time.Millisecond)
+	return tx.Replace(ctx, colMentalModels, r, prev)
+}
+
+// DeleteWikiFolder removes a folder (a person only). A folder that still holds
+// pages or query pages is refused unless recursive, which deletes them too:
+// pages become erased "deleted" rows and links to them turn into plain text.
+func (s *Service) DeleteWikiFolder(ctx context.Context, token string, in WikiFolderDeleteInput) (WikiCleanupResult, error) {
+	out := WikiCleanupResult{Deleted: []string{}, Detached: []string{}, Unlinked: []string{}, JobsEnded: []string{}}
+	path, ok := normalizeWikiFolder(in.Path)
+	if !ok || path == "" {
+		return out, ErrInvalid
+	}
+	d, err := s.wikiAuthorize(ctx, token, "write:"+colWikiPages, in.Scope, wikiFolderID(in.Scope, path), path, "human")
+	if err != nil {
+		return out, err
+	}
+	set, err := s.readWikiFolder(ctx, in.Scope, path)
+	if err != nil {
+		return out, err
+	}
+	if !in.Recursive && len(set.pages)+len(set.models) > 0 {
+		return out, ErrConflict
+	}
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		out.Deleted, out.Unlinked = []string{}, []string{}
+		if err := s.deleteWikiPages(ctx, tx, in.Scope, d.PrincipalID, set.rows, set.pages, &out); err != nil {
+			return err
+		}
+		for _, m := range set.models {
+			if err := tx.Delete(ctx, colMentalModels, in.Scope, m.ID, m.Revision); err != nil {
+				return err
+			}
+			if err := audit(ctx, tx, in.Scope, d.PrincipalID, "delete:"+colMentalModels, m.ID); err != nil {
+				return err
+			}
+			out.Deleted = append(out.Deleted, m.ID)
+		}
+		for _, f := range set.folders {
+			if err := tx.Delete(ctx, colWikiPages, in.Scope, f.ID, f.Revision); err != nil {
+				return err
+			}
+		}
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:folder_deleted", wikiFolderID(in.Scope, path))
+	})
+	return out, err
+}
+
+// deleteWikiPages deletes the given pages and unlinks them from the rest.
+func (s *Service) deleteWikiPages(ctx context.Context, tx Tx, scope Scope, actor string, rows, pages []Record, out *WikiCleanupResult) error {
+	deleted := map[string]string{}
+	for _, seen := range pages {
+		r, err := s.getWikiPage(ctx, tx, scope, seen.ID)
+		if err != nil {
+			return err
+		}
+		if r.Revision != seen.Revision || r.Status == "deleted" {
+			return ErrConflict
+		}
+		if err = s.deleteWikiPageRow(ctx, tx, scope, &r, actor); err != nil {
+			return err
+		}
+		deleted[r.Wiki.Page.Slug] = r.ID
+		out.Deleted = append(out.Deleted, r.ID)
+	}
+	if len(deleted) == 0 {
+		return nil
+	}
+	return s.unlinkDeletedWikiPages(ctx, tx, scope, rows, deleted, out)
+}
+
+// DeleteWikiPage deletes one page (a person only, locked pages too: the lock
+// stops automation, not its owner). A query page (mental model id) is deleted
+// as its mental model.
+func (s *Service) DeleteWikiPage(ctx context.Context, token, id string, in WikiPageDeleteInput) (WikiCleanupResult, error) {
+	out := WikiCleanupResult{Deleted: []string{}, Detached: []string{}, Unlinked: []string{}, JobsEnded: []string{}}
+	if in.ExpectedRevision < 1 || !validRunLabel(id, 256) {
+		return out, ErrInvalid
+	}
+	if strings.HasPrefix(id, "mm_") {
+		if err := s.DeleteMentalModel(ctx, token, in.Scope, id, in.ExpectedRevision); err != nil {
+			return out, err
+		}
+		out.Deleted = append(out.Deleted, id)
+		return out, nil
+	}
+	d, err := s.wikiAuthorize(ctx, token, "write:"+colWikiPages, in.Scope, id, "", "human")
+	if err != nil {
+		return out, err
+	}
+	rows, err := s.Repo.ListRecords(ctx, in.Scope, colWikiPages, wikiListLimit+1)
+	if err != nil {
+		return out, err
+	}
+	// A full window may hide a page that links here: refuse rather than leave a link dangling.
+	if len(rows) > wikiListLimit {
+		return out, ErrConflict
+	}
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		out.Deleted, out.Unlinked = []string{}, []string{}
+		page := Record{ID: id, Revision: in.ExpectedRevision}
+		if err := s.deleteWikiPages(ctx, tx, in.Scope, d.PrincipalID, rows, []Record{page}, &out); err != nil {
+			return err
+		}
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "wiki:page_deleted", id)
+	})
+	return out, err
 }
