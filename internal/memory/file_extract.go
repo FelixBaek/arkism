@@ -663,7 +663,7 @@ func extractFileChunks(pages []string, paged bool, size int) ([]FileExtractChunk
 
 // ExtractFileMemories turns one uploaded file into review candidates.
 func (s *Service) ExtractFileMemories(ctx context.Context, token string, in FileMemoriesInput) (FileMemoriesResult, error) {
-	if !validScope(in.Scope) || !validRunLabel(in.Filename, 200) || strings.ContainsAny(in.Filename, "/\\") || containsSecret(in.Filename) {
+	if !validScope(in.Scope) || !validUploadName(in.Filename) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
 	opts := ExtractOptions{Context: in.Context, Timestamp: in.Timestamp, Tags: in.Tags, Strategy: in.Strategy}
@@ -682,14 +682,24 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
+	return s.extractUploaded(ctx, token, d, plan, f)
+}
+
+// validUploadName is a plain file name: no folders, no control characters, no secret.
+func validUploadName(name string) bool {
+	return validRunLabel(name, 200) && !strings.ContainsAny(name, "/\\") && !containsSecret(name)
+}
+
+// extractUploaded reads one checked upload and proposes candidates from it.
+func (s *Service) extractUploaded(ctx context.Context, token string, d Decision, plan FileExtractJob, f uploadedFile) (FileMemoriesResult, error) {
 	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, f)
 	if err == nil {
-		err = s.defendItem(ctx, in.Scope, "write:memory_candidates", &plan.Options, pagePointers(pages)...)
+		err = s.defendItem(ctx, f.Scope, "write:memory_candidates", &plan.Options, pagePointers(pages)...)
 	}
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
-	if in.DryRun && len(pages) == 0 {
+	if f.DryRun && len(pages) == 0 {
 		return FileMemoriesResult{Status: JobStatusDone, Skipped: notes}, nil
 	}
 	chunks, redacted, err := extractFileChunks(pages, paged, extractChunkRunes(plan.Settings))
@@ -697,12 +707,12 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 		return FileMemoriesResult{}, err
 	}
 	out := FileMemoriesResult{Skipped: append(notes, extractRedactionNote(redacted)...)}
-	if in.DryRun {
+	if f.DryRun {
 		out.Status = JobStatusDone
-		return out, s.previewChunks(ctx, token, d, in.Scope, &plan, chunks, &out)
+		return out, s.previewChunks(ctx, token, d, f.Scope, &plan, chunks, &out)
 	}
-	plan.Label = in.Filename
-	return s.extractStored(ctx, token, d, in.Scope, plan, "file:"+in.Filename, chunks, out, fileExtractSyncChunks, false)
+	plan.Label = f.Name
+	return s.extractStored(ctx, token, d, f.Scope, plan, "file:"+f.Name, chunks, out, fileExtractSyncChunks, false)
 }
 
 // ingestMaxItems bounds one ingest request; every item may become its own job.

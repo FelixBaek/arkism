@@ -1566,6 +1566,10 @@ class ArkismClient(BaseClient):
         """POST /v1/memories/ingest — Extract memory candidates from text items"""
         return self.request("POST", f"/v1/memories/ingest", None, body)
 
+    def extract_file_memories_batch(self, body=None):
+        """POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request; body: {metadata JSON, file JSON} sent as multipart in this order"""
+        return self.request("POST", f"/v1/files/memories/batch", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', True)]])
+
     def extract_file_memories(self, body=None):
         """POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)"""
         return self.request("POST", f"/v1/files/memories", None, body)

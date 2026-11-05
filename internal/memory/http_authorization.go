@@ -126,7 +126,9 @@ func (w *routeResponse) flush(dst http.ResponseWriter) {
 type httpPreflightKey struct{}
 
 func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, policy routePolicy) (Decision, error) {
-	if policy.fileLimit {
+	if policy.fileLimit && policy.scope == routeMultipart {
+		policy.limit = s.batchRequestBytes()
+	} else if policy.fileLimit {
 		policy.limit = s.Files.requestBytes()
 	}
 	scope, input, err := policy.requestScope(w, r)
@@ -197,7 +199,7 @@ func (policy routePolicy) requestScope(w http.ResponseWriter, r *http.Request) (
 		return scope, routeInput{}, nil
 	}
 	if policy.scope == routeMultipart {
-		return readMultipartRouteScope(w, r)
+		return readMultipartRouteScope(w, r, max(policy.limit, maxFileRequestBytes))
 	}
 	if policy.scope == routePath {
 		scope := Scope{WorkspaceID: r.PathValue("workspace"), ProjectID: r.PathValue("project")}
@@ -243,8 +245,8 @@ type replayedBody struct {
 
 func (b *replayedBody) Close() error { return b.original.Close() }
 
-func readMultipartRouteScope(w http.ResponseWriter, r *http.Request) (Scope, routeInput, error) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxFileRequestBytes)
+func readMultipartRouteScope(w http.ResponseWriter, r *http.Request, limit int64) (Scope, routeInput, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	original := r.Body
 	var prefix bytes.Buffer
 	r.Body = &replayedBody{Reader: io.TeeReader(original, &prefix), original: original}
@@ -261,7 +263,13 @@ func readMultipartRouteScope(w http.ResponseWriter, r *http.Request) (Scope, rou
 		return Scope{}, routeInput{}, err
 	}
 	var input routeInput
-	if json.Unmarshal(metadata, &input) != nil || !validScope(input.Source.Scope) {
+	if json.Unmarshal(metadata, &input) != nil {
+		return Scope{}, routeInput{}, ErrInvalid
+	}
+	if input.Source.Scope == (Scope{}) {
+		input.Source.Scope = input.Scope // a batch upload names its scope at the top
+	}
+	if !validScope(input.Source.Scope) {
 		return Scope{}, routeInput{}, ErrInvalid
 	}
 	if containsSecret(structuredText(input.Source.Scope)) {

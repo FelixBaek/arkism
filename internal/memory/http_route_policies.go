@@ -152,6 +152,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/extract/preview":                             {action: "generate:memory_candidates", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/files/memories":                              {action: "write:memory_candidates", scope: routeJSON, limit: fileRequestJSONOverhead, fileLimit: true, roles: []string{roleHuman, roleAgent}},
 	"POST /v1/memories/ingest":                             {action: "write:memory_candidates", scope: routeJSON, limit: ingestRequestBytes, roles: []string{roleHuman, roleAgent}},
+	"POST /v1/files/memories/batch":                        {action: "write:memory_candidates", scope: routeMultipart, fileLimit: true, roles: []string{roleHuman, roleAgent}},
 	"GET /v1/files/memories/jobs/{id}":                     {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/files/memories/documents/{id}/chunks":         {action: "read:memory_candidates", scope: routeQuery},
 	"GET /v1/files/memories/documents/{id}/history":        {action: "read:memory_candidates", scope: routeQuery},

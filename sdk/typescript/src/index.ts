@@ -2203,6 +2203,10 @@ export class ArkismClient {
   ingest_memories(body: { "scope": Scope; "items": Array<(unknown | unknown)>; "async"?: boolean }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/memories/ingest`, undefined, body);
   }
+  /** POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request */
+  extract_file_memories_batch(body: { "metadata": { "scope": Scope; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
+    return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
+  }
   /** POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document) */
   extract_file_memories(body: { "scope": Scope; "filename": string; "content_base64": string; "mime"?: string; "dry_run"?: boolean; "context"?: string; "timestamp"?: string; "tags"?: Array<string>; "strategy"?: string }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/files/memories`, undefined, body);

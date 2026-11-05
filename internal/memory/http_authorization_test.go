@@ -262,7 +262,7 @@ func TestHTTPMultipartPolicyReadsMetadataThenReplaysUpload(t *testing.T) {
 	req := httptest.NewRequest("POST", "/v1/sources/ingest", nil)
 	req.Body = counted
 	req.Header.Set("Content-Type", contentType)
-	scope, _, err := readMultipartRouteScope(httptest.NewRecorder(), req)
+	scope, _, err := readMultipartRouteScope(httptest.NewRecorder(), req, maxFileRequestBytes)
 	if err != nil || scope != scopeA {
 		t.Fatal(scope, err)
 	}

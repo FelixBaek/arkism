@@ -82,6 +82,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerReflectCoreHTTP(mux, s, stats)
 	registerFileextractCoreHTTP(mux, s, stats)
 	registerDocs2CoreHTTP(mux, s, stats)
+	registerFilesCoreHTTP(mux, s, stats)
 	registerEntitiesCoreHTTP(mux, s, stats)
 	registerOpsCoreHTTP(mux, s, stats)
 	registerWebhooksCoreHTTP(mux, s, stats)

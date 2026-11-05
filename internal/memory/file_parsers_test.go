@@ -1,11 +1,13 @@
 package memory
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -212,5 +214,55 @@ func TestKnowledgeImageReadByVision(t *testing.T) {
 	got, err := f.svc.IngestKnowledge(testCtx, f.human, in)
 	if err != nil || len(got.Chunks) != 1 || !strings.Contains(got.Chunks[0].Text, "금요일 배포 금지") || len(v.images) != 1 {
 		t.Fatal(err, got.Chunks)
+	}
+}
+
+func batchRequest(t *testing.T, meta string, files map[string]string, order []string, token string) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, _ := w.CreateFormField("metadata")
+	_, _ = part.Write([]byte(meta))
+	for _, name := range order {
+		part, err := w.CreateFormFile("file", name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = part.Write([]byte(files[name]))
+	}
+	_ = w.Close()
+	r := httptest.NewRequest(http.MethodPost, "/v1/files/memories/batch", &body)
+	r.Header.Set("Content-Type", w.FormDataContentType())
+	r.Header.Set("Authorization", "Bearer "+token)
+	return r
+}
+
+// A batch reads each file in turn, reports a bad one and goes on, and stops
+// at the batch limits.
+func TestFileBatchUpload(t *testing.T) {
+	f, llm := mediaFixture(t, extractAnswer(), extractAnswer())
+	h := Handler(f.svc)
+	meta := `{"scope":` + string(mustJSON(t, scopeA)) + `,"files":[{},{"parsers":["builtin"]}]}`
+	files := map[string]string{"a.md": "첫 파일 본문", "b.txt": "둘째 파일 본문", "c.exe": "MZ"}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, batchRequest(t, meta, files, []string{"a.md", "b.txt", "c.exe"}, f.human))
+	var out FileBatchOutput
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &out) != nil || len(out.Files) != 3 {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	if out.Files[0].Result == nil || out.Files[1].Result == nil || out.Files[2].Error != "unsupported_media_type" || len(llm.prompts) != 2 {
+		t.Fatalf("%+v %d", out.Files, len(llm.prompts))
+	}
+	f.svc.Files.BatchFiles = 1
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, batchRequest(t, `{"scope":`+string(mustJSON(t, scopeA))+`}`, files, []string{"a.md", "b.txt"}, f.human))
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("file count: %d %s", w.Code, w.Body)
+	}
+	f.svc.Files.BatchFiles, f.svc.Files.BatchBytes = 0, 4
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, batchRequest(t, `{"scope":`+string(mustJSON(t, scopeA))+`}`, files, []string{"a.md"}, f.human))
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("bytes: %d %s", w.Code, w.Body)
 	}
 }

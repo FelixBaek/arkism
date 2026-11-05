@@ -296,7 +296,7 @@ func TestIngestImageBlocksAndPerItemResults(t *testing.T) {
 		{{Content: "x", Blocks: []IngestBlock{png}}},
 		{{Blocks: []IngestBlock{{Type: "image", MIME: "image/gif", ContentBase64: png.ContentBase64}}}},
 		{{Blocks: []IngestBlock{{Type: "text", Text: "x", MIME: "image/png"}}}},
-		{{Blocks: slices.Repeat([]IngestBlock{png}, fileVisionMaxPages+1)}},
+		{{Blocks: slices.Repeat([]IngestBlock{png}, fileVisionPagesDefault+1)}},
 	} {
 		if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: bad}); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v: %v", bad, err)

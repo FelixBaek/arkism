@@ -39275,6 +39275,223 @@
         }
       }
     },
+    "/v1/files/memories/batch": {
+      "post": {
+        "operationId": "extract_file_memories_batch",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Turn several files into memory candidates in one multipart request",
+        "description": "multipart/form-data: a metadata part first ({scope, dry_run, parsers, files: [{mime, parsers}] in file order}), then one part named file per file. The caller is authorized before any file byte is read; files are read one at a time, each at most the per-file limit (MEMORY_FILE_MAX_BYTES, default 4 MiB), at most MEMORY_FILE_BATCH_MAX_FILES files (default 10) and MEMORY_FILE_BATCH_MAX_BYTES (default 100 MiB) together; going over answers 413. Each file is read and extracted exactly like POST /v1/files/memories: its readers are the per-file parsers, else the batch parsers, else the server order, and the request may name only readers in MEMORY_FILE_PARSER_ALLOWLIST. A file that fails reports its error code and the rest go on; a refusal or the model budget stops the batch. Each stored file returns its own job id and document id. Candidates only; a person reviews every one.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "metadata",
+                  "file"
+                ],
+                "properties": {
+                  "metadata": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "scope"
+                    ],
+                    "properties": {
+                      "scope": {
+                        "$ref": "#/components/schemas/Scope"
+                      },
+                      "dry_run": {
+                        "type": "boolean"
+                      },
+                      "parsers": {
+                        "type": "array",
+                        "maxItems": 8,
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "files": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "properties": {
+                            "mime": {
+                              "type": "string"
+                            },
+                            "parsers": {
+                              "type": "array",
+                              "maxItems": 8,
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "file": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "binary"
+                    }
+                  }
+                }
+              },
+              "encoding": {
+                "metadata": {
+                  "contentType": "application/json"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One result per file in order: filename and result (as POST /v1/files/memories) or error code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "files"
+                  ],
+                  "properties": {
+                    "files": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "filename"
+                        ],
+                        "properties": {
+                          "filename": {
+                            "type": "string"
+                          },
+                          "result": {
+                            "type": "object"
+                          },
+                          "error": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/files/memories": {
       "post": {
         "operationId": "extract_file_memories",
