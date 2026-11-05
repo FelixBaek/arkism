@@ -53524,6 +53524,7 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "entities": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {"name": {"type": "string"}, "type": {"type": "string", "pattern": "^[a-z][a-z0-9_-]{1,31}$", "description": "Built-in: person, project, repo, tool, product, file, service, place, organization, concept. label is a key:value classification from the space's entity_labels. Other well-formed types appear when the space turns entity_free_types on."}}}, "description": "Entities the caller states for this memory, applied literally (no similar-name matching) when the candidate is approved. type defaults to concept; a type the space does not allow is skipped. A label (type label, name key:value) must be in the space's entity_labels; labels of groups with tag true also become the candidate's tags."},
           "archive_messages": {
             "type": "array",
             "maxItems": 8,
