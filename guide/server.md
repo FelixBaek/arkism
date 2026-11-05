@@ -306,7 +306,9 @@ wiki. What a person approves and how is described in
    `GET /v1/files/memories/documents` lists extraction documents.
    `PATCH /v1/files/memories/documents/{id}` (people only) edits a document's
    tags and passes the edit to its waiting candidates and, one audited
-   revision each, to the memories its approved candidates became.
+   revision each, to the memories its approved candidates became. Observation
+   scopes (the space's `consolidation` block) are cut from memory tags, so the
+   edit also moves those memories to the matching scopes on the next run.
    `POST /v1/files/memories/documents/{id}/reprocess` (the uploader) reads a
    finished document again from its stored evidence; it spends model calls
    like an upload and only creates candidates.

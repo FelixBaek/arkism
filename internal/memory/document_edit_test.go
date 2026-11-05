@@ -50,6 +50,9 @@ func TestExtractDocumentListTagsAndReprocess(t *testing.T) {
 	}
 	if m, _ := f.repo.Get(testCtx, colMemories, scopeA, c.ID); slices.Contains(m.Tags, "ui") || !slices.Contains(m.Tags, "design") || m.Text != c.Text {
 		t.Fatalf("memory tags %+v", m)
+	} else if sc := (&SpaceConsolidation{DefaultScopes: [][]string{{"design"}, {"ui"}}}).partition([]Record{m}); len(sc) != 1 || !slices.Equal(sc[0].tags, []string{"design"}) {
+		// The document's tags are what observation scopes are cut from: the edit moves the memory's scope.
+		t.Fatalf("observation scopes %d", len(sc))
 	}
 	// Reprocess reads every chunk again from the stored evidence, with the document's tags.
 	if _, err := f.svc.ReprocessDocument(testCtx, f.agent, up.DocumentID, WikiScopeInput{Scope: scopeA}); err == nil {
