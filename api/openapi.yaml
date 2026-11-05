@@ -36005,7 +36005,7 @@
           "Management"
         ],
         "summary": "Resume a file extraction job",
-        "description": "Runs the remaining chunks of a pending or stopped job (budget stop, restart). A finished job is returned unchanged. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Runs the remaining chunks of a pending or stopped job (budget stop, restart). Only the person who uploaded the file may run it (others get 403). A finished job, or one an operator stopped, is returned unchanged. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",

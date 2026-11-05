@@ -54,6 +54,9 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 	})
 }
 
+// extractJobSlots bounds how many queued extraction jobs call the model at once.
+var extractJobSlots = make(chan struct{}, 2)
+
 // startExtractJob runs a queued job after the response; the caller polls it.
 // A job stopped by a restart or the budget resumes through its run route.
 func (s *Service) startExtractJob(r *http.Request, scope Scope, id string, err error) {
@@ -61,5 +64,9 @@ func (s *Service) startExtractJob(r *http.Request, scope Scope, id string, err e
 		return
 	}
 	ctx, token := context.WithoutCancel(r.Context()), bearer(r)
-	go func() { _, _ = s.RunFileExtractJob(ctx, token, scope, id) }()
+	go func() {
+		extractJobSlots <- struct{}{}
+		defer func() { <-extractJobSlots }()
+		_, _ = s.RunFileExtractJob(ctx, token, scope, id)
+	}()
 }

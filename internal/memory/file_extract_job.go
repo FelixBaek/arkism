@@ -66,8 +66,21 @@ func (s *Service) GetFileExtractJob(ctx context.Context, token string, scope Sco
 	return viewExtractJob(r), nil
 }
 
-// claimExtractJob takes the job's lease; a finished or leased job is returned unclaimed.
-func (s *Service) claimExtractJob(ctx context.Context, scope Scope, id string) (Record, bool, error) {
+// extractJobClaimable lists the states a run may pick up; any other state
+// (done, or one an operator set such as a cancel) is left alone.
+func extractJobClaimable(r Record, now time.Time) bool {
+	switch r.Status {
+	case JobStatusPending, JobStatusFailed, JobStatusRetry:
+		return true
+	case JobStatusRunning:
+		return !r.LeaseUntil.After(now)
+	}
+	return false
+}
+
+// claimExtractJob takes the job's lease for the person who asked for it; a
+// finished, leased or stopped job is returned unclaimed.
+func (s *Service) claimExtractJob(ctx context.Context, d Decision, scope Scope, id string) (Record, bool, error) {
 	var claimed Record
 	ok := false
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -76,8 +89,13 @@ func (s *Service) claimExtractJob(ctx context.Context, scope Scope, id string) (
 			return err
 		}
 		claimed = r
+		// The run captures candidates under the runner's name, so only the
+		// person who uploaded the file may run it.
+		if r.FileExtract.RequestedBy != d.PrincipalID {
+			return ErrDenied
+		}
 		now := time.Now().UTC()
-		if r.Status == JobStatusDone || r.Status == JobStatusRunning && r.LeaseUntil.After(now) {
+		if !extractJobClaimable(r, now) {
 			return nil
 		}
 		r.Status, r.LeaseUntil, r.LeaseToken, r.UpdatedAt = JobStatusRunning, now.Add(fileExtractJobLease), ID(), now
@@ -105,6 +123,9 @@ func (s *Service) saveExtractJob(ctx context.Context, r Record) (Record, error) 
 			return ErrConflict
 		}
 		r.UpdatedAt = time.Now().UTC()
+		if r.Status == JobStatusRunning { // each finished chunk renews the lease
+			r.LeaseUntil = r.UpdatedAt.Add(fileExtractJobLease)
+		}
 		r.Revision++
 		return tx.Replace(ctx, "jobs", r, current.Revision)
 	})
@@ -122,7 +143,7 @@ func (s *Service) RunFileExtractJob(ctx context.Context, token string, scope Sco
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
-	r, ok, err := s.claimExtractJob(ctx, scope, id)
+	r, ok, err := s.claimExtractJob(ctx, d, scope, id)
 	if err != nil || !ok {
 		return viewExtractJob(r), err
 	}

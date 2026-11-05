@@ -116,6 +116,10 @@ func TestFileMemoriesLargeFileRunsAsJob(t *testing.T) {
 	if err != nil || out.JobID == "" || out.Status != JobStatusPending {
 		t.Fatalf("queue %+v %v", out, err)
 	}
+	f.auth.actors[f.human2].verbs["generate"] = true
+	if _, err = f.svc.RunFileExtractJob(testCtx, f.human2, scopeA, out.JobID); !errors.Is(err, ErrDenied) {
+		t.Fatalf("another person ran the job: %v", err)
+	}
 	ran, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.JobID)
 	if err != nil || ran.Status != JobStatusDone || ran.Job.Next != ran.Job.Total || ran.Job.Total < 3 || ran.Job.Calls != ran.Job.Total {
 		t.Fatalf("run %+v %v", ran, err)
@@ -194,5 +198,24 @@ func TestFileMemoriesReadsPDFPages(t *testing.T) {
 	out, err := f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "doc.pdf", MIME: "application/pdf", ContentBase64: base64.StdEncoding.EncodeToString(tinyPDF(t, "")), DryRun: true})
 	if err != nil || len(llm.prompts) != 2 || !strings.Contains(llm.prompts[1], "한국") || extractRows(f) != 0 {
 		t.Fatalf("pdf %+v %v %v", out, err, llm.prompts)
+	}
+}
+
+func TestFileExtractJobLeavesStoppedJobAlone(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(), extractAnswer(), extractAnswer())
+	para := strings.Repeat("배포 전에 테스트를 실행한다. ", 200)
+	text := strings.Join([]string{para, para, para, para, para}, "\n\n")
+	out, err := f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "long.txt", ContentBase64: base64.StdEncoding.EncodeToString([]byte(text))})
+	if err != nil || out.JobID == "" {
+		t.Fatalf("queue %+v %v", out, err)
+	}
+	job, _ := f.repo.Get(testCtx, "jobs", scopeA, out.JobID)
+	job.Status = "cancelled" // an operator stop this package does not know
+	if err = f.repo.Replace(testCtx, "jobs", job, job.Revision); err != nil {
+		t.Fatal(err)
+	}
+	ran, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.JobID)
+	if err != nil || ran.Status != "cancelled" || len(llm.prompts) != 0 {
+		t.Fatalf("stopped job ran %+v %v %d", ran, err, len(llm.prompts))
 	}
 }

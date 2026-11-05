@@ -29,6 +29,8 @@ const (
 	pdfMaxPages    = 1000
 	pdfMaxDepth    = 32
 	pdfMaxCMap     = 1 << 16
+	pdfMaxText     = 2 << 20
+	pdfMaxCMapDst  = 64 // bytes of UTF-16 one code may map to (a ligature is a few)
 )
 
 type pdfName string
@@ -69,7 +71,18 @@ func (l *pdfLexer) skipSpace() {
 	}
 }
 
-func (l *pdfLexer) at(s string) bool { return bytes.HasPrefix(l.b[l.i:], []byte(s)) }
+// at is false past the end: a dict or array closing at the end steps over it.
+func (l *pdfLexer) at(s string) bool { return l.i < len(l.b) && bytes.HasPrefix(l.b[l.i:], []byte(s)) }
+
+// pdfInt reads a non-negative count or offset; a huge, infinite or NaN number
+// is refused instead of wrapping to a negative int.
+func pdfInt(v any) (int, bool) {
+	n, ok := v.(float64)
+	if !ok || !(n >= 0 && n <= math.MaxInt32) {
+		return 0, false
+	}
+	return int(n), true
+}
 
 // value reads one object or content operator; false at the end or on a
 // token that cannot start one (the caller skips a byte and goes on).
@@ -253,8 +266,8 @@ func (l *pdfLexer) stream(d pdfDict) (pdfStream, bool) {
 		l.i++
 	}
 	start := l.i
-	if n, ok := d["Length"].(float64); ok && n >= 0 && start+int(n) <= len(l.b) {
-		end := start + int(n)
+	if n, ok := pdfInt(d["Length"]); ok && start+n <= len(l.b) {
+		end := start + n
 		rest := bytes.TrimLeft(l.b[end:], " \r\n")
 		if bytes.HasPrefix(rest, []byte("endstream")) {
 			l.i = len(l.b) - len(rest) + len("endstream")
@@ -309,9 +322,12 @@ func pdfPagesText(raw []byte) ([]string, error) {
 	d.expandObjectStreams()
 	pages := d.pages()
 	out := make([]string, 0, len(pages))
-	found := false
+	found, total := false, 0
 	for _, page := range pages {
-		text := d.pageText(page)
+		text, over := d.pageText(page)
+		if total += len(text); over || total > pdfMaxText {
+			return nil, errBlobTooLarge // more text than one extraction reads
+		}
 		found = found || strings.TrimSpace(text) != ""
 		out = append(out, text)
 	}
@@ -356,13 +372,16 @@ func (d *pdfDoc) decode(s pdfStream) ([]byte, bool) {
 		if d.resolve(f) != pdfName("FlateDecode") {
 			return nil, false
 		}
+		// The document-wide cap is checked before inflating, so a stream shared
+		// by many pages or fonts cannot be inflated over and over.
+		limit := min(pdfMaxStream, pdfMaxInflated-d.inflated)
 		zr, err := zlib.NewReader(bytes.NewReader(data))
-		if err != nil {
+		if err != nil || limit <= 0 {
 			return nil, false
 		}
-		out, err := io.ReadAll(io.LimitReader(zr, pdfMaxStream+1))
+		out, err := io.ReadAll(io.LimitReader(zr, int64(limit)+1))
 		d.inflated += len(out)
-		if err != nil && len(out) == 0 || len(out) > pdfMaxStream || d.inflated > pdfMaxInflated {
+		if err != nil && len(out) == 0 || len(out) > limit {
 			return nil, false
 		}
 		data = out
@@ -376,26 +395,29 @@ func (d *pdfDoc) expandObjectStreams() {
 		if !ok || s.dict["Type"] != pdfName("ObjStm") {
 			continue
 		}
-		first, okFirst := s.dict["First"].(float64)
-		count, okCount := s.dict["N"].(float64)
-		data, okData := d.decode(s)
-		if !okFirst || !okCount || !okData || first < 0 || int(first) > len(data) {
+		first, okFirst := pdfInt(s.dict["First"])
+		count, okCount := pdfInt(s.dict["N"])
+		if !okFirst || !okCount {
 			continue
 		}
-		head := &pdfLexer{b: data[:int(first)]}
-		for n := 0; n < int(count); n++ {
+		data, okData := d.decode(s)
+		if !okData || first > len(data) {
+			continue
+		}
+		head := &pdfLexer{b: data[:first]}
+		for n := 0; n < count; n++ {
 			num, ok1 := head.value()
 			off, ok2 := head.value()
-			nf, isNum := num.(float64)
-			of, isOff := off.(float64)
-			if !ok1 || !ok2 || !isNum || !isOff || of < 0 || int(first)+int(of) > len(data) {
+			nf, isNum := pdfInt(num)
+			of, isOff := pdfInt(off)
+			if !ok1 || !ok2 || !isNum || !isOff || first+of > len(data) {
 				break
 			}
-			if _, exists := d.objs[int(nf)]; exists {
+			if _, exists := d.objs[nf]; exists {
 				continue
 			}
-			if obj, ok := (&pdfLexer{b: data, i: int(first) + int(of)}).value(); ok {
-				d.objs[int(nf)] = obj
+			if obj, ok := (&pdfLexer{b: data, i: first + of}).value(); ok {
+				d.objs[nf] = obj
 			}
 		}
 	}
@@ -460,13 +482,13 @@ func (d *pdfDoc) pageFonts(page pdfDict) map[pdfName]*pdfFont {
 }
 
 type pdfText struct {
-	out   strings.Builder
+	out   pdfOut
 	font  *pdfFont
 	fonts map[pdfName]*pdfFont
 	lastY float64
 }
 
-func (d *pdfDoc) pageText(page pdfDict) string {
+func (d *pdfDoc) pageText(page pdfDict) (string, bool) {
 	t := &pdfText{fonts: d.pageFonts(page), lastY: math.NaN()}
 	l := &pdfLexer{b: d.pageContent(page)}
 	var args []any
@@ -491,7 +513,7 @@ func (d *pdfDoc) pageText(page pdfDict) string {
 		t.operator(string(op), args)
 		args = args[:0]
 	}
-	return pdfTidy(t.out.String())
+	return pdfTidy(t.out.String()), t.out.over
 }
 
 func pdfNumber(args []any, i int) float64 {
@@ -513,20 +535,20 @@ func (t *pdfText) operator(op string, args []any) {
 	case "Tj":
 		t.show(args)
 	case "'", "\"":
-		t.out.WriteByte('\n')
+		t.out.add("\n")
 		t.show(args)
 	case "TJ":
 		t.showArray(args)
 	case "T*", "ET":
-		t.out.WriteByte('\n')
+		t.out.add("\n")
 	case "Td", "TD":
 		if pdfNumber(args, 1) != 0 {
-			t.out.WriteByte('\n')
+			t.out.add("\n")
 		}
 	case "Tm":
 		if y := pdfNumber(args, 5); y != t.lastY {
 			t.lastY = y
-			t.out.WriteByte('\n')
+			t.out.add("\n")
 		}
 	}
 }
@@ -534,7 +556,7 @@ func (t *pdfText) operator(op string, args []any) {
 func (t *pdfText) show(args []any) {
 	if len(args) > 0 {
 		if s, ok := args[len(args)-1].(string); ok {
-			t.out.WriteString(t.font.text(s))
+			t.out.add(t.font.text(s))
 		}
 	}
 }
@@ -547,12 +569,25 @@ func (t *pdfText) showArray(args []any) {
 	for _, it := range items {
 		switch x := it.(type) {
 		case string:
-			t.out.WriteString(t.font.text(x))
+			t.out.add(t.font.text(x))
 		case float64:
 			if x < -250 { // a wide kerning gap is a word space
-				t.out.WriteByte(' ')
+				t.out.add(" ")
 			}
 		}
+	}
+}
+
+// pdfOut stops growing at pdfMaxText, so a font map that turns one code into
+// a long string cannot blow a small stream up into gigabytes of text.
+type pdfOut struct {
+	strings.Builder
+	over bool
+}
+
+func (o *pdfOut) add(s string) {
+	if o.over = o.over || o.Len()+len(s) > pdfMaxText; !o.over {
+		o.WriteString(s)
 	}
 }
 
@@ -618,7 +653,7 @@ func (f *pdfFont) readCMap(data []byte) {
 			for i := 0; i+1 < len(args); i += 2 {
 				src, ok1 := args[i].(string)
 				dst, ok2 := args[i+1].(string)
-				if ok1 && ok2 {
+				if ok1 && ok2 && len(dst) <= pdfMaxCMapDst {
 					f.cmap[src] = pdfUTF16(dst)
 				}
 			}
@@ -645,17 +680,24 @@ func (f *pdfFont) readRanges(args []any) {
 			continue
 		}
 		first, last := pdfCode(lo), pdfCode(hi)
+		// A range wider than the map cap (up to 2^32 codes) is cut, so an
+		// unusable destination cannot spin through billions of codes (uint64
+		// codes cannot wrap).
+		last = min(last, first+pdfMaxCMap-1)
 		for c := first; c <= last && len(f.cmap) < pdfMaxCMap; c++ {
 			key := pdfCodeBytes(c, len(lo))
 			switch dst := args[i+2].(type) {
 			case string:
+				if len(dst) > pdfMaxCMapDst {
+					continue
+				}
 				u := []rune(pdfUTF16(dst))
 				if len(u) > 0 {
 					u[len(u)-1] += rune(c - first)
 					f.cmap[key] = string(u)
 				}
 			case []any:
-				if s, ok := pdfArg(dst, int(c-first)); ok {
+				if s, ok := pdfArg(dst, int(c-first)); ok && len(s) <= pdfMaxCMapDst {
 					f.cmap[key] = pdfUTF16(s)
 				}
 			}
@@ -663,15 +705,15 @@ func (f *pdfFont) readRanges(args []any) {
 	}
 }
 
-func pdfCode(s string) uint32 {
-	var v uint32
+func pdfCode(s string) uint64 {
+	var v uint64
 	for i := 0; i < len(s); i++ {
-		v = v<<8 | uint32(s[i])
+		v = v<<8 | uint64(s[i])
 	}
 	return v
 }
 
-func pdfCodeBytes(v uint32, n int) string {
+func pdfCodeBytes(v uint64, n int) string {
 	b := make([]byte, n)
 	for i := n - 1; i >= 0; i-- {
 		b[i] = byte(v)
