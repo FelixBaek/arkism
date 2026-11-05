@@ -105,7 +105,7 @@
     "/v1/reflect": {
       "post": {
         "summary": "Answer a question from approved memory under person-written directives (search:memories; the model call also needs generate:reflect and external transfer)",
-        "description": "Retrieves with the search pipeline, adds active directives (applies_to reflect|both) as hard rules, and asks the configured server model. The answer keeps the question's language and is not stored. 429 model_budget_exceeded when the daily call cap or prompt size is passed; 503 model_not_configured without a server model.",
+        "description": "Retrieves with the search pipeline, adds active directives (applies_to reflect|both) as hard rules plus the mission and disposition (request, else the space config), and asks the configured server model, which may call read-only tools up to max_iterations. The answer keeps the question's language and is not stored. 429 model_budget_exceeded when the daily call cap or prompt size is passed; 503 model_not_configured without a server model.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -8544,7 +8544,7 @@
     "/v1/spaces/{workspace}/{project}/aliases": {"post": {"summary": "Add an alias to a space (human principals only)", "description": "Body {alias}. Alias: lowercase letters, digits, . _ -, up to 63; at most 16 per space; unique in the workspace (409 handle_taken).", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "handle_taken"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/spaces/{workspace}/{project}/aliases/{alias}": {"delete": {"summary": "Remove an alias from a space (human principals only)", "description": "Removing an alias the space does not carry changes nothing.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "alias", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/spaces/{workspace}/{project}/clone": {"post": {"summary": "Copy a space into another (export then import in one job)", "description": "Body {target {workspace_id, project_id}, include[], import_as}. The caller needs read:memories with a transfer grant here and write:memory_candidates on the target; import_as=approved needs a human principal on both.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"202": {"description": "Job {id, workspace_id, project_id, kind, state queued|done|failed, include, template, import_as, target, bundle_id, manifest, report, error, finished_at}"}, "403": {"description": "denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
-    "/v1/spaces/{workspace}/{project}/config": {"get": {"summary": "A space's settings (read:space_configs)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes}. {project} may be @alias. Settings are advisory: other features do not read them yet. A space without stored settings returns the defaults with revision 0.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{workspace_id, project_id, revision, config}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "put": {"summary": "Replace a space's settings (human principals only)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes}. {project} may be @alias. Settings are advisory: other features do not read them yet. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "patch": {"summary": "Change some of a space's settings (human principals only)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes}. {project} may be @alias. Settings are advisory: other features do not read them yet. Only the fields sent change.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/spaces/{workspace}/{project}/config": {"get": {"summary": "A space's settings (read:space_configs)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes, reflect_mission (max 2000), reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears}}. {project} may be @alias. Settings are advisory except reflect_mission and reflect_disposition, which POST /v1/reflect reads. A space without stored settings returns the defaults with revision 0.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{workspace_id, project_id, revision, config}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "put": {"summary": "Replace a space's settings (human principals only)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes, reflect_mission (max 2000), reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears}}. {project} may be @alias. Settings are advisory except reflect_mission and reflect_disposition, which POST /v1/reflect reads. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "patch": {"summary": "Change some of a space's settings (human principals only)", "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled, rerank_enabled, consolidation_schedule off|daily|weekly, notes, reflect_mission (max 2000), reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears}}. {project} may be @alias. Settings are advisory except reflect_mission and reflect_disposition, which POST /v1/reflect reads. Only the fields sent change.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/spaces/{workspace}/{project}/export": {"post": {"summary": "Start exporting a space as a versioned JSONL bundle (read:memories with a transfer grant)", "description": "Body {include[] (memories, memory_candidates and definition collections; default all), template}. A template carries settings and definitions only, never memories. Erased, quarantined, private, restricted and secret-bearing records are left out and counted in manifest.skipped. The first line is the manifest {format, format_version, bundle_id, sections, skipped, sha256 of the rest}.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"202": {"description": "Job {id, workspace_id, project_id, kind, state queued|done|failed, include, template, import_as, target, bundle_id, manifest, report, error, finished_at}"}, "403": {"description": "No transfer grant"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/spaces/{workspace}/{project}/import": {"post": {"summary": "Import a bundle into a space (human principals only)", "description": "Body {bundle, import_as candidate|approved}. A bundle whose sha256 does not match its manifest is refused before any job starts. Memories arrive as candidates through the capture checks, carrying the bundle id and original ids; import_as=approved approves only records approved in the bundle. Importing the same bundle again changes nothing. Settings apply only to a space without its own, without aliases.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"202": {"description": "Job {id, workspace_id, project_id, kind, state queued|done|failed, include, template, import_as, target, bundle_id, manifest, report, error, finished_at}"}, "400": {"description": "invalid_request (tampered or unknown bundle)"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/merge_proposals": {"get": {"summary": "Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals)", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["open", "accepted", "dismissed", "stale"]}}], "responses": {"200": {"description": "items: records with merge.proposal {candidate, action store|merge|skip, targets, reason_code, reason (short model note, data only, cleared on close), pool_id, decision, decided_by, decided_at, memory}"},
@@ -43526,6 +43526,47 @@
           "prompt_only": {
             "type": "boolean",
             "description": "Return the exact system/user prompts without any model call."
+          },
+          "max_iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 8,
+            "default": 3,
+            "description": "Model calls allowed. Above 1 the model may call read-only tools (recall with an optional created-time window and causal hop, observations, mental_models, entity, expand) before it answers; each call counts against the daily budget and every record passes the external-transfer check. The last call offers no tools."
+          },
+          "response_schema": {
+            "type": "object",
+            "description": "Optional JSON Schema (at most 8 KiB) for a JSON answer. Supported keywords: type, properties, required, additionalProperties (boolean), items, enum, minItems, maxItems, title, description; any other keyword is refused with 400. An answer that does not validate is 502 invalid_model_output and is never stored."
+          },
+          "mission": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Overrides the space's reflect_mission for this call."
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/ReflectDisposition"
+          }
+        }
+      },
+      "ReflectDisposition": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "How an answer weighs its records, each 1 (low) to 5 (high); 0 or absent is unset, 3 is neutral.",
+        "properties": {
+          "skepticism": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "literalism": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
+          },
+          "empathy": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5
           }
         }
       },
@@ -43578,8 +43619,47 @@
               }
             }
           },
+          "structured_answer": {
+            "description": "The decoded answer when response_schema was given; answer then holds the same JSON compacted."
+          },
+          "tool_trace": {
+            "type": "array",
+            "description": "Tools the model called, in order: arguments and returned ids only, never record text.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "tool",
+                "args",
+                "ids"
+              ],
+              "properties": {
+                "tool": {
+                  "type": "string"
+                },
+                "args": {
+                  "type": "object"
+                },
+                "ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "error": {
+                  "type": "string",
+                  "description": "unknown_tool, invalid_arguments or denied"
+                }
+              }
+            }
+          },
+          "iterations": {
+            "type": "integer",
+            "description": "Model calls made."
+          },
           "usage": {
-            "type": "object"
+            "type": "object",
+            "description": "Summed over every model call."
           },
           "generator": {
             "type": "object"

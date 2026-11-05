@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Memory spaces: one workspace+project scope seen as a unit a person can name,
@@ -67,6 +68,9 @@ type SpaceConfig struct {
 	RerankEnabled         bool     `json:"rerank_enabled" bson:"rerank_enabled"`
 	ConsolidationSchedule string   `json:"consolidation_schedule" bson:"consolidation_schedule"`
 	Notes                 string   `json:"notes" bson:"notes"`
+	// ReflectMission and ReflectDisposition guide reflect answers in this space (reflect.go).
+	ReflectMission     string              `json:"reflect_mission" bson:"reflect_mission"`
+	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -82,6 +86,9 @@ type SpaceConfigInput struct {
 	RerankEnabled         *bool   `json:"rerank_enabled,omitempty"`
 	ConsolidationSchedule *string `json:"consolidation_schedule,omitempty"`
 	Notes                 *string `json:"notes,omitempty"`
+	ReflectMission        *string `json:"reflect_mission,omitempty"`
+	// ReflectDisposition: an all-zero value clears it.
+	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty"`
 }
 
 type SpaceView struct {
@@ -341,6 +348,13 @@ func applySpaceConfig(c *SpaceConfig, in SpaceConfigInput, replace bool) error {
 	set(&c.DefaultReach, in.DefaultReach)
 	set(&c.ConsolidationSchedule, in.ConsolidationSchedule)
 	set(&c.Notes, in.Notes)
+	set(&c.ReflectMission, in.ReflectMission)
+	if in.ReflectDisposition != nil {
+		c.ReflectDisposition = in.ReflectDisposition
+		if *in.ReflectDisposition == (ReflectDisposition{}) {
+			c.ReflectDisposition = nil
+		}
+	}
 	if in.ExtractionEnabled != nil {
 		c.ExtractionEnabled = *in.ExtractionEnabled
 	}
@@ -352,10 +366,11 @@ func applySpaceConfig(c *SpaceConfig, in SpaceConfigInput, replace bool) error {
 
 func validSpaceConfig(c SpaceConfig) error {
 	if len(c.DisplayName) > 256 || len(c.Notes) > 4000 || len(c.Aliases) > spaceAliasMax ||
-		!slices.Contains([]string{"", ReachPersonal, ReachGeneral, ReachProject}, c.DefaultReach) || !slices.Contains(spaceSchedules, c.ConsolidationSchedule) {
+		!slices.Contains([]string{"", ReachPersonal, ReachGeneral, ReachProject}, c.DefaultReach) || !slices.Contains(spaceSchedules, c.ConsolidationSchedule) ||
+		utf8.RuneCountInString(c.ReflectMission) > reflectMissionMax || !utf8.ValidString(c.ReflectMission) || !c.ReflectDisposition.valid() {
 		return ErrInvalid
 	}
-	if containsSecret(c.DisplayName) || containsSecret(c.Notes) {
+	if containsSecret(c.DisplayName) || containsSecret(c.Notes) || containsSecret(c.ReflectMission) {
 		return ErrSecretDetected
 	}
 	return nil

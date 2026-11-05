@@ -100,7 +100,7 @@ func reflectAnswer(args map[string]any) (any, error) {
 		return nil, errors.New("query is required (at most 2000 characters)")
 	}
 	payload := map[string]any{"scope": host.Scope(), "query": query}
-	for key, bounds := range map[string][2]int64{"limit": {1, 20}, "max_tokens": {64, 4096}} {
+	for key, bounds := range map[string][2]int64{"limit": {1, 20}, "max_tokens": {64, 4096}, "max_iterations": {1, 8}} {
 		if v, has := args[key]; has && v != nil {
 			n, ok := host.Int(v)
 			if _, isBool := v.(bool); isBool || !ok || n < bounds[0] || n > bounds[1] {
@@ -109,17 +109,11 @@ func reflectAnswer(args map[string]any) (any, error) {
 			payload[key] = n
 		}
 	}
-	if tags, has := args["tags"]; has && tags != nil {
-		list, ok := tags.([]any)
-		if !ok || len(list) > 32 {
-			return nil, errors.New("tags must be a list of at most 32 strings")
-		}
-		for _, tag := range list {
-			if s, isStr := tag.(string); !isStr || s == "" || host.Len(s) > 128 {
-				return nil, errors.New("tags must be a list of at most 32 strings")
-			}
-		}
-		payload["tags"] = list
+	if err := reflectTagsArg(args, payload); err != nil {
+		return nil, err
+	}
+	if err := reflectGuidanceArgs(args, payload); err != nil {
+		return nil, err
 	}
 	res, err := routerRequest("/v1/reflect", payload)
 	if err != nil {
@@ -127,6 +121,56 @@ func reflectAnswer(args map[string]any) (any, error) {
 	}
 	return host.Obj{{Key: "answer", Value: getOr(res, "answer", "")}, {Key: "cited_memory_ids", Value: getOr(res, "cited_memory_ids", []any{})},
 		{Key: "directives_applied", Value: getOr(res, "directives_applied", []any{})}, {Key: "retrieved", Value: getOr(res, "retrieved", []any{})},
+		{Key: "structured_answer", Value: getOr(res, "structured_answer", nil)}, {Key: "tool_trace", Value: getOr(res, "tool_trace", []any{})},
 		{Key: "authority", Value: "data_only_untrusted"},
 		{Key: "note", Value: "모델이 승인된 기억으로 쓴 답이며 저장되지 않습니다. 인용한 기억은 recall의 ids로 확인하고, 현재 상태와 다르면 현재 상태가 우선합니다."}}, nil
+}
+
+// reflectGuidanceArgs copies the optional response_schema, mission and disposition; the server checks them in full.
+func reflectGuidanceArgs(args map[string]any, payload map[string]any) error {
+	if v, has := args["response_schema"]; has && v != nil {
+		if _, ok := v.(map[string]any); !ok {
+			return errors.New("response_schema must be a JSON Schema object")
+		}
+		payload["response_schema"] = v
+	}
+	if v, has := args["mission"]; has && v != nil {
+		mission, ok := v.(string)
+		if !ok || host.Len(mission) > 2000 {
+			return errors.New("mission must be a string of at most 2000 characters")
+		}
+		payload["mission"] = mission
+	}
+	if v, has := args["disposition"]; has && v != nil {
+		d, ok := v.(map[string]any)
+		if !ok {
+			return errors.New("disposition must be an object")
+		}
+		for key, x := range d {
+			n, isInt := host.Int(x)
+			if _, isBool := x.(bool); isBool || !isInt || n < 0 || n > 5 || key != "skepticism" && key != "literalism" && key != "empathy" {
+				return errors.New("disposition takes skepticism, literalism and empathy from 0 to 5")
+			}
+		}
+		payload["disposition"] = d
+	}
+	return nil
+}
+
+func reflectTagsArg(args map[string]any, payload map[string]any) error {
+	tags, has := args["tags"]
+	if !has || tags == nil {
+		return nil
+	}
+	list, ok := tags.([]any)
+	if !ok || len(list) > 32 {
+		return errors.New("tags must be a list of at most 32 strings")
+	}
+	for _, tag := range list {
+		if s, isStr := tag.(string); !isStr || s == "" || host.Len(s) > 128 {
+			return errors.New("tags must be a list of at most 32 strings")
+		}
+	}
+	payload["tags"] = list
+	return nil
 }

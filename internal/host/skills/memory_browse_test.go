@@ -32,6 +32,31 @@ func TestReflectAsksTheServerAndLabelsTheAnswer(t *testing.T) {
 	}
 }
 
+func TestReflectPassesLoopSchemaAndMission(t *testing.T) {
+	swapRouter(t)
+	reply := `{"answer":"{\"day\":\"Fri\"}","structured_answer":{"day":"Fri"},"tool_trace":[{"tool":"recall","args":{"query":"x"},"ids":["m1"]}],"cited_memory_ids":[],"directives_applied":[],"retrieved":[]}`
+	calls := fakeRequest(t, reply)
+	args := `{"query":"q","max_iterations":4,"response_schema":{"type":"object"},"mission":"for on-call","disposition":{"skepticism":5}}`
+	out := structured(t, call(t, "reflect", args))
+	want := map[string]any{"scope": host.Scope(), "query": "q", "max_iterations": 4, "response_schema": map[string]any{"type": "object"}, "mission": "for on-call", "disposition": map[string]any{"skepticism": 5}}
+	if len(*calls) != 1 || canon(t, (*calls)[0].payload) != canon(t, want) {
+		t.Fatal(*calls)
+	}
+	if canon(t, field(out, "structured_answer")) != canon(t, map[string]any{"day": "Fri"}) || canon(t, field(out, "tool_trace")) == "[]" {
+		t.Fatal(out)
+	}
+	*calls = nil
+	for _, bad := range []string{`{"query":"q","max_iterations":9}`, `{"query":"q","response_schema":"x"}`, `{"query":"q","mission":3}`,
+		`{"query":"q","disposition":{"skepticism":6}}`, `{"query":"q","disposition":{"mood":1}}`, `{"query":"q","mission":"` + strings.Repeat("가", 2001) + `"}`} {
+		if _, err := callTool("reflect", j(t, bad)); err == nil {
+			t.Fatal(bad)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatal("network before validation")
+	}
+}
+
 func TestBrowseMemoryListsEachKindReadOnly(t *testing.T) {
 	swapRouter(t)
 	scope := scopeQueryAll()
