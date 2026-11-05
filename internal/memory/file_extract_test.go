@@ -242,7 +242,12 @@ func TestDiffExtractChunks(t *testing.T) {
 
 func extractUpload(t *testing.T, f *fixture, paras ...string) FileMemoriesResult {
 	t.Helper()
-	out, err := f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "rules.txt", ContentBase64: base64.StdEncoding.EncodeToString([]byte(strings.Join(paras, "\n\n")))})
+	return extractUploadAs(t, f, f.human, paras...)
+}
+
+func extractUploadAs(t *testing.T, f *fixture, token string, paras ...string) FileMemoriesResult {
+	t.Helper()
+	out, err := f.svc.ExtractFileMemories(testCtx, token, FileMemoriesInput{Scope: scopeA, Filename: "rules.txt", ContentBase64: base64.StdEncoding.EncodeToString([]byte(strings.Join(paras, "\n\n")))})
 	if err != nil || out.Delta == nil || out.JobID == "" {
 		t.Fatalf("upload %+v %v", out, err)
 	}
@@ -286,5 +291,18 @@ func TestFileExtractReuploadAfterCancelMakesNewJob(t *testing.T) {
 	again := extractUpload(t, f, paras...)
 	if again.JobID == out.JobID || again.Status != JobStatusPending || again.Delta.ChunksChanged != again.Delta.ChunksTotal || len(llm.prompts) != 0 {
 		t.Fatalf("re-upload after cancel %+v %+v", again, again.Delta)
+	}
+}
+
+func TestFileExtractReuploadIsPerUploader(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(extractRuleClaim), extractAnswer())
+	a := f.auth.actors[f.human2]
+	a.verbs["generate"] = true
+	f.auth.actors[f.human2] = a
+	para := "선택 상태에는 주황 강조선을 쓰지 않는다." + strings.Repeat(" 배포 전에 테스트를 실행한다.", 200)
+	extractUpload(t, f, para)
+	other := extractUploadAs(t, f, f.human2, "다른 사람의 문서."+strings.Repeat(" 다른 내용.", 300))
+	if other.Delta.ChunksChanged != other.Delta.ChunksTotal || other.Delta.ChunksRemoved != 0 || len(llm.prompts) != 2 {
+		t.Fatalf("another uploader saw the first upload: %d %+v", len(llm.prompts), other.Delta)
 	}
 }

@@ -9,8 +9,8 @@ package memory
 // collection (kind file_memory_extract); its chunks carry their own source
 // references, so a job resumes from the next chunk after a budget stop.
 //
-// A document uploaded again (same scope and file name, or the same knowledge
-// source) is compared chunk by chunk with its last upload: unchanged chunks
+// A document uploaded again (same scope, uploader and file name, or the same
+// knowledge source) is compared chunk by chunk with its last upload: unchanged chunks
 // are not sent to the model again, and chunks that disappeared are only
 // reported with their candidate ids, for a person to retire if they wish.
 
@@ -438,7 +438,9 @@ func extractSourceIDs(chunks []FileExtractChunk) []string {
 // upload: a few now, more as a queued job. Chunks without a source yet (an
 // uploaded file) get one; unchanged chunks keep their old source.
 func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, label, docRef string, chunks []FileExtractChunk, out FileMemoriesResult) (FileMemoriesResult, error) {
-	docID := "file-extract-doc-" + ContentHash(structuredText(scope)+"\x00"+docRef)
+	// The uploader is part of the identity: another person's file of the same
+	// name is a different document, and its chunks and candidates stay theirs.
+	docID := "file-extract-doc-" + ContentHash(structuredText(scope)+"\x00"+d.PrincipalID+"\x00"+docRef)
 	prev, err := s.extractDocState(ctx, scope, docID)
 	if err != nil {
 		return FileMemoriesResult{}, err
