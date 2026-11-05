@@ -425,6 +425,10 @@ class ArkismClient(BaseClient):
         """PATCH /v1/spaces/{workspace}/{project}/config — Change some of a space's settings (human principals only)"""
         return self.request("PATCH", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, None)
 
+    def get_v1_spaces_by_workspace_by_project_config_effective(self, workspace, project):
+        """GET /v1/spaces/{workspace}/{project}/config/effective — A space's resolved settings and where each came from (search:memories)"""
+        return self.request("GET", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config/effective", None, None)
+
     def post_v1_spaces_by_workspace_by_project_export(self, workspace, project):
         """POST /v1/spaces/{workspace}/{project}/export — Start exporting a space as a versioned JSONL bundle (read:memories with a transfer grant)"""
         return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/export", None, None)
@@ -1501,6 +1505,10 @@ class ArkismClient(BaseClient):
         """DELETE /v1/entities/{id} — Entities: delete"""
         return self.request("DELETE", f"/v1/entities/{urllib.parse.quote(id, safe='')}", None, body)
 
+    def draft_entity_summary(self, id):
+        """POST /v1/entities/{id}/summary — Entities: draft a cited summary (human or service principals)"""
+        return self.request("POST", f"/v1/entities/{urllib.parse.quote(id, safe='')}/summary", None, None)
+
     def merge_entity(self, id, body=None):
         """POST /v1/entities/{id}/merge — Entities: merge"""
         return self.request("POST", f"/v1/entities/{urllib.parse.quote(id, safe='')}/merge", None, body)
@@ -1628,3 +1636,19 @@ class ArkismClient(BaseClient):
     def post_v1_causal_links_by_id_review(self, id, body=None):
         """POST /v1/causal-links/{id}/review — A person's decision on a causal link (human principals only, write:memory_relations)"""
         return self.request("POST", f"/v1/causal-links/{urllib.parse.quote(id, safe='')}/review", None, body)
+
+    def get_v1_files_memories_documents_id_chunks(self, id, query=None):
+        """GET /v1/files/memories/documents/{id}/chunks — Chunks of an uploaded document"""
+        return self.request("GET", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/chunks", query, None)
+
+    def get_v1_files_memories_documents_id_history(self, id, query=None):
+        """GET /v1/files/memories/documents/{id}/history — Upload history of a document"""
+        return self.request("GET", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/history", query, None)
+
+    def get_v1_knowledge_sources_id_chunks(self, id, query=None):
+        """GET /v1/knowledge/sources/{id}/chunks — Chunks of a knowledge source"""
+        return self.request("GET", f"/v1/knowledge/sources/{urllib.parse.quote(id, safe='')}/chunks", query, None)
+
+    def get_v1_knowledge_sources_id_history(self, id, query=None):
+        """GET /v1/knowledge/sources/{id}/history — Document versions of a knowledge source"""
+        return self.request("GET", f"/v1/knowledge/sources/{urllib.parse.quote(id, safe='')}/history", query, None)
