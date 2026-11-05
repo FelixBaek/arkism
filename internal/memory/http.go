@@ -79,6 +79,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerRecordsCoreHTTP(mux, s, stats)
 	registerReflectCoreHTTP(mux, s, stats)
 	registerFileextractCoreHTTP(mux, s, stats)
+	registerEntitiesCoreHTTP(mux, s, stats)
 	catalogQueryRoutes(mux, s)
 	s.registerKnowledgeHTTP(mux)
 	googleLoginRoutes(mux, s.GoogleLogin)

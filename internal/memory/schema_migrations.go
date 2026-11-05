@@ -34,6 +34,9 @@ var schemaMemoryGraphVectorIndexSQL string
 //go:embed migrations/0005_decision_daily_counts.sql
 var schemaDecisionDailyCountsSQL string
 
+//go:embed migrations/0006_named_entities.sql
+var schemaNamedEntitiesSQL string
+
 type schemaMigration struct {
 	version int
 	name    string
@@ -41,7 +44,7 @@ type schemaMigration struct {
 }
 
 func schemaMigrations() []schemaMigration {
-	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}}
+	return []schemaMigration{{1, "baseline", schemaBaselineSQL}, {2, "memory_context_search", schemaMemoryContextSearchSQL}, {3, "principal_token_lifecycle", schemaPrincipalTokenLifecycleSQL}, {4, "memory_graph_vector_index", schemaMemoryGraphVectorIndexSQL}, {5, "decision_daily_counts", schemaDecisionDailyCountsSQL}, {6, "named_entities", schemaNamedEntitiesSQL}}
 }
 
 func (m schemaMigration) checksum() string {

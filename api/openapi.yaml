@@ -36284,6 +36284,1767 @@
           }
         ]
       }
+    },
+    "/v1/entities": {
+      "get": {
+        "operationId": "listEntities",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: list",
+        "description": "Named entities found in approved memories, most mentioned first, with mention counts and first/last seen event time. Agents see confirmed entities only. Requires read:entities. Paginated (limit 1-100, cursor).",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "project",
+                "repo",
+                "tool",
+                "product",
+                "file",
+                "service",
+                "place",
+                "organization",
+                "concept"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EntityList",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "person",
+                                  "project",
+                                  "repo",
+                                  "tool",
+                                  "product",
+                                  "file",
+                                  "service",
+                                  "place",
+                                  "organization",
+                                  "concept"
+                                ]
+                              },
+                              "aliases": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              },
+                              "proposed": {
+                                "type": "boolean"
+                              },
+                              "edited_by": {
+                                "type": "string"
+                              },
+                              "created_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "updated_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "type",
+                              "aliases"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "mentions": {
+                                "type": "integer"
+                              },
+                              "proposed_mentions": {
+                                "type": "integer"
+                              },
+                              "first_seen": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "last_seen": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "mentions",
+                              "proposed_mentions"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entities/extract": {
+      "post": {
+        "operationId": "extractEntities",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: extract",
+        "description": "Runs named-entity extraction over the scope's approved memories (newest first, limit 1-500, default 100). The rule pass writes mentions edges; the optional model pass only proposes (mentions_proposed) until a person confirms. dry_run writes nothing. People or services with write:entities.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "EntityExtractResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dry_run": {
+                      "type": "boolean"
+                    },
+                    "memories": {
+                      "type": "integer"
+                    },
+                    "new_entities": {
+                      "type": "integer"
+                    },
+                    "added_mentions": {
+                      "type": "integer"
+                    },
+                    "removed_mentions": {
+                      "type": "integer"
+                    },
+                    "model_calls": {
+                      "type": "integer"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "memory_id": {
+                            "type": "string"
+                          },
+                          "found": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string"
+                                },
+                                "entity_id": {
+                                  "type": "string"
+                                },
+                                "new": {
+                                  "type": "boolean"
+                                },
+                                "relation": {
+                                  "type": "string",
+                                  "enum": [
+                                    "mentions",
+                                    "mentions_proposed"
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "dry_run",
+                    "memories",
+                    "new_entities",
+                    "added_mentions",
+                    "removed_mentions"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "workspace_id": {
+                        "type": "string"
+                      },
+                      "project_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "agent_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "workspace_id",
+                      "project_id"
+                    ]
+                  },
+                  "dry_run": {
+                    "type": "boolean"
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 500
+                  },
+                  "model": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "scope"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entities/graph": {
+      "get": {
+        "operationId": "getEntityGraph",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: co-occurrence graph",
+        "description": "Most mentioned entities (limit 1-100 nodes) and edges weighted by the number of memories mentioning both (at most 500 edges), optionally filtered by type and event-time window (RFC 3339 from/to). Requires read:entities.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "project",
+                "repo",
+                "tool",
+                "product",
+                "file",
+                "service",
+                "place",
+                "organization",
+                "concept"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EntityGraph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "mentions": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "edges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "source": {
+                            "type": "string"
+                          },
+                          "target": {
+                            "type": "string"
+                          },
+                          "weight": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "nodes",
+                    "edges"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entities/{id}": {
+      "get": {
+        "operationId": "getEntity",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: page",
+        "description": "One entity with aliases, type, up to 20 mentioning memories the caller can read (with snippets), related entities by co-mention weight and a monthly mention timeline. Requires read:entities.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EntityDetail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "allOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "person",
+                                "project",
+                                "repo",
+                                "tool",
+                                "product",
+                                "file",
+                                "service",
+                                "place",
+                                "organization",
+                                "concept"
+                              ]
+                            },
+                            "aliases": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "proposed": {
+                              "type": "boolean"
+                            },
+                            "edited_by": {
+                              "type": "string"
+                            },
+                            "created_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "updated_at": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "type",
+                            "aliases"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "mentions": {
+                              "type": "integer"
+                            },
+                            "proposed_mentions": {
+                              "type": "integer"
+                            },
+                            "first_seen": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "last_seen": {
+                              "type": "string",
+                              "format": "date-time"
+                            }
+                          },
+                          "required": [
+                            "mentions",
+                            "proposed_mentions"
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "memories": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string"
+                              },
+                              "relation": {
+                                "type": "string"
+                              },
+                              "event_at": {
+                                "type": "string",
+                                "format": "date-time"
+                              },
+                              "snippet": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "related": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "weight": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        },
+                        "timeline": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "month": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "memories",
+                        "related",
+                        "timeline"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patchEntity",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: edit",
+        "description": "Human-only rename (the old name stays an alias), type change, alias add/remove, or confirm of a model-proposed entity and its proposed mentions. Requires write:entities.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NamedEntity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "person",
+                        "project",
+                        "repo",
+                        "tool",
+                        "product",
+                        "file",
+                        "service",
+                        "place",
+                        "organization",
+                        "concept"
+                      ]
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "proposed": {
+                      "type": "boolean"
+                    },
+                    "edited_by": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type",
+                    "aliases"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "workspace_id": {
+                        "type": "string"
+                      },
+                      "project_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "agent_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "workspace_id",
+                      "project_id"
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "project",
+                      "repo",
+                      "tool",
+                      "product",
+                      "file",
+                      "service",
+                      "place",
+                      "organization",
+                      "concept"
+                    ]
+                  },
+                  "add_aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "remove_aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "confirm": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "scope"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteEntity",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: delete",
+        "description": "Human-only. Removes the entity's mention edges, never memories; a tombstone with hashed name keys keeps extraction from re-creating it. Requires write:entities.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "EntityDeleteResult",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "removed_mentions": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "removed_mentions"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "workspace_id": {
+                        "type": "string"
+                      },
+                      "project_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "agent_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "workspace_id",
+                      "project_id"
+                    ]
+                  }
+                },
+                "required": [
+                  "scope"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/entities/{id}/merge": {
+      "post": {
+        "operationId": "mergeEntity",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Entities: merge",
+        "description": "Human-only. Moves every mention of the entity onto into and keeps its names as aliases of into. Requires write:entities.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_-]{1,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NamedEntity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "person",
+                        "project",
+                        "repo",
+                        "tool",
+                        "product",
+                        "file",
+                        "service",
+                        "place",
+                        "organization",
+                        "concept"
+                      ]
+                    },
+                    "aliases": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "proposed": {
+                      "type": "boolean"
+                    },
+                    "edited_by": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "updated_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "type",
+                    "aliases"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "type": "object",
+                    "properties": {
+                      "workspace_id": {
+                        "type": "string"
+                      },
+                      "project_id": {
+                        "type": "string"
+                      },
+                      "user_id": {
+                        "type": "string"
+                      },
+                      "agent_id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "workspace_id",
+                      "project_id"
+                    ]
+                  },
+                  "into": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "scope",
+                  "into"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
