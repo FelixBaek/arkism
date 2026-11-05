@@ -51,6 +51,9 @@ type SearchInput struct {
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
 	Include        []string `json:"include,omitempty"`
 	retrievalQuery string
+	// space is the resolved space settings (space_settings.go); spaceModes marks Modes the space set, not the caller.
+	space      *SpaceConfig
+	spaceModes bool
 	// pinned: memories a context build already injected ahead of this search
 	// (crew_pins.go); the receipt lists them first and the search hits after.
 	pinned []Ref
@@ -198,6 +201,15 @@ func searchCollection(purpose string) (string, bool) {
 	}
 }
 
+// authorizeSearch checks the search grant, then gives the search its space's settings.
+func (s *Service) authorizeSearch(ctx context.Context, token, collection string, in *SearchInput, searchContent string) (Decision, error) {
+	d, err := s.authorize(ctx, token, "search:"+collection, in.Scope, "", searchContent)
+	if err == nil {
+		err = s.applySpaceSearch(ctx, collection, in)
+	}
+	return d, err
+}
+
 // Keep the search actor inside the service for multi-step consumers.
 func (s *Service) searchWithActor(ctx context.Context, token string, in SearchInput) (ContextBundle, Decision, error) {
 	searchContent, err := prepareSearchInput(&in)
@@ -212,7 +224,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if !ok {
 		return out, Decision{}, ErrInvalid
 	}
-	d, e := s.authorize(ctx, token, "search:"+collection, in.Scope, "", searchContent)
+	d, e := s.authorizeSearch(ctx, token, collection, &in, searchContent)
 	if e != nil {
 		return out, Decision{}, e
 	}

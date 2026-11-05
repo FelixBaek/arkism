@@ -250,7 +250,11 @@ func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
-	chunks, redacted, err := extractFileChunks([]string{text}, false)
+	pages := []string{text}
+	if err = s.defendPages(ctx, in.Scope, pages); err != nil {
+		return FileMemoriesResult{}, err
+	}
+	chunks, redacted, err := extractFileChunks(pages, false)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

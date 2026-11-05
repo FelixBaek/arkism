@@ -98,10 +98,10 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	for i := range lists {
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
-	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 {
+	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes {
 		return lists, trace, nil
 	}
-	if w, ok := parseTimeIntent(in.Query, s.recallClock(in).In(recallLocation(in.Timezone))); ok {
+	if w, ok := parseTimeIntent(in.Query, s.recallClock(in).In(recallLocation(in.Timezone))); ok && spaceLaneOn(in.space, "temporal", true) {
 		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
 		if err == nil {
 			hits, err = clean(hits)
@@ -113,7 +113,7 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
 	}
 	sources := []neighborSource{}
-	if s.RecallGraph {
+	if spaceLaneOn(in.space, "graph", s.RecallGraph) {
 		sources = append(sources, neighborSource{reasonGraph, s.Repo.MemoryNeighbors})
 	}
 	if in.ExpandCausal {
@@ -237,7 +237,7 @@ func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []s
 // embedding. Text is sent only when the vector lane could send the query too, and
 // only for hits the embedding worker would send (not restricted, safe to transfer).
 func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
-	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
+	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
 		return rows, nil
 	}
 	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])

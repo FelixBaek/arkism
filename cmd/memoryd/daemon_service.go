@@ -53,6 +53,9 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 			svc.ReviewClassifier = classifier
 		}
 	}
+	if svc.SpaceTemplate, err = memory.LoadSpaceTemplate(os.Getenv("ARKISM_SPACE_DEFAULT_TEMPLATE")); err != nil {
+		return nil, err
+	}
 	if err := configureDaemonPolicies(svc); err != nil {
 		return nil, err
 	}

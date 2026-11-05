@@ -53,7 +53,7 @@ func TestParseExtractedClaimsIsStrict(t *testing.T) {
 }
 
 func TestExtractPromptKeepsSourceLanguage(t *testing.T) {
-	system, user := extractPrompt(extractKoreanSource)
+	system, user := extractPrompt(extractKoreanSource, "")
 	if !strings.Contains(system, "Korean stays Korean") || !strings.Contains(system, "never translate") || !strings.Contains(system, wikiDataRule) {
 		t.Fatalf("system prompt: %s", system)
 	}

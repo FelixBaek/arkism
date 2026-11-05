@@ -47,6 +47,8 @@ type ReflectInput struct {
 	// Mission and Disposition override the space's reflect_mission and reflect_disposition.
 	Mission     string              `json:"mission,omitempty"`
 	Disposition *ReflectDisposition `json:"disposition,omitempty"`
+	// space is the resolved space settings every reflect search runs with.
+	space *SpaceConfig
 }
 
 // ReflectDisposition tunes how an answer weighs its records, each 1 (low) to 5 (high); 0 is unset.
@@ -134,12 +136,21 @@ func validReflectInput(in *ReflectInput) bool {
 }
 
 func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (ReflectOutput, error) {
+	spaceTokens := in.MaxTokens == 0
 	if !validReflectInput(&in) {
 		return ReflectOutput{}, ErrInvalid
 	}
 	if containsSecret(in.Mission) {
 		return ReflectOutput{}, ErrSecretDetected
 	}
+	settings, err := s.searchSpaceSettings(ctx, token, in.Scope)
+	if err != nil {
+		return ReflectOutput{}, err
+	}
+	if spaceTokens {
+		in.MaxTokens = settings.ReflectMaxTokens
+	}
+	in.space = &settings
 	run := &reflectRun{in: in, seen: map[string]bool{}}
 	if len(in.ResponseSchema) > 0 {
 		schema, err := parseReflectSchema(in.ResponseSchema)
@@ -181,7 +192,7 @@ func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (R
 // reflectSearch is the search a reflect step runs; without prompt_only the hits go to
 // the server model, so each one passes the external-transfer filter.
 func reflectSearch(in ReflectInput, query string) SearchInput {
-	search := SearchInput{Scope: in.Scope, Query: query, Limit: in.Limit, Purpose: "answer"}
+	search := SearchInput{Scope: in.Scope, Query: query, Limit: in.Limit, Purpose: "answer", space: in.space}
 	if !in.PromptOnly {
 		search.Destination = wikiDestination
 	}

@@ -11,6 +11,7 @@ var spaceRoutePolicies = map[string]routePolicy{
 	"GET /v1/spaces/{workspace}/{project}/config":             {action: "read:space_configs", scope: routePath},
 	"PUT /v1/spaces/{workspace}/{project}/config":             {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 	"PATCH /v1/spaces/{workspace}/{project}/config":           {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
+	"GET /v1/spaces/{workspace}/{project}/config/effective":   {action: "search:memories", scope: routePath},
 	"POST /v1/spaces/{workspace}/{project}/aliases":           {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 	"DELETE /v1/spaces/{workspace}/{project}/aliases/{alias}": {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 	"POST /v1/spaces/{workspace}/{project}/export":            {action: "read:memories", scope: routePath},
@@ -36,6 +37,7 @@ func registerSpacesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 	mux.HandleFunc("GET /v1/spaces/{workspace}/{project}/config", s.coreHTTPGetV1SpacesConfig)
 	mux.HandleFunc("PUT /v1/spaces/{workspace}/{project}/config", s.coreHTTPPutV1SpacesConfig)
 	mux.HandleFunc("PATCH /v1/spaces/{workspace}/{project}/config", s.coreHTTPPatchV1SpacesConfig)
+	mux.HandleFunc("GET /v1/spaces/{workspace}/{project}/config/effective", s.coreHTTPGetV1SpacesConfigEffective)
 	mux.HandleFunc("POST /v1/spaces/{workspace}/{project}/aliases", s.coreHTTPPostV1SpacesAliases)
 	mux.HandleFunc("DELETE /v1/spaces/{workspace}/{project}/aliases/{alias}", s.coreHTTPDeleteV1SpacesAliases)
 	mux.HandleFunc("POST /v1/spaces/{workspace}/{project}/export", s.coreHTTPPostV1SpacesExport)
@@ -54,6 +56,11 @@ func (s *Service) coreHTTPGetV1Spaces(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) coreHTTPGetV1SpacesConfig(w http.ResponseWriter, r *http.Request) {
 	out, err := s.GetSpaceConfig(r.Context(), bearer(r), pathSpace(r))
+	respond(w, out, err)
+}
+
+func (s *Service) coreHTTPGetV1SpacesConfigEffective(w http.ResponseWriter, r *http.Request) {
+	out, err := s.EffectiveSpaceConfig(r.Context(), bearer(r), pathSpace(r))
 	respond(w, out, err)
 }
 

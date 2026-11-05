@@ -196,13 +196,18 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	if err != nil && !errors.Is(err, ErrNotFound) {
 		return CaptureResult{}, err
 	}
+	// Space defense rules run before every privacy and secret check (space_settings.go).
+	settings, err := s.spaceSettings(ctx, in.Scope)
+	if err != nil {
+		return CaptureResult{}, err
+	}
 	out := CaptureResult{Items: make([]CaptureItem, len(in.Claims))}
 	transient := false
 	for i, c := range in.Claims {
-		item, err := s.captureClaim(ctx, token, in, c)
+		item, err := s.defendedClaim(ctx, token, in, settings.DefenseRules, c)
 		if err != nil {
 			item = CaptureItem{Status: "rejected", Reason: captureErrorCode(err), DedupeKey: item.DedupeKey}
-			transient = transient || c.Supersedes != nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrDenied) || errors.Is(err, ErrConflict) || errors.Is(err, ErrCandidateQuota) || item.Reason == "internal_error"
+			transient = transient || captureTransient(err, c, item.Reason)
 		}
 		out.Items[i] = item
 		// Identifiers and codes only: claim text never reaches the log.
@@ -221,6 +226,21 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 		}
 	}
 	return out, nil
+}
+
+// defendedClaim applies the space defense rules to a claim's texts before
+// capturing it; a block is audited without its text.
+func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInput, rules []SpaceDefenseRule, c CaptureClaim) (CaptureItem, error) {
+	if err := defendAll(rules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
+		s.auditDeniedInput(ctx, "capture:defense_blocked", in.Scope, "")
+		return CaptureItem{}, err
+	}
+	return s.captureClaim(ctx, token, in, c)
+}
+
+// captureTransient reports a rejection a retry may get past, so the event keeps no receipt.
+func captureTransient(err error, c CaptureClaim, reason string) bool {
+	return c.Supersedes != nil || errors.Is(err, ErrUnavailable) || errors.Is(err, ErrDenied) || errors.Is(err, ErrConflict) || errors.Is(err, ErrCandidateQuota) || reason == "internal_error"
 }
 
 func (s *Service) captureClaim(ctx context.Context, token string, in CaptureInput, c CaptureClaim) (CaptureItem, error) {
@@ -683,7 +703,7 @@ func (s *Service) staleCaptureEvidence(ctx context.Context, scope Scope, pointer
 }
 
 func captureErrorCode(err error) string {
-	for _, e := range []error{ErrSecretDetected, ErrDenied, ErrInvalid, ErrConflict, ErrNotFound, ErrCandidateQuota, ErrUnavailable} {
+	for _, e := range []error{ErrSecretDetected, ErrDefenseBlocked, ErrDenied, ErrInvalid, ErrConflict, ErrNotFound, ErrCandidateQuota, ErrUnavailable} {
 		if errors.Is(err, e) {
 			return e.Error()
 		}

@@ -270,6 +270,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "digest_mismatch", 422
 	case errors.Is(e, ErrSecretDetected):
 		code, status = "secret_detected", 422
+	case errors.Is(e, ErrDefenseBlocked):
+		code, status = "defense_blocked", 422
 	case errors.Is(e, errPDFNoText):
 		code, status = "no_extractable_text", 422
 	case errors.Is(e, ErrModelNotConfigured):

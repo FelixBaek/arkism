@@ -87,6 +87,8 @@ type Service struct {
 	Reranker *TEIReranker
 	// RecallGraph adds the relations-graph lane to memory recall.
 	RecallGraph bool
+	// SpaceTemplate is the default template every space inherits settings from (space_settings.go); nil means none.
+	SpaceTemplate *SpaceTemplate
 	// RecallNow replaces the clock recall resolves "yesterday" against. Nil means time.Now.
 	RecallNow func() time.Time
 	CostRates CostRates
@@ -538,6 +540,9 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	}
 	if containsSecret(structuredText(in.Scope)) {
 		return Record{}, ErrSecretDetected
+	}
+	if err := s.defendCreate(ctx, col, &in); err != nil {
+		return Record{}, err
 	}
 	clean, inspection, err := s.inspectCreateRequest(ctx, token, col, in, file)
 	if err != nil {

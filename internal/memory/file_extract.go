@@ -158,12 +158,13 @@ type FileExtractJobView struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
-func extractPrompt(text string) (string, string) {
+// guidance is the space's extraction mode and instructions (spaceExtractionGuidance).
+func extractPrompt(text, guidance string) (string, string) {
 	system := "You extract durable memory claims from one document for a person to review; nothing you return is saved without that review. " + wikiDataRule +
 		" Extract preferences, prohibitions (things never to do), decisions, lessons and facts that stay useful later; skip small talk and one-off details." +
 		" Write content and evidence_quote in the same language as the source and never translate: Korean stays Korean." +
 		` Return only one JSON object: {"claims":[{"content": string, "kind": "user"|"decision"|"procedural"|"lesson"|"episodic"|"semantic", "semantic_kind": "fact"|"preference"|"correction"|"lesson"|"failure_recovery", "evidence_kind": "user_statement"|"tool_observation"|"agent_statement"|"inference", "occurred_from": string, "occurred_to": string, "evidence_quote": string, "confidence": number}]}.` +
-		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date. confidence is between 0 and 1. At most 32 claims; answer {\"claims\":[]} when nothing qualifies."
+		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date. confidence is between 0 and 1. At most 32 claims; answer {\"claims\":[]} when nothing qualifies." + guidance
 	return system, wikiFence("SOURCE_DATA", text)
 }
 
@@ -261,7 +262,11 @@ func (s *Service) extractChunk(ctx context.Context, token string, d Decision, sc
 	if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
 		return nil, nil, ErrDenied
 	}
-	system, user := extractPrompt(ch.Text)
+	settings, err := s.spaceSettings(ctx, scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	system, user := extractPrompt(ch.Text, spaceExtractionGuidance(settings))
 	answer, err := s.wikiCall(ctx, scope, budget, fileExtractOperation, system, user)
 	if errors.Is(err, errWikiBudget) {
 		return nil, nil, ErrModelBudget
@@ -304,7 +309,11 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	text, redacted := extractClean(in.Text)
+	pages := []string{in.Text}
+	if err = s.defendPages(ctx, in.Scope, pages); err != nil {
+		return ExtractPreviewResult{}, err
+	}
+	text, redacted := extractClean(pages[0])
 	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
 	if err = s.previewChunks(ctx, token, d, in.Scope, extractChunks([]string{text}, false), &out); err != nil {
 		return ExtractPreviewResult{}, err
@@ -354,6 +363,20 @@ func extractFilePages(in FileMemoriesInput) ([]string, bool, error) {
 	return []string{text}, false, nil
 }
 
+// defendPages applies the space defense rules to every page before the privacy filter and the model.
+func (s *Service) defendPages(ctx context.Context, scope Scope, pages []string) error {
+	settings, err := s.spaceSettings(ctx, scope)
+	if err != nil {
+		return err
+	}
+	for i := range pages {
+		if err = defendAll(settings.DefenseRules, &pages[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // extractFileChunks applies the privacy filter page by page and enforces size limits.
 func extractFileChunks(pages []string, paged bool) ([]FileExtractChunk, int, error) {
 	redacted, total := 0, 0
@@ -383,6 +406,9 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 		return FileMemoriesResult{}, err
 	}
 	pages, paged, err := extractFilePages(in)
+	if err == nil {
+		err = s.defendPages(ctx, in.Scope, pages)
+	}
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

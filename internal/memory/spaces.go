@@ -61,13 +61,24 @@ var (
 )
 
 type SpaceConfig struct {
-	DisplayName           string   `json:"display_name" bson:"display_name"`
-	Aliases               []string `json:"aliases" bson:"aliases"`
-	DefaultReach          string   `json:"default_reach" bson:"default_reach"`
-	ExtractionEnabled     bool     `json:"extraction_enabled" bson:"extraction_enabled"`
-	RerankEnabled         bool     `json:"rerank_enabled" bson:"rerank_enabled"`
-	ConsolidationSchedule string   `json:"consolidation_schedule" bson:"consolidation_schedule"`
-	Notes                 string   `json:"notes" bson:"notes"`
+	DisplayName       string   `json:"display_name" bson:"display_name"`
+	Aliases           []string `json:"aliases" bson:"aliases"`
+	DefaultReach      string   `json:"default_reach" bson:"default_reach"`
+	ExtractionEnabled bool     `json:"extraction_enabled" bson:"extraction_enabled"`
+	// RerankEnabled is the old advisory switch nothing read; kept so older bundles still import. Rerank replaces it.
+	RerankEnabled         bool   `json:"rerank_enabled,omitempty" bson:"rerank_enabled,omitempty"`
+	ConsolidationSchedule string `json:"consolidation_schedule" bson:"consolidation_schedule"`
+	Notes                 string `json:"notes" bson:"notes"`
+
+	// Behaviour settings (space_settings.go): an empty value inherits the server default.
+	ExtractionMode         string             `json:"extraction_mode,omitempty" bson:"extraction_mode,omitempty"`
+	ExtractionInstructions string             `json:"extraction_instructions,omitempty" bson:"extraction_instructions,omitempty"`
+	Lanes                  *SpaceLanes        `json:"lanes,omitempty" bson:"lanes,omitempty"`
+	Rerank                 *bool              `json:"rerank,omitempty" bson:"rerank,omitempty"`
+	DefenseRules           []SpaceDefenseRule `json:"defense_rules,omitempty" bson:"defense_rules,omitempty"`
+	MCPTools               []string           `json:"mcp_tools,omitempty" bson:"mcp_tools,omitempty"`
+	RecallBudgetTokens     int                `json:"recall_budget_tokens,omitempty" bson:"recall_budget_tokens,omitempty"`
+	ReflectMaxTokens       int                `json:"reflect_max_tokens,omitempty" bson:"reflect_max_tokens,omitempty"`
 	// ReflectMission and ReflectDisposition guide reflect answers in this space (reflect.go).
 	ReflectMission     string              `json:"reflect_mission" bson:"reflect_mission"`
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
@@ -83,12 +94,21 @@ type SpaceConfigInput struct {
 	DisplayName           *string `json:"display_name,omitempty"`
 	DefaultReach          *string `json:"default_reach,omitempty"`
 	ExtractionEnabled     *bool   `json:"extraction_enabled,omitempty"`
-	RerankEnabled         *bool   `json:"rerank_enabled,omitempty"`
 	ConsolidationSchedule *string `json:"consolidation_schedule,omitempty"`
 	Notes                 *string `json:"notes,omitempty"`
 	ReflectMission        *string `json:"reflect_mission,omitempty"`
 	// ReflectDisposition: an all-zero value clears it.
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty"`
+
+	// Behaviour settings (space_settings.go).
+	ExtractionMode         *string             `json:"extraction_mode,omitempty"`
+	ExtractionInstructions *string             `json:"extraction_instructions,omitempty"`
+	Lanes                  *SpaceLanes         `json:"lanes,omitempty"`
+	Rerank                 *bool               `json:"rerank,omitempty"`
+	DefenseRules           *[]SpaceDefenseRule `json:"defense_rules,omitempty"`
+	MCPTools               *[]string           `json:"mcp_tools,omitempty"`
+	RecallBudgetTokens     *int                `json:"recall_budget_tokens,omitempty"`
+	ReflectMaxTokens       *int                `json:"reflect_max_tokens,omitempty"`
 }
 
 type SpaceView struct {
@@ -204,6 +224,8 @@ type SpaceExportInput struct {
 type SpaceImportInput struct {
 	Bundle   string `json:"bundle"`
 	ImportAs string `json:"import_as,omitempty"`
+	// DefaultTemplate imports the server's default template (ARKISM_SPACE_DEFAULT_TEMPLATE) instead of Bundle.
+	DefaultTemplate bool `json:"default_template,omitempty"`
 }
 
 type SpaceCloneInput struct {
@@ -358,9 +380,8 @@ func applySpaceConfig(c *SpaceConfig, in SpaceConfigInput, replace bool) error {
 	if in.ExtractionEnabled != nil {
 		c.ExtractionEnabled = *in.ExtractionEnabled
 	}
-	if in.RerankEnabled != nil {
-		c.RerankEnabled = *in.RerankEnabled
-	}
+	c.RerankEnabled = false
+	applySpaceSettingsInput(c, in)
 	return validSpaceConfig(*c)
 }
 
@@ -373,7 +394,7 @@ func validSpaceConfig(c SpaceConfig) error {
 	if containsSecret(c.DisplayName) || containsSecret(c.Notes) || containsSecret(c.ReflectMission) {
 		return ErrSecretDetected
 	}
-	return nil
+	return validSpaceSettings(c)
 }
 
 // changeSpaceConfig applies change to the stored (or default) config under a revision check.
@@ -630,7 +651,7 @@ func (s *Service) ImportSpace(ctx context.Context, token string, scope Scope, in
 	if err != nil {
 		return SpaceJobView{}, err
 	}
-	manifest, lines, err := parseSpaceBundle(in.Bundle)
+	manifest, lines, err := s.importBundle(ctx, scope, in)
 	if err != nil {
 		return SpaceJobView{}, err
 	}
@@ -640,6 +661,34 @@ func (s *Service) ImportSpace(ctx context.Context, token string, scope Scope, in
 		job.Report = &report
 		return err
 	})
+}
+
+// importBundle parses the bundle to import. A template sets up a new space: it
+// goes only into a space without stored settings, so applying it twice cannot
+// duplicate its directives and mental models.
+func (s *Service) importBundle(ctx context.Context, scope Scope, in SpaceImportInput) (SpaceManifest, []spaceBundleLine, error) {
+	bundle := in.Bundle
+	if in.DefaultTemplate {
+		if s.SpaceTemplate == nil {
+			return SpaceManifest{}, nil, ErrNotFound
+		}
+		if bundle != "" {
+			return SpaceManifest{}, nil, ErrInvalid
+		}
+		bundle = s.SpaceTemplate.Bundle
+	}
+	manifest, lines, err := parseSpaceBundle(bundle)
+	if err != nil || !manifest.Template {
+		return manifest, lines, err
+	}
+	_, err = s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
+	if err == nil {
+		return SpaceManifest{}, nil, ErrConflict
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return SpaceManifest{}, nil, err
+	}
+	return manifest, lines, nil
 }
 
 // CloneSpace copies one space into another (export then import, inside the server).

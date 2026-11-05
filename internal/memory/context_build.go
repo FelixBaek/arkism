@@ -43,6 +43,7 @@ type ContextPack struct {
 }
 
 func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuildInput) (ContextPack, error) {
+	// Without budget_tokens the space's recall budget applies (read in directivesFirst, after validation).
 	maxItems, budget := 6, 2000
 	if in.MaxItems != nil {
 		maxItems = *in.MaxItems
@@ -65,7 +66,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 		Explain: in.Explain, Timezone: in.Timezone, ExpandCausal: in.ExpandCausal,
 		QueryTime: in.QueryTime, GraphDepth: in.GraphDepth, MinScore: in.MinScore, Rerank: in.Rerank, PreferObservations: in.PreferObservations,
 	}
-	directives, err := s.directivesFirst(ctx, token, &search)
+	directives, err := s.directivesFirst(ctx, token, &search, in.BudgetTokens == nil)
 	if err != nil {
 		return ContextPack{}, err
 	}
@@ -92,13 +93,21 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 
 // directivesFirst validates the search before any service call, then packs the
 // context directives ahead of it and leaves the search the rest of the budget.
-func (s *Service) directivesFirst(ctx context.Context, token string, search *SearchInput) (*DirectiveSection, error) {
+func (s *Service) directivesFirst(ctx context.Context, token string, search *SearchInput, spaceBudget bool) (*DirectiveSection, error) {
 	probe := *search
 	if _, err := prepareSearchInput(&probe); err != nil {
 		return nil, err
 	}
 	if !boundSearchInput(&probe) {
 		return nil, ErrInvalid
+	}
+	settings, err := s.searchSpaceSettings(ctx, token, search.Scope)
+	if err != nil {
+		return nil, err
+	}
+	search.space = &settings
+	if spaceBudget {
+		search.BudgetTokens = settings.RecallBudgetTokens
 	}
 	directives, err := s.contextDirectives(ctx, token, search.Scope, search.TokenEncoding, search.BudgetTokens)
 	if directives != nil {

@@ -706,7 +706,11 @@ func (s *Service) transferableMemories(ctx context.Context, token string, scope 
 
 func (s *Service) askObservations(ctx context.Context, scope Scope, job *WikiJob, members []Record, previous string) ([]observationDraft, error) {
 	var answer observationAnswer
-	if err := s.derivedModelCall(ctx, scope, job, "wiki_observation", observationSystem, observationPrompt(members, previous), &answer); err != nil {
+	settings, err := s.spaceSettings(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.derivedModelCall(ctx, scope, job, "wiki_observation", observationSystem+spaceOwnerGuidance(settings), observationPrompt(members, previous), &answer); err != nil {
 		return nil, err
 	}
 	return answer.Observations, nil

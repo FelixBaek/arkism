@@ -1107,6 +1107,17 @@ func routerToolNames() map[string]bool {
 	return names
 }
 
+// routerToolEnabled refuses a tool the router does not have or the space's settings leave out.
+func routerToolEnabled(n string) error {
+	if !routerToolNames()[n] {
+		return errors.New("unknown tool")
+	}
+	if !spaceToolAllowed(n) {
+		return errors.New("tool_not_enabled: this space's settings leave this tool out")
+	}
+	return nil
+}
+
 // routerTools is the tools list in the exact order and key order clients have always seen.
 func routerTools() ([]json.RawMessage, error) {
 	var all []json.RawMessage
@@ -1117,7 +1128,7 @@ func routerTools() ([]json.RawMessage, error) {
 	for _, raw := range all {
 		var t struct{ Name string }
 		_ = json.Unmarshal(raw, &t) // raw came from the parse above
-		if !(receiveOnly && t.Name == "record_skill_usage") {
+		if !(receiveOnly && t.Name == "record_skill_usage") && spaceToolAllowed(t.Name) {
 			out = append(out, raw)
 		}
 	}
@@ -1158,8 +1169,8 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	if receiveOnly && n == "record_skill_usage" {
 		return nil, errors.New("skills_receive_only: skill usage writes are disabled for this client")
 	}
-	if !routerToolNames()[n] {
-		return nil, errors.New("unknown tool")
+	if err := routerToolEnabled(n); err != nil {
+		return nil, err
 	}
 	args, ok := argsAny.(map[string]any)
 	if !ok {
