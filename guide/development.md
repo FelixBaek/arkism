@@ -249,9 +249,22 @@ values compiled into that program.
 | `CaptureValidator` | `ValidateCapture(ctx, actor, CaptureInput) error` | After authorization and the built-in input checks, before any write | The capture answers 400 (`ErrInvalid` and `ErrExtensionRefused`) |
 | `JobHook` | `BeforeJob(ctx, job Record) error` | After the worker claims an embedding or webhook job. Erasure jobs skip it | The attempt fails and the job is retried later |
 | `ApproveHook` | `AfterApprove(ctx, Record)` | After a candidate approval is committed | None: it only observes; a panic is logged and contained |
+| `RequestHook` | `BeforeRequest(*http.Request) error` | Before routing and authorization of every HTTP request; it gets a copy without a readable body | The request answers 403 (`ErrDenied` and `ErrExtensionRefused`) |
+
+The skill router's MCP server has its own hook in `internal/host/skills`:
+`skills.ToolCallHook func(name string, args map[string]any) error` runs before
+every tool call; an error refuses the call before anything reaches the server.
 
 Hooks cannot approve anything: captures still land as candidates a person
-reviews. Keep hooks fast; they run in the request or worker goroutine.
+reviews. Keep hooks fast; they run in the request or worker goroutine. A hook
+that refuses also refuses when it panics (fail closed); `ApproveHook` only logs.
+
+To build with extensions, add a file behind a build tag to `cmd/memoryd`
+whose `init` sets `daemonExtensions` (a `memory.Extensions`; the daemon copies
+it onto the service at start), and, for the MCP hook, a file to `cmd/arkism`
+whose `init` sets `skills.ToolCallHook`. Build with `go build -tags <tag>`.
+Go's `internal` rule keeps these packages importable only from this module,
+and there is nothing to load at run time.
 
 ### Management lists and daemon structure
 

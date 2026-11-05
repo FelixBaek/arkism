@@ -3,8 +3,12 @@ package memory
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type testExtension struct {
@@ -88,5 +92,39 @@ func TestRefusingHooksContainPanics(t *testing.T) {
 	}
 	if err := f.svc.Extensions.beforeJob(testCtx, Record{Kind: "embedding"}); !errors.Is(err, ErrExtensionRefused) {
 		t.Fatal("panicking job hook", err)
+	}
+}
+
+type requestHookFunc func(*http.Request) error
+
+func (f requestHookFunc) BeforeRequest(r *http.Request) error { return f(r) }
+
+func TestExtensionRequestHookFailsClosed(t *testing.T) {
+	f := newFixture(t)
+	seenBody := false
+	f.svc.Extensions.RequestHook = requestHookFunc(func(r *http.Request) error {
+		if b, _ := io.ReadAll(r.Body); len(b) > 0 {
+			seenBody = true
+		}
+		switch r.Header.Get("X-Test") {
+		case "refuse":
+			return errors.New("house rule")
+		case "panic":
+			panic("boom")
+		}
+		return nil
+	})
+	h := handlerMode(f.svc, time.Minute, true)
+	for mode, want := range map[string]int{"": http.StatusOK, "refuse": http.StatusForbidden, "panic": http.StatusForbidden} {
+		req := httptest.NewRequest(http.MethodGet, "/v1/spaces/template-schema", strings.NewReader("secret body"))
+		req.Header.Set("X-Test", mode)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Fatalf("%q: %d %s", mode, rec.Code, rec.Body)
+		}
+	}
+	if seenBody {
+		t.Fatal("the hook could read the request body")
 	}
 }

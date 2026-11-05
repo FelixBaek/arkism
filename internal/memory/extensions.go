@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 )
 
 // Extensions let a program that embeds this package add its own checks and
@@ -22,6 +23,15 @@ type Extensions struct {
 	JobHook JobHook
 	// ApproveHook hears every committed candidate approval.
 	ApproveHook ApproveHook
+	// RequestHook may refuse any HTTP request before its route runs (middleware).
+	// The MCP router's tool-call hook is skills.ToolCallHook (internal/host/skills).
+	RequestHook RequestHook
+}
+
+// RequestHook sees a copy of each HTTP request (method, URL, headers; the body is
+// not readable) before routing and authorization; an error refuses it with 403.
+type RequestHook interface {
+	BeforeRequest(r *http.Request) error
 }
 
 // CaptureValidator checks a capture request; an error refuses the whole request.
@@ -86,4 +96,18 @@ func (x Extensions) afterTransition(ctx context.Context, col, status string, app
 		}
 	}()
 	x.ApproveHook.AfterApprove(context.WithoutCancel(ctx), approved)
+}
+
+// beforeRequest runs RequestHook; a refusal or a panic answers 403 (fail closed).
+func (x Extensions) beforeRequest(r *http.Request) error {
+	if x.RequestHook == nil {
+		return nil
+	}
+	view := r.Clone(r.Context())
+	view.Body = http.NoBody
+	if err := guard("request_hook", func() error { return x.RequestHook.BeforeRequest(view) }); err != nil {
+		slog.Info("request refused by extension", "method", r.Method, "path", r.URL.Path)
+		return errors.Join(ErrDenied, ErrExtensionRefused)
+	}
+	return nil
 }

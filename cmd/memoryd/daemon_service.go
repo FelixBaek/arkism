@@ -76,6 +76,7 @@ func configureDaemonPolicies(svc *memory.Service) error {
 	if svc.SpaceTemplate, e = memory.LoadSpaceTemplate(os.Getenv("ARKISM_SPACE_DEFAULT_TEMPLATE")); e != nil {
 		return e
 	}
+	svc.Extensions = daemonExtensions
 	if svc.SpaceTemplate != nil {
 		svc.SpaceTemplate.Auto = os.Getenv("ARKISM_SPACE_TEMPLATE_AUTO") == "1"
 	}

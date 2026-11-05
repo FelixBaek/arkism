@@ -193,6 +193,10 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		}()
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if err := s.Extensions.beforeRequest(r); err != nil {
+			respond(w, nil, err)
+			return
+		}
 
 		if !recovery && r.URL.Path != "/healthz" {
 			ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

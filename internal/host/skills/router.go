@@ -1176,6 +1176,9 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	if !ok {
 		return nil, attrErr(argsAny)
 	}
+	if err := toolCallAllowed(n, args); err != nil {
+		return nil, err
+	}
 	var value any
 	var err error
 	switch n {
