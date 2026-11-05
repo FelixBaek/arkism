@@ -5460,7 +5460,6 @@
  "글을 넣으면 규칙을 거친 결과가 바로 보여요.": "Saisissez un texte pour voir tout de suite le résultat après les règles.",
  "그대로 통과해요": "Passe sans changement",
  "쓸 수 없는 규칙은 빼고 시험했어요.": "Les règles inutilisables ont été exclues du test.",
- "이 화면에서 바로 돌려 본 결과예요. 저장할 때 서버가 한 번 더 검사해요.": "Ce résultat est calculé ici même. Le serveur revérifie à l’enregistrement.",
  "에이전트가 쓸 도구": "Outils utilisables par les agents",
  "이 공간에서 에이전트가 쓸 Arkism 도구(MCP)예요. 비워 두면 모두 써요.": "Les outils Arkism (MCP) que les agents peuvent utiliser dans cet espace. Laissez vide pour tout autoriser.",
  "모든 도구를 써요.": "Tous les outils sont autorisés.",
@@ -5495,7 +5494,6 @@
  "처음에는 꺼져 있어요. 켜면 모델 사용량(예산)을 써요.": "Désactivé au départ. Si vous l'activez, cela consomme de l'utilisation de modèle (budget).",
  "켜져 있어요. 정리할 때마다 서버 모델을 불러 모델 예산을 써요.": "Activé. À chaque rangement, un modèle du serveur est appelé et consomme le budget de modèle.",
  "몇 개 승인마다": "Tous les combien d'approbations",
- "1에서 1000 사이로 넣어 주세요.": "Saisissez un nombre entre 1 et 1000.",
  "얼마나 자주": "À quelle fréquence",
  "자세히 · 언제 만들지": "Détails · quand les créer",
  "승인한 기억이 이만큼 쌓이면 정리를 시작해요 (1~1000)": "Le rangement démarre quand ce nombre de souvenirs approuvés s'est accumulé (1–1000)",
@@ -5519,7 +5517,25 @@
  "에이전트 계정이라 보기만 할 수 있어요. 바꾸려면 사람 계정으로 로그인해 주세요.": "C'est un compte d'agent : vous pouvez seulement consulter. Pour modifier, connectez-vous avec un compte de personne.",
  "이 계정에는 공간 설정을 바꿀 권한이 없어요. 서버 관리자에게 공간 설정 권한을 받아 주세요.": "Ce compte n'a pas l'autorisation de modifier les réglages de l'espace. Demandez cette autorisation à l'administrateur du serveur.",
  "자세하게": "Détaillé",
- "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요": "Concis : l'essentiel uniquement · Détaillé : avec le contexte · Mot pour mot : exactement comme dit · Écrire soi-même : suit le guide ci-dessous"
+ "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요": "Concis : l'essentiel uniquement · Détaillé : avec le contexte · Mot pour mot : exactement comme dit · Écrire soi-même : suit le guide ci-dessous",
+ "시험해 보기 (미리 보기)": "Essayer (aperçu)",
+ "앱에서 바로 돌려 본 미리 보기라 서버 결과와 드물게 다를 수 있어요. 저장할 때 서버가 다시 검사해요.": "Cet aperçu a été exécuté directement dans l'application, il peut donc rarement différer du résultat du serveur. Le serveur vérifie de nouveau à l'enregistrement.",
+ "낱말로 찾기": "Recherche par mots",
+ "적힌 낱말이 맞는 기억": "Souvenirs dont les mots correspondent",
+ "뜻으로 찾기": "Recherche par sens",
+ "낱말이 달라도 뜻이 비슷한 기억": "Souvenirs au sens proche, même avec d'autres mots",
+ "시간으로 찾기": "Recherche par date",
+ "물어본 때와 가까운 기억": "Souvenirs proches du moment demandé",
+ "연결로 찾기": "Recherche par liens",
+ "같은 이름으로 이어진 기억": "Souvenirs reliés par le même nom",
+ "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "C'est la façon dont les agents cherchent des souvenirs. Elle est utilisée quand un agent n'en choisit pas une autre.",
+ "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Un modèle relit une fois de plus les souvenirs trouvés et les remet dans l'ordre. Tant que c'est activé, chaque recherche consomme de l'utilisation du modèle (budget).",
+ "에이전트에 줄 기억 양": "Quantité de souvenirs donnée aux agents",
+ "자세히 · 찾는 방법과 양": "Détails · Méthodes de recherche et quantité",
+ "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Nombre de tokens de souvenirs transmis en une fois (1~64000). Laissez vide pour hériter.",
+ "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Pour rétablir les méthodes de recherche et le nouveau tri aux valeurs héritées, utilisez ‘Tout hériter’.",
+ "답 길이 상한": "Longueur maximale de réponse",
+ "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Nombre de tokens utilisables pour une réponse (64~4096). Laissez vide pour hériter."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -6694,6 +6710,7 @@
  "{0} · 템플릿 규칙이라 여기서 못 바꿔요": "{0} · règle du modèle, impossible à modifier ici",
  "막혀요 · ‘{0}’ 규칙에 걸려 저장하지 않아요.": "Bloqué · la règle « {0} » s'applique, ce n'est donc pas enregistré.",
  "가려서 저장해요 · {0}곳": "Enregistré avec des parties masquées · {0}",
- "후보 {0}개를 가져왔어요. '확인해 주세요'에서 승인해 주세요.": "{0} candidats importés. Approuvez-les dans « À vérifier »."
+ "후보 {0}개를 가져왔어요. '확인해 주세요'에서 승인해 주세요.": "{0} candidats importés. Approuvez-les dans « À vérifier ».",
+ "{0}에서 {1} 사이로 넣어 주세요.": "Saisissez un nombre entre {0} et {1}."
  }
 };

@@ -256,6 +256,7 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
 
 test("기억 관리 › 활동 기록, 모델 호출, 추이: filters reach the server, 더 보기 follows the cursor, an agent token is told plainly", async () => {
   require("./memory-management.js");
+  require("./memory-pages.js"); // the shared cursor pager 더 보기 runs on
   const last = () => document.querySelectorAll("dialog.ov-wide-win").at(-1);
   const btn = (root, t) => root.querySelectorAll("button").find((b) => b.textContent.trim() === t);
   let denied = false;

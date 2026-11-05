@@ -23,11 +23,15 @@ let retentionDays = 7;
 // 기억 공간: a stored config with one rule of its own under one template rule; writes are recorded, not applied
 const TEMPLATE_RULE = { name: "사번", pattern: "EMP-\\d{4}", action: "block" };
 const spaceStored = () => ({ display_name: "기본", extraction_enabled: true, extraction_mode: "verbose", defense_rules: [{ name: "고객번호", pattern: "고객번호-\\d{6}", action: "redact" }], mcp_tools: ["recall"] });
-let spaceWrites = [];
+let spaceWrites = [], spaceConflict = false, spaceReads = 0;
 function spaceConfig(a, p) {
   const base = "/v1/spaces/default/default/config";
-  if (p === base && a.method === "GET") return { status: 200, body: JSON.stringify({ revision: 2, config: spaceStored() }) };
-  if (p === base) { spaceWrites.push([a.method, JSON.parse(a.body)]); return { status: 200, body: JSON.stringify({ revision: 3, config: spaceStored() }) }; }
+  if (p === base && a.method === "GET") { spaceReads++; return { status: 200, body: JSON.stringify({ revision: 2, config: spaceStored() }) }; }
+  if (p === base) {
+    spaceWrites.push([a.method, JSON.parse(a.body)]);
+    if (spaceConflict) return { status: 409, body: JSON.stringify({ code: "revision_conflict" }) };
+    return { status: 200, body: JSON.stringify({ revision: 3, config: spaceStored() }) };
+  }
   if (p === `${base}/effective`) {
     const c = spaceStored();
     return { status: 200, body: JSON.stringify({ revision: 2, config: { ...c, defense_rules: [TEMPLATE_RULE, ...c.defense_rules], auto_derive: { threshold: 20, interval: "24h" } },
@@ -751,4 +755,27 @@ test("기억 공간: each value says where it comes from; a save sends only what
   await press("모두 물려받기"); await app.settle(200);
   assert.deepEqual(spaceWrites.at(-1), ["PUT", { expected_revision: 2, display_name: "기본", default_reach: "", extraction_enabled: true, consolidation_schedule: "off", notes: "" }]);
   assert.equal(find("기본 템플릿 가져오기").disabled, true, "a space with saved settings cannot take the template");
+});
+
+test("기억 공간: finding settings save as a PATCH; a revision conflict says so and reloads the stored settings", async () => {
+  spaceWrites = []; spaceConflict = false;
+  await settings("space"); await app.settle(200);
+  const t = () => text(app.$("#table"));
+  const sw = (label) => app.$$("#table [aria-label]").find((n) => n.getAttribute("aria-label") === label && n.tagName !== "INPUT");
+  const field = (label) => app.$$("#table input").find((n) => n.getAttribute("aria-label") === label);
+  assert.match(t(), /켜 두면 찾을 때마다 모델 사용량\(예산\)을 써요/, "rerank names its budget");
+  sw("뜻으로 찾기").click(); await app.settle();
+  const budget = field("에이전트에 줄 기억 양"); budget.value = "3000"; budget.dispatchEvent(new app.window.Event("change")); await app.settle();
+  const tok = field("답 길이 상한"); tok.value = "20"; tok.dispatchEvent(new app.window.Event("change")); await app.settle();
+  await press("저장"); await app.settle(200);
+  assert.deepEqual(spaceWrites.at(-1), ["PATCH", { expected_revision: 2, lanes: { vector: false }, recall_budget_tokens: 3000 }], "an out-of-range limit never goes out");
+  // someone else saved first: the 409 is told plainly and the stored settings come back, the unsaved edit dropped
+  sw("시간으로 찾기").click(); await app.settle();
+  spaceConflict = true; const reads = spaceReads;
+  await press("저장"); await app.settle(200);
+  spaceConflict = false;
+  assert.equal(spaceWrites.at(-1)[1].expected_revision, 2);
+  assert.ok(spaceReads > reads, "the stored settings are read again");
+  assert.match(text(app.document.body), /다른 곳에서 먼저 바꿨어요\. 새로 불러왔어요\./);
+  assert.equal(app.$(".pg-save"), null, "no unsaved change is left over");
 });

@@ -12,8 +12,10 @@
   const sourceLabel = (src) => String(src || "server").split("+").map((s) => SOURCE[s] || s).join(" + ");
   // The behaviour settings this screen edits and the value that hands each back to the layer below (PATCH semantics:
   // an empty string, 0, [] or {} clears; the server treats an all-empty auto_derive or reflect_disposition as cleared).
-  const EDIT = { extraction_enabled: undefined, extraction_mode: "", extraction_instructions: "", defense_rules: [], mcp_tools: [], reflect_mission: "", reflect_disposition: {}, auto_derive: {} };
-  const unset = (v) => v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x !== undefined && x !== null && x !== "" && x !== 0));
+  // lanes and rerank have no empty value: a PATCH can set them but only 모두 물려받기 (PUT) hands them back.
+  const EDIT = { extraction_enabled: undefined, extraction_mode: "", extraction_instructions: "", defense_rules: [], mcp_tools: [], reflect_mission: "", reflect_disposition: {}, auto_derive: {},
+    lanes: undefined, rerank: undefined, recall_budget_tokens: 0, reflect_max_tokens: 0 };
+  const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x !== undefined && x !== null && x !== "" && x !== 0));
   // What a PATCH must carry to turn stored into draft: only the keys that changed, cleared ones as their empty value.
   function configPatch(stored, draft) {
     const out = {};
@@ -29,19 +31,20 @@
   const resetBody = (stored, revision) => ({ expected_revision: revision, display_name: stored?.display_name || "", default_reach: stored?.default_reach || "",
     extraction_enabled: stored?.extraction_enabled !== false, consolidation_schedule: stored?.consolidation_schedule || "off", notes: stored?.notes || "" });
 
-  // Defense rules are RE2 on the server. The live test runs them here with the browser's engine: a leading (?flags)
-  // group becomes JS flags, and what RE2 refuses (look-around, back references) is refused here too, so the test never
-  // passes a pattern the server would reject. The server stays the judge when saving.
+  // Defense rules are RE2 on the server and no server route tries one out, so the live test is a preview in the
+  // browser's engine: a leading (?flags) group becomes JS flags, (?P<name>) becomes (?<name>), and what RE2 refuses
+  // (look-around, back references, \k<name>) is refused here too, so the test never passes a pattern the server would
+  // reject. The server stays the judge when saving.
   const MARK = "[redacted]";
   function compile(pattern) {
     const p = String(pattern || "");
     if (!p) return { error: "empty" };
     if (new TextEncoder().encode(p).length > 512) return { error: "too_long" };
-    if (/\(\?<?[=!]|\\[1-9]/.test(p)) return { error: "unsupported" };
+    if (/\(\?<?[=!]|\\[1-9]|\\k</.test(p)) return { error: "unsupported" };
     const m = /^\(\?([imsU]+)\)/.exec(p);
     if (m && m[1].includes("U")) return { error: "unsupported" };
     let re;
-    try { re = new RegExp(m ? p.slice(m[0].length) : p, `g${m ? m[1] : ""}`); } catch (_) { return { error: "invalid" }; }
+    try { re = new RegExp((m ? p.slice(m[0].length) : p).replaceAll("(?P<", "(?<"), `g${m ? m[1] : ""}`); } catch (_) { return { error: "invalid" }; }
     // a pattern matching nothing at all, or its own output, would rewrite every text again on each pass
     const hits = (t) => { re.lastIndex = 0; return re.test(t); };
     if (hits("") || hits(MARK)) return { error: "matches_empty" };
@@ -141,6 +144,17 @@
       t.addEventListener("change", () => { onChange(t.value.trim()); redraw(); });
       return t;
     };
+    // a whole number in [min, max]; empty or 0 hands the value back (onSet(0)); anything else out of range is refused
+    const numberBox = (value, min, max, placeholder, label, editable, onSet) => {
+      // the settings select box look, so a number sits like a choice
+      const n = el("input", "ag-select"); n.type = "number"; n.min = String(min); n.max = String(max); n.value = value ? String(value) : ""; n.placeholder = placeholder ? String(placeholder) : ""; n.setAttribute("aria-label", label);
+      n.disabled = !editable;
+      n.addEventListener("change", () => {
+        const v = n.value.trim() === "" ? 0 : Math.round(Number(n.value));
+        if (v === 0 || (v >= min && v <= max)) onSet(v); else { n.value = value ? String(value) : ""; notice(`${min}에서 ${max} 사이로 넣어 주세요.`); }
+      });
+      return n;
+    };
     const readOnly = (text) => { const o = el("output", "", text); o.dataset.noI18n = ""; return o; };
     const modeName = (m) => MODES.find(([k]) => k === m)?.[1] || "간결하게";
 
@@ -213,7 +227,7 @@
       }
       sample.addEventListener("input", () => { S.sample = sample.value; paintTest(); });
       paintTest();
-      g.append(field("시험해 보기", sample, "이 화면에서 바로 돌려 본 결과예요. 저장할 때 서버가 한 번 더 검사해요."), out);
+      g.append(field("시험해 보기 (미리 보기)", sample, "앱에서 바로 돌려 본 미리 보기라 서버 결과와 드물게 다를 수 있어요. 저장할 때 서버가 다시 검사해요."), out);
       return g;
     }
 
@@ -248,6 +262,23 @@
       return g;
     }
 
+    // 기억 찾기: which recall lanes run when the caller names none, the model re-ranking (budget) and the default context size
+    const LANES = [["fts", "낱말로 찾기", "적힌 낱말이 맞는 기억"], ["vector", "뜻으로 찾기", "낱말이 달라도 뜻이 비슷한 기억"], ["temporal", "시간으로 찾기", "물어본 때와 가까운 기억"], ["graph", "연결로 찾기", "같은 이름으로 이어진 기억"]];
+    function recallGroup(kit) {
+      const g = kit.group("기억 찾기", "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.");
+      const d = S.draft, edit = human() && d;
+      const lane = (k) => (d?.lanes?.[k] ?? S.eff.lanes?.[k]) !== false;
+      const rows = LANES.map(([k, title, hint]) => [kit.line(title, hint, edit ? kit.sw(lane(k), title, (next) => { d.lanes = { ...(d.lanes || {}), [k]: next }; redraw(); }) : readOnly(lane(k) ? "켜짐" : "꺼짐")), origin(`lanes.${k}`)]).flat();
+      const rr = d?.rerank ?? S.eff.rerank;
+      g.append(kit.line("검색 결과 다시 고르기", "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.",
+        edit ? kit.sw(!!rr, "검색 결과 다시 고르기", (next) => { d.rerank = next; redraw(); }) : readOnly(rr ? "켜짐" : "꺼짐")), origin("rerank"));
+      const budget = numberBox(d?.recall_budget_tokens, 1, 64000, S.eff.recall_budget_tokens, "에이전트에 줄 기억 양", edit, (n) => { setDraft("recall_budget_tokens", n); redraw(); });
+      g.append(kit.more("자세히 · 찾는 방법과 양", ...rows, kit.line("에이전트에 줄 기억 양", "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.", budget),
+        origin("recall_budget_tokens", () => { setDraft("recall_budget_tokens", 0); redraw(); })));
+      if (edit) g.append(el("p", "pg-hint", "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요."));
+      return g;
+    }
+
     const LEVELS = [["0", "정하지 않음"], ["1", "1 · 아주 낮게"], ["2", "2"], ["3", "3 · 보통"], ["4", "4"], ["5", "5 · 아주 높게"]];
     const DISPOSITION = [["skepticism", "의심하는 정도", "기억끼리 다르면 얼마나 조심스럽게 말할지"], ["literalism", "글자 그대로 읽는 정도", "기억에 적힌 말을 얼마나 그대로 따를지"], ["empathy", "마음을 헤아리는 정도", "사람의 사정과 기분을 얼마나 살필지"]];
     function reflectGroup(kit) {
@@ -256,11 +287,15 @@
       g.append(field("답할 때 지킬 목표", edit ? area(d.reflect_mission, 2000, "답할 때 지킬 목표", "예: 이 저장소의 결정 이유를 짧게, 근거 기억과 함께 알려 줘요.", (v) => setDraft("reflect_mission", v)) : readOnly(S.eff.reflect_mission || "없음")),
         origin("reflect_mission", () => { setDraft("reflect_mission", ""); redraw(); }));
       const disp = d ? d.reflect_disposition || {} : S.eff.reflect_disposition || {};
-      const rows = DISPOSITION.map(([k, title, hint]) => kit.line(title, hint, edit ? select(LEVELS, String(disp[k] || 0), title, (v) => {
+      // with nothing set here, "0" is what the template or server gives, so it says so (like 뽑는 방식's 물려받기)
+      const inh = (k) => (!d?.reflect_disposition && S.eff.reflect_disposition?.[k] ? [["0", `물려받기 · ${S.eff.reflect_disposition[k]}`], ...LEVELS.slice(1)] : LEVELS);
+      const rows = DISPOSITION.map(([k, title, hint]) => kit.line(title, hint, edit ? select(inh(k), String(disp[k] || 0), title, (v) => {
         const next = { ...(d.reflect_disposition || {}), [k]: Number(v) };
         d.reflect_disposition = Object.values(next).some((n) => n) ? next : null; redraw();
       }) : readOnly(disp[k] ? String(disp[k]) : "정하지 않음")));
-      g.append(kit.more("자세히 · 답하는 태도", ...rows, origin("reflect_disposition", () => { d.reflect_disposition = null; redraw(); })));
+      const maxTok = numberBox(d?.reflect_max_tokens, 64, 4096, S.eff.reflect_max_tokens, "답 길이 상한", edit, (n) => { setDraft("reflect_max_tokens", n); redraw(); });
+      g.append(kit.more("자세히 · 답하는 태도", ...rows, origin("reflect_disposition", () => { d.reflect_disposition = null; redraw(); }),
+        kit.line("답 길이 상한", "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.", maxTok), origin("reflect_max_tokens", () => { setDraft("reflect_max_tokens", 0); redraw(); })));
       return g;
     }
 
@@ -272,9 +307,7 @@
       const set = (patchIn) => { const next = { ...(d.auto_derive || {}), ...patchIn }; d.auto_derive = unset(next) ? null : next; redraw(); };
       g.append(kit.line("자동으로 정리 제안 만들기", "처음에는 꺼져 있어요. 켜면 모델 사용량(예산)을 써요.", edit ? kit.sw(on, "자동으로 정리 제안 만들기", (next) => set({ enabled: next })) : readOnly(on ? "켜짐" : "꺼짐")));
       if (on) g.append(el("p", "pg-hint warn", "켜져 있어요. 정리할 때마다 서버 모델을 불러 모델 예산을 써요."));
-      const thr = el("input"); thr.type = "number"; thr.min = "1"; thr.max = "1000"; thr.value = cur.threshold ? String(cur.threshold) : ""; thr.placeholder = String(S.eff.auto_derive?.threshold || ""); thr.setAttribute("aria-label", "몇 개 승인마다");
-      thr.disabled = !edit;
-      thr.addEventListener("change", () => { const n = Math.round(Number(thr.value)); if (n >= 1 && n <= 1000) set({ threshold: n }); else { thr.value = cur.threshold ? String(cur.threshold) : ""; notice("1에서 1000 사이로 넣어 주세요."); } });
+      const thr = numberBox(cur.threshold, 1, 1000, S.eff.auto_derive?.threshold, "몇 개 승인마다", edit, (n) => set({ threshold: n || undefined }));
       const every = edit ? select(INTERVALS, cur.interval || "", "얼마나 자주", (v) => set({ interval: v || undefined })) : readOnly(S.eff.auto_derive?.interval || "—");
       g.append(kit.more("자세히 · 언제 만들지", kit.line("몇 개 승인마다", "승인한 기억이 이만큼 쌓이면 정리를 시작해요 (1~1000)", thr), kit.line("얼마나 자주", "쌓인 게 적어도 이 간격이 지나면 정리해요", every)),
         origin("auto_derive.enabled", () => { d.auto_derive = null; redraw(); }));
@@ -315,7 +348,7 @@
       const out = [];
       if (!human()) out.push(el("p", "pg-hint", "에이전트 계정이라 보기만 할 수 있어요. 바꾸려면 사람 계정으로 로그인해 주세요."));
       else if (!S.stored) out.push(el("p", "pg-hint warn", "이 계정에는 공간 설정을 바꿀 권한이 없어요. 서버 관리자에게 공간 설정 권한을 받아 주세요."));
-      out.push(extractGroup(kit), defenseGroup(kit), reflectGroup(kit), deriveGroup(kit), toolsGroup(kit), templateGroup(kit, kit.spaceJob), ...extra);
+      out.push(extractGroup(kit), defenseGroup(kit), recallGroup(kit), reflectGroup(kit), deriveGroup(kit), toolsGroup(kit), templateGroup(kit, kit.spaceJob), ...extra);
       if (dirty()) {
         const bar = el("div", "pg-save");
         const ok = button("저장", "primary", null, save); ok.disabled = S.busy;

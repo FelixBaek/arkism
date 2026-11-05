@@ -8,13 +8,41 @@
     "extraction_mode": "verbose",
     "extraction_instructions": "배포 절차와 고객 요청은 꼭 남기고, 잡담은 빼 주세요.",
     "defense_rules": [
-      { "name": "사번", "pattern": "EMP-\\d{4}", "action": "block" },
-      { "name": "고객번호", "pattern": "고객번호-\\d{6}", "action": "redact" }
+      {
+        "name": "사번",
+        "pattern": "EMP-\\d{4}",
+        "action": "block"
+      },
+      {
+        "name": "고객번호",
+        "pattern": "고객번호-\\d{6}",
+        "action": "redact"
+      }
     ],
-    "mcp_tools": ["recall", "remember", "reflect"],
+    "mcp_tools": [
+      "recall",
+      "remember",
+      "reflect"
+    ],
     "reflect_mission": "이 저장소의 결정 이유를 짧게, 근거 기억과 함께 알려 줘요.",
-    "reflect_disposition": { "skepticism": 4, "literalism": 3, "empathy": 2 },
-    "auto_derive": { "threshold": 20, "interval": "24h" }
+    "reflect_disposition": {
+      "skepticism": 4,
+      "literalism": 3,
+      "empathy": 2
+    },
+    "auto_derive": {
+      "threshold": 20,
+      "interval": "24h"
+    },
+    "lanes": {
+      "fts": true,
+      "vector": true,
+      "temporal": true,
+      "graph": false
+    },
+    "rerank": false,
+    "recall_budget_tokens": 2000,
+    "reflect_max_tokens": 1024
   },
   "sources": {
     "display_name": "space",
@@ -26,6 +54,13 @@
     "reflect_mission": "space",
     "reflect_disposition": "template",
     "auto_derive.threshold": "template",
-    "auto_derive.interval": "server"
+    "auto_derive.interval": "server",
+    "lanes.fts": "server",
+    "lanes.vector": "server",
+    "lanes.temporal": "server",
+    "lanes.graph": "template",
+    "rerank": "server",
+    "recall_budget_tokens": "server",
+    "reflect_max_tokens": "server"
   }
 }

@@ -6591,7 +6591,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "글을 넣으면 규칙을 거친 결과가 바로 보여요.": "Type some text to see the result after the rules right away.",
   "그대로 통과해요": "Passes unchanged",
   "쓸 수 없는 규칙은 빼고 시험했어요.": "Rules that can't be used were left out of the test.",
-  "이 화면에서 바로 돌려 본 결과예요. 저장할 때 서버가 한 번 더 검사해요.": "This result is computed right here. The server checks again when you save.",
   "에이전트가 쓸 도구": "Tools agents can use",
   "이 공간에서 에이전트가 쓸 Arkism 도구(MCP)예요. 비워 두면 모두 써요.": "The Arkism tools (MCP) agents can use in this space. Leave it empty to allow all.",
   "모든 도구를 써요.": "All tools are allowed.",
@@ -6626,7 +6625,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "처음에는 꺼져 있어요. 켜면 모델 사용량(예산)을 써요.": "Off at first. Turning it on uses model usage (budget).",
   "켜져 있어요. 정리할 때마다 서버 모델을 불러 모델 예산을 써요.": "On. Each upkeep run calls a server model and uses the model budget.",
   "몇 개 승인마다": "After how many approvals",
-  "1에서 1000 사이로 넣어 주세요.": "Enter a number from 1 to 1000.",
   "얼마나 자주": "How often",
   "자세히 · 언제 만들지": "Details · when to make them",
   "승인한 기억이 이만큼 쌓이면 정리를 시작해요 (1~1000)": "Upkeep starts once this many approved memories pile up (1–1000)",
@@ -6661,3 +6659,24 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
   "자세하게": "Detailed",
   "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요": "Concise: key points only · Detailed: with context · Word for word: exactly as said · Write my own: follows the guide below" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "시험해 보기 (미리 보기)": "Try it (preview)",
+  "앱에서 바로 돌려 본 미리 보기라 서버 결과와 드물게 다를 수 있어요. 저장할 때 서버가 다시 검사해요.": "A preview run in the app, so it can rarely differ from the server. The server checks again when you save.",
+  "낱말로 찾기": "Find by words",
+  "적힌 낱말이 맞는 기억": "Memories whose words match",
+  "뜻으로 찾기": "Find by meaning",
+  "낱말이 달라도 뜻이 비슷한 기억": "Memories with a similar meaning, even in other words",
+  "시간으로 찾기": "Find by time",
+  "물어본 때와 가까운 기억": "Memories close to the time asked about",
+  "연결로 찾기": "Find by links",
+  "같은 이름으로 이어진 기억": "Memories linked by the same name",
+  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "How agents find memories. Used whenever an agent doesn't choose for itself.",
+  "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "A model reads the found memories once more and reorders them. While on, every search uses model usage (budget).",
+  "에이전트에 줄 기억 양": "Memory given to agents",
+  "자세히 · 찾는 방법과 양": "Details · Search methods and amount",
+  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Tokens of memory handed over at once (1–64000). Leave empty to inherit.",
+  "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "To put search methods and reordering back to inherited values, use ‘Inherit everything’.",
+  "답 길이 상한": "Answer length limit",
+  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Tokens one answer may use (64–4096). Leave empty to inherit." });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}에서 {1} 사이로 넣어 주세요.": "Enter a number from {0} to {1}." });

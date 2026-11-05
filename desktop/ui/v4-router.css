@@ -551,5 +551,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set-space .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .v4-set-space .sp-chip { display: inline-flex; align-items: center; gap: 4px; }
 .v4-set-space .warn { color: var(--nc-amber); }
+/* a number beside its label, as wide as a choice box (the folded 자세히 rows otherwise stretch inputs full width) */
+.v4-set-space .setting > input.ag-select { width: min(160px, 40%); }
 @media (max-width: 720px) { .v4-set-space .sp-rule { grid-template-columns: minmax(0, 1fr) 28px; } }
 .v4-kv.sp-kv > span:first-child { width: auto; min-width: 72px; max-width: 50%; }

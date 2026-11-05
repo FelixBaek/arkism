@@ -5460,7 +5460,6 @@
  "글을 넣으면 규칙을 거친 결과가 바로 보여요.": "Nhập văn bản để xem ngay kết quả sau khi qua các quy tắc.",
  "그대로 통과해요": "Đi qua nguyên vẹn",
  "쓸 수 없는 규칙은 빼고 시험했어요.": "Các quy tắc không dùng được đã bị bỏ qua khi thử.",
- "이 화면에서 바로 돌려 본 결과예요. 저장할 때 서버가 한 번 더 검사해요.": "Đây là kết quả chạy ngay trên màn hình này. Khi lưu, máy chủ sẽ kiểm tra thêm một lần nữa.",
  "에이전트가 쓸 도구": "Công cụ agent được dùng",
  "이 공간에서 에이전트가 쓸 Arkism 도구(MCP)예요. 비워 두면 모두 써요.": "Các công cụ Arkism (MCP) mà agent được dùng trong không gian này. Để trống thì dùng được tất cả.",
  "모든 도구를 써요.": "Tất cả công cụ đều được dùng.",
@@ -5495,7 +5494,6 @@
  "처음에는 꺼져 있어요. 켜면 모델 사용량(예산)을 써요.": "Ban đầu đang tắt. Khi bật, việc này sẽ dùng lượng sử dụng mô hình (ngân sách).",
  "켜져 있어요. 정리할 때마다 서버 모델을 불러 모델 예산을 써요.": "Đang bật. Mỗi lần dọn dẹp sẽ gọi mô hình trên máy chủ và dùng ngân sách mô hình.",
  "몇 개 승인마다": "Sau bao nhiêu lần duyệt",
- "1에서 1000 사이로 넣어 주세요.": "Vui lòng nhập một số từ 1 đến 1000.",
  "얼마나 자주": "Tần suất",
  "자세히 · 언제 만들지": "Chi tiết · khi nào tạo",
  "승인한 기억이 이만큼 쌓이면 정리를 시작해요 (1~1000)": "Khi số ký ức đã duyệt tích lũy đạt mức này, việc dọn dẹp sẽ bắt đầu (1~1000)",
@@ -5519,7 +5517,25 @@
  "에이전트 계정이라 보기만 할 수 있어요. 바꾸려면 사람 계정으로 로그인해 주세요.": "Đây là tài khoản tác tử nên bạn chỉ xem được. Để thay đổi, hãy đăng nhập bằng tài khoản của người.",
  "이 계정에는 공간 설정을 바꿀 권한이 없어요. 서버 관리자에게 공간 설정 권한을 받아 주세요.": "Tài khoản này không có quyền thay đổi cài đặt không gian. Hãy nhờ quản trị viên máy chủ cấp quyền cài đặt không gian.",
  "자세하게": "Chi tiết",
- "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요": "Ngắn gọn: chỉ ý chính · Chi tiết: kèm cả ngữ cảnh · Nguyên văn: đúng như đã nói · Tự viết: làm theo hướng dẫn bên dưới"
+ "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요": "Ngắn gọn: chỉ ý chính · Chi tiết: kèm cả ngữ cảnh · Nguyên văn: đúng như đã nói · Tự viết: làm theo hướng dẫn bên dưới",
+ "시험해 보기 (미리 보기)": "Thử ngay (xem trước)",
+ "앱에서 바로 돌려 본 미리 보기라 서버 결과와 드물게 다를 수 있어요. 저장할 때 서버가 다시 검사해요.": "Đây là bản xem trước chạy ngay trong ứng dụng nên hiếm khi có thể khác với kết quả trên máy chủ. Khi lưu, máy chủ sẽ kiểm tra lại.",
+ "낱말로 찾기": "Tìm theo từ",
+ "적힌 낱말이 맞는 기억": "Những ký ức có từ khớp với nội dung đã ghi",
+ "뜻으로 찾기": "Tìm theo ý nghĩa",
+ "낱말이 달라도 뜻이 비슷한 기억": "Những ký ức có ý nghĩa gần giống, dù dùng từ khác",
+ "시간으로 찾기": "Tìm theo thời gian",
+ "물어본 때와 가까운 기억": "Những ký ức gần với thời điểm được hỏi",
+ "연결로 찾기": "Tìm theo liên kết",
+ "같은 이름으로 이어진 기억": "Những ký ức được nối với nhau bằng cùng một tên",
+ "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "Đây là cách agent tìm ký ức. Khi agent không tự chọn, sẽ tìm theo cách này.",
+ "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Mô hình sẽ đọc lại các ký ức đã tìm được rồi sắp xếp lại thứ tự. Nếu bật, mỗi lần tìm sẽ tốn lượng dùng mô hình (ngân sách).",
+ "에이전트에 줄 기억 양": "Lượng ký ức đưa cho agent",
+ "자세히 · 찾는 방법과 양": "Chi tiết · Cách tìm và lượng ký ức",
+ "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Đây là số token của ký ức được đưa đi mỗi lần (1~64000). Để trống thì sẽ kế thừa.",
+ "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Muốn đưa cách tìm và việc chọn lại về giá trị kế thừa, hãy dùng ‘Kế thừa tất cả’.",
+ "답 길이 상한": "Giới hạn độ dài câu trả lời",
+ "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Đây là số token tối đa cho mỗi câu trả lời (64~4096). Để trống thì sẽ kế thừa."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -6694,6 +6710,7 @@
  "{0} · 템플릿 규칙이라 여기서 못 바꿔요": "{0} · là quy tắc của mẫu nên không thể đổi ở đây",
  "막혀요 · ‘{0}’ 규칙에 걸려 저장하지 않아요.": "Bị chặn · khớp với quy tắc ‘{0}’ nên sẽ không được lưu.",
  "가려서 저장해요 · {0}곳": "Lưu và che một phần · {0} chỗ",
- "후보 {0}개를 가져왔어요. '확인해 주세요'에서 승인해 주세요.": "Đã nhập {0} ứng viên. Hãy duyệt chúng trong 'Vui lòng xem lại'."
+ "후보 {0}개를 가져왔어요. '확인해 주세요'에서 승인해 주세요.": "Đã nhập {0} ứng viên. Hãy duyệt chúng trong 'Vui lòng xem lại'.",
+ "{0}에서 {1} 사이로 넣어 주세요.": "Vui lòng nhập một số từ {0} đến {1}."
  }
 };

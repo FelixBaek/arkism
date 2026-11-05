@@ -16,6 +16,8 @@ test("configPatch sends only changed keys and clears with the empty value of eac
   assert.deepEqual(S.configPatch({}, { reflect_disposition: { skepticism: 4 } }), { reflect_disposition: { skepticism: 4 } });
   assert.deepEqual(S.configPatch({ reflect_disposition: { skepticism: 4 } }, { reflect_disposition: { skepticism: 0 } }), { reflect_disposition: {} }, "all zero = cleared");
   assert.ok(!("notes" in S.configPatch(stored, { ...stored, notes: "changed" })), "fields this screen does not edit never go out");
+  assert.deepEqual(S.configPatch({ recall_budget_tokens: 3000, reflect_max_tokens: 512 }, { recall_budget_tokens: 0, reflect_max_tokens: 512, rerank: false, lanes: { graph: true } }),
+    { recall_budget_tokens: 0, rerank: false, lanes: { graph: true } }, "0 hands a limit back; a switch off is a value, not a clear");
 });
 
 test("resetBody keeps the name, reach, schedule, notes and the switch; everything else goes back to the layers below", () => {
@@ -27,6 +29,8 @@ test("compile refuses what the server's RE2 refuses, and patterns that match not
   for (const [p, code] of [["", "empty"], ["a".repeat(513), "too_long"], ["(?=x)", "unsupported"], ["(?<!x)y", "unsupported"], ["(a)\\1", "unsupported"], ["(?U)a+", "unsupported"], ["(", "invalid"], ["a*", "matches_empty"], ["redacted", "matches_empty"]])
     assert.equal(S.compile(p).error, code, p);
   assert.ok(S.compile("(?i)secret-\\d+").re.test("SECRET-12"), "a leading flag group becomes a JS flag");
+  assert.equal(S.compile("(?P<n>a)\\k<n>").error, "unsupported", "a named back reference is not RE2");
+  assert.ok(S.compile("(?P<id>ID)-\\d+").re.test("ID-7"), "RE2's (?P<name>) group runs in the preview");
 });
 
 test("testRules redacts in order, stops at a block and skips unusable rules", () => {

@@ -1247,24 +1247,28 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const RANGE = [["1", "오늘"], ["7", "최근 7일"], ["30", "최근 30일"], ["90", "최근 90일"]];
   const deniedText = (e) => (e?.message === "access_denied" ? "사람 계정으로 로그인하면 보여요." : /HTTP 404|not_found|HTTP 501/.test(e?.message || "") ? "이 서버는 아직 이 기록을 주지 않아요." : "불러오지 못했어요. 잠시 뒤 다시 열어 보세요.");
   const selectBox = (list, cur, label, onPick) => { const s = sortSelect(list, cur, onPick); s.setAttribute("aria-label", label); return s; };
-  // a list that grows by 더 보기: get(cursor) → { items, next }; draw(item) → a row
+  // a list that grows by 더 보기 over the shared cursor pager (memory-pages.js: page bounds, repeated cursors, stale reads):
+  // get(cursor, limit) → { items, next }; draw(item) → a row
   function pagedList(host, get, draw, empty) {
     const list = el("div", "ov-win-list"), foot = el("div", "ov-wide-foot");
     host.append(list, foot);
-    let next = "", busy = false;
-    async function more(first) {
-      if (busy) return; busy = true;
+    const pager = window.ArkismMemoryPages.create(async (_, at) => {
+      const page = await get(at.cursor, at.limit);
+      return { items: page.items, next_cursor: page.next || "", authority: "data_only_untrusted" }; // drawn as plain text all the same
+    });
+    let shown = 0;
+    async function more(retry) {
+      if (pager.snapshot().loading) return;
       foot.replaceChildren(el("p", "ov-wide-foot-note", "불러오는 중…"));
-      try {
-        const page = await get(first ? "" : next);
-        if (!host.isConnected) return;
-        list.append(...page.items.map(draw)); next = page.next || "";
-        if (first && !page.items.length) list.append(el("p", "ov-win-empty", empty));
-        foot.replaceChildren(...(next ? [button("더 보기", "small", null, () => more(false))] : []));
-      } catch (e) { foot.replaceChildren(el("p", "ov-win-err", deniedText(e)), ...(e?.message === "access_denied" ? [] : [button("다시 시도", "small", null, () => more(first))])); }
-      finally { busy = false; }
+      try { await (retry ? pager.retry("list") : pager.load("list")); } catch (_) { /* the snapshot keeps the error */ }
+      if (!host.isConnected) return;
+      const s = pager.snapshot();
+      list.append(...s.items.slice(shown).map(draw)); shown = s.items.length;
+      if (s.error) { foot.replaceChildren(el("p", "ov-win-err", deniedText({ message: s.error })), ...(s.error === "access_denied" ? [] : [button("다시 시도", "small", null, () => more(true))])); return; }
+      if (!shown) list.replaceChildren(el("p", "ov-win-empty", empty));
+      foot.replaceChildren(...(s.cursor ? [button("더 보기", "small", null, () => more(false))] : []));
     }
-    void more(true);
+    void more(false);
   }
   // 활동 기록: who did what to which record, newest first; reasons and bodies never come back from the server
   const AUDIT_KINDS = [["", "모든 활동"], ["write:", "바꾼 것"], ["create:", "만든 것"], ["review:", "검토한 것"], ["delete:", "지운 것"], ["read:", "읽은 것"]];
@@ -1277,8 +1281,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     left.append(bar, el("p", "ov-detail-hint", "누가 언제 무엇을 했는지 남은 기록이에요. 이유와 내용은 보여 주지 않고, 비밀처럼 보이는 값은 가려요."));
     body.append(left); d.append(body);
     const from = iso(Date.now() - Number(auditF.days) * DAY);
-    pagedList(left, async (cursor) => {
-      const r = await request(`/v1/audit-events?${query({ from, limit: 50, ...(auditF.action ? { action: auditF.action } : {}), ...(cursor ? { cursor } : {}) })}`);
+    pagedList(left, async (cursor, limit) => {
+      const r = await request(`/v1/audit-events?${query({ from, limit, ...(auditF.action ? { action: auditF.action } : {}), ...(cursor ? { cursor } : {}) })}`);
       return { items: r.items || [], next: r.next_cursor };
     }, (e) => {
       const a = M.auditLine(e), who = el("span", "mono", e.actor || "—"); who.dataset.noI18n = "";
@@ -1312,8 +1316,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     }, (e) => { if (d.isConnected) right.replaceChildren(el("h3", "", "최근 30일"), el("p", "ov-win-err", deniedText(e))); });
     bar.append(selectBox([["", "모든 결과"], ["error", "실패만"]], modelF.status, "결과", (v) => { modelF.status = v; redo(); }), opSlot);
     left.append(bar, el("p", "ov-detail-hint", "서버가 모델을 부른 기록이에요. 대화 내용은 서버가 따로 켜 둔 때만 가려서 남아요."));
-    pagedList(left, async (before) => {
-      const r = await request(`/v1/llm-requests?${query({ limit: 50, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
+    pagedList(left, async (before, limit) => {
+      const r = await request(`/v1/llm-requests?${query({ limit, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
       return { items: r.items || [], next: r.next_before };
     }, (it) => {
       const q = it.request || {}, failed = q.status === "error";
