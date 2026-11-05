@@ -308,3 +308,26 @@ func TestSpaceDefenseBlockHiddenFromUnauthorizedCallers(t *testing.T) {
 		t.Fatalf("http = %d %s", w.Code, w.Body.String())
 	}
 }
+
+// The reflect mission and disposition inherit like the other settings: space, then template.
+func TestSpaceReflectGuidanceInherits(t *testing.T) {
+	f, _ := reflectFixture(t)
+	f.activeMemory("guidance needle", "needle")
+	f.svc.SpaceTemplate = &SpaceTemplate{Config: SpaceConfig{ReflectMission: "Answer for the auditors.", ReflectDisposition: &ReflectDisposition{Skepticism: 4}}}
+	view, err := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
+	if err != nil || view.Config.ReflectMission != "Answer for the auditors." || view.Sources["reflect_mission"] != spaceSourceTemplate || view.Sources["reflect_disposition"] != spaceSourceTemplate {
+		t.Fatalf("effective = %+v %v %v", view.Config, view.Sources, err)
+	}
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true})
+	if err != nil || !strings.Contains(out.Prompt.System, "auditors") || !strings.Contains(out.Prompt.System, "skepticism 4/5") {
+		t.Fatal("template guidance", out.Prompt, err)
+	}
+	mission := "Answer for the on-call engineer."
+	putSettings(t, f, scopeA, SpaceConfigInput{ReflectMission: &mission})
+	view, _ = f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
+	out, err = f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true})
+	if view.Sources["reflect_mission"] != spaceSourceSpace || view.Sources["reflect_disposition"] != spaceSourceTemplate || err != nil ||
+		!strings.Contains(out.Prompt.System, "on-call") || strings.Contains(out.Prompt.System, "auditors") || !strings.Contains(out.Prompt.System, "skepticism 4/5") {
+		t.Fatal("space mission over template", view.Sources, out.Prompt, err)
+	}
+}

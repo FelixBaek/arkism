@@ -209,16 +209,19 @@ func reflectRetrieved(out ReflectOutput, run *reflectRun) ReflectOutput {
 	return out
 }
 
-// reflectGuidance fills the mission and disposition: the request's, else the space's (person-set) ones.
+// reflectGuidance fills the mission and disposition: the request's, else the space's resolved
+// (person-set) ones, which the space or the server's default template may set.
 // prompt_only hands the prompt back to the caller, so the space's settings then need read:space_configs.
 func (s *Service) reflectGuidance(ctx context.Context, token string, run *reflectRun) error {
-	scope := spaceScope(run.in.Scope)
-	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
-	view, err := spaceView(scope, rec, err)
-	if err != nil {
-		return err
+	space := run.in.space
+	if space == nil {
+		c, err := s.spaceSettings(ctx, run.in.Scope)
+		if err != nil {
+			return err
+		}
+		space = &c
 	}
-	run.mission, run.disposition = view.Config.ReflectMission, view.Config.ReflectDisposition
+	run.mission, run.disposition = space.ReflectMission, space.ReflectDisposition
 	if run.in.Mission != "" {
 		run.mission = run.in.Mission
 	}
@@ -227,9 +230,10 @@ func (s *Service) reflectGuidance(ctx context.Context, token string, run *reflec
 	}
 	fromSpace := run.in.Mission == "" && run.mission != "" || run.in.Disposition == nil && run.disposition != nil
 	if run.in.PromptOnly && fromSpace {
-		_, err = s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, "")
+		_, err := s.authorize(ctx, token, "read:"+colSpaceConfigs, spaceScope(run.in.Scope), spaceConfigID, "")
+		return err
 	}
-	return err
+	return nil
 }
 
 // reflectLoop asks the model up to max_iterations times; a tool request runs the tool

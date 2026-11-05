@@ -267,6 +267,8 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "recall_budget_tokens", func(c *SpaceConfig) *int { return &c.RecallBudgetTokens }, num)
 	inheritSetting(&out, layers, src, "reflect_max_tokens", func(c *SpaceConfig) *int { return &c.ReflectMaxTokens }, num)
 	inheritSetting(&out, layers, src, "mcp_tools", func(c *SpaceConfig) *[]string { return &c.MCPTools }, func(v []string) bool { return len(v) > 0 })
+	inheritSetting(&out, layers, src, "reflect_mission", func(c *SpaceConfig) *string { return &c.ReflectMission }, str)
+	inheritSetting(&out, layers, src, "reflect_disposition", func(c *SpaceConfig) **ReflectDisposition { return &c.ReflectDisposition }, func(v *ReflectDisposition) bool { return v != nil })
 	resolveAutoDerive(&out, layers, src)
 	out.Lanes = &SpaceLanes{}
 	for _, f := range spaceLaneFields {
