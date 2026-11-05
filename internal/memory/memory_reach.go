@@ -115,7 +115,7 @@ func (s *Service) editLiveMemory(ctx context.Context, token, id string, scope Sc
 			return e
 		}
 		out = r
-		return nil
+		return queueMemoryEvent(ctx, tx, EventMemoryUpdated, colMemories, r)
 	})
 	if e != nil {
 		return Record{}, e

@@ -327,3 +327,28 @@ func TestSpaceAliasStoredShapeMatchesSQL(t *testing.T) {
 		t.Fatalf("stored doc %s: %v", b, err)
 	}
 }
+
+func TestSpaceTemplateCarriesDirectivesForHumansOnly(t *testing.T) {
+	f := newFixture(t)
+	in := directiveInput("Units", "Always use metric units.", "both", 7)
+	in.Scope = scopeA
+	if _, err := f.svc.CreateDirective(testCtx, f.human, in); err != nil {
+		t.Fatal(err)
+	}
+	bundle := exportBundle(t, f, scopeA, SpaceExportInput{Template: true})
+	// An agent may clone a space, but a directive is a human rule and stays behind.
+	job, err := f.svc.CloneSpace(testCtx, f.agent, scopeA, SpaceCloneInput{Target: scopeB, Include: []string{colDirectives}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := waitSpaceJob(t, f, scopeA, job.ID).Report; got.Imported != 0 || len(scopeRecords(f, colDirectives, scopeB)) != 0 {
+		t.Fatalf("agent clone wrote a directive: %+v", got)
+	}
+	if report := importBundle(t, f, scopeB, bundle, ""); report.Imported != 1 {
+		t.Fatalf("human import = %+v", report)
+	}
+	got := scopeRecords(f, colDirectives, scopeB)
+	if len(got) != 1 || got[0].Text != in.Rule || got[0].Directive == nil || got[0].Directive.Priority != 7 || got[0].Directive.AppliesTo != "both" || got[0].Status != "active" {
+		t.Fatalf("imported directive = %+v", got)
+	}
+}

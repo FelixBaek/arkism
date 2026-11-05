@@ -322,8 +322,13 @@ func TestWebhookDeliveryIsQueuedInTheChangeTransaction(t *testing.T) {
 
 func TestWebhookEventsForCandidateApprovalAndDelete(t *testing.T) {
 	f := webhookFixture(t)
-	v := f.hook("https://hooks.example.com/x", false, EventCandidateCreated, EventMemoryApproved, EventMemoryDeleted)
+	v := f.hook("https://hooks.example.com/x", false, EventCandidateCreated, EventMemoryApproved, EventMemoryUpdated, EventMemoryDeleted)
 	m := approveCandidate(t, f, "event chain")
+	// Metadata edits of a live memory (tags, reach) are updates too.
+	m, err := f.svc.SetMemoryTags(testCtx, f.human, m.ID, MemoryTagsInput{Scope: scopeA, Add: []string{"chain"}})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := f.svc.Delete(testCtx, f.human, colMemories, m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision}); err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +340,7 @@ func TestWebhookEventsForCandidateApprovalAndDelete(t *testing.T) {
 		got = append(got, d.Delivery.Event)
 	}
 	sort.Strings(got)
-	if strings.Join(got, ",") != "candidate.created,memory.approved,memory.deleted" {
+	if strings.Join(got, ",") != "candidate.created,memory.approved,memory.deleted,memory.updated" {
 		t.Fatal("events", got)
 	}
 }
