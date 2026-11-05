@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"slices"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
@@ -125,7 +126,7 @@ func TestParseTimeIntent(t *testing.T) {
 			t.Errorf("%q: got %v..%v ok=%v, want %v..%v", tc.query, w.From, w.To, ok, tc.from, tc.to)
 		}
 	}
-	for _, q := range []string{"deploy the build", "may I ask about march forward", "3개월 계획", "version 12"} {
+	for _, q := range []string{"deploy the build", "may I ask about march forward", "3개월 계획", "version 12", "2026-02-30 배포", "2월 30일", "february 30", "2026-13 plan"} {
 		if w, ok := parseTimeIntent(q, nov5); ok {
 			t.Errorf("%q: unexpected window %v", q, w)
 		}
@@ -178,18 +179,31 @@ func rerankRowsFixture() []ScoredHit {
 
 func TestRecallRerankBlendAndTimeoutFallback(t *testing.T) {
 	d := Decision{ExternalTransfer: true, ContentSafe: true}
-	in := SearchInput{Query: "q", Limit: 3}
+	in := SearchInput{Scope: scopeA, Query: "q", Limit: 3}
+	var sent teiRerankRequest
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&sent)
 		_, _ = w.Write([]byte(`[{"index":0,"score":0.0},{"index":1,"score":0.1},{"index":2,"score":1.0}]`))
 	}))
 	defer srv.Close()
-	s := &Service{}
+	f := newFixture(t)
+	s := f.svc
 	s.Reranker, _ = NewTEIReranker(TEIRerankConfig{URL: srv.URL})
 	trace := &recallTrace{rerank: map[string]float64{}}
-	rows := s.rerankRows(testCtx, in, d, rerankRowsFixture(), trace)
+	rows, err := s.rerankRows(testCtx, in, d, rerankRowsFixture(), trace)
 	// c: 0.7*1 + 0.3*(1/3) = 0.8 beats a: 0.7*0 + 0.3*1 = 0.3.
-	if rows[0].ID != "c" || rows[1].ID != "a" || !trace.reranked || trace.rerank[hitKey(rows[0].Hit)] != 1 {
-		t.Fatal(rows, trace)
+	if err != nil || rows[0].ID != "c" || rows[1].ID != "a" || !trace.reranked || trace.rerank[hitKey(rows[0].Hit)] != 1 {
+		t.Fatal(rows, trace, err)
+	}
+	// Every rerank call leaves a provider usage row, like the query embedding.
+	if usage := f.repo.rows(colProviderUsage); len(usage) != 1 || usage[0].Cost.Operation != "rerank" || usage[0].Status != JobStatusDone {
+		t.Fatalf("%+v", usage)
+	}
+	// A restricted memory's text never leaves the host; its row keeps the fused score.
+	restricted := rerankRowsFixture()
+	restricted[1].Sensitivity = "restricted"
+	if _, err = s.rerankRows(testCtx, in, d, restricted, &recallTrace{rerank: map[string]float64{}}); err != nil || slices.Contains(sent.Texts, "second") || len(sent.Texts) != 2 {
+		t.Fatal(sent.Texts, err)
 	}
 
 	slow := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -198,13 +212,13 @@ func TestRecallRerankBlendAndTimeoutFallback(t *testing.T) {
 	defer slow.Close()
 	s.Reranker, _ = NewTEIReranker(TEIRerankConfig{URL: slow.URL, Timeout: 50 * time.Millisecond})
 	trace = &recallTrace{rerank: map[string]float64{}}
-	rows = s.rerankRows(testCtx, in, d, rerankRowsFixture(), trace)
+	rows, err = s.rerankRows(testCtx, in, d, rerankRowsFixture(), trace)
 	m := s.Reranker.Metrics()
-	if rows[0].ID != "a" || rows[0].Score != 0.03 || trace.reranked || m.Calls != 1 || m.Fallbacks != 1 || m.Timeouts != 1 {
-		t.Fatal(rows, m)
+	if err != nil || rows[0].ID != "a" || rows[0].Score != 0.03 || trace.reranked || m.Calls != 1 || m.Fallbacks != 1 || m.Timeouts != 1 {
+		t.Fatal(rows, m, err)
 	}
 	// No transfer permission: the reranker is never called.
-	_ = s.rerankRows(testCtx, in, Decision{}, rerankRowsFixture(), trace)
+	_, _ = s.rerankRows(testCtx, in, Decision{}, rerankRowsFixture(), trace)
 	if s.Reranker.Metrics().Calls != 1 {
 		t.Fatal("rerank without transfer permission")
 	}
@@ -274,6 +288,12 @@ func TestRecallGraphLaneWalksRelationsAndMentions(t *testing.T) {
 		{SourceID: "gamma", TargetKind: "entity", TargetID: "e-db", Kind: "mentions"},
 		{SourceID: "yday", TargetKind: "entity", TargetID: "e-db", Kind: "mentions"},
 		{SourceID: "alpha", TargetKind: "memory", TargetID: "missing", Kind: "references"},
+		{SourceID: "gamma", TargetKind: "memory", TargetID: "retired", Kind: "supersedes"},
+	}
+	// A neighbour that is no longer active is dropped by the same recheck as every lane.
+	at := time.Now().UTC()
+	if err := f.repo.Insert(testCtx, colMemories, Record{ID: "retired", Scope: scopeA, Kind: "decision", Text: "retired note", Status: "superseded", ApprovedBy: "human", Revision: 1, Sources: refs(f.source()), CreatedAt: at, UpdatedAt: at}); err != nil {
+		t.Fatal(err)
 	}
 	out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "gamma", Explain: true})
 	got := ids(out.Items)
@@ -313,5 +333,39 @@ func TestRecallRegressionGuardNewLanesOff(t *testing.T) {
 	again, err := f.svc.Search(testCtx, f.human, in)
 	if err != nil || !slices.Equal(ids(again.Items), ids(got.Items)) {
 		t.Fatal(ids(again.Items), err)
+	}
+}
+
+// The window SQL must read stored times through ->>'$date': doc holds them as
+// {"$date": ...} objects, and casting the object text to timestamptz errors.
+func TestRecallWindowSQLReadsStoredDates(t *testing.T) {
+	at := time.Date(2026, 11, 4, 3, 0, 0, 0, time.UTC)
+	_, doc, err := encodeRecord(Record{ID: "m", Text: "x", CreatedAt: at, EffectiveAt: &at, MemoryContext: &MemoryContext{ObservedAt: &at}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d map[string]any
+	if err := json.Unmarshal(doc, &d); err != nil {
+		t.Fatal(err)
+	}
+	stored := map[string]any{"created_at": d["created_at"], "effective_at": d["effective_at"], "memory_context'->'observed_at": d["memory_context"].(map[string]any)["observed_at"]}
+	for path, v := range stored {
+		if obj, ok := v.(map[string]any); !ok || obj["$date"] == nil {
+			t.Fatalf("%s stored as %v", path, v)
+		}
+		if !strings.Contains(recallWindowSQL, "doc->'"+path+"'->>'$date'") {
+			t.Fatalf("recallWindowSQL does not read %s through $date", path)
+		}
+	}
+}
+
+func TestRecallContextBuildPassesExplainAndTimezone(t *testing.T) {
+	f, _ := recallFixture(t)
+	pack, err := f.svc.BuildContext(testCtx, f.human, ContextBuildInput{Scope: scopeA, Task: "어제 뭐 바꿨지", TokenEncoding: "cl100k_base", Explain: true})
+	if err != nil || pack.Explain == nil || pack.Explain.TimeWindow == nil || len(pack.Items) == 0 || pack.Items[0].Explain == nil {
+		t.Fatalf("%+v %v", pack.Explain, err)
+	}
+	if _, err = f.svc.BuildContext(testCtx, f.human, ContextBuildInput{Scope: scopeA, Task: "어제", TokenEncoding: "cl100k_base", Timezone: "Mars/Base"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("unknown timezone must be rejected", err)
 	}
 }

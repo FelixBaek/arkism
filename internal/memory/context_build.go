@@ -16,6 +16,9 @@ type ContextBuildInput struct {
 	Modes         []string `json:"modes,omitempty"`
 	// Agent ("@handle") puts that agent's or team's pins first (crew_pins.go).
 	Agent string `json:"agent,omitempty"`
+	// Explain and Timezone pass through to the search (SearchInput).
+	Explain  bool   `json:"explain,omitempty"`
+	Timezone string `json:"timezone,omitempty"`
 }
 
 type ContextPack struct {
@@ -47,6 +50,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 		SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: view,
 		Limit: maxItems, BudgetTokens: budget, TokenEncoding: in.TokenEncoding,
 		Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
+		Explain: in.Explain, Timezone: in.Timezone,
 	}
 	directives, err := s.directivesFirst(ctx, token, &search)
 	if err != nil {

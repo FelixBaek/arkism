@@ -7,11 +7,12 @@ import (
 )
 
 // recallWindowSQL keeps rows with any event-time field in the window, a superset;
-// windowHits then applies hitEventTime's precedence exactly.
-const recallWindowSQL = `((doc->'memory_context'->>'observed_at')::timestamptz >= $%d AND (doc->'memory_context'->>'observed_at')::timestamptz < $%d
+// windowHits then applies hitEventTime's precedence exactly. Stored times are
+// {"$date": ...} objects (storecodec.go), so each is read through ->>'$date'.
+const recallWindowSQL = `((doc->'memory_context'->'observed_at'->>'$date')::timestamptz >= $%d AND (doc->'memory_context'->'observed_at'->>'$date')::timestamptz < $%d
  OR left(doc->'memory_context'->>'valid_from',10) BETWEEN $%d AND $%d
- OR (doc->>'effective_at')::timestamptz >= $%d AND (doc->>'effective_at')::timestamptz < $%d
- OR (doc->>'created_at')::timestamptz >= $%d AND (doc->>'created_at')::timestamptz < $%d)`
+ OR (doc->'effective_at'->>'$date')::timestamptz >= $%d AND (doc->'effective_at'->>'$date')::timestamptz < $%d
+ OR (doc->'created_at'->>'$date')::timestamptz >= $%d AND (doc->'created_at'->>'$date')::timestamptz < $%d)`
 
 func (p *Postgres) SearchMemoriesInWindow(ctx context.Context, in SearchInput, from, to time.Time) ([]Hit, error) {
 	if checkScope(in.Scope) != nil || !from.Before(to) || in.Limit < 1 || in.Limit > 50 {
@@ -23,7 +24,8 @@ func (p *Postgres) SearchMemoriesInWindow(ctx context.Context, in SearchInput, f
 	}
 	now := time.Now().UTC()
 	loc := from.Location()
-	args := []any{from, to, from.Format(time.DateOnly), to.Format(time.DateOnly), from, to, from, to}
+	// valid_from dates get a day of slack each side: an RFC3339 value in another offset can carry the neighbouring date.
+	args := []any{from, to, from.AddDate(0, 0, -1).Format(time.DateOnly), to.AddDate(0, 0, 1).Format(time.DateOnly), from, to, from, to}
 	where, params := pgSearchWhere(criteria, colMemories, now, recallWindowSQL, args)
 	rows, err := p.selectRecords(ctx, colMemories, in.Scope, where, params, "updated_at DESC, id ASC", in.Limit*5)
 	if err != nil {

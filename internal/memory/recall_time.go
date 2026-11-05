@@ -13,10 +13,12 @@ type timeWindow struct {
 	Phrase   string
 }
 
-// timeRule turns one regexp match into a window; ok=false lets the next rule try.
+// timeRule turns one regexp match into a window. ok=false means the phrase names no
+// real span (2026-02-30), so parsing stops, unless retry lets the next rule try.
 type timeRule struct {
-	re   *regexp.Regexp
-	span func(m []string, now time.Time) (time.Time, time.Time, bool)
+	re    *regexp.Regexp
+	span  func(m []string, now time.Time) (time.Time, time.Time, bool)
+	retry bool
 }
 
 const (
@@ -30,10 +32,10 @@ var monthParts = map[string]string{"초": "early", "중순": "mid", "말": "late
 var timeRules = []timeRule{
 	{regexp.MustCompile(`(\d{4})[-./](\d{1,2})[-./](\d{1,2})`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return dateSpan(atoi(m[1]), atoi(m[2]), atoi(m[3]), now.Location())
-	}},
+	}, false},
 	{regexp.MustCompile(`(\d{4})[-./](\d{1,2})\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return monthSpan(atoi(m[1]), atoi(m[2]), "", now.Location())
-	}},
+	}, false},
 	{regexp.MustCompile(`(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(?:(\d{1,2})\s*일|(초|중순|말))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return inYear(m[1], now, func(y int) (time.Time, time.Time, bool) {
 			if m[3] != "" {
@@ -41,46 +43,46 @@ var timeRules = []timeRule{
 			}
 			return monthSpan(y, atoi(m[2]), monthParts[m[4]], now.Location())
 		})
-	}},
+	}, false},
 	{regexp.MustCompile(`\b(` + monthNames + `)\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
 			return dateSpan(y, monthIndex(m[1]), atoi(m[2]), now.Location())
 		})
-	}},
+	}, false},
 	{regexp.MustCompile(`\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(` + monthNames + `)\b(?:,?\s+(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
 			return dateSpan(y, monthIndex(m[2]), atoi(m[1]), now.Location())
 		})
-	}},
+	}, false},
 	{regexp.MustCompile(`\b(end of|late|early|beginning of|start of|mid|middle of)\s+(` + monthFull + `)\b(?:\s+(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
 			return monthSpan(y, monthIndex(m[2]), monthParts[m[1]], now.Location())
 		})
-	}},
+	}, false},
 	{regexp.MustCompile(`\b(in\s+|during\s+)?(` + monthFull + `)\b(?:\s+(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		// "may" and "march" are also verbs: only "in May", "during March" or "May 2026" count.
 		if (m[2] == "may" || m[2] == "march") && m[1] == "" && m[3] == "" {
 			return time.Time{}, time.Time{}, false
 		}
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) { return monthSpan(y, monthIndex(m[2]), "", now.Location()) })
-	}},
+	}, true},
 	{regexp.MustCompile(`(\d{1,3})\s*일\s*전|\b(\d{1,3}) days? ago\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return daySpan(now, -atoi(m[1]+m[2]))
-	}},
-	{regexp.MustCompile(`그저께|그제|\bday before yesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -2) }},
-	{regexp.MustCompile(`어제|\byesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -1) }},
-	{regexp.MustCompile(`오늘|\btoday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, 0) }},
-	{regexp.MustCompile(`(?:지난|저번)\s*주|\blast week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, -1) }},
-	{regexp.MustCompile(`이번\s*주|금주|\bthis week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, 0) }},
+	}, false},
+	{regexp.MustCompile(`그저께|그제|\bday before yesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -2) }, false},
+	{regexp.MustCompile(`어제|\byesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -1) }, false},
+	{regexp.MustCompile(`오늘|\btoday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, 0) }, false},
+	{regexp.MustCompile(`(?:지난|저번)\s*주|\blast week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, -1) }, false},
+	{regexp.MustCompile(`이번\s*주|금주|\bthis week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, 0) }, false},
 	{regexp.MustCompile(`(?:지난|저번)\s*달|\blast month\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
 		return monthSpan(now.Year(), int(now.Month())-1, "", now.Location())
-	}},
+	}, false},
 	{regexp.MustCompile(`이번\s*달|\bthis month\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
 		return monthSpan(now.Year(), int(now.Month()), "", now.Location())
-	}},
-	{regexp.MustCompile(`재작년`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -2) }},
-	{regexp.MustCompile(`작년|지난\s*해|\blast year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -1) }},
-	{regexp.MustCompile(`올해|금년|\bthis year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, 0) }},
+	}, false},
+	{regexp.MustCompile(`재작년`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -2) }, false},
+	{regexp.MustCompile(`작년|지난\s*해|\blast year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -1) }, false},
+	{regexp.MustCompile(`올해|금년|\bthis year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, 0) }, false},
 }
 
 // parseTimeIntent finds the first time phrase in query (Korean or English) and
@@ -94,6 +96,8 @@ func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
 		}
 		if from, to, ok := rule.span(m, now); ok {
 			return timeWindow{From: from, To: to, Phrase: strings.TrimSpace(m[0])}, true
+		} else if !rule.retry {
+			return timeWindow{}, false
 		}
 	}
 	return timeWindow{}, false

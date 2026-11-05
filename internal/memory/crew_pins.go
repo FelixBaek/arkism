@@ -354,6 +354,7 @@ func (s *Service) pinnedContext(ctx context.Context, token string, in ContextBui
 			SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: in.ContextView,
 			Limit: maxItems, BudgetTokens: left, TokenEncoding: in.TokenEncoding,
 			Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
+			Explain: in.Explain, Timezone: in.Timezone,
 			pinned: refs, // the search's receipt lists the pinned memories first
 		})
 		if err != nil {
@@ -368,7 +369,7 @@ func (s *Service) pinnedContext(ctx context.Context, token string, in ContextBui
 				out.Items = append(out.Items, h)
 			}
 		}
-		out.History, out.Degraded, out.ContextID = bundle.History, bundle.Degraded, bundle.ContextID
+		out.History, out.Degraded, out.ContextID, out.Explain = bundle.History, bundle.Degraded, bundle.ContextID, bundle.Explain
 	}
 	if out.ContextID == "" {
 		// No search ran (the pins took the budget): the pins get their own receipt.

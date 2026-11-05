@@ -39255,6 +39255,16 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "explain": {
+            "type": "boolean",
+            "default": false,
+            "description": "Passed to the search: per-hit lane ranks, fused and rerank scores, and the detected time window. For debugging."
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "IANA zone that time words in the task resolve in. Empty means Asia/Seoul. Unknown names are rejected."
+          },
           "scope": {
             "$ref": "#/components/schemas/Scope"
           },
@@ -39468,6 +39478,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "explain": {
+            "type": "object",
+            "description": "Present only with explain=true; same as the search response's explain.",
+            "properties": {
+              "lanes": {"type": "array", "items": {"type": "string"}},
+              "reranked": {"type": "boolean"},
+              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
+            }
+          },
           "authority": {
             "const": "data_only_untrusted"
           },

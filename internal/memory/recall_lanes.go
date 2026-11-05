@@ -104,7 +104,10 @@ func (s *Service) recallItems(ctx context.Context, in SearchInput, d Decision, c
 	if err != nil {
 		return err
 	}
-	scored := s.fuseRecallHits(ctx, lists, collection, in, d, trace)
+	scored, err := s.fuseRecallHits(ctx, lists, collection, in, d, trace)
+	if err != nil {
+		return err
+	}
 	out.Items = make([]Hit, len(scored))
 	for i, r := range scored {
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
@@ -137,29 +140,30 @@ func (s *Service) graphLane(ctx context.Context, in SearchInput, top []ScoredHit
 	return hits, nil
 }
 
-// rerankRows reorders the fused head by the reranker (blend above). Any failure keeps
-// the fused order; text is sent only when the vector lane could send the query too.
-func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) []ScoredHit {
+// rerankRows reorders the fused head by the reranker (blend above). A reranker failure
+// keeps the fused order; only a usage-ledger failure is returned, as for the query
+// embedding. Text is sent only when the vector lane could send the query too, and
+// only for hits the embedding worker would send (not restricted, safe to transfer).
+func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
 	if s.Reranker == nil || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
-		return rows
+		return rows, nil
 	}
-	texts, at := []string{}, []int{}
-	for i := range rows[:min(len(rows), in.Limit*3, rerankMaxRows)] {
-		text := rows[i].Text
-		if utf8.RuneCountInString(text) > rerankTextMax {
-			text = string([]rune(text)[:rerankTextMax])
-		}
-		if safeTransfer(text) && text != "" {
-			texts, at = append(texts, text), append(at, i)
-		}
-	}
+	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])
 	if len(texts) == 0 {
-		return rows
+		return rows, nil
+	}
+	usage := ProviderUsage{Provider: "tei", Model: "rerank", Requests: 1}
+	reserved, err := s.beginProviderCall(ctx, in.Scope, "rerank", usage.Provider, usage.Model)
+	if err != nil {
+		return nil, err
 	}
 	scores, err := s.Reranker.Rerank(ctx, in.Query, texts)
+	if e := s.finishProviderCall(ctx, reserved, usage, err == nil); e != nil {
+		return nil, e
+	}
 	if err != nil {
 		s.Reranker.fellBack(err)
-		return rows
+		return rows, nil
 	}
 	best := rows[0].Score
 	for i := range rows {
@@ -171,7 +175,22 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Score > rows[j].Score })
 	trace.reranked = true
-	return rows
+	return rows, nil
+}
+
+// rerankTexts picks the head rows whose text may leave the host, cut to rerankTextMax runes.
+func rerankTexts(head []ScoredHit) ([]string, []int) {
+	texts, at := []string{}, []int{}
+	for i, r := range head {
+		text := r.Text
+		if utf8.RuneCountInString(text) > rerankTextMax {
+			text = string([]rune(text)[:rerankTextMax])
+		}
+		if r.Sensitivity != "restricted" && text != "" && safeTransfer(text) {
+			texts, at = append(texts, text), append(at, i)
+		}
+	}
+	return texts, at
 }
 
 func (t *recallTrace) noteFused(rows []ScoredHit) {
