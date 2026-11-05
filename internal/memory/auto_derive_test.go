@@ -194,7 +194,7 @@ func TestAutoDeriveWorkerRunsOnePassAndStopsOnBudget(t *testing.T) {
 		t.Fatalf("requeue: %+v %+v", job, job.AutoDerive)
 	}
 	f.svc.Wiki = nil
-	if outcome, err := f.svc.autoDerivePass(testCtx, f.work, scopeA, 0); err != nil || outcome != "model_not_configured" {
+	if outcome, err := f.svc.autoDerivePass(testCtx, f.work, scopeA, 0, nil); err != nil || outcome != "model_not_configured" {
 		t.Fatal(outcome, err)
 	}
 }
@@ -390,5 +390,54 @@ func TestAutoDerivePerSpaceSetting(t *testing.T) {
 		if _, err := g.svc.PutSpaceConfig(testCtx, g.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, AutoDerive: &bad}, false); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v accepted: %v", bad, err)
 		}
+	}
+}
+
+// Approving a fact or relation about a person queues a summary draft for them on the scope's
+// auto_derive job; its summaries pass drafts it for a person to review.
+func TestAutoDeriveDraftsSummariesOfApprovedPeople(t *testing.T) {
+	t.Setenv("MEMORY_AUTO_DERIVE", "on")
+	f, repo := entityFixture(t)
+	w := f.auth.actors[f.work]
+	for _, verb := range []string{"write", "search", "context", "generate"} {
+		w.verbs[verb] = true
+	}
+	f.auth.actors[f.work] = w
+	llm := &fakeWikiLLM{}
+	f.svc.Wiki = llm
+	m := f.activeMemory("mina owns the harbor deploy pipeline")
+	for _, e := range []NamedEntity{{ID: "e1", Name: "mina", Type: "person", Aliases: []string{}}, {ID: "e2", Name: "harbor", Type: "project", Aliases: []string{}}} {
+		e.Keys = entityKeys(e)
+		repo.ents[e.ID] = e
+	}
+	f.svc.queueEntitySummaries(testCtx, Record{ID: "x", Scope: scopeA, ApprovedBy: "human", Entities: []EntityInput{{Name: "harbor", Type: "project"}}})
+	if got := autoDeriveJobs(f)[0].AutoDerive.Entities; len(got) != 0 {
+		t.Fatalf("a project is not a person: %v", got)
+	}
+	approved := Record{ID: "y", Scope: scopeA, ApprovedBy: "human", EntityRelations: []EntityRelationInput{{Source: "Mina", Relation: "works_on", Target: "harbor"}}}
+	f.svc.queueEntitySummaries(testCtx, approved)
+	f.svc.queueEntitySummaries(testCtx, approved)
+	var job Record
+	for job.Kind != autoDeriveJobKind {
+		var err error
+		if job, err = f.repo.ClaimJob(testCtx, time.Now().UTC().Add(7*time.Hour), time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := job.AutoDerive.Entities; len(got) != 1 || got[0] != "e1" {
+		t.Fatalf("queued people: %v", got)
+	}
+	started := time.Now().UTC()
+	job.AutoDerive.Pass, job.AutoDerive.Started = len(autoDerivePasses)-1, &started
+	answer, _ := json.Marshal(mentalModelAnswer{Summary: "Mina owns the harbor deploy pipeline.", Citations: []string{m.ID}})
+	llm.answers = []string{string(answer)}
+	if err := f.svc.runAutoDerive(testCtx, f.work, job); err != nil {
+		t.Fatal(err)
+	}
+	if repo.ents["e1"].SummaryDraft == nil || repo.ents["e1"].Summary != nil {
+		t.Fatalf("draft only, never published: %+v", repo.ents["e1"])
+	}
+	if cur := autoDeriveJobs(f)[0]; len(cur.AutoDerive.Entities) != 0 || cur.AutoDerive.Outcome != "ok" {
+		t.Fatalf("drafted people leave the queue: %+v", cur.AutoDerive)
 	}
 }

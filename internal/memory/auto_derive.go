@@ -2,8 +2,9 @@ package memory
 
 // Automatic derivation: approved memories trigger the existing model passes
 // that turn them into proposals: observation consolidation (which also
-// refreshes due mental models), causal link proposals and the model entity
-// pass. Each pass only proposes; a person approves what becomes active.
+// refreshes due mental models), causal link proposals, the model entity pass
+// and a summary draft for each person whose facts or relations were approved
+// (DraftEntitySummary). Each pass only proposes; a person approves what becomes active.
 //
 // It is off unless the operator sets MEMORY_AUTO_DERIVE=on: an upgrade must not
 // start spending the server model's daily calls on its own.
@@ -22,6 +23,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -33,7 +35,10 @@ const (
 	autoDeriveGroups           = 1 // one model group per pass keeps a claim inside the worker iteration
 )
 
-var autoDerivePasses = []string{"observations", "causal", "entities"}
+var autoDerivePasses = []string{"observations", "causal", "entities", "summaries"}
+
+// autoDeriveEntitiesMax caps the people a run drafts summaries for.
+const autoDeriveEntitiesMax = 16
 
 // AutoDeriveJob is the state of a scope's automatic derivation job.
 type AutoDeriveJob struct {
@@ -43,6 +48,8 @@ type AutoDeriveJob struct {
 	LastRun  *time.Time `json:"last_run,omitempty" bson:"last_run,omitempty"`
 	// Started is when the current run's first pass began; approvals after it are queued again at the end.
 	Started *time.Time `json:"started,omitempty" bson:"started,omitempty"`
+	// Entities are the people whose approved facts or relations wait for a summary draft.
+	Entities []string `json:"entities,omitempty" bson:"entities,omitempty"`
 }
 
 type autoDeriveSettings struct {
@@ -162,7 +169,7 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 		started := time.Now().UTC()
 		state.Started, state.Approved = &started, 0 // this run consumes the approvals counted so far
 	}
-	outcome, err := s.autoDerivePass(ctx, workerToken, job.Scope, state.Pass)
+	outcome, err := s.autoDerivePass(ctx, workerToken, job.Scope, state.Pass, state.Entities)
 	if err != nil {
 		return err
 	}
@@ -170,6 +177,10 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 	state.Pass++
 	state.Outcome, state.LastRun = outcome, &now
 	done := outcome != "ok" || state.Pass >= len(autoDerivePasses)
+	drafted := []string{}
+	if outcome == "ok" && autoDerivePasses[state.Pass-1] == "summaries" {
+		drafted = state.Entities
+	}
 	// Approvals that arrived after the run began are not in every pass it made: start the next count.
 	again := done && (state.Approved > 0 || latestApprovedMemory(ctx, s.Repo, job.Scope).After(*state.Started))
 	set := s.autoDeriveSettingsFor(ctx, job.Scope) // read before the transaction: it reads the space outside tx
@@ -182,6 +193,9 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 			return ErrConflict // the lease was lost (cancelled or reclaimed)
 		}
 		cur.Status, cur.RunAt, cur.LeaseToken, cur.LeaseUntil, cur.UpdatedAt = JobStatusPending, &now, "", time.Time{}, now
+		if cur.AutoDerive != nil { // people queued while the run held the lease stay queued
+			state.Entities = slices.DeleteFunc(slices.Clone(cur.AutoDerive.Entities), func(id string) bool { return slices.Contains(drafted, id) })
+		}
 		switch {
 		case again:
 			at := now.Add(set.Interval)
@@ -200,7 +214,7 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 }
 
 // autoDerivePass runs one existing proposal pass and names how it ended.
-func (s *Service) autoDerivePass(ctx context.Context, token string, scope Scope, pass int) (string, error) {
+func (s *Service) autoDerivePass(ctx context.Context, token string, scope Scope, pass int, entities []string) (string, error) {
 	if pass < 0 || pass >= len(autoDerivePasses) {
 		return "invalid_pass", nil
 	}
@@ -218,8 +232,85 @@ func (s *Service) autoDerivePass(ctx context.Context, token string, scope Scope,
 		_, err = s.ConsolidateObservations(ctx, token, ObservationConsolidateInput{Scope: scope, MaxGroups: autoDeriveGroups})
 	case "causal":
 		_, err = s.ProposeCausalLinks(ctx, token, CausalProposeInput{Scope: scope, MaxGroups: autoDeriveGroups})
+	case "summaries":
+		err = s.draftQueuedSummaries(ctx, token, scope, entities)
 	default:
 		_, err = s.ExtractEntities(ctx, token, EntityExtractInput{Scope: scope, Model: true})
 	}
 	return derivePassOutcome(err)
+}
+
+// draftQueuedSummaries drafts a summary for each queued person. A person whose draft still waits
+// for review (ErrConflict) or who is gone is skipped; any other stop ends the pass.
+func (s *Service) draftQueuedSummaries(ctx context.Context, token string, scope Scope, ids []string) error {
+	for _, id := range ids {
+		_, err := s.DraftEntitySummary(ctx, token, id, EntitySummaryInput{Scope: scope})
+		if err != nil && !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	}
+	return nil
+}
+
+// queueEntitySummaries puts the people an approved memory states facts or relations about on the
+// scope's auto_derive job, which noteApprovedMemory queued. Best effort, like the count.
+func (s *Service) queueEntitySummaries(ctx context.Context, r Record) {
+	ids := s.approvedPeople(ctx, r)
+	if len(ids) == 0 || s.Wiki == nil || !s.autoDeriveSettingsFor(ctx, r.Scope).Enabled {
+		return
+	}
+	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		job, err := tx.Get(ctx, colJobs, r.Scope, autoDeriveJobID(r.Scope))
+		if err != nil || job.Kind != autoDeriveJobKind || job.AutoDerive == nil {
+			return err
+		}
+		state := *job.AutoDerive
+		state.Entities = slices.Clone(state.Entities)
+		for _, id := range ids {
+			if !slices.Contains(state.Entities, id) && len(state.Entities) < autoDeriveEntitiesMax {
+				state.Entities = append(state.Entities, id)
+			}
+		}
+		if len(state.Entities) == len(job.AutoDerive.Entities) {
+			return nil
+		}
+		job.AutoDerive, job.UpdatedAt = &state, time.Now().UTC()
+		prev := job.Revision
+		job.Revision++
+		return tx.Replace(ctx, colJobs, job, prev)
+	})
+	if err != nil {
+		slog.Debug("person summary not queued", "memory", r.ID, "error", err)
+	}
+}
+
+// approvedPeople are the live person entities r names as a person or in a relation.
+func (s *Service) approvedPeople(ctx context.Context, r Record) []string {
+	store, err := s.entityStore()
+	if err != nil || r.ApprovedBy == "" {
+		return nil
+	}
+	names := []string{}
+	for _, e := range r.Entities {
+		if e.Type == "person" {
+			names = append(names, e.Name)
+		}
+	}
+	for _, rel := range r.EntityRelations {
+		names = append(names, rel.Source, rel.Target)
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	g, err := loadEntityGraph(ctx, store, r.Scope)
+	if err != nil {
+		return nil
+	}
+	ids := []string{}
+	for _, name := range names {
+		if e, _ := g.resolve(name, "person"); e != nil && e.Type == "person" && !slices.Contains(ids, e.ID) {
+			ids = append(ids, e.ID)
+		}
+	}
+	return ids
 }

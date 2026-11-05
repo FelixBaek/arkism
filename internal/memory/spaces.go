@@ -115,6 +115,14 @@ type SpaceConfig struct {
 	// candidates for "where the work stands"; RecallSessionArchives (opt-in) adds a session-archive lane to search.
 	WorkStateCandidates   *bool `json:"work_state_candidates,omitempty" bson:"work_state_candidates,omitempty"`
 	RecallSessionArchives *bool `json:"recall_session_archives,omitempty" bson:"recall_session_archives,omitempty"`
+	// CaptureMode is whose words the capture hook extracts: user (the default) or assistant_results
+	// (opt-in: also results the agent confirmed and other speakers' statements, as assistant_result
+	// candidates). CaptureDensity (durable, the default, balanced or dense) is how much it keeps.
+	CaptureMode    string `json:"capture_mode,omitempty" bson:"capture_mode,omitempty"`
+	CaptureDensity string `json:"capture_density,omitempty" bson:"capture_density,omitempty"`
+	// DecisionModels picks per task the decision engine that settles easy cases before the server
+	// model is asked: off (the default) or a server engine (decision_models.go).
+	DecisionModels map[string]string `json:"decision_models,omitempty" bson:"decision_models,omitempty"`
 	// Reflect, mental-model and consolidation blocks (reflect_models_settings.go).
 	ReflectDefaults     *SpaceReflectDefaults     `json:"reflect_default_options,omitempty" bson:"reflect_default_options,omitempty"`
 	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty" bson:"mental_model_defaults,omitempty"`
@@ -168,10 +176,14 @@ type SpaceConfigInput struct {
 	MemoryLanguage            *string                     `json:"memory_language,omitempty"`
 	WorkStateCandidates       *bool                       `json:"work_state_candidates,omitempty"`
 	RecallSessionArchives     *bool                       `json:"recall_session_archives,omitempty"`
-	ReflectDefaults           *SpaceReflectDefaults       `json:"reflect_default_options,omitempty"`
-	MentalModelDefaults       *SpaceMentalModelDefaults   `json:"mental_model_defaults,omitempty"`
-	Consolidation             *SpaceConsolidation         `json:"consolidation,omitempty"`
-	RecallQuality             *SpaceRecallQuality         `json:"recall_quality,omitempty"`
+	CaptureMode               *string                     `json:"capture_mode,omitempty"`
+	CaptureDensity            *string                     `json:"capture_density,omitempty"`
+	// DecisionModels replaces the stored map ({} hands every task back).
+	DecisionModels      *map[string]string        `json:"decision_models,omitempty"`
+	ReflectDefaults     *SpaceReflectDefaults     `json:"reflect_default_options,omitempty"`
+	MentalModelDefaults *SpaceMentalModelDefaults `json:"mental_model_defaults,omitempty"`
+	Consolidation       *SpaceConsolidation       `json:"consolidation,omitempty"`
+	RecallQuality       *SpaceRecallQuality       `json:"recall_quality,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

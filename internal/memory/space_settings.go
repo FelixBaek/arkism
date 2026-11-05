@@ -31,11 +31,13 @@ import (
 // the claim or request. Patterns are Go regular expressions (RE2: linear time).
 
 const (
-	memoryLanguageAuto   = "auto"
-	spaceExtractConcise  = "concise"
-	spaceExtractVerbose  = "verbose"
-	spaceExtractCustom   = "custom"
-	spaceExtractVerbatim = "verbatim"
+	memoryLanguageAuto    = "auto"
+	captureModeUser       = "user"
+	captureDensityDurable = "durable"
+	spaceExtractConcise   = "concise"
+	spaceExtractVerbose   = "verbose"
+	spaceExtractCustom    = "custom"
+	spaceExtractVerbatim  = "verbatim"
 	// chunks stores each chunk of the text as a candidate as it stands, with no model call.
 	spaceExtractChunks   = "chunks"
 	spaceChunkMin        = 500
@@ -54,6 +56,9 @@ const (
 )
 
 var (
+	// captureModes and captureDensities shape the capture hook's prompt (capture_mode, capture_density).
+	captureModes      = []string{"", captureModeUser, "assistant_results"}
+	captureDensities  = []string{"", captureDensityDurable, "balanced", "dense"}
 	spaceExtractModes = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim, spaceExtractChunks}
 	spaceStrategyName = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 	// memoryLanguageTag is a language tag a space may write memories in ("ko", "en", "pt-BR").
@@ -129,7 +134,8 @@ func validExtractionSettings(c SpaceConfig) error {
 		return err
 	}
 	if len(c.ExtractionStrategies) > spaceStrategiesMax || c.ExtractionDefaultStrategy != "" && !spaceStrategyName.MatchString(c.ExtractionDefaultStrategy) ||
-		c.MemoryLanguage != "" && c.MemoryLanguage != memoryLanguageAuto && !memoryLanguageTag.MatchString(c.MemoryLanguage) {
+		c.MemoryLanguage != "" && c.MemoryLanguage != memoryLanguageAuto && !memoryLanguageTag.MatchString(c.MemoryLanguage) ||
+		!slices.Contains(captureModes, c.CaptureMode) || !slices.Contains(captureDensities, c.CaptureDensity) || !validDecisionModels(c.DecisionModels) {
 		return ErrInvalid
 	}
 	if c.DefaultTimezone != "" {
@@ -373,6 +379,15 @@ func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.RecallSessionArchives != nil || in.resets.sessionArchives {
 		c.RecallSessionArchives = in.RecallSessionArchives
 	}
+	if in.CaptureMode != nil {
+		c.CaptureMode = strings.TrimSpace(*in.CaptureMode)
+	}
+	if in.CaptureDensity != nil {
+		c.CaptureDensity = strings.TrimSpace(*in.CaptureDensity)
+	}
+	if in.DecisionModels != nil {
+		c.DecisionModels = *in.DecisionModels
+	}
 }
 
 // spaceResets are the boolean settings a PATCH hands back to the template or
@@ -487,7 +502,8 @@ func (s *Service) serverSpaceDefaults() SpaceConfig {
 		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
 		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off,
 		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String(),
-		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, RecallSessionArchives: &off}
+		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, RecallSessionArchives: &off,
+		CaptureMode: captureModeUser, CaptureDensity: captureDensityDurable, DecisionModels: map[string]string{decisionTaskConsolidation: decisionModelOff}}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -562,6 +578,9 @@ func resolveExtraction(out *SpaceConfig, layers []spaceLayer, src map[string]str
 	inheritSetting(out, layers, src, "memory_language", func(c *SpaceConfig) *string { return &c.MemoryLanguage }, str)
 	inheritSetting(out, layers, src, "work_state_candidates", func(c *SpaceConfig) **bool { return &c.WorkStateCandidates }, func(v *bool) bool { return v != nil })
 	inheritSetting(out, layers, src, "recall_session_archives", func(c *SpaceConfig) **bool { return &c.RecallSessionArchives }, func(v *bool) bool { return v != nil })
+	inheritSetting(out, layers, src, "capture_mode", func(c *SpaceConfig) *string { return &c.CaptureMode }, str)
+	inheritSetting(out, layers, src, "capture_density", func(c *SpaceConfig) *string { return &c.CaptureDensity }, str)
+	inheritSetting(out, layers, src, "decision_models", func(c *SpaceConfig) *map[string]string { return &c.DecisionModels }, func(v map[string]string) bool { return len(v) > 0 })
 }
 
 // resolveAutoDerive fills each auto_derive field from the first layer that sets it.

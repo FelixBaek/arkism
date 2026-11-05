@@ -220,7 +220,7 @@ func inScope(existing []Record, tags []string) []Record {
 }
 
 func liveObservations(rows []Record) int {
-	return len(slices.DeleteFunc(slices.Clone(rows), func(r Record) bool { return r.Status != obsProposed && r.Status != obsActive }))
+	return len(liveRecords(rows))
 }
 
 // obsAsk is one group a run asks the model about.

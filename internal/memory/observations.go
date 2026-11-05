@@ -817,6 +817,9 @@ func (s *Service) proposeObservations(ctx context.Context, token string, d Decis
 				out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "scope_limit", Target: strings.Join(sc.tags, ",")})
 				break
 			}
+			if out.Plan == nil && s.settledByDecision(ctx, token, in.Scope, settings, mine, group, out.Groups, out) {
+				continue
+			}
 			count, asked = count+1, asked+1
 			out.Groups++
 			if out.Plan != nil {

@@ -99,7 +99,7 @@ func riskFields(c map[string]any, basis, quote, text string) host.Obj {
 			reasons = append(reasons, t)
 		}
 	}
-	if basis == "inferred" && risk == "low" {
+	if basis != "explicit_user" && risk == "low" {
 		risk = "medium"
 		reasons = append(reasons, langnote.Text(langnote.NotUserWords, langnote.Pick(memoryLanguage(), "", text)))
 	}
@@ -198,15 +198,9 @@ func buildClaim(c map[string]any, text, userText string, related []map[string]an
 	if !known {
 		kind = "decision"
 	}
-	matches, err := claimQuoteMatches(quote, users)
+	basis, matches, err := claimBasis(c, quote, userText, users)
 	if err != nil {
 		return nil, err
-	}
-	basis := "inferred"
-	// Aggregate-only legacy callers cannot establish message boundaries.
-	legacyExact := users == nil && pyStrip(quote) != "" && strings.Contains(userText, quote)
-	if len(matches) > 0 || legacyExact {
-		basis = "explicit_user"
 	}
 	claim := map[string]any{"subject": head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120),
 		"text": head(text, 4000), "kind": kind, "basis": basis, "reason": head(str(or(c["reason"], "")), 500)}
@@ -245,6 +239,23 @@ func buildClaim(c map[string]any, text, userText string, related []map[string]an
 		}
 	}
 	return claim, nil
+}
+
+// claimBasis is explicit_user when the quote is the user's literal words, else an inference; another
+// speaker's claim (markSpeakers' basis_hint) is never the user's.
+func claimBasis(c map[string]any, quote, userText string, users []any) (string, []map[string]any, error) {
+	if hint, ok := c["basis_hint"].(string); ok {
+		return hint, nil, nil
+	}
+	matches, err := claimQuoteMatches(quote, users)
+	if err != nil {
+		return "", nil, err
+	}
+	// Aggregate-only legacy callers cannot establish message boundaries.
+	if len(matches) > 0 || users == nil && pyStrip(quote) != "" && strings.Contains(userText, quote) {
+		return "explicit_user", matches, nil
+	}
+	return "inferred", matches, nil
 }
 
 // claimEventDates copies the extractor's event dates; the server checks them against the
@@ -406,6 +417,9 @@ func process(job map[string]any, persist func() error) (err error) {
 	started := monotonic()
 	sid := job["session_id"].(string) // KeyError/TypeError surface through recovered
 	cued := cuedUsers(users)
+	if captureEveryTurn() {
+		cued = users
+	}
 	checkpoint := persist
 	if checkpoint == nil {
 		checkpoint = func() error { return nil }
@@ -556,8 +570,9 @@ func prepareCapture(job map[string]any, cued []any, sid, origin string, checkPol
 	if err != nil {
 		return nil, err
 	}
-	out, err := privateModel(redactPrivate(withGuidance(extractPrompt)), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", messageDay(cued), memoryLanguage(), existing, userText),
-		capModel, 120*time.Second, claimsSchema, "claims", str(or(job["cwd"], "")))
+	mode := captureMode()
+	out, err := privateModel(redactPrivate(withGuidance(capturePrompt(mode, captureDensity()))), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: %s\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s%s", messageDay(cued), memoryLanguage(), existing, userText, assistantSection(mode, job)),
+		capModel, 120*time.Second, captureSchema(mode), "claims", str(or(job["cwd"], "")))
 	if err != nil {
 		return nil, err
 	}
@@ -565,6 +580,7 @@ func prepareCapture(job map[string]any, cued []any, sid, origin string, checkPol
 	if err != nil {
 		return nil, err
 	}
+	markSpeakers(raw, str(or(job["assistant"], "")), userText)
 	claims, contextReceipt, err := buildClaimsWithReceipt(raw, userText, related, linked)
 	if err != nil {
 		return nil, err

@@ -227,6 +227,7 @@ func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active 
 		return
 	}
 	s.applyEntityRelations(ctx, actor, r)
+	s.queueEntitySummaries(ctx, r)
 }
 
 // entityNameInputs states plain entity names (ingest options) as concept entities of a claim.

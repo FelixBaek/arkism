@@ -482,7 +482,7 @@ func sessionCapture(hook map[string]any, kind string) error {
 	if !ok {
 		return fmt.Errorf("%w: offset", errType)
 	}
-	users, _, end, _, err := readNew(transcript, offset, context)
+	users, assistant, end, _, err := readNew(transcript, offset, context)
 	if err != nil {
 		return err
 	}
@@ -493,6 +493,9 @@ func sessionCapture(hook map[string]any, kind string) error {
 	if len(users) > 0 || sessionProcessorOn() && end > offset {
 		job := map[string]any{"type": kind, "session_id": sid, "cwd": or(hook["cwd"], ""), "users": users, "turns": turns,
 			"event_id": fmt.Sprintf("%s:%s:%s:%d", strings.ReplaceAll(capOrigin, "_", "-"), sid, kind, end), "queued_at": host.NowISO()}
+		if assistant != "" && captureMode() == assistantResultsMode {
+			job["assistant"] = redactPrivateValue(assistant)
+		}
 		if truthy(context) {
 			job["archive_context"] = context
 			if sessionProcessorOn() {
