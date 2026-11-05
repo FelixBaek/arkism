@@ -64080,6 +64080,10 @@
           },
           "skills": {
             "type": "integer"
+          },
+          "version": {
+            "type": "string",
+            "description": "the agent CLI's version, when the host reads it"
           }
         },
         "additionalProperties": false,

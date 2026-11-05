@@ -24,7 +24,7 @@ const (
 	agentToolsID  = "agent-tools"
 )
 
-var agentToolAgents = []string{"claude_code", "codex", "zcode", "gemini", "grok", "opencode", "cursor"}
+var agentToolAgents = []string{"claude_code", "codex", "zcode", "gemini", "grok", "opencode", "cursor", "hermes"}
 var agentToolTransports = []string{"stdio", "http", "sse", "plugin"}
 
 type AgentToolEntry struct {
@@ -111,6 +111,7 @@ type AgentInfo struct {
 	Enabled    bool     `json:"enabled"` // Arkism reads it
 	Custom     bool     `json:"custom,omitempty"`
 	Skills     int      `json:"skills"`
+	Version    string   `json:"version,omitempty"` // the agent CLI's version, when the host reads it
 }
 
 type AgentToolRequest struct {
@@ -295,12 +296,15 @@ func validAgentDir(d string, required bool) bool {
 // winDirRe: a Windows host's C:\ or C:/ folder, or a \\server\share one (desktop pages.js agentDirOk accepts the same).
 var winDirRe = regexp.MustCompile(`^([A-Za-z]:[\\/]|\\\\[^\\])`)
 
+// agentVersionRe: empty, or a version as a CLI prints it (0.19.0, 1.2.3-beta.1).
+var agentVersionRe = regexp.MustCompile(`^([0-9][0-9A-Za-z.+-]{0,39})?$`)
+
 func validAgentInfos(list []AgentInfo) bool {
 	if len(list) > 40 {
 		return false
 	}
 	for _, a := range list {
-		if !agentIDRe.MatchString(a.ID) || strings.TrimSpace(a.Name) == "" || runes(a.Name) > 40 || len(a.SkillsDirs) > 4 || !validAgentDir(a.ChatsDir, false) || a.Skills < 0 {
+		if !agentIDRe.MatchString(a.ID) || strings.TrimSpace(a.Name) == "" || runes(a.Name) > 40 || len(a.SkillsDirs) > 4 || !validAgentDir(a.ChatsDir, false) || a.Skills < 0 || !agentVersionRe.MatchString(a.Version) {
 			return false
 		}
 		for _, d := range a.SkillsDirs {

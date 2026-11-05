@@ -158,7 +158,8 @@ window.ArkismPages = (ctx) => {
     codex: ["~/.codex/skills · ~/.agents/skills", "~/.codex/sessions"],
     zcode: ["~/.zcode/skills", "~/.zcode/sessions"],
     gemini: ["~/.gemini/skills · ~/.agents/skills", "~/.gemini/tmp"],
-    grok: ["~/.grok/skills · ~/.claude/skills", "~/.grok/sessions"]
+    grok: ["~/.grok/skills · ~/.claude/skills", "~/.grok/sessions"],
+    hermes: ["~/.hermes/skills", "~/.hermes/state.db"]
   };
 
   const openInjectPreview = () => window.dispatchEvent(new Event("arkism:inject-preview")); // a popup over 설정, no page change
@@ -258,7 +259,7 @@ window.ArkismPages = (ctx) => {
   }
 
   // 07 설정 › 에이전트: what the server found plus the owner's own switch for this app's tables.
-  const AGENT_LOGOS = { claude_code: "img:claude.svg", codex: "sym:a-codex", gemini: "sym:a-gemini", zcode: "sym:a-zcode", grok: "sym:a-grok" };
+  const AGENT_LOGOS = { claude_code: "img:claude.svg", codex: "sym:a-codex", gemini: "sym:a-gemini", zcode: "sym:a-zcode", grok: "sym:a-grok", hermes: "sym:a-hermes" };
   function monogram(name) {
     const t = el("span", "agent-tile mono-tile");
     t.textContent = (name || "?").replace(/[^A-Za-z0-9가-힣]/g, "").slice(0, 2).toUpperCase();
@@ -346,6 +347,7 @@ window.ArkismPages = (ctx) => {
       const plan = e.api ? "API" : src?.main?.plan ? models.subscriptionLabel(src.main.plan) : "";
       if (plan) top.append(el("span", `ag-plan${e.api ? " api" : ""}`, plan));
       if (!e.api && src) top.append(...models.cliBadge(src));
+      else if (a.version) top.append(el("span", "ag-cli", `CLI ${a.version}`)); // an agent without a model account (Hermes Agent)
       if (pendingAgent(a.id)) top.append(el("span", "tag warn", "적용 대기"));
       if (a.custom) top.append(el("span", "tag", "직접 추가"));
       const sub = [arkismOn(a.id) ? "기억" : "", `스킬 ${skillCount(a)}`, hook(a.id)[0] === "off" ? "" : "훅", mcpOn(a.id) ? "MCP" : ""].filter(Boolean).join(" · ");

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 type fixture struct {
@@ -302,4 +304,21 @@ func TestCaptureSettingsFailClosedDiagnostics(t *testing.T) {
 		}
 	}
 	checkEnabled()
+}
+
+// Hermes Agent is checked where its home exists: the arkism entry in config.yaml must start our client.
+func TestHermesAgentMCPEntry(t *testing.T) {
+	t.Setenv("HERMES_HOME", "")
+	f := healthy(t, http.StatusOK)
+	cfg := filepath.Join(host.HermesHome(f.home), "config.yaml")
+	write(t, cfg, "model:\n  default: x\nmcp_servers:\n  arkism:\n    command: other\n", 0o600)
+	_, r, _ := f.run()
+	if c := find(t, r, "agent.hermes"); c.Status != Fail || !strings.Contains(c.Message, "config.yaml MCP(arkism)") {
+		t.Fatal(c)
+	}
+	write(t, cfg, "model:\n  default: x  # mine\nmcp_servers:\n  arkism:\n    command: \""+f.env.client()+"\"\n    args:\n      - windows\n      - mcp\n      - hermes\n", 0o600)
+	_, r, _ = f.run()
+	if c := find(t, r, "agent.hermes"); c.Status != OK {
+		t.Fatal(c)
+	}
 }

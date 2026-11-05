@@ -93,7 +93,7 @@ export function startApp() {
   };
   // Runtimes the skill router knows. Logos come from the agent logo set in the design file.
   const AGENTS = [["claude_code", "Claude Code", "img:claude.svg"], ["codex", "Codex", "sym:a-codex"], ["zcode", "ZCode", "sym:a-zcode"],
-    ["gemini", "Gemini CLI", "sym:a-gemini"], ["grok", "Grok", "sym:a-grok"], ["opencode", "OpenCode", "sym:a-opencode"], ["cursor", "Cursor", "sym:a-cursor"]];
+    ["gemini", "Gemini CLI", "sym:a-gemini"], ["grok", "Grok", "sym:a-grok"], ["opencode", "OpenCode", "sym:a-opencode"], ["cursor", "Cursor", "sym:a-cursor"], ["hermes", "Hermes Agent", "sym:a-hermes"]];
   function agentLogo(spec, name) {
     const tile = el("span", "agent-tile");
     tile.title = name;
@@ -133,7 +133,7 @@ export function startApp() {
       }
     }
   }
-  const ORIGINS = { "claude-code": "Claude Code", claude_code: "Claude Code", codex: "Codex", zcode: "ZCode", gemini: "Gemini CLI", grok: "Grok", opencode: "OpenCode", cursor: "Cursor" };
+  const ORIGINS = { "claude-code": "Claude Code", claude_code: "Claude Code", codex: "Codex", zcode: "ZCode", gemini: "Gemini CLI", grok: "Grok", opencode: "OpenCode", cursor: "Cursor", hermes: "Hermes Agent" };
 
   // ---------------------------------------------------------------- helpers
   function el(tag, cls, text) {

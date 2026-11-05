@@ -291,7 +291,7 @@ var claudeNeedsLogin = func(name string, d map[string]any) bool {
 	return needed
 }
 
-// serverEntry is one server's row; others are the file-edited agents' servers (Gemini CLI, ZCode, Grok).
+// serverEntry is one server's row; others are the file-edited agents' servers (Gemini CLI, ZCode, Grok, Hermes Agent …).
 func serverEntry(name string, d map[string]any, claude, codex map[string]any, others ...map[string]map[string]any) host.Obj {
 	agents := host.Obj{{Key: "claude_code", Value: "off"}, {Key: "codex", Value: "off"}}
 	for _, a := range mcpFileAgents {
@@ -431,6 +431,7 @@ var knownAgents = []knownAgent{
 	{"gemini", "Gemini CLI", []string{"~/.gemini/skills", sharedSkills}, "~/.gemini/tmp", "~/.gemini"},
 	{"zcode", "ZCode", []string{"~/.zcode/skills"}, "~/.zcode/sessions", "~/.zcode"},
 	{"grok", "Grok", []string{"~/.grok/skills"}, "~/.grok/sessions", "~/.grok"},
+	{"hermes", "Hermes Agent", []string{hermesDir + "/skills"}, hermesDir + "/state.db", hermesDir},
 	{"cursor", "Cursor", []string{"~/.cursor/skills"}, "", "~/.cursor"},
 	{"opencode", "OpenCode", []string{"~/.config/opencode/skills"}, "", "~/.config/opencode"},
 	{"windsurf", "Windsurf", []string{"~/.windsurf/skills"}, "", "~/.windsurf"},
@@ -440,7 +441,60 @@ var knownAgents = []knownAgent{
 }
 
 // defaultOn agents are read by Arkism from the start; the rest only once the owner adds them.
-var defaultOn = []string{"claude_code", "codex", "gemini", "zcode", "grok"}
+var defaultOn = []string{"claude_code", "codex", "gemini", "zcode", "grok", "hermes"}
+
+// hermesDir is Hermes Agent's home as the agents table writes folders: ~/… when it is under home.
+var hermesDir = func() string {
+	h := host.HermesHome(host.Home)
+	if rel, err := filepath.Rel(host.Home, h); err == nil && !strings.HasPrefix(rel, "..") {
+		return "~/" + filepath.ToSlash(rel)
+	}
+	return filepath.ToSlash(h)
+}()
+
+// agentBins are the CLIs whose version the agents table shows (the others report theirs with their sign-ins).
+var agentBins = map[string]string{"hermes": "hermes"}
+
+var cliVersionRx = regexp.MustCompile(`\bv?(\d+\.\d+(?:\.\d+)?(?:[-+.][0-9A-Za-z.]{1,20})?)\b`)
+
+// agentVersion is the agent CLI's --version, asked again only when the binary changes.
+func agentVersion(id string) string {
+	name, ok := agentBins[id]
+	if !ok {
+		return ""
+	}
+	bin := filepath.Join(agentsHome, ".local", "bin", name)
+	if !isFile(bin) {
+		p, err := lookPath(name)
+		if err != nil {
+			return ""
+		}
+		bin = p
+	}
+	fi, err := os.Stat(bin)
+	if err != nil {
+		return ""
+	}
+	key := fmt.Sprintf("%s|%d|%d", bin, fi.Size(), fi.ModTime().UnixNano())
+	cacheFile := filepath.Join(agentsState, "agent-versions.json")
+	cache, _ := readJSONMap(cacheFile)
+	if cache == nil {
+		cache = map[string]any{}
+	}
+	if hit, ok := cache[id].([]any); ok && len(hit) == 2 && hit[0] == key {
+		return str(hit[1])
+	}
+	out, _ := agentRun(20*time.Second, bin, "--version")
+	version := ""
+	if m := cliVersionRx.FindStringSubmatch(out); m != nil {
+		version = m[1]
+	}
+	cache[id] = []any{key, version}
+	if os.MkdirAll(agentsState, 0o700) == nil {
+		_ = os.WriteFile(cacheFile, []byte(host.MustDumps(cache, host.DumpOpts{})), 0o666) // a cache
+	}
+	return version
+}
 
 func expand(d string) string {
 	if strings.HasPrefix(d, "~") {
@@ -492,8 +546,20 @@ func countSkills(dirs []string) int {
 			continue
 		}
 		for _, e := range entries {
-			if isFile(filepath.Join(expand(d), e.Name(), "SKILL.md")) {
+			dir := filepath.Join(expand(d), e.Name())
+			if isFile(filepath.Join(dir, "SKILL.md")) {
 				names[e.Name()] = true
+				continue
+			}
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			// a category folder (Hermes Agent groups skills as category/name)
+			inner, _ := os.ReadDir(dir)
+			for _, c := range inner {
+				if isFile(filepath.Join(dir, c.Name(), "SKILL.md")) {
+					names[e.Name()+"/"+c.Name()] = true
+				}
 			}
 		}
 	}
@@ -508,8 +574,13 @@ func agentsInventory(reg registry) []any {
 		known[a.id] = true
 		_, added := reg.added.Get(a.id)
 		enabled := (containsStr(defaultOn, a.id) || added) && !containsStr(reg.removed, a.id)
-		out = append(out, host.Obj{{Key: "id", Value: a.id}, {Key: "name", Value: a.name}, {Key: "skills_dirs", Value: stringsAny(a.skills)},
-			{Key: "chats_dir", Value: a.chats}, {Key: "found", Value: exists(expand(a.home))}, {Key: "enabled", Value: enabled}, {Key: "skills", Value: countSkills(a.skills)}})
+		found := exists(expand(a.home))
+		row := host.Obj{{Key: "id", Value: a.id}, {Key: "name", Value: a.name}, {Key: "skills_dirs", Value: stringsAny(a.skills)},
+			{Key: "chats_dir", Value: a.chats}, {Key: "found", Value: found}, {Key: "enabled", Value: enabled}, {Key: "skills", Value: countSkills(a.skills)}}
+		if v := agentVersion(a.id); found && v != "" {
+			row.Set("version", v)
+		}
+		out = append(out, row)
 	}
 	for _, kv := range reg.added {
 		if known[kv.Key] || containsStr(reg.removed, kv.Key) {

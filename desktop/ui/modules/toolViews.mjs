@@ -4,7 +4,7 @@ export function createToolViews(deps) {
 
   // ---------------------------------------------------------------- MCP·플러그인
   // The host tool (arkism-agents.timer) applies a switch within a minute and reports back.
-  const SWITCHABLE = { mcp: ["claude_code", "codex", "gemini", "zcode", "grok", "opencode", "cursor"], plugin: ["claude_code"] };
+  const SWITCHABLE = { mcp: ["claude_code", "codex", "gemini", "zcode", "grok", "opencode", "cursor", "hermes"], plugin: ["claude_code"] };
 
   async function loadTools() {
     try {

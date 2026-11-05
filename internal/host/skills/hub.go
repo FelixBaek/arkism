@@ -72,7 +72,7 @@ func defaultRoots() []skillRoot {
 		{"claude-code", filepath.Join(h, ".claude/skills"), "claude_code"},
 		{"claude-plugins", filepath.Join(h, ".claude/plugins"), "claude_code"},
 		{"agents", filepath.Join(h, ".agents/skills"), "generic"},
-		{"hermes", filepath.Join(h, ".hermes/skills"), "hermes"},
+		{"hermes", filepath.Join(host.HermesHome(h), "skills"), "hermes"},
 	}
 }
 

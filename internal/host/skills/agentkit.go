@@ -19,7 +19,7 @@ import (
 const kitManifest = "arkism-mcp.json" // {"name", "command", "args", "env", "description"}
 
 // kitMCPAgents are the agents whose MCP config Arkism writes (the 연결 › MCP switches).
-var kitMCPAgents = []string{"claude_code", "codex", "gemini", "zcode", "grok", "opencode", "cursor"}
+var kitMCPAgents = []string{"claude_code", "codex", "gemini", "zcode", "grok", "opencode", "cursor", "hermes"}
 
 // kitHookFiles: the agents that take plugin hooks, and the file holding them.
 var kitHookFiles = []struct{ agent, file string }{{"claude_code", ".claude/settings.json"}, {"codex", ".codex/hooks.json"}}

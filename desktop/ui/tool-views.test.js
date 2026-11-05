@@ -10,7 +10,7 @@ globalThis.setTimeout = (fn, ms, ...a) => setImmediate(fn, ...a);
 globalThis.clearTimeout = (id) => clearImmediate(id);
 globalThis.setInterval = (fn) => { ticks.push(fn); return 1; };
 
-const AGENTS = [["claude_code", "Claude Code", "cc"], ["codex", "Codex", "cx"], ["gemini", "Gemini", "gm"], ["hermes", "Hermes", "hm"]];
+const AGENTS = [["claude_code", "Claude Code", "cc"], ["codex", "Codex", "cx"], ["gemini", "Gemini", "gm"], ["kiro", "Kiro", "kr"]];
 const NOW = new Date().toISOString();
 
 function tools() {
@@ -170,7 +170,7 @@ test("renderTools: tiles, stale warning, agent filter, rows, mini buttons and th
   assert.equal(s.doc.querySelector("#controls .v4s-filter").groups[2].set, true);
   assert.match(s.doc.querySelector("#chips").textContent, /Gemini의 MCP 설정은 아직 읽지 않아요/);
   assert.match(s.doc.querySelector("#table").textContent, /조건에 맞는 항목이 없어요/);
-  s.state.toolAgent = "hermes"; s.v.renderTools();
+  s.state.toolAgent = "kiro"; s.v.renderTools();
   assert.equal(s.state.toolAgent, "");
   // A fresh install: no 0개 tiles, one next step in the list (MCP: add a server; plugins: where they come from).
   const servers = s.state.data.tools.servers, plugins = s.state.data.tools.plugins;
@@ -225,7 +225,7 @@ test("server detail: facts, switches, tools with more, calls, history, skills, w
   assert.match(d.textContent, /stdio · npx gh/);
   assert.match(d.textContent, /~\/\.claude\.json · ~\/\.codex\/config\.toml/);
   const chips = d.querySelectorAll(".cn-chip");
-  assert.deepEqual(chips.map((c) => c.textContent), ["Claude Code · 켜는 중", "Codex", "Gemini", "Hermes · 지원 안 함"]);
+  assert.deepEqual(chips.map((c) => c.textContent), ["Claude Code · 켜는 중", "Codex", "Gemini", "Kiro · 지원 안 함"]);
   assert.equal(chips[3].title, "이 에이전트는 아직 켜고 끌 수 없어요");
   assert.match(d.textContent, /‘확인’ 표시는 바꾸거나 보내는 도구예요 · 1개/);
   assert.equal(d.querySelectorAll(".cn-sec")[2].querySelectorAll(".cn-subrow").length, 5);
@@ -444,7 +444,7 @@ test("sign-in in a plain browser takes the pasted address; closing the popup or 
 
 test("reconnect a program server: out and back in per agent, with its failures", async () => {
   const s = await views();
-  const broken = { name: "broken", transport: "stdio", note: "끊김", agents: { claude_code: "on", codex: "on", hermes: "on" } };
+  const broken = { name: "broken", transport: "stdio", note: "끊김", agents: { claude_code: "on", codex: "on", kiro: "on" } };
   let fail = null, missing = false;
   s.deps.request = async (path, opt) => {
     const body = opt?.body && JSON.parse(opt.body);

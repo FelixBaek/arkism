@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/FelixBaek/arkism/internal/host"
 )
 
 const fixInstall = "arkism doctor --fix (install-arkism 재실행)"
@@ -222,6 +224,17 @@ func (e *env) tomlServer(path string) bool {
 	return false
 }
 
+// yamlServer reports whether Hermes Agent's config.yaml has the named MCP entry starting our client.
+func (e *env) yamlServer(path, name string) bool {
+	data, err := readSmall(path)
+	if err != nil {
+		return false
+	}
+	servers, err := host.YAMLMCPServers(string(data))
+	s, ok := servers[name]
+	return err == nil && ok && e.mentions(s.Def["command"])
+}
+
 var hookEvents4 = []string{"SessionStart", "UserPromptSubmit", "Stop", "SessionEnd"}
 
 func (e *env) checkAgents() []Check {
@@ -272,6 +285,12 @@ func (e *env) checkAgents() []Check {
 		{"grok", filepath.Join(h, ".grok"), func() (p []string) {
 			if !e.tomlServer(filepath.Join(h, ".grok", "config.toml")) {
 				p = append(p, "config.toml [mcp_servers.skill-router] 없음")
+			}
+			return p
+		}},
+		{"hermes", host.HermesHome(h), func() (p []string) {
+			if !e.yamlServer(filepath.Join(host.HermesHome(h), "config.yaml"), "arkism") {
+				p = append(p, "config.yaml MCP(arkism) 없음")
 			}
 			return p
 		}},

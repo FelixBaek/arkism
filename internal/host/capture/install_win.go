@@ -848,13 +848,13 @@ func instInstall(userRoot, roaming, local string, deepseekOnly bool) (summary ho
 	if err != nil {
 		return nil, err
 	}
-	// Gemini CLI and Grok get the skill hub only where they are installed; both are read before anything is written.
+	// Gemini CLI, Grok and Hermes Agent get the skill hub only where they are installed; each is read before anything is written.
 	gemini, grok := filepath.Join(userRoot, instGemini, "settings.json"), filepath.Join(userRoot, ".grok", "config.toml")
 	geminiData, err := instReadGemini(gemini)
 	if err != nil {
 		return nil, err
 	}
-	grokText, hasGrok, err := instReadGrok(grok, client)
+	tomlYAML, err := instReadAgentConfigs(grok, userRoot, client)
 	if err != nil {
 		return nil, err
 	}
@@ -891,8 +891,8 @@ func instInstall(userRoot, roaming, local string, deepseekOnly bool) (summary ho
 	if err := instGeminiServer(s, gemini, geminiData, client); err != nil {
 		return nil, err
 	}
-	if hasGrok { // config.toml wins over the Claude entry Grok would otherwise borrow (as claude_code)
-		if err := s.text(grok, grokText); err != nil {
+	for _, w := range tomlYAML {
+		if err := s.text(w[0], w[1]); err != nil {
 			return nil, err
 		}
 	}
@@ -961,6 +961,25 @@ func instReadGemini(gemini string) (host.Obj, error) {
 		}
 	}
 	return geminiData, nil
+}
+
+// instReadAgentConfigs returns the edited config files (path, text) of Grok's config.toml and Hermes
+// Agent's config.yaml, for the ones installed. Grok's wins over the Claude entry Grok would otherwise
+// borrow (as claude_code).
+func instReadAgentConfigs(grok, userRoot, client string) ([][2]string, error) {
+	var out [][2]string
+	grokText, hasGrok, err := instReadGrok(grok, client)
+	if err != nil {
+		return nil, err
+	}
+	if hasGrok {
+		out = append(out, [2]string{grok, grokText})
+	}
+	hermesText, hasHermes, err := instReadHermes(userRoot, client)
+	if hasHermes {
+		out = append(out, [2]string{instHermesConfig(userRoot), hermesText})
+	}
+	return out, err
 }
 
 // instReadGrok returns Grok's edited config.toml and whether Grok is installed.

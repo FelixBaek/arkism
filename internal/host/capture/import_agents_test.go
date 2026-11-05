@@ -107,6 +107,26 @@ func TestImportAgentsSplitAndSkip(t *testing.T) {
 	}
 }
 
+// Hermes Agent's MEMORY.md and USER.md entries (separated by a lone §) each become one candidate.
+func TestImportAgentsReadsHermesMemories(t *testing.T) {
+	home, _ := importHome(t)
+	mem := filepath.Join(host.HermesHome(home), "memories")
+	os.MkdirAll(mem, 0o755)
+	os.WriteFile(filepath.Join(mem, "MEMORY.md"), []byte("The build runs on the second server.\n§\nTests need the memory cap wrapper.\n"), 0o644)
+	os.WriteFile(filepath.Join(mem, "USER.md"), []byte("Prefers short Korean reports.\n"), 0o644)
+	stmts, _ := importCollect()
+	got := map[string]string{}
+	for _, s := range stmts {
+		if s.Origin == "hermes" {
+			got[s.Text] = s.Kind
+		}
+	}
+	if len(got) != 3 || got["The build runs on the second server."] != "semantic" || got["Tests need the memory cap wrapper."] != "semantic" ||
+		got["Prefers short Korean reports."] != "user" {
+		t.Fatal(got)
+	}
+}
+
 func TestImportAgentsFrontmatterKinds(t *testing.T) {
 	importHome(t)
 	stmts, _ := importCollect()

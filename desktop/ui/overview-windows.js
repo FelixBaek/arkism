@@ -313,7 +313,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // where a recall went: owner/name for a repository, a folder with no remote ("path:" + hash) or no project at all
   const recallWhere = (x) => (!x.project_key ? "프로젝트 밖" : x.project_key.startsWith("path:") ? "저장소 없는 폴더" : x.project_key);
   // which coding agent asked (X-Arkism-Client); receipts from before the server kept it have none
-  const CLIENT = { claude_code: "Claude Code", "claude-code": "Claude Code", codex: "Codex", zcode: "ZCode", gemini: "Gemini CLI", grok: "Grok", deepseek: "DeepSeek", opencode: "OpenCode", cursor: "Cursor" };
+  const CLIENT = { claude_code: "Claude Code", "claude-code": "Claude Code", codex: "Codex", zcode: "ZCode", gemini: "Gemini CLI", grok: "Grok", deepseek: "DeepSeek", opencode: "OpenCode", cursor: "Cursor", hermes: "Hermes Agent" };
   const clientName = (c) => (c ? CLIENT[c] || c : "이전 기록");
   let recalls = null, redrawing = false; // one GET /v1/recalls per opened window; a redraw after the names arrive reuses it
   // 불러오기 opens wide: one row per session (its recalls folded together), the picked session's recalls on the right.

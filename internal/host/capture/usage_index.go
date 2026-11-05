@@ -642,7 +642,75 @@ func usageSessionRoots() []archiveRoot {
 	}
 	return append(archiveRoots(), archiveRoot{"gemini", device, filepath.Join(host.Home, ".gemini/tmp"), "session-*.json*"},
 		archiveRoot{"zcode", device, filepath.Join(host.Home, ".zcode/cli/db"), "db.sqlite"},
-		archiveRoot{"opencode", device, opencodeDataDir(), "opencode*.d[b]"}) // "[b]": a "*.db" glob is skipped here
+		archiveRoot{"opencode", device, opencodeDataDir(), "opencode*.d[b]"}, // "[b]": a "*.db" glob is skipped here
+		archiveRoot{"hermes", device, host.HermesHome(host.Home), "state.d[b]"})
+}
+
+// hermesDB reads Hermes Agent's state.db (read-only): each session's title, folder, model and token
+// totals (Hermes keeps them per session, so they count on the day it started), user messages and
+// tool results. Columns are read by name because older versions lack some of them.
+func (p *usageParser) hermesDB(path string) error {
+	db, err := openRO(path)
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	sessions := map[string]*usageSession{}
+	err = eachRow(db, "SELECT * FROM sessions ORDER BY started_at", nil, func(cols []string, v []any) error {
+		row := map[string]any{}
+		for i, c := range cols {
+			row[c] = v[i]
+		}
+		if truthy(row["archived"]) {
+			return nil
+		}
+		s := p.get(str(row["id"]))
+		s.Title = usageText(row["title"], "")
+		s.Project, s.Folder = usageProject(sstr(row["cwd"])), sstr(row["cwd"])
+		sessions[str(row["id"])] = s
+		tok := usageTok{Input: usageInt(row["input_tokens"]), Output: usageInt(row["output_tokens"]) + usageInt(row["reasoning_tokens"]),
+			CacheRead: usageInt(row["cache_read_tokens"]), CacheWrite: usageInt(row["cache_write_tokens"]), Requests: max(1, usageInt(row["api_call_count"]))}
+		if when := hermesWhen(row["started_at"]); when != nil && tok.sum() > 1 {
+			s.tokens(*when, usageText(row["model"], ""), tok)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return eachRow(db, "SELECT session_id, role, tool_name, timestamp FROM messages ORDER BY session_id, timestamp", nil, func(_ []string, v []any) error {
+		s := sessions[str(v[0])]
+		if s == nil {
+			return nil
+		}
+		when := hermesWhen(v[3])
+		switch str(v[1]) {
+		case "user":
+			s.message(when)
+		case "tool":
+			s.tool(usageText(v[2], "?"), "")
+			s.stamp(when)
+		default:
+			s.stamp(when)
+		}
+		return nil
+	})
+}
+
+// hermesWhen turns Hermes Agent's epoch seconds (REAL) into microseconds.
+func hermesWhen(v any) *int64 {
+	var sec float64
+	switch t := v.(type) {
+	case float64:
+		sec = t
+	case int64:
+		sec = float64(t)
+	}
+	if sec <= 0 {
+		return nil
+	}
+	us := int64(sec * 1e6)
+	return &us
 }
 
 // zcodeDB reads ZCode's own database (~/.zcode/cli/db/db.sqlite, read-only): each session's title,
@@ -818,6 +886,8 @@ func usageParse(origin, device, path string) (*usageFile, error) {
 		err = p.gemini(path)
 	case "zcode", "opencode": // OpenCode keeps the same session/message/part tables
 		err = p.zcodeDB(path)
+	case "hermes":
+		err = p.hermesDB(path)
 	default:
 		err = p.generic(path)
 	}
@@ -850,8 +920,8 @@ func usageLive(cache map[string]*usageFile) map[string]*usageFile {
 			continue
 		}
 		paths := globAll(r.root, r.glob)
-		if r.origin == "opencode" {
-			// opencode.db sits at the top; the folders below hold file snapshots that can be huge.
+		if r.origin == "opencode" || r.origin == "hermes" {
+			// the database sits at the top; the folders below hold file snapshots (or skills) that can be huge.
 			paths, _ = filepath.Glob(filepath.Join(globEscape(r.root), r.glob))
 		}
 		for _, path := range paths {
@@ -871,7 +941,7 @@ func usageLive(cache map[string]*usageFile) map[string]*usageFile {
 				}
 				f.Sig = sig
 				for _, part := range f.Sessions {
-					if part.File == "" && r.origin != "zcode" && r.origin != "opencode" { // a shared database is no one session's file
+					if part.File == "" && r.origin != "zcode" && r.origin != "opencode" && r.origin != "hermes" { // a shared database is no one session's file
 						part.File = path
 					}
 				}

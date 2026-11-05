@@ -119,6 +119,19 @@ func importSources(skip map[string]int) []importSource {
 		}
 		add(g.rel, g.origin, "procedural", "", false)
 	}
+	// Hermes Agent keeps its own notes (MEMORY.md) and what it learned about the user (USER.md).
+	if rel, err := filepath.Rel(home, filepath.Join(host.HermesHome(home), "memories")); err == nil && !strings.HasPrefix(rel, "..") {
+		for _, m := range [][2]string{{"MEMORY.md", "semantic"}, {"USER.md", "user"}} {
+			name, kind := m[0], m[1]
+			if f := filepath.Join(home, rel, name); captureSkipped(filepath.Dir(f)) {
+				if exists(f) {
+					skip["excluded_folder"]++
+				}
+			} else {
+				add(filepath.ToSlash(filepath.Join(rel, name)), "hermes", kind, "", false)
+			}
+		}
+	}
 	projects := filepath.Join(home, ".claude", "projects")
 	dirs, _ := os.ReadDir(projects)
 	for _, d := range dirs {
@@ -336,7 +349,7 @@ func importMeta(src importSource, text string) (string, string, string) {
 
 // importBreak is a line that ends a paragraph and is no statement: blank, a rule or an HTML comment.
 func importBreak(line, trim string) bool {
-	return trim == "" || importRule.MatchString(line) || strings.HasPrefix(trim, "<!--")
+	return trim == "" || trim == "§" || importRule.MatchString(line) || strings.HasPrefix(trim, "<!--") // § separates Hermes Agent entries
 }
 
 // importStatements turns the split chunks into statements; an auto-memory body that fits stays one.

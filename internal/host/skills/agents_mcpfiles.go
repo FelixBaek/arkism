@@ -14,7 +14,7 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 )
 
-// MCP on/off for agents without a CLI for it (Gemini CLI, ZCode, Grok): their config file is
+// MCP on/off for agents without a CLI for it (Gemini CLI, ZCode, Grok, Hermes Agent): their config file is
 // edited in place. Only the one server entry changes; every other byte stays as it was, and a
 // layout that cannot be edited that way is refused with the file left untouched.
 
@@ -27,8 +27,10 @@ type mcpFileDef struct {
 
 type mcpFileAgent struct {
 	id, name   string
-	home, file string   // relative to agentsHome
-	path       []string // JSON key path of the servers object; nil for TOML
+	home, file string                   // relative to agentsHome
+	path       []string                 // JSON key path of the servers object; nil for TOML
+	yaml       bool                     // Hermes Agent's config.yaml (mcp_servers), edited by host.YAMLMCP*
+	root       func(home string) string // the agent's own home when it is not home/home; file is then relative to it
 	toNative   func(d map[string]any) host.Obj
 	fromNative func(v map[string]any) map[string]any
 }
@@ -39,10 +41,22 @@ var mcpFileAgents = []mcpFileAgent{
 	{id: "grok", name: "Grok", home: ".grok", file: ".grok/config.toml"},
 	{id: "opencode", name: "OpenCode", home: ".config/opencode", file: ".config/opencode/opencode.json", path: []string{"mcp"}, toNative: toOpenCode, fromNative: fromOpenCode},
 	{id: "cursor", name: "Cursor", home: ".cursor", file: ".cursor/mcp.json", path: []string{"mcpServers"}, toNative: toCursor, fromNative: fromCursor},
+	{id: "hermes", name: "Hermes Agent", file: "config.yaml", yaml: true, root: host.HermesHome},
 }
 
-func (a mcpFileAgent) homePath() string { return filepath.Join(agentsHome, a.home) }
-func (a mcpFileAgent) filePath() string { return filepath.Join(agentsHome, a.file) }
+func (a mcpFileAgent) homePath() string {
+	if a.root != nil {
+		return a.root(agentsHome)
+	}
+	return filepath.Join(agentsHome, a.home)
+}
+
+func (a mcpFileAgent) filePath() string {
+	if a.root != nil {
+		return filepath.Join(a.homePath(), a.file)
+	}
+	return filepath.Join(agentsHome, a.file)
+}
 
 // load reads the config; a missing file is an empty one.
 func (a mcpFileAgent) load() (string, bool, map[string]mcpFileDef, error) {
@@ -54,6 +68,17 @@ func (a mcpFileAgent) load() (string, bool, map[string]mcpFileDef, error) {
 		return "", true, nil, err
 	}
 	text := string(raw)
+	if a.yaml {
+		servers, err := host.YAMLMCPServers(text)
+		if err != nil {
+			return "", true, nil, err
+		}
+		out := map[string]mcpFileDef{}
+		for name, s := range servers {
+			out[name] = mcpFileDef{canon: s.Def, raw: s.Raw}
+		}
+		return text, true, out, nil
+	}
 	if a.path == nil {
 		servers, err := tomlServers(text)
 		if err != nil {
@@ -95,6 +120,9 @@ func (a mcpFileAgent) servers() map[string]any {
 }
 
 func (a mcpFileAgent) remove(text, name string) (string, error) {
+	if a.yaml {
+		return host.YAMLMCPRemove(text, name)
+	}
 	if a.path == nil {
 		return tomlRemove(text, name)
 	}
@@ -107,6 +135,12 @@ func (a mcpFileAgent) add(text, name string, d map[string]any, own bool) (string
 	raw := ""
 	if own {
 		raw = str(d["_raw"])
+	}
+	if a.yaml {
+		if raw == "" {
+			raw = host.YAMLMCPEntry(name, cleanDef(d))
+		}
+		return host.YAMLMCPAdd(text, name, raw)
 	}
 	if a.path == nil {
 		if raw == "" {
@@ -145,7 +179,7 @@ func (a mcpFileAgent) addNew(name string, d map[string]any) error {
 	}
 	if !found {
 		text = "{}\n"
-		if a.path == nil {
+		if a.path == nil { // TOML and YAML start empty
 			text = ""
 		}
 		if err := os.MkdirAll(filepath.Dir(a.filePath()), 0o700); err != nil {
@@ -203,7 +237,7 @@ func (a mcpFileAgent) switchMCP(name string, enabled bool, stash map[string]any)
 	}
 	if !found {
 		text = "{}\n"
-		if a.path == nil {
+		if a.path == nil { // TOML and YAML start empty
 			text = ""
 		}
 	}

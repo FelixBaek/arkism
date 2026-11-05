@@ -290,7 +290,7 @@ test("에이전트: switches, removal, shared folders and the add dialog", async
   keyDlg.close(); await app.settle();
   // built-in agents: the switch only shows or hides them in this app's skill tables; an added one: whether Arkism reads its skills and chats
   const swOf = (name) => find(`${name} 스킬 표에 보이기`) || find(`${name} 스킬·대화 읽기`);
-  for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode"]) { const b = swOf(name); if (b) { b.click(); await app.settle(); } }
+  for (const name of ["Codex", "Gemini CLI", "ZCode", "Grok", "Cursor", "OpenCode", "Hermes Agent"]) { const b = swOf(name); if (b) { b.click(); await app.settle(); } }
   await press("Claude Code 스킬 표에 보이기");
   assert.match(notice(), /하나는 켜져 있어야/);
   await press("Codex 스킬 표에 보이기");

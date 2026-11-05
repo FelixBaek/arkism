@@ -2,9 +2,10 @@ package skills
 
 import "github.com/FelixBaek/arkism/internal/host"
 
-// OpenCode and Cursor keep their MCP servers in a JSON file like Gemini CLI and ZCode do, so they
-// are file-edited agents too (mcpFileAgents). Here: their two entry formats, and their ids on the
-// lists that name the agents the skill router and the on/off switches know.
+// OpenCode and Cursor keep their MCP servers in a JSON file like Gemini CLI and ZCode do, and Hermes
+// Agent in its config.yaml, so they are file-edited agents too (mcpFileAgents). Here: the two JSON
+// entry formats, and their ids on the lists that name the agents the skill router and the on/off
+// switches know.
 
 func init() {
 	for _, a := range mcpFileAgents {
@@ -12,7 +13,7 @@ func init() {
 			switches[a.id] = a.switchMCP
 		}
 	}
-	for _, id := range []string{"opencode", "cursor"} {
+	for _, id := range []string{"opencode", "cursor", "hermes"} {
 		if !containsStr(routerRuntimes, id) {
 			routerRuntimes = append(routerRuntimes, id)
 		}

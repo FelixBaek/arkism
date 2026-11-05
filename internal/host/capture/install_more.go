@@ -8,7 +8,7 @@ import (
 	"github.com/FelixBaek/arkism/internal/host"
 )
 
-// OpenCode and Cursor get the Arkism MCP server (as "arkism") where they are installed. Neither
+// OpenCode, Cursor and Hermes Agent get the Arkism MCP server (as "arkism") where they are installed. Neither
 // has command hooks the capture hook can answer: OpenCode's hooks are JavaScript plugins, and
 // Cursor's own hooks (~/.cursor/hooks.json) use other event names and outputs. Cursor already runs
 // the Claude Code hooks in ~/.claude/settings.json by default ("Third-party hooks").
@@ -129,6 +129,42 @@ func instNoHookGuidance(text string) string {
 	return strings.ReplaceAll(instGuidance(text, "arkism"), "세션 훅이 넣은 기억으로 부족할 때만", "새 대화를 시작할 때 관련 기억을 먼저 조회하고, 추가 기억이 필요할 때")
 }
 
+// instHermesConfig is Hermes Agent's config.yaml under its own home.
+func instHermesConfig(userRoot string) string {
+	return filepath.Join(host.HermesHome(userRoot), "config.yaml")
+}
+
+// instReadHermes returns Hermes Agent's config.yaml with the Arkism entry set, and whether Hermes is
+// installed. A layout the YAML editor cannot keep intact stops the install before anything is written.
+func instReadHermes(userRoot, client string) (string, bool, error) {
+	path := instHermesConfig(userRoot)
+	if !isDir(filepath.Dir(path)) {
+		return "", false, nil
+	}
+	text, err := instReadOr(path, "")
+	if err != nil {
+		return "", false, err
+	}
+	if text, err = host.YAMLMCPRemove(text, "arkism"); err != nil {
+		return "", false, err
+	}
+	entry := host.YAMLMCPEntry("arkism", map[string]any{"type": "stdio", "command": client, "args": []any{"windows", "mcp", "hermes"}})
+	text, err = host.YAMLMCPAdd(text, "arkism", entry)
+	return text, err == nil, err
+}
+
+// instHermesRemove drops the Arkism entry from config.yaml when it starts the installed client.
+func instHermesRemove(text string) (string, error) {
+	servers, err := host.YAMLMCPServers(text)
+	if err != nil {
+		return text, nil // a layout the installer refused holds no entry of ours
+	}
+	if s, ok := servers["arkism"]; !ok || !instClientIn(str(s.Def["command"])) {
+		return text, nil
+	}
+	return host.YAMLMCPRemove(text, "arkism")
+}
+
 // instUninstallMore takes out what instInstallMore wrote.
 func instUninstallMore(userRoot string, editJSON func(string, func(host.Obj) host.Obj) error,
 	editText func(string, func(string) (string, error)) error) []func() error {
@@ -142,6 +178,7 @@ func instUninstallMore(userRoot string, editJSON func(string, func(host.Obj) hos
 			return editJSON(t.file, t.drop)
 		})
 	}
+	steps = append(steps, func() error { return editText(instHermesConfig(userRoot), instHermesRemove) })
 	guide := filepath.Join(instOpenCodeDir(userRoot), "AGENTS.md")
 	steps = append(steps, func() error {
 		return editText(guide, func(text string) (string, error) { return instGuidanceRemove(text, "arkism"), nil })

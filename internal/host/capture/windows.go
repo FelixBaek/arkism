@@ -22,7 +22,7 @@ import (
 // Windows apps -> SSH -> central Arkism. No API tokens or LLMs on the PC.
 
 var (
-	winOrigins = []string{"codex", "claude_code", "zcode", "gemini", "grok", "deepseek", "opencode", "cursor"}
+	winOrigins = []string{"codex", "claude_code", "zcode", "gemini", "grok", "deepseek", "opencode", "cursor", "hermes"}
 	// winState is the PC client's folder; tests replace it.
 	winState = filepath.Join(host.Home, ".config", "arkism")
 )

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/FelixBaek/arkism/internal/host"
 	sqlite "github.com/ncruces/go-sqlite3"
 )
 
@@ -58,6 +59,47 @@ func TestInstOpenCodeAndCursorGetTheMCPServerAndUninstallTakesOnlyItOut(t *testi
 	}
 	if exists(filepath.Join(oc, "AGENTS.md")) {
 		t.Fatal("opencode guide left")
+	}
+}
+
+// Hermes Agent's config.yaml gets the Arkism entry with every other line and comment kept, a second
+// install changes nothing, a layout the editor cannot keep stops the install before any write, and
+// disconnecting gives back the file as it was.
+func TestInstHermesGetsTheMCPServerAndUninstallRestoresTheFile(t *testing.T) {
+	root := instInstallFixture(t)
+	instRun(t, root)
+	hh := host.HermesHome(root)
+	if exists(hh) {
+		t.Fatal("absent hermes written")
+	}
+	cfg := filepath.Join(hh, "config.yaml")
+	os.MkdirAll(hh, 0o755)
+	before := "# mine\nmodel:\n  default: x  # keep\nmcp_servers:\n  web:\n    url: https://example.com/mcp\n"
+	os.WriteFile(cfg, []byte(before), 0o644)
+	instRun(t, root)
+	once, _ := os.ReadFile(cfg)
+	instRun(t, root)
+	twice, _ := os.ReadFile(cfg)
+	servers, err := host.YAMLMCPServers(string(twice))
+	client := filepath.Join(root, ".config", "arkism", instClient)
+	if err != nil || string(once) != string(twice) || !strings.HasPrefix(string(twice), before) || len(servers) != 2 ||
+		servers["arkism"].Def["command"] != client || !eq(servers["arkism"].Def["args"], []any{"windows", "mcp", "hermes"}) {
+		t.Fatalf("%v\n%s", err, twice)
+	}
+	if _, err := instUninstall(root, filepath.Join(root, "roaming"), filepath.Join(root, "local")); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(cfg); string(raw) != before {
+		t.Fatalf("not restored:\n%s", raw)
+	}
+
+	flow := "mcp_servers: {web: {url: x}}\n"
+	os.WriteFile(cfg, []byte(flow), 0o644)
+	if _, err := instInstall(root, filepath.Join(root, "roaming"), filepath.Join(root, "local"), false); err == nil {
+		t.Fatal("flow layout accepted")
+	}
+	if raw, _ := os.ReadFile(cfg); string(raw) != flow {
+		t.Fatal(string(raw))
 	}
 }
 
@@ -128,6 +170,54 @@ func TestUsageReadsOpenCodeDatabase(t *testing.T) {
 		}
 	}
 	if got := globAll(dir, glob); len(got) != 2 || filepath.Base(got[0]) != "opencode-dev.db" || filepath.Base(got[1]) != "opencode.db" {
+		t.Fatal(glob, got)
+	}
+}
+
+// Hermes Agent's state.db keeps token totals per session and one row per message; the usage list
+// reads both, leaves archived sessions out, and its root picks state.db but not the WAL.
+func TestUsageReadsHermesDatabase(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.db")
+	db, err := sqlite.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		// Hermes Agent v0.19 columns, trimmed to the ones that matter.
+		`CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT, model TEXT, started_at REAL NOT NULL, ended_at REAL, input_tokens INTEGER DEFAULT 0,
+			output_tokens INTEGER DEFAULT 0, cache_read_tokens INTEGER DEFAULT 0, cache_write_tokens INTEGER DEFAULT 0, reasoning_tokens INTEGER DEFAULT 0,
+			cwd TEXT, title TEXT, api_call_count INTEGER DEFAULT 0, archived INTEGER DEFAULT 0)`,
+		`CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT, tool_name TEXT, timestamp REAL NOT NULL)`,
+		`INSERT INTO sessions VALUES ('20261105_1', 'cli', 'claude-sonnet-5', 1791302936.5, NULL, 100, 20, 300, 10, 5, '/home/u/site', 'Fix login', 2, 0),
+			('20261105_2', 'cli', 'x', 1791302900, NULL, 1, 1, 0, 0, 0, '/tmp', 'old', 1, 1)`,
+		`INSERT INTO messages (session_id, role, content, tool_name, timestamp) VALUES ('20261105_1', 'user', 'hi', NULL, 1791302936.6),
+			('20261105_1', 'assistant', '', NULL, 1791302937), ('20261105_1', 'tool', '{}', 'terminal', 1791302938), ('20261105_2', 'user', 'x', NULL, 1791302901)`,
+	} {
+		if err := db.Exec(q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	db.Close()
+	f, err := usageParse("hermes", "server", path)
+	if err != nil || len(f.Sessions) != 1 {
+		t.Fatal(err, f.Sessions)
+	}
+	s := f.Sessions[0]
+	if s.Sid != "20261105_1" || s.Title != "Fix login" || s.Project != "site" || s.Messages != 1 || len(s.Tools) != 1 || s.Tools[0].K != "terminal" ||
+		len(s.Days) != 1 || s.Days[0].Models[0].Model != "claude-sonnet-5" || s.Days[0].Models[0].T != (usageTok{Input: 100, Output: 25, CacheRead: 300, CacheWrite: 10, Requests: 2}) {
+		t.Fatalf("%+v %+v", s, s.Days)
+	}
+	for _, name := range []string{"state.db-wal", "state.db-shm"} {
+		os.WriteFile(filepath.Join(dir, name), nil, 0o644)
+	}
+	var glob string
+	for _, r := range usageSessionRoots() {
+		if r.origin == "hermes" {
+			glob = r.glob
+		}
+	}
+	if got := globAll(dir, glob); len(got) != 1 || filepath.Base(got[0]) != "state.db" {
 		t.Fatal(glob, got)
 	}
 }

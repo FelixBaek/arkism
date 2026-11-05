@@ -211,14 +211,14 @@ func TestFileAgentsTakeAnotherAgentsDefinition(t *testing.T) {
 
 func TestAbsentAgentFoldersAreLeftAlone(t *testing.T) {
 	for _, a := range mcpFileAgents {
-		home := mcpHome(t, map[string]any{"wake": map[string]any{"command": "wake-mcp"}})
+		mcpHome(t, map[string]any{"wake": map[string]any{"command": "wake-mcp"}})
 		if err := mcpSwitch(a.id, "wake", false, map[string]any{}); err != nil {
 			t.Fatal(a.id, err)
 		}
 		if err := mcpSwitch(a.id, "wake", true, map[string]any{}); err == nil {
 			t.Fatal(a.id, "switched on without the agent")
 		}
-		if exists(filepath.Join(home, a.home)) {
+		if exists(a.homePath()) {
 			t.Fatal(a.id, "folder created")
 		}
 	}
@@ -266,14 +266,14 @@ func TestServerListReportsTheFileAgents(t *testing.T) {
 	write(t, filepath.Join(home, ".grok/config.toml"), grokConfig+"\n[mcp_servers.off]\ncommand = \"x\"\nenabled = false\n")
 	others := fileAgentServers()
 	e := serverEntry("wake", asMap(others["gemini"]["wake"]), map[string]any{}, map[string]any{}, others)
-	if got := canon(t, objGet(e, "agents")); got != `{"claude_code":"off","codex":"off","cursor":"off","gemini":"on","grok":"on","opencode":"off","zcode":"off"}` {
+	if got := canon(t, objGet(e, "agents")); got != `{"claude_code":"off","codex":"off","cursor":"off","gemini":"on","grok":"on","hermes":"off","opencode":"off","zcode":"off"}` {
 		t.Fatal(got)
 	}
 	if objGet(e, "target") != "wake-mcp x" || objGet(e, "transport") != "stdio" {
 		t.Fatal(e)
 	}
 	e = serverEntry("off", asMap(others["grok"]["off"]), map[string]any{}, map[string]any{}, others)
-	if got := canon(t, objGet(e, "agents")); got != `{"claude_code":"off","codex":"off","cursor":"off","gemini":"off","grok":"off","opencode":"off","zcode":"off"}` {
+	if got := canon(t, objGet(e, "agents")); got != `{"claude_code":"off","codex":"off","cursor":"off","gemini":"off","grok":"off","hermes":"off","opencode":"off","zcode":"off"}` {
 		t.Fatal(got)
 	}
 }

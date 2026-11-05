@@ -8,6 +8,7 @@ window.ArkismSessionList = (() => {
     codex: { label: "Codex", resume: (id) => ["codex", "resume", id], start: (p) => ["codex", p] },
     gemini: { label: "Gemini CLI", resume: (id) => ["gemini", "--resume", id], start: (p) => ["gemini", "-i", p] },
     opencode: { label: "OpenCode", resume: (id) => ["opencode", "--session", id], start: (p) => ["opencode", "--prompt", p] },
+    hermes: { label: "Hermes Agent", resume: (id) => ["hermes", "--resume", id] },
     zcode: { label: "ZCode" }, grok: { label: "Grok" }, cursor: { label: "Cursor" },
   };
   const NONE = "기록 없음";

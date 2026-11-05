@@ -40,6 +40,7 @@ var syncRoots = func() []skillRoot {
 		{"claude-code", filepath.Join(h, ".claude/skills"), "claude_code"},
 		{"agents", filepath.Join(h, ".agents/skills"), "generic"},
 		{"claude-plugins", filepath.Join(h, ".claude/plugins/synced"), "claude_code"},
+		{"hermes", filepath.Join(host.HermesHome(h), "skills"), "hermes"},
 	}
 }
 
@@ -108,6 +109,8 @@ func syncSkillID(row map[string]any) (string, error) {
 		return "claude/" + lastPart(s), nil
 	case "agents":
 		return "agents/" + s, nil
+	case "hermes": // category/name, as Hermes Agent groups its skills
+		return "hermes/" + s, nil
 	case "claude-plugins": // account/plugin folder (often an id)/…/name
 		return "claude-plugin/" + pluginName(str(row["path"])) + "/" + lastPart(s), nil
 	case "agent-plugins": // kit plugin folder/skills/…/name
