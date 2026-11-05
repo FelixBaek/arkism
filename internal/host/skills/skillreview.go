@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 const reviewUsage = `Review candidate skill versions: list, diff, approve (apply) or reject.
@@ -265,7 +266,7 @@ func automatedCheck(item map[string]any, state string) []string {
 	if len(text) > reviewMaxBytes {
 		problems = append(problems, "larger than 64000 bytes")
 	}
-	if secretRx.MatchString(text) {
+	if secretscan.Contains(text) {
 		problems = append(problems, "credential-like string")
 	}
 	if item["validation_status"] != state {

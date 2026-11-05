@@ -501,7 +501,7 @@
  ],
  "secret": [
   [
-   "-----BEGIN RSA PRIVATE KEY",
+   "-----BEGIN RSA PRIVATE KEY-----",
    true
   ],
   [
@@ -526,6 +526,10 @@
   ],
   [
    "password=short",
+   true
+  ],
+  [
+   "token: ~/.config/arkism/token",
    false
   ],
   [

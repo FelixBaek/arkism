@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -73,10 +74,29 @@ type Webhook struct {
 	QueryNames  []string `json:"query_param_names,omitempty" bson:"query_param_names,omitempty"`
 }
 
-// webhookHTTP is the sealed part of a webhook's request shape.
+// webhookHTTP is the sealed part of a webhook's request shape. URL is set when
+// the address itself carries a key (a chat app's token in the path); Webhook.URL
+// then shows it masked.
 type webhookHTTP struct {
 	Headers map[string]string `json:"headers,omitempty"`
 	Query   map[string]string `json:"query,omitempty"`
+	URL     string            `json:"url,omitempty"`
+}
+
+// webhookShownURL splits raw into the URL reads show and the URL to seal ("" when nothing needs sealing).
+// Each path part is masked alone, so the host and the other parts stay readable.
+func webhookShownURL(raw string) (shown, sealed string) {
+	if !containsSecret(raw) {
+		return raw, ""
+	}
+	parts := strings.Split(raw, "/")
+	for i, p := range parts {
+		parts[i] = redactSecrets(p)
+	}
+	if shown = strings.Join(parts, "/"); shown == raw || containsSecret(shown) {
+		shown = redactSecrets(raw)
+	}
+	return shown, raw
 }
 
 // WebhookSubject is what an event is about, without its text.
@@ -234,7 +254,7 @@ func webhookHTTPAAD(scope Scope, id string) []byte {
 // sealWebhookHTTP stores headers and query values sealed and only their sorted names in the clear.
 func sealWebhookHTTP(key []byte, w *Webhook, h webhookHTTP, scope Scope, id string) error {
 	w.SealedHTTP, w.HeaderNames, w.QueryNames = "", webhookNames(h.Headers), webhookNames(h.Query)
-	if len(h.Headers) == 0 && len(h.Query) == 0 {
+	if len(h.Headers) == 0 && len(h.Query) == 0 && h.URL == "" {
 		return nil
 	}
 	raw, err := json.Marshal(h)
@@ -294,7 +314,7 @@ func webhookDeliveryView(r Record) WebhookDeliveryView {
 // literal must pass the outbound address check. Names are checked again after
 // DNS at every connection (httpguard.OutboundClient).
 func checkWebhookURL(raw string, allowPrivate bool) error {
-	if len(raw) > 2048 || validateEndpoint(raw) != nil || containsSecret(raw) {
+	if len(raw) > 2048 || validateEndpoint(raw) != nil {
 		return ErrInvalid
 	}
 	u, err := url.Parse(raw)
@@ -382,9 +402,11 @@ func (s *Service) CreateWebhook(ctx context.Context, token string, in WebhookInp
 	if err != nil {
 		return WebhookView{}, err
 	}
-	w := Webhook{URL: in.URL, Events: slices.Clone(in.Events), IncludeContent: in.IncludeContent, Active: in.Active == nil || *in.Active, SealedKey: sealed,
+	w := Webhook{Events: slices.Clone(in.Events), IncludeContent: in.IncludeContent, Active: in.Active == nil || *in.Active, SealedKey: sealed,
 		Method: in.Method, TimeoutSeconds: in.TimeoutSeconds}
-	if err = sealWebhookHTTP(s.WebhookKey, &w, webhookHTTP{Headers: in.Headers, Query: in.QueryParams}, in.Scope, id); err != nil {
+	h := webhookHTTP{Headers: in.Headers, Query: in.QueryParams}
+	w.URL, h.URL = webhookShownURL(in.URL)
+	if err = sealWebhookHTTP(s.WebhookKey, &w, h, in.Scope, id); err != nil {
 		return WebhookView{}, err
 	}
 	r := Record{ID: id, Scope: in.Scope, Kind: webhookKind, Status: statusActive, Revision: 1, Webhook: &w,
@@ -493,26 +515,26 @@ func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) er
 	if in.TimeoutSeconds != nil {
 		w.TimeoutSeconds = *in.TimeoutSeconds
 	}
-	// A new origin must not inherit sealed credentials meant for the old one:
-	// parts the same update does not resend are dropped.
-	moved := in.URL != nil && w.SealedHTTP != "" && webhookOrigin(*in.URL) != webhookOrigin(w.URL)
-	if in.Headers != nil || in.QueryParams != nil || moved {
+	if in.Headers != nil || in.QueryParams != nil || in.URL != nil {
 		h, err := s.openWebhookHTTP(w, in.Scope, id)
 		if err != nil {
 			return err
 		}
+		// A new origin must not inherit sealed credentials meant for the old one:
+		// parts the same update does not resend are dropped.
+		moved := in.URL != nil && webhookOrigin(*in.URL) != webhookOrigin(cmp.Or(h.URL, w.URL))
 		if in.Headers != nil || moved {
 			h.Headers = in.Headers
 		}
 		if in.QueryParams != nil || moved {
 			h.Query = in.QueryParams
 		}
+		if in.URL != nil {
+			w.URL, h.URL = webhookShownURL(*in.URL)
+		}
 		if err = sealWebhookHTTP(s.WebhookKey, w, h, in.Scope, id); err != nil {
 			return err
 		}
-	}
-	if in.URL != nil {
-		w.URL = *in.URL
 	}
 	if in.Events != nil {
 		w.Events = slices.Clone(in.Events)
@@ -723,7 +745,7 @@ func (s *Service) deliverWebhook(ctx context.Context, job *Record) (bool, error)
 	}
 	secret, err := openAEAD(s.WebhookKey, h.Webhook.SealedKey, webhookSecretAAD(h.Scope, h.ID), errWebhookSecret)
 	extra, httpErr := s.openWebhookHTTP(h.Webhook, h.Scope, h.ID)
-	target, urlErr := webhookRequestURL(h.Webhook.URL, extra.Query)
+	target, urlErr := webhookRequestURL(cmp.Or(extra.URL, h.Webhook.URL), extra.Query)
 	if err != nil || httpErr != nil || urlErr != nil {
 		d.Error = "secret_unavailable"
 		return false, s.recordWebhookAttempt(ctx, job, d)

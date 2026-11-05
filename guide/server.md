@@ -532,6 +532,18 @@ wiki. What a person approves and how is described in
     workspace/project --to workspace/project2` moves a space to a new project
     id offline (see the command table). Nothing changes until an administrator
     runs it.
+23. **Unnamed keys.** The secret check now also catches long random tokens
+    no named rule knows (32 characters or more, mixed letters and digits),
+    and lets a reference through (`token: ~/.config/x/token`, `$API_KEY`,
+    `<your-key>`, `***`) while a value after the same marks is still caught.
+    Hashes, commit ids, uuids, record ids and image data are not flagged.
+    Inspection reports say `101-ingest-v2`. Stored records are not inspected
+    again on upgrade, but checks made when old text is read again (archive
+    search, merge proposals, webhook content, wiki sources, transfers and
+    exports) now withhold text that holds such a token, and importing an old
+    bundle refuses those items. A webhook address that carries a key (a
+    token in its path) is now accepted: it is sealed like the headers, and
+    reads show it with the key as `[REDACTED]`.
 
 ### Reflect, consolidation and mental-model settings
 

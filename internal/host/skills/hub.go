@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 // Skill hub client: inventory, runtime importers, resolve with a validated
@@ -109,7 +110,6 @@ func repoLocalRoots(base string) []skillRoot {
 var (
 	skipDirs       = []string{".git", "node_modules", ".trash", "build", "__pycache__"}
 	frontmatterRx  = regexp.MustCompile(`(?s)\A---\r?\n(.*?)\r?\n---\r?\n`)
-	secretRx       = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|\b(?:sk|al)-[a-z0-9_-]{12,}|AIza[0-9A-Za-z_-]{20,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{16,})`)
 	usageStatuses  = []string{"success", "failure", "cancelled", "validation_failed"}
 	errorCodeRx    = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 	vendorNames    = []string{"claude_code", "codex"}
@@ -230,7 +230,7 @@ func skillRow(sr skillRoot, path string, raw []byte) map[string]any {
 		"skill_id": filepath.ToSlash(rel), "name": name, "description": meta["description"],
 		"content_hash": digest(raw), "bytes": len(raw),
 		"has_frontmatter":     meta["name"] != "" && meta["description"] != "",
-		"credential_like":     secretRx.MatchString(text),
+		"credential_like":     secretscan.Contains(text),
 		"hardcoded_root_path": homePathRx.MatchString(text),
 		"vendor_markers":      orEmpty(vendors),
 		"mcp_tools":           stringsAny(sortedKeys(tools)),

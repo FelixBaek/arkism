@@ -91,7 +91,7 @@ func TestEntropyDetectorKeepsHashesIdsImagesAndText(t *testing.T) {
 		"/usr/lib/x86_64-linux-gnu/libLLVM-17.so.1 https://example.com/a/b/c?page=2&sort=created_at",
 		"사용자는 한국어로 짧게 보고받기를 원한다. 배포는 매주 화요일 오후 3시에 한다. 버전 0.1.7, 스키마 5.",
 		strings.Repeat("기억 저장과 검색 품질을 확인한다 ", 200),
-		"The API key is stored in ~/.config/arkism/anthropic-api.key and never printed.",
+		"The API key is stored in ~/.config/arkism/model-api.key and never printed.",
 	}
 	for _, text := range safe {
 		if containsSecret(text) {
@@ -111,6 +111,11 @@ func TestSecretReferencesAllowedValuesBlocked(t *testing.T) {
 		"password: ****",
 		"비밀번호: ~/.secrets/db.txt",
 		"access_token = ./local/token.txt",
+		"token: ~/.ssh/id_ed25519",
+		"password=$HOME/.config/db/password",
+		"api_key=%APPDATA%\\arkism\\key",
+		"token: .env",
+		"token: ****abcd",
 	} {
 		if containsSecret(text) {
 			t.Errorf("reference blocked: %q", text)
@@ -119,6 +124,11 @@ func TestSecretReferencesAllowedValuesBlocked(t *testing.T) {
 	for _, text := range []string{
 		"token: abcd1234efgh", `api_key="realvalue123"`, "password: hunter2", "비밀번호: 아주짧음",
 		`{\"token\":\"plainvalue\"}`, "secret='x'", `password: "unterminated`, `{"password":{}}`, "token=[REDACTED]",
+		// A reference mark in front of a real value does not make it a reference.
+		"api_key=/abc9fQ2xLmP4tR7vW1zB8n", "token: ./9fQ2xLmP4tR7vW1zB8nK3cY6", "token: $9fQ2xLmP4tR7vW1zB8nK3cY6",
+		"password=$Hunter2pass!", "password=~hunter2", "password=.hunter2xyz", "password=/hunter2xyz", "password=*hunter2",
+		"password=%hunter2%", `password: "/hunter2xyz"`, `"password": "$hunter2"`, "PASSWORD=$lowercasevalue",
+		"copy base64,Zq8XvN3kLw7RtY2mPc5HbJ9dGf4SaE6u", // only a data URI (";base64,") payload is a blob
 	} {
 		if !containsSecret(text) {
 			t.Errorf("value allowed: %q", text)

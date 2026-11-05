@@ -71,7 +71,7 @@ func TestArchiveStreamingSecretAndWindowParity(t *testing.T) {
 		strings.Repeat("가", 20000) + " 키 " + token + " 단서", "token: ~/.config/x/token 단서", "커밋 " + ContentHash("a") + " 단서"} {
 		observer := newArchiveTextObserver(archiveSplitReader{strings.NewReader(text), 7}, "단서", 0, 4096, false)
 		got := archiveStreamSecrets.MatchReader(observer)
-		got = observer.entropy.close() || got
+		got = observer.entropy.Close() || got
 		if observer.failure != nil || got != containsSecret(text) {
 			t.Fatal("secret parity", got, observer.failure)
 		}
@@ -185,7 +185,7 @@ func FuzzArchiveSecretPrefix(f *testing.F) {
 		if _, err := io.Copy(io.Discard, observer); err != nil {
 			t.Fatal(err)
 		}
-		got := observer.entropy.close() || observer.candidate && archiveStreamSecrets.MatchString(value[observer.candidateOffset:])
+		got := observer.entropy.Close() || observer.candidate && archiveStreamSecrets.MatchString(value[observer.candidateOffset:])
 		if got != expected {
 			t.Fatalf("secret prefix/suffix mismatch: %q offset=%d", value, observer.candidateOffset)
 		}

@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"math"
 	"reflect"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 // Structured summaries deliberately omit raw conversations and tool outputs.
@@ -60,11 +61,6 @@ type SkillAnalysis struct {
 	SourceFile          string             `json:"source_file" bson:"source_file"`
 }
 
-// Defence in depth; the authorizer remains responsible for full secret/PII
-// inspection. Reject the whole payload rather than silently corrupting facts.
-// Secrets and personal data use the shared detectors; this adds raw transcript markers.
-var rawOutputPattern = regexp.MustCompile(`(?i)\b(?:tool_output|raw_output|raw_conversation)\b`)
-
 // The secret patterns are fixed, so a verdict depends only on the text: listing 600 skills
 // re-scanned every unchanged analysis with them (most of a 3 s catalog request).
 var safeTransferSeen struct {
@@ -85,7 +81,7 @@ func safeTransfer(text string) bool {
 	}
 	// Inspect JSON string content too, not only the outer serialization.
 	plain := strings.ReplaceAll(text, `\"`, `"`)
-	ok = !containsSecret(plain) && !personalPattern.MatchString(plain) && !rawOutputPattern.MatchString(plain)
+	ok = secretscan.Transferable(plain)
 	safeTransferSeen.Lock()
 	if len(safeTransferSeen.verdict) >= 20000 || safeTransferSeen.verdict == nil {
 		safeTransferSeen.verdict = map[[32]byte]bool{}

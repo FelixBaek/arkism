@@ -614,3 +614,38 @@ func TestWebhookDefenseAndConsolidationEvents(t *testing.T) {
 		t.Fatal("consolidation event", ev)
 	}
 }
+
+// A chat app's webhook address carries its key in the path: the hook is accepted,
+// reads and the stored row show the address masked, and delivery uses the real one.
+func TestWebhookURLWithKeyIsSealedAndSent(t *testing.T) {
+	f := webhookFixture(t)
+	var got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.URL.RequestURI() }))
+	t.Cleanup(srv.Close)
+	key := "Zq8XvN3kLw7RtY2mPc5HbJ9dGf4SaE6uQ1oIy0TnB7xC3vM9pL2kJ5hG8fD4sA6w"
+	path := "/api/webhooks/123456789012345678/" + key
+	v, err := f.svc.CreateWebhook(testCtx, f.human, WebhookInput{Scope: scopeA, URL: srv.URL + path, Events: []string{EventMemoryDeleted}, Secret: testWebhookSecret})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(v)
+	stored, _ := json.Marshal(f.repo.rows(colWebhooks)[0])
+	if strings.Contains(string(raw), key) || strings.Contains(string(stored), key) || v.URL != srv.URL+"/api/webhooks/123456789012345678/[REDACTED]" {
+		t.Fatal("key readable", v.URL, string(stored))
+	}
+	if _, err = f.svc.TestWebhook(testCtx, f.human, scopeA, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.svc.WorkOnce(testCtx, f.work)
+	if got != path {
+		t.Fatalf("delivered to %q", got)
+	}
+	// A plain address replaces the sealed one; delivery follows it.
+	plain := srv.URL + "/plain"
+	if v, err = f.svc.UpdateWebhook(testCtx, f.human, v.ID, WebhookUpdate{Scope: scopeA, ExpectedRevision: v.Revision, URL: &plain}); err != nil || v.URL != plain {
+		t.Fatal("update", err, v.URL)
+	}
+	if h, err := f.svc.openWebhookHTTP(f.repo.rows(colWebhooks)[0].Webhook, scopeA, v.ID); err != nil || h.URL != "" {
+		t.Fatal("sealed url kept", err, h.URL)
+	}
+}

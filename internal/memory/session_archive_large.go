@@ -15,6 +15,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 type archiveLargeRecord struct {
@@ -229,7 +231,7 @@ type archiveTextObserver struct {
 	prefixTail             []byte
 	candidate              bool
 	candidateOffset        int
-	entropy                entropyScanner // the unnamed half of containsSecret, fed once per block
+	entropy                secretscan.Scanner // the unnamed half of containsSecret, fed once per block
 }
 
 func newArchiveTextObserver(r io.Reader, query string, offset, limit int, direct bool) *archiveTextObserver {
@@ -248,7 +250,7 @@ func (o *archiveTextObserver) Read(dst []byte) (int, error) {
 		o.failure = err
 	}
 	data := dst[:n]
-	o.entropy.feed(string(data))
+	o.entropy.Feed(string(data))
 	if !o.candidate {
 		edge := append(append([]byte(nil), o.prefixTail...), data...)
 		o.candidate = archiveSecretStarts.Match(edge)
@@ -395,7 +397,7 @@ func archiveInspectText(ctx context.Context, cancel context.CancelFunc, open fun
 	if err = ctx.Err(); err != nil {
 		return nil, "", err
 	}
-	secret := observe.entropy.close()
+	secret := observe.entropy.Close()
 	if !secret && observe.candidate {
 		if err = text.Close(); err != nil {
 			return nil, "", err

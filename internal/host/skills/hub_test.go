@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 func loadGolden(t *testing.T, name string) map[string]any {
@@ -157,7 +158,7 @@ func TestHubGoldens(t *testing.T) {
 	}
 	for _, e := range g["secret"].([]any) {
 		pair := e.([]any)
-		if secretRx.MatchString(pair[0].(string)) != pair[1] {
+		if secretscan.Contains(pair[0].(string)) != pair[1] {
 			t.Errorf("secret %q", pair[0])
 		}
 	}

@@ -13,12 +13,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/secretscan"
 )
 
 // Skill sync: keep the hub in step with the local skill folders. Scans the
@@ -515,19 +515,17 @@ func httpFailure(err error) any {
 	return fmt.Sprintf("%d %s: %s", h.Code, cmp.Or(body.Error.Code, body.Error.Type), runeCut(body.Error.Message, 160))
 }
 
-// transferBlocked mirrors the hub's transfer check (internal/memory/structured.go safeTransfer): model-written examples
-// such as "test@example.com" or "bearer URL" otherwise fail the whole import with 400 invalid_request.
-var transferBlocked = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|bearer\s+[a-z0-9._~-]+|\b(?:sk|al)-[a-z0-9_-]{12,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{8,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b|\b\d{6}-[1-4]\d{6}\b|\b(?:tool_output|raw_output|raw_conversation)\b)`)
-
-// scrubTransfer masks blocked text in analysis strings and drops blocked list items.
+// scrubTransfer masks blocked text in analysis strings and drops blocked list items. It uses the hub's own
+// transfer check (internal/secretscan): model-written examples such as "test@example.com" or "bearer URL"
+// otherwise fail the whole import with 400 invalid_request.
 func scrubTransfer(v any) any {
 	switch x := v.(type) {
 	case string:
-		return transferBlocked.ReplaceAllString(x, "[생략]")
+		return secretscan.MaskTransfer(x, "[생략]")
 	case []any:
 		kept := []any{}
 		for _, item := range x {
-			if s, ok := item.(string); !ok || !transferBlocked.MatchString(s) {
+			if s, ok := item.(string); !ok || secretscan.Transferable(s) {
 				kept = append(kept, item)
 			}
 		}
