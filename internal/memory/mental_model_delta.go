@@ -28,7 +28,8 @@ type mentalModelDeltaInput struct {
 
 // mentalModelDelta prepares a delta refresh. ok is false when the request is not a
 // delta (no approved base) or the base can no longer be sent; the caller then
-// rewrites in full. ErrNotFound means nothing changed after the approval.
+// rewrites in full. ErrNotFound means nothing changed after the approval (or, with the
+// mental_model_delta decision model, nothing that changed could change the text).
 func (s *Service) mentalModelDelta(ctx context.Context, token string, req summaryRequest, recalled []Hit) (mentalModelDeltaInput, bool, error) {
 	base := req.base
 	if base == nil || base.Withheld || strings.TrimSpace(base.Text) == "" || !safeTransfer(base.Text) {
@@ -38,7 +39,7 @@ func (s *Service) mentalModelDelta(ctx context.Context, token string, req summar
 	if !ok {
 		return mentalModelDeltaInput{}, false, nil
 	}
-	fresh := changedSince(recallableHits(recalled), cited, base.At)
+	fresh := s.deltaDecision(ctx, token, req, cited, changedSince(recallableHits(recalled), cited, base.At))
 	if len(fresh) == 0 {
 		return mentalModelDeltaInput{}, false, ErrNotFound
 	}

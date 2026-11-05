@@ -184,6 +184,8 @@ type MentalModelInput struct {
 	Refresh          MentalModelRefresh `json:"refresh"`
 	// Folder puts the model in the wiki tree as a query page; omitted on update keeps it.
 	Folder *string `json:"folder,omitempty"`
+	// NoFolder (update) takes the model out of the wiki tree.
+	NoFolder bool `json:"no_folder,omitempty"`
 }
 
 type MentalModelRefreshInput struct {
@@ -243,7 +245,7 @@ func validMentalModelInput(in MentalModelInput) error {
 		return ErrSecretDetected
 	}
 	if in.Folder != nil {
-		if _, ok := normalizeWikiFolder(*in.Folder); !ok {
+		if _, ok := normalizeWikiFolder(*in.Folder); !ok || in.NoFolder {
 			return ErrInvalid
 		}
 	}
@@ -418,7 +420,7 @@ func (s *Service) updateMentalModel(ctx context.Context, token, id string, in Me
 			r.Status, r.ApprovedBy = statusActive, d.PrincipalID
 		}
 		r.MentalModel.Title, r.MentalModel.Query, r.MentalModel.Refresh = strings.TrimSpace(in.Title), strings.TrimSpace(in.Query), in.Refresh
-		if in.Folder != nil {
+		if in.Folder != nil || in.NoFolder {
 			r.MentalModel.Folder = mentalModelFolder(in)
 		}
 		return nil
@@ -463,6 +465,13 @@ func mentalModelData(hits []Hit) string {
 		data.WriteString("- id: " + h.ID + "\n  kind: " + h.Collection + "\n  date: " + hitContentTime(h).UTC().Format(time.DateOnly) + occurredLine(h.Occurred) + "\n  text: " + strings.ReplaceAll(h.Text, "\n", " ") + "\n")
 	}
 	return data.String()
+}
+
+// summaryHits are the recalled hits a summary may cite, narrowed to its fact types.
+func summaryHits(req summaryRequest, items []Hit) map[string]Hit {
+	hits := recallableHits(items)
+	maps.DeleteFunc(hits, func(_ string, h Hit) bool { return !factTypeKept(req.factTypes, h.Collection) })
+	return hits
 }
 
 // recallableHits keeps what a summary may cite: approved memories and approved observations.
@@ -585,6 +594,8 @@ type summaryRequest struct {
 	recallTokens  int
 	schema        json.RawMessage
 	factTypes     []string
+	// decide: a mental model, whose refresh the space's decision models may narrow.
+	decide bool
 }
 
 func summaryRequestFor(r Record) summaryRequest {
@@ -592,7 +603,7 @@ func summaryRequestFor(r Record) summaryRequest {
 	f := m.Refresh
 	req := summaryRequest{scope: r.Scope, title: m.Title, query: m.Query, kinds: f.Kinds, tags: f.Tags, maxTokens: f.MaxTokens,
 		limit: mmBudgetRecall[f.Budget], tagsMatch: f.TagsMatch, tagGroups: f.TagGroups, includeChunks: f.IncludeChunks, recallTokens: f.RecallMaxTokens,
-		schema: f.ResponseSchema, factTypes: f.FactTypes}
+		schema: f.ResponseSchema, factTypes: f.FactTypes, decide: true}
 	if slices.Equal(f.FactTypes, []string{"observation"}) && len(f.Kinds) == 0 {
 		req.kinds = []string{observationKind}
 	}
@@ -607,16 +618,22 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 	if err != nil {
 		return nil, err
 	}
-	hits := recallableHits(bundle.Items)
-	maps.DeleteFunc(hits, func(_ string, h Hit) bool { return !factTypeKept(req.factTypes, h.Collection) })
-	if len(hits) == 0 {
+	items := bundle.Items
+	if len(summaryHits(req, items)) == 0 {
 		return nil, ErrNotFound
 	}
-	action, system, prompt := "refresh", mentalModelSystem, mentalModelPrompt(req.title, req.query, bundle.Items)
-	if delta, ok, err := s.mentalModelDelta(ctx, token, req, bundle.Items); err != nil {
+	var action, system, prompt string
+	var hits map[string]Hit
+	if delta, ok, err := s.mentalModelDelta(ctx, token, req, items); err != nil {
 		return nil, err
 	} else if ok {
 		action, system, prompt, hits = "delta_refresh", mentalModelDeltaSystem, delta.prompt, delta.hits
+	} else {
+		items = s.summaryDecision(ctx, token, req, items)
+		if hits = summaryHits(req, items); len(hits) == 0 {
+			return nil, ErrNotFound
+		}
+		action, system, prompt = "refresh", mentalModelSystem, mentalModelPrompt(req.title, req.query, items)
 	}
 	call := job
 	if req.maxTokens > 0 { // one refresh's own cap, still counted against the run
@@ -631,7 +648,7 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 		system += mentalModelSchemaRule(schema)
 	}
 	if req.includeChunks {
-		prompt += s.summaryChunks(ctx, token, req.scope, bundle.Items)
+		prompt += s.summaryChunks(ctx, token, req.scope, items)
 	}
 	var answer mentalModelAnswer
 	if err := s.derivedModelCall(ctx, req.scope, call, "wiki_mental_model", system, prompt, &answer); err != nil {

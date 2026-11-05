@@ -284,6 +284,7 @@ func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (R
 		return ReflectOutput{}, err
 	}
 	run.add(bundle.Items, false)
+	s.decisionReflect(ctx, token, run)
 	out := ReflectOutput{CitedMemoryIDs: []string{}, DirectivesApplied: []string{}, Retrieved: []ReflectRetrieved{}, ToolTrace: []ReflectToolStep{}}
 	for _, r := range run.rules {
 		out.DirectivesApplied = append(out.DirectivesApplied, r.ID)

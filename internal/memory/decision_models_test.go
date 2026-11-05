@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // decisionServer answers every decision request with relation = choice.
@@ -76,5 +78,157 @@ func TestPickedChoice(t *testing.T) {
 	}
 	if got := pickedChoice(jevAnswer{Choice: "new"}); got != "new" {
 		t.Fatal(got)
+	}
+}
+
+// itemDecisionServer answers each per-item question with pick(item text) and every other
+// question (enough) with other; requests counts the calls.
+func itemDecisionServer(t *testing.T, pick func(text string) string, other string, requests *atomic.Int32) *JevJudge {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		var in struct {
+			State struct {
+				Items map[string]struct {
+					Text string `json:"text"`
+				} `json:"items"`
+			} `json:"state"`
+			Questions map[string]any `json:"questions"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+			t.Error(err)
+		}
+		answers := map[string]any{}
+		for key := range in.Questions {
+			choice := other
+			if item, ok := in.State.Items[key]; ok {
+				choice = pick(item.Text)
+			}
+			answers[key] = map[string]any{"type": "choice", "choice": choice, "probabilities": map[string]float64{choice: 0.9}}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"model": "jev-1.13.0", "answers": answers, "usage": map[string]any{"input_tokens": 10}})
+	}))
+	t.Cleanup(srv.Close)
+	return &JevJudge{APIKey: "decision-key", Endpoint: srv.URL}
+}
+
+func setDecisionModels(t *testing.T, f *fixture, m map[string]string) {
+	t.Helper()
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, DecisionModels: &m}, false); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMentalModelRefreshDecisionDropsUnrelated(t *testing.T) {
+	f, llm, ms := obsFixture(t)
+	lunch := f.activeMemory("lunch for the staging team is at noon")
+	requests := &atomic.Int32{}
+	related := func(text string) string {
+		if strings.Contains(text, "lunch") {
+			return "unrelated"
+		}
+		return "relevant"
+	}
+	f.svc.Judges = map[string]SkillJudge{"jev": itemDecisionServer(t, related, "", requests)}
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Deploys", Query: "staging", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, _ := json.Marshal(mentalModelAnswer{Summary: "Staging needs the flag.", Citations: []string{ms[0].ID}})
+	// Off by default: everything recalled goes to the model, the engine is not asked.
+	llm.answers = []string{string(answer)}
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); err != nil || requests.Load() != 0 || !strings.Contains(llm.prompts[0], lunch.ID) {
+		t.Fatalf("off: %v requests=%d", err, requests.Load())
+	}
+	setDecisionModels(t, f, map[string]string{decisionTaskRefresh: "jev"})
+	llm.answers = append(llm.answers, string(answer))
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); err != nil || requests.Load() != 1 {
+		t.Fatalf("on: %v requests=%d", err, requests.Load())
+	}
+	if prompt := llm.prompts[1]; strings.Contains(prompt, lunch.ID) || !strings.Contains(prompt, ms[0].ID) {
+		t.Fatalf("the unrelated memory must stay out of the prompt:\n%s", prompt)
+	}
+	// Nothing related: no model call at all.
+	f.svc.Judges = map[string]SkillJudge{"jev": itemDecisionServer(t, func(string) string { return "unrelated" }, "", requests)}
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); !errors.Is(err, ErrNotFound) || len(llm.prompts) != 2 {
+		t.Fatalf("all unrelated: %v prompts=%d", err, len(llm.prompts))
+	}
+	// An engine that fails leaves the model in charge with everything recalled.
+	f.svc.Judges = map[string]SkillJudge{"jev": &JevJudge{APIKey: "k", Endpoint: "http://127.0.0.1:1"}}
+	llm.answers = append(llm.answers, string(answer))
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); err != nil || !strings.Contains(llm.prompts[2], lunch.ID) {
+		t.Fatalf("failed engine: %v", err)
+	}
+}
+
+func TestMentalModelDeltaDecisionGatesNewMemories(t *testing.T) {
+	f, llm, ms := obsFixture(t)
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual, Strategy: mmStrategyDelta}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer := func(text string, ids ...string) string {
+		raw, _ := json.Marshal(mentalModelAnswer{Summary: text, Citations: ids})
+		return string(raw)
+	}
+	llm.answers = []string{answer("Staging needs the flag.", ms[0].ID)}
+	v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v, err = f.svc.ReviewMentalModel(testCtx, f.human, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(2 * time.Millisecond)
+	fresh := f.activeMemory("deploy to staging requires the staging flag and a second reviewer")
+	verdict, requests := "no_change", &atomic.Int32{}
+	f.svc.Judges = map[string]SkillJudge{"jev": itemDecisionServer(t, func(string) string { return verdict }, "", requests)}
+	setDecisionModels(t, f, map[string]string{decisionTaskDelta: "jev"})
+	prompts := len(llm.prompts)
+	// The engine says the new memory cannot change the text: no model call, nothing to review.
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); !errors.Is(err, ErrNotFound) || len(llm.prompts) != prompts || requests.Load() != 1 {
+		t.Fatalf("no change: %v prompts=%d requests=%d", err, len(llm.prompts), requests.Load())
+	}
+	got, _ := f.svc.GetMentalModel(testCtx, f.human, scopeA, mm.ID)
+	if got.LastOutcome == nil || got.LastOutcome.Code != mmOutcomeNoFacts {
+		t.Fatalf("outcome: %+v", got.LastOutcome)
+	}
+	verdict = "could_change"
+	llm.answers = append(llm.answers, answer("Staging needs the flag and a second reviewer.", ms[0].ID, fresh.ID))
+	if v, err = f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA}); err != nil || v.Draft == nil || v.Draft.Action != "delta_refresh" {
+		t.Fatalf("could change: %+v %v", v, err)
+	}
+}
+
+func TestReflectDecisionPrunesAndStops(t *testing.T) {
+	f, llm := reflectFixture(t)
+	needle := f.activeMemory("reflect needle: the deploy runs on Fridays", "needle")
+	other := f.activeMemory("reflect needle: lunch is at noon", "needle")
+	requests := &atomic.Int32{}
+	f.svc.Judges = map[string]SkillJudge{"jev": itemDecisionServer(t, func(text string) string {
+		if strings.Contains(text, "lunch") {
+			return "unrelated"
+		}
+		return "relevant"
+	}, "enough", requests)}
+	setDecisionModels(t, f, map[string]string{decisionTaskReflect: "jev"})
+	llm.answers = []string{"Fridays [" + needle.ID + "]"}
+	out, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle deploy day?", MaxIterations: 3})
+	if err != nil || requests.Load() != 1 {
+		t.Fatalf("%v requests=%d", err, requests.Load())
+	}
+	if len(out.Retrieved) != 1 || out.Retrieved[0].ID != needle.ID || strings.Contains(llm.prompts[0], other.ID) {
+		t.Fatalf("the unrelated memory is pruned: %+v", out.Retrieved)
+	}
+	cfg, _ := f.svc.spaceSettings(testCtx, scopeA)
+	run := &reflectRun{in: ReflectInput{Scope: scopeA, Query: "needle", MaxIterations: 3, space: &cfg}, graph: map[string]bool{other.ID: true},
+		hits: []Hit{searchHit(needle, colMemories, "fts"), searchHit(other, colMemories, "fts")}}
+	f.svc.decisionReflect(testCtx, f.human, run)
+	if run.in.MaxIterations != 1 || len(run.hits) != 1 || run.graph[other.ID] {
+		t.Fatalf("enough ends the loop after one call: %+v", run.in)
+	}
+	// prompt_only never asks the engine.
+	if _, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true}); err != nil || requests.Load() != 2 {
+		t.Fatalf("prompt only: %v requests=%d", err, requests.Load())
 	}
 }

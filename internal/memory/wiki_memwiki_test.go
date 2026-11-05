@@ -390,6 +390,21 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if agentTree, _ := f.svc.WikiTree(testCtx, f.agent, scope); slices.ContainsFunc(agentTree.Pages, func(p WikiTreePage) bool { return p.Type == "query" }) {
 		t.Fatal("agent saw a query page with no approved text")
 	}
+	// no_folder takes a query page out of the wiki; with a folder it is refused.
+	out := MentalModelInput{Scope: scope, ExpectedRevision: loose.Revision, Title: "Loose", Query: "loose", Refresh: MentalModelRefresh{Mode: "manual"}, NoFolder: true, Folder: &root}
+	if _, err := f.svc.UpdateMentalModel(testCtx, f.human, loose.ID, out); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("folder and no_folder: %v", err)
+	}
+	out.Folder = nil
+	if got, err := f.svc.UpdateMentalModel(testCtx, f.human, loose.ID, out); err != nil || got.Folder != nil {
+		t.Fatalf("no_folder: %+v %v", got, err)
+	}
+	if tree, _ := f.svc.WikiTree(testCtx, f.human, scope); len(tree.Pages) != 3 {
+		t.Fatalf("taken out of the tree: %+v", tree.Pages)
+	}
+	if loose, err = f.svc.UpdateMentalModel(testCtx, f.human, loose.ID, MentalModelInput{Scope: scope, ExpectedRevision: loose.Revision + 1, Title: "Loose", Query: "loose", Refresh: MentalModelRefresh{Mode: "manual"}, Folder: &root}); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, bad := range []WikiFolderMoveInput{{From: "docs", To: "docs/inner"}, {From: "docs", To: "docs"}, {From: "", To: "x"}, {From: "docs", To: strings.Repeat("a/", 7) + "b"}} {
 		bad.Scope = scope
