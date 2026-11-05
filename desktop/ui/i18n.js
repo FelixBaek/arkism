@@ -1,10 +1,11 @@
-// 화면 언어: 한국어 원문 그대로 두거나 영어로 바꿔 보여 준다.
-// 화면 코드는 한국어 문구를 그대로 쓰고, 영어일 때만 이 파일이 DOM에 들어간 글자를 사전(i18n-en.js)으로 바꾼다.
+// 화면 언어: 한국어 원문 그대로 두거나 다른 언어로 바꿔 보여 준다.
+// 화면 코드는 한국어 문구를 그대로 쓰고, 다른 언어일 때만 이 파일이 DOM에 들어간 글자를 그 언어 사전(i18n-<code>.js, 언어마다 한 파일)으로 바꾼다.
+// 사전은 모두 같은 모양 { strings, patterns }이고 window.ArkismI18nDicts[code]에 들어간다. 언어 목록은 look.js가 가진다.
 //   - 정확한 문장 사전 + `{0}` 자리 표시가 있는 패턴(템플릿 문자열에서 뽑음)
 //   - MutationObserver가 새로 그려진 글자·title·placeholder·aria-label을 한 번씩 바꾸고 원문을 기억해 한국어로 되돌릴 수 있다
 //   - data-no-i18n이 붙은 요소 아래(기억 본문·스킬 설명 같은 사용자 데이터)와 code·textarea·편집 칸은 건드리지 않는다
 //   - confirm·alert·prompt 문구도 바꾼다
-// 언어 선택은 look.js(설정 › 모양)가 저장한다. 저장한 값이 없으면 navigator.language가 ko로 시작할 때만 한국어.
+// 언어 선택은 look.js(설정 › 일반)가 저장한다. 저장한 값이 없으면 시스템 언어, 지원하지 않는 언어면 한국어.
 (function (root) {
   "use strict";
   const HANGUL = /[가-힣ㄱ-ㆎ]/;
@@ -166,14 +167,15 @@
 
   let translator = makeTranslator({});
   const translate = (text) => translator.translate(text);
-  let dictionaryTask = null;
+  const dictionaryTasks = new Map(); // code → Promise<translator>; a failed load is tried again next time
   const switches = globalThis.ArkismKeep.latest(); // the last language picked wins over a dictionary still loading
-  async function englishDictionary() {
-    if (!dictionaryTask) dictionaryTask = import("./i18n-en.js").then(() => {
-      translator = makeTranslator(root.ArkismI18nEN);
-    }).catch((error) => { dictionaryTask = null; throw error; });
-    return dictionaryTask;
+  const LANG_CODE = /^[a-z]{2}(-[A-Z]{2})?$/; // also keeps the import path to one file next to this one
+  function dictionary(code) {
+    if (!dictionaryTasks.has(code)) dictionaryTasks.set(code, import(`./i18n-${code}.js`).then(() => makeTranslator(root.ArkismI18nDicts[code]))
+      .catch((error) => { dictionaryTasks.delete(code); throw error; }));
+    return dictionaryTasks.get(code);
   }
+  const LOCALES = { ko: "ko-KR", en: "en-US" }; // date formats; other codes are already locale tags
   const ATTRS = ["title", "placeholder", "aria-label"];
   const FIELD = /^(INPUT|TEXTAREA|SELECT)$/;
   const SKIP = "[data-i18n-id],[data-no-i18n],script,style,code,textarea,[contenteditable=''],[contenteditable='true']";
@@ -252,7 +254,7 @@
   function bindMessage(node, id) {
     if (!messages.has(id)) throw new Error("Unknown message ID: " + id);
     node.setAttribute("data-i18n-id", id);
-    node.textContent = lang === "en" ? translate(messages.get(id)) : messages.get(id);
+    node.textContent = lang !== "ko" ? translate(messages.get(id)) : messages.get(id);
     return node;
   }
   function updateMessages() {
@@ -261,29 +263,35 @@
 
   let titleOrig = null;
   async function setLang(next) {
-    next = next === "en" ? "en" : "ko";
+    next = LANG_CODE.test(next) ? next : "ko";
     const sequence = switches.begin();
-    if (next === "en") {
-      try { await englishDictionary(); }
-      catch (error) { if (sequence.live()) document.documentElement.lang = lang; console.warn("English dictionary unavailable", error); return false; }
+    let loaded = null;
+    if (next !== "ko") {
+      try { loaded = await dictionary(next); }
+      catch (error) { if (sequence.live()) document.documentElement.lang = lang; console.warn(`Dictionary for ${next} unavailable`, error); return false; }
       if (!sequence.live()) return false;
     }
     if (next === lang) return true;
-    lang = next;
-    document.documentElement.lang = lang;
-    if (lang === "en") {
-      walk(document.documentElement, apply);
-      if (HANGUL.test(document.title)) { titleOrig = document.title; document.title = translate(document.title); }
-      observer.observe(document.documentElement, OBSERVE);
-    } else {
+    const docs = root.ArkismPopout?.docs() || [];
+    if (lang !== "ko") { // back to the Korean source first: a text keeps only its original, not every translation
       observer.disconnect();
       walk(document.documentElement, restore);
       if (titleOrig) { document.title = titleOrig; titleOrig = null; }
+      for (const d of docs) popout(d, restore);
     }
-    for (const d of root.ArkismPopout?.docs() || []) popout(d, lang === "en" ? apply : restore);
+    lang = next;
+    document.documentElement.lang = lang;
+    if (loaded) {
+      translator = loaded;
+      walk(document.documentElement, apply);
+      if (HANGUL.test(document.title)) { titleOrig = document.title; document.title = translate(document.title); }
+      observer.observe(document.documentElement, OBSERVE);
+      for (const d of docs) popout(d, apply);
+    } else for (const d of docs) d.documentElement.lang = lang;
     updateMessages();
+    return true;
   }
-  // A popout window (popup-drag.js) is its own document: translate it the same way and watch it while English is on.
+  // A popout window (popup-drag.js) is its own document: translate it the same way and watch it while another language is on.
   // Its <title> is a text node in the walk. A closed window's document takes its registration with it.
   const OBSERVE = { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS };
   function popout(d, fn) {
@@ -291,14 +299,14 @@
     walk(d.documentElement, fn);
     if (fn === apply) observer.observe(d.documentElement, OBSERVE);
   }
-  (root.ArkismPopoutSetup ||= {}).translate = (d) => { if (lang === "en") popout(d, apply); };
+  (root.ArkismPopoutSetup ||= {}).translate = (d) => { if (lang !== "ko") popout(d, apply); };
 
   // 대화 상자 문구
   for (const name of ["confirm", "alert", "prompt"]) {
     const native = root[name];
     if (typeof native !== "function") continue;
     root[name] = function (message, ...rest) {
-      return native.call(root, lang === "en" && typeof message === "string" ? translate(message) : message, ...rest);
+      return native.call(root, lang !== "ko" && typeof message === "string" ? translate(message) : message, ...rest);
     };
   }
 
@@ -307,5 +315,5 @@
   const initialLanguage = setLang(wanted());
 
   // 화면 코드가 직접 쓰는 것: translate(s)는 data-no-i18n 안에 넣을 화면 문구용, locale()은 날짜·시각 형식용.
-  root.ArkismI18n = { ready: () => initialLanguage, registerMessages, bindMessage, translate: (s) => (lang === "en" ? translate(s) : s), lang: () => lang, locale: () => (lang === "en" ? "en-US" : "ko-KR"), setLang };
+  root.ArkismI18n = { ready: () => initialLanguage, registerMessages, bindMessage, translate: (s) => (lang !== "ko" ? translate(s) : s), lang: () => lang, locale: () => LOCALES[lang] || lang, setLang };
 })(typeof window !== "undefined" ? window : globalThis);

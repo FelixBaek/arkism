@@ -1,4 +1,5 @@
-// English UI coverage: re-extracts every Korean string in desktop/ui and checks the dictionary in i18n-en.js.
+// UI language coverage: re-extracts every Korean string in desktop/ui and checks each dictionary (i18n-<code>.js).
+// English is the reference; every other language must have exactly its keys, the same placeholders and no Korean left.
 // Run: node --test desktop/ui/*.test.js
 "use strict";
 const test = require("node:test");
@@ -9,15 +10,32 @@ const vm = require("vm");
 const { extract, stale } = require("./i18n-extract.js");
 const { makeTranslator, HANGUL } = require("./i18n.js");
 
-function loadDict() {
-  const sandbox = { window: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "i18n-en.js"), "utf8"), sandbox);
-  return sandbox.window.ArkismI18nEN;
+// look.js owns the language list; run it with just enough of a page around it.
+function languages() {
+  const page = { navigator: { language: "ko-KR" }, localStorage: { getItem: () => null, setItem() {} }, CustomEvent: class {},
+    document: { addEventListener() {}, documentElement: { removeAttribute() {}, setAttribute() {}, style: { setProperty() {} } } } };
+  page.window = page;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "look.js"), "utf8"), page);
+  return page.ArkismLook.languages.map(([code]) => code);
 }
-const dict = loadDict();
+const codes = languages().filter((c) => c !== "ko");
+function loadDicts() {
+  const sandbox = { window: {} };
+  for (const c of codes) vm.runInNewContext(fs.readFileSync(path.join(__dirname, `i18n-${c}.js`), "utf8"), sandbox);
+  return sandbox.window.ArkismI18nDicts;
+}
+const dicts = loadDicts();
+const dict = dicts.en;
 const { translate } = makeTranslator(dict);
 const { statics, templates } = extract(__dirname);
 const placeholders = (s) => [...s.matchAll(/\{(\d+)\}/g)].map((m) => m[1]).sort().join(",");
+
+test("each language in the picker has one dictionary file, and no file is left without a language", () => {
+  assert.ok(codes.length >= 10, "Korean plus at least ten languages");
+  const files = fs.readdirSync(__dirname).filter((f) => /^i18n-.+\.js$/.test(f) && !/^i18n-extract\.js$|\.test\.js$/.test(f)).map((f) => f.slice(5, -3));
+  assert.deepEqual(files.sort(), [...codes].sort());
+  for (const c of codes) assert.ok(dicts[c]?.strings && dicts[c]?.patterns, `${c}: registers { strings, patterns }`);
+});
 
 test("every static string has its own English entry", () => {
   // an exact entry, not a lucky pattern match: "{0}건" would otherwise turn "조건" into "조 req"
@@ -44,13 +62,38 @@ test("no English entry outlives its Korean", () => {
   assert.deepEqual(old, { strings: [], patterns: [] }, "remove these from i18n-en.js, or put the English on the reworded Korean");
 });
 
-test("each pattern keeps its placeholders and translates a sample", () => {
+for (const code of codes.filter((c) => c !== "en")) {
+  test(`${code}: exactly the English keys, translated, with the same placeholders`, () => {
+    const d = dicts[code], bad = [];
+    for (const kind of ["strings", "patterns"]) {
+      const want = Object.keys(dict[kind]), have = new Set(Object.keys(d[kind]));
+      const missing = want.filter((k) => !have.has(k)), extra = [...have].filter((k) => !Object.hasOwn(dict[kind], k));
+      if (missing.length) bad.push(`${missing.length} ${kind} missing, e.g. ${missing.slice(0, 5).join(" | ")}`);
+      if (extra.length) bad.push(`${extra.length} ${kind} not in English, e.g. ${extra.slice(0, 5).join(" | ")}`);
+      for (const [k, v] of Object.entries(d[kind])) {
+        if (typeof v !== "string" || !v.trim() || HANGUL.test(v)) bad.push(`untranslated: ${k} → ${v}`);
+        else if (placeholders(k) !== placeholders(v)) bad.push(`placeholders differ: ${k} → ${v}`);
+      }
+    }
+    if (bad.length) console.log(`  ${code}:\n` + bad.slice(0, 40).map((b) => `   - ${b}`).join("\n"));
+    assert.equal(bad.length, 0, `${code}: ${bad.length} problems; add the missing keys to i18n-${code}.js`);
+  });
+}
+
+test("menu names stay English in every language", () => {
+  for (const code of codes) for (const [ko, en] of [["홈", "Home"], ["흐름", "Flow"], ["도구", "Tools"]]) assert.equal(dicts[code].strings[ko], en, `${code}: ${ko}`);
+});
+
+test("each pattern keeps its placeholders and translates a sample, in every language", () => {
   const bad = [];
-  for (const [k, en] of Object.entries(dict.patterns)) {
-    if (placeholders(k) !== placeholders(en)) { bad.push(`placeholders differ: ${k} → ${en}`); continue; }
-    const sample = k.replace(/\{(\d+)\}/g, (_, n) => `Q${n}x`);
-    const out = translate(sample);
-    if (out === sample || (HANGUL.test(out) && !HANGUL.test(en))) bad.push(`no match: ${sample} → ${out}`);
+  for (const code of codes) {
+    const t = makeTranslator(dicts[code]).translate;
+    for (const [k, out0] of Object.entries(dicts[code].patterns)) {
+      if (placeholders(k) !== placeholders(out0)) { bad.push(`${code} placeholders differ: ${k} → ${out0}`); continue; }
+      const sample = k.replace(/\{(\d+)\}/g, (_, n) => `Q${n}x`);
+      const out = t(sample);
+      if (out === sample || (HANGUL.test(out) && !HANGUL.test(out0))) bad.push(`${code} no match: ${sample} → ${out}`);
+    }
   }
   assert.deepEqual(bad, []);
 });

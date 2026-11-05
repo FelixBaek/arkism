@@ -5,9 +5,19 @@ window.ArkismLook = (() => {
   "use strict";
   const KEY = "arkism.look";
   const THEMES = ["system", "dark", "light"];
-  const LANGS = ["ko", "en"];
-  // 저장한 언어가 없으면 시스템 언어를 따른다: ko로 시작하면 한국어, 아니면 영어.
-  const systemLang = () => (String(navigator.language || "ko").toLowerCase().startsWith("ko") ? "ko" : "en");
+  // 화면 언어 [code, 그 언어로 쓴 이름]: ko is the source; every other code has its dictionary in i18n-<code>.js (i18n.js loads it).
+  const LANGUAGES = [["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh-CN", "简体中文"], ["zh-TW", "繁體中文"], ["es", "Español"],
+    ["de", "Deutsch"], ["fr", "Français"], ["pt", "Português"], ["vi", "Tiếng Việt"], ["id", "Bahasa Indonesia"]];
+  const LANGS = LANGUAGES.map(([code]) => code);
+  // 저장한 언어가 없으면 시스템 언어(선호 순서대로)에서 지원하는 첫 언어를 따르고, 없으면 한국어.
+  function systemLang() {
+    for (const raw of [...(navigator.languages || []), navigator.language]) {
+      const tag = String(raw || "").toLowerCase(), base = tag.split("-")[0];
+      if (base === "zh") return /^zh-(tw|hk|mo|hant)/.test(tag) ? "zh-TW" : "zh-CN";
+      if (LANGS.includes(base)) return base;
+    }
+    return "ko";
+  }
   const FONTS = { sm: 1, md: 1.1, lg: 1.2, xl: 1.32 }; // md was 1: 13px body read too small (10-21)
   const ZOOM_MIN = 0.7, ZOOM_MAX = 1.6, ZOOM_STEP = 0.1;
   const clampZoom = (z) => Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 100) / 100;
@@ -52,5 +62,5 @@ window.ArkismLook = (() => {
   document.addEventListener("keydown", zoomKeys);
   (window.ArkismPopoutSetup ||= {}).zoomKeys = (d) => d.addEventListener("keydown", zoomKeys); // a popout window (popup-drag.js) dresses as this one, so only the keys
   apply();
-  return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP };
+  return { get: () => ({ ...look, lang: look.lang || systemLang() }), set, ZOOM_STEP, languages: LANGUAGES };
 })();

@@ -1,7 +1,8 @@
 // @ts-check
 // English UI dictionary for i18n.js. Generated from the Korean strings in desktop/ui (see i18n-extract.js);
 // edit freely. strings: exact Korean → English. patterns: Korean with {0}… placeholders → English.
-window.ArkismI18nEN = {
+// Every other language has the same keys in its own i18n-<code>.js (i18n.test.js checks they all cover the UI).
+window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
  "strings": {
  "승인과 버리기는 사람만 할 수 있어요.": "Only a person can approve or discard.",
  "오래 갈 내용": "Lasting",

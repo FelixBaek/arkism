@@ -37,7 +37,7 @@ window.ArkismAssist = (ctx) => {
     stop();
     // A cut would break install_skill's JSON; free text is cut, structured requests are refused when too long.
     if (["install_skill", "fix", "comfy", "json", "review", "build"].includes(kind) && prompt.length > 20000) throw new Error("내용이 너무 길어요 (2만 자까지)");
-    const body = { kind, prompt: prompt.slice(0, 20000), lang: window.ArkismI18n?.lang() === "en" ? "en" : "ko", persona: (opts.persona || personaFor(opts.purpose || "workflow")).crew.instructions, ...(opts.model ? { model: opts.model } : {}), ...(opts.expert ? { expert: opts.expert } : {}) }; // try: the agent's @이름
+    const body = { kind, prompt: prompt.slice(0, 20000), lang: (window.ArkismI18n?.lang() || "ko") === "ko" ? "ko" : "en", persona: (opts.persona || personaFor(opts.purpose || "workflow")).crew.instructions, ...(opts.model ? { model: opts.model } : {}), ...(opts.expert ? { expert: opts.expert } : {}) }; // try: the agent's @이름
     const r = await request("/v1/crew/assists", { method: "POST", body: JSON.stringify({ scope: state.scope, assist: body }) })
       .catch((e) => { stop(); throw passing(e) ? new Error("서버에 닿지 못했어요. 연결을 확인하고 다시 시도해 주세요.", { cause: e }) : e; });
     stop();

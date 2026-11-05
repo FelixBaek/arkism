@@ -171,7 +171,15 @@ test("일반: keep running, the open shortcut, language and the alerts", async (
   app.dom.key(app.document, "Escape"); await app.settle();
   assert.match(text(app.$(".pg-shortcut")), /Ctrl \+ Alt \+ K/);
   // 화면 언어 lives in 일반 now, not in 모양
-  assert.ok(find("English"));
+  const langs = app.$('select[aria-label="화면 언어"]');
+  assert.ok(langs.hasAttribute("data-no-i18n"), "each language keeps its own name");
+  assert.deepEqual(langs.querySelectorAll("option").map((o) => o.value), ["ko", "en", "ja", "zh-CN", "zh-TW", "es", "de", "fr", "pt", "vi", "id"]);
+  assert.equal(langs.value, "ko");
+  langs.value = "de"; app.dom.fire(langs, "change"); await app.settle();
+  assert.equal(app.window.ArkismLook.get().lang, "de");
+  const back = app.$('select[aria-label="화면 언어"]') || app.$("select[data-no-i18n]");
+  back.value = "ko"; app.dom.fire(back, "change"); await app.settle();
+  assert.equal(app.window.ArkismLook.get().lang, "ko");
   await settings("appearance");
   assert.doesNotMatch(text(app.$("#table")), /화면 언어/);
   await settings("general");

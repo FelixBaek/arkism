@@ -237,8 +237,8 @@ window.ArkismPages = (ctx) => {
   function langGroup() {
     const look = window.ArkismLook;
     const g = group("언어와 단축키");
-    const langs = segment([["ko", "한국어"], ["en", "English"]], look.get().lang, (k) => { look.set({ lang: k }); render(false); });
-    langs.setAttribute("data-no-i18n", ""); // 언어 이름은 늘 그 언어로 보여 준다
+    const langs = pick(look.languages, look.get().lang, "화면 언어", (k) => { look.set({ lang: k }); render(false); });
+    langs.setAttribute("data-no-i18n", ""); // 언어 이름은 늘 그 언어로 보여 준다 (aria-label은 화면 문구라 번역된다)
     g.append(line("화면 언어", "", langs));
     return g;
   }

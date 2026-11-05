@@ -659,6 +659,21 @@ test("Ctrl +, Ctrl − and Ctrl 0 zoom any screen; other keys pass", () => {
   assert.equal(key(document.body, "=", { ctrlKey: true, altKey: true }).defaultPrevented, false);
 });
 
+test("with no saved language the first supported system language wins, else Korean", () => {
+  const look = window.ArkismLook, nav = window.navigator, was = [nav.languages, nav.language];
+  const sys = (languages, language = languages[0]) => { nav.languages = languages; nav.language = language; return look.get().lang; };
+  try {
+    assert.equal(sys(["ko-KR"]), "ko");
+    assert.equal(sys(["ja-JP", "en-US"]), "ja");
+    assert.equal(sys(["ru-RU", "zh-Hant-HK"]), "zh-TW", "an unsupported first choice falls to the next");
+    assert.equal(sys(["zh-SG"]), "zh-CN");
+    assert.equal(sys(["pt-BR"]), "pt");
+    assert.equal(sys([], "de-AT"), "de");
+    assert.equal(sys(["ru-RU", "uk"]), "ko");
+    assert.equal(look.languages.length, 11);
+  } finally { [nav.languages, nav.language] = was; }
+});
+
 test("the type-only contracts module loads with no runtime exports", async () => {
   assert.deepEqual(Object.keys(await import("./modules/contracts.mjs")), []);
 });

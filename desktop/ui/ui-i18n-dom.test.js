@@ -1,5 +1,6 @@
 // Switching the screen language (i18n.js in a page): Korean text, titles and placeholders turn English from the
 // dictionary (i18n-en.js), user data stays as written, new text is translated as it appears, and Korean comes back.
+// Any other language goes through the same steps with its own i18n-<code>.js.
 // Run: node --test desktop/ui/*.test.js
 "use strict";
 const test = require("node:test");
@@ -40,7 +41,7 @@ test("starts in Korean and leaves the page as written", async () => {
 test("English translates text, attributes, the title and messages, but not user data or code", async () => {
   // a dictionary that fails to load keeps Korean and is tried again next time
   let fail = true, dict;
-  Object.defineProperty(window, "ArkismI18nEN", { configurable: true, get() { if (fail && !new Error().stack.includes("i18n-en.js")) { fail = false; throw new Error("broken"); } return dict; }, set(v) { dict = v; } });
+  Object.defineProperty(window.ArkismI18nDicts ||= {}, "en", { configurable: true, get() { if (fail && !new Error().stack.includes("i18n-en.js")) { fail = false; throw new Error("broken"); } return dict; }, set(v) { dict = v; } });
   const warn = console.warn; console.warn = () => {};
   try { assert.equal(await I.setLang("en"), false); } finally { console.warn = warn; }
   assert.equal(I.lang(), "ko");
@@ -136,6 +137,32 @@ test("back to Korean restores what was written, keeping text the screen changed 
   const second = I.setLang("ko");
   assert.equal(await first, false);
   assert.equal(await second, true);
+  assert.equal(I.lang(), "ko");
+});
+
+test("another language replaces the current one from the Korean source, and a bad code stays Korean", async () => {
+  const ja = () => window.ArkismI18nDicts.ja.strings;
+  assert.equal(await I.setLang("en"), true);
+  assert.equal($("nav button").textContent, "Save");
+  assert.equal(await I.setLang("ja"), true);
+  assert.equal(I.lang(), "ja");
+  assert.equal(I.locale(), "ja");
+  assert.equal(document.documentElement.lang, "ja");
+  assert.equal($("nav button").textContent, ja()["저장"], "from the Korean, not from the English");
+  assert.equal($("nav button").getAttribute("title"), ja()["닫기"]); // the title the screen set to 닫기 earlier
+  assert.equal(document.title, ja()["설정"]);
+  assert.equal($("[data-i18n-id]").textContent, ja()["저장"]);
+  assert.equal(popout.querySelector("p").textContent, ja()["저장"], "the popout window follows");
+  assert.equal(I.translate("저장"), ja()["저장"]);
+  const late = document.createElement("p"); late.textContent = "닫기"; document.body.append(late);
+  await flush();
+  assert.equal(late.textContent, ja()["닫기"]);
+  assert.equal(await I.setLang("ko"), true);
+  assert.equal($("nav button").textContent, "저장");
+  assert.equal(late.textContent, "닫기");
+  const warn = console.warn; console.warn = () => {};
+  try { assert.equal(await I.setLang("xx"), false); } finally { console.warn = warn; } // no such dictionary
+  assert.equal(await I.setLang("../i18n-en"), true); // not a language code: Korean
   assert.equal(I.lang(), "ko");
 });
 
