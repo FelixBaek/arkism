@@ -104,6 +104,7 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 		return memory.NewTEIEmbedder(memory.TEIConfig{
 			EndpointURL: os.Getenv("TEI_ENDPOINT_URL"), Model: os.Getenv("TEI_MODEL"), Revision: os.Getenv("TEI_REVISION"),
 			Prefixes: map[string]string{"query": query, "document": document}, MaxBatchSize: clientBatch,
+			APIKey: os.Getenv("TEI_API_KEY"), SendDimensions: os.Getenv("TEI_SEND_DIMENSIONS") == "1",
 		})
 	case "ollama":
 		// Loopback only, like TEI: text never leaves the host. The defaults are
@@ -126,8 +127,9 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 	}
 }
 
-// configuredReranker reads ARKISM_RERANK_URL (base URL of a POST /rerank service) and the
-// optional ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables reranking.
+// configuredReranker reads ARKISM_RERANK_URL (base URL of a POST /rerank service), the
+// optional ARKISM_RERANK_MODEL (switches to the hosted model/documents protocol),
+// ARKISM_RERANK_API_KEY and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables reranking.
 func configuredReranker() (*memory.TEIReranker, error) {
 	raw := os.Getenv("ARKISM_RERANK_URL")
 	if raw == "" {
@@ -141,7 +143,7 @@ func configuredReranker() (*memory.TEIReranker, error) {
 		}
 		timeout = parsed
 	}
-	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Timeout: timeout})
+	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Model: os.Getenv("ARKISM_RERANK_MODEL"), APIKey: os.Getenv("ARKISM_RERANK_API_KEY"), Timeout: timeout})
 }
 
 // PostgreSQL permissions are canonical; the other authorizers serve non-Postgres test wiring.

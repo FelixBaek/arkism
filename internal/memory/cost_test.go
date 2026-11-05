@@ -34,7 +34,7 @@ func TestEmbeddingsAreNotPriced(t *testing.T) {
 	if amount, available := rates.price("embedding_query", ProviderUsage{Provider: "tei", Model: "local", Requests: 1, TotalTokens: 42}); available || amount != 0 {
 		t.Fatal("local TEI embedding was charged")
 	}
-	if embeddingProvider(&TEIEmbedder{}) != "tei" {
+	if embeddingProvider(&TEIEmbedder{provider: teiProviderName}) != "tei" || embeddingProvider(&TEIEmbedder{provider: openAIEmbeddingsProvider}) != "openai_compatible" {
 		t.Fatal("TEI provider identity lost")
 	}
 }

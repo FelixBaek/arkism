@@ -92,6 +92,11 @@ type Service struct {
 	CostRates CostRates
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
+	// LLMTraceContent keeps redacted, clipped prompt and answer text in model
+	// call traces (llm_requests.go); off stores sizes and hashes only.
+	LLMTraceContent bool
+	// Extensions are an embedding program's own checks and reactions (extensions.go).
+	Extensions Extensions
 
 	// SignalRankingOff keeps judged outcomes (memory_signal) out of recall ranking (ARKISM_RANK_SIGNAL=off).
 	SignalRankingOff bool
@@ -1177,6 +1182,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		return Record{}, ErrInvalid
 	}
 	var result Record
+	committed := "" // the status this call wrote; a replayed review writes none
 	if col == "skill_versions" && in.Status == "approved" {
 		r, e := s.Repo.Get(ctx, col, in.Scope, id)
 		if e != nil {
@@ -1233,6 +1239,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 		if e != nil {
 			return e
 		}
+		committed = r.Status
 		if promoted != nil {
 			result = *promoted
 		}
@@ -1254,6 +1261,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	if e != nil {
 		return Record{}, e
 	}
+	s.Extensions.afterTransition(ctx, col, committed, result)
 	return result, nil
 }
 

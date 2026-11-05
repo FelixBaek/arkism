@@ -95,10 +95,11 @@ func (s *Service) embedKnowledgeQuery(ctx context.Context, d Decision, query str
 	if !embedderTransferAllowed(s.Embedder, d) {
 		return nil, ErrDenied
 	}
-	out, err := s.Embedder.Embed(ctx, []string{query}, embedInputQuery)
-	if err != nil {
+	batch, callErr, err := s.meteredEmbed(ctx, d.Scope, "embedding_query", []string{query}, embedInputQuery)
+	if err = errors.Join(callErr, err); err != nil {
 		return nil, err
 	}
+	out := batch.Items
 	if len(out) != 1 || len(out[0].Vector) != VectorDimension || out[0].Space == "" {
 		return nil, ErrUnavailable
 	}
@@ -108,7 +109,7 @@ func (s *Service) embedKnowledgeQuery(ctx context.Context, d Decision, query str
 // embedderTransferAllowed: loopback TEI keeps text on the host; any other
 // embedder sends it to a provider and needs the decision's external transfer.
 func embedderTransferAllowed(e Embedder, d Decision) bool {
-	if _, local := e.(*TEIEmbedder); local {
+	if t, ok := e.(*TEIEmbedder); ok && t.Local() {
 		return true
 	}
 	return d.ExternalTransfer
@@ -376,10 +377,8 @@ func (s *Service) IndexKnowledgeEmbeddings(ctx context.Context, token string, in
 		for i, target := range batch {
 			texts[i] = target.text
 		}
-		embeddings, embedErr := s.Embedder.Embed(ctx, texts, embedInputDocument)
-		if embedErr == nil && len(embeddings) != len(batch) {
-			embedErr = ErrUnavailable
-		}
+		embedded, callErr, ledgerErr := s.meteredEmbed(ctx, in.Scope, "embedding_knowledge", texts, embedInputDocument)
+		embeddings, embedErr := embedded.Items, errors.Join(callErr, ledgerErr)
 		if embedErr != nil {
 			// Durable partial-batch outcome: vectors from completed batches are
 			// written (idempotently reused by a retry), only the remainder is

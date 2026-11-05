@@ -244,13 +244,8 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 	if len(texts) == 0 {
 		return rows, nil
 	}
-	usage := ProviderUsage{Provider: "tei", Model: "rerank", Requests: 1}
-	reserved, err := s.beginProviderCall(ctx, in.Scope, "rerank", usage.Provider, usage.Model)
-	if err != nil {
-		return nil, err
-	}
-	scores, err := s.Reranker.Rerank(ctx, in.Query, texts)
-	if e := s.finishProviderCall(ctx, reserved, usage, err == nil); e != nil {
+	scores, err, e := s.meteredRerank(ctx, in.Scope, in.Query, texts)
+	if e != nil {
 		return nil, e
 	}
 	if err != nil {

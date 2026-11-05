@@ -93,6 +93,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if endpoint := os.Getenv("ARKISM_OTLP_ENDPOINT"); endpoint != "" { // request tracing, off by default
+		stop, err := memory.StartTracing(endpoint, os.Getenv("ARKISM_OTLP_SERVICE_NAME"))
+		if err != nil {
+			return err
+		}
+		defer stop()
+	}
 	return serveDaemon(ctx, svc, cfg)
 }
 func checkDaemonReadiness(ctx context.Context, pg *memory.Postgres) error {

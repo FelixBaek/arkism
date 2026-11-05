@@ -359,19 +359,11 @@ func (s *Service) mergeQueryVector(ctx context.Context, sd Decision, scope Scope
 	if !(sd.ExternalTransfer && sd.ContentSafe && s.Embedder != nil && safeTransfer(query)) {
 		return nil, "", append(degraded, "memory_vector_disabled"), nil
 	}
-	reserved, err := s.beginProviderCall(ctx, scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
+	batch, callErr, err := s.meteredEmbed(ctx, scope, "embedding_query", []string{query}, "query")
 	if err != nil {
 		return nil, "", nil, err
 	}
-	batch, err := embedMeasured(ctx, s.Embedder, []string{query}, "query")
-	if err != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-		return nil, "", append(degraded, "memory_vector_unavailable"), nil
-	}
-	if err = s.finishProviderCall(ctx, reserved, batch.Usage, true); err != nil {
-		return nil, "", nil, err
-	}
-	if len(batch.Items) == 1 && len(batch.Items[0].Vector) == VectorDimension {
+	if callErr == nil && len(batch.Items[0].Vector) == VectorDimension {
 		return batch.Items[0].Vector, s.Embedder.Space(), degraded, nil
 	}
 	return nil, "", append(degraded, "memory_vector_unavailable"), nil

@@ -137,7 +137,7 @@ A minimal env file, with fake values:
 ```sh
 MEMORY_STORE=postgres
 MEMORY_DATABASE_URL=postgres://arkism_app:change-me@127.0.0.1:5432/arkism?sslmode=disable
-MEMORY_EMBEDDER=none                  # none | tei | gemini; the worker needs one
+MEMORY_EMBEDDER=none                  # none | tei | ollama | gemini; the worker needs one
 MEMORY_LOCAL_STANDALONE=true          # API listens on loopback only
 MEMORY_WORKER_TOKEN=example-worker-token
 ```
@@ -222,6 +222,8 @@ wiki. What a person approves and how is described in
    | `MEMORY_WEBHOOK_KEY` | 32-byte hex key that seals webhook signing secrets. Required to create webhooks; an invalid value stops startup |
    | `ARKISM_WEBHOOK_ALLOW_PRIVATE` | `1` lets webhooks reach loopback and private addresses (development only). Link-local and metadata addresses stay refused |
    | `ARKISM_RERANK_URL`, `ARKISM_RERANK_TIMEOUT` | Base URL of a `POST /rerank` service and its timeout (Go duration, at most `1m`). On error or timeout recall keeps the fused order |
+   | `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Model name and bearer key of a hosted rerank API. Setting the model switches to the hosted request shape (see [Model providers](#model-providers)) |
+   | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME` | Request tracing (see [Tracing](#tracing)). Off by default |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
 
 4. **Permissions.** Principals registered with `--actions '*'` (the examples
@@ -240,6 +242,50 @@ wiki. What a person approves and how is described in
 5. **File extraction jobs.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
+
+## Model providers
+
+The server reaches models through three plain HTTP protocols, so most hosted
+APIs and self-hosted inference servers work without new code:
+
+| Need | Setting | Protocol |
+|---|---|---|
+| Chat (server model) | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | OpenAI-compatible chat completions |
+| Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embed` | Text Embeddings Inference `POST /embed` |
+| Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embeddings` (for example `https://api.example.com/v1/embeddings`), `TEI_API_KEY` | OpenAI-compatible `POST .../embeddings` `{model, input}` → `{data: [{index, embedding}], usage}` |
+| Embeddings | `MEMORY_EMBEDDER=ollama` or `gemini` | Their own embedding routes |
+| Rerank | `ARKISM_RERANK_URL` | Text Embeddings Inference `POST /rerank` `{query, texts}` |
+| Rerank | `ARKISM_RERANK_URL` (for example `https://api.example.com/v1`), `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Hosted rerank `POST {url}/rerank` `{model, query, documents, top_n}` → `{results` or `data: [{index, relevance_score}]}` |
+
+Notes:
+
+- Vectors must have 1024 dimensions. For a model that shortens its output on
+  request, set `TEI_SEND_DIMENSIONS=1` to send `dimensions: 1024`; leave it off
+  for servers that reject the field.
+- `TEI_QUERY_PREFIX` and `TEI_DOCUMENT_PREFIX` stay required (empty is allowed).
+- Remote endpoints must use https. A loopback endpoint keeps text on the host;
+  any other endpoint needs the caller's `external:transfer` grant, like Gemini.
+- Each protocol has its own vector space, so switching endpoint or protocol
+  needs a reindex (`memoryd --reindex`).
+- Every chat, embedding and rerank call is filed in the usage ledger and in the
+  model call traces (`GET /v1/llm-requests`, operations `embed` and `rerank`
+  besides the chat steps), with tokens when the provider reports them.
+
+## Tracing
+
+Set `ARKISM_OTLP_ENDPOINT` to an OTLP/HTTP traces URL (for example
+`https://collector.example.com:4318/v1/traces`; plain http only on loopback) and
+the API exports spans as OTLP JSON. Off when unset; nothing is recorded then.
+
+- One span per request, named by its route. A valid W3C `traceparent` header on
+  the request continues the caller's trace.
+- Child spans for each search lane (`search.lane.exact|fts|vector`) and model call
+  (`model.complete`, `model.embed`, `model.rerank`). Outgoing model requests carry
+  `traceparent`, so a traced inference server joins the same trace.
+- Spans hold routes, ids, status and fixed error codes only: no memory text,
+  queries or tokens. Spans are batched every 2 seconds; when the collector is
+  slow, spans are dropped rather than slowing requests.
+- `ARKISM_OTLP_SERVICE_NAME` sets `service.name` (default `arkism-memoryd`).
 
 ## Host tools and systemd
 

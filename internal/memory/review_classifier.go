@@ -360,17 +360,12 @@ func (s *Service) reviewTrainingRows(ctx context.Context, token string, scope Sc
 }
 
 func (s *Service) embedReviewTexts(ctx context.Context, scope Scope, texts []string) ([]Embedding, error) {
-	reserved, err := s.beginProviderCall(ctx, scope, "embedding_review", embeddingProvider(s.Embedder), s.Embedder.Space())
+	batch, callErr, err := s.meteredEmbed(ctx, scope, "embedding_review", texts, "document")
 	if err != nil {
 		return nil, err
 	}
-	batch, err := embedMeasured(ctx, s.Embedder, texts, "document")
-	if err != nil || len(batch.Items) != len(texts) {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
+	if callErr != nil {
 		return nil, ErrUnavailable
-	}
-	if err := s.finishProviderCall(ctx, reserved, batch.Usage, true); err != nil {
-		return nil, err
 	}
 	return batch.Items, nil
 }

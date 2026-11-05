@@ -18,7 +18,10 @@ import (
 
 const (
 	teiProviderName = "tei"
-	teiDimension    = 1024
+	// openAIEmbeddingsProvider is the same client speaking the OpenAI-compatible
+	// POST .../embeddings protocol (guide/server.md lists servers that answer it).
+	openAIEmbeddingsProvider = "openai_compatible"
+	teiDimension             = 1024
 	// TeiMaxBatchSize is the hard client-batch ceiling for the TEI CPU
 	// backend: it forces max_batch_requests=4 and dies with exit 139 (bounded
 	// queue panic) when an in-flight batch overflows it. The same ceiling is
@@ -27,12 +30,18 @@ const (
 	TeiMaxBatchSize = 4
 )
 
-// TEIConfig configures an already-running Hugging Face Text Embeddings
-// Inference /embed endpoint. The adapter does not select or deploy weights.
+// TEIConfig configures an already-running embedding endpoint: a Text Embeddings
+// Inference /embed URL, or any URL ending in /embeddings that speaks the
+// OpenAI-compatible embeddings protocol. The adapter does not select or deploy weights.
 type TEIConfig struct {
 	EndpointURL string
-	Model       string
-	Revision    string
+	// APIKey is sent as a bearer token; https (or loopback http) is enforced.
+	APIKey string
+	// SendDimensions asks an OpenAI-compatible server for 1024-dimension vectors
+	// (for models that shorten their output); servers that reject the field leave it off.
+	SendDimensions bool
+	Model          string
+	Revision       string
 	// Prefixes must contain explicit query and document entries. An empty value
 	// is valid for models that do not require a purpose prefix.
 	Prefixes map[string]string
@@ -48,6 +57,8 @@ type TEIConfig struct {
 
 type TEIEmbedder struct {
 	endpoint, model, revision, queryPrefix, documentPrefix, space string
+	provider, apiKey                                              string
+	sendDimensions, local                                         bool
 	maxBatch                                                      int
 	maxRequest, maxResponse                                       int64
 	client                                                        *http.Client
@@ -75,9 +86,11 @@ func ValidateTEIBatchLimits(clientBatch, queueBatch, serverBatch int) error {
 }
 
 func NewTEIEmbedder(cfg TEIConfig) (*TEIEmbedder, error) {
-	if err := validateTEIEndpoint(cfg.EndpointURL); err != nil {
+	provider, err := validateTEIEndpoint(cfg.EndpointURL)
+	if err != nil {
 		return nil, err
 	}
+	parsed, _ := url.Parse(cfg.EndpointURL)
 	maxBatch := cfg.MaxBatchSize
 	if maxBatch == 0 {
 		maxBatch = TeiMaxBatchSize
@@ -99,7 +112,9 @@ func NewTEIEmbedder(cfg TEIConfig) (*TEIEmbedder, error) {
 	return &TEIEmbedder{
 		endpoint: cfg.EndpointURL, model: model, revision: revision,
 		queryPrefix: queryPrefix, documentPrefix: documentPrefix,
-		space:       fmt.Sprintf("%s:%s:%s:%dd:%x", teiProviderName, model, revision, teiDimension, prefixHash[:]),
+		provider: provider, apiKey: strings.TrimSpace(cfg.APIKey), sendDimensions: cfg.SendDimensions,
+		local:       isLoopbackHost(parsed.Hostname()),
+		space:       fmt.Sprintf("%s:%s:%s:%dd:%x", provider, model, revision, teiDimension, prefixHash[:]),
 		maxBatch:    maxBatch,
 		maxRequest:  positiveOr(cfg.MaxRequestBytes, defaultRequestMax),
 		maxResponse: positiveOr(cfg.MaxResponseBytes, defaultResponseMax),
@@ -111,16 +126,27 @@ func validTEIMetadata(value string) bool {
 	return value != "" && len(value) <= 256 && strings.IndexFunc(value, unicode.IsControl) < 0
 }
 
-func validateTEIEndpoint(raw string) error {
+// validateTEIEndpoint names the protocol by the path: exactly /embed, or a path
+// ending in /embeddings (OpenAI-compatible).
+func validateTEIEndpoint(raw string) (string, error) {
 	if err := validateEndpoint(raw); err != nil {
-		return fmt.Errorf("tei endpoint: %w", err)
+		return "", fmt.Errorf("tei endpoint: %w", err)
 	}
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Path != "/embed" || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-		return fmt.Errorf("tei endpoint must be the exact /embed URL: %w", ErrInvalid)
+	if err != nil || parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+		return "", fmt.Errorf("embedding endpoint must be a plain URL: %w", ErrInvalid)
 	}
-	return nil
+	switch {
+	case parsed.Path == "/embed":
+		return teiProviderName, nil
+	case strings.HasSuffix(parsed.Path, "/embeddings"):
+		return openAIEmbeddingsProvider, nil
+	}
+	return "", fmt.Errorf("embedding endpoint must be the /embed or .../embeddings URL: %w", ErrInvalid)
 }
+
+// Local reports whether text stays on this host (a loopback endpoint).
+func (t *TEIEmbedder) Local() bool { return t.local }
 
 func (t *TEIEmbedder) Space() string { return t.space }
 
@@ -129,6 +155,76 @@ type teiRequest struct {
 }
 
 func (t *TEIEmbedder) Embed(ctx context.Context, texts []string, purpose string) ([]Embedding, error) {
+	batch, err := t.EmbedMeasured(ctx, texts, purpose)
+	return batch.Items, err
+}
+
+type openAIEmbeddingRequest struct {
+	Model          string   `json:"model"`
+	Input          []string `json:"input"`
+	EncodingFormat string   `json:"encoding_format"`
+	Dimensions     int      `json:"dimensions,omitempty"`
+}
+
+type openAIEmbeddingResponse struct {
+	Data []struct {
+		Index     *int      `json:"index"`
+		Embedding []float64 `json:"embedding"`
+	} `json:"data"`
+	Usage struct {
+		PromptTokens int64 `json:"prompt_tokens"`
+		TotalTokens  int64 `json:"total_tokens"`
+	} `json:"usage"`
+}
+
+// post sends inputs in this endpoint's protocol and returns vectors in input order.
+func (t *TEIEmbedder) post(ctx context.Context, inputs []string) ([][]float64, ProviderUsage, error) {
+	usage := ProviderUsage{Provider: t.provider, Model: t.space, Requests: 1}
+	var payload any = teiRequest{Inputs: inputs}
+	if t.provider == openAIEmbeddingsProvider {
+		req := openAIEmbeddingRequest{Model: t.model, Input: inputs, EncodingFormat: "float"}
+		if t.sendDimensions {
+			req.Dimensions = teiDimension
+		}
+		payload = req
+	}
+	body, status, err := postJSON(ctx, t.client, t.endpoint, t.apiKey, payload, t.maxRequest, t.maxResponse)
+	if err != nil {
+		return nil, usage, err
+	}
+	if status != http.StatusOK {
+		return nil, usage, dependencyStatusError(t.provider+" embeddings", status)
+	}
+	// encoding/json turns null numeric components into zero; a numeric vector must not contain null.
+	if bytes.Contains(body, []byte("null")) {
+		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
+	}
+	if t.provider != openAIEmbeddingsProvider {
+		var vectors [][]float64
+		if err := json.Unmarshal(body, &vectors); err != nil {
+			return nil, usage, fmt.Errorf("tei embeddings: unreadable response: %w", ErrUnavailable)
+		}
+		return vectors, usage, nil
+	}
+	var res openAIEmbeddingResponse
+	if err := json.Unmarshal(body, &res); err != nil || len(res.Data) != len(inputs) {
+		return nil, usage, fmt.Errorf("embeddings: unreadable response: %w", ErrUnavailable)
+	}
+	vectors := make([][]float64, len(inputs))
+	for _, d := range res.Data {
+		if d.Index == nil || *d.Index < 0 || *d.Index >= len(inputs) || vectors[*d.Index] != nil {
+			return nil, usage, fmt.Errorf("embeddings: malformed index: %w", ErrUnavailable)
+		}
+		vectors[*d.Index] = d.Embedding
+	}
+	if res.Usage.PromptTokens >= 0 && res.Usage.TotalTokens >= res.Usage.PromptTokens {
+		usage.InputTokens, usage.TotalTokens = res.Usage.PromptTokens, res.Usage.TotalTokens
+	}
+	return vectors, usage, nil
+}
+
+// EmbedMeasured embeds texts and reports the provider's token count when it sends one.
+func (t *TEIEmbedder) EmbedMeasured(ctx context.Context, texts []string, purpose string) (EmbeddingBatch, error) {
 	prefix := ""
 	switch purpose {
 	case embedInputQuery:
@@ -136,57 +232,56 @@ func (t *TEIEmbedder) Embed(ctx context.Context, texts []string, purpose string)
 	case embedInputDocument:
 		prefix = t.documentPrefix
 	default:
-		return nil, fmt.Errorf("tei purpose must be query or document: %w", ErrInvalid)
+		return EmbeddingBatch{}, fmt.Errorf("tei purpose must be query or document: %w", ErrInvalid)
 	}
 	if len(texts) == 0 || len(texts) > t.maxBatch {
-		return nil, fmt.Errorf("tei requires 1 to %d inputs per request: %w", t.maxBatch, ErrInvalid)
+		return EmbeddingBatch{}, fmt.Errorf("tei requires 1 to %d inputs per request: %w", t.maxBatch, ErrInvalid)
 	}
 	inputs := make([]string, len(texts))
 	for i, text := range texts {
 		if !utf8.ValidString(text) || strings.TrimSpace(text) == "" {
-			return nil, fmt.Errorf("tei input text must be non-empty UTF-8: %w", ErrInvalid)
+			return EmbeddingBatch{}, fmt.Errorf("tei input text must be non-empty UTF-8: %w", ErrInvalid)
 		}
 		inputs[i] = prefix + text
 	}
-	body, status, err := postJSON(ctx, t.client, t.endpoint, "", teiRequest{Inputs: inputs}, t.maxRequest, t.maxResponse)
+	vectors, usage, err := t.post(ctx, inputs)
 	if err != nil {
-		return nil, err
-	}
-	if status != http.StatusOK {
-		return nil, dependencyStatusError("tei embeddings", status)
-	}
-	var vectors [][]float64
-	// encoding/json turns null numeric components into zero; a numeric vector must not contain null.
-	if err := json.Unmarshal(body, &vectors); err != nil || bytes.Contains(body, []byte("null")) {
-		return nil, fmt.Errorf("tei embeddings: unreadable response: %w", ErrUnavailable)
+		return EmbeddingBatch{Usage: usage}, err
 	}
 	if len(vectors) != len(texts) {
-		return nil, fmt.Errorf("tei embeddings: expected %d vectors, got %d: %w", len(texts), len(vectors), ErrUnavailable)
+		return EmbeddingBatch{Usage: usage}, fmt.Errorf("embeddings: expected %d vectors, got %d: %w", len(texts), len(vectors), ErrUnavailable)
 	}
 	now := time.Now().UTC()
 	out := make([]Embedding, len(texts))
 	for i, vector := range vectors {
-		if len(vector) != teiDimension {
-			return nil, fmt.Errorf("tei embeddings: expected dimension %d, got %d: %w", teiDimension, len(vector), ErrUnavailable)
-		}
-		nonzero := false
-		for _, value := range vector {
-			if math.IsNaN(value) || math.IsInf(value, 0) {
-				return nil, fmt.Errorf("tei embeddings: non-finite value: %w", ErrUnavailable)
-			}
-			nonzero = nonzero || value != 0
-		}
-		if !nonzero {
-			return nil, fmt.Errorf("tei embeddings: zero vector: %w", ErrUnavailable)
+		if err := checkEmbeddingVector(vector); err != nil {
+			return EmbeddingBatch{Usage: usage}, err
 		}
 		sum := sha256.Sum256([]byte(texts[i]))
 		out[i] = Embedding{
-			Provider: teiProviderName, Model: t.model, Revision: t.revision,
+			Provider: t.provider, Model: t.model, Revision: t.revision,
 			Dimension: teiDimension, Space: t.space, EmbeddedAt: now,
 			ContentHash: hex.EncodeToString(sum[:]), Vector: vector,
 		}
 	}
-	return out, nil
+	return EmbeddingBatch{Items: out, Usage: usage}, nil
 }
 
-var _ Embedder = (*TEIEmbedder)(nil)
+func checkEmbeddingVector(vector []float64) error {
+	if len(vector) != teiDimension {
+		return fmt.Errorf("embeddings: expected dimension %d, got %d: %w", teiDimension, len(vector), ErrUnavailable)
+	}
+	nonzero := false
+	for _, value := range vector {
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return fmt.Errorf("embeddings: non-finite value: %w", ErrUnavailable)
+		}
+		nonzero = nonzero || value != 0
+	}
+	if !nonzero {
+		return fmt.Errorf("embeddings: zero vector: %w", ErrUnavailable)
+	}
+	return nil
+}
+
+var _ MeteredEmbedder = (*TEIEmbedder)(nil)

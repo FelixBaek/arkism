@@ -127,12 +127,13 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	if key != "" {
 		svc.Unsplash = &memory.Unsplash{Key: key}
 	}
+	svc.LLMTraceContent = os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1" // model call traces keep redacted text
 	if !cfg.Recovery && os.Getenv("SKILL_LLM_API_KEY") != "" {
 		config := memory.LLMConfig{Endpoint: os.Getenv("SKILL_LLM_ENDPOINT_URL"), APIKey: os.Getenv("SKILL_LLM_API_KEY"), Model: os.Getenv("SKILL_LLM_MODEL")}
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
-			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config}, os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1")
+			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config})
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes

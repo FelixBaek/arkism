@@ -282,7 +282,10 @@ func vectorSQL(vector []float64) string {
 	return "[" + strings.Join(vals, ",") + "]"
 }
 
-func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, criteria SearchCriteria, now time.Time, terms []string, lane, vector, space string, limit int) ([]Hit, error) {
+func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, criteria SearchCriteria, now time.Time, terms []string, lane, vector, space string, limit int) (hits []Hit, err error) {
+	ctx, sp := startSpan(ctx, "search.lane."+lane)
+	sp.set("arkism.collection", collection)
+	defer func() { sp.end(err) }()
 	if lane == "exact" && len(terms) == 0 {
 		return nil, nil
 	}

@@ -7,7 +7,8 @@ import (
 	"unicode/utf8"
 )
 
-// Model call traces: every server-side WikiLLM.Complete call is recorded as one
+// Model call traces: every server-side model call (WikiLLM.Complete, and the
+// embedding and rerank calls as operation "embed" and "rerank") is recorded as one
 // llm_requests row in the caller's scope: sizes and hashes of the prompt and the
 // answer, tokens, latency and outcome. The text itself is kept only when the
 // server runs with ARKISM_LLM_TRACE_CONTENT=1, redacted and truncated, and
@@ -54,56 +55,62 @@ func WithLLMOperation(ctx context.Context, operation string, scope Scope) contex
 
 // tracedLLM decorates a WikiLLM; it changes nothing about the call itself.
 type tracedLLM struct {
-	inner        WikiLLM
-	svc          *Service
-	storeContent bool
+	inner WikiLLM
+	svc   *Service
 }
 
 // TraceLLM wraps inner so every Complete call is recorded; nil stays nil.
-func TraceLLM(svc *Service, inner WikiLLM, storeContent bool) WikiLLM {
+// Service.LLMTraceContent decides whether redacted text is kept.
+func TraceLLM(svc *Service, inner WikiLLM) WikiLLM {
 	if inner == nil {
 		return nil
 	}
-	return &tracedLLM{inner: inner, svc: svc, storeContent: storeContent}
+	return &tracedLLM{inner: inner, svc: svc}
 }
 
 func (t *tracedLLM) Generator() Generator { return t.inner.Generator() }
 
 func (t *tracedLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
+	call, traced := ctx.Value(llmCallKey{}).(llmCall)
+	ctx, span := startSpan(ctx, "model.complete")
+	span.set("arkism.operation", call.operation)
 	start := time.Now()
 	out, usage, err := t.inner.Complete(ctx, system, user, maxTokens)
-	t.record(ctx, start, system+"\n\n"+user, out, usage, err)
+	span.end(err)
+	if traced && t.svc != nil {
+		t.svc.recordLLMRequest(ctx, call.scope, call.operation, t.inner.Generator(), system+"\n\n"+user, out, usage, start, err)
+	}
 	return out, usage, err
 }
 
-// record is best effort: tracing never changes or fails the call it describes.
-func (t *tracedLLM) record(ctx context.Context, start time.Time, prompt, out string, usage ProviderUsage, callErr error) {
-	call, ok := ctx.Value(llmCallKey{}).(llmCall)
-	if !ok || t.svc == nil || t.svc.Repo == nil || !validScope(call.scope) || !validRunLabel(call.operation, 128) {
+// recordLLMRequest files one model call (completion, embedding or rerank) as an
+// llm_requests row. It is best effort: tracing never changes or fails the call
+// it describes. out is empty for calls that return no text.
+func (s *Service) recordLLMRequest(ctx context.Context, scope Scope, operation string, gen Generator, prompt, out string, usage ProviderUsage, start time.Time, callErr error) {
+	if s.Repo == nil || !validScope(scope) || !validRunLabel(operation, 128) {
 		return
 	}
 	defer func() { _ = recover() }()
-	gen := t.inner.Generator()
-	tr := LLMRequest{Operation: call.operation, Generator: &gen, PromptChars: utf8.RuneCountInString(prompt), PromptSHA256: ContentHash(prompt),
+	tr := LLMRequest{Operation: operation, Generator: &gen, PromptChars: utf8.RuneCountInString(prompt), PromptSHA256: ContentHash(prompt),
 		InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, TotalTokens: max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens),
 		LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
 	if callErr != nil {
 		tr.Status, tr.Error = "error", captureErrorCode(callErr)
-	} else {
+	} else if out != "" {
 		tr.ResponseChars, tr.ResponseSHA256 = utf8.RuneCountInString(out), ContentHash(out)
 	}
-	if t.storeContent {
+	if s.LLMTraceContent {
 		tr.Prompt = traceText(prompt)
 		if callErr == nil {
 			tr.Response = traceText(out)
 		}
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	r := Record{ID: timeOrderedID(now.UnixMilli()), Scope: call.scope, Kind: llmRequestKind, Status: tr.Status, Revision: 1,
+	r := Record{ID: timeOrderedID(now.UnixMilli()), Scope: scope, Kind: llmRequestKind, Status: tr.Status, Revision: 1,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: "server", CreatedByType: roleService, LLMRequest: &tr}
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
-	_ = t.svc.Repo.Insert(wctx, colLLMRequests, r)
+	_ = s.Repo.Insert(wctx, colLLMRequests, r)
 }
 
 // traceText is stored model text: private spans masked, secrets redacted, clipped.

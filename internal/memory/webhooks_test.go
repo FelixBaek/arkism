@@ -457,11 +457,11 @@ func (l traceLLM) Complete(context.Context, string, string, int) (string, Provid
 func TestLLMTraceRecordsSuccessAndError(t *testing.T) {
 	f := newFixture(t)
 	ctx := WithLLMOperation(testCtx, "wiki.page", scopeA)
-	ok := TraceLLM(f.svc, traceLLM{}, false)
+	ok := TraceLLM(f.svc, traceLLM{})
 	if _, _, err := ok.Complete(ctx, "sys", "user <private>pin 1234</private>", 100); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := TraceLLM(f.svc, traceLLM{err: ErrUnavailable}, false).Complete(ctx, "sys", "u", 100); !errors.Is(err, ErrUnavailable) {
+	if _, _, err := TraceLLM(f.svc, traceLLM{err: ErrUnavailable}).Complete(ctx, "sys", "u", 100); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("decorator changed the error", err)
 	}
 	if _, _, err := ok.Complete(testCtx, "untraced", "u", 1); err != nil {
@@ -498,7 +498,8 @@ func TestLLMTraceRecordsSuccessAndError(t *testing.T) {
 func TestLLMTraceStoresRedactedContentOnlyWithFlag(t *testing.T) {
 	f := newFixture(t)
 	ctx := WithLLMOperation(testCtx, "wiki.page", scopeA)
-	if _, _, err := TraceLLM(f.svc, traceLLM{}, true).Complete(ctx, "sys", "user <private>pin 1234</private>", 100); err != nil {
+	f.svc.LLMTraceContent = true
+	if _, _, err := TraceLLM(f.svc, traceLLM{}).Complete(ctx, "sys", "user <private>pin 1234</private>", 100); err != nil {
 		t.Fatal(err)
 	}
 	page, _ := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{})

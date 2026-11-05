@@ -486,19 +486,11 @@ func (s *Service) searchQueryVector(ctx context.Context, in SearchInput, d Decis
 	if !(d.ExternalTransfer && d.ContentSafe && s.Embedder != nil && safeTransfer(searchContent)) {
 		return nil, "", append(degraded, "memory_vector_disabled"), nil
 	}
-	reserved, e := s.beginProviderCall(ctx, in.Scope, "embedding_query", embeddingProvider(s.Embedder), s.Embedder.Space())
+	batch, callErr, e := s.meteredEmbed(ctx, in.Scope, "embedding_query", []string{in.Query}, "query")
 	if e != nil {
 		return nil, "", degraded, e
 	}
-	batch, e := embedMeasured(ctx, s.Embedder, []string{in.Query}, "query")
-	if e != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-		return nil, "", append(degraded, "memory_vector_unavailable"), nil
-	}
-	if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
-		return nil, "", degraded, e
-	}
-	if len(batch.Items) != 1 {
+	if callErr != nil {
 		return nil, "", append(degraded, "memory_vector_unavailable"), nil
 	}
 	return batch.Items[0].Vector, s.Embedder.Space(), degraded, nil
@@ -800,6 +792,9 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		handled = e == nil
 		return e
 	}
+	if e = s.Extensions.beforeJob(ctx, job); e != nil {
+		return e
+	}
 	if job.Kind == webhookDeliveryKind {
 		success, e = s.deliverWebhook(ctx, &job)
 		return e
@@ -923,16 +918,8 @@ func (s *Service) embedDocument(ctx context.Context, workerToken string, r Recor
 	if s.Embedder == nil {
 		return Embedding{}, ErrDenied
 	}
-	reserved, e := s.beginProviderCall(ctx, r.Scope, "embedding_document", embeddingProvider(s.Embedder), s.Embedder.Space())
-	if e != nil {
-		return Embedding{}, e
-	}
-	batch, e := embedMeasured(ctx, s.Embedder, []string{content}, "document")
-	if e != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: embeddingProvider(s.Embedder), Model: s.Embedder.Space(), Requests: 1}, false)
-		return Embedding{}, e
-	}
-	if e = s.finishProviderCall(ctx, reserved, batch.Usage, true); e != nil {
+	batch, callErr, e := s.meteredEmbed(ctx, r.Scope, "embedding_document", []string{content}, "document")
+	if e = errors.Join(callErr, e); e != nil {
 		return Embedding{}, e
 	}
 	embedded := batch.Items

@@ -69,8 +69,11 @@ func TestExternalEmbedderNeedsTransferDecision(t *testing.T) {
 	if embedderTransferAllowed(g, Decision{}) || !embedderTransferAllowed(g, Decision{ExternalTransfer: true}) {
 		t.Fatal("external transfer gate")
 	}
-	if !embedderTransferAllowed(&TEIEmbedder{}, Decision{}) {
+	if !embedderTransferAllowed(&TEIEmbedder{local: true}, Decision{}) {
 		t.Fatal("loopback TEI must not need external transfer")
+	}
+	if embedderTransferAllowed(&TEIEmbedder{}, Decision{}) {
+		t.Fatal("remote embedding endpoint skipped the transfer decision")
 	}
 	s := &Service{Embedder: g}
 	if _, err := s.embedKnowledgeQuery(context.Background(), Decision{}, "q"); !errors.Is(err, ErrDenied) || knowledgeFallbackReason(err) != "embedder_denied" {

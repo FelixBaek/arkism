@@ -180,11 +180,13 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		requestID := ID()
 		w.Header().Set("X-Request-ID", requestID)
 		r = r.WithContext(ContextWithPostgresToken(context.WithValue(r.Context(), auditRequestKey{}, requestID), bearer(r)))
+		r, sp := startServerSpan(r, pattern)
 		defer func() {
 			status := recorded.status
 			if status == 0 {
 				status = http.StatusOK
 			}
+			sp.endHTTP(status)
 			stats.observe(pattern, status, time.Since(started))
 			slog.Info("memory request", "status", status, "request_id", requestID, "method", r.Method, "route", pattern, "duration_ms", time.Since(started).Milliseconds())
 		}()

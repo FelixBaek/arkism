@@ -82,10 +82,61 @@ func embedMeasured(ctx context.Context, embedder Embedder, texts []string, input
 	return EmbeddingBatch{Items: items, Usage: ProviderUsage{Provider: embeddingProvider(embedder), Model: embedder.Space(), Requests: 1}}, err
 }
 
+// meteredEmbed is the one path for a service embedding call: the call is filed in
+// the provider_usage ledger under operation and traced in llm_requests as "embed".
+// callErr is the provider's failure or a short answer (callers degrade on it);
+// err is a ledger failure (callers return it).
+func (s *Service) meteredEmbed(ctx context.Context, scope Scope, operation string, texts []string, purpose string) (batch EmbeddingBatch, callErr, err error) {
+	provider, model := embeddingProvider(s.Embedder), s.Embedder.Space()
+	reserved, err := s.beginProviderCall(ctx, scope, operation, provider, model)
+	if err != nil {
+		return EmbeddingBatch{}, nil, err
+	}
+	ctx, span := startSpan(ctx, "model.embed")
+	span.set("arkism.operation", operation)
+	start := time.Now()
+	batch, callErr = embedMeasured(ctx, s.Embedder, texts, purpose)
+	if callErr == nil && len(batch.Items) != len(texts) {
+		callErr = ErrUnavailable
+	}
+	span.end(callErr)
+	usage := batch.Usage
+	if callErr != nil {
+		usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
+	}
+	s.recordLLMRequest(ctx, scope, "embed", Generator{Model: model}, strings.Join(texts, "\n"), "", usage, start, callErr)
+	if callErr != nil {
+		_ = s.finishProviderCall(ctx, reserved, usage, false)
+		return EmbeddingBatch{}, callErr, nil
+	}
+	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
+		return EmbeddingBatch{}, nil, err
+	}
+	return batch, nil, nil
+}
+
+// meteredRerank is meteredEmbed for the reranker: operation "rerank" in both ledgers.
+func (s *Service) meteredRerank(ctx context.Context, scope Scope, query string, texts []string) (scores []float64, callErr, err error) {
+	usage := s.Reranker.usage()
+	reserved, err := s.beginProviderCall(ctx, scope, "rerank", usage.Provider, usage.Model)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, span := startSpan(ctx, "model.rerank")
+	start := time.Now()
+	scores, callErr = s.Reranker.Rerank(ctx, query, texts)
+	span.end(callErr)
+	s.recordLLMRequest(ctx, scope, "rerank", Generator{Model: usage.Model}, query+"\n"+strings.Join(texts, "\n"), "", usage, start, callErr)
+	if err = s.finishProviderCall(ctx, reserved, usage, callErr == nil); err != nil {
+		return nil, nil, err
+	}
+	return scores, callErr, nil
+}
+
 func embeddingProvider(embedder Embedder) string {
-	switch embedder.(type) {
+	switch e := embedder.(type) {
 	case *TEIEmbedder:
-		return "tei"
+		return e.provider
 	case *GeminiEmbedder:
 		return geminiProviderName
 	default:

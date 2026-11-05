@@ -152,6 +152,15 @@ func captureKey(scope Scope, kind, text string, correction ...*Ref) string {
 	return key
 }
 
+// captureAllowed: automated captures come from service principals only, and an
+// extension may refuse a capture after that.
+func (s *Service) captureAllowed(ctx context.Context, actor Decision, in CaptureInput) error {
+	if in.Automated && actor.Role != roleService {
+		return ErrDenied
+	}
+	return s.Extensions.validateCapture(ctx, actor, in)
+}
+
 func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (CaptureResult, error) {
 	started := time.Now()
 	if !validCaptureInput(in, started.UTC()) {
@@ -167,8 +176,8 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	if authErr != nil {
 		return CaptureResult{}, authErr
 	}
-	if in.Automated && actor.Role != roleService {
-		return CaptureResult{}, ErrDenied
+	if err := s.captureAllowed(ctx, actor, in); err != nil {
+		return CaptureResult{}, err
 	}
 	ctx = bindRequestActor(ctx, actor)
 	var seen Record
