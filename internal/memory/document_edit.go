@@ -50,39 +50,74 @@ type DocumentTagsResult struct {
 	Skipped    int      `json:"skipped"`
 }
 
+// documentScanMax bounds the documents one text-filtered page reads; past it the
+// page ends early with a cursor to keep looking.
+const documentScanMax = 1000
+
 // ListExtractDocuments lists the scope's extraction documents, newest first,
-// optionally only those with a tag. An agent sees only the documents whose
-// last upload it started, as with the upload jobs themselves.
+// optionally only those with a tag or whose name, tags or chunk text contain
+// page.Q. An agent sees only the documents whose last upload it started, as
+// with the upload jobs themselves.
 func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope Scope, page DocumentPage) (ExtractDocumentPage, error) {
 	out := ExtractDocumentPage{Items: []ExtractDocument{}}
 	d, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, "", "")
 	if err != nil {
 		return out, err
 	}
-	rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, Cursor: page.Cursor, Limit: page.Limit}, "jobs")
-	if err != nil {
-		return out, err
+	cursor, scanned := page.Cursor, 0
+	for {
+		rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, Cursor: cursor, Limit: page.Limit - len(out.Items)}, "jobs")
+		if err != nil {
+			return out, err
+		}
+		if err = s.addExtractDocuments(ctx, d, scope, page.Q, rows, &out); err != nil {
+			return out, err
+		}
+		scanned += len(rows)
+		cursor = next
+		if page.Q == "" || next == "" || len(out.Items) >= page.Limit || scanned >= documentScanMax {
+			break
+		}
 	}
+	out.NextCursor = cursor
+	return out, nil
+}
+
+// addExtractDocuments appends the rows the caller may see and, with q, that match it.
+func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Scope, q string, rows []Record, out *ExtractDocumentPage) error {
+	var err error
 	for _, doc := range rows {
 		item := ExtractDocument{ID: doc.ID, Tags: append([]string{}, doc.Tags...), CreatedAt: doc.CreatedAt, UpdatedAt: doc.UpdatedAt}
 		var job Record
 		if doc.Target != nil {
 			job, err = s.Repo.Get(ctx, "jobs", scope, doc.Target.ID)
 			if err != nil && !errors.Is(err, ErrNotFound) {
-				return out, err
+				return err
 			}
 			if err == nil && job.FileExtract != nil {
 				j := job.FileExtract
 				item.JobID, item.Status, item.Label, item.Chunks, item.CandidatesCreated, item.RequestedBy = job.ID, job.Status, j.Label, j.Delta.ChunksTotal, j.CandidatesCreated, j.RequestedBy
 			}
 		}
-		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) {
+		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) || q != "" && !documentMatches(item, job.FileExtract, q) {
 			continue
 		}
 		out.Items = append(out.Items, item)
 	}
-	out.NextCursor = next
-	return out, nil
+	return nil
+}
+
+// documentMatches reports whether q is in the document's name, a tag or a chunk's text, ignoring case.
+func documentMatches(item ExtractDocument, job *FileExtractJob, q string) bool {
+	has := func(v string) bool { return strings.Contains(strings.ToLower(v), strings.ToLower(q)) }
+	if has(item.Label) || slices.ContainsFunc(item.Tags, has) {
+		return true
+	}
+	if job == nil {
+		return false
+	}
+	return slices.ContainsFunc(job.Kept, func(c FileExtractChunk) bool { return has(c.Text) }) ||
+		slices.ContainsFunc(job.Chunks, func(c FileExtractChunk) bool { return has(c.Text) })
 }
 
 // documentJob is the document's last upload job.

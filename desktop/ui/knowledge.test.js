@@ -862,8 +862,7 @@ test("ingestExtras, filterDocs and deleteImpact", () => {
   assert.match(K.ingestExtras({ when: "2026-10-01T09:30" }, true).timestamp, /^2026-10-01T/);
   assert.deepEqual(K.ingestExtras({ when: "nope" }, true), {});
   const docs = [{ id: "d1", label: "Plan.pdf", tags: ["work"], updated_at: "2026-10-02T10:00:00Z" }, { id: "d2", label: "notes", tags: [], updated_at: "2026-10-05T00:00:00Z" }];
-  assert.deepEqual(K.filterDocs(docs, { q: "plan" }).map((d) => d.id), ["d1"]);
-  assert.deepEqual(K.filterDocs(docs, { q: "WORK" }).map((d) => d.id), ["d1"]);
+  assert.deepEqual(K.filterDocs(docs, { q: "zzz" }).map((d) => d.id), ["d1", "d2"], "the text filter is the server's");
   assert.deepEqual(K.filterDocs(docs, { from: "2026-10-03" }).map((d) => d.id), ["d2"]);
   assert.deepEqual(K.filterDocs(docs, { to: "2026-10-02" }).map((d) => d.id), ["d1"]);
   assert.deepEqual(K.deleteImpact([{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved" }] }, { candidates: [{ id: "a", status: "candidate" }, { id: "c", status: "rejected" }] }, {}]),
@@ -893,6 +892,11 @@ test("기억 문서: list with filters, tag edits, reprocess asks first, delete 
   tagSel.value = "work"; dom.fire(tagSel, "change"); await dom.flush(); await dom.flush();
   assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents?") && c.path.includes("tag=work")));
   assert.doesNotMatch(t(), /memo/);
+  // the text search asks the server too (name, tags and content), with the tag still set
+  const search = k.table().querySelector("input[type=search]"); search.value = "orange bar"; dom.fire(search, "input"); await wait(300); await dom.flush(); await dom.flush();
+  assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents?") && c.path.includes("tag=work") && /q=orange(\+|%20)bar/.test(c.path)), "q goes to the server");
+  assert.match(t(), /plan\.pdf/, "a server match shows even when its name does not contain q");
+  search.value = ""; dom.fire(search, "input"); await wait(300); await dom.flush(); await dom.flush();
   // tags
   assert.equal(k.detail().firstChild.dataset.label, "기억 문서");
   k.detail().querySelector(".v4k-tag").click(); await dom.flush(); await dom.flush();

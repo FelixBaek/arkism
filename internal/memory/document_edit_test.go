@@ -5,7 +5,9 @@ package memory
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestExtractDocumentListTagsAndReprocess(t *testing.T) {
@@ -136,5 +138,37 @@ func TestExtractDocumentDelete(t *testing.T) {
 		if !slices.ContainsFunc(f.repo.rows("audit_events"), func(r Record) bool { return r.Kind == "delete:file_extract_document" && r.Target.ID == up.DocumentID }) {
 			t.Fatal("delete not audited")
 		}
+	}
+}
+
+// q matches a document's name, a tag or its chunk text, ignoring case, and keeps
+// reading past documents that do not match until the page is full.
+func TestListDocumentsTextFilter(t *testing.T) {
+	f := newOpsFixture(t)
+	base := time.Now().UTC().Truncate(time.Millisecond)
+	f.put(colJobs, Record{ID: "job-b", Kind: "file_memory_extract", CreatedAt: base.Add(-time.Hour),
+		FileExtract: &FileExtractJob{Label: "plan.pdf", Chunks: []FileExtractChunk{{Locator: "page:1", Text: "Never use an Orange accent bar"}}}})
+	f.put(colJobs, Record{ID: "doc-a", Kind: fileExtractDocKind, Tags: []string{"orange-team"}, CreatedAt: base.Add(-4 * time.Second)})
+	f.put(colJobs, Record{ID: "doc-b", Kind: fileExtractDocKind, Target: &Ref{ID: "job-b"}, CreatedAt: base.Add(-3 * time.Second)})
+	for i, id := range []string{"doc-x", "doc-y"} {
+		f.put(colJobs, Record{ID: id, Kind: fileExtractDocKind, CreatedAt: base.Add(time.Duration(-2+i) * time.Second)})
+	}
+	first, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 1, Q: "ORANGE"})
+	if err != nil || len(first.Items) != 1 || first.Items[0].ID != "doc-b" || first.NextCursor == "" {
+		t.Fatalf("first match by chunk text, past two misses = %+v, %v", first, err)
+	}
+	rest, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 1, Q: "ORANGE", Cursor: first.NextCursor})
+	if err != nil || len(rest.Items) != 1 || rest.Items[0].ID != "doc-a" {
+		t.Fatalf("second match by tag = %+v, %v", rest, err)
+	}
+	byName, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 10, Q: "plan.PDF"})
+	if err != nil || len(byName.Items) != 1 || byName.Items[0].ID != "doc-b" || byName.NextCursor != "" {
+		t.Fatalf("match by name = %+v, %v", byName, err)
+	}
+	if none, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 10, Q: "absent"}); err != nil || len(none.Items) != 0 || none.NextCursor != "" {
+		t.Fatalf("no match = %+v, %v", none, err)
+	}
+	if _, _, err := parseDocumentQuery("workspace_id=w&project_id=p&q=" + strings.Repeat("a", 201)); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("long q = %v", err)
 	}
 }

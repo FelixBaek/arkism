@@ -39847,6 +39847,16 @@
               "type": "string",
               "maxLength": 128
             }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "description": "Only documents whose name, a tag or chunk text contains this, ignoring case. A page reads at most 1000 documents and may end early with next_cursor to keep looking.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
           }
         ],
         "responses": {

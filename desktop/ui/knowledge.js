@@ -34,7 +34,7 @@ window.ArkismKnowledge = (ctx) => {
     pg: { q: "", type: "", sort: "recent", chip: "all", folder: null }, pageSel: "", compare: false, edit: null,
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: SHARED, q: "", busy: false, result: null, error: "" },
     busy: false, notice: "", remove: null, upload: null, extract: null,
-    // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q and the dates filter what is loaded
+    // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q and the tag go to the server, the dates filter what is loaded
     fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", sel: "", del: null },
     folders: [], folderOf: {} // 위키 폴더 (GET /v1/wiki/tree); pg.folder null = every folder
   };
@@ -998,7 +998,7 @@ window.ArkismKnowledge = (ctx) => {
     const F = K.fd, ticket = loads.begin("docs");
     F.busy = true; F.error = ""; paint();
     try {
-      const r = await get("/v1/files/memories/documents", { limit: 50, ...(F.tag ? { tag: F.tag } : {}), ...(more && F.next ? { cursor: F.next } : {}) });
+      const r = await get("/v1/files/memories/documents", { limit: 50, ...(F.tag ? { tag: F.tag } : {}), ...(F.q ? { q: F.q } : {}), ...(more && F.next ? { cursor: F.next } : {}) });
       if (!ticket.live()) return;
       if (!Array.isArray(r?.items)) throw new Error("invalid_response");
       F.items = more ? [...F.items, ...r.items] : r.items; F.next = r.next_cursor || ""; F.state = "ready";
@@ -1012,7 +1012,7 @@ window.ArkismKnowledge = (ctx) => {
     const bar = el("div", "v4s-bar");
     const date = (key, label) => { const i = el("input", "v4s-input v4k-date"); i.type = "date"; i.value = F[key]; i.setAttribute("aria-label", label); i.title = label; i.addEventListener("change", () => { F[key] = i.value; paint(); }); return i; };
     const tags = [...new Set([F.tag, ...F.items.flatMap((d) => d.tags || [])].filter(Boolean))].sort();
-    bar.append(searchBox("문서 이름·태그 검색", F.q, (v) => { F.q = v; paint(); }),
+    bar.append(searchBox("문서 이름·태그·내용 검색", F.q, (v) => { F.q = v; F.state = "loading"; void loadDocs(); }),
       noI18nOpts(select("태그", [["", "태그: 모두"], ...tags.map((t) => [t, t])], F.tag, (v) => { F.tag = v; F.state = "loading"; void loadDocs(); })),
       date("from", "이날부터"), date("to", "이날까지"));
     parts.push(bar);
@@ -1028,11 +1028,11 @@ window.ArkismKnowledge = (ctx) => {
       if (F.state === "loading" || F.state === "idle") box.append(el("p", "", "불러오는 중…"));
       else if (F.state === "off") box.append(el("p", "", "이 서버는 기억 문서 목록을 아직 지원하지 않아요."));
       else if (F.state === "error") box.append(el("p", "", F.error), button("다시 시도", "", null, () => loadDocs()));
-      else if (F.items.length || F.tag) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { Object.assign(F, { q: "", from: "", to: "" }); if (F.tag) { F.tag = ""; void loadDocs(); } else paint(); }));
+      else if (F.items.length || F.tag || F.q) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { const reload = F.tag || F.q; Object.assign(F, { q: "", tag: "", from: "", to: "" }); if (reload) void loadDocs(); else paint(); }));
       else box.append(el("p", "", "아직 기억 후보를 만든 글이나 파일이 없어요."), button("기억 후보 만들기", "primary", null, () => openAdd()));
       list.append(box);
     }
-    parts.push(list, el("p", "v4s-foot", F.busy ? "불러오는 중…" : `불러온 ${F.items.length}개 중 ${items.length}개 표시 · 이름·태그·날짜는 불러온 목록에서 걸러요`));
+    parts.push(list, el("p", "v4s-foot", F.busy ? "불러오는 중…" : `불러온 ${F.items.length}개 중 ${items.length}개 표시 · 날짜는 불러온 목록에서 걸러요`));
     if (F.next) { const b = button("문서 더 보기", "", null, () => loadDocs(true)); b.disabled = F.busy; parts.push(b); }
     table.replaceChildren(...parts);
     if (!items.some((d) => d.id === F.sel)) F.sel = items[0]?.id || "";
@@ -1269,13 +1269,11 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
 };
 // 기억 문서 filters over the loaded list: q in the name, id or tags; from/to as YYYY-MM-DD against the last upload.
 // shortcut: the day is the server's UTC day and only loaded pages are searched; a server-side text query would replace this.
-window.ArkismKnowledge.filterDocs = (items, { q = "", from = "", to = "" } = {}) => {
-  const t = q.trim().toLowerCase();
-  return items.filter((d) => {
-    const day = String(d.updated_at || d.created_at || "").slice(0, 10);
-    return (!t || [d.label, d.id, ...(d.tags || [])].some((x) => String(x || "").toLowerCase().includes(t))) && (!from || day >= from) && (!to || day <= to);
-  });
-};
+// The loaded documents within the date range; the text filter is the server's (q).
+window.ArkismKnowledge.filterDocs = (items, { from = "", to = "" } = {}) => items.filter((d) => {
+  const day = String(d.updated_at || d.created_at || "").slice(0, 10);
+  return (!from || day >= from) && (!to || day <= to);
+});
 // What deleting a document touches, counted like the server does: waiting candidates are rejected, approved ones stay as memories.
 window.ArkismKnowledge.deleteImpact = (chunks) => {
   const seen = new Map();

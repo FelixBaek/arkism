@@ -2264,7 +2264,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
   }
   /** GET /v1/files/memories/documents — List memory-extraction documents */
-  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
+  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string; "q"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
     return this.request("GET", `/v1/files/memories/documents`, query, undefined);
   }
   /** PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced */

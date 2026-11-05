@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -90,15 +91,17 @@ type DocumentPage struct {
 	Cursor string
 	Limit  int
 	Tag    string // the document list only
+	// Q is the document list's text filter over name, tags and chunk text, case-insensitive (at most 200 bytes).
+	Q string
 }
 
 // parseDocumentQuery reads the scope plus cursor and limit (1..200, default 50).
 func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
-	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag")
+	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag", "q")
 	if err != nil {
 		return Scope{}, DocumentPage{}, err
 	}
-	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag")}
+	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag"), Q: strings.TrimSpace(q.Get("q"))}
 	if v := q.Get("limit"); v != "" {
 		n, e := strconv.Atoi(v)
 		if e != nil || n < 1 || n > documentPageMax {
@@ -106,7 +109,7 @@ func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
 		}
 		page.Limit = n
 	}
-	if len(page.Cursor) > 256 || page.Tag != "" && !validTagEdit([]string{page.Tag}) {
+	if len(page.Cursor) > 256 || len(page.Q) > 200 || page.Tag != "" && !validTagEdit([]string{page.Tag}) {
 		return Scope{}, DocumentPage{}, ErrInvalid
 	}
 	return scope, page, nil
