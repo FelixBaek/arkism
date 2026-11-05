@@ -106,6 +106,33 @@ uses fixed data/time and reduced motion so `compare-ui-snapshots.cjs BEFORE AFTE
 can require identical labels, selection and rendered PNGs. A browser fixture is
 separate from a running Windows product or its native WebView.
 
+## UI languages
+
+Screen code writes Korean only. `desktop/ui/i18n.js` swaps the text on screen through one dictionary per language,
+`desktop/ui/i18n-<code>.js` (`en`, `ja`, `zh-CN`, `zh-TW`, `es`, `de`, `fr`, `pt`, `vi`, `id`). The picker list lives in
+`look.js` (`ArkismLook.languages`) and the loader list in `i18n.js` (`DICTIONARIES`); `i18n.test.js` keeps the two and the
+files equal. The menu names Home, Memory, Flow, Router and Tools stay English in every language.
+
+`i18n.test.js` fails when a Korean UI string has no entry in a dictionary. After changing Korean text:
+
+```bash
+node tools/i18n_sync.mjs                      # what each language is missing or still has after a rewording
+node tools/i18n_sync.mjs --todo /tmp/todo.json # the missing keys, with the English as the meaning to translate
+node tools/i18n_sync.mjs --apply /tmp/todo.json # merge the translations you wrote into that file
+node tools/i18n_sync.mjs --fallback           # fill whatever is still missing with English
+```
+
+Fallback rule:
+
+- English is required. Write the English for every new Korean string yourself (in `i18n-en.js` or through `--apply`);
+  the tool never invents it.
+- Any other language may show the English for a new string until someone translates it. `--fallback` writes the
+  English text and lists the key under `"fallback"` in that dictionary. The test accepts a listed key only while its text
+  is exactly the English one, and prints how many each language still has.
+- A translation passed with `--apply` replaces the fallback and removes the key from the list. A translation is refused
+  when it is empty, still has Korean, or changes the `{0}` placeholders.
+- Keys that English no longer has are removed from the other languages on the next write.
+
 ## Building the desktop app
 
 - Windows: `desktop/installer/build-windows.ps1 -Version X.Y.Z`
@@ -124,7 +151,7 @@ node --test desktop/ui/*.test.js
 ```
 
 `desktop/ui/index.html` uses the source `entry.mjs` for browser development.
-Production uses one esbuild module graph with a separate lazy English chunk.
+Production uses one esbuild module graph with a separate lazy chunk per UI language.
 Keep `desktop/ui-dist` and `desktop/frontend/node_modules` in local Git excludes.
 See [UI ownership and validation](ui-structure-improvement-plan.md).
 

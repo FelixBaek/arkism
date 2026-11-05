@@ -1,5 +1,5 @@
 // Spanish UI dictionary for i18n.js: the same keys as i18n-en.js (Korean source → Spanish).
-// i18n.test.js checks it has every key with the same placeholders; translate new Korean strings here too.
+// i18n.test.js checks it has every key with the same placeholders; keep it in step with node tools/i18n_sync.mjs.
 (window.ArkismI18nDicts ||= {})["es"] = {
  "strings": {
  "승인과 버리기는 사람만 할 수 있어요.": "Solo una persona puede aprobar o descartar.",
