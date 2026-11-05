@@ -1,10 +1,4 @@
 // Settings and the Arkism design-token pages. app.js passes the shared helpers in once, so these screens use the same state and builders.
-// Hands a file (text or bytes) to the browser's download; a link click cannot tell whether the save went through.
-// Shared by 설정 (preference files) and 지식 (kept originals, wiki pages and the wiki archive).
-window.ArkismSaveFile = (name, data, type) => {
-  const url = URL.createObjectURL(new Blob([data], { type }));
-  try { const a = document.createElement("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
-};
 window.ArkismPages = (ctx) => {
   "use strict";
   const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus, saveFile } = ctx;

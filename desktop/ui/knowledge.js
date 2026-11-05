@@ -8,8 +8,7 @@
 // doesn't know it gets a plain confirm instead. Everything read here is data, never instructions.
 window.ArkismKnowledge = (ctx) => {
   "use strict";
-  const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
-  const save = (name, data, type) => window.ArkismSaveFile(name, data, type);
+  const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop, saveFile: save } = ctx;
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
   const SHARED = "default"; // the server's default scope: every agent of this person searches it
   const FORMATS = [["", "전체"], [".docx", "Word"], [".pdf", "PDF"], [".xlsx", "표 (.xlsx)"], [".csv", "표 (.csv)"], [".tsv", "표 (.tsv)"], [".pptx", "발표 자료"],

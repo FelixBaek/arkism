@@ -79,13 +79,13 @@ async function setup(over, stateOver = {}) {
   const state = { view: "knowledge", server: "local", scope: { workspace_id: "w" }, connection: { generation: 1 }, ...stateOver };
   const srv = server(over);
   const heads = [];
-  const confirms = [], gone = [], opened = [];
+  const confirms = [], gone = [], opened = [], saved = [];
   let view;
   const ctx = {
     ...h, query: (o = {}) => h.query(o), state, request: srv.request, ago: (v) => (v ? `ago(${v})` : "—"),
     render: () => view.views.knowledge.render(),
     detailShell: (label) => { const body = h.el("div", "detail-body"); body.dataset.label = label; h.$("#detail").replaceChildren(body); return body; },
-    headExtras: (o) => heads.push(o), go: (...a) => gone.push(a), openMemory: (id) => opened.push(id),
+    headExtras: (o) => heads.push(o), go: (...a) => gone.push(a), openMemory: (id) => opened.push(id), saveFile: (...a) => saved.push(a),
     confirmPop: async (...a) => { confirms.push(a); return confirms.answer ?? true; },
     remoteCollection: (read) => createRemoteCollection({ state, read, createPager }),
     virtualList: createVirtualList()
@@ -94,7 +94,7 @@ async function setup(over, stateOver = {}) {
   view = window.ArkismKnowledge(ctx);
   const files = (picked.length = 0, picked);
   const k = {
-    view, state, srv, heads, confirms, gone, opened, files, h, document,
+    view, state, srv, heads, confirms, gone, opened, saved, files, h, document,
     table: () => h.$("#table"), detail: () => h.$("#detail"),
     btn(root, label) { const b = dom.buttons(root, label)[0]; assert.ok(b, `button ${label}`); return b; },
     async press(root, label) { k.btn(root, label).click(); await dom.flush(); },
@@ -919,8 +919,6 @@ test("기억 문서: list with filters, tag edits, reprocess asks first, delete 
 
 test("원본 파일 tab downloads a kept file; a candidate with a memory opens that memory", async () => {
   require("./crew-popup.js");
-  const saved = [];
-  window.ArkismSaveFile = (...a) => saved.push(a);
   const k = await setup({
     "/v1/files/memories/documents/fd1/chunks": () => ({ items: [{ locator: "page:1", hash: "x", status: "extracted", source: { id: "src1" }, candidates: [{ id: "c1", status: "approved", memory_id: "m1" }] }], next_cursor: "" }),
     "/v1/files/memories/documents": () => ({ items: [{ id: "fd1", label: "plan.pdf", status: "done", tags: [], chunks: 1, candidates_created: 1, updated_at: T }], next_cursor: "" }),
@@ -933,7 +931,7 @@ test("원본 파일 tab downloads a kept file; a candidate with a memory opens t
   const dlg = () => k.document.body.querySelector("dialog.v4k-parts");
   assert.match(dlg().textContent, /application\/pdf/);
   await k.press(dlg(), "내려받기"); await dom.flush();
-  assert.equal(saved.length, 1); assert.equal(saved[0][0], "a1.pdf"); assert.deepEqual([...saved[0][1]], [1, 2, 3]);
+  assert.equal(k.saved.length, 1); assert.equal(k.saved[0][0], "a1.pdf"); assert.deepEqual([...k.saved[0][1]], [1, 2, 3]);
   assert.match(dlg().textContent, /내려받았어요/);
   await k.press(dlg(), "부분"); await dom.flush();
   const chip = dlg().querySelector(".v4k-cand"); assert.ok(chip, "candidate chip");
@@ -943,8 +941,7 @@ test("원본 파일 tab downloads a kept file; a candidate with a memory opens t
 });
 
 test("wiki folders: pick, create, move, delete with its pages; a page moves, saves as Markdown, deletes at its revision; export", async () => {
-  const saved = [], asked = [];
-  window.ArkismSaveFile = (...a) => saved.push(a);
+  const asked = [];
   window.askText = async (msg, value) => { asked.push([msg, value]); return asked.answer.shift(); };
   asked.answer = ["운영/배포", "운영/옛배포"];
   const k = await setup({
@@ -980,13 +977,13 @@ test("wiki folders: pick, create, move, delete with its pages; a page moves, sav
   const mv = k.srv.calls.find((c) => c.method === "PATCH" && c.path.startsWith("/v1/wiki/pages/"));
   assert.equal(mv.body.folder, "운영"); assert.equal(typeof mv.body.expected_revision, "number");
   await k.press(k.detail(), "Markdown으로 저장");
-  assert.match(saved.at(-1)[0], /\.md$/); assert.equal(saved.at(-1)[2], "text/markdown");
+  assert.match(k.saved.at(-1)[0], /\.md$/); assert.equal(k.saved.at(-1)[2], "text/markdown");
   k.confirms.answer = false; await k.press(k.detail(), "페이지 지우기");
   assert.equal(k.srv.calls.filter((c) => c.method === "DELETE" && c.path.startsWith("/v1/wiki/pages/")).length, 0);
   k.confirms.answer = true; await k.press(k.detail(), "페이지 지우기"); await dom.flush();
   assert.match(k.srv.calls.find((c) => c.method === "DELETE" && c.path.startsWith("/v1/wiki/pages/")).path, /expected_revision=\d/);
   // export
   await k.press(side(), "위키 내보내기 (.zip)"); await dom.flush();
-  assert.deepEqual(saved.at(-1).slice(0, 1), ["wiki.zip"]); assert.deepEqual([...saved.at(-1)[1]], [80, 75]);
+  assert.deepEqual(k.saved.at(-1).slice(0, 1), ["wiki.zip"]); assert.deepEqual([...k.saved.at(-1)[1]], [80, 75]);
   assert.match(k.table().textContent + k.detail().textContent, /위키를 내보냈어요/);
 });

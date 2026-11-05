@@ -2310,9 +2310,10 @@ export function startApp() {
   window.ArkismAIChat.kit = { assist: crew.assist, assistError: crew.assistError, parseJSON: crew.parseJSON }; // field()'s default ask (ai-chat.js)
   const reviews = window.ArkismReviews({ state, $, el, icon, button, render, request: appApi.request, query: appApi.query, notice, detailShell, section, facts, markSelected, openDetail, ago, stat, go, headExtras, confirmPop: toolViews.confirmPop,
     assist: (kind, prompt) => crew.assist(kind, prompt) });
-  // Hands text to the browser's download; a link click cannot tell whether the save went through.
-  const saveFile = (name, text, type) => {
-    const url = URL.createObjectURL(new Blob([text], { type }));
+  // Hands a file (text or bytes) to the browser's download; a link click cannot tell whether the save went through.
+  // The one save helper: 설정, 지식, 개요 and 공간 get it through their ctx.
+  const saveFile = (name, data, type) => {
+    const url = URL.createObjectURL(new Blob([data], { type }));
     try { const a = el("a"); a.href = url; a.download = name; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
   };
   const pages = window.ArkismPages({ state, $, el, icon, button, segment, go, render, saveFile, query: appApi.query, AGENTS, agentLogo, allowed: skillViews.allowed, notice, store, stored, lock: appConnection.lock, disconnect: appConnection.disconnect, useLocal: appConnection.useLocal, startLocal: appConnection.startLocal, sshFields: appConnection.sshFields, sshTest: appConnection.sshTest, sshConnect: appConnection.sshConnect, sshLabel: appConnection.sshLabel, storageRow: appConnection.storageRow, reopen: appConnection.open, serverBanner: appConnection.serverBanner, trimSlash, tauri, stat, models, routing, crew, catIconChoices: CAT_ICON_CHOICES, pcStatus,
@@ -2345,7 +2346,7 @@ export function startApp() {
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });
-  const knowledge = window.ArkismKnowledge({ go, openMemory, remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop }); // TOOLS › 지식 (knowledge.js)
+  const knowledge = window.ArkismKnowledge({ go, openMemory, remoteCollection, virtualList, state, $, el, button, icon, render, request: appApi.request, query: appApi.query, ago, detailShell, headExtras, confirmPop: toolViews.confirmPop, saveFile }); // TOOLS › 지식 (knowledge.js)
   const overview = window.ArkismOverview({ count: serverCount, remoteCollection, state, $, el, button, icon, request: appApi.request, query: appApi.query, ago, go, render, saveFile, reloadMemories: () => memoryList.reloadMemories(), maintenanceRecords: memoryPaging.maintenanceRecords, openRecord: openIntelligenceRecord, reload: loadAll, fixMemory: (m) => memoryDetail.openMemoryFix(m), kept: keptMemories, keepMemory: (id) => { try { localStorage.setItem(KEEP_KEY, JSON.stringify([...keptMemories(), id])); } catch (_) { /* private window */ } }, resolveConflict: (c, choice) => memoryList.resolveConflict(c, choice), memoryCount: () => memoryPaging.memoryCount(), memoryCheck: memoryList, onSessions: () => renderStatusCard(), notice }); // MEMORY › 개요 (overview.js)
   // TOOLS › 관리: what to look after, from the lists already loaded (skill use counts, update offers, apply requests).
   function manageView() {
