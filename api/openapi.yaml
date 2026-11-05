@@ -54822,6 +54822,12 @@
           },
           "mental_model": {
             "$ref": "#/components/schemas/WireResponseMentalModelData"
+          },
+          "directive": {
+            "$ref": "#/components/schemas/WireResponseDirective"
+          },
+          "file_extract": {
+            "$ref": "#/components/schemas/WireResponseFileExtractJob"
           }
         },
         "additionalProperties": false,
@@ -69582,6 +69588,115 @@
         "x-go-type": "memory.MentalModelData",
         "x-go-source": "internal/memory/mental_models.go",
         "description": "MentalModelData is the mental-model part of a record."
+      },
+      "WireResponseDirective": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "applies_to": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "priority",
+          "applies_to"
+        ],
+        "x-go-type": "memory.Directive",
+        "x-go-source": "internal/memory/directives.go",
+        "description": "Directive is the directive-only part of a record; the rule text is Record.Text."
+      },
+      "WireResponseFileExtractJob": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "type": "integer"
+          },
+          "candidates_created": {
+            "type": "integer"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseExtractSkip"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calls": {
+            "type": "integer"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "requested_by": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "label",
+          "sources",
+          "total",
+          "next",
+          "candidates_created",
+          "skipped",
+          "calls",
+          "tokens",
+          "requested_by"
+        ],
+        "x-go-type": "memory.FileExtractJob",
+        "x-go-source": "internal/memory/file_extract.go"
+      },
+      "WireResponseExtractSkip": {
+        "type": "object",
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "x-go-type": "memory.ExtractSkip",
+        "x-go-source": "internal/memory/file_extract.go"
       }
     },
     "headers": {
