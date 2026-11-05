@@ -76,6 +76,11 @@
    "created_by_type": "agent",
    "generator": {
     "prompt_version": "session-reflect-v2"
+   },
+   "occurred": {
+    "from": "2026-10-03T00:00:00Z",
+    "to": "2026-10-04T00:00:00Z",
+    "phrase": "10월 3일"
    }
   },
   {

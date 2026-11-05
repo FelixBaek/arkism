@@ -20,7 +20,9 @@ const has = (root, text) => root.textContent.includes(text);
 test("extract state maps job status to a phase and reads delta from the upload answer or the job", () => {
   const s = window.ArkismKnowledge.extractState;
   assert.deepEqual(s({ id: "j", status: "running", revision: 2, job: { total: 10, next: 4, candidates_created: 3, skipped: [{}, {}] } }),
-    { id: "j", revision: 2, phase: "running", active: true, total: 10, next: 4, created: 3, skipped: 2, jobError: "", delta: null });
+    { id: "j", revision: 2, phase: "running", active: true, total: 10, next: 4, created: 3, skipped: 2, jobError: "", delta: null, doc: "" });
+  assert.equal(s({ id: "j", status: "done", document_id: "d1" }).doc, "d1", "the document the upload made opens its parts");
+  assert.equal(s({ id: "j", status: "done", job: { document: "d2" } }).doc, "d2");
   assert.equal(s({ id: "j", status: "retry" }).phase, "queued");
   assert.equal(s({ id: "j", status: "cancelled" }).active, false);
   assert.equal(s({ id: "j", status: "failed", job: { error: "no_text" } }).jobError, "no_text");

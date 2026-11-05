@@ -1,0 +1,50 @@
+{
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "items": [
+  {
+   "locator": "chunk:0",
+   "hash": "9f2c41d0a7b3e5f1",
+   "status": "extracted",
+   "candidates": [
+    {
+     "id": "k-dep1",
+     "status": "approved",
+     "memory_id": "m4"
+    },
+    {
+     "id": "k-dep2",
+     "status": "candidate"
+    }
+   ]
+  },
+  {
+   "locator": "chunk:1",
+   "hash": "3b8e07c2d19f4a66",
+   "status": "unchanged",
+   "candidates": [
+    {
+     "id": "k-dep3",
+     "status": "rejected"
+    }
+   ]
+  },
+  {
+   "locator": "chunk:2",
+   "hash": "c71d5e9a02f84b13",
+   "status": "pending",
+   "candidates": []
+  },
+  {
+   "locator": "chunk:3",
+   "hash": "5a40e6b8c3d21f97",
+   "status": "extracted",
+   "candidates": [
+    {
+     "id": "k-dep4",
+     "status": "gone"
+    }
+   ]
+  }
+ ]
+}

@@ -879,7 +879,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
       list.replaceChildren(); if (!items.length) list.append(el("p", "ov-win-empty", snap.loading ? "불러오는 중…" : "찾은 기억이 없어요."));
       for (const m of items) {
         const r = el("div", `ov-wide-row${m.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t"); l1.append(tagEl(kind(m.kind)), el("span", "ov-win-item-title", clip(m.text, 70)));
-        t.append(l1, el("small", "", [tag(m, "repo:"), ago(m.created_at)].filter(Boolean).join(" · ")));
+        const when = window.ArkismMemoryTime.span(m.occurred); // the day the content says it happened, before the day it was saved
+        t.append(l1, el("small", "", [tag(m, "repo:"), when ? `일어난 때 ${when}` : ago(m.created_at)].filter(Boolean).join(" · ")));
         const u = usage(m.id); r.append(t, el("span", "ov-wide-row-r", u ? (u.d7 ? `7일 ${num(u.d7)}번 쓰임` : "안 쓰임") : ""));
         r.addEventListener("click", () => { sel = m.id; paint(); }); list.append(r);
       }
@@ -890,6 +891,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function detailFor(m) {
       detail.replaceChildren(); if (!m) return;
       const h = el("div", "ov-detail-head"); h.append(tagEl(kind(m.kind)), el("small", "", `${m.created_by_type === "agent" ? "AI가 모음" : "사람이 만듦"} · ${ago(m.created_at)}`));
+      const when = window.ArkismMemoryTime.span(m.occurred);
+      if (when) h.append(el("small", "", `일어난 때 ${when}`));
       detail.append(h, el("h3", "", m.text));
       const sec = (title, ...nodes) => { const s = el("div", "ov-detail-sec"); s.append(el("small", "", title), ...nodes); detail.append(s); };
       const u = usage(m.id), wu = w?.items?.find((x) => x.id === m.id), f = el("div", "ov-detail-facts");

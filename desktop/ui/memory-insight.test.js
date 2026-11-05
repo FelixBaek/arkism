@@ -294,3 +294,47 @@ test("a 묶음 and a 묶음 목록 hold their own fields, and a nested answer dr
   assert.equal(t.h.$("#table").querySelectorAll(".insight-step").length, 1, "steps that are not objects are skipped");
   assert.match(step.textContent, /<img src=x>/); assert.equal(t.h.$("#table").querySelectorAll("img").length, 0);
 });
+
+test("an entity's summary: a model draft waits for a person; approving a draft whose memories changed says so (409)", async () => {
+  const draft = { version: 1, status: "draft", text: "Alex는 배포를 맡아요.", citations: [{ collection: "memories", id: "m5", revision: 1 }], at: "2026-10-20T00:00:00Z" };
+  let current = entity({ proposed: false, summary_draft: draft }), approve = err("revision_conflict", 409);
+  const t = setup("entities", [["/v1/entities?", () => ({ items: [current] })],
+    ["/v1/entities/e1?", () => ({ ...current, memories: [], related: [], timeline: [] })],
+    ["/v1/entities/e1/summary", () => { current = entity({ proposed: false, summary_draft: draft }); return current; }],
+    ["/v1/entities/e1", (_, o) => { const b = JSON.parse(o.body); if (b.summary_review === "approve" && approve) throw approve;
+      current = entity({ proposed: false, ...(b.summary_review === "approve" ? { summary: { ...draft, status: "active" } } : {}) }); return current; }]]);
+  t.view.draw(); await dom.flush();
+  assert.match(t.h.$("#table").textContent, /요약 초안/, "the list marks a waiting draft");
+  t.h.$("#table .original-row").click(); await dom.flush();
+  const d = () => t.h.$("#detail");
+  assert.match(d().textContent, /AI가 쓴 요약 초안이에요. 승인하기 전에는 쓰이지 않아요/);
+  assert.match(d().textContent, /Alex는 배포를 맡아요/); assert.match(d().textContent, /근거 기억 1개/);
+  dom.buttons(d(), "승인")[0].click(); await dom.flush();
+  assert.deepEqual(body(t.calls.filter(([, o]) => o?.method === "PATCH").at(-1)), { scope: SCOPE, summary_review: "approve" });
+  assert.match(t.notices.at(-1), /근거 기억이 그사이 바뀌어서 이 초안은 승인할 수 없어요/);
+  dom.buttons(d(), "버리기")[0].click(); await dom.flush();
+  assert.deepEqual(body(t.calls.filter(([, o]) => o?.method === "PATCH").at(-1)), { scope: SCOPE, summary_review: "reject" });
+  assert.match(d().textContent, /아직 요약이 없어요/);
+  dom.buttons(d(), "AI에게 요약 초안 쓰게 하기")[0].click(); await dom.flush();
+  assert.deepEqual(body(t.calls.find(([p]) => p === "/v1/entities/e1/summary")), { scope: SCOPE });
+  assert.equal(t.notices.at(-1), "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.");
+  approve = null;
+  dom.buttons(d(), "승인")[0].click(); await dom.flush();
+  assert.match(d().textContent, /승인 · 근거 기억 1개/);
+  assert.equal(dom.buttons(d(), "새 요약 초안 만들기").length, 1);
+
+  const agent = setup("entities", [["/v1/entities?", () => ({ items: [entity({ summary_draft: draft })] })], ["/v1/entities/e1?", () => ({ ...entity({ summary_draft: draft }), memories: [], related: [], timeline: [] })]], { role: "agent" });
+  agent.view.draw(); await dom.flush();
+  agent.h.$("#table .original-row").click(); await dom.flush();
+  assert.equal(dom.buttons(agent.h.$("#detail"), "승인").length, 0, "only a person decides");
+  assert.match(agent.h.$("#detail").textContent, /승인과 버리기는 사람만 할 수 있어요/);
+});
+
+test("asking for an entity summary without a server model says what to set up", async () => {
+  const t = setup("entities", [["/v1/entities?", () => ({ items: [entity({ proposed: false })] })], ["/v1/entities/e1?", () => ({ ...entity({ proposed: false }), memories: [], related: [], timeline: [] })],
+    ["/v1/entities/e1/summary", () => { throw err("model_not_configured", 503); }]]);
+  t.view.draw(); await dom.flush();
+  t.h.$("#table .original-row").click(); await dom.flush();
+  dom.buttons(t.h.$("#detail"), "AI에게 요약 초안 쓰게 하기")[0].click(); await dom.flush();
+  assert.match(t.notices.at(-1), /서버에 요약을 쓸 모델이 없어요/);
+});

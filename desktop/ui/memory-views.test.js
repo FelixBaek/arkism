@@ -393,3 +393,12 @@ test("시간순 examples send the words the screen shows (English screen: Englis
     assert.equal(calls[0].timezone, Intl.DateTimeFormat().resolvedOptions().timeZone);
   } finally { globalThis.ArkismI18n = before; }
 });
+
+test("an occurred span reads as one day or a range (to is exclusive), and occurred comes first for event time", () => {
+  const { span, eventAt } = window.ArkismMemoryTime;
+  assert.equal(span(null), "");
+  assert.equal(span({ from: "2026-03-04T00:00:00Z", to: "2026-03-05T00:00:00Z" }), "2026년 3월 4일");
+  assert.equal(span({ from: "2026-03-04T00:00:00Z", to: "2026-03-08T00:00:00Z" }), "2026년 3월 4일 ~ 2026년 3월 7일");
+  assert.equal(span({ from: "2026-03-04T00:00:00Z" }), "2026년 3월 4일");
+  assert.equal(eventAt({ occurred: { from: "2026-03-04T00:00:00Z" }, created_at: "2026-05-01T00:00:00Z" }).what, "일어난 때");
+});

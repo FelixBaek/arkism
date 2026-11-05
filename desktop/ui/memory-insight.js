@@ -412,7 +412,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status);
     for (const r of s.items) {
       table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, r.active ? "켜짐" : "꺼짐", !r.active)
-        : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : "확인됨", r.proposed));
+        : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : r.summary_draft ? "요약 초안" : "확인됨", r.proposed || !!r.summary_draft));
     }
     if (error) table.append(button("다시 불러오기", "small", null, () => loadList("retry")));
     else if (s.cursor) table.append(button("더 보기", "small", null, () => loadList("load")));
@@ -489,12 +489,43 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   function entityError(e) {
     return { revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", access_denied: "이 계정은 이름을 고칠 수 없어요.", not_found: "이미 없어진 이름이에요." }[e?.message] || `처리하지 못했어요 (${e?.message})`;
   }
-  async function editEntity(id, work, done, next) {
+  // codes: plain sentences for this write's own error codes, ahead of entityError.
+  async function editEntity(id, work, done, next, codes = {}) {
     try { const out = await work(); notice(done); views.clear(); await loadList(); selected = rows().find((r) => r.id === (next === undefined ? out?.id || id : next)) || null; }
-    catch (e) { notice(entityError(e)); views.delete(id); }
+    catch (e) { notice(codes[e?.message] || entityError(e)); views.delete(id); }
     detail();
   }
-  const patch = (id, change, done) => editEntity(id, () => request(`/v1/entities/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, ...change }) }), done);
+  const patch = (id, change, done, codes) => editEntity(id, () => request(`/v1/entities/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify({ scope: state.scope, ...change }) }), done, undefined, codes);
+  // 요약: the server model drafts a cited summary (POST …/summary); it waits on the name until a person approves or rejects it
+  // (PATCH summary_review). Approving checks every cited memory still stands; a changed one answers 409.
+  function entitySummary(id, v) {
+    const box = section("요약");
+    if (!v) { box.append(el("p", "meta", v === null ? "불러오는 중…" : "불러오지 못했어요. 다시 골라 주세요.")); return box; }
+    const d = v.summary_draft, can = human();
+    if (v.summary) box.append(raw(el("p", "original-text", v.summary.text)), el("p", "meta", `${day(v.summary.at)} 승인 · 근거 기억 ${(v.summary.citations || []).length}개`));
+    else if (!d) box.append(el("p", "meta", "아직 요약이 없어요."));
+    if (d) {
+      const card = el("div", "d-action dg-cand");
+      card.append(el("p", "", "AI가 쓴 요약 초안이에요. 승인하기 전에는 쓰이지 않아요."),
+        d.withheld ? el("p", "dg-warn", "근거 기억이 지워져서 내용을 가렸어요. 버리고 새 초안을 만들어 주세요.") : raw(el("p", "original-text", d.text)),
+        el("p", "meta", `근거 기억 ${(d.citations || []).length}개`));
+      if (can) {
+        const btns = el("div", "d-buttons"), lock = () => btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+        const ok = button("승인", "primary small", null, () => { lock(); void patch(id, { summary_review: "approve" }, "요약을 승인했어요.",
+          { revision_conflict: "근거 기억이 그사이 바뀌어서 이 초안은 승인할 수 없어요. 버리고 새 초안을 만들어 주세요." }); });
+        ok.disabled = !!d.withheld;
+        btns.append(ok, button("버리기", "ghost small", null, () => { lock(); void patch(id, { summary_review: "reject" }, "요약 초안을 버렸어요."); }));
+        card.append(btns);
+      } else card.append(el("p", "meta", "승인과 버리기는 사람만 할 수 있어요."));
+      box.append(card);
+    } else if (can) {
+      const gen = button(v.summary ? "새 요약 초안 만들기" : "AI에게 요약 초안 쓰게 하기", "small", null, () => { gen.disabled = true;
+        void editEntity(id, () => request(`/v1/entities/${encodeURIComponent(id)}/summary`, { method: "POST", body: JSON.stringify({ scope: state.scope }) }), "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.", undefined,
+          { revision_conflict: "확인을 기다리는 초안이 이미 있어요.", model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." }); });
+      box.append(gen);
+    }
+    return box;
+  }
   function entityDetail(body) {
     const item = selected;
     if (!item) { body.append(el("h2", "", "이름을 고르세요"), el("p", "lead", "승인된 기억에 나온 사람·도구·프로젝트 이름이에요. 고르면 그 이름이 나온 기억을 볼 수 있어요.")); return; }
@@ -507,7 +538,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const v = views.get(item.id), e = v || item;
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", `${TYPES[e.type] || e.type}${e.proposed ? " · AI가 찾은 이름이라 확인이 필요해요" : ""}`), raw(el("h2", "", e.name)));
-    body.append(head);
+    body.append(head, entitySummary(item.id, v));
     const can = human();
     const aliases = section("다른 이름");
     const chips = el("div", "insight-aliases");

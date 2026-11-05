@@ -1,0 +1,42 @@
+{
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "items": [
+  {
+   "job_id": "fx-2",
+   "status": "done",
+   "label": "10-test-deploy-ops.md",
+   "delta": {
+    "chunks_total": 14,
+    "chunks_unchanged": 11,
+    "chunks_changed": 3,
+    "chunks_removed": 1,
+    "removed_sources": [
+     {
+      "locator": "chunk:12",
+      "candidate_ids": [
+       "k-old1",
+       "k-old2"
+      ]
+     }
+    ]
+   },
+   "candidates_created": 4,
+   "created_at": "2026-10-11T10:00:00Z"
+  },
+  {
+   "job_id": "fx-1",
+   "status": "done",
+   "label": "10-test-deploy-ops.md",
+   "delta": {
+    "chunks_total": 11,
+    "chunks_unchanged": 0,
+    "chunks_changed": 11,
+    "chunks_removed": 0,
+    "removed_sources": []
+   },
+   "candidates_created": 9,
+   "created_at": "2026-09-21T10:00:00Z"
+  }
+ ]
+}

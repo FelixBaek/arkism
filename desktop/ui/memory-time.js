@@ -5,12 +5,7 @@ window.ArkismMemoryTime = (ctx) => {
   const LANES = { all: "전체", facts: "사실", events: "겪은 일", observations: "정리된 관찰" };
   const FOUND = window.ArkismMemoryTime.FOUND;
   const laneOf = (h) => h.derived || h.collection !== "memories" ? "observations" : h.kind === "episodic" || h.kind === "raw" || (h.tags || []).some((t) => t.startsWith("session:")) ? "events" : "facts";
-  // the server's event-time order (recall_time.go hitEventTime): occurred (the days the content states), observed_at, valid_from, then effective_at / created_at
-  const eventAt = (h) => {
-    const c = h.memory_context || {};
-    for (const [v, what] of [[h.occurred?.from, "일어난 때"], [c.observed_at, "일어난 때"], [c.valid_from, "맞기 시작한 때"], [h.effective_at, "적용된 때"], [h.created_at, "저장한 때"], [h.updated_at, "저장한 때"]]) { const t = v ? Date.parse(v) : NaN; if (Number.isFinite(t)) return { t, what }; }
-    return { t: 0, what: "" };
-  };
+  const { eventAt, span } = window.ArkismMemoryTime;
   const day = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric", weekday: "short" });
   const identity = () => JSON.stringify([state.server, state.token, state.scope]);
   const active = () => state.view === "memories" && state.memTab === "past";
@@ -30,7 +25,7 @@ window.ArkismMemoryTime = (ctx) => {
     const at = eventAt(selected), head = el("div", "d-head");
     const title = el("h2", "", selected.text || selected.summary || "본문 없음"); title.setAttribute("data-no-i18n", "");
     head.append(el("p", "d-kind", LANES[laneOf(selected)]), title);
-    if (at.t) head.append(el("p", "lead", `${at.what} · ${date(at.t)}`));
+    if (at.t) head.append(el("p", "lead", selected.occurred ? `일어난 때 · ${span(selected.occurred)}` : `${at.what} · ${date(at.t)}`));
     body.append(head);
     if (laneOf(selected) === "observations") body.append(el("p", "meta", `여러 기억을 정리한 관찰이에요. 바탕 기억 ${(selected.source_ids || []).length}개`));
     const more = el("details", "section"), facts = el("dl", "facts");
@@ -210,3 +205,17 @@ window.ArkismMemoryTime = (ctx) => {
 };
 // How a search lane found a memory, in plain words; also the 검색 살펴보기 screen (memory-insight.js).
 window.ArkismMemoryTime.FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억", causal: "원인과 결과" };
+// the server's event-time order (recall_time.go hitEventTime): occurred (the days the content states), observed_at, valid_from, then effective_at / created_at
+window.ArkismMemoryTime.eventAt = (h) => {
+  const c = h.memory_context || {};
+  for (const [v, what] of [[h.occurred?.from, "일어난 때"], [c.observed_at, "일어난 때"], [c.valid_from, "맞기 시작한 때"], [h.effective_at, "적용된 때"], [h.created_at, "저장한 때"], [h.updated_at, "저장한 때"]]) { const t = v ? Date.parse(v) : NaN; if (Number.isFinite(t)) return { t, what }; }
+  return { t: 0, what: "" };
+};
+// An event span {from, to} (to is exclusive): one day, or "first ~ last day"; "" when there is none.
+window.ArkismMemoryTime.span = (o) => {
+  // the last day is counted from "from" in whole days, so a span cut at another zone's midnight does not spill a day
+  const a = Date.parse(o?.from || ""), days = Math.round((Date.parse(o?.to || "") - a) / 864e5), b = a + (days - 1) * 864e5;
+  if (!Number.isFinite(a)) return "";
+  const f = (t) => new Date(t).toLocaleDateString(globalThis.ArkismI18n?.locale() || "ko-KR", { year: "numeric", month: "long", day: "numeric" });
+  return !(days > 1) ? f(a) : `${f(a)} ~ ${f(b)}`;
+};

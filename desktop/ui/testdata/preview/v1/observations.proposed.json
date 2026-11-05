@@ -35,7 +35,12 @@
    },
    "created_at": "2026-10-14T03:00:00Z",
    "updated_at": "2026-10-14T03:00:00Z",
-   "authority": "data_only_untrusted"
+   "authority": "data_only_untrusted",
+   "occurred": {
+    "from": "2026-10-06T00:00:00Z",
+    "to": "2026-10-10T00:00:00Z",
+    "phrase": "지난주"
+   }
   },
   {
    "id": "ob2",

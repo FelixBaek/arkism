@@ -1,0 +1,22 @@
+{
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "items": [
+  {
+   "id": "doc-1",
+   "filename": "10-test-deploy-ops.md",
+   "current": true,
+   "chunk_count": 14,
+   "extraction_status": "done",
+   "created_at": "2026-10-11T10:00:00Z"
+  },
+  {
+   "id": "doc-0",
+   "filename": "10-test-deploy-ops.md",
+   "current": false,
+   "chunk_count": 11,
+   "extraction_status": "done",
+   "created_at": "2026-09-21T10:00:00Z"
+  }
+ ]
+}

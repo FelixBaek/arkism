@@ -56,7 +56,7 @@ window.ArkismDigests = (ctx) => {
         user: items(ua)[0] || null, userCand: items(uc), userOld: items(uo), failed: [ta, tc, ua, uc, uo].includes(FAILED),
         merge: mp === FAILED ? false : mp ? items(mp).filter((r) => r.merge?.proposal) : null, // merge: false failed, null not supported
         models: items(mm), notes: [ob, mm, cl].includes(FAILED) ? false : !ob && !mm && !cl ? null
-          : [...items(ob).map((o) => ({ id: `obs:${o.id}`, obs: o })), ...items(mm).filter((m) => m.draft).map((m) => ({ id: `model:${m.id}`, model: m })),
+          : [...items(ob).map((o) => ({ id: `obs:${o.id}`, obs: o })), ...items(mm).filter((m) => m.draft || m.stale).map((m) => ({ id: `model:${m.id}`, model: m })),
             ...items(cl).filter((l) => l.cause?.id && l.effect?.id).map((l) => ({ id: `causal:${l.id}`, link: l }))] });
       if (key !== data.other.key) data.other = { key };
       if (before !== JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed, data.notes])) repaint();
@@ -391,7 +391,7 @@ window.ArkismDigests = (ctx) => {
     if (busy.has(id)) return;
     busy.add(id); btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
     try { await send(); notice(say.ok); }
-    catch (e) { notice(e.message === "revision_conflict" ? say.conflict : e.message === "access_denied" ? say.denied : `처리하지 못했어요: ${e.message}`); }
+    catch (e) { notice(say.codes?.[e.message] || (e.message === "revision_conflict" ? say.conflict : e.message === "access_denied" ? say.denied : `처리하지 못했어요: ${e.message}`)); }
     finally { busy.delete(id); }
     await reload();
     render(false); detail();
@@ -545,8 +545,13 @@ window.ArkismDigests = (ctx) => {
   // ------------------------------------------------------------ 확인해 주세요 · AI 정리 (observations and mental-model drafts)
   // Both are model-written drafts with their cited memories; nothing is used until a person approves it here.
   const DURABLE = { lasting: "오래 갈 내용", momentary: "잠깐 맞는 내용" };
-  const noteText = (n) => (n.obs ? n.obs.content : n.link ? n.link.reason : n.model.draft.text) || "";
-  const noteRefs = (n) => (n.obs ? n.obs.source_memories : n.link ? [n.link.cause, n.link.effect] : n.model.draft.citations) || [];
+  // A mental model shows up here with a draft to review, or stale with none yet (then the approved text and a 다시 만들기 button).
+  const STALE = { sources_changed: "근거 바뀜", new_memories: "새 기억 있음" };
+  const STALE_LEAD = { sources_changed: "이 요약이 근거로 든 기억이 지워졌거나 더는 승인 상태가 아니에요.", new_memories: "이 요약을 만든 뒤에 새로 승인된 기억이 있어요." };
+  const modelRev = (m) => m.draft || m.active;
+  const noteText = (n) => (n.obs ? n.obs.content : n.link ? n.link.reason : modelRev(n.model)?.text) || "";
+  const noteRefs = (n) => (n.obs ? n.obs.source_memories : n.link ? [n.link.cause, n.link.effect] : modelRev(n.model)?.citations) || [];
+  const occurred = (o) => { const w = o?.occurred && window.ArkismMemoryTime?.span(o.occurred); return w ? `일어난 때 ${w}` : ""; };
   const memText = (id) => { const m = record("memories", id); return m ? m.text : m === null ? "읽을 수 없는 기억" : "불러오는 중…"; };
   const noteTitle = (n) => (n.obs ? n.obs.content : n.link ? `${memText(n.link.cause.id)} → ${memText(n.link.effect.id)}` : n.model.title);
   function drawNotes() {
@@ -557,14 +562,15 @@ window.ArkismDigests = (ctx) => {
   function paintNotes() {
     if (state.view !== "memories" || state.memTab !== "notes") return;
     const items = (data.notes || []).filter((n) => !state.query || `${n.model?.title || ""} ${noteText(n)}`.toLowerCase().includes(state.query));
-    const KIND = (n) => (n.obs ? "기억에서 뽑은 정리" : n.link ? "원인과 결과 제안" : "주제 요약 초안");
+    const KIND = (n) => (n.obs ? "기억에서 뽑은 정리" : n.link ? "원인과 결과 제안" : n.model.draft ? "주제 요약 초안" : "다시 만들 주제 요약");
     const table = $("#table");
     table.replaceChildren(...items.map((n) => {
       const cell = el("div", "cell mem-cell");
       cell.append(raw(el("div", "text", noteTitle(n))),
-        el("div", "mem-meta", [KIND(n), `근거 기억 ${noteRefs(n).length}개`, ago((n.obs || n.link || n.model).updated_at)].join(" · ")));
-      const stale = n.obs ? !n.obs.fresh : n.link ? false : n.model.draft.withheld;
-      return row(`note:${n.id}`, "minmax(0,1fr) auto", [cell, el("span", "mem-badge warn", stale ? "근거 바뀜" : n.obs?.diff?.length ? "고침" : "새 정리")], () => notesDetail());
+        el("div", "mem-meta", [KIND(n), `근거 기억 ${noteRefs(n).length}개`, occurred(n.obs), ago((n.obs || n.link || n.model).updated_at)].filter(Boolean).join(" · ")));
+      const stale = n.obs ? !n.obs.fresh : n.link ? false : !!n.model.draft?.withheld;
+      const badge = stale ? "근거 바뀜" : n.model && !n.model.draft ? STALE[n.model.stale_reason] || "오래됨" : n.obs?.diff?.length ? "고침" : "새 정리";
+      return row(`note:${n.id}`, "minmax(0,1fr) auto", [cell, el("span", "mem-badge warn", badge)], () => notesDetail());
     }));
     if (!data.key) table.append(el("div", "empty", "AI 정리를 불러오는 중…"));
     else if (data.notes === false) table.append(el("div", "empty", "AI 정리를 불러오지 못했어요. 새로고침하면 다시 불러와요."));
@@ -581,9 +587,12 @@ window.ArkismDigests = (ctx) => {
     if (n.link) { causalDetail(body, n); return; }
     const o = n.obs, m = n.model, d = m?.draft;
     const head = el("div", "d-head");
-    head.append(el("p", "d-kind", o ? "AI 정리 · 기억에서 뽑음" : "AI 정리 · 주제 요약 초안"), raw(el("h2", "", o ? o.content : m.title)));
+    head.append(el("p", "d-kind", o ? "AI 정리 · 기억에서 뽑음" : d ? "AI 정리 · 주제 요약 초안" : "주제 요약 · 다시 만들 때가 됐어요"), raw(el("h2", "", o ? o.content : m.title)));
     if (m) head.append(raw(el("p", "meta", m.query)));
+    if (occurred(o)) head.append(el("p", "meta", occurred(o)));
+    if (m?.stale) head.append(el("p", "dg-warn", STALE_LEAD[m.stale_reason] || "이 요약이 오래됐어요."));
     body.append(head);
+    if (m && !d) { staleModel(body, n, m); return; }
     const human = state.caps?.role === "human";
     const lines = o ? o.diff : m.draft_diff;
     const c = { id: n.id, fresh: o ? o.fresh : !d.withheld, body: noteText(n), tags: o?.tags, diff: lines?.length ? { lines } : null };
@@ -605,6 +614,30 @@ window.ArkismDigests = (ctx) => {
       ["다시 만드는 때", m && ({ manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh?.mode ?? m.refresh] || (m.refresh?.mode ?? m.refresh))], ["쓴 모델", ((o?.generator || d?.generator)?.model) || ""]];
     const more = el("details", "insight-more"); more.append(el("summary", "", "자세히"), ctx.facts(info));
     body.append(more);
+  }
+
+  // A stale mental model without a draft: the approved text stays in use; 다시 만들기 asks the model for a new draft,
+  // which comes back here for a person to approve (POST /v1/mental-models/{id}/refresh).
+  function staleModel(body, n, m) {
+    if (m.active) {
+      const now = ctx.section("지금 요약", `v${m.active.version}`);
+      now.append(quote(m.active.withheld ? "" : m.active.text, day(m.active.at)));
+      body.append(now);
+    }
+    const card = el("div", "d-action dg-cand");
+    card.append(el("p", "", "AI에게 새 초안을 쓰게 할까요? 승인하기 전까지는 지금 요약을 그대로 써요."));
+    if (state.caps?.role !== "human") card.append(el("p", "meta", "다시 만들기는 사람만 할 수 있어요."));
+    else {
+      const btns = el("div", "d-buttons");
+      btns.append(button("다시 만들기", "primary small", null, () => decideOnce(n.id, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}/refresh`,
+        { method: "POST", body: JSON.stringify({ scope: state.scope }) }),
+      { ok: "새 초안을 만들었어요. 읽어 보고 승인해 주세요.", conflict: "그사이 요약이 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 요약을 다시 만들 수 없어요.",
+        codes: { model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." } }, btns)));
+      card.append(btns);
+    }
+    body.append(card);
+    const refs = noteRefs(n), mems = refs.filter((r) => r.collection === "memories");
+    body.append(members(mems, [], "근거 기억"));
   }
 
   // 원인과 결과 제안: AI가 "이 기억이 저 기억으로 이어졌다"고 본 것. 승인하면 기억을 찾을 때 서로 함께 불려 나와요.

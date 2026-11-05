@@ -527,3 +527,34 @@ test("AI 정리 also lists causal link candidates: cause → effect with the rea
   assert.equal(btn(t.h.$("#detail"), "승인"), undefined);
   assert.match(detailText(t), /승인과 버리기는 사람만 할 수 있어요/);
 });
+
+test("AI 정리: a stale topic summary keeps its approved text and only a person asks for a new draft; observations show when it happened", async () => {
+  require("./memory-time.js");
+  const ob1 = { id: "ob1", revision: 1, content: "3월 초에 이사했어요", fresh: true, updated_at: "2026-03-09T00:00:00Z", source_memories: [{ collection: "memories", id: "m1" }],
+    occurred: { from: "2026-03-04T00:00:00Z", to: "2026-03-08T00:00:00Z" } };
+  const mm = (id, reason) => ({ id, revision: 2, title: `요약 ${id}`, query: "q", stale: true, stale_reason: reason, active: { version: 1, text: "지금 쓰는 요약", citations: [{ collection: "memories", id: "m1" }], at: "2026-01-01T00:00:00Z" } });
+  let refresh = () => ({});
+  const t = setup({ routes: { "/v1/observations?": () => ({ items: [ob1] }), "/v1/mental-models?": () => ({ items: [mm("s1", "sources_changed"), mm("s2", "new_memories"), { id: "ok", revision: 1, title: "괜찮음", active: { version: 1, text: "x" } }] }),
+    "/v1/mental-models/s1/refresh": (_, o) => refresh(o) } });
+  t.state.memTab = "notes"; t.state.caps = { role: "human" };
+  t.view.drawNotes(); await dom.flush();
+  assert.equal(rows(t).length, 3, "a model that is neither stale nor drafted is not listed");
+  const table = t.h.$("#table").textContent;
+  assert.match(table, /일어난 때 2026년 3월 4일 ~ 2026년 3월 7일/);
+  assert.match(table, /다시 만들 주제 요약/); assert.match(table, /새 기억 있음/); assert.match(table, /근거 바뀜/);
+  rows(t).find((r) => r.dataset.id === "note:model:s1").click(); await dom.flush();
+  assert.match(detailText(t), /근거로 든 기억이 지워졌거나 더는 승인 상태가 아니에요/);
+  assert.match(detailText(t), /지금 쓰는 요약/);
+  assert.equal(btn(t.h.$("#detail"), "승인"), undefined, "nothing to approve until a draft exists");
+  refresh = () => { throw new Error("model_not_configured"); };
+  btn(t.h.$("#detail"), "다시 만들기").click(); await dom.flush();
+  assert.match(t.notices.at(-1), /서버에 요약을 쓸 모델이 없어요/);
+  let sent;
+  refresh = (o) => { sent = JSON.parse(o.body); return {}; };
+  btn(t.h.$("#detail"), "다시 만들기").click(); await dom.flush();
+  assert.deepEqual(sent, { scope: SCOPE });
+  assert.match(t.notices.at(-1), /새 초안을 만들었어요/);
+  t.state.caps = { role: "agent" }; t.view.detail();
+  assert.equal(btn(t.h.$("#detail"), "다시 만들기"), undefined);
+  assert.match(detailText(t), /다시 만들기는 사람만 할 수 있어요/);
+});

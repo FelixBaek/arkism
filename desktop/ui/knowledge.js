@@ -1,7 +1,8 @@
 // TOOLS › 지식 (Figma 384:30031 자료 · 384:30671 부분 · 384:31269 위키).
 // 자료 = uploaded knowledge sources (GET /v1/knowledge/sources, …/documents). A new version puts the source back
 // to draft: a person reviews it before search sees it. 부분 = the current document's heading paths, its versions and
-// a test search (POST /v1/knowledge/search) — chunk text is never listed, only search evidence shows it.
+// a test search (POST /v1/knowledge/search). The 부분·이력 window lists the chunks (…/chunks: text for a person only,
+// withheld text stays hidden) and the uploads (…/history), for a source and for a file-extraction document.
 // 위키 = pages an AI drafted from sources (GET /v1/wiki/pages): draft → a person approves → reviewed; edited pages lock.
 // Removing a source from the wiki asks the server for a dry-run preview first (…/remove?dry_run=1); a server that
 // doesn't know it gets a plain confirm instead. Everything read here is data, never instructions.
@@ -10,10 +11,15 @@ window.ArkismKnowledge = (ctx) => {
   const { state, $, el, button, icon, render, request, query, ago, detailShell, headExtras, confirmPop } = ctx;
   const PROFILES = [["design_consultant", "디자인 상담"], ["illustrator", "일러스트"], ["listing_reviewer", "상품 검수"]];
   const SHARED = "default"; // the server's default scope: every agent of this person searches it
-  const FORMATS = [["", "전체"], [".docx", "Word"], [".md", "Markdown"], [".txt", "텍스트"], [".json", "JSON"]];
-  const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".docx": DOCX };
-  const KINDS = "Word·Markdown·텍스트·JSON";
+  const FORMATS = [["", "전체"], [".docx", "Word"], [".pdf", "PDF"], [".xlsx", "표 (.xlsx)"], [".csv", "표 (.csv)"], [".tsv", "표 (.tsv)"], [".pptx", "발표 자료"],
+    [".html", "웹 페이지"], [".htm", "웹 페이지 (.htm)"], [".eml", "메일"], [".md", "Markdown"], [".txt", "텍스트"], [".json", "JSON"]];
+  const OOXML = "application/vnd.openxmlformats-officedocument.";
+  // The server's own types (document_formats.go): a file sent with any other type is refused.
+  const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".docx": `${OOXML}wordprocessingml.document`, ".pdf": "application/pdf",
+    ".xlsx": `${OOXML}spreadsheetml.sheet`, ".pptx": `${OOXML}presentationml.presentation`, ".html": "text/html", ".htm": "text/html", ".csv": "text/csv",
+    ".tsv": "text/tab-separated-values", ".eml": "message/rfc822" };
+  const TEXT = [".md", ".txt", ".json"]; // sent as text and split past 64KB; any other file goes up whole (4MB) and the server reads it
+  const KINDS = "Word·PDF·표·발표 자료·웹 페이지·메일·Markdown·텍스트·JSON";
   const REJECT = {
     path_outside_wiki: "위키 밖 경로", path_identity_mismatch: "경로와 제목이 다름", forbidden_field: "금지된 머리말", unknown_attribute: "모르는 속성",
     not_planned: "계획에 없던 페이지", not_in_source: "원문에 없는 주제", type_mismatch: "종류가 다름", duplicate_block: "같은 블록 반복",
@@ -40,7 +46,9 @@ window.ArkismKnowledge = (ctx) => {
   const off = (e) => /HTTP 404|access_denied|HTTP 403/.test(e?.message || "");
   // A plain sentence first; an unknown server code stays out of the main line.
   const errText = (e) => ({ revision_conflict: "그새 바뀌었어요. 새로고침했어요.", access_denied: "권한이 없어요. 사람만 할 수 있는 동작이에요.", secret_detected: "비밀값이 들어 있어 받지 않았어요.",
-    invalid_request: "파일을 읽지 못했어요. 내용과 형식을 확인하고 다시 올려 주세요.", payload_too_large: "파일이 너무 커요.", artifact_too_large: "파일이 너무 커요." }[e?.message] || "잠시 문제가 생겼어요. 다시 시도해 주세요.");
+    invalid_request: "파일을 읽지 못했어요. 내용과 형식을 확인하고 다시 올려 주세요.", payload_too_large: "파일이 너무 커요.", artifact_too_large: "파일이 너무 커요.",
+    unsupported_media_type: `이 형식은 읽지 못해요. 서버에 변환기를 연결하지 않았어요. ${KINDS} 파일로 저장해서 올려 주세요.`,
+    no_extractable_text: "파일에서 글자를 찾지 못했어요. 스캔한 PDF나 암호가 걸린 PDF는 읽지 못해요." }[e?.message] || "잠시 문제가 생겼어요. 다시 시도해 주세요.");
   const noI18n = (n) => { n.dataset.noI18n = ""; return n; };
   const num = (n) => Number(n || 0).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR");
 
@@ -210,20 +218,19 @@ window.ArkismKnowledge = (ctx) => {
     if ((b?.lifecycle_status || b?.knowledge?.lifecycle_status || b?.status) !== "active_synthetic") await post(`/v1/knowledge/bindings/${encodeURIComponent(b.id)}/state`, { expected_revision: b.revision, status: "active_synthetic" });
   }
   const b64 = (buf) => { let bin = ""; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(bin); };
-  // One file picker for both uploads: onFile gets the file and its lower-case extension.
+  // One file picker for both uploads: onFile gets the file and its lower-case extension. Any file may be picked:
+  // a server with a converter reads more formats, and one without answers 415 (shown as a plain sentence).
   function chooseFile(onFile) {
-    const input = el("input"); input.type = "file"; input.accept = ".docx,.md,.txt,.json,.pdf";
+    const input = el("input"); input.type = "file";
     input.addEventListener("change", () => { const f = input.files?.[0]; if (f) onFile(f, (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase()); });
     input.click();
   }
   function pickFile(source) {
     chooseFile(async (f, ext) => {
-      const word = ext === ".docx";
-      if (ext === ".pdf") { K.notice = "PDF는 아직 읽지 못해요. Word(.docx)나 텍스트(.txt)로 저장해서 올려 주세요."; paint(); return; }
-      if (!MIME[ext]) { K.notice = `${KINDS} 파일을 올릴 수 있어요. 다른 파일은 텍스트로 저장해서 올려 주세요.`; paint(); return; }
-      if (word && f.size > 4 << 20) { K.notice = "파일이 너무 커요. Word 파일은 4MB까지 올릴 수 있어요."; paint(); return; }
-      const data = word ? { content_base64: b64(await f.arrayBuffer()) } : { content: await f.text() };
-      const parts = word ? [] : window.ArkismKnowledge.splitText(data.content);
+      const whole = !TEXT.includes(ext);
+      if (whole && f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
+      const data = whole ? { content_base64: b64(await f.arrayBuffer()) } : { content: await f.text() };
+      const parts = whole ? [] : window.ArkismKnowledge.splitText(data.content);
       if (parts.length > 1) {
         // The server takes 64KB of text per file: a bigger text goes up as several sources, one per part.
         if (ext === ".json") { K.notice = "JSON 파일은 나누면 깨져서 64KB까지만 올릴 수 있어요."; paint(); return; }
@@ -237,7 +244,7 @@ window.ArkismKnowledge = (ctx) => {
       if (!choice) return;
       if (same) delete K.docs[same.id];
       void act(async () => {
-        const r = await post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext], ...data, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) });
+        const r = await post("/v1/knowledge/ingest", { source_key: same?.display_name || f.name, filename: f.name, mime_type: MIME[ext] || "application/octet-stream", ...data, synthetic: false, ...(same ? { expected_revision: same.revision } : {}) });
         const src = r?.source;
         if (choice === "use" && src?.id) await useEverywhere(src.id, src.revision, r.duplicate && same && !needs(same), same?.bindings || []);
         return r;
@@ -269,7 +276,7 @@ window.ArkismKnowledge = (ctx) => {
   // The server only proposes: every claim lands as a memory candidate a person approves in 확인해 주세요.
   // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}); 멈추기 asks /v1/operations/{id}/cancel (people only).
   // A failed job is resumed by its uploader through …/jobs/{id}/run (the operations retry route refuses this kind).
-  const extractErr = (e) => ({ no_extractable_text: "파일에서 글자를 찾지 못했어요. 스캔한 PDF나 암호가 걸린 PDF는 읽지 못해요.", model_not_configured: "서버에 기억을 뽑을 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.",
+  const extractErr = (e) => ({ model_not_configured: "서버에 기억을 뽑을 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.",
     model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요.", candidate_daily_limit: "오늘 만들 수 있는 후보 수를 넘었어요. 내일 다시 해 주세요." }[e?.message] || errText(e));
   let extractTimer = 0;
   function showExtract(r, label) {
@@ -309,10 +316,9 @@ window.ArkismKnowledge = (ctx) => {
     clearTimeout(extractTimer); extractTimer = setTimeout(pollExtract, 1500);
   }
   const pickExtractFile = () => chooseFile(async (f, ext) => {
-    if (!MIME[ext] && ext !== ".pdf") { K.notice = `PDF·${KINDS} 파일에서 기억 후보를 만들 수 있어요.`; paint(); return; }
     if (f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
     const content = b64(await f.arrayBuffer());
-    void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, mime: MIME[ext] || "application/pdf" }), f.name);
+    void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, ...(MIME[ext] ? { mime: MIME[ext] } : {}) }), f.name);
   });
   const extractFromSource = (s) => startExtract(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/extract_memories`, {}), s.display_name);
   const EXTRACT_WORD = { queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
@@ -326,17 +332,81 @@ window.ArkismKnowledge = (ctx) => {
     if (x.active && x.total) { const bar = el("progress", "v4k-progress"); bar.max = x.total; bar.value = x.next; bar.setAttribute("aria-label", "진행"); c.append(bar, el("p", "v4k-card-note", `${num(x.total)}부분 중 ${num(x.next)}부분 읽음`)); }
     if (x.active && !x.total) c.append(el("p", "v4k-card-note", "파일을 읽고 있어요…"));
     if (!x.active && !x.error) c.append(el("p", "", x.created ? `기억 후보 ${num(x.created)}개를 만들었어요. 저장할지는 내가 골라요.` : "새로 만든 후보가 없어요."));
-    if (x.delta) c.append(el("p", "v4k-card-note", `전체 ${num(x.delta.total)} · 그대로 ${num(x.delta.unchanged)} · 바뀜 ${num(x.delta.changed)} · 빠짐 ${num(x.delta.removed)}`));
+    if (x.delta) c.append(el("p", "v4k-card-note", deltaLine(x.delta)));
     if (x.delta?.left) c.append(el("p", "v4k-card-note", `빠진 부분에서 나온 기억 후보 ${num(x.delta.left)}개는 그대로 남아 있어요. 필요 없으면 '확인해 주세요'에서 버려 주세요.`));
     if (x.error || x.jobError) c.append(el("p", "v4k-warn", x.error || extractErr({ message: x.jobError })));
     const a = el("div", "v4s-actions");
     if ((x.created || x.delta?.left) && !x.active) a.append(button("후보 확인하러 가기", "primary", null, () => ctx.go?.("memories", "candidate")));
     if (x.active && x.id && human()) a.append(button("멈추기", "ghost", null, cancelExtract));
     if (!x.active && x.id && x.phase === "failed") a.append(button("이어서 하기", "primary", null, resumeExtract));
+    if (!x.active && x.doc) a.append(button("부분·이력 보기", "", null, () => openParts({ title: x.label, doc: x.doc })));
     if (!x.active) a.append(link("닫기", () => { K.extract = null; paint(); }));
     c.append(a);
     if (x.skipped) { const more = el("details", "v4k-more"); more.append(el("summary", "", "자세히"), el("p", "meta", `건너뛴 부분 ${num(x.skipped)}곳 (비공개·비밀값이거나 읽을 수 없는 부분)`)); c.append(more); }
     return c;
+  }
+
+  // ---------------------------------------------------------------- 부분·이력 창 (GET …/chunks, …/history)
+  // One window for a knowledge source (source) or a file-extraction document (doc): 부분 lists the chunks with their hash,
+  // place and state (a document's chunks also with the memory candidates each made); 이력 lists the versions or uploads
+  // with what changed. Pages of 50 load on demand. Everything here is data, drawn as plain text.
+  const CHUNK = { unchanged: "그대로", extracted: "읽음", pending: "아직 안 읽음", active: "사용 중", draft: "확인 전", quarantined: "격리됨", erased: "지워짐", deleted: "지워짐" };
+  const CAND = { candidate: "확인 대기", conflicted: "확인 대기", approved: "승인됨", active: "승인됨", rejected: "버림", superseded: "새 기억으로 바뀜", gone: "없어짐" };
+  const UPLOAD = { pending: "기다리는 중", retry: "기다리는 중", running: "읽는 중", done: "끝남", failed: "실패", cancelled: "멈춤" };
+  const deltaLine = (d) => `전체 ${num(d.total)} · 그대로 ${num(d.unchanged)} · 바뀜 ${num(d.changed)} · 빠짐 ${num(d.removed)}`;
+  function openParts({ title, source, doc }) {
+    const base = source ? `/v1/knowledge/sources/${encodeURIComponent(source)}` : `/v1/files/memories/documents/${encodeURIComponent(doc)}`;
+    const L = { chunks: { items: [], next: "", busy: false, error: "", read: false }, history: { items: [], next: "", busy: false, error: "", read: false } };
+    let extract = "", pop = null, open = "chunks";
+    const redraw = () => { if (pop?.dialog.isConnected) pop.select(open); };
+    async function more(key) {
+      const P = L[key];
+      if (P.busy) return;
+      P.busy = true; P.error = ""; redraw();
+      try {
+        const r = await get(`${base}/${key}`, { limit: 50, ...(P.next ? { cursor: P.next } : {}) });
+        if (!Array.isArray(r?.items)) throw new Error("invalid_response");
+        P.items.push(...r.items); P.next = r.next_cursor || ""; P.total = r.total;
+        if (r.extract_document_id) extract = r.extract_document_id;
+      } catch (e) { P.error = errText(e); }
+      P.busy = false; P.read = true; redraw();
+    }
+    const item = (head, meta, ...kids) => { const c = el("article", "v4k-ev"), top = el("div", "v4k-ev-top"); top.append(noI18n(el("span", "mono", head)), el("small", "", meta.filter(Boolean).join(" · "))); c.append(top, ...kids.filter(Boolean)); return c; };
+    const chunk = (x) => source
+      ? item(`#${x.chunk_index + 1}${x.section_path ? ` · ${x.section_path}` : ""}`, [CHUNK[x.status] || x.status, `${num(x.token_estimate)} 토큰`, x.hash?.slice(0, 12)],
+        x.text_withheld ? el("p", "meta", "내용을 가렸어요. 비공개·격리된 부분이거나 사람만 볼 수 있는 내용이에요.") : noI18n(el("p", "", x.text)))
+      : item(x.locator, [CHUNK[x.status] || x.status, x.hash?.slice(0, 12)], candidates(x.candidates || []));
+    function candidates(list) {
+      if (!list.length) return el("p", "meta", "이 부분에서 만든 기억 후보가 없어요.");
+      const box = el("div", "v4k-chips");
+      for (const [i, c] of list.entries()) box.append(el("span", `v4s-badge${c.status === "candidate" || c.status === "conflicted" ? " amber" : ""}`, `후보 ${i + 1} · ${CAND[c.status] || c.status}`));
+      return box;
+    }
+    const version = (x) => source
+      ? item(x.filename, [x.current ? "지금 버전" : "예전 버전", x.extraction_status === "failed" ? "읽기 실패" : `부분 ${num(x.chunk_count)}개`, ago(x.created_at)])
+      : item(x.label || title, [UPLOAD[x.status] || x.status, ago(x.created_at), `기억 후보 ${num(x.candidates_created)}개`],
+        window.ArkismKnowledge.delta(x.delta) ? el("p", "v4k-card-note", deltaLine(window.ArkismKnowledge.delta(x.delta))) : null,
+        x.delta?.removed_sources?.length ? el("p", "v4k-card-note", `빠진 부분 ${num(x.delta.removed_sources.length)}곳 · 그 후보는 그대로 남아 있어요`) : null);
+    const tab = (key, row, empty) => (body) => {
+      open = key;
+      const P = L[key];
+      if (!P.read && !P.busy) void more(key);
+      const list = el("div", "v4k-evidence");
+      list.append(...P.items.map(row));
+      if (P.read && !P.items.length && !P.error) list.append(el("div", "empty", empty));
+      if (P.busy) list.append(el("p", "meta", "불러오는 중…"));
+      if (P.error) list.append(el("p", "v4k-warn", P.error));
+      body.append(list);
+      const acts = el("div", "v4s-actions");
+      if (P.next || P.error) { const b = button(P.error ? "다시 시도" : "더 보기", "", null, () => more(key)); b.disabled = P.busy; acts.append(b); }
+      if (key === "chunks" && extract) acts.append(button("이 자료로 만든 기억 후보 보기", "", null, () => { pop.dialog.close(); openParts({ title, doc: extract }); }));
+      if (acts.childElementCount) body.append(acts);
+    };
+    const sub = source ? "검색에 쓰는 부분과 올린 버전이에요. 내용은 사람에게만 보여요." : "파일에서 읽은 부분과 그 부분에서 나온 기억 후보예요. 후보는 '확인해 주세요'에서 승인해야 쓰여요.";
+    pop = window.ArkismCrewPopup({ el, button }).open({ title, sub, cls: "v4k-parts", tabs: [
+      { key: "chunks", label: "부분", render: tab("chunks", chunk, "부분이 없어요.") },
+      { key: "history", label: source ? "버전" : "올린 이력", render: tab("history", version, "이력이 없어요.") }] });
+    noI18n(pop.dialog.querySelector("h2"));
   }
 
   // ---------------------------------------------------------------- 자료 (384:30031)
@@ -437,8 +507,9 @@ window.ArkismKnowledge = (ctx) => {
     box.append(wikiSection(s));
     box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["확인한 사람", s.approved_by || "", true], ["올린 때", ago(s.created_at)]])));
     const tools = el("div", "v4s-actions");
-    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("이 자료로 기억 후보 만들기", "", null, () => extractFromSource(s)));
-    for (const b of tools.children) b.disabled = K.busy || (b.textContent.includes("기억 후보") && !!K.extract?.active);
+    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("이 자료로 기억 후보 만들기", "", null, () => extractFromSource(s)),
+      button("부분·이력 보기", "", null, () => openParts({ title: s.display_name, source: s.id })));
+    for (const b of tools.children) b.disabled = (K.busy && !b.textContent.includes("이력")) || (b.textContent.includes("기억 후보") && !!K.extract?.active);
     box.append(sec("관리", null, tools, noticeLine(), el("p", "meta", "AI는 자료를 지시가 아닌 참고로만 읽어요.")));
     // 자세히: specialist bindings and index facts for people who need them
     const more = el("details", "v4k-more");
@@ -829,12 +900,13 @@ window.ArkismKnowledge = (ctx) => {
 // Re-extraction counts (delta: chunks_total/unchanged/changed/removed, removed_sources) show only when the server sends them.
 window.ArkismKnowledge.extractState = (r = {}) => {
   const j = r.job || r, phase = { pending: "queued", retry: "queued", waiting: "queued", running: "running", done: "done", cancelled: "cancelled", failed: "failed" }[r.status] || "queued";
-  const d = j.delta || r.delta;
   return { id: r.id || r.job_id || "", revision: r.revision || 0, phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
     total: j.total || 0, next: j.next || 0, created: j.candidates_created || 0, skipped: (j.skipped || []).length, jobError: phase === "failed" ? j.error || "failed" : "",
-    delta: d?.chunks_total != null ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0,
-      left: (d.removed_sources || []).reduce((n, x) => n + (x.candidate_ids?.length || 0), 0) } : null };
+    doc: r.document_id || j.document || "", delta: window.ArkismKnowledge.delta(j.delta || r.delta) };
 };
+// A server delta (chunks_total/unchanged/changed/removed, removed_sources) in the screen's words; null when the server sent none.
+window.ArkismKnowledge.delta = (d) => (d?.chunks_total != null ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0,
+  left: (d.removed_sources || []).reduce((n, x) => n + (x.candidate_ids?.length || 0), 0) } : null);
 // Cuts text into parts of at most max UTF-8 bytes (the server's per-file cap): at blank lines first,
 // then at line ends, then between characters. Parts that hold only spaces are dropped.
 window.ArkismKnowledge.splitText = (text, max = 64 << 10) => {

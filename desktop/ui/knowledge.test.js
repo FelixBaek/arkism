@@ -297,8 +297,10 @@ test("document loading and errors, a source without sections and a source that v
   assert.match(k.table().textContent, /전체 2개 중 2개/);
 });
 
-test("upload: wrong type, PDF, too large, Word, the uploader's check and a duplicate", async () => {
-  const k = await setup({ "/v1/knowledge/ingest": (_, body) => (body.content === "same" ? { duplicate: true, source: { id: "s2", revision: 2 } } : { source: { id: body.source_key === "a.md" ? "s1" : "new", revision: 4 } }) });
+test("upload: a format the server can't read (415), PDF, too large, Word, the uploader's check and a duplicate", async () => {
+  const unsupported = Object.assign(new Error("unsupported_media_type"), { status: 415 });
+  const k = await setup({ "/v1/knowledge/ingest": (_, body) => { if (body.filename === "x.hwp") throw unsupported;
+    return body.content === "same" ? { duplicate: true, source: { id: "s2", revision: 2 } } : { source: { id: body.source_key === "a.md" ? "s1" : "new", revision: 4 } }; } });
   await k.start();
   const add = k.view.views.knowledge.head().at(-1);
   const pick = async (f, choice) => {
@@ -310,27 +312,34 @@ test("upload: wrong type, PDF, too large, Word, the uploader's check and a dupli
   };
   await pick(null);
   assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
-  await pick(file("x.pdf", "pdf"));
-  assert.match(k.table().textContent, /PDF는 아직 읽지 못해요/);
-  await pick(file("x.hwp", "hwp"));
-  assert.match(k.table().textContent, /Word·Markdown·텍스트·JSON 파일을 올릴 수 있어요/);
+  const bin = (name, size = 3) => ({ name, size, arrayBuffer: async () => new TextEncoder().encode("abc").buffer });
   await pick(file("big.json", "x".repeat(65 * 1024)));
   assert.match(k.table().textContent, /JSON 파일은 나누면 깨져서/);
   assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
-  await pick(file("big.docx", "x", 5 << 20));
-  assert.match(k.table().textContent, /Word 파일은 4MB까지/);
+  await pick(bin("big.docx", 5 << 20));
+  assert.match(k.table().textContent, /4MB까지 올릴 수 있어요/);
+  // any other file goes up whole; a server without a converter answers 415, said in plain words
+  await pick(bin("x.hwp"), "only");
+  const hwp = k.posted("/v1/knowledge/ingest").at(-1).body;
+  assert.equal(hwp.mime_type, "application/octet-stream"); assert.equal(hwp.content_base64, "YWJj");
+  assert.match(k.table().textContent, /이 형식은 읽지 못해요. 서버에 변환기를 연결하지 않았어요/);
+  await pick(bin("deck.pptx"), "only");
+  assert.equal(k.posted("/v1/knowledge/ingest").at(-1).body.mime_type, "application/vnd.openxmlformats-officedocument.presentationml.presentation");
+  await pick(bin("x.pdf"), "only");
+  assert.equal(k.posted("/v1/knowledge/ingest").at(-1).body.mime_type, "application/pdf");
+  const before = k.posted("/v1/knowledge/ingest").length;
   // 취소 sends nothing
   await pick(file("new.txt", "hello"), "no");
-  assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
+  assert.equal(k.posted("/v1/knowledge/ingest").length, before);
   // 올리기만: ingested, still waiting for a person
   await pick(file("new.txt", "hello"), "only");
-  const first = k.posted("/v1/knowledge/ingest")[0].body;
+  const first = k.posted("/v1/knowledge/ingest")[before].body;
   assert.equal(first.mime_type, "text/plain"); assert.equal(first.source_key, "new.txt"); assert.equal(first.expected_revision, undefined); assert.equal(first.content, "hello");
   assert.equal(k.posted("/v1/knowledge/bindings").length, 0);
   assert.match(k.table().textContent, /'쓰게 하기'를 눌러/);
   // the uploader's check: reviewed, shared with every agent and turned on
   await pick(file("a.md", "v2"), "use");
-  const second = k.posted("/v1/knowledge/ingest")[1].body;
+  const second = k.posted("/v1/knowledge/ingest")[before + 1].body;
   assert.equal(second.expected_revision, 1); assert.equal(second.mime_type, "text/markdown");
   assert.deepEqual(k.posted("/v1/knowledge/sources/s1/review")[0].body, { scope: { workspace_id: "w" }, expected_revision: 4, status: "active", trust_level: "reviewed" });
   assert.deepEqual(k.posted("/v1/knowledge/bindings")[0].body, { scope: { workspace_id: "w" }, binding_key: "s1:default", knowledge_source_id: "s1", specialist_profile_id: "default",
@@ -339,7 +348,7 @@ test("upload: wrong type, PDF, too large, Word, the uploader's check and a dupli
   assert.match(k.table().textContent, /이제 내 모든 AI가/);
   // a Word file travels as base64 with its own type
   await pick({ name: "guide.docx", size: 3, arrayBuffer: async () => new Uint8Array([80, 75, 3]).buffer }, "only");
-  const word = k.posted("/v1/knowledge/ingest")[2].body;
+  const word = k.posted("/v1/knowledge/ingest")[before + 2].body;
   assert.equal(word.mime_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"); assert.equal(word.content_base64, "UEsD"); assert.equal(word.content, undefined);
   // the same text again on a reviewed source: no second review, only the shared switch
   await pick(file("b.txt", "same"), "use");
@@ -350,7 +359,7 @@ test("upload: wrong type, PDF, too large, Word, the uploader's check and a dupli
   assert.equal(dom.buttons(k.table(), "+ 파일 올리기").length, 0);
   assert.match(k.table().textContent, /올릴 수 있는 파일: Word/);
   await k.press(k.detail(), "새 버전 올리기");
-  assert.equal(k.files.length, 11);
+  assert.equal(k.files.length, 12);
 });
 
 test("source filters, search typing, format groups and paging with a retry", async () => {
@@ -694,7 +703,7 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   const k = await setup({
     "/v1/files/memories/jobs/": () => (++reads < 2 ? { id: "fx", status: "running", revision: 1, job: { total: 4, next: 1 } }
       : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1, removed_sources: [{ locator: "chunk:4", candidate_ids: ["c9"] }] } } }),
-    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" }),
+    "/v1/files/memories": (_, body) => { if (body.filename === "notes.exe") throw Object.assign(new Error("unsupported_media_type"), { status: 415 }); return { job_id: "fx", status: "pending" }; },
     "/v1/operations/": () => ({ id: "fx", status: "cancelled" })
   });
   await k.start();
@@ -702,12 +711,12 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   assert.equal(hb[0].textContent.trim(), "파일로 기억 후보 만들기");
   hb[0].click(); const input = k.files.at(-1);
   input.files = [{ name: "notes.exe", size: 3, arrayBuffer: async () => new ArrayBuffer(3) }]; dom.fire(input, "change"); await dom.flush();
-  assert.match(k.table().textContent, /기억 후보를 만들 수 있어요/);
-  assert.equal(k.posted("/v1/files/memories").length, 0);
+  assert.match(k.table().textContent, /이 형식은 읽지 못해요/, "the server's 415 in plain words");
+  assert.equal(k.posted("/v1/files/memories")[0].body.mime, undefined, "an unknown type is left to the server");
   hb[0].click(); const input2 = k.files.at(-1);
   input2.files = [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input2, "change"); await dom.flush();
-  assert.deepEqual(k.posted("/v1/files/memories")[0].body, { scope: { workspace_id: "w" }, filename: "plan.pdf", content_base64: "YWJj", mime: "application/pdf" });
-  assert.doesNotMatch(k.table().textContent, /기억 후보를 만들 수 있어요/, "a fresh start clears the old notice");
+  assert.deepEqual(k.posted("/v1/files/memories")[1].body, { scope: { workspace_id: "w" }, filename: "plan.pdf", content_base64: "YWJj", mime: "application/pdf" });
+  assert.doesNotMatch(k.table().textContent, /이 형식은 읽지 못해요/, "a fresh start clears the old notice");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /4부분 중 1부분 읽음/);
   // stop: declined asks and sends nothing; accepted cancels at the read revision and reads the job again
@@ -742,4 +751,64 @@ test("file → memory candidates: a failed job resumes through its run route; an
   assert.match(k.table().textContent, /기억 후보 2개를 만들었어요/);
   assert.equal(dom.buttons(k.table(), "이어서 하기").length, 0);
   k.view.views.knowledge.render?.();
+});
+
+test("부분·이력 window: a source's chunks (withheld text hidden), its versions, then the extraction document's candidates and uploads", async () => {
+  require("./crew-popup.js");
+  const k = await setup({
+    "/v1/knowledge/sources/s2/chunks": (path) => (path.includes("cursor=50") ? { items: [{ id: "c3", chunk_index: 2, hash: "h3", token_estimate: 4, status: "active", text: "third" }], total: 3, next_cursor: "" }
+      : { items: [{ id: "c1", chunk_index: 0, section_path: "Intro", hash: "abcdef0123456789", token_estimate: 12, status: "active", text: "hello chunk" },
+        { id: "c2", chunk_index: 1, hash: "h2", token_estimate: 8, status: "quarantined", text_withheld: true }], total: 3, next_cursor: "50", extract_document_id: "doc1" }),
+    "/v1/knowledge/sources/s2/history": () => ({ items: [{ id: "d2", filename: "b.txt", current: true, chunk_count: 2, created_at: T }], total: 1, next_cursor: "" }),
+    "/v1/files/memories/documents/doc1/chunks": () => ({ items: [{ locator: "chunk:1", hash: "x1", status: "extracted", candidates: [{ id: "k1", status: "candidate" }, { id: "k2", status: "approved", memory_id: "k2" }] },
+      { locator: "chunk:2", hash: "x2", status: "unchanged", candidates: [] }], total: 2, next_cursor: "" }),
+    "/v1/files/memories/documents/doc1/history": () => ({ items: [{ job_id: "j2", status: "done", label: "b.txt", candidates_created: 2, created_at: T,
+      delta: { chunks_total: 2, chunks_unchanged: 1, chunks_changed: 1, chunks_removed: 1, removed_sources: [{ locator: "chunk:3", candidate_ids: ["k9"] }] } }], next_cursor: "" })
+  });
+  await k.start();
+  const row = [...k.table().querySelectorAll(".v4s-row")].find((r) => r.dataset.id === "s2"); row.click(); await dom.flush();
+  await k.press(k.detail(), "부분·이력 보기"); await dom.flush();
+  const dlg = () => k.document.body.querySelector("dialog.v4k-parts");
+  assert.ok(dlg(), "the window opens");
+  let t = dlg().textContent;
+  assert.match(t, /#1 · Intro/); assert.match(t, /hello chunk/); assert.match(t, /abcdef012345/); assert.doesNotMatch(t, /abcdef0123456/, "hash shortened");
+  assert.match(t, /격리됨/); assert.match(t, /내용을 가렸어요/);
+  assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/knowledge/sources/s2/chunks?") && c.path.includes("limit=50")));
+  await k.press(dlg(), "더 보기"); await dom.flush();
+  assert.match(dlg().textContent, /third/);
+  assert.equal(dom.buttons(dlg(), "더 보기").length, 0, "no next page left");
+  await k.press(dlg(), "버전"); await dom.flush();
+  assert.match(dlg().textContent, /지금 버전 · 부분 2개/);
+  await k.press(dlg(), "부분");
+  await k.press(dlg(), "이 자료로 만든 기억 후보 보기"); await dom.flush();
+  t = dlg().textContent;
+  assert.match(t, /chunk:1/); assert.match(t, /후보 1 · 확인 대기/); assert.match(t, /후보 2 · 승인됨/); assert.match(t, /이 부분에서 만든 기억 후보가 없어요/);
+  await k.press(dlg(), "올린 이력"); await dom.flush();
+  t = dlg().textContent;
+  assert.match(t, /끝남/); assert.match(t, /기억 후보 2개/); assert.match(t, /전체 2 · 그대로 1 · 바뀜 1 · 빠짐 1/); assert.match(t, /빠진 부분 1곳/);
+  // nothing here writes: every call the window made was a GET
+  assert.ok(k.srv.calls.filter((c) => c.path.includes("/chunks") || c.path.includes("/history")).every((c) => c.method === "GET"));
+});
+
+test("부분·이력 window from a finished extraction card; a failed page read can be retried", async () => {
+  require("./crew-popup.js");
+  let fail = true;
+  const k = await setup({
+    "/v1/files/memories/documents/": () => { if (fail) { fail = false; throw new Error("dependency_unavailable"); } return { items: [{ locator: "page:1", hash: "p1", status: "extracted", candidates: [] }], next_cursor: "" }; },
+    "/v1/files/memories": () => ({ job_id: "fx", document_id: "docx1", status: "done", candidates_created: 0 })
+  });
+  await k.start();
+  k.view.views.knowledge.head()[0].click(); const input = k.files.at(-1);
+  input.files = [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input, "change"); await dom.flush();
+  await k.press(k.table(), "부분·이력 보기"); await dom.flush();
+  const dlg = k.document.body.querySelector("dialog.v4k-parts");
+  assert.match(dlg.textContent, /잠시 문제가 생겼어요/);
+  await k.press(dlg, "다시 시도"); await dom.flush();
+  assert.match(dlg.textContent, /page:1/);
+  assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents/docx1/chunks?")));
+});
+
+test("delta: the server's counts in the screen's words", () => {
+  assert.equal(window.ArkismKnowledge.delta(undefined), null);
+  assert.deepEqual(window.ArkismKnowledge.delta({ chunks_total: 3, chunks_changed: 1, removed_sources: [{ candidate_ids: ["a", "b"] }, {}] }), { total: 3, unchanged: 0, changed: 1, removed: 0, left: 2 });
 });
