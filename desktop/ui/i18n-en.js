@@ -7621,3 +7621,20 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.strings, {
   "응답 코드": "Response code",
   "받은 내용": "Response received" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "에이전트가 묻는 거라 사람이 정해요": "An agent is asking, so a person decides",
+  "좋아요": "Agree",
+  "그대로 두기를 누르면 아무것도 바뀌지 않아요.": "Leave as is changes nothing.",
+  "에이전트가 바꾸자고 해요": "An agent suggests a change",
+  "좋아요를 누르면 동의했다고만 남아요. 바꾸는 건 사람이 직접 해요.": "Agree only records that you agree. A person makes the change.",
+  "위키 폴더 만들기": "Create wiki folder",
+  "위키 페이지 만들기": "Create wiki page",
+  "위키 페이지 고치기": "Edit wiki page",
+  "위키 페이지 지우기": "Delete wiki page",
+  "문서 지우기": "Delete document",
+  "주제 요약 새로 쓰기": "Rewrite topic summary",
+  "주제 요약 비우기": "Clear topic summary",
+  "주제 지우기": "Delete topic",
+  "공간 설정 바꾸기": "Change space settings",
+  "새 공간 만들기": "Create new space",
+  "에이전트 제안": "Agent suggestion" });

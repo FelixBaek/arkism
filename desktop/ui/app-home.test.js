@@ -531,6 +531,18 @@ test("overview: an agent's 기억 비우기 proposal waits for a person who type
   await closeAll();
 });
 
+test("overview: an agent's other change proposal only records a person's yes or no", async () => {
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  const row = [...win().querySelectorAll(".ov-wide-row-dream")].find((r) => /위키 페이지 고치기/.test(text(r)));
+  assert.ok(row, "change proposal row"); assert.match(text(row), /에이전트 제안/); row.click(); await app.settle();
+  assert.match(text(win()), /에이전트가 바꾸자고 해요/); assert.match(text(win()), /Local setup/);
+  const sent = () => app.apiCalls.filter(([m, p]) => m === "POST" && /\/v1\/maintenance_proposals\/mp-page\/decide$/.test(p));
+  await press("좋아요", win(), 60);
+  const body = JSON.parse(sent().at(-1)[2]);
+  assert.equal(body.decision, "accept"); assert.equal(body.confirm, undefined);
+  await closeAll();
+});
+
 test("overview: a dreaming proposal's 지우기 picks which memory and why; 취소 sends nothing", async () => {
   await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
   const d = win();

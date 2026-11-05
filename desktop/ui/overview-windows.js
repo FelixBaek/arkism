@@ -247,7 +247,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       })),
       dream: () => dreamItems().slice(0, cap).map((c) => keepRow(c.dream, () => {
         const t = c.dream.maintenance || {}, ev = t.evidence, wrap = el("div", "ov-win-proposal"), panel = el("div", "ov-win-proposal-panel"); panel.hidden = true;
-        const meta = t.change ? "되돌릴 수 없는 일이라 사람이 정해요" : !t.memory ? `→ ${clip(memText(t.retire?.id), 40)}` : ev ? (t.type === "lesson_often_failing" ? `자주 어기는 교훈 · ${num(ev.samples)}번 중 ${num(ev.passed)}번만 지켜졌어요` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙";
+        const meta = t.change ? (CHANGES[t.change.action]?.ask ? "되돌릴 수 없는 일이라 사람이 정해요" : "에이전트가 묻는 거라 사람이 정해요") : !t.memory ? `→ ${clip(memText(t.retire?.id), 40)}` : ev ? (t.type === "lesson_often_failing" ? `자주 어기는 교훈 · ${num(ev.samples)}번 중 ${num(ev.passed)}번만 지켜졌어요` : `자주 어기는 규칙 · 통과율 ${Math.round((ev.pass_rate || 0) * 100)}% (${num(ev.passed)}/${num(ev.samples)})`) : t.type === "lesson_often_failing" ? "실패가 잦은 교훈" : "자주 어기는 규칙";
         const toggle = button("결정하기 ⌄", "small", null, () => { panel.hidden = !panel.hidden; toggle.textContent = panel.hidden ? "결정하기 ⌄" : "접기 ⌃"; if (!panel.hidden && !panel.childElementCount) panel.append(...dreamDecision(c, () => redraw?.())); });
         wrap.append(row(c.label, c.text, meta, "", [toggle]), panel);
         return wrap;
@@ -592,7 +592,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   // A dreaming proposal: what stays, what goes to history, and the person's choices (nothing is hard-deleted); 승인 대기 and the 드리밍 window share it
   function dreamDecision(c, done) { // done: after a decision, once the data is reloaded
-    const p = c.dream, x = p.maintenance || {}, signal = !!x.memory, merge = x.type !== "contradiction", chg = x.change && DESTRUCTIVE[x.change.action];
+    const p = c.dream, x = p.maintenance || {}, signal = !!x.memory, merge = x.type !== "contradiction", chg = x.change && CHANGES[x.change.action];
     const h = el("div", "ov-detail-head"); h.append(tagEl("정리"), tagEl(c.label), el("small", "", `정리 제안${c.created_at ? ` · ${ago(c.created_at)}` : ""}`));
     const head = el("div", "ov-detail-group"); head.append(h, el("h3", "", chg ? chg.title : signal ? (x.type === "lesson_often_failing" ? "이 교훈이 자주 실패해요. 다시 볼까요?" : "이 규칙을 자주 어겨요. 다시 볼까요?") : merge ? "비슷한 기억 2개, 하나로 합칠까요?" : "서로 다른 말을 하는 기억, 새 것으로 바꿀까요?"));
     const g = el("div", "ov-detail-group"), cmp = el("div", "ov-detail-list");
@@ -600,7 +600,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (signal) { card("", "대상 기억", x.memory.id); const ev = x.evidence; if (ev) cmp.append(el("p", "", `최근 ${num(ev.samples)}번 중 ${num(ev.passed)}번만 지켜졌어요.`)); }
     // the pair as it would end up: + stays, − goes to history; the proposal itself and each preview draw through it
     const pair = (stay, gone) => { cmp.replaceChildren(); stay.forEach((r) => card("diff-add", "남길 기억", r?.id)); gone.forEach((r) => card("diff-del", "이력으로 넘길 기억", r?.id)); };
-    if (chg) cmp.append(el("p", "", chg.what));
+    if (chg) { cmp.append(el("p", "", chg.what)); const on = changeOn(x.change); if (on) { const o = el("p", "mono", on); o.dataset.noI18n = ""; cmp.append(o); } }
     else if (!signal) pair([x.keep], [x.retire]);
     const why = { same_meaning: "두 기억이 같은 말을 해요.", more_specific: "남길 기억이 더 자세해요. 다른 하나의 내용이 거기에 들어 있다고 봤어요.", newer_replaces_older: "새 기억이 예전 기억과 반대예요. 지금 생각은 새 기억이라고 봤어요." }[x.reason];
     const st = el("p", "ov-win-err", ""), act = el("div", "ov-detail-actions");
@@ -617,9 +617,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (chg) {
       // an agent only asks; a person accepts after typing the project id, which the server checks again before it deletes
       const id = state.scope?.project_id || "";
-      if (state.caps?.actions?.review_decide !== false && state.caps?.actions?.[chg.cap] !== false)
-        act.append(button(chg.ok, "small danger", null, async () => { if (await window.askTyped(chg.ask(id), id, chg.ok)) go2("accept", { confirm: id }); }),
-          button("그대로 두기", "small", null, () => go2("dismiss")));
+      // the other changes: accept only records that a person agrees; they then make the change on its own screen
+      if (state.caps?.actions?.review_decide !== false && (!chg.cap || state.caps?.actions?.[chg.cap] !== false))
+        act.append(chg.ask ? button(chg.ok, "small danger", null, async () => { if (await window.askTyped(chg.ask(id), id, chg.ok)) go2("accept", { confirm: id }); })
+          : button("좋아요", "small primary", null, () => go2("accept")), button("그대로 두기", "small", null, () => go2("dismiss")));
       else act.append(el("small", "ov-detail-hint", "이 제안은 사람만 정할 수 있어요."));
     } else if (signal) act.append(button("다시 볼게요", "small primary", null, () => go2("accept")), button("괜찮아요", "small", null, () => go2("dismiss")), forget, ...stale);
     else {
@@ -632,12 +633,19 @@ window.ArkismOverviewWindows = (ctx, env) => {
         act.replaceChildren(button("이대로 적용", "small primary", null, () => go2(decision)), button("취소", "small", null, back)); };
       act.append(...choices);
     }
-    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", chg ? "그대로 두기를 누르면 아무것도 지워지지 않아요." : signal ? "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
+    g.append(cmp, ...(why ? [el("p", "ov-detail-why", why)] : []), act, el("small", "ov-detail-hint", chg ? (chg.ask ? "그대로 두기를 누르면 아무것도 지워지지 않아요." : "그대로 두기를 누르면 아무것도 바뀌지 않아요.") : signal ? "다시 볼게요·괜찮아요는 기억을 바꾸지 않아요. 지운 기억은 지운 이유와 함께 기억 이력에 남아요." : "아주 지우지는 않아요. 넘기거나 지운 기억은 기억 이력에 남아요."), st);
     return [head, g];
   }
   const proposalRefs = (x) => (x.change ? [] : x.memory ? [x.memory] : [x.keep, x.retire]).filter(Boolean);
-  // the two change proposals an agent may raise but never carry out: deleting this space or emptying its memories (spaces.js asks the same way)
-  const DESTRUCTIVE = {
+  // change proposals an agent may raise but never carry out (maintenance_change.go changeActions). Deleting this space or
+  // emptying its memories run on accept after a typed project id (spaces.js asks the same way); the rest only record a yes.
+  const agree = (label) => ({ label, title: "에이전트가 바꾸자고 해요", what: "좋아요를 누르면 동의했다고만 남아요. 바꾸는 건 사람이 직접 해요." });
+  // what the change is about, as the agent named it: a title, folder, space id or the target record
+  const changeOn = (c) => { const v = c.params && typeof c.params === "object" ? c.params : {}; return [v.title, v.path, v.project_id, c.target].find((t) => typeof t === "string" && t) || ""; };
+  const CHANGES = {
+    knowledge_folder_create: agree("위키 폴더 만들기"), knowledge_page_create: agree("위키 페이지 만들기"), knowledge_page_edit: agree("위키 페이지 고치기"), knowledge_node_delete: agree("위키 페이지 지우기"),
+    document_delete: agree("문서 지우기"), mental_model_refresh: agree("주제 요약 새로 쓰기"), mental_model_clear: agree("주제 요약 비우기"), mental_model_delete: agree("주제 지우기"),
+    directive_delete: agree("규칙 지우기"), space_config_change: agree("공간 설정 바꾸기"), space_create: agree("새 공간 만들기"),
     space_delete: { label: "공간 지우기", ok: "지우기", cap: "delete_spaces", title: "에이전트가 이 공간을 지우자고 해요", what: "이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요.",
       ask: (id) => `‘${id}’ 공간을 지울까요?\n이 공간의 기억·자료·첨부 파일·설정이 모두 지워지고 되돌릴 수 없어요. 지우려면 프로젝트 ID를 그대로 적어 주세요.` },
     memories_clear: { label: "기억 비우기", ok: "비우기", cap: "delete_memories", title: "에이전트가 이 공간의 기억을 비우자고 해요", what: "기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요.",
@@ -648,7 +656,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const DREAM_LABEL = { duplicate: "합치기", contradiction: "고치기" };
   const known = (ref) => { const m = ref && memOf(ref.id); return !!m && (ref.revision == null || m.revision === ref.revision); };
   // a proposal whose memory is gone or changed since is hidden, as on the 기억 screen: deciding it would only go stale
-  const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.change ? !!DESTRUCTIVE[t.change.action] : t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {}, chg = t.change && DESTRUCTIVE[t.change.action];
+  const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.change ? !!CHANGES[t.change.action] : t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {}, chg = t.change && CHANGES[t.change.action];
     return { dream: p, id: p.id, created_at: p.created_at, text: chg ? chg.title : memText(t.memory?.id || t.keep?.id), label: chg ? chg.label : t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
   // 충돌: the existing memory beside the new candidate, resolved here with the 기억 screen's resolveConflict (its notices and guards);
   // AI 제안 only lights one button and says why, the person still clicks
@@ -768,7 +776,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function dreamRow(c) {
       const r = el("div", `ov-wide-row ov-wide-row-dream${c.id === sel ? " on" : ""}`), t = el("div", "ov-wide-row-t"), l1 = el("div", "ov-win-item-t"), x = c.dream.maintenance || {};
       l1.append(tagEl("정리"), tagEl(c.label), el("span", "ov-win-item-title", clip(c.text, 70)));
-      t.append(l1, el("small", "", [x.change ? "되돌릴 수 없어요" : x.retire?.id ? `→ ${clip(memText(x.retire.id), 30)}` : x.evidence ? `${num(x.evidence.samples)}번 중 ${num(x.evidence.passed)}번 지켜짐` : "", "정리 제안"].filter(Boolean).join(" · ")));
+      t.append(l1, el("small", "", [x.change ? (CHANGES[x.change.action]?.ask ? "되돌릴 수 없어요" : "에이전트 제안") : x.retire?.id ? `→ ${clip(memText(x.retire.id), 30)}` : x.evidence ? `${num(x.evidence.samples)}번 중 ${num(x.evidence.passed)}번 지켜짐` : "", "정리 제안"].filter(Boolean).join(" · ")));
       r.append(el("span", "ov-wide-row-cb"), t, el("span", "ov-wide-row-r", c.created_at ? waitFor(c.created_at) : "")); r.addEventListener("click", () => { sel = c.id; paint(); });
       return r;
     }
