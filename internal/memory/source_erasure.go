@@ -753,15 +753,15 @@ func sourceErasureCollections(kind string) []string {
 	case memoryRelationErasureKind:
 		return []string{"memory_relations"}
 	case sourceMemoryErasureKind:
-		return []string{"memory_candidates", "memories", colTopicDigests, colUserDigests}
+		return []string{"memory_candidates", "memories", colTopicDigests, colUserDigests, colObservations}
 	case sourceRecordErasureKind:
-		return []string{"sources", "memory_candidates", "memories", "reflections", "evaluations", "tool_calls", "agent_runs", "execution_traces", colConsultations, colHandoffs, colKnowledgeSources, colKnowledgeDocuments, colKnowledgeChunks, colKnowledgeBindings, colRetrievalLogs, colTopicDigests, colUserDigests, colEvalTasks, colEvalRuns, colEvalTrials, colJudgeCalibrations}
+		return []string{"sources", "memory_candidates", "memories", "reflections", "evaluations", "tool_calls", "agent_runs", "execution_traces", colConsultations, colHandoffs, colKnowledgeSources, colKnowledgeDocuments, colKnowledgeChunks, colKnowledgeBindings, colRetrievalLogs, colTopicDigests, colUserDigests, colObservations, colEvalTasks, colEvalRuns, colEvalTrials, colJudgeCalibrations}
 	case sourceMemoryDependentsErasureKind:
 		return append(sourceErasureCollections(sourceRelationErasureKind), colArtifacts)
 	case sourceRelationErasureKind:
 		return append(sourceErasureCollections(sourceSkillErasureKind), "memory_relations")
 	case sourceSkillErasureKind:
-		return []string{"sources", "memory_candidates", "memories", "reflections", "evaluations", "tool_calls", "agent_runs", "execution_traces", colConsultations, colHandoffs, colKnowledgeSources, colKnowledgeDocuments, colKnowledgeChunks, colKnowledgeBindings, colRetrievalLogs, colSkillVersions, colSkills, colTopicDigests, colUserDigests, colEvalTasks, colEvalRuns, colEvalTrials, colJudgeCalibrations}
+		return []string{"sources", "memory_candidates", "memories", "reflections", "evaluations", "tool_calls", "agent_runs", "execution_traces", colConsultations, colHandoffs, colKnowledgeSources, colKnowledgeDocuments, colKnowledgeChunks, colKnowledgeBindings, colRetrievalLogs, colSkillVersions, colSkills, colTopicDigests, colUserDigests, colObservations, colEvalTasks, colEvalRuns, colEvalTrials, colJudgeCalibrations}
 	default:
 		return nil
 	}

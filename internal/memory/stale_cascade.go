@@ -47,6 +47,9 @@ func staleCascade(ctx context.Context, tx Tx, old, next Record, actor string, no
 	if err := staleSkillProposals(ctx, tx, lister, old.Scope, mark, actor); err != nil {
 		return err
 	}
+	if err := staleObservations(ctx, tx, lister, old.Scope, mark, actor); err != nil {
+		return err
+	}
 	return staleSupports(ctx, tx, old.Scope, mark, actor)
 }
 

@@ -69,7 +69,7 @@ func (s *Service) deleteMemoryAndProposal(ctx context.Context, token, id string,
 		if e = enqueueMemoryErasure(ctx, tx, "memories", in.Scope, id, in.ExpectedRevision, actor.PrincipalID, current.Proposal, ""); e != nil {
 			return e
 		}
-		if e = eraseMemoryFromDigests(ctx, tx, in.Scope, id, actor.PrincipalID); e != nil {
+		if e = eraseMemoryFromDerived(ctx, tx, in.Scope, id, actor.PrincipalID); e != nil {
 			return e
 		}
 		if e = audit(ctx, tx, in.Scope, actor.PrincipalID, "delete:memories", id); e != nil {

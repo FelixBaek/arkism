@@ -72,6 +72,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerTwinCoreHTTP(mux, s, stats)
 	registerTacitCoreHTTP(mux, s, stats)
 	registerReflectionsCoreHTTP(mux, s, stats)
+	registerObservationsCoreHTTP(mux, s, stats)
 	registerImprovementsCoreHTTP(mux, s, stats)
 	registerContextCoreHTTP(mux, s, stats)
 	registerSearchCoreHTTP(mux, s, stats)
@@ -270,6 +271,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "no_extractable_text", 422
 	case errors.Is(e, ErrModelNotConfigured):
 		code, status = "model_not_configured", 503
+	case errors.Is(e, errModelAnswer):
+		code, status = "invalid_model_output", 502
 	case errors.Is(e, ErrSemanticLaneDown):
 		code, status = "semantic_lane_unavailable", 503
 	case errors.Is(e, ErrInvalid):

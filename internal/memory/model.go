@@ -28,7 +28,7 @@ var (
 	ErrCandidateQuota     = errors.New("candidate_daily_limit")
 )
 
-var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives"}
+var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives", "observations", "mental_models"}
 
 const (
 	VerificationCandidate = "candidate"
@@ -245,6 +245,8 @@ type Record struct {
 	Maintenance        *MaintenanceProposal `json:"maintenance,omitempty" bson:"maintenance,omitempty"`
 	Merge              *MergeRecord         `json:"merge,omitempty" bson:"merge,omitempty"`
 	Digest             *DigestData          `json:"digest,omitempty" bson:"digest,omitempty"`
+	Observation        *ObservationData     `json:"observation,omitempty" bson:"observation,omitempty"`
+	MentalModel        *MentalModelData     `json:"mental_model,omitempty" bson:"mental_model,omitempty"`
 	SkillCompatibility map[string]string    `json:"skill_compatibility,omitempty" bson:"skill_compatibility,omitempty"`
 	ApprovedBy         string               `json:"approved_by,omitempty" bson:"approved_by,omitempty"`
 	ValidationID       string               `json:"validation_id,omitempty" bson:"validation_id,omitempty"`
@@ -427,23 +429,26 @@ type Hit struct {
 	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
 	Explain            *HitExplain    `json:"explain,omitempty" bson:"-"`
 	Kind               string         `json:"kind,omitempty" bson:"kind"`
-	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
-	ID                 string         `json:"id" bson:"id"`
-	Collection         string         `json:"collection" bson:"collection"`
-	Origin             string         `json:"origin" bson:"origin"`
-	Scope              Scope          `json:"scope" bson:"scope"`
-	Status             string         `json:"status" bson:"status"`
-	Revision           int64          `json:"revision" bson:"revision"`
-	Text               string         `json:"text" bson:"text"`
-	Summary            string         `json:"summary,omitempty" bson:"summary"`
-	Sources            []SourceRef    `json:"sources" bson:"sources"`
-	SourceURL          string         `json:"source_url,omitempty" bson:"source_url"`
-	ImageURL           string         `json:"image_url,omitempty" bson:"image_url"`
-	UpdatedAt          time.Time      `json:"updated_at" bson:"updated_at"`
-	Trust              float64        `json:"trust" bson:"trust"`
-	Relations          []Ref          `json:"relations,omitempty" bson:"relations"`
-	Reasons            []string       `json:"reasons" bson:"reasons"`
-	Authority          string         `json:"authority" bson:"authority"`
+	// Derived marks an approved observation: written from the memories in SourceIDs, not captured.
+	Derived     bool        `json:"derived,omitempty" bson:"-"`
+	SourceIDs   []string    `json:"source_ids,omitempty" bson:"-"`
+	Sensitivity string      `json:"sensitivity,omitempty" bson:"sensitivity"`
+	ID          string      `json:"id" bson:"id"`
+	Collection  string      `json:"collection" bson:"collection"`
+	Origin      string      `json:"origin" bson:"origin"`
+	Scope       Scope       `json:"scope" bson:"scope"`
+	Status      string      `json:"status" bson:"status"`
+	Revision    int64       `json:"revision" bson:"revision"`
+	Text        string      `json:"text" bson:"text"`
+	Summary     string      `json:"summary,omitempty" bson:"summary"`
+	Sources     []SourceRef `json:"sources" bson:"sources"`
+	SourceURL   string      `json:"source_url,omitempty" bson:"source_url"`
+	ImageURL    string      `json:"image_url,omitempty" bson:"image_url"`
+	UpdatedAt   time.Time   `json:"updated_at" bson:"updated_at"`
+	Trust       float64     `json:"trust" bson:"trust"`
+	Relations   []Ref       `json:"relations,omitempty" bson:"relations"`
+	Reasons     []string    `json:"reasons" bson:"reasons"`
+	Authority   string      `json:"authority" bson:"authority"`
 	// Repository-only evidence that its configured vector distance gate ran.
 	// Service rehydrates, authorizes and recomputes before exposing VectorMatch.
 	vectorDistanceLimit float64

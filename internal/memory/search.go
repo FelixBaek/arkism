@@ -219,7 +219,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if in.retrievalQuery != "" {
 		retrieval.Query = in.retrievalQuery
 	}
-	lists, memoryErr := s.Repo.SearchCollection(ctx, collection, retrieval, queryVector, querySpace)
+	lists, memoryErr := s.searchLists(ctx, token, collection, retrieval, queryVector, querySpace)
 	if memoryErr != nil {
 		return out, Decision{}, ErrUnavailable
 	}
@@ -384,6 +384,34 @@ func searchUsage(run *Ref, in SearchInput, items []Hit) *ContextUsage {
 	return usage
 }
 
+// searchLists are the collection's lanes; a plain memory recall also gets the
+// lanes of observations (only approved ones survive cleaning) when the caller may read them.
+func (s *Service) searchLists(ctx context.Context, token, collection string, in SearchInput, vector []float64, space string) ([][]Hit, error) {
+	lists, err := s.Repo.SearchCollection(ctx, collection, in, vector, space)
+	if err != nil || collection != colMemories || in.IncludeInactive || in.RelatedTo != nil || in.contextView != nil {
+		return lists, err
+	}
+	if _, err := s.authorize(ctx, token, "read:"+colObservations, in.Scope, "", ""); err != nil {
+		return lists, nil // recall without observations
+	}
+	derived, err := s.Repo.SearchCollection(ctx, colObservations, in, vector, space)
+	if err != nil {
+		return nil, err
+	}
+	for _, lane := range derived {
+		kept := []Hit{} // a new slice: the store may hand back shared lanes
+		for _, h := range lane {
+			if h.Collection == colObservations {
+				kept = append(kept, h)
+			}
+		}
+		if len(kept) > 0 {
+			lists = append(lists, kept)
+		}
+	}
+	return lists, nil
+}
+
 func (s *Service) cleanSearchLanes(ctx context.Context, token string, in SearchInput, d Decision, collection string, anchor Record, run *Ref, relationLane int, queryVector []float64, querySpace string, historyRecords map[string]Record, out *ContextBundle, lists [][]Hit) error {
 	for i, list := range lists {
 		clean := []Hit{}
@@ -496,7 +524,7 @@ func (s *Service) searchHitRecord(ctx context.Context, in SearchInput, collectio
 	if h.Scope != in.Scope || !in.IncludeInactive && h.Status != "active" || len(h.Sources) == 0 {
 		return Record{}, false
 	}
-	if h.Collection != collection {
+	if h.Collection != collection && (h.Collection != colObservations || collection != colMemories) {
 		return Record{}, false
 	}
 	r, e := s.Repo.Get(ctx, h.Collection, in.Scope, h.ID)
@@ -518,7 +546,7 @@ func (s *Service) searchHitRecord(ctx context.Context, in SearchInput, collectio
 }
 
 func (s *Service) searchRecordFiltered(ctx context.Context, in SearchInput, run *Ref, col string, r Record) bool {
-	return (!in.IncludeInactive && !live(r)) || (in.IncludeInactive && !historySearchable(r)) || !in.SearchCriteria.matchesRecord(r) || (col == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r))) || (!strings.HasPrefix(in.Destination, "external:") && checkSources(ctx, s.Repo, r) != nil)
+	return (!in.IncludeInactive && !live(r)) || (in.IncludeInactive && !historySearchable(r)) || !in.SearchCriteria.matchesRecord(r) || (col == colMemories && (r.ApprovedBy == "" || run != nil && !verifiedMemory(r))) || (col == colObservations && !observationRecallable(ctx, s.Repo, r)) || (!strings.HasPrefix(in.Destination, "external:") && checkSources(ctx, s.Repo, r) != nil)
 }
 
 // authorizeSearchHit authorizes reading one hit. A filtered hit returns false
@@ -675,6 +703,9 @@ func verifySearchItemSources(ctx context.Context, checked searchReadTx, in Searc
 			return err
 		}
 	}
+	if col == colObservations && !observationRecallable(ctx, checked, r) {
+		return ErrConflict
+	}
 	return nil
 }
 
@@ -782,7 +813,7 @@ func sourceErasureJob(kind string) bool {
 // embedJob runs one embedding job. The bool reports whether the attempt
 // counts as finished; a successful write also advances job.Revision.
 func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
-	if job.Target == nil || !slices.Contains([]string{colMemories, colSkillVersions, colReflections, colWikiPages}, job.Target.Collection) {
+	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages {
 		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)

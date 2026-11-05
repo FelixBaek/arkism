@@ -518,6 +518,9 @@ func validCreateKind(collection, kind string) bool {
 	}
 }
 func (s *Service) Create(ctx context.Context, token, col string, in CreateInput) (Record, error) {
+	if isDerivedCollection(col) {
+		return Record{}, ErrInvalid
+	}
 	return s.create(ctx, token, col, in, nil)
 }
 
@@ -1022,7 +1025,7 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 	}
 	// Digests are served only by /v1/digests, which withholds a body whose basis is gone;
 	// skill decisions only by /v1/routing/skills, under read:routing.
-	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || col == colTopicDigests || col == colUserDigests || isWikiCollection(col) || slices.Contains([]string{colSkillRoutes, colDirectives}, col) {
+	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || servedByOwnRoutes(col) || isWikiCollection(col) || slices.Contains([]string{colSkillRoutes, colDirectives}, col) {
 		return Record{}, ErrInvalid
 	}
 	d, e := s.authorize(ctx, token, "read:"+col, scope, id, "")
@@ -1654,7 +1657,7 @@ func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeIn
 	if col == colProviderUsage {
 		return ErrInvalid
 	}
-	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) || col == colDirectives {
+	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) || isDerivedCollection(col) || col == colDirectives {
 		return ErrInvalid
 	}
 	if col == "sources" {
@@ -1740,6 +1743,9 @@ func HitFromRecord(col string, r Record) Hit {
 		hit.Supersedes = append([]Ref(nil), r.Supersedes...)
 		hit.SupersededBy = r.SupersededBy
 		hit.ProofCount, hit.LastConfirmedAt = r.ProofCount, r.LastConfirmedAt
+	}
+	if col == colObservations && r.Observation != nil {
+		hit.Origin, hit.Derived, hit.SourceIDs = observationKind, true, refIDs(r.Observation.SourceMemories)
 	}
 	if r.Generator != nil {
 		hit.GeneratorModel = r.Generator.Model

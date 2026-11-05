@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 )
@@ -145,7 +146,7 @@ func pgSearchWhere(criteria SearchCriteria, collection string, now time.Time, ex
 	// state placeholders are relative to the selectRecords predicate ($6).
 	parts := []string{state}
 	params := append([]any{}, stateArgs...)
-	if collection == colMemories && !criteria.history {
+	if collection == colMemories && !criteria.history || collection == colObservations {
 		// The service rechecks these conditions, but rejecting only after LIMIT
 		// lets stale active rows displace approved, unerased memories in every
 		// lane (and in the vector lane's nearest-neighbour cutoff).
@@ -182,7 +183,7 @@ func (p *Postgres) Search(ctx context.Context, scope Scope, query string, vector
 }
 
 func (p *Postgres) SearchCollection(ctx context.Context, collection string, in SearchInput, vector []float64, space string) ([][]Hit, error) {
-	if collection != colMemories && collection != colSkillVersions && collection != colReflections || in.IncludeInactive && collection != colMemories {
+	if !slices.Contains(searchableCollections, collection) || in.IncludeInactive && collection != colMemories {
 		return nil, ErrInvalid
 	}
 	if err := checkScope(in.Scope); err != nil || !validSearchModes(in.Modes) {

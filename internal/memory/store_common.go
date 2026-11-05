@@ -65,7 +65,7 @@ var (
 
 // searchableCollections are the only collections a search may return. Skills,
 // candidates, runs and audit rows stay out of retrieval.
-var searchableCollections = []string{colMemories, colSkillVersions, colReflections}
+var searchableCollections = []string{colMemories, colSkillVersions, colReflections, colObservations}
 
 // searchableLive is the decision made on the live document. skillParent is only
 // set for skill_versions, and a non-empty space additionally requires the live

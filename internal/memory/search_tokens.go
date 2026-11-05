@@ -17,7 +17,8 @@ import (
 
 // searchTokenCollections are the collections the fts lane reads; other rows
 // keep search_tokens NULL and are never backfilled.
-var searchTokenCollections = []string{colMemories, colSkillVersions, colReflections}
+// Observations get tokens when written; the backfill below predates them and needs none.
+var searchTokenCollections = []string{colMemories, colSkillVersions, colReflections, colObservations}
 
 // searchTokensPending is literal so PostgreSQL can use the pending indexes
 // for missing tokens and for pre-context indexes that need refreshing.
