@@ -1,0 +1,16 @@
+{
+ "id": "op_95",
+ "kind": "embedding",
+ "status": "running",
+ "revision": 7,
+ "operable": true,
+ "attempts": 1,
+ "lease_until": "2026-11-05T09:46:00Z",
+ "created_by": "arkism",
+ "created_at": "2026-11-05T09:44:10Z",
+ "updated_at": "2026-11-05T09:44:40Z",
+ "target": {
+  "collection": "memories",
+  "id": "m_7d11"
+ }
+}

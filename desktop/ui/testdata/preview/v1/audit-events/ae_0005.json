@@ -1,0 +1,18 @@
+{
+ "id": "ae_0005",
+ "action": "update:webhooks",
+ "actor": "felix",
+ "actor_type": "human",
+ "target": {
+  "collection": "webhooks",
+  "id": "wh_deploy"
+ },
+ "decision": "allow",
+ "created_at": "2026-11-04T11:15:22Z",
+ "transport": "http",
+ "method": "POST",
+ "route": "/v1/capture",
+ "duration_ms": 37,
+ "request_id": "req_0005",
+ "mandatory": false
+}

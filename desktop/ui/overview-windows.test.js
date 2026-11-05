@@ -289,3 +289,78 @@ test("기억 관리 › 활동 기록, 모델 호출, 추이: filters reach the 
   assert.match(last().textContent, /사람 계정으로 로그인하면 보여요/); assert.equal(btn(last(), "다시 시도"), undefined);
   win.reset?.();
 });
+
+test("기억 관리 ops: link kinds, an audit event's detail and transport filter, model calls by kind with tokens split, time axis, and the full job list", async () => {
+  require("./memory-management.js");
+  require("./memory-pages.js");
+  const last = () => document.querySelectorAll("dialog.ov-wide-win").at(-1);
+  const btn = (root, t) => root.querySelectorAll("button").find((b) => b.textContent.trim() === t);
+  const sel = (label) => last().querySelectorAll("select").find((s) => s.getAttribute("aria-label") === label);
+  const pickRow = (t) => last().querySelectorAll(".ov-ops-pick").find((r) => r.textContent.includes(t));
+  const sent = [];
+  let failedOps = [{ id: "j2", kind: "embedding", status: "failed", operable: true, revision: 2 }, { id: "j3", kind: "file_memory_extract", status: "failed", operable: true, revision: 1 }];
+  const read = (path, body) => {
+    if (body) sent.push([path, body]);
+    if (path.startsWith("/v1/stats/timeseries")) return { points: [{ bucket: "2026-11-05T00:00:00Z", key: "user", count: 1 }] };
+    if (path.startsWith("/v1/stats")) return { memories: { total: 1, by_status: { active: 1 } }, links: { causes: 3, supports: 1 } };
+    if (path.startsWith("/v1/tags")) return { items: [] };
+    if (path.startsWith("/v1/audit-events/stats")) return { total: 7, by_day: [{ bucket: "2026-11-04", count: 3 }, { bucket: "2026-11-05", count: 4 }], by_action: [{ key: "read:memories", count: 5 }] };
+    if (path.startsWith("/v1/audit-events/a1")) return { id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", method: "POST", route: "/v1/capture", duration_ms: 42, decision: "allow", mandatory: true, created_at: "2026-11-05T00:00:00Z" };
+    if (path.startsWith("/v1/audit-events?")) return { items: [{ id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", created_at: "2026-11-05T00:00:00Z" },
+      { id: "a2", action: "read:memories", actor: "felix", actor_type: "human", transport: "http", created_at: "2026-11-05T00:00:00Z" }] };
+    if (path.startsWith("/v1/llm-requests/stats")) return { items: [{ day: "2026-11-05", operation: "reflect", calls: 1, total_tokens: 30 }, { day: "2026-11-05", operation: "embedding_query", calls: 2, total_tokens: 4 }] };
+    if (path.startsWith("/v1/llm-requests?")) return { items: [{ id: "l1", created_at: "2026-11-05T00:00:00Z", request: { operation: "reflect", generator: { model: "large" }, input_tokens: 20, output_tokens: 10, total_tokens: 30, latency_ms: 900, status: "ok", trace_id: "t-run-1", job_id: "j9" } },
+      { id: "l2", created_at: "2026-11-05T00:00:00Z", request: { operation: "embedding_query", generator: { model: "embedder" }, total_tokens: 2, latency_ms: 10, status: "ok", trace_id: "t-run-1" } }] };
+    if (/^\/v1\/operations\/j1\?/.test(path)) return { id: "j1", kind: "embedding", status: "running", operable: true, revision: 5, attempts: 2, lease_until: "2026-11-05T00:01:00Z", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z" };
+    if (path.startsWith("/v1/operations?") && /status=failed/.test(path)) return { items: failedOps };
+    if (path.startsWith("/v1/operations?")) return { items: [{ id: "j1", kind: "embedding", status: "running", operable: true, revision: 5 }, ...failedOps, { id: "j4", kind: "wiki_build", status: "done", operable: true, revision: 3 }, { id: "j5", kind: "capture_receipt", status: "done", operable: false, revision: 1 }] };
+    return {};
+  };
+  const { win, calls } = windows([], {}, read);
+  const opened = []; window.addEventListener("arkism:open-settings", (e) => opened.push(e.detail.tab));
+  win.wide("ops"); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /기억 사이 연결/); assert.match(last().textContent, /원인→결과3/);
+  btn(last(), "모델 연결 시험").click();
+  assert.deepEqual(opened, ["agents"], "the model test opens 설정 › 에이전트, where models.js runs it");
+  win.wide("ops"); await dom.flush(); await dom.flush();
+  // 활동 기록: the volume chart, then one event's detail; 어디서 filters each page here
+  btn(last(), "활동 기록").click(); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /요청량 · 모두 7건/); assert.match(last().textContent, /기억 읽음5/);
+  pickRow("기억 바꿈").click(); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => c.startsWith("/v1/audit-events/a1?")));
+  for (const t of ["에이전트 도구(MCP)", "POST /v1/capture", "42ms", "예 — 끌 수 없어요"]) assert.ok(last().textContent.includes(t), t);
+  assert.ok(pickRow("기억 바꿈").classList.contains("on"));
+  sel("어디서").value = "http"; sel("어디서").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  assert.equal(last().querySelectorAll(".ov-ops-pick").length, 1); assert.ok(pickRow("기억 읽음"));
+  sel("어디서").value = ""; sel("어디서").dispatchEvent(new dom.Event("change")); await dom.flush();
+  // 모델 호출: kind filter, in/out tokens, per-model fold, a call's run ids
+  btn(last(), "모델 호출").click(); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /입력 20 · 출력 10/); assert.match(last().textContent, /모델별 호출 \(불러온 것\)/); assert.match(last().textContent, /같은 실행에서 여러 번 부른 것/);
+  sel("호출 종류").value = "embedding"; sel("호출 종류").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  assert.equal(last().querySelectorAll(".ov-ops-pick").length, 1); assert.ok(pickRow("검색어 색인 만들기"));
+  sel("호출 종류").value = ""; sel("호출 종류").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  pickRow("질문에 답하기").click();
+  for (const t of ["입력 토큰", "20 토큰", "t-run-1", "j9", "같은 실행의 호출"]) assert.ok(last().textContent.includes(t), t);
+  // 추이: the time axis goes to the server
+  btn(last(), "추이").click(); await dom.flush(); await dom.flush();
+  sel("어느 때 기준").value = "occurred"; sel("어느 때 기준").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/stats\/timeseries\?.*time_field=occurred/.test(c)));
+  // 작업: every job, the buttons each allows, delete asks first, retry-all skips what the route refuses
+  btn(last(), "작업").click(); await dom.flush(); await dom.flush();
+  const acts = (id) => pickRow(id === "j1" ? "도는 중" : id === "j4" ? "위키 만들기" : "").querySelectorAll("button").map((b) => b.textContent.trim());
+  assert.deepEqual(acts("j1"), ["멈추기"]); assert.deepEqual(acts("j4"), ["지우기"]);
+  assert.ok(last().textContent.includes("기타 작업"), "an unknown kind is named plainly");
+  pickRow("도는 중").click(); await dom.flush(); await dom.flush();
+  assert.ok(last().textContent.includes("2번") && last().textContent.includes("잡고 있는 시간"));
+  btn(pickRow("위키 만들기"), "지우기").click();
+  const ask = document.querySelectorAll("dialog.ov-ask").at(-1);
+  assert.ok(!sent.some(([p]) => p === "/v1/operations/j4"), "nothing deleted before the answer");
+  btn(ask, "지우기").click(); await dom.flush();
+  assert.deepEqual(sent.find(([p]) => p === "/v1/operations/j4")[1], { scope: {}, expected_revision: 3 });
+  btn(last(), "작업").click(); await dom.flush(); await dom.flush();
+  btn(last(), "멈춘 작업 모두 다시 시도").click(); await dom.flush(); await dom.flush();
+  assert.ok(sent.some(([p]) => p === "/v1/operations/j2/retry")); assert.ok(!sent.some(([p]) => p === "/v1/operations/j3/retry"), "a file extraction is left to its uploader");
+  sel("상태").value = "failed"; sel("상태").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/operations\?.*status=failed/.test(c)));
+  win.reset?.();
+});

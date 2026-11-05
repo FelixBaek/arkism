@@ -1,13 +1,111 @@
 {
   "items": [
-    { "id": "ae_0012", "action": "review:memory_candidates", "actor": "felix", "actor_type": "human", "target": { "collection": "memory_candidates", "id": "c_8f2a" }, "decision": "allow", "created_at": "2026-11-05T09:41:12Z" },
-    { "id": "ae_0011", "action": "write:memories:defense_blocked", "actor": "note-agent", "actor_type": "agent", "target": { "collection": "memories", "id": "m_51c0" }, "decision": "deny", "reason_code": "defense_rule", "created_at": "2026-11-05T09:12:40Z" },
-    { "id": "ae_0010", "action": "write:space_configs", "actor": "felix", "actor_type": "human", "target": { "collection": "space_configs", "id": "default/default" }, "decision": "allow", "created_at": "2026-11-05T08:55:03Z" },
-    { "id": "ae_0009", "action": "create:memory_candidates", "actor": "code-agent", "actor_type": "agent", "target": { "collection": "memory_candidates", "id": "c_7d11" }, "decision": "allow", "created_at": "2026-11-05T08:20:19Z" },
-    { "id": "ae_0008", "action": "read:memories", "actor": "worker", "actor_type": "agent", "target": { "collection": "memories", "id": "m_0b3e" }, "decision": "deny", "reason_code": "scope", "created_at": "2026-11-04T22:03:51Z" },
-    { "id": "ae_0007", "action": "delete:memories", "actor": "felix", "actor_type": "human", "target": { "collection": "memories", "id": "m_19aa" }, "decision": "allow", "created_at": "2026-11-04T18:47:30Z" },
-    { "id": "ae_0006", "action": "start:jobs", "actor": "arkism", "actor_type": "service", "target": { "collection": "jobs", "id": "j_wiki_42" }, "decision": "allow", "created_at": "2026-11-04T17:00:00Z" },
-    { "id": "ae_0005", "action": "update:webhooks", "actor": "felix", "actor_type": "human", "target": { "collection": "webhooks", "id": "wh_deploy" }, "decision": "allow", "created_at": "2026-11-04T11:15:22Z" }
+    {
+      "id": "ae_0012",
+      "action": "review:memory_candidates",
+      "actor": "felix",
+      "actor_type": "human",
+      "target": {
+        "collection": "memory_candidates",
+        "id": "c_8f2a"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-05T09:41:12Z",
+      "transport": "http"
+    },
+    {
+      "id": "ae_0011",
+      "action": "write:memories:defense_blocked",
+      "actor": "note-agent",
+      "actor_type": "agent",
+      "target": {
+        "collection": "memories",
+        "id": "m_51c0"
+      },
+      "decision": "deny",
+      "reason_code": "defense_rule",
+      "created_at": "2026-11-05T09:12:40Z",
+      "transport": "mcp"
+    },
+    {
+      "id": "ae_0010",
+      "action": "write:space_configs",
+      "actor": "felix",
+      "actor_type": "human",
+      "target": {
+        "collection": "space_configs",
+        "id": "default/default"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-05T08:55:03Z",
+      "transport": "http"
+    },
+    {
+      "id": "ae_0009",
+      "action": "create:memory_candidates",
+      "actor": "code-agent",
+      "actor_type": "agent",
+      "target": {
+        "collection": "memory_candidates",
+        "id": "c_7d11"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-05T08:20:19Z",
+      "transport": "mcp"
+    },
+    {
+      "id": "ae_0008",
+      "action": "read:memories",
+      "actor": "worker",
+      "actor_type": "agent",
+      "target": {
+        "collection": "memories",
+        "id": "m_0b3e"
+      },
+      "decision": "deny",
+      "reason_code": "scope",
+      "created_at": "2026-11-04T22:03:51Z",
+      "transport": "mcp"
+    },
+    {
+      "id": "ae_0007",
+      "action": "delete:memories",
+      "actor": "felix",
+      "actor_type": "human",
+      "target": {
+        "collection": "memories",
+        "id": "m_19aa"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-04T18:47:30Z",
+      "transport": "http"
+    },
+    {
+      "id": "ae_0006",
+      "action": "start:jobs",
+      "actor": "arkism",
+      "actor_type": "service",
+      "target": {
+        "collection": "jobs",
+        "id": "j_wiki_42"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-04T17:00:00Z",
+      "transport": "system"
+    },
+    {
+      "id": "ae_0005",
+      "action": "update:webhooks",
+      "actor": "felix",
+      "actor_type": "human",
+      "target": {
+        "collection": "webhooks",
+        "id": "wh_deploy"
+      },
+      "decision": "allow",
+      "created_at": "2026-11-04T11:15:22Z",
+      "transport": "http"
+    }
   ],
   "next_cursor": "ae_0005"
 }

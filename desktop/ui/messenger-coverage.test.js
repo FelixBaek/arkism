@@ -170,3 +170,40 @@ test("unsupported servers, failed reads, retry and error texts", async () => {
   s4.view(); await flush();
   assert.ok(has(s4.view(), "연결 안 됨"));
 });
+
+test("webhook shape: lines become headers and query, the wait is bounded, a patch sends only what changed", () => {
+  const M = window.ArkismMessenger;
+  const ok = M.hookShape({ method: "PUT", timeout: "10", headers: "Authorization: Bearer abc\n\nX-Team: core", query: "team=memory" });
+  assert.deepEqual(ok.create, { method: "PUT", timeout_seconds: 10, headers: { Authorization: "Bearer abc", "X-Team": "core" }, query_params: { team: "memory" } });
+  assert.deepEqual(M.hookShape({ method: "POST", timeout: "", headers: "", query: "" }).create, {}, "defaults send nothing");
+  assert.match(M.hookShape({ headers: "no colon here" }).error, /이름: 값/);
+  assert.match(M.hookShape({ query: "=v" }).error, /이름=값/);
+  assert.match(M.hookShape({ timeout: "31" }).error, /1~30초/);
+  const h = { url: "https://a.example/x", events: ["memory.approved", "candidate.created"], include_content: false, method: "", timeout_seconds: 0, header_names: ["Authorization"] };
+  const same = { url: h.url, events: ["candidate.created", "memory.approved"], content: false, method: "POST", timeout: "", headers: "", query: "", clear: false, secret: "" };
+  assert.deepEqual(M.hookPatch(h, same, M.hookShape(same)), {}, "nothing changed, nothing sent (event order does not count)");
+  const changed = { ...same, url: "https://b.example/y", events: ["memory.deleted"], method: "PATCH", timeout: "5", query: "k=v", clear: true, secret: "s" };
+  assert.deepEqual(M.hookPatch(h, changed, M.hookShape(changed)), { url: "https://b.example/y", events: ["memory.deleted"], method: "PATCH", timeout_seconds: 5, secret: "s", headers: {}, query_params: { k: "v" } });
+});
+
+test("a webhook is changed in place: 고치기 opens its form, 저장 PATCHes only the changed fields, header names show but values never", async () => {
+  const hook = { id: "wh1", revision: 3, url: "https://hooks.example.com/a", events: ["candidate.created"], include_content: false, active: true, method: "PUT", timeout_seconds: 8, header_names: ["Authorization"], query_param_names: ["team"] };
+  const s = setup({ "/v1/discord": { bots: [] }, "/v1/messengers": { destinations: [] }, "/v1/webhooks": { items: [hook] } });
+  s.view(); await flush();
+  let v = s.view();
+  assert.ok(has(v, "PUT · 8초까지 기다림 · 헤더 Authorization · 쿼리 team"));
+  btn(v, "고치기").click(); v = s.view();
+  const box = v.querySelector(".mg-hook-form");
+  assert.equal(all(box, "input").find((n) => n.getAttribute("aria-label") === "받을 주소").value, hook.url);
+  assert.equal(all(box, "select")[0].value, "PUT");
+  const area = all(box, "textarea").find((n) => n.getAttribute("aria-label")?.startsWith("더 보낼 헤더"));
+  assert.equal(area.value, "", "a sealed header value never comes back");
+  area.value = "Authorization: Bearer new"; await area.fire("input");
+  const wait = all(box, "input").find((n) => n.getAttribute("aria-label")?.startsWith("답을 기다릴 시간")); wait.value = "12"; await wait.fire("input");
+  btn(box, "저장").click(); await flush();
+  const [path, sent] = s.calls.find(([p, b]) => p === "/v1/webhooks/wh1" && b?.expected_revision === 3);
+  assert.equal(path, "/v1/webhooks/wh1");
+  assert.deepEqual(sent, { scope: { workspace_id: "w" }, expected_revision: 3, timeout_seconds: 12, headers: { Authorization: "Bearer new" } });
+  assert.equal(s.notices.at(-1), "웹훅을 고쳤어요.");
+  assert.equal(s.view().querySelector(".mg-hook-form .mg-actions")?.textContent.includes("취소") || false, false, "the form closed after saving");
+});

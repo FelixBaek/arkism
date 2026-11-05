@@ -84,7 +84,8 @@
     const n = v => (typeof v === "number" ? v : null);
     const byStatus = stats?.memories?.by_status; // the server leaves out statuses with no memories: present map, missing key = 0
     return { active: byStatus && typeof byStatus === "object" ? n(byStatus.active ?? 0) : null, total: n(stats?.memories?.total), pending: n(stats?.pending_candidates), sources: n(stats?.sources?.total),
-      kinds: Object.entries(stats?.memories?.by_kind || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]) };
+      kinds: Object.entries(stats?.memories?.by_kind || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]),
+      links: Object.entries(stats?.links || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]) }; // live links between memories by type
   }
   // 기억 관리 › 활동 기록 (GET /v1/audit-events): "verb:collection[:detail]" in plain words; anything unknown keeps its code.
   const VERB = { write: "바꿈", create: "만듦", update: "고침", delete: "지움", review: "검토함", read: "읽음", start: "시작함", decide: "결정함", expire: "기한 지나 정리됨", cancel: "취소함", erase: "지움", finish: "끝냄", confirm: "확인함" };
@@ -98,9 +99,23 @@
     return { what, code: e?.action || "", blocked, person: e?.actor_type === "human", known: !!known };
   }
   // 기억 관리 › 모델 호출 (GET /v1/llm-requests): what each server-side call was for
-  const OPERATION = { embed: "검색용 색인 만들기", rerank: "검색 결과 다시 고르기", reflect: "질문에 답하기", wiki_memory_extract: "파일에서 기억 뽑기", wiki_entities: "이름 찾기",
-    wiki_analyse: "위키 내용 살피기", wiki_write: "위키 쓰기", wiki_observation: "관찰 정리 제안", wiki_causal: "원인과 결과 제안", wiki_mental_model: "정리 틀 만들기" };
+  const OPERATION = { embed: "검색용 색인 만들기", embedding_query: "검색어 색인 만들기", embedding_document: "검색용 색인 만들기", embedding_review: "검토용 색인 만들기", embedding_knowledge: "자료 색인 만들기",
+    rerank: "검색 결과 다시 고르기", recall_rerank: "검색 결과 다시 고르기", reflect: "질문에 답하기", wiki_memory_extract: "파일에서 기억 뽑기", wiki_entities: "이름 찾기",
+    wiki_analyse: "위키 내용 살피기", wiki_write: "위키 쓰기", wiki_observation: "관찰 정리 제안", wiki_causal: "원인과 결과 제안", wiki_mental_model: "정리 틀 만들기",
+    wiki_file_vision: "그림 읽기", wiki_file_transcribe: "소리 받아쓰기", skill_routing: "스킬 고르기", model_routing: "모델 고르기", skill_draft: "스킬 초안 쓰기", skill_analysis: "스킬 살피기" };
   const opLabel = (op) => OPERATION[op] || "";
+  // a call's kind from its operation: embeddings and reranks are named so by the server (cost.go meteredEmbed/meteredRerank)
+  const callKind = (op) => (/^embed/.test(op || "") ? "embedding" : /(^|_)rerank$/.test(op || "") ? "rerank" : "llm");
+  // loaded calls (GET /v1/llm-requests items) per model or per run (trace, else job): [key, calls, tokens], busiest first
+  function callGroups(items, by) {
+    const m = new Map();
+    for (const it of items || []) {
+      const q = it?.request || {}, key = by === "run" ? q.trace_id || q.job_id || "" : q.generator?.model || q.provider || "";
+      if (!key) continue;
+      const g = m.get(key) || [key, 0, 0]; g[1] += 1; g[2] += Number(q.total_tokens) || 0; m.set(key, g);
+    }
+    return [...m.values()].sort((a, b) => b[1] - a[1]);
+  }
   // GET /v1/llm-requests/stats rows (day × operation) folded into days, oldest first, and operations, busiest first
   function modelStats(stats) {
     const days = new Map(), ops = new Map();
@@ -123,7 +138,7 @@
     }
     return { buckets: [...buckets].sort((a, b) => String(a[0]).localeCompare(String(b[0]))), keys: [...keys].sort((a, b) => b[1] - a[1]), total: [...keys.values()].reduce((n, c) => n + c, 0) };
   }
-  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles, auditLine, opLabel, modelStats, series };
+  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles, auditLine, opLabel, callKind, callGroups, modelStats, series };
   root.ArkismMemoryManagement = api;
   if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

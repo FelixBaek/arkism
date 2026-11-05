@@ -1,0 +1,13 @@
+{
+ "id": "op_91",
+ "kind": "wiki_build",
+ "status": "failed",
+ "revision": 4,
+ "operable": true,
+ "attempts": 3,
+ "manual_retries": 1,
+ "error": "wiki_budget_exceeded",
+ "created_by": "felix",
+ "created_at": "2026-11-04T21:00:00Z",
+ "updated_at": "2026-11-04T22:10:00Z"
+}

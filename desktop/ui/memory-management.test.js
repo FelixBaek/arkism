@@ -103,3 +103,14 @@ test("audit lines, model-call names and the two stats folds read in plain words,
   const s = management.series({ points: [{ bucket: "2026-11-02", key: "user", count: 2 }, { bucket: "2026-11-01", key: "user", count: 1 }, { bucket: "2026-11-02", key: "fact", count: 5 }] });
   assert.deepEqual(s, { buckets: [["2026-11-01", 1], ["2026-11-02", 7]], keys: [["fact", 5], ["user", 3]], total: 8 });
 });
+
+test("model calls split by kind and fold per model or per run; stats links come out busiest first", () => {
+  assert.deepEqual(["embedding_query", "embed", "rerank", "recall_rerank", "reflect", "wiki_write", ""].map(management.callKind), ["embedding", "embedding", "rerank", "rerank", "llm", "llm", "llm"]);
+  const items = [{ request: { generator: { model: "large" }, trace_id: "t1", total_tokens: 10 } }, { request: { generator: { model: "large" }, job_id: "j1", total_tokens: 5 } },
+    { request: { provider: "embedder", trace_id: "t1", total_tokens: 2 } }, { request: {} }];
+  assert.deepEqual(management.callGroups(items, "model"), [["large", 2, 15], ["embedder", 1, 2]]);
+  assert.deepEqual(management.callGroups(items, "run"), [["t1", 2, 12], ["j1", 1, 5]], "a call with no trace or job is left out");
+  assert.deepEqual(management.callGroups(null, "run"), []);
+  assert.deepEqual(management.statTiles({ links: { supports: 2, causes: 7, empty: 0 } }).links, [["causes", 7], ["supports", 2]]);
+  assert.deepEqual(management.statTiles({}).links, []);
+});

@@ -1,0 +1,18 @@
+{
+ "id": "ae_0012",
+ "action": "review:memory_candidates",
+ "actor": "felix",
+ "actor_type": "human",
+ "target": {
+  "collection": "memory_candidates",
+  "id": "c_8f2a"
+ },
+ "decision": "allow",
+ "created_at": "2026-11-05T09:41:12Z",
+ "transport": "http",
+ "method": "POST",
+ "route": "/v1/memory_candidates/{id}/review",
+ "duration_ms": 37,
+ "request_id": "req_0012",
+ "mandatory": true
+}

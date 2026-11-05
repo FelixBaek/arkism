@@ -1,0 +1,106 @@
+{
+ "items": [
+  {
+   "id": "op_95",
+   "kind": "embedding",
+   "status": "running",
+   "revision": 7,
+   "operable": true,
+   "attempts": 1,
+   "lease_until": "2026-11-05T09:46:00Z",
+   "created_by": "arkism",
+   "created_at": "2026-11-05T09:44:10Z",
+   "updated_at": "2026-11-05T09:44:40Z",
+   "target": {
+    "collection": "memories",
+    "id": "m_7d11"
+   }
+  },
+  {
+   "id": "op_94",
+   "kind": "wiki_build",
+   "status": "pending",
+   "revision": 1,
+   "operable": true,
+   "attempts": 0,
+   "run_at": "2026-11-05T10:00:00Z",
+   "created_by": "felix",
+   "created_at": "2026-11-05T09:30:00Z",
+   "updated_at": "2026-11-05T09:30:00Z"
+  },
+  {
+   "id": "op_93",
+   "kind": "webhook_delivery",
+   "status": "retry",
+   "revision": 3,
+   "operable": false,
+   "attempts": 2,
+   "error": "HTTP 503",
+   "run_at": "2026-11-05T09:50:00Z",
+   "created_by": "arkism",
+   "created_at": "2026-11-05T09:20:00Z",
+   "updated_at": "2026-11-05T09:40:00Z"
+  },
+  {
+   "id": "op_91",
+   "kind": "wiki_build",
+   "status": "failed",
+   "revision": 4,
+   "operable": true,
+   "attempts": 3,
+   "manual_retries": 1,
+   "error": "wiki_budget_exceeded",
+   "created_by": "felix",
+   "created_at": "2026-11-04T21:00:00Z",
+   "updated_at": "2026-11-04T22:10:00Z"
+  },
+  {
+   "id": "op_90",
+   "kind": "embedding",
+   "status": "done",
+   "revision": 3,
+   "operable": true,
+   "attempts": 1,
+   "created_by": "arkism",
+   "created_at": "2026-11-04T18:00:00Z",
+   "updated_at": "2026-11-04T18:00:05Z"
+  },
+  {
+   "id": "op_88",
+   "kind": "file_memory_extract",
+   "status": "failed",
+   "revision": 2,
+   "operable": true,
+   "attempts": 3,
+   "error": "no_extractable_text",
+   "created_by": "felix",
+   "created_at": "2026-11-03T08:40:00Z",
+   "updated_at": "2026-11-03T08:41:00Z",
+   "target": {
+    "collection": "sources",
+    "id": "src_scan_0412"
+   }
+  },
+  {
+   "id": "op_86",
+   "kind": "embedding",
+   "status": "cancelled",
+   "revision": 4,
+   "operable": true,
+   "attempts": 1,
+   "created_by": "code-agent",
+   "created_at": "2026-11-02T12:00:00Z",
+   "updated_at": "2026-11-02T12:01:00Z"
+  },
+  {
+   "id": "op_80",
+   "kind": "capture_receipt",
+   "status": "done",
+   "revision": 1,
+   "operable": false,
+   "attempts": 0,
+   "created_at": "2026-11-01T07:00:00Z",
+   "updated_at": "2026-11-01T07:00:00Z"
+  }
+ ]
+}

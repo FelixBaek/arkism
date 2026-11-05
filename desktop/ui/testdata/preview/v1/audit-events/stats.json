@@ -1,0 +1,68 @@
+{
+ "from": "2026-10-30T00:00:00Z",
+ "to": "2026-11-05T10:00:00Z",
+ "total": 214,
+ "by_day": [
+  {
+   "bucket": "2026-10-30",
+   "key": "",
+   "count": 18
+  },
+  {
+   "bucket": "2026-10-31",
+   "key": "",
+   "count": 25
+  },
+  {
+   "bucket": "2026-11-01",
+   "key": "",
+   "count": 9
+  },
+  {
+   "bucket": "2026-11-02",
+   "key": "",
+   "count": 31
+  },
+  {
+   "bucket": "2026-11-03",
+   "key": "",
+   "count": 40
+  },
+  {
+   "bucket": "2026-11-04",
+   "key": "",
+   "count": 52
+  },
+  {
+   "bucket": "2026-11-05",
+   "key": "",
+   "count": 39
+  }
+ ],
+ "by_action": [
+  {
+   "key": "read:memories",
+   "count": 96
+  },
+  {
+   "key": "create:memory_candidates",
+   "count": 51
+  },
+  {
+   "key": "review:memory_candidates",
+   "count": 38
+  },
+  {
+   "key": "write:memories",
+   "count": 17
+  },
+  {
+   "key": "write:space_configs",
+   "count": 7
+  },
+  {
+   "key": "delete:memories",
+   "count": 5
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "id": "op_93",
+ "kind": "webhook_delivery",
+ "status": "retry",
+ "revision": 3,
+ "operable": false,
+ "attempts": 2,
+ "error": "HTTP 503",
+ "run_at": "2026-11-05T09:50:00Z",
+ "created_by": "arkism",
+ "created_at": "2026-11-05T09:20:00Z",
+ "updated_at": "2026-11-05T09:40:00Z"
+}

@@ -1,0 +1,16 @@
+{
+ "id": "op_88",
+ "kind": "file_memory_extract",
+ "status": "failed",
+ "revision": 2,
+ "operable": true,
+ "attempts": 3,
+ "error": "no_extractable_text",
+ "created_by": "felix",
+ "created_at": "2026-11-03T08:40:00Z",
+ "updated_at": "2026-11-03T08:41:00Z",
+ "target": {
+  "collection": "sources",
+  "id": "src_scan_0412"
+ }
+}

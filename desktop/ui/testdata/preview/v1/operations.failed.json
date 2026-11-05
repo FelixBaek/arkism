@@ -1,4 +1,33 @@
-{"items": [
-  {"id": "op_91", "kind": "wiki_compile", "status": "failed", "revision": 4, "operable": true, "error": "wiki_budget_exceeded", "updated_at": "2026-11-04T22:10:00Z"},
-  {"id": "op_88", "kind": "file_memory_extract", "status": "failed", "revision": 2, "operable": false, "error": "no_extractable_text", "updated_at": "2026-11-03T08:41:00Z"}
-]}
+{
+ "items": [
+  {
+   "id": "op_91",
+   "kind": "wiki_build",
+   "status": "failed",
+   "revision": 4,
+   "operable": true,
+   "attempts": 3,
+   "manual_retries": 1,
+   "error": "wiki_budget_exceeded",
+   "created_by": "felix",
+   "created_at": "2026-11-04T21:00:00Z",
+   "updated_at": "2026-11-04T22:10:00Z"
+  },
+  {
+   "id": "op_88",
+   "kind": "file_memory_extract",
+   "status": "failed",
+   "revision": 2,
+   "operable": true,
+   "attempts": 3,
+   "error": "no_extractable_text",
+   "created_by": "felix",
+   "created_at": "2026-11-03T08:40:00Z",
+   "updated_at": "2026-11-03T08:41:00Z",
+   "target": {
+    "collection": "sources",
+    "id": "src_scan_0412"
+   }
+  }
+ ]
+}

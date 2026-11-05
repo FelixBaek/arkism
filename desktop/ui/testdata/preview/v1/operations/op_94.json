@@ -1,0 +1,12 @@
+{
+ "id": "op_94",
+ "kind": "wiki_build",
+ "status": "pending",
+ "revision": 1,
+ "operable": true,
+ "attempts": 0,
+ "run_at": "2026-11-05T10:00:00Z",
+ "created_by": "felix",
+ "created_at": "2026-11-05T09:30:00Z",
+ "updated_at": "2026-11-05T09:30:00Z"
+}

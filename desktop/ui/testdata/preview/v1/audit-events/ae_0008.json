@@ -1,0 +1,19 @@
+{
+ "id": "ae_0008",
+ "action": "read:memories",
+ "actor": "worker",
+ "actor_type": "agent",
+ "target": {
+  "collection": "memories",
+  "id": "m_0b3e"
+ },
+ "decision": "deny",
+ "reason_code": "scope",
+ "created_at": "2026-11-04T22:03:51Z",
+ "transport": "mcp",
+ "method": "",
+ "route": "memory.remember",
+ "duration_ms": 37,
+ "request_id": "req_0008",
+ "mandatory": false
+}

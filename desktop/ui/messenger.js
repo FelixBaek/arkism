@@ -5,7 +5,7 @@ window.ArkismMessenger = (ctx) => {
   "use strict";
   const { state, el, button, notice, request, render } = ctx;
   const raw = (n) => { n.setAttribute("data-no-i18n", ""); return n; };
-  const S = { loaded: false, loading: false, bots: [], err: "", draft: {}, changing: {}, busy: false, dests: [], nerr: "", hooks: [], herr: "", hook: null, logs: {} };
+  const S = { loaded: false, loading: false, bots: [], err: "", draft: {}, changing: {}, busy: false, dests: [], nerr: "", hooks: [], herr: "", hook: null, edit: null, logs: {} };
   const body = (extra) => JSON.stringify({ scope: state.scope, ...extra });
   const unwrap = (r) => (r?.discord_bot ? { ...r.discord_bot, id: r.id, revision: r.revision } : r);
   const ago = (iso) => { if (!iso) return ""; const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 1 ? "방금 확인" : m < 60 ? `${m}분 전 확인` : m < 2880 ? `${Math.round(m / 60)}시간 전 확인` : `${Math.floor(m / 1440)}일 전 확인`; }; // days past 48 hours (#190)
@@ -175,44 +175,88 @@ window.ArkismMessenger = (ctx) => {
     }
     return box;
   }
+  // what the server sends with each delivery besides the body: method, wait time and the names of extra headers/query (values stay sealed)
+  function shapeLine(h) {
+    const parts = [h.method && h.method !== "POST" ? h.method : "", h.timeout_seconds ? `${h.timeout_seconds}초까지 기다림` : "",
+      (h.header_names || []).length ? `헤더 ${h.header_names.join(", ")}` : "", (h.query_param_names || []).length ? `쿼리 ${h.query_param_names.join(", ")}` : ""].filter(Boolean);
+    return parts.length ? raw(el("p", "mg-meta mono", parts.join(" · "))) : null;
+  }
   function hookRow(h) {
+    if (S.edit?.id === h.id) return hookForm(h);
     const right = el("div", "mg-actions");
     right.append(button("시험 보내기", "", null, () => hookAct(() => request(hookPath(h, "/test"), { method: "POST", body: body({}) }).then(() => { delete S.logs[h.id]; }), "시험 알림을 보냈어요. 결과는 '보낸 기록'에서 봐요.")),
       button(S.logs[h.id] ? "기록 닫기" : "보낸 기록", "", null, () => openLog(h)),
+      button("고치기", "", null, () => { S.edit = draftOf(h); render(false); }),
       button(h.active ? "끄기" : "켜기", "ghost", null, () => hookAct(() => request(hookPath(h), { method: "PATCH", body: body({ expected_revision: h.revision, active: !h.active }) }), h.active ? "웹훅을 껐어요. 알림을 보내지 않아요." : "웹훅을 켰어요.")),
       button("지우기", "ghost", null, async () => { if (await ask("이 웹훅을 지울까요? 이 주소로 더는 알림을 보내지 않고, 되돌릴 수 없어요.")) void hookAct(() => request(`${hookPath(h)}?${new URLSearchParams(state.scope)}`, { method: "DELETE" }), "웹훅을 지웠어요."); }));
     const row = el("div", "mg-hook"), title = el("div", "mg-title");
     title.append(raw(el("strong", "mono", h.url)), el("span", `mg-state ${h.active ? "on" : ""}`, h.active ? "켜짐" : "꺼짐"));
     const ev = el("p", "mg-meta"); (h.events || []).forEach((e, i) => ev.append(...(i ? [" · "] : []), el("span", "", EVENTS[e] || e)));
-    row.append(title, ev, right);
+    const shape = shapeLine(h);
+    row.append(title, ev, ...(shape ? [shape] : []), right);
     const log = logList(h); if (log) row.append(log);
     return row;
   }
-  function hookForm() {
-    const f = S.hook ||= { url: "", events: ["candidate.created", "memory.approved"], secret: newSecret(), content: false };
+  // one draft for adding (no id) or changing a webhook; headers and query are typed fresh: stored values never come back
+  const draftOf = (h) => (h ? { id: h.id, url: h.url, events: [...(h.events || [])], content: !!h.include_content, method: h.method || "POST", timeout: h.timeout_seconds ? String(h.timeout_seconds) : "", headers: "", query: "", clear: false, secret: "" }
+    : { url: "", events: ["candidate.created", "memory.approved"], secret: newSecret(), content: false, method: "POST", timeout: "", headers: "", query: "" });
+  const input = (f, key, label, attrs = {}) => {
+    const n = el("input"); Object.assign(n, { autocomplete: "off", ...attrs, value: f[key] }); n.setAttribute("aria-label", label);
+    n.addEventListener("input", () => { f[key] = n.value; });
+    const box = el("label", "mg-field"); box.append(el("span", "mg-label", label), n); return box;
+  };
+  const area = (f, key, label, placeholder) => {
+    const n = el("textarea", "mono"); n.value = f[key]; n.placeholder = placeholder; n.rows = 2; n.spellcheck = false; n.setAttribute("aria-label", label); raw(n);
+    n.addEventListener("input", () => { f[key] = n.value; });
+    const box = el("label", "mg-field"); box.append(el("span", "mg-label", label), n); return box;
+  };
+  function hookForm(h) {
+    const editing = !!h, f = editing ? S.edit : (S.hook ||= draftOf());
     const box = el("div", "mg-hook-form");
-    const url = el("input"); url.type = "url"; url.placeholder = "https://example.com/arkism-hook"; url.value = f.url; url.setAttribute("aria-label", "받을 주소"); url.autocomplete = "off";
-    url.addEventListener("input", () => { f.url = url.value; });
-    const field = el("label", "mg-field"); field.append(el("span", "mg-label", "받을 주소"), url);
+    const url = input(f, "url", "받을 주소", { type: "url", placeholder: "https://example.com/arkism-hook" });
     const pick = el("fieldset", "mg-events"); pick.append(el("legend", "mg-label", "알림 보낼 때"));
     for (const [k, label] of Object.entries(EVENTS).filter(([k]) => k !== "webhook.test")) {
       const l = el("label", "mg-check"), c = el("input"); c.type = "checkbox"; c.checked = f.events.includes(k);
       c.addEventListener("change", () => { f.events = c.checked ? [...f.events, k] : f.events.filter((x) => x !== k); });
       l.append(c, el("span", "", label)); pick.append(l);
     }
-    const more = el("details", "mg-more"); more.append(el("summary", "", "자세히"));
-    const sec = el("input"); sec.readOnly = true; sec.value = f.secret; sec.setAttribute("aria-label", "서명 비밀값"); sec.className = "mono";
-    const secField = el("label", "mg-field"); secField.append(el("span", "mg-label", "서명 비밀값 (받는 쪽에서 진짜 알림인지 확인할 때 써요. 지금만 보여요.)"), sec);
+    const more = el("details", "mg-more"), opts = el("div", "mg-more-body"); more.append(el("summary", "", "자세히"), opts); // a wrapper: flex on <details> itself does not lay out its content
+    if (!editing) {
+      const sec = el("input"); sec.readOnly = true; sec.value = f.secret; sec.setAttribute("aria-label", "서명 비밀값"); sec.className = "mono";
+      const secField = el("label", "mg-field"); secField.append(el("span", "mg-label", "서명 비밀값 (받는 쪽에서 진짜 알림인지 확인할 때 써요. 지금만 보여요.)"), sec);
+      opts.append(secField);
+    } else if (f.secret) {
+      const sec = el("input"); sec.readOnly = true; sec.value = f.secret; sec.setAttribute("aria-label", "새 서명 비밀값"); sec.className = "mono";
+      const secField = el("label", "mg-field"); secField.append(el("span", "mg-label", "새 서명 비밀값 (저장하면 이 값으로 바뀌어요. 지금만 보여요.)"), sec);
+      opts.append(secField);
+    } else opts.append(button("서명 비밀값 새로 만들기", "small", null, () => { f.secret = newSecret(); render(false); }));
     const inc = el("label", "mg-check"), ic = el("input"); ic.type = "checkbox"; ic.checked = f.content; ic.addEventListener("change", () => { f.content = ic.checked; });
     inc.append(ic, el("span", "", "알림에 기억 내용도 넣기 (비공개·비밀 표시된 내용은 빼요)"));
-    more.append(secField, inc);
-    const add = button("웹훅 추가", "primary", null, () => {
-      const u = f.url.trim();
+    const method = el("select"); method.setAttribute("aria-label", "보내는 방식");
+    for (const m of ["POST", "PUT", "PATCH"]) { const o = el("option", "", m); o.value = m; o.selected = m === f.method; method.append(o); }
+    method.addEventListener("change", () => { f.method = method.value; });
+    const mField = el("label", "mg-field"); mField.append(el("span", "mg-label", "보내는 방식"), method);
+    const named = editing ? [...(h.header_names || []), ...(h.query_param_names || [])] : [];
+    opts.append(inc, mField, input(f, "timeout", "답을 기다릴 시간 (초, 1~30, 비우면 기본)", { type: "number", min: "1", max: "30", inputMode: "numeric" }),
+      area(f, "headers", "더 보낼 헤더 (한 줄에 하나, 이름: 값)", "Authorization: Bearer …"), area(f, "query", "주소에 붙일 쿼리 (한 줄에 하나, 이름=값)", "team=memory"),
+      el("p", "mg-note", editing ? "헤더·쿼리 값은 봉인해 저장해서 다시 보여 주지 않아요. 비워 두면 지금 값을 그대로 둬요. 주소의 도메인을 바꾸면 저장한 헤더·쿼리는 지워지니 다시 넣어 주세요." : "헤더·쿼리 값은 봉인해 저장하고, 화면에는 이름만 보여요."));
+    if (named.length) { const cl = el("label", "mg-check"), cc = el("input"); cc.type = "checkbox"; cc.checked = !!f.clear; cc.addEventListener("change", () => { f.clear = cc.checked; }); cl.append(cc, el("span", "", "저장한 헤더·쿼리 모두 지우기")); opts.append(cl); }
+    if (editing && (f.method !== "POST" || f.timeout || named.length)) more.open = true;
+    const save = button(editing ? "저장" : "웹훅 추가", "primary", null, () => {
+      const u = f.url.trim(), shape = window.ArkismMessenger.hookShape(f);
       if (!/^https:\/\/\S+$/.test(u)) { notice("https://로 시작하는 주소를 넣어 주세요."); return; }
       if (!f.events.length) { notice("알림 보낼 때를 하나 이상 골라 주세요."); return; }
-      void hookAct(() => request("/v1/webhooks", { method: "POST", body: body({ url: u, events: f.events, secret: f.secret, include_content: f.content }) }).then(() => { S.hook = null; }), "웹훅을 추가했어요. '시험 보내기'로 확인해 보세요.");
+      if (shape.error) { notice(shape.error); return; }
+      if (!editing) {
+        void hookAct(() => request("/v1/webhooks", { method: "POST", body: body({ url: u, events: f.events, secret: f.secret, include_content: f.content, ...shape.create }) }).then(() => { S.hook = null; }), "웹훅을 추가했어요. '시험 보내기'로 확인해 보세요.");
+        return;
+      }
+      const patch = window.ArkismMessenger.hookPatch(h, { ...f, url: u }, shape);
+      if (!Object.keys(patch).length) { S.edit = null; render(false); return; }
+      void hookAct(() => request(hookPath(h), { method: "PATCH", body: body({ expected_revision: h.revision, ...patch }) }).then(() => { S.edit = null; }), "웹훅을 고쳤어요.");
     });
-    box.append(field, pick, more, add);
+    const foot = el("div", "mg-actions"); foot.append(save, ...(editing ? [button("취소", "ghost", null, () => { S.edit = null; render(false); })] : []));
+    box.append(url, pick, more, foot);
     return box;
   }
   function webhookCard() {
@@ -260,6 +304,39 @@ window.ArkismMessenger = (ctx) => {
 };
 // 웹훅 알림 종류 (the server's webhookEvents) and one delivery's state in words: retry says when it goes again.
 window.ArkismMessenger.WEBHOOK_EVENTS = { "candidate.created": "기억 후보가 생겼을 때", "memory.approved": "기억을 승인했을 때", "memory.rejected": "기억을 버렸을 때", "memory.updated": "기억이 바뀌었을 때", "memory.deleted": "기억을 지웠을 때", "consolidation.completed": "기억 정리가 끝났을 때", "ingest.completed": "파일 수집이 끝났을 때", "defense.triggered": "공간 방어 규칙이 작동했을 때", "webhook.test": "시험 알림" };
+// a webhook form's method, wait and extra headers/query as the API wants them; error is a sentence for the person.
+// Lines are "Name: value" (headers) and "name=value" (query); the server checks names and lengths again.
+window.ArkismMessenger.hookShape = (f) => {
+  const lines = (text, sep) => {
+    const out = {};
+    for (const line of String(text || "").split("\n").map((x) => x.trim()).filter(Boolean)) {
+      const i = line.indexOf(sep), k = i > 0 ? line.slice(0, i).trim() : "", v = i > 0 ? line.slice(i + 1).trim() : "";
+      if (!k || !v) return null;
+      out[k] = v;
+    }
+    return out;
+  };
+  const headers = lines(f.headers, ":"), query = lines(f.query, "="), t = String(f.timeout ?? "").trim(), timeout = t ? Number(t) : 0;
+  if (!headers) return { error: "헤더는 한 줄에 하나씩 '이름: 값'으로 적어 주세요." };
+  if (!query) return { error: "쿼리는 한 줄에 하나씩 '이름=값'으로 적어 주세요." };
+  if (!Number.isInteger(timeout) || timeout < 0 || timeout > 30) return { error: "기다릴 시간은 1~30초로 적어 주세요." };
+  const create = { ...(f.method && f.method !== "POST" ? { method: f.method } : {}), ...(timeout ? { timeout_seconds: timeout } : {}),
+    ...(Object.keys(headers).length ? { headers } : {}), ...(Object.keys(query).length ? { query_params: query } : {}) };
+  return { headers, query, timeout, create };
+};
+// only what changed, for PATCH /v1/webhooks/{id}: typed headers/query replace the sealed set, 지우기 sends empty sets, blank keeps them
+window.ArkismMessenger.hookPatch = (h, f, shape) => {
+  const out = {}, same = (a, b) => [...a].sort().join("\n") === [...b].sort().join("\n");
+  if (f.url !== h.url) out.url = f.url;
+  if (!same(f.events, h.events || [])) out.events = f.events;
+  if (f.content !== !!h.include_content) out.include_content = f.content;
+  if ((f.method || "POST") !== (h.method || "POST")) out.method = f.method;
+  if (shape.timeout !== (h.timeout_seconds || 0)) out.timeout_seconds = shape.timeout;
+  if (f.secret) out.secret = f.secret;
+  if (Object.keys(shape.headers).length) out.headers = shape.headers; else if (f.clear) out.headers = {};
+  if (Object.keys(shape.query).length) out.query_params = shape.query; else if (f.clear) out.query_params = {};
+  return out;
+};
 window.ArkismMessenger.deliveryState = (v = {}) => {
   const d = v.delivery || {}, code = d.http_status ? `HTTP ${d.http_status}` : "", when = (t) => { const x = new Date(t); return Number.isNaN(x.getTime()) ? "" : x.toLocaleString(); };
   if (v.status === "done") return { label: "보냄", detail: [code, d.latency_ms ? `${d.latency_ms}ms` : ""].filter(Boolean).join(" · "), tone: "" };
