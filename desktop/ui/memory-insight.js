@@ -93,15 +93,17 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   function paintAsk() {
     const table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(busy));
     const status = el("p", "meta original-notice", busy ? "기억에서 답을 찾는 중…" : !answer && !failure ? "승인된 기억만 보고 답해요. 답은 저장하지 않아요." : "");
-    status.setAttribute("role", "status"); table.append(status);
+    status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status); // an empty line draws as a bare bordered bar
     if (failure) { table.append(askError(failure)); return; }
     if (!answer) return;
     const box = el("div", "quote dg-quote insight-answer");
     box.append(raw(el("p", "", answer.answer || "답할 만한 기억을 찾지 못했어요.")));
     const ids = answer.cited_memory_ids.slice(0, 20), list = el("div", "dg-list");
     for (const id of ids) list.append(memoryLink(id));
-    table.append(box, el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list,
+    const card = el("div", "insight-ask");
+    card.append(box, el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list,
       more(facts([["찾아본 기억", `${answer.retrieved?.length || 0}개`], ["지킨 규칙", `${answer.directives_applied?.length || 0}개`]])));
+    table.append(card);
   }
 
   // ------------------------------------------------------------ 규칙 · 자주 나온 이름 (lists)
@@ -148,7 +150,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const empty = rules ? "아직 규칙이 없어요. 규칙을 적어 두면 AI가 답할 때 꼭 지켜요." : q ? "검색과 맞는 이름이 없어요." : "아직 모인 이름이 없어요. 승인된 기억에 사람·도구·프로젝트 이름이 나오면 여기에 모여요.";
     const error = s.error ? "불러오지 못했어요. 연결과 접근 권한을 확인하고 다시 불러와 주세요." : "";
     const status = el("p", "meta original-notice", s.loading && !s.items.length ? "불러오는 중…" : error || (s.ready && !s.items.length ? empty : ""));
-    status.setAttribute("role", "status"); table.append(status);
+    status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status);
     for (const r of s.items) {
       table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, r.active ? "켜짐" : "꺼짐", !r.active)
         : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : "확인됨", r.proposed));

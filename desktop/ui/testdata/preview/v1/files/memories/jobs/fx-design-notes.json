@@ -1,0 +1,7 @@
+{
+ "id": "fx-design-notes",
+ "status": "running",
+ "revision": 3,
+ "job": { "filename": "orbit-design-notes.md", "total": 12, "next": 5, "candidates_created": 4, "skipped": [] },
+ "authority": "data_only_untrusted"
+}
