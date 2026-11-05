@@ -147,7 +147,8 @@ func (p *Postgres) moveSpaceTables(ctx context.Context, from, to Scope, m *space
 		sql   string
 	}{
 		{[]string{"entities", "relations"}, `WITH e AS (UPDATE entities SET project_id=$3, external_id=COALESCE((SELECT new FROM space_rename_ids WHERE old=external_id), external_id) WHERE organization_id=$1 AND project_id=$2 RETURNING 1),
- r AS (UPDATE relations SET project_id=$3, source_id=COALESCE((SELECT new FROM space_rename_ids WHERE old=source_id), source_id), target_id=COALESCE((SELECT new FROM space_rename_ids WHERE old=target_id), target_id) WHERE organization_id=$1 AND project_id=$2 RETURNING 1)
+ r AS (UPDATE relations SET project_id=$3, source_id=COALESCE((SELECT new FROM space_rename_ids WHERE old=source_id), source_id), target_id=COALESCE((SELECT new FROM space_rename_ids WHERE old=target_id), target_id),
+ metadata=COALESCE((SELECT jsonb_set(metadata,'{evidence,id}',to_jsonb(new)) FROM space_rename_ids WHERE old=metadata->'evidence'->>'id'), metadata) WHERE organization_id=$1 AND project_id=$2 RETURNING 1)
  SELECT (SELECT count(*) FROM e), (SELECT count(*) FROM r)`},
 		{[]string{"execution_traces", "source_events"}, `WITH t AS (UPDATE execution_traces SET project_id=$3 WHERE organization_id=$1 AND project_id=$2 RETURNING 1),
  s AS (UPDATE source_events SET project_id=$3 WHERE organization_id=$1 AND project_id=$2 RETURNING 1)

@@ -25,6 +25,18 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 	if err := p.Insert(testCtx, colProviders, settings); err != nil {
 		t.Fatal(err)
 	}
+	// A graph relation whose evidence names a remapped id, and a privacy request whose id and hash carry the scope.
+	if _, err := p.q().Exec(testCtx, `INSERT INTO entities (organization_id,project_id,kind,external_id) VALUES ($1,$2,'note','a'),($1,$2,'note','b')`, scopeA.WorkspaceID, scopeA.ProjectID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.q().Exec(testCtx, `INSERT INTO relations (organization_id,project_id,source_kind,source_id,target_kind,target_id,relation_kind,metadata) VALUES ($1,$2,'note','a','note','b','cites',jsonb_build_object('evidence',jsonb_build_object('id',$3::text)))`, scopeA.WorkspaceID, scopeA.ProjectID, bleed.ID); err != nil {
+		t.Fatal(err)
+	}
+	req := PrivacyDeletionRequest{Scope: scopeA, IdempotencyKey: "k1", TargetType: "source_event", TargetIDs: []string{"src-1"}, Reason: "asked", RetentionPolicyRef: retentionExternal}
+	privacy := Record{ID: privacyJobID(scopeA, "human-1", "k1"), Scope: scopeA, Kind: privacyDeletionKind, Status: JobStatusDone, Revision: 1, PrivacyDeletion: &PrivacyDeletion{State: privacyCompleted, RequesterType: "human", RequesterID: "human-1", IdempotencyKey: "k1", TargetType: req.TargetType, TargetIDs: req.TargetIDs, Reason: req.Reason, RetentionPolicyRef: req.RetentionPolicyRef, LegalHoldStatus: privacyHoldNone, RequestHash: ContentHash(structuredText(req))}}
+	if err := p.Insert(testCtx, colJobs, privacy); err != nil {
+		t.Fatal(err)
+	}
 	to := Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "renamed"}
 	toSub := Scope{WorkspaceID: to.WorkspaceID, ProjectID: to.ProjectID, UserID: sub.UserID, AgentID: sub.AgentID}
 
@@ -58,6 +70,14 @@ func TestPostgresSpaceRenameMovesEveryRow(t *testing.T) {
 	}
 	if got, err := p.Get(testCtx, colProviders, to, providersID(to)); err != nil || got.Text != settings.Text {
 		t.Fatalf("settings under new name: %+v %v", got, err)
+	}
+	var evidence string
+	if err = p.q().QueryRow(testCtx, `SELECT metadata->'evidence'->>'id' FROM relations WHERE organization_id=$1 AND project_id=$2 AND relation_kind='cites'`, to.WorkspaceID, to.ProjectID).Scan(&evidence); err != nil || evidence != wikiPageID(toSub, "bleed") {
+		t.Fatalf("relation evidence %q %v", evidence, err)
+	}
+	req.Scope = to
+	if got, err := p.Get(testCtx, colJobs, to, privacyJobID(to, "human-1", "k1")); err != nil || got.PrivacyDeletion.RequestHash != ContentHash(structuredText(req)) {
+		t.Fatalf("privacy request under new name: %+v %v", got.PrivacyDeletion, err)
 	}
 	if _, err = p.RenameSpace(testCtx, scopeA, to, true); !errors.Is(err, ErrConflict) {
 		t.Fatalf("rename onto a used name: %v", err)

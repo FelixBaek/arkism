@@ -27,3 +27,24 @@ func TestSpaceRenamerMapsDerivedIDsAndRewritesReferences(t *testing.T) {
 		t.Fatalf("rewrite %s %v", got, err)
 	}
 }
+
+func TestSpaceRenamerMovesPrivacyRequestIDAndHash(t *testing.T) {
+	to := Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "renamed"}
+	req := PrivacyDeletionRequest{Scope: scopeA, IdempotencyKey: "k1", TargetType: "source_event", TargetIDs: []string{"src-1"}, Reason: "asked", RetentionPolicyRef: retentionExternal}
+	oldID, oldHash := privacyJobID(scopeA, "human-1", "k1"), ContentHash(structuredText(req))
+	pd := &PrivacyDeletion{RequesterID: "human-1", IdempotencyKey: "k1", TargetType: req.TargetType, TargetIDs: req.TargetIDs, Reason: req.Reason, RetentionPolicyRef: req.RetentionPolicyRef, RequestHash: oldHash, PurgeReportRef: "jobs/" + oldID + "#privacy_deletion.report"}
+	m := newSpaceRenamer(scopeA, to, []Scope{scopeA})
+	m.plan(colJobs, Record{ID: oldID, Scope: scopeA, Kind: privacyDeletionKind, PrivacyDeletion: pd})
+	req.Scope = to
+	newID, newHash := privacyJobID(to, "human-1", "k1"), ContentHash(structuredText(req))
+	if m.id(oldID) != newID || m.id(oldHash) != newHash || m.id(pd.PurgeReportRef) != "jobs/"+newID+"#privacy_deletion.report" || len(m.ids) != 1 {
+		t.Fatalf("ids %v texts %v", m.ids, m.texts)
+	}
+	// A hash the row's fields do not reproduce stays as it was.
+	pd.RequestHash = "other"
+	m = newSpaceRenamer(scopeA, to, []Scope{scopeA})
+	m.plan(colJobs, Record{ID: oldID, Scope: scopeA, Kind: privacyDeletionKind, PrivacyDeletion: pd})
+	if m.id(oldID) != newID || m.id("other") != "other" {
+		t.Fatalf("ids %v texts %v", m.ids, m.texts)
+	}
+}

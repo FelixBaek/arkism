@@ -13,12 +13,16 @@ import (
 // the scope. Those ids are recomputed when their formula is known and the row
 // proves it (wiki pages, folders and links, artifacts, memory signals), or
 // when the id carries the scope hash itself (per-space settings rows and
-// queues); every reference to a remapped id in any document of the space is
-// rewritten with it. Ids hashed from the scope with inputs the row does not
-// keep (knowledge sources, idempotency receipts) keep their old value: they
-// still read and resolve by id, and only a repeat of the original request
-// under the new name would not find them. Stored files are keyed by digest, so
-// nothing moves in the file store.
+// queues, privacy deletion requests with their request hash and report
+// reference); every reference to a remapped id in any document of the space,
+// and the evidence id of a graph relation, is rewritten with it. Ids and
+// request hashes hashed from the scope with inputs the row does not keep keep
+// their old value: knowledge sources and bindings (source and binding key),
+// source receipts and consultations (idempotency key), and the request hash of
+// every other idempotent write (the whole request body). They still read and
+// resolve by id; only a repeat of the original request under the new name
+// would not replay them. Stored files are keyed by digest, so nothing moves in
+// the file store.
 
 // SpaceRenameReport counts what a rename moves; a preview counts the same rows and changes nothing.
 type SpaceRenameReport struct {
@@ -34,12 +38,14 @@ type SpaceRenameReport struct {
 type spaceRenamer struct {
 	ws, from, to string
 	ids          map[string]string
+	// texts maps stored strings that are not row ids (request hashes, report references).
+	texts map[string]string
 	// hashes holds the old and new scope hash of each sub-scope.
 	hashes [][2]string
 }
 
 func newSpaceRenamer(from, to Scope, subs []Scope) *spaceRenamer {
-	m := &spaceRenamer{ws: from.WorkspaceID, from: from.ProjectID, to: to.ProjectID, ids: map[string]string{}}
+	m := &spaceRenamer{ws: from.WorkspaceID, from: from.ProjectID, to: to.ProjectID, ids: map[string]string{}, texts: map[string]string{}}
 	for _, s := range subs {
 		m.hashes = append(m.hashes, [2]string{ContentHash(structuredText(s)), ContentHash(structuredText(m.moved(s)))})
 	}
@@ -55,6 +61,9 @@ func (m *spaceRenamer) moved(s Scope) Scope {
 
 func (m *spaceRenamer) id(old string) string {
 	if v, ok := m.ids[old]; ok {
+		return v
+	}
+	if v, ok := m.texts[old]; ok {
 		return v
 	}
 	return old
@@ -90,9 +99,28 @@ func (m *spaceRenamer) plan(col string, r Record) {
 		id = artifactID(scope, r.Target.ID, r.Artifact.Digest)
 	case col == colJobs && r.MemorySignal != nil && r.ID == memorySignalID(old, r.MemorySignal.Memory.ID):
 		id = memorySignalID(scope, r.MemorySignal.Memory.ID)
+	case col == colJobs && r.Kind == privacyDeletionKind && r.PrivacyDeletion != nil && r.ID == privacyJobID(old, r.PrivacyDeletion.RequesterID, r.PrivacyDeletion.IdempotencyKey):
+		id = privacyJobID(scope, r.PrivacyDeletion.RequesterID, r.PrivacyDeletion.IdempotencyKey)
+		m.planPrivacy(r, scope, id)
 	}
 	if id != r.ID {
 		m.ids[r.ID] = id
+	}
+}
+
+// planPrivacy maps the report reference and, when the row's own fields
+// reproduce its request hash, the hash under the new scope; a request that
+// carried an expected revision the row does not keep keeps its old hash.
+func (m *spaceRenamer) planPrivacy(r Record, scope Scope, id string) {
+	pd := r.PrivacyDeletion
+	m.texts["jobs/"+r.ID+"#privacy_deletion.report"] = "jobs/" + id + "#privacy_deletion.report"
+	for _, hold := range []string{"", privacyHoldNone} {
+		req := PrivacyDeletionRequest{Scope: r.Scope, IdempotencyKey: pd.IdempotencyKey, TargetType: pd.TargetType, TargetIDs: pd.TargetIDs, Reason: pd.Reason, RetentionPolicyRef: pd.RetentionPolicyRef, LegalHoldStatus: hold}
+		if ContentHash(structuredText(req)) == pd.RequestHash {
+			req.Scope = scope
+			m.texts[pd.RequestHash] = ContentHash(structuredText(req))
+			return
+		}
 	}
 }
 
