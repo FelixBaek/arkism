@@ -77,7 +77,9 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	}
 	rows = s.modelRerankRows(ctx, token, in, rows, trace)
 	if recall {
-		return decayByRecency(rows, s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows), in.Limit), nil
+		now, weights := s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows)
+		trace.noteBoosts(rows, now, weights)
+		return decayByRecency(rows, now, weights, in.Limit), nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil
 }

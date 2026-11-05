@@ -123,6 +123,8 @@ type ReflectToolStep struct {
 	IDs    []string            `json:"ids"`
 	Error  string              `json:"error,omitempty"`
 	Output []ReflectToolOutput `json:"output,omitempty"`
+	// MS is the step's wall time in whole milliseconds, for debugging only.
+	MS int64 `json:"ms"`
 }
 
 type ReflectOutput struct {
@@ -375,10 +377,12 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 			return out, errModelAnswer
 		}
 		for _, call := range calls {
+			start := time.Now()
 			step, err := s.reflectTool(ctx, token, run, call)
 			if err != nil {
 				return out, err
 			}
+			step.MS = time.Since(start).Milliseconds()
 			run.trace = append(run.trace, step)
 		}
 		out.ToolTrace = run.trace

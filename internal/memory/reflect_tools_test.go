@@ -27,6 +27,9 @@ func TestReflectToolLoopReadsMoreAndTraces(t *testing.T) {
 		t.Fatal("loop", out.Iterations, out.ToolTrace, out.Usage)
 	}
 	step := out.ToolTrace[0]
+	if stepJSON, _ := json.Marshal(step); step.MS < 0 || !strings.Contains(string(stepJSON), `"ms":`) {
+		t.Fatal("each step carries its wall time", step)
+	}
 	if step.Tool != "recall" || step.Args.Query != "bravo" || !slices.Contains(step.IDs, second.ID) || step.Error != "" {
 		t.Fatal("recall step", step)
 	}

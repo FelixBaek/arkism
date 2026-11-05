@@ -268,6 +268,13 @@ func TestRecallTemporalLaneWithExplain(t *testing.T) {
 	if ms, ok := out.Explain.LaneMS["temporal"]; !ok || ms < 0 {
 		t.Fatalf("explain must time the temporal lane: %+v", out.Explain.LaneMS)
 	}
+	// The recency and outcome factors are shown apart, and each lane's own list by id.
+	if h.Explain.Recency == nil || *h.Explain.Recency < 0.5 || *h.Explain.Recency > 1 || h.Explain.Outcome == nil || *h.Explain.Outcome != 1 {
+		t.Fatalf("boosts %+v", h.Explain)
+	}
+	if lane := out.Explain.LaneHits["temporal"]; len(lane) != 1 || lane[0].ID != "yday" || lane[0].Collection != colMemories {
+		t.Fatalf("lane hits %+v", out.Explain.LaneHits)
+	}
 	// The temporal lane never filters: a plain match still comes back beside it.
 	out, err = f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "gamma 어제"})
 	if err != nil || !slices.Contains(ids(out.Items), "yday") || out.Explain != nil || out.Items[0].Explain != nil {

@@ -39,6 +39,10 @@ type HitExplain struct {
 	ModelRank int `json:"model_rank,omitempty"`
 	// GraphHops is how many graph or causal steps from a top hit the hit was first reached.
 	GraphHops int `json:"graph_hops,omitempty"`
+	// Recency and Outcome are the memory-recall factors the score was multiplied by after
+	// fusion and rerank (recency.go): age decay (0.5-1) and the outcome weight.
+	Recency *float64 `json:"recency,omitempty"`
+	Outcome *float64 `json:"outcome,omitempty"`
 }
 
 // RecallExplain is the search-level debug trace returned with explain=true.
@@ -60,6 +64,9 @@ type RecallExplain struct {
 	// RerankChain is each configured reranker tried, in order, with its outcome:
 	// ok, failed, or not_allowed (the request may not send text to it).
 	RerankChain []RerankStage `json:"rerank_chain,omitempty"`
+	// LaneHits is each lane's own list before fusion, in lane order (at most laneHitsMax per lane),
+	// including hits fusion or a floor left out; ids only, a reader opens each with its own read.
+	LaneHits map[string][]Ref `json:"lane_hits,omitempty"`
 }
 
 // RerankStage is one reranker of the fallback chain and what it did for this search.
@@ -68,6 +75,8 @@ type RerankStage struct {
 	Model    string `json:"model"`
 	Outcome  string `json:"outcome"`
 }
+
+const laneHitsMax = 20
 
 type RecallTimeWindow struct {
 	Phrase string    `json:"phrase"`
@@ -91,6 +100,8 @@ type recallTrace struct {
 	dropStages  map[string]int
 	weights     map[string]float64
 	clock       *laneClock
+	// boosts are each memory hit's recency factor and outcome weight (noteBoosts).
+	boosts map[string][2]float64
 }
 
 // laneClock sums each lane's wall time for explain output; without explain the
@@ -418,6 +429,38 @@ func (t *recallTrace) noteFused(rows []ScoredHit) {
 	}
 }
 
+// noteBoosts keeps the factors decayByRecency applies, for explain.
+func (t *recallTrace) noteBoosts(rows []ScoredHit, now time.Time, weights map[string]float64) {
+	if !t.explain {
+		return
+	}
+	t.boosts = map[string][2]float64{}
+	for _, r := range rows {
+		w, ok := weights[r.ID]
+		if !ok {
+			w = 1
+		}
+		t.boosts[hitKey(r.Hit)] = [2]float64{recencyFactor(r.Hit, now), w}
+	}
+}
+
+// laneHits lists each lane's hits in lane order, at most laneHitsMax each, once per lane.
+func (t *recallTrace) laneHits(lists [][]Hit) map[string][]Ref {
+	out, seen := map[string][]Ref{}, map[string]bool{}
+	for lane, list := range lists {
+		name := t.lanes[lane]
+		for _, h := range list {
+			k := name + "\x00" + hitKey(h)
+			if len(out[name]) >= laneHitsMax || seen[k] {
+				continue
+			}
+			seen[k] = true
+			out[name] = append(out[name], Ref{Collection: h.Collection, ID: h.ID, Revision: h.Revision})
+		}
+	}
+	return out
+}
+
 // annotate attaches the explain trace to out when the caller asked for it.
 func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 	if !t.explain {
@@ -444,10 +487,13 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		if v, ok := t.rerank[k]; ok {
 			e.RerankScore = &v
 		}
+		if b, ok := t.boosts[k]; ok {
+			e.Recency, e.Outcome = &b[0], &b[1]
+		}
 		out.Items[i].Explain = e
 	}
 	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped,
-		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis(), RerankChain: t.chain}
+		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis(), RerankChain: t.chain, LaneHits: t.laneHits(lists)}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}
