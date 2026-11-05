@@ -15,6 +15,7 @@ func TestParseTimeIntentCLDRFallback(t *testing.T) {
 		"què vam decidir fa 3 dies":          {day(2026, 11, 2), day(2026, 11, 3)},   // Catalan 3 days ago
 		"la reunió del 15 de gener":          {day(2026, 1, 15), day(2026, 1, 16)},   // Catalan month with day
 		"cyfarfod ionawr 2025":               {day(2025, 1, 1), day(2025, 2, 1)},     // Welsh month with year
+		"ang pulong ng enero 15, 2026":       {day(2026, 1, 15), day(2026, 1, 16)},   // Tagalog, Spanish month name in month-first order
 		"what did we ship last monday":       {day(2026, 10, 26), day(2026, 10, 27)}, // weekday phrases for every language
 		"¿qué pasó el lunes pasado?":         {day(2026, 10, 26), day(2026, 10, 27)},
 		"this friday's deploy":               {day(2026, 11, 6), day(2026, 11, 7)},

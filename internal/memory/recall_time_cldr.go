@@ -19,7 +19,10 @@ import (
 //   - a month name needs a day (1..31) right before or after it, or a 4-digit year next to it;
 //   - a one-word phrase (month names too: "out", "here", "masa") needs at least cldrSingleMin
 //     letters and must not be a hand-tuned stop word or month name ("mars", "jana") or a
-//     known false friend (cldrFalseFriends);
+//     known false friend (cldrFalseFriends); a hand-tuned month name is kept when it names
+//     the same month, so "enero 15, 2026" reads in locales that borrow the Spanish names;
+//   - there are no weekend words: CLDR dateFields has no weekend field (only day, week,
+//     month, year, quarter, weekday and the seven day names), so weekends are hand-tuned only;
 //   - a one-word Latin-script "this <weekday>" is the bare weekday name in some locales
 //     ("monday", "måndag"), so it is skipped;
 //   - phrases two tables (or two locales) read differently were dropped.
@@ -41,13 +44,18 @@ type cldrTimeEntry struct {
 var cldrTime = sync.OnceValue(buildCLDRTime)
 
 func buildCLDRTime() map[string]cldrTimeEntry {
-	guard := map[string]bool{}
+	guard := map[string]int{} // hand-tuned month names keep their month; stop words and clashing names are -1
+	for i := range timeLexicons {
+		for w, m := range timeLexicons[i].monthOf {
+			if g, ok := guard[w]; ok && g != m {
+				m = -1
+			}
+			guard[w] = m
+		}
+	}
 	for i := range timeLexicons {
 		for w := range timeLexicons[i].stopSet {
-			guard[w] = true
-		}
-		for w := range timeLexicons[i].monthOf {
-			guard[w] = true
+			guard[w] = -1
 		}
 	}
 	out, bad := map[string]cldrTimeEntry{}, map[string]bool{}
@@ -69,7 +77,7 @@ func buildCLDRTime() map[string]cldrTimeEntry {
 
 // cldrLine reads one "<code>\t<phrase>" data line into its folded phrase and entry; ok is
 // false for lines the guards in the file comment leave out.
-func cldrLine(line string, guard map[string]bool) (string, cldrTimeEntry, bool) {
+func cldrLine(line string, guard map[string]int) (string, cldrTimeEntry, bool) {
 	code, phrase, _ := strings.Cut(line, "\t")
 	words := cldrWords(foldTimeText(phrase))
 	key, err := strconv.Atoi(code[min(len(code), 1):])
@@ -84,8 +92,11 @@ func cldrLine(line string, guard map[string]bool) (string, cldrTimeEntry, bool) 
 	}
 	one := strings.Join(words, " ")
 	single := len(words) == 1
+	// A hand-tuned month name still reads as the same month here, for word orders its own
+	// rules skip ("enero 15, 2026" in Filipino); a month name is never anything else.
+	g, guarded := guard[one]
 	switch {
-	case e.kind == 'a' != (e.numAt >= 0), guard[one] && (single || e.kind == 'm'):
+	case e.kind == 'a' != (e.numAt >= 0), guarded && (single || e.kind == 'm') && !(e.kind == 'm' && g == e.key):
 		return "", cldrTimeEntry{}, false
 	case single && utf8.RuneCountInString(one) < cldrSingleMin, single && e.kind == 't' && isLatinWord(one), cldrFalseFriends[one]:
 		return "", cldrTimeEntry{}, false

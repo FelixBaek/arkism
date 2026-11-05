@@ -177,6 +177,16 @@ func TestParseTimeIntentWeekends(t *testing.T) {
 		"letztes Wochenende": last, "am letzten Wochenende": last, "dieses Wochenende": this,
 		"на прошлых выходных": last, "прошлые выходные": last, "в эти выходные": this, "呢個週末": this, "上個週末": last,
 		"no fim de semana passado": last, "lo scorso fine settimana": last, "questo weekend": this,
+		"vorig weekend": last, "dit weekend": this, "на минулих вихідних": last, "ці вихідні": this,
+		"w zeszły weekend": last, "w ten weekend": this, "geçen hafta sonu": last, "bu hafta sonunda": this,
+		"نهاية الأسبوع الماضي": last, "عطلة نهاية هذا الأسبوع": this, "पिछले वीकेंड": last, "इस सप्ताहांत": this,
+		"สุดสัปดาห์ที่แล้ว": last, "สุดสัปดาห์นี้": this, "cuối tuần trước": last, "cuối tuần này": this,
+		"akhir pekan lalu": last, "hujung minggu ini": this, "förra helgen": last, "i helgen": this,
+		"sidste weekend": last, "denne helgen": this, "viime viikonloppuna": last, "tänä viikonloppuna": this,
+		"o minulém víkendu": last, "tento víkend": this, "το περασμένο Σαββατοκύριακο": last, "αυτό το Σαββατοκύριακο": this,
+		"בסוף השבוע שעבר": last, "סוף השבוע הזה": this, "weekendul trecut": last, "în weekendul acesta": this,
+		"a múlt hétvégén": last, "ezen a hétvégén": this, "গত সপ্তাহান্তে": last, "এই সপ্তাহান্তে": this,
+		"آخر هفته گذشته": last, "این آخر هفته": this,
 	}
 	for _, now := range []time.Time{time.Date(2026, 11, 5, 10, 0, 0, 0, seoul), time.Date(2026, 11, 8, 22, 0, 0, 0, seoul)} { // Thursday, Sunday
 		for q, want := range queries {
@@ -188,5 +198,11 @@ func TestParseTimeIntentWeekends(t *testing.T) {
 	// The week words still read whole weeks.
 	if w, _ := parseTimeIntent("지난주 회의", time.Date(2026, 11, 5, 10, 0, 0, 0, seoul)); !w.From.Equal(time.Date(2026, 10, 26, 0, 0, 0, 0, seoul)) {
 		t.Error("지난주 lost to the weekend rule", w)
+	}
+	// Every hand-tuned language reads both weekend words.
+	for _, l := range timeLexicons {
+		if l.rel[relLastWeekend] == "" || l.rel[relThisWeekend] == "" {
+			t.Errorf("%s has no weekend words", l.lang)
+		}
 	}
 }

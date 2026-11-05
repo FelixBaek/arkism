@@ -380,10 +380,12 @@ wiki. What a person approves and how is described in
       (needs `read:observations`).
     - Time words for about 380 more CLDR locales (month names with a day or
       year, yesterday/last week words, "N days ago", last/this weekday) are read
-      after the hand-tuned languages, which still decide first.
+      after the hand-tuned languages, which still decide first. A month name a
+      hand-tuned language also uses now reads there too when it names the same
+      month ("enero 15, 2026" in Tagalog).
     - "Last weekend" and "this weekend" (Saturday and Sunday of the previous
-      or current Monday-first week) in English, Korean, Japanese, Chinese,
-      Spanish, French, German, Portuguese and Italian.
+      or current Monday-first week) in every hand-tuned language. CLDR has no
+      weekend term, so the CLDR-only locales do not read weekend words.
 12. **Agent proposal tools.** Agents can now propose directives, mental
     models and invalidations, list and cancel their own jobs, and read
     documents. What an agent creates stays `proposed` until a person saves or
