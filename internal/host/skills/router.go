@@ -810,6 +810,9 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 			}
 		}
 	}
+	if err := recallAnchorOptions(opts, out); err != nil {
+		return nil, err
+	}
 	if v, ok := opts["timezone"]; ok && v != nil {
 		tz, isStr := v.(string)
 		if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
@@ -820,6 +823,49 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// recallAnchorOptions checks query_time (RFC3339), rerank (bool, false is kept),
+// graph_depth (1-3) and include ("sources", "entities") into out.
+func recallAnchorOptions(opts, out map[string]any) error {
+	if v, ok := opts["query_time"]; ok && v != nil {
+		text, isStr := v.(string)
+		if _, err := time.Parse(time.RFC3339Nano, text); !isStr || err != nil {
+			return errors.New("query_time must be an RFC3339 time such as 2026-11-04T09:00:00+09:00")
+		}
+		out["query_time"] = text
+	}
+	if v, ok := opts["rerank"]; ok && v != nil {
+		b, isBool := v.(bool)
+		if !isBool {
+			return errors.New("rerank must be true or false")
+		}
+		out["rerank"] = b
+	}
+	if v, ok := opts["graph_depth"]; ok && v != nil {
+		n, isInt := host.Int(v)
+		if _, isBool := v.(bool); isBool || !isInt || n < 1 || n > 3 {
+			return errors.New("graph_depth must be 1, 2 or 3")
+		}
+		out["graph_depth"] = n
+	}
+	if v, ok := opts["include"]; ok && v != nil {
+		list, isList := v.([]any)
+		if !isList || !validRecallInclude(list) {
+			return errors.New(`include must list "sources" and/or "entities"`)
+		}
+		out["include"] = list
+	}
+	return nil
+}
+
+func validRecallInclude(list []any) bool {
+	for i, item := range list {
+		if (item != "sources" && item != "entities") || slices.Contains(list[:i], item) {
+			return false
+		}
+	}
+	return len(list) <= 2
 }
 
 // recallSearch runs the memory search for a query or a related_to anchor. A query search
@@ -864,7 +910,7 @@ func recallShape(found []any) ([]any, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain", "source_traces", "entities"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}

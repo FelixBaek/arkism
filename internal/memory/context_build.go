@@ -1,6 +1,9 @@
 package memory
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type ContextBuildInput struct {
 	ContextView *ContextInvocationView `json:"context_view,omitempty"`
@@ -21,6 +24,11 @@ type ContextBuildInput struct {
 	Timezone string `json:"timezone,omitempty"`
 	// ExpandCausal passes through to the search (SearchInput).
 	ExpandCausal bool `json:"expand_causal,omitempty"`
+	// QueryTime, GraphDepth, MinScore and Rerank pass through to the search (SearchInput).
+	QueryTime  *time.Time `json:"query_time,omitempty"`
+	GraphDepth int        `json:"graph_depth,omitempty"`
+	MinScore   float64    `json:"min_score,omitempty"`
+	Rerank     *bool      `json:"rerank,omitempty"`
 }
 
 type ContextPack struct {
@@ -53,6 +61,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 		Limit: maxItems, BudgetTokens: budget, TokenEncoding: in.TokenEncoding,
 		Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
 		Explain: in.Explain, Timezone: in.Timezone, ExpandCausal: in.ExpandCausal,
+		QueryTime: in.QueryTime, GraphDepth: in.GraphDepth, MinScore: in.MinScore, Rerank: in.Rerank,
 	}
 	directives, err := s.directivesFirst(ctx, token, &search)
 	if err != nil {

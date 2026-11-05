@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -35,7 +36,18 @@ type SearchInput struct {
 	// Explain returns each hit's lane ranks and rerank score (recall_lanes.go).
 	Explain bool `json:"explain,omitempty"`
 	// Timezone (IANA) is the calendar time words like "yesterday" resolve in; empty is Asia/Seoul.
-	Timezone       string `json:"timezone,omitempty"`
+	Timezone string `json:"timezone,omitempty"`
+	// QueryTime is the "now" time words and recency resolve against (default: the server clock),
+	// so "yesterday" can be asked as of a past moment.
+	QueryTime *time.Time `json:"query_time,omitempty"`
+	// GraphDepth is how many steps the graph and causal lanes walk from the top hits (default 2, at most 3).
+	GraphDepth int `json:"graph_depth,omitempty"`
+	// MinScore (0..1) drops hits whose final score is below it; explain counts them.
+	MinScore float64 `json:"min_score,omitempty"`
+	// Rerank false skips the reranker for this search; nil or true keeps the server default.
+	Rerank *bool `json:"rerank,omitempty"`
+	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
+	Include        []string `json:"include,omitempty"`
 	retrievalQuery string
 	// pinned: memories a context build already injected ahead of this search
 	// (crew_pins.go); the receipt lists them first and the search hits after.
@@ -128,7 +140,7 @@ func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
 			} else if slices.Contains(hit.Reasons, reasonGraph) || slices.Contains(hit.Reasons, reasonCausal) {
-				weight = graphLaneWeight
+				weight = graphLaneWeight * math.Pow(graphHopDecay, float64(max(hit.graphHops, 1)-1))
 			}
 			entry.Score += weight / float64(rankOffset+position+1)
 			for _, reason := range hit.Reasons {
@@ -302,7 +314,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		return ContextBundle{}, Decision{}, e
 	}
 	shadow.returned(out)
-	return out, d, nil
+	return s.withIncludes(ctx, token, in, out, d)
 }
 
 // prepareSearchInput validates the relation, history and criteria inputs,
@@ -363,7 +375,7 @@ func boundSearchInput(in *SearchInput) bool {
 	if strings.TrimSpace(in.Query) == "" || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 1000 || in.Limit < 0 || in.Limit > 50 || in.MaxChars < 0 || in.MaxChars > 64000 {
 		return false
 	}
-	if !validTimezone(in.Timezone) {
+	if !boundRecallOptions(in) {
 		return false
 	}
 	if in.Limit == 0 {

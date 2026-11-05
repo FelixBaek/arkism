@@ -19,6 +19,8 @@ const (
 	graphLaneWeight = 0.5 // RRF weight: a neighbour is weaker evidence than a direct match.
 	graphSeedCount  = 5
 	graphFanOut     = 20
+	graphDepthMax   = 3
+	graphHopDecay   = 0.5 // each further step halves a neighbour's lane weight
 	rerankMaxRows   = 100
 	rerankTextMax   = 2000
 	rerankBlend     = 0.7
@@ -29,6 +31,8 @@ type HitExplain struct {
 	LaneRanks   map[string]int `json:"lane_ranks"`
 	FusedScore  float64        `json:"fused_score"`
 	RerankScore *float64       `json:"rerank_score,omitempty"`
+	// GraphHops is how many graph or causal steps from a top hit the hit was first reached.
+	GraphHops int `json:"graph_hops,omitempty"`
 }
 
 // RecallExplain is the search-level debug trace returned with explain=true.
@@ -36,6 +40,8 @@ type RecallExplain struct {
 	Lanes      []string          `json:"lanes"`
 	TimeWindow *RecallTimeWindow `json:"time_window,omitempty"`
 	Reranked   bool              `json:"reranked"`
+	// MinScoreDropped counts hits the request's min_score removed.
+	MinScoreDropped int `json:"min_score_dropped,omitempty"`
 }
 
 type RecallTimeWindow struct {
@@ -52,6 +58,7 @@ type recallTrace struct {
 	fused    map[string]float64
 	rerank   map[string]float64
 	reranked bool
+	dropped  int
 }
 
 func (s *Service) recallNow() time.Time {
@@ -59,6 +66,25 @@ func (s *Service) recallNow() time.Time {
 		return s.RecallNow()
 	}
 	return time.Now()
+}
+
+// recallClock is the request's query_time, else the server clock.
+func (s *Service) recallClock(in SearchInput) time.Time {
+	if in.QueryTime != nil {
+		return *in.QueryTime
+	}
+	return s.recallNow()
+}
+
+// boundRecallOptions checks the timezone and recall-only options and fills the graph depth default.
+func boundRecallOptions(in *SearchInput) bool {
+	if !validTimezone(in.Timezone) || in.QueryTime != nil && (in.QueryTime.Year() < 1970 || in.QueryTime.Year() > 9999) {
+		return false
+	}
+	if in.GraphDepth == 0 {
+		in.GraphDepth = 2
+	}
+	return in.GraphDepth >= 1 && in.GraphDepth <= graphDepthMax && in.MinScore >= 0 && in.MinScore <= 1 && validInclude(in.Include)
 }
 
 func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
@@ -73,7 +99,7 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 {
 		return lists, trace, nil
 	}
-	if w, ok := parseTimeIntent(in.Query, s.recallNow().In(recallLocation(in.Timezone))); ok {
+	if w, ok := parseTimeIntent(in.Query, s.recallClock(in).In(recallLocation(in.Timezone))); ok {
 		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
 		if err == nil {
 			hits, err = clean(hits)
@@ -84,24 +110,22 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		trace.window = &w
 		lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
 	}
-	// Neighbour lanes step from the same top fused hits, so a causal hop is one hop from a direct match.
-	top := FuseScored(lists, graphSeedCount)
-	for _, lane := range []struct {
-		on     bool
-		reason string
-		next   func(context.Context, Scope, []string, int) ([]string, error)
-	}{{s.RecallGraph, reasonGraph, s.Repo.MemoryNeighbors}, {in.ExpandCausal, reasonCausal, s.causalNeighbors}} {
-		if !lane.on {
-			continue
-		}
-		hits, err := s.neighborLane(ctx, in, top, lane.reason, lane.next)
-		if err == nil {
-			hits, err = clean(hits)
-		}
-		if err != nil {
-			return nil, nil, err
-		}
-		lists, trace.lanes = append(lists, hits), append(trace.lanes, lane.reason)
+	sources := []neighborSource{}
+	if s.RecallGraph {
+		sources = append(sources, neighborSource{reasonGraph, s.Repo.MemoryNeighbors})
+	}
+	if in.ExpandCausal {
+		sources = append(sources, neighborSource{reasonCausal, s.causalNeighbors})
+	}
+	if len(sources) == 0 {
+		return lists, trace, nil
+	}
+	lanes, err := s.neighborLanes(ctx, in, FuseScored(lists, graphSeedCount), sources, clean)
+	if err != nil {
+		return nil, nil, err
+	}
+	for i, hits := range lanes {
+		lists, trace.lanes = append(lists, hits), append(trace.lanes, sources[i].reason)
 	}
 	return lists, trace, nil
 }
@@ -116,36 +140,75 @@ func (s *Service) recallItems(ctx context.Context, in SearchInput, d Decision, c
 	if err != nil {
 		return err
 	}
-	out.Items = make([]Hit, len(scored))
-	for i, r := range scored {
+	out.Items = make([]Hit, 0, len(scored))
+	for _, r := range scored {
+		if r.Score < in.MinScore {
+			trace.dropped++
+			continue
+		}
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
-		out.Items[i] = r.Hit
+		out.Items = append(out.Items, r.Hit)
 	}
 	trace.annotate(out, lists)
 	return nil
 }
 
-// neighborLane reads the approved memories one step (found by next) from the top fused hits.
-func (s *Service) neighborLane(ctx context.Context, in SearchInput, top []ScoredHit, reason string, next func(context.Context, Scope, []string, int) ([]string, error)) ([]Hit, error) {
-	seeds := make([]string, 0, len(top))
+// neighborSource is one way to step from memories to their neighbours (relations
+// and entity co-mentions, or person-approved causal links).
+type neighborSource struct {
+	reason string
+	next   func(context.Context, Scope, []string, int) ([]string, error)
+}
+
+// neighborLanes walks up to in.GraphDepth steps from the top fused hits over all
+// sources together, so a path may mix relation and causal steps. Each source fills
+// its own lane in hop order, at most min(graphFanOut, 2*limit) hits, and a step only
+// continues from neighbours that passed clean: the walk never crosses a memory the
+// caller could not read. A hit's graphHops makes farther neighbours weigh less.
+func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []ScoredHit, sources []neighborSource, clean func([]Hit) ([]Hit, error)) ([][]Hit, error) {
+	seen, frontier := map[string]bool{}, []string{}
 	for _, r := range top {
-		seeds = append(seeds, r.ID)
+		seen[r.ID], frontier = true, append(frontier, r.ID)
 	}
-	if len(seeds) == 0 {
-		return []Hit{}, nil
+	lanes, budget := make([][]Hit, len(sources)), min(graphFanOut, 2*in.Limit)
+	for hop := 1; hop <= in.GraphDepth && len(frontier) > 0; hop++ {
+		var next []string
+		for i, src := range sources {
+			if len(lanes[i]) >= budget {
+				continue
+			}
+			hits, err := s.neighborStep(ctx, in, frontier, src, budget, seen, clean)
+			if err != nil {
+				return nil, err
+			}
+			for _, h := range hits[:min(len(hits), budget-len(lanes[i]))] {
+				h.graphHops = hop
+				lanes[i], next = append(lanes[i], h), append(next, h.ID)
+			}
+		}
+		frontier = next
 	}
-	ids, err := next(ctx, in.Scope, seeds, min(graphFanOut, 2*in.Limit))
+	return lanes, nil
+}
+
+// neighborStep reads and cleans the unseen memories one src step from frontier.
+func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []string, src neighborSource, limit int, seen map[string]bool, clean func([]Hit) ([]Hit, error)) ([]Hit, error) {
+	ids, err := src.next(ctx, in.Scope, frontier, limit)
 	if err != nil {
 		return nil, err
 	}
 	hits := make([]Hit, 0, len(ids))
 	for _, id := range ids {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 		// A neighbour that is gone or unreadable simply drops out; cleaning rechecks the rest.
 		if r, err := s.Repo.Get(ctx, colMemories, in.Scope, id); err == nil {
-			hits = append(hits, searchHit(r, colMemories, reason))
+			hits = append(hits, searchHit(r, colMemories, src.reason))
 		}
 	}
-	return hits, nil
+	return clean(hits)
 }
 
 // rerankRows reorders the fused head by the reranker (blend above). A reranker failure
@@ -153,7 +216,7 @@ func (s *Service) neighborLane(ctx context.Context, in SearchInput, top []Scored
 // embedding. Text is sent only when the vector lane could send the query too, and
 // only for hits the embedding worker would send (not restricted, safe to transfer).
 func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
-	if s.Reranker == nil || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
+	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
 		return rows, nil
 	}
 	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])
@@ -211,10 +274,13 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 	if !t.explain {
 		return
 	}
-	ranks := map[string]map[string]int{}
+	ranks, hops := map[string]map[string]int{}, map[string]int{}
 	for lane, list := range lists {
 		for pos, h := range list {
 			k := hitKey(h)
+			if h.graphHops > 0 && (hops[k] == 0 || h.graphHops < hops[k]) {
+				hops[k] = h.graphHops
+			}
 			if ranks[k] == nil {
 				ranks[k] = map[string]int{}
 			}
@@ -225,13 +291,13 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 	}
 	for i := range out.Items {
 		k := hitKey(out.Items[i])
-		e := &HitExplain{LaneRanks: ranks[k], FusedScore: t.fused[k]}
+		e := &HitExplain{LaneRanks: ranks[k], FusedScore: t.fused[k], GraphHops: hops[k]}
 		if v, ok := t.rerank[k]; ok {
 			e.RerankScore = &v
 		}
 		out.Items[i].Explain = e
 	}
-	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked}
+	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, MinScoreDropped: t.dropped}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}

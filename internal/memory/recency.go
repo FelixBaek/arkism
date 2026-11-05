@@ -76,7 +76,7 @@ func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection 
 		return nil, err
 	}
 	if recall {
-		return decayByRecency(rows, s.recallNow(), s.outcomeWeights(ctx, in.Scope, rows), in.Limit), nil
+		return decayByRecency(rows, s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows), in.Limit), nil
 	}
 	return rows[:min(in.Limit, len(rows))], nil
 }

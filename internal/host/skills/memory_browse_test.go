@@ -146,6 +146,30 @@ func TestRecallPassesExplainAndTimezoneWithServerLanes(t *testing.T) {
 	}
 }
 
+func TestRecallPassesQueryTimeRerankDepthAndInclude(t *testing.T) {
+	swapRouter(t)
+	t.Setenv("ARKISM_REPO", "")
+	hit := `{"id":"m1","kind":"decision","status":"active","text":"결정","score":0.05,"lanes":["keyword"],"source_traces":[{"source_id":"s","state":"available","excerpt":"원문"}],"entities":[{"id":"e","name":"billing","type":"service"}]}`
+	calls := fakeRequest(t, `{"items":[`+hit+`]}`)
+	out := structured(t, call(t, "recall", `{"query":"어제 결정","query_time":"2026-11-04T09:00:00+09:00","rerank":false,"graph_depth":3,"include":["sources","entities"]}`))
+	payload := asMap((*calls)[0].payload)
+	if payload["query_time"] != "2026-11-04T09:00:00+09:00" || payload["rerank"] != false || canon(t, payload["graph_depth"]) != "3" || canon(t, payload["include"]) != `["sources","entities"]` {
+		t.Fatal(payload)
+	}
+	if got := canon(t, field(out, "memories")); !strings.Contains(got, `"source_traces"`) || !strings.Contains(got, `"entities"`) {
+		t.Fatal(got)
+	}
+	*calls = nil
+	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`} {
+		if _, err := callTool("recall", j(t, bad)); err == nil {
+			t.Fatal(bad)
+		}
+	}
+	if len(*calls) != 0 {
+		t.Fatal("network before validation")
+	}
+}
+
 func TestReadWikiTree(t *testing.T) {
 	swapRouter(t)
 	calls := fakeRequest(t, `{"folders":[{"path":"ops","pages":1}],"pages":[{"id":"p1","title":"배포"}],"truncated":false,"authority":"data_only_untrusted"}`)

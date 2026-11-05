@@ -14,8 +14,10 @@ type SearchCriteria struct {
 	ProjectKey string `json:"project_key,omitempty"`
 }
 type SearchFilters struct {
-	Statuses    []string   `json:"statuses,omitempty"`
-	Tags        []string   `json:"tags,omitempty"`
+	Statuses []string `json:"statuses,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+	// TagsMatch is how Tags match (tagsMatch): any_strict (default), any, all, all_strict or exact.
+	TagsMatch   string     `json:"tags_match,omitempty"`
 	CreatedFrom *time.Time `json:"created_from,omitempty"`
 	CreatedTo   *time.Time `json:"created_to,omitempty"`
 	UpdatedFrom *time.Time `json:"updated_from,omitempty"`
@@ -66,7 +68,7 @@ func normalizeFilterLabels(f *SearchFilters) bool {
 		}
 	}
 	f.Statuses = slices.Clone(f.Statuses)
-	if !validTags(f.Tags) {
+	if !validTags(f.Tags) || f.TagsMatch != "" && (len(f.Tags) == 0 || !slices.Contains(tagsMatchModes, f.TagsMatch)) {
 		return false
 	}
 	for _, tag := range f.Tags {
@@ -171,7 +173,7 @@ func (c SearchCriteria) matches(kind string, tags []string, created, updated tim
 		return true
 	}
 	f := c.Filters
-	if len(f.Tags) > 0 && !slices.ContainsFunc(tags, func(tag string) bool { return slices.Contains(f.Tags, tag) }) {
+	if len(f.Tags) > 0 && !tagsMatch(f.TagsMatch, f.Tags, tags) {
 		return false
 	}
 	for _, bound := range []struct {
@@ -198,6 +200,25 @@ func (c SearchCriteria) matchesHit(h Hit) bool {
 	}
 	return reachVisible(h.Reach, h.ReachProject, c.ProjectKey) && c.matchesStatus(h.Status) && c.matches(h.Kind, h.Tags, created, h.UpdatedAt) &&
 		c.matchesIdentity(h.CreatedBy, h.GeneratorModel, hitFileDigests(h))
+}
+
+var tagsMatchModes = []string{"any", "all", "any_strict", "all_strict", "exact"}
+
+// tagsMatch: any/any_strict need one requested tag, all/all_strict every one, exact the
+// same set. any and all also let untagged memories through; the strict modes and exact
+// do not. Empty mode is any_strict, the behaviour before modes existed.
+func tagsMatch(mode string, want, have []string) bool {
+	if len(have) == 0 {
+		return mode == "any" || mode == "all"
+	}
+	has := func(tag string) bool { return slices.Contains(have, tag) }
+	switch mode {
+	case "all", "all_strict":
+		return !slices.ContainsFunc(want, func(tag string) bool { return !has(tag) })
+	case "exact":
+		return !slices.ContainsFunc(want, func(tag string) bool { return !has(tag) }) && !slices.ContainsFunc(have, func(tag string) bool { return !slices.Contains(want, tag) })
+	}
+	return slices.ContainsFunc(want, has)
 }
 
 var memorySearchStatuses = []string{"active", "superseded", "conflicted", "rejected", "expired"}

@@ -46238,8 +46238,23 @@
             "properties": {
               "lane_ranks": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
               "fused_score": {"type": "number"},
-              "rerank_score": {"type": "number", "minimum": 0, "maximum": 1}
+              "rerank_score": {"type": "number", "minimum": 0, "maximum": 1},
+              "graph_hops": {"type": "integer", "minimum": 1, "maximum": 3, "description": "graph or causal steps from a top hit where this hit was first reached."}
             }
+          },
+          "source_traces": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 3,
+            "items": {"$ref": "#/components/schemas/SourceTrace"},
+            "description": "Present only with include containing sources, on memory hits: the first three checked source traces (same states and authorization as GET /v1/memories/{id}/sources). excerpt is cut to 300 characters, private spans masked, and left out for restricted memories or secret-looking text. archive_messages is omitted. Outside max_chars and the token budget."
+          },
+          "entities": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 10,
+            "items": {"type": "object", "additionalProperties": false, "required": ["id", "name", "type"], "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "type": {"type": "string"}}},
+            "description": "Present only with include containing entities, on memory hits: named entities the memory mentions, as the entity reads show them (agents see confirmed entities only). At most 10."
           },
           "reach": {
             "type": "string",
@@ -46278,7 +46293,7 @@
                 "causal"
               ]
             },
-            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph, causal. temporal: the query named a time and the memory happened then; graph: one relations step from a top hit. causal: one active causal link from a top hit (expand_causal)."
+            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph, causal. temporal: the query named a time and the memory happened then; graph: relations or shared-entity steps from a top hit, up to graph_depth. causal: active causal links from a top hit (expand_causal), up to graph_depth. Each further step halves the lane weight."
           },
           "path_check": {
             "type": "string",
@@ -46943,7 +46958,12 @@
               "minLength": 1,
               "maxLength": 128
             },
-            "description": "Exact case-sensitive OR match; not extracted keywords. Server enforces 128 UTF-8 bytes per tag, no edge whitespace/control characters or secrets."
+            "description": "Exact case-sensitive match on tags, combined as tags_match says; not extracted keywords. Server enforces 128 UTF-8 bytes per tag, no edge whitespace/control characters or secrets."
+          },
+          "tags_match": {
+            "type": "string",
+            "enum": ["any", "all", "any_strict", "all_strict", "exact"],
+            "description": "How tags match. any_strict (default when omitted): at least one tag. all_strict: every tag. any / all: the same, but untagged memories also pass. exact: the memory's tag set equals tags. Requires tags."
           },
           "created_from": {
             "type": [
@@ -47192,7 +47212,30 @@
           "expand_causal": {
             "type": "boolean",
             "default": false,
-            "description": "Passed to the search: add memories one active causal link from the top hits."
+            "description": "Passed to the search: add memories active causal links from the top hits, up to graph_depth."
+          },
+          "query_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The moment time words and recency resolve against, instead of the server clock (\"yesterday\" as of that day). Year 1970-9999."
+          },
+          "graph_depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "default": 2,
+            "description": "How many steps the graph and causal lanes walk from the top hits. A step only continues from neighbours the caller can read; each further step halves the lane weight."
+          },
+          "min_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0,
+            "description": "Drop hits whose final score is below this. Fused scores are about 1/61 per lane rank-1 match (exact keyword 2x); reranked scores blend into 0..1. explain reports min_score_dropped."
+          },
+          "rerank": {
+            "type": "boolean",
+            "description": "false skips the reranker for this request. Omitted or true keeps the server default (on when a reranker is configured); the outbound-text and usage-ledger rules still apply."
           }
         },
         "required": [
@@ -47273,6 +47316,7 @@
             "properties": {
               "lanes": {"type": "array", "items": {"type": "string"}},
               "reranked": {"type": "boolean"},
+              "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }
           },
@@ -47500,7 +47544,37 @@
           "expand_causal": {
             "type": "boolean",
             "default": false,
-            "description": "Add memories one active causal link (either direction) from the top hits as the causal lane, at most 20. Ignored with modes, include_inactive or non-memory collections."
+            "description": "Add memories active causal links (either direction) from the top hits as the causal lane, up to graph_depth steps, at most 20. Ignored with modes, include_inactive or non-memory collections."
+          },
+          "query_time": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The moment time words and recency resolve against, instead of the server clock (\"yesterday\" as of that day). Year 1970-9999."
+          },
+          "graph_depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "default": 2,
+            "description": "How many steps the graph and causal lanes walk from the top hits. A step only continues from neighbours the caller can read; each further step halves the lane weight."
+          },
+          "min_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0,
+            "description": "Drop hits whose final score is below this. Fused scores are about 1/61 per lane rank-1 match (exact keyword 2x); reranked scores blend into 0..1. explain reports min_score_dropped."
+          },
+          "rerank": {
+            "type": "boolean",
+            "description": "false skips the reranker for this request. Omitted or true keeps the server default (on when a reranker is configured); the outbound-text and usage-ledger rules still apply."
+          },
+          "include": {
+            "type": "array",
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {"type": "string", "enum": ["sources", "entities"]},
+            "description": "Attach to each memory hit its checked source traces with short excerpts (sources) and the named entities it mentions (entities). See Hit.source_traces and Hit.entities."
           }
         },
         "required": [
@@ -48109,6 +48183,7 @@
             "properties": {
               "lanes": {"type": "array", "items": {"type": "string"}},
               "reranked": {"type": "boolean"},
+              "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }
           },

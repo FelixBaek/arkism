@@ -432,7 +432,10 @@ type Hit struct {
 	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
 	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
 	Explain            *HitExplain    `json:"explain,omitempty" bson:"-"`
-	Kind               string         `json:"kind,omitempty" bson:"kind"`
+	// SourceTraces and Entities are filled only when the search asked for them (recall_include.go).
+	SourceTraces []SourceTrace `json:"source_traces,omitempty" bson:"-"`
+	Entities     []HitEntity   `json:"entities,omitempty" bson:"-"`
+	Kind         string        `json:"kind,omitempty" bson:"kind"`
 	// Derived marks an approved observation: written from the memories in SourceIDs, not captured.
 	Derived     bool        `json:"derived,omitempty" bson:"-"`
 	SourceIDs   []string    `json:"source_ids,omitempty" bson:"-"`
@@ -456,6 +459,8 @@ type Hit struct {
 	// Repository-only evidence that its configured vector distance gate ran.
 	// Service rehydrates, authorizes and recomputes before exposing VectorMatch.
 	vectorDistanceLimit float64
+	// graphHops: steps from a top hit for a graph or causal lane hit (recall_lanes.go).
+	graphHops int
 }
 type ContextBundle struct {
 	History       []HistoricalHit `json:"history,omitempty"`

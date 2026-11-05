@@ -228,3 +228,28 @@ func TestPostgresRecallWindowReadsTheEventSpan(t *testing.T) {
 		t.Fatal(got, err)
 	}
 }
+
+// tags_match modes run in SQL (pgTagsMatch), so untagged rows must not spend the LIMIT or vanish.
+func TestPostgresSearchTagsMatchModes(t *testing.T) {
+	f, _ := pgFixture(t)
+	both := f.activeMemory("deploy checklist alpha", "deploy")
+	one := f.activeMemory("deploy checklist beta", "deploy")
+	none := f.activeMemory("deploy checklist gamma", "deploy")
+	for id, tags := range map[string][]string{both.ID: {"team", "ops"}, one.ID: {"team"}} {
+		if _, err := f.svc.SetMemoryTags(testCtx, f.human, id, MemoryTagsInput{Scope: scopeA, Add: tags}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for mode, want := range map[string][]string{
+		"": {both.ID, one.ID}, "any": {both.ID, one.ID, none.ID}, "all": {both.ID, none.ID},
+		"all_strict": {both.ID}, "exact": {both.ID},
+	} {
+		out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "deploy checklist", Modes: []string{"exact", "fts"}, SearchCriteria: SearchCriteria{Filters: &SearchFilters{Tags: []string{"team", "ops"}, TagsMatch: mode}}})
+		got := ids(out.Items)
+		slices.Sort(got)
+		slices.Sort(want)
+		if err != nil || !slices.Equal(got, want) {
+			t.Fatalf("%q: %v %v want %v", mode, got, err, want)
+		}
+	}
+}

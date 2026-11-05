@@ -94,6 +94,16 @@ func pgSearchState(criteria SearchCriteria, now time.Time, start int) (string, [
 	return strings.Join(parts, " AND "), args
 }
 
+// pgTagsMatch is tagsMatch in SQL, keyed by mode.
+var pgTagsMatch = map[string]string{
+	"":           "doc->'tags' ?| $%d::text[]",
+	"any_strict": "doc->'tags' ?| $%d::text[]",
+	"all_strict": "doc->'tags' ?& $%d::text[]",
+	"any":        "(COALESCE(doc->'tags','null'::jsonb) IN ('[]'::jsonb,'null'::jsonb) OR doc->'tags' ?| $%d::text[])",
+	"all":        "(COALESCE(doc->'tags','null'::jsonb) IN ('[]'::jsonb,'null'::jsonb) OR doc->'tags' ?& $%d::text[])",
+	"exact":      "(doc->'tags' ?& $%[1]d::text[] AND doc->'tags' <@ to_jsonb($%[1]d::text[]))",
+}
+
 func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 	parts := []string{}
 	args := []any{}
@@ -110,7 +120,7 @@ func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 	add("(doc->>'reach' IS DISTINCT FROM 'project' OR ($%[1]d <> '' AND doc->>'reach_project' = $%[1]d))", criteria.ProjectKey)
 	if f := criteria.Filters; f != nil {
 		if len(f.Tags) > 0 {
-			add("doc->'tags' ?| $%d::text[]", f.Tags)
+			add(pgTagsMatch[f.TagsMatch], f.Tags)
 		}
 		if len(f.CreatedBy) > 0 {
 			add("doc->>'created_by' = ANY($%d::text[])", f.CreatedBy)

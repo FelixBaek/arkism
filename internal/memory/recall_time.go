@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +28,30 @@ const (
 	monthFull  = `january|february|march|april|may|june|july|august|september|october|november|december`
 )
 
-var monthParts = map[string]string{"초": "early", "중순": "mid", "말": "late", "early": "early", "beginning of": "early", "start of": "early", "mid": "mid", "middle of": "mid", "late": "late", "end of": "late"}
+// euroMonths are month names in Spanish, French and German, lower-cased, with their number.
+var euroMonths = map[string]int{
+	"enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7, "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+	"janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6, "juillet": 7, "août": 8, "aout": 8, "septembre": 9, "octobre": 10, "novembre": 11, "décembre": 12, "decembre": 12,
+	"januar": 1, "jänner": 1, "februar": 2, "märz": 3, "maerz": 3, "april": 4, "juni": 6, "juli": 7, "august": 8, "september": 9, "oktober": 10, "november": 11, "dezember": 12,
+}
+
+// euroMonthNames is euroMonths as a regexp alternation, longest first so "juillet" beats "juli".
+var euroMonthNames = func() string {
+	names := slices.Collect(maps.Keys(euroMonths))
+	slices.SortFunc(names, func(a, b string) int { return len(b) - len(a) })
+	return strings.Join(names, "|")
+}()
+
+var monthParts = map[string]string{
+	"초": "early", "중순": "mid", "말": "late",
+	"early": "early", "beginning of": "early", "start of": "early", "mid": "mid", "middle of": "mid", "late": "late", "end of": "late",
+	"上旬": "early", "初": "early", "初め": "early", "中旬": "mid", "下旬": "late", "末": "late", "底": "late",
+	"principios de": "early", "début": "early", "anfang": "early", "mediados de": "mid", "mi-": "mid", "mitte": "mid", "finales de": "late", "fin": "late", "ende": "late",
+}
+
+// words joins per-language alternatives (Korean, English, Japanese, Chinese, Spanish,
+// French, German) into one rule's regexp.
+func words(alts ...string) *regexp.Regexp { return regexp.MustCompile(strings.Join(alts, "|")) }
 
 // timeRules run in order; explicit dates win over month names, which win over relative words.
 var timeRules = []timeRule{
@@ -44,6 +69,35 @@ var timeRules = []timeRule{
 			return monthSpan(y, atoi(m[2]), monthParts[m[4]], now.Location())
 		})
 	}, false},
+	// Japanese and Chinese: 2026年10月31日, 10月31号, 10月下旬, 10月末, 10月底.
+	{regexp.MustCompile(`(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(?:(\d{1,2})\s*[日号號]|(上旬|中旬|下旬|初め?|末|底))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		return inYear(m[1], now, func(y int) (time.Time, time.Time, bool) {
+			if m[3] != "" {
+				return dateSpan(y, atoi(m[2]), atoi(m[3]), now.Location())
+			}
+			return monthSpan(y, atoi(m[2]), monthParts[m[4]], now.Location())
+		})
+	}, false},
+	// German numeric 31.10.2026 (day first; slashes stay out, they are ambiguous).
+	{regexp.MustCompile(`\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		return dateSpan(atoi(m[3]), atoi(m[2]), atoi(m[1]), now.Location())
+	}, false},
+	// 31 de octubre de 2026, 1er mai, 31. Oktober 2026.
+	{regexp.MustCompile(`\b(\d{1,2})(?:\.|er|º)?\s*(?:de\s+)?(` + euroMonthNames + `)\b(?:\s+(?:de\s+)?(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
+			return dateSpan(y, euroMonths[m[2]], atoi(m[1]), now.Location())
+		})
+	}, false},
+	// en octubre, im Oktober, fin octobre, finales de octubre, octubre de 2026. A bare name
+	// is not enough ("mars" is also the planet).
+	{regexp.MustCompile(`(?:\b(en|im|in|de|principios de|mediados de|finales de|début|mi-|fin|anfang|mitte|ende)\s*)?\b(` + euroMonthNames + `)\b(?:\s+(?:de\s+)?(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		if m[1] == "" && m[3] == "" {
+			return time.Time{}, time.Time{}, false
+		}
+		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
+			return monthSpan(y, euroMonths[m[2]], monthParts[m[1]], now.Location())
+		})
+	}, true},
 	{regexp.MustCompile(`\b(` + monthNames + `)\s+(\d{1,2})(?:st|nd|rd|th)?\b(?:,?\s+(\d{4}))?`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) {
 			return dateSpan(y, monthIndex(m[1]), atoi(m[2]), now.Location())
@@ -66,26 +120,27 @@ var timeRules = []timeRule{
 		}
 		return inYear(m[3], now, func(y int) (time.Time, time.Time, bool) { return monthSpan(y, monthIndex(m[2]), "", now.Location()) })
 	}, true},
-	{regexp.MustCompile(`(\d{1,3})\s*일\s*전|\b(\d{1,3}) days? ago\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
-		return daySpan(now, -atoi(m[1]+m[2]))
+	{words(`(\d{1,3})\s*일\s*전`, `\b(\d{1,3}) days? ago\b`, `([0-9一二两兩三四五六七八九十]{1,3})\s*[日天]前`, `\bhace (\d{1,3}) d[ií]as?\b`, `\bil y a (\d{1,3}) jours?\b`, `\bvor (\d{1,3}) tagen\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		return daySpan(now, -cjkInt(strings.Join(m[1:], "")))
 	}, false},
-	{regexp.MustCompile(`그저께|그제|\bday before yesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -2) }, false},
-	{regexp.MustCompile(`어제|\byesterday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -1) }, false},
-	{regexp.MustCompile(`오늘|\btoday\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, 0) }, false},
-	{regexp.MustCompile(`(?:지난|저번)\s*주|\blast week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, -1) }, false},
-	{regexp.MustCompile(`이번\s*주|금주|\bthis week\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, 0) }, false},
-	{regexp.MustCompile(`(?:지난|저번)\s*달|\blast month\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
+	{words(`그저께|그제`, `\bday before yesterday\b`, `一昨日|おととい`, `前天`, `\banteayer\b|\bantes de ayer\b`, `\bavant-hier\b`, `\bvorgestern\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -2) }, false},
+	{words(`어제`, `\byesterday\b`, `昨日`, `昨天`, `\bayer\b`, `\bhier\b`, `\bgestern\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, -1) }, false},
+	{words(`오늘`, `\btoday\b`, `今日`, `今天`, `\bhoy\b`, `\baujourd['’]hui\b`, `\bheute\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return daySpan(now, 0) }, false},
+	{words(`(?:지난|저번)\s*주`, `\blast week\b`, `先週`, `上周|上週|上(?:个|個)?星期|上(?:个|個)?礼拜|上(?:个|個)?禮拜`, `\bla semana pasada\b`, `\bla semaine (?:derni[eè]re|pass[ée]e)\b`, `\b(?:letzte|letzten|vergangene|vergangenen|vorige|vorigen) woche\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, -1) }, false},
+	{words(`이번\s*주|금주`, `\bthis week\b`, `今週`, `本周|本週|这周|這週|这(?:个)?星期|這(?:個)?星期|本星期`, `\besta semana\b`, `\bcette semaine\b`, `\bdiese(?:r)? woche\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return weekSpan(now, 0) }, false},
+	{words(`(?:지난|저번)\s*달`, `\blast month\b`, `先月`, `上(?:个|個)?月`, `\bel mes pasado\b`, `\ble mois (?:dernier|pass[ée])\b`, `\b(?:letzten|vergangenen|vorigen) monat\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
 		return monthSpan(now.Year(), int(now.Month())-1, "", now.Location())
 	}, false},
-	{regexp.MustCompile(`이번\s*달|\bthis month\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
+	{words(`이번\s*달`, `\bthis month\b`, `今月`, `本月|这(?:个)?月|這(?:個)?月`, `\beste mes\b`, `\bce mois(?:-ci)?\b`, `\b(?:diesen|diesem|dieser) monat\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) {
 		return monthSpan(now.Year(), int(now.Month()), "", now.Location())
 	}, false},
-	{regexp.MustCompile(`재작년`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -2) }, false},
-	{regexp.MustCompile(`작년|지난\s*해|\blast year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -1) }, false},
-	{regexp.MustCompile(`올해|금년|\bthis year\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, 0) }, false},
+	{words(`재작년`, `一昨年|おととし`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -2) }, false},
+	{words(`작년|지난\s*해`, `\blast year\b`, `去年|昨年`, `\bel año pasado\b`, `\bl['’](?:année|annee) (?:derni[eè]re|pass[ée]e)\b|\bl['’]an (?:dernier|pass[ée])\b`, `\b(?:letztes|letzten|vergangenes|vorigen|voriges) jahr\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, -1) }, false},
+	{words(`올해|금년`, `\bthis year\b`, `今年`, `\beste año\b`, `\bcette (?:année|annee)\b`, `\b(?:dieses|diesem) jahr\b`), func(_ []string, now time.Time) (time.Time, time.Time, bool) { return yearSpan(now, 0) }, false},
 }
 
-// parseTimeIntent finds the first time phrase in query (Korean or English) and
+// parseTimeIntent finds the first time phrase in query (Korean, English, Japanese,
+// Chinese, Spanish, French or German) and
 // resolves it against now, whose location is the reader's calendar.
 func parseTimeIntent(query string, now time.Time) (timeWindow, bool) {
 	q := strings.ToLower(query)
@@ -126,6 +181,25 @@ func validTimezone(name string) bool {
 func atoi(s string) int {
 	n, _ := strconv.Atoi(s)
 	return n
+}
+
+// cjkInt reads Arabic digits or a Chinese-character number up to 99 (三, 十二, 二十一).
+func cjkInt(s string) int {
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
+	}
+	n, digit := 0, 0
+	for _, r := range s {
+		if r == '十' {
+			n, digit = n+max(digit, 1)*10, 0
+		} else {
+			digit = strings.IndexRune("一二三四五六七八九", r)/len("一") + 1
+			if r == '两' || r == '兩' {
+				digit = 2
+			}
+		}
+	}
+	return n + digit
 }
 
 // monthIndex maps an English month name or its abbreviation to 1..12.
