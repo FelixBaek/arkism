@@ -119,6 +119,29 @@ func TestPickedAPIKeyMissingNeverFallsBack(t *testing.T) {
 	}
 }
 
+// Any failure of a model picked under an API key (here a provider error) is returned; the default is not run on the subscription.
+func TestPickedAPIModelFailureNeverFallsBack(t *testing.T) {
+	modelVia["claude-sonnet-5-5"], fallbackModel["claude-sonnet-5-5"] = host.BillingAPI, "haiku"
+	calls, oldLLM := []string{}, llm
+	llm = func(system, user, model string, timeout time.Duration, schema, key string) (any, error) {
+		calls = append(calls, model)
+		return nil, runtimeErr("extractor_exit_1")
+	}
+	t.Cleanup(func() {
+		llm = oldLLM
+		delete(modelVia, "claude-sonnet-5-5")
+		delete(fallbackModel, "claude-sonnet-5-5")
+	})
+	if _, err := privateModel("system", "user", "claude-sonnet-5-5", time.Second, `{}`, ""); err == nil || len(calls) != 1 {
+		t.Fatal(err, calls)
+	}
+	modelVia["claude-sonnet-5-5"] = host.BillingSubscription
+	calls = nil
+	if _, _ = privateModel("system", "user", "claude-sonnet-5-5", time.Second, `{}`, ""); len(calls) != 2 || calls[1] != "haiku" {
+		t.Fatal("a subscription pick still falls back to its default", calls)
+	}
+}
+
 func TestExtractorDefaultPicksTheSignedInCLI(t *testing.T) {
 	home := t.TempDir()
 	oldHome, oldClaude, oldModel := host.Home, host.ClaudeBin, capModel
