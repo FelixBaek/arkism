@@ -6,23 +6,30 @@
 (function (root) {
   "use strict";
   // ------------------------------------------------------------ pure helpers (node tests require them)
-  const MODES = [["concise", "간결하게"], ["verbose", "자세하게"], ["verbatim", "원문 그대로"], ["custom", "직접 쓰기"]];
+  const MODES = [["concise", "간결하게"], ["verbose", "자세하게"], ["verbatim", "원문 그대로"], ["custom", "직접 쓰기"], ["chunks", "조각 그대로"]];
   const SOURCE = { space: "이 공간에서 정함", template: "템플릿에서 옴", server: "기본값" };
   // "template+space": every layer that adds defense rules
   const sourceLabel = (src) => String(src || "server").split("+").map((s) => SOURCE[s] || s).join(" + ");
   // The behaviour settings this screen edits and the value that hands each back to the layer below (PATCH semantics:
   // an empty string, 0, [] or {} clears; the server treats an all-empty auto_derive or reflect_disposition as cleared).
-  // The switches lanes, rerank and rerank_model hand back with null (one lane: lanes.<name> null; all lanes cleared: lanes null).
+  // The switches lanes, rerank and rerank_model hand back with null (one lane: lanes.<name> null; all lanes cleared: lanes null),
+  // like every other on/off setting the server stores as "unset or a value"; a whole block (audit, recall_quality, …) clears with {}.
   const EDIT = { extraction_enabled: undefined, extraction_mode: "", extraction_instructions: "", defense_rules: [], mcp_tools: [], reflect_mission: "", reflect_disposition: {}, auto_derive: {},
-    lanes: null, rerank: null, rerank_model: null, recall_budget_tokens: 0, reflect_max_tokens: 0 };
-  const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x !== undefined && x !== null && x !== "" && x !== 0));
+    lanes: null, rerank: null, rerank_model: null, recall_budget_tokens: 0, reflect_max_tokens: 0,
+    extraction_mission: "", extraction_chunk_size: 0, extract_causal: null, extraction_strategies: {}, extraction_default_strategy: "", default_timezone: "", memory_language: "",
+    work_state_candidates: null, recall_session_archives: null, recall_lane_weights: {}, audit: {}, entity_resolution: "", entities_allow_free_form: null, entity_free_types: null,
+    entity_labels: [], reflect_default_options: {}, mental_model_defaults: {}, consolidation: {}, recall_quality: {} };
+  // empty all the way down ({tools: {}} is as empty as {}); false is a value
+  const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) ? !v.length : typeof v === "object" && Object.values(v).every(unset));
+  // a named strategy with nothing set is still a name an item can pick
+  const none = (k, v) => (k === "extraction_strategies" ? !v || !Object.keys(v).length : unset(v));
   // What a PATCH must carry to turn stored into draft: only the keys that changed, cleared ones as their empty value.
   function configPatch(stored, draft) {
     const out = {};
     for (const [k, empty] of Object.entries(EDIT)) {
       const a = stored?.[k], b = draft?.[k];
-      if (JSON.stringify(unset(a) ? null : a) === JSON.stringify(unset(b) ? null : b)) continue;
-      out[k] = unset(b) && empty !== undefined ? empty : b;
+      if (JSON.stringify(none(k, a) ? null : a) === JSON.stringify(none(k, b) ? null : b)) continue;
+      out[k] = none(k, b) && empty !== undefined ? empty : b;
     }
     return out;
   }
@@ -65,12 +72,34 @@
     return { text: out, blocked, redacted, errors };
   }
   const TOOL = /^[a-z0-9_]{1,64}$/;
-  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL };
+  // 추출 시험: the draft is tried before it is saved, so the extraction settings it changes go as that call's overrides
+  // (a setting the draft hands back cannot be said as an override; the test then runs with the stored one).
+  function extractOverrides(stored, draft) {
+    const p = configPatch(stored, draft), out = {};
+    for (const k of ["extraction_mode", "extraction_instructions", "extraction_mission", "extraction_chunk_size", "extract_causal"]) if (k in p && !unset(p[k])) out[k] = p[k];
+    return Object.keys(out).length ? out : undefined;
+  }
+  // a label group's values as one comma list; a value kept keeps its description
+  const labelValues = (text, old = []) => [...new Set(String(text || "").split(",").map((s) => s.trim()).filter(Boolean))].map((value) => old.find((v) => v.value === value) || { value });
+  // the consolidation rule lists are edited as one JSON object; null = not readable or a key the server does not take
+  const RULE_KEYS = ["default_scopes", "strategies", "scope_limits"];
+  const rulesText = (block) => { const o = Object.fromEntries(RULE_KEYS.filter((k) => block?.[k]?.length).map((k) => [k, block[k]])); return Object.keys(o).length ? JSON.stringify(o, null, 2) : ""; };
+  function parseRules(text) {
+    if (!String(text || "").trim()) return {};
+    let o;
+    try { o = JSON.parse(text); } catch (_) { return null; }
+    if (!o || typeof o !== "object" || Array.isArray(o) || Object.keys(o).some((k) => !RULE_KEYS.includes(k) || !Array.isArray(o[k]))) return null;
+    return o;
+  }
+  // a renamed strategy keeps its place
+  const renameKey = (map, from, to) => Object.fromEntries(Object.entries(map || {}).map(([k, v]) => [k === from ? to : k, v]));
+  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL, extractOverrides, labelValues, rulesText, parseRules, renameKey };
 
   // ------------------------------------------------------------ the tab
   function create(ctx) {
     const { state, el, button, icon, request, notice, render } = ctx;
-    const S = { key: "", loading: false, loaded: false, err: "", stored: null, revision: 0, eff: null, src: {}, draft: null, busy: false, sample: "", tool: "", job: "" };
+    const S = { key: "", loading: false, loaded: false, err: "", stored: null, revision: 0, eff: null, src: {}, draft: null, busy: false, sample: "", job: "",
+      chip: {}, rules: null, trial: { text: "", strategy: "", run: "prompt", op: "retain", out: null, busy: false } };
     const human = () => state.caps?.actions?.review_decide !== false; // config writes take people only; an agent token sees no editor
     const scopeKey = () => JSON.stringify([state.server, state.scope?.workspace_id, state.scope?.project_id]);
     const path = () => {
@@ -98,7 +127,7 @@
         S.eff = eff.value.config || {}; S.src = eff.value.sources || {}; S.revision = eff.value.revision || 0;
         S.stored = cfg.status === "fulfilled" ? cfg.value.config || {} : null;
         if (cfg.status === "fulfilled") S.revision = cfg.value.revision || 0;
-        S.draft = S.stored ? clone(S.stored) : null; S.err = "";
+        S.draft = S.stored ? clone(S.stored) : null; S.err = ""; S.rules = null;
       } catch (e) { S.err = errText(e); } finally { S.loading = false; S.loaded = true; S.key = key; redraw(); }
     }
     const patch = () => (S.stored && S.draft ? configPatch(S.stored, S.draft) : {});
@@ -112,7 +141,7 @@
     }
     const save = () => write("PATCH", { expected_revision: S.revision, ...patch() }, "공간 설정을 저장했어요. 다음 작업부터 써요.");
     const resetAll = async () => {
-      if (!(await ask("이 공간의 기억 뽑기·막을 내용·도구·답하는 방식·자동 정리 설정을 모두 지우고 템플릿과 기본값을 따를까요?", "모두 물려받기"))) return;
+      if (!(await ask("이 공간의 기억 뽑기·막을 내용·이름 정리·찾기·답하는 방식·자동 정리·도구·활동 기록 설정을 모두 지우고 템플릿과 기본값을 따를까요?", "모두 물려받기"))) return;
       await write("PUT", resetBody(S.stored, S.revision), "이 공간 설정을 지웠어요. 이제 템플릿과 기본값을 따라요.");
     };
 
@@ -129,7 +158,7 @@
     function unsetKey(key) {
       const [k, sub] = key.split(".");
       const v = S.draft?.[k];
-      return unset(sub ? v?.[sub] : v);
+      return sub ? unset(v?.[sub]) : none(k, v);
     }
     const setDraft = (k, v) => { S.draft[k] = v; };
     const field = (label, node, hint) => { const f = el("label", "field wide", label); f.append(node); if (hint) f.append(el("small", "", hint)); return f; };
@@ -145,18 +174,45 @@
       return t;
     };
     // a whole number in [min, max]; empty or 0 hands the value back (onSet(0)); anything else out of range is refused
-    const numberBox = (value, min, max, placeholder, label, editable, onSet) => {
+    const numberBox = (value, min, max, placeholder, label, editable, onSet, step = 1) => {
       // the settings select box look, so a number sits like a choice
-      const n = el("input", "ag-select"); n.type = "number"; n.min = String(min); n.max = String(max); n.value = value ? String(value) : ""; n.placeholder = placeholder ? String(placeholder) : ""; n.setAttribute("aria-label", label);
+      const n = el("input", "ag-select"); n.type = "number"; n.min = String(min); n.max = String(max); n.step = String(step); n.value = value ? String(value) : ""; n.placeholder = placeholder ? String(placeholder) : ""; n.setAttribute("aria-label", label);
       n.disabled = !editable;
       n.addEventListener("change", () => {
-        const v = n.value.trim() === "" ? 0 : Math.round(Number(n.value));
+        const v = n.value.trim() === "" ? 0 : step < 1 ? Number(n.value) : Math.round(Number(n.value));
         if (v === 0 || (v >= min && v <= max)) onSet(v); else { n.value = value ? String(value) : ""; notice(`${min}에서 ${max} 사이로 넣어 주세요.`); }
       });
       return n;
     };
     const readOnly = (text) => { const o = el("output", "", text); o.dataset.noI18n = ""; return o; };
     const modeName = (m) => MODES.find(([k]) => k === m)?.[1] || "간결하게";
+    const onOff = (on) => readOnly(on ? "켜짐" : "꺼짐");
+    // 물려받기 first in a choice list, naming what is inherited when this space sets nothing
+    const inheritList = (key, list, eff = S.eff[key]) => [["", S.src[key] !== "space" && eff ? `물려받기 · ${list.find(([k]) => k === eff)?.[1] || eff}` : "물려받기"], ...list];
+    const choice = (kit, key, list, title, hint) => {
+      const d = S.draft, edit = human() && d;
+      const ctl = edit ? select(inheritList(key, list), d[key] || "", title, (v) => { setDraft(key, v); redraw(); }) : readOnly(list.find(([k]) => k === S.eff[key])?.[1] || S.eff[key] || "기본값");
+      return [kit.line(title, hint, ctl), origin(key, () => { setDraft(key, ""); redraw(); })];
+    };
+    // an on/off the server keeps as "unset or a value": 기본값으로 sends null; warn says what turning it on costs
+    const flag = (kit, key, title, hint, warn) => {
+      const d = S.draft, edit = human() && d;
+      const on = !!(d && d[key] != null ? d[key] : S.eff[key]);
+      const out = [kit.line(title, hint, edit ? kit.sw(on, title, (next) => { d[key] = next; redraw(); }) : onOff(on)), origin(key, () => { d[key] = null; redraw(); })];
+      if (on && warn) out.push(el("p", "pg-hint warn", warn));
+      return out;
+    };
+    // A block the server inherits whole: changing one field starts from what the space resolves to now, so the rest stays.
+    const blockOf = (k) => (S.draft?.[k] ? S.draft[k] : clone(S.eff?.[k] || {}));
+    const setBlock = (k, part) => { const next = { ...blockOf(k), ...part }; S.draft[k] = unset(next) ? null : next; redraw(); };
+    const textBox = (value, max, label, placeholder, editable, onChange) => {
+      const t = el("input", "ag-select"); t.value = value || ""; t.maxLength = max; t.placeholder = placeholder || ""; t.setAttribute("aria-label", label); t.spellcheck = false; t.disabled = !editable;
+      t.addEventListener("change", () => onChange(t.value.trim()));
+      return t;
+    };
+    // small number boxes side by side (lane weights, tool budgets, run sizes)
+    const grid = (...cells) => { const g = el("div", "sp-grid"); for (const [label, node] of cells) { const c = el("label", "", label); c.append(node); g.append(c); } return g; };
+    const pre = (text) => { const p = el("p", "mono", text); p.dataset.noI18n = ""; return p; };
 
     // ---------------------------------------------------------- groups
     function extractGroup(kit) {
@@ -167,7 +223,7 @@
         edit ? kit.sw(on, "자동으로 기억 뽑기", (next) => { d.extraction_enabled = next; redraw(); }) : readOnly(on ? "켜짐" : "꺼짐")));
       const inherited = S.src.extraction_mode !== "space" ? `물려받기 · ${modeName(S.eff.extraction_mode)}` : "물려받기";
       const mode = edit ? select([["", inherited], ...MODES], d.extraction_mode || "", "뽑는 방식", (v) => { setDraft("extraction_mode", v); redraw(); }) : readOnly(modeName(S.eff.extraction_mode));
-      const modeRow = kit.line("뽑는 방식", "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요", mode);
+      const modeRow = kit.line("뽑는 방식", "간결하게: 핵심만 · 자세하게: 맥락까지 · 원문 그대로: 말한 그대로 · 직접 쓰기: 아래 안내를 따라요 · 조각 그대로: 글을 나눈 조각마다 후보 하나 (모델 안 씀)", mode);
       g.append(modeRow, origin("extraction_mode", () => { setDraft("extraction_mode", ""); redraw(); }));
       const custom = (d?.extraction_mode || S.eff.extraction_mode) === "custom";
       const guide = edit ? area(d.extraction_instructions, 2000, "뽑을 때 따를 안내", "예: 배포 절차와 고객 요청은 꼭 남기고, 잡담은 빼 주세요.", (v) => setDraft("extraction_instructions", v))
@@ -175,7 +231,126 @@
       g.append(field(custom ? "뽑을 때 따를 안내 (직접 쓰기에 꼭 필요해요)" : "뽑을 때 따를 안내 (선택)", guide, "서버가 기억을 뽑을 때 읽어요. 비밀값·개인정보 규칙보다 앞서지는 않아요. 2000자까지."),
         origin("extraction_instructions", () => { setDraft("extraction_instructions", ""); redraw(); }));
       if (edit && custom && !(d.extraction_instructions || "").trim()) g.append(el("p", "pg-hint warn", "직접 쓰기는 안내가 있어야 저장할 수 있어요."));
+      const chunk = numberBox(d?.extraction_chunk_size, 500, 12000, S.eff.extraction_chunk_size, "한 번에 읽는 글 길이", edit, (n) => { setDraft("extraction_chunk_size", n); redraw(); });
+      g.append(kit.more("자세히 · 뽑는 방식 더 정하기",
+        field("뽑을 때 목표", edit ? area(d.extraction_mission, 2000, "뽑을 때 목표", "예: 이 팀이 왜 그렇게 정했는지를 남겨요.", (v) => setDraft("extraction_mission", v)) : readOnly(S.eff.extraction_mission || "없음"),
+          "무엇을 기억으로 남길지 한두 문장으로 알려 줘요. 2000자까지."), origin("extraction_mission", () => { setDraft("extraction_mission", ""); redraw(); }),
+        kit.line("한 번에 읽는 글 길이", "긴 글을 이 글자 수로 나눠 읽어요 (500~12000). 비우면 물려받아요.", chunk), origin("extraction_chunk_size", () => { setDraft("extraction_chunk_size", 0); redraw(); }),
+        ...flag(kit, "extract_causal", "원인과 결과도 후보로", "한 일이 다른 일의 원인이면 그 연결도 후보로 만들어요."),
+        ...choice(kit, "memory_language", LANGS(), "기억을 쓰는 언어", "후보를 어떤 언어로 적을지예요. ‘말한 언어 그대로’는 내가 쓴 말을 따라요."),
+        ...choice(kit, "default_timezone", ZONES(), "기준 시간대", "‘어제’·‘지난주’ 같은 말을 날짜로 바꿀 때 쓰는 시간대예요."),
+        ...flag(kit, "work_state_candidates", "작업 상태를 후보로", "작업 중간 저장과 인계를 ‘지금 어디까지 했는지’ 후보로 만들어요. 처음에는 꺼져 있어요."),
+        ...strategies(kit)));
+      if (human()) g.append(kit.more("자세히 · 뽑기 시험해 보기", ...trialBox(kit)));
       return g;
+    }
+
+    const LANG_LIST = [["auto", "말한 언어 그대로"], ["ko", "한국어"], ["en", "English"], ["ja", "日本語"], ["zh", "中文"], ["es", "Español"], ["de", "Deutsch"], ["fr", "Français"], ["pt", "Português"]];
+    // a stored value outside the list still shows as itself
+    const withValue = (list, ...vals) => [...list, ...vals.filter((v) => v && !list.some(([k]) => k === v)).map((v) => [v, v])];
+    const LANGS = () => withValue(LANG_LIST, S.draft?.memory_language, S.eff.memory_language);
+    const ZONES = () => withValue((typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : ["UTC"]).map((z) => [z, z]), S.draft?.default_timezone, S.eff.default_timezone);
+
+    // 이름 붙은 뽑기 방식: an upload or a capture may pick one by name; the default one applies when nothing is picked
+    const STRATEGY_NAME = /^[a-z0-9_-]{1,32}$/;
+    function strategies(kit) {
+      const d = S.draft, edit = human() && d;
+      const map = (d ? d.extraction_strategies : S.eff.extraction_strategies) || {};
+      const names = Object.keys(map);
+      const out = [el("strong", "sp-sub", "이름 붙은 뽑기 방식")];
+      if (!names.length) out.push(el("p", "pg-hint", "아직 없어요. 파일 종류마다 다르게 뽑고 싶을 때 만들어요."));
+      const put = (next) => { d.extraction_strategies = Object.keys(next).length ? next : null; redraw(); };
+      for (const name of names) {
+        const st = map[name] || {};
+        if (!edit) { out.push(el("div", "sp-rule sp-rule-fixed", `${name} · ${modeName(st.extraction_mode)}`)); continue; }
+        const row = el("div", "sp-rule");
+        const n = el("input", "mono"); n.value = name; n.maxLength = 32; n.setAttribute("aria-label", "방식 이름"); n.spellcheck = false;
+        n.addEventListener("change", () => {
+          const to = n.value.trim();
+          if (to === name) return;
+          if (!STRATEGY_NAME.test(to) || to in map) { notice("이름은 영어 소문자·숫자·-·_로, 겹치지 않게 써요."); n.value = name; return; }
+          if (d.extraction_default_strategy === name) d.extraction_default_strategy = to;
+          put(renameKey(map, name, to));
+        });
+        const set = (part) => put({ ...map, [name]: Object.fromEntries(Object.entries({ ...st, ...part }).filter(([, v]) => !unset(v) || v === false)) });
+        const mode = select([["", "공간 방식 따름"], ...MODES], st.extraction_mode || "", "이 방식의 뽑는 방식", (v) => set({ extraction_mode: v }));
+        const size = numberBox(st.extraction_chunk_size, 500, 12000, "", "이 방식의 글 길이", true, (v) => set({ extraction_chunk_size: v }));
+        const del = el("button", "icon-btn plain"); del.type = "button"; del.setAttribute("aria-label", `${name} 지우기`); del.append(icon("x"));
+        del.addEventListener("click", () => { const { [name]: _gone, ...rest } = map; if (d.extraction_default_strategy === name) d.extraction_default_strategy = ""; put(rest); });
+        row.append(n, mode, size, del);
+        const causal = select([["", "공간 설정 따름"], ["on", "켜기"], ["off", "끄기"]], st.extract_causal == null ? "" : st.extract_causal ? "on" : "off", "원인과 결과도 후보로",
+          (v) => set({ extract_causal: v === "" ? undefined : v === "on" }));
+        out.push(row, field("이 방식의 안내", area(st.extraction_instructions, 2000, "이 방식의 안내", "예: 회의록이면 결정과 담당자만 남겨요.", (v) => set({ extraction_instructions: v }))),
+          field("이 방식의 목표", area(st.extraction_mission, 2000, "이 방식의 목표", "", (v) => set({ extraction_mission: v }))), kit.line("원인과 결과도 후보로", "", causal));
+      }
+      if (edit) {
+        const add = button("방식 추가", "ghost", "plus", () => { let i = names.length + 1; while (`style-${i}` in map) i++; put({ ...map, [`style-${i}`]: {} }); });
+        add.disabled = names.length >= 16;
+        out.push(add);
+      }
+      out.push(origin("extraction_strategies", () => { d.extraction_strategies = null; redraw(); }));
+      if (names.length || S.eff.extraction_default_strategy) out.push(...choice(kit, "extraction_default_strategy", names.map((k) => [k, k]), "기본으로 쓸 방식", "따로 고르지 않으면 이 방식으로 뽑아요."));
+      return out;
+    }
+
+    // 뽑기 시험: POST /v1/extract/preview with the unsaved draft as overrides; 프롬프트만 calls no model.
+    // 보낼 프롬프트 보기: POST /v1/prompts/preview renders the saved settings' prompt for retain, consolidation or reflect.
+    function trialBox(kit) {
+      const T = S.trial;
+      const sample = el("textarea"); sample.rows = 4; sample.maxLength = 65536; sample.value = T.text; sample.placeholder = "예: 어제 회의에서 배포는 금요일에 하지 않기로 했어요. 민수가 체크리스트를 맡았어요.";
+      sample.setAttribute("aria-label", "뽑기 시험할 글"); sample.addEventListener("input", () => { T.text = sample.value; });
+      const names = Object.keys((S.draft ? S.draft.extraction_strategies : S.eff.extraction_strategies) || {});
+      const strat = select([["", "기본 방식"], ...names.map((k) => [k, k])], T.strategy, "쓸 방식", (v) => { T.strategy = v; });
+      const run = select([["prompt", "프롬프트만 보기 · 모델 안 씀"], ["run", "실제로 뽑아 보기 · 모델 예산 씀"]], T.run, "시험 방식", (v) => { T.run = v; redraw(); });
+      const go = button("시험해 보기", "", null, () => void trial("extract"));
+      go.disabled = T.busy;
+      const op = select([["retain", "기억 뽑기"], ["consolidation", "관찰 정리"], ["reflect", "질문에 답하기"]], T.op, "어떤 프롬프트", (v) => { T.op = v; });
+      const show = button("프롬프트 보기", "ghost", null, () => void trial("prompt"));
+      show.disabled = T.busy;
+      const out = [field("뽑기 시험할 글", sample, "저장하지 않은 설정으로 시험해요. 아무것도 저장하지 않아요."), kit.line("쓸 방식", "", strat), kit.line("시험 방식", "", run)];
+      if (T.run === "run") out.push(el("p", "pg-hint warn", "실제로 뽑으면 서버 모델을 불러 모델 예산을 써요."));
+      out.push(go, kit.line("보낼 프롬프트 보기", "저장한 설정으로 서버가 모델에 보낼 글을 보여 줘요. 모델은 부르지 않아요.", op), show);
+      if (T.out) out.push(T.out);
+      return out;
+    }
+    async function trial(kind) {
+      const T = S.trial;
+      if (kind === "extract" && !T.text.trim()) { notice("시험해 볼 글을 넣어 주세요."); return; }
+      T.busy = true; redraw();
+      const box = el("div", "sp-test-out"); box.setAttribute("role", "status");
+      try {
+        const scope = { workspace_id: state.scope.workspace_id, project_id: state.scope.project_id };
+        if (kind === "prompt") {
+          const r = await request("/v1/prompts/preview", { method: "POST", body: JSON.stringify({ scope, operation: T.op }) });
+          box.append(el("strong", "", "시스템 안내"), pre(r.system || ""), el("strong", "", "보낼 글"), pre(r.user || ""));
+        } else {
+          const body = { scope, text: T.text, prompt_only: T.run !== "run" };
+          if (T.strategy) body.strategy = T.strategy;
+          const overrides = S.stored && S.draft ? extractOverrides(S.stored, S.draft) : undefined;
+          if (overrides) body.overrides = overrides;
+          const r = await request("/v1/extract/preview", { method: "POST", body: JSON.stringify(body) });
+          paintTrial(box, r);
+        }
+      } catch (e) { box.append(el("small", "warn", errText(e))); }
+      T.out = box; T.busy = false; redraw();
+    }
+    function paintTrial(box, r) {
+      const p = r.prompt;
+      if (p) {
+        if (p.skipped_reason) box.append(el("small", "warn", `뽑지 않아요 · ${p.skipped_reason}`));
+        box.append(el("small", "", [p.strategy ? `방식 ${p.strategy}` : "", p.timezone ? `시간대 ${p.timezone}` : ""].filter(Boolean).join(" · ") || "기본 방식"));
+        if (p.system) box.append(el("strong", "", "시스템 안내"), pre(p.system));
+        if (p.user) box.append(el("strong", "", "보낼 글"), pre(p.user));
+      }
+      const claims = r.claims || [];
+      if (!p) box.append(el("strong", "", claims.length ? `후보 ${claims.length}개가 나와요` : "뽑힌 후보가 없어요"));
+      for (const c of claims) {
+        const row = el("div", "sp-claim");
+        row.append(pre(c.content || ""), el("small", "", [c.kind, c.fact_type, c.occurred_from ? `${c.occurred_from.slice(0, 10)}${c.occurred_to ? ` ~ ${c.occurred_to.slice(0, 10)}` : ""}` : ""].filter(Boolean).join(" · ")));
+        box.append(row);
+      }
+      if (r.causes?.length) box.append(el("small", "", `원인과 결과 연결 ${r.causes.length}개`));
+      if (r.skipped?.length) box.append(el("small", "", `빼고 읽은 부분 ${r.skipped.length}곳 (비밀값·개인 표시 등)`));
     }
 
     const ACTIONS = [["redact", "가리기"], ["block", "막기"]];
@@ -231,43 +406,118 @@
       return g;
     }
 
+    // A list of short names as chips with an add box (agent tools, audit actions). o: { id, list, set, empty, placeholder, label, add, ok, bad }
+    function chipEditor(o) {
+      const chips = el("div", "sp-chips");
+      const editable = human() && S.draft;
+      for (const t of o.list) {
+        const c = el("span", "pill on sp-chip"), name = el("span", "mono", t); name.dataset.noI18n = "";
+        c.append(name);
+        if (editable) { const x = el("button", "icon-btn plain"); x.type = "button"; x.setAttribute("aria-label", `${t} 빼기`); x.append(icon("x")); x.addEventListener("click", () => o.set(o.list.filter((y) => y !== t))); c.append(x); }
+        chips.append(c);
+      }
+      if (!o.list.length) chips.append(el("small", "pg-hint", o.empty));
+      if (!editable) return { chips, box: null, msg: null };
+      const input = el("input", "mono"); input.placeholder = o.placeholder; input.value = S.chip[o.id] || ""; input.setAttribute("aria-label", o.label); input.spellcheck = false;
+      const msg = el("small", "warn");
+      const add = button(o.add, "", null, () => {
+        const t = input.value.trim();
+        if (!o.ok(t)) { msg.textContent = o.bad; return; }
+        if (o.list.includes(t)) { msg.textContent = "이미 있어요."; return; }
+        if (o.list.length >= 64) { msg.textContent = "64개까지 넣을 수 있어요."; return; }
+        S.chip[o.id] = ""; o.set([...o.list, t]);
+      });
+      input.addEventListener("input", () => { S.chip[o.id] = input.value; });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add.click(); } });
+      const box = el("div", "pg-input-act"); box.append(input, add);
+      return { chips, box, msg };
+    }
+
     function toolsGroup(kit) {
       const g = kit.group("에이전트가 쓸 도구", "이 공간에서 에이전트가 쓸 Arkism 도구(MCP)예요. 비워 두면 모두 써요.");
       const list = S.draft ? S.draft.mcp_tools || [] : S.eff.mcp_tools || [];
-      const chips = el("div", "sp-chips");
-      for (const t of list) {
-        const c = el("span", "pill on sp-chip"), name = el("span", "mono", t); name.dataset.noI18n = "";
-        c.append(name);
-        if (human() && S.draft) { const x = el("button", "icon-btn plain"); x.type = "button"; x.setAttribute("aria-label", `${t} 빼기`); x.append(icon("x")); x.addEventListener("click", () => { S.draft.mcp_tools = list.filter((y) => y !== t); redraw(); }); c.append(x); }
-        chips.append(c);
-      }
-      if (!list.length) chips.append(el("small", "pg-hint", "모든 도구를 써요."));
-      g.append(chips);
-      if (human() && S.draft) {
-        const input = el("input", "mono"); input.placeholder = "recall"; input.value = S.tool; input.setAttribute("aria-label", "도구 이름"); input.spellcheck = false;
-        const msg = el("small", "warn");
-        const add = button("도구 추가", "", null, () => {
-          const t = input.value.trim();
-          if (!TOOL.test(t)) { msg.textContent = "도구 이름은 영어 소문자·숫자·밑줄로 써요. 예: recall"; return; }
-          if (list.includes(t)) { msg.textContent = "이미 있는 도구예요."; return; }
-          if (list.length >= 64) { msg.textContent = "64개까지 넣을 수 있어요."; return; }
-          S.tool = ""; S.draft.mcp_tools = [...list, t]; redraw();
-        });
-        input.addEventListener("input", () => { S.tool = input.value; });
-        input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); add.click(); } });
-        const box = el("div", "pg-input-act"); box.append(input, add);
-        g.append(kit.more("자세히 · 도구 고르기", field("도구 이름", box, "이름 하나를 넣고 추가해요. 하나라도 넣으면 넣은 것만 써요."), msg));
-      }
+      const c = chipEditor({ id: "tool", list, set: (next) => { S.draft.mcp_tools = next; redraw(); }, empty: "모든 도구를 써요.", placeholder: "recall", label: "도구 이름", add: "도구 추가",
+        ok: (t) => TOOL.test(t), bad: "도구 이름은 영어 소문자·숫자·밑줄로 써요. 예: recall" });
+      g.append(c.chips);
+      if (c.box) g.append(kit.more("자세히 · 도구 고르기", field("도구 이름", c.box, "이름 하나를 넣고 추가해요. 하나라도 넣으면 넣은 것만 써요."), c.msg));
       g.append(origin("mcp_tools", () => { S.draft.mcp_tools = []; redraw(); }));
       return g;
     }
 
+    // 활동 기록: what changes something is always recorded; a space may stop or narrow only the optional reads and searches
+    function auditGroup(kit) {
+      const g = kit.group("활동 기록", "누가 언제 무엇을 했는지 남기는 기록이에요. 바꾸는 일은 언제나 남겨요.");
+      const d = S.draft, edit = human() && d, a = (d ? d.audit : S.eff.audit) || {};
+      const on = a.enabled !== false;
+      g.append(kit.line("읽기·찾기도 기록하기", on ? "읽고 찾은 일도 남겨요." : "읽기·찾기는 남기지 않아요. 원문 읽기와 바꾸는 일은 그대로 남겨요.",
+        edit ? kit.sw(on, "읽기·찾기도 기록하기", (next) => setBlock("audit", { enabled: next ? undefined : false })) : onOff(on)));
+      const c = chipEditor({ id: "audit", list: a.actions || [], set: (next) => setBlock("audit", { actions: next.length ? next : undefined }), empty: "읽기·찾기를 모두 남겨요.",
+        placeholder: "search:*", label: "남길 기록 이름", add: "기록 추가", ok: (t) => t.length > 0 && t.length <= 128 && !/\s/.test(t), bad: "띄어쓰기 없이 128자까지 써요. 예: search:*" });
+      g.append(kit.more("자세히 · 남길 읽기만 고르기", c.chips, ...(c.box ? [field("남길 기록 이름", c.box, "넣은 것만 남겨요. 끝에 *를 붙이면 그 앞이 같은 것 모두예요."), c.msg] : [])),
+        origin("audit", () => { d.audit = null; redraw(); }));
+      return g;
+    }
+
+    // 이름 정리: how names in memories become one entity, and the label schema extraction may fill
+    const RESOLUTION = [["exact", "똑같은 이름만 같게 봐요"], ["propose", "비슷한 이름은 합칠지 물어봐요"], ["similar", "글자만 다른 이름은 바로 붙여요"]];
+    const LABEL_TYPES = [["value", "값 하나"], ["multi-values", "값 여러 개"], ["text", "글 하나"], ["multi-text", "글 여러 개"]];
+    const LABEL_KEY = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+    function entityGroup(kit) {
+      const g = kit.group("이름 정리", "기억 속 사람·도구·프로젝트 이름을 하나로 모으는 방식이에요. 합치는 일은 내가 정해요.");
+      g.append(...choice(kit, "entity_resolution", RESOLUTION, "같은 이름 찾기", "비슷한 이름을 어떻게 다룰지예요."));
+      g.append(kit.more("자세히 · 이름 종류와 라벨",
+        ...flag(kit, "entities_allow_free_form", "라벨 밖의 이름도 받기", "라벨을 정해 두어도 자유로운 이름을 함께 뽑아요."),
+        ...flag(kit, "entity_free_types", "새 이름 종류 허용", "사람·도구 같은 기본 종류 밖의 종류도 받아요."),
+        ...labels(kit)));
+      return g;
+    }
+    function labels(kit) {
+      const d = S.draft, edit = human() && d;
+      const list = (d ? d.entity_labels : S.eff.entity_labels) || [];
+      const out = [el("strong", "sp-sub", "라벨")];
+      if (!list.length) out.push(el("p", "pg-hint", "아직 없어요. 예: 우선순위(높음, 보통, 낮음)처럼 정해 두면 그 값으로만 붙여요."));
+      const put = (next) => { d.entity_labels = next; redraw(); };
+      list.forEach((grp, i) => {
+        if (!edit) { out.push(el("div", "sp-rule sp-rule-fixed", `${grp.key} · ${LABEL_TYPES.find(([k]) => k === (grp.type || "value"))?.[1]}`)); return; }
+        const set = (part) => put(list.map((x, j) => (j === i ? { ...x, ...part } : x)));
+        const row = el("div", "sp-rule");
+        const key = el("input", "mono"); key.value = grp.key || ""; key.maxLength = 32; key.placeholder = "priority"; key.setAttribute("aria-label", "라벨 이름"); key.spellcheck = false;
+        key.addEventListener("change", () => { const k = key.value.trim(); if (!LABEL_KEY.test(k)) { notice("라벨 이름은 영어 소문자·숫자·-·_로 써요."); key.value = grp.key || ""; return; } set({ key: k }); });
+        const desc = el("input"); desc.value = grp.description || ""; desc.maxLength = 200; desc.placeholder = "무엇을 나누는 라벨인지"; desc.setAttribute("aria-label", "라벨 설명");
+        desc.addEventListener("change", () => set({ description: desc.value.trim() || undefined }));
+        const type = select(LABEL_TYPES, grp.type || "value", "라벨 값 종류", (v) => set({ type: v === "value" ? undefined : v, values: v.endsWith("text") ? undefined : grp.values }));
+        const del = el("button", "icon-btn plain"); del.type = "button"; del.setAttribute("aria-label", "라벨 지우기"); del.append(icon("x"));
+        del.addEventListener("click", () => put(list.filter((_, j) => j !== i)));
+        row.append(key, desc, type, del);
+        const textual = String(grp.type || "").endsWith("text");
+        if (!grp.key || (!textual && !grp.values?.length)) row.append(el("small", "warn sp-rule-err", !grp.key ? "라벨 이름을 넣어 주세요." : "고를 수 있는 값을 하나 이상 넣어 주세요."));
+        out.push(row);
+        if (!textual) {
+          const vals = el("input"); vals.value = (grp.values || []).map((v) => v.value).join(", "); vals.placeholder = "높음, 보통, 낮음"; vals.setAttribute("aria-label", "고를 수 있는 값");
+          vals.addEventListener("change", () => set({ values: labelValues(vals.value, grp.values) }));
+          out.push(field("고를 수 있는 값 (쉼표로 나눠요)", vals));
+        }
+        out.push(kit.line("태그로도 붙이기", "이 라벨을 기억의 태그로도 붙여요.", kit.sw(!!grp.tag, "태그로도 붙이기", (next) => set({ tag: next || undefined }))));
+      });
+      if (edit) {
+        const add = button("라벨 추가", "ghost", "plus", () => put([...list, { key: "", values: [] }]));
+        add.disabled = list.length >= 16;
+        out.push(add);
+      }
+      out.push(origin("entity_labels", () => { d.entity_labels = []; redraw(); }));
+      return out;
+    }
+
     // 기억 찾기: which recall lanes run when the caller names none, the re-ranking, the server-model re-ranking (budget) and the default context size
-    const LANES = [["fts", "낱말로 찾기", "적힌 낱말이 맞는 기억"], ["vector", "뜻으로 찾기", "낱말이 달라도 뜻이 비슷한 기억"], ["temporal", "시간으로 찾기", "물어본 때와 가까운 기억"], ["graph", "연결로 찾기", "같은 이름으로 이어진 기억"]];
+    const LANES = [["fts", "낱말로 찾기", "적힌 낱말이 맞는 기억"], ["vector", "뜻으로 찾기", "낱말이 달라도 뜻이 비슷한 기억"], ["temporal", "시간으로 찾기", "물어본 때와 가까운 기억"], ["graph", "연결로 찾기", "같은 이름으로 이어진 기억"],
+      ["semantic", "가까운 뜻 잇기", "찾은 기억과 뜻이 가장 가까운 기억을 이어 붙여요. 처음에는 꺼져 있어요."]];
+    // the fusion weight of each recall lane (recall_weights.go recallLaneNames)
+    const WEIGHTS = [["exact", "똑같은 글"], ["keyword", "낱말"], ["vector", "뜻"], ["relation", "관계"], ["temporal", "시간"], ["graph", "연결"], ["causal", "원인"], ["semantic", "가까운 뜻"]];
+    const CONFLICT = [["attach", "같이 보여 주고 ‘정정 검토 중’ 표시"], ["exclude", "결정할 때까지 빼기"]];
     function recallGroup(kit) {
       const g = kit.group("기억 찾기", "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.");
       const d = S.draft, edit = human() && d;
-      const lane = (k) => (d?.lanes?.[k] ?? S.eff.lanes?.[k]) !== false;
+      const lane = (k) => { const v = d?.lanes?.[k] ?? S.eff.lanes?.[k]; return k === "semantic" ? v === true : v !== false; };
       const rows = LANES.map(([k, title, hint]) => [kit.line(title, hint, edit ? kit.sw(lane(k), title, (next) => { d.lanes = { ...(d.lanes || {}), [k]: next }; redraw(); }) : readOnly(lane(k) ? "켜짐" : "꺼짐")),
         origin(`lanes.${k}`, () => { d.lanes = { ...d.lanes, [k]: null }; redraw(); })]).flat();
       const rr = d?.rerank ?? S.eff.rerank;
@@ -278,8 +528,24 @@
         edit ? kit.sw(rm, "서버 모델로 다시 고르기", (next) => { d.rerank_model = next; redraw(); }) : readOnly(rm ? "켜짐" : "꺼짐")), origin("rerank_model", () => { d.rerank_model = null; redraw(); }));
       if (rm) g.append(el("p", "pg-hint warn", "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요."));
       const budget = numberBox(d?.recall_budget_tokens, 1, 64000, S.eff.recall_budget_tokens, "에이전트에 줄 기억 양", edit, (n) => { setDraft("recall_budget_tokens", n); redraw(); });
+      const w = (d ? d.recall_lane_weights : S.eff.recall_lane_weights) || {};
+      const weights = grid(...WEIGHTS.map(([k, name]) => [name, numberBox(w[k], 0.25, 8, 1, `${name} 무게`, edit, (n) => {
+        const next = { ...w, [k]: n || undefined }; d.recall_lane_weights = unset(next) ? null : next; redraw(); }, 0.25)]));
       g.append(kit.more("자세히 · 찾는 방법과 양", ...rows, kit.line("에이전트에 줄 기억 양", "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.", budget),
-        origin("recall_budget_tokens", () => { setDraft("recall_budget_tokens", 0); redraw(); })));
+        origin("recall_budget_tokens", () => { setDraft("recall_budget_tokens", 0); redraw(); }),
+        ...flag(kit, "recall_session_archives", "세션 원문에서도 찾기", "저장된 대화 원문도 찾는 길에 넣어요. 처음에는 꺼져 있어요."),
+        field("찾는 방법별 무게", weights, "1이 보통이에요. 크게 하면 그 방법으로 찾은 기억이 앞에 와요 (0.25~8)."),
+        origin("recall_lane_weights", () => { d.recall_lane_weights = null; redraw(); })));
+      // recall_quality is one block the server inherits whole
+      const q = (d?.recall_quality ? d.recall_quality : S.eff.recall_quality) || {};
+      const qsw = (k, title, hint, on) => kit.line(title, hint, edit ? kit.sw(on, title, (next) => setBlock("recall_quality", { [k]: next })) : onOff(on));
+      g.append(kit.more("자세히 · 찾은 결과 거르기",
+        qsw("relevance_gate", "관련 없는 결과 빼기", "낱말만 우연히 맞고 뜻이 먼 기억을 빼요. 처음에는 켜져 있어요.", q.relevance_gate !== false),
+        kit.line("정정을 기다리는 기억", "고쳐 달라는 후보가 있는 기억을 어떻게 보여 줄지예요.",
+          edit ? select(CONFLICT, q.conflict_pending || "attach", "정정을 기다리는 기억", (v) => setBlock("recall_quality", { conflict_pending: v === "attach" ? undefined : v })) : readOnly(CONFLICT.find(([k]) => k === (q.conflict_pending || "attach"))[1])),
+        qsw("provisional", "승인 전 후보도 보여 주기", "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요.", !!q.provisional),
+        qsw("auto_close_on_correction", "정정되면 옛 사실 끝내기 제안", "정정을 승인하면 옛 기억에 끝난 날짜를 붙이자고 제안해요. 내가 승인해야 바뀌어요.", !!q.auto_close_on_correction),
+        origin("recall_quality", () => { d.recall_quality = null; redraw(); })));
       return g;
     }
 
@@ -300,7 +566,30 @@
       const maxTok = numberBox(d?.reflect_max_tokens, 64, 4096, S.eff.reflect_max_tokens, "답 길이 상한", edit, (n) => { setDraft("reflect_max_tokens", n); redraw(); });
       g.append(kit.more("자세히 · 답하는 태도", ...rows, origin("reflect_disposition", () => { d.reflect_disposition = null; redraw(); }),
         kit.line("답 길이 상한", "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.", maxTok), origin("reflect_max_tokens", () => { setDraft("reflect_max_tokens", 0); redraw(); })));
+      g.append(kit.more("자세히 · 답할 때 읽는 것", ...reflectDefaults(kit)));
       return g;
+    }
+
+    // reflect_default_options: what a reflect request takes for what it leaves unset (one block, inherited whole)
+    const BUDGET = [["low", "적게"], ["mid", "보통"], ["high", "많이"]];
+    const FACTS = [["", "기억과 관찰 모두"], ["memory", "기억만"], ["observation", "관찰만"]];
+    const TOOL_CAPS = [["recall_max_tokens", "찾은 기억", 64], ["recall_max_chunk_tokens", "원문 조각", 16], ["observations_max_tokens", "관찰", 64], ["mental_models_max_tokens", "주제 요약 목록", 64],
+      ["read_mental_models_max_tokens", "주제 요약 읽기", 64], ["expand_max_tokens", "더 펼쳐 읽기", 64]];
+    function reflectDefaults(kit) {
+      const d = S.draft, edit = human() && d;
+      const o = (d?.reflect_default_options ? d.reflect_default_options : S.eff.reflect_default_options) || {};
+      const set = (part) => setBlock("reflect_default_options", part);
+      const sw = (k, title, hint) => kit.line(title, hint, edit ? kit.sw(!!o[k], title, (next) => set({ [k]: next || undefined })) : onOff(!!o[k]));
+      const ft = o.fact_types?.length === 1 ? o.fact_types[0] : "";
+      const tools = o.tools || {};
+      const caps = grid(...TOOL_CAPS.map(([k, name, min]) => [name, numberBox(tools[k], min, 32000, "", `${name} 토큰`, edit, (n) => set({ tools: { ...tools, [k]: n || undefined } }))]));
+      return [
+        kit.line("읽을 기억의 양", "답하기 전에 기억을 얼마나 많이 찾아 읽을지예요.", edit ? select([["", "기본값"], ...BUDGET], o.budget || "", "읽을 기억의 양", (v) => set({ budget: v || undefined })) : readOnly(BUDGET.find(([k]) => k === o.budget)?.[1] || "기본값")),
+        kit.line("읽을 종류", "", edit ? select(FACTS, ft, "읽을 종류", (v) => set({ fact_types: v ? [v] : undefined })) : readOnly(FACTS.find(([k]) => k === ft)[1])),
+        sw("exclude_mental_models", "주제 요약은 빼고 답하기", "승인한 주제 요약을 읽지 않고 기억만으로 답해요."),
+        sw("tag_scoped_directives", "태그가 맞는 지시만 쓰기", "태그를 붙인 지시는 같은 태그로 물을 때만 따라요."),
+        field("도구 한 번에 읽는 양 (토큰)", caps, "비우면 기본값을 써요."),
+        origin("reflect_default_options", () => { d.reflect_default_options = null; redraw(); })];
     }
 
     const INTERVALS = [["", "물려받기"], ["1h", "1시간마다"], ["6h", "6시간마다"], ["24h", "하루마다"], ["168h", "일주일마다"]];
@@ -315,7 +604,86 @@
       const every = edit ? select(INTERVALS, cur.interval || "", "얼마나 자주", (v) => set({ interval: v || undefined })) : readOnly(S.eff.auto_derive?.interval || "—");
       g.append(kit.more("자세히 · 언제 만들지", kit.line("몇 개 승인마다", "승인한 기억이 이만큼 쌓이면 정리를 시작해요 (1~1000)", thr), kit.line("얼마나 자주", "쌓인 게 적어도 이 간격이 지나면 정리해요", every)),
         origin("auto_derive.enabled", () => { d.auto_derive = null; redraw(); }));
+      g.append(kit.more("자세히 · 관찰 정리 방식", ...consolidation(kit)), kit.more("자세히 · 주제 요약 기본값", ...mentalModels(kit)));
       return g;
+    }
+
+    // consolidation: the observation mission, how memories group into scopes, run sizes and the strategy rules (JSON)
+    const SCOPE_MODES = [["shared", "모두 한 묶음"], ["combined", "태그 조합마다"], ["per_tag", "태그마다"], ["all_combinations", "모든 태그 조합마다"]];
+    function consolidation(kit) {
+      const d = S.draft, edit = human() && d;
+      const c = (d?.consolidation ? d.consolidation : S.eff.consolidation) || {};
+      const set = (part) => setBlock("consolidation", part);
+      const sizes = grid(["묶음마다 관찰 수", numberBox(c.max_observations_per_scope, 1, 1000, "", "묶음마다 관찰 수", edit, (n) => set({ max_observations_per_scope: n || undefined }))],
+        ["한 번에 정리할 묶음", numberBox(c.batch_size, 1, 10, "", "한 번에 정리할 묶음", edit, (n) => set({ batch_size: n || undefined }))],
+        ["동시에 정리", numberBox(c.parallel, 1, 4, "", "동시에 정리", edit, (n) => set({ parallel: n || undefined }))]);
+      const out = [
+        field("관찰을 만들 때 목표", edit ? area(c.observations_mission, 2000, "관찰을 만들 때 목표", "예: 반복되는 실수와 그 해결을 관찰로 남겨요.", (v) => set({ observations_mission: v || undefined })) : readOnly(c.observations_mission || "없음")),
+        kit.line("묶는 방식", "어떤 기억끼리 모아 관찰을 만들지예요.", edit ? select([["", "기본값 · 모두 한 묶음"], ...SCOPE_MODES], c.default_scope_mode || "", "묶는 방식", (v) => set({ default_scope_mode: v || undefined }))
+          : readOnly(SCOPE_MODES.find(([k]) => k === c.default_scope_mode)?.[1] || "모두 한 묶음")),
+        field("크기", sizes, "비우면 기본값을 써요.")];
+      // the rule lists as JSON: kept in S.rules while being typed, so a half-typed object is not lost on redraw
+      if (!edit) {
+        out.push(field("정리 전략 규칙 (JSON)", pre(rulesText(c) || "없음")), origin("consolidation"));
+        return out;
+      }
+      if (S.rules === null) S.rules = rulesText(c);
+      const rules = el("textarea", "mono"); rules.rows = 6; rules.value = S.rules; rules.spellcheck = false; rules.setAttribute("aria-label", "정리 전략 규칙 (JSON)");
+      rules.placeholder = '{"strategies": [{"name": "bugs", "scopes": [{"tags": ["bug*"]}]}]}';
+      const bad = parseRules(S.rules) === null;
+      rules.addEventListener("input", () => { S.rules = rules.value; });
+      rules.addEventListener("change", () => { const r = parseRules(rules.value); if (r) set({ default_scopes: undefined, strategies: undefined, scope_limits: undefined, ...r }); else redraw(); });
+      out.push(field("정리 전략 규칙 (JSON)", rules, "default_scopes · strategies · scope_limits 를 적어요. 태그 모양으로 어떤 전략이 어떤 묶음을 맡을지 정해요."));
+      if (bad) out.push(el("small", "warn", "JSON을 읽을 수 없거나 모르는 이름이 있어요. 저장하지 않았어요."));
+      out.push(button("전략 미리 보기", "ghost", null, () => void strategyPreview()));
+      if (S.trial.strat) out.push(S.trial.strat);
+      out.push(origin("consolidation", () => { d.consolidation = null; S.rules = null; redraw(); }));
+      return out;
+    }
+    async function strategyPreview() {
+      const box = el("div", "sp-test-out"); box.setAttribute("role", "status");
+      try {
+        const body = { scope: { workspace_id: state.scope.workspace_id, project_id: state.scope.project_id } };
+        if (S.draft?.consolidation) body.consolidation = S.draft.consolidation;
+        const r = await request("/v1/observations/strategies/preview", { method: "POST", body: JSON.stringify(body) });
+        box.append(el("strong", "", `묶음 ${r.scopes ?? 0}개 · 맡은 전략 없음 ${r.unclaimed ?? 0}개`));
+        for (const st of r.strategies || []) box.append(el("small", "", `${st.name} · 묶음 ${st.claimed ?? 0}개 맡음`));
+        if (!(r.strategies || []).length) box.append(el("small", "", "전략이 없어 모두 기본 방식으로 정리해요."));
+      } catch (e) { box.append(el("small", "warn", errText(e))); }
+      S.trial.strat = box; redraw();
+    }
+
+    // mental_model_defaults: the trigger a summary made without one takes, and the shortest gap between refreshes
+    const MM_MODES = [["manual", "직접 할 때만"], ["on_change", "기억이 바뀌면"], ["daily", "하루마다"]];
+    const GAPS = [["", "기본값"], ["1h", "1시간"], ["6h", "6시간"], ["24h", "하루"], ["168h", "일주일"]];
+    function mentalModels(kit) {
+      const d = S.draft, edit = human() && d;
+      const m = (d?.mental_model_defaults ? d.mental_model_defaults : S.eff.mental_model_defaults) || {};
+      const t = m.trigger || null;
+      const set = (part) => setBlock("mental_model_defaults", part);
+      const setT = (part) => set({ trigger: { ...t, ...part } });
+      const out = [kit.line("언제 새로 고칠지", "새 주제 요약을 만들 때 따로 정하지 않으면 이대로 해요. 새로 고친 요약도 내가 승인해야 쓰여요.",
+        edit ? select([["", "기본값"], ...MM_MODES], t?.mode || "", "언제 새로 고칠지", (v) => set({ trigger: v ? { ...t, mode: v } : undefined })) : readOnly(MM_MODES.find(([k]) => k === t?.mode)?.[1] || "기본값"))];
+      if (t) {
+        const cron = textBox(t.cron, 64, "정해진 시각 (cron)", "0 9 * * 1", edit, (v) => setT({ cron: v || undefined }));
+        const look = button("다음 시각 보기", "ghost", null, () => void cronPreview(t.cron));
+        const bar = el("div", "pg-input-act"); bar.append(cron, look);
+        out.push(field("정해진 시각 (cron, UTC)", bar, "다섯 칸으로 써요. 예: 0 9 * * 1 = 월요일 9시(UTC)."));
+        if (S.trial.cronOut) out.push(S.trial.cronOut);
+        out.push(kit.line("관찰 정리 뒤에 고치기", "관찰을 정리하고 나면 요약도 새로 고쳐요.", edit ? kit.sw(!!t.after_consolidation, "관찰 정리 뒤에 고치기", (next) => setT({ after_consolidation: next || undefined })) : onOff(!!t.after_consolidation)));
+      }
+      out.push(kit.line("가장 짧은 간격", "요약을 이보다 자주 고치지 않아요.", edit ? select(withValue(GAPS, m.min_interval), m.min_interval || "", "가장 짧은 간격", (v) => set({ min_interval: v || undefined })) : readOnly(m.min_interval || "기본값")),
+        origin("mental_model_defaults", () => { d.mental_model_defaults = null; redraw(); }));
+      return out;
+    }
+    async function cronPreview(cron) {
+      const box = el("div", "sp-test-out"); box.setAttribute("role", "status");
+      if (!cron) { box.append(el("small", "warn", "cron을 먼저 넣어 주세요.")); S.trial.cronOut = box; redraw(); return; }
+      try {
+        const r = await request("/v1/mental-models/cron-preview", { method: "POST", body: JSON.stringify({ scope: { workspace_id: state.scope.workspace_id, project_id: state.scope.project_id }, cron, count: 5 }) });
+        box.append(el("strong", "", "다음 실행 시각"), ...(r.next || []).map((n) => pre(new Date(n).toLocaleString())));
+      } catch (e) { box.append(el("small", "warn", e?.message === "invalid_request" ? "cron을 읽을 수 없어요. 다섯 칸인지 확인해 주세요." : errText(e))); }
+      S.trial.cronOut = box; redraw();
     }
 
     // 템플릿: the server's default template (ARKISM_SPACE_DEFAULT_TEMPLATE) sets up a space that has no saved settings yet;
@@ -339,7 +707,7 @@
     }
 
     function tab(kit, extra = []) {
-      if (S.key && S.key !== scopeKey()) Object.assign(S, { loaded: false, stored: null, draft: null, eff: null, src: {}, job: "", sample: "" });
+      if (S.key && S.key !== scopeKey()) Object.assign(S, { loaded: false, stored: null, draft: null, eff: null, src: {}, job: "", sample: "", chip: {}, rules: null, trial: { text: "", strategy: "", run: "prompt", op: "retain", out: null, busy: false } });
       if (!S.loaded) void load();
       const { workspace_id: w = "", project_id: p = "" } = state.scope || {};
       const ws = el("b", "mono", w || "—"), pj = el("b", "mono", p || "—"); ws.dataset.noI18n = pj.dataset.noI18n = "";
@@ -352,11 +720,11 @@
       const out = [];
       if (!human()) out.push(el("p", "pg-hint", "에이전트 계정이라 보기만 할 수 있어요. 바꾸려면 사람 계정으로 로그인해 주세요."));
       else if (!S.stored) out.push(el("p", "pg-hint warn", "이 계정에는 공간 설정을 바꿀 권한이 없어요. 서버 관리자에게 공간 설정 권한을 받아 주세요."));
-      out.push(extractGroup(kit), defenseGroup(kit), recallGroup(kit), reflectGroup(kit), deriveGroup(kit), toolsGroup(kit), templateGroup(kit, kit.spaceJob), ...extra);
+      out.push(extractGroup(kit), defenseGroup(kit), entityGroup(kit), recallGroup(kit), reflectGroup(kit), deriveGroup(kit), toolsGroup(kit), auditGroup(kit), templateGroup(kit, kit.spaceJob), ...extra);
       if (dirty()) {
         const bar = el("div", "pg-save");
         const ok = button("저장", "primary", null, save); ok.disabled = S.busy;
-        bar.append(el("span", "", "저장하지 않은 변경이 있어요."), button("취소", "ghost", null, () => { S.draft = clone(S.stored); redraw(); }), ok);
+        bar.append(el("span", "", "저장하지 않은 변경이 있어요."), button("취소", "ghost", null, () => { S.draft = clone(S.stored); S.rules = null; redraw(); }), ok);
         out.push(bar);
       }
       return out;

@@ -1,0 +1,6 @@
+{
+  "operation": "retain",
+  "system": "You extract durable memories from text for a software team.\nMission: 이 팀이 왜 그렇게 정했는지와 배포에서 겪은 문제를 남겨요.\nWrite each memory in Korean.",
+  "user": "Text:\n[memory text]",
+  "authority": "data_only_untrusted"
+}

@@ -551,6 +551,13 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set-space .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .v4-set-space .sp-chip { display: inline-flex; align-items: center; gap: 4px; }
 .v4-set-space .warn { color: var(--nc-amber); }
+/* small labelled number boxes side by side (lane weights, tool budgets, run sizes); a sub-heading inside a 자세히 fold */
+.v4-set-space .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px 12px; margin-top: 6px; }
+.v4-set-space .sp-grid > label { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--nc-muted); font-size: calc(12px * var(--fs, 1)); }
+.v4-set-space .sp-grid input { width: 100%; min-width: 0; }
+.v4-set-space .sp-sub { display: block; margin: 14px 0 6px; color: var(--nc-text); font-weight: 500; }
+.v4-set-space .sp-claim { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-top: 1px solid var(--nc-line); }
+.v4-set-space .sp-test-out > strong { color: var(--nc-text); }
 /* a number beside its label, as wide as a choice box (the folded 자세히 rows otherwise stretch inputs full width) */
 .v4-set-space .setting > input.ag-select { width: min(160px, 40%); }
 @media (max-width: 720px) { .v4-set-space .sp-rule { grid-template-columns: minmax(0, 1fr) 28px; } }

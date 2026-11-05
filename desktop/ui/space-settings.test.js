@@ -99,3 +99,71 @@ test("a person turns on the server-model re-ranking with a budget note and hands
   box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
   assert.deepEqual(sent[0], ["PATCH", { expected_revision: 2, lanes: null, rerank: null }], "rerank_model was never saved, so it just drops out");
 });
+
+test("configPatch: on/off settings go back with null, whole blocks with {}, and an all-empty block counts as empty", () => {
+  const stored = { extract_causal: true, work_state_candidates: false, recall_quality: { provisional: true }, reflect_default_options: { budget: "high", tools: {} }, extraction_strategies: { notes: { extraction_mode: "verbose" } } };
+  assert.deepEqual(S.configPatch(stored, structuredClone(stored)), {});
+  assert.deepEqual(S.configPatch(stored, { ...stored, extract_causal: null, work_state_candidates: null, recall_quality: null, reflect_default_options: { tools: {} }, extraction_strategies: null }),
+    { extract_causal: null, work_state_candidates: null, recall_quality: {}, reflect_default_options: {}, extraction_strategies: {} });
+  assert.deepEqual(S.configPatch({}, { recall_session_archives: false, entity_labels: [{ key: "team", values: [{ value: "a" }] }], memory_language: "ko", default_timezone: "Asia/Seoul" }),
+    { recall_session_archives: false, entity_labels: [{ key: "team", values: [{ value: "a" }] }], memory_language: "ko", default_timezone: "Asia/Seoul" }, "false is a value");
+  assert.deepEqual(S.configPatch({ audit: { enabled: false } }, { audit: null, entity_labels: [] }), { audit: {} });
+});
+
+test("the small helpers: draft overrides for the extraction test, label values, the consolidation rule JSON, renaming a strategy", () => {
+  assert.equal(S.extractOverrides({ extraction_mode: "verbose" }, { extraction_mode: "verbose" }), undefined);
+  assert.deepEqual(S.extractOverrides({ extraction_mode: "verbose" }, { extraction_mode: "chunks", extraction_chunk_size: 800, extract_causal: false, mcp_tools: ["x"] }),
+    { extraction_mode: "chunks", extraction_chunk_size: 800, extract_causal: false });
+  assert.deepEqual(S.labelValues("높음, 보통,, 높음", [{ value: "높음", description: "급함" }]), [{ value: "높음", description: "급함" }, { value: "보통" }]);
+  assert.equal(S.rulesText({ strategies: [], batch_size: 2 }), "");
+  const block = { strategies: [{ name: "bugs", scopes: [{ tags: ["bug*"] }] }] };
+  assert.deepEqual(S.parseRules(S.rulesText(block)), block);
+  assert.deepEqual(S.parseRules(""), {});
+  for (const bad of ["{", "[]", '{"other": []}', '{"strategies": {}}']) assert.equal(S.parseRules(bad), null, bad);
+  assert.deepEqual(Object.keys(S.renameKey({ a: 1, b: 2, c: 3 }, "b", "z")), ["a", "z", "c"]);
+});
+
+test("a person edits the new groups: a block starts from the resolved value, on/off goes back with null, and the tests call the preview routes", async () => {
+  const state = { view: "settings", settingsTab: "space", server: "s", scope: { workspace_id: "w", project_id: "p" }, caps: { actions: {} } };
+  const sent = [];
+  const stored = { extract_causal: true, extraction_mode: "verbose" };
+  const request = async (path, o) => {
+    if (o?.method) { sent.push([path, JSON.parse(o.body)]); return path.includes("/prompts/") ? { system: "SYS", user: "USER" } : path.includes("/extract/") ? { claims: [{ content: "금요일 배포 안 함", kind: "decision" }], skipped: [] } : {}; }
+    if (path.endsWith("/config")) return { revision: 5, config: structuredClone(stored) };
+    return { revision: 5, config: { ...stored, recall_quality: { conflict_pending: "exclude" }, memory_language: "auto" }, sources: { extract_causal: "space", recall_quality: "template", memory_language: "server" } };
+  };
+  const group = (title) => h.el("section", "", title);
+  const line = (title, hint, ctl) => { const r = h.el("div", "", title); r.append(h.el("small", "", hint), ctl); return r; };
+  const sws = {};
+  const kit = { side() {}, sideSec: () => h.el("div"), kvRow: () => h.el("div"), sideNote: () => h.el("p"), group, line, more: (s, ...n) => { const d = h.el("details", "", s); d.append(...n); return d; }, spaceJob: async () => ({}),
+    sw: (on, label, set) => { const b = h.el("button", "", `sw:${label}:${on}`); sws[label] = set; return b; } };
+  let box;
+  const tab = S({ state, ...h, request, notice() {}, render() { box = h.el("div"); box.append(...tab.tab(kit)); } });
+  tab.tab(kit); await dom.flush(); await dom.flush();
+  const t = box.textContent;
+  for (const s of ["이름 정리", "활동 기록", "승인 전 후보도 보여 주기", "세션 원문에서도 찾기", "기억을 쓰는 언어", "기준 시간대", "이름 붙은 뽑기 방식", "관찰 정리 방식", "주제 요약 기본값", "찾는 방법별 무게", "작업 상태를 후보로"])
+    assert.ok(t.includes(s), s);
+  assert.match(t, /sw:원인과 결과도 후보로:true/);
+  assert.match(t, /물려받기 · 말한 언어 그대로/);
+  sws["승인 전 후보도 보여 주기"](true); // the template's block is kept whole
+  sws["원인과 결과도 후보로"](false);
+  sws["작업 상태를 후보로"](true);
+  box.querySelectorAll("button").find((b) => b.textContent === "방식 추가").click();
+  box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
+  assert.deepEqual(sent[0], ["/v1/spaces/w/p/config", { expected_revision: 5, extract_causal: false, work_state_candidates: true, extraction_strategies: { "style-1": {} }, recall_quality: { conflict_pending: "exclude", provisional: true } }]);
+  // 뽑기 시험: the unsaved draft goes as overrides, prompt only by default (no model)
+  sws["원인과 결과도 후보로"](false);
+  const area = box.querySelectorAll("textarea").find((n) => n.getAttribute("aria-label") === "뽑기 시험할 글");
+  area.value = "어제 회의에서 금요일 배포는 하지 않기로 했어요."; dom.fire(area, "input");
+  box.querySelectorAll("button").find((b) => b.textContent === "시험해 보기").click(); await dom.flush(); await dom.flush();
+  assert.deepEqual(sent.at(-1), ["/v1/extract/preview", { scope: { workspace_id: "w", project_id: "p" }, text: "어제 회의에서 금요일 배포는 하지 않기로 했어요.", prompt_only: true, overrides: { extract_causal: false } }]);
+  assert.match(box.textContent, /후보 1개가 나와요/);
+  box.querySelectorAll("button").find((b) => b.textContent === "프롬프트 보기").click(); await dom.flush(); await dom.flush();
+  assert.deepEqual(sent.at(-1), ["/v1/prompts/preview", { scope: { workspace_id: "w", project_id: "p" }, operation: "retain" }]);
+  assert.match(box.textContent, /SYS/);
+  // 기본값으로 next to 원인과 결과도 후보로 hands it back with null
+  const reset = box.querySelectorAll(".sp-origin").find((n) => n.previousSibling?.textContent.includes("원인과 결과도 후보로")).querySelector("button");
+  reset.click();
+  box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
+  assert.equal(sent.at(-1)[1].extract_causal, null);
+});

@@ -43,7 +43,81 @@
     "rerank": true,
     "recall_budget_tokens": 2000,
     "reflect_max_tokens": 1024,
-    "rerank_model": true
+    "rerank_model": true,
+    "extraction_mission": "이 팀이 왜 그렇게 정했는지와 배포에서 겪은 문제를 남겨요.",
+    "extraction_chunk_size": 3000,
+    "extract_causal": true,
+    "memory_language": "ko",
+    "default_timezone": "Asia/Seoul",
+    "extraction_strategies": {
+      "meeting-notes": {
+        "extraction_mode": "custom",
+        "extraction_instructions": "회의록이면 결정과 담당자만 남겨요."
+      }
+    },
+    "extraction_default_strategy": "meeting-notes",
+    "entity_resolution": "propose",
+    "entity_labels": [
+      {
+        "key": "priority",
+        "description": "일의 급한 정도",
+        "values": [
+          {
+            "value": "높음"
+          },
+          {
+            "value": "보통"
+          },
+          {
+            "value": "낮음"
+          }
+        ],
+        "tag": true
+      }
+    ],
+    "recall_lane_weights": {
+      "vector": 1.5,
+      "temporal": 0.5
+    },
+    "recall_quality": {
+      "provisional": true,
+      "conflict_pending": "attach"
+    },
+    "audit": {
+      "enabled": true,
+      "actions": [
+        "search:*"
+      ]
+    },
+    "recall_session_archives": false,
+    "work_state_candidates": false,
+    "reflect_default_options": {
+      "budget": "mid",
+      "tools": {}
+    },
+    "consolidation": {
+      "observations_mission": "반복되는 실수와 그 해결을 관찰로 남겨요.",
+      "default_scope_mode": "per_tag",
+      "strategies": [
+        {
+          "name": "bugs",
+          "scopes": [
+            {
+              "tags": [
+                "bug*"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "mental_model_defaults": {
+      "trigger": {
+        "mode": "daily",
+        "cron": "0 9 * * 1"
+      },
+      "min_interval": "6h"
+    }
   },
   "sources": {
     "display_name": "space",
@@ -63,6 +137,22 @@
     "rerank": "space",
     "recall_budget_tokens": "server",
     "reflect_max_tokens": "server",
-    "rerank_model": "space"
+    "rerank_model": "space",
+    "extraction_mission": "space",
+    "extraction_chunk_size": "space",
+    "extract_causal": "space",
+    "memory_language": "space",
+    "default_timezone": "space",
+    "extraction_strategies": "space",
+    "extraction_default_strategy": "space",
+    "entity_resolution": "space",
+    "entity_labels": "space",
+    "recall_lane_weights": "space",
+    "recall_quality": "space",
+    "reflect_default_options": "template",
+    "consolidation": "template",
+    "mental_model_defaults": "server",
+    "work_state_candidates": "server",
+    "recall_session_archives": "server"
   }
 }

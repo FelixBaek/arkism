@@ -1,0 +1,26 @@
+{
+  "claims": [
+    {
+      "content": "금요일에는 배포하지 않기로 했어요.",
+      "kind": "decision",
+      "fact_type": "world",
+      "semantic_kind": "fact",
+      "evidence_kind": "observed",
+      "occurred_from": "2026-11-05",
+      "evidence_quote": "배포는 금요일에 하지 않기로",
+      "confidence": 0.9
+    },
+    {
+      "content": "민수가 배포 체크리스트를 맡았어요.",
+      "kind": "decision",
+      "fact_type": "world",
+      "semantic_kind": "fact",
+      "evidence_kind": "observed",
+      "occurred_from": "2026-11-05",
+      "evidence_quote": "민수가 체크리스트를 맡았어요",
+      "confidence": 0.8
+    }
+  ],
+  "skipped": [],
+  "prompt": null
+}

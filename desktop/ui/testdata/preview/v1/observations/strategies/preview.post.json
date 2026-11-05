@@ -1,0 +1,19 @@
+{
+  "scopes": 6,
+  "unclaimed": 4,
+  "strategies": [
+    {
+      "name": "bugs",
+      "active": true,
+      "claimed": 2,
+      "rules": [
+        {
+          "matched": 2,
+          "taken": 2,
+          "samples": []
+        }
+      ]
+    }
+  ],
+  "authority": "data_only_untrusted"
+}
