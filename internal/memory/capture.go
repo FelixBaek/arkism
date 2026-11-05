@@ -19,6 +19,8 @@ import (
 // basis=explicit_user. A person must review the resulting candidate separately.
 // Corrections never overwrite and are marked as conflicts.
 
+// captureAutomaticEvents are the events a hook extracts on its own; a space with extraction off refuses them.
+var captureAutomaticEvents = []string{"turn_completed", "run_completed", "handoff_completed", "session_end"}
 var captureEventTypes = []string{"turn_completed", "run_completed", "handoff_completed", "user_corrected_fact", "explicit_remember", "session_end", "backfill"}
 var captureKinds = []string{"user", "decision", "procedural", "lesson", "episodic", "semantic"}
 var captureBases = []string{"explicit_user", "assistant_result", "inferred"}
@@ -204,7 +206,7 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	out := CaptureResult{Items: make([]CaptureItem, len(in.Claims))}
 	transient := false
 	for i, c := range in.Claims {
-		item, err := s.defendedClaim(ctx, token, in, settings.DefenseRules, c)
+		item, err := s.defendedClaim(ctx, token, in, settings, c)
 		if err != nil {
 			item = CaptureItem{Status: "rejected", Reason: captureErrorCode(err), DedupeKey: item.DedupeKey}
 			transient = transient || captureTransient(err, c, item.Reason)
@@ -228,11 +230,13 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	return out, nil
 }
 
-// defendedClaim applies the space defense rules to a claim's texts before
-// capturing it; a block is audited without its text.
-func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInput, rules []SpaceDefenseRule, c CaptureClaim) (CaptureItem, error) {
-	if err := defendAll(rules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
-		s.auditDeniedInput(ctx, "capture:defense_blocked", in.Scope, "")
+// defendedClaim applies the space settings to a claim before capturing it: a space
+// with extraction off takes no automatic captures, and the defense rules run on its texts.
+func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInput, settings SpaceConfig, c CaptureClaim) (CaptureItem, error) {
+	if !settings.ExtractionEnabled && slices.Contains(captureAutomaticEvents, in.Event.Type) {
+		return CaptureItem{}, ErrExtractionDisabled
+	}
+	if err := s.defendWith(ctx, in.Scope, "capture", settings.DefenseRules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
 		return CaptureItem{}, err
 	}
 	return s.captureClaim(ctx, token, in, c)
@@ -703,7 +707,7 @@ func (s *Service) staleCaptureEvidence(ctx context.Context, scope Scope, pointer
 }
 
 func captureErrorCode(err error) string {
-	for _, e := range []error{ErrSecretDetected, ErrDefenseBlocked, ErrDenied, ErrInvalid, ErrConflict, ErrNotFound, ErrCandidateQuota, ErrUnavailable} {
+	for _, e := range []error{ErrSecretDetected, ErrDefenseBlocked, ErrExtractionDisabled, ErrDenied, ErrInvalid, ErrConflict, ErrNotFound, ErrCandidateQuota, ErrUnavailable} {
 		if errors.Is(err, e) {
 			return e.Error()
 		}

@@ -54,6 +54,11 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 	if in.Conflict != nil && !validCandidateReviewConflict(id, in) {
 		return Record{}, ErrInvalid
 	}
+	if in.Content != "" || in.Reason != "" {
+		if e = s.defendSpace(ctx, in.Scope, "review:memory_candidates", &in.Content, &in.Reason); e != nil {
+			return Record{}, e
+		}
+	}
 	if containsSecret(structuredText(in)) {
 		return Record{}, ErrSecretDetected
 	}

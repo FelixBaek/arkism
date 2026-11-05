@@ -250,7 +250,11 @@ func (s *Service) extractActor(ctx context.Context, token, action string, scope 
 	if s.Wiki == nil {
 		return d, ErrModelNotConfigured
 	}
-	return d, nil
+	settings, err := s.spaceSettings(ctx, scope)
+	if err == nil && !settings.ExtractionEnabled {
+		err = ErrExtractionDisabled
+	}
+	return d, err
 }
 
 // extractChunk sends one privacy-filtered chunk to the model under the budget gate.
@@ -309,11 +313,13 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	pages := []string{in.Text}
-	if err = s.defendPages(ctx, in.Scope, pages); err != nil {
+	if err = s.defendSpace(ctx, in.Scope, "generate:memory_candidates", &in.Text); err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	text, redacted := extractClean(pages[0])
+	if len(in.Text) > fileExtractMaxPreview {
+		return ExtractPreviewResult{}, ErrInvalid // redaction grew the text past the limit
+	}
+	text, redacted := extractClean(in.Text)
 	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
 	if err = s.previewChunks(ctx, token, d, in.Scope, extractChunks([]string{text}, false), &out); err != nil {
 		return ExtractPreviewResult{}, err
@@ -363,18 +369,12 @@ func extractFilePages(in FileMemoriesInput) ([]string, bool, error) {
 	return []string{text}, false, nil
 }
 
-// defendPages applies the space defense rules to every page before the privacy filter and the model.
-func (s *Service) defendPages(ctx context.Context, scope Scope, pages []string) error {
-	settings, err := s.spaceSettings(ctx, scope)
-	if err != nil {
-		return err
-	}
+func pagePointers(pages []string) []*string {
+	out := make([]*string, len(pages))
 	for i := range pages {
-		if err = defendAll(settings.DefenseRules, &pages[i]); err != nil {
-			return err
-		}
+		out[i] = &pages[i]
 	}
-	return nil
+	return out
 }
 
 // extractFileChunks applies the privacy filter page by page and enforces size limits.
@@ -407,7 +407,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	}
 	pages, paged, err := extractFilePages(in)
 	if err == nil {
-		err = s.defendPages(ctx, in.Scope, pages)
+		err = s.defendSpace(ctx, in.Scope, "write:memory_candidates", pagePointers(pages)...)
 	}
 	if err != nil {
 		return FileMemoriesResult{}, err

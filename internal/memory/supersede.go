@@ -28,6 +28,11 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 	if !validTags(in.Tags) || id == "" || len(id) > 256 || in.ExpectedRevision < 1 || strings.TrimSpace(in.Reason) == "" || len(in.Reason) > 2000 {
 		return out, ErrInvalid
 	}
+	// The new content's limits are checked below on the redacted text; a reason a redaction grew is cut back.
+	if e := s.defendSpace(ctx, in.Scope, "write:memories", &in.NewContent, &in.Reason); e != nil {
+		return out, e
+	}
+	in.Reason = cutUTF8(in.Reason, 2000)
 	existing := in.ReplacementMemoryID != ""
 	var clean CreateInput
 	var inspection Inspection

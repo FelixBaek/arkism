@@ -84,8 +84,11 @@ var spaceCaptureNote = sync.OnceValue(func() string {
 	}
 	config, _ := res["config"].(map[string]any)
 	note := strField(config["extraction_instructions"])
-	if strField(config["extraction_mode"]) == "verbose" {
+	switch strField(config["extraction_mode"]) {
+	case "verbose":
 		note = "Keep more detail: supporting context and specific one-off facts that may matter later.\n" + note
+	case "verbatim":
+		note = "Keep the user's own words: write each claim as an exact quote, never a paraphrase or summary.\n" + note
 	}
 	return note
 })

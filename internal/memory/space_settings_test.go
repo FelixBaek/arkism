@@ -37,9 +37,13 @@ func TestSpaceSettingsInheritance(t *testing.T) {
 	if len(c.DefenseRules) != 2 || src["defense_rules"] != "template+space" {
 		t.Fatalf("rules = %+v from %s", c.DefenseRules, src["defense_rules"])
 	}
+	// Rules (names and patterns) and notes are for people; the agent still sees where rules come from.
 	agentView, err := f.svc.EffectiveSpaceConfig(testCtx, f.agent, scopeA)
-	if err != nil || agentView.Config.DefenseRules[0].Pattern != "" || agentView.Config.DefenseRules[0].Action != "redact" {
-		t.Fatalf("agent sees patterns: %+v %v", agentView.Config.DefenseRules, err)
+	if err != nil || agentView.Config.DefenseRules != nil || agentView.Sources["defense_rules"] != "template+space" || agentView.Config.RecallBudgetTokens != 900 {
+		t.Fatalf("agent view: %+v %v", agentView, err)
+	}
+	if got, err := f.svc.GetSpaceConfig(testCtx, f.agent, scopeA); err == nil && got.Config.DefenseRules != nil {
+		t.Fatalf("agent config read shows rules: %+v", got.Config.DefenseRules)
 	}
 	// A space without stored settings gets the template, then the server defaults.
 	b, _ := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeB)
@@ -192,5 +196,85 @@ func TestSpaceTemplateRoundTripAndDefault(t *testing.T) {
 	}
 	if _, err = LoadSpaceTemplate(t.TempDir() + "/missing"); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("missing template err = %v", err)
+	}
+}
+
+func TestSpaceDefenseOnEveryIngestionPath(t *testing.T) {
+	f := handoffFixture(t)
+	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{
+		{Pattern: `INC-\d+`, Action: "block"}, {Pattern: `(?i)falcon`, Action: "redact"}}})
+	// Knowledge documents.
+	kin := knowledgeFixtureInput()
+	kin.Content += " Falcon ships."
+	ing, err := f.svc.IngestKnowledge(testCtx, f.human, kin)
+	if err != nil || len(ing.Chunks) != 1 || strings.Contains(ing.Chunks[0].Text, "Falcon") || !strings.Contains(ing.Chunks[0].Text, spaceRedactMark) {
+		t.Fatalf("knowledge = %+v %v", ing.Chunks, err)
+	}
+	kin.SourceKey, kin.Content = "other", "see INC-7"
+	if _, err = f.svc.IngestKnowledge(testCtx, f.human, kin); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("knowledge block err = %v", err)
+	}
+	// Uploaded text files: the stored bytes are the redacted ones.
+	file := FileIngestInput{Source: sourceInput(CreateInput{Scope: scopeA}), Artifact: FileArtifactSpec{Kind: "code", MIME: "text/plain"}}
+	out, err := f.svc.IngestFile(testCtx, f.human, file, []byte("falcon download"))
+	if err != nil || out.Artifact.Digest != ContentHash(spaceRedactMark+" download") || out.Artifact.Bytes != int64(len(spaceRedactMark+" download")) {
+		t.Fatalf("file = %+v %v", out.Artifact, err)
+	}
+	if _, err = f.svc.IngestFile(testCtx, f.human, file, []byte("INC-9 log")); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("file block err = %v", err)
+	}
+	// A block is audited without its text.
+	for _, r := range scopeRecords(f, "audit_events", scopeA) {
+		if strings.Contains(structuredText(r), "INC-") {
+			t.Fatal("audit kept the blocked text")
+		}
+	}
+	// Bounded work: an oversized text is refused before any rule runs.
+	big := strings.Repeat("x", spaceDefenseMaxText+1)
+	if err = defendAll([]SpaceDefenseRule{{Pattern: `y`, Action: "block"}}, &big); !errors.Is(err, errBlobTooLarge) {
+		t.Fatalf("oversized err = %v", err)
+	}
+}
+
+func TestSpaceExtractionDisabledAndVerbatim(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(extractRuleClaim))
+	off := false
+	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionEnabled: &off})
+	items := f.capture(f.human, captureInput(scopeA, "evt-off", explicit("prefer tabs")))
+	if items[0].Status != "rejected" || items[0].Reason != "extraction_disabled" {
+		t.Fatalf("automatic capture = %+v", items)
+	}
+	in := captureInput(scopeA, "evt-remember", explicit("prefer tabs"))
+	in.Event.Type = "explicit_remember"
+	if items = f.capture(f.human, in); items[0].Status != "candidate" {
+		t.Fatalf("explicit remember = %+v", items)
+	}
+	if _, err := f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: extractKoreanSource}); !errors.Is(err, ErrExtractionDisabled) || len(llm.prompts) != 0 {
+		t.Fatalf("extract with extraction off err = %v", err)
+	}
+	on, verbatim := true, spaceExtractVerbatim
+	putSettings(t, f, scopeA, SpaceConfigInput{ExpectedRevision: -1, ExtractionEnabled: &on, ExtractionMode: &verbatim})
+	if _, err := f.svc.ExtractPreview(testCtx, f.human, ExtractPreviewInput{Scope: scopeA, Text: extractKoreanSource}); err != nil {
+		t.Fatal(err)
+	}
+	if len(llm.prompts) != 1 || !strings.Contains(llm.prompts[0], "never a paraphrase") {
+		t.Fatalf("verbatim prompt = %v", llm.prompts)
+	}
+}
+
+func TestSpaceExportHidesRulesFromAgents(t *testing.T) {
+	f := newFixture(t)
+	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{{Name: "codename", Pattern: `(?i)falcon`, Action: "redact"}}})
+	job, err := f.svc.ExportSpace(testCtx, f.agent, scopeA, SpaceExportInput{})
+	if err != nil {
+		t.Skipf("agent cannot export in this fixture: %v", err)
+	}
+	waitSpaceJob(t, f, scopeA, job.ID)
+	bundle, err := f.svc.DownloadSpaceExport(testCtx, f.agent, scopeA, job.ID)
+	if err != nil || strings.Contains(bundle, "falcon") || strings.Contains(bundle, "codename") {
+		t.Fatalf("agent export carries rules: %v", err)
+	}
+	if human := exportBundle(t, f, scopeA, SpaceExportInput{}); !strings.Contains(human, "falcon") {
+		t.Fatal("human export lost its rules")
 	}
 }

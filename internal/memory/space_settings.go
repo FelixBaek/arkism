@@ -17,9 +17,11 @@ import (
 // default. Defense rules add up instead: a space adds rules to the template's
 // and never drops them. Only a person edits them (PUT/PATCH config).
 //
-// Defense rules run on every ingestion path before the privacy and secret
-// checks: each claim of a capture, every file or pasted text before the model
-// sees it, and every memory, candidate or source text a create stores. A
+// Defense rules run on every ingestion path, through defendSpace, before the
+// privacy and secret checks: each claim of a capture (session and bundle imports
+// included), every file or pasted text before the model sees it, knowledge
+// documents, uploaded text files, supersede and review edits, and every memory,
+// candidate or source text a create stores. A
 // redact rule replaces each match with spaceRedactMark; a block rule refuses
 // the claim or request. Patterns are Go regular expressions (RE2: linear time).
 
@@ -27,6 +29,8 @@ const (
 	spaceExtractConcise  = "concise"
 	spaceExtractVerbose  = "verbose"
 	spaceExtractCustom   = "custom"
+	spaceExtractVerbatim = "verbatim"
+	spaceDefenseMaxText  = 8 << 20
 	spaceInstructionsMax = 2000
 	spaceDefenseMax      = 32
 	spacePatternMax      = 512
@@ -39,11 +43,13 @@ const (
 )
 
 var (
-	spaceExtractModes  = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom}
+	spaceExtractModes  = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim}
 	spaceToolPattern   = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 	spaceDefenseAction = []string{"redact", "block"}
 	// ErrDefenseBlocked: a space defense rule refused the text.
 	ErrDefenseBlocked = errors.New("defense_blocked")
+	// ErrExtractionDisabled: the space's extraction_enabled is off.
+	ErrExtractionDisabled = errors.New("extraction_disabled")
 )
 
 // SpaceLanes turns recall lanes on or off; nil inherits.
@@ -241,6 +247,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 }
 
 // spaceSettings is the resolved settings of the space scope belongs to (internal read, no authorization).
+// It is the accessor other features read their per-space settings through.
 func (s *Service) spaceSettings(ctx context.Context, scope Scope) (SpaceConfig, error) {
 	rec, err := s.Repo.Get(ctx, colSpaceConfigs, spaceScope(scope), spaceConfigID)
 	view, err := spaceView(spaceScope(scope), rec, err)
@@ -261,7 +268,7 @@ func (s *Service) searchSpaceSettings(ctx context.Context, token string, scope S
 }
 
 // EffectiveSpaceConfig shows a space's resolved settings and where each came from.
-// Defense patterns are shown to people only; other callers see each rule's name and action.
+// Defense rules are shown to people only (shownSpaceConfig); sources still says where rules come from.
 func (s *Service) EffectiveSpaceConfig(ctx context.Context, token string, scope Scope) (SpaceEffectiveView, error) {
 	scope, err := s.resolveSpace(ctx, scope)
 	if err != nil {
@@ -279,12 +286,21 @@ func (s *Service) EffectiveSpaceConfig(ctx context.Context, token string, scope 
 	}
 	config, src := s.resolveSpaceSettings(view.Config)
 	if d.Role != roleHuman {
-		config.DefenseRules = slices.Clone(config.DefenseRules)
-		for i := range config.DefenseRules {
-			config.DefenseRules[i].Pattern = ""
-		}
+		// search:memories is wider than read:space_configs: the owner's notes stay with the config route.
+		config.Notes = ""
 	}
+	config = shownSpaceConfig(config, d.Role)
 	return SpaceEffectiveView{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, Revision: view.Revision, Config: config, Sources: src}, nil
+}
+
+// shownSpaceConfig is c as role may see it. Defense rules, names and patterns alike,
+// are for people only: a rule's name or pattern tells an agent what to word around.
+// Other settings shape the agent's own work, so it may read them.
+func shownSpaceConfig(c SpaceConfig, role string) SpaceConfig {
+	if role != roleHuman {
+		c.DefenseRules = nil
+	}
+	return c
 }
 
 // lane reports whether a resolved recall lane is on; a missing value is on.
@@ -301,57 +317,88 @@ func (c SpaceConfig) lane(name string) bool {
 	return true
 }
 
-// defend applies the rules to text: the redacted text, or ErrDefenseBlocked.
-func defend(rules []SpaceDefenseRule, text string) (string, error) {
-	for _, r := range rules {
-		re, err := regexp.Compile(r.Pattern)
-		if err != nil {
-			continue // validated on write; an unreadable stored rule is skipped, not fatal
-		}
-		if !re.MatchString(text) {
-			continue
-		}
-		if r.Action == "block" {
-			return "", ErrDefenseBlocked
-		}
-		text = re.ReplaceAllLiteralString(text, spaceRedactMark)
+// defendSpace is the one entry every ingestion path calls (capture, create, file
+// and pasted-text extraction, knowledge documents, uploaded text, supersede and
+// review edits): it applies the space's defense rules to texts in place before
+// the privacy and secret checks. A block is audited under action, without its text.
+func (s *Service) defendSpace(ctx context.Context, scope Scope, action string, texts ...*string) error {
+	cfg, err := s.spaceSettings(ctx, scope)
+	if err != nil {
+		return err
 	}
-	return text, nil
+	return s.defendWith(ctx, scope, action, cfg.DefenseRules, texts...)
+}
+
+// defendWith is defendSpace with settings the caller already read.
+func (s *Service) defendWith(ctx context.Context, scope Scope, action string, rules []SpaceDefenseRule, texts ...*string) error {
+	err := defendAll(rules, texts...)
+	if errors.Is(err, ErrDefenseBlocked) {
+		s.auditDeniedInput(ctx, action+":defense_blocked", scope, "")
+	}
+	return err
 }
 
 // defendAll applies the rules to every text in place; it stops at the first block.
+// Work is bounded: at most two layers of spaceDefenseMax linear-time patterns over
+// texts of at most spaceDefenseMaxText bytes each.
 func defendAll(rules []SpaceDefenseRule, texts ...*string) error {
 	if len(rules) == 0 {
 		return nil
 	}
+	compiled := make([]*regexp.Regexp, len(rules))
+	for i, r := range rules {
+		compiled[i], _ = regexp.Compile(r.Pattern) // validated on write; an unreadable stored rule is skipped, not fatal
+	}
 	for _, t := range texts {
-		v, err := defend(rules, *t)
-		if err != nil {
-			return err
+		if len(*t) > spaceDefenseMaxText {
+			return errBlobTooLarge
 		}
-		*t = v
+		for i, re := range compiled {
+			if re == nil || !re.MatchString(*t) {
+				continue
+			}
+			if rules[i].Action == "block" {
+				return ErrDefenseBlocked
+			}
+			*t = re.ReplaceAllLiteralString(*t, spaceRedactMark)
+		}
 	}
 	return nil
 }
 
 // defendCreate runs the space rules on the text a memory, candidate or source create stores.
-func (s *Service) defendCreate(ctx context.Context, col string, in *CreateInput) error {
+func (s *Service) defendCreate(ctx context.Context, col string, in *CreateInput, file *textArtifact) error {
 	if col != colMemories && col != "memory_candidates" && col != "sources" {
 		return nil
 	}
-	cfg, err := s.spaceSettings(ctx, in.Scope)
-	if err != nil {
+	texts := []*string{&in.Text, &in.Summary}
+	var content string
+	if file != nil {
+		content = string(file.content)
+		texts = append(texts, &content)
+	}
+	if err := s.defendSpace(ctx, in.Scope, "write:"+col, texts...); err != nil {
 		return err
 	}
-	return defendAll(cfg.DefenseRules, &in.Text, &in.Summary)
+	if len(content) > maxTextArtifactBytes {
+		return errBlobTooLarge // redaction grew the file past the limit
+	}
+	if file != nil && content != string(file.content) {
+		file.content = []byte(content)
+		file.metadata.Data.Digest, file.metadata.Data.Bytes = ContentHash(content), int64(len(content))
+	}
+	return nil
 }
 
 // spaceExtractionGuidance is the space's extraction mode and the person's own
 // instructions, appended to the system prompt of server-side extraction.
 func spaceExtractionGuidance(c SpaceConfig) string {
 	var b strings.Builder
-	if c.ExtractionMode == spaceExtractVerbose {
+	switch c.ExtractionMode {
+	case spaceExtractVerbose:
 		b.WriteString(" This space keeps detail: also keep supporting context and specific one-off facts that may matter later, as more, smaller claims.")
+	case spaceExtractVerbatim:
+		b.WriteString(" This space keeps the source's own words: make each content an exact excerpt of the source (the same text as its evidence_quote), never a paraphrase or summary.")
 	}
 	b.WriteString(spaceOwnerGuidance(c))
 	return b.String()

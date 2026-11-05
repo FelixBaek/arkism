@@ -320,11 +320,14 @@ func (s *Service) GetSpaceConfig(ctx context.Context, token string, scope Scope)
 }
 
 func (s *Service) getSpaceConfig(ctx context.Context, token string, scope Scope) (SpaceView, error) {
-	if _, err := s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, ""); err != nil {
+	d, err := s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, "")
+	if err != nil {
 		return SpaceView{}, err
 	}
 	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
-	return spaceView(scope, rec, err)
+	view, err := spaceView(scope, rec, err)
+	view.Config = shownSpaceConfig(view.Config, d.Role)
+	return view, err
 }
 
 func spaceView(scope Scope, rec Record, err error) (SpaceView, error) {
@@ -523,13 +526,14 @@ func validSpaceInclude(include []string) bool {
 }
 
 // buildSpaceBundle writes the bundle of one space; it reads only that exact scope.
-func buildSpaceBundle(ctx context.Context, repo Repository, scope Scope, in SpaceExportInput, bundleID string, now time.Time) (string, SpaceManifest, error) {
+// role is the exporter's: the settings it carries are the ones that role may see (shownSpaceConfig).
+func buildSpaceBundle(ctx context.Context, repo Repository, scope Scope, in SpaceExportInput, role, bundleID string, now time.Time) (string, SpaceManifest, error) {
 	manifest := SpaceManifest{Format: spaceBundleFormat, FormatVersion: spaceBundleVersion, BundleID: bundleID, Template: in.Template, Source: scope, CreatedAt: now, Sections: []SpaceSection{}, Skipped: []SpaceSkip{}}
 	var body bytes.Buffer
 	enc := json.NewEncoder(&body)
 	total := 0
 	for _, name := range spaceSections(in) {
-		lines, skipped, err := spaceSectionLines(ctx, repo, scope, name, now)
+		lines, skipped, err := spaceSectionLines(ctx, repo, scope, name, role, now)
 		if err != nil {
 			return "", SpaceManifest{}, err
 		}
@@ -553,7 +557,7 @@ func buildSpaceBundle(ctx context.Context, repo Repository, scope Scope, in Spac
 	return string(head) + "\n" + body.String(), manifest, nil
 }
 
-func spaceSectionLines(ctx context.Context, repo Repository, scope Scope, name string, now time.Time) ([]spaceBundleLine, []SpaceSkip, error) {
+func spaceSectionLines(ctx context.Context, repo Repository, scope Scope, name, role string, now time.Time) ([]spaceBundleLine, []SpaceSkip, error) {
 	if name == spaceSectionConfig {
 		rec, err := repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
 		if errors.Is(err, ErrNotFound) || err == nil && rec.SpaceConfig == nil {
@@ -562,7 +566,8 @@ func spaceSectionLines(ctx context.Context, repo Repository, scope Scope, name s
 		if err != nil {
 			return nil, nil, err
 		}
-		return []spaceBundleLine{{Section: name, Config: rec.SpaceConfig}}, nil, nil
+		config := shownSpaceConfig(*rec.SpaceConfig, role)
+		return []spaceBundleLine{{Section: name, Config: &config}}, nil, nil
 	}
 	if !slices.Contains(spaceExportable, name) {
 		return nil, []SpaceSkip{{Section: name, Reason: "not_exportable", Count: 1}}, nil
@@ -632,7 +637,7 @@ func (s *Service) ExportSpace(ctx context.Context, token string, scope Scope, in
 	}
 	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Template: in.Template, BundleID: "sb_" + ID()}
 	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
-		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, in, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
+		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, in, d.Role, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
 		job.Bundle, job.Manifest = bundle, &manifest
 		return err
 	})
@@ -722,7 +727,7 @@ func (s *Service) CloneSpace(ctx context.Context, token string, scope Scope, in 
 	}
 	job := SpaceJob{Kind: spaceJobClone, Include: in.Include, ImportAs: in.ImportAs, Target: &target, BundleID: "sb_" + ID()}
 	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
-		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, SpaceExportInput{Include: in.Include}, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
+		bundle, manifest, err := buildSpaceBundle(ctx, s.Repo, scope, SpaceExportInput{Include: in.Include}, d.Role, job.BundleID, time.Now().UTC().Truncate(time.Millisecond))
 		if err != nil {
 			return err
 		}
