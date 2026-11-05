@@ -16,6 +16,14 @@ type MemoryConfirmInput struct {
 }
 
 func (s *Service) ConfirmMemory(ctx context.Context, token, col, id string, in MemoryConfirmInput) (Record, error) {
+	r, err := s.confirmMemory(ctx, token, col, id, in)
+	if err == nil && col == colMemories {
+		s.emitMemoryEvent(ctx, EventMemoryUpdated, col, r)
+	}
+	return r, err
+}
+
+func (s *Service) confirmMemory(ctx context.Context, token, col, id string, in MemoryConfirmInput) (Record, error) {
 	if col != colMemories && col != "memory_candidates" || !validScope(in.Scope) || !validRunLabel(id, 256) || containsSecret(structuredText(in.Scope)) {
 		return Record{}, ErrInvalid
 	}

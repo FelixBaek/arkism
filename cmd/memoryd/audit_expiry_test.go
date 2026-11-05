@@ -31,6 +31,11 @@ func (f *fakeAuditStore) ExpireAuditEvents(_ context.Context, cutoff time.Time, 
 	return f.count, nil
 }
 
+// Model call traces follow the same run; their counts are not under test here.
+func (f *fakeAuditStore) ExpireLLMRequests(context.Context, time.Time, bool) (int64, error) {
+	return 0, nil
+}
+
 func TestExpireAuditEventsPreviewsCountsAndOnlyExecuteDeletes(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv("MEMORY_AUDIT_RETENTION_DAYS", "")

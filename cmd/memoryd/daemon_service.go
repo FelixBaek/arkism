@@ -88,6 +88,14 @@ func configureDaemonPolicies(svc *memory.Service) error {
 		}
 		svc.SessionArchiveKey = decoded
 	}
+	if key := os.Getenv("MEMORY_WEBHOOK_KEY"); key != "" {
+		decoded, err := hex.DecodeString(key)
+		if err != nil || len(decoded) != 32 {
+			return memory.ErrInvalid
+		}
+		svc.WebhookKey = decoded
+	}
+	svc.WebhookAllowPrivate = os.Getenv("ARKISM_WEBHOOK_ALLOW_PRIVATE") == "1"
 	return nil
 }
 func configureDaemonStorage(ctx context.Context, svc *memory.Service, cfg daemonOptions, store string) error {
@@ -124,7 +132,7 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
-			svc.Wiki = &memory.ChatWikiLLM{Config: config}
+			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config}, os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1")
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes

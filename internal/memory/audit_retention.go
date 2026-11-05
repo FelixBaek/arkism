@@ -11,6 +11,15 @@ import (
 // security any other role would delete just the scopes its token reaches and
 // report that as the whole table. cutoff must be at least a day in the past.
 func (p *Postgres) ExpireAuditEvents(ctx context.Context, cutoff time.Time, execute bool) (int64, error) {
+	return p.expireCollection(ctx, "audit_events", cutoff, execute)
+}
+
+// ExpireLLMRequests is ExpireAuditEvents for model call traces (llm_requests rows are never updated either).
+func (p *Postgres) ExpireLLMRequests(ctx context.Context, cutoff time.Time, execute bool) (int64, error) {
+	return p.expireCollection(ctx, colLLMRequests, cutoff, execute)
+}
+
+func (p *Postgres) expireCollection(ctx context.Context, collection string, cutoff time.Time, execute bool) (int64, error) {
 	if p == nil || p.pool == nil || cutoff.IsZero() || !cutoff.Before(time.Now().Add(-24*time.Hour)) {
 		return 0, ErrInvalid
 	}
@@ -25,13 +34,13 @@ func (p *Postgres) ExpireAuditEvents(ctx context.Context, cutoff time.Time, exec
 		return 0, ErrDenied
 	}
 	var count int64
-	if err := p.q().QueryRow(ctx, `SELECT count(*) FROM memory_records WHERE collection='audit_events' AND updated_at < $1`, cutoff).Scan(&count); err != nil {
+	if err := p.q().QueryRow(ctx, `SELECT count(*) FROM memory_records WHERE collection=$1 AND updated_at < $2`, collection, cutoff).Scan(&count); err != nil {
 		return 0, ErrUnavailable
 	}
 	if !execute || count == 0 {
 		return count, nil
 	}
-	tag, err := p.q().Exec(ctx, `DELETE FROM memory_records WHERE collection='audit_events' AND updated_at < $1`, cutoff)
+	tag, err := p.q().Exec(ctx, `DELETE FROM memory_records WHERE collection=$1 AND updated_at < $2`, collection, cutoff)
 	if err != nil {
 		return 0, ErrUnavailable
 	}

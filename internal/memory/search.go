@@ -750,6 +750,10 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		handled = e == nil
 		return e
 	}
+	if job.Kind == webhookDeliveryKind {
+		success, e = s.deliverWebhook(ctx, &job)
+		return e
+	}
 	if job.Kind != "embedding" {
 		return ErrInvalid
 	}

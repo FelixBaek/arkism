@@ -121,15 +121,24 @@ func postJSON(ctx context.Context, client *http.Client, endpoint, credential str
 	if int64(len(encoded)) > maxRequest {
 		return nil, 0, fmt.Errorf("request body exceeds %d bytes: %w", maxRequest, ErrInvalid)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(encoded))
+	header := http.Header{"Accept": {"application/json"}}
+	if credential != "" {
+		header.Set("Authorization", "Bearer "+credential)
+	}
+	return postBody(ctx, client, endpoint, header, encoded, maxResponse)
+}
+
+// postBody POSTs exact JSON bytes with extra headers (a signature is over these
+// bytes) under postJSON's rules: no redirects, bounded response body.
+func postBody(ctx context.Context, client *http.Client, endpoint string, header http.Header, body []byte, maxResponse int64) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", ErrInvalid)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	if credential != "" {
-		req.Header.Set("Authorization", "Bearer "+credential)
+	for k, v := range header {
+		req.Header[k] = v
 	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
 		// Keep the transport cause in the chain (deadline, connection
@@ -138,14 +147,14 @@ func postJSON(ctx context.Context, client *http.Client, endpoint, credential str
 		return nil, 0, fmt.Errorf("call dependency: %w: %w", err, ErrUnavailable)
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
+	out, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
 	if err != nil {
 		return nil, resp.StatusCode, fmt.Errorf("read response: %w", ErrUnavailable)
 	}
-	if int64(len(body)) > maxResponse {
+	if int64(len(out)) > maxResponse {
 		return nil, resp.StatusCode, fmt.Errorf("response body exceeds %d bytes: %w", maxResponse, ErrUnavailable)
 	}
-	return body, resp.StatusCode, nil
+	return out, resp.StatusCode, nil
 }
 
 // decodeStrict reads a response envelope that must not carry unknown fields.

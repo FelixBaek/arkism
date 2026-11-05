@@ -231,11 +231,42 @@ func (s *Service) sessionArchiveNow() time.Time {
 	return time.Now().UTC().Truncate(time.Millisecond)
 }
 
-func (s *Service) sessionArchiveAEAD() (cipher.AEAD, error) {
-	if len(s.SessionArchiveKey) != 32 {
+// sealAEAD encrypts plain with AES-256-GCM under a 32-byte key; the result is
+// base64(nonce || ciphertext). A missing or wrong-length key is ErrUnavailable.
+func sealAEAD(key, plain, aad []byte) (string, error) {
+	gcm, err := aeadFor(key)
+	if err != nil {
+		return "", err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err = rand.Read(nonce); err != nil {
+		return "", ErrUnavailable
+	}
+	return base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, plain, aad)), nil
+}
+
+// openAEAD reverses sealAEAD; bad bytes return bad, a bad key ErrUnavailable.
+func openAEAD(key []byte, sealed string, aad []byte, bad error) ([]byte, error) {
+	gcm, err := aeadFor(key)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := base64.StdEncoding.DecodeString(sealed)
+	if err != nil || len(raw) < gcm.NonceSize() {
+		return nil, bad
+	}
+	plain, err := gcm.Open(nil, raw[:gcm.NonceSize()], raw[gcm.NonceSize():], aad)
+	if err != nil {
+		return nil, bad
+	}
+	return plain, nil
+}
+
+func aeadFor(key []byte) (cipher.AEAD, error) {
+	if len(key) != 32 {
 		return nil, ErrUnavailable
 	}
-	block, err := aes.NewCipher(s.SessionArchiveKey)
+	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, ErrUnavailable
 	}
@@ -253,32 +284,11 @@ func sessionArchiveAAD(scope Scope, parentID, chunkSHA string) []byte {
 }
 
 func (s *Service) sealSessionArchiveChunk(scope Scope, parentID, chunkSHA string, plain []byte) (string, error) {
-	gcm, err := s.sessionArchiveAEAD()
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err = rand.Read(nonce); err != nil {
-		return "", ErrUnavailable
-	}
-	return base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, plain, sessionArchiveAAD(scope, parentID, chunkSHA))), nil
+	return sealAEAD(s.SessionArchiveKey, plain, sessionArchiveAAD(scope, parentID, chunkSHA))
 }
 
 func (s *Service) openSessionArchiveChunk(scope Scope, parentID, chunkSHA, sealed string) ([]byte, error) {
-	gcm, err := s.sessionArchiveAEAD()
-	if err != nil {
-		return nil, err
-	}
-	raw, err := base64.StdEncoding.DecodeString(sealed)
-	if err != nil || len(raw) < gcm.NonceSize() {
-		return nil, errSessionArchiveCiphertext
-	}
-	nonce, body := raw[:gcm.NonceSize()], raw[gcm.NonceSize():]
-	plain, err := gcm.Open(nil, nonce, body, sessionArchiveAAD(scope, parentID, chunkSHA))
-	if err != nil {
-		return nil, errSessionArchiveCiphertext
-	}
-	return plain, nil
+	return openAEAD(s.SessionArchiveKey, sealed, sessionArchiveAAD(scope, parentID, chunkSHA), errSessionArchiveCiphertext)
 }
 
 // sessionArchiveChunkID derives the content address of one chunk: identical

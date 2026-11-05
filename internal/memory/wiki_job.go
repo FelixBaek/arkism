@@ -375,7 +375,7 @@ func (s *Service) modelCall(ctx context.Context, scope Scope, operation, system,
 	if err != nil {
 		return "", ProviderUsage{}, err
 	}
-	text, usage, err := s.Wiki.Complete(ctx, system, user, maxTokens)
+	text, usage, err := s.Wiki.Complete(WithLLMOperation(ctx, operation, scope), system, user, maxTokens)
 	if usage.Provider == "" {
 		usage.Provider = wikiProvider
 	}

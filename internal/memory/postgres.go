@@ -602,7 +602,7 @@ func (p *Postgres) ClaimJob(ctx context.Context, now time.Time, lease time.Durat
 	e := p.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		quarantined = false
 		pp := tx.(*Postgres)
-		kinds := append([]string{"embedding"}, erasureJobKinds...)
+		kinds := append([]string{"embedding", webhookDeliveryKind}, erasureJobKinds...)
 		if pp.erasureOnly {
 			kinds = erasureJobKinds
 		}

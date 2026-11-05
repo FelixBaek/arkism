@@ -225,6 +225,9 @@ type Record struct {
 	Crew               *Crew                `json:"crew,omitempty" bson:"crew,omitempty"`
 	CrewRun            *CrewRun             `json:"crew_run,omitempty" bson:"crew_run,omitempty"`
 	FlowDelivery       *FlowDelivery        `json:"delivery,omitempty" bson:"delivery,omitempty"`
+	Webhook            *Webhook             `json:"-" bson:"webhook,omitempty"`
+	WebhookDelivery    *WebhookDelivery     `json:"-" bson:"webhook_delivery,omitempty"`
+	LLMRequest         *LLMRequest          `json:"-" bson:"llm_request,omitempty"`
 	FlowEffect         *FlowEffect          `json:"flow_effect,omitempty" bson:"flow_effect,omitempty"`
 	FlowAttempt        *FlowAttempt         `json:"flow_attempt,omitempty" bson:"flow_attempt,omitempty"`
 	FlowBudget         *FlowBudget          `json:"flow_budget,omitempty" bson:"flow_budget,omitempty"`

@@ -78,7 +78,7 @@ func TestAuditRetentionDaysDefaultsToThirtyAndRejectsNonsense(t *testing.T) {
 		{"", 30, true}, {"0", 0, true}, {"7", 7, true}, {"3650", 3650, true}, {"-1", 0, false}, {"3651", 0, false}, {"soon", 0, false},
 	} {
 		t.Setenv("MEMORY_AUDIT_RETENTION_DAYS", test.raw)
-		days, err := auditRetentionDays()
+		days, err := retentionDays("MEMORY_AUDIT_RETENTION_DAYS", 30)
 		if (err == nil) != test.valid || days != test.days {
 			t.Fatal(test, days, err)
 		}

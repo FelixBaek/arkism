@@ -20,10 +20,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/host/crew/keystore"
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 const backendService = "arkism-backends" // credential-store service for connection tokens
@@ -204,53 +204,32 @@ func loopbackHost(h string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-var (
-	cgnat = mustCIDR("100.64.0.0/10") // Tailscale and carrier NAT
-	// Cloud metadata endpoints outside link-local, refused even for a local connection.
-	metadataIPs = []net.IP{net.ParseIP("100.100.100.200"), net.ParseIP("fd00:ec2::254")}
-	thisNet     = mustCIDR("0.0.0.0/8")
-)
-
-func mustCIDR(s string) *net.IPNet { _, n, _ := net.ParseCIDR(s); return n }
-
-// allowBackendIP is the address check every connection is dialled through (so a DNS answer cannot move it):
-// link-local (169.254.0.0/16 metadata included), multicast, unspecified and metadata addresses never; loopback,
+// allowBackendIP is the shared outbound address check (httpguard.CheckOutboundIP) in this package's
+// words: link-local (metadata included), multicast, unspecified and metadata addresses never; loopback,
 // private and CGNAT only for a local connection.
 func allowBackendIP(ip net.IP, local bool) error {
-	if v4 := ip.To4(); v4 != nil {
-		ip = v4
+	return backendIPErr(httpguard.CheckOutboundIP(ip, local))
+}
+
+func backendIPErr(err error) error {
+	var b *httpguard.BlockedAddress
+	if !errors.As(err, &b) {
+		return err
 	}
-	for _, m := range metadataIPs {
-		if ip.Equal(m) {
-			return crewErr("메타데이터 서버 주소에는 연결하지 않아요")
-		}
+	switch b.Class {
+	case httpguard.ClassMetadata:
+		return crewErr("메타데이터 서버 주소에는 연결하지 않아요")
+	case httpguard.ClassReserved:
+		return crewErr("이 주소(" + b.IP + ")에는 연결하지 않아요")
+	case httpguard.ClassPrivate:
+		return crewErr("내부망 주소(" + b.IP + ")는 --local로 만든 연결만 쓸 수 있어요")
 	}
-	if ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || thisNet.Contains(ip) {
-		return crewErr("이 주소(" + ip.String() + ")에는 연결하지 않아요")
-	}
-	if !local && (ip.IsLoopback() || ip.IsPrivate() || cgnat.Contains(ip)) {
-		return crewErr("내부망 주소(" + ip.String() + ")는 --local로 만든 연결만 쓸 수 있어요")
-	}
-	return nil
+	return crewErr("주소를 확인하지 못했어요")
 }
 
 // backendClient dials only allowed addresses (checked after DNS, at connect time), ignores proxy settings so the
 // check sees the real destination, and never follows a redirect (the token would travel with it).
-func backendClient(local bool) *http.Client {
-	d := &net.Dialer{Timeout: 10 * time.Second, Control: func(_, address string, _ syscall.RawConn) error {
-		h, _, err := net.SplitHostPort(address)
-		if err != nil {
-			return err
-		}
-		ip := net.ParseIP(h)
-		if ip == nil {
-			return crewErr("주소를 확인하지 못했어요")
-		}
-		return allowBackendIP(ip, local)
-	}}
-	tr := &http.Transport{Proxy: nil, DialContext: d.DialContext, TLSHandshakeTimeout: 10 * time.Second, MaxIdleConns: 4, IdleConnTimeout: 30 * time.Second}
-	return &http.Client{Transport: tr, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-}
+func backendClient(local bool) *http.Client { return httpguard.OutboundClient(local, 0, backendIPErr) }
 
 // ---------------------------------------------------------------- add, remove, check
 

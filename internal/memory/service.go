@@ -46,6 +46,13 @@ type Service struct {
 	// chunks. Unset or wrong-length keys make chunk writes and raw reads
 	// unavailable; nothing else in the service shares this key.
 	SessionArchiveKey []byte
+	// WebhookKey is the 32-byte AES-256-GCM key sealing webhook signing secrets
+	// (MEMORY_WEBHOOK_KEY). Unset: webhooks cannot be created or signed.
+	WebhookKey []byte
+	// WebhookAllowPrivate lets webhooks reach loopback and private addresses
+	// (ARKISM_WEBHOOK_ALLOW_PRIVATE=1, development and tests). Link-local and
+	// metadata addresses stay refused.
+	WebhookAllowPrivate bool
 	// SessionArchiveNow replaces the service clock in tests so expiry
 	// boundaries are exact. Nil means time.Now.
 	SessionArchiveNow   func() time.Time
@@ -584,6 +591,9 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	})
 	if e != nil {
 		return Record{}, e
+	}
+	if col == "memory_candidates" {
+		s.emitMemoryEvent(ctx, EventCandidateCreated, col, r)
 	}
 	return r, nil
 }
@@ -1238,6 +1248,7 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	if e != nil {
 		return Record{}, e
 	}
+	s.emitTransitionEvent(ctx, col, in.Status, result)
 	return result, nil
 }
 
@@ -1664,7 +1675,10 @@ func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeIn
 		return ErrDenied
 	}
 	if col == "memories" {
-		return s.deleteMemoryAndProposal(ctx, token, id, in, d)
+		if e = s.deleteMemoryAndProposal(ctx, token, id, in, d); e == nil {
+			s.emitMemoryEvent(ctx, EventMemoryDeleted, col, Record{ID: id, Scope: in.Scope, Kind: "memory", Status: "deleted", Revision: in.ExpectedRevision, UpdatedAt: time.Now().UTC()})
+		}
+		return e
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		current, e := tx.Get(ctx, col, in.Scope, id)
