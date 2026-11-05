@@ -3,7 +3,7 @@ import { candidateGroup } from "./candidateGroups.mjs";
 import { collectionFooter, serverCount } from "./collectionPaging.mjs";
 import { memoryLabels, labelLine, rowLabels } from "./memoryLabels.mjs";
 import { whenPick as pickDay } from "./memoryTimeline.mjs";
-import { pageTimeline } from "./memoryViews.mjs";
+import { pageTimeline, dayStart } from "./memoryViews.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.
 export function createMemoryList(deps) {
 
@@ -177,7 +177,6 @@ export function createMemoryList(deps) {
       more.push(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
         deps.memory.repo || "", (v) => { deps.memory.repo = v; deps.render(false); }));
     }
-    if (view === "timeline") more.push(memSelect("간격", [["day", "간격: 하루"], ["week", "간격: 한 주"], ["month", "간격: 한 달"]], tl.zoom, (v) => { tl.zoom = v; deps.render(false); }));
     if (!past && view === "list") more.push(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
     more.push(deps.inject.button());
     if (deps.state.caps?.actions?.review_decide) more.push(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
@@ -212,17 +211,32 @@ export function createMemoryList(deps) {
   // 타임라인 draws every loaded memory (no 50-row reveal) and loads older pages at its bottom end. A stored view it no
   // longer offers (the old 그래프) falls back to 목록.
   const VIEWS = [["list", "목록"], ["timeline", "타임라인"]];
-  const tl = { zoom: "day", io: null };
+  const tl = {};
   function pick(id, past) {
     deps.catalogQuery.pin(id); deps.state.selected = id; deps.markSelected();
     if (past) void openCurrent(id); else deps.renderDetail();
     deps.openDetail();
   }
+  // The day after the oldest saved memory loaded so far: pages come newest saved first, so every day from there on is complete.
+  const covered = (snap) => {
+    const oldest = Math.min(...snap.items.map((m) => Date.parse(m.created_at || "")).filter(Number.isFinite));
+    return snap.cursor && Number.isFinite(oldest) ? dayStart(oldest + 86400000) : null;
+  };
+  // ‹ 이전 달: load older pages until the month is covered (bounded, so a huge store never loops for long)
+  async function loadUntil(t) {
+    for (let i = 0; i < 20; i++) {
+      const snap = deps.catalogQuery.snapshot("memories");
+      if (!snap.cursor || snap.error || (covered(snap) ?? 0) <= t) break;
+      try { await deps.catalogQuery.more("memories"); } catch { break; }
+    }
+    deps.render(false);
+  }
   function drawTimeline(items, snap, past) {
     deps.virtualList.clear?.();
-    const more = snap.cursor && !snap.error && !snap.loading ? () => deps.catalogQuery.more("memories").catch(() => deps.render(false)) : null;
+    const ready = snap.cursor && !snap.error && !snap.loading;
     deps.$("#table").replaceChildren(pageTimeline(items, { el: deps.el, raw: deps.raw, kindLabel: deps.kindLabel, memStat: deps.memStat, idle: deps.idle, usageDone: deps.state.usageDone,
-      maintenance: deps.state.data.maintenance, selected: deps.state.selected, onPick: (id) => pick(id, past), more }, tl));
+      maintenance: deps.state.data.maintenance, selected: deps.state.selected, onPick: (id) => pick(id, past), covered: covered(snap),
+      more: ready ? () => deps.catalogQuery.more("memories").catch(() => deps.render(false)) : null, loadUntil: ready ? loadUntil : null }, tl));
   }
 
   // A fresh install: say where memories come from and offer the one thing to do now.

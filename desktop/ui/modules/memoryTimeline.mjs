@@ -45,11 +45,11 @@ function entryMore(r, { el, raw }) {
   return meta;
 }
 
-// The vertical rail both 변경 이력 and 기억 › 타임라인 draw (.mem-brief-* in v4-memory.css): an <ol> whose stops draw the
+// The vertical rail 변경 이력 draws (.mem-brief-* in v4-memory.css): an <ol> whose stops draw the
 // 1px line and a small hollow dot in CSS, each stop led by a date heading. State classes on a stop: current (soft accent
 // dot), review (dashed dot), muted (quiet dot).
 
-/** The rail list. buttons(): its visible buttons in order, walked by ↑ ↓ Home End. deps: el. */
+/** The rail list (also 기억 › 타임라인's day list). buttons(): its visible buttons in order, walked by ↑ ↓ Home End. deps: el. */
 export function briefRail(buttons, { el }, label = "") {
   const list = el("ol", "mem-brief-list");
   if (label) list.setAttribute("aria-label", label);
@@ -63,10 +63,10 @@ export function briefRail(buttons, { el }, label = "") {
 }
 
 /** One stop on the rail, with its state classes. */
-export const briefStop = (el, ...states) => el("li", ["mem-brief-item", ...states.filter(Boolean)].join(" "));
+const briefStop = (el, ...states) => el("li", ["mem-brief-item", ...states.filter(Boolean)].join(" "));
 
 /** A stop's date heading: the date as written, then a muted tag (a word to translate, or a node kept as written). deps: el, raw. */
-export function briefDate(date, tag, { el, raw }, tagName = "span") {
+function briefDate(date, tag, { el, raw }, tagName = "span") {
   const head = el(tagName, "mem-brief-date");
   head.append(raw(el("span", "", date || "—")));
   if (tag) { const t = el("span", "mem-brief-tag"); t.append(" · ", typeof tag === "string" ? el("span", "", tag) : tag); head.append(t); }

@@ -29,6 +29,14 @@ def many(n):
     return {"/v1/memory-graph": {"nodes": nodes, "edges": edges, "truncated": False}, "/v1/memories": {"items": mems, "next_cursor": "", "authority": "data_only_untrusted"},"/v1/digests?topic": topics}
 MANY = many(int(os.environ["PREVIEW_MANY"])) if os.environ.get("PREVIEW_MANY") else {}
 
+def timeline():
+    """PREVIEW_TIMELINE=1 adds v1/memories.timeline.json: three months of memories with usage, for judging the 타임라인 view."""
+    load = lambda n: json.load(open(os.path.join(HERE, n), encoding="utf-8"))
+    extra, mems, tools = load("v1/memories.timeline.json"), load("v1/memories.json"), load("v1/agent_tools.json")
+    mems["items"] = extra["items"] + mems["items"]; tools["agent_tools"]["memory_use"]["items"] += extra["use"]
+    return {"/v1/memories": mems, "/v1/agent_tools": tools}
+if os.environ.get("PREVIEW_TIMELINE"): MANY.update(timeline())
+
 class H(http.server.SimpleHTTPRequestHandler):
     def __init__(s, *a, **k): super().__init__(*a, directory=UI, **k)
     def log_message(s, *a): pass
@@ -60,7 +68,12 @@ class H(http.server.SimpleHTTPRequestHandler):
             if old: return s._json(200, {"status": "ok", "version": old, "commit": "ec057c47f757", "built": "2026-10-26T09:12:00Z", "api_level": 1, "features": ["role_model_picks"]})
             return s._json(200, {"status": "ok", "version": "dev", "api_level": 1, "features": ["role_model_picks", "forget_both"]})
         key = p + ("?topic" if "kind=topic" in s.path and "status=active" in s.path else "")
-        if key in MANY: return s._json(200, MANY[key])
+        if key in MANY:  # a GET list pages by limit and a plain-offset cursor, like the query routes
+            q = dict(x.split("=", 1) for x in s.path.partition("?")[2].split("&") if "=" in x); body = MANY[key]
+            if "limit" in q and isinstance(body.get("items"), list):
+                start, n = int(q.get("cursor") or 0), int(q["limit"]); rows = body["items"]
+                body = {**body, "items": rows[start:start + n], "next_cursor": str(start + n) if start + n < len(rows) else ""}
+            return s._json(200, body)
         if p.startswith("/v1/"): return s._json(200, s._fixture())
         if p in ("/", "/index.html"): # a plain browser gets the desktop stand-in so it opens on the local Arkism, not the SSH form
             with open(os.path.join(UI, "index.html"), encoding="utf-8") as fh: html = fh.read().replace("<head>", '<head><script src="/testdata/preview/fake-app.js"></script>', 1)
@@ -104,6 +117,7 @@ class H(http.server.SimpleHTTPRequestHandler):
         kinds = count(rows, lambda r: r.get("kind"))
         if body.get("kind"): rows = [r for r in rows if r.get("kind") == body["kind"]]
         start, limit = int(body.get("cursor") or 0), int(body.get("limit") or 50)  # the cursor is a plain offset here
+        limit = min(limit, int(os.environ.get("PREVIEW_PAGE") or limit))  # PREVIEW_PAGE=20: small pages, to watch older ones load
         nxt = str(start + limit) if start + limit < len(rows) else ""
         return {"items": rows[start:start + limit], "total": len(rows), "next_cursor": nxt, "authority": "data_only_untrusted", "facets": {"kinds": kinds, "repositories": {}, "categories": groups, "states": states}}
     do_POST = do_PUT = do_PATCH = do_DELETE = _write

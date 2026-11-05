@@ -7427,9 +7427,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "관계를 따라가 찾은 기억 {0}개": "{0} memories reached by following links" });
 Object.assign(window.ArkismI18nEN.strings, {
   "보기 방식": "View",
-  "간격: 하루": "Spacing: day",
-  "간격: 한 주": "Spacing: week",
-  "간격: 한 달": "Spacing: month",
+  "날짜로 이동": "Jump to a day",
+  "이전 달": "Previous month",
+  "다음 달": "Next month",
   "타임라인": "Timeline",
   "기억 타임라인": "Memory timeline",
   "더 이전 불러오기": "Load earlier" });

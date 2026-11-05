@@ -1,0 +1,652 @@
+{
+ "items": [
+  {
+   "id": "t01",
+   "text": "Orbit 검색 결과는 최신순이 아니라 관련도순으로 먼저 보여 준다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-06T09:12:00Z",
+   "updated_at": "2026-11-06T09:12:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-06T09:12:00Z"
+   }
+  },
+  {
+   "id": "t02",
+   "text": "Orbit 마이그레이션은 되돌리기 스크립트를 같이 올려야 병합한다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-06T08:40:00Z",
+   "updated_at": "2026-11-06T08:40:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-06T08:40:00Z"
+   }
+  },
+  {
+   "id": "t03",
+   "text": "Alex는 오전에는 리뷰를, 오후에는 구현을 하고 싶어 한다.",
+   "kind": "user",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-06T07:05:00Z",
+   "updated_at": "2026-11-06T07:05:00Z",
+   "tags": [
+    "basis:explicit_user",
+    "review:pending_correction"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-06T07:05:00Z"
+   }
+  },
+  {
+   "id": "t04",
+   "text": "Orbit 알림 배치를 자정에 돌리면 시간대가 다른 사용자가 하루 늦게 받는다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-05T16:20:00Z",
+   "updated_at": "2026-11-05T16:20:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-05T16:20:00Z"
+   }
+  },
+  {
+   "id": "t05",
+   "text": "Orbit 2.3 출시 회고에서 QA 기간을 이틀 늘리기로 했다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-05T10:02:00Z",
+   "updated_at": "2026-11-05T10:02:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-05T10:02:00Z"
+   }
+  },
+  {
+   "id": "t06",
+   "text": "Orbit 관리자 화면은 데스크톱 전용으로 두고 모바일은 읽기만 지원한다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-03T14:30:00Z",
+   "updated_at": "2026-11-03T14:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-03T14:30:00Z"
+   }
+  },
+  {
+   "id": "t07",
+   "text": "Orbit 스테이징 서버는 매일 새벽 4시에 데이터가 초기화된다.",
+   "kind": "semantic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-02T11:11:00Z",
+   "updated_at": "2026-11-02T11:11:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-02T11:11:00Z"
+   }
+  },
+  {
+   "id": "t08",
+   "text": "Orbit 핫픽스는 main에서 바로 따고, 끝나면 release 브랜치에도 cherry-pick 한다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-11-02T09:00:00Z",
+   "updated_at": "2026-11-02T09:00:00Z",
+   "tags": [
+    "basis:explicit_user",
+    "temporary"
+   ],
+   "memory_context": {
+    "valid_from": "2026-11-02T09:00:00Z"
+   }
+  },
+  {
+   "id": "t09",
+   "text": "Orbit 이미지 리사이즈를 업로드 요청 안에서 하면 큰 파일에서 시간 초과가 난다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-30T15:45:00Z",
+   "updated_at": "2026-10-30T15:45:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-30T15:45:00Z"
+   }
+  },
+  {
+   "id": "t10",
+   "text": "Alex는 PR 설명에 스크린샷 전후 비교를 꼭 넣어 달라고 한다.",
+   "kind": "user",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-29T10:10:00Z",
+   "updated_at": "2026-10-29T10:10:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-29T10:10:00Z"
+   }
+  },
+  {
+   "id": "t11",
+   "text": "Orbit 결제 실패 재시도는 최대 세 번, 간격은 1분·10분·1시간으로 한다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-27T13:20:00Z",
+   "updated_at": "2026-10-27T13:20:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-27T13:20:00Z"
+   }
+  },
+  {
+   "id": "t12",
+   "text": "Orbit 결제 장애가 40분 이어졌고 원인은 만료된 인증서였다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-27T09:30:00Z",
+   "updated_at": "2026-10-27T09:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-27T09:30:00Z"
+   },
+   "expires_at": "2026-11-01T00:00:00Z"
+  },
+  {
+   "id": "t13",
+   "text": "Orbit 배포는 금요일 오후에 하지 않는다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-24T08:15:00Z",
+   "updated_at": "2026-10-24T08:15:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-24T08:15:00Z"
+   }
+  },
+  {
+   "id": "t14",
+   "text": "Orbit 앱 최소 지원 버전은 iOS 16, Android 10이다.",
+   "kind": "semantic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-22T17:00:00Z",
+   "updated_at": "2026-10-22T17:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-22T17:00:00Z"
+   }
+  },
+  {
+   "id": "t15",
+   "text": "Orbit 로그에 이메일 주소를 그대로 남겨 개인정보 점검에서 지적받았다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-20T12:40:00Z",
+   "updated_at": "2026-10-20T12:40:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-20T12:40:00Z"
+   }
+  },
+  {
+   "id": "t16",
+   "text": "Orbit 다크 모드는 시스템 설정을 따르고, 앱 안 토글은 두지 않는다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-17T10:05:00Z",
+   "updated_at": "2026-10-17T10:05:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-17T10:05:00Z"
+   }
+  },
+  {
+   "id": "t17",
+   "text": "Alex는 회의 일정을 화요일과 목요일 오후로만 잡는다.",
+   "kind": "user",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-16T09:25:00Z",
+   "updated_at": "2026-10-16T09:25:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-16T09:25:00Z"
+   }
+  },
+  {
+   "id": "t18",
+   "text": "Orbit 베타 2차 모집에 120명이 신청했다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-15T14:00:00Z",
+   "updated_at": "2026-10-15T14:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-15T14:00:00Z"
+   },
+   "expires_at": "2026-10-31T00:00:00Z"
+  },
+  {
+   "id": "t19",
+   "text": "Orbit API 변경은 스키마 파일부터 고치고 코드를 생성한다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-08T11:30:00Z",
+   "updated_at": "2026-10-08T11:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-08T11:30:00Z"
+   }
+  },
+  {
+   "id": "t20",
+   "text": "Orbit 테스트 데이터에 실제 고객 이름을 쓰면 데모 녹화에 그대로 나온다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-06T16:10:00Z",
+   "updated_at": "2026-10-06T16:10:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-06T16:10:00Z"
+   }
+  },
+  {
+   "id": "t21",
+   "text": "Orbit 파일 첨부는 한 메시지에 다섯 개까지만 받는다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-10-02T10:00:00Z",
+   "updated_at": "2026-10-02T10:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-10-02T10:00:00Z"
+   }
+  },
+  {
+   "id": "t22",
+   "text": "Orbit 고객 지원 응답 목표 시간은 영업일 기준 4시간이다.",
+   "kind": "semantic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-30T09:00:00Z",
+   "updated_at": "2026-09-30T09:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-30T09:00:00Z"
+   }
+  },
+  {
+   "id": "t23",
+   "text": "Orbit 디자인 리뷰에서 온보딩 단계를 다섯에서 셋으로 줄였다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-26T15:30:00Z",
+   "updated_at": "2026-09-26T15:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-26T15:30:00Z"
+   }
+  },
+  {
+   "id": "t24",
+   "text": "Orbit 번역 문구는 키 대신 한국어 원문을 기준으로 관리한다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-22T10:45:00Z",
+   "updated_at": "2026-09-22T10:45:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-22T10:45:00Z"
+   }
+  },
+  {
+   "id": "t25",
+   "text": "Alex는 숫자가 많은 보고서를 표 대신 짧은 문장으로 받고 싶어 한다.",
+   "kind": "user",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-18T13:00:00Z",
+   "updated_at": "2026-09-18T13:00:00Z",
+   "tags": [
+    "basis:explicit_user",
+    "review:pending_correction"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-18T13:00:00Z"
+   }
+  },
+  {
+   "id": "t26",
+   "text": "Orbit 사용자 삭제는 30일 유예 뒤 완전히 지운다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-15T09:20:00Z",
+   "updated_at": "2026-09-15T09:20:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-15T09:20:00Z"
+   }
+  },
+  {
+   "id": "t27",
+   "text": "Orbit 캐시 키에 언어를 넣지 않아 영어 화면에 한국어가 섞였다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-09T11:00:00Z",
+   "updated_at": "2026-09-09T11:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-09T11:00:00Z"
+   }
+  },
+  {
+   "id": "t28",
+   "text": "Orbit 팀이 9월 첫 주에 서울 사무실로 이사했다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-09-04T16:00:00Z",
+   "updated_at": "2026-09-04T16:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-09-04T16:00:00Z"
+   },
+   "expires_at": "2026-09-30T00:00:00Z"
+  },
+  {
+   "id": "t29",
+   "text": "Orbit 문서 링크는 상대 경로로 써야 미리보기에서도 열린다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-08-28T10:30:00Z",
+   "updated_at": "2026-08-28T10:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-08-28T10:30:00Z"
+   }
+  },
+  {
+   "id": "t30",
+   "text": "Orbit 무료 플랜은 프로젝트 세 개까지 만들 수 있다.",
+   "kind": "semantic",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-08-21T14:15:00Z",
+   "updated_at": "2026-08-21T14:15:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-08-21T14:15:00Z"
+   }
+  },
+  {
+   "id": "t31",
+   "text": "Orbit 로그인은 이메일 링크와 구글 두 가지만 지원한다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-08-19T09:40:00Z",
+   "updated_at": "2026-08-19T09:40:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-08-19T09:40:00Z"
+   }
+  },
+  {
+   "id": "t32",
+   "text": "Orbit 대량 메일을 한 번에 보내 스팸 처리된 적이 있다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "created_at": "2026-08-14T11:00:00Z",
+   "updated_at": "2026-08-14T11:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ],
+   "memory_context": {
+    "valid_from": "2026-08-14T11:00:00Z"
+   }
+  }
+ ],
+ "use": [
+  {
+   "id": "t01",
+   "injected": 4,
+   "used": 3
+  },
+  {
+   "id": "t02",
+   "injected": 16,
+   "used": 11
+  },
+  {
+   "id": "t03",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t04",
+   "injected": 9,
+   "used": 6
+  },
+  {
+   "id": "t05",
+   "injected": 1,
+   "used": 1
+  },
+  {
+   "id": "t06",
+   "injected": 25,
+   "used": 17
+  },
+  {
+   "id": "t07",
+   "injected": 36,
+   "used": 24
+  },
+  {
+   "id": "t08",
+   "injected": 12,
+   "used": 8
+  },
+  {
+   "id": "t09",
+   "injected": 6,
+   "used": 4
+  },
+  {
+   "id": "t10",
+   "injected": 46,
+   "used": 31
+  },
+  {
+   "id": "t11",
+   "injected": 3,
+   "used": 2
+  },
+  {
+   "id": "t12",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t13",
+   "injected": 28,
+   "used": 19
+  },
+  {
+   "id": "t14",
+   "injected": 7,
+   "used": 5
+  },
+  {
+   "id": "t15",
+   "injected": 13,
+   "used": 9
+  },
+  {
+   "id": "t16",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t17",
+   "injected": 19,
+   "used": 13
+  },
+  {
+   "id": "t18",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t19",
+   "injected": 10,
+   "used": 7
+  },
+  {
+   "id": "t20",
+   "injected": 1,
+   "used": 1
+  },
+  {
+   "id": "t21",
+   "injected": 6,
+   "used": 4
+  },
+  {
+   "id": "t22",
+   "injected": 3,
+   "used": 2
+  },
+  {
+   "id": "t23",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t24",
+   "injected": 22,
+   "used": 15
+  },
+  {
+   "id": "t25",
+   "injected": 9,
+   "used": 6
+  },
+  {
+   "id": "t26",
+   "injected": 4,
+   "used": 3
+  },
+  {
+   "id": "t27",
+   "injected": 12,
+   "used": 8
+  },
+  {
+   "id": "t28",
+   "injected": 3,
+   "used": 0
+  },
+  {
+   "id": "t29",
+   "injected": 3,
+   "used": 2
+  },
+  {
+   "id": "t30",
+   "injected": 15,
+   "used": 10
+  },
+  {
+   "id": "t31",
+   "injected": 31,
+   "used": 21
+  },
+  {
+   "id": "t32",
+   "injected": 3,
+   "used": 0
+  }
+ ]
+}

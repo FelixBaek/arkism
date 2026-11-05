@@ -77,7 +77,7 @@ test("the view switch (목록 · 타임라인) sits in the toolbar, is remembere
   assert.ok(env.document.querySelector("#table .mem-page-tl"));
   assert.equal(env.document.querySelectorAll("#table .row").length, 0);
   const more = env.document.querySelector("#chips .mem-more-pop");
-  assert.ok(more.querySelector('select[aria-label="간격"]'), "zoom lives in 자세히 on the timeline");
+  assert.equal(more.querySelector('select[aria-label="간격"]'), null, "no 간격 choice: the day strip and day groups are the one way");
   assert.equal(more.querySelector('select[aria-label="정렬"]'), null, "sorting means nothing on a timeline");
   assert.deepEqual(env.document.querySelectorAll("#controls .mem-view-seg .tab").map((b) => b.dataset.key), ["list", "timeline"], "no 그래프");
   env.deps.memory.memView = "graph"; draw();
@@ -95,68 +95,77 @@ test("the timeline catalog loads newest first, so 더 이전 불러오기 really
   assert.deepEqual(bodies.map((b) => b.sort), ["recent", "used"]);
 });
 
-test("timeline groups: newest first, by day, week or month", async () => {
+test("timeline groups: newest day first, newest first inside a day", async () => {
   const { timelineGroups, memoryWhen } = await import("./modules/memoryViews.mjs");
   assert.equal(memoryWhen(MEMS[4]), Date.parse("2026-08-15T00:00:00Z"), "the event time wins over the saved time");
-  const ids = (gs) => gs.map((g) => g.items.map((m) => m.id).join(""));
   const days = timelineGroups(MEMS);
-  assert.deepEqual(ids(days), ["f", "cd", "b", "e", "a"], "newest on top, c and d share a day");
+  assert.deepEqual(days.map((g) => g.items.map((m) => m.id).join("")), ["f", "cd", "b", "e", "a"], "c and d share a day");
   assert.ok(days.every((g, i) => !i || g.at < days[i - 1].at));
-  // 10-13 (Tue) … 10-20 (Tue): weeks starting Mon 10-19, 10-05, 08-31, 08-10, 06-29
-  assert.deepEqual(ids(timelineGroups(MEMS, "week")), ["f", "cd", "b", "e", "a"]);
-  const extra = [...MEMS, { id: "g", text: "g", created_at: at("10-19") }, { id: "h", text: "h", created_at: at("10-14") }];
-  assert.deepEqual(ids(timelineGroups(extra, "week")), ["fg", "h", "cd", "b", "e", "a"], "the same Monday-started week shares a stop");
-  assert.deepEqual(ids(timelineGroups(MEMS, "month")), ["fcd", "b", "e", "a"], "months: Oct · Sep · Aug · Jul");
 });
 
-test("the timeline is a vertical rail: date stops, rows with meta and one label, keyboard, detail and paging", async () => {
+test("the timeline: a month heading over a day strip, then day groups with rows, labels, keyboard and detail", async () => {
+  const env = setup(), { draw } = await page(env);
+  env.deps.memory.memView = "timeline"; env.deps.state.data.maintenance = [];
+  draw();
+  const box = env.document.querySelector("#table .mem-page-tl");
+  const days = box.querySelectorAll(".tlc-day");
+  assert.equal(days.length, 5);
+  assert.ok(days.every((d) => d.querySelector(".tlc-dayhead").tagName === "H3"));
+  assert.deepEqual(days.map((d) => d.querySelector(".tlc-n").textContent), ["1개", "2개", "1개", "1개", "1개"]);
+  const rows = box.querySelectorAll(".mem-brief-row");
+  assert.deepEqual(rows.map((r) => r.dataset.id), ["f", "c", "d", "b", "e", "a"]);
+  assert.equal(rows[0].querySelector(".mem-brief-meta").textContent, "user · 답에 보임 10번");
+  assert.equal(rows[2].querySelector(".mem-label").textContent, "정정 검토 중", "a memory waiting on review keeps its badge in place");
+  assert.equal(rows[0].querySelector(".mem-labels"), null, "no label line without labels");
+  assert.ok(rows[5].className.includes("muted"));
+  // the strip: every day from the oldest memory to today; only days with memories are buttons to use, one tab stop
+  const bars = box.querySelectorAll(".tlc-strip .tlc-bar"), live = bars.filter((b) => !b.disabled);
+  assert.ok(bars.length > 120, "July to today, one bar a day");
+  assert.equal(live.length, 5);
+  assert.deepEqual(live.map((b) => b.tabIndex), [-1, -1, -1, -1, 0], "the newest day is the strip's one tab stop");
+  assert.ok(bars.at(-1).className.includes("today"));
+  assert.match(box.querySelector(".tlc-month").textContent, /2026/);
+  // ← → walk the days with memories; a bar (Enter or click) jumps to its day and focuses its first memory
+  live[4].focus(); dom.fire(live[4], "keydown", { key: "ArrowLeft" });
+  assert.equal(env.document.activeElement, live[3]); assert.deepEqual([live[3].tabIndex, live[4].tabIndex], [0, -1]);
+  dom.fire(live[3], "keydown", { key: "Home" }); assert.equal(env.document.activeElement, live[0]);
+  live[1].click();
+  assert.equal(days[3].scrolledIntoView, 1, "the 08-15 bar scrolls to its day");
+  assert.equal(env.document.activeElement, rows[4]);
+  // ↑ ↓ walk the rows
+  rows[0].focus(); dom.fire(rows[0], "keydown", { key: "ArrowDown" }); assert.equal(env.document.activeElement, rows[1]);
+  dom.fire(rows[1], "keydown", { key: "End" }); assert.equal(env.document.activeElement, rows[5]);
+  rows[2].click();
+  assert.equal(env.state.selected, "d");
+  assert.deepEqual(env.log.slice(-4), ["pin:d", "mark", "detail:d", "open"]);
+  draw();
+  assert.equal(env.document.querySelector("#table .mem-brief-row.selected").dataset.id, "d");
+  assert.equal(env.document.querySelector("#table .mem-brief-older"), null, "every page loaded: no 더 이전 불러오기");
+});
+
+test("the timeline loads older pages: at its bottom end, and when ‹ goes to a month not loaded yet", async () => {
   const env = setup(), { draw } = await page(env);
   const seen = [];
   globalThis.IntersectionObserver = class { constructor(cb) { this.cb = cb; seen.push(this); } observe(n) { this.n = n; } disconnect() { this.off = true; } };
   try {
     env.deps.memory.memView = "timeline"; env.snap("memories").cursor = "next";
-    env.deps.state.data.maintenance = [];
     draw();
-    const box = env.document.querySelector("#table .mem-page-tl");
-    const stops = box.querySelectorAll(".mem-brief-item");
-    assert.equal(stops.length, 5);
-    assert.deepEqual(stops.map((s) => s.querySelector(".mem-brief-date").tagName), ["H3", "H3", "H3", "H3", "H3"]);
-    assert.match(stops[0].querySelector(".mem-brief-date").textContent, /2026/, "the date has the year");
-    assert.ok(stops[0].querySelector(".mem-brief-tag"), "a weekday or 오늘 · 어제 follows the date");
-    assert.ok(stops[1].className.includes("review"), "a stop holding a memory waiting on review has a dashed dot");
-    assert.ok(stops[4].className.includes("muted"), "an unused memory's stop is muted");
-    const rows = box.querySelectorAll(".mem-brief-row");
-    assert.deepEqual(rows.map((r) => r.dataset.id), ["f", "c", "d", "b", "e", "a"]);
-    assert.ok(rows.every((r) => r.tagName === "BUTTON"));
-    assert.equal(rows[0].querySelector(".mem-brief-meta").textContent, "user · 답에 보임 10번");
-    assert.equal(rows[2].querySelectorAll(".mem-label").length, 1); assert.equal(rows[2].querySelector(".mem-label").textContent, "정정 검토 중");
-    assert.equal(rows[0].querySelector(".mem-labels"), null, "no label line without labels");
-    assert.ok(rows[5].className.includes("muted"));
-    // ↑ ↓ Home End
-    rows[0].focus(); dom.fire(rows[0], "keydown", { key: "ArrowDown" }); assert.equal(env.document.activeElement, rows[1]);
-    dom.fire(rows[1], "keydown", { key: "ArrowUp" }); assert.equal(env.document.activeElement, rows[0]);
-    dom.fire(rows[0], "keydown", { key: "End" }); assert.equal(env.document.activeElement, rows[5]);
-    dom.fire(rows[5], "keydown", { key: "Home" }); assert.equal(env.document.activeElement, rows[0]);
-    // a row opens the detail and is marked as the pick
-    rows[2].click();
-    assert.equal(env.state.selected, "d");
-    assert.deepEqual(env.log.slice(-4), ["pin:d", "mark", "detail:d", "open"]);
-    draw();
-    assert.equal(env.document.querySelector("#table .mem-brief-row.selected").dataset.id, "d");
-    // paging: reaching the bottom loads the next older page once; the button stays as the fallback
-    assert.equal(seen.at(-2).off, true, "a redraw drops the old observer");
-    const io = seen.at(-1), older = env.document.querySelector("#table .mem-brief-older");
-    assert.equal(io.n, older);
+    const bars = env.document.querySelectorAll("#table .tlc-bar"), first = new Date(Number(env.document.querySelector("#table .tlc-day:last-child").dataset.at));
+    assert.ok(bars.length < 130 && first.getMonth() === 6, "with pages left, the strip starts the day after the oldest saved memory (07-03), never on a day not loaded");
+    const io = seen.find((o) => o.n === env.document.querySelector("#table .mem-brief-older"));
     io.cb([{ isIntersecting: true }]); io.cb([{ isIntersecting: true }]);
-    assert.deepEqual(env.log.filter((l) => l === "more:memories"), ["more:memories"]);
-    assert.equal(older.disabled, true);
-    draw(); env.document.querySelector("#table .mem-brief-older").click();
-    assert.deepEqual(env.log.filter((l) => l === "more:memories").length, 2, "the button loads too");
-    env.snap("memories").cursor = ""; draw();
-    assert.equal(env.document.querySelector("#table .mem-brief-older"), null, "every page loaded: no 더 이전 불러오기");
-    // 자세히 zoom regroups
-    env.document.querySelector('#chips select[aria-label="간격"]').value = "month";
-    dom.fire(env.document.querySelector('#chips select[aria-label="간격"]'), "change"); draw();
-    assert.equal(env.document.querySelectorAll("#table .mem-brief-item").length, 4);
+    assert.deepEqual(env.log.filter((l) => l === "more:memories"), ["more:memories"], "the bottom end loads once");
+    draw();
+    const month = () => env.document.querySelector("#table .tlc-month").textContent, prev = () => env.document.querySelector("#table .tlc-arrow.prev");
+    assert.match(month(), /10/);
+    prev().click(); assert.match(month(), /9/, "‹ goes to the newest day of the month before");
+    prev().click(); assert.match(month(), /8/);
+    const before = env.log.filter((l) => l === "more:memories").length;
+    prev().click(); await new Promise((r) => setTimeout(r, 0));
+    const loads = env.log.filter((l) => l === "more:memories").length - before;
+    assert.ok(loads > 0 && loads <= 20, `July is not covered yet: older pages load, at most 20 (${loads})`);
+    env.snap("memories").cursor = ""; draw(); await Promise.resolve();
+    assert.match(month(), /7/, "once loaded, the heading names the month asked for");
+    assert.equal(env.document.querySelector("#table .tlc-day:last-child").scrolledIntoView, 1, "and its newest day is scrolled to");
   } finally { delete globalThis.IntersectionObserver; }
 });
