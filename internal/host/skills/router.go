@@ -1172,15 +1172,11 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	if err := routerToolEnabled(n); err != nil {
 		return nil, err
 	}
-	args, ok := argsAny.(map[string]any)
-	if !ok {
-		return nil, attrErr(argsAny)
-	}
-	if err := toolCallAllowed(n, args); err != nil {
+	args, err := toolArgs(n, argsAny)
+	if err != nil {
 		return nil, err
 	}
 	var value any
-	var err error
 	switch n {
 	case "handoff_work":
 		value, err = host.RunHandoff(args, func(path string, payload map[string]any) (map[string]any, error) {

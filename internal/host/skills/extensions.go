@@ -32,3 +32,12 @@ func toolCallAllowed(name string, args map[string]any) (err error) {
 	}
 	return nil
 }
+
+// toolArgs checks the argument object, then asks the extension hook.
+func toolArgs(name string, argsAny any) (map[string]any, error) {
+	args, ok := argsAny.(map[string]any)
+	if !ok {
+		return nil, attrErr(argsAny)
+	}
+	return args, toolCallAllowed(name, args)
+}
