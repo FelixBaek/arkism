@@ -39,7 +39,9 @@ const jobs = () => [{ id: "j1", status: "failed", updated_at: "2026-10-22", job:
 function server(over = {}) {
   const calls = [], db = { sources: sources(), documents: documents(), pages: pages(), jobs: jobs() };
   async function request(path, opts = {}) {
-    const body = opts.body ? JSON.parse(opts.body) : undefined;
+    // a multipart upload is recorded as its metadata plus the file's name and size
+    const file = opts.form?.get("file");
+    const body = opts.form ? { ...JSON.parse(opts.form.get("metadata")), file: { name: file.name, size: file.size } } : opts.body ? JSON.parse(opts.body) : undefined;
     calls.push({ path, method: opts.method || "GET", body });
     const route = Object.keys(over).find((k) => path.startsWith(k));
     if (route) return over[route](path, body);
@@ -715,17 +717,19 @@ test("file → memory candidates: upload, poll to done with delta counts, open t
   const k = await setup({
     "/v1/files/memories/jobs/": () => (++reads < 2 ? { id: "fx", status: "running", revision: 1, job: { total: 4, next: 1 } }
       : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1, removed_sources: [{ locator: "chunk:4", candidate_ids: ["c9"] }] } } }),
-    "/v1/files/memories": (_, body) => { if (body.filename === "notes.exe") throw Object.assign(new Error("unsupported_media_type"), { status: 415 }); return { job_id: "fx", status: "pending" }; },
+    "/v1/files/memories/batch": (_, body) => ({ files: [body.file.name === "notes.exe" ? { filename: "notes.exe", error: "unsupported_media_type" } : { filename: body.file.name, result: { job_id: "fx", status: "pending" } }] }),
     "/v1/operations/": () => ({ id: "fx", status: "cancelled" })
   });
   await k.start();
   const hb = k.view.views.knowledge.head();
   assert.equal(hb[0].textContent.trim(), "기억 후보 만들기");
-  await sendFiles(k, [{ name: "notes.exe", size: 3, arrayBuffer: async () => new ArrayBuffer(3) }]);
-  assert.match(k.table().textContent, /이 형식은 읽지 못해요/, "the server's 415 in plain words");
-  assert.equal(k.posted("/v1/files/memories")[0].body.mime, undefined, "an unknown type is left to the server");
-  await sendFiles(k, [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
-  assert.deepEqual(k.posted("/v1/files/memories")[1].body, { scope: { workspace_id: "w" }, filename: "plan.pdf", content_base64: "YWJj", mime: "application/pdf" });
+  await sendFiles(k, [new File(["MZ!"], "notes.exe")]);
+  assert.match(k.table().textContent, /이 형식은 읽지 못해요/, "the file's own error in plain words");
+  assert.deepEqual(k.posted("/v1/files/memories/batch")[0].body.files, [{}], "an unknown type is left to the server");
+  // no size check here: a file bigger than the old 4MB goes up as bytes, and the server's limit decides
+  const big = new File([new Uint8Array(5 << 20)], "plan.pdf");
+  await sendFiles(k, [big]);
+  assert.deepEqual(k.posted("/v1/files/memories/batch")[1].body, { scope: { workspace_id: "w" }, files: [{ mime: "application/pdf" }], file: { name: "plan.pdf", size: 5 << 20 } });
   assert.doesNotMatch(k.table().textContent, /이 형식은 읽지 못해요/, "a fresh start clears the old notice");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /4부분 중 1부분 읽음/);
@@ -748,10 +752,10 @@ test("file → memory candidates: a failed job resumes through its run route; an
     "/v1/files/memories/jobs/fx/run": () => { runs++; return { id: "fx", status: "done", revision: 4, job: { total: 2, next: 2, candidates_created: 2 } }; },
     "/v1/files/memories/jobs/": () => (runs ? { id: "fx", status: "done", revision: 4, job: { total: 2, next: 2, candidates_created: 2 } }
       : { id: "fx", status: "failed", revision: 2, job: { total: 2, next: 1, error: "model_budget_exceeded" } }),
-    "/v1/files/memories": () => ({ job_id: "fx", status: "running" })
+    "/v1/files/memories/batch": () => ({ files: [{ filename: "plan.txt", result: { job_id: "fx", status: "running" } }] })
   }, { caps: { actions: { review_decide: false } } });
   await k.start();
-  await sendFiles(k, [{ name: "plan.txt", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
+  await sendFiles(k, [new File(["abc"], "plan.txt")]);
   assert.doesNotMatch(k.table().textContent, /멈추기/, "cancel is a people-only route");
   await wait(1600); await dom.flush();
   assert.match(k.table().textContent, /오늘 쓸 수 있는 모델 호출을 다 썼어요/);
@@ -804,10 +808,10 @@ test("부분·이력 window from a finished extraction card; a failed page read 
   let fail = true;
   const k = await setup({
     "/v1/files/memories/documents/": () => { if (fail) { fail = false; throw new Error("dependency_unavailable"); } return { items: [{ locator: "page:1", hash: "p1", status: "extracted", candidates: [] }], next_cursor: "" }; },
-    "/v1/files/memories": () => ({ job_id: "fx", document_id: "docx1", status: "done", candidates_created: 0 })
+    "/v1/files/memories/batch": () => ({ files: [{ filename: "plan.pdf", result: { job_id: "fx", document_id: "docx1", status: "done", candidates_created: 0 } }] })
   });
   await k.start();
-  await sendFiles(k, [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]);
+  await sendFiles(k, [new File(["abc"], "plan.pdf")]);
   await k.press(k.table(), "부분·이력 보기"); await dom.flush();
   const dlg = k.document.body.querySelector("dialog.v4k-parts");
   assert.match(dlg.textContent, /잠시 문제가 생겼어요/);
@@ -827,7 +831,7 @@ test("add window: pasted text goes to ingest with its 자세히 extras; several 
   const k = await setup({
     "/v1/spaces/": () => ({ config: { extraction_strategies: { meetings: {}, code: {} } } }),
     "/v1/memories/ingest": () => ({ items: [{ job_id: "ti", document_id: "dt", status: "done", candidates_created: 2 }] }),
-    "/v1/files/memories": (_, body) => { n++; if (body.filename === "b.txt") throw Object.assign(new Error("payload_too_large"), { status: 413 }); return { job_id: `f${n}`, status: "done", candidates_created: 1 }; }
+    "/v1/files/memories/batch": (_, body) => { n++; return { files: [body.file.name === "b.txt" ? { filename: "b.txt", error: "artifact_too_large" } : { filename: body.file.name, result: { job_id: `f${n}`, status: "done", candidates_created: 1 } }] }; }
   }, { scope: { workspace_id: "w", project_id: "p" } });
   await k.start();
   k.view.views.knowledge.head()[0].click(); await dom.flush();
@@ -847,14 +851,13 @@ test("add window: pasted text goes to ingest with its 자세히 extras; several 
   k.view.views.knowledge.head()[0].click(); await dom.flush();
   await k.press(dlg(), "파일"); await k.press(dlg(), "파일 고르기");
   const input = k.files.at(-1); assert.equal(input.multiple, true);
-  const buf = async () => new TextEncoder().encode("abc").buffer;
-  input.files = [{ name: "a.md", size: 3, arrayBuffer: buf }, { name: "b.txt", size: 3, arrayBuffer: buf }]; dom.fire(input, "change"); await dom.flush();
+  input.files = [new File(["abc"], "a.md"), new File(["abc"], "b.txt")]; dom.fire(input, "change"); await dom.flush();
   const parser = [...dlg().querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "vision"));
   parser.value = "converter"; dom.fire(parser, "change");
   await k.press(dlg(), "파일 2개로 기억 후보 만들기"); await dom.flush();
-  const sent = k.posted("/v1/files/memories").map((c) => c.body);
-  assert.deepEqual(sent.map((b) => [b.filename, b.parsers]), [["a.md", ["converter"]], ["b.txt", ["converter"]]]);
-  assert.match(k.table().textContent, /2개 중 1개를 보냈어요\. 못 보낸 파일이 1개 있어요\./);
+  const sent = k.posted("/v1/files/memories/batch").map((c) => c.body);
+  assert.deepEqual(sent.map((b) => [b.file.name, b.parsers, b.files]), [["a.md", ["converter"], [{ mime: "text/markdown" }]], ["b.txt", ["converter"], [{ mime: "text/plain" }]]]);
+  assert.match(k.table().textContent, /2개 중 1개를 보냈어요\. 못 보낸 파일이 1개 있어요\. 파일이 너무 커요\./);
 });
 
 test("ingestExtras, docRange and deleteImpact", () => {
@@ -863,6 +866,9 @@ test("ingestExtras, docRange and deleteImpact", () => {
   assert.deepEqual(K.ingestExtras({ tags: "a，b", parser: "builtin", meta: "x=1" }, false), { tags: ["a", "b"], parsers: ["builtin"] });
   assert.match(K.ingestExtras({ when: "2026-10-01T09:30" }, true).timestamp, /^2026-10-01T/);
   assert.deepEqual(K.ingestExtras({ when: "nope" }, true), {});
+  assert.deepEqual(K.ingestExtras({ entities: "민수, Arkism，민수", doc: " notes ", append: true }, true), { entities: ["민수", "Arkism"], document_id: "notes", update_mode: "append" });
+  assert.deepEqual(K.ingestExtras({ append: true, entities: " " }, true), {}, "append needs a document id");
+  assert.deepEqual(K.ingestExtras({ doc: "d", entities: "x" }, false), {}, "the file routes take neither");
   assert.deepEqual(K.docRange({}), {});
   const r = K.docRange({ from: "2026-10-03", to: "2026-10-04" });
   assert.equal(new Date(r.from).getDate(), 3); assert.equal(new Date(r.to).getDate(), 5, "to covers the whole last day");
@@ -1036,4 +1042,31 @@ test("wiki: a topic placed in a folder is listed as a question page and opens it
   assert.equal(k.srv.calls.filter((c) => c.path.startsWith("/v1/mental-models/mm1")).length, 1);
   await k.press(k.detail(), "주제 요약에서 열기");
   assert.equal(k.state.openTopic, "mm1"); assert.deepEqual(k.gone.at(-1), ["memories", "digests"]);
+});
+
+test("add window: 자세히 builds text and picture cells in order and sends them as blocks with the document id", async () => {
+  require("./crew-popup.js");
+  const k = await setup({ "/v1/memories/ingest": () => ({ items: [{ job_id: "ti", status: "done", candidates_created: 1 }] }) }, { scope: { workspace_id: "w", project_id: "p" } });
+  await k.start();
+  k.view.views.knowledge.head()[0].click(); await dom.flush();
+  const dlg = () => k.document.body.querySelector("dialog.v4k-add");
+  const ta = dlg().querySelector("textarea.v4k-paste"); ta.value = "화이트보드 사진 설명"; dom.fire(ta, "input");
+  const opts = () => dlg().querySelector("details.v4k-opts");
+  opts().open = true; dom.fire(opts(), "toggle");
+  const box = (label) => [...opts().querySelectorAll("label.v4k-field")].find((l) => l.textContent.includes(label)).querySelector("input");
+  const ents = box("이 글에 나오는 이름"); ents.value = "민수"; dom.fire(ents, "input");
+  const doc = box("문서 ID"); doc.value = "board"; dom.fire(doc, "input");
+  const cb = opts().querySelector(".v4k-check input"); cb.checked = true; dom.fire(cb, "change");
+  await k.press(opts(), "+ 그림");
+  k.files.at(-1).files = [new File(["x"], "notes.gif")]; dom.fire(k.files.at(-1), "change"); await dom.flush();
+  assert.match(opts().textContent, /PNG·JPEG·WebP 그림만/);
+  await k.press(opts(), "+ 그림");
+  k.files.at(-1).files = [new File(["abc"], "board.png")]; dom.fire(k.files.at(-1), "change"); await dom.flush();
+  await k.press(opts(), "+ 글 칸");
+  const cell = opts().querySelector(".v4k-block textarea"); cell.value = "사진 아래 메모"; dom.fire(cell, "input");
+  await k.press(opts(), "+ 글 칸"); // an empty cell is left out
+  assert.ok(opts().open, "자세히 stays open while cells are added");
+  await k.press(dlg(), "기억 후보 만들기"); await dom.flush();
+  assert.deepEqual(k.posted("/v1/memories/ingest")[0].body.items, [{ blocks: [{ type: "text", text: "화이트보드 사진 설명" }, { type: "image", mime: "image/png", content_base64: "YWJj" }, { type: "text", text: "사진 아래 메모" }],
+    entities: ["민수"], document_id: "board", update_mode: "append" }]);
 });

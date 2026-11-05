@@ -22,7 +22,14 @@ export function createAppApi(deps) {
   async function request(path, options = {}) {
     const session = identity();
     let status, text = "", bytes = null;
-    if (deps.tauri) {
+    if (options.form) {
+      // form: a multipart upload (POST /v1/files/memories/batch, the only route the app passes it to) goes as bytes, not base64 JSON
+      const res = new Response(options.form), type = res.headers.get("content-type"), data = new Uint8Array(await res.arrayBuffer());
+      const r = deps.tauri
+        ? await deps.tauri.invoke("api_upload", data, { headers: { "x-arkism-base": deps.trimSlash(deps.state.server), "x-arkism-token": deps.state.token, "x-arkism-content-type": type } }).catch((e) => { throw new Error(String(e)); })
+        : await fetch(deps.trimSlash(deps.state.server) + path, { method: "POST", body: data, headers: { Authorization: `Bearer ${deps.state.token}`, "Content-Type": type } }).then(async (x) => ({ status: x.status, body: await x.text() }));
+      status = r.status; text = r.body;
+    } else if (deps.tauri) {
       const r = await deps.tauri.invoke("api", { base: deps.trimSlash(deps.state.server), token: deps.state.token, method: options.method || "GET", path, body: options.body ?? null, ...(options.binary ? { binary: true } : {}) })
         .catch((e) => { throw new Error(String(e)); });
       status = r.status; text = r.body;

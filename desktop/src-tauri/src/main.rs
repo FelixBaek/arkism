@@ -661,11 +661,43 @@ async fn api(rt: tauri::State<'_, Arc<runtime::Runtime>>, base: String, token: S
 const API_BINARY_MAX: u64 = 64 << 20;
 
 async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, method: String, path: String, body: Option<String>, binary: bool) -> Result<Reply, String> {
-    if !valid_base(&base) {
-        return Err("server_address_invalid".into());
-    }
     if !allowed(&method, &path) {
         return Err("path_not_allowed".into());
+    }
+    send(gate, api_agent(), base, token, method, path, body.map(String::into_bytes), "application/json".into(), binary).await
+}
+
+/// 기억 후보 만들기 › 파일 goes to this one route as a multipart body the WebView builds.
+const UPLOAD_PATH: &str = "/v1/files/memories/batch";
+
+fn upload_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    // A big file on a slow link takes longer than the 30 seconds an ordinary call gets.
+    AGENT.get_or_init(|| ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(30 * 60))).http_status_as_error(false).build().into())
+}
+
+/// Sends a file upload: the multipart bytes are the raw invoke body (no base64 JSON), and the
+/// server address, token and content type ride in the invoke headers.
+#[tauri::command]
+async fn api_upload(rt: tauri::State<'_, Arc<runtime::Runtime>>, request: tauri::ipc::Request<'_>) -> Result<Reply, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("upload_body_invalid".into());
+    };
+    let header = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string).unwrap_or_default();
+    upload_with_gate(rt.gate(), header("x-arkism-base"), header("x-arkism-token"), header("x-arkism-content-type"), body.clone()).await
+}
+
+async fn upload_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, content_type: String, body: Vec<u8>) -> Result<Reply, String> {
+    if !content_type.starts_with("multipart/form-data; boundary=") || content_type.contains(['\r', '\n']) {
+        return Err("upload_body_invalid".into());
+    }
+    send(gate, upload_agent(), base, token, "POST".into(), UPLOAD_PATH.into(), Some(body), content_type, false).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn send(gate: Arc<lifecycle::Gate>, agent: &'static ureq::Agent, base: String, token: String, method: String, path: String, body: Option<Vec<u8>>, content_type: String, binary: bool) -> Result<Reply, String> {
+    if !valid_base(&base) {
+        return Err("server_address_invalid".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
         let _activity = gate.activity()?;
@@ -673,10 +705,10 @@ async fn api_with_gate(gate: Arc<lifecycle::Gate>, base: String, token: String, 
             .method(method.as_str())
             .uri(format!("{base}{path}"))
             .header("Authorization", format!("Bearer {token}"))
-            .header("Content-Type", "application/json");
+            .header("Content-Type", content_type);
         let res = match body {
-            Some(b) => req.body(b).map_err(|e| e.to_string()).and_then(|r| api_agent().run(r).map_err(|e| format!("server_unreachable: {e}"))),
-            None => req.body(()).map_err(|e| e.to_string()).and_then(|r| api_agent().run(r).map_err(|e| format!("server_unreachable: {e}"))),
+            Some(b) => req.body(b).map_err(|e| e.to_string()).and_then(|r| agent.run(r).map_err(|e| format!("server_unreachable: {e}"))),
+            None => req.body(()).map_err(|e| e.to_string()).and_then(|r| agent.run(r).map_err(|e| format!("server_unreachable: {e}"))),
         };
         let mut r = res?;
         let status = r.status().as_u16();
@@ -1189,7 +1221,7 @@ fn main() {
                 let _ = window.hide();
             }
         })
-        .invoke_handler(tauri::generate_handler![api, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
+        .invoke_handler(tauri::generate_handler![api, api_upload, app_defaults, local_location, local_location_set, local_start, local_backup, local_backups, local_restore, local_erase, open_backups, open_logs, model_roles, set_model_roles, gateway_info, agent_link_set, doctor, import_agent_memories, agents_setup, agents_setup_retry, autostart_get, autostart_set, search_mode, capture_settings, set_capture_settings, ssh_connect, ssh_connect_done, ssh_test, ssh_host_key_check, ssh_host_key_approve, ssh_host_key_cancel, ssh_disconnect, ssh_keys, ssh_hosts, providers_refresh, git_op, skill_execution, mcp_login, update_check, update_install, gateway_token_status, gateway_token_regenerate, general::general_get, general::general_set, general::notify, agent_backends, popout::popout_destroy, server_update, agent_login, agents_install])
         .build(tauri::generate_context!())
         .expect("Arkism failed to start");
     app.run(|app, event| {
@@ -1295,6 +1327,16 @@ mod tests {
         let reply = tauri::async_runtime::block_on(api_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "GET".into(), "/v1/wiki/export".into(), None, true)).unwrap();
         assert_eq!((reply.status, reply.body.as_str()), (413, "{}"));
         server.join().unwrap();
+        // upload: the multipart bytes go as they are to the batch route only, with their own content type
+        let (base, server) = serve_once("HTTP/1.1 200 OK\r\nContent-Length: 11\r\nConnection: close\r\n\r\n{\"files\":[]}");
+        let reply = tauri::async_runtime::block_on(upload_with_gate(Arc::new(lifecycle::Gate::default()), base, "t".into(), "multipart/form-data; boundary=b1".into(), b"--b1\r\nx\r\n--b1--".to_vec())).unwrap();
+        assert_eq!(reply.status, 200);
+        let request = server.join().unwrap();
+        assert!(request.starts_with("POST /v1/files/memories/batch HTTP/1.1\r\n") && request.to_ascii_lowercase().contains("content-type: multipart/form-data; boundary=b1"), "{request}");
+        assert!(request.ends_with("--b1\r\nx\r\n--b1--"), "{request}");
+        let bad = |ct: &str| tauri::async_runtime::block_on(upload_with_gate(Arc::new(lifecycle::Gate::default()), "http://127.0.0.1:9".into(), "t".into(), ct.into(), vec![1]));
+        assert_eq!(bad("application/json").err().as_deref(), Some("upload_body_invalid"));
+        assert_eq!(bad("multipart/form-data; boundary=b\r\nX-Evil: 1").err().as_deref(), Some("upload_body_invalid"));
     }
 
     #[test]

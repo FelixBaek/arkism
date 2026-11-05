@@ -18,6 +18,7 @@ window.ArkismKnowledge = (ctx) => {
   const MIME = { ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".docx": `${OOXML}wordprocessingml.document`, ".pdf": "application/pdf",
     ".xlsx": `${OOXML}spreadsheetml.sheet`, ".pptx": `${OOXML}presentationml.presentation`, ".html": "text/html", ".htm": "text/html", ".csv": "text/csv",
     ".tsv": "text/tab-separated-values", ".eml": "message/rfc822" };
+  const IMAGE = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }; // the image blocks the server reads
   const TEXT = [".md", ".txt", ".json"]; // sent as text and split past 64KB; any other file goes up whole (4MB) and the server reads it
   const KINDS = "Word·PDF·표·발표 자료·웹 페이지·메일·Markdown·텍스트·JSON";
   const REJECT = {
@@ -309,9 +310,9 @@ window.ArkismKnowledge = (ctx) => {
     try { showExtract(await get(`/v1/files/memories/jobs/${encodeURIComponent(x.id)}`)); }
     catch (e) { if (K.extract === x) { x.error = extractErr(e); x.active = false; paint(); } }
   }
-  async function startExtract(work, label) {
+  async function startExtract(work, label, phase = "queued") {
     if (K.busy) return;
-    K.busy = true; K.notice = ""; K.extract = { label, phase: "queued", active: true, total: 0, next: 0, created: 0, skipped: 0 }; paint();
+    K.busy = true; K.notice = ""; K.extract = { label, phase, active: true, total: 0, next: 0, created: 0, skipped: 0 }; paint();
     try { showExtract(await work(), label); } catch (e) { K.extract = { label, phase: "failed", active: false, error: extractErr(e) }; }
     K.busy = false; K.fd.state = "idle"; paint(); // 기억 문서 reads again
   }
@@ -332,7 +333,7 @@ window.ArkismKnowledge = (ctx) => {
     clearTimeout(extractTimer); extractTimer = setTimeout(pollExtract, 1500);
   }
   const extractFromSource = (s) => startExtract(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/extract_memories`, {}), s.display_name);
-  const EXTRACT_WORD = { queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
+  const EXTRACT_WORD = { sending: "보내는 중", queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
   function extractCard() {
     const x = K.extract;
     if (!x) return null;
@@ -341,7 +342,7 @@ window.ArkismKnowledge = (ctx) => {
     c.append(head);
     if (x.label) c.append(noI18n(el("p", "v4k-card-note mono", x.label)));
     if (x.active && x.total) { const bar = el("progress", "v4k-progress"); bar.max = x.total; bar.value = x.next; bar.setAttribute("aria-label", "진행"); c.append(bar, el("p", "v4k-card-note", `${num(x.total)}부분 중 ${num(x.next)}부분 읽음`)); }
-    if (x.active && !x.total) c.append(el("p", "v4k-card-note", "파일을 읽고 있어요…"));
+    if (x.active && !x.total) c.append(el("p", "v4k-card-note", x.phase === "sending" ? "파일을 서버로 보내고 있어요…" : "파일을 읽고 있어요…"));
     if (!x.active && !x.error) c.append(el("p", "", x.created ? `기억 후보 ${num(x.created)}개를 만들었어요. 저장할지는 내가 골라요.` : "새로 만든 후보가 없어요."));
     if (x.delta) c.append(el("p", "v4k-card-note", deltaLine(x.delta)));
     if (x.delta?.left) c.append(el("p", "v4k-card-note", `빠진 부분에서 나온 기억 후보 ${num(x.delta.left)}개는 그대로 남아 있어요. 필요 없으면 '확인해 주세요'에서 버려 주세요.`));
@@ -364,8 +365,6 @@ window.ArkismKnowledge = (ctx) => {
   const CHUNK = { unchanged: "그대로", extracted: "읽음", pending: "아직 안 읽음", active: "사용 중", draft: "확인 전", quarantined: "격리됨", erased: "지워짐", deleted: "지워짐" };
   const CAND = { candidate: "확인 대기", conflicted: "확인 대기", approved: "승인됨", active: "승인됨", rejected: "버림", superseded: "새 기억으로 바뀜", gone: "없어짐" };
   const UPLOAD = { pending: "기다리는 중", retry: "기다리는 중", running: "읽는 중", done: "끝남", failed: "실패", cancelled: "멈춤" };
-  const ARTIFACT = { code: "코드", ocr: "글자 인식", tool_output: "도구 결과", pdf: "PDF", image: "이미지", screenshot_region: "화면 일부", audio: "소리" };
-  const EXT = { "text/plain": ".txt", "application/json": ".json", "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg" };
   const deltaLine = (d) => `전체 ${num(d.total)} · 그대로 ${num(d.unchanged)} · 바뀜 ${num(d.changed)} · 빠짐 ${num(d.removed)}`;
   function openParts({ title, source, doc, initial }) {
     const base = source ? `/v1/knowledge/sources/${encodeURIComponent(source)}` : `/v1/files/memories/documents/${encodeURIComponent(doc)}`;
@@ -427,8 +426,8 @@ window.ArkismKnowledge = (ctx) => {
       const list = el("div", "v4k-evidence");
       const files = ids.flatMap((id) => (kept[id].items || []).map((a) => [id, a]));
       for (const [id, a] of files) {
-        const c = item(a.id, [ARTIFACT[a.kind] || a.kind, a.mime, bytes(a.bytes)]);
-        const acts = el("div", "v4s-actions"), dl = button("내려받기", "", null, () => download(id, a, dl));
+        const c = item(a.id, [window.ArkismKnowledge.ARTIFACT[a.kind] || a.kind, a.mime, bytes(a.bytes)]);
+        const acts = el("div", "v4s-actions"), dl = window.ArkismKnowledge.artifactButton({ button, request, query, saveFile: save }, id, a);
         acts.append(dl); c.append(acts); list.append(c);
       }
       const waiting = L.chunks.busy || ids.some((id) => !kept[id].items);
@@ -436,11 +435,6 @@ window.ArkismKnowledge = (ctx) => {
       for (const id of ids) if (kept[id].error) list.append(el("p", "v4k-warn", kept[id].error));
       if (!waiting && !files.length) list.append(el("div", "empty", "보관한 원본 파일이 없어요. 서버에서 원본 보관(MEMORY_FILE_KEEP_ORIGINALS)을 켜야 올린 파일이 남아요."));
       body.append(list);
-    }
-    async function download(id, a, b) {
-      b.disabled = true;
-      try { save(`${a.id}${EXT[a.mime] || ""}`, await request(`/v1/sources/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(a.id)}?${query()}`, { binary: true }), a.mime); b.textContent = "내려받았어요"; }
-      catch (e) { b.textContent = e?.message === "payload_too_large" ? "파일이 너무 커요" : "내려받지 못했어요"; b.disabled = false; }
     }
     const version = (x) => source
       ? item(x.filename, [x.current ? "지금 버전" : "예전 버전", x.extraction_status === "failed" ? "읽기 실패" : `부분 ${num(x.chunk_count)}개`, ago(x.created_at)])
@@ -937,8 +931,8 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   // ---------------------------------------------------------------- 기억 후보 만들기 (글 붙여넣기 · 여러 파일)
-  // 글: POST /v1/memories/ingest (one item). 파일: POST /v1/files/memories, one file after another (the desktop bridge carries
-  // JSON only, so the multipart batch route is not used; each file gets the same per-file result and job).
+  // 글: POST /v1/memories/ingest (one item). 파일: POST /v1/files/memories/batch as multipart bytes, one file per request so the
+  // card says which file is going up and a failed file is named; the size limit is the server's (MEMORY_FILE_MAX_BYTES).
   // Everything optional sits under 자세히 and stays empty: the server's own defaults apply.
   const PARSERS = [["", "서버 기본 순서"], ["builtin", "내장 읽기"], ["converter", "변환기"], ["vision", "이미지 읽기 (모델)"], ["transcribe", "음성 받아쓰기 (모델)"],
     ["upload_job", "외부 읽기 (업로드)"], ["presigned_job", "외부 읽기 (주소)"]];
@@ -951,19 +945,50 @@ window.ArkismKnowledge = (ctx) => {
   }
   const field = (label, input) => { const f = el("label", "v4k-field"); f.append(el("span", "", label), input); return f; };
   function openAdd(initial = "text") {
-    const A = { text: "", files: [], tags: "", context: "", when: "", meta: "", strategy: "", parser: "" };
+    const A = { text: "", files: [], tags: "", context: "", when: "", meta: "", strategy: "", parser: "", doc: "", append: false, entities: "", blocks: [], more: false };
     let pop = null;
     const redraw = (key) => { if (pop?.dialog.isConnected) pop.select(key); };
     if (!strategies) loadStrategies().then((list) => { strategies = list; if (list.length) redraw(A.files.length ? "files" : initial); });
     function options(files) {
       const more = el("details", "v4k-more v4k-opts"); more.append(el("summary", "", "자세히"));
+      more.open = A.more; more.addEventListener("toggle", () => { A.more = more.open; });
       const input = (key, type = "text", ph = "") => { const i = el("input", "v4s-input"); i.type = type; i.value = A[key]; i.placeholder = ph; i.addEventListener("input", () => { A[key] = i.value; }); return i; };
       more.append(field("태그 (쉼표로 나눠요)", input("tags", "text", "회의, 디자인")), field("상황 설명 (AI가 글과 함께 읽어요)", input("context", "text", "팀 주간 회의록")),
         field("일이 있었던 때 (‘어제’ 같은 말의 기준)", input("when", "datetime-local")));
-      if (!files) { const t = el("textarea", "v4s-input"); t.rows = 3; t.value = A.meta; t.placeholder = "project=arkism"; t.addEventListener("input", () => { A.meta = t.value; }); more.append(field("메타데이터 (한 줄에 이름=값)", t)); }
+      if (!files) {
+        const t = el("textarea", "v4s-input"); t.rows = 3; t.value = A.meta; t.placeholder = "project=arkism"; t.addEventListener("input", () => { A.meta = t.value; }); more.append(field("메타데이터 (한 줄에 이름=값)", t));
+        more.append(field("이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)", input("entities", "text", "민수, Arkism")),
+          field("문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)", input("doc", "text", "weekly-notes")));
+        const ap = el("label", "v4k-check"), cb = el("input"); cb.type = "checkbox"; cb.checked = A.append; cb.addEventListener("change", () => { A.append = cb.checked; });
+        ap.append(cb, el("span", "", "같은 문서 ID의 앞 내용 뒤에 이어 붙이기"));
+        more.append(ap, blockBuilder());
+      }
       if (strategies?.length) more.append(field("뽑는 방식", select("뽑는 방식", [["", "공간 기본"], ...strategies.map((x) => [x, x])], A.strategy, (v) => { A.strategy = v; })));
       if (files) more.append(field("파일 읽는 방법", select("파일 읽는 방법", PARSERS, A.parser, (v) => { A.parser = v; })));
       return more;
+    }
+    // 글과 그림 섞기: blocks after the pasted text, in order (IngestItem.blocks). Pictures are read by the server's
+    // image model only when the operator turned it on; otherwise the item fails and says so.
+    function blockBuilder() {
+      const box = el("div", "v4k-field v4k-blocks"); box.append(el("span", "", "글 뒤에 이어질 칸 (그림과 글을 순서대로)"));
+      for (const [i, b] of A.blocks.entries()) {
+        const row = el("div", "v4k-block");
+        if (b.type === "image") row.append(noI18n(el("span", "", `🖼 ${b.file.name}`)), el("small", "", bytes(b.file.size)));
+        else { const t = el("textarea", "v4s-input"); t.rows = 2; t.value = b.text; t.setAttribute("aria-label", `글 칸 ${i + 1}`); t.addEventListener("input", () => { b.text = t.value; }); row.append(t); }
+        row.append(link("빼기", () => { A.blocks.splice(i, 1); redraw("text"); }));
+        box.append(row);
+      }
+      if (A.blockErr) box.append(el("p", "pg-hint warn", A.blockErr));
+      const add = el("div", "v4s-actions");
+      add.append(button("+ 글 칸", "", null, () => { A.blocks.push({ type: "text", text: "" }); redraw("text"); }),
+        button("+ 그림", "", null, () => chooseFile((f, ext) => {
+          A.blockErr = IMAGE[ext] ? "" : "PNG·JPEG·WebP 그림만 넣을 수 있어요.";
+          if (IMAGE[ext]) A.blocks.push({ type: "image", file: f, mime: IMAGE[ext] });
+          redraw("text");
+        })));
+      add.lastChild.disabled = A.blocks.filter((b) => b.type === "image").length >= 8; // the server reads at most 8 pictures per request
+      box.append(add, el("small", "", "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요."));
+      return box;
     }
     const actions = (label, ok, go) => {
       const a = el("div", "v4s-actions"), b = button(label, "primary", null, () => { pop.dialog.close(); go(); });
@@ -973,8 +998,9 @@ window.ArkismKnowledge = (ctx) => {
     };
     const textTab = (body) => {
       const t = el("textarea", "v4s-input v4k-paste"); t.rows = 10; t.value = A.text; t.placeholder = "회의 메모, 대화, 글을 붙여넣어 주세요."; t.setAttribute("aria-label", "넣을 글");
-      const acts = actions("기억 후보 만들기", A.text.trim(), () => extractText(A));
-      t.addEventListener("input", () => { A.text = t.value; acts.firstChild.disabled = !t.value.trim() || K.busy; });
+      const filled = () => !!(A.text.trim() || A.blocks.some((b) => b.type === "image" || b.text.trim()));
+      const acts = actions("기억 후보 만들기", filled(), () => extractText(A));
+      t.addEventListener("input", () => { A.text = t.value; acts.firstChild.disabled = !filled() || K.busy; });
       body.append(t, options(false), el("p", "meta", "글에서 기억할 만한 내용을 뽑아 후보로 만들어요. 저장할지는 '확인해 주세요'에서 내가 골라요."), acts);
     };
     const filesTab = (body) => {
@@ -983,31 +1009,48 @@ window.ArkismKnowledge = (ctx) => {
       if (!A.files.length) list.append(el("p", "meta", "아직 고른 파일이 없어요."));
       const pick = el("div", "v4s-actions");
       pick.append(button(A.files.length ? "다른 파일 고르기" : "파일 고르기", "", null, () => chooseFile((fs) => { A.files = fs; redraw("files"); }, true)));
-      body.append(pick, list, el("p", "meta", `${KINDS} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.`), options(true),
+      body.append(pick, list, el("p", "meta", `${KINDS} 파일을 한 번에 여러 개 고를 수 있어요.`), options(true),
         actions(A.files.length > 1 ? `파일 ${A.files.length}개로 기억 후보 만들기` : "기억 후보 만들기", A.files.length, () => extractFiles(A)));
     };
     pop = window.ArkismCrewPopup({ el, button }).open({ title: "기억 후보 만들기", sub: "AI가 뽑은 내용은 후보로만 남아요. 내가 승인해야 기억이 돼요.", cls: "v4k-add", initial, tabs: [
       { key: "text", label: "글 붙여넣기", render: textTab }, { key: "files", label: "파일", render: filesTab }] });
   }
+  // The pasted text first, then the added cells in order; empty text cells are left out.
+  async function itemBlocks(A) {
+    const out = A.text.trim() ? [{ type: "text", text: A.text }] : [];
+    for (const b of A.blocks) {
+      if (b.type === "image") out.push({ type: "image", mime: b.mime, content_base64: b64(await b.file.arrayBuffer()) });
+      else if (b.text.trim()) out.push({ type: "text", text: b.text });
+    }
+    return out;
+  }
   function extractText(A) {
-    const label = A.text.trim().split("\n")[0].slice(0, 40);
+    const label = (A.text.trim() || A.blocks.find((b) => b.text?.trim())?.text.trim() || A.blocks[0]?.file?.name || "").split("\n")[0].slice(0, 40);
     return startExtract(async () => {
-      const r = await post("/v1/memories/ingest", { items: [{ content: A.text, ...window.ArkismKnowledge.ingestExtras(A, true) }] });
+      const body = A.blocks.length ? { blocks: await itemBlocks(A) } : { content: A.text };
+      const r = await post("/v1/memories/ingest", { items: [{ ...body, ...window.ArkismKnowledge.ingestExtras(A, true) }] });
       const it = r?.items?.[0];
       if (!it) throw new Error("invalid_response");
       if (it.status === "failed" && !it.job_id) throw new Error(it.error || "invalid_request");
       return it;
     }, label);
   }
+  // One file as a one-file batch: the batch answers per file, so its error code is this file's.
+  async function sendFile(f, extra) {
+    const mime = MIME[extOf(f)], form = new FormData();
+    form.append("metadata", JSON.stringify({ scope: state.scope, ...extra, files: [mime ? { mime } : {}] }));
+    form.append("file", f, f.name);
+    const r = (await request("/v1/files/memories/batch", { method: "POST", form }))?.files?.[0];
+    if (!r?.result && !r?.error) throw new Error("invalid_response");
+    if (r.error) throw new Error(r.error);
+    return r.result;
+  }
   // One file after another; a file that fails does not stop the rest, and the end says how many went.
   async function extractFiles(A) {
     const n = A.files.length, extra = window.ArkismKnowledge.ingestExtras(A, false);
     let failed = 0, reason = "";
     for (const [i, f] of A.files.entries()) {
-      if (f.size > 4 << 20) { failed++; reason ||= "파일이 너무 커요. 4MB까지 올릴 수 있어요."; continue; }
-      const ext = extOf(f);
-      await startExtract(async () => post("/v1/files/memories", { filename: f.name, content_base64: b64(await f.arrayBuffer()), ...(MIME[ext] ? { mime: MIME[ext] } : {}), ...extra }),
-        n > 1 ? `${f.name} (${i + 1}/${n})` : f.name);
+      await startExtract(() => sendFile(f, extra), n > 1 ? `${f.name} (${i + 1}/${n})` : f.name, "sending");
       if (K.extract?.error) { failed++; reason ||= K.extract.error; }
     }
     if (n > 1) { K.notice = failed ? `${n}개 중 ${n - failed}개를 보냈어요. 못 보낸 파일이 ${failed}개 있어요.` : `${n}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.`; if (reason) K.notice += ` ${reason}`; paint(); }
@@ -1327,6 +1370,18 @@ window.ArkismKnowledge.splitText = (text, max = 64 << 10) => {
   };
   return pack(String(text), 0).filter((p) => p.trim());
 };
+// A kept original file (GET /v1/sources/{id}/artifacts/{artifact_id}, which checks the caller again): the word for its kind
+// and a 내려받기 button that says how it went. Also used for the attachments of search and ask results (memory-insight.js).
+window.ArkismKnowledge.ARTIFACT = { code: "코드", ocr: "글자 인식", tool_output: "도구 결과", pdf: "PDF", image: "이미지", screenshot_region: "화면 일부", audio: "소리" };
+window.ArkismKnowledge.artifactButton = ({ button, request, query, saveFile }, sourceId, a) => {
+  const EXT = { "text/plain": ".txt", "application/json": ".json", "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp", "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg" };
+  const b = button("내려받기", "", null, async () => {
+    b.disabled = true;
+    try { saveFile(`${a.id}${EXT[a.mime] || ""}`, await request(`/v1/sources/${encodeURIComponent(sourceId)}/artifacts/${encodeURIComponent(a.id)}?${query()}`, { binary: true }), a.mime); b.textContent = "내려받았어요"; }
+    catch (e) { b.textContent = e?.message === "payload_too_large" ? "파일이 너무 커요" : "내려받지 못했어요"; b.disabled = false; }
+  });
+  return b;
+};
 // The add window's optional fields in the server's words; empty ones stay out so the space defaults apply.
 // text: the paste tab (metadata lines "name=value"); otherwise the file tab (one reader to try).
 window.ArkismKnowledge.ingestExtras = (A, text) => {
@@ -1340,6 +1395,11 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
     const meta = {};
     for (const line of String(A.meta || "").split("\n")) { const m = /^\s*([^=:]+?)\s*[=:]\s*(.*?)\s*$/.exec(line); if (m) meta[m[1]] = m[2]; }
     if (Object.keys(meta).length) out.metadata = meta;
+    const entities = [...new Set(String(A.entities || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+    if (entities.length) out.entities = entities;
+    const doc = String(A.doc || "").trim();
+    if (doc) out.document_id = doc;
+    if (doc && A.append) out.update_mode = "append"; // without an id the text names the document, so there is nothing to add to
   } else if (A.parser) out.parsers = [A.parser];
   return out;
 };
