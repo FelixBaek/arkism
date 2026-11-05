@@ -551,7 +551,7 @@
         qsw("relevance_gate", "관련 없는 결과 빼기", "낱말만 우연히 맞고 뜻이 먼 기억을 빼요. 처음에는 켜져 있어요.", q.relevance_gate !== false),
         kit.line("정정을 기다리는 기억", "고쳐 달라는 후보가 있는 기억을 어떻게 보여 줄지예요.",
           edit ? select(CONFLICT, q.conflict_pending || "attach", "정정을 기다리는 기억", (v) => setBlock("recall_quality", { conflict_pending: v === "attach" ? undefined : v })) : readOnly(CONFLICT.find(([k]) => k === (q.conflict_pending || "attach"))[1])),
-        qsw("provisional", "승인 전 후보도 보여 주기", "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요.", !!q.provisional),
+        qsw("provisional", "승인 전 후보도 보여 주기", "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.", q.provisional !== false),
         qsw("auto_close_on_correction", "정정되면 옛 사실 끝내기 제안", "정정을 승인하면 옛 기억에 끝난 날짜를 붙이자고 제안해요. 내가 승인해야 바뀌어요.", !!q.auto_close_on_correction),
         ...recallDefaults(kit, q, edit),
         origin("recall_quality", () => { d.recall_quality = null; redraw(); })));

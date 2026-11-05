@@ -6743,7 +6743,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "칸으로 정하기": "Set by fields",
   "JSON 코드": "JSON code",
   "답 모양 JSON": "Answer shape JSON",
-  "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요.": "Only part of JSON Schema is used (type, properties, required, items). The shape you edit here is sent as is.",
   "찾을 기억": "Memories to look at",
   "얼마나 찾아볼까요": "How much to look",
   "둘 다 비워 두면 둘 다 봐요.": "Leave both empty to look at both.",
@@ -7288,7 +7287,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "다른 페이지에서 이 페이지로 가는 링크는 글자로 바뀌어요. 잠긴 페이지도 지워져요. 되돌릴 수 없어요.": "Links to this page from other pages become plain text. Locked pages are deleted too. This can't be undone.",
   "페이지를 지웠어요.": "Page deleted." });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "{0} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.": "You can choose several {0} files at once. Up to 4MB each.",
   "파일 {0}개로 기억 후보 만들기": "Make memory candidates from {0} files",
   "{0}개 중 {1}개를 보냈어요. 못 보낸 파일이 {2}개 있어요.": "Sent {1} of {0}. {2} files couldn't be sent.",
   "{0}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.": "Sent {0} files. See each file's result in 'Memory docs'.",
@@ -7547,3 +7545,22 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "위키에 두기: {0}": "Put in wiki: {0}",
   "폴더 {0}": "Folder {0}",
   "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "First seen {0} · Last seen {1}" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "파일을 서버로 보내고 있어요…": "Sending the file to the server…",
+  "이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)": "Names in this text (people, projects; separate with commas)",
+  "민수, Arkism": "Minsu, Arkism",
+  "문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)": "Document ID (send again with the same ID and only the changed parts are read again)",
+  "같은 문서 ID의 앞 내용 뒤에 이어 붙이기": "Add after the earlier content of the same document ID",
+  "글 뒤에 이어질 칸 (그림과 글을 순서대로)": "Parts that follow the text (pictures and text, in order)",
+  "+ 글 칸": "+ Text part",
+  "+ 그림": "+ Picture",
+  "PNG·JPEG·WebP 그림만 넣을 수 있어요.": "Only PNG, JPEG and WebP pictures can be added.",
+  "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요.": "Pictures are read only when picture reading is on in the server. Up to 8 pictures.",
+  "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요.": "Uses JSON Schema (2020-12). anyOf, oneOf, allOf and $ref within the same document work. $ref to outside addresses and $id don't. The shape you edit here is sent as is.",
+  "찾은 기억에 보관된 원본 파일도 보기": "Also show the kept original files of the found memories",
+  "보관된 원본 파일": "Kept original files",
+  "보관된 원본 파일 붙이기": "Attach the kept original files",
+  "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Shows a few candidates not yet approved, marked ‘not approved yet’. They aren't used like confirmed memories. On by default." });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "글 칸 {0}": "Text part {0}",
+  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} You can pick several files at once." });

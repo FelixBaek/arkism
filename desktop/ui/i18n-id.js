@@ -5587,7 +5587,6 @@
  "칸으로 정하기": "Atur lewat kolom",
  "JSON 코드": "Kode JSON",
  "답 모양 JSON": "JSON bentuk jawaban",
- "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요.": "Hanya sebagian JSON Schema yang dipakai (type, properties, required, items). Bentuk yang Anda ubah di sini dikirim apa adanya.",
  "찾을 기억": "Memori yang dicari",
  "얼마나 찾아볼까요": "Seberapa banyak yang dicari",
  "둘 다 비워 두면 둘 다 봐요.": "Kalau keduanya dikosongkan, keduanya dilihat.",
@@ -6281,7 +6280,22 @@
  "요약 쓰기 전에 관계없는 기억 거르기": "Saring memori yang tidak terkait sebelum menulis ringkasan",
  "작은 판정 모델이 주제와 관계없는 기억을 먼저 빼서 요약이 흐려지지 않게 해요.": "Model penilai kecil membuang dulu memori yang tidak terkait dengan topik agar ringkasan tetap fokus.",
  "바뀐 부분만 고칠 때 먼저 거르기": "Saring dulu saat hanya memperbarui bagian yang berubah",
- "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Model server hanya dipanggil jika memori baru bisa mengubah ringkasan. Jika tidak ada yang berubah, tidak dipanggil."
+ "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Model server hanya dipanggil jika memori baru bisa mengubah ringkasan. Jika tidak ada yang berubah, tidak dipanggil.",
+ "파일을 서버로 보내고 있어요…": "Sedang mengirim file ke server…",
+ "이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)": "Nama yang muncul di tulisan ini (orang, proyek; pisahkan dengan koma)",
+ "민수, Arkism": "Minsu, Arkism",
+ "문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)": "ID dokumen (kalau dikirim lagi dengan ID yang sama, hanya bagian yang berubah yang dibaca ulang)",
+ "같은 문서 ID의 앞 내용 뒤에 이어 붙이기": "Tambahkan setelah isi sebelumnya dari ID dokumen yang sama",
+ "글 뒤에 이어질 칸 (그림과 글을 순서대로)": "Bagian lanjutan setelah tulisan (gambar dan teks, berurutan)",
+ "+ 글 칸": "+ Kolom teks",
+ "+ 그림": "+ Gambar",
+ "PNG·JPEG·WebP 그림만 넣을 수 있어요.": "Hanya gambar PNG, JPEG, dan WebP yang bisa ditambahkan.",
+ "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요.": "Gambar hanya dibaca kalau pembacaan gambar di server diaktifkan. Maksimal 8 gambar.",
+ "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요.": "Memakai JSON Schema (2020-12). anyOf, oneOf, allOf, dan $ref di dalam dokumen yang sama bisa dipakai. $ref ke alamat luar dan $id tidak bisa. Bentuk yang Anda ubah di sini dikirim apa adanya.",
+ "찾은 기억에 보관된 원본 파일도 보기": "Tampilkan juga file asli yang tersimpan dari memori yang ditemukan",
+ "보관된 원본 파일": "File asli yang tersimpan",
+ "보관된 원본 파일 붙이기": "Lampirkan file asli yang tersimpan",
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Menampilkan beberapa kandidat yang belum disetujui, dengan tanda ‘belum disetujui’. Kandidat ini tidak diperlakukan seperti memori yang sudah pasti. Awalnya aktif."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7499,7 +7513,6 @@
  "정리 {0}개": "{0} rangkuman",
  "근거 바뀐 정리 {0}개 · 새로 묶을 기억 {1}묶음 · 다시 만들 주제 {2}개": "{0} rangkuman dengan dasar yang berubah · {1} kelompok memori baru · {2} topik yang akan dibuat ulang",
  "새 정리 {0}개 · 고친 정리 {1}개 · 주제 초안 {2}개 · 못 쓴 답 {3}개 · AI 호출 {4}번": "{0} rangkuman baru · {1} rangkuman diperbaiki · {2} draf topik · {3} jawaban tak terpakai · {4} panggilan AI",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.": "Anda bisa memilih beberapa file {0} sekaligus. Maksimal 4MB per file.",
  "파일 {0}개로 기억 후보 만들기": "Buat kandidat memori dari {0} file",
  "{0}개 중 {1}개를 보냈어요. 못 보낸 파일이 {2}개 있어요.": "{1} dari {0} file terkirim. {2} file gagal dikirim.",
  "{0}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.": "{0} file sudah dikirim. Hasil tiap file bisa dilihat di 'Dokumen memori'.",
@@ -7542,6 +7555,8 @@
  "기억과 고른 문서 {0}개 내보내기": "Ekspor memori dan {0} dokumen yang dipilih",
  "위키에 두기: {0}": "Taruh di wiki: {0}",
  "폴더 {0}": "Folder {0}",
- "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Pertama muncul {0} · Terakhir muncul {1}"
+ "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Pertama muncul {0} · Terakhir muncul {1}",
+ "글 칸 {0}": "Kolom teks {0}",
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Anda bisa memilih beberapa file sekaligus."
  }
 };

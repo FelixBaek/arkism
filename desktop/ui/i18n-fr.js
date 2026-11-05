@@ -5587,7 +5587,6 @@
  "칸으로 정하기": "Définir par champs",
  "JSON 코드": "Code JSON",
  "답 모양 JSON": "JSON de la forme de la réponse",
- "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요.": "Seule une partie de JSON Schema est utilisée (type, properties, required, items). La forme que vous modifiez ici est envoyée telle quelle.",
  "찾을 기억": "Souvenirs à chercher",
  "얼마나 찾아볼까요": "Jusqu'où chercher ?",
  "둘 다 비워 두면 둘 다 봐요.": "Si vous laissez les deux vides, les deux sont pris en compte.",
@@ -6281,7 +6280,22 @@
  "요약 쓰기 전에 관계없는 기억 거르기": "Écarter les souvenirs sans rapport avant d'écrire un résumé",
  "작은 판정 모델이 주제와 관계없는 기억을 먼저 빼서 요약이 흐려지지 않게 해요.": "Un petit modèle de tri écarte d'abord les souvenirs sans rapport avec le sujet, pour que le résumé reste clair.",
  "바뀐 부분만 고칠 때 먼저 거르기": "Trier d'abord quand on ne met à jour que ce qui a changé",
- "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Le modèle du serveur n'est sollicité que si de nouveaux souvenirs peuvent modifier le résumé. S'il n'y a rien à changer, il n'est pas appelé."
+ "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Le modèle du serveur n'est sollicité que si de nouveaux souvenirs peuvent modifier le résumé. S'il n'y a rien à changer, il n'est pas appelé.",
+ "파일을 서버로 보내고 있어요…": "Envoi du fichier au serveur…",
+ "이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)": "Noms cités dans ce texte (personnes, projets, séparés par des virgules)",
+ "민수, Arkism": "Minsu, Arkism",
+ "문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)": "ID du document (si vous renvoyez avec le même ID, seules les parties modifiées sont relues)",
+ "같은 문서 ID의 앞 내용 뒤에 이어 붙이기": "Ajouter à la suite du contenu précédent du même ID de document",
+ "글 뒤에 이어질 칸 (그림과 글을 순서대로)": "Blocs à la suite du texte (images et texte, dans l'ordre)",
+ "+ 글 칸": "+ Bloc de texte",
+ "+ 그림": "+ Image",
+ "PNG·JPEG·WebP 그림만 넣을 수 있어요.": "Seules les images PNG, JPEG et WebP sont acceptées.",
+ "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요.": "Les images ne sont lues que si la lecture d'images est activée sur le serveur. 8 images au maximum.",
+ "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요.": "Utilise JSON Schema (2020-12). anyOf, oneOf, allOf et les $ref vers le même document fonctionnent. Les $ref vers une adresse externe et $id ne fonctionnent pas. Le format modifié ici est envoyé tel quel.",
+ "찾은 기억에 보관된 원본 파일도 보기": "Afficher aussi les fichiers originaux conservés des souvenirs trouvés",
+ "보관된 원본 파일": "Fichiers originaux conservés",
+ "보관된 원본 파일 붙이기": "Joindre les fichiers originaux conservés",
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Affiche quelques candidats pas encore approuvés, avec la mention « non approuvé ». Ils ne sont pas utilisés comme des souvenirs confirmés. Activé par défaut."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -7499,7 +7513,6 @@
  "정리 {0}개": "{0} synthèses",
  "근거 바뀐 정리 {0}개 · 새로 묶을 기억 {1}묶음 · 다시 만들 주제 {2}개": "{0} synthèses dont les sources ont changé · {1} groupes de souvenirs à regrouper · {2} sujets à refaire",
  "새 정리 {0}개 · 고친 정리 {1}개 · 주제 초안 {2}개 · 못 쓴 답 {3}개 · AI 호출 {4}번": "{0} nouvelles synthèses · {1} synthèses corrigées · {2} brouillons de sujets · {3} réponses inutilisables · {4} appels à l'IA",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.": "Vous pouvez choisir plusieurs fichiers {0} à la fois. 4 Mo maximum par fichier.",
  "파일 {0}개로 기억 후보 만들기": "Créer des candidats de mémoire à partir de {0} fichiers",
  "{0}개 중 {1}개를 보냈어요. 못 보낸 파일이 {2}개 있어요.": "{1} fichiers envoyés sur {0}. {2} fichiers n'ont pas pu être envoyés.",
  "{0}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.": "{0} fichiers envoyés. Vous pouvez voir le résultat de chaque fichier dans « Documents mémoire ».",
@@ -7542,6 +7555,8 @@
  "기억과 고른 문서 {0}개 내보내기": "Exporter les souvenirs et les {0} documents choisis",
  "위키에 두기: {0}": "Placer dans le wiki : {0}",
  "폴더 {0}": "Dossier {0}",
- "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Première apparition {0} · Dernière apparition {1}"
+ "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Première apparition {0} · Dernière apparition {1}",
+ "글 칸 {0}": "Bloc de texte {0}",
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Vous pouvez choisir plusieurs fichiers à la fois."
  }
 };

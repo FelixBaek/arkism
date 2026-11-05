@@ -144,6 +144,7 @@ test("a person edits the new groups: a block starts from the resolved value, on/
   for (const s of ["이름 정리", "활동 기록", "승인 전 후보도 보여 주기", "세션 원문에서도 찾기", "기억을 쓰는 언어", "기준 시간대", "이름 붙은 뽑기 방식", "관찰 정리 방식", "주제 요약 기본값", "찾는 방법별 무게", "작업 상태를 후보로"])
     assert.ok(t.includes(s), s);
   assert.match(t, /sw:원인과 결과도 후보로:true/);
+  assert.match(t, /sw:승인 전 후보도 보여 주기:true/, "unset provisional is the server default: on");
   assert.match(t, /물려받기 · 말한 언어 그대로/);
   sws["승인 전 후보도 보여 주기"](true); // the template's block is kept whole
   sws["원인과 결과도 후보로"](false);

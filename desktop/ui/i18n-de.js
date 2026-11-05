@@ -5587,7 +5587,6 @@
  "칸으로 정하기": "Über Felder festlegen",
  "JSON 코드": "JSON-Code",
  "답 모양 JSON": "Antwortformat (JSON)",
- "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요.": "Nur ein Teil von JSON Schema wird genutzt (type, properties, required, items). Das Format, das du hier änderst, wird genau so gesendet.",
  "찾을 기억": "Zu durchsuchende Erinnerungen",
  "얼마나 찾아볼까요": "Wie gründlich suchen?",
  "둘 다 비워 두면 둘 다 봐요.": "Wenn du beides leer lässt, werden beide durchsucht.",
@@ -6281,7 +6280,22 @@
  "요약 쓰기 전에 관계없는 기억 거르기": "Unpassende Erinnerungen vor der Zusammenfassung aussortieren",
  "작은 판정 모델이 주제와 관계없는 기억을 먼저 빼서 요약이 흐려지지 않게 해요.": "Ein kleines Bewertungsmodell sortiert zuerst Erinnerungen aus, die nicht zum Thema passen, damit die Zusammenfassung klar bleibt.",
  "바뀐 부분만 고칠 때 먼저 거르기": "Beim Aktualisieren nur geänderter Teile vorher aussortieren",
- "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Das Servermodell wird nur aufgerufen, wenn neue Erinnerungen die Zusammenfassung ändern könnten. Gibt es nichts zu ändern, erfolgt kein Aufruf."
+ "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Das Servermodell wird nur aufgerufen, wenn neue Erinnerungen die Zusammenfassung ändern könnten. Gibt es nichts zu ändern, erfolgt kein Aufruf.",
+ "파일을 서버로 보내고 있어요…": "Die Datei wird an den Server gesendet…",
+ "이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)": "Namen in diesem Text (Personen, Projekte, durch Kommas getrennt)",
+ "민수, Arkism": "Minsu, Arkism",
+ "문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)": "Dokument-ID (wenn du mit derselben ID erneut sendest, werden nur die geänderten Teile neu gelesen)",
+ "같은 문서 ID의 앞 내용 뒤에 이어 붙이기": "Hinter den bisherigen Inhalt derselben Dokument-ID anhängen",
+ "글 뒤에 이어질 칸 (그림과 글을 순서대로)": "Teile, die auf den Text folgen (Bilder und Text in der richtigen Reihenfolge)",
+ "+ 글 칸": "+ Textfeld",
+ "+ 그림": "+ Bild",
+ "PNG·JPEG·WebP 그림만 넣을 수 있어요.": "Es können nur Bilder im Format PNG, JPEG und WebP hinzugefügt werden.",
+ "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요.": "Bilder werden nur gelesen, wenn das Bilderlesen auf dem Server aktiviert ist. Es sind bis zu 8 Bilder möglich.",
+ "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요.": "Es wird JSON Schema (2020-12) verwendet. anyOf, oneOf, allOf und $ref innerhalb desselben Dokuments funktionieren. $ref auf externe Adressen und $id funktionieren nicht. Die Form, die du hier bearbeitest, wird unverändert gesendet.",
+ "찾은 기억에 보관된 원본 파일도 보기": "Auch die gespeicherten Originaldateien der gefundenen Erinnerungen anzeigen",
+ "보관된 원본 파일": "Gespeicherte Originaldateien",
+ "보관된 원본 파일 붙이기": "Gespeicherte Originaldateien anhängen",
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Zeigt ein paar noch nicht freigegebene Kandidaten mit dem Hinweis „Noch nicht freigegeben“ an. Sie werden nicht wie bestätigte Erinnerungen behandelt. Standardmäßig ist das eingeschaltet."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -7499,7 +7513,6 @@
  "정리 {0}개": "{0} Zusammenfassungen",
  "근거 바뀐 정리 {0}개 · 새로 묶을 기억 {1}묶음 · 다시 만들 주제 {2}개": "{0} Zusammenfassungen mit geänderter Grundlage · {1} neue Erinnerungsgruppen · {2} Themen zum Neuerstellen",
  "새 정리 {0}개 · 고친 정리 {1}개 · 주제 초안 {2}개 · 못 쓴 답 {3}개 · AI 호출 {4}번": "{0} neue Zusammenfassungen · {1} überarbeitet · {2} Themenentwürfe · {3} unbrauchbare Antworten · {4} KI-Aufrufe",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.": "Du kannst mehrere {0}-Dateien auf einmal wählen. Bis zu 4 MB pro Datei.",
  "파일 {0}개로 기억 후보 만들기": "Erinnerungskandidaten aus {0} Dateien erstellen",
  "{0}개 중 {1}개를 보냈어요. 못 보낸 파일이 {2}개 있어요.": "{1} von {0} Dateien gesendet. {2} Dateien konnten nicht gesendet werden.",
  "{0}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.": "{0} Dateien gesendet. Das Ergebnis jeder Datei siehst du unter „Erinnerungsdokumente“.",
@@ -7542,6 +7555,8 @@
  "기억과 고른 문서 {0}개 내보내기": "Erinnerungen und {0} ausgewählte Dokumente exportieren",
  "위키에 두기: {0}": "Im Wiki ablegen: {0}",
  "폴더 {0}": "Ordner {0}",
- "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Zuerst gesehen {0} · Zuletzt gesehen {1}"
+ "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Zuerst gesehen {0} · Zuletzt gesehen {1}",
+ "글 칸 {0}": "Textfeld {0}",
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Du kannst mehrere Dateien auf einmal auswählen."
  }
 };

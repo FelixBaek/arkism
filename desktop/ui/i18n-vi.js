@@ -5587,7 +5587,6 @@
  "칸으로 정하기": "Đặt theo từng ô",
  "JSON 코드": "Mã JSON",
  "답 모양 JSON": "JSON dạng câu trả lời",
- "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요.": "Chỉ dùng một phần của JSON Schema (type, properties, required, items). Dạng bạn sửa ở đây sẽ được gửi đi nguyên như vậy.",
  "찾을 기억": "Ký ức cần tìm",
  "얼마나 찾아볼까요": "Tìm kỹ đến đâu",
  "둘 다 비워 두면 둘 다 봐요.": "Để trống cả hai thì sẽ xem cả hai.",
@@ -6281,7 +6280,22 @@
  "요약 쓰기 전에 관계없는 기억 거르기": "Lọc bỏ ký ức không liên quan trước khi viết tóm tắt",
  "작은 판정 모델이 주제와 관계없는 기억을 먼저 빼서 요약이 흐려지지 않게 해요.": "Một mô hình nhỏ sẽ loại bỏ trước những ký ức không liên quan đến chủ đề để bản tóm tắt không bị loãng.",
  "바뀐 부분만 고칠 때 먼저 거르기": "Lọc trước khi chỉ sửa phần đã thay đổi",
- "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Chỉ gọi mô hình trên máy chủ khi ký ức mới có thể làm thay đổi bản tóm tắt. Nếu không có gì cần đổi thì sẽ không gọi."
+ "새 기억이 요약을 바꿀 수 있을 때만 서버 모델을 불러요. 바꿀 게 없으면 호출하지 않아요.": "Chỉ gọi mô hình trên máy chủ khi ký ức mới có thể làm thay đổi bản tóm tắt. Nếu không có gì cần đổi thì sẽ không gọi.",
+ "파일을 서버로 보내고 있어요…": "Đang gửi tệp lên máy chủ…",
+ "이 글에 나오는 이름 (사람·프로젝트, 쉼표로 나눠요)": "Tên xuất hiện trong bài này (người, dự án, ngăn cách bằng dấu phẩy)",
+ "민수, Arkism": "Minsu, Arkism",
+ "문서 ID (같은 ID로 다시 보내면 바뀐 부분만 다시 읽어요)": "ID tài liệu (gửi lại với cùng ID thì chỉ phần thay đổi được đọc lại)",
+ "같은 문서 ID의 앞 내용 뒤에 이어 붙이기": "Nối vào sau nội dung trước đó của cùng ID tài liệu",
+ "글 뒤에 이어질 칸 (그림과 글을 순서대로)": "Các phần nối tiếp sau bài viết (hình và chữ, theo thứ tự)",
+ "+ 글 칸": "+ Phần chữ",
+ "+ 그림": "+ Hình",
+ "PNG·JPEG·WebP 그림만 넣을 수 있어요.": "Chỉ thêm được hình PNG, JPEG và WebP.",
+ "그림은 서버에서 그림 읽기를 켰을 때만 읽혀요. 그림은 8개까지예요.": "Hình chỉ được đọc khi máy chủ đã bật tính năng đọc hình. Tối đa 8 hình.",
+ "JSON Schema(2020-12)를 써요. anyOf·oneOf·allOf와 같은 문서 안의 $ref도 돼요. 바깥 주소 $ref와 $id는 안 돼요. 여기서 고친 모양이 그대로 보내져요.": "Dùng JSON Schema (2020-12). anyOf, oneOf, allOf và $ref trong cùng tài liệu đều dùng được. $ref trỏ đến địa chỉ bên ngoài và $id thì không. Dạng bạn chỉnh ở đây sẽ được gửi đi nguyên như vậy.",
+ "찾은 기억에 보관된 원본 파일도 보기": "Xem cả tệp gốc được lưu cùng các ký ức tìm thấy",
+ "보관된 원본 파일": "Tệp gốc đã lưu",
+ "보관된 원본 파일 붙이기": "Đính kèm tệp gốc đã lưu",
+ "아직 승인하지 않은 후보를 ‘승인 전’ 표시와 함께 몇 개 보여 줘요. 확정된 기억처럼 쓰이지 않아요. 처음에는 켜져 있어요.": "Hiển thị vài ứng viên chưa được duyệt, kèm nhãn ‘chưa duyệt’. Chúng không được dùng như ký ức đã xác nhận. Mặc định là bật."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7499,7 +7513,6 @@
  "정리 {0}개": "{0} bản tổng hợp",
  "근거 바뀐 정리 {0}개 · 새로 묶을 기억 {1}묶음 · 다시 만들 주제 {2}개": "{0} bản tổng hợp đổi nguồn · {1} nhóm ký ức cần gom mới · {2} chủ đề cần tạo lại",
  "새 정리 {0}개 · 고친 정리 {1}개 · 주제 초안 {2}개 · 못 쓴 답 {3}개 · AI 호출 {4}번": "{0} bản tổng hợp mới · {1} bản đã sửa · {2} bản nháp chủ đề · {3} câu trả lời không dùng được · {4} lần gọi AI",
- "{0} 파일을 한 번에 여러 개 고를 수 있어요. 파일마다 4MB까지예요.": "Bạn có thể chọn nhiều tệp {0} cùng lúc. Mỗi tệp tối đa 4MB.",
  "파일 {0}개로 기억 후보 만들기": "Tạo ứng viên ký ức từ {0} tệp",
  "{0}개 중 {1}개를 보냈어요. 못 보낸 파일이 {2}개 있어요.": "Đã gửi {1} trong {0} tệp. Có {2} tệp không gửi được.",
  "{0}개 파일을 보냈어요. '기억 문서'에서 파일마다 결과를 볼 수 있어요.": "Đã gửi {0} tệp. Bạn có thể xem kết quả của từng tệp trong 'Tài liệu ký ức'.",
@@ -7542,6 +7555,8 @@
  "기억과 고른 문서 {0}개 내보내기": "Xuất ký ức và {0} tài liệu đã chọn",
  "위키에 두기: {0}": "Đặt vào wiki: {0}",
  "폴더 {0}": "Thư mục {0}",
- "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Xuất hiện lần đầu {0} · Xuất hiện lần cuối {1}"
+ "처음 나온 때 {0} · 마지막으로 나온 때 {1}": "Xuất hiện lần đầu {0} · Xuất hiện lần cuối {1}",
+ "글 칸 {0}": "Phần chữ {0}",
+ "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Bạn có thể chọn nhiều tệp cùng lúc."
  }
 };
