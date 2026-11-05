@@ -28,8 +28,9 @@ type Extensions struct {
 	RequestHook RequestHook
 }
 
-// RequestHook sees a copy of each HTTP request (method, URL, headers; the body is
-// not readable) before routing and authorization; an error refuses it with 403.
+// RequestHook sees a copy of each HTTP request (method, URL, headers without
+// credentials; the body is not readable) before routing and authorization; an
+// error refuses it with 403.
 type RequestHook interface {
 	BeforeRequest(r *http.Request) error
 }
@@ -105,6 +106,9 @@ func (x Extensions) beforeRequest(r *http.Request) error {
 	}
 	view := r.Clone(r.Context())
 	view.Body = http.NoBody
+	for _, h := range []string{"Authorization", "Proxy-Authorization", "Cookie", "X-Api-Key"} {
+		view.Header.Del(h) // Clone copied the header map, so the route still sees them
+	}
 	if err := guard("request_hook", func() error { return x.RequestHook.BeforeRequest(view) }); err != nil {
 		slog.Info("request refused by extension", "method", r.Method, "path", r.URL.Path)
 		return errors.Join(ErrDenied, ErrExtensionRefused)

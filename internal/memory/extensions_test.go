@@ -103,7 +103,7 @@ func TestExtensionRequestHookFailsClosed(t *testing.T) {
 	f := newFixture(t)
 	seenBody := false
 	f.svc.Extensions.RequestHook = requestHookFunc(func(r *http.Request) error {
-		if b, _ := io.ReadAll(r.Body); len(b) > 0 {
+		if b, _ := io.ReadAll(r.Body); len(b) > 0 || r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
 			seenBody = true
 		}
 		switch r.Header.Get("X-Test") {
@@ -118,6 +118,8 @@ func TestExtensionRequestHookFailsClosed(t *testing.T) {
 	for mode, want := range map[string]int{"": http.StatusOK, "refuse": http.StatusForbidden, "panic": http.StatusForbidden} {
 		req := httptest.NewRequest(http.MethodGet, "/healthz", strings.NewReader("secret body"))
 		req.Header.Set("X-Test", mode)
+		req.Header.Set("Authorization", "Bearer "+f.human)
+		req.Header.Set("Cookie", "session=s")
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != want {
@@ -125,6 +127,6 @@ func TestExtensionRequestHookFailsClosed(t *testing.T) {
 		}
 	}
 	if seenBody {
-		t.Fatal("the hook could read the request body")
+		t.Fatal("the hook could read the request body or credentials")
 	}
 }
