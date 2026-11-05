@@ -242,7 +242,7 @@ func batchRequest(t *testing.T, meta string, files map[string]string, order []st
 func TestFileBatchUpload(t *testing.T) {
 	f, llm := mediaFixture(t, extractAnswer(), extractAnswer())
 	h := Handler(f.svc)
-	meta := `{"scope":` + string(mustJSON(t, scopeA)) + `,"files":[{},{"parsers":["builtin"]}]}`
+	meta := `{"scope":` + string(mustJSON(t, scopeA)) + `,"files":[{},{"parsers":["builtin"]}],"context":"주간 팀 회의록","tags":["회의"]}`
 	files := map[string]string{"a.md": "첫 파일 본문", "b.txt": "둘째 파일 본문", "c.exe": "MZ"}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, batchRequest(t, meta, files, []string{"a.md", "b.txt", "c.exe"}, f.human))
@@ -252,6 +252,14 @@ func TestFileBatchUpload(t *testing.T) {
 	}
 	if out.Files[0].Result == nil || out.Files[1].Result == nil || out.Files[2].Error != "unsupported_media_type" || len(llm.prompts) != 2 {
 		t.Fatalf("%+v %d", out.Files, len(llm.prompts))
+	}
+	if !strings.Contains(llm.prompts[1], "주간 팀 회의록") {
+		t.Fatal("the batch context reaches every file's prompt", llm.prompts[1])
+	}
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, batchRequest(t, `{"scope":`+string(mustJSON(t, scopeA))+`,"strategy":"bad name!"}`, files, []string{"a.md"}, f.human))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("a bad strategy name is refused like the one-file route: %d %s", w.Code, w.Body)
 	}
 	f.svc.Files.BatchFiles = 1
 	w = httptest.NewRecorder()

@@ -2278,7 +2278,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/memories/ingest`, undefined, body);
   }
   /** POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request */
-  extract_file_memories_batch(body: { "metadata": { "scope": Scope; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
+  extract_file_memories_batch(body: { "metadata": { "scope": Scope; "context"?: string; "timestamp"?: string; "tags"?: Array<string>; "strategy"?: string; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
   }
   /** GET /v1/files/memories/documents — List memory-extraction documents */

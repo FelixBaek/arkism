@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"time"
 )
 
 // FileBatchInput is the leading metadata part of a batch upload. Files gives
@@ -17,6 +18,11 @@ type FileBatchInput struct {
 	DryRun  bool            `json:"dry_run"`
 	Parsers []string        `json:"parsers,omitempty"`
 	Files   []FileBatchItem `json:"files,omitempty"`
+	// Context, Timestamp, Tags and Strategy apply to every file, as on POST /v1/files/memories.
+	Context   string     `json:"context,omitempty"`
+	Timestamp *time.Time `json:"timestamp,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+	Strategy  string     `json:"strategy,omitempty"`
 }
 
 type FileBatchItem struct {
@@ -160,14 +166,15 @@ func multipartFiles(m *multipart.Reader, perFile int64) func() (batchFile, error
 // or file limit, or a refusal, stops the batch.
 func (s *Service) ExtractFileBatch(ctx context.Context, token string, in FileBatchInput, next func() (batchFile, error)) (FileBatchOutput, error) {
 	out := FileBatchOutput{Files: []FileBatchResult{}}
-	if !validScope(in.Scope) || len(in.Files) > s.Files.batchFiles() {
+	opts := ExtractOptions{Context: in.Context, Timestamp: in.Timestamp, Tags: in.Tags, Strategy: in.Strategy}
+	if !validScope(in.Scope) || len(in.Files) > s.Files.batchFiles() || !validExtractOptions(opts, time.Now()) {
 		return out, ErrInvalid
 	}
 	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman, roleAgent)
 	if err != nil {
 		return out, err
 	}
-	plan, err := s.extractPlan(settings, ExtractOptions{}, nil)
+	plan, err := s.extractPlan(settings, opts, nil)
 	if err != nil {
 		return out, err
 	}
