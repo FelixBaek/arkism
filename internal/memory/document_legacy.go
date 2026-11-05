@@ -1,11 +1,11 @@
 package memory
 
-// Legacy binary Office files (.doc, .xls, .ppt) are compound files: a small
+// Legacy binary document files (.doc, .xls, .ppt) are compound files: a small
 // FAT file system inside one file. The reader below opens the root streams
-// with the standard library and pulls out the text: the Word piece table,
+// with the standard library and pulls out the text: the .doc piece table,
 // the spreadsheet's string and number cells, and the slides' text atoms.
 // Encrypted files and the pre-1997 formats are refused as invalid.
-// shortcut: no formula results, no embedded objects, no Word headers or
+// shortcut: no formula results, no embedded objects, no .doc headers or
 // footnotes; an operator converter still covers those when configured.
 import (
 	"bytes"
@@ -101,7 +101,13 @@ func cfbName(e []byte) string {
 func (f *cfbFile) readFAT() error {
 	ids := cfbEntries(f.raw[0x4C:0x200])
 	next, per := le32(f.raw, 0x44), (1<<f.shift)/4
-	for n := 0; next < cfbEndOfChain && n < 1<<16; n++ {
+	// A file cannot hold more FAT sectors than it has sectors, which also
+	// bounds a DIFAT chain that loops.
+	want, sectors := int(le32(f.raw, 0x2C)), len(f.raw)>>f.shift
+	if want > sectors {
+		return ErrInvalid
+	}
+	for next < cfbEndOfChain && len(ids) < want {
 		s, ok := f.sector(next)
 		if !ok {
 			return ErrInvalid
@@ -109,7 +115,7 @@ func (f *cfbFile) readFAT() error {
 		all := cfbEntries(s)
 		ids, next = append(ids, all[:per-1]...), all[per-1]
 	}
-	for _, id := range ids[:min(len(ids), int(le32(f.raw, 0x2C)))] {
+	for _, id := range ids[:min(len(ids), want)] {
 		s, ok := f.sector(id)
 		if !ok {
 			return ErrInvalid
@@ -141,7 +147,8 @@ func (f *cfbFile) chain(start uint32, table []uint32, read func(uint32) ([]byte,
 	var out []byte
 	for id, steps := start, 0; id != cfbEndOfChain && id != cfbNoStream; steps++ {
 		s, ok := read(id)
-		if !ok || steps > len(table) || int(id) >= len(table) || len(out) > documentMaxFile {
+		// An acyclic chain never yields more bytes than the file holds.
+		if !ok || steps > len(table) || int(id) >= len(table) || len(out) > len(f.raw) {
 			return nil, ErrInvalid
 		}
 		out, id = append(out, s...), table[id]
@@ -173,7 +180,7 @@ func (f *cfbFile) rootChildren(dir []byte) []int {
 	return out
 }
 
-// legacyTidy turns Word's control characters into text: paragraph and cell
+// legacyTidy turns .doc control characters into text: paragraph and cell
 // marks become line breaks and tabs, field codes keep only their result.
 func legacyTidy(s string) string {
 	var b strings.Builder
@@ -198,7 +205,7 @@ func legacyTidy(s string) string {
 	return strings.TrimSpace(b.String())
 }
 
-// cp1252 maps the bytes Windows code page 1252 uses differently from Latin-1.
+// cp1252 maps the bytes code page 1252 uses differently from Latin-1.
 var cp1252 = map[byte]rune{0x80: '€', 0x85: '…', 0x91: '‘', 0x92: '’', 0x93: '“', 0x94: '”', 0x96: '–', 0x97: '—'}
 
 func latin1(b []byte) string {
@@ -221,7 +228,7 @@ func utf16le(b []byte) string {
 	return string(utf16.Decode(u))
 }
 
-// docPages reads a Word 97-2003 document's main text through its piece table.
+// docPages reads a .doc (version 8) document's main text through its piece table.
 func docPages(raw []byte) ([]string, bool, error) {
 	s, err := cfbStreams(raw, "WordDocument", "0Table", "1Table")
 	word := s["WordDocument"]
@@ -231,6 +238,9 @@ func docPages(raw []byte) ([]string, bool, error) {
 	table := s[map[bool]string{false: "0Table", true: "1Table"}[le16(word, 0x0A)&0x0200 != 0]]
 	rgw := 32 + 2 + le16(word, 32)*2
 	rglw := rgw + 2
+	if rglw > len(word) {
+		return nil, false, ErrInvalid
+	}
 	blob := rglw + le16(word, rgw)*4 + 2
 	if blob+34*8 > len(word) {
 		return nil, false, ErrInvalid

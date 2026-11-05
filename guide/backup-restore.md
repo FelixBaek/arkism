@@ -21,6 +21,8 @@ A server backup is a nightly job you schedule yourself (a systemd timer or cron)
 
 Attached files kept in object storage (`MEMORY_BLOB_S3_*` or `MEMORY_BLOB_SHAREDKEY_*`, see [server.md](server.md#upgrade-to-the-memory-review-features)) are not copied into this backup. When those settings are in the environment of `arkism backup-bundle create`, the bundle lists every stored object's digest and size, and the restore checks the storage still holds each one. Back the bucket up separately (versioning or a scheduled copy) and restore it to the same time as the database.
 
+A bundle made with object storage on carries an extra `objects` list in its manifest. Only `arkism` and `memoryd` binaries that include this change can read it; an older binary refuses the bundle as an unsupported manifest, so restore it with the same or a newer version. Bundles made without object storage have no `objects` list and still restore with older binaries, and the new binaries restore every older bundle.
+
 `arkism-backup-retention.timer` removes old archives, then, with `--privacy-worker <worker container>`, tells the memory worker the oldest archive it kept so privacy deletions finished before that time can complete.
 
 Before an upgrade, `tools/pre_upgrade_backup.sh` runs that backup once more and exits non-zero when no new archive appeared (the backup unit exits 0 without one while another backup holds its lock), so the upgrade stops; it then keeps only the newest `ARKISM_BACKUP_KEEP` archives (10 by default) with `arkism backup-retention --keep`, so repeated upgrades cannot fill the disk. The desktop app takes a backup into `Documents/Arkism Backups` right before it installs an update and keeps the last seven automatic ones.

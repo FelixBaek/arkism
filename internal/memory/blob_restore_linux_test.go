@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -212,11 +213,17 @@ func TestBlobRestoreReviewPersistence(t *testing.T) {
 // adopted only when object storage holds each at its size; files the bundle
 // carried are uploaded there.
 func TestBlobRestoreIntoObjectStorage(t *testing.T) {
-	for _, scenario := range []string{"object", "missing_object", "no_storage", "local_upload"} {
+	for _, scenario := range []string{"object", "missing_object", "no_storage", "local_upload", "upload_fails"} {
 		t.Run(scenario, func(t *testing.T) {
 			f, digest := blobRestoreFixture(t)
 			fake := &fakeObjects{objects: map[string][]byte{}}
-			server := httptest.NewServer(fake)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if scenario == "upload_fails" && r.Method == http.MethodPut {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				fake.ServeHTTP(w, r)
+			}))
 			defer server.Close()
 			objects, err := NewS3BlobStore(server.URL, "bucket", "us-east-1", "blobs/", "AK", "SK", "")
 			if err != nil {
@@ -225,7 +232,7 @@ func TestBlobRestoreIntoObjectStorage(t *testing.T) {
 			if scenario != "no_storage" {
 				f.svc.BlobObjects = objects
 			}
-			if scenario != "local_upload" {
+			if scenario != "local_upload" && scenario != "upload_fails" {
 				// The referenced bytes live in object storage, not in the bundle.
 				pending := filepath.Join(f.svc.BlobDirectory, ".restore-pending")
 				m := blobBackupManifest{Version: 1, SourceIdentity: ContentHash("old-db"), SourceRootID: ContentHash("old-root"), Database: backupFile{ContentHash("dump"), 4}, Files: []backupFile{}, Objects: []backupFile{{digest, 14}}}
@@ -252,6 +259,13 @@ func TestBlobRestoreIntoObjectStorage(t *testing.T) {
 				}
 				if _, err = os.Stat(filepath.Join(f.svc.BlobDirectory, digest)); !os.IsNotExist(err) {
 					t.Fatal("local copy kept beside object storage", err)
+				}
+			case "upload_fails":
+				// A failed upload keeps the local copy and the pending marker for a retry.
+				_, local := os.Stat(filepath.Join(f.svc.BlobDirectory, digest))
+				_, marker := os.Stat(filepath.Join(f.svc.BlobDirectory, ".restore-pending"))
+				if err == nil || local != nil || marker != nil {
+					t.Fatal("upload failure lost data", err, local, marker)
 				}
 			default:
 				if !errors.Is(err, ErrUnavailable) {

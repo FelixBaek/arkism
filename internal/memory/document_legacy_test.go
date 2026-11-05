@@ -92,3 +92,41 @@ func TestXLSSharedStringContinues(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// FuzzLegacyOffice feeds damaged compound files to the three readers: they
+// must fail cleanly, never panic, loop or allocate past the file's own size.
+func FuzzLegacyOffice(f *testing.F) {
+	t := &testing.T{}
+	for _, name := range []string{"memo.doc", "sheet.xls", "deck.ppt"} {
+		f.Add(legacyFixture(t, name))
+	}
+	f.Fuzz(func(t *testing.T, raw []byte) {
+		for _, read := range []func([]byte) ([]string, bool, error){docPages, xlsPages, pptPages} {
+			_, _, _ = read(raw)
+		}
+	})
+}
+
+// A DIFAT chain that points at itself while the header claims billions of
+// FAT sectors must be refused at once, not read into memory.
+func TestLegacyCompoundFileLoopRefused(t *testing.T) {
+	raw := make([]byte, 512*3)
+	copy(raw, []byte{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1})
+	raw[0x1E], raw[0x20] = 9, 6
+	for i := 0x4C; i < 0x200; i++ {
+		raw[i] = 0xFF
+	}
+	put := func(at int, v uint32) {
+		raw[at], raw[at+1], raw[at+2], raw[at+3] = byte(v), byte(v>>8), byte(v>>16), byte(v>>24)
+	}
+	put(0x2C, 0xFFFFFFF0) // FAT sector count
+	put(0x44, 0)          // DIFAT starts at sector 0 ...
+	put(512+508, 0)       // ... whose next link is sector 0 again
+	if _, err := cfbStreams(raw, "WordDocument"); !errors.Is(err, ErrInvalid) {
+		t.Fatal(err)
+	}
+	put(0x2C, 1) // a sane count with the same looping chain still ends
+	if _, err := cfbStreams(raw, "WordDocument"); err == nil {
+		t.Fatal("broken file accepted")
+	}
+}
