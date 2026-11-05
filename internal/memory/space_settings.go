@@ -241,12 +241,7 @@ func validSpaceSettings(c SpaceConfig) error {
 		len(c.DefenseRules) > spaceDefenseMax || len(c.MCPTools) > spaceMCPToolsMax || !validLaneWeights(c.RecallLaneWeights) {
 		return ErrInvalid
 	}
-	for i, tool := range c.MCPTools {
-		if !spaceToolPattern.MatchString(tool) || slices.Contains(c.MCPTools[:i], tool) {
-			return ErrInvalid
-		}
-	}
-	if slices.ContainsFunc(c.DefenseRules, func(r SpaceDefenseRule) bool { return !validDefenseRule(r) }) ||
+	if !validMCPTools(c.MCPTools) || slices.ContainsFunc(c.DefenseRules, func(r SpaceDefenseRule) bool { return !validDefenseRule(r) }) ||
 		!c.AutoDerive.valid() || !c.Audit.valid() || !slices.Contains(entityResolveModes, c.EntityResolution) || !validEntityLabels(c.EntityLabels) {
 		return ErrInvalid
 	}
@@ -254,6 +249,16 @@ func validSpaceSettings(c SpaceConfig) error {
 		return err
 	}
 	return validExtractionSettings(c)
+}
+
+// validMCPTools: every tool name matches the pattern and appears once.
+func validMCPTools(tools []string) bool {
+	for i, tool := range tools {
+		if !spaceToolPattern.MatchString(tool) || slices.Contains(tools[:i], tool) {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *SpaceAutoDerive) valid() bool {
@@ -311,6 +316,16 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 			c.Audit = nil
 		}
 	}
+	applyEntityInput(c, in)
+	if in.RecallLaneWeights != nil {
+		c.RecallLaneWeights = *in.RecallLaneWeights // {} hands the weights back
+	}
+	applyExtractionInput(c, in)
+	applyReflectModelBlocks(c, in)
+}
+
+// applyEntityInput copies the entity fields a PUT or PATCH sent.
+func applyEntityInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.EntityResolution != nil {
 		c.EntityResolution = strings.TrimSpace(*in.EntityResolution)
 	}
@@ -323,11 +338,6 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.EntityLabels != nil {
 		c.EntityLabels = *in.EntityLabels
 	}
-	if in.RecallLaneWeights != nil {
-		c.RecallLaneWeights = *in.RecallLaneWeights // {} hands the weights back
-	}
-	applyExtractionInput(c, in)
-	applyReflectModelBlocks(c, in)
 }
 
 // applyExtractionInput copies the extraction fields a PUT or PATCH sent.
