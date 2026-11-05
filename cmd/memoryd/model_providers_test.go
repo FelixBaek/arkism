@@ -94,7 +94,7 @@ func TestModelSidecarRefusesBadSettings(t *testing.T) {
 	}
 	t.Setenv("ARKISM_MODEL_SIDECAR_ENV", "")
 	// A command that exits at once is reported, not waited on.
-	t.Setenv("ARKISM_MODEL_SIDECAR", `["`+os.Args[0]+`","-test.run=^$"]`)
+	t.Setenv("ARKISM_MODEL_SIDECAR", `["`+os.Args[0]+`","-test.run=^TestSidecarHelperProcess$"]`)
 	t.Setenv("ARKISM_MODEL_SIDECAR_READY_URL", "http://"+freeLoopbackAddr(t)+"/")
 	if _, err := startModelSidecar(context.Background()); !errors.Is(err, memory.ErrUnavailable) {
 		t.Fatal("early exit", err)
