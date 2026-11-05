@@ -268,7 +268,8 @@ wiki. What a person approves and how is described in
    `external:transfer` like other model input. The calls count against the
    daily model call cap and appear in usage as `wiki_file_vision` and
    `wiki_file_transcribe`. What the model returns goes through the same
-   privacy filters and becomes review candidates only.
+   privacy filters and becomes review candidates only. A `dry_run` upload
+   never calls these models; it answers with the skip reason `dry_run_media`.
 7. **File extraction jobs.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.

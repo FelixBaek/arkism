@@ -414,6 +414,9 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
+	if in.DryRun && len(pages) == 0 {
+		return FileMemoriesResult{Status: JobStatusDone, Skipped: notes}, nil
+	}
 	chunks, redacted, err := extractFileChunks(pages, paged)
 	if err != nil {
 		return FileMemoriesResult{}, err

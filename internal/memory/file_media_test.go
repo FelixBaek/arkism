@@ -133,9 +133,7 @@ func TestScannedPDFPagesReadByVision(t *testing.T) {
 	}
 	v := &fakeVisionLLM{fakeWikiLLM: llm, reads: []string{"첫 쪽 글자", "둘째 쪽 글자"}}
 	f.svc.Wiki = v
-	in := mediaUpload("scan.pdf", scannedPDF("JPEG1", "JPEG2"))
-	in.DryRun = true
-	out, err := f.svc.ExtractFileMemories(testCtx, f.human, in)
+	out, err := f.svc.ExtractFileMemories(testCtx, f.human, mediaUpload("scan.pdf", scannedPDF("JPEG1", "JPEG2")))
 	if err != nil || len(v.images) != 2 || string(v.images[1]) != "JPEG2" || len(llm.prompts) != 2 || !strings.Contains(llm.prompts[1], "둘째 쪽 글자") {
 		t.Fatalf("%+v %v %d %q", out, err, len(v.images), llm.prompts)
 	}
@@ -175,9 +173,7 @@ func TestFileAudioTranscribedThroughEndpoint(t *testing.T) {
 	}
 	f, llm := mediaFixture(t, extractAnswer())
 	f.svc.Transcriber = tr
-	in := mediaUpload("팀 회의 녹음.mp3", []byte("MP3BYTES"))
-	in.DryRun = true
-	if _, err = f.svc.ExtractFileMemories(testCtx, f.human, in); err != nil {
+	if _, err = f.svc.ExtractFileMemories(testCtx, f.human, mediaUpload("팀 회의 녹음.mp3", []byte("MP3BYTES"))); err != nil {
 		t.Fatal(err)
 	}
 	if gotModel != "speech-1" || gotName != "audio.mp3:MP3BYTES" || gotAuth != "Bearer k" || !strings.Contains(llm.prompts[0], "금요일 배포 금지") {
@@ -189,5 +185,30 @@ func TestFileAudioTranscribedThroughEndpoint(t *testing.T) {
 	t.Setenv("MEMORY_TRANSCRIBE_ENDPOINT", "http://example.com/x")
 	if _, err = TranscriberFromEnv(); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("plain http endpoint: %v", err)
+	}
+}
+
+// A dry run is a free preview: images, scanned PDFs and audio are not sent to a
+// model; the answer says the file needs a real run.
+func TestFileMediaDryRunCallsNoModel(t *testing.T) {
+	f, llm := mediaFixture(t)
+	v := &fakeVisionLLM{fakeWikiLLM: llm, reads: []string{"x", "y"}}
+	f.svc.Wiki = v
+	f.svc.Transcriber = &HTTPTranscriber{Endpoint: "https://127.0.0.1:1/never", ModelName: "speech-1", APIKey: "k"}
+	for _, in := range []FileMemoriesInput{mediaUpload("a.png", []byte("PNG")), mediaUpload("a.mp3", []byte("MP3")), mediaUpload("scan.pdf", scannedPDF("JPEG1"))} {
+		in.DryRun = true
+		out, err := f.svc.ExtractFileMemories(testCtx, f.human, in)
+		if err != nil || out.Status != JobStatusDone || len(out.Skipped) != 1 || out.Skipped[0].Reason != "dry_run_media" || len(out.Claims) != 0 {
+			t.Fatalf("%s: %+v %v", in.Filename, out, err)
+		}
+	}
+	if len(v.images) != 0 || len(llm.prompts) != 0 || len(ledgerOps(f)) != 0 || len(f.repo.rows("memory_candidates")) != 0 {
+		t.Fatalf("a dry run spent a model: images %d prompts %d ledger %v", len(v.images), len(llm.prompts), ledgerOps(f))
+	}
+	f.svc.Transcriber = nil
+	in := mediaUpload("a.mp3", []byte("MP3"))
+	in.DryRun = true
+	if _, err := f.svc.ExtractFileMemories(testCtx, f.human, in); !errors.Is(err, errUnsupportedFormat) {
+		t.Fatalf("a dry run still says audio is off: %v", err)
 	}
 }
