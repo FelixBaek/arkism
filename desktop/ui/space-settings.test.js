@@ -196,8 +196,12 @@ test("recall defaults, capture mode and density and the consolidation decision m
   sws["다시 고를 때 겹치는 것 합치기"](true);
   sws["관찰을 먼저 보여 주기"](true);
   const sel = (label) => box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === label);
-  const density = sel("얼마나 촘촘히 뽑을지"); density.value = "dense"; dom.fire(density, "change");
+  const density = sel("얼마나 촘촘히 뽑을지");
+  density.value = "conversation"; dom.fire(density, "change");
+  assert.match(box.textContent, /대화 원문도 찾아볼 수 있게/);
+  density.value = "dense"; dom.fire(density, "change");
   assert.match(box.textContent, /뽑는 모델 사용량/);
+  assert.doesNotMatch(box.textContent, /대화 원문도 찾아볼 수 있게/);
   const delta = sel("바뀐 부분만 고칠 때 먼저 거르기"); delta.value = "jev"; dom.fire(delta, "change");
   assert.ok(sel("요약 쓰기 전에 관계없는 기억 거르기"), "every task keeps its own control");
   const back = sel("바뀐 부분만 고칠 때 먼저 거르기"); back.value = ""; dom.fire(back, "change");

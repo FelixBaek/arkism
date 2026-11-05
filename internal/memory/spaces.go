@@ -119,7 +119,7 @@ type SpaceConfig struct {
 	RecallSessionArchives *bool `json:"recall_session_archives,omitempty" bson:"recall_session_archives,omitempty"`
 	// CaptureMode is whose words the capture hook extracts: user (the default) or assistant_results
 	// (opt-in: also results the agent confirmed and other speakers' statements, as assistant_result
-	// candidates). CaptureDensity (durable, balanced, the default, or dense) is how much it keeps.
+	// candidates). CaptureDensity (durable, balanced, the default, dense, or conversation for talk between people) is how much it keeps.
 	CaptureMode    string `json:"capture_mode,omitempty" bson:"capture_mode,omitempty"`
 	CaptureDensity string `json:"capture_density,omitempty" bson:"capture_density,omitempty"`
 	// DecisionModels picks per task the decision engine that settles easy cases before the server

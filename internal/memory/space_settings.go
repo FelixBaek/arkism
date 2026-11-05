@@ -34,10 +34,12 @@ const (
 	memoryLanguageAuto    = "auto"
 	captureModeUser       = "user"
 	captureDensityDefault = "balanced"
-	spaceExtractConcise   = "concise"
-	spaceExtractVerbose   = "verbose"
-	spaceExtractCustom    = "custom"
-	spaceExtractVerbatim  = "verbatim"
+	// captureDensityConversation keeps every fact of every speaker and the turns themselves (recall_conversation.go).
+	captureDensityConversation = "conversation"
+	spaceExtractConcise        = "concise"
+	spaceExtractVerbose        = "verbose"
+	spaceExtractCustom         = "custom"
+	spaceExtractVerbatim       = "verbatim"
 	// chunks stores each chunk of the text as a candidate as it stands, with no model call.
 	spaceExtractChunks   = "chunks"
 	spaceChunkMin        = 500
@@ -59,7 +61,7 @@ const (
 var (
 	// captureModes and captureDensities shape the capture hook's prompt (capture_mode, capture_density).
 	captureModes      = []string{"", captureModeUser, "assistant_results"}
-	captureDensities  = []string{"", "durable", captureDensityDefault, "dense"}
+	captureDensities  = []string{"", "durable", captureDensityDefault, "dense", captureDensityConversation}
 	spaceExtractModes = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim, spaceExtractChunks}
 	spaceStrategyName = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 	// memoryLanguageTag is a language tag a space may write memories in ("ko", "en", "pt-BR").

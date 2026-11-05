@@ -993,7 +993,7 @@ func (s *Service) checkCreateTx(ctx context.Context, tx Tx, col string, in Creat
 			return e
 		}
 	}
-	return s.enqueueProvisional(ctx, tx, col, r)
+	return s.enqueueSideLane(ctx, tx, col, r)
 }
 
 func checkToolCallRun(ctx context.Context, tx Tx, r Record, now time.Time) error {

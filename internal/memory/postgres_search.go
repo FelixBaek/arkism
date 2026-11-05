@@ -190,7 +190,7 @@ func pgSearchWhere(criteria SearchCriteria, collection string, now time.Time, ex
 		// lane (and in the vector lane's nearest-neighbour cutoff).
 		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false", "NULLIF(doc->>'approved_by','') IS NOT NULL")
 	}
-	if collection == "memory_candidates" {
+	if collection == "memory_candidates" || collection == "sources" {
 		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false")
 	}
 	if collection == colReflections {
@@ -225,7 +225,8 @@ func (p *Postgres) Search(ctx context.Context, scope Scope, query string, vector
 
 func (p *Postgres) SearchCollection(ctx context.Context, collection string, in SearchInput, vector []float64, space string) ([][]Hit, error) {
 	pending := collection == "memory_candidates" // the provisional lane over candidates waiting for review
-	if !pending && !slices.Contains(searchableCollections, collection) || in.IncludeInactive && collection != colMemories {
+	turns := collection == "sources" && slices.Equal(in.Kinds, []string{conversationSourceKind})
+	if !pending && !turns && !slices.Contains(searchableCollections, collection) || in.IncludeInactive && collection != colMemories {
 		return nil, ErrInvalid
 	}
 	if err := checkScope(in.Scope); err != nil || !validSearchModes(in.Modes) {

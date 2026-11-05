@@ -7397,6 +7397,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "에이전트가 확인한 결과까지": "Also results the agent confirmed",
   "오래 쓸 것만": "Only lasting things",
   "촘촘하게": "Dense",
+  "사람 사이 대화 전체": "Whole conversations between people",
+  "사람끼리 나눈 대화의 모든 사실을 후보로 만들고, 대화 원문도 찾아볼 수 있게 남겨요. 모델을 가장 많이 써요.": "Turns every fact in conversations between people into candidates and keeps the conversation text searchable. Uses the most model calls.",
   "후보도 뜻으로 찾기": "Find candidates by meaning too",
   "새 후보를 임베딩해 뜻으로 찾는 길에도 걸리게 해요. 처음에는 꺼져 있어요.": "Embeds new candidates so search by meaning finds them too. Off at first.",
   "켜져 있어요. 후보가 들어올 때마다 임베딩을 만들어 모델 예산을 써요.": "It is on. Every incoming candidate gets an embedding, which spends model budget.",

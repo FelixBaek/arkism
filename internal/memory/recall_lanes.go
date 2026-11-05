@@ -260,6 +260,7 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 	if err := s.pendingRecall(ctx, token, in, collection, out); err != nil {
 		return err
 	}
+	s.conversationTurns(ctx, token, in, collection, out)
 	return s.collectSourceFacts(ctx, in, out, clean)
 }
 

@@ -884,7 +884,7 @@ func sourceErasureJob(kind string) bool {
 // embedJob runs one embedding job. The bool reports whether the attempt
 // counts as finished; a successful write also advances job.Revision.
 func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
-	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages && job.Target.Collection != "memory_candidates" {
+	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages && job.Target.Collection != "memory_candidates" && job.Target.Collection != "sources" {
 		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
@@ -1000,13 +1000,16 @@ func embeddingEligible(col string, r Record) bool {
 	if col == "memory_candidates" { // provisional recall: only while it waits for review
 		return searchableLive(r, col, "", time.Now(), nil)
 	}
+	if col == "sources" { // only the conversation lane embeds sources
+		return conversationSource(col, r) && live(r)
+	}
 	return live(r)
 }
 
 // embedSourcesLive: a wiki page a person wrote, or one built from memories,
 // may have no source rows; every other embedded record must cite live sources.
 func embedSourcesLive(ctx context.Context, tx Tx, col string, r Record) error {
-	if col == colWikiPages && len(r.Sources) == 0 {
+	if col == colWikiPages && len(r.Sources) == 0 || col == "sources" { // a source is its own evidence
 		return nil
 	}
 	return checkSources(ctx, tx, r)

@@ -783,7 +783,7 @@ func searchExtras(res map[string]any) host.Obj {
 	if explain := res["explain"]; explain != nil {
 		out = append(out, host.KV{Key: "explain", Value: explain})
 	}
-	for _, k := range []string{"empty_reason", "provisional", "provisional_notice"} {
+	for _, k := range []string{"empty_reason", "provisional", "provisional_notice", "conversation"} { // conversation: unreviewed raw turns, labelled data_only
 		if truthy(res[k]) {
 			out = append(out, host.KV{Key: k, Value: res[k]})
 		}
@@ -993,7 +993,7 @@ func recallShape(found []any) ([]any, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "pending_correction", "valid_to_proposal", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain", "source_traces", "entities"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "occurred", "collected_at", "sources", "memory_context", "conflict_pending", "pending_correction", "valid_to_proposal", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain", "source_traces", "entities"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}

@@ -207,3 +207,23 @@ func TestSearchExtrasKeepsSessionLaneApart(t *testing.T) {
 		t.Fatal(empty)
 	}
 }
+
+// Recalled memories keep their event span and recording time; conversation turns reach the agent apart.
+func TestRecallShapeKeepsEventSpanAndConversationLane(t *testing.T) {
+	occurred := map[string]any{"from": "2023-05-07T00:00:00Z", "to": "2023-05-07T23:59:59Z"}
+	out, err := recallShape([]any{map[string]any{"id": "m1", "text": "Caroline went to a support group on 2023-05-07.", "occurred": occurred, "collected_at": "2023-05-08T10:00:00Z"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := out[0].(host.Obj)
+	if v, _ := m.Get("occurred"); v == nil {
+		t.Fatal("occurred dropped", m)
+	}
+	if v, _ := m.Get("collected_at"); v != "2023-05-08T10:00:00Z" {
+		t.Fatal("collected_at dropped", m)
+	}
+	extras := searchExtras(map[string]any{"conversation": []any{map[string]any{"text": "[2023-05-08] Caroline: hi", "authority": "data_only_untrusted"}}})
+	if v, _ := extras.Get("conversation"); len(asList(v)) != 1 {
+		t.Fatal(extras)
+	}
+}

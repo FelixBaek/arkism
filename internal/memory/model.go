@@ -504,6 +504,9 @@ type ContextBundle struct {
 	// Sessions is the opt-in session-archive lane (space setting recall_session_archives):
 	// raw past messages, kept apart from memories because no person reviewed them.
 	Sessions []ArchiveMessageView `json:"sessions,omitempty"`
+	// Conversation are raw conversation turns a space with capture_density conversation keeps as
+	// sources (recall_conversation.go), returned with include sources; never ranked among memories.
+	Conversation []Hit `json:"conversation,omitempty"`
 	// sourceFacts are the cleaned source memories of observation hits, held for
 	// include source_facts until the search's checks are done (recall_include.go).
 	sourceFacts map[string][]Hit

@@ -107,14 +107,20 @@ func (in SearchInput) noticeLang() string {
 	return langnote.Pick(setting, in.locale, in.Query)
 }
 
-// enqueueProvisional queues a new candidate for embedding when an embedder runs and its
-// space shows provisional candidates with provisional_vectors.
-func (s *Service) enqueueProvisional(ctx context.Context, tx Tx, col string, r Record) error {
-	if col != "memory_candidates" || s.Embedder == nil || r.Status != "candidate" || r.Sensitivity == "restricted" {
+// enqueueSideLane queues a new record of a recall side lane for embedding when an embedder
+// runs: a candidate when its space shows provisional candidates with provisional_vectors, a
+// conversation source when its space keeps conversations (capture_density conversation).
+func (s *Service) enqueueSideLane(ctx context.Context, tx Tx, col string, r Record) error {
+	side := col == "memory_candidates" && r.Status == "candidate" || conversationSource(col, r)
+	if !side || s.Embedder == nil || r.Sensitivity == "restricted" {
 		return nil
 	}
 	settings, err := s.spaceSettingsFrom(ctx, tx, r.Scope)
-	if q := settings.recallQuality(); err != nil || !q.provisionalOn() || !q.ProvisionalVectors {
+	if err != nil {
+		return nil
+	}
+	if q := settings.recallQuality(); col == "memory_candidates" && (!q.provisionalOn() || !q.ProvisionalVectors) ||
+		col == "sources" && settings.CaptureDensity != captureDensityConversation {
 		return nil
 	}
 	return enqueue(ctx, tx, col, r)
@@ -262,13 +268,12 @@ func (s *Service) pendingReadable(ctx context.Context, token string, in SearchIn
 // recall's own lanes (exact, keyword and, with the recall's query vector, vector) over the
 // candidates waiting for review. A lexical match must also hold the query's topic.
 func (s *Service) provisionalHits(ctx context.Context, token string, in SearchInput, out *ContextBundle) error {
-	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: in.SearchCriteria}
-	lists, err := s.Repo.SearchCollection(ctx, "memory_candidates", lane, in.queryVector, in.querySpace)
+	rows, err := s.sideLane(ctx, "memory_candidates", in, in.SearchCriteria)
 	if err != nil {
 		return err
 	}
 	terms := searchQueryTerms(in.Query)
-	for _, row := range fuseWeighted(lists, provisionalLaneLimit, nil) {
+	for _, row := range rows {
 		if len(out.Provisional) == provisionalMax {
 			break
 		}
@@ -286,6 +291,17 @@ func (s *Service) provisionalHits(ctx context.Context, token string, in SearchIn
 		out.ProvisionalNotice = langnote.Text(langnote.Provisional, in.noticeLang())
 	}
 	return nil
+}
+
+// sideLane runs the recall's own lanes (exact, keyword and, with the recall's query vector,
+// vector) over another collection and fuses them, best first. The caller rechecks each row.
+func (s *Service) sideLane(ctx context.Context, collection string, in SearchInput, criteria SearchCriteria) ([]ScoredHit, error) {
+	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: criteria}
+	lists, err := s.Repo.SearchCollection(ctx, collection, lane, in.queryVector, in.querySpace)
+	if err != nil {
+		return nil, err
+	}
+	return fuseWeighted(lists, provisionalLaneLimit, nil), nil
 }
 
 // closeCorrectedFact runs when a person approves a correction and keeps the old memory:

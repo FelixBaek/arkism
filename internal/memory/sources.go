@@ -126,6 +126,9 @@ func (s *Service) createSource(ctx context.Context, token string, in CreateInput
 				if result, e = insertDigestSource(ctx, tx, in.Scope, proposed, digestID, actor); e != nil {
 					return e
 				}
+				if e = s.enqueueSideLane(ctx, tx, "sources", result); e != nil {
+					return e
+				}
 			} else {
 				return e
 			}

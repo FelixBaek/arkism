@@ -6165,6 +6165,8 @@
  "에이전트가 확인한 결과까지": "Y compris les résultats confirmés par l'agent",
  "오래 쓸 것만": "Seulement ce qui dure",
  "촘촘하게": "Très détaillé",
+ "사람 사이 대화 전체": "Conversations complètes entre personnes",
+ "사람끼리 나눈 대화의 모든 사실을 후보로 만들고, 대화 원문도 찾아볼 수 있게 남겨요. 모델을 가장 많이 써요.": "Transforme chaque fait des conversations entre personnes en candidats et garde le texte de la conversation consultable. C'est ce qui sollicite le plus le modèle.",
  "후보도 뜻으로 찾기": "Trouver aussi les candidats par le sens",
  "새 후보를 임베딩해 뜻으로 찾는 길에도 걸리게 해요. 처음에는 꺼져 있어요.": "Crée des embeddings pour les nouveaux candidats afin que la recherche par le sens les trouve aussi. Désactivé au départ.",
  "켜져 있어요. 후보가 들어올 때마다 임베딩을 만들어 모델 예산을 써요.": "Activé. Chaque nouveau candidat reçoit un embedding, ce qui consomme du budget du modèle.",

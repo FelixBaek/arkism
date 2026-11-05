@@ -268,11 +268,12 @@ func (f *fakeRepo) search(scope Scope, query string, vector []float64, space str
 	}
 	tokens, lowered := exactQueryKeywords(query), strings.ToLower(query)
 	var keyword, text, nearest []Hit
-	for _, col := range append(slices.Clone(searchableCollections), "memory_candidates") {
-		pending := col == "memory_candidates" // only when asked for by name, like the store
+	for _, col := range append(slices.Clone(searchableCollections), "memory_candidates", "sources") {
+		pending := col == "memory_candidates"
+		named := pending || col == "sources" // only when asked for by name, like the store
 		for _, rec := range f.rowsLocked(col) {
 			state := pending && searchableLive(rec, col, "", time.Now(), nil) || !pending && (criteria.history && historySearchable(rec) || !criteria.history && live(rec))
-			if (collection != "" || pending) && col != collection || !state || !criteria.matchesRecord(rec) || !sameScope(rec.Scope, scope) {
+			if (collection != "" || named) && col != collection || !state || !criteria.matchesRecord(rec) || !sameScope(rec.Scope, scope) {
 				continue
 			}
 			if searchModeEnabled(modes, "exact") && matchesKeyword(rec.Keywords, tokens) {

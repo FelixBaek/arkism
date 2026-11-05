@@ -258,7 +258,8 @@
         ...flag(kit, "work_state_candidates", "작업 상태를 후보로", "작업 중간 저장과 인계를 ‘지금 어디까지 했는지’ 후보로 만들어요. 처음에는 꺼져 있어요."),
         ...choice(kit, "capture_mode", CAPTURE_MODES, "대화에서 무엇을 뽑을지", "에이전트가 확인한 사실·도구 결과·다른 사람의 말도 후보로 만들지예요. 후보는 내가 승인해야 기억이 돼요."),
         ...choice(kit, "capture_density", DENSITIES, "얼마나 촘촘히 뽑을지", "촘촘할수록 후보가 많아져요."),
-        ...(["balanced", "dense"].includes(S.draft?.capture_density || S.eff.capture_density) ? [el("p", "pg-hint warn", "후보가 많아지는 만큼 뽑는 모델 사용량(예산)을 더 써요.")] : []),
+        ...(["balanced", "dense", "conversation"].includes(S.draft?.capture_density || S.eff.capture_density) ? [el("p", "pg-hint warn", "후보가 많아지는 만큼 뽑는 모델 사용량(예산)을 더 써요.")] : []),
+        ...((S.draft?.capture_density || S.eff.capture_density) === "conversation" ? [el("p", "pg-hint", "사람끼리 나눈 대화의 모든 사실을 후보로 만들고, 대화 원문도 찾아볼 수 있게 남겨요. 모델을 가장 많이 써요.")] : []),
         ...extractSizes(kit),
         ...strategies(kit)));
       if (human()) g.append(kit.more("자세히 · 뽑기 시험해 보기", ...trialBox(kit)));
@@ -266,7 +267,7 @@
     }
 
     const CAPTURE_MODES = [["user", "내가 한 말만"], ["assistant_results", "에이전트가 확인한 결과까지"]];
-    const DENSITIES = [["durable", "오래 쓸 것만"], ["balanced", "보통"], ["dense", "촘촘하게"]];
+    const DENSITIES = [["durable", "오래 쓸 것만"], ["balanced", "보통"], ["dense", "촘촘하게"], ["conversation", "사람 사이 대화 전체"]];
     // the app's own language list (look.js); the server takes any language tag
     const LANG_LIST = [["auto", "말한 언어 그대로"], ...(window.ArkismLook?.languages || [])];
     // a stored value outside the list still shows as itself
