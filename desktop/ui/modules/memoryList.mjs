@@ -9,17 +9,18 @@ export function createMemoryList(deps) {
   // Figma v4 Brain › 기억 (198:630): 확인해 주세요 card → search + dropdowns → kind chips → list.
   // 확인할 것 (검토 대기·확인 필요·안 쓰임) and 모아보기 (작업 관계·사용자 특성·반성 교훈·과거 시점·대화) are sub-screens with "← 기억".
   // One name per review concept across the app: 새 기억 확인 · 서로 다른 기억 · 합치기 제안. 승인 경로 has nothing to decide, so it is a 모아보기 view.
-  const MEM_CHECK = [["candidate", "새 기억 확인"], ["conflicted", "서로 다른 기억"], ["merge", "합치기 제안"], ["idle", "다시 볼 기억"]];
- // merge: digests.js
-  const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"]];
+  const MEM_CHECK = [["candidate", "새 기억 확인"], ["conflicted", "서로 다른 기억"], ["merge", "합치기 제안"], ["notes", "AI 정리"], ["idle", "다시 볼 기억"]];
+ // merge, notes: digests.js
+  const MEM_LOOK = [["digests", "주제 요약"], ["relations", "작업 관계"], ["traits", "사용자 특성"], ["reflections", "반성 교훈"], ["past", "과거 시점"], ["originals", "대화"], ["ask", "물어보기"], ["rules", "규칙"], ["entities", "자주 나온 이름"]];
 
-  const memPanels = () => ({ relations: deps.relations, traits: deps.traits, reflections: deps.reflections, past: deps.memoryTime, originals: deps.originals });
+  const memPanels = () => ({ relations: deps.relations, traits: deps.traits, reflections: deps.reflections, past: deps.memoryTime, originals: deps.originals, ask: deps.insight.ask, rules: deps.insight.rules, entities: deps.insight.entities }); // insight: memory-insight.js
 
   // Each is a serverCount(): the server total or "N+" while more pages wait, "—" when the list failed (#465), never the first page as the whole.
   function checkCounts() {
-    const d = deps.state.data, merge = deps.digests.mergeCount();
+    const d = deps.state.data, merge = deps.digests.mergeCount(), notes = deps.digests.notesCount();
     return { candidate: deps.listCount("candidates", deps.state.candidateTotal), provenance: serverCount(d.memories.filter(deps.approvalUnproven), { more: deps.partialMemories() }),
-      conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge === false ? null : merge) };
+      conflicted: deps.listCount("conflicted"), idle: deps.idleCount(), merge: serverCount(merge === null ? undefined : merge === false ? null : merge),
+      notes: serverCount(notes === null ? undefined : notes === false ? null : notes) };
   }
 
   // What is known to wait, with "+" when a part is still unknown or partial.
@@ -33,7 +34,8 @@ export function createMemoryList(deps) {
   function memTitle() {
     const t = deps.memory.memTab;
     const check = { candidate: "AI가 대화에서 새로 뽑은 기억이에요. 저장할지 버릴지 정해 주세요.", conflicted: "이미 있는 기억과 다른 내용이 들어왔어요. 어느 쪽이 맞는지 골라 주세요.",
-      idle: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보이는 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요." }[t];
+      idle: "재검토 예정일이 지났거나 최근에 잘 안 불리거나 답에 잘 안 보이는 기억이에요. 실제 활용 여부와는 구분해요.", merge: "새로 들어온 기억이 이미 있는 기억과 비슷해요. AI 제안을 보고 저장할지, 합칠지, 건너뛸지 골라 주세요.",
+      notes: "AI가 승인된 기억을 읽고 쓴 정리와 주제 요약 초안이에요. 근거를 보고 쓸지 버릴지 정해 주세요." }[t];
     // everything waiting, as on the 한눈에 chip: each sub-tab already shows its own count
     if (check) return ["확인해 주세요", check, `${checkTotal().text}개`];
     if (t === "provenance") return ["승인 기록", "예전 방식으로 저장돼 사람이 승인한 기록이 남지 않은 기억이에요. 할 일은 없고, 내용도 바꾸지 않아요.", `${deps.catalogQuery.snapshot("memories").total ?? checkCounts().provenance.text}개`];
@@ -41,7 +43,9 @@ export function createMemoryList(deps) {
     if (t === "digests") return ["모아보기", "비슷한 기억을 주제로 묶고 AI가 요약해요. 요약이 바뀌면 바로 쓰지 않고 먼저 확인을 받아요.", deps.digests.title()];
     const look = { relations: "같은 작업에서 이어서 쓰인 스킬 순서예요. 관찰한 것일 뿐, 실행 허가는 아니에요.", traits: "대화에서 관찰한 사용자 성향이에요. 지시나 실행 승인으로 쓰지 않아요.",
       reflections: "작업하면서 얻은 해석이에요. 사실이나 실행 승인으로 쓰지 않아요.", past: "정한 시각에 쓰이던 기억을 그대로 보여 줘요. 지금 지시로는 쓰지 않아요.",
-      originals: "에이전트와 나눈 대화예요. 7일 보관하고, 기억이 실제로 쓰이면 그때부터 다시 7일을 세요." }[t];
+      originals: "에이전트와 나눈 대화예요. 7일 보관하고, 기억이 실제로 쓰이면 그때부터 다시 7일을 세요.",
+      ask: "궁금한 것을 물으면 승인된 기억만 보고 답해요. 답에는 근거 기억이 붙어요.", rules: "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 규칙이에요. 사람만 적고 바꿀 수 있어요.",
+      entities: "기억에 자주 나온 사람·도구·프로젝트 이름이에요. 고르면 그 이름이 나온 기억을 볼 수 있어요." }[t];
     if (look) return [MEM_LOOK.find(([k]) => k === t)[1], look, ""];
     const w = deps.memUse();
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
@@ -118,6 +122,7 @@ export function createMemoryList(deps) {
       const line = deps.el("p", "mem-check-title"); line.append("확인해 주세요", deps.el("strong", "", total.text));
       txt.append(line, deps.el("p", "mem-check-sub", `새 기억 확인 ${n.candidate.text} · 서로 다른 기억 ${n.conflicted.text} · 다시 볼 기억 ${n.idle.text}`));
       if (n.merge.min) txt.lastChild.append(` · 합치기 제안 ${n.merge.text}`);
+      if (n.notes.min) txt.lastChild.append(` · AI 정리 ${n.notes.text}`);
       card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", firstCheck())));
       top.push(card);
     }
@@ -259,6 +264,7 @@ export function createMemoryList(deps) {
     const tools = deps.el("div", "mem-tools"); tools.append(memSearch());
     deps.$("#controls").append(tools); // 합치기 제안 too: paintMerge filters by the same query (Figma 383:29822)
     if (deps.memory.memTab === "merge") { deps.digests.drawMerge(); return; }
+    if (deps.memory.memTab === "notes") { deps.digests.drawNotes(); return; }
     deps.$("#stats").replaceChildren(catalogNote());
     const items = memorySource();
     const canDecide = !!deps.state.caps?.actions?.review_decide;

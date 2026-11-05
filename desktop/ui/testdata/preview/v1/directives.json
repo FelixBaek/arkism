@@ -1,0 +1,39 @@
+{
+ "items": [
+  {
+   "id": "dr1",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "title": "배포 전에는 사람에게 묻기",
+   "rule": "운영 서버에 올리기 전에는 꼭 사람에게 먼저 물어본다.",
+   "priority": 80,
+   "applies_to": "both",
+   "active": true,
+   "tags": [],
+   "created_by": "preview-owner",
+   "created_at": "2026-10-11T02:00:00Z",
+   "updated_at": "2026-10-11T02:00:00Z"
+  },
+  {
+   "id": "dr2",
+   "revision": 2,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "title": "답은 한국어로",
+   "rule": "물어보기 답은 한국어로 짧게 쓴다.",
+   "priority": 50,
+   "applies_to": "reflect",
+   "active": false,
+   "tags": [],
+   "created_by": "preview-owner",
+   "created_at": "2026-10-12T02:00:00Z",
+   "updated_at": "2026-10-13T02:00:00Z"
+  }
+ ],
+ "next_cursor": ""
+}

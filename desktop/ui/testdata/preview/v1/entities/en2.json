@@ -1,0 +1,47 @@
+{
+ "id": "en2",
+ "name": "Orbit",
+ "type": "project",
+ "aliases": [],
+ "proposed": false,
+ "mentions": 9,
+ "proposed_mentions": 0,
+ "first_seen": "2026-09-01T00:00:00Z",
+ "last_seen": "2026-10-14T03:00:00Z",
+ "memories": [
+  {
+   "id": "m1",
+   "kind": "decision",
+   "relation": "mentions",
+   "event_at": "2026-10-14T03:00:00Z",
+   "snippet": "Orbit 백엔드는 데이터베이스 하나로 둔다."
+  },
+  {
+   "id": "m4",
+   "kind": "decision",
+   "relation": "mentions",
+   "event_at": "2026-10-14T03:00:00Z",
+   "snippet": "Orbit 배포 전에는 스테이징에서 결제 흐름을 확인한다."
+  }
+ ],
+ "related": [
+  {
+   "id": "en1",
+   "name": "Alex",
+   "type": "person",
+   "weight": 2
+  },
+  {
+   "id": "en3",
+   "name": "devserver",
+   "type": "tool",
+   "weight": 2
+  }
+ ],
+ "timeline": [
+  {
+   "month": "2026-10",
+   "count": 9
+  }
+ ]
+}

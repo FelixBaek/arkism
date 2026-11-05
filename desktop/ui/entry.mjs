@@ -49,6 +49,7 @@ import "./memory-context.js";
 import "./memory-management.js";
 import "./model-generation.js";
 import "./intelligence.js";
+import "./memory-insight.js";
 import "./digests.js";
 import "./skill-execution.js";
 import "./skill-trial-status.js";

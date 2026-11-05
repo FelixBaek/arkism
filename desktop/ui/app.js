@@ -1237,6 +1237,7 @@ export function startApp() {
     if (state.view !== "memories" || state.memTab !== "traits") traits.reset();
     if (state.view !== "memories" || state.memTab !== "relations") relations.reset();
     if (state.view !== "memories" || state.memTab !== "digests") digests.reset();
+    for (const [tab, panel] of Object.entries(insight)) if (state.view !== "memories" || state.memTab !== tab) panel.reset();
     updateCounts();
     renderStatusCard();
     const v = views[state.view];
@@ -1324,7 +1325,7 @@ export function startApp() {
       box.replaceChildren(...pageView.head());
     } else if (state.view === "crew") {
       box.replaceChildren(...crew.head());
-    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "provenance", "conflicted", "idle", "digests", "merge", "removed"].includes(state.memTab)) {
+    } else if (state.view === "memories" && ["past", "reflections", "traits", "relations", "candidate", "provenance", "conflicted", "idle", "digests", "merge", "notes", "removed", ...Object.keys(insight)].includes(state.memTab)) {
       box.replaceChildren();
     } else if (state.view === "memories" && state.memTab === "originals") {
       box.replaceChildren(button("다시 불러오기", "", "arrows-clockwise", originals.reload));
@@ -1767,6 +1768,7 @@ export function startApp() {
     get currentMemoryPages() { return memoryPaging.currentMemoryPages; },
     get DAY() { return DAY; },
     get digests() { return digests; },
+    get insight() { return insight; },
     get el() { return el; },
     get ensureMemoryResults() { return memoryPaging.ensureMemoryResults; },
     get failNotice() { return failNotice; },
@@ -2025,7 +2027,8 @@ export function startApp() {
     if (state.view === "memories" && state.memTab === "reflections") return reflections.detail();
     if (state.view === "memories" && state.memTab === "past") return memoryTime.detail();
     if (state.view === "memories" && state.memTab === "originals") return originals.detail();
-    if (state.view === "memories" && ["digests", "merge"].includes(state.memTab)) return digests.detail();
+    if (state.view === "memories" && ["digests", "merge", "notes"].includes(state.memTab)) return digests.detail();
+    if (state.view === "memories" && insight[state.memTab]) return insight[state.memTab].detail();
     const id = state.selected;
     if (state.view === "todo") {
       if (state.start) return home.startDetail();
@@ -2207,7 +2210,7 @@ export function startApp() {
     itemPop?.dialog.close();
     $("#app").classList.remove("detail-open"); state.selected = null;
     if (state.view === "todo") { render(); return; } // home's title and body change with the selection too
-    const panel = state.view === "memories" && { traits, reflections, relations, past: memoryTime, originals, digests, merge: digests }[state.memTab];
+    const panel = state.view === "memories" && { traits, reflections, relations, past: memoryTime, originals, digests, merge: digests, notes: digests, ...insight }[state.memTab];
     if (panel) { panel.close(); return; }
     markSelected(); renderDetail();
   }
@@ -2316,6 +2319,9 @@ export function startApp() {
   const reflections = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const digests = window.ArkismDigests({ canRefresh: () => !syncVisible.blocked(), state, $, el, raw, tr, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, notice, ago, render, row, markSelected,
     kindLabel, originOf, memSelect: memoryList.memSelect, section, facts, openRecord: (r) => openIntelligenceRecord(r), reloadMemories: memoryList.reloadMemories });
+  // 물어보기 · 규칙 · 자주 나온 이름 (memory-insight.js)
+  const insight = Object.fromEntries(["ask", "rules", "entities"].map((tab) => [tab, window.ArkismMemoryInsight({ state, $, el, raw, icon, button, request: appApi.request, query: appApi.query,
+    detailShell, openDetail, notice, section, facts, callout, openRecord: openIntelligenceRecord }, tab)]));
   const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });

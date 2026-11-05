@@ -1,0 +1,21 @@
+{
+ "answer": "Orbit은 배포 전에 스테이징에서 결제 흐름을 처음부터 끝까지 확인하고, 운영에 올리기 전에는 사람에게 먼저 물어봐요.",
+ "cited_memory_ids": [
+  "m4"
+ ],
+ "directives_applied": [
+  "dr1"
+ ],
+ "retrieved": [
+  {
+   "id": "m4",
+   "kind": "procedural",
+   "score": 0.91
+  },
+  {
+   "id": "m7",
+   "kind": "lesson",
+   "score": 0.55
+  }
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "items": [
+  {
+   "id": "ob1",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "status": "proposed",
+   "revision": 1,
+   "content": "Orbit 배포는 늘 스테이징 결제 확인 뒤에 하고, 테스트 시간대는 UTC로 고정한다.",
+   "source_memories": [
+    {
+     "collection": "memories",
+     "id": "m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m7",
+     "revision": 1
+    }
+   ],
+   "source_memory_ids": [
+    "m4",
+    "m7"
+   ],
+   "durability": "lasting",
+   "durability_reason": "배포 절차로 반복해서 나옴",
+   "confidence": 0.82,
+   "fresh": true,
+   "derived": true,
+   "generator": {
+    "model": "server-default"
+   },
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z",
+   "authority": "data_only_untrusted"
+  },
+  {
+   "id": "ob2",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "status": "proposed",
+   "revision": 2,
+   "content": "Alex는 리뷰 코멘트를 파일별 목록으로, PR 설명은 짧게 받는 걸 좋아한다.",
+   "source_memories": [
+    {
+     "collection": "memories",
+     "id": "m5",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m2",
+     "revision": 1
+    }
+   ],
+   "source_memory_ids": [
+    "m5",
+    "m2"
+   ],
+   "durability": "lasting",
+   "fresh": true,
+   "derived": true,
+   "diff": [
+    {
+     "op": "-",
+     "text": "Alex는 리뷰 코멘트를 파일별 목록으로 받는 걸 좋아한다."
+    },
+    {
+     "op": "+",
+     "text": "Alex는 리뷰 코멘트를 파일별 목록으로, PR 설명은 짧게 받는 걸 좋아한다."
+    }
+   ],
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T04:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "next_cursor": "",
+ "authority": "data_only_untrusted"
+}

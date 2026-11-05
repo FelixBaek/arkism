@@ -1,0 +1,40 @@
+{
+ "id": "en3",
+ "name": "devserver",
+ "type": "tool",
+ "aliases": [],
+ "proposed": true,
+ "mentions": 2,
+ "proposed_mentions": 1,
+ "first_seen": "2026-09-01T00:00:00Z",
+ "last_seen": "2026-10-14T03:00:00Z",
+ "memories": [
+  {
+   "id": "m8",
+   "kind": "decision",
+   "relation": "mentions",
+   "event_at": "2026-10-14T03:00:00Z",
+   "snippet": "Orbit 로컬 개발 서버는 make dev로 띄운다."
+  }
+ ],
+ "related": [
+  {
+   "id": "en1",
+   "name": "Alex",
+   "type": "person",
+   "weight": 2
+  },
+  {
+   "id": "en2",
+   "name": "Orbit",
+   "type": "project",
+   "weight": 2
+  }
+ ],
+ "timeline": [
+  {
+   "month": "2026-10",
+   "count": 2
+  }
+ ]
+}

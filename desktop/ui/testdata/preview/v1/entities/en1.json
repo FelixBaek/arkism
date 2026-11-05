@@ -1,0 +1,42 @@
+{
+ "id": "en1",
+ "name": "Alex",
+ "type": "person",
+ "aliases": [
+  "알렉스"
+ ],
+ "proposed": false,
+ "mentions": 4,
+ "proposed_mentions": 0,
+ "first_seen": "2026-09-01T00:00:00Z",
+ "last_seen": "2026-10-14T03:00:00Z",
+ "memories": [
+  {
+   "id": "m5",
+   "kind": "decision",
+   "relation": "mentions",
+   "event_at": "2026-10-14T03:00:00Z",
+   "snippet": "Alex는 리뷰 코멘트를 파일별 목록으로 받는 걸 좋아한다."
+  }
+ ],
+ "related": [
+  {
+   "id": "en2",
+   "name": "Orbit",
+   "type": "project",
+   "weight": 2
+  },
+  {
+   "id": "en3",
+   "name": "devserver",
+   "type": "tool",
+   "weight": 2
+  }
+ ],
+ "timeline": [
+  {
+   "month": "2026-10",
+   "count": 4
+  }
+ ]
+}

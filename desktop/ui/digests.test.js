@@ -433,3 +433,68 @@ test("#465 digests: a failed read says it could not load; only a missing route r
   assert.match(old.h.$("#table").textContent, /합치기 제안을 지원하지 않아요/);
   assert.equal(old.view.mergeCount(), 0);
 });
+
+test("AI 정리 lists observations and mental-model drafts; only a person approves or rejects them", async () => {
+  const sent = [];
+  const ob1 = { id: "ob1", revision: 2, content: "답은 짧게 쓰는 편이에요", fresh: true, durability: "lasting", confidence: 0.8, updated_at: "2026-01-05T00:00:00Z",
+    source_memories: [{ collection: "memories", id: "m1" }, { collection: "observations", id: "ob0" }], generator: { model: "small" } };
+  const mm1 = { id: "mm1", revision: 4, title: "배포 방식", query: "배포는 어떻게 하나요?", refresh: "on_change", updated_at: "2026-01-04T00:00:00Z",
+    active: { version: 1, text: "옛 요약", at: "2026-01-01T00:00:00Z" }, draft: { version: 2, text: "새 요약", citations: [{ collection: "memories", id: "m3" }], withheld: false },
+    draft_diff: [{ op: "-", text: "옛 요약" }, { op: "+", text: "새 요약" }] };
+  const mm2 = { id: "mm2", revision: 1, title: "초안 없음" };
+  const mm3 = { id: "mm3", revision: 1, title: "가린 초안", draft: { version: 1, text: "", citations: [], withheld: true } };
+  const t = setup({ routes: {
+    "/v1/observations?": () => ({ items: [ob1] }), "/v1/mental-models?": () => ({ items: [mm1, mm2, mm3] }),
+    "/v1/observations/ob1/review": (_, o) => { sent.push(["ob1", JSON.parse(o.body)]); return {}; },
+    "/v1/mental-models/mm1/review": (_, o) => { sent.push(["mm1", JSON.parse(o.body)]); throw new Error("revision_conflict"); } } });
+  t.state.memTab = "notes"; t.state.caps = { role: "human" };
+  assert.equal(t.view.notesCount(), null);
+  t.view.drawNotes();
+  assert.match(t.h.$("#table").textContent, /AI 정리를 불러오는 중/);
+  await dom.flush();
+  assert.equal(t.view.notesCount(), 3, "models without a draft are not waiting");
+  assert.equal(rows(t).length, 3);
+  assert.match(t.h.$("#table").textContent, /기억에서 뽑은 정리 · 근거 기억 2개/);
+  assert.match(t.h.$("#table").textContent, /근거 바뀜/);
+  t.view.detail();
+  assert.match(detailText(t), /정리를 고르세요/);
+  rows(t)[0].click(); await dom.flush();
+  let d = detailText(t);
+  assert.match(d, /답은 짧게 쓰는 편이에요/);
+  assert.match(d, /승인된 다른 AI 정리 1개도 근거로 썼어요/);
+  assert.match(d, /오래 갈 내용/);
+  assert.match(d, /80%/);
+  btn(t.h.$("#detail"), "승인").click(); await dom.flush();
+  assert.deepEqual(sent[0], ["ob1", { scope: SCOPE, expected_revision: 2, action: "approve" }]);
+  assert.match(t.notices[0], /승인했어요/);
+  rows(t).find((r) => r.dataset.id === "note:model:mm1").click(); await dom.flush();
+  d = detailText(t);
+  assert.match(d, /배포는 어떻게 하나요/);
+  assert.match(d, /지금 요약/);
+  assert.match(d, /옛 요약/);
+  btn(t.h.$("#detail"), "버리기").click();
+  dom.input(t.h.$("#detail textarea"), "틀렸어요");
+  btn(t.h.$("#detail"), "버리기").click(); await dom.flush();
+  assert.deepEqual(sent[1], ["mm1", { scope: SCOPE, expected_revision: 4, action: "reject", reason: "틀렸어요" }]);
+  assert.match(t.notices[1], /그사이 정리나 근거 기억이 바뀌었어요/);
+  rows(t).find((r) => r.dataset.id === "note:model:mm3").click(); await dom.flush();
+  assert.ok(btn(t.h.$("#detail"), "승인").disabled, "a withheld draft cannot be approved");
+  assert.match(detailText(t), /근거 기억이 지워져서 내용을 가렸어요/);
+  t.state.caps = { role: "agent" }; t.view.detail();
+  assert.equal(btn(t.h.$("#detail"), "승인"), undefined);
+  assert.match(detailText(t), /승인과 버리기는 사람만 할 수 있어요/);
+});
+
+test("AI 정리 without server support or with a failed read", async () => {
+  const gone = () => { throw new Error("not_found"); };
+  let t = setup({ routes: { "/v1/observations?": gone, "/v1/mental-models?": gone } });
+  t.state.memTab = "notes"; t.view.drawNotes(); await dom.flush();
+  assert.match(t.h.$("#table").textContent, /AI 정리를 지원하지 않아요/);
+  t = setup({ routes: { "/v1/observations?": () => { throw new Error("down"); }, "/v1/mental-models?": () => ({ items: [] }) } });
+  t.state.memTab = "notes"; t.view.drawNotes(); await dom.flush();
+  assert.equal(t.view.notesCount(), false);
+  assert.match(t.h.$("#table").textContent, /불러오지 못했어요/);
+  t = setup({ routes: { "/v1/observations?": () => ({ items: [] }), "/v1/mental-models?": gone } });
+  t.state.memTab = "notes"; t.view.drawNotes(); await dom.flush();
+  assert.match(t.h.$("#table").textContent, /확인할 AI 정리가 없어요/);
+});

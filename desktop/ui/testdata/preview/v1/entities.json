@@ -1,0 +1,40 @@
+{
+ "items": [
+  {
+   "id": "en1",
+   "name": "Alex",
+   "type": "person",
+   "aliases": [
+    "알렉스"
+   ],
+   "mentions": 4,
+   "proposed_mentions": 0,
+   "proposed": false,
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z"
+  },
+  {
+   "id": "en2",
+   "name": "Orbit",
+   "type": "project",
+   "aliases": [],
+   "mentions": 9,
+   "proposed_mentions": 0,
+   "proposed": false,
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z"
+  },
+  {
+   "id": "en3",
+   "name": "devserver",
+   "type": "tool",
+   "aliases": [],
+   "mentions": 2,
+   "proposed_mentions": 0,
+   "proposed": true,
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z"
+  }
+ ],
+ "next_cursor": ""
+}

@@ -1,0 +1,73 @@
+{
+ "items": [
+  {
+   "id": "mm1",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "revision": 3,
+   "title": "Orbit 배포 방식",
+   "query": "Orbit 배포 절차와 확인할 것",
+   "refresh": "on_change",
+   "active": {
+    "version": 1,
+    "status": "active",
+    "action": "approve",
+    "text": "스테이징에서 결제 흐름을 확인한 뒤 배포한다.",
+    "citations": [
+     {
+      "collection": "memories",
+      "id": "m4",
+      "revision": 1
+     }
+    ],
+    "by": "preview-owner",
+    "at": "2026-10-10T09:00:00Z"
+   },
+   "draft": {
+    "version": 2,
+    "status": "draft",
+    "action": "refresh",
+    "text": "스테이징에서 결제 흐름을 처음부터 끝까지 확인한 뒤 배포한다.\n테스트 시간대는 UTC로 고정한다.",
+    "citations": [
+     {
+      "collection": "memories",
+      "id": "m4",
+      "revision": 1
+     },
+     {
+      "collection": "memories",
+      "id": "m7",
+      "revision": 1
+     }
+    ],
+    "by": "service:refresh",
+    "at": "2026-10-14T03:00:00Z",
+    "generator": {
+     "model": "server-default"
+    }
+   },
+   "draft_diff": [
+    {
+     "op": "-",
+     "text": "스테이징에서 결제 흐름을 확인한 뒤 배포한다."
+    },
+    {
+     "op": "+",
+     "text": "스테이징에서 결제 흐름을 처음부터 끝까지 확인한 뒤 배포한다."
+    },
+    {
+     "op": "+",
+     "text": "테스트 시간대는 UTC로 고정한다."
+    }
+   ],
+   "last_refresh_at": "2026-10-14T03:00:00Z",
+   "created_at": "2026-10-10T09:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "next_cursor": "",
+ "authority": "data_only_untrusted"
+}
