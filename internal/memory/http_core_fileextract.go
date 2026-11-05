@@ -23,7 +23,7 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 			return
 		}
 		out, e := s.ExtractFileMemories(r.Context(), bearer(r), in)
-		s.startExtractJob(r, in.Scope, out.JobID, e)
+		s.startExtractJob(r, in.Scope, out, e)
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/files/memories/jobs/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +49,7 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 			return
 		}
 		out, e := s.ExtractKnowledgeMemories(r.Context(), bearer(r), r.PathValue("id"), in)
-		s.startExtractJob(r, in.Scope, out.JobID, e)
+		s.startExtractJob(r, in.Scope, out, e)
 		respond(w, out, e)
 	})
 }
@@ -59,10 +59,11 @@ var extractJobSlots = make(chan struct{}, 2)
 
 // startExtractJob runs a queued job after the response; the caller polls it.
 // A job stopped by a restart or the budget resumes through its run route.
-func (s *Service) startExtractJob(r *http.Request, scope Scope, id string, err error) {
-	if err != nil || id == "" {
+func (s *Service) startExtractJob(r *http.Request, scope Scope, out FileMemoriesResult, err error) {
+	if err != nil || out.JobID == "" || out.Status != JobStatusPending {
 		return
 	}
+	id := out.JobID
 	ctx, token := context.WithoutCancel(r.Context()), bearer(r)
 	go func() {
 		extractJobSlots <- struct{}{}

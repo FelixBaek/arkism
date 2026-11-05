@@ -8,6 +8,11 @@ package memory
 // A file the request budget cannot cover runs as a job in the "jobs"
 // collection (kind file_memory_extract); its chunks carry their own source
 // references, so a job resumes from the next chunk after a budget stop.
+//
+// A document uploaded again (same scope and file name, or the same knowledge
+// source) is compared chunk by chunk with its last upload: unchanged chunks
+// are not sent to the model again, and chunks that disappeared are only
+// reported with their candidate ids, for a person to retire if they wish.
 
 import (
 	"context"
@@ -25,6 +30,7 @@ import (
 
 const (
 	fileExtractJobKind         = "file_memory_extract"
+	fileExtractDocKind         = "file_memory_extract_doc"
 	fileExtractPromptVersion   = "file-extract-v1"
 	fileExtractPipelineVersion = "arkism-file-extract-v1"
 	// The wiki_ prefix puts these calls under the wiki model's daily call cap.
@@ -90,26 +96,49 @@ type KnowledgeExtractInput struct {
 }
 
 type FileMemoriesResult struct {
-	SourceID          string           `json:"source_id,omitempty"`
-	SourceIDs         []string         `json:"source_ids,omitempty"`
-	JobID             string           `json:"job_id,omitempty"`
-	Status            string           `json:"status"`
-	CandidatesCreated int              `json:"candidates_created"`
-	Claims            []ExtractedClaim `json:"claims,omitempty"`
-	Skipped           []ExtractSkip    `json:"skipped"`
+	SourceID          string            `json:"source_id,omitempty"`
+	SourceIDs         []string          `json:"source_ids,omitempty"`
+	JobID             string            `json:"job_id,omitempty"`
+	Status            string            `json:"status"`
+	CandidatesCreated int               `json:"candidates_created"`
+	Claims            []ExtractedClaim  `json:"claims,omitempty"`
+	Skipped           []ExtractSkip     `json:"skipped"`
+	Delta             *FileExtractDelta `json:"delta,omitempty"`
+}
+
+// FileExtractDelta compares an upload with the last upload of the same document.
+type FileExtractDelta struct {
+	ChunksTotal     int                  `json:"chunks_total" bson:"chunks_total"`
+	ChunksUnchanged int                  `json:"chunks_unchanged" bson:"chunks_unchanged"`
+	ChunksChanged   int                  `json:"chunks_changed" bson:"chunks_changed"`
+	ChunksRemoved   int                  `json:"chunks_removed" bson:"chunks_removed"`
+	RemovedSources  []FileExtractRemoved `json:"removed_sources" bson:"removed_sources"`
+}
+
+// FileExtractRemoved is a chunk of the last upload that is gone now; its
+// candidates (an approved candidate keeps its id as a memory) stay as they are.
+type FileExtractRemoved struct {
+	Locator      string   `json:"locator" bson:"locator"`
+	Source       Ref      `json:"source" bson:"source"`
+	CandidateIDs []string `json:"candidate_ids" bson:"candidate_ids"`
 }
 
 // FileExtractChunk is one model request's worth of text and where it came from.
 type FileExtractChunk struct {
-	Locator string `json:"locator" bson:"locator"`
-	Source  Ref    `json:"source" bson:"source"`
-	Text    string `json:"-" bson:"text"`
+	Locator    string   `json:"locator" bson:"locator"`
+	Source     Ref      `json:"source" bson:"source"`
+	Text       string   `json:"-" bson:"text,omitempty"`
+	Hash       string   `json:"-" bson:"hash,omitempty"`
+	Candidates []string `json:"-" bson:"candidates,omitempty"`
 }
 
 type FileExtractJob struct {
 	Label             string             `json:"label" bson:"label"`
 	Sources           []string           `json:"sources" bson:"sources"`
 	Chunks            []FileExtractChunk `json:"-" bson:"chunks"`
+	Kept              []FileExtractChunk `json:"-" bson:"kept,omitempty"` // unchanged chunks carried from the last upload
+	Document          string             `json:"-" bson:"document,omitempty"`
+	Delta             FileExtractDelta   `json:"delta" bson:"delta"`
 	Total             int                `json:"total" bson:"total"`
 	Next              int                `json:"next" bson:"next"`
 	CandidatesCreated int                `json:"candidates_created" bson:"candidates_created"`
@@ -205,7 +234,7 @@ func extractChunks(pages []string, paged bool) []FileExtractChunk {
 			if paged {
 				locator = fmt.Sprintf("page:%d/chunk:%d", p+1, c+1)
 			}
-			out = append(out, FileExtractChunk{Locator: locator, Text: piece})
+			out = append(out, FileExtractChunk{Locator: locator, Text: piece, Hash: ContentHash(extractSpaces(piece))})
 		}
 	}
 	return out
@@ -366,10 +395,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 		out.Status = JobStatusDone
 		return out, s.previewChunks(ctx, token, d, in.Scope, chunks, &out)
 	}
-	if err = s.storeExtractSources(ctx, token, in.Scope, in.Filename, chunks); err != nil {
-		return FileMemoriesResult{}, err
-	}
-	return s.extractStored(ctx, token, d, in.Scope, in.Filename, chunks, out)
+	return s.extractStored(ctx, token, d, in.Scope, in.Filename, "file:"+in.Filename, chunks, out)
 }
 
 // storeExtractSources stores the filtered text as source evidence, in parts
@@ -408,51 +434,99 @@ func extractSourceIDs(chunks []FileExtractChunk) []string {
 	return ids
 }
 
-// extractStored runs a small file now and queues a larger one as a job.
-func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, label string, chunks []FileExtractChunk, out FileMemoriesResult) (FileMemoriesResult, error) {
-	out.SourceIDs = extractSourceIDs(chunks)
-	out.SourceID = out.SourceIDs[0]
-	if len(chunks) > fileExtractSyncChunks {
-		job, err := s.createExtractJob(ctx, d, scope, label, chunks, out.Skipped)
-		if err != nil {
+// extractStored extracts the chunks that changed since the document's last
+// upload: a few now, more as a queued job. Chunks without a source yet (an
+// uploaded file) get one; unchanged chunks keep their old source.
+func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, label, docRef string, chunks []FileExtractChunk, out FileMemoriesResult) (FileMemoriesResult, error) {
+	docID := "file-extract-doc-" + ContentHash(structuredText(scope)+"\x00"+docRef)
+	prev, err := s.extractDocState(ctx, scope, docID)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	fresh, kept, delta := diffExtractChunks(prev, chunks)
+	if len(fresh) > 0 && fresh[0].Source.ID == "" {
+		if err = s.storeExtractSources(ctx, token, scope, label, fresh); err != nil {
 			return FileMemoriesResult{}, err
 		}
-		out.JobID, out.Status = job.ID, job.Status
+	}
+	out.SourceIDs = extractSourceIDs(append(slices.Clone(kept), fresh...))
+	out.SourceID, out.Delta = out.SourceIDs[0], &delta
+	job, err := s.createExtractJob(ctx, d, scope, label, docID, fresh, kept, delta, out.Skipped)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	out.JobID, out.Status = job.ID, job.Status
+	if len(fresh) == 0 || len(fresh) > fileExtractSyncChunks {
 		return out, nil
 	}
-	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
-	for _, ch := range chunks {
-		created, skipped, err := s.extractAndCapture(ctx, token, d, scope, budget, ch)
-		if err != nil {
-			return FileMemoriesResult{}, err
-		}
-		out.CandidatesCreated += created
-		out.Skipped = append(out.Skipped, skipped...)
+	r, ok, err := s.claimExtractJob(ctx, d, scope, job.ID)
+	if err != nil || !ok {
+		return out, err
 	}
-	out.Status = JobStatusDone
+	r, runErr, err := s.runExtractJob(ctx, token, d, r)
+	if runErr != nil {
+		return FileMemoriesResult{}, runErr
+	}
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	out.Status, out.CandidatesCreated, out.Skipped = r.Status, r.FileExtract.CandidatesCreated, r.FileExtract.Skipped
 	return out, nil
 }
 
-func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) (int, []ExtractSkip, error) {
+// diffExtractChunks splits an upload by chunk hash against the chunks the
+// last upload already extracted: fresh ones need the model, kept ones carry
+// their old source and candidates, and the delta lists what disappeared.
+func diffExtractChunks(prev, next []FileExtractChunk) ([]FileExtractChunk, []FileExtractChunk, FileExtractDelta) {
+	old := map[string]FileExtractChunk{}
+	for _, ch := range prev {
+		if _, ok := old[ch.Hash]; !ok {
+			old[ch.Hash] = ch
+		}
+	}
+	seen := map[string]bool{}
+	fresh, kept := []FileExtractChunk{}, []FileExtractChunk{}
+	for _, ch := range next {
+		seen[ch.Hash] = true
+		if p, ok := old[ch.Hash]; ok {
+			ch.Text, ch.Source, ch.Candidates = "", p.Source, p.Candidates
+			kept = append(kept, ch)
+			continue
+		}
+		fresh = append(fresh, ch)
+	}
+	delta := FileExtractDelta{ChunksTotal: len(next), ChunksUnchanged: len(kept), ChunksChanged: len(fresh), RemovedSources: []FileExtractRemoved{}}
+	for _, ch := range prev {
+		if !seen[ch.Hash] {
+			seen[ch.Hash] = true
+			delta.RemovedSources = append(delta.RemovedSources, FileExtractRemoved{Locator: ch.Locator, Source: ch.Source, CandidateIDs: append([]string{}, ch.Candidates...)})
+		}
+	}
+	delta.ChunksRemoved = len(delta.RemovedSources)
+	return fresh, kept, delta
+}
+
+// extractAndCapture returns the ids of the candidates the chunk produced or merged into.
+func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]string, []ExtractSkip, error) {
 	claims, skipped, err := s.extractChunk(ctx, token, d, scope, budget, ch)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
-	created, more, err := s.captureExtracted(ctx, token, scope, ch, claims)
-	return created, append(skipped, more...), err
+	ids, more, err := s.captureExtracted(ctx, token, scope, ch, claims)
+	return ids, append(skipped, more...), err
 }
 
 // captureExtracted hands claims to Capture, which dedupes and screens them and
 // only ever creates candidates; one event per chunk makes a retry a no-op.
-func (s *Service) captureExtracted(ctx context.Context, token string, scope Scope, ch FileExtractChunk, claims []ExtractedClaim) (int, []ExtractSkip, error) {
+func (s *Service) captureExtracted(ctx context.Context, token string, scope Scope, ch FileExtractChunk, claims []ExtractedClaim) ([]string, []ExtractSkip, error) {
 	if len(claims) == 0 {
-		return 0, nil, nil
+		return nil, nil, nil
 	}
 	gen := s.Wiki.Generator()
 	gen.PromptVersion, gen.PipelineVersion = fileExtractPromptVersion, fileExtractPipelineVersion
 	now := time.Now().UTC()
 	in := CaptureInput{Scope: scope, Generator: &gen,
-		Event: CaptureEvent{ID: "file-extract:" + ch.Source.ID + ":" + ch.Locator, Type: "backfill", OriginProduct: "arkism", OccurredAt: &now}}
+		Event: CaptureEvent{ID: "file-extract:" + ch.Source.ID + ":" + ch.Locator + ":" + ch.Hash[:min(16, len(ch.Hash))], Type: "backfill", OriginProduct: "arkism", OccurredAt: &now}}
 	for _, c := range claims {
 		confidence := c.Confidence
 		in.Claims = append(in.Claims, CaptureClaim{Subject: "file-extract", Text: c.Content, Kind: c.Kind, Basis: "inferred", Confidence: &confidence,
@@ -463,15 +537,15 @@ func (s *Service) captureExtracted(ctx context.Context, token string, scope Scop
 	}
 	res, err := s.Capture(ctx, token, in)
 	if err != nil {
-		return 0, nil, err
+		return nil, nil, err
 	}
-	created, skipped := 0, []ExtractSkip{}
+	ids, skipped := []string{}, []ExtractSkip{}
 	for _, item := range res.Items {
 		if item.CandidateID != "" {
-			created++
+			ids = append(ids, item.CandidateID)
 			continue
 		}
 		skipped = append(skipped, ExtractSkip{Locator: ch.Locator, Reason: item.Status + ":" + item.Reason})
 	}
-	return created, skipped, nil
+	return ids, skipped, nil
 }

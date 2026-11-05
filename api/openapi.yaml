@@ -38439,7 +38439,7 @@
           "Management"
         ],
         "summary": "Turn a file into memory candidates",
-        "description": "Reads txt, md, json, docx or pdf (base64, at most 4 MiB; encrypted or scanned PDFs return no_extractable_text). With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; a file larger than one request's budget returns job_id and runs as a job. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Reads txt, md, json, docx or pdf (base64, at most 4 MiB; encrypted or scanned PDFs return no_extractable_text). With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. Uploading the same file name again in the same scope extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -38882,7 +38882,7 @@
           "Management"
         ],
         "summary": "Turn a knowledge source into memory candidates",
-        "description": "Same extraction as file upload over an existing knowledge source; candidates cite the knowledge file's source anchor. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Same extraction as file upload over an existing knowledge source; candidates cite the knowledge file's source anchor. Running it again on the same knowledge source extracts only changed chunks and reports the same delta object. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -69664,12 +69664,16 @@
           },
           "requested_by": {
             "type": "string"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/WireResponseFileExtractDelta"
           }
         },
         "additionalProperties": false,
         "required": [
           "label",
           "sources",
+          "delta",
           "total",
           "next",
           "candidates_created",
@@ -69697,6 +69701,80 @@
         ],
         "x-go-type": "memory.ExtractSkip",
         "x-go-source": "internal/memory/file_extract.go"
+      },
+      "WireResponseFileExtractDelta": {
+        "type": "object",
+        "properties": {
+          "chunks_total": {
+            "type": "integer"
+          },
+          "chunks_unchanged": {
+            "type": "integer"
+          },
+          "chunks_changed": {
+            "type": "integer"
+          },
+          "chunks_removed": {
+            "type": "integer"
+          },
+          "removed_sources": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseFileExtractRemoved"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "chunks_total",
+          "chunks_unchanged",
+          "chunks_changed",
+          "chunks_removed",
+          "removed_sources"
+        ],
+        "x-go-type": "memory.FileExtractDelta",
+        "x-go-source": "internal/memory/file_extract.go",
+        "description": "FileExtractDelta compares an upload with the last upload of the same document."
+      },
+      "WireResponseFileExtractRemoved": {
+        "type": "object",
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "candidate_ids": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "locator",
+          "source",
+          "candidate_ids"
+        ],
+        "x-go-type": "memory.FileExtractRemoved",
+        "x-go-source": "internal/memory/file_extract.go",
+        "description": "FileExtractRemoved is a chunk of the last upload that is gone now; its\ncandidates (an approved candidate keeps its id as a memory) stay as they are."
       }
     },
     "headers": {

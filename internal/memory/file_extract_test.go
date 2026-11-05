@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -126,7 +127,7 @@ func TestFileMemoriesLargeFileRunsAsJob(t *testing.T) {
 	}
 	got, err := f.svc.GetFileExtractJob(testCtx, f.human, scopeA, out.JobID)
 	stored, _ := f.repo.Get(testCtx, "jobs", scopeA, out.JobID)
-	if err != nil || got.Status != JobStatusDone || len(stored.FileExtract.Chunks) != 0 {
+	if err != nil || got.Status != JobStatusDone || slices.ContainsFunc(stored.FileExtract.Chunks, func(c FileExtractChunk) bool { return c.Text != "" }) {
 		t.Fatalf("get %+v %v", got, err)
 	}
 }
@@ -217,5 +218,73 @@ func TestFileExtractJobLeavesStoppedJobAlone(t *testing.T) {
 	ran, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.JobID)
 	if err != nil || ran.Status != "cancelled" || len(llm.prompts) != 0 {
 		t.Fatalf("stopped job ran %+v %v %d", ran, err, len(llm.prompts))
+	}
+}
+
+func TestDiffExtractChunks(t *testing.T) {
+	ch := func(loc, hash, src string, cands ...string) FileExtractChunk {
+		return FileExtractChunk{Locator: loc, Hash: hash, Text: "t-" + hash, Source: Ref{Collection: "sources", ID: src, Revision: 1}, Candidates: cands}
+	}
+	prev := []FileExtractChunk{ch("chunk:1", "a", "s1", "c1"), ch("chunk:2", "b", "s1", "c2", "c3"), ch("chunk:3", "c", "s1")}
+	next := []FileExtractChunk{ch("chunk:1", "b", ""), ch("chunk:2", "d", ""), ch("chunk:3", "a", "")}
+	fresh, kept, delta := diffExtractChunks(prev, next)
+	if len(fresh) != 1 || fresh[0].Hash != "d" || fresh[0].Text != "t-d" || len(kept) != 2 || kept[0].Text != "" || kept[0].Source.ID != "s1" || !slices.Equal(kept[0].Candidates, []string{"c2", "c3"}) || kept[1].Locator != "chunk:3" {
+		t.Fatalf("fresh %+v kept %+v", fresh, kept)
+	}
+	if delta.ChunksTotal != 3 || delta.ChunksUnchanged != 2 || delta.ChunksChanged != 1 || delta.ChunksRemoved != 1 || delta.RemovedSources[0].Locator != "chunk:3" || len(delta.RemovedSources[0].CandidateIDs) != 0 {
+		t.Fatalf("delta %+v", delta)
+	}
+	fresh, kept, delta = diffExtractChunks(nil, next)
+	if len(fresh) != 3 || len(kept) != 0 || delta.ChunksChanged != 3 || delta.RemovedSources == nil {
+		t.Fatalf("first upload %+v", delta)
+	}
+}
+
+func extractUpload(t *testing.T, f *fixture, paras ...string) FileMemoriesResult {
+	t.Helper()
+	out, err := f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "rules.txt", ContentBase64: base64.StdEncoding.EncodeToString([]byte(strings.Join(paras, "\n\n")))})
+	if err != nil || out.Delta == nil || out.JobID == "" {
+		t.Fatalf("upload %+v %v", out, err)
+	}
+	return out
+}
+
+func TestFileExtractReuploadOnlyExtractsChanges(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(extractRuleClaim), extractAnswer(), extractAnswer())
+	filler := strings.Repeat(" 배포 전에 테스트를 실행한다.", 200) // one paragraph fills most of a chunk
+	p1, p2, p3 := "선택 상태에는 주황 강조선을 쓰지 않는다."+filler, "둘째 문단."+filler, "셋째 문단."+filler
+	first := extractUpload(t, f, p1, p2)
+	if first.Status != JobStatusDone || first.CandidatesCreated != 1 || len(llm.prompts) != 2 || first.Delta.ChunksTotal != 2 || first.Delta.ChunksChanged != 2 {
+		t.Fatalf("first %+v %+v", first, first.Delta)
+	}
+	cands := f.repo.rows("memory_candidates")
+	same := extractUpload(t, f, p1, p2)
+	if len(llm.prompts) != 2 || same.CandidatesCreated != 0 || same.Status != JobStatusDone || same.JobID == first.JobID || same.Delta.ChunksUnchanged != 2 || same.Delta.ChunksChanged != 0 || same.Delta.ChunksRemoved != 0 {
+		t.Fatalf("unchanged upload called the model: %d %+v %+v", len(llm.prompts), same, same.Delta)
+	}
+	changed := extractUpload(t, f, p3, p2)
+	d := changed.Delta
+	if len(llm.prompts) != 3 || !strings.Contains(llm.prompts[2], "셋째 문단") || d.ChunksUnchanged != 1 || d.ChunksChanged != 1 || d.ChunksRemoved != 1 ||
+		d.RemovedSources[0].Locator != "chunk:1" || !slices.Equal(d.RemovedSources[0].CandidateIDs, []string{cands[0].ID}) {
+		t.Fatalf("changed upload %d %+v %+v", len(llm.prompts), changed, d)
+	}
+	if left := f.repo.rows("memory_candidates"); len(left) != 1 || left[0].Status != "candidate" {
+		t.Fatalf("a removed chunk touched its candidate: %+v", left)
+	}
+}
+
+func TestFileExtractReuploadAfterCancelMakesNewJob(t *testing.T) {
+	f, llm := wikiFixture(t)
+	para := strings.Repeat("배포 전에 테스트를 실행한다. ", 200)
+	paras := []string{para, para, para, para, para}
+	out := extractUpload(t, f, paras...)
+	job, _ := f.repo.Get(testCtx, "jobs", scopeA, out.JobID)
+	job.Status = "cancelled"
+	if err := f.repo.Replace(testCtx, "jobs", job, job.Revision); err != nil {
+		t.Fatal(err)
+	}
+	again := extractUpload(t, f, paras...)
+	if again.JobID == out.JobID || again.Status != JobStatusPending || again.Delta.ChunksChanged != again.Delta.ChunksTotal || len(llm.prompts) != 0 {
+		t.Fatalf("re-upload after cancel %+v %+v", again, again.Delta)
 	}
 }
