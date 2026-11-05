@@ -5636,7 +5636,7 @@
     "/v1/memories/{id}/tags": {
       "post": {
         "summary": "Add or remove tags on one active memory (human transition:memories)",
-        "description": "Metadata only: text, approval and status are unchanged. Removes, then adds; tags carrying secrets or private markers are refused. Optional expected_revision. One audited revision.",
+        "description": "Metadata only: text, approval and status are unchanged. Removes, then adds; tags carrying secrets or private markers, and system session: tags, are refused. Optional expected_revision. One audited revision.",
         "parameters": [
           {
             "name": "id",
@@ -5802,7 +5802,7 @@
     "/v1/tags/rename": {
       "post": {
         "summary": "Rename a tag across a scope's active memories (human transition:memories)",
-        "description": "Up to 500 memories per call (more=true asks for another call). Each memory is its own audited revision; one changed meanwhile is skipped.",
+        "description": "Up to 500 memories per call (more=true asks for another call; it stays false when a full batch made no progress). Each memory is its own audited revision; one changed meanwhile or not live is counted in skipped. session: tags are system provenance and cannot be renamed.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5839,10 +5839,14 @@
                   "type": "object",
                   "required": [
                     "renamed",
+                    "skipped",
                     "more"
                   ],
                   "properties": {
                     "renamed": {
+                      "type": "integer"
+                    },
+                    "skipped": {
                       "type": "integer"
                     },
                     "more": {

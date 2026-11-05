@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // Tags are reviewer-owned labels on active memories. Editing them never
@@ -34,12 +35,22 @@ type TagRenameInput struct {
 
 type TagRenameResult struct {
 	Renamed int  `json:"renamed"`
+	Skipped int  `json:"skipped"`
 	More    bool `json:"more"`
 }
 
-// validTagInput is validTags plus the ingestion privacy filters.
+// systemTagPrefix marks capture provenance that session archive use checks
+// read (session_archive.go); a human edit must not forge or cut that link.
+const systemTagPrefix = "session:"
+
+// validTagEdit accepts plain labels only: valid, and no system provenance tag.
+func validTagEdit(tags []string) bool {
+	return validTags(tags) && !slices.ContainsFunc(tags, func(t string) bool { return strings.HasPrefix(t, systemTagPrefix) })
+}
+
+// validTagInput is validTagEdit plus the ingestion privacy filters.
 func validTagInput(tags []string) bool {
-	if !validTags(tags) {
+	if !validTagEdit(tags) {
 		return false
 	}
 	for _, t := range tags {
@@ -90,7 +101,7 @@ func editTags(tags, add, remove []string) []string {
 // SetMemoryTags adds and removes tags on one active memory. Human only.
 func (s *Service) SetMemoryTags(ctx context.Context, token, id string, in MemoryTagsInput) (Record, error) {
 	if !validScope(in.Scope) || containsSecret(structuredText(in.Scope)) || !validRunLabel(id, 256) || containsSecret(id) || in.ExpectedRevision < 0 ||
-		len(in.Add)+len(in.Remove) == 0 || !validTagInput(in.Add) || !validTags(in.Remove) {
+		len(in.Add)+len(in.Remove) == 0 || !validTagInput(in.Add) || !validTagEdit(in.Remove) {
 		return Record{}, ErrInvalid
 	}
 	return s.editLiveMemory(ctx, token, id, in.Scope, in.ExpectedRevision, "set_tags:memories", func(r *Record) error {
@@ -107,10 +118,10 @@ func (s *Service) SetMemoryTags(ctx context.Context, token, id string, in Memory
 }
 
 // RenameTag replaces one tag on up to tagRenameBatch active memories of the
-// scope per call; More reports that another call is needed.
+// scope per call; More reports that another call can make progress.
 func (s *Service) RenameTag(ctx context.Context, token string, in TagRenameInput) (TagRenameResult, error) {
 	var out TagRenameResult
-	if !validScope(in.Scope) || in.From == in.To || !validTags([]string{in.From}) || !validTagInput([]string{in.To}) {
+	if !validScope(in.Scope) || in.From == in.To || !validTagEdit([]string{in.From}) || !validTagInput([]string{in.To}) {
 		return out, ErrInvalid
 	}
 	if _, err := s.opsAuthorize(ctx, token, "transition:memories", in.Scope, "", roleHuman); err != nil {
@@ -124,13 +135,13 @@ func (s *Service) RenameTag(ctx context.Context, token string, in TagRenameInput
 	if err != nil {
 		return out, err
 	}
-	if len(rows) > tagRenameBatch {
-		rows, out.More = rows[:tagRenameBatch], true
-	}
+	more := len(rows) > tagRenameBatch
+	rows = rows[:min(len(rows), tagRenameBatch)]
 	for _, r := range rows {
+		changed := false
 		// Each memory is its own audited revision; a memory changed meanwhile is skipped, not overwritten.
 		_, err := s.editLiveMemory(ctx, token, r.ID, in.Scope, r.Revision, "rename_tag:memories", func(m *Record) error {
-			if !slices.Contains(m.Tags, in.From) {
+			if changed = slices.Contains(m.Tags, in.From); !changed {
 				return errMemoryUnchanged
 			}
 			next := []string{}
@@ -145,11 +156,18 @@ func (s *Service) RenameTag(ctx context.Context, token string, in TagRenameInput
 			m.Tags = next
 			return nil
 		})
-		if err == nil {
+		switch {
+		case err == nil && changed:
 			out.Renamed++
-		} else if !errors.Is(err, ErrConflict) && !errors.Is(err, ErrNotFound) {
+		case err == nil || errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound):
+			out.Skipped++
+		default:
 			return out, err
 		}
 	}
+	// shortcut: rows that stay unrenamable (held conflict, not yet effective) keep the head of the
+	// newest-first query; a full batch without progress ends with More=false and Skipped tells the
+	// operator. Upgrade to a returned keyset cursor if such rows ever fill a batch.
+	out.More = more && out.Renamed > 0
 	return out, nil
 }

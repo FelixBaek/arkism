@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"slices"
@@ -284,5 +285,68 @@ func TestOpsStatsAndLivez(t *testing.T) {
 	Handler(&Service{}).ServeHTTP(w, httptest.NewRequest("GET", "/livez", nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "alive") {
 		t.Fatalf("livez = %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestOpsTagEditsKeepSystemTagsAndCountSkips(t *testing.T) {
+	f := newOpsFixture(t)
+	f.put(colMemories, Record{ID: "m1", Kind: "decision", Status: "active", Text: "a", Tags: []string{"session:s1", "old"}})
+	f.put(colMemories, Record{ID: "m2", Kind: "decision", Status: "active", Text: "b", Tags: []string{"old"}, ConflictID: "c1"})
+	for _, in := range []MemoryTagsInput{{Scope: scopeA, Add: []string{"session:s2"}}, {Scope: scopeA, Remove: []string{"session:s1"}}} {
+		if _, err := f.svc.SetMemoryTags(testCtx, f.human, "m1", in); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("system tag edit %+v err = %v", in, err)
+		}
+	}
+	for _, in := range []TagRenameInput{{Scope: scopeA, From: "session:s1", To: "x"}, {Scope: scopeA, From: "old", To: "session:s9"}} {
+		if _, err := f.svc.RenameTag(testCtx, f.human, in); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("system tag rename %+v err = %v", in, err)
+		}
+	}
+	res, err := f.svc.RenameTag(testCtx, f.human, TagRenameInput{Scope: scopeA, From: "old", To: "legacy"})
+	if err != nil || res != (TagRenameResult{Renamed: 1, Skipped: 1}) {
+		t.Fatalf("rename = %+v, %v", res, err)
+	}
+	if m := f.repo.rows(colMemories); !slices.ContainsFunc(m, func(r Record) bool { return r.ID == "m1" && slices.Equal(r.Tags, []string{"session:s1", "legacy"}) }) {
+		t.Fatalf("memories after rename = %+v", m)
+	}
+}
+
+// TestOpsSQLReadsTheStoredDocForm ties every doc path the operator SQL reads to
+// what encodeRecord writes into the jsonb doc: dates are {"$date": ...} objects,
+// so a time filter, cursor or bucket must go through pgDate, never doc->>'created_at'.
+func TestOpsSQLReadsTheStoredDocForm(t *testing.T) {
+	at := time.Date(2026, 11, 5, 7, 8, 9, 123456789, time.UTC)
+	_, raw, err := encodeRecord(Record{ID: "a1", Kind: "set_tags:memories", CreatedAt: at, CreatedBy: "human-1", Target: &Ref{ID: "m1"}, Tags: []string{"old"}, OriginProduct: "cli"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		CreatedAt     map[string]any `json:"created_at"`
+		CreatedBy     string         `json:"created_by"`
+		Target        map[string]any `json:"target"`
+		Tags          []string       `json:"tags"`
+		OriginProduct string         `json:"origin_product"`
+	}
+	if err = json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ := doc.CreatedAt["$date"].(string)
+	parsed, err := time.Parse(time.RFC3339, stored)
+	if err != nil || !parsed.Equal(at.Truncate(time.Millisecond)) || doc.CreatedBy != "human-1" || doc.Target["id"] != "m1" || !slices.Equal(doc.Tags, []string{"old"}) || doc.OriginProduct != "cli" {
+		t.Fatalf("stored doc = %s", raw)
+	}
+	if pgDate != `((doc->'created_at'->>'$date')::timestamptz)` {
+		t.Fatalf("pgDate = %s", pgDate)
+	}
+	from, to := at.Add(-time.Hour), at
+	w := opsRecordWhere(opsRecordQuery{Actor: "a", TargetID: "t", Tag: "x", From: from, To: to, After: &keysetCursor{At: at, ID: "z"}})
+	sql := w.sql() + opsBucketExpr["day"] + opsBucketExpr["week"] + opsKeyExpr["source"]
+	for _, want := range []string{pgDate + ` >= $6`, pgDate + ` < $7`, `doc->>'created_by'=$8`, `doc->'target'->>'id'=$9`, `doc->'tags' ? $10`, `(` + pgDate + ` < $11 OR (` + pgDate + ` = $12 AND id < $13))`, `date_trunc('day', ` + pgDate, `doc->>'origin_product'`} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("operator SQL lacks %q:\n%s", want, sql)
+		}
+	}
+	if strings.Contains(strings.ReplaceAll(sql, pgDate, ""), "created_at") || len(w.args) != 8 {
+		t.Fatalf("operator SQL reads created_at outside pgDate or binds %d args:\n%s", len(w.args), sql)
 	}
 }
