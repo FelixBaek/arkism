@@ -198,13 +198,16 @@ func parseChatReply(body []byte) (chatReply, bool) {
 			Details          struct {
 				CachedTokens int64 `json:"cached_tokens"`
 			} `json:"prompt_tokens_details"`
+			OutDetails struct {
+				ReasoningTokens int64 `json:"reasoning_tokens"`
+			} `json:"completion_tokens_details"`
 		} `json:"usage"`
 	}
 	if json.Unmarshal(body, &response) != nil || len(response.Choices) != 1 {
 		return chatReply{}, false
 	}
 	usage := ProviderUsage{Requests: 1, InputTokens: response.Usage.PromptTokens, OutputTokens: response.Usage.CompletionTokens, TotalTokens: response.Usage.TotalTokens,
-		CachedInputTokens: response.Usage.Details.CachedTokens}
+		CachedInputTokens: response.Usage.Details.CachedTokens, ReasoningTokens: response.Usage.OutDetails.ReasoningTokens}
 	return chatReply{text: response.Choices[0].Message.Content, usage: usage, complete: response.Choices[0].FinishReason == "stop"}, true
 }
 
@@ -230,6 +233,9 @@ func parseResponsesReply(body []byte) (chatReply, bool) {
 			Details      struct {
 				CachedTokens int64 `json:"cached_tokens"`
 			} `json:"input_tokens_details"`
+			OutDetails struct {
+				ReasoningTokens int64 `json:"reasoning_tokens"`
+			} `json:"output_tokens_details"`
 		} `json:"usage"`
 	}
 	if json.Unmarshal(body, &response) != nil || response.Status != "completed" && response.Status != "incomplete" {
@@ -244,7 +250,7 @@ func parseResponsesReply(body []byte) (chatReply, bool) {
 		}
 	}
 	usage := ProviderUsage{Requests: 1, InputTokens: response.Usage.InputTokens, OutputTokens: response.Usage.OutputTokens, TotalTokens: response.Usage.TotalTokens,
-		CachedInputTokens: response.Usage.Details.CachedTokens}
+		CachedInputTokens: response.Usage.Details.CachedTokens, ReasoningTokens: response.Usage.OutDetails.ReasoningTokens}
 	return chatReply{text: text.String(), usage: usage, complete: response.Status == "completed"}, true
 }
 

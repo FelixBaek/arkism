@@ -5852,7 +5852,6 @@
  "꼭 남는 기록": "Immer aufgezeichnet",
  "예 — 끌 수 없어요": "Ja – lässt sich nicht ausschalten",
  "요청량으로": "Zurück zu Anfragen",
- "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Auf dieser Seite gibt es keine Aktivität über diesen Weg. Mit „Mehr anzeigen“ suchst du weiter.",
  "모든 종류": "Alle Arten",
  "언어 모델": "Sprachmodell",
  "검색용 색인": "Suchindex",
@@ -5875,7 +5874,6 @@
  "보낸 글": "Gesendeter Text",
  "받은 글": "Empfangener Text",
  "요약으로": "Zurück zur Übersicht",
- "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Auf dieser Seite gibt es keine Aufrufe dieser Art. Mit „Mehr anzeigen“ suchst du weiter.",
  "저장한 때 기준": "Nach Speicherzeit",
  "일어난 때 기준": "Nach Ereigniszeit",
  "말한 때 기준": "Nach Aussagezeit",
@@ -6186,7 +6184,10 @@
  "쓰지 않기": "Nicht verwenden",
  "정리 전에 쉬운 것 먼저 거르기": "Vor dem Zusammenfassen Einfaches aussortieren",
  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "Ein kleines Entscheidungsmodell sortiert zuerst aus, was schon in einer Beobachtung steht, sowie Smalltalk. So gibt es weniger Aufrufe des Servermodells. Es schreibt nichts.",
- "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Ist eingeschaltet. Jede Entscheidung zählt zum Tageslimit des Servermodells."
+ "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Ist eingeschaltet. Jede Entscheidung zählt zum Tageslimit des Servermodells.",
+ "호출 자세히": "Aufruf-Details",
+ "그중 캐시에서": "Davon aus dem Cache",
+ "그중 생각": "Davon Denken"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -7386,7 +7387,6 @@
  "{0}초까지 기다림": "Wartet bis zu {0} s",
  "쿼리 {0}": "Query {0}",
  "요청량 · 모두 {0}건": "Anfragen · insgesamt {0}",
- "{0}번 (불러온 것)": "{0}-mal (geladen)",
  "{0}까지": "bis {0}",
  "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "{0} wurden erneut versucht. {1} lassen sich hier nicht erneut versuchen.",
  "{0}개를 다시 시도했어요.": "{0} wurden erneut versucht.",
@@ -7430,6 +7430,7 @@
  "· 기억 {0}개": "· {0} Erinnerungen",
  "관계 {0}개": "{0} Beziehungen",
  "근거 {0}개": "{0} Belege",
- "이전 {0}개 더 보기": "{0} frühere anzeigen"
+ "이전 {0}개 더 보기": "{0} frühere anzeigen",
+ "{0}번 (30일)": "{0}-mal (30 Tage)"
  }
 };

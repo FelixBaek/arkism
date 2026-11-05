@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -31,6 +32,7 @@ const (
 	llmTraceTextRunes = 4000
 	llmStatsMaxRows   = 5000
 	llmTraceMaxIDs    = 64
+	llmStatsRuns      = 20
 )
 
 type LLMRequest struct {
@@ -45,12 +47,16 @@ type LLMRequest struct {
 	OutputTokens   int64      `json:"output_tokens" bson:"output_tokens"`
 	TotalTokens    int64      `json:"total_tokens" bson:"total_tokens"`
 	// CachedInputTokens is the part of InputTokens served from the provider's prompt cache.
-	CachedInputTokens int64  `json:"cached_input_tokens,omitempty" bson:"cached_input_tokens,omitempty"`
-	LatencyMS         int64  `json:"latency_ms" bson:"latency_ms"`
-	Status            string `json:"status" bson:"status"` // ok | error
-	Error             string `json:"error,omitempty" bson:"error,omitempty"`
-	Prompt            string `json:"prompt,omitempty" bson:"prompt,omitempty"`
-	Response          string `json:"response,omitempty" bson:"response,omitempty"`
+	CachedInputTokens int64 `json:"cached_input_tokens,omitempty" bson:"cached_input_tokens,omitempty"`
+	// ReasoningTokens is the part of OutputTokens the model spent thinking, when the provider says.
+	ReasoningTokens int64 `json:"reasoning_tokens,omitempty" bson:"reasoning_tokens,omitempty"`
+	// CallKind is llm, embedding or rerank (llmCallKind); rows filed before it existed have none.
+	CallKind  string `json:"call_kind,omitempty" bson:"call_kind,omitempty"`
+	LatencyMS int64  `json:"latency_ms" bson:"latency_ms"`
+	Status    string `json:"status" bson:"status"` // ok | error
+	Error     string `json:"error,omitempty" bson:"error,omitempty"`
+	Prompt    string `json:"prompt,omitempty" bson:"prompt,omitempty"`
+	Response  string `json:"response,omitempty" bson:"response,omitempty"`
 	// TraceID groups the calls of one request or job; ParentSpanID is the job's
 	// (or, with tracing on, the enclosing) span. With tracing on they are the
 	// exported span's own ids.
@@ -288,7 +294,8 @@ func (s *Service) recordLLMRequest(ctx context.Context, m modelCallSpec, sp *spa
 	tr := LLMRequest{Operation: m.operation, Generator: &Generator{Model: usage.Model}, Provider: usage.Provider,
 		PromptChars: utf8.RuneCountInString(m.prompt), PromptSHA256: ContentHash(m.prompt),
 		InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, TotalTokens: max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens),
-		CachedInputTokens: usage.CachedInputTokens, LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
+		CachedInputTokens: usage.CachedInputTokens, ReasoningTokens: usage.ReasoningTokens, CallKind: llmCallKind(m.operation),
+		LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
 	tr.TraceID, tr.SpanID, tr.ParentSpanID, tr.JobID = llmTraceIDs(ctx, sp)
 	note, _ := ctx.Value(llmNoteKey{}).(*llmNote)
 	if note != nil {
@@ -339,9 +346,11 @@ type LLMRequestPage struct {
 
 type LLMRequestFilter struct {
 	Operation string
-	Status    string
-	Before    string
-	Limit     int
+	// CallKind is llm, embedding or rerank; with Operation set it must be that operation's kind.
+	CallKind string
+	Status   string
+	Before   string
+	Limit    int
 }
 
 func (s *Service) humanLLMRequests(ctx context.Context, token string, scope Scope) (scopedRowStore, error) {
@@ -359,7 +368,7 @@ func (s *Service) humanLLMRequests(ctx context.Context, token string, scope Scop
 }
 
 func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope, f LLMRequestFilter) (LLMRequestPage, error) {
-	if f.Limit < 0 || f.Limit > 200 || f.Operation != "" && !validRunLabel(f.Operation, 128) ||
+	if f.Limit < 0 || f.Limit > 200 || f.Operation != "" && !validRunLabel(f.Operation, 128) || f.CallKind != "" && !slices.Contains(llmCallKinds, f.CallKind) ||
 		f.Status != "" && f.Status != "ok" && f.Status != "error" || f.Before != "" && !validRunLabel(f.Before, 64) {
 		return LLMRequestPage{}, ErrInvalid
 	}
@@ -371,8 +380,13 @@ func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope
 		return LLMRequestPage{}, err
 	}
 	q := scopedRowQuery{Collection: colLLMRequests, Kind: llmRequestKind, Status: f.Status, Scope: scope, Before: f.Before, Limit: f.Limit + 1}
-	if f.Operation != "" {
+	switch {
+	case f.Operation != "" && f.CallKind != "" && llmCallKind(f.Operation) != f.CallKind:
+		return LLMRequestPage{Items: []LLMRequestView{}}, nil
+	case f.Operation != "":
 		q.Path, q.Value = []string{"llm_request", "operation"}, f.Operation
+	case f.CallKind != "":
+		q.Path, q.Value = []string{"llm_request", "call_kind"}, f.CallKind
 	}
 	rows, err := store.ListScopedRows(ctx, q)
 	if err != nil {
@@ -391,6 +405,38 @@ func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope
 	return out, nil
 }
 
+var llmCallKinds = []string{"llm", "embedding", "rerank"}
+
+// llmCallKind names a call's kind from its operation: the embedding and rerank
+// operations are named so by meteredEmbed and meteredRerank (cost.go).
+func llmCallKind(operation string) string {
+	switch {
+	case strings.HasPrefix(operation, "embed"):
+		return "embedding"
+	case operation == "rerank" || strings.HasSuffix(operation, "_rerank"):
+		return "rerank"
+	}
+	return "llm"
+}
+
+// GetLLMRequest is one model call trace, read like the list (people only, the caller's scope).
+func (s *Service) GetLLMRequest(ctx context.Context, token string, scope Scope, id string) (LLMRequestView, error) {
+	if !validRunLabel(id, 64) {
+		return LLMRequestView{}, ErrInvalid
+	}
+	if _, err := s.humanLLMRequests(ctx, token, scope); err != nil {
+		return LLMRequestView{}, err
+	}
+	r, err := s.Repo.Get(ctx, colLLMRequests, scope, id)
+	if err != nil {
+		return LLMRequestView{}, err
+	}
+	if r.LLMRequest == nil || r.Kind != llmRequestKind {
+		return LLMRequestView{}, ErrNotFound
+	}
+	return LLMRequestView{ID: r.ID, Scope: r.Scope, CreatedAt: r.CreatedAt, Request: *r.LLMRequest}, nil
+}
+
 type LLMRequestStat struct {
 	Day          string `json:"day"` // UTC, YYYY-MM-DD
 	Operation    string `json:"operation"`
@@ -403,9 +449,18 @@ type LLMRequestStat struct {
 	CachedInputTokens int64 `json:"cached_input_tokens"`
 }
 
+// LLMRunStat is one run's calls in the window: a run is a trace (else a job) id.
+type LLMRunStat struct {
+	Run         string `json:"run"`
+	Calls       int64  `json:"calls"`
+	TotalTokens int64  `json:"total_tokens"`
+}
+
 type LLMRequestStats struct {
 	Since time.Time        `json:"since"`
 	Items []LLMRequestStat `json:"items"`
+	// Runs are the runs with more than one call, busiest first (at most llmStatsRuns).
+	Runs []LLMRunStat `json:"runs"`
 	// Truncated: the window held more than llmStatsMaxRows calls; only the newest were counted.
 	Truncated bool `json:"truncated,omitempty"`
 }
@@ -425,8 +480,8 @@ func (s *Service) LLMRequestStatsFor(ctx context.Context, token string, scope Sc
 	}
 	now := time.Now().UTC()
 	since := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1-days)
-	out := LLMRequestStats{Since: since, Items: []LLMRequestStat{}}
-	stats := map[[2]string]*LLMRequestStat{}
+	out := LLMRequestStats{Since: since, Items: []LLMRequestStat{}, Runs: []LLMRunStat{}}
+	acc := llmStatsAcc{days: map[[2]string]*LLMRequestStat{}, runs: map[string]*LLMRunStat{}}
 	before, seen := "", 0
 	for seen < llmStatsMaxRows {
 		rows, err := store.ListScopedRows(ctx, scopedRowQuery{Collection: colLLMRequests, Kind: llmRequestKind, Scope: scope, Before: before, Limit: 500})
@@ -435,47 +490,73 @@ func (s *Service) LLMRequestStatsFor(ctx context.Context, token string, scope Sc
 		}
 		for _, r := range rows {
 			if r.CreatedAt.Before(since) {
-				return finishLLMStats(out, stats), nil
+				return acc.finish(out), nil
 			}
 			seen++
-			addLLMStat(stats, r)
+			acc.add(r)
 		}
 		if len(rows) < 500 {
-			return finishLLMStats(out, stats), nil
+			return acc.finish(out), nil
 		}
 		before = rows[len(rows)-1].ID
 	}
 	out.Truncated = true
-	return finishLLMStats(out, stats), nil
+	return acc.finish(out), nil
 }
 
-func addLLMStat(stats map[[2]string]*LLMRequestStat, r Record) {
-	if r.LLMRequest == nil {
+// llmStatsAcc folds trace rows by day and operation, and by run.
+type llmStatsAcc struct {
+	days map[[2]string]*LLMRequestStat
+	runs map[string]*LLMRunStat
+}
+
+func (a llmStatsAcc) add(r Record) {
+	q := r.LLMRequest
+	if q == nil {
 		return
 	}
-	key := [2]string{r.CreatedAt.UTC().Format(time.DateOnly), r.LLMRequest.Operation}
-	st := stats[key]
+	key := [2]string{r.CreatedAt.UTC().Format(time.DateOnly), q.Operation}
+	st := a.days[key]
 	if st == nil {
 		st = &LLMRequestStat{Day: key[0], Operation: key[1]}
-		stats[key] = st
+		a.days[key] = st
 	}
 	st.Calls++
-	if r.LLMRequest.Status == "error" {
+	if q.Status == "error" {
 		st.Errors++
 	}
-	st.InputTokens += r.LLMRequest.InputTokens
-	st.OutputTokens += r.LLMRequest.OutputTokens
-	st.TotalTokens += r.LLMRequest.TotalTokens
-	st.CachedInputTokens += r.LLMRequest.CachedInputTokens
+	st.InputTokens += q.InputTokens
+	st.OutputTokens += q.OutputTokens
+	st.TotalTokens += q.TotalTokens
+	st.CachedInputTokens += q.CachedInputTokens
+	if run := cmp.Or(q.TraceID, q.JobID); run != "" {
+		rs := a.runs[run]
+		if rs == nil {
+			rs = &LLMRunStat{Run: run}
+			a.runs[run] = rs
+		}
+		rs.Calls++
+		rs.TotalTokens += q.TotalTokens
+	}
 }
 
-func finishLLMStats(out LLMRequestStats, stats map[[2]string]*LLMRequestStat) LLMRequestStats {
-	for _, st := range stats {
+func (a llmStatsAcc) finish(out LLMRequestStats) LLMRequestStats {
+	for _, st := range a.days {
 		out.Items = append(out.Items, *st)
 	}
 	sort.Slice(out.Items, func(i, j int) bool {
 		a, b := out.Items[i], out.Items[j]
 		return a.Day > b.Day || a.Day == b.Day && a.Operation < b.Operation
 	})
+	for _, rs := range a.runs {
+		if rs.Calls > 1 {
+			out.Runs = append(out.Runs, *rs)
+		}
+	}
+	sort.Slice(out.Runs, func(i, j int) bool {
+		a, b := out.Runs[i], out.Runs[j]
+		return a.Calls > b.Calls || a.Calls == b.Calls && a.Run < b.Run
+	})
+	out.Runs = out.Runs[:min(len(out.Runs), llmStatsRuns)]
 	return out
 }

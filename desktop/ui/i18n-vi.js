@@ -5852,7 +5852,6 @@
  "꼭 남는 기록": "Bản ghi luôn được lưu",
  "예 — 끌 수 없어요": "Có — không thể tắt",
  "요청량으로": "Về số yêu cầu",
- "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Trang này không có hoạt động nào từ kênh này. Hãy bấm Xem thêm để tìm tiếp.",
  "모든 종류": "Mọi loại",
  "언어 모델": "Mô hình ngôn ngữ",
  "검색용 색인": "Chỉ mục tìm kiếm",
@@ -5875,7 +5874,6 @@
  "보낸 글": "Nội dung gửi",
  "받은 글": "Nội dung nhận",
  "요약으로": "Về phần tóm tắt",
- "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Trang này không có lượt gọi nào thuộc loại này. Hãy bấm Xem thêm để tìm tiếp.",
  "저장한 때 기준": "Theo thời điểm lưu",
  "일어난 때 기준": "Theo thời điểm xảy ra",
  "말한 때 기준": "Theo thời điểm được nói",
@@ -6186,7 +6184,10 @@
  "쓰지 않기": "Không dùng",
  "정리 전에 쉬운 것 먼저 거르기": "Lọc trường hợp dễ trước khi tổng hợp",
  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "Một mô hình phán định nhỏ sẽ lọc trước những nội dung đã có trong quan sát và chuyện phiếm, giúp giảm số lần gọi mô hình máy chủ. Nó không ghi bất cứ thứ gì.",
- "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Đang bật. Mỗi lần phán định đều được tính vào giới hạn dùng mỗi ngày của mô hình máy chủ."
+ "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Đang bật. Mỗi lần phán định đều được tính vào giới hạn dùng mỗi ngày của mô hình máy chủ.",
+ "호출 자세히": "Chi tiết lượt gọi",
+ "그중 캐시에서": "Trong đó từ bộ nhớ đệm",
+ "그중 생각": "Trong đó phần suy nghĩ"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7386,7 +7387,6 @@
  "{0}초까지 기다림": "Chờ tối đa {0} giây",
  "쿼리 {0}": "Query {0}",
  "요청량 · 모두 {0}건": "Số yêu cầu · tổng cộng {0}",
- "{0}번 (불러온 것)": "{0} lần (đã tải)",
  "{0}까지": "Đến {0}",
  "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "Đã thử lại {0} tác vụ. {1} tác vụ không thể thử lại ở đây.",
  "{0}개를 다시 시도했어요.": "Đã thử lại {0} tác vụ.",
@@ -7430,6 +7430,7 @@
  "· 기억 {0}개": "· {0} ký ức",
  "관계 {0}개": "{0} quan hệ",
  "근거 {0}개": "{0} nguồn",
- "이전 {0}개 더 보기": "Xem thêm {0} mục trước"
+ "이전 {0}개 더 보기": "Xem thêm {0} mục trước",
+ "{0}번 (30일)": "{0} lần (30 ngày)"
  }
 };

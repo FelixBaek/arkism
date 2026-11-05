@@ -57,7 +57,7 @@ func viewOperation(r Record) OperationView {
 
 func (s *Service) ListOperations(ctx context.Context, token string, in OpsListInput) (OperationPage, error) {
 	out := OperationPage{Items: []OperationView{}}
-	if in.Action != "" {
+	if in.Action != "" || in.Transport != "" {
 		return out, ErrInvalid
 	}
 	d, err := s.opsAuthorize(ctx, token, "read:jobs", in.Scope, "", roleHuman, roleService, roleAgent)

@@ -592,8 +592,9 @@ export type WebhookUpdate = { "scope"?: Scope; "expected_revision"?: number; "ur
 export type WebhookDelivery = { "id": string; "status": "pending" | "running" | "retry" | "done" | "failed"; "attempts": number; "next_attempt_at"?: string; "delivery": { "webhook_id": string; "event": string; "occurred_at": string; "subject"?: { "collection"?: string; "id"?: string; "kind"?: string; "status"?: string; "revision"?: number; "scope"?: Scope; "created_at"?: string; "updated_at"?: string }; "http_status"?: number; "latency_ms"?: number; "error"?: string; "attempted_at"?: string } };
 export type WebhookDeliveryPage = { "items": Array<WebhookDelivery>; "next_before"?: string };
 export type ScopeOnly = { "scope"?: Scope };
-export type LLMRequestPage = { "items": Array<{ "id": string; "scope": Scope; "created_at": string; "request": { "operation": string; "generator"?: { [key: string]: unknown }; "prompt_chars": number; "prompt_sha256": string; "response_chars": number; "response_sha256"?: string; "input_tokens": number; "output_tokens": number; "cached_input_tokens"?: number; "total_tokens": number; "latency_ms": number; "status": "ok" | "error"; "error"?: string; "prompt"?: string; "response"?: string; "provider"?: string; "trace_id"?: string; "span_id"?: string; "parent_span_id"?: string; "job_id"?: string; "document_id"?: string; "source_memory_ids"?: Array<string>; "created_memory_ids"?: Array<string> } }>; "next_before"?: string };
-export type LLMRequestStats = { "since": string; "truncated"?: boolean; "items": Array<{ "day": string; "operation": string; "calls": number; "errors": number; "input_tokens": number; "output_tokens": number; "cached_input_tokens"?: number; "total_tokens": number }> };
+export type LLMRequestView = { "id": string; "scope": Scope; "created_at": string; "request": { "operation": string; "call_kind"?: "llm" | "embedding" | "rerank"; "generator"?: { [key: string]: unknown }; "prompt_chars": number; "prompt_sha256": string; "response_chars": number; "response_sha256"?: string; "input_tokens": number; "output_tokens": number; "cached_input_tokens"?: number; "reasoning_tokens"?: number; "total_tokens": number; "latency_ms": number; "status": "ok" | "error"; "error"?: string; "prompt"?: string; "response"?: string; "provider"?: string; "trace_id"?: string; "span_id"?: string; "parent_span_id"?: string; "job_id"?: string; "document_id"?: string; "source_memory_ids"?: Array<string>; "created_memory_ids"?: Array<string> } };
+export type LLMRequestPage = { "items": Array<LLMRequestView>; "next_before"?: string };
+export type LLMRequestStats = { "runs": Array<{ "run": string; "calls": number; "total_tokens": number }>; "since": string; "truncated"?: boolean; "items": Array<{ "day": string; "operation": string; "calls": number; "errors": number; "input_tokens": number; "output_tokens": number; "cached_input_tokens"?: number; "total_tokens": number }> };
 export type WireRequestWikiFolderInput = { "scope"?: WireRequestScope; "path"?: string };
 export type WireRequestWikiMemoryBuildInput = { "scope"?: WireRequestScope; "query"?: string; "topic"?: string; "entity_name"?: string; "dry_run"?: boolean; "max_total_tokens"?: number };
 export type WireRequestWikiPagePatchInput = { "scope"?: WireRequestScope; "expected_revision"?: number; "folder"?: (string | null); "title"?: string };
@@ -959,7 +960,7 @@ export class ArkismClient {
     return this.request("GET", `/livez`, undefined, undefined);
   }
   /** GET /v1/audit-events — List a scope's audit events (human read:audit_events) */
-  getV1AuditEvents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "action"?: string; "actor"?: string; "record_id"?: string; "from"?: string; "to"?: string; "cursor"?: string; "limit"?: number }): Promise<{ "items": Array<{ "id": string; "action": string; "actor": string; "actor_type"?: string; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "decision"?: string; "reason_code"?: string; "request_id"?: string; "created_at": string; "policy_decision_id"?: string; "transport"?: "http" | "mcp" | "system"; "method"?: string; "route"?: string; "duration_ms"?: number; "mandatory"?: boolean }>; "next_cursor"?: string }> {
+  getV1AuditEvents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "action"?: string; "actor"?: string; "record_id"?: string; "transport"?: "http" | "mcp" | "system"; "from"?: string; "to"?: string; "cursor"?: string; "limit"?: number }): Promise<{ "items": Array<{ "id": string; "action": string; "actor": string; "actor_type"?: string; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "decision"?: string; "reason_code"?: string; "request_id"?: string; "created_at": string; "policy_decision_id"?: string; "transport"?: "http" | "mcp" | "system"; "method"?: string; "route"?: string; "duration_ms"?: number; "mandatory"?: boolean }>; "next_cursor"?: string }> {
     return this.request("GET", `/v1/audit-events`, query, undefined);
   }
   /** GET /v1/audit-events/stats — Count a scope's audit events by action and UTC day (human read:audit_events) */
@@ -2355,12 +2356,16 @@ export class ArkismClient {
     return this.request("POST", `/v1/webhooks/${encodeURIComponent(id)}/test`, undefined, body);
   }
   /** GET /v1/llm-requests — Model call traces: list */
-  get_v1_llm_requests(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "operation"?: string; "status"?: "ok" | "error"; "before"?: string; "limit"?: number }): Promise<LLMRequestPage> {
+  get_v1_llm_requests(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "operation"?: string; "status"?: "ok" | "error"; "kind"?: "llm" | "embedding" | "rerank"; "before"?: string; "limit"?: number }): Promise<LLMRequestPage> {
     return this.request("GET", `/v1/llm-requests`, query, undefined);
   }
   /** GET /v1/llm-requests/stats — Model call traces: daily stats */
   get_v1_llm_requests_stats(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "days"?: number }): Promise<LLMRequestStats> {
     return this.request("GET", `/v1/llm-requests/stats`, query, undefined);
+  }
+  /** GET /v1/llm-requests/{id} — Model call traces: read one */
+  get_v1_llm_request(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<LLMRequestView> {
+    return this.request("GET", `/v1/llm-requests/${encodeURIComponent(id)}`, query, undefined);
   }
   /** GET /v1/wiki/tree — Wiki: tree */
   get_v1_wiki_tree(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<WireResponseWikiTree> {

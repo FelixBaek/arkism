@@ -306,11 +306,16 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
     if (path.startsWith("/v1/tags")) return { items: [] };
     if (path.startsWith("/v1/audit-events/stats")) return { total: 7, by_day: [{ bucket: "2026-11-04", count: 3 }, { bucket: "2026-11-05", count: 4 }], by_action: [{ key: "read:memories", count: 5 }] };
     if (path.startsWith("/v1/audit-events/a1")) return { id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", method: "POST", route: "/v1/capture", duration_ms: 42, decision: "allow", mandatory: true, created_at: "2026-11-05T00:00:00Z" };
+    if (path.startsWith("/v1/audit-events?") && /transport=http/.test(path)) return { items: [{ id: "a2", action: "read:memories", actor: "felix", actor_type: "human", transport: "http", created_at: "2026-11-05T00:00:00Z" }] };
     if (path.startsWith("/v1/audit-events?")) return { items: [{ id: "a1", action: "write:memories", actor: "codex", actor_type: "agent", transport: "mcp", created_at: "2026-11-05T00:00:00Z" },
       { id: "a2", action: "read:memories", actor: "felix", actor_type: "human", transport: "http", created_at: "2026-11-05T00:00:00Z" }] };
-    if (path.startsWith("/v1/llm-requests/stats")) return { items: [{ day: "2026-11-05", operation: "reflect", calls: 1, total_tokens: 30 }, { day: "2026-11-05", operation: "embedding_query", calls: 2, total_tokens: 4 }] };
-    if (path.startsWith("/v1/llm-requests?")) return { items: [{ id: "l1", created_at: "2026-11-05T00:00:00Z", request: { operation: "reflect", generator: { model: "large" }, input_tokens: 20, output_tokens: 10, total_tokens: 30, latency_ms: 900, status: "ok", trace_id: "t-run-1", job_id: "j9" } },
-      { id: "l2", created_at: "2026-11-05T00:00:00Z", request: { operation: "embedding_query", generator: { model: "embedder" }, total_tokens: 2, latency_ms: 10, status: "ok", trace_id: "t-run-1" } }] };
+    if (path.startsWith("/v1/llm-requests/stats")) return { items: [{ day: "2026-11-05", operation: "reflect", calls: 1, total_tokens: 30 }, { day: "2026-11-05", operation: "embedding_query", calls: 2, total_tokens: 4 }], runs: [{ run: "t-run-1", calls: 3, total_tokens: 34 }] };
+    if (path.startsWith("/v1/llm-requests/l1?")) return { id: "l1", created_at: "2026-11-05T00:00:00Z", request: { operation: "reflect", call_kind: "llm", generator: { model: "large" }, input_tokens: 20, cached_input_tokens: 8, output_tokens: 10, reasoning_tokens: 4, total_tokens: 30, latency_ms: 900, status: "ok", trace_id: "t-run-1", job_id: "j9" } };
+    if (path.startsWith("/v1/llm-requests?")) {
+      const all = [{ id: "l1", created_at: "2026-11-05T00:00:00Z", request: { operation: "reflect", generator: { model: "large" }, input_tokens: 20, output_tokens: 10, total_tokens: 30, latency_ms: 900, status: "ok", trace_id: "t-run-1", job_id: "j9" } },
+        { id: "l2", created_at: "2026-11-05T00:00:00Z", request: { operation: "embedding_query", generator: { model: "embedder" }, total_tokens: 2, latency_ms: 10, status: "ok", trace_id: "t-run-1" } }];
+      return { items: /kind=embedding/.test(path) ? all.slice(1) : all };
+    }
     if (/^\/v1\/operations\/j1\?/.test(path)) return { id: "j1", kind: "embedding", status: "running", operable: true, revision: 5, attempts: 2, lease_until: "2026-11-05T00:01:00Z", created_at: "2026-11-05T00:00:00Z", updated_at: "2026-11-05T00:00:00Z" };
     if (path.startsWith("/v1/operations?") && /status=failed/.test(path)) return { items: failedOps };
     if (path.startsWith("/v1/operations?")) return { items: [{ id: "j1", kind: "embedding", status: "running", operable: true, revision: 5 }, ...failedOps, { id: "j4", kind: "wiki_build", status: "done", operable: true, revision: 3 }, { id: "j5", kind: "capture_receipt", status: "done", operable: false, revision: 1 }] };
@@ -323,7 +328,7 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
   btn(last(), "모델 연결 시험").click();
   assert.deepEqual(opened, ["agents"], "the model test opens 설정 › 에이전트, where models.js runs it");
   win.wide("ops"); await dom.flush(); await dom.flush();
-  // 활동 기록: the volume chart, then one event's detail; 어디서 filters each page here
+  // 활동 기록: the volume chart, then one event's detail; 어디서 goes to the server
   btn(last(), "활동 기록").click(); await dom.flush(); await dom.flush();
   assert.match(last().textContent, /요청량 · 모두 7건/); assert.match(last().textContent, /기억 읽음5/);
   pickRow("기억 바꿈").click(); await dom.flush(); await dom.flush();
@@ -332,15 +337,18 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
   assert.ok(pickRow("기억 바꿈").classList.contains("on"));
   sel("어디서").value = "http"; sel("어디서").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
   assert.equal(last().querySelectorAll(".ov-ops-pick").length, 1); assert.ok(pickRow("기억 읽음"));
+  assert.ok(calls.some((c) => /\/v1\/audit-events\?.*transport=http/.test(c)));
   sel("어디서").value = ""; sel("어디서").dispatchEvent(new dom.Event("change")); await dom.flush();
   // 모델 호출: kind filter, in/out tokens, per-model fold, a call's run ids
   btn(last(), "모델 호출").click(); await dom.flush(); await dom.flush();
   assert.match(last().textContent, /입력 20 · 출력 10/); assert.match(last().textContent, /모델별 호출 \(불러온 것\)/); assert.match(last().textContent, /같은 실행에서 여러 번 부른 것/);
   sel("호출 종류").value = "embedding"; sel("호출 종류").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
   assert.equal(last().querySelectorAll(".ov-ops-pick").length, 1); assert.ok(pickRow("검색어 색인 만들기"));
+  assert.ok(calls.some((c) => /\/v1\/llm-requests\?.*kind=embedding/.test(c)), "종류 goes to the server");
   sel("호출 종류").value = ""; sel("호출 종류").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
-  pickRow("질문에 답하기").click();
-  for (const t of ["입력 토큰", "20 토큰", "t-run-1", "j9", "같은 실행의 호출"]) assert.ok(last().textContent.includes(t), t);
+  pickRow("질문에 답하기").click(); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => c.startsWith("/v1/llm-requests/l1?")), "the detail is read by id");
+  for (const t of ["입력 토큰", "20 토큰", "그중 캐시에서", "8 토큰", "그중 생각", "4 토큰", "t-run-1", "j9", "같은 실행의 호출", "3번 (30일)"]) assert.ok(last().textContent.includes(t), t);
   // 추이: the time axis goes to the server
   btn(last(), "추이").click(); await dom.flush(); await dom.flush();
   sel("어느 때 기준").value = "occurred"; sel("어느 때 기준").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();

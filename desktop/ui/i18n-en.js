@@ -7028,7 +7028,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "꼭 남는 기록": "Always recorded",
   "예 — 끌 수 없어요": "Yes — can't be turned off",
   "요청량으로": "Back to requests",
-  "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "No activity from this channel on this page. Use Show more to keep looking.",
   "모든 종류": "All kinds",
   "언어 모델": "Language model",
   "검색용 색인": "Search index",
@@ -7051,7 +7050,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "보낸 글": "Prompt",
   "받은 글": "Response",
   "요약으로": "Back to summary",
-  "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "No calls of this kind on this page. Use Show more to keep looking.",
   "저장한 때 기준": "By when stored",
   "일어난 때 기준": "By when it happened",
   "말한 때 기준": "By when it was said",
@@ -7081,7 +7079,6 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0}초까지 기다림": "waits up to {0}s",
   "쿼리 {0}": "Query {0}",
   "요청량 · 모두 {0}건": "Requests · {0} in all",
-  "{0}번 (불러온 것)": "{0} times (loaded)",
   "{0}까지": "until {0}",
   "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "Retried {0}. {1} can't be retried here.",
   "{0}개를 다시 시도했어요.": "Retried {0}." });
@@ -7425,3 +7422,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "정리 전에 쉬운 것 먼저 거르기": "Filter easy cases before consolidating",
   "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "A small decision model first filters out what an observation already says and small talk, so fewer server model calls are made. It never writes anything.",
   "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "It is on. Each decision counts toward the server model's daily usage limit." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "호출 자세히": "Call details",
+  "그중 캐시에서": "Of which from cache",
+  "그중 생각": "Of which reasoning" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "{0}번 (30일)": "{0} times (30 days)" });

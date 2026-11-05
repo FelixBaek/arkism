@@ -56,6 +56,9 @@ func opsRecordWhere(q opsRecordQuery) *pgOpsWhere {
 	if q.TargetID != "" {
 		w.add(`doc->'target'->>'id'=$?`, q.TargetID)
 	}
+	if q.Transport != "" {
+		w.add(`doc->'audit'->>'transport'=$?`, q.Transport)
+	}
 	if q.Tag != "" {
 		w.add(`doc->'tags' ? $?`, q.Tag)
 	}

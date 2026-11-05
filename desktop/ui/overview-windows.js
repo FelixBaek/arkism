@@ -1312,7 +1312,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     return f;
   }
   // 활동 기록: who did what to which record, newest first; reasons and bodies never come back from the server.
-  // The server filters by kind; 어디서 (transport) is filtered here, on each page as it comes.
+  // The server filters by kind, 어디서 (transport) and time.
   const AUDIT_KINDS = [["", "모든 활동"], ["write:", "바꾼 것"], ["create:", "만든 것"], ["review:", "검토한 것"], ["delete:", "지운 것"], ["read:", "읽은 것"]];
   const TRANSPORT = [["", "모든 경로"], ["http", "앱·API"], ["mcp", "에이전트 도구(MCP)"], ["system", "서버 안 작업"]];
   const transportLabel = (t) => TRANSPORT.find(([k]) => k && k === t)?.[1] || "";
@@ -1347,18 +1347,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
       right.lastChild.append(button("요청량으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(volume); }));
     };
     pagedList(left, async (cursor, limit) => {
-      const r = await request(`/v1/audit-events?${query({ from, limit, ...(auditF.action ? { action: auditF.action } : {}), ...(cursor ? { cursor } : {}) })}`);
-      return { items: (r.items || []).filter((e) => !auditF.transport || e.transport === auditF.transport), next: r.next_cursor };
+      const r = await request(`/v1/audit-events?${query({ from, limit, ...(auditF.action ? { action: auditF.action } : {}), ...(auditF.transport ? { transport: auditF.transport } : {}), ...(cursor ? { cursor } : {}) })}`);
+      return { items: r.items || [], next: r.next_cursor };
     }, (e) => {
       const a = M.auditLine(e), who = el("span", "mono", e.actor || "—"); who.dataset.noI18n = "";
       const r = row(a.blocked ? "막힘" : "", a.what || tr("기타 활동"), `${stamp(e.created_at)} · ${a.person ? tr("사람") : e.actor_type === "agent" ? tr("에이전트") : tr("서비스")}${transportLabel(e.transport) ? ` · ${tr(transportLabel(e.transport))}` : ""}`, "");
       const code = el("small", "mono ov-ops-code", [a.code, e.target?.id].filter(Boolean).join(" · ")); code.dataset.noI18n = "";
       r.querySelector(".ov-win-item-l").append(code); r.querySelector(".ov-win-item-r").append(who);
       return pickable(r, () => detail(e));
-    }, auditF.transport ? "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요." : "이 기간에 남은 활동이 없어요.");
+    }, "이 기간에 남은 활동이 없어요.");
   }
   // 모델 호출: every server-side model call (embedding and rerank included) with its tokens, time and outcome.
-  // 종류 (language model, embedding, rerank) is read from the operation here; 모델별·실행별 fold the calls loaded so far.
+  // The server filters by 종류 (language model, embedding, rerank) and counts runs over 30 days; 모델별 folds the calls loaded so far.
   const CALL_KINDS = [["", "모든 종류"], ["llm", "언어 모델"], ["embedding", "검색용 색인"], ["rerank", "다시 고르기"]];
   const modelF = { status: "", operation: "", kind: "" };
   function opsModels(d, M) {
@@ -1367,16 +1367,18 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const bar = el("div", "ov-wide-bar"), opSlot = el("span");
     body.append(left, right); d.append(body);
     const summary = el("div", "ov-detail-group"), groups = el("div", "ov-detail-group"), loaded = [];
+    let runs = [];
     summary.append(el("h3", "", "최근 30일"), el("p", "ov-win-empty", "불러오는 중…")); right.append(summary, groups);
     const paintGroups = () => {
-      const byModel = M.callGroups(loaded, "model"), byRun = M.callGroups(loaded, "run").filter(([, n]) => n > 1);
+      const byModel = M.callGroups(loaded);
       groups.replaceChildren(...(byModel.length ? [el("div", "ov-win-list-title", "모델별 호출 (불러온 것)"), barList(byModel.map(([k, n]) => [k, n]))] : []),
-        ...(byRun.length ? [el("div", "ov-win-list-title", "같은 실행에서 여러 번 부른 것"), barList(byRun.slice(0, 6).map(([k, n]) => [k.slice(0, 16), n]))] : []));
+        ...(runs.length ? [el("div", "ov-win-list-title", "같은 실행에서 여러 번 부른 것"), barList(runs.slice(0, 6).map((x) => [x.run.slice(0, 16), x.calls]))] : []));
       groups.querySelectorAll(".ov-detail-bar span").forEach((n) => { n.dataset.noI18n = ""; n.classList.add("mono"); });
     };
     request(`/v1/llm-requests/stats?${query({ days: 30 })}`).then((st) => {
       if (!d.isConnected) return;
       const m = M.modelStats(st), tiles = el("div", "ov-win-tiles");
+      runs = st.runs || []; paintGroups();
       for (const [v, l] of [[`${num(m.calls)}번`, "모델 호출"], [`${num(m.errors)}번`, "실패"], [num(m.tokens), "토큰"]]) { const x = el("div", "ov-win-tile"); x.append(el("strong", "", v), el("span", "", l)); tiles.append(x); }
       const ops = m.ops.map((o) => [M.opLabel(o.operation) || o.operation, o.calls]);
       summary.replaceChildren(el("h3", "", "최근 30일"), tiles, barChart("날짜별 호출", m.days.map((x) => [x.day, x.calls, x.errors ? "a" : ""]), "아직 호출이 없어요"),
@@ -1387,21 +1389,26 @@ window.ArkismOverviewWindows = (ctx, env) => {
     bar.append(selectBox(CALL_KINDS, modelF.kind, "호출 종류", (v) => { modelF.kind = v; modelF.operation = ""; redo(); }),
       selectBox([["", "모든 결과"], ["error", "실패만"]], modelF.status, "결과", (v) => { modelF.status = v; redo(); }), opSlot);
     left.append(bar, el("p", "ov-detail-hint", "서버가 모델을 부른 기록이에요. 대화 내용은 서버가 따로 켜 둔 때만 가려서 남아요."));
-    const detail = (it) => {
-      const q = it.request || {}, kindName = CALL_KINDS.find(([k]) => k === M.callKind(q.operation))[1], tok = (n) => (n ? `${num(n)} ${tr("토큰")}` : "");
-      const runMates = q.trace_id ? loaded.filter((x) => x.request?.trace_id === q.trace_id).length : 0;
+    // a picked call is read again by id, so the detail shows the whole stored trace
+    const detail = async (it) => {
+      right.replaceChildren(el("h3", "", "호출 자세히"), el("p", "ov-win-empty", "불러오는 중…"));
+      try { it = await request(`/v1/llm-requests/${encodeURIComponent(it.id)}?${query()}`); } catch (err) { if (d.isConnected) right.lastChild.replaceWith(el("p", "ov-win-err", deniedText(err))); return; }
+      if (!d.isConnected) return;
+      const q = it.request || {}, kindName = CALL_KINDS.find(([k]) => k === (q.call_kind || M.callKind(q.operation)))[1], tok = (n) => (n ? `${num(n)} ${tr("토큰")}` : "");
+      const runMates = runs.find((x) => x.run === (q.trace_id || q.job_id))?.calls || 0;
       right.replaceChildren(el("h3", "", M.opLabel(q.operation) || q.operation || tr("기타 호출")), facts([["언제", stamp(it.created_at)], ["종류", tr(kindName)], ["모델", q.generator?.model], ["공급자", q.provider],
         ["결과", q.status === "error" ? `${tr("실패")} · ${q.error || ""}` : tr("성공")], ["걸린 시간", `${(q.latency_ms / 1000 || 0).toFixed(1)}${tr("초")}`],
-        ["입력 토큰", tok(q.input_tokens)], ["출력 토큰", tok(q.output_tokens)], ["모두", tok(q.total_tokens)], ["보낸 글 길이", q.prompt_chars ? tr(`${num(q.prompt_chars)}자`) : ""], ["받은 글 길이", q.response_chars ? tr(`${num(q.response_chars)}자`) : ""],
+        ["입력 토큰", tok(q.input_tokens)], ["그중 캐시에서", tok(q.cached_input_tokens)], ["출력 토큰", tok(q.output_tokens)], ["그중 생각", tok(q.reasoning_tokens)], ["모두", tok(q.total_tokens)],
+        ["보낸 글 길이", q.prompt_chars ? tr(`${num(q.prompt_chars)}자`) : ""], ["받은 글 길이", q.response_chars ? tr(`${num(q.response_chars)}자`) : ""],
         ["실행 ID", q.trace_id], ["단계 ID", q.span_id], ["윗단계 ID", q.parent_span_id], ["작업 ID", q.job_id], ["자료 ID", q.document_id],
         ["읽은 기억", (q.source_memory_ids || []).length ? `${num(q.source_memory_ids.length)}개` : ""], ["만든 기억 후보", (q.created_memory_ids || []).length ? `${num(q.created_memory_ids.length)}개` : ""],
-        ["같은 실행의 호출", runMates > 1 ? `${num(runMates)}번 (불러온 것)` : ""]]));
+        ["같은 실행의 호출", runMates > 1 ? tr(`${num(runMates)}번 (30일)`) : ""]]));
       for (const [label, text] of [["보낸 글", q.prompt], ["받은 글", q.response]]) if (text) { const pre = el("pre", "mono ov-ops-text", text); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", label), pre); }
       const back = el("div", "ov-detail-actions"); back.append(button("요약으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(summary, groups); })); right.append(back);
     };
     pagedList(left, async (before, limit) => {
-      const r = await request(`/v1/llm-requests?${query({ limit, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
-      const items = (r.items || []).filter((it) => !modelF.kind || M.callKind(it.request?.operation) === modelF.kind);
+      const r = await request(`/v1/llm-requests?${query({ limit, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.kind ? { kind: modelF.kind } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
+      const items = r.items || [];
       loaded.push(...items); queueMicrotask(paintGroups);
       return { items, next: r.next_before };
     }, (it) => {
@@ -1411,7 +1418,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const r = row(failed ? "실패" : "", M.opLabel(q.operation) || q.operation || tr("기타 호출"), `${stamp(it.created_at)} · ${(q.latency_ms / 1000 || 0).toFixed(1)}${tr("초")}`, `${num(q.total_tokens)} ${tr("토큰")}${split}`);
       r.querySelector(".ov-win-item-l").append(model);
       return pickable(r, () => detail(it));
-    }, modelF.kind ? "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요." : "아직 모델을 부른 기록이 없어요.");
+    }, "아직 모델을 부른 기록이 없어요.");
   }
   // 추이: rows per day or week (memories, candidates or uploaded sources), split by kind, status or origin, counted by when they were
   // stored (created), when the event happened (occurred) or when it was said (mentioned)

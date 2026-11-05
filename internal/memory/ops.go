@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -32,6 +33,7 @@ type opsRecordQuery struct {
 	Actor      string
 	TargetID   string
 	Tag        string
+	Transport  string    // audit.transport
 	From, To   time.Time // zero is open
 	After      *keysetCursor
 	Limit      int
@@ -97,15 +99,17 @@ type OpsListInput struct {
 	Actor    string
 	RecordID string
 	Tag      string
-	From, To time.Time
-	Cursor   string
-	Limit    int
+	// Transport (audit only): http, mcp or system.
+	Transport string
+	From, To  time.Time
+	Cursor    string
+	Limit     int
 }
 
 // ParseOpsListQuery reads the list filters from a URL query.
 func ParseOpsListQuery(q url.Values) (OpsListInput, error) {
 	in := OpsListInput{Scope: Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")},
-		Action: q.Get("action"), Kind: q.Get("kind"), Status: q.Get("status"), Actor: q.Get("actor"), RecordID: q.Get("record_id"), Cursor: q.Get("cursor")}
+		Action: q.Get("action"), Kind: q.Get("kind"), Status: q.Get("status"), Actor: q.Get("actor"), RecordID: q.Get("record_id"), Transport: q.Get("transport"), Cursor: q.Get("cursor")}
 	var err error
 	if in.From, in.To, err = parseOpsRange(q, false); err != nil {
 		return in, err
@@ -148,6 +152,8 @@ func parseOpsRange(q url.Values, defaults bool) (time.Time, time.Time, error) {
 	return from, to, nil
 }
 
+var auditTransports = []string{"", "http", "mcp", "system"}
+
 func validOpsFilter(v string) bool { return v == "" || validRunLabel(v, 256) && !containsSecret(v) }
 
 // recordQuery validates the shared filters and turns them into a store query.
@@ -158,12 +164,15 @@ func (in OpsListInput) recordQuery(collection, binding string) (opsRecordQuery, 
 	if in.Limit < 1 || in.Limit > opsPageMax {
 		return opsRecordQuery{}, ErrInvalid
 	}
+	if !slices.Contains(auditTransports, in.Transport) {
+		return opsRecordQuery{}, ErrInvalid
+	}
 	for _, v := range []string{in.Action, in.Kind, in.Status, in.Actor, in.RecordID, in.Tag} {
 		if !validOpsFilter(v) {
 			return opsRecordQuery{}, ErrInvalid
 		}
 	}
-	q := opsRecordQuery{Scope: in.Scope, Collection: collection, Kind: in.Kind, KindPrefix: in.Action, Actor: in.Actor, TargetID: in.RecordID, Tag: in.Tag, From: in.From, To: in.To, Limit: in.Limit + 1}
+	q := opsRecordQuery{Scope: in.Scope, Collection: collection, Kind: in.Kind, KindPrefix: in.Action, Actor: in.Actor, TargetID: in.RecordID, Tag: in.Tag, Transport: in.Transport, From: in.From, To: in.To, Limit: in.Limit + 1}
 	if in.Status != "" {
 		q.Statuses = []string{in.Status}
 	}

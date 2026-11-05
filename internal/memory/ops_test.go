@@ -42,7 +42,7 @@ func opsFakeMatch(r Record, q opsRecordQuery) bool {
 	after := q.After == nil || r.CreatedAt.Before(q.After.At) || r.CreatedAt.Equal(q.After.At) && r.ID < q.After.ID
 	return sameScope(r.Scope, q.Scope) && after && (q.Kind == "" || r.Kind == q.Kind) && strings.HasPrefix(r.Kind, q.KindPrefix) &&
 		(len(q.Statuses) == 0 || slices.Contains(q.Statuses, r.Status)) && (q.Actor == "" || r.CreatedBy == q.Actor) &&
-		(q.TargetID == "" || target == q.TargetID) && (q.Tag == "" || slices.Contains(r.Tags, q.Tag))
+		(q.TargetID == "" || target == q.TargetID) && (q.Tag == "" || slices.Contains(r.Tags, q.Tag)) && (q.Transport == "" || r.Audit != nil && r.Audit.Transport == q.Transport)
 }
 
 func (o opsFakeRepo) OpsCounts(_ context.Context, q opsCountQuery) ([]OpsCount, error) {
@@ -137,11 +137,19 @@ func TestOpsAuditListRedactsAndPages(t *testing.T) {
 	if err != nil || len(filtered.Items) != 1 || filtered.Items[0].ID != "a3" {
 		t.Fatalf("action filter = %+v, %v", filtered, err)
 	}
+	f.put("audit_events", Record{ID: "a4", Kind: "remember:memories", CreatedBy: "human-1", CreatedAt: base.Add(-4 * time.Second), Audit: &AuditMetadata{Transport: "mcp"}})
+	viaMCP, err := f.svc.ListAuditEvents(testCtx, f.human, OpsListInput{Scope: scopeA, Transport: "mcp"})
+	if err != nil || len(viaMCP.Items) != 1 || viaMCP.Items[0].ID != "a4" {
+		t.Fatalf("transport filter = %+v, %v", viaMCP, err)
+	}
+	if _, err = f.svc.ListAuditEvents(testCtx, f.human, OpsListInput{Scope: scopeA, Transport: "pigeon"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad transport err = %v", err)
+	}
 	if _, err = f.svc.ListAuditEvents(testCtx, f.agent, OpsListInput{Scope: scopeA}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("agent audit read err = %v", err)
 	}
 	stats, err := f.svc.AuditEventStats(testCtx, f.human, scopeA, base.Add(-time.Hour), base.Add(time.Hour))
-	if err != nil || stats.Total != 3 || len(stats.ByDay) == 0 || !slices.ContainsFunc(stats.ByAction, func(c OpsCount) bool { return c.Key == opsRedacted }) {
+	if err != nil || stats.Total != 4 || len(stats.ByDay) == 0 || !slices.ContainsFunc(stats.ByAction, func(c OpsCount) bool { return c.Key == opsRedacted }) {
 		t.Fatalf("audit stats = %+v, %v", stats, err)
 	}
 }

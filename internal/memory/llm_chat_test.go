@@ -59,8 +59,9 @@ func TestLLMChatImagePartsKeylessAndLenientUsage(t *testing.T) {
 	}))
 	defer server.Close()
 	cfg := LLMConfig{Endpoint: server.URL, APIKey: "k", Model: "m"}
-	if _, err := cfg.chat(testCtx, chatRequest{provider: "p", system: "s", user: "read", imageMIME: "image/png", image: []byte("PNG"), maxTokens: 9}); err != nil {
-		t.Fatal(err)
+	usage["completion_tokens_details"] = map[string]any{"reasoning_tokens": 2}
+	if reply, err := cfg.chat(testCtx, chatRequest{provider: "p", system: "s", user: "read", imageMIME: "image/png", image: []byte("PNG"), maxTokens: 9}); err != nil || reply.usage.ReasoningTokens != 2 {
+		t.Fatal(err, reply.usage)
 	}
 	user := got["messages"].([]any)[1].(map[string]any)["content"].([]any)
 	if len(user) != 2 || user[1].(map[string]any)["image_url"].(map[string]any)["url"] != "data:image/png;base64,UE5H" || auth != "Bearer k" {
@@ -97,12 +98,12 @@ func TestLLMChatResponsesProtocol(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"status": status, "output": []any{
 			map[string]any{"type": "reasoning", "content": []any{map[string]any{"type": "output_text", "text": "hidden"}}},
 			map[string]any{"type": "message", "content": []any{map[string]any{"type": "output_text", "text": "hel"}, map[string]any{"type": "output_text", "text": "lo"}}}},
-			"usage": map[string]any{"input_tokens": 4, "output_tokens": 2, "total_tokens": 6}})
+			"usage": map[string]any{"input_tokens": 4, "output_tokens": 2, "total_tokens": 6, "output_tokens_details": map[string]any{"reasoning_tokens": 1}}})
 	}))
 	defer server.Close()
 	cfg := LLMConfig{Endpoint: server.URL, APIKey: "k", Model: "m", Protocol: llmProtocolResponses}
 	reply, err := cfg.chat(testCtx, chatRequest{provider: "p", system: "sys", user: "hi", imageMIME: "image/png", image: []byte("PNG"), maxTokens: 9, jsonOut: true})
-	if err != nil || reply.text != "hello" || !reply.complete || reply.usage != (ProviderUsage{Provider: "p", Model: "m", Requests: 1, InputTokens: 4, OutputTokens: 2, TotalTokens: 6}) {
+	if err != nil || reply.text != "hello" || !reply.complete || reply.usage != (ProviderUsage{Provider: "p", Model: "m", Requests: 1, InputTokens: 4, OutputTokens: 2, TotalTokens: 6, ReasoningTokens: 1}) {
 		t.Fatalf("%+v %v", reply, err)
 	}
 	content := got["input"].([]any)[0].(map[string]any)["content"].([]any)

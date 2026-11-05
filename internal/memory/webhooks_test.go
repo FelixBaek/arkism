@@ -496,6 +496,55 @@ func TestLLMTraceRecordsSuccessAndError(t *testing.T) {
 	if err != nil || len(stats.Items) != 1 || stats.Items[0].Calls != 2 || stats.Items[0].Errors != 1 || stats.Items[0].TotalTokens != 15 {
 		t.Fatal("stats", err, stats)
 	}
+	if len(stats.Runs) != 0 {
+		t.Fatal("two unrelated calls are not a run", stats.Runs)
+	}
+	one, err := f.svc.GetLLMRequest(testCtx, f.human, scopeA, page.Items[0].ID)
+	if err != nil || one.ID != page.Items[0].ID || one.Request.CallKind != "llm" {
+		t.Fatal("get by id", err, one)
+	}
+	if _, err := f.svc.GetLLMRequest(testCtx, f.agent, scopeA, one.ID); !errors.Is(err, ErrDenied) {
+		t.Fatal("agent read one trace", err)
+	}
+	if _, err := f.svc.GetLLMRequest(testCtx, f.human, scopeB, one.ID); err == nil {
+		t.Fatal("another scope read the trace")
+	}
+	if _, err := f.svc.GetLLMRequest(testCtx, f.human, scopeA, "missing"); !errors.Is(err, ErrNotFound) {
+		t.Fatal("missing trace", err)
+	}
+}
+
+func TestLLMRequestKindFilterAndRuns(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Wiki = traceLLM{}
+	ctx, _ := startJobSpan(testCtx, "job", "job-1")
+	for range 2 {
+		if _, _, err := f.svc.modelCall(ctx, scopeA, "wiki.page", "sys", "u", 100); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{CallKind: "llm"})
+	if err != nil || len(page.Items) != 2 {
+		t.Fatal("kind llm", err, page)
+	}
+	if page, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{CallKind: "embedding"}); err != nil || len(page.Items) != 0 {
+		t.Fatal("kind embedding", err, page)
+	}
+	if page, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{CallKind: "llm", Operation: "embed"}); err != nil || len(page.Items) != 0 {
+		t.Fatal("operation and kind disagree", err, page)
+	}
+	if _, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{CallKind: "bogus"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("bad kind", err)
+	}
+	stats, err := f.svc.LLMRequestStatsFor(testCtx, f.human, scopeA, 1)
+	if err != nil || len(stats.Runs) != 1 || stats.Runs[0].Calls != 2 || stats.Runs[0].TotalTokens != 30 {
+		t.Fatal("runs", err, stats.Runs)
+	}
+	for op, want := range map[string]string{"embed_query": "embedding", "rerank": "rerank", "recall_rerank": "rerank", "wiki.page": "llm"} {
+		if got := llmCallKind(op); got != want {
+			t.Errorf("llmCallKind(%q) = %q, want %q", op, got, want)
+		}
+	}
 }
 
 func TestLLMTraceStoresRedactedContentOnlyWithFlag(t *testing.T) {

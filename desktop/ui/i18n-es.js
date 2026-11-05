@@ -5852,7 +5852,6 @@
  "꼭 남는 기록": "Registro obligatorio",
  "예 — 끌 수 없어요": "Sí — no se puede desactivar",
  "요청량으로": "Volver a solicitudes",
- "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "No hay actividad de esta vía en esta página. Pulsa Ver más para seguir buscando.",
  "모든 종류": "Todos los tipos",
  "언어 모델": "Modelo de lenguaje",
  "검색용 색인": "Índice de búsqueda",
@@ -5875,7 +5874,6 @@
  "보낸 글": "Texto enviado",
  "받은 글": "Texto recibido",
  "요약으로": "Volver al resumen",
- "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "No hay llamadas de este tipo en esta página. Pulsa Ver más para seguir buscando.",
  "저장한 때 기준": "Según cuándo se guardó",
  "일어난 때 기준": "Según cuándo ocurrió",
  "말한 때 기준": "Según cuándo se dijo",
@@ -6186,7 +6184,10 @@
  "쓰지 않기": "No usar",
  "정리 전에 쉬운 것 먼저 거르기": "Descartar primero lo fácil antes de consolidar",
  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "Un modelo de decisión pequeño descarta antes lo que una observación ya recoge y la charla trivial, así se hacen menos llamadas al modelo del servidor. No escribe nada.",
- "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Está activado. Cada decisión cuenta para el límite diario de uso del modelo del servidor."
+ "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Está activado. Cada decisión cuenta para el límite diario de uso del modelo del servidor.",
+ "호출 자세히": "Detalles de las llamadas",
+ "그중 캐시에서": "De ellos, desde la caché",
+ "그중 생각": "De ellos, razonamiento"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -7386,7 +7387,6 @@
  "{0}초까지 기다림": "Espera hasta {0} s",
  "쿼리 {0}": "Consulta {0}",
  "요청량 · 모두 {0}건": "Solicitudes · {0} en total",
- "{0}번 (불러온 것)": "{0} veces (cargadas)",
  "{0}까지": "Hasta {0}",
  "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "Se reintentaron {0}. {1} no se pueden reintentar desde aquí.",
  "{0}개를 다시 시도했어요.": "Se reintentaron {0}.",
@@ -7430,6 +7430,7 @@
  "· 기억 {0}개": "· {0} recuerdos",
  "관계 {0}개": "{0} relaciones",
  "근거 {0}개": "{0} fuentes",
- "이전 {0}개 더 보기": "Ver {0} anteriores"
+ "이전 {0}개 더 보기": "Ver {0} anteriores",
+ "{0}번 (30일)": "{0} veces (30 días)"
  }
 };

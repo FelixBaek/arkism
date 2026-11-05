@@ -80,6 +80,8 @@ type ProviderUsage struct {
 	TotalTokens  int64  `json:"total_tokens" bson:"total_tokens"`
 	// CachedInputTokens is the part of InputTokens the provider served from its prompt cache, when it says.
 	CachedInputTokens int64 `json:"cached_input_tokens,omitempty" bson:"cached_input_tokens,omitempty"`
+	// ReasoningTokens is the part of OutputTokens the model spent thinking, when the provider says.
+	ReasoningTokens int64 `json:"reasoning_tokens,omitempty" bson:"reasoning_tokens,omitempty"`
 }
 
 type EmbeddingBatch struct {

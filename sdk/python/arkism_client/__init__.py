@@ -1674,6 +1674,10 @@ class ArkismClient(BaseClient):
         """GET /v1/llm-requests/stats — Model call traces: daily stats"""
         return self.request("GET", f"/v1/llm-requests/stats", query, None)
 
+    def get_v1_llm_request(self, id, query=None):
+        """GET /v1/llm-requests/{id} — Model call traces: read one"""
+        return self.request("GET", f"/v1/llm-requests/{urllib.parse.quote(id, safe='')}", query, None)
+
     def get_v1_wiki_tree(self, query=None):
         """GET /v1/wiki/tree — Wiki: tree"""
         return self.request("GET", f"/v1/wiki/tree", query, None)

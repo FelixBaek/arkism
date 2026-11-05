@@ -5852,7 +5852,6 @@
  "꼭 남는 기록": "Catatan yang selalu tersimpan",
  "예 — 끌 수 없어요": "Ya — tidak bisa dimatikan",
  "요청량으로": "Kembali ke permintaan",
- "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Tidak ada aktivitas dari jalur ini di halaman ini. Tekan Tampilkan lebih banyak untuk terus mencari.",
  "모든 종류": "Semua jenis",
  "언어 모델": "Model bahasa",
  "검색용 색인": "Indeks pencarian",
@@ -5875,7 +5874,6 @@
  "보낸 글": "Teks terkirim",
  "받은 글": "Teks diterima",
  "요약으로": "Kembali ke ringkasan",
- "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Tidak ada panggilan jenis ini di halaman ini. Tekan Tampilkan lebih banyak untuk terus mencari.",
  "저장한 때 기준": "Berdasarkan waktu disimpan",
  "일어난 때 기준": "Berdasarkan waktu kejadian",
  "말한 때 기준": "Berdasarkan waktu diucapkan",
@@ -6186,7 +6184,10 @@
  "쓰지 않기": "Jangan gunakan",
  "정리 전에 쉬운 것 먼저 거르기": "Saring dulu yang mudah sebelum merangkum",
  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "Model penilai kecil menyaring dulu isi yang sudah ada di observasi dan obrolan ringan, sehingga panggilan ke model server berkurang. Model ini tidak menulis apa pun.",
- "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Aktif. Setiap penilaian dihitung ke batas penggunaan harian model server."
+ "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Aktif. Setiap penilaian dihitung ke batas penggunaan harian model server.",
+ "호출 자세히": "Detail panggilan",
+ "그중 캐시에서": "Di antaranya dari cache",
+ "그중 생각": "Di antaranya penalaran"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7386,7 +7387,6 @@
  "{0}초까지 기다림": "Menunggu hingga {0} detik",
  "쿼리 {0}": "Query {0}",
  "요청량 · 모두 {0}건": "Jumlah permintaan · total {0}",
- "{0}번 (불러온 것)": "{0} kali (yang dimuat)",
  "{0}까지": "Sampai {0}",
  "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "{0} pekerjaan dicoba lagi. {1} pekerjaan tidak bisa dicoba lagi dari sini.",
  "{0}개를 다시 시도했어요.": "{0} pekerjaan dicoba lagi.",
@@ -7430,6 +7430,7 @@
  "· 기억 {0}개": "· {0} memori",
  "관계 {0}개": "{0} relasi",
  "근거 {0}개": "{0} sumber",
- "이전 {0}개 더 보기": "Tampilkan {0} sebelumnya"
+ "이전 {0}개 더 보기": "Tampilkan {0} sebelumnya",
+ "{0}번 (30일)": "{0} kali (30 hari)"
  }
 };

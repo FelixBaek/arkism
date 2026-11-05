@@ -3431,7 +3431,7 @@
     "/v1/audit-events": {
       "get": {
         "summary": "List a scope's audit events (human read:audit_events)",
-        "description": "Newest first, paginated. action is a prefix filter; actor is the principal id; record_id matches the event target. Returns metadata only: free-form reasons and stored bodies are never returned and secret-shaped values read [redacted].",
+        "description": "Newest first, paginated. action is a prefix filter; actor is the principal id; record_id matches the event target; transport is where the call came in. Returns metadata only: free-form reasons and stored bodies are never returned and secret-shaped values read [redacted].",
         "parameters": [
           {
             "in": "query",
@@ -3494,6 +3494,20 @@
             "description": "Target record id",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "transport",
+            "required": false,
+            "description": "Where the call came in",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "http",
+                "mcp",
+                "system"
+              ]
             }
           },
           {
@@ -44179,6 +44193,21 @@
             }
           },
           {
+
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Call kind: llm, embedding or rerank. Traces filed before kinds were recorded match none.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "llm",
+                "embedding",
+                "rerank"
+              ]
+            }
+          },
+          {
             "name": "before",
             "in": "query",
             "required": false,
@@ -44376,6 +44405,171 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LLMRequestStats"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/llm-requests/{id}": {
+      "get": {
+        "operationId": "get_v1_llm_request",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Model call traces: read one",
+        "description": "Human principals only. Model call traces of server-side model calls: operation, generator, prompt/response size and SHA-256, tokens, latency and outcome. Text is stored only when the server enables it, redacted and truncated, and expires with the retention run. Reads one trace by id with the same scope and roles as the list.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMRequestView"
                 }
               }
             }
@@ -75006,6 +75200,140 @@
           }
         }
       },
+      "LLMRequestView": {
+        "type": "object",
+        "required": [
+          "id",
+          "scope",
+          "created_at",
+          "request"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "request": {
+            "type": "object",
+            "required": [
+              "operation",
+              "prompt_chars",
+              "prompt_sha256",
+              "response_chars",
+              "input_tokens",
+              "output_tokens",
+              "total_tokens",
+              "latency_ms",
+              "status"
+            ],
+            "properties": {
+              "operation": {
+                "type": "string"
+              },
+              "call_kind": {
+                "type": "string",
+                "enum": [
+                  "llm",
+                  "embedding",
+                  "rerank"
+                ],
+                "description": "What the call was; omitted on traces filed before kinds were recorded."
+              },
+              "generator": {
+                "type": "object"
+              },
+              "prompt_chars": {
+                "type": "integer"
+              },
+              "prompt_sha256": {
+                "type": "string"
+              },
+              "response_chars": {
+                "type": "integer"
+              },
+              "response_sha256": {
+                "type": "string"
+              },
+              "input_tokens": {
+                "type": "integer"
+              },
+              "output_tokens": {
+                "type": "integer"
+              },
+              "cached_input_tokens": {
+                "type": "integer",
+                "description": "Part of input_tokens the provider served from its prompt cache; omitted when none was reported."
+              },
+              "reasoning_tokens": {
+                "type": "integer",
+                "description": "Part of output_tokens the model spent on hidden reasoning; omitted when none was reported."
+              },
+              "total_tokens": {
+                "type": "integer"
+              },
+              "latency_ms": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok",
+                  "error"
+                ]
+              },
+              "error": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "response": {
+                "type": "string"
+              },
+              "provider": {
+                "type": "string"
+              },
+              "trace_id": {
+                "type": "string",
+                "description": "W3C trace id; the job's trace when the call ran inside a background job."
+              },
+              "span_id": {
+                "type": "string"
+              },
+              "parent_span_id": {
+                "type": "string"
+              },
+              "job_id": {
+                "type": "string"
+              },
+              "document_id": {
+                "type": "string",
+                "description": "Source document the call worked on; traces are deleted when that source is erased."
+              },
+              "source_memory_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64
+              },
+              "created_memory_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64
+              }
+            }
+          }
+        }
+      },
       "LLMRequestPage": {
         "type": "object",
         "required": [
@@ -75015,125 +75343,7 @@
           "items": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "scope",
-                "created_at",
-                "request"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "scope": {
-                  "$ref": "#/components/schemas/Scope"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "request": {
-                  "type": "object",
-                  "required": [
-                    "operation",
-                    "prompt_chars",
-                    "prompt_sha256",
-                    "response_chars",
-                    "input_tokens",
-                    "output_tokens",
-                    "total_tokens",
-                    "latency_ms",
-                    "status"
-                  ],
-                  "properties": {
-                    "operation": {
-                      "type": "string"
-                    },
-                    "generator": {
-                      "type": "object"
-                    },
-                    "prompt_chars": {
-                      "type": "integer"
-                    },
-                    "prompt_sha256": {
-                      "type": "string"
-                    },
-                    "response_chars": {
-                      "type": "integer"
-                    },
-                    "response_sha256": {
-                      "type": "string"
-                    },
-                    "input_tokens": {
-                      "type": "integer"
-                    },
-                    "output_tokens": {
-                      "type": "integer"
-                    },
-                    "cached_input_tokens": {
-                      "type": "integer",
-                      "description": "Part of input_tokens the provider served from its prompt cache; omitted when none was reported."
-                    },
-                    "total_tokens": {
-                      "type": "integer"
-                    },
-                    "latency_ms": {
-                      "type": "integer"
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "ok",
-                        "error"
-                      ]
-                    },
-                    "error": {
-                      "type": "string"
-                    },
-                    "prompt": {
-                      "type": "string"
-                    },
-                    "response": {
-                      "type": "string"
-                    },
-                    "provider": {
-                      "type": "string"
-                    },
-                    "trace_id": {
-                      "type": "string",
-                      "description": "W3C trace id; the job's trace when the call ran inside a background job."
-                    },
-                    "span_id": {
-                      "type": "string"
-                    },
-                    "parent_span_id": {
-                      "type": "string"
-                    },
-                    "job_id": {
-                      "type": "string"
-                    },
-                    "document_id": {
-                      "type": "string",
-                      "description": "Source document the call worked on; traces are deleted when that source is erased."
-                    },
-                    "source_memory_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "maxItems": 64
-                    },
-                    "created_memory_ids": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "maxItems": 64
-                    }
-                  }
-                }
-              }
+              "$ref": "#/components/schemas/LLMRequestView"
             }
           },
           "next_before": {
@@ -75145,9 +75355,33 @@
         "type": "object",
         "required": [
           "since",
-          "items"
+          "items",
+          "runs"
         ],
         "properties": {
+          "runs": {
+            "type": "array",
+            "description": "Runs (a trace, else a job) with more than one call in the window, busiest first, at most 20.",
+            "items": {
+              "type": "object",
+              "required": [
+                "run",
+                "calls",
+                "total_tokens"
+              ],
+              "properties": {
+                "run": {
+                  "type": "string"
+                },
+                "calls": {
+                  "type": "integer"
+                },
+                "total_tokens": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
           "since": {
             "type": "string",
             "format": "date-time"

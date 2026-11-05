@@ -5852,7 +5852,6 @@
  "꼭 남는 기록": "Toujours enregistré",
  "예 — 끌 수 없어요": "Oui — impossible à désactiver",
  "요청량으로": "Retour aux requêtes",
- "이 경로로 남은 활동이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Aucune activité de ce canal sur cette page. Utilisez Afficher plus pour continuer la recherche.",
  "모든 종류": "Tous les types",
  "언어 모델": "Modèle de langage",
  "검색용 색인": "Index de recherche",
@@ -5875,7 +5874,6 @@
  "보낸 글": "Texte envoyé",
  "받은 글": "Texte reçu",
  "요약으로": "Retour au résumé",
- "이 종류의 호출이 이 페이지에 없어요. 더 보기로 이어서 찾아요.": "Aucun appel de ce type sur cette page. Utilisez Afficher plus pour continuer la recherche.",
  "저장한 때 기준": "Selon la date d'enregistrement",
  "일어난 때 기준": "Selon la date de l'événement",
  "말한 때 기준": "Selon la date de la parole",
@@ -6186,7 +6184,10 @@
  "쓰지 않기": "Ne pas utiliser",
  "정리 전에 쉬운 것 먼저 거르기": "Écarter les cas simples avant la synthèse",
  "이미 관찰에 있는 내용이나 잡담은 작은 판정 모델이 먼저 걸러 서버 모델 호출을 줄여요. 아무것도 쓰지 않아요.": "Un petit modèle de décision écarte d'abord ce qu'une observation contient déjà et les bavardages, ce qui réduit les appels au modèle du serveur. Il n'écrit rien.",
- "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Activé. Chaque décision est comptée dans la limite d'utilisation quotidienne du modèle du serveur."
+ "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Activé. Chaque décision est comptée dans la limite d'utilisation quotidienne du modèle du serveur.",
+ "호출 자세히": "Détails des appels",
+ "그중 캐시에서": "Dont depuis le cache",
+ "그중 생각": "Dont réflexion"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -7386,7 +7387,6 @@
  "{0}초까지 기다림": "Attend jusqu'à {0} s",
  "쿼리 {0}": "Paramètre {0}",
  "요청량 · 모두 {0}건": "Requêtes · {0} au total",
- "{0}번 (불러온 것)": "{0} fois (chargées)",
  "{0}까지": "Jusqu'à {0}",
  "{0}개를 다시 시도했어요. {1}개는 여기서 다시 할 수 없어요.": "{0} tâche(s) relancée(s). {1} ne peuvent pas être relancées ici.",
  "{0}개를 다시 시도했어요.": "{0} tâche(s) relancée(s).",
@@ -7430,6 +7430,7 @@
  "· 기억 {0}개": "· {0} souvenirs",
  "관계 {0}개": "{0} relations",
  "근거 {0}개": "{0} sources",
- "이전 {0}개 더 보기": "Afficher {0} plus anciennes"
+ "이전 {0}개 더 보기": "Afficher {0} plus anciennes",
+ "{0}번 (30일)": "{0} fois (30 jours)"
  }
 };

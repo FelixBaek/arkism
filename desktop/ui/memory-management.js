@@ -104,13 +104,13 @@
     wiki_analyse: "위키 내용 살피기", wiki_write: "위키 쓰기", wiki_observation: "관찰 정리 제안", wiki_causal: "원인과 결과 제안", wiki_mental_model: "정리 틀 만들기",
     wiki_file_vision: "그림 읽기", wiki_file_transcribe: "소리 받아쓰기", skill_routing: "스킬 고르기", model_routing: "모델 고르기", skill_draft: "스킬 초안 쓰기", skill_analysis: "스킬 살피기" };
   const opLabel = (op) => OPERATION[op] || "";
-  // a call's kind from its operation: embeddings and reranks are named so by the server (cost.go meteredEmbed/meteredRerank)
+  // a call's kind from its operation, for the 하는 일 list and traces filed before the server stored call_kind (llmCallKind in llm_requests.go)
   const callKind = (op) => (/^embed/.test(op || "") ? "embedding" : /(^|_)rerank$/.test(op || "") ? "rerank" : "llm");
-  // loaded calls (GET /v1/llm-requests items) per model or per run (trace, else job): [key, calls, tokens], busiest first
-  function callGroups(items, by) {
+  // loaded calls (GET /v1/llm-requests items) per model: [model, calls, tokens], busiest first; runs come counted from the stats route
+  function callGroups(items) {
     const m = new Map();
     for (const it of items || []) {
-      const q = it?.request || {}, key = by === "run" ? q.trace_id || q.job_id || "" : q.generator?.model || q.provider || "";
+      const q = it?.request || {}, key = q.generator?.model || q.provider || "";
       if (!key) continue;
       const g = m.get(key) || [key, 0, 0]; g[1] += 1; g[2] += Number(q.total_tokens) || 0; m.set(key, g);
     }
