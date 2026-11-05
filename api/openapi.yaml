@@ -36592,7 +36592,7 @@
           "Management"
         ],
         "summary": "Entities: extract",
-        "description": "Runs named-entity extraction over the scope's approved memories (newest first, limit 1-500, default 100). The rule pass writes mentions edges; the optional model pass only proposes (mentions_proposed) until a person confirms. dry_run writes nothing. People or services with write:entities.",
+        "description": "Runs named-entity extraction over the scope's approved memories (newest first, limit 1-500, default 100; with model at most 50, default 50). The rule pass writes mentions edges; the optional model pass sends no private, restricted or secret-bearing memory and only proposes (mentions_proposed) until a person confirms. dry_run writes nothing. People or services with write:entities.",
         "parameters": [],
         "responses": {
           "200": {

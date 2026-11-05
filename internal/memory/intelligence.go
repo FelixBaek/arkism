@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"math"
-	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -501,24 +500,6 @@ func (s *Service) improvementEvidence(ctx context.Context, token string, in *Imp
 		return "", 0, ErrInvalid
 	}
 	return status, confidence, nil
-}
-
-func parseIntelligenceQuery(raw string, extra ...string) (Scope, url.Values, error) {
-	q, err := url.ParseQuery(raw)
-	if err != nil {
-		return Scope{}, nil, ErrInvalid
-	}
-	allowed := append([]string{"workspace_id", "project_id", "user_id", "agent_id"}, extra...)
-	for key, values := range q {
-		if !slices.Contains(allowed, key) || len(values) != 1 {
-			return Scope{}, nil, ErrInvalid
-		}
-	}
-	scope := Scope{WorkspaceID: q.Get("workspace_id"), ProjectID: q.Get("project_id"), UserID: q.Get("user_id"), AgentID: q.Get("agent_id")}
-	if !validScope(scope) {
-		return Scope{}, nil, ErrInvalid
-	}
-	return scope, q, nil
 }
 
 func splitStatuses(value string) []string {

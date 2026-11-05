@@ -108,6 +108,8 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 	if e != nil {
 		return SupersedeOutput{}, e
 	}
+	// The old memory's mentions left with its status; the edited text gets its own.
+	s.extractEntitiesAfterApproval(ctx, actor.PrincipalID, out.New)
 	return out, nil
 }
 

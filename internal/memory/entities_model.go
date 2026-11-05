@@ -10,6 +10,7 @@ import (
 
 const (
 	entityModelBatch     = 10
+	entityModelMax       = 50
 	entityModelTextRunes = 2000
 )
 
@@ -62,7 +63,7 @@ func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scop
 	return out, job.Calls, nil
 }
 
-// entityModelPrompt numbers the notes it sends; notes with secrets are not sent.
+// entityModelPrompt numbers the notes it sends; private, restricted or secret-bearing notes are not sent.
 func entityModelPrompt(batch []Record) (string, []Record) {
 	type note struct {
 		I    int    `json:"i"`
@@ -72,7 +73,7 @@ func entityModelPrompt(batch []Record) (string, []Record) {
 	var sent []Record
 	for _, r := range batch {
 		text := entityText(r)
-		if containsSecret(text) {
+		if r.Sensitivity == "private" || r.Sensitivity == "restricted" || !safeTransfer(text) {
 			continue
 		}
 		if rs := []rune(text); len(rs) > entityModelTextRunes {

@@ -2,9 +2,11 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -322,5 +324,56 @@ func TestApprovalSucceedsWhenEntityExtractionFails(t *testing.T) {
 	}
 	if len(repo.ents) != 1 || len(repo.edges) != 1 {
 		t.Fatal("approval did not extract", repo.ents, repo.edges)
+	}
+}
+
+// The trigger in 0010 reads these exact stored shapes; keep the SQL and the codec in step.
+func TestEntitySQLMatchesStoredForms(t *testing.T) {
+	doc := map[string]any{}
+	b, err := storeMarshal(Record{ID: "m", Status: statusActive, ContentErased: true, PrivacyQuarantined: true})
+	if err != nil || json.Unmarshal(b, &doc) != nil || doc["content_erased"] != true || doc["privacy_quarantined"] != true {
+		t.Fatal("stored doc flags", string(b), err)
+	}
+	if b, _ = storeMarshal(Record{ID: "m"}); strings.Contains(string(b), "content_erased") || strings.Contains(string(b), "privacy_quarantined") {
+		t.Fatal("false flags must be omitted, the trigger compares presence", string(b))
+	}
+	if b, _ = json.Marshal(NamedEntity{ID: "e", Deleted: true}); !strings.Contains(string(b), `"deleted":true`) {
+		t.Fatal("tombstone metadata", string(b))
+	}
+	for _, want := range []string{"doc->'content_erased'", "doc->'privacy_quarantined'", "metadata->>'deleted'", "OLD.status='active'"} {
+		if !strings.Contains(schemaNamedEntitiesSQL, want) {
+			t.Fatal("migration no longer reads", want)
+		}
+	}
+	if strings.Contains(schemaNamedEntitiesSQL, "::timestamptz") || strings.ContainsRune(namedEntityLockKey(scopeA), 0) {
+		t.Fatal("stored dates are {$date} objects; Postgres text takes no NUL byte")
+	}
+}
+
+func TestEntityModelPromptSkipsPrivateAndSecret(t *testing.T) {
+	batch := []Record{{ID: "a", Text: "Arkism note"}, {ID: "b", Text: "private note", Sensitivity: "private"},
+		{ID: "c", Text: "restricted note", Sensitivity: "restricted"}, {ID: "d", Text: "key AKIAIOSFODNN7EXAMPLE"}}
+	user, sent := entityModelPrompt(batch)
+	if len(sent) != 1 || sent[0].ID != "a" || strings.Contains(user, "private note") || strings.Contains(user, "AKIA") {
+		t.Fatal(user, sent)
+	}
+}
+
+func TestSupersedeMovesMentionsToReplacement(t *testing.T) {
+	f, repo := entityFixture(t)
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	old := entityMemory(t, f, repo, "m1", "Arkism uses Postgres.", day)
+	next := entityMemory(t, f, repo, "m2", "Arkism uses Postgres and Valkey.", day)
+	if _, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); err != nil {
+		t.Fatal(err)
+	}
+	// The fake repo has no trigger; drop the old edges the way 0010 does on leaving 'active'.
+	repo.edges = slices.DeleteFunc(repo.edges, func(m EntityMention) bool { return m.MemoryID == old.ID })
+	repo.edges = slices.DeleteFunc(repo.edges, func(m EntityMention) bool { return m.MemoryID == next.ID })
+	if _, err := f.svc.Supersede(testCtx, f.human, old.ID, SupersedeInput{Scope: scopeA, ExpectedRevision: old.Revision, Reason: "edit", ReplacementMemoryID: next.ID, ReplacementExpectedRevision: next.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(repo.edges, func(m EntityMention) bool { return m.MemoryID == next.ID }) {
+		t.Fatal("replacement not re-extracted", repo.edges)
 	}
 }

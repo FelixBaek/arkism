@@ -231,8 +231,8 @@ func (s *Service) GetEntity(ctx context.Context, token string, scope Scope, id s
 		out.Timeline = append(out.Timeline, EntityTimelineBucket{Month: month, Count: months[month]})
 	}
 	slices.SortFunc(own, func(a, b EntityMention) int { return b.EventAt.Compare(a.EventAt) })
-	for _, m := range own {
-		if len(out.Memories) == entityDetailMemories {
+	for i, m := range own {
+		if len(out.Memories) == entityDetailMemories || i == 3*entityDetailMemories {
 			break
 		}
 		ref, ok, err := s.entityMemoryRef(ctx, token, scope, sum.NamedEntity, m)

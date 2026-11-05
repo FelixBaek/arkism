@@ -51,8 +51,12 @@ const entityPreviewItems = 50
 func (s *Service) ExtractEntities(ctx context.Context, token string, in EntityExtractInput) (EntityExtractResult, error) {
 	if in.Limit == 0 {
 		in.Limit = 100
+		if in.Model {
+			in.Limit = entityModelMax
+		}
 	}
-	if in.Limit < 1 || in.Limit > entityExtractMax {
+	// Model calls run inline in the request, so the model pass takes fewer memories.
+	if in.Limit < 1 || in.Limit > entityExtractMax || in.Model && in.Limit > entityModelMax {
 		return EntityExtractResult{}, ErrInvalid
 	}
 	d, err := s.entityEditor(ctx, token, in.Scope, "", roleService)

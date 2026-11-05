@@ -13,9 +13,12 @@ func (p *Postgres) LockNamedEntities(ctx context.Context, scope Scope) error {
 	if checkScope(scope) != nil {
 		return ErrInvalid
 	}
-	_, err := p.q().Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, "named_entities\x00"+structuredText(scope))
+	_, err := p.q().Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, namedEntityLockKey(scope))
 	return pgErr(err)
 }
+
+// namedEntityLockKey is text Postgres accepts (no NUL byte); the scope JSON keeps scopes apart.
+func namedEntityLockKey(scope Scope) string { return "arkism.named_entities:" + structuredText(scope) }
 
 func (p *Postgres) NamedEntities(ctx context.Context, scope Scope, limit int) ([]NamedEntity, error) {
 	if checkScope(scope) != nil || limit < 1 || limit > entityScanLimit+1 {

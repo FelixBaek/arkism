@@ -28,7 +28,7 @@ func registerEvaluationsCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 
 func registerReflectionsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("GET /v1/reflections", func(w http.ResponseWriter, r *http.Request) {
-		scope, q, e := parseIntelligenceQuery(r.URL.RawQuery, "subject")
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "subject")
 		if e != nil {
 			respond(w, nil, e)
 			return
@@ -40,7 +40,7 @@ func registerReflectionsCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 
 func registerTacitCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("GET /v1/tacit/edges", func(w http.ResponseWriter, r *http.Request) {
-		scope, q, e := parseIntelligenceQuery(r.URL.RawQuery, "node", "relation")
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "node", "relation")
 		if e != nil {
 			respond(w, nil, e)
 			return
@@ -52,7 +52,7 @@ func registerTacitCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics
 
 func registerTwinCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("GET /v1/twin/claims", func(w http.ResponseWriter, r *http.Request) {
-		scope, q, e := parseIntelligenceQuery(r.URL.RawQuery, "status")
+		scope, q, e := parseWikiQuery(r.URL.RawQuery, "status")
 		if e != nil {
 			respond(w, nil, e)
 			return
