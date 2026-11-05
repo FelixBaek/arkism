@@ -59,7 +59,7 @@ var (
 	spaceData         = []string{colMemories, "memory_candidates", colMentalModels, colDirectives, "entities"}
 	spaceCaptured     = []string{colMemories, "memory_candidates", colObservations}
 	spaceHistory      = []string{"audit_events", colLLMRequests}
-	spaceParts        = []string{spaceSectionConfig, "data", colObservations, "history", spaceSectionKnowledge, spaceSectionAttachments}
+	spaceParts        = []string{spaceSectionConfig, "data", colObservations, "history", spaceSectionKnowledge, spaceSectionAttachments, spaceSectionDocuments}
 	spaceDefinitions  = []string{colDirectives, colMentalModels}
 	spaceAliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
 	spaceSchedules    = []string{"off", "daily", "weekly"}
@@ -246,14 +246,15 @@ type SpaceBundleRecord struct {
 }
 
 type spaceBundleLine struct {
-	Manifest   *SpaceManifest     `json:"manifest,omitempty"`
-	Section    string             `json:"section,omitempty"`
-	Config     *SpaceConfig       `json:"config,omitempty"`
-	Record     *SpaceBundleRecord `json:"record,omitempty"`
-	Audit      *AuditEventView    `json:"audit,omitempty"`
-	LLMRequest *LLMRequestView    `json:"llm_request,omitempty"`
-	File       *SpaceBundleFile   `json:"file,omitempty"`
-	End        *SpaceBundleEnd    `json:"end,omitempty"`
+	Manifest   *SpaceManifest       `json:"manifest,omitempty"`
+	Section    string               `json:"section,omitempty"`
+	Config     *SpaceConfig         `json:"config,omitempty"`
+	Record     *SpaceBundleRecord   `json:"record,omitempty"`
+	Audit      *AuditEventView      `json:"audit,omitempty"`
+	LLMRequest *LLMRequestView      `json:"llm_request,omitempty"`
+	File       *SpaceBundleFile     `json:"file,omitempty"`
+	Document   *SpaceBundleDocument `json:"document,omitempty"`
+	End        *SpaceBundleEnd      `json:"end,omitempty"`
 }
 
 // SpaceReport is what an import or clone did, per section.

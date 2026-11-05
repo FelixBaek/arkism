@@ -31,7 +31,7 @@ func (s *Service) createExtractJob(ctx context.Context, d Decision, scope Scope,
 		switch {
 		case errors.Is(err, ErrNotFound):
 			err = tx.Insert(ctx, "jobs", Record{ID: docID, Scope: scope, Kind: fileExtractDocKind, Status: JobStatusDone, Revision: 1, Target: target, CreatedAt: now, UpdatedAt: now,
-				CreatedBy: d.PrincipalID, CreatedByType: d.Role})
+				CreatedBy: d.PrincipalID, CreatedByType: d.Role, Tags: job.Tags})
 		case err == nil && doc.Kind == fileExtractDocKind:
 			if doc.Target != nil {
 				out.FileExtract.Previous = doc.Target.ID

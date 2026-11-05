@@ -168,6 +168,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_FILE_PARSERS`, `MEMORY_FILE_PARSER_ALLOWLIST` | Comma-separated reader order used when a request names none (default `builtin,converter,vision,transcribe` plus configured external readers), and the readers a request may name in `parsers` (default all configured). A reader that cannot read a file hands it to the next; a limit, a refusal or the model budget stops the chain |
 | `MEMORY_FILE_PARSER_JOB_URL` | Optional external reading service (reader `upload_job`) using the upload-and-poll protocol: `POST {url}/upload` (multipart `file`), `GET {url}/{id}` until done, `GET {url}/{id}?expand=markdown_full`. Key in `MEMORY_FILE_PARSER_JOB_API_KEY` |
 | `MEMORY_FILE_PARSER_PRESIGNED_URL` | Optional external reading service (reader `presigned_job`) using the presigned-upload protocol under `{url}/org/{MEMORY_FILE_PARSER_PRESIGNED_ORG}`; token in `MEMORY_FILE_PARSER_PRESIGNED_TOKEN`. Each file needs a `transfer:model_input` decision for destination `external:file_parser`; the file name never leaves the server, a file holding a secret or a private part is never sent, and the upload address the service returns may not be a private address unless the service URL itself is on a private network |
+| `MEMORY_FILE_BUNDLE_MAX_BYTES` | Largest attachment a space bundle carries (default `MEMORY_FILE_MAX_BYTES`, at most 200 MiB). Larger attachments are left out and counted as `too_large` in the bundle's `skipped` list |
 | `MEMORY_FILE_KEEP_ORIGINALS` | `1` keeps each file uploaded for memory extraction as an attachment of its evidence (needs `MEMORY_BLOB_DIRECTORY` or object storage). Recall lists them with `include: ["attachments"]`, reflect with `include: {"attachments": true}`; download is `GET /v1/sources/{id}/artifacts/{artifact_id}`. Off by default. Files from agents and files whose text had private or secret parts removed are not kept |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
@@ -489,15 +490,22 @@ wiki. What a person approves and how is described in
     `application/x-ndjson` body (up to 1 GiB, spooled to a temp file and checked
     before anything is written), with `import_as` and `as_template=true` in the
     query. Export and clone take `parts` (`config`, `data`, `observations`,
-    `history`, `knowledge`, `attachments`; default `config` and `data`, as
-    before). Observations arrive as
+    `history`, `knowledge`, `attachments`, `documents`; default `config` and
+    `data`, as before). Observations arrive as
     memory candidates. History (audit rows and model-call traces without their
     text) is only for people; an uploaded bundle's history is never written,
     and only a clone inside the server copies it. `as_template` takes the
     settings and definitions of any bundle into a space without settings.
     The `knowledge` part carries knowledge files as their stored text and the
-    `attachments` part carries text and JSON source attachments (up to 512 KiB,
-    base64), both from the space's user and agent sub-scopes. Only a person
+    `attachments` part carries source attachments of any format (base64, up
+    to `MEMORY_FILE_BUNDLE_MAX_BYTES`, default `MEMORY_FILE_MAX_BYTES`; a file
+    over 2 MiB goes as consecutive pieces that import joins again), both from
+    the space's user and agent sub-scopes. The `documents` part carries each
+    extracted document with its chunks' text read back from its evidence;
+    import stores the chunks as new evidence and records the document as done
+    under the importing person without calling a model (reprocess it to
+    extract again). Every line left out is counted in `manifest.skipped` with
+    its reason (`too_large`, `private`, `not_live`, `incomplete_file`, ...). Only a person
     gets them, and only their own: knowledge files the caller supplied,
     private attachments the caller created; restricted attachments never
     leave. Import and clone restore each file into the same sub-scope of the

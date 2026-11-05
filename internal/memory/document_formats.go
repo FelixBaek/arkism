@@ -90,9 +90,12 @@ type FileSettings struct {
 	Hosted map[string]HostedParser
 	// KeepOriginals keeps each uploaded file as an attachment of its evidence (MEMORY_FILE_KEEP_ORIGINALS=1).
 	KeepOriginals bool
+	// BundleBytes caps one attachment in a space bundle (MEMORY_FILE_BUNDLE_MAX_BYTES, default MaxBytes); larger ones are skipped as too_large.
+	BundleBytes int64
 }
 
-func (f FileSettings) maxBytes() int64 { return positiveOr(f.MaxBytes, fileMaxBytesDefault) }
+func (f FileSettings) maxBytes() int64    { return positiveOr(f.MaxBytes, fileMaxBytesDefault) }
+func (f FileSettings) bundleBytes() int64 { return positiveOr(f.BundleBytes, f.maxBytes()) }
 func (f FileSettings) batchFiles() int {
 	return int(positiveOr(int64(f.BatchFiles), fileBatchFilesDefault))
 }
@@ -158,6 +161,7 @@ func FileSettingsFromEnv() (FileSettings, error) {
 	}{
 		{"MEMORY_FILE_MAX_BYTES", fileMaxBytesCap, &f.MaxBytes},
 		{"MEMORY_FILE_BATCH_MAX_BYTES", fileBatchBytesCap, &f.BatchBytes},
+		{"MEMORY_FILE_BUNDLE_MAX_BYTES", fileMaxBytesCap, &f.BundleBytes},
 		{"MEMORY_FILE_BATCH_MAX_FILES", fileBatchFilesCap, &files},
 		{"MEMORY_FILE_VISION_MAX_PAGES", fileVisionPagesCap, &pages},
 	} {

@@ -29,6 +29,8 @@ const (
 	spaceHistoryPage    = 500
 )
 
+var errSpaceLineTooLarge = errors.New("space bundle line too large")
+
 // SpaceBundleEnd is the trailer of a version 2 bundle.
 type SpaceBundleEnd struct {
 	SHA256   string         `json:"sha256"`
@@ -71,9 +73,17 @@ func (s *Service) writeSpaceBundle(ctx context.Context, token string, d Decision
 		return SpaceManifest{}, ErrUnavailable
 	}
 	h := sha256.New()
-	enc := json.NewEncoder(io.MultiWriter(bw, h))
+	out := io.MultiWriter(bw, h)
 	sections, skipped, err := s.eachSpaceLine(ctx, token, d, scope, spaceSections(in), at, func(l spaceBundleLine) error {
-		if enc.Encode(l) != nil {
+		b, err := json.Marshal(l)
+		switch {
+		case err != nil:
+			return ErrUnavailable
+		case len(b) >= spaceLineMaxBytes:
+			// A reader refuses a longer line, so it is left out and reported rather than written.
+			return errSpaceLineTooLarge
+		}
+		if _, err = out.Write(append(b, '\n')); err != nil {
 			return ErrUnavailable
 		}
 		return nil
@@ -96,7 +106,17 @@ func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, s
 	report := SpaceReport{Skipped: []SpaceSkip{}}
 	for _, name := range sections {
 		n := 0
-		count := func(l spaceBundleLine) error { n++; return emit(l) }
+		count := func(l spaceBundleLine) error {
+			err := emit(l)
+			if errors.Is(err, errSpaceLineTooLarge) {
+				report.skip(name, "too_large", 1)
+				return nil
+			}
+			if err == nil {
+				n++
+			}
+			return err
+		}
 		if err := s.emitSpaceSection(ctx, token, d, scope, name, now, count, &report); err != nil {
 			return nil, nil, err
 		}
@@ -110,11 +130,13 @@ func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision
 	switch {
 	case name == spaceSectionConfig:
 		return emitSpaceConfig(ctx, repo, scope, d.Role, emit)
-	case (slices.Contains(spaceHistory, name) || slices.Contains(spaceFiles, name)) && d.Role != roleHuman:
+	case (slices.Contains(spaceHistory, name) || slices.Contains(spaceFiles, name) || name == spaceSectionDocuments) && d.Role != roleHuman:
 		report.skip(name, "not_human", 1)
 		return nil
 	case slices.Contains(spaceFiles, name):
 		return s.emitSpaceFiles(ctx, token, d, scope, name, emit, report)
+	case name == spaceSectionDocuments:
+		return s.emitSpaceDocuments(ctx, d, scope, emit, report)
 	case name == colLLMRequests:
 		return emitLLMRequests(ctx, repo, scope, emit)
 	case name == "audit_events":
@@ -333,6 +355,8 @@ type spaceImporter struct {
 	origin            []bool
 	chunk             int
 	report            SpaceReport
+	// piece is a split attachment still waiting for its next part.
+	piece *spacePiece
 }
 
 func (s *Service) importSpaceLines(ctx context.Context, token string, d Decision, scope Scope, m SpaceManifest, lines spaceLines, approved bool) (SpaceReport, error) {
@@ -342,6 +366,7 @@ func (s *Service) importSpaceLines(ctx context.Context, token string, d Decision
 func (s *Service) runSpaceImport(ctx context.Context, imp *spaceImporter, lines spaceLines) (SpaceReport, error) {
 	imp.report.Skipped = []SpaceSkip{}
 	err := lines(func(l spaceBundleLine) error { return imp.add(ctx, l) })
+	imp.dropPiece(spaceSectionAttachments)
 	if err == nil {
 		err = imp.flush(ctx)
 	}
@@ -365,6 +390,8 @@ func (imp *spaceImporter) add(ctx context.Context, line spaceBundleLine) error {
 		imp.s.importSpaceDefinition(ctx, imp.token, imp.d.Role, imp.scope, line, &imp.report)
 	case line.File != nil && slices.Contains(spaceFiles, line.Section):
 		imp.addFile(ctx, line.Section, *line.File)
+	case line.Document != nil && line.Section == spaceSectionDocuments:
+		imp.addDocument(ctx, *line.Document)
 	case (line.Audit != nil || line.LLMRequest != nil) && slices.Contains(spaceHistory, line.Section):
 		imp.addHistory(ctx, line)
 	default:
