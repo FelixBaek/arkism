@@ -5341,7 +5341,12 @@
  "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요.": "La puntuación combinada suma las posiciones de cada método, por eso es pequeña. Fíjate en el orden, no en el tamaño.",
  "나온 이름": "Nombres mencionados",
  "원문 조각": "Fragmentos del original",
- "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Muestra tal cual el proceso con el que el agente busca recuerdos. Así sabrás con qué método y en qué posición se encontró cada uno."
+ "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Muestra tal cual el proceso con el que el agente busca recuerdos. Así sabrás con qué método y en qué posición se encontró cada uno.",
+ "묶음": "Grupo",
+ "묶음 목록": "Lista de grupos",
+ "안에 칸 추가": "Añadir campo dentro",
+ "찾은 기억을 골라 확인하세요": "Elige un recuerdo encontrado para verlo",
+ "근거 기억을 눌러 확인하세요": "Toca un recuerdo de origen para verlo"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

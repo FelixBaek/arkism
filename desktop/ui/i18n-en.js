@@ -6471,3 +6471,9 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "{0} {1}위": "{0} #{1}",
   "{0}단계 이어짐": "{0} steps away",
   "{0}위로 찾은 기억": "Memory found at #{0}" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "묶음": "Group",
+  "묶음 목록": "List of groups",
+  "안에 칸 추가": "Add field inside",
+  "찾은 기억을 골라 확인하세요": "Pick a found memory to check it",
+  "근거 기억을 눌러 확인하세요": "Tap a source memory to check it" });

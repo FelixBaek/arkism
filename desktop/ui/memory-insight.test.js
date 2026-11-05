@@ -205,7 +205,7 @@ test("search 살펴보기 sends explain with the 자세히 options and shows lan
     explain: { lane_ranks: { keyword: 1, graph: 2 }, fused_score: 0.0245, rerank_score: 0.82, graph_hops: 2 }, entities: [{ id: "e1", name: "Orbit", type: "project" }],
     source_traces: [{ excerpt: "스테이징 먼저 보자" }], tags: ["배포"] };
   const t = setup("search", [["/v1/search", () => ({ authority: "data_only_untrusted", context_id: "c1", items: [hit],
-    explain: { lanes: ["exact", "keyword", "vector", "graph"], reranked: true, min_score_dropped: 3, time_window: { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" } } })],
+    explain: { lanes: ["exact", "keyword", "vector", "graph"], reranked: true, min_score_dropped: 3, lane_ms: { keyword: 3, vector: 12, rerank: 40 }, time_window: { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" } } })],
     ["/v1/memories/m4?", () => memory("m4")]]);
   let copied = "";
   t.view.draw();
@@ -232,6 +232,7 @@ test("search 살펴보기 sends explain with the 자세히 options and shows lan
   assert.match(table.textContent, /‘지난주’/);
   assert.match(table.textContent, /AI로 다시 매겼어요/);
   assert.match(table.textContent, /점수가 낮아 뺀 기억3개/);
+  assert.match(table.textContent, /걸린 시간순서 다시 매김 40ms · 비슷한 뜻 12ms · 단어 3ms/, "lane times, slowest first");
   const row = table.querySelector(".original-row");
   assert.match(row.textContent, /단어 1위 · 이어진 기억 2위 · 2단계 이어짐/);
   row.click(); await dom.flush();
@@ -256,4 +257,40 @@ test("search 살펴보기 sends only explain by default and says when the server
   t.h.$("#chips input").value = "배포"; dom.fire(t.h.$("#chips form"), "submit"); await dom.flush();
   assert.deepEqual(body(sentTo(t, "/v1/search")[0]), { scope: SCOPE, query: "배포", explain: true });
   assert.match(t.h.$("#table .callout").textContent, /찾을 수 없는 설정/);
+});
+
+test("a 묶음 and a 묶음 목록 hold their own fields, and a nested answer draws as nested rows with model text kept as data", async () => {
+  const t = setup("ask", [["/v1/reflect", () => ({ answer: "{}", cited_memory_ids: [], directives_applied: [], retrieved: [],
+    structured_answer: { "담당": { "이름": "<b>민지</b>", "확인함": true }, "단계": [{ "할 일": "스테이징 확인" }, { "할 일": "배포" }] },
+    tool_trace: [null, "x", { tool: "<img src=x>", args: "bad", ids: "m1" }] })]]);
+  t.view.draw(); await dom.flush();
+  const form = t.h.$("#chips form");
+  const top = () => [...form.querySelectorAll("button")].find((b) => b.textContent === "칸 추가");
+  top().click(); top().click();
+  let items = form.querySelectorAll(".insight-shape-list > .insight-shape-rows > .insight-shape-item");
+  const set = (item, name, type) => {
+    const n = item.querySelector("input:not([type])"); n.value = name; dom.fire(n, "input");
+    const k = item.querySelector("select"); k.value = type; dom.fire(k, "change");
+  };
+  set(items[0], "담당", "object"); set(form.querySelectorAll(".insight-shape-list > .insight-shape-rows > .insight-shape-item")[1], "단계", "objects");
+  items = form.querySelectorAll(".insight-shape-list > .insight-shape-rows > .insight-shape-item");
+  assert.equal(items[0].querySelectorAll(".insight-shape-sub select option").length, 0, "a new 묶음 starts empty");
+  for (const [n, item] of [...items].entries()) {
+    [...item.querySelectorAll("button")].find((b) => b.textContent === "안에 칸 추가").click();
+    const inner = form.querySelectorAll(".insight-shape-list > .insight-shape-rows > .insight-shape-item")[n].querySelector(".insight-shape-sub .insight-shape-item");
+    assert.ok(![...inner.querySelectorAll("option")].some((o) => o.value === "object" || o.value === "objects"), "no group inside a group");
+    set(inner, n ? "할 일" : "이름", "string");
+  }
+  t.h.$("#chips input").value = "누가 배포해?"; dom.fire(form, "submit"); await dom.flush();
+  const inner = (name) => ({ type: "object", properties: { [name]: { type: "string" } }, required: [name], additionalProperties: false });
+  assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]).response_schema, { type: "object", additionalProperties: false, required: ["담당", "단계"],
+    properties: { "담당": inner("이름"), "단계": { type: "array", items: inner("할 일") } } });
+  const ans = t.h.$("#table .insight-answer");
+  assert.equal(ans.querySelectorAll("b").length + ans.querySelectorAll("img").length, 0, "model text is never markup");
+  assert.match(ans.textContent, /<b>민지<\/b>/);
+  assert.equal(ans.querySelectorAll(".insight-data-list > li").length, 2);
+  assert.match(ans.textContent, /확인함예/);
+  const step = t.h.$("#table .insight-step");
+  assert.equal(t.h.$("#table").querySelectorAll(".insight-step").length, 1, "steps that are not objects are skipped");
+  assert.match(step.textContent, /<img src=x>/); assert.equal(t.h.$("#table").querySelectorAll("img").length, 0);
 });

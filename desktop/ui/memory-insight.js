@@ -65,49 +65,75 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       .then(() => notice("복사했어요."), () => notice("복사하지 못했어요. 글자를 직접 골라 복사해 주세요.")));
     return [copy, pre];
   }
-  // name → value rows of server data (a structured answer), never translated
+  // name → value rows of server data (a structured answer): names and text never translated, only 예/아니오.
+  // A group nests its own rows; a list of groups is a numbered list (the server checked the shape, at most 8 levels).
   function dataFacts(entries) {
     const dl = el("dl", "facts");
-    const show = (v) => (Array.isArray(v) ? v.map(show).join(", ") : v === true ? "예" : v === false ? "아니오" : v && typeof v === "object" ? JSON.stringify(v) : String(v ?? "—"));
-    for (const [k, v] of entries) dl.append(raw(el("dt", "", k)), typeof v === "boolean" ? el("dd", "", show(v)) : raw(el("dd", "", show(v))));
+    for (const [k, v] of entries) dl.append(raw(el("dt", "", k)), dataValue(v, "dd"));
     return dl;
+  }
+  const isGroup = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+  function dataValue(v, tag) {
+    if (typeof v === "boolean") return el(tag, "", v ? "예" : "아니오");
+    const node = el(tag);
+    if (isGroup(v)) node.append(dataFacts(Object.entries(v)));
+    else if (Array.isArray(v) && v.some((x) => x && typeof x === "object")) { const ol = el("ol", "insight-data-list"); for (const x of v.slice(0, 50)) ol.append(dataValue(x, "li")); node.append(ol); }
+    else raw(node).textContent = Array.isArray(v) ? v.map((x) => String(x ?? "—")).join(", ") : String(v ?? "—");
+    return node;
   }
 
   // ------------------------------------------------------------ 물어보기
   // 답 모양: a few named fields become the small JSON schema subset POST /v1/reflect accepts (reflect_schema.go).
-  const SHAPES = { string: "글", number: "숫자", integer: "정수", boolean: "예/아니오", list: "글 목록" };
+  // 묶음 (object) and 묶음 목록 (array of objects) hold their own fields, one level deep; the server allows 8.
+  const SHAPES = { string: "글", number: "숫자", integer: "정수", boolean: "예/아니오", list: "글 목록", object: "묶음", objects: "묶음 목록" };
+  const GROUPS = new Set(["object", "objects"]);
+  function fieldSchema(f) {
+    if (f.type === "list") return { type: "array", items: { type: "string" } };
+    if (!GROUPS.has(f.type)) return { type: SHAPES[f.type] ? f.type : "string" };
+    const inner = schemaOf(f.children || []) || { type: "object" };
+    return f.type === "object" ? inner : { type: "array", items: inner };
+  }
   function schemaOf(fields) {
     const properties = {}, required = new Set();
     for (const f of fields) {
       const name = f.name.trim().slice(0, 64);
       if (!name) continue;
-      properties[name] = f.type === "list" ? { type: "array", items: { type: "string" } } : { type: SHAPES[f.type] ? f.type : "string" };
+      properties[name] = fieldSchema(f);
       if (f.required) required.add(name);
     }
     return Object.keys(properties).length ? { type: "object", properties, required: [...required], additionalProperties: false } : undefined;
   }
   function shapeEditor() {
-    const box = el("div", "insight-shape"), rows = el("div", "insight-shape-rows");
-    const add = button("칸 추가", "small", null, () => { if (shape.length < 20) { shape.push({ name: "", type: "string", required: true }); fill(); rows.querySelector(".insight-shape-row:last-child input")?.focus(); } });
-    function fill() {
-      rows.replaceChildren(...shape.map((f, i) => {
-        const row = el("div", "insight-shape-row");
-        const name = el("input"); name.maxLength = 64; name.value = f.name; name.placeholder = "칸 이름 (예: 할 일)"; name.setAttribute("aria-label", "칸 이름");
-        name.addEventListener("input", () => { f.name = name.value; });
-        const type = el("select"); type.setAttribute("aria-label", "칸 종류");
-        for (const [k, l] of Object.entries(SHAPES)) { const o = el("option", "", l); o.value = k; type.append(o); }
-        type.value = f.type; type.addEventListener("change", () => { f.type = type.value; });
-        const must = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; c.checked = f.required;
-        c.addEventListener("change", () => { f.required = c.checked; }); must.append(c, el("span", "", "꼭 채우기"));
-        const drop = button("빼기", "ghost small", null, () => { shape.splice(i, 1); fill(); }); drop.setAttribute("aria-label", "이 칸 빼기");
-        row.append(name, type, must, drop);
-        return row;
-      }));
-      add.disabled = shape.length >= 20;
-    }
-    fill();
-    box.append(el("span", "", "답 모양 (비워 두면 글로 답해요)"), rows, add);
+    const box = el("div", "insight-shape");
+    box.append(el("span", "", "답 모양 (비워 두면 글로 답해요)"), shapeFields(shape, false));
     return box;
+  }
+  // The rows of one field list and its add button; inner: the fields of a 묶음 (no groups inside).
+  function shapeFields(fields, inner) {
+    const box = el("div", inner ? "insight-shape-sub" : "insight-shape-list"), rows = el("div", "insight-shape-rows");
+    const add = button(inner ? "안에 칸 추가" : "칸 추가", "small", null, () => {
+      if (fields.length < 20) { fields.push({ name: "", type: "string", required: true }); fill(); rows.querySelector(":scope > .insight-shape-item:last-child input")?.focus(); }
+    });
+    function fill() { rows.replaceChildren(...fields.map((f, i) => shapeRow(fields, f, i, inner, fill))); add.disabled = fields.length >= 20; }
+    fill();
+    box.append(rows, add);
+    return box;
+  }
+  function shapeRow(fields, f, i, inner, refill) {
+    const item = el("div", "insight-shape-item"), row = el("div", "insight-shape-row");
+    const name = el("input"); name.maxLength = 64; name.value = f.name; name.placeholder = "칸 이름 (예: 할 일)"; name.setAttribute("aria-label", "칸 이름");
+    name.addEventListener("input", () => { f.name = name.value; });
+    const type = el("select"); type.setAttribute("aria-label", "칸 종류");
+    for (const [k, l] of Object.entries(SHAPES)) if (!inner || !GROUPS.has(k)) { const o = el("option", "", l); o.value = k; type.append(o); }
+    type.value = f.type;
+    type.addEventListener("change", () => { const was = GROUPS.has(f.type); f.type = type.value; if (GROUPS.has(f.type)) f.children ||= []; if (was !== GROUPS.has(f.type)) refill(); });
+    const must = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; c.checked = f.required;
+    c.addEventListener("change", () => { f.required = c.checked; }); must.append(c, el("span", "", "꼭 채우기"));
+    const drop = button("빼기", "ghost small", null, () => { fields.splice(i, 1); refill(); }); drop.setAttribute("aria-label", "이 칸 빼기");
+    row.append(name, type, must, drop);
+    item.append(row);
+    if (GROUPS.has(f.type)) item.append(shapeFields(f.children, true));
+    return item;
   }
   function drawAsk() {
     if (!formHere()) {
@@ -139,7 +165,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const { workspace_id: w, project_id: p } = state.scope || {}, owner = identity();
     mission = "";
     if (!w || !p) return;
-    request(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`)
+    void request(`/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}/config/effective`)
       .then((r) => (typeof r?.config?.reflect_mission === "string" ? r.config.reflect_mission.trim() : ""), () => "")
       .then((m) => { if (identity() !== owner || !m) return; mission = m; if (active()) paintAsk(); });
   }
@@ -171,12 +197,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const TOOLS = { recall: "기억 다시 찾기", observations: "정리된 관찰 찾기", mental_models: "생각 정리 읽기", entity: "이름으로 찾기", expand: "이어진 기억 펼치기" };
   const TOOL_ERRORS = { unknown_tool: "없는 방법이라 건너뛰었어요", invalid_arguments: "요청이 맞지 않아 건너뛰었어요", denied: "권한이 없어 건너뛰었어요" };
   function toolStep(step) {
-    const li = el("li", "insight-step"), args = step.args || {};
-    const what = args.query || args.name || "";
-    const line = el("p", "", TOOLS[step.tool] || step.tool);
+    const li = el("li", "insight-step"), args = isGroup(step.args) ? step.args : {};
+    const what = String(args.query || args.name || "");
+    const ids = Array.isArray(step.ids) ? step.ids.filter((id) => typeof id === "string" && id) : [];
+    const line = el("p", "", TOOLS[step.tool] || String(step.tool));
     if (what) line.append(" · ", raw(el("span", "", what)));
-    li.append(line, el("small", "meta", step.error ? TOOL_ERRORS[step.error] || step.error : step.ids?.length ? `${step.ids.length}개 찾음` : "찾은 것 없음"));
-    if (step.ids?.length) { const list = el("div", "dg-list"); for (const id of step.ids.slice(0, 5)) list.append(memoryLink(id)); li.append(list); }
+    li.append(line, el("small", "meta", step.error ? TOOL_ERRORS[step.error] || String(step.error) : ids.length ? `${ids.length}개 찾음` : "찾은 것 없음"));
+    if (ids.length) { const list = el("div", "dg-list"); for (const id of ids.slice(0, 5)) list.append(memoryLink(id)); li.append(list); }
     return li;
   }
   function missionLine(own) {
@@ -200,7 +227,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const card = el("div", "insight-ask");
     const m = missionLine(answer.mission_used === "own");
     card.append(box, ...(m ? [m] : []), el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list);
-    const steps = Array.isArray(answer.tool_trace) ? answer.tool_trace : [];
+    const steps = Array.isArray(answer.tool_trace) ? answer.tool_trace.filter(isGroup) : [];
     if (steps.length) { const ol = el("ol", "insight-steps"); for (const s of steps.slice(0, 32)) ol.append(toolStep(s)); card.append(el("h3", "insight-head", `AI가 더 찾아본 과정 ${steps.length}번`), ol); }
     const { mission_used: _, ...reply } = answer;
     card.append(more(facts([["찾아본 기억", `${answer.retrieved?.length || 0}개`], ["지킨 규칙", `${answer.directives_applied?.length || 0}개`],
@@ -269,16 +296,22 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     } catch (e) { if (now()) failure = e; }
     finally { if (now()) { busy = false; paintSearch(); detail(); } }
   }
-  const lanesText = (lanes) => (lanes || []).map((l) => window.ArkismMemoryTime.FOUND[l] || l).join(", ");
+  // Lane names joined by "," or next to a number have no pattern to match whole, so each is translated here.
+  const tr = (s) => globalThis.ArkismI18n?.translate(s) ?? s;
+  const laneName = (l) => tr(l === "rerank" ? "순서 다시 매김" : window.ArkismMemoryTime.FOUND[l] || l);
+  const lanesText = (lanes) => (lanes || []).map(laneName).join(", ");
+  // lane_ms: whole milliseconds per lane (and rerank), slowest first
+  const laneTimes = (ms) => Object.entries(isGroup(ms) ? ms : {}).filter(([, v]) => Number.isFinite(v)).sort((a, b) => b[1] - a[1])
+    .map(([l, v]) => `${laneName(l)} ${v}ms`).join(" · ");
   const score = (v) => (typeof v === "number" ? v.toFixed(v < 0.1 ? 4 : 2) : "");
   function hitMeta(h) {
-    const ranks = Object.entries(h.explain?.lane_ranks || {}).map(([l, r]) => `${window.ArkismMemoryTime.FOUND[l] || l} ${r}위`);
+    const ranks = Object.entries(h.explain?.lane_ranks || {}).map(([l, r]) => `${laneName(l)} ${tr(`${r}위`)}`);
     return [ranks.join(" · ") || lanesText(h.lanes), h.explain?.graph_hops ? `${h.explain.graph_hops}단계 이어짐` : ""].filter(Boolean).join(" · ");
   }
   function searchSummary() {
     const x = answer.explain || {}, w = x.time_window;
     const range = w ? `‘${w.phrase}’ → ${day(w.from)} ~ ${day(new Date(Date.parse(w.to) - 1).toISOString())}` : "";
-    return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["때를 읽은 말", range], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
+    return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["걸린 시간", laneTimes(x.lane_ms)], ["때를 읽은 말", range], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
       ["점수가 낮아 뺀 기억", x.min_score_dropped ? `${x.min_score_dropped}개` : ""], ["못 쓴 방법", (answer.degraded || []).join(", ")]]);
   }
   function searchError(e) {
@@ -305,10 +338,10 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function searchDetail(body) {
     const h = selected;
-    if (!h) { body.append(el("h2", "", "검색 살펴보기"), el("p", "lead", "검색어를 넣으면 에이전트가 받는 결과와 같은 순서로 보여 줘요. 기억을 고르면 어떤 방법으로 찾았고 점수가 몇인지 볼 수 있어요.")); return; }
+    if (!h) { body.append(el("h2", "", "찾은 기억을 골라 확인하세요"), el("p", "lead", "검색어를 넣으면 에이전트가 받는 결과와 같은 순서로 보여 줘요. 기억을 고르면 어떤 방법으로 찾았고 점수가 몇인지 볼 수 있어요.")); return; }
     const rank = (answer?.items || []).indexOf(h) + 1, x = h.explain || {};
     const head = el("div", "d-head");
-    head.append(el("p", "d-kind", "검색 살펴보기"), el("h2", "", rank ? `${rank}위로 찾은 기억` : "찾은 기억"));
+    head.append(el("p", "d-kind", lanesText(h.lanes) || "—"), el("h2", "", rank ? `${rank}위로 찾은 기억` : "찾은 기억"));
     body.append(head);
     if (h.collection === "memories") { const open = section("기억"), list = el("div", "dg-list"); list.append(memoryLink(h.id, h.text || h.summary)); open.append(list); body.append(open); }
     else body.append(raw(el("p", "original-text", h.text || h.summary || h.id)));
@@ -536,7 +569,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function detail() {
     const body = detailShell(TITLE[tab]);
-    if (tab === "ask") { body.append(el("h2", "", "물어보기"), el("p", "lead", "승인된 기억만 보고 답해요. 근거 기억을 누르면 그 기억을 열어요. 답은 저장하지 않아요.")); return; }
+    if (tab === "ask") { body.append(el("h2", "", "근거 기억을 눌러 확인하세요"), el("p", "lead", "승인된 기억만 보고 답해요. 근거 기억을 누르면 그 기억을 열어요. 답은 저장하지 않아요.")); return; }
     if (tab === "rules") { if (editing) ruleForm(body); else ruleDetail(body); return; }
     if (tab === "search") { searchDetail(body); return; }
     entityDetail(body);

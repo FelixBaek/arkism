@@ -5341,7 +5341,12 @@
  "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요.": "Skor gabungan adalah jumlah peringkat dari tiap metode, jadi nilainya kecil. Lihat urutannya, bukan besarnya.",
  "나온 이름": "Nama yang disebut",
  "원문 조각": "Potongan teks asli",
- "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Menunjukkan apa adanya proses agen mencari memori. Anda bisa tahu metode apa yang menemukannya dan di peringkat berapa."
+ "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Menunjukkan apa adanya proses agen mencari memori. Anda bisa tahu metode apa yang menemukannya dan di peringkat berapa.",
+ "묶음": "Grup",
+ "묶음 목록": "Daftar grup",
+ "안에 칸 추가": "Tambah kolom di dalam",
+ "찾은 기억을 골라 확인하세요": "Pilih memori yang ditemukan untuk melihatnya",
+ "근거 기억을 눌러 확인하세요": "Ketuk memori sumber untuk melihatnya"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

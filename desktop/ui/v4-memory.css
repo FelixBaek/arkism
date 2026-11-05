@@ -143,7 +143,7 @@
 .memory-mode .detail-body .quote .original-source .meta { font-size: calc(0.6875rem * var(--fs, 1)); }
 .memory-mode .detail-body .quote .original-excerpt { margin: 0; }
 .memory-mode .detail-body .facts { gap: 0.5rem 0.75rem; font-size: calc(0.8125rem * var(--fs, 1)); line-height: 1.5; }
-.memory-mode .detail-body .facts dt { color: var(--nc-quiet); }
+.memory-mode .detail-body .facts dt { color: var(--nc-quiet); overflow-wrap: anywhere; hyphens: auto; } /* a long single word (German) wraps instead of running into the value */
 .memory-mode .detail-body .facts dd { color: var(--nc-text); }
 .d-rules summary { cursor: pointer; font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); list-style: none; }
 .d-rules summary::after { content: " ›"; }
@@ -227,7 +227,12 @@
 .insight-check { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); cursor: pointer; }
 .insight-check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--nc-accent); }
 .insight-shape { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem; font: 500 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
-.insight-shape > .btn { align-self: flex-start; }
+.insight-shape-list, .insight-shape-sub { display: flex; flex-direction: column; gap: 0.5rem; }
+.insight-shape-list > .btn, .insight-shape-sub > .btn { align-self: flex-start; }
+/* a 묶음's own fields sit indented under it, with a quiet guide line */
+.insight-shape-sub { margin: 0.5rem 0 0 0.75rem; padding-left: 0.75rem; border-left: 0.0625rem solid var(--nc-line); }
+.insight-data-list { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.insight-answer dd > .facts, .insight-data-list .facts { margin: 0; }
 .insight-shape-rows { display: flex; flex-direction: column; gap: 0.5rem; }
 .insight-shape-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .insight-shape-row input:not([type]), .insight-shape-row select { box-sizing: border-box; min-width: 0; padding: 0.375rem 0.5rem; border: 0.0625rem solid var(--nc-line);

@@ -5341,7 +5341,12 @@
  "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요.": "Die Gesamtpunktzahl addiert die Ränge der einzelnen Methoden und ist deshalb klein. Achte auf die Reihenfolge, nicht auf die Größe.",
  "나온 이름": "Genannte Namen",
  "원문 조각": "Textauszüge",
- "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Zeigt Schritt für Schritt, wie Agents Erinnerungen suchen: mit welcher Methode und auf welchem Rang etwas gefunden wurde."
+ "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Zeigt Schritt für Schritt, wie Agents Erinnerungen suchen: mit welcher Methode und auf welchem Rang etwas gefunden wurde.",
+ "묶음": "Gruppe",
+ "묶음 목록": "Liste von Gruppen",
+ "안에 칸 추가": "Feld darin hinzufügen",
+ "찾은 기억을 골라 확인하세요": "Wähle eine gefundene Erinnerung, um sie anzusehen",
+ "근거 기억을 눌러 확인하세요": "Tippe auf eine Beleg-Erinnerung, um sie anzusehen"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

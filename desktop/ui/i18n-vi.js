@@ -5341,7 +5341,12 @@
  "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요.": "Điểm gộp là tổng thứ hạng của từng cách tìm nên khá nhỏ. Hãy xem thứ tự, đừng xem độ lớn.",
  "나온 이름": "Tên được nhắc đến",
  "원문 조각": "Đoạn trích gốc",
- "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Cho thấy nguyên quá trình tác nhân tìm ký ức. Bạn biết được mỗi ký ức được tìm bằng cách nào và ở hạng mấy."
+ "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Cho thấy nguyên quá trình tác nhân tìm ký ức. Bạn biết được mỗi ký ức được tìm bằng cách nào và ở hạng mấy.",
+ "묶음": "Nhóm",
+ "묶음 목록": "Danh sách nhóm",
+ "안에 칸 추가": "Thêm trường bên trong",
+ "찾은 기억을 골라 확인하세요": "Chọn một ký ức đã tìm thấy để xem",
+ "근거 기억을 눌러 확인하세요": "Nhấn vào ký ức làm căn cứ để xem"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

@@ -1,6 +1,14 @@
 {
  "authority": "data_only_untrusted",
  "explain": {
+  "lane_ms": {
+   "exact": 2,
+   "keyword": 6,
+   "vector": 18,
+   "relation": 4,
+   "temporal": 3,
+   "rerank": 41
+  },
   "lanes": [
    "exact",
    "keyword",

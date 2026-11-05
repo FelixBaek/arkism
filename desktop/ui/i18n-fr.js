@@ -5341,7 +5341,12 @@
  "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요.": "Le score combiné additionne les rangs de chaque méthode, il est donc petit. Regardez l'ordre plutôt que la valeur.",
  "나온 이름": "Noms mentionnés",
  "원문 조각": "Extraits de la source",
- "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Montre tel quel comment les agents recherchent des souvenirs. Vous voyez quelle méthode a trouvé chaque souvenir et à quelle position."
+ "에이전트가 기억을 찾는 과정을 그대로 보여 줘요. 어떤 방법으로 몇 위에 찾았는지 알 수 있어요.": "Montre tel quel comment les agents recherchent des souvenirs. Vous voyez quelle méthode a trouvé chaque souvenir et à quelle position.",
+ "묶음": "Groupe",
+ "묶음 목록": "Liste de groupes",
+ "안에 칸 추가": "Ajouter un champ dedans",
+ "찾은 기억을 골라 확인하세요": "Choisissez un souvenir trouvé pour le consulter",
+ "근거 기억을 눌러 확인하세요": "Touchez un souvenir source pour le consulter"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
