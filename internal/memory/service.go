@@ -55,9 +55,11 @@ type Service struct {
 	WebhookAllowPrivate bool
 	// SessionArchiveNow replaces the service clock in tests so expiry
 	// boundaries are exact. Nil means time.Now.
-	SessionArchiveNow   func() time.Time
-	SyntheticHandoff    bool
-	BlobDirectory       string
+	SessionArchiveNow func() time.Time
+	SyntheticHandoff  bool
+	BlobDirectory     string
+	// BlobObjects, when set, stores blob bytes there instead of in BlobDirectory.
+	BlobObjects         BlobObjectStore
 	CandidateDailyLimit int
 	// CaptureMergeSimilarity is the cosine similarity at or above which a captured
 	// claim gets a merge proposal toward the closest approved memory instead of a

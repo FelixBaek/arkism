@@ -31,6 +31,7 @@ func (s *Service) withBlobs(ctx context.Context, fn func(*lockedBlobs) error) er
 		if err = bindBlobRoot(ctx, s.Repo, identity, rootID); err != nil {
 			return err
 		}
+		b.objects = s.BlobObjects
 		return fn(b)
 	})
 }

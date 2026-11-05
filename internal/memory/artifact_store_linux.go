@@ -88,6 +88,26 @@ func (b *lockedBlobs) collect(repo Repository, digest string) error {
 	if err != nil {
 		return err
 	}
+	if err = b.unlink(digest); err != nil {
+		return err
+	}
+	return repo.Transaction(b.ctx, func(ctx context.Context, tx Tx) error {
+		current, e := tx.Get(ctx, colBlobs, blobScope(), digest)
+		if e != nil {
+			return e
+		}
+		if current.Status != JobStatusPending || current.Revision != marker.Revision || current.Blob == nil || current.Blob.References != 0 {
+			return ErrConflict
+		}
+		return tx.Delete(ctx, colBlobs, blobScope(), digest, current.Revision)
+	})
+}
+
+// unlink durably removes the digest's bytes; an absent blob is already removed.
+func (b *lockedBlobs) unlink(digest string) error {
+	if b.objects != nil {
+		return b.objects.Delete(b.ctx, digest)
+	}
 	info, err := b.root.Lstat(digest)
 	if err == nil {
 		if !info.Mode().IsRegular() {
@@ -110,17 +130,5 @@ func (b *lockedBlobs) collect(repo Repository, digest string) error {
 	}
 	err = directory.Sync()
 	directory.Close()
-	if err != nil {
-		return err
-	}
-	return repo.Transaction(b.ctx, func(ctx context.Context, tx Tx) error {
-		current, e := tx.Get(ctx, colBlobs, blobScope(), digest)
-		if e != nil {
-			return e
-		}
-		if current.Status != JobStatusPending || current.Revision != marker.Revision || current.Blob == nil || current.Blob.References != 0 {
-			return ErrConflict
-		}
-		return tx.Delete(ctx, colBlobs, blobScope(), digest, current.Revision)
-	})
+	return err
 }

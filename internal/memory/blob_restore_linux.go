@@ -21,7 +21,8 @@ func (s *Service) AdoptRestoredBlobs(ctx context.Context, token string) error {
 	if actor.Role != "service" {
 		return ErrDenied
 	}
-	if s.Repo == nil || s.BlobDirectory == "" {
+	// shortcut: restore manifests name local files; restoring into object storage is the bucket's own versioning.
+	if s.Repo == nil || s.BlobDirectory == "" || s.BlobObjects != nil {
 		return ErrUnavailable
 	}
 	return (blobStore{dir: s.BlobDirectory}).locked(ctx, func(b *lockedBlobs) error {

@@ -101,7 +101,11 @@ func runDaemonBlobs(ctx context.Context, pg *memory.Postgres, cfg daemonOptions,
 	if err != nil {
 		return err
 	}
-	svc := &memory.Service{Repo: pg, Auth: auth, BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY")}
+	objects, err := memory.S3BlobStoreFromEnv()
+	if err != nil {
+		return err
+	}
+	svc := &memory.Service{Repo: pg, Auth: auth, BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), BlobObjects: objects}
 	if cfg.AdoptBlobs {
 		if err = svc.AdoptRestoredBlobs(ctx, os.Getenv("MEMORY_WORKER_TOKEN")); err != nil {
 			return err

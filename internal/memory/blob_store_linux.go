@@ -21,6 +21,8 @@ type lockedBlobs struct {
 	root     *os.Root
 	ctx      context.Context
 	maxBytes int64
+	// objects, when set, holds the digest files; root keeps the lock, binding and staging.
+	objects BlobObjectStore
 }
 
 func (s blobStore) locked(ctx context.Context, fn func(*lockedBlobs) error) error {
@@ -184,28 +186,41 @@ func (b *lockedBlobs) put(input io.Reader, expected string) (digest string, size
 	if err = b.ctx.Err(); err != nil {
 		return "", 0, err
 	}
-	if _, err = b.root.Lstat(digest); err == nil {
+	if b.objects != nil {
+		return digest, size, b.putObject(name, digest, size)
+	}
+	return digest, size, b.publishLocal(name, digest, size)
+}
+
+// publishLocal renames the verified staged file to its digest name.
+func (b *lockedBlobs) publishLocal(name, digest string, size int64) error {
+	if _, err := b.root.Lstat(digest); err == nil {
 		if err = b.verify(digest, digest, size); err != nil {
-			return "", 0, err
+			return err
 		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		if err = b.root.Rename(name, digest); err != nil {
-			return "", 0, err
-		}
-	} else {
-		return "", 0, err
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	} else if err = b.root.Rename(name, digest); err != nil {
+		return err
 	}
 	// Retry also syncs the directory: a prior rename may have succeeded before
 	// its fsync failed. A retry must not mistake that for durable publication.
 	directory, err := b.root.Open(".")
 	if err != nil {
-		return "", 0, err
+		return err
 	}
 	defer directory.Close()
-	if err = directory.Sync(); err != nil {
-		return "", 0, err
+	return directory.Sync()
+}
+
+// putObject uploads the verified staged file; the caller removes the staging file.
+func (b *lockedBlobs) putObject(name, digest string, size int64) error {
+	file, err := openPrivateBlob(b.root, name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return err
 	}
-	return digest, size, nil
+	defer file.Close()
+	return b.objects.Put(b.ctx, digest, io.LimitReader(file, size), size)
 }
 
 func (b *lockedBlobs) verify(name, digest string, size int64) error {

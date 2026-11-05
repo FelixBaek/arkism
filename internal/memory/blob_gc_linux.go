@@ -95,6 +95,9 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 				}
 				result.ScannedFiles++
 				if sourceHashPattern.MatchString(name) {
+					if b.objects != nil {
+						return ErrUnavailable // bytes in both places: move them before switching storage
+					}
 					if e = checkFile(name, b.maxBytes); e != nil {
 						return e
 					}
@@ -125,9 +128,27 @@ func (s *Service) CollectBlobGarbage(ctx context.Context, token string) (BlobGCR
 				break
 			}
 		}
+		if e = b.collectObjects(&result, collect); e != nil {
+			return e
+		}
 		return collectPendingBlobs(ctx, s.Repo, collect)
 	})
 	return result, err
+}
+
+// collectObjects passes every stored object through collect, like a directory entry.
+// shortcut: the listing is read while collect deletes; a skipped page entry waits for the next run.
+func (b *lockedBlobs) collectObjects(result *BlobGCResult, collect func(string) error) error {
+	if b.objects == nil {
+		return nil
+	}
+	return b.objects.List(b.ctx, func(digest string, size int64) error {
+		result.ScannedFiles++
+		if size > b.maxBytes {
+			return ErrUnavailable
+		}
+		return collect(digest)
+	})
 }
 
 // temporaryBlobLimit is the size bound of an upload or binding probe name, or 0 for any other name.

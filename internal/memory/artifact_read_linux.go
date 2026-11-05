@@ -116,17 +116,29 @@ func (b *lockedBlobs) readArtifactBytes(data artifactMetadata) ([]byte, error) {
 	if !sourceHashPattern.MatchString(data.Digest) || data.Bytes < 1 || data.Bytes > b.maxBytes {
 		return nil, ErrInvalid
 	}
-	file, err := openPrivateBlob(b.root, data.Digest, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
-	if err != nil {
-		return nil, err
+	var content []byte
+	if b.objects != nil {
+		got, err := b.objects.Get(b.ctx, data.Digest, data.Bytes)
+		if err != nil {
+			return nil, err
+		}
+		content = got
+	} else {
+		file, err := openPrivateBlob(b.root, data.Digest, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
+		content = make([]byte, int(data.Bytes)+1)
+		n, err := io.ReadFull(blobContextReader{b.ctx, file}, content)
+		if err != io.ErrUnexpectedEOF {
+			return nil, ErrInvalid
+		}
+		content = content[:n]
 	}
-	defer file.Close()
-	content := make([]byte, int(data.Bytes)+1)
-	n, err := io.ReadFull(blobContextReader{b.ctx, file}, content)
-	if err != io.ErrUnexpectedEOF || int64(n) != data.Bytes {
+	if int64(len(content)) != data.Bytes {
 		return nil, ErrInvalid
 	}
-	content = content[:n]
 	digest := sha256.Sum256(content)
 	if hex.EncodeToString(digest[:]) != data.Digest {
 		return nil, ErrInvalid
