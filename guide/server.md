@@ -153,7 +153,9 @@ Keep the file out of Git. All settings:
 | `MEMORY_CANDIDATE_DAILY_LIMIT` | Daily cap (1–100000) for AI-written memory candidates. Unset means none are accepted |
 | `MEMORY_CAPTURE_MERGE_SIMILARITY` | Cosine similarity (0–1, default 0.92) at which a captured claim gets a merge proposal toward the closest approved memory instead of a plain review entry. Needs an embedder; a person still decides |
 | `MEMORY_BLOB_DIRECTORY` | Folder for attached files. With object storage on, it keeps only the lock and upload staging |
-| `MEMORY_BLOB_S3_ENDPOINT` | Optional S3-compatible object storage URL (https, or http on loopback). Set it with `_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, and optionally `_PREFIX` and `_SESSION_TOKEN` (all `MEMORY_BLOB_S3_*`) to keep attached files there. Deletion and erasure delete the objects. File backups and restore cover only the local folder |
+| `MEMORY_BLOB_S3_ENDPOINT` | Optional S3-compatible object storage URL (https, or http on loopback). Set it with `_BUCKET`, `_REGION`, `_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, and optionally `_PREFIX` and `_SESSION_TOKEN` (all `MEMORY_BLOB_S3_*`) to keep attached files there. Deletion and erasure delete the objects. Backups list the stored objects (digest and size) without copying them; restore checks they are there |
+| `MEMORY_BLOB_S3_ADDRESSING` | `path` (default) puts the bucket in the URL path; `virtual` puts it in the host name (`https://<bucket>.<endpoint host>/`), for providers that only serve that form. Other providers' S3-interoperable endpoints work with their endpoint URL, the region name they document (for example `auto`), and their HMAC access keys |
+| `MEMORY_BLOB_SHAREDKEY_ENDPOINT` | Optional object storage that speaks the Shared Key blob protocol, instead of S3: the account's blob service URL (https). Set it with `_ACCOUNT`, `_CONTAINER`, `_KEY` (the base64 account key) and optionally `_PREFIX` (all `MEMORY_BLOB_SHAREDKEY_*`). Set this or `MEMORY_BLOB_S3_*`, not both |
 | `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.epub,.rtf,.odt`). `.doc`, `.xls` and `.ppt` have built-in readers; listed there, the converter reads the files those readers cannot. It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
 | `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images and scanned PDFs (JPEG page images, up to 8 pages) are read by it for memory extraction. Off by default; without it these uploads get 415 |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
@@ -271,9 +273,12 @@ wiki. What a person approves and how is described in
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
 8. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
-   set, attached files live in the bucket, not in `MEMORY_BLOB_DIRECTORY`.
-   The server backup does not copy the bucket, and `memoryd --adopt-restored-blobs`
-   refuses to run while object storage is on. Back the bucket up yourself
+   or `MEMORY_BLOB_SHAREDKEY_*` set, attached files live in the bucket, not in
+   `MEMORY_BLOB_DIRECTORY`. The server backup does not copy the bucket; with the
+   same settings in its environment it lists each object's digest and size, and
+   `memoryd --adopt-restored-blobs` now runs with object storage on: it checks
+   every listed object is present at its size and uploads the files the bundle
+   carried. Back the bucket up yourself
    (bucket versioning or a scheduled copy) at least as often as the database
    backup, and restore it to the same time as the database. Switch storage
    only on an empty blob folder: blob garbage collection stops with an error

@@ -101,7 +101,7 @@ func runDaemonBlobs(ctx context.Context, pg *memory.Postgres, cfg daemonOptions,
 	if err != nil {
 		return err
 	}
-	objects, err := memory.S3BlobStoreFromEnv()
+	objects, err := memory.BlobObjectStoreFromEnv()
 	if err != nil {
 		return err
 	}

@@ -38,9 +38,10 @@ type BlobObjectStore interface {
 	List(ctx context.Context, fn func(digest string, size int64) error) error
 }
 
-// S3BlobStore talks to one bucket with path-style URLs.
-// shortcut: path-style addressing only; add virtual-host URLs if a provider refuses path-style.
+// S3BlobStore talks to one bucket with path-style URLs, or with the bucket
+// as the first label of the host name when VirtualHost is set.
 type S3BlobStore struct {
+	VirtualHost  bool
 	Endpoint     *url.URL
 	Bucket       string
 	Region       string
@@ -63,8 +64,22 @@ func S3BlobStoreFromEnv() (BlobObjectStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	switch os.Getenv("MEMORY_BLOB_S3_ADDRESSING") {
+	case "", "path":
+	case "virtual":
+		if !s3HostBucket.MatchString(store.Bucket) {
+			return nil, fmt.Errorf("blob object storage bucket for virtual-host addressing: %w", ErrInvalid)
+		}
+		store.VirtualHost = true
+	default:
+		return nil, fmt.Errorf("blob object storage addressing: %w", ErrInvalid)
+	}
 	return store, nil
 }
+
+// s3HostBucket is a bucket that can be a host name label (no dots, which
+// would not match the endpoint's wildcard certificate).
+var s3HostBucket = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`)
 
 // s3NamePattern is the bucket and prefix alphabet: safe in a URL path as is,
 // so the signed path and the sent path cannot differ.
@@ -88,7 +103,12 @@ func NewS3BlobStore(endpoint, bucket, region, prefix, accessKey, secretKey, sess
 
 func (s *S3BlobStore) objectURL(key string, query url.Values) *url.URL {
 	u := *s.Endpoint
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + s.Bucket
+	u.Path = strings.TrimSuffix(u.Path, "/")
+	if s.VirtualHost {
+		u.Host = s.Bucket + "." + u.Host
+	} else {
+		u.Path += "/" + s.Bucket
+	}
 	if key != "" {
 		u.Path += "/" + key
 	}

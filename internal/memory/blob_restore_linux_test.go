@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -204,5 +205,59 @@ func TestBlobRestoreReviewPersistence(t *testing.T) {
 	f.svc.BlobDirectory = ""
 	if err := f.svc.CheckRestorePublication(testCtx); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("omitted file root bypassed gate", err)
+	}
+}
+
+// TestBlobRestoreIntoObjectStorage: a manifest that names stored objects is
+// adopted only when object storage holds each at its size; files the bundle
+// carried are uploaded there.
+func TestBlobRestoreIntoObjectStorage(t *testing.T) {
+	for _, scenario := range []string{"object", "missing_object", "no_storage", "local_upload"} {
+		t.Run(scenario, func(t *testing.T) {
+			f, digest := blobRestoreFixture(t)
+			fake := &fakeObjects{objects: map[string][]byte{}}
+			server := httptest.NewServer(fake)
+			defer server.Close()
+			objects, err := NewS3BlobStore(server.URL, "bucket", "us-east-1", "blobs/", "AK", "SK", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if scenario != "no_storage" {
+				f.svc.BlobObjects = objects
+			}
+			if scenario != "local_upload" {
+				// The referenced bytes live in object storage, not in the bundle.
+				pending := filepath.Join(f.svc.BlobDirectory, ".restore-pending")
+				m := blobBackupManifest{Version: 1, SourceIdentity: ContentHash("old-db"), SourceRootID: ContentHash("old-root"), Database: backupFile{ContentHash("dump"), 4}, Files: []backupFile{}, Objects: []backupFile{{digest, 14}}}
+				raw, _ := json.Marshal(m)
+				if err = os.WriteFile(pending, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err = os.Remove(filepath.Join(f.svc.BlobDirectory, digest)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if scenario == "object" {
+				fake.objects["/bucket/blobs/"+digest] = []byte("restored bytes")
+			}
+			err = f.svc.AdoptRestoredBlobs(testCtx, f.work)
+			switch scenario {
+			case "object":
+				if err != nil {
+					t.Fatal(err)
+				}
+			case "local_upload":
+				if err != nil || !fake.has(digest) {
+					t.Fatal("not uploaded", err)
+				}
+				if _, err = os.Stat(filepath.Join(f.svc.BlobDirectory, digest)); !os.IsNotExist(err) {
+					t.Fatal("local copy kept beside object storage", err)
+				}
+			default:
+				if !errors.Is(err, ErrUnavailable) {
+					t.Fatal("adopted without the objects", err)
+				}
+			}
+		})
 	}
 }

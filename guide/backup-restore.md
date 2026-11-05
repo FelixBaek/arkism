@@ -19,7 +19,7 @@ A server backup is a nightly job you schedule yourself (a systemd timer or cron)
 2. bundles the `pg_dump -Fc` archive and the files (`arkism backup-bundle create`),
 3. encrypts the bundle with CMS into `/srv/arkism/backups/arkism-prod-pg-<time>.cms` (`arkism backup-archive encrypt`).
 
-Attached files kept in object storage (`MEMORY_BLOB_S3_*`, see [server.md](server.md#upgrade-to-the-memory-review-features)) are not in this backup: back the bucket up separately and restore it to the same time as the database.
+Attached files kept in object storage (`MEMORY_BLOB_S3_*` or `MEMORY_BLOB_SHAREDKEY_*`, see [server.md](server.md#upgrade-to-the-memory-review-features)) are not copied into this backup. When those settings are in the environment of `arkism backup-bundle create`, the bundle lists every stored object's digest and size, and the restore checks the storage still holds each one. Back the bucket up separately (versioning or a scheduled copy) and restore it to the same time as the database.
 
 `arkism-backup-retention.timer` removes old archives, then, with `--privacy-worker <worker container>`, tells the memory worker the oldest archive it kept so privacy deletions finished before that time can complete.
 
@@ -57,6 +57,11 @@ Keep every writer (API, worker, timers) stopped, and restore into a **new, empty
    memoryd --adopt-restored-blobs
    memoryd --check-indexes
    ```
+
+   With object storage on, set the same `MEMORY_BLOB_S3_*` or `MEMORY_BLOB_SHAREDKEY_*`
+   settings here. Adoption then refuses unless the storage holds every object the
+   bundle lists at its recorded size, uploads the files the bundle carried, and
+   removes their local copies.
 
 4. Replay deletions made after the backup was taken. Start `memoryd --recovery`. It listens on loopback only, serves just the deletion and expiry endpoints, and needs the same `MEMORY_SESSION_ARCHIVE_KEY` as before. For each target in the saved list, send `POST /v1/privacy/deletions` with a stable idempotency key such as `restore-<target id>`, so a repeated replay does not create a second request. Then call `POST /v1/session-archives/expire` for each scope. `memoryd --inspect-restored-recovery` shows what is still pending.
 5. The normal API refuses to start until the restore is reviewed. There is no command for this step yet. After the replay, remove the review marker with the `arkism_init` connection, then start the API and worker as usual:

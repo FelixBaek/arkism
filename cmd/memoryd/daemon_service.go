@@ -41,7 +41,7 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err != nil {
 		return nil, err
 	}
-	objects, err := memory.S3BlobStoreFromEnv()
+	objects, err := memory.BlobObjectStoreFromEnv()
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package backup
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/memory"
 )
 
 func writeMode(t *testing.T, path string, data []byte, mode os.FileMode) {
@@ -206,6 +208,7 @@ func TestValidateManifestRejectsLooseTypes(t *testing.T) {
 	d := digestOf(nil)
 	head := `{"database":{"bytes":1,"digest":"` + d + `"},"files":[],"source_identity":"` + d + `","source_root_id":"` + d + `",`
 	for tail, ok := range map[string]bool{
+		`"objects":[],"version":1}`: true, `"objects":0,"version":1}`: false, `"objects":[{"bytes":0,"digest":"` + d + `"}],"version":1}`: false,
 		`"version":1}`: true, `"version":true}`: false, `"version":1.0}`: false, `"version":2}`: false, `"version":1,"extra":0}`: false,
 	} {
 		parsed, err := host.Loads(head + tail)
@@ -215,5 +218,57 @@ func TestValidateManifestRejectsLooseTypes(t *testing.T) {
 		if _, err := validateManifest(parsed); (err == nil) != ok {
 			t.Errorf("%s: %v", tail, err)
 		}
+	}
+}
+
+// listedObjects is object storage that only lists.
+type listedObjects struct {
+	memory.BlobObjectStore
+	sizes map[string]int64
+}
+
+func (l listedObjects) List(_ context.Context, fn func(string, int64) error) error {
+	for d, n := range l.sizes {
+		if err := fn(d, n); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TestBundleNamesStoredObjects: object storage contents go into the manifest
+// as digests and sizes only, and extraction hands them to the restore check.
+func TestBundleNamesStoredObjects(t *testing.T) {
+	root := t.TempDir()
+	blobs, dump := blobFixture(t, root, '1', '2')
+	a, b := digestOf([]byte("a")), digestOf([]byte("bb"))
+	objectStore = func() (memory.BlobObjectStore, error) {
+		return listedObjects{sizes: map[string]int64{b: 2, a: 1}}, nil
+	}
+	t.Cleanup(func() { objectStore = memory.BlobObjectStoreFromEnv })
+	var buffer bytes.Buffer
+	if err := create(dump, blobs, &buffer, true); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(root, "bundle.zip")
+	writeMode(t, archive, buffer.Bytes(), 0o600)
+	if members := zipMembers(t, archive); len(members) != 2 {
+		t.Fatal("object bytes bundled", len(members))
+	}
+	output := filepath.Join(root, "restored")
+	if err := extract(archive, output); err != nil {
+		t.Fatal(err)
+	}
+	var manifest map[string]any
+	pending, _ := os.ReadFile(filepath.Join(output, "files", ".restore-pending"))
+	if err := json.Unmarshal(pending, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	want := []any{map[string]any{"digest": a, "bytes": float64(1)}, map[string]any{"digest": b, "bytes": float64(2)}}
+	if a > b {
+		want[0], want[1] = want[1], want[0]
+	}
+	if !reflect.DeepEqual(manifest["objects"], want) {
+		t.Fatal(manifest["objects"])
 	}
 }

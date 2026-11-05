@@ -152,7 +152,7 @@ func TestObjectBlobStorage(t *testing.T) {
 		t.Fatal("local digest file ignored while object storage is on", err)
 	}
 	f.auth.actors[f.work] = actor("restorer", "service", false, "restore")
-	if err = f.svc.AdoptRestoredBlobs(testCtx, f.work); !errors.Is(err, ErrUnavailable) {
-		t.Fatal("local restore accepted with object storage")
+	if err = f.svc.AdoptRestoredBlobs(testCtx, f.work); err == nil {
+		t.Fatal("restore adopted without a quarantined manifest")
 	}
 }

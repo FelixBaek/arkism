@@ -13,6 +13,9 @@ type blobBackupManifest struct {
 	SourceRootID   string       `json:"source_root_id"`
 	Database       backupFile   `json:"database"`
 	Files          []backupFile `json:"files"`
+	// Objects names the blobs that were in object storage at backup time; the
+	// bundle carries only their digests and sizes.
+	Objects []backupFile `json:"objects,omitempty"`
 }
 
 // A stopped-writer restore check, not a live cross-collection snapshot.

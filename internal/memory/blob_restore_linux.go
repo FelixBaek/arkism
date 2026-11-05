@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"os"
 	"strings"
 	"syscall"
@@ -21,8 +22,7 @@ func (s *Service) AdoptRestoredBlobs(ctx context.Context, token string) error {
 	if actor.Role != "service" {
 		return ErrDenied
 	}
-	// shortcut: restore manifests name local files; restoring into object storage is the bucket's own versioning.
-	if s.Repo == nil || s.BlobDirectory == "" || s.BlobObjects != nil {
+	if s.Repo == nil || s.BlobDirectory == "" {
 		return ErrUnavailable
 	}
 	return (blobStore{dir: s.BlobDirectory}).locked(ctx, func(b *lockedBlobs) error {
@@ -31,10 +31,11 @@ func (s *Service) AdoptRestoredBlobs(ctx context.Context, token string) error {
 }
 
 func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token string, actor Decision) error {
-	raw, files, m, err := readRestoreManifest(b)
+	raw, files, objects, err := readRestoreManifest(b)
 	if err != nil {
 		return err
 	}
+	m := objects.manifest
 	identity, err := s.restoreTargetIdentity(ctx, m)
 	if err != nil {
 		return err
@@ -47,7 +48,11 @@ func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token 
 	if err = verifyRestoredDirectory(ctx, b, directory, files); err != nil {
 		return err
 	}
-	if err = s.Repo.ValidateBlobRestore(ctx, files); err != nil {
+	all, err := s.restoredObjects(b, files, objects.sizes)
+	if err != nil {
+		return err
+	}
+	if err = s.Repo.ValidateBlobRestore(ctx, all); err != nil {
 		return err
 	}
 	d, err := s.authorize(ctx, token, "restore:blobs", blobScope(), "storage", "")
@@ -69,6 +74,9 @@ func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token 
 	if err = review.RequireRestoreReview(ctx, ContentHash(string(raw))); err != nil {
 		return err
 	}
+	if err = s.uploadRestoredFiles(b, files); err != nil {
+		return err
+	}
 	rootID, err := s.restoredRootID(ctx, b, identity)
 	if err != nil {
 		return err
@@ -82,36 +90,109 @@ func (s *Service) adoptRestoredBlobs(ctx context.Context, b *lockedBlobs, token 
 	if err = b.root.Remove(".restore-pending"); err != nil {
 		return err
 	}
+	if err = s.dropUploadedFiles(b, files); err != nil {
+		return err
+	}
 	return directory.Sync()
 }
 
-func readRestoreManifest(b *lockedBlobs) ([]byte, map[string]int64, blobBackupManifest, error) {
+// restoreManifest is the parsed pending manifest with the sizes of the objects it names.
+type restoreManifest struct {
+	manifest blobBackupManifest
+	sizes    map[string]int64
+}
+
+// dropUploadedFiles removes the local copies of uploaded files; with object
+// storage on, a local digest file would stop garbage collection.
+func (s *Service) dropUploadedFiles(b *lockedBlobs, files map[string]int64) error {
+	if s.BlobObjects == nil {
+		return nil
+	}
+	for digest := range files {
+		if err := b.root.Remove(digest); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
+}
+
+func readRestoreManifest(b *lockedBlobs) ([]byte, map[string]int64, restoreManifest, error) {
 	var m blobBackupManifest
 	pending, err := openPrivateBlob(b.root, ".restore-pending", os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, nil, m, err
+		return nil, nil, restoreManifest{}, err
 	}
 	raw, err := io.ReadAll(io.LimitReader(pending, maxBackupManifest+1))
 	pending.Close()
 	if err != nil {
-		return nil, nil, m, err
+		return nil, nil, restoreManifest{}, err
 	}
 	if len(raw) > maxBackupManifest {
-		return nil, nil, m, ErrInvalid
+		return nil, nil, restoreManifest{}, ErrInvalid
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
 	if decoder.Decode(&m) != nil || decoder.Decode(new(any)) != io.EOF || !validRestoreManifest(m) {
-		return nil, nil, m, ErrInvalid
+		return nil, nil, restoreManifest{}, ErrInvalid
 	}
-	files := map[string]int64{}
-	for _, f := range m.Files {
-		if !sourceHashPattern.MatchString(f.Digest) || f.Bytes < 1 || f.Bytes > b.maxBytes || files[f.Digest] != 0 {
-			return nil, nil, m, ErrInvalid
+	files, ok := backupSizes(m.Files, b.maxBytes)
+	objects, ok2 := backupSizes(m.Objects, b.maxBytes)
+	if !ok || !ok2 {
+		return nil, nil, restoreManifest{}, ErrInvalid
+	}
+	return raw, files, restoreManifest{m, objects}, nil
+}
+
+// backupSizes maps manifest rows to sizes, refusing bad digests, sizes and repeats.
+func backupSizes(rows []backupFile, max int64) (map[string]int64, bool) {
+	sizes := map[string]int64{}
+	for _, f := range rows {
+		if !sourceHashPattern.MatchString(f.Digest) || f.Bytes < 1 || f.Bytes > max || sizes[f.Digest] != 0 {
+			return nil, false
 		}
-		files[f.Digest] = f.Bytes
+		sizes[f.Digest] = f.Bytes
 	}
-	return raw, files, m, nil
+	return sizes, true
+}
+
+// restoredObjects checks that every object the manifest names is in object
+// storage at its recorded size, and returns all digests the restore may
+// reference. Without object storage a manifest that names objects is refused.
+func (s *Service) restoredObjects(b *lockedBlobs, files, objects map[string]int64) (map[string]int64, error) {
+	if s.BlobObjects == nil {
+		if len(objects) > 0 {
+			return nil, ErrUnavailable
+		}
+		return files, nil
+	}
+	stored := map[string]int64{}
+	if err := s.BlobObjects.List(b.ctx, func(digest string, size int64) error { stored[digest] = size; return nil }); err != nil {
+		return nil, err
+	}
+	all := maps.Clone(files)
+	for digest, size := range objects {
+		if stored[digest] != size || (all[digest] != 0 && all[digest] != size) {
+			return nil, ErrUnavailable
+		}
+		all[digest] = size
+	}
+	return all, nil
+}
+
+// uploadRestoredFiles puts the files the bundle carried into object storage,
+// where the server reads them once objects are configured. The local copies
+// stay until the quarantine is lifted, so a retry still finds them.
+func (s *Service) uploadRestoredFiles(b *lockedBlobs, files map[string]int64) error {
+	if s.BlobObjects == nil {
+		return nil
+	}
+	b.objects = s.BlobObjects
+	for digest, size := range files {
+		if err := b.putObject(digest, digest, size); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func validRestoreManifest(m blobBackupManifest) bool {

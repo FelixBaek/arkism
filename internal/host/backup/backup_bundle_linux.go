@@ -2,6 +2,7 @@ package backup
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/FelixBaek/arkism/internal/host"
+	"github.com/FelixBaek/arkism/internal/memory"
 	"golang.org/x/sys/unix"
 )
 
@@ -28,6 +30,9 @@ const (
 	maxFiles    = 100000
 	maxManifest = 8 << 20
 )
+
+// objectStore is the configured blob object storage; tests replace it.
+var objectStore = memory.BlobObjectStoreFromEnv
 
 var (
 	digestName = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -94,7 +99,16 @@ func manifestBytes(m map[string]any) []byte {
 
 func validateManifest(raw any) (map[string]any, error) {
 	m, ok := raw.(map[string]any)
-	if !ok || len(m) != 5 {
+	if !ok {
+		return nil, errors.New("unsupported manifest")
+	}
+	// "objects", when present, names the blobs kept in object storage.
+	objects, hasObjects := m["objects"].([]any)
+	keys := 5
+	if hasObjects {
+		keys = 6
+	}
+	if _, named := m["objects"]; named != hasObjects || len(m) != keys || len(objects) > maxFiles {
 		return nil, errors.New("unsupported manifest")
 	}
 	for _, k := range []string{"version", "source_identity", "source_root_id", "database", "files"} {
@@ -115,6 +129,9 @@ func validateManifest(raw any) (map[string]any, error) {
 		return nil, errors.New("too many files")
 	}
 	if err := validateRows(append([]any{m["database"]}, files...)); err != nil {
+		return nil, err
+	}
+	if err := validateRows(append([]any{m["database"]}, objects...)); err != nil {
 		return nil, err
 	}
 	if len(manifestBytes(m)) > maxManifest {
@@ -204,6 +221,9 @@ func create(databaseArchive, blobRoot string, output io.Writer, writersStopped b
 	if m["files"], err = bundleBlobs(bundle, root, names); err != nil {
 		return err
 	}
+	if err = objectRows(m); err != nil {
+		return err
+	}
 	if _, err := validateManifest(m); err != nil {
 		return err
 	}
@@ -215,6 +235,29 @@ func create(databaseArchive, blobRoot string, output io.Writer, writersStopped b
 		return err
 	}
 	return bundle.Close()
+}
+
+// objectRows lists the blobs in the configured object storage into the
+// manifest's "objects" rows, so a restore can check the storage still holds
+// them. Their bytes stay in the storage, which keeps its own copies.
+func objectRows(m map[string]any) error {
+	store, err := objectStore()
+	if err != nil || store == nil {
+		return err
+	}
+	rows := []any{}
+	err = store.List(context.Background(), func(digest string, size int64) error {
+		if len(rows) == maxFiles {
+			return errors.New("too many objects")
+		}
+		rows = append(rows, map[string]any{"digest": digest, "bytes": size})
+		return nil
+	})
+	sort.Slice(rows, func(i, j int) bool {
+		return rows[i].(map[string]any)["digest"].(string) < rows[j].(map[string]any)["digest"].(string)
+	})
+	m["objects"] = rows
+	return err
 }
 
 // databaseBinding reads the source identity and root id that .database binds the blobs to.
