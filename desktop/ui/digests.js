@@ -550,6 +550,7 @@ window.ArkismDigests = (ctx) => {
   const STALE = { sources_changed: "근거 바뀜", new_memories: "새 기억 있음" };
   const STALE_LEAD = { sources_changed: "이 요약이 근거로 든 기억이 지워졌거나 더는 승인 상태가 아니에요.", new_memories: "이 요약을 만든 뒤에 새로 승인된 기억이 있어요." };
   const modelRev = (m) => m.draft || m.active;
+  const proposedModel = (n) => n.model?.status === "proposed";
   const noteText = (n) => (n.obs ? n.obs.content : n.link ? n.link.reason : modelRev(n.model)?.text) || "";
   const noteRefs = (n) => (n.obs ? n.obs.source_memories : n.link ? [n.link.cause, n.link.effect] : modelRev(n.model)?.citations) || [];
   const occurred = (o) => { const w = o?.occurred && window.ArkismMemoryTime?.span(o.occurred); return w ? `일어난 때 ${w}` : ""; };
@@ -568,7 +569,7 @@ window.ArkismDigests = (ctx) => {
     table.replaceChildren(...items.map((n) => {
       const cell = el("div", "cell mem-cell");
       cell.append(raw(el("div", "text", noteTitle(n))),
-        el("div", "mem-meta", [KIND(n), `근거 기억 ${noteRefs(n).length}개`, occurred(n.obs), ago((n.obs || n.link || n.model).updated_at)].filter(Boolean).join(" · ")));
+        el("div", "mem-meta", [KIND(n), !proposedModel(n) && `근거 기억 ${noteRefs(n).length}개`, occurred(n.obs), ago((n.obs || n.link || n.model).updated_at)].filter(Boolean).join(" · ")));
       const stale = n.obs ? !n.obs.fresh : n.link ? false : !!n.model.draft?.withheld;
       const badge = stale ? "근거 바뀜" : proposedModel(n) ? "AI 제안" : n.model && !n.model.draft ? STALE[n.model.stale_reason] || "오래됨" : n.obs?.diff?.length ? "고침" : "새 정리";
       return row(`note:${n.id}`, "minmax(0,1fr) auto", [cell, el("span", "mem-badge warn", badge)], () => notesDetail());
@@ -644,7 +645,6 @@ window.ArkismDigests = (ctx) => {
 
   // An agent may only propose a topic (status proposed): it is never refreshed or read until a person approves it.
   // 승인 saves it as it is (PATCH, which makes it active); 버리기 deletes it.
-  const proposedModel = (n) => n.model?.status === "proposed";
   function proposedTopic(body, n) {
     const m = n.model;
     const head = el("div", "d-head");

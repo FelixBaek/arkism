@@ -8,9 +8,22 @@
     "extraction_mode": "verbose",
     "extraction_instructions": "배포 절차와 고객 요청은 꼭 남기고, 잡담은 빼 주세요.",
     "defense_rules": [
-      { "name": "고객번호", "pattern": "고객번호-\\d{6}", "action": "redact" }
+      {
+        "name": "고객번호",
+        "pattern": "고객번호-\\d{6}",
+        "action": "redact"
+      }
     ],
-    "mcp_tools": ["recall", "remember", "reflect"],
-    "reflect_mission": "이 저장소의 결정 이유를 짧게, 근거 기억과 함께 알려 줘요."
+    "mcp_tools": [
+      "recall",
+      "remember",
+      "reflect"
+    ],
+    "reflect_mission": "이 저장소의 결정 이유를 짧게, 근거 기억과 함께 알려 줘요.",
+    "lanes": {
+      "temporal": false
+    },
+    "rerank": true,
+    "rerank_model": true
   }
 }

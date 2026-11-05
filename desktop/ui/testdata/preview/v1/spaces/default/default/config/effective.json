@@ -37,12 +37,13 @@
     "lanes": {
       "fts": true,
       "vector": true,
-      "temporal": true,
+      "temporal": false,
       "graph": false
     },
-    "rerank": false,
+    "rerank": true,
     "recall_budget_tokens": 2000,
-    "reflect_max_tokens": 1024
+    "reflect_max_tokens": 1024,
+    "rerank_model": true
   },
   "sources": {
     "display_name": "space",
@@ -57,10 +58,11 @@
     "auto_derive.interval": "server",
     "lanes.fts": "server",
     "lanes.vector": "server",
-    "lanes.temporal": "server",
+    "lanes.temporal": "space",
     "lanes.graph": "template",
-    "rerank": "server",
+    "rerank": "space",
     "recall_budget_tokens": "server",
-    "reflect_max_tokens": "server"
+    "reflect_max_tokens": "server",
+    "rerank_model": "space"
   }
 }

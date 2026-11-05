@@ -1,0 +1,23 @@
+{
+ "items": [
+  {
+   "id": "mm9",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "revision": 1,
+   "title": "결제 오류 대응",
+   "query": "결제 실패가 났을 때 확인하는 순서",
+   "refresh": {
+    "mode": "on_change"
+   },
+   "status": "proposed",
+   "stale": false,
+   "authority": "data_only",
+   "created_at": "2026-10-14T04:00:00Z",
+   "updated_at": "2026-10-14T04:00:00Z"
+  }
+ ],
+ "next_cursor": ""
+}

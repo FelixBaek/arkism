@@ -33,6 +33,24 @@
    "created_by": "preview-owner",
    "created_at": "2026-10-12T02:00:00Z",
    "updated_at": "2026-10-13T02:00:00Z"
+  },
+  {
+   "id": "dr3",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "title": "마이그레이션은 따로 올리기",
+   "rule": "데이터베이스 마이그레이션은 코드 변경과 다른 PR로 올린다.",
+   "priority": 60,
+   "applies_to": "both",
+   "active": false,
+   "proposed": true,
+   "tags": [],
+   "created_by": "agent-claude-code",
+   "created_at": "2026-10-14T03:00:00Z",
+   "updated_at": "2026-10-14T03:00:00Z"
   }
  ],
  "next_cursor": ""
