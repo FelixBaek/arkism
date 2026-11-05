@@ -42,6 +42,7 @@ const (
 	mmIntervalMax    = 30 * 24 * time.Hour
 	mmMinTokens      = 1000
 	mmFilterMax      = 16
+	mmStrategyDelta  = "delta"
 )
 
 var mmRefreshModes = []string{mmRefreshManual, mmRefreshChange, mmRefreshDaily}
@@ -52,6 +53,8 @@ var mmRefreshModes = []string{mmRefreshManual, mmRefreshChange, mmRefreshDaily}
 // after_consolidation refreshes once a consolidation run changed observations;
 // min_interval (a duration such as "6h") holds every trigger back; kinds and
 // tags narrow the recall; max_tokens caps one refresh (prompt and answer).
+// strategy "delta" (opt-in) asks for a minimal edit of the approved text from the
+// memories that changed since it was approved, instead of rewriting it.
 // The old form, a bare mode string, still decodes from bodies, records and bundles.
 type MentalModelRefresh struct {
 	Mode               string   `json:"mode" bson:"mode"`
@@ -61,6 +64,7 @@ type MentalModelRefresh struct {
 	Kinds              []string `json:"kinds,omitempty" bson:"kinds,omitempty"`
 	Tags               []string `json:"tags,omitempty" bson:"tags,omitempty"`
 	MaxTokens          int64    `json:"max_tokens,omitempty" bson:"max_tokens,omitempty"`
+	Strategy           string   `json:"strategy,omitempty" bson:"strategy,omitempty"`
 }
 
 func (r *MentalModelRefresh) UnmarshalJSON(b []byte) error {
@@ -79,7 +83,7 @@ func (r *MentalModelRefresh) UnmarshalJSON(b []byte) error {
 func (r *MentalModelRefresh) storeLegacyString(mode string) { *r = MentalModelRefresh{Mode: mode} }
 
 func validMentalModelRefresh(r MentalModelRefresh) bool {
-	if !slices.Contains(mmRefreshModes, r.Mode) || len(r.Kinds) > mmFilterMax || len(r.Tags) > mmFilterMax || !validTags(r.Kinds) || !validTags(r.Tags) {
+	if !slices.Contains(mmRefreshModes, r.Mode) || (r.Strategy != "" && r.Strategy != "full" && r.Strategy != mmStrategyDelta) || len(r.Kinds) > mmFilterMax || len(r.Tags) > mmFilterMax || !validTags(r.Kinds) || !validTags(r.Tags) {
 		return false
 	}
 	if r.MaxTokens != 0 && (r.MaxTokens < mmMinTokens || r.MaxTokens > obsRunTokens) {
@@ -354,13 +358,18 @@ const mentalModelSystem = "You write a short, factual summary of one topic from 
 	`Return only one JSON object: {"summary": string, "citations": [string]}. Cite the ids of every item the summary rests on, only ids from the data, and state nothing the items do not support. ` + derivedTimeRule
 
 func mentalModelPrompt(title, query string, hits []Hit) string {
+	return wikiFence("TOPIC", title+"\n"+query) + "\n\n" + wikiFence("RECALLED_DATA", mentalModelData(hits))
+}
+
+// mentalModelData lists the hits oldest first, each dated by the server.
+func mentalModelData(hits []Hit) string {
 	var data strings.Builder
 	hits = slices.Clone(hits)
 	slices.SortStableFunc(hits, func(a, b Hit) int { return hitContentTime(a).Compare(hitContentTime(b)) }) // oldest first, dated by the server
 	for _, h := range hits {
 		data.WriteString("- id: " + h.ID + "\n  kind: " + h.Collection + "\n  date: " + hitContentTime(h).UTC().Format(time.DateOnly) + occurredLine(h.Occurred) + "\n  text: " + strings.ReplaceAll(h.Text, "\n", " ") + "\n")
 	}
-	return wikiFence("TOPIC", title+"\n"+query) + "\n\n" + wikiFence("RECALLED_DATA", data.String())
+	return data.String()
 }
 
 // recallableHits keeps what a summary may cite: approved memories and approved observations.
@@ -411,7 +420,11 @@ func (s *Service) RefreshMentalModel(ctx context.Context, token, id string, in M
 
 func (s *Service) refreshMentalModel(ctx context.Context, token string, d Decision, r Record, dryRun bool, job *WikiJob) (MentalModelView, error) {
 	m := r.MentalModel
-	draft, err := s.citedSummaryDraft(ctx, token, d, summaryRequest{scope: r.Scope, title: m.Title, query: m.Query, kinds: m.Refresh.Kinds, tags: m.Refresh.Tags, maxTokens: m.Refresh.MaxTokens}, job)
+	req := summaryRequest{scope: r.Scope, title: m.Title, query: m.Query, kinds: m.Refresh.Kinds, tags: m.Refresh.Tags, maxTokens: m.Refresh.MaxTokens}
+	if m.Refresh.Strategy == mmStrategyDelta {
+		req.base = m.Active
+	}
+	draft, err := s.citedSummaryDraft(ctx, token, d, req, job)
 	if err != nil {
 		return MentalModelView{}, err
 	}
@@ -442,6 +455,8 @@ type summaryRequest struct {
 	title, query string
 	kinds, tags  []string
 	maxTokens    int64
+	// base, when set, is the approved revision a delta refresh edits (mental_model_delta.go).
+	base *DerivedRevision
 }
 
 // citedSummaryDraft recalls the query over approved memories and observations (every hit
@@ -461,13 +476,19 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 	if len(hits) == 0 {
 		return nil, ErrNotFound
 	}
+	action, system, prompt := "refresh", mentalModelSystem, mentalModelPrompt(req.title, req.query, bundle.Items)
+	if delta, ok, err := s.mentalModelDelta(ctx, token, req, bundle.Items); err != nil {
+		return nil, err
+	} else if ok {
+		action, system, prompt, hits = "delta_refresh", mentalModelDeltaSystem, delta.prompt, delta.hits
+	}
 	call := job
 	if req.maxTokens > 0 { // one refresh's own cap, still counted against the run
 		call = &WikiJob{MaxTotalTokens: min(req.maxTokens, job.MaxTotalTokens-job.Tokens)}
 		defer func() { job.Calls, job.Tokens = job.Calls+call.Calls, job.Tokens+call.Tokens }()
 	}
 	var answer mentalModelAnswer
-	if err := s.derivedModelCall(ctx, req.scope, call, "wiki_mental_model", mentalModelSystem, mentalModelPrompt(req.title, req.query, bundle.Items), &answer); err != nil {
+	if err := s.derivedModelCall(ctx, req.scope, call, "wiki_mental_model", system, prompt, &answer); err != nil {
 		return nil, err
 	}
 	cited, err := validMentalModelAnswer(answer, hits)
@@ -476,7 +497,7 @@ func (s *Service) citedSummaryDraft(ctx context.Context, token string, d Decisio
 	}
 	gen := s.Wiki.Generator()
 	gen.PromptVersion = mmPromptVersion
-	return &DerivedRevision{Status: mmDraft, Action: "refresh", Text: strings.TrimSpace(answer.Summary), Citations: cited, Generator: &gen, By: d.PrincipalID, At: time.Now().UTC().Truncate(time.Millisecond)}, nil
+	return &DerivedRevision{Status: mmDraft, Action: action, Text: strings.TrimSpace(answer.Summary), Citations: cited, Generator: &gen, By: d.PrincipalID, At: time.Now().UTC().Truncate(time.Millisecond)}, nil
 }
 
 // ReviewMentalModel: a person approves the draft (it becomes the active revision) or rejects it.
