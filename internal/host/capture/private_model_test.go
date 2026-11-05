@@ -171,7 +171,7 @@ func TestPrivateModelAutosaveAndBenchmarkUseSanitizedRequests(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ExtractClaims("visible <private>synthetic-bench</private>", "2026-10-18", []map[string]any{{"id": "memory", "text": "visible <private>synthetic-related</private>"}}, "visible <private>synthetic-guidance</private>", "test"); err != nil {
+	if _, err := ExtractClaims("visible <private>synthetic-bench</private>", "2026-10-18", []map[string]any{{"id": "memory", "text": "visible <private>synthetic-related</private>"}}, "visible <private>synthetic-guidance</private>", "", "test"); err != nil {
 		t.Fatal(err)
 	}
 	if len(sent) != 2 || strings.Contains(strings.Join(sent, ""), "synthetic-") {

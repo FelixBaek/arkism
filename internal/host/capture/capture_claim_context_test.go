@@ -190,22 +190,22 @@ func TestCaptureOptionalContextExportDoesNotReportWithheldAsEmptySuccess(t *test
 	invalid := optionalClaimContext()
 	invalid["evidence_kind"] = "user_statement"
 	output = []any{optionalContextClaim(invalid)}
-	withheld, err := ExtractClaims("input", "2026-01-01", nil, "", "synthetic-context")
+	withheld, err := ExtractClaims("input", "2026-01-01", nil, "", "", "synthetic-context")
 	if errorCode(err) != "capture_context_all_withheld" || len(withheld.Claims) != 0 || withheld.ContextRejections == nil || withheld.ContextRejections.BindingStatus != "unbound" {
 		t.Fatal(err, withheld)
 	}
 	output = []any{optionalContextClaim(optionalClaimContext())}
-	withheld, err = ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "synthetic-context")
+	withheld, err = ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "", "synthetic-context")
 	if errorCode(err) != "capture_context_all_withheld" || withheld.ContextRejections == nil || withheld.ContextRejections.Rejected[0].Reason != "context_evidence_unbound" {
 		t.Fatal("aggregate export invented a single source boundary", err, withheld)
 	}
 	output = []any{optionalContextClaim(nil)}
-	legacy, err := ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "synthetic-context")
+	legacy, err := ExtractClaims(optionalContextSource, "2026-01-01", nil, "", "", "synthetic-context")
 	if err != nil || len(legacy.Claims) != 1 || legacy.ContextRejections != nil {
 		t.Fatal("context-free aggregate export changed", err, legacy)
 	}
 	output = []any{}
-	empty, err := ExtractClaims("input", "2026-01-01", nil, "", "synthetic-context")
+	empty, err := ExtractClaims("input", "2026-01-01", nil, "", "", "synthetic-context")
 	if err != nil || empty.ContextRejections != nil || !reflect.DeepEqual(empty.Claims, []any{}) {
 		t.Fatal("real empty extraction lost its distinction", err, empty)
 	}

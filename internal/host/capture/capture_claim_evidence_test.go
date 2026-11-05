@@ -161,7 +161,7 @@ func TestCaptureClaimEvidenceBenchmarkAggregateLegacy(t *testing.T) {
 			map[string]any{"text": "Keep prod.", "quote": "prod", "risk": "low"},
 		}, nil
 	}
-	result, err := ExtractClaims("Always keep Prod exactly.", "2026-01-01", nil, "", "synthetic-legacy")
+	result, err := ExtractClaims("Always keep Prod exactly.", "2026-01-01", nil, "", "", "synthetic-legacy")
 	if err != nil || len(result.Claims) != 2 {
 		t.Fatal(err, result.Claims)
 	}

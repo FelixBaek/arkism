@@ -29,8 +29,10 @@ func CaptureModel() string { return capModel }
 
 // ExtractClaims runs the drain's extraction on userText. today is the TODAY line (YYYY-MM-DD),
 // related the EXISTING MEMORIES rows (id, text, revision) the drain gets from search, guidance an
-// optional user note appended the way capture.json's is. pipeline names the generator.
-func ExtractClaims(userText, today string, related []map[string]any, guidance, pipeline string) (BenchExtraction, error) {
+// optional user note appended the way capture.json's is, density the space's capture_density as
+// the server resolves it (config/effective; "" is durable). The caller feeds user text only, so the
+// capture mode stays user. pipeline names the generator.
+func ExtractClaims(userText, today string, related []map[string]any, guidance, density, pipeline string) (BenchExtraction, error) {
 	userText, guidance = redactPrivate(userText), redactPrivate(guidance)
 	if err := os.MkdirAll(capState, 0o700); err != nil {
 		return BenchExtraction{}, err
@@ -49,7 +51,7 @@ func ExtractClaims(userText, today string, related []map[string]any, guidance, p
 	if existing == "" {
 		existing = "(none)"
 	}
-	out, err := privateModel(extractPrompt+userGuidance(guidance), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: auto\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
+	out, err := privateModel(capturePrompt("", density)+userGuidance(guidance), fmt.Sprintf("TODAY: %s\nMEMORY_LANGUAGE: auto\n\nEXISTING MEMORIES:\n%s\n\nUSER MESSAGES:\n%s", today, existing, userText),
 		capModel, 180*time.Second, claimsSchema, "claims")
 	if err != nil {
 		return BenchExtraction{}, err

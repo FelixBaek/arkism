@@ -2,19 +2,20 @@ package capture
 
 import "strings"
 
-// Capture modes and density (space settings capture_mode, capture_density). The default
-// (user, durable) keeps only the user's own lasting statements from turns with a memory cue.
+// Capture modes and density (space settings capture_mode, capture_density). The server's default
+// density is balanced; durable (a space's choice, or no server to ask) keeps only the user's own
+// lasting statements from turns with a memory cue.
 // assistant_results (opt-in) also reads the agent's last reply of the turn and keeps facts the
 // agent confirmed and facts other people are quoted as saying, as assistant_result candidates a
-// person still reviews; balanced and dense keep more specific facts. Both opt-ins read every
-// turn, not only cued ones, so they spend a model call per captured batch.
+// person still reviews; balanced and dense keep more specific facts. Both read every turn, not
+// only cued ones, so they spend a model call per captured batch.
 
 const assistantResultsMode = "assistant_results"
 
 func captureMode() string    { return strField(spaceConfig()["capture_mode"]) }
 func captureDensity() string { return strField(spaceConfig()["capture_density"]) }
 
-// captureEveryTurn: the opt-in modes read every turn instead of cued ones only.
+// captureEveryTurn: assistant_results, balanced and dense read every turn instead of cued ones only.
 func captureEveryTurn() bool {
 	d := captureDensity()
 	return captureMode() == assistantResultsMode || d == "balanced" || d == "dense"

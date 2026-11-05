@@ -353,8 +353,15 @@ func TestInvalidationPathMissingReason(t *testing.T) {
 func TestSpaceSettingsExtractionOptIns(t *testing.T) {
 	f := newFixture(t)
 	view, err := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
-	if err != nil || view.Config.MemoryLanguage != memoryLanguageAuto || *view.Config.WorkStateCandidates || *view.Config.RecallSessionArchives {
+	if err != nil || view.Config.MemoryLanguage != memoryLanguageAuto || *view.Config.WorkStateCandidates || *view.Config.RecallSessionArchives ||
+		view.Config.CaptureDensity != "balanced" || view.Sources["capture_density"] != spaceSourceServer {
 		t.Fatalf("defaults %+v %v", view.Config, err)
+	}
+	// a space that chose durable before the default changed keeps it
+	durable := "durable"
+	putSettings(t, f, scopeA, SpaceConfigInput{ExpectedRevision: -1, CaptureDensity: &durable})
+	if view, _ = f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA); view.Config.CaptureDensity != "durable" || view.Sources["capture_density"] != spaceSourceSpace {
+		t.Fatalf("durable %+v", view)
 	}
 	for _, bad := range []string{"Korean!", "k", "ko_KR"} {
 		if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, MemoryLanguage: &bad}, false); !errors.Is(err, ErrInvalid) {

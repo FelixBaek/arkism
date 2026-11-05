@@ -194,7 +194,7 @@ func TestReleaseMetrics(t *testing.T) {
 		llm = func(string, string, string, time.Duration, string, string) (any, error) {
 			return []any{map[string]any{"subject": task.ID, "kind": "decision", "text": task.Fact, "quote": task.Fact, "risk": "low"}}, nil
 		}
-		extracted, err := ExtractClaims(userText, "2026-01-01", nil, "", "release-metrics")
+		extracted, err := ExtractClaims(userText, "2026-01-01", nil, "", "", "release-metrics")
 		if err != nil || len(extracted.Claims) != 1 {
 			t.Fatal(task.ID, err, extracted.Claims)
 		}
