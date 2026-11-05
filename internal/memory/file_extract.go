@@ -449,9 +449,10 @@ func (s *Service) extractPlan(settings SpaceConfig, opts ExtractOptions, overrid
 // agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
 const agentUploadTool = "add_document"
 
-// extractTransfer checks that the chunk may go to the model for the person running the extraction.
-func (s *Service) extractTransfer(ctx context.Context, token string, d Decision, scope Scope, ch FileExtractChunk) error {
-	t, err := s.authorizeAt(ctx, token, "generate:memory_candidates", scope, "", ch.Text, wikiDestination)
+// modelTransfer authorizes text leaving the server for the model under verb and
+// requires the decision to be the caller's own, external and content-safe.
+func (s *Service) modelTransfer(ctx context.Context, token string, d Decision, verb string, scope Scope, resourceID, text string) error {
+	t, err := s.authorizeAt(ctx, token, verb, scope, resourceID, text, wikiDestination)
 	if err != nil {
 		return err
 	}
@@ -470,7 +471,7 @@ func (s *Service) extractChunk(ctx context.Context, token string, d Decision, sc
 	if s.Wiki == nil {
 		return ExtractPreviewResult{}, ErrModelNotConfigured
 	}
-	if err := s.extractTransfer(ctx, token, d, scope, ch); err != nil {
+	if err := s.modelTransfer(ctx, token, d, "generate:memory_candidates", scope, "", ch.Text); err != nil {
 		return ExtractPreviewResult{}, err
 	}
 	system, user := extractPrompt(ch.Text, plan)

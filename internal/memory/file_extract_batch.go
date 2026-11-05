@@ -130,7 +130,7 @@ func (s *Service) fileBatchAnswer(ctx context.Context, scope Scope, job *FileExt
 func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decision, scope Scope, b BatchLLM, job *FileExtractJob) error {
 	prompts, ids := []BatchPrompt{}, []string{}
 	for i := job.Next; i < len(job.Chunks); i++ {
-		if err := s.extractTransfer(ctx, token, d, scope, job.Chunks[i]); err != nil {
+		if err := s.modelTransfer(ctx, token, d, "generate:memory_candidates", scope, "", job.Chunks[i].Text); err != nil {
 			return err
 		}
 		system, user := extractPrompt(job.Chunks[i].Text, job)

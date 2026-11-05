@@ -41,12 +41,8 @@ func (s *Service) modelEntityFinds(ctx context.Context, token string, scope Scop
 		if len(sent) == 0 {
 			continue
 		}
-		t, err := s.authorizeAt(ctx, token, "generate:entities", scope, "", user, wikiDestination)
-		if err != nil {
+		if err := s.modelTransfer(ctx, token, d, "generate:entities", scope, "", user); err != nil {
 			return nil, job.Calls, err
-		}
-		if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
-			return nil, job.Calls, ErrDenied
 		}
 		answer, err := s.wikiCall(ctx, scope, job, "wiki_entities", entityModelSystem+cfg.entityModelGuidance(), user)
 		if errors.Is(err, errWikiBudget) {

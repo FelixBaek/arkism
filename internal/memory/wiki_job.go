@@ -596,12 +596,8 @@ func newWikiWrite(refs []SourceRef, gen Generator) *wikiWrite {
 // boundary checks in w. writeRule is appended to the write step's system prompt.
 func (s *Service) wikiPlanAndWrite(ctx context.Context, token string, d Decision, scope Scope, job *WikiJob, w *wikiWrite, resourceID, source, writeRule string) error {
 	// The source leaves the server for the model: an explicit transfer decision.
-	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, resourceID, source, wikiDestination)
-	if err != nil {
+	if err := s.modelTransfer(ctx, token, d, "generate:"+colWikiPages, scope, resourceID, source); err != nil {
 		return err
-	}
-	if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
-		return ErrDenied
 	}
 	existing, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit)
 	if err != nil {

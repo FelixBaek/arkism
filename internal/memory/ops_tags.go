@@ -116,28 +116,9 @@ func (s *Service) ListTags(ctx context.Context, token string, in TagListInput) (
 	return out, nil
 }
 
-// tagMatches: "" matches every tag; otherwise * is any run of characters, case-insensitive, whole tag.
+// tagMatches: "" matches every tag; otherwise the pattern is a whole-tag glob (globMatch), case-insensitive.
 func tagMatches(pattern, tag string) bool {
-	if pattern == "" {
-		return true
-	}
-	parts := strings.Split(strings.ToLower(pattern), "*")
-	rest := strings.ToLower(tag)
-	if !strings.HasPrefix(rest, parts[0]) {
-		return false
-	}
-	rest = rest[len(parts[0]):]
-	for i, part := range parts[1:] {
-		if i == len(parts)-2 {
-			return strings.HasSuffix(rest, part)
-		}
-		at := strings.Index(rest, part)
-		if at < 0 {
-			return false
-		}
-		rest = rest[at+len(part):]
-	}
-	return rest == ""
+	return pattern == "" || globMatch(strings.ToLower(pattern), strings.ToLower(tag))
 }
 
 // editTags returns the tag list after removing then adding, keeping order.
