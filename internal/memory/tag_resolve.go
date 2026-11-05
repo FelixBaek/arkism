@@ -33,16 +33,17 @@ func (s *Service) resolveFuzzyTags(ctx context.Context, in *SearchInput) error {
 	if f == nil || !slices.ContainsFunc(f.TagGroups, hasFuzzyLeaf) {
 		return nil
 	}
-	vocab := []string{}
+	tags := []string{}
 	if st, err := s.opsStore(); err == nil {
 		rows, err := st.OpsCounts(ctx, opsCountQuery{Scope: in.Scope, Collection: colMemories, By: "tag", Statuses: []string{statusActive}})
 		if err != nil {
 			return err
 		}
 		for _, r := range rows {
-			vocab = append(vocab, opsText(r.Key))
+			tags = append(tags, opsText(r.Key))
 		}
 	}
+	vocab := tagVocab(tags) // at most opsCountRows tags, each split into trigrams once
 	copied := *f
 	copied.TagGroups = make([][]TagTest, len(f.TagGroups))
 	for i, group := range f.TagGroups {
@@ -61,7 +62,7 @@ func hasFuzzyLeaf(tests []TagTest) bool {
 	})
 }
 
-func resolveTagTests(tests []TagTest, vocab []string) []TagTest {
+func resolveTagTests(tests []TagTest, vocab []tagSpelling) []TagTest {
 	out := make([]TagTest, len(tests))
 	for i, t := range tests {
 		switch {
@@ -78,7 +79,7 @@ func resolveTagTests(tests []TagTest, vocab []string) []TagTest {
 }
 
 // fuzzyLeaf is the rewrite described above; Not stays on the rewritten test.
-func fuzzyLeaf(t TagTest, vocab []string) TagTest {
+func fuzzyLeaf(t TagTest, vocab []tagSpelling) TagTest {
 	spellings := make([][]string, len(t.Tags))
 	for i, token := range t.Tags {
 		spellings[i] = similarTags(token, vocab)
@@ -135,7 +136,7 @@ func tagCombos(spellings [][]string, limit int) [][]string {
 // similarTags is token itself plus the vocabulary tags at least tagFuzzySimilarity alike,
 // most similar first, at most tagFuzzyPerToken. A namespace ("lang:go") must match exactly
 // and only the value is compared: a shared namespace is not a shared spelling.
-func similarTags(token string, vocab []string) []string {
+func similarTags(token string, vocab []tagSpelling) []string {
 	ns, value := splitTagNamespace(token)
 	want := trigramSet(value)
 	type scored struct {
@@ -143,13 +144,12 @@ func similarTags(token string, vocab []string) []string {
 		sim float64
 	}
 	found := []scored{}
-	for _, tag := range vocab {
-		tns, tvalue := splitTagNamespace(tag)
-		if tag == token || !strings.EqualFold(tns, ns) {
+	for _, v := range vocab {
+		if v.tag == token || !strings.EqualFold(v.ns, ns) {
 			continue
 		}
-		if sim := trigramSimilarity(want, trigramSet(tvalue)); sim >= tagFuzzySimilarity {
-			found = append(found, scored{tag, sim})
+		if sim := trigramSimilarity(want, v.tri); sim >= tagFuzzySimilarity {
+			found = append(found, scored{v.tag, sim})
 		}
 	}
 	slices.SortStableFunc(found, func(a, b scored) int {
@@ -164,6 +164,22 @@ func similarTags(token string, vocab []string) []string {
 	out := []string{token}
 	for _, f := range found[:min(len(found), tagFuzzyPerToken-1)] {
 		out = append(out, f.tag)
+	}
+	return out
+}
+
+// tagSpelling is a vocabulary tag with its namespace and value trigrams, computed once per
+// search rather than once per fuzzy token.
+type tagSpelling struct {
+	tag, ns string
+	tri     map[string]bool
+}
+
+func tagVocab(tags []string) []tagSpelling {
+	out := make([]tagSpelling, len(tags))
+	for i, tag := range tags {
+		ns, value := splitTagNamespace(tag)
+		out[i] = tagSpelling{tag, ns, trigramSet(value)}
 	}
 	return out
 }

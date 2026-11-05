@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -41,6 +42,38 @@ func TestTagTreeBoundsAndSQL(t *testing.T) {
 	}
 }
 
+// Tag values only ever travel as bind arguments; the SQL text holds placeholders and the
+// fixed mode fragments, and the placeholders count up in order through any nesting.
+func TestTagTreeSQLIsParameterized(t *testing.T) {
+	evil := []string{"x') OR true --", `$1`, "a\"b"}
+	tree := []TagTest{
+		{Tags: evil, Match: "exact"},
+		{Not: true, Or: []TagTest{{Tags: evil, Match: "any"}, {And: []TagTest{{Tags: evil, Match: "all", Not: true}, {Tags: evil}}}}},
+	}
+	args := []any{}
+	next := 7
+	sql := pgTagTests(tree, " OR ", &next, &args)
+	if next != 11 || len(args) != 4 {
+		t.Fatal(next, args)
+	}
+	for _, v := range evil[:1] {
+		if strings.Contains(sql, v) {
+			t.Fatalf("value %q in SQL: %s", v, sql)
+		}
+	}
+	for i, a := range args {
+		if !slices.Equal(a.([]string), evil) {
+			t.Fatal(i, a)
+		}
+		if !strings.Contains(sql, fmt.Sprintf("$%d::text[]", 7+i)) {
+			t.Fatalf("$%d missing: %s", 7+i, sql)
+		}
+	}
+	if strings.Count(sql, "COALESCE((") != 4 || strings.Count(sql, "NOT ") != 2 || strings.Count(sql, "(") != strings.Count(sql, ")") {
+		t.Fatal(sql)
+	}
+}
+
 // tagVocabRepo serves the tag counts the fuzzy resolver reads (the operator count query).
 type tagVocabRepo struct {
 	Repository
@@ -66,7 +99,7 @@ func TestFuzzyTagLeaf(t *testing.T) {
 	if sim := trigramSimilarity(trigramSet("mango"), trigramSet("mongo")); sim >= tagFuzzySimilarity {
 		t.Fatal(sim)
 	}
-	vocab := []string{"deployment", "deploy", "lang:golang", "golang", "billing"}
+	vocab := tagVocab([]string{"deployment", "deploy", "lang:golang", "golang", "billing"})
 	// A namespace must match; only the value is compared. The token itself always stays.
 	if got := similarTags("lang:golan", vocab); !slices.Equal(got, []string{"lang:golan", "lang:golang"}) {
 		t.Fatal(got)
@@ -337,5 +370,47 @@ func TestReflectTagFilters(t *testing.T) {
 		if validReflectInput(&bad) {
 			t.Fatalf("%+v", bad)
 		}
+	}
+}
+
+type denyObservationReads struct{ Authorizer }
+
+func (a denyObservationReads) Authorize(ctx context.Context, token string, in Authorization) (Decision, error) {
+	if in.Action == "read:"+colObservations {
+		return Decision{}, ErrDenied
+	}
+	return a.Authorizer.Authorize(ctx, token, in)
+}
+
+// Entity observations are only approved, unrestricted, same-scope ones, and none at all
+// for a caller without the observation read grant.
+func TestIncludeEntityObservationsStayInBounds(t *testing.T) {
+	f, repo := entityFixture(t)
+	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	m := entityMemory(t, f, repo, "m-bounds", "the billing service moved to the new queue", at)
+	repo.ents["e-bill"] = NamedEntity{ID: "e-bill", Name: "billing service", Type: "service"}
+	repo.edges = []EntityMention{{MemoryID: m.ID, EntityID: "e-bill", Relation: relMentions}}
+	obs := func(id, approvedBy, sensitivity string, scope Scope) Record {
+		return Record{ID: id, Scope: scope, Kind: observationKind, Text: "Billing note " + id, Status: obsActive, ApprovedBy: approvedBy, Sensitivity: sensitivity, Revision: 1, Sources: m.Sources,
+			Observation: &ObservationData{SourceMemories: []Ref{{Collection: colMemories, ID: m.ID, Revision: m.Revision}}, Durability: "durable"}, CreatedAt: at, UpdatedAt: at}
+	}
+	for _, r := range []Record{obs("obs-ok", "human-1", "", scopeA), obs("obs-draft", "", "", scopeA), obs("obs-restricted", "human-1", "restricted", scopeA), obs("obs-far", "human-1", "", scopeFar)} {
+		if err := repo.Insert(testCtx, colObservations, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	search := func() []IncludedFact {
+		out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "billing service", Include: []string{"entities"}, IncludeOptions: &IncludeOptions{Entities: &IncludeBudget{MaxTokens: 2000}}})
+		if err != nil || len(out.Items) != 1 || len(out.Items[0].Entities) != 1 {
+			t.Fatalf("%+v %v", out.Items, err)
+		}
+		return out.Items[0].Entities[0].Observations
+	}
+	if got := search(); len(got) != 1 || got[0].ID != "obs-ok" {
+		t.Fatalf("%+v", got)
+	}
+	f.svc.Auth = denyObservationReads{f.auth}
+	if got := search(); got != nil {
+		t.Fatalf("observations without the read grant: %+v", got)
 	}
 }

@@ -289,8 +289,12 @@ func (s *Service) entityObservations(ctx context.Context, token string, scope Sc
 	for _, m := range v.mentions {
 		mentioned[m.MemoryID] = append(mentioned[m.MemoryID], m.EntityID)
 	}
+	linked := func(r Record) bool {
+		return slices.ContainsFunc(r.Observation.SourceMemories, func(src Ref) bool { return len(mentioned[src.ID]) > 0 })
+	}
 	for _, r := range rows {
-		if r.Scope != scope || r.Observation == nil || r.PrivacyQuarantined || r.Sensitivity == "restricted" || !observationRecallable(ctx, s.Repo, r) {
+		// The freshness check reads the sources, so unlinked observations are skipped first.
+		if r.Scope != scope || r.Observation == nil || r.PrivacyQuarantined || r.Sensitivity == "restricted" || !linked(r) || !observationRecallable(ctx, s.Repo, r) {
 			continue
 		}
 		fact := IncludedFact{ID: r.ID, Text: runeCutString(redactSessionPrivate(r.Text), includeBudgetRunesMax)}

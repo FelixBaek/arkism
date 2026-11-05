@@ -127,6 +127,10 @@ func tagFilterCases() (filters []SearchFilters, stored [][]string) {
 		SearchFilters{Tags: []string{"a"}, TagGroups: [][]TagTest{{{Tags: []string{"a", "b"}, Match: "exact"}, {Tags: []string{"b"}, Not: true}}}},
 		// not (a and (b or c)): nested groups under a negation
 		SearchFilters{TagGroups: [][]TagTest{{{Not: true, And: []TagTest{{Tags: []string{"a"}}, {Or: []TagTest{{Tags: []string{"b"}}, {Tags: []string{"c"}}}}}}}}},
+		// not (any a or not (all b)): untagged rows hit both lenient modes under two negations
+		SearchFilters{TagGroups: [][]TagTest{{{Not: true, Or: []TagTest{{Tags: []string{"a"}, Match: "any"}, {Tags: []string{"b"}, Match: "all", Not: true}}}}}},
+		// (exact {a,b} and not all_strict {c}) or not (any_strict z): two groups, nested both sides
+		SearchFilters{TagGroups: [][]TagTest{{{And: []TagTest{{Tags: []string{"a", "b"}, Match: "exact"}, {Tags: []string{"c"}, Match: "all_strict", Not: true}}}, {Not: true, Or: []TagTest{{Tags: []string{"z"}}}}}, {{Not: true, And: []TagTest{{Tags: []string{"z"}, Match: "all"}}}}}},
 	)
 	return filters, [][]string{nil, {}, {"a"}, {"b"}, {"c"}, {"a", "b"}, {"b", "a"}, {"a", "c"}, {"a", "b", "c"}, {"z"}}
 }
@@ -142,6 +146,8 @@ func TestTagGroups(t *testing.T) {
 		{filters[7], nil, true}, {filters[7], []string{"a"}, true}, {filters[7], []string{"a", "c"}, false}, {filters[7], []string{"z"}, false},
 		{filters[8], []string{"a", "b"}, true}, {filters[8], []string{"a", "c"}, true}, {filters[8], []string{"a", "b", "c"}, false}, {filters[8], nil, false},
 		{filters[9], []string{"a", "c"}, false}, {filters[9], []string{"a", "b"}, false}, {filters[9], []string{"a"}, true}, {filters[9], []string{"b", "c"}, true}, {filters[9], nil, true},
+		{filters[10], nil, false}, {filters[10], []string{"b"}, true}, {filters[10], []string{"a", "b"}, false}, {filters[10], []string{"c"}, false},
+		{filters[11], []string{"a", "b"}, true}, {filters[11], []string{"a", "b", "c"}, true}, {filters[11], nil, false}, {filters[11], []string{"z"}, false},
 	} {
 		if got := (SearchCriteria{Filters: &tc.f}).matches("", tc.have, time.Time{}, time.Time{}); got != tc.ok {
 			t.Errorf("%+v %v: got %v", tc.f.TagGroups, tc.have, got)

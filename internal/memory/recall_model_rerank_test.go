@@ -48,10 +48,15 @@ func TestParseModelOrder(t *testing.T) {
 	if got, ok := parseModelRerank(`{"order":[2],"drop":[3]}`, 3, RerankOptions{}); !ok || got.Drop != nil {
 		t.Fatal(got, ok)
 	}
-	for _, bad := range []string{`{"order":[1],"drop":[4]}`, `{"order":[1],"duplicates":[2,2]}`} {
+	for _, bad := range []string{`{"order":[1],"drop":[4]}`, `{"order":[1],"duplicates":[2,2]}`, `{"order":[1],"drop":"all"}`, `{"order":["1"]}`, `{"order":[1.5]}`,
+		`{"order":[1],"drop":[-1]}`, `{"order":[9223372036854775807]}`, `{"order":[1]} trailing`, `null`, ``, `[1,2,3]`} {
 		if got, ok := parseModelRerank(bad, 3, both); ok {
 			t.Fatal(bad, got)
 		}
+	}
+	// Dropping and repeating every snippet still keeps the model's first pick.
+	if got := modelRemovals([]int{1, 2, 3}, []int{1, 2, 3}, []int{4, 7, 9}, 7); len(got) != 2 || got[7] != "" || got[4] != "model_prune" {
+		t.Fatal(got)
 	}
 	if !strings.Contains(modelRerankPrompt(both), `"drop"`) || strings.Contains(modelRerankPrompt(RerankOptions{}), `"drop"`) {
 		t.Fatal("prompt")
