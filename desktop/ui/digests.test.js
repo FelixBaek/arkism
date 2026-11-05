@@ -1,6 +1,7 @@
 // Run with: node --test desktop/ui/*.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared typed-list reader
 const dom = require("./testdata/fake-dom.cjs");
 
 const SCOPE = { workspace_id: "w", project_id: "p" };

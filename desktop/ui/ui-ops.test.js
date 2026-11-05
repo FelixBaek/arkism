@@ -1,6 +1,7 @@
 // 운영 화면: 파일 → 기억 후보 상태, 웹훅 카드, 태그 이름 바꾸기·합치기와 기억 숫자 계산.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared typed-list reader
 const { createDocument, house, flush } = require("./testdata/views-dom.js");
 const management = require("./memory-management.js");
 

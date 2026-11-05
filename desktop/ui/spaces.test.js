@@ -4,6 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
+require("./memory-time.js"); // the shared day helpers
 const h = dom.helpers(document);
 require("./spaces.js");
 const S = window.ArkismSpaces;

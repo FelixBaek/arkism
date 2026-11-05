@@ -1,5 +1,5 @@
 // @ts-check
-// Shared guards for the screens. each(): a bounded number of reads at a time. latest(): a reply that comes back after a newer request for the same key
+// Shared guards and the typed-list reader for the screens. each(): a bounded number of reads at a time. latest(): a reply that comes back after a newer request for the same key
 // (or after cancel) is dropped, so an older answer never overwrites a newer choice. view(): a redraw that rebuilds
 // a box keeps the field being typed in (text, caret, focus), open <details> and the scroll of the boxes it names.
 (() => {
@@ -64,7 +64,10 @@
     await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => { while (queue.length && alive()) await fn(queue.shift()); }));
   }
 
-  const api = { latest, view, each };
+  // listOf(text): a list a person typed with commas (ASCII or full-width) → its items, trimmed, empty ones and repeats dropped.
+  const listOf = (text) => [...new Set(String(text || "").split(/[,，]/).map((s) => s.trim()).filter(Boolean))];
+
+  const api = { latest, view, each, listOf };
   globalThis.ArkismKeep = api;
   if (typeof module !== "undefined") module.exports = api;
 })();

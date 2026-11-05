@@ -80,10 +80,10 @@ func xmlParagraphs(data []byte, para, text string) (string, error) {
 // list in ppt/presentation.xml); a file without that list falls back to the
 // slide-number order.
 func pptxPages(raw []byte) ([]string, bool, error) {
-	parts, err := officeParts(raw, func(name string) bool {
+	parts, err := zipParts(raw, func(name string) bool {
 		_, ok := pageNumber(name, "ppt/slides/slide")
 		return ok || name == "ppt/presentation.xml" || name == "ppt/_rels/presentation.xml.rels"
-	})
+	}, documentMaxText)
 	if err != nil {
 		return nil, false, err
 	}
@@ -159,9 +159,9 @@ func ooxmlRels(data []byte, base string) (map[string]string, error) {
 
 // xlsxPages returns one Markdown table per sheet, in workbook order.
 func xlsxPages(raw []byte) ([]string, bool, error) {
-	parts, err := officeParts(raw, func(name string) bool {
+	parts, err := zipParts(raw, func(name string) bool {
 		return name == "xl/workbook.xml" || name == "xl/_rels/workbook.xml.rels" || name == "xl/sharedStrings.xml" || strings.HasPrefix(name, "xl/worksheets/sheet")
-	})
+	}, documentMaxText)
 	if err != nil {
 		return nil, false, err
 	}

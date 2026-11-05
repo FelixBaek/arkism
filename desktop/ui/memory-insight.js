@@ -85,7 +85,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", opt(groups, "groups"))];
   }
   function tagFilter() {
-    const tags = [...new Set(String(opts.tags || "").split(",").map((t) => t.trim()).filter(Boolean))], groups = tagGroups(opts.groups);
+    const tags = globalThis.ArkismKeep.listOf(opts.tags), groups = tagGroups(opts.groups);
     return { ...(tags.length ? { tags, tags_match: MATCH[opts.match] ? opts.match : "any_strict" } : {}), ...(groups.length ? { tag_groups: groups } : {}) };
   }
   // Small tabs (the shared segmented look): the count shows next to the active tab only.

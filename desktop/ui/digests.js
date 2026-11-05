@@ -891,7 +891,7 @@ window.ArkismDigests = (ctx) => {
     btns.append(button("저장", "primary small", null, () => {
       let shape;
       try { shape = schema.value.trim() ? JSON.parse(schema.value) : undefined; } catch { notice("요약 모양 JSON을 읽을 수 없어요. 중괄호로 감싼 JSON으로 적어 주세요."); return; }
-      const tagList = [...new Set(tags.value.split(",").map((x) => x.trim()).filter(Boolean))];
+      const tagList = globalThis.ArkismKeep.listOf(tags.value);
       void saveModel(m, btns, { title: title.value.trim(), query: q.value.trim(), ...D.folderBody(inWiki, folder.value),
         refresh: D.refreshBody(r, { mode: mode.value, cron: cron.value, after_consolidation: after.checked, min_interval: gap.value, strategy: strategy.value, full_refresh_cron: full.value, budget: budget.value,
           tags: tagList, tags_match: tagList.length ? match.value : "", tag_groups: D.tagGroups(groups.value), fact_types: facts.value ? [facts.value] : [], include_chunks: chunks.checked,

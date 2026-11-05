@@ -328,7 +328,7 @@
       if (row) row.counts = { ...(row.counts || {}), memories: 0 };
       show(`‘${id}’ 공간에서 기록 ${n}개를 지웠어요.`);
     }, "list");
-    const day = (v) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString() : "—"; };
+    const day = (v) => window.ArkismMemoryTime.boundDay(v) || "—"; // in the UI language, the day the server wrote
     function spaceRow(s, can, canClear) {
       const here = s.project_id === state.scope?.project_id, name = s.config?.display_name || s.project_id;
       const t = el("div"), meta = el("small"), r = el("div", "setting sp-row");

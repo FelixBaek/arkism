@@ -1702,7 +1702,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const nameF = { tags: "", min: "" };
     async function loadExtra() {
       namesBusy = true;
-      const tags = nameF.tags.split(",").map((t) => t.trim()).filter(Boolean).join(","), min = Number(nameF.min) > 1 ? String(Math.min(1000, Math.floor(Number(nameF.min)))) : "";
+      const tags = globalThis.ArkismKeep.listOf(nameF.tags).join(","), min = Number(nameF.min) > 1 ? String(Math.min(1000, Math.floor(Number(nameF.min)))) : "";
       const [g, obs] = await Promise.all([request(`/v1/entities/graph?${query({ limit: namesLimit, ...(tags ? { tags } : {}), ...(min ? { min_count: min } : {}) })}`).catch(() => null), request(`/v1/observations?${query({ status: "active", limit: 100 })}`).then((r) => r.items || [], () => [])]); // an older server or no read:entities / read:observations: no extra areas
       if (!d.isConnected) return;
       const ents = Array.isArray(g?.nodes) ? g.nodes.filter((e) => typeof e?.id === "string") : [];

@@ -2,6 +2,7 @@
 // 설정 › 기억 공간 (space-settings.js): the PATCH/PUT bodies, the RE2-like rule check and the read-only agent view.
 const test = require("node:test");
 const assert = require("node:assert/strict");
+require("./keep.js"); // the shared typed-list reader
 const dom = require("./testdata/fake-dom.cjs");
 const { document } = dom.install();
 const h = dom.helpers(document);
@@ -281,7 +282,7 @@ test("정리 전략 편집: order is priority, tags as a comma list, delete asks
   btnIn(box, "저장")[0].click(); await dom.flush();
   assert.deepEqual(sent.at(-1), ["/v1/spaces/w/p/config", { expected_revision: 2, consolidation: { batch_size: 2,
     strategies: [{ name: "ops", scopes: [{ tags: ["deploy"], tags_match: "exact" }] }, { name: "bugs", scopes: [{ tags: ["bug*", "crash"] }] }] } }]);
-  assert.deepEqual(S.moveAt([1, 2, 3], 0, -1), [1, 2, 3]); assert.deepEqual(S.tagList(" a, ,b,a "), ["a", "b"]);
+  assert.deepEqual(S.moveAt([1, 2, 3], 0, -1), [1, 2, 3]); assert.deepEqual(globalThis.ArkismKeep.listOf(" a, ,b，a "), ["a", "b"]);
   assert.equal(S.strategyIssue([{ name: "x", scopes: [{ tags: ["a"] }] }, { name: "x", scopes: [{ tags: ["b"] }] }]), "같은 이름의 전략이 둘 있어요. 이름을 바꿔 주세요.");
   assert.equal(S.strategyIssue([]), "");
 });

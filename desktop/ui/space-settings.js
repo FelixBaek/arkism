@@ -81,7 +81,7 @@
     return Object.keys(out).length ? out : undefined;
   }
   // a label group's values as one comma list; a value kept keeps its description
-  const labelValues = (text, old = []) => [...new Set(String(text || "").split(",").map((s) => s.trim()).filter(Boolean))].map((value) => old.find((v) => v.value === value) || { value });
+  const labelValues = (text, old = []) => globalThis.ArkismKeep.listOf(text).map((value) => old.find((v) => v.value === value) || { value });
   // the consolidation rule lists are edited as one JSON object; null = not readable or a key the server does not take
   const RULE_KEYS = ["default_scopes", "strategies", "scope_limits"];
   const rulesText = (block) => { const o = Object.fromEntries(RULE_KEYS.filter((k) => block?.[k]?.length).map((k) => [k, block[k]])); return Object.keys(o).length ? JSON.stringify(o, null, 2) : ""; };
@@ -93,7 +93,6 @@
     return o;
   }
   // 정리 전략 편집: tags typed as one comma list; list order is priority (the first strategy whose rule fits a note group takes it)
-  const tagList = (text) => [...new Set(String(text || "").split(",").map((s) => s.trim()).filter(Boolean))];
   const moveAt = (list, i, by) => { const out = [...list], j = i + by; if (j >= 0 && j < out.length) [out[i], out[j]] = [out[j], out[i]]; return out; };
   // what the server would refuse (ConsolidationStrategy.valid), said before saving; "" when the list is fine
   function strategyIssue(list) {
@@ -110,7 +109,7 @@
   }
   // a renamed strategy keeps its place
   const renameKey = (map, from, to) => Object.fromEntries(Object.entries(map || {}).map(([k, v]) => [k === from ? to : k, v]));
-  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL, extractOverrides, labelValues, rulesText, parseRules, renameKey, tagList, moveAt, strategyIssue };
+  const lib = { MODES, sourceLabel, configPatch, resetBody, compile, testRules, TOOL, extractOverrides, labelValues, rulesText, parseRules, renameKey, moveAt, strategyIssue };
 
   // ------------------------------------------------------------ the tab
   function create(ctx) {
@@ -747,7 +746,7 @@
         const putRule = (j, part) => put(i, { scopes: rules.map((r, k) => (k === j ? { ...r, ...part } : r)) });
         rules.forEach((r, j) => {
           const line = el("div", "sp-strat-row");
-          line.append(textBox((r.tags || []).join(", "), 2000, "태그", "예: bug*, 배포", edit, (v) => putRule(j, { tags: tagList(v) })),
+          line.append(textBox((r.tags || []).join(", "), 2000, "태그", "예: bug*, 배포", edit, (v) => putRule(j, { tags: globalThis.ArkismKeep.listOf(v) })),
             edit ? select(MATCH, r.tags_match === "exact" ? "exact" : "", "맞추는 방식", (v) => putRule(j, { tags_match: v || undefined })) : readOnly(MATCH.find(([k]) => k === (r.tags_match === "exact" ? "exact" : ""))[1]));
           if (edit && rules.length > 1) line.append(button("빼기", "ghost small", null, () => put(i, { scopes: rules.filter((_, k) => k !== j) })));
           card.append(line);

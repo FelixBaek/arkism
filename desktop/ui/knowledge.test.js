@@ -73,6 +73,7 @@ dom.Element.prototype.click = function () { if (this.type === "file") picked.pus
 
 async function setup(over, stateOver = {}) {
   const { document } = dom.install();
+  require("./memory-time.js"); // the shared day helpers
   const h = dom.helpers(document);
   for (const id of ["table", "detail", "stats", "chips", "controls", "title-count", "title"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
   const head = h.el("div", "page-head"); document.body.append(head);

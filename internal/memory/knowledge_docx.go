@@ -15,7 +15,7 @@ const knowledgeDOCXMIME = "application/vnd.openxmlformats-officedocument.wordpro
 
 // docxPages returns the document body as one Markdown-like page.
 func docxPages(raw []byte) ([]string, bool, error) {
-	parts, err := officeParts(raw, func(name string) bool { return name == "word/document.xml" })
+	parts, err := zipParts(raw, func(name string) bool { return name == "word/document.xml" }, documentMaxText)
 	if err != nil {
 		return nil, false, err
 	}

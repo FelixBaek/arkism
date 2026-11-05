@@ -1,13 +1,12 @@
 package memory
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"io"
+	"maps"
 	"path"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -182,41 +181,29 @@ func (s *Service) ImportDocuments(ctx context.Context, token string, in Document
 }
 
 // readDocumentZip reads the documents/*.json entries of a documents zip (at most 200,
-// 8 MiB unpacked); any other entry is ignored and a malformed one refuses the zip.
+// 8 MiB unpacked) in name order; any other entry is ignored and a malformed one refuses the zip.
 func readDocumentZip(b64 string) ([]SpaceBundleDocument, error) {
 	raw, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return nil, ErrInvalid
 	}
-	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+	parts, err := zipParts(raw, func(name string) bool {
+		dir, base := path.Split(name)
+		return dir == "documents/" && path.Ext(base) == ".json"
+	}, docZipMaxBytes)
 	if err != nil {
+		return nil, err
+	}
+	if len(parts) == 0 || len(parts) > docPickMax {
 		return nil, ErrInvalid
 	}
-	out, budget := []SpaceBundleDocument{}, int64(docZipMaxBytes)
-	for _, f := range zr.File {
-		if dir, name := path.Split(f.Name); dir != "documents/" || path.Ext(name) != ".json" {
-			continue
-		}
-		if len(out) == docPickMax {
-			return nil, ErrInvalid
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, ErrInvalid
-		}
-		body, err := io.ReadAll(io.LimitReader(rc, budget+1))
-		_ = rc.Close()
-		if budget -= int64(len(body)); err != nil || budget < 0 {
-			return nil, errBlobTooLarge
-		}
+	out := make([]SpaceBundleDocument, 0, len(parts))
+	for _, name := range slices.Sorted(maps.Keys(parts)) {
 		var doc SpaceBundleDocument
-		if json.Unmarshal(body, &doc) != nil {
+		if json.Unmarshal(parts[name], &doc) != nil {
 			return nil, ErrInvalid
 		}
 		out = append(out, doc)
-	}
-	if len(out) == 0 {
-		return nil, ErrInvalid
 	}
 	return out, nil
 }

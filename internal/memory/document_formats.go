@@ -338,10 +338,10 @@ func textPage(convert func(string) (string, error)) func([]byte) ([]string, bool
 	}
 }
 
-// officeParts opens an OOXML (zip) file and reads the wanted parts, with
-// their unpacked size counted against documentMaxText. Go's XML decoder does
-// not expand entities declared in a DTD, so parts cannot inflate further.
-func officeParts(raw []byte, want func(string) bool) (map[string][]byte, error) {
+// zipParts opens a zip (an OOXML file, a documents zip) and reads the wanted
+// parts, with their unpacked size counted against budget. Go's XML decoder does
+// not expand entities declared in a DTD, so OOXML parts cannot inflate further.
+func zipParts(raw []byte, want func(string) bool, budget int64) (map[string][]byte, error) {
 	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 	if err != nil {
 		return nil, ErrInvalid
@@ -349,7 +349,7 @@ func officeParts(raw []byte, want func(string) bool) (map[string][]byte, error) 
 	if len(zr.File) > documentMaxZipEntries {
 		return nil, errBlobTooLarge
 	}
-	out, budget := map[string][]byte{}, int64(documentMaxText)
+	out := map[string][]byte{}
 	for _, f := range zr.File {
 		if !want(f.Name) {
 			continue

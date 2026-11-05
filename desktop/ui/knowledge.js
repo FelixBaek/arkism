@@ -1384,7 +1384,7 @@ window.ArkismKnowledge.artifactButton = ({ button, request, query, saveFile }, s
 // The add window's optional fields in the server's words; empty ones stay out so the space defaults apply.
 // text: the paste tab (metadata lines "name=value"); otherwise the file tab (one reader to try).
 window.ArkismKnowledge.ingestExtras = (A, text) => {
-  const out = {}, tags = [...new Set(String(A.tags || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+  const out = {}, tags = globalThis.ArkismKeep.listOf(A.tags);
   if (tags.length) out.tags = tags;
   if (String(A.context || "").trim()) out.context = A.context.trim();
   const when = A.when ? new Date(A.when) : null; // datetime-local is the person's own clock
@@ -1394,7 +1394,7 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
     const meta = {};
     for (const line of String(A.meta || "").split("\n")) { const m = /^\s*([^=:]+?)\s*[=:]\s*(.*?)\s*$/.exec(line); if (m) meta[m[1]] = m[2]; }
     if (Object.keys(meta).length) out.metadata = meta;
-    const entities = [...new Set(String(A.entities || "").split(/[,，]/).map((t) => t.trim()).filter(Boolean))];
+    const entities = globalThis.ArkismKeep.listOf(A.entities);
     if (entities.length) out.entities = entities;
     const doc = String(A.doc || "").trim();
     if (doc) out.document_id = doc;
@@ -1405,8 +1405,8 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
 // The list's date boxes as the server's from/to: from that day's start to the end of the to day, in local time.
 // A to day before the from day is left out rather than sent as an empty range.
 window.ArkismKnowledge.docRange = ({ from = "", to = "" } = {}) => {
-  const day = (v, next) => { const d = new Date(`${v}T00:00:00`); if (next) d.setDate(d.getDate() + 1); return d.toISOString(); };
-  return { ...(from ? { from: day(from) } : {}), ...(to && (!from || to >= from) ? { to: day(to, true) } : {}) };
+  const { dayStart } = window.ArkismMemoryTime;
+  return { ...(from ? { from: dayStart(from) } : {}), ...(to && (!from || to >= from) ? { to: dayStart(to, 1) } : {}) };
 };
 // What deleting a document touches, counted like the server does: waiting candidates are rejected, approved ones stay as memories.
 window.ArkismKnowledge.deleteImpact = (chunks) => {
