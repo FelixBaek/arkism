@@ -1,0 +1,44 @@
+{
+ "id": "e-orbit",
+ "name": "Orbit",
+ "type": "project",
+ "aliases": [
+  "orbit-app"
+ ],
+ "mentions": 6,
+ "proposed_mentions": 0,
+ "first_seen": "2026-09-03T13:16:34Z",
+ "last_seen": "2026-10-13T11:16:34Z",
+ "memories": [
+  {
+   "id": "m1"
+  },
+  {
+   "id": "m2"
+  },
+  {
+   "id": "m4"
+  },
+  {
+   "id": "m9"
+  }
+ ],
+ "related": [
+  {
+   "id": "e-pg",
+   "name": "Postgres",
+   "type": "tool",
+   "weight": 1
+  }
+ ],
+ "timeline": [
+  {
+   "month": "2026-09",
+   "count": 1
+  },
+  {
+   "month": "2026-10",
+   "count": 3
+  }
+ ]
+}

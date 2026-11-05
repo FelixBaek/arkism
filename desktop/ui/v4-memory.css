@@ -108,6 +108,10 @@
 .original-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
 .memory-mode .original-row strong { font: 400 calc(0.875rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
 .memory-mode .table > .original-notice { margin: 0; padding: 0.625rem 1rem; border-bottom: 0.0625rem solid var(--nc-line); font-size: calc(0.75rem * var(--fs, 1)); color: var(--nc-quiet); }
+/* 시간순 (memory-time.js): view switch above the search, kind chips and day headings in the list */
+.mem-time-modes { display: flex; gap: 0.25rem; width: 100%; }
+.memory-mode .table > .mem-time-try, .memory-mode .table > .mem-time-lanes { display: flex; flex-wrap: wrap; gap: 0.375rem; margin: 0; padding: 0.625rem 1rem; border-bottom: 0.0625rem solid var(--nc-line); }
+.mem-time-day { margin: 0; padding: 1rem 1rem 0.375rem; font: 500 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .memory-mode .table > .original-notice:last-child { border-bottom: 0; }
 .memory-mode .table > .btn.small { margin: 0.625rem 1rem; }
 

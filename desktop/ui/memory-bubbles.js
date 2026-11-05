@@ -8,7 +8,10 @@
 window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 뒷받침 solid, 같은 대화 dotted, 서로 다름 red dashed, 새로 바뀜 purple dotted.
-  const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "뒷받침" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "같은 대화" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "서로 다름" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "새로 바뀜" } };
+  const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "뒷받침" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "같은 대화" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "서로 다름" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "새로 바뀜" },
+    mentions: { c: "#e0a3c8", dash: [2, 3], n: "이름 언급" }, derived_from: { c: "#9fb4c8", dash: [], n: "정리 바탕" } };
+  // a line kind this build does not know yet (a newer server's) still draws: grey dashes named by its kind
+  const edgeStyle = (t) => EDGE[t] || { c: "#9a9a94", dash: [4, 3], n: String(t || "관계") };
   const RIM = 16, MANY = 150; // area rim past its outer dots · above MANY dots the overview shows topic-to-topic lines, not every line
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // spiral step
@@ -187,7 +190,7 @@ window.ArkismMemoryBubbles = (() => {
       const hot = [];
       for (const l of links) { // quiet lines sit under the bubbles; lines of the focused memory are drawn on top (below)
         const on = foci.has(l.a.id) || foci.has(l.b.id); if (on) { hot.push(l); continue; } if (!showAll || items.length > MANY) continue;
-        const s = EDGE[l.t] || EDGE.supports; ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2 / zoom; ctx.setLineDash(px(s.dash));
+        const s = edgeStyle(l.t); ctx.globalAlpha = foci.size ? 0.05 : 0.3; ctx.strokeStyle = s.c; ctx.lineWidth = 1.2 / zoom; ctx.setLineDash(px(s.dash));
         ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
       }
       ctx.setLineDash([]);
@@ -212,7 +215,7 @@ window.ArkismMemoryBubbles = (() => {
       }
       const tr = (x) => window.ArkismI18n?.translate(x) || x, tags = [];
       for (const l of hot) { // focused relations (Figma 기억 지도): thin soft curves on top of the bubbles, the relation name in a pill at the middle
-        const s = EDGE[l.t] || EDGE.supports, dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
+        const s = edgeStyle(l.t), dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 1;
         const mx = (l.a.x + l.b.x) / 2, my = (l.a.y + l.b.y) / 2, gx = (l.a.g.cx + l.b.g.cx) / 2, gy = (l.a.g.cy + l.b.g.cy) / 2;
         let nx = -dy / d, ny = dx / d; if ((mx - gx) * nx + (my - gy) * ny < 0) { nx = -nx; ny = -ny; }
         const bow = Math.max(10, d * 0.16), cx = mx + nx * bow, cy = my + ny * bow;
@@ -277,7 +280,7 @@ window.ArkismMemoryBubbles = (() => {
       if (sp && card) {
         const c = card(sel); if (c) cards.push({ p: sp, main: true, title: c.title, sub: [c.place, c.meta].filter(Boolean).join(" · ") });
         const tr = (x) => window.ArkismI18n?.translate(x) || x, seen = new Set([sp]);
-        for (const l of links) { const o = l.a === sp ? l.b : l.b === sp ? l.a : null; if (!o || seen.has(o)) continue; seen.add(o); const c2 = card(o.id); if (c2) cards.push({ p: o, title: c2.title, sub: [c2.place, tr((EDGE[l.t] || EDGE.supports).n)].filter(Boolean).join(" · ") }); }
+        for (const l of links) { const o = l.a === sp ? l.b : l.b === sp ? l.a : null; if (!o || seen.has(o)) continue; seen.add(o); const c2 = card(o.id); if (c2) cards.push({ p: o, title: c2.title, sub: [c2.place, tr(edgeStyle(l.t).n)].filter(Boolean).join(" · ") }); }
       }
       cardsEl.replaceChildren(...cards.map((c) => { c.el = mk("div", c.main ? "mm-card main" : "mm-card"); const t = mk("b", "", c.title); t.setAttribute("data-no-i18n", ""); c.el.append(t, mk("small", "", c.sub)); return c.el; }));
       for (const c of cards) { c.w = c.el.offsetWidth; c.h = c.el.offsetHeight; }

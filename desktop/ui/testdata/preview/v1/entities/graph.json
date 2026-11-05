@@ -1,0 +1,30 @@
+{
+ "nodes": [
+  {
+   "id": "e-orbit",
+   "name": "Orbit",
+   "type": "project",
+   "mentions": 6
+  },
+  {
+   "id": "e-alex",
+   "name": "Alex",
+   "type": "person",
+   "mentions": 3
+  },
+  {
+   "id": "e-pg",
+   "name": "Postgres",
+   "type": "tool",
+   "mentions": 2
+  }
+ ],
+ "edges": [
+  {
+   "source": "e-orbit",
+   "target": "e-pg",
+   "weight": 1
+  }
+ ],
+ "truncated": false
+}

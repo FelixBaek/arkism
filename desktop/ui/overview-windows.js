@@ -1283,8 +1283,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 기억 지도 (611:54134 · 611:56374): GET /v1/memory-graph?mode=all, grouped by 칸 (reach), curved lines between memories.
   // The map has no AI-suggestion write API (POST /v1/knowledge-graph/relations writes a separate store the map never reads), so 연결/아니요 are not drawn.
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
-  const EDGE = { supports: "지지", supersedes: "대체", conflicts: "서로 다름", human_link: "직접 연결", same_session: "관련", similar: "비슷함" };
+  const EDGE = { supports: "지지", supersedes: "대체", conflicts: "서로 다름", human_link: "직접 연결", same_session: "관련", similar: "비슷함", mentions: "이름 언급", derived_from: "정리 바탕" };
   const REACH_COLOR = { personal: "#7fc79c", general: "#6aa3ff", project: "#f5b955" }; // same colours as the 칸 chips (v4-overview.css .ov-map-personal …)
+  // names (GET /v1/entities/graph) and approved observations (GET /v1/observations) join the map as their own areas; their lines are 이름 언급 and 정리 바탕
+  const NAMED = { key: "_named", name: "이름", ord: 997, color: "#e0a3c8" }, OBSERVED = { key: "_observed", name: "정리된 관찰", ord: 998, color: "#9fb4c8" };
+  const ETYPE = { person: "사람", project: "프로젝트", repo: "저장소", tool: "도구", product: "제품", file: "파일", service: "서비스", place: "장소", organization: "단체", concept: "개념" };
+  const NAMES_STEP = 20, NAMES_MAX = 100;
   // 고치기: the edit popup over this window (it stays open), reading the memory first when the map has only its label
   async function editMemory(m, id) {
     m = m || await request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).catch(() => null);
@@ -1314,6 +1318,29 @@ window.ArkismOverviewWindows = (ctx, env) => {
     let topicSet = null; // members of the picked topic
     const inTopic = (id) => !topicF || topicSet.has(id);
     const byId = new Map(nodes.map((n) => [n.id, n])), reachOf = (n) => n?.reach || "general";
+    // extra nodes: "ent:<id>" names and "obs:<id>" observations; read after the memories so the map draws first
+    const extra = new Map(); let extraEdges = [], namesLimit = NAMES_STEP, namesMore = false, namesBusy = false;
+    const entInfo = new Map(); // entity id → its page (memories, related), null while it loads, false when it failed
+    async function loadExtra() {
+      namesBusy = true;
+      const [g, obs] = await Promise.all([request(`/v1/entities/graph?${query({ limit: namesLimit })}`).catch(() => null), request(`/v1/observations?${query({ status: "active", limit: 100 })}`).then((r) => r.items || [], () => [])]); // an older server or no read:entities / read:observations: no extra areas
+      if (!d.isConnected) return;
+      const ents = Array.isArray(g?.nodes) ? g.nodes.filter((e) => typeof e?.id === "string") : [];
+      namesMore = ents.length >= namesLimit && namesLimit < NAMES_MAX;
+      await Promise.all(ents.filter((e) => !entInfo.has(e.id)).map((e) => request(`/v1/entities/${encodeURIComponent(e.id)}?${query()}`).then((r) => entInfo.set(e.id, r || false), () => entInfo.set(e.id, false))));
+      if (!d.isConnected) return;
+      extra.clear(); const lines = [];
+      for (const e of ents) {
+        extra.set(`ent:${e.id}`, { id: `ent:${e.id}`, kind: "entity", label: e.name || "이름", uses: e.mentions || 0, ent: e, group: NAMED });
+        for (const m of entInfo.get(e.id)?.memories || []) if (byId.has(m.id)) lines.push({ from: `ent:${e.id}`, to: m.id, type: "mentions" });
+      }
+      for (const o of obs) {
+        if (typeof o?.id !== "string") continue;
+        extra.set(`obs:${o.id}`, { id: `obs:${o.id}`, kind: "observation", label: o.content || "", uses: (o.source_memory_ids || []).length, obs: o, group: OBSERVED });
+        for (const mid of o.source_memory_ids || []) if (byId.has(mid)) lines.push({ from: `obs:${o.id}`, to: mid, type: "derived_from" });
+      }
+      extraEdges = lines; namesBusy = false; relink(); paint();
+    }
     const bar = el("div", "ov-map-bar"), seg = el("div", "ov-wide-seg ov-map-seg"), searchBox = el("label", "ov-map-search"), search = el("input", "ov-wide-search"); search.placeholder = "기억·주제 찾기"; search.setAttribute("aria-label", "기억·주제 찾기"); searchBox.append(search);
     const chipHost = el("div", "ov-map-reach"); bar.append(seg, searchBox, el("small", "", "쓰는 범위"), chipHost);
     const canvas = el("div", "ov-map-canvas");
@@ -1321,9 +1348,9 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const proj = state.scope?.project_id && state.scope.project_id !== "default" ? state.scope.project_id : "";
     // node labels come with the map (first 40 characters); the full record is read when a memory is picked
     const fetched = new Map(), memRec = (id) => fetched.get(id) || memOf(id);
-    const label = (id) => clip(byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
-    const readMemory = (id) => { if (fetched.has(id) || memOf(id)) return; fetched.set(id, null); const got = (r) => { fetched.set(id, r); if (d.isConnected && sel === id) drawSide(); }; request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then(got, () => got(false)); };
-    const rel = (id) => edges.filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
+    const label = (id) => clip(extra.get(id)?.label || byId.get(id)?.label || memRec(id)?.text || kind(byId.get(id)?.kind), 22);
+    const readMemory = (id) => { if (extra.has(id) || fetched.has(id) || memOf(id)) return; fetched.set(id, null); const got = (r) => { fetched.set(id, r); if (d.isConnected && sel === id) drawSide(); }; request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then(got, () => got(false)); };
+    const rel = (id) => [...edges, ...extraEdges].filter((e) => e.type !== "similar" && (e.from === id || e.to === id));
     const fmt = (v) => new Date(v).toLocaleDateString(loc(), { year: "numeric", month: "numeric", day: "numeric" });
     // Figma 611:54134: one area per topic digest; memories in no topic sit in a grey "분류 대기" area
     const TOPIC_COLORS = ["#7c9cff", "#5fc6a8", "#e8a65d", "#c48ef0", "#e57b8f", "#6cc3e0", "#b9c56b", "#d98b5f"];
@@ -1331,15 +1358,17 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const UNSORTED = { key: "_unsorted", name: "분류 대기", ord: 999, color: "#8a8f98" };
     const bubbles = window.ArkismMemoryBubbles.create({
       tabs: [...(topics.length ? [["topic", "주제별"]] : []), ["reach", "범위별"], ["kind", "종류별"]],
-      groupOf: (m, p) => m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1], color: REACH_COLOR[p.reach] } : m === "kind" ? { key: p.kind, name: kind(p.kind), color: KIND_COLOR[p.kind] } : topicOf.get(p.id) || UNSORTED,
-      tip: (id) => { const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
-      card: (id) => { const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
+      groupOf: (m, p) => extra.get(p.id)?.group || (m === "reach" ? { key: p.reach, name: REACH[p.reach][0] + (p.reach === "project" && proj ? ` · ${proj}` : ""), ord: REACH[p.reach][1], color: REACH_COLOR[p.reach] } : m === "kind" ? { key: p.kind, name: kind(p.kind), color: KIND_COLOR[p.kind] } : topicOf.get(p.id) || UNSORTED),
+      tip: (id) => { const x = extra.get(id); if (x) return { text: label(id), meta: x.ent ? [ETYPE[x.ent.type] || "이름", `기억 ${num(x.uses)}개에 나옴`].join(" · ") : `바탕 기억 ${num(x.uses)}개` }; const n = byId.get(id); return n ? { text: label(id), meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
+      card: (id) => { const x = extra.get(id); if (x) return { title: label(id), place: x.group.name, meta: x.ent ? ETYPE[x.ent.type] || "" : "" }; const n = byId.get(id); return n ? { title: label(id), place: (REACH[reachOf(n)] || REACH.general)[0], meta: [kind(n.kind), n.uses ? `쓰임 ${num(n.uses)}회` : ""].filter(Boolean).join(" · ") } : null; },
       onSelect: (id) => { sel = lastSel = id; mode = "sel"; moreOpen = false; paint(); },
       onClear: () => { sel = lastSel = null; mode = "all"; paint(); },
       onZoom: (z) => { zoomLab.textContent = `${Math.round(z * 100)}%`; },
     });
     canvas.append(bubbles.el); d.addEventListener("close", () => bubbles.destroy());
-    const mapEdges = edges.filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })); // one array: the map skips relinking while it is the same
+    let mapEdges = []; // one array: the map skips relinking while it is the same
+    const relink = () => { mapEdges = [...edges, ...extraEdges].filter((e) => e.type !== "similar").map((e) => ({ from: e.from, to: e.to, t: e.type === "human_link" ? "supports" : e.type })); };
+    relink();
     // a cut map says so on the canvas; older servers send only truncated
     const cut = "nodes_truncated" in graph ? [graph.nodes_truncated && `기억이 많아 ${num(nodes.length)}개까지만 그렸어요`, graph.edges_truncated && "선이 많아 일부 선은 빠졌어요"].filter(Boolean).join(" · ") : graph.truncated ? "기억이 많아 일부만 그렸어요." : "";
     const note = [cut, topicsFailed && tr("주제를 불러오지 못해 주제별 보기가 빠졌어요. 지도를 다시 열면 다시 불러와요.")].filter(Boolean).join(" · ");
@@ -1347,10 +1376,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
     function drawMap() {
       const qq = q.toLowerCase(), topicHit = new Set(qq ? topics.filter((t) => (t.title || "").toLowerCase().includes(qq)).flatMap((t) => (t.members || []).map((r) => r.id)) : []);
       const vis = (n) => n && reachF.has(reachOf(n)) && inTopic(n.id) && (!qq || (n.label || label(n.id)).toLowerCase().includes(qq) || topicHit.has(n.id));
-      const shown = nodes.filter(vis);
+      const shown = [...nodes.filter(vis), ...(topicF || q ? [...extra.values()].filter((x) => !topicF && x.label.toLowerCase().includes(qq)) : [...extra.values()])];
       if (sel && !shown.some((n) => n.id === sel)) { sel = lastSel = null; mode = "all"; moreOpen = false; }
       empty.hidden = shown.length > 0;
-      bubbles.setItems(shown.map((n) => ({ id: n.id, v: n.uses || 1, color: REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
+      bubbles.setItems(shown.map((n) => ({ id: n.id, v: n.uses || 1, color: extra.get(n.id)?.group.color || REACH_COLOR[reachOf(n)] || REACH_COLOR.general, reach: reachOf(n) in REACH ? reachOf(n) : "general", kind: n.kind || "" })));
       bubbles.setEdges(mapEdges);
       bubbles.setEdgeAll(mode === "all" || allEdges); bubbles.setSelected(sel);
     }
@@ -1358,7 +1387,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const legend = el("div", "ov-map-legend"), zoomLab = el("span", "ov-map-zoom", "100%");
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
-      const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes"]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t])); items.append(i); }
+      const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes", ...["mentions", "derived_from"].filter((t) => extraEdges.some((e) => e.type === t))]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t] || t)); items.append(i); }
       // the note takes its own top line, and the zoom buttons wrap as one group, so ⤢ never drops alone (#181)
       const note = bubbles.groupLinesOnly() ? [el("span", "ov-map-lg-note", "점이 많아 무리 사이 선만 그려요")] : [], zoom = el("span", "ov-map-lg-zoom");
       const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const on = mode === "all" ? v : v === allEdges, b = el("button", on ? "on" : "", l); b.type = "button"; b.disabled = mode === "all"; b.setAttribute("aria-pressed", String(on)); b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }
@@ -1381,9 +1410,16 @@ window.ArkismOverviewWindows = (ctx, env) => {
         const kinds = {}; nodes.forEach((n) => { kinds[n.kind] = (kinds[n.kind] || 0) + 1; }); const kl = el("div", "ov-detail-list"); Object.entries(kinds).sort((a, b) => b[1] - a[1]).forEach(([k, n]) => kl.append(row("", kind(k), "", num(n)))); sec("종류", kl);
         if (topics.length) { const tl = el("div", "ov-detail-list"); topics.forEach((t) => { const r = row("", t.title || "주제", "", num((t.members || []).filter((m) => byId.has(m.id)).length)); r.classList.add("ov-win-click"); r.tabIndex = 0; r.setAttribute("role", "button"); r.setAttribute("aria-pressed", String(topicF === t.id));
           const pick = () => { topicF = topicF === t.id ? null : t.id; topicSet = new Set(topicF ? (t.members || []).map((m) => m.id) : []); paint(); }; r.addEventListener("click", pick); r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } }); if (topicF === t.id) r.classList.add("on"); tl.append(r); }); sec("주제", tl); }
+        const names = [...extra.values()].filter((x) => x.ent);
+        if (names.length || namesMore) {
+          const nl = el("div", "ov-detail-list"); names.slice(0, 5).forEach((x) => { const r = row("", x.label, "", num(x.uses)); r.classList.add("ov-win-click"); r.tabIndex = 0; r.setAttribute("role", "button"); const pick = () => { sel = lastSel = x.id; mode = "sel"; moreOpen = false; paint(); }; r.addEventListener("click", pick); r.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); pick(); } }); nl.append(r); });
+          const s = sec("자주 나온 이름", nl);
+          if (namesMore) { const mb = el("button", "ov-map-more", namesBusy ? "불러오는 중…" : "이름 더 보기"); mb.type = "button"; mb.disabled = namesBusy; mb.addEventListener("click", () => { namesLimit = Math.min(NAMES_MAX, namesLimit + NAMES_STEP); void loadExtra(); drawSide(); }); s.append(mb); }
+        }
         right.append(el("p", "ov-win-empty", "점을 누르면 그 기억과 이어진 기억이 보여요."));
         return;
       }
+      if (extra.has(sel)) { drawExtra(extra.get(sel), sec); return; }
       readMemory(sel);
       const m = memRec(sel) || null, n = byId.get(sel), ev = m && tag(m, "event_id:"), basis = m && tag(m, "basis:"), wait = fetched.get(sel) === null;
       const chips = el("div", "ov-map-tags"), rc = el("span", `ov-map-chip on ov-map-${reachOf(n)}`); rc.append(el("i", ""), document.createTextNode(REACH[reachOf(n)]?.[0] || "범용")); chips.append(rc, tagEl(kind(n.kind))); right.append(chips);
@@ -1396,16 +1432,35 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (ev) { const b = el("div", "ov-map-quote"), [agent, sid] = ev.split(":"), ses = env.sessions().find((x) => x.session_id === sid);
         b.append(el("small", "", `대화 · ${ses ? ses.title || ses.project || agent : agent} · ${fmt(m.created_at)}`), button("원문 대화 보기 ›", "ghost small", null, () => openSession(ev, ""))); sec("출처", b); }
       const real = rel(sel), shown = moreOpen ? real : real.slice(0, 3), ul = el("div", "ov-map-rels");
-      for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = lastSel = other; moreOpen = false; paint(); }); ul.append(r); }
+      for (const e of shown) { const other = e.from === sel ? e.to : e.from, o = byId.get(other), r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"), pr = el("span", extra.has(other) ? "ov-map-chip on" : `ov-map-chip on ov-map-${reachOf(o)}`); pr.append(el("i", ""), document.createTextNode(extra.get(other)?.group.name || REACH[reachOf(o)]?.[0] || "")); tx.append(el("b", "", label(other)), pr); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type === "human_link" ? "supports" : e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = lastSel = other; moreOpen = false; paint(); }); ul.append(r); }
       const lh = el("div", "ov-map-relhead"); lh.append(el("small", "", "연결된 기억"), el("small", "", num(real.length))); right.append(lh);
       if (real.length) { right.append(ul); if (real.length > 3) { const mb = el("button", "ov-map-more", moreOpen ? "접기" : `나머지 ${real.length - 3}개 펼치기`); mb.type = "button"; mb.addEventListener("click", () => { moreOpen = !moreOpen; drawSide(); }); right.append(mb); } } else right.append(el("p", "ov-win-empty", "이어진 기억이 없어요."));
       const sim = edges.find((e) => e.type === "similar" && (e.from === sel || e.to === sel));
       if (sim) { const other = sim.from === sel ? sim.to : sim.from, box = el("div", "ov-map-suggest"); box.append(el("small", "", "AI 관계 제안"), el("p", "", `“${label(other)}”와 비슷한 기억이에요. 같은 뜻이면 기억 화면에서 합치거나 연결해 주세요.`)); right.append(box); }
       const act = el("div", "ov-map-foot"); if (m?.updated_at) act.append(el("small", "", `수정 ${fmt(m.updated_at)}`)); act.append(button("기억 수정", "small", null, () => editMemory(m, sel))); right.append(act);
     }
+    // a name or an observation: what it is, then the memories it links to (each opens on the map)
+    function drawExtra(x, sec) {
+      const chips = el("div", "ov-map-tags"); chips.append(tagEl(x.group.name), ...(x.ent?.type ? [tagEl(ETYPE[x.ent.type] || x.ent.type)] : [])); right.append(chips);
+      const title = el("h3", "ov-map-title", x.ent ? x.label : clip(x.label, 60)); title.setAttribute("data-no-i18n", ""); right.append(title);
+      if (x.ent) {
+        const info = entInfo.get(x.ent.id), f = el("div", "ov-detail-facts");
+        const facts = [["나온 기억", num(x.ent.mentions || 0)], ...(info?.first_seen ? [["처음", fmt(info.first_seen)]] : []), ...(info?.last_seen ? [["마지막", fmt(info.last_seen)]] : [])];
+        for (const [a, b] of facts) { const p = el("p", ""); p.append(el("span", "", a), el("strong", "", b)); f.append(p); } sec("", f);
+        if (info === false) right.append(el("p", "ov-win-empty", "이 이름의 자세한 내용을 불러오지 못했어요."));
+        if (info?.aliases?.length) { const al = el("p", "ov-map-body-text", info.aliases.join(", ")); al.setAttribute("data-no-i18n", ""); sec("다른 이름", al); }
+      } else {
+        const body = el("p", "ov-map-body-text", x.label); body.setAttribute("data-no-i18n", ""); sec("정리한 내용", body);
+        right.append(el("small", "ov-detail-basis", "● 사람이 승인한 관찰이에요"));
+      }
+      const real = rel(sel), shown = moreOpen ? real : real.slice(0, 5), ul = el("div", "ov-map-rels");
+      for (const e of shown) { const other = e.from === sel ? e.to : e.from, r = el("button", "ov-map-rel"); r.type = "button"; const tx = el("span", "ov-map-rel-t"); tx.append(el("b", "", label(other))); r.append(el("span", `ov-map-tagpill ov-map-e-${e.type}`, EDGE[e.type] || e.type), tx, el("span", "ov-map-chev", "›")); r.addEventListener("click", () => { sel = lastSel = other; moreOpen = false; paint(); }); ul.append(r); }
+      const lh = el("div", "ov-map-relhead"); lh.append(el("small", "", "이어진 기억"), el("small", "", num(real.length))); right.append(lh);
+      if (real.length) { right.append(ul); if (real.length > 5) { const mb = el("button", "ov-map-more", moreOpen ? "접기" : `나머지 ${real.length - 5}개 펼치기`); mb.type = "button"; mb.addEventListener("click", () => { moreOpen = !moreOpen; drawSide(); }); right.append(mb); } } else right.append(el("p", "ov-win-empty", "지도에 있는 기억과 이어지지 않았어요."));
+    }
     let typing; search.addEventListener("input", () => { clearTimeout(typing); typing = setTimeout(() => { q = search.value.trim(); paint(); }, 150); });
     const empty = el("div", "ov-map-loading off"); empty.hidden = true; empty.append(el("p", "", "조건에 맞는 기억이 없어요."), button("조건 지우기", "small", null, () => { q = search.value = ""; topicF = null; reachF = new Set(Object.keys(REACH)); paint(); }));
-    left.append(bar, canvas); canvas.append(legend, empty); paint();
+    left.append(bar, canvas); canvas.append(legend, empty); paint(); void loadExtra();
   }
 
   return { open, wide, reset() { dlg?.close(); read.clear(); recalls = null; once.clear(); }, usageChanged() { if (usageWin && usageWin === dlg) wideUsage(); if (traceWin && traceWin === dlg) wideTrace(); } };

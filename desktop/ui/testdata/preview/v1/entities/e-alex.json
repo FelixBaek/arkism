@@ -1,0 +1,25 @@
+{
+ "id": "e-alex",
+ "name": "Alex",
+ "type": "person",
+ "aliases": [],
+ "mentions": 3,
+ "proposed_mentions": 0,
+ "first_seen": "2026-09-03T13:16:34Z",
+ "last_seen": "2026-09-13T13:16:34Z",
+ "memories": [
+  {
+   "id": "m5"
+  },
+  {
+   "id": "m9"
+  }
+ ],
+ "related": [],
+ "timeline": [
+  {
+   "month": "2026-09",
+   "count": 2
+  }
+ ]
+}

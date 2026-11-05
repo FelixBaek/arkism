@@ -225,3 +225,16 @@ test("cards that do not fit a small window are hidden; the selected card always 
   assert.equal(plain.b.el.querySelectorAll(".mm-card").length, 0);
   reduced = false; b.destroy(); plain.b.destroy();
 });
+
+test("a line kind the map does not know draws dashed grey and its card names the kind", () => {
+  reduced = true;
+  const { b, items, resize } = make({ size: [300, 260] });
+  b.setItems(items); b.setEdges([{ from: "m0", to: "m1", t: "causes" }, { from: "m0", to: "m2", t: "mentions" }]);
+  resize(); calls.length = 0;
+  b.setSelected("m0");
+  const subs = b.el.querySelectorAll(".mm-card small").map((s) => s.textContent);
+  assert.ok(subs.includes("일반 · causes"), subs.join("|"));
+  assert.ok(subs.includes("일반 · 이름 언급"), subs.join("|"));
+  assert.ok(calls.some(([k, a]) => k === "setLineDash" && a.length === 2 && Math.abs(a[0] / a[1] - 4 / 3) < 1e-9), "grey dashes for the unknown kind");
+  reduced = false; b.destroy();
+});

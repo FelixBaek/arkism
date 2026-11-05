@@ -2316,7 +2316,7 @@ export function startApp() {
   const reflections = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const digests = window.ArkismDigests({ canRefresh: () => !syncVisible.blocked(), state, $, el, raw, tr, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, notice, ago, render, row, markSelected,
     kindLabel, originOf, memSelect: memoryList.memSelect, section, facts, openRecord: (r) => openIntelligenceRecord(r), reloadMemories: memoryList.reloadMemories });
-  const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail });
+  const memoryTime = window.ArkismMemoryTime({ state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const inject = window.ArkismInject({ state, el, button, request: appApi.request, query: appApi.query, section, facts });
   const originals = window.ArkismOriginals({ state, $, el, icon, button, request: appApi.request, detailShell, openDetail, ago });
   const privacy = window.ArkismPrivacy({ state, el, button, request: appApi.request, query: appApi.query, notice, section, afterChange: async () => { await memoryList.reloadMemories(); renderDetail(); } });

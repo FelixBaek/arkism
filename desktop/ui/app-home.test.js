@@ -839,6 +839,7 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   const offG = route("GET", "/v1/memory-graph", () => ok(graph));
   const offT = route("GET", "/v1/digests", () => ok({ items: [{ id: "t1", title: "배포 주제", members: [{ id: "m1" }, { id: "m3" }] }, { id: "t2", members: [{ id: "m4" }] }] }));
   const offM = route("GET", "/v1/memories/gone", () => fail(404, "not_found"));
+  const offX = [route("GET", "/v1/entities/", () => fail(404, "not_found")), route("GET", "/v1/observations", () => fail(403, "access_denied"))]; // a server without names or observations: the map stays as it was
   let d = await openWindow({ wide: "map" }); await app.settle(50); d = win();
   assert.match(text(d), /지도 요약/);
   assert.match(text(d), /기억이 많아 6개까지만 그렸어요 · 선이 많아 일부 선은 빠졌어요/);
@@ -885,7 +886,7 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   const editor = app.$$("dialog[open]").find((x) => /기억 고치기/.test(text(x)));
   assert.ok(win() && editor, "기억 수정 opens the edit popup over the map");
   editor.close(); await closeAll();
-  offT(); offM();
+  offT(); offM(); offX.forEach((o) => o());
   // an empty map, a denied map, a failed map with 다시 시도, an older server's truncated flag
   const offE = route("GET", "/v1/memory-graph", () => ok({ nodes: [], edges: [] }));
   d = await openWindow({ wide: "map" }); await app.settle(50);
@@ -909,6 +910,39 @@ test("overview: 기억 지도 picks a memory, follows its links and filters", as
   offSlow();
   await press("‹ 개요", await openWindow({ wide: "map" }), 50);
   await closeAll();
+});
+
+test("overview: 기억 지도 adds names and observations, links them and pages more names", async () => {
+  const graph = { nodes: [{ id: "m1", label: "Orbit 백엔드", kind: "decision", reach: "project" }, { id: "m2", label: "결제 흐름", kind: "lesson", reach: "general" }], edges: [{ from: "m1", to: "m2", type: "causes" }] };
+  const names = Array.from({ length: 20 }, (_, i) => ({ id: `e${i}`, name: i ? `이름${i}` : "민지", type: i ? "tool" : "person", mentions: 20 - i }));
+  const asked = [];
+  const offs = [
+    route("GET", "/v1/memory-graph", () => ok(graph)),
+    route("GET", "/v1/entities/", (a) => (/\/e1\?/.test(a.path) ? fail(500, "boom") : !/\/e0\?/.test(a.path) ? ok({ memories: [], related: [], timeline: [] }) : ok({ id: "e0", name: "민지", type: "person", aliases: ["Minji"], mentions: 2, proposed_mentions: 0, first_seen: "2026-10-01T00:00:00Z", last_seen: "2026-10-30T00:00:00Z", memories: [{ id: "m1", kind: "decision" }, { id: "m2" }, { id: "gone" }], related: [], timeline: [] }))),
+    route("GET", "/v1/entities/graph", (a) => { asked.push(a.path); return ok({ nodes: /limit=40/.test(a.path) ? [...names, { id: "e20", name: "새 이름", type: "concept", mentions: 1 }] : names, edges: [] }); }),
+    route("GET", "/v1/observations", () => ok({ items: [{ id: "o1", status: "active", content: "주로 오후에 배포한다", source_memory_ids: ["m1", "m2"] }] }))
+  ];
+  let d = await openWindow({ wide: "map" }); await app.settle(80); d = win();
+  assert.match(text(d), /자주 나온 이름/);
+  assert.match(text(d.querySelector(".ov-map-legend")), /이름 언급/);
+  assert.match(text(d.querySelector(".ov-map-legend")), /정리 바탕/);
+  const pickName = (n) => [...d.querySelectorAll(".ov-win-click")].find((r) => text(r).startsWith(n));
+  pickName("민지").click(); await app.settle(30);
+  assert.match(text(d), /사람/); assert.match(text(d), /Minji/); assert.match(text(d), /이어진 기억2/);
+  // an entity link opens the memory; the memory lists the name and the observation back, and an unknown line kind by its name
+  [...d.querySelectorAll(".ov-map-rel")].find((r) => /Orbit 백엔드/.test(text(r))).click(); await app.settle(30);
+  for (const s of ["이름 언급", "정리 바탕", "causes", "정리된 관찰"]) assert.ok(text(d).includes(s), s);
+  [...d.querySelectorAll(".ov-map-rel")].find((r) => /주로 오후에/.test(text(r))).click(); await app.settle(30);
+  assert.match(text(d), /사람이 승인한 관찰이에요/);
+  await press("닫기", d.querySelector(".ov-map-sidehead"));
+  pickName("이름1").click(); await app.settle(30);
+  assert.match(text(d), /자세한 내용을 불러오지 못했어요/);
+  await press("닫기", d.querySelector(".ov-map-sidehead"));
+  await press("이름 더 보기", d, 80);
+  assert.ok(asked.some((p) => /limit=40/.test(p)));
+  app.dom.type(d.querySelector(".ov-wide-search"), "새 이름"); await app.settle(200);
+  assert.equal([...d.querySelectorAll(".ov-map-loading")].find((e) => /조건에 맞는/.test(text(e))).hidden, true, "a name alone keeps the map from looking empty");
+  await closeAll(); offs.forEach((o) => o());
 });
 
 test("overview: the screen's chips, steps and cards open windows; motion follows the settings", async () => {

@@ -170,6 +170,8 @@ function timeView(request) {
   const detailShell = (label) => { const body = h.el("div", "detail-body"); h.$("#detail").replaceChildren(h.el("span", "", label), body); return body; };
   const state = { server: "s", token: "t", scope: { project_id: "p" }, view: "memories", memTab: "past" };
   const view = window.ArkismMemoryTime({ state, $: h.$, el: h.el, icon: h.icon, button: h.button, request, detailShell, openDetail: () => opened++ });
+  // these tests cover 그 시각 상태; the tab opens on 시간순
+  const draw = view.draw; view.draw = () => { draw(); const c = dom.buttons(h.$("#chips"), "그 시각 상태")[0]; if (!c.classList.contains("active")) c.click(); };
   return { view, state, opened: () => opened };
 }
 const past = "2025-05-06T07:08";
@@ -283,4 +285,97 @@ test("a second submit while loading is ignored", async () => {
   assert.equal(n, 1);
   release(); await dom.flush();
   assert.match(h.$("#table").textContent, /표시할 기억이 없어요/);
+});
+
+// ---------------------------------------------------------------- 시간순 (memory-time.js)
+function lineView(request, extra = {}) {
+  document.body.replaceChildren();
+  for (const id of ["chips", "stats", "table", "detail"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
+  let opened = 0;
+  const detailShell = (label) => { const body = h.el("div", "detail-body"); h.$("#detail").replaceChildren(h.el("span", "", label), body); return body; };
+  const state = { server: "s", token: "t", scope: { project_id: "p" }, view: "memories", memTab: "past" };
+  const view = window.ArkismMemoryTime({ state, $: h.$, el: h.el, icon: h.icon, button: h.button, request, detailShell, openDetail: () => opened++, query: () => "project_id=p", ...extra });
+  return { view, state, opened: () => opened };
+}
+const hits = (items, time_window) => ({ authority: "data_only_untrusted", items, ...(time_window ? { explain: { lanes: ["keyword", "temporal"], time_window } } : {}) });
+const week = { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" };
+
+test("시간순 opens first, offers examples and sends the time words to the server parser", async () => {
+  const calls = [];
+  const { view } = lineView(async (path, opts) => { calls.push([path, JSON.parse(opts.body)]); return hits([], week); });
+  view.draw();
+  assert.ok(dom.buttons(h.$("#chips"), "시간순")[0].classList.contains("active"));
+  assert.match(h.$("#table").textContent, /언제 있었던 일인지/);
+  h.$("#chips form").requestSubmit(); // empty: asks for words, sends nothing
+  assert.equal(h.$("#chips form input").validity, "언제 일인지 적어 주세요.");
+  assert.equal(calls.length, 0);
+  dom.buttons(h.$("#table"), "지난주")[0].click(); await dom.flush();
+  assert.equal(calls[0][0], "/v1/search");
+  assert.equal(calls[0][1].query, "지난주"); assert.equal(calls[0][1].explain, true); assert.equal(calls[0][1].limit, 50);
+  assert.match(h.$("#table").textContent, /‘지난주’/);
+  assert.match(h.$("#table").textContent, /그때 기억을 찾지 못했어요/);
+  view.detail(); assert.match(h.$("#detail").textContent, /기억을 골라 확인하세요/);
+});
+
+test("시간순 sorts by event time, groups by day, splits lanes and opens the memory", async () => {
+  const items = [
+    { id: "f", collection: "memories", kind: "decision", text: "배포는 금요일에 안 한다", created_at: "2026-10-20T01:00:00Z", memory_context: { observed_at: "2026-10-28T03:00:00Z" }, lanes: ["temporal"] },
+    { id: "e", collection: "memories", kind: "episodic", text: "결제 오류를 고쳤다", created_at: "2026-10-30T05:00:00Z", lanes: ["keyword", "temporal"] },
+    { id: "o", collection: "observations", derived: true, kind: "semantic", text: "주로 오후에 배포한다", source_ids: ["f", "e"], updated_at: "2026-10-29T05:00:00Z" },
+    { id: "old", collection: "memories", kind: "user", text: "예전 기억", created_at: "2026-09-01T05:00:00Z", lanes: ["vector"] }
+  ];
+  const opened = [];
+  let reply = hits(items, week);
+  const calls = [];
+  const { view, opened: shown } = lineView(async (path, opts) => { calls.push(path); if (path.startsWith("/v1/memories/")) { if (reply instanceof Error) throw reply; return reply; } return hits(items, week); }, { openRecord: (r) => opened.push(r.id) });
+  view.draw();
+  const q = h.$("#chips form input"); dom.input(q, "지난주 배포"); h.$("#chips form").requestSubmit(); await dom.flush();
+  const rows = () => h.$("#table").querySelectorAll(".original-row");
+  assert.deepEqual(rows().map((r) => r.querySelector("strong").textContent), ["결제 오류를 고쳤다", "주로 오후에 배포한다", "배포는 금요일에 안 한다", "예전 기억"]);
+  assert.deepEqual(rows().map((r) => r.querySelector(".mem-badge").textContent), ["겪은 일", "정리된 관찰", "사실", "사실"]);
+  assert.match(rows()[2].textContent, /일어난 때/);
+  assert.match(rows()[3].textContent, /찾은 기간 밖/);
+  assert.equal(h.$("#table").querySelectorAll(".mem-time-day").length, 4);
+  // the count sits only next to the chosen chip
+  const chip = (l) => dom.buttons(h.$("#table .mem-time-lanes"), l)[0];
+  assert.equal(chip("전체").querySelector("output").textContent, "4");
+  assert.equal(chip("사실").querySelector("output"), null);
+  chip("사실").click();
+  assert.equal(rows().length, 2); assert.equal(chip("사실").querySelector("output").textContent, "2");
+  chip("정리된 관찰").click(); rows()[0].click();
+  assert.equal(shown(), 1);
+  assert.match(h.$("#detail").textContent, /바탕 기억 2개/);
+  assert.equal(dom.buttons(h.$("#detail"), "기억 화면에서 열기").length, 0); // an observation is not a memory record
+  chip("전체").click(); rows()[2].click();
+  assert.match(h.$("#detail").textContent, /찾은 방법시간/);
+  reply = new Error("gone"); dom.buttons(h.$("#detail"), "기억 화면에서 열기")[0].click(); await dom.flush();
+  assert.match(h.$("#detail").textContent, /열지 못했어요/);
+  reply = { id: "f", status: "active", text: "배포는 금요일에 안 한다" }; dom.buttons(h.$("#detail"), "기억 화면에서 열기")[0].click(); await dom.flush();
+  assert.deepEqual(opened, ["f"]); assert.equal(calls.at(-1), "/v1/memories/f?project_id=p");
+  view.close();
+  assert.equal(document.activeElement, rows()[2]);
+});
+
+test("시간순 says when no time was found, retries a failure and drops stale answers", async () => {
+  let reply = hits([{ id: "a", collection: "memories", kind: "lesson", text: "x", created_at: "2026-10-01T00:00:00Z" }]);
+  const { view, state } = lineView(async () => { if (reply instanceof Error) throw reply; return reply; });
+  view.draw(); dom.input(h.$("#chips form input"), "결제"); h.$("#chips form").requestSubmit(); await dom.flush();
+  assert.match(h.$("#table").textContent, /시간 표현을 찾지 못해/);
+  for (const bad of [null, { authority: "x", items: [] }, { authority: "data_only_untrusted", items: [{ id: 1 }] }, new Error("net")]) {
+    reply = bad; h.$("#chips form").requestSubmit(); await dom.flush();
+    assert.match(h.$("#table").textContent, /찾지 못했어요. 연결과/);
+  }
+  reply = hits([], week); dom.buttons(h.$("#table"), "다시 찾기")[0].click(); await dom.flush();
+  assert.match(h.$("#table").textContent, /‘지난주’/);
+  let release; reply = new Promise((r) => { release = r; });
+  const { view: v2, state: s2 } = lineView(async () => reply);
+  v2.draw(); dom.input(h.$("#chips form input"), "어제"); h.$("#chips form").requestSubmit();
+  s2.memTab = "active"; release(hits([{ id: "z", collection: "memories", text: "늦은 답" }])); await dom.flush();
+  assert.ok(!h.$("#table").textContent.includes("늦은 답"));
+  // switching to 그 시각 상태 and back keeps each view's own form
+  state.memTab = "past"; s2.memTab = "past"; v2.draw();
+  dom.buttons(h.$("#chips"), "그 시각 상태")[0].click();
+  assert.equal(h.$("#chips form input").type, "datetime-local");
+  dom.buttons(h.$("#chips"), "시간순")[0].click();
+  assert.equal(h.$("#chips form input").type, "search");
 });

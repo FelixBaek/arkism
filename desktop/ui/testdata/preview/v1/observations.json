@@ -1,0 +1,17 @@
+{
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "items": [
+  {
+   "id": "ob1",
+   "status": "active",
+   "revision": 2,
+   "content": "Orbit 배포는 스테이징 확인 뒤 금요일을 피해 오후에 한다.",
+   "source_memory_ids": [
+    "m4",
+    "m2"
+   ],
+   "durability": "lasting"
+  }
+ ]
+}

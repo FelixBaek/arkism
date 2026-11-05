@@ -6114,3 +6114,17 @@ Object.assign(window.ArkismI18nEN.strings, { "폴더에 직접 넣기": "Put it 
 Object.assign(window.ArkismI18nEN.patterns, { "기본 + 엔진 {0}개": "Basic + {0} engines", "요청마다 {0}개": "{0} per request" });
 Object.assign(window.ArkismI18nEN.strings, { "아직 위험도와 중복 힌트가 붙지 않았어요. 붙고 나면 이 목록에서 빠지고 승인 대기에만 남아요.": "No risk level or duplicate hint yet. Once they are added, it leaves this list and stays only in Pending approval." });
 Object.assign(window.ArkismI18nEN.strings, { "구독으로 쓰는 모델": "Models on a subscription", "API 키로 쓰는 모델": "Models on an API key" });
+// 시간순 (memory-time.js) and the names / observations on 기억 지도 (overview-windows.js, memory-bubbles.js)
+Object.assign(window.ArkismI18nEN.strings, { "이름 언급": "Name mention", "정리 바탕": "Summarized from", "겪은 일": "Experiences", "정리된 관찰": "Observations", "같은 문구": "Same phrase", "단어": "Words",
+  "비슷한 뜻": "Similar meaning", "이어진 기억": "Linked memories", "일어난 때": "Happened", "맞기 시작한 때": "True from", "적용된 때": "In effect from", "저장한 때": "Saved",
+  "시간순 기억": "Memories by time", "기억을 골라 확인하세요": "Pick a memory to see it", "언제 있었던 일인지 순서대로 보여 줘요. 사람이 승인한 기억만 나와요.": "Shows what happened, in order. Only memories a person approved appear.",
+  "찾은 방법": "Found by", "찾은 기간": "Time span searched", "여는 중…": "Opening…", "기억 화면에서 열기": "Open in memories", "이 기억을 열지 못했어요. 지워졌거나 볼 권한이 없을 수 있어요.": "Couldn't open this memory. It may be deleted, or you may not have access.",
+  "시간순 기억을 찾는 중…": "Finding memories by time…", "언제 있었던 일인지 적어 보세요. 예: 지난주, 10월 말, 어제 배포": "Write when it happened. E.g. last week, late October, yesterday's deploy",
+  "시간 표현을 찾지 못해 내용으로만 찾았어요. 날짜를 같이 적으면 그때 일을 먼저 보여 줘요.": "No time words found, so this searched by content only. Add a date to see that time first.",
+  "지난주": "Last week", "이 종류로는 찾은 기억이 없어요.": "No memories of this type were found.", "그때 기억을 찾지 못했어요. 다른 날짜나 낱말로 찾아보세요.": "No memories found for that time. Try another date or words.",
+  "날짜 모름": "Date unknown", "찾은 기간 밖": "Outside the span", "찾지 못했어요. 연결과 접근 권한을 확인하고 다시 찾아 주세요.": "Search failed. Check the connection and access, then try again.",
+  "보는 방법": "View", "시간순": "By time", "그 시각 상태": "State at a time", "언제 일이었나요? 예: 지난주 배포, 10월 말": "When was it? E.g. last week's deploy, late October", "시간으로 기억 찾기": "Find memories by time",
+  "언제 일인지 적어 주세요.": "Write when it happened.", "사람": "Person", "서비스": "Service", "장소": "Place", "단체": "Organization", "자주 나온 이름": "Frequent names", "이름 더 보기": "More names",
+  "나온 기억": "Memories", "처음": "First", "이 이름의 자세한 내용을 불러오지 못했어요.": "Couldn't load this name's details.", "다른 이름": "Other names", "정리한 내용": "Summary",
+  "● 사람이 승인한 관찰이에요": "● An observation a person approved", "지도에 있는 기억과 이어지지 않았어요.": "Not linked to any memory on the map." });
+Object.assign(window.ArkismI18nEN.patterns, { "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "An observation summarizing several memories. Based on {0} memories", "기억 {0}개에 나옴": "In {0} memories", "바탕 기억 {0}개": "Based on {0} memories" });
