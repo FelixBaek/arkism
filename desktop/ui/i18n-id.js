@@ -5593,7 +5593,10 @@
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Sedang aktif. Setiap kali mencari, model server dipanggil dan memakai anggaran model.",
  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Model server membaca 20 memori teratas yang ditemukan lalu menyusun ulang urutannya. Jika diaktifkan, setiap pencarian akan memakai kuota (anggaran) model.",
  "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Aturan — jika disetujui menjadi arahan di awal setiap sesi",
- "이번만 — 승인해도 7일 뒤 만료": "Kali ini saja — kedaluwarsa 7 hari setelah disetujui"
+ "이번만 — 승인해도 7일 뒤 만료": "Kali ini saja — kedaluwarsa 7 hari setelah disetujui",
+ "기억을 뽑을 API 키가 없어요": "Tidak ada kunci API untuk mengekstrak memori",
+ "API 키로 쓰도록 고른 모델인데 이 서버에 그 키가 없어요. 설정 › 에이전트에서 키를 넣거나, 역할별 모델에서 구독으로 고르세요.": "Model ini dipilih untuk berjalan dengan kunci API, tetapi server ini tidak memiliki kunci tersebut. Tambahkan kunci di Pengaturan › Agen, atau pilih langganan di Model per peran.",
+ "API 키 없음": "Tidak ada kunci API"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

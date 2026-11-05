@@ -5593,7 +5593,10 @@
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm kiếm sẽ gọi mô hình của máy chủ và tốn ngân sách mô hình.",
  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Mô hình trên máy chủ sẽ đọc 20 ký ức đứng đầu mà nó tìm được rồi sắp xếp lại thứ tự. Khi bật, mỗi lần tìm kiếm sẽ tốn lượng dùng mô hình (ngân sách).",
  "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Quy tắc — khi duyệt sẽ thành chỉ thị ở đầu mỗi phiên",
- "이번만 — 승인해도 7일 뒤 만료": "Chỉ lần này — hết hạn 7 ngày sau khi duyệt"
+ "이번만 — 승인해도 7일 뒤 만료": "Chỉ lần này — hết hạn 7 ngày sau khi duyệt",
+ "기억을 뽑을 API 키가 없어요": "Không có khóa API để trích xuất ký ức",
+ "API 키로 쓰도록 고른 모델인데 이 서버에 그 키가 없어요. 설정 › 에이전트에서 키를 넣거나, 역할별 모델에서 구독으로 고르세요.": "Mô hình này được chọn để chạy bằng khóa API, nhưng máy chủ này không có khóa đó. Hãy thêm khóa trong Cài đặt › Tác tử, hoặc chọn gói đăng ký trong Mô hình theo vai trò.",
+ "API 키 없음": "Không có khóa API"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

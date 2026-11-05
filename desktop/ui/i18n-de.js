@@ -5593,7 +5593,10 @@
  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Ist an. Bei jeder Suche wird das Servermodell aufgerufen und Modellbudget verbraucht.",
  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 켜면 찾을 때마다 모델 사용량(예산)을 써요.": "Das Servermodell liest die 20 obersten gefundenen Erinnerungen und ordnet sie neu. Wenn aktiviert, verbraucht jede Suche Modellnutzung (Budget).",
  "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Regel — nach Freigabe steht sie als Anweisung am Anfang jeder Sitzung",
- "이번만 — 승인해도 7일 뒤 만료": "Nur dieses Mal — läuft 7 Tage nach Freigabe ab"
+ "이번만 — 승인해도 7일 뒤 만료": "Nur dieses Mal — läuft 7 Tage nach Freigabe ab",
+ "기억을 뽑을 API 키가 없어요": "Kein API-Schlüssel zum Extrahieren von Erinnerungen",
+ "API 키로 쓰도록 고른 모델인데 이 서버에 그 키가 없어요. 설정 › 에이전트에서 키를 넣거나, 역할별 모델에서 구독으로 고르세요.": "Dieses Modell soll über einen API-Schlüssel laufen, aber dieser Server hat keinen solchen Schlüssel. Füge den Schlüssel unter Einstellungen › Agenten hinzu oder wähle unter Modelle nach Rolle das Abo.",
+ "API 키 없음": "Kein API-Schlüssel"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
