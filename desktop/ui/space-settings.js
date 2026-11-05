@@ -582,6 +582,7 @@
       if (q.provisional_vectors) out.push(el("p", "pg-hint warn", "켜져 있어요. 후보가 들어올 때마다 임베딩을 만들어 모델 예산을 써요."));
       out.push(rsw("prune", "다시 고를 때 관련 없는 것 빼기", "서버 모델로 다시 고를 때 질문과 먼 기억을 빼요."),
         rsw("dedup", "다시 고를 때 겹치는 것 합치기", "서버 모델로 다시 고를 때 같은 내용을 하나만 남겨요."),
+        ...decisionModel(kit, edit, "recall", "찾은 결과를 판정 모델로 거르기", "위 두 스위치를 켜 두면 작은 판정 모델이 관련 없거나 겹치는 기억을 먼저 빼요. 서버 모델로 다시 고르지 않아도 돼요."),
         qsw("prefer_observations", "관찰을 먼저 보여 주기", "정리된 관찰이 있으면 그 바탕 기억보다 앞에 둬요.", !!q.prefer_observations),
         qsw("include_chunks", "원문 조각도 같이 주기", "찾은 기억이 나온 문서의 원문 조각을 함께 넘겨요.", !!q.include_chunks),
         kit.line("원문 조각 양", "원문 조각에 쓸 토큰 수예요 (1~16384). 비우면 기본값을 써요.",
@@ -696,7 +697,8 @@
       const set = (part) => setBlock("consolidation", part);
       const sizes = grid(["묶음마다 관찰 수", numberBox(c.max_observations_per_scope, 1, 1000, "", "묶음마다 관찰 수", edit, (n) => set({ max_observations_per_scope: n || undefined }))],
         ["한 번에 정리할 묶음", numberBox(c.batch_size, 1, 10, "", "한 번에 정리할 묶음", edit, (n) => set({ batch_size: n || undefined }))],
-        ["동시에 정리", numberBox(c.parallel, 1, 4, "", "동시에 정리", edit, (n) => set({ parallel: n || undefined }))]);
+        ["동시에 정리", numberBox(c.parallel, 1, 4, "", "동시에 정리", edit, (n) => set({ parallel: n || undefined }))],
+        ["한 번에 읽을 기억", numberBox(c.max_memories_per_round, 1, 100000, "", "한 번에 읽을 기억", edit, (n) => set({ max_memories_per_round: n || undefined }))]);
       const out = [
         field("관찰을 만들 때 목표", edit ? area(c.observations_mission, 2000, "관찰을 만들 때 목표", "예: 반복되는 실수와 그 해결을 관찰로 남겨요.", (v) => set({ observations_mission: v || undefined })) : readOnly(c.observations_mission || "없음")),
         kit.line("묶는 방식", "어떤 기억끼리 모아 관찰을 만들지예요.", edit ? select([["", "기본값 · 모두 한 묶음"], ...SCOPE_MODES], c.default_scope_mode || "", "묶는 방식", (v) => set({ default_scope_mode: v || undefined }))

@@ -680,7 +680,7 @@ test("주제 고치기: tags, recall options, answer shape and the wiki folder g
   dom.input(inputs.find((i) => i.value === "deploy"), "deploy, ops, deploy");
   dom.input(inputs.find((i) => i.placeholder === "예: 4000"), "3000");
   inputs.find((i) => i.type === "checkbox" && !i.checked && i.parentElement.textContent.includes("원문 조각")).checked = true;
-  dom.input(sel("읽을 종류"), "observation");
+  inputs.find((i) => i.type === "checkbox" && i.value === "memory").checked = false;
   dom.input(sel("태그 맞추는 방법"), "all_strict");
   const areas = t.h.$("#detail").querySelectorAll("textarea");
   assert.equal(areas[1].value, "a");
@@ -688,6 +688,11 @@ test("주제 고치기: tags, recall options, answer shape and the wiki folder g
   btn(t.h.$("#detail"), "저장").click(); await dom.flush();
   assert.match(t.notices.at(-1), /요약 모양 JSON을 읽을 수 없어요/);
   dom.input(areas[2], '{"type": "object"}');
+  const obs = inputs.find((i) => i.type === "checkbox" && i.value === "observation");
+  obs.checked = false;
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.match(t.notices.at(-1), /읽을 종류를 하나 이상/);
+  obs.checked = true;
   dom.input(folder, "guides");
   btn(t.h.$("#detail"), "저장").click(); await dom.flush();
   assert.deepEqual(sent(t, "/v1/mental-models/x2", "PATCH")[0], { scope: SCOPE, expected_revision: 3, title: "배포", query: "배포 순서?", folder: "guides",

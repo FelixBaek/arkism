@@ -875,6 +875,8 @@ test("ingestExtras, docRange and deleteImpact", () => {
   const r = K.docRange({ from: "2026-10-03", to: "2026-10-04" });
   assert.equal(new Date(r.from).getDate(), 3); assert.equal(new Date(r.to).getDate(), 5, "to covers the whole last day");
   assert.deepEqual(Object.keys(K.docRange({ from: "2026-10-05", to: "2026-10-01" })), ["from"], "a to before from is dropped");
+  assert.equal(K.docRange({ from: "2026-10-03", by: "updated" }).time_field, "updated", "by update time");
+  assert.deepEqual(K.docRange({ by: "updated" }), {}, "no date, no time field");
   assert.deepEqual(K.deleteImpact([{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved" }] }, { candidates: [{ id: "a", status: "candidate" }, { id: "c", status: "rejected" }] }, {}]),
     { waiting: 1, kept: 1 });
 });

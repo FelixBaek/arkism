@@ -705,7 +705,7 @@ window.ArkismDigests = (ctx) => {
   const BUDGET = [["", "참고할 기억: 기본"], ["low", "참고할 기억: 적게 (10개)"], ["mid", "참고할 기억: 보통 (20개)"], ["high", "참고할 기억: 많이 (40개)"]];
   const TAG_MATCH = [["", "태그 맞추는 방법: 하나라도 있는 기억"], ["all_strict", "태그 맞추는 방법: 모두 있는 기억"], ["any", "태그 맞추는 방법: 하나라도 있거나 태그 없는 기억"],
     ["all", "태그 맞추는 방법: 모두 있거나 태그 없는 기억"], ["exact", "태그 맞추는 방법: 태그가 똑같은 기억"]];
-  const FACT_TYPES = [["", "읽을 종류: 기억과 정리 모두"], ["memory", "읽을 종류: 기억만"], ["observation", "읽을 종류: 정리된 관찰만"]];
+  const FACT_TYPES = [["memory", "기억 읽기"], ["observation", "정리된 관찰 읽기"]];
   const NO_FOLDER = "\u0000none";
   const MODEL_CODES = { model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." };
   const human = () => state.caps?.role === "human";
@@ -866,7 +866,10 @@ window.ArkismDigests = (ctx) => {
     const tags = input((r.tags || []).join(", "), 400, "예: 배포, 운영");
     const match = ctx.memSelect("태그 맞추는 방법", TAG_MATCH, r.tags_match || "", () => {});
     const groups = dirty(el("textarea")); groups.rows = 2; groups.maxLength = 2000; groups.value = D.tagGroupsText(r.tag_groups); groups.placeholder = "예: 배포+운영 | -연습";
-    const facts = ctx.memSelect("읽을 종류", FACT_TYPES, r.fact_types?.length === 1 ? r.fact_types[0] : "", () => {});
+    // 읽을 종류: one box per kind, every box on (= all) unless the model narrows it
+    const facts = FACT_TYPES.map(([k, label]) => { const c = el("input"); c.type = "checkbox"; c.value = k; c.checked = !r.fact_types?.length || r.fact_types.includes(k); const l = el("label", "insight-check"); l.append(c, el("span", "", label)); return l; });
+    const factBox = el("div", "dg-facts"); factBox.setAttribute("role", "group"); factBox.setAttribute("aria-label", "읽을 종류"); factBox.append(...facts);
+    const picked = () => facts.map((l) => l.firstChild).filter((c) => c.checked).map((c) => c.value);
     const chunks = el("input"); chunks.type = "checkbox"; chunks.checked = !!r.include_chunks;
     const chunkCheck = el("label", "insight-check"); chunkCheck.append(chunks, el("span", "", "기억의 원문 조각도 같이 읽기"));
     const recall = input(r.recall_max_tokens ? String(r.recall_max_tokens) : "", 6, "예: 4000"); recall.inputMode = "numeric";
@@ -882,7 +885,7 @@ window.ArkismDigests = (ctx) => {
     more.open = !!(r.cron || r.after_consolidation || r.min_interval || r.strategy || r.full_refresh_cron || r.budget || r.tag_groups?.length || r.fact_types?.length || r.include_chunks || r.recall_max_tokens || r.response_schema);
     more.append(el("summary", "", "자세히"), field("일정 (분 시 일 월 요일, UTC)", cron),
       button("일정 미리보기", "small", null, () => void previewCron(cron.value.trim(), preview)), preview, check, field("최소 간격", gap), strategy, field("전체 다시 쓰기 일정 (UTC)", full), budget,
-      match, field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", groups), facts, chunkCheck,
+      match, field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", groups), field("읽을 종류", factBox), chunkCheck,
       field("읽을 기억의 최대 양 (토큰, 비우면 제한 없음)", recall), field("요약 모양 (JSON Schema, 비우면 글로 써요)", schema));
     const form = el("div", "insight-edit");
     form.append(field("제목", title), field("질문", q), field("이 태그가 붙은 기억만 읽기 (쉼표로 나눠요)", tags), mode, folder, more);
@@ -891,10 +894,12 @@ window.ArkismDigests = (ctx) => {
     btns.append(button("저장", "primary small", null, () => {
       let shape;
       try { shape = schema.value.trim() ? JSON.parse(schema.value) : undefined; } catch { notice("요약 모양 JSON을 읽을 수 없어요. 중괄호로 감싼 JSON으로 적어 주세요."); return; }
+      const kinds = picked();
+      if (!kinds.length) { notice("읽을 종류를 하나 이상 골라 주세요."); return; }
       const tagList = globalThis.ArkismKeep.listOf(tags.value);
       void saveModel(m, btns, { title: title.value.trim(), query: q.value.trim(), ...D.folderBody(inWiki, folder.value),
         refresh: D.refreshBody(r, { mode: mode.value, cron: cron.value, after_consolidation: after.checked, min_interval: gap.value, strategy: strategy.value, full_refresh_cron: full.value, budget: budget.value,
-          tags: tagList, tags_match: tagList.length ? match.value : "", tag_groups: D.tagGroups(groups.value), fact_types: facts.value ? [facts.value] : [], include_chunks: chunks.checked,
+          tags: tagList, tags_match: tagList.length ? match.value : "", tag_groups: D.tagGroups(groups.value), fact_types: kinds.length < FACT_TYPES.length ? kinds : [], include_chunks: chunks.checked,
           recall_max_tokens: Number.parseInt(recall.value, 10) > 0 ? Number.parseInt(recall.value, 10) : undefined, response_schema: shape }) });
     }),
     button("취소", "ghost small", null, () => { editing = null; if (!m) state.selected = null; detail(); }));

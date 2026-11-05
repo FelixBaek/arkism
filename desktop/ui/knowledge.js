@@ -37,7 +37,7 @@ window.ArkismKnowledge = (ctx) => {
     busy: false, notice: "", remove: null, upload: null, extract: null,
     // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q, the tag and the dates go to the server
     // edit: the text being edited ({id, state, text}); conflict: what a zip import does with a document of the same name
-    fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", sel: "", del: null, edit: null, conflict: "replace" },
+    fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", by: "", sel: "", del: null, edit: null, conflict: "replace" },
     folders: [], folderOf: {} // 위키 폴더 (GET /v1/wiki/tree); pg.folder null = every folder
   };
   let typing = 0;
@@ -1083,6 +1083,8 @@ window.ArkismKnowledge = (ctx) => {
     bar.append(searchBox("문서 이름·태그·내용 검색", F.q, (v) => { F.q = v; F.state = "loading"; void loadDocs(); }),
       noI18nOpts(select("태그", [["", "태그: 모두"], ...tags.map((t) => [t, t])], F.tag, (v) => { F.tag = v; F.state = "loading"; void loadDocs(); })),
       date("from", "이날부터"), date("to", "이날까지"));
+    // which day the dates mean: when the document was first added (the server's default) or when it last changed
+    if (F.from || F.to) bar.append(select("기간 기준", [["", "기간 기준: 올린 날"], ["updated", "기간 기준: 고친 날"]], F.by, (v) => { F.by = v; F.state = "loading"; void loadDocs(); }));
     parts.push(bar);
     if (noticeLine()) parts.push(noticeLine());
     const items = F.items;
@@ -1096,7 +1098,7 @@ window.ArkismKnowledge = (ctx) => {
       if (F.state === "loading" || F.state === "idle") box.append(el("p", "", "불러오는 중…"));
       else if (F.state === "off") box.append(el("p", "", "이 서버는 기억 문서 목록을 아직 지원하지 않아요."));
       else if (F.state === "error") box.append(el("p", "", F.error), button("다시 시도", "", null, () => loadDocs()));
-      else if (F.tag || F.q || F.from || F.to) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { Object.assign(F, { q: "", tag: "", from: "", to: "" }); void loadDocs(); }));
+      else if (F.tag || F.q || F.from || F.to) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { Object.assign(F, { q: "", tag: "", from: "", to: "", by: "" }); void loadDocs(); }));
       else box.append(el("p", "", "아직 기억 후보를 만든 글이나 파일이 없어요."), button("기억 후보 만들기", "primary", null, () => openAdd()));
       list.append(box);
     }
@@ -1404,9 +1406,11 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
 };
 // The list's date boxes as the server's from/to: from that day's start to the end of the to day, in local time.
 // A to day before the from day is left out rather than sent as an empty range.
-window.ArkismKnowledge.docRange = ({ from = "", to = "" } = {}) => {
+// by "updated" bounds when a document last changed instead (time_field), sent only with a date.
+window.ArkismKnowledge.docRange = ({ from = "", to = "", by = "" } = {}) => {
   const { dayStart } = window.ArkismMemoryTime;
-  return { ...(from ? { from: dayStart(from) } : {}), ...(to && (!from || to >= from) ? { to: dayStart(to, 1) } : {}) };
+  const out = { ...(from ? { from: dayStart(from) } : {}), ...(to && (!from || to >= from) ? { to: dayStart(to, 1) } : {}) };
+  return by === "updated" && Object.keys(out).length ? { ...out, time_field: "updated" } : out;
 };
 // What deleting a document touches, counted like the server does: waiting candidates are rejected, approved ones stay as memories.
 window.ArkismKnowledge.deleteImpact = (chunks) => {

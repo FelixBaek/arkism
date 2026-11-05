@@ -507,6 +507,30 @@ test("overview: 정리 제안 decide accept, swap, dismiss and a stale proposal"
   await closeAll();
 });
 
+test("overview: an agent's 기억 비우기 proposal waits for a person who types the project id", async () => {
+  await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
+  const row = [...win().querySelectorAll(".ov-wide-row-dream")].find((r) => /기억 비우기/.test(text(r)));
+  assert.ok(row, "change proposal row"); row.click(); await app.settle();
+  assert.match(text(win()), /이 공간의 기억을 비우자고 해요/);
+  assert.match(text(win()), /되돌릴 수 없어요/);
+  const sent = () => app.apiCalls.filter(([m, p]) => m === "POST" && /\/v1\/maintenance_proposals\/mp-clear\/decide$/.test(p));
+  const real = app.window.askTyped, asks = [];
+  let typed = false;
+  app.window.askTyped = async (m, match) => { asks.push([m, match]); return typed; };
+  try {
+    await press("비우기", win(), 30);
+    assert.equal(sent().length, 0, "a cancelled typed confirm sends nothing");
+    assert.match(asks[0][0], /프로젝트 ID를 그대로 적어/);
+    typed = true;
+    await press("비우기", win(), 60);
+    const body = JSON.parse(sent().at(-1)[2]);
+    assert.equal(body.decision, "accept");
+    assert.equal(body.confirm, body.scope.project_id);
+    assert.equal(asks[1][1], body.scope.project_id);
+  } finally { app.window.askTyped = real; }
+  await closeAll();
+});
+
 test("overview: a dreaming proposal's 지우기 picks which memory and why; 취소 sends nothing", async () => {
   await openWindow({ wide: "review", args: [null, "dream"] }); await app.settle(50);
   const d = win();
