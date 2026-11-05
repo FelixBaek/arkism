@@ -89,12 +89,8 @@ func cfbEntries(b []byte) []uint32 {
 }
 
 func cfbName(e []byte) string {
-	n := min(le16(e, 64)/2-1, 31)
-	u := make([]uint16, 0, 32)
-	for i := 0; i < n; i++ {
-		u = append(u, uint16(le16(e, i*2)))
-	}
-	return string(utf16.Decode(u))
+	n := max(min(le16(e, 64)/2-1, 31), 0)
+	return utf16le(e[:n*2])
 }
 
 // readFAT collects the FAT sectors named in the header and the DIFAT chain.
