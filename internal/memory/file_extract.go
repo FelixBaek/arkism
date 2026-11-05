@@ -165,8 +165,21 @@ type IngestItem struct {
 	DocumentID string            `json:"document_id,omitempty"`
 	UpdateMode string            `json:"update_mode,omitempty"`
 	Strategy   string            `json:"strategy,omitempty"`
+	// Blocks is the content as ordered text and image blocks, instead of content.
+	Blocks []IngestBlock `json:"blocks,omitempty"`
 }
 
+// IngestBlock is one piece of an item's content in order: text, or an image (png, jpeg
+// or webp) the server model reads into text. Image blocks need the vision opt-in
+// (MEMORY_FILE_VISION); without it the item fails as an unsupported format.
+type IngestBlock struct {
+	Type          string `json:"type"`
+	Text          string `json:"text,omitempty"`
+	ContentBase64 string `json:"content_base64,omitempty"`
+	MIME          string `json:"mime,omitempty"`
+}
+
+// IngestResult has one result per item, in order; a failed item has status failed and error.
 type IngestResult struct {
 	Items []FileMemoriesResult `json:"items"`
 }
@@ -187,6 +200,8 @@ type FileMemoriesResult struct {
 	Causes            []ExtractedCause  `json:"causes,omitempty"`
 	Skipped           []ExtractSkip     `json:"skipped"`
 	Delta             *FileExtractDelta `json:"delta,omitempty"`
+	// Error is a failed ingest item's error code (POST /v1/memories/ingest).
+	Error string `json:"error,omitempty"`
 }
 
 // FileExtractDelta compares an upload with the last upload of the same document.
@@ -681,30 +696,28 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 }
 
 // ingestMaxItems bounds one ingest request; every item may become its own job.
-const ingestMaxItems = 16
-
-type ingestReady struct {
-	plan   FileExtractJob
-	docRef string
-	chunks []FileExtractChunk
-	out    FileMemoriesResult
-}
+const (
+	ingestMaxItems  = 16
+	ingestMaxBlocks = 64
+)
 
 // Ingest extracts memory candidates from text items, each its own document and job.
-// Every item is checked, filtered and chunked before any is stored, so one bad item
-// stores nothing. Async queues every item and answers at once
-// (the HTTP route starts the queued jobs).
+// The whole request (shapes, strategies, model) is checked first, so a malformed item
+// stores nothing. After that each item stands alone: its result says done, pending or
+// failed (with the error code), and a failed item never undoes the items before it. The
+// request fails only when every item failed before anything was stored. Async queues
+// every item and answers at once (the HTTP route starts the queued jobs).
 func (s *Service) Ingest(ctx context.Context, token string, in IngestInput) (IngestResult, error) {
-	if !validScope(in.Scope) || len(in.Items) == 0 || len(in.Items) > ingestMaxItems || slices.ContainsFunc(in.Items, func(it IngestItem) bool { return !validIngestItem(it) }) {
+	if !validScope(in.Scope) || len(in.Items) == 0 || len(in.Items) > ingestMaxItems || slices.ContainsFunc(in.Items, func(it IngestItem) bool { return !validIngestItem(it) }) ||
+		ingestImages(in.Items) > fileVisionMaxPages {
 		return IngestResult{}, ErrInvalid
 	}
 	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
 	if err != nil {
 		return IngestResult{}, err
 	}
-	ready := make([]ingestReady, len(in.Items))
-	for i, it := range in.Items {
-		if ready[i], err = s.ingestPrepare(ctx, in.Scope, settings, it); err != nil {
+	for _, it := range in.Items { // an unknown strategy or a missing model refuses the whole request
+		if _, err = s.extractPlan(settings, ingestOptions(it), nil); err != nil {
 			return IngestResult{}, err
 		}
 	}
@@ -712,43 +725,83 @@ func (s *Service) Ingest(ctx context.Context, token string, in IngestInput) (Ing
 	if in.Async {
 		sync = 0
 	}
-	out := IngestResult{Items: make([]FileMemoriesResult, len(ready))}
-	for i, r := range ready {
-		// shortcut: an item that fails leaves the earlier items stored; the caller sends the rest again.
-		if out.Items[i], err = s.extractStored(ctx, token, d, in.Scope, r.plan, r.docRef, r.chunks, r.out, sync, in.Items[i].UpdateMode == "append"); err != nil {
-			return IngestResult{}, err
+	out, firstErr, stored, failed := IngestResult{Items: make([]FileMemoriesResult, len(in.Items))}, error(nil), false, 0
+	for i, it := range in.Items {
+		res, err := s.ingestItem(ctx, token, d, in.Scope, settings, it, sync)
+		if err != nil {
+			code, _ := errorResponse(err)
+			res.Status, res.Error, firstErr, failed = JobStatusFailed, code, cmp.Or(firstErr, err), failed+1
 		}
+		stored = stored || res.JobID != ""
+		out.Items[i] = res
+	}
+	if failed == len(in.Items) && !stored {
+		return IngestResult{}, firstErr
 	}
 	return out, nil
 }
 
-func validIngestItem(it IngestItem) bool {
-	return strings.TrimSpace(it.Content) != "" && len(it.Content) <= fileExtractMaxText && utf8.ValidString(it.Content) && !strings.ContainsRune(it.Content, 0) &&
-		(it.DocumentID == "" || validRunLabel(it.DocumentID, 200) && !containsSecret(it.DocumentID)) && slices.Contains([]string{"", "replace", "append"}, it.UpdateMode) &&
-		validExtractOptions(ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}, time.Now())
+// ingestImages counts the image blocks of a request; each is one vision model call.
+func ingestImages(items []IngestItem) int {
+	n := 0
+	for _, it := range items {
+		for _, b := range it.Blocks {
+			if b.Type == "image" {
+				n++
+			}
+		}
+	}
+	return n
 }
 
-// ingestPrepare plans, defends, filters and chunks one item without storing anything.
-func (s *Service) ingestPrepare(ctx context.Context, scope Scope, settings SpaceConfig, it IngestItem) (ingestReady, error) {
-	plan, err := s.extractPlan(settings, ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}, nil)
-	if err != nil {
-		return ingestReady{}, err
+func validIngestItem(it IngestItem) bool {
+	content := strings.TrimSpace(it.Content) != "" && len(it.Blocks) == 0 || it.Content == "" && len(it.Blocks) > 0 && len(it.Blocks) <= ingestMaxBlocks && !slices.ContainsFunc(it.Blocks, func(b IngestBlock) bool { return !validIngestBlock(b) })
+	return content && len(it.Content) <= fileExtractMaxText && utf8.ValidString(it.Content) && !strings.ContainsRune(it.Content, 0) &&
+		(it.DocumentID == "" || validRunLabel(it.DocumentID, 200) && !containsSecret(it.DocumentID)) && slices.Contains([]string{"", "replace", "append"}, it.UpdateMode) &&
+		validExtractOptions(ingestOptions(it), time.Now())
+}
+
+func ingestOptions(it IngestItem) ExtractOptions {
+	return ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}
+}
+
+// validIngestBlock: a text block carries text only, an image block a supported image type.
+func validIngestBlock(b IngestBlock) bool {
+	switch b.Type {
+	case "text":
+		return b.ContentBase64 == "" && b.MIME == "" && strings.TrimSpace(b.Text) != "" && len(b.Text) <= fileExtractMaxText && utf8.ValidString(b.Text) && !strings.ContainsRune(b.Text, 0)
+	case "image":
+		return b.Text == "" && b.ContentBase64 != "" && strings.HasPrefix(b.MIME, "image/") && slices.Contains(slices.Collect(maps.Values(mediaFormats)), b.MIME)
 	}
-	text := it.Content
+	return false
+}
+
+// ingestItem plans, defends, filters, chunks and stores one item.
+func (s *Service) ingestItem(ctx context.Context, token string, d Decision, scope Scope, settings SpaceConfig, it IngestItem, sync int) (FileMemoriesResult, error) {
+	plan, err := s.extractPlan(settings, ingestOptions(it), nil)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	text, docRef := it.Content, "text:"+ContentHash(it.Content)
+	if len(it.Blocks) > 0 {
+		docRef = "text:" + ContentHash(structuredText(it.Blocks))
+		if text, err = s.ingestBlocksText(ctx, token, d, scope, it.Blocks); err != nil {
+			return FileMemoriesResult{}, err
+		}
+	}
 	if err = s.defendItem(ctx, scope, "write:memory_candidates", &plan.Options, &text); err != nil {
-		return ingestReady{}, err
+		return FileMemoriesResult{}, err
 	}
 	chunks, redacted, err := extractFileChunks([]string{text}, false, extractChunkRunes(plan.Settings))
 	if err != nil {
-		return ingestReady{}, err
+		return FileMemoriesResult{}, err
 	}
-	// Without a document id the text names the document, so the same text is extracted once.
-	docRef, label := "doc:"+it.DocumentID, it.DocumentID
-	if it.DocumentID == "" {
-		docRef, label = "text:"+ContentHash(it.Content), "ingest"
+	// Without a document id the content names the document, so the same content is extracted once.
+	plan.Label = "ingest"
+	if it.DocumentID != "" {
+		docRef, plan.Label = "doc:"+it.DocumentID, it.DocumentID
 	}
-	plan.Label = label
-	return ingestReady{plan: plan, docRef: docRef, chunks: chunks, out: FileMemoriesResult{Skipped: extractRedactionNote(redacted)}}, nil
+	return s.extractStored(ctx, token, d, scope, plan, docRef, chunks, FileMemoriesResult{Skipped: extractRedactionNote(redacted)}, sync, it.UpdateMode == "append")
 }
 
 // storeExtractSources stores the filtered text as source evidence, in parts
@@ -826,8 +879,9 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 		return out, err
 	}
 	r, runErr, err := s.runExtractJob(ctx, token, d, r)
-	if runErr != nil {
-		return FileMemoriesResult{}, runErr
+	if runErr != nil { // the job stays failed at its chunk; its run route resumes it
+		out.Status = r.Status
+		return out, runErr
 	}
 	if err != nil {
 		return FileMemoriesResult{}, err

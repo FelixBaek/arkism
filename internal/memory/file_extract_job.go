@@ -99,7 +99,8 @@ func (s *Service) extractJob(ctx context.Context, tx Tx, scope Scope, id string)
 	return r, err
 }
 
-// GetFileExtractJob shows a job's progress; chunk text never leaves the server.
+// GetFileExtractJob shows a job's progress; chunk text never leaves the server. The
+// owner's poll of a job waiting on a provider batch resumes following it in the background.
 func (s *Service) GetFileExtractJob(ctx context.Context, token string, scope Scope, id string) (FileExtractJobView, error) {
 	if !validRunLabel(id, 256) {
 		return FileExtractJobView{}, ErrInvalid
@@ -115,7 +116,12 @@ func (s *Service) GetFileExtractJob(ctx context.Context, token string, scope Sco
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
-	return viewExtractJob(r), nil
+	out := viewExtractJob(r)
+	// A batch whose poll loop a restart ended is picked up again by its owner's poll.
+	if extractBatchWaiting(out) && r.FileExtract.RequestedBy == d.PrincipalID {
+		s.followExtractJob(context.WithoutCancel(ctx), token, scope, id)
+	}
+	return out, nil
 }
 
 // extractJobClaimable lists the states a run may pick up; any other state
@@ -220,7 +226,7 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 	job := r.FileExtract
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
 	var answers map[int]ExtractPreviewResult
-	if b := s.extractBatcher(job); b != nil {
+	if b := s.extractBatcher(ctx, r.Scope, job); b != nil {
 		answers, err = s.extractBatchAnswers(ctx, token, d, r.Scope, b, job)
 		if errors.Is(err, errExtractBatchPending) {
 			r.Status, job.Error = JobStatusRetry, extractBatchPending

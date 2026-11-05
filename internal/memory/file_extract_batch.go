@@ -17,7 +17,9 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -50,74 +52,133 @@ type BatchAnswer struct {
 type ExtractBatch struct {
 	ID          string    `json:"id" bson:"id"`
 	SubmittedAt time.Time `json:"submitted_at" bson:"submitted_at"`
+	// Reserved maps each prompt id to the ledger row reserved for it at submit.
+	Reserved map[string]string `json:"-" bson:"reserved"`
 }
 
 func extractBatchID(i int) string { return "chunk-" + strconv.Itoa(i) }
 
 // extractBatcher is the batch client for job, or nil when the job calls the model per chunk:
 // batching is off, the mode calls no model, or only a request's worth of chunks is left.
-func (s *Service) extractBatcher(job *FileExtractJob) BatchLLM {
+// A batch submitted before batching was turned off is dropped and the job goes on per chunk.
+func (s *Service) extractBatcher(ctx context.Context, scope Scope, job *FileExtractJob) BatchLLM {
 	b, ok := s.Wiki.(BatchLLM)
 	if !ok || !b.Batches() || job.Settings.Mode == spaceExtractChunks || job.Batch == nil && len(job.Chunks)-job.Next <= fileExtractSyncChunks {
+		if job.Batch != nil {
+			s.dropExtractBatch(ctx, scope, job)
+		}
 		return nil
 	}
 	return b
 }
 
+// dropExtractBatch forgets a batch whose answers will not be read and closes its reserved rows.
+func (s *Service) dropExtractBatch(ctx context.Context, scope Scope, job *FileExtractJob) {
+	s.releaseExtractCalls(ctx, scope, job.Batch.Reserved)
+	job.Batch = nil
+}
+
 // extractBatchAnswers submits the job's remaining chunks (errExtractBatchPending), or reads
-// the ended batch: one ledger row per answer, each read as a direct answer would be.
+// the ended batch: each answer settles the ledger row reserved for it at submit and is read
+// as a direct answer would be.
 func (s *Service) extractBatchAnswers(ctx context.Context, token string, d Decision, scope Scope, b BatchLLM, job *FileExtractJob) (map[int]ExtractPreviewResult, error) {
 	if job.Batch == nil {
 		return nil, s.submitExtractBatch(ctx, token, d, scope, b, job)
 	}
 	got, done, err := b.BatchResults(ctx, job.Batch.ID)
 	if err != nil || !done {
-		return nil, cmp.Or(err, errExtractBatchPending)
+		if time.Since(job.Batch.SubmittedAt) <= extractBatchWaitMax {
+			return nil, errExtractBatchPending // a failed poll is tried again until the batch's day is over
+		}
+		s.dropExtractBatch(ctx, scope, job)
+		return nil, cmp.Or(err, ErrUnavailable)
 	}
 	out := map[int]ExtractPreviewResult{}
 	for i := job.Next; i < len(job.Chunks); i++ {
 		ch, a := job.Chunks[i], got[extractBatchID(i)]
-		text, usage, err := s.ledgerCall(ctx, modelCallSpec{scope: scope, operation: fileExtractOperation, kind: "complete", provider: wikiProvider, model: s.Wiki.Generator().Model}, func(context.Context) (string, ProviderUsage, error) {
-			if a.Failed || a.Text == "" {
-				return "", a.Usage, ErrUnavailable
-			}
-			return a.Text, a.Usage, nil
-		})
-		job.Calls, job.Tokens = job.Calls+1, job.Tokens+max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens)
-		if err != nil {
+		ok := !a.Failed && a.Text != "" && len(a.Text) <= 256<<10 && utf8.ValidString(a.Text)
+		if err = s.settleExtractCall(ctx, scope, job.Batch.Reserved[extractBatchID(i)], a.Usage, ok); err != nil {
+			return nil, err
+		}
+		job.Calls, job.Tokens = job.Calls+1, job.Tokens+max(a.Usage.TotalTokens, a.Usage.InputTokens+a.Usage.OutputTokens)
+		if !ok {
 			out[i] = ExtractPreviewResult{Skipped: []ExtractSkip{{Locator: ch.Locator, Reason: "batch_failed"}}}
 			continue
 		}
-		out[i] = readExtractAnswer(text, job, ch)
+		out[i] = readExtractAnswer(a.Text, job, ch)
 	}
 	job.Batch = nil // filed: a later failure resumes per chunk instead of filing the answers twice
 	return out, nil
 }
 
-// submitExtractBatch checks every chunk may leave the server and the day's call cap has
-// room for all of them, then submits them as one batch.
+// submitExtractBatch checks every chunk may leave the server, reserves a ledger row per
+// chunk within the day's call cap, then submits them as one batch.
 func (s *Service) submitExtractBatch(ctx context.Context, token string, d Decision, scope Scope, b BatchLLM, job *FileExtractJob) error {
-	prompts := []BatchPrompt{}
+	prompts, ids := []BatchPrompt{}, []string{}
 	for i := job.Next; i < len(job.Chunks); i++ {
 		if err := s.extractTransfer(ctx, token, d, scope, job.Chunks[i]); err != nil {
 			return err
 		}
 		system, user := extractPrompt(job.Chunks[i].Text, job)
-		prompts = append(prompts, BatchPrompt{ID: extractBatchID(i), System: system, User: user})
+		prompts, ids = append(prompts, BatchPrompt{ID: extractBatchID(i), System: system, User: user}), append(ids, extractBatchID(i))
 	}
-	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
+	reserved, err := s.reserveExtractCalls(ctx, scope, ids)
 	if err != nil {
 		return err
-	}
-	if calls+len(prompts) > wikiDailyCallLimit {
-		return ErrModelBudget
 	}
 	id, err := b.SubmitBatch(ctx, prompts, wikiMaxCallTokens)
 	if err != nil {
+		s.releaseExtractCalls(ctx, scope, reserved)
 		return err
 	}
-	job.Batch = &ExtractBatch{ID: id, SubmittedAt: time.Now().UTC()}
+	job.Batch = &ExtractBatch{ID: id, SubmittedAt: time.Now().UTC(), Reserved: reserved}
 	return errExtractBatchPending
+}
+
+// extractBudgetMu makes counting the day's calls and reserving a batch's rows one step, so
+// two batches submitted at once cannot both pass the cap.
+// shortcut: guards one server process; several processes on one database would need a database lock.
+var extractBudgetMu sync.Mutex
+
+// reserveExtractCalls reserves one pending ledger row per prompt id, all or none, within
+// the day's call cap; the rows count against the cap from now on.
+func (s *Service) reserveExtractCalls(ctx context.Context, scope Scope, ids []string) (map[string]string, error) {
+	extractBudgetMu.Lock()
+	defer extractBudgetMu.Unlock()
+	calls, err := s.wikiDailyCalls(ctx, scope, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	if calls+len(ids) > wikiDailyCallLimit {
+		return nil, ErrModelBudget
+	}
+	out := map[string]string{}
+	for _, id := range ids {
+		r, err := s.beginProviderCall(ctx, scope, fileExtractOperation, wikiProvider, s.Wiki.Generator().Model)
+		if err != nil {
+			s.releaseExtractCalls(ctx, scope, out)
+			return nil, err
+		}
+		out[id] = r.ID
+	}
+	return out, nil
+}
+
+// releaseExtractCalls closes reserved rows whose prompts were never answered as failed calls.
+func (s *Service) releaseExtractCalls(ctx context.Context, scope Scope, reserved map[string]string) {
+	for _, id := range reserved {
+		_ = s.settleExtractCall(ctx, scope, id, ProviderUsage{}, false)
+	}
+}
+
+// settleExtractCall files one batch answer's usage on the row reserved for it.
+func (s *Service) settleExtractCall(ctx context.Context, scope Scope, id string, usage ProviderUsage, ok bool) error {
+	model := "unknown"
+	if s.Wiki != nil {
+		model = s.Wiki.Generator().Model
+	}
+	usage.Provider, usage.Model, usage.Requests = cmp.Or(usage.Provider, wikiProvider), cmp.Or(usage.Model, model), max(usage.Requests, 1)
+	return s.finishProviderCall(ctx, Record{ID: id, Scope: scope, Revision: 1, Cost: &ProviderCost{}}, usage, ok)
 }
 
 // Batches reports whether the operator turned batch mode on for a messages-protocol model.

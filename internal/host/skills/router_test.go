@@ -428,9 +428,9 @@ func TestRememberIsACandidateAndReportsRejection(t *testing.T) {
 	if (*calls)[0].path != "/v1/capture" || claim["basis"] != "inferred" || claim["text"] != "답은 짧게" {
 		t.Fatal(p)
 	}
-	call(t, "remember", `{"text":"Falcon ships Fridays","tags":["release"],"metadata":{"channel":"slack"},"entities":["Falcon"]}`)
+	call(t, "remember", `{"text":"Falcon ships Fridays","tags":["release"],"metadata":{"channel":"chat"},"entities":["Falcon"]}`)
 	claim = (*calls)[1].payload.(map[string]any)["claims"].([]any)[0].(map[string]any)
-	if canon(t, claim["tags"]) != `["release"]` || canon(t, claim["metadata"]) != `{"channel":"slack"}` || canon(t, claim["entities"]) != `[{"name":"Falcon"}]` {
+	if canon(t, claim["tags"]) != `["release"]` || canon(t, claim["metadata"]) != `{"channel":"chat"}` || canon(t, claim["entities"]) != `[{"name":"Falcon"}]` {
 		t.Fatal(claim)
 	}
 	for _, text := range []any{"", "    ", strings.Repeat("a", 4001), strings.Repeat("가", 1334), json123()} {

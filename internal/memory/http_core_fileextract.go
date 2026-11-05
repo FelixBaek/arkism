@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -69,23 +70,38 @@ func registerFileextractCoreHTTP(mux routeRegistrar, s *Service, stats *requestM
 // extractJobSlots bounds how many queued extraction jobs call the model at once.
 var extractJobSlots = make(chan struct{}, 2)
 
-// startExtractJob runs a queued job after the response; the caller polls it. A job
-// waiting on a provider batch is run again every minute until the batch ends (a day at
-// most). A job stopped by a restart or the budget resumes through its run route.
+// startExtractJob runs a queued job after the response; the caller polls it.
+// A job stopped by a restart or the budget resumes through its run route.
 func (s *Service) startExtractJob(r *http.Request, scope Scope, out FileMemoriesResult, err error) {
 	if err != nil || out.JobID == "" || out.Status != JobStatusPending {
 		return
 	}
-	id := out.JobID
-	ctx, token := context.WithoutCancel(r.Context()), bearer(r)
+	s.followExtractJob(context.WithoutCancel(r.Context()), bearer(r), scope, out.JobID)
+}
+
+// extractFollowers names the jobs a loop of this process is running, so a job has one loop.
+var extractFollowers sync.Map
+
+// followExtractJob runs a job in the background under the token of the person who asked.
+// A job waiting on a provider batch is run again every minute until the batch ends (a
+// day at most); after a restart the owner's next poll of the job starts this again.
+func (s *Service) followExtractJob(ctx context.Context, token string, scope Scope, id string) {
+	if _, busy := extractFollowers.LoadOrStore(id, true); busy {
+		return
+	}
 	go func() {
+		defer extractFollowers.Delete(id)
 		for start := time.Now(); ; time.Sleep(extractBatchPoll) {
 			extractJobSlots <- struct{}{} // held per run, not while waiting on a batch
 			view, err := s.RunFileExtractJob(ctx, token, scope, id)
 			<-extractJobSlots
-			if err != nil || view.Status != JobStatusRetry || view.Job.Error != extractBatchPending || time.Since(start) > extractBatchWaitMax {
+			if err != nil || !extractBatchWaiting(view) || time.Since(start) > extractBatchWaitMax {
 				return
 			}
 		}
 	}()
+}
+
+func extractBatchWaiting(v FileExtractJobView) bool {
+	return v.Status == JobStatusRetry && v.Job.Error == extractBatchPending
 }

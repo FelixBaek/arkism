@@ -2,12 +2,15 @@ package memory
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -31,7 +34,7 @@ func TestIngestChunksModeLabelsAndDedupe(t *testing.T) {
 	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionMode: ptr(spaceExtractChunks)})
 	at := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	item := IngestItem{Content: "Project Falcon ships on Fridays.", Context: "release channel", Timestamp: &at, Tags: []string{"release"},
-		Metadata: map[string]string{"channel": "slack"}, Entities: []string{"Falcon"}}
+		Metadata: map[string]string{"channel": "chat"}, Entities: []string{"Falcon"}}
 	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{item, {Content: "Second note about tabs."}}})
 	if err != nil || len(out.Items) != 2 || out.Items[0].CandidatesCreated != 1 || out.Items[1].CandidatesCreated != 1 || out.Items[0].Status != JobStatusDone {
 		t.Fatalf("ingest %+v %v", out, err)
@@ -40,7 +43,7 @@ func TestIngestChunksModeLabelsAndDedupe(t *testing.T) {
 	if !slices.ContainsFunc(c.Entities, func(e EntityInput) bool { return e.Name == "Falcon" }) {
 		t.Fatalf("entities %+v", c.Entities)
 	}
-	for _, tag := range []string{"release", "meta:channel=slack"} {
+	for _, tag := range []string{"release", "meta:channel=chat"} {
 		if !slices.Contains(c.Tags, tag) {
 			t.Fatalf("tags %v miss %s", c.Tags, tag)
 		}
@@ -278,5 +281,195 @@ func TestExtractionSettingsValidation(t *testing.T) {
 		if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, in, false); err == nil {
 			t.Fatalf("accepted %+v", in)
 		}
+	}
+}
+
+func TestIngestImageBlocksAndPerItemResults(t *testing.T) {
+	claim := `{"content":"금요일에는 배포하지 않는다","kind":"decision","semantic_kind":"preference","evidence_kind":"inference","evidence_quote":"금요일 배포 금지","confidence":0.8}`
+	f, llm := mediaFixture(t, extractAnswer(claim))
+	png := IngestBlock{Type: "image", MIME: "image/png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PNGDATA"))}
+	// Without the vision opt-in an image block is refused before anything is stored.
+	if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Blocks: []IngestBlock{png}}}}); !errors.Is(err, errUnsupportedFormat) {
+		t.Fatalf("no vision: %v", err)
+	}
+	for _, bad := range [][]IngestItem{
+		{{Content: "x", Blocks: []IngestBlock{png}}},
+		{{Blocks: []IngestBlock{{Type: "image", MIME: "image/gif", ContentBase64: png.ContentBase64}}}},
+		{{Blocks: []IngestBlock{{Type: "text", Text: "x", MIME: "image/png"}}}},
+		{{Blocks: slices.Repeat([]IngestBlock{png}, fileVisionMaxPages+1)}},
+	} {
+		if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: bad}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%+v: %v", bad, err)
+		}
+	}
+	if extractRows(f) != 0 || len(ledgerOps(f)) != 0 {
+		t.Fatal("stored or called a model")
+	}
+	v := &fakeVisionLLM{fakeWikiLLM: llm, reads: []string{"금요일 배포 금지\n<private>집 주소 서울</private>"}}
+	f.svc.Wiki = v
+	// The second item's image cannot be read: it fails on its own, the first stays stored.
+	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{
+		{Blocks: []IngestBlock{{Type: "text", Text: "Board notes:"}, png}}, {Blocks: []IngestBlock{png}}}})
+	if err != nil || len(out.Items) != 2 || out.Items[0].Status != JobStatusDone || out.Items[0].CandidatesCreated != 1 || out.Items[0].Error != "" ||
+		out.Items[1].Status != JobStatusFailed || out.Items[1].Error == "" || out.Items[1].JobID != "" {
+		t.Fatalf("ingest %+v %v", out, err)
+	}
+	if len(llm.prompts) != 1 || !strings.Contains(llm.prompts[0], "Board notes:\n\n금요일 배포 금지") || strings.Contains(llm.prompts[0], "집 주소") {
+		t.Fatalf("prompts %q", llm.prompts)
+	}
+}
+
+func TestIngestLaterItemFailureKeepsEarlierItemWithItsOwnStatus(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(extractTestClaim))
+	src := "배포 전에 항상 테스트를 실행한다."
+	// The second item's model call has no answer left: its job is stored failed and resumable.
+	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Content: src}, {Content: src + " 두 번째"}}})
+	if err != nil || out.Items[0].Status != JobStatusDone || out.Items[0].CandidatesCreated != 1 || out.Items[1].Status != JobStatusFailed ||
+		out.Items[1].JobID == "" || out.Items[1].Error == "" || len(llm.prompts) != 2 {
+		t.Fatalf("ingest %+v %v", out, err)
+	}
+	// Every item failing before anything was stored fails the request.
+	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{{Pattern: "금지어", Action: "block"}}})
+	if _, err = f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Content: "금지어 포함"}}}); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("all failed: %v", err)
+	}
+}
+
+// countingBatchLLM accepts every batch and never ends one.
+type countingBatchLLM struct {
+	fakeWikiLLM
+	mu      sync.Mutex
+	batches int
+}
+
+func (f *countingBatchLLM) Batches() bool { return true }
+
+// Generator is slow so that two reservations overlap unless they are serialized.
+func (f *countingBatchLLM) Generator() Generator {
+	time.Sleep(2 * time.Millisecond)
+	return f.fakeWikiLLM.Generator()
+}
+func (f *countingBatchLLM) SubmitBatch(context.Context, []BatchPrompt, int) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.batches++
+	return "batch-" + strconv.Itoa(f.batches), nil
+}
+func (f *countingBatchLLM) BatchResults(context.Context, string) (map[string]BatchAnswer, bool, error) {
+	return nil, false, nil
+}
+
+func TestExtractBatchesReserveTheDailyCapAtomically(t *testing.T) {
+	f, _ := wikiFixture(t)
+	llm := &countingBatchLLM{}
+	f.svc.Wiki = llm
+	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionChunkSize: ptr(500)})
+	n := wikiDailyCallLimit/2 + 1 // two such batches do not fit in one day
+	ids := []string{}
+	for i := range 2 {
+		text := strings.Repeat(strings.Repeat("alpha beta gamma ", 25)+strconv.Itoa(i)+"\n\n", n)
+		out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Async: true, Items: []IngestItem{{Content: text}}})
+		if err != nil || out.Items[0].Status != JobStatusPending {
+			t.Fatalf("ingest %+v %v", out, err)
+		}
+		ids = append(ids, out.Items[0].JobID)
+	}
+	views := make([]FileExtractJobView, 2)
+	var wg sync.WaitGroup
+	for i, id := range ids {
+		wg.Go(func() { views[i], _ = f.svc.RunFileExtractJob(testCtx, f.human, scopeA, id) })
+	}
+	wg.Wait()
+	pending, budget := 0, 0
+	for _, v := range views {
+		switch {
+		case extractBatchWaiting(v) && len(v.Job.Batch.Reserved) == n:
+			pending++
+		case v.Status == JobStatusFailed && v.Job.Error == "model_budget_exceeded":
+			budget++
+		}
+	}
+	if pending != 1 || budget != 1 || llm.batches != 1 || len(f.repo.rows(colProviderUsage)) != n {
+		t.Fatalf("pending %d budget %d batches %d ledger %d views %+v", pending, budget, llm.batches, len(f.repo.rows(colProviderUsage)), views)
+	}
+}
+
+func TestExtractBatchResumesOnOwnerPollAndDropsWhenTurnedOff(t *testing.T) {
+	f, _ := wikiFixture(t)
+	llm := &fakeBatchLLM{}
+	f.svc.Wiki = llm
+	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionChunkSize: ptr(500)})
+	text := strings.Repeat(strings.Repeat("alpha beta gamma ", 25)+"\n\n", 3)
+	queue := func(content string) string {
+		out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Async: true, Items: []IngestItem{{Content: content}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.Items[0].JobID); err != nil || !extractBatchWaiting(v) {
+			t.Fatalf("submit %+v %v", v, err)
+		}
+		return out.Items[0].JobID
+	}
+	id := queue(text)
+	// No loop follows the job (as after a restart); the owner's poll starts one.
+	llm.done = true
+	if _, err := f.svc.GetFileExtractJob(testCtx, f.human, scopeA, id); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		r, err := f.svc.extractJob(testCtx, f.svc.Repo, scopeA, id)
+		if err == nil && r.Status == JobStatusDone {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("not resumed: %+v %v", r, err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	for _, r := range f.repo.rows(colProviderUsage) {
+		if r.Status != JobStatusDone {
+			t.Fatalf("ledger row %+v", r)
+		}
+	}
+	// Batching turned off while a batch waits: its rows close as failed, the job goes on per chunk.
+	llm.done = false
+	id = queue(text + "x")
+	plain := &fakeWikiLLM{answers: []string{extractAnswer(), extractAnswer(), extractAnswer()}}
+	f.svc.Wiki = plain
+	v, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, id)
+	failed := 0
+	for _, r := range f.repo.rows(colProviderUsage) {
+		if r.Status == JobStatusFailed {
+			failed++
+		}
+	}
+	if err != nil || v.Status != JobStatusDone || v.Job.Batch != nil || len(plain.prompts) != 3 || failed != 3 {
+		t.Fatalf("dropped %+v %v prompts %d failed rows %d", v, err, len(plain.prompts), failed)
+	}
+}
+
+func TestCaptureLabelsPassDefenseRules(t *testing.T) {
+	f, _ := wikiFixture(t)
+	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionMode: ptr(spaceExtractChunks),
+		DefenseRules: &[]SpaceDefenseRule{{Pattern: "codename", Action: "redact"}, {Pattern: "forbidden", Action: "block"}}})
+	labels := []string{"codename-x"}
+	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Content: "Plain note.", Tags: labels, Entities: []string{"codename"},
+		Metadata: map[string]string{"team": "codename team"}}}})
+	if err != nil || out.Items[0].CandidatesCreated != 1 || labels[0] != "codename-x" {
+		t.Fatalf("ingest %+v %v %v", out, err, labels)
+	}
+	c := candidateByText(f, "Plain note.")
+	if len(c.Entities) != 1 || c.Entities[0].Name != "[redacted]" {
+		t.Fatalf("entities %+v", c.Entities)
+	}
+	for _, tag := range []string{"[redacted]-x", "meta:team=[redacted] team"} {
+		if !slices.Contains(c.Tags, tag) {
+			t.Fatalf("tags %v miss %s", c.Tags, tag)
+		}
+	}
+	out, err = f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Content: "Other note.", Tags: []string{"forbidden"}}}})
+	if err != nil || out.Items[0].CandidatesCreated != 0 {
+		t.Fatalf("blocked label %+v %v", out, err)
 	}
 }

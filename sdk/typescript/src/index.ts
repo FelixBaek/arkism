@@ -2200,7 +2200,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/extract/preview`, undefined, body);
   }
   /** POST /v1/memories/ingest — Extract memory candidates from text items */
-  ingest_memories(body: { "scope": Scope; "items": Array<{ "content": string; "context"?: string; "timestamp"?: string; "metadata"?: { [key: string]: string }; "tags"?: Array<string>; "entities"?: Array<string>; "document_id"?: string; "update_mode"?: "" | "replace" | "append"; "strategy"?: string }>; "async"?: boolean }): Promise<{ [key: string]: unknown }> {
+  ingest_memories(body: { "scope": Scope; "items": Array<(unknown | unknown)>; "async"?: boolean }): Promise<{ [key: string]: unknown }> {
     return this.request("POST", `/v1/memories/ingest`, undefined, body);
   }
   /** POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document) */

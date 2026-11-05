@@ -159,7 +159,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_BLOB_SHAREDKEY_ENDPOINT` | Optional object storage that speaks the Shared Key blob protocol, instead of S3: the account's blob service URL (https). Set it with `_ACCOUNT`, `_CONTAINER`, `_KEY` (the base64 account key) and optionally `_PREFIX` (all `MEMORY_BLOB_SHAREDKEY_*`). Set this or `MEMORY_BLOB_S3_*`, not both |
 | `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.epub,.rtf,.odt`). `.doc`, `.xls` and `.ppt` have built-in readers; listed there, the converter reads the files those readers cannot. It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
 | `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images and scanned PDFs (JPEG page images, up to 8 pages) are read by it for memory extraction. Off by default; without it these uploads get 415 |
-| `MEMORY_EXTRACT_BATCH` | `1` lets queued extraction jobs of more than 2 chunks send them to the server model as one provider batch (messages protocol only: `{endpoint}/batches`). The job waits as `retry` with `batch_pending` and is checked every minute for up to a day; after a restart resume it with its run route. Each answer is filed in the usage ledger like a direct call and becomes review candidates only. Off by default |
+| `MEMORY_EXTRACT_BATCH` | `1` lets queued extraction jobs of more than 2 chunks send them to the server model as one provider batch (messages protocol only: `{endpoint}/batches`). Submitting reserves one usage-ledger row per chunk under the daily call cap (two batches cannot both pass it). The job waits as `retry` with `batch_pending` and is checked every minute for up to a day; after a restart the owner's next `GET` of the job (or its run route) resumes the checks. Each answer settles its reserved row and becomes review candidates only; turning the setting off drops a waiting batch and the job goes on per chunk. Off by default |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
@@ -363,7 +363,11 @@ wiki. What a person approves and how is described in
     1-16 text items (context, timestamp, tags, metadata, entities, strategy,
     `document_id`, `update_mode` replace or append) and turns them into review
     candidates through the same extraction as file uploads; `async: true`
-    queues every item as a job. Agents may call it only where the space lists
+    queues every item as a job. Each item reports its own `status` (`failed`
+    with `error`, and `job_id` when its text was stored); a failed item never
+    undoes earlier ones. Items may send ordered `blocks` (text and png/jpeg/webp
+    images) instead of `content`; images are read by the server model only with
+    `MEMORY_FILE_VISION=1`. Agents may call it only where the space lists
     `add_document` in `mcp_tools`, as for uploads. New space settings, all
     inherited and off or unchanged by default: `extraction_mode: "chunks"`
     (each chunk of at most 1000 characters becomes a candidate, no model

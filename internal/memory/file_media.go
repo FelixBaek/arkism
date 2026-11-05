@@ -154,6 +154,28 @@ func (s *Service) readImages(ctx context.Context, token string, d Decision, in F
 	return pages, nil
 }
 
+// ingestBlocksText joins an ingest item's blocks in order; each image block is read into
+// text exactly like an uploaded image (transfer check, budget, usage ledger).
+func (s *Service) ingestBlocksText(ctx context.Context, token string, d Decision, scope Scope, blocks []IngestBlock) (string, error) {
+	parts := make([]string, 0, len(blocks))
+	for i, b := range blocks {
+		if b.Type == "text" {
+			parts = append(parts, b.Text)
+			continue
+		}
+		raw, err := fileUpload(FileMemoriesInput{ContentBase64: b.ContentBase64})
+		if err != nil {
+			return "", err
+		}
+		pages, err := s.readImages(ctx, token, d, FileMemoriesInput{Scope: scope, Filename: fmt.Sprintf("block-%d", i+1)}, b.MIME, [][]byte{raw})
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, pages[0])
+	}
+	return strings.Join(parts, "\n\n"), nil
+}
+
 // transcribeFile turns one audio file into text through the transcription endpoint.
 func (s *Service) transcribeFile(ctx context.Context, token string, d Decision, in FileMemoriesInput, mime string, audio []byte) (string, error) {
 	if s.Transcriber == nil {

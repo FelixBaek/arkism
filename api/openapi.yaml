@@ -39012,7 +39012,7 @@
           "Management"
         ],
         "summary": "Extract memory candidates from text items",
-        "description": "Extracts memory candidates from 1-16 text items (content at most 512 KiB each) under the space's extraction settings; every claim becomes a candidate through capture and a person reviews every one, nothing is approved here. Per item: context (sent to the model next to the text), timestamp (reference time for relative dates, in the space's default_timezone; also the candidates' observed time), tags, metadata (meta:<key>=<value> tags), entities (names stated on every candidate, linked when a person approves), strategy (a named extraction strategy), document_id and update_mode. Items with the same document_id are one document of the caller: replace (default) extracts only chunks whose text changed and reports removed ones in delta; append adds the text after the document's earlier chunks. Without document_id the text itself names the document, so the same text is extracted once. Each item is its own document and job (job_id, also listed under /v1/operations): up to 2 chunks run in the request, more run as a queued job; async queues every item and answers at once (poll GET /v1/files/memories/jobs/{id}). Every item is validated, defended and filtered before any is stored; a bad item is 400 and stores nothing. Mode chunks stores each chunk (at most 1000 characters) as a candidate without a model call; other modes call the server model under the daily call cap and the usage ledger. With the space's extract_causal on, causes the model states between claims of one chunk become causal link candidates (GET /v1/causal/links) once a person approved both claims. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Extracts memory candidates from 1-16 text items (content at most 512 KiB each) under the space's extraction settings; every claim becomes a candidate through capture and a person reviews every one, nothing is approved here. Per item: context (sent to the model next to the text), timestamp (reference time for relative dates, in the space's default_timezone; also the candidates' observed time), tags, metadata (meta:<key>=<value> tags), entities (names stated on every candidate, linked when a person approves), strategy (a named extraction strategy), document_id and update_mode. Items with the same document_id are one document of the caller: replace (default) extracts only chunks whose text changed and reports removed ones in delta; append adds the text after the document's earlier chunks. Without document_id the text itself names the document, so the same text is extracted once. Each item is its own document and job (job_id, also listed under /v1/operations): up to 2 chunks run in the request, more run as a queued job; async queues every item and answers at once (poll GET /v1/files/memories/jobs/{id}). The whole request (item shapes, strategies, a configured model) is checked before anything is stored; a malformed item is 400 and stores nothing. After that each item stands alone: items[] has one result per item in order with status done, pending or failed; a failed item carries error (the error code, as in Error.code) and, when its text was already stored, job_id for its run route, and never undoes the items before it. The request answers with an error only when every item failed before anything was stored. A job waiting on a provider batch (status retry, job.error batch_pending) is polled by the server; after a restart the owner's next GET of the job resumes polling. Mode chunks stores each chunk (at most 1000 characters) as a candidate without a model call; other modes call the server model under the daily call cap and the usage ledger. With the space's extract_causal on, causes the model states between claims of one chunk become causal link candidates (GET /v1/causal/links) once a person approved both claims. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -39148,14 +39148,61 @@
                     "items": {
                       "type": "object",
                       "additionalProperties": false,
-                      "required": [
-                        "content"
+                      "oneOf": [
+                        {
+                          "required": [
+                            "content"
+                          ]
+                        },
+                        {
+                          "required": [
+                            "blocks"
+                          ]
+                        }
                       ],
                       "properties": {
                         "content": {
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 524288
+                        },
+                        "blocks": {
+                          "type": "array",
+                          "minItems": 1,
+                          "maxItems": 64,
+                          "description": "The content as ordered text and image blocks, instead of content. Image blocks (png, jpeg, webp; at most 8 per request, 4 MiB each) are read into text by the server model only when the operator set MEMORY_FILE_VISION=1 (otherwise the item fails with unsupported_media_type); each needs transfer:model_input, counts against the daily model call cap and is filed in the usage ledger (wiki_file_vision), and its text goes through the same defense rules, privacy filters and candidate review as the text blocks. Images are read during the request, also with async.",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "type"
+                            ],
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "text",
+                                  "image"
+                                ]
+                              },
+                              "text": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 524288
+                              },
+                              "content_base64": {
+                                "type": "string"
+                              },
+                              "mime": {
+                                "type": "string",
+                                "enum": [
+                                  "image/png",
+                                  "image/jpeg",
+                                  "image/webp"
+                                ]
+                              }
+                            }
+                          }
                         },
                         "context": {
                           "type": "string",

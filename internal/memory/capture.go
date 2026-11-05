@@ -280,10 +280,39 @@ func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInp
 	if !settings.ExtractionEnabled && slices.Contains(captureAutomaticEvents, in.Event.Type) {
 		return CaptureItem{}, ErrExtractionDisabled
 	}
-	if err := s.defendWith(ctx, "", defenseGuard{action: "capture"}, in.Scope, settings.DefenseRules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
+	texts, labelsBack := claimLabelTexts(&c)
+	if err := s.defendWith(ctx, "", defenseGuard{action: "capture"}, in.Scope, settings.DefenseRules, append([]*string{&c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan}, texts...)...); err != nil {
 		return CaptureItem{}, err
 	}
+	labelsBack()
 	return s.captureClaim(ctx, token, in, c)
+}
+
+// claimLabelTexts exposes copies of the claim's labels to the defense rules; the returned
+// func writes the (possibly redacted) metadata values back. The caller's slices stay untouched.
+func claimLabelTexts(c *CaptureClaim) ([]*string, func()) {
+	c.Tags, c.Entities = slices.Clone(c.Tags), slices.Clone(c.Entities)
+	keys := slices.Sorted(maps.Keys(c.Metadata))
+	values := make([]string, len(keys))
+	texts := []*string{}
+	for i, k := range keys {
+		values[i] = c.Metadata[k]
+		texts = append(texts, &values[i])
+	}
+	for i := range c.Tags {
+		texts = append(texts, &c.Tags[i])
+	}
+	for i := range c.Entities {
+		texts = append(texts, &c.Entities[i].Name)
+	}
+	return texts, func() {
+		if len(keys) > 0 {
+			c.Metadata = map[string]string{}
+			for i, k := range keys {
+				c.Metadata[k] = values[i]
+			}
+		}
+	}
 }
 
 // captureTransient reports a rejection a retry may get past, so the event keeps no receipt.
