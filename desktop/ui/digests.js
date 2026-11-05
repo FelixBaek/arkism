@@ -602,7 +602,7 @@ window.ArkismDigests = (ctx) => {
     body.append(members(mems, [], "근거 기억"));
     if (refs.length > mems.length) body.append(el("p", "meta", `승인된 다른 AI 정리 ${refs.length - mems.length}개도 근거로 썼어요.`));
     const info = [["얼마나 갈 내용", o && (DURABLE[o.durability] || o.durability)], ["AI 확신", o?.confidence != null ? `${Math.round(o.confidence * 100)}%` : ""],
-      ["다시 만드는 때", m && ({ manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh] || m.refresh)], ["쓴 모델", ((o?.generator || d?.generator)?.model) || ""]];
+      ["다시 만드는 때", m && ({ manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh?.mode ?? m.refresh] || (m.refresh?.mode ?? m.refresh))], ["쓴 모델", ((o?.generator || d?.generator)?.model) || ""]];
     const more = el("details", "insight-more"); more.append(el("summary", "", "자세히"), ctx.facts(info));
     body.append(more);
   }

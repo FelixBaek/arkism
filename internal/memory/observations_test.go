@@ -239,7 +239,7 @@ func TestObservationAndMentalModelDryRunPersistNothing(t *testing.T) {
 	if rows := f.repo.rows(colObservations); len(rows) != 0 {
 		t.Fatalf("dry run stored %d observations", len(rows))
 	}
-	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: mmRefreshManual})
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,14 +257,14 @@ func TestObservationAndMentalModelDryRunPersistNothing(t *testing.T) {
 
 func TestMentalModelRefreshReviewAndHistory(t *testing.T) {
 	f, llm, ms := obsFixture(t)
-	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: mmRefreshDaily})
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshDaily}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.svc.CreateMentalModel(testCtx, f.agent, MentalModelInput{Scope: scopeA, Title: "x", Query: "y", Refresh: mmRefreshManual}); !errors.Is(err, ErrDenied) {
+	if _, err := f.svc.CreateMentalModel(testCtx, f.agent, MentalModelInput{Scope: scopeA, Title: "x", Query: "y", Refresh: MentalModelRefresh{Mode: mmRefreshManual}}); !errors.Is(err, ErrDenied) {
 		t.Fatalf("agent create: %v", err)
 	}
-	if _, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "x", Query: "<private>y</private>", Refresh: mmRefreshManual}); !errors.Is(err, ErrSecretDetected) {
+	if _, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "x", Query: "<private>y</private>", Refresh: MentalModelRefresh{Mode: mmRefreshManual}}); !errors.Is(err, ErrSecretDetected) {
 		t.Fatalf("private query: %v", err)
 	}
 	outside, _ := json.Marshal(mentalModelAnswer{Summary: "Invented.", Citations: []string{"mem_not_recalled"}})
@@ -375,7 +375,7 @@ func TestObservationTransferGateIsPerMemory(t *testing.T) {
 		t.Fatalf("observation sensitivity %q", got)
 	}
 	// A mental-model refresh recalls for the model, so the same gate filters its recall.
-	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: mmRefreshManual})
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +422,7 @@ func TestSourceErasureClearsMentalModelText(t *testing.T) {
 	}
 	approved := func(title string, cites ...string) MentalModelView {
 		t.Helper()
-		mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: title, Query: "staging flag", Refresh: mmRefreshManual})
+		mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: title, Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
 		if err != nil {
 			t.Fatal(err)
 		}

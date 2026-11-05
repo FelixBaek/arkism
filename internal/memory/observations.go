@@ -136,6 +136,15 @@ type ObservationConsolidateInput struct {
 	Scope     Scope `json:"scope"`
 	DryRun    bool  `json:"dry_run,omitempty"`
 	MaxGroups int   `json:"max_groups,omitempty"`
+	// PlanOnly previews the run's strategy: what it would refresh and ask about, with no model call and no write.
+	PlanOnly bool `json:"plan_only,omitempty"`
+}
+
+// ConsolidationPlan is what a run would do, in the order it would do it.
+type ConsolidationPlan struct {
+	StaleObservations []string   `json:"stale_observations"`
+	Groups            [][]string `json:"groups"`
+	MentalModels      []string   `json:"mental_models"`
 }
 
 type ObservationRejection struct {
@@ -152,6 +161,7 @@ type ObservationConsolidateResult struct {
 	Refreshed    []ObservationView      `json:"refreshed"`
 	Rejected     []ObservationRejection `json:"rejected"`
 	MentalModels []MentalModelView      `json:"mental_models"`
+	Plan         *ConsolidationPlan     `json:"plan,omitempty"`
 	Calls        int                    `json:"calls"`
 	Tokens       int64                  `json:"tokens"`
 	Authority    string                 `json:"authority"`
@@ -210,6 +220,14 @@ func isDerivedCollection(col string) bool { return col == colObservations || col
 // servedByOwnRoutes: digests and derived records are read only through their own routes, which recheck their basis.
 func servedByOwnRoutes(col string) bool {
 	return col == colTopicDigests || col == colUserDigests || isDerivedCollection(col)
+}
+
+func recordIDs(records []Record) []string {
+	ids := make([]string, len(records))
+	for i := range records {
+		ids[i] = records[i].ID
+	}
+	return ids
 }
 
 func refIDs(refs []Ref) []string {
@@ -551,6 +569,10 @@ func (s *Service) ConsolidateObservations(ctx context.Context, token string, in 
 	}
 	out := ObservationConsolidateResult{DryRun: in.DryRun, Proposed: []ObservationView{}, Refreshed: []ObservationView{}, Rejected: []ObservationRejection{},
 		MentalModels: []MentalModelView{}, Authority: AuthorityDataOnly}
+	if in.PlanOnly {
+		in.DryRun, out.DryRun = true, true
+		out.Plan = &ConsolidationPlan{StaleObservations: []string{}, Groups: [][]string{}, MentalModels: []string{}}
+	}
 	if !in.DryRun {
 		if out.StaleMarked, err = s.sweepObservations(ctx, in.Scope, d.PrincipalID); err != nil {
 			return out, err
@@ -659,6 +681,10 @@ func (s *Service) refreshStaleObservations(ctx context.Context, token string, d 
 		}
 		done++
 		out.Groups++
+		if out.Plan != nil {
+			out.Plan.StaleObservations = append(out.Plan.StaleObservations, r.ID)
+			continue
+		}
 		drafts, err := s.askObservations(ctx, in.Scope, job, members, r.Text)
 		if err != nil {
 			if errors.Is(err, errModelAnswer) {
@@ -744,6 +770,10 @@ func (s *Service) proposeObservations(ctx context.Context, token string, d Decis
 		}
 		asked++
 		out.Groups++
+		if out.Plan != nil {
+			out.Plan.Groups = append(out.Plan.Groups, recordIDs(group))
+			continue
+		}
 		if err := s.proposeGroup(ctx, d, in, job, group, out); err != nil {
 			return err
 		}

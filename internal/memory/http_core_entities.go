@@ -13,6 +13,7 @@ func registerEntitiesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetr
 	mux.HandleFunc("GET /v1/entities/{id}", s.coreHTTPGetV1EntitiesId)
 	mux.HandleFunc("PATCH /v1/entities/{id}", s.coreHTTPPatchV1EntitiesId)
 	mux.HandleFunc("POST /v1/entities/{id}/merge", s.coreHTTPPostV1EntitiesIdMerge)
+	mux.HandleFunc("POST /v1/entities/{id}/summary", s.coreHTTPPostV1EntitiesIdSummary)
 	mux.HandleFunc("DELETE /v1/entities/{id}", s.coreHTTPDeleteV1EntitiesId)
 }
 
@@ -85,6 +86,15 @@ func (s *Service) coreHTTPPostV1EntitiesIdMerge(w http.ResponseWriter, r *http.R
 		return
 	}
 	out, err := s.MergeEntity(r.Context(), bearer(r), r.PathValue("id"), in)
+	respond(w, out, err)
+}
+
+func (s *Service) coreHTTPPostV1EntitiesIdSummary(w http.ResponseWriter, r *http.Request) {
+	var in EntitySummaryInput
+	if !decode(w, r, &in) {
+		return
+	}
+	out, err := s.DraftEntitySummary(r.Context(), bearer(r), r.PathValue("id"), in)
 	respond(w, out, err)
 }
 

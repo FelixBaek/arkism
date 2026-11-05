@@ -159,12 +159,28 @@ func storeUnmarshal(data []byte, dest any) error {
 	return storeAssign(v.Elem(), raw)
 }
 
+// storeAssignLegacy reads a plain string into a field that once was one and is now a struct.
+func storeAssignLegacy(v reflect.Value, raw any) bool {
+	text, ok := raw.(string)
+	if !ok || !v.CanAddr() {
+		return false
+	}
+	legacy, ok := v.Addr().Interface().(interface{ storeLegacyString(string) })
+	if ok {
+		legacy.storeLegacyString(text)
+	}
+	return ok
+}
+
 // storeAssign follows the driver's decode rules for the kinds records use:
 // JSON null zeroes the target, extended wrappers ($date, $numberLong,
 // $numberDouble, $numberInt) unwrap to their scalar.
 func storeAssign(v reflect.Value, raw any) error {
 	if raw == nil {
 		v.Set(reflect.Zero(v.Type()))
+		return nil
+	}
+	if storeAssignLegacy(v, raw) {
 		return nil
 	}
 	if v.Type() == timeType {

@@ -10,6 +10,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/entities/{id}":                                {action: "read:entities", scope: routeQuery},
 	"PATCH /v1/entities/{id}":                              {action: "write:entities", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"POST /v1/entities/{id}/merge":                         {action: "write:entities", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
+	"POST /v1/entities/{id}/summary":                       {action: "write:entities", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman, roleService}},
 	"DELETE /v1/entities/{id}":                             {action: "write:entities", scope: routeJSON, limit: 256 << 10, roles: []string{roleHuman}},
 	"GET /v1/crew/templates/research":                      {action: "read:crew", scope: routeQuery},
 	"POST /v1/crew/runs/{id}/lease":                        {action: "write:crew_runs", scope: routeJSON, limit: 256 << 10},

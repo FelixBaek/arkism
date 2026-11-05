@@ -228,14 +228,6 @@ func TestPostgresBlobIdentityReferencesAndGC(t *testing.T) {
 	}
 }
 
-func recordIDs(records []Record) []string {
-	ids := make([]string, len(records))
-	for i := range records {
-		ids[i] = records[i].ID
-	}
-	return ids
-}
-
 func TestPostgresMemoryUsageWindowSkipsOldReceipts(t *testing.T) {
 	p, scope := openPostgresListsTest(t)
 	ctx := context.Background()

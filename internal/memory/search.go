@@ -811,6 +811,11 @@ func (s *Service) WorkOnce(ctx context.Context, workerToken string) (result erro
 		success, e = s.deliverWebhook(ctx, &job)
 		return e
 	}
+	if job.Kind == autoDeriveJobKind {
+		e = s.runAutoDerive(ctx, workerToken, job)
+		handled = e == nil
+		return e
+	}
 	if job.Kind != "embedding" {
 		return ErrInvalid
 	}

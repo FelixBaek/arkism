@@ -237,7 +237,7 @@ func TestReflectEntityToolChecksEachMemory(t *testing.T) {
 // An approved summary reaches the model only while every memory it cites may.
 func TestReflectMentalModelToolFollowsCitations(t *testing.T) {
 	f, llm, ms := obsFixture(t)
-	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: mmRefreshManual})
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: MentalModelRefresh{Mode: mmRefreshManual}})
 	if err != nil {
 		t.Fatal(err)
 	}

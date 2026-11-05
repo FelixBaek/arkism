@@ -67,7 +67,7 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 		return Record{}, e
 	}
 	if status == "approved" {
-		s.extractEntitiesAfterApproval(ctx, r.ApprovedBy, r)
+		s.afterMemoryApproval(ctx, r.ApprovedBy, r)
 	}
 	return r, nil
 }

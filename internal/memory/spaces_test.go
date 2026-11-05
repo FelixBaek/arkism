@@ -335,7 +335,7 @@ func TestSpaceTemplateCarriesDefinitionsForHumansOnly(t *testing.T) {
 	if _, err := f.svc.CreateDirective(testCtx, f.human, in); err != nil {
 		t.Fatal(err)
 	}
-	mm := MentalModelInput{Scope: scopeA, Title: "Deploy habits", Query: "how do we deploy", Refresh: "manual"}
+	mm := MentalModelInput{Scope: scopeA, Title: "Deploy habits", Query: "how do we deploy", Refresh: MentalModelRefresh{Mode: "manual"}}
 	if _, err := f.svc.CreateMentalModel(testCtx, f.human, mm); err != nil {
 		t.Fatal(err)
 	}

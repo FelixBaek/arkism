@@ -15,6 +15,14 @@ type EntityPatchInput struct {
 	RemoveAliases []string `json:"remove_aliases,omitempty"`
 	// Confirm accepts a model-proposed entity and its proposed mentions.
 	Confirm bool `json:"confirm,omitempty"`
+	// SummaryReview approves (the draft becomes the summary) or rejects the summary draft.
+	SummaryReview string `json:"summary_review,omitempty"`
+}
+
+// EntitySummaryInput asks for a summary draft; dry_run returns it without storing.
+type EntitySummaryInput struct {
+	Scope  Scope `json:"scope"`
+	DryRun bool  `json:"dry_run,omitempty"`
 }
 
 type EntityMergeInput struct {
@@ -31,9 +39,9 @@ type EntityDeleteResult struct {
 	RemovedMentions int    `json:"removed_mentions"`
 }
 
-// editEntities runs a person's change under the scope's entity lock.
-func (s *Service) editEntities(ctx context.Context, token string, scope Scope, id, action string, fn func(store namedEntityStore, g *entityGraph, actor string, now time.Time) error) error {
-	d, err := s.entityEditor(ctx, token, scope, id)
+// editEntities runs a person's change (or one of roles) under the scope's entity lock.
+func (s *Service) editEntities(ctx context.Context, token string, scope Scope, id, action string, fn func(store namedEntityStore, g *entityGraph, actor string, now time.Time) error, roles ...string) error {
+	d, err := s.entityEditor(ctx, token, scope, id, roles...)
 	if err != nil {
 		return err
 	}
@@ -69,7 +77,77 @@ func validEntityPatch(in EntityPatchInput) bool {
 			return false
 		}
 	}
-	return in.Name != nil || in.Type != nil || len(in.AddAliases)+len(in.RemoveAliases) > 0 || in.Confirm
+	if in.SummaryReview != "" && in.SummaryReview != mmReviewApprove && in.SummaryReview != mmReviewReject {
+		return false
+	}
+	return in.Name != nil || in.Type != nil || len(in.AddAliases)+len(in.RemoveAliases) > 0 || in.Confirm || in.SummaryReview != ""
+}
+
+// reviewEntitySummary applies a person's decision on the summary draft; approval needs every citation to still stand.
+func (s *Service) reviewEntitySummary(ctx context.Context, scope Scope, e *NamedEntity, action, actor string, now time.Time) error {
+	if action == "" {
+		return nil
+	}
+	if e.SummaryDraft == nil || action == mmReviewApprove && !s.citationsStand(ctx, scope, e.SummaryDraft.Citations) {
+		return ErrConflict
+	}
+	if action == mmReviewApprove {
+		decided := *e.SummaryDraft
+		decided.Status, decided.Action, decided.By, decided.At = statusActive, action, actor, now
+		e.Summary = &decided
+	}
+	e.SummaryDraft = nil
+	return nil
+}
+
+// DraftEntitySummary asks the server model for a cited summary of an entity from the approved
+// memories and observations its names recall (each one passes the transfer gate). The
+// draft waits on the entity for a person (PATCH summary_review); it is never published by itself.
+func (s *Service) DraftEntitySummary(ctx context.Context, token, id string, in EntitySummaryInput) (NamedEntity, error) {
+	d, err := s.entityEditor(ctx, token, in.Scope, id, roleService)
+	if err != nil {
+		return NamedEntity{}, err
+	}
+	if s.Wiki == nil {
+		return NamedEntity{}, ErrModelNotConfigured
+	}
+	store, err := s.entityStore()
+	if err != nil {
+		return NamedEntity{}, err
+	}
+	g, err := loadEntityGraph(ctx, store, in.Scope)
+	if err != nil {
+		return NamedEntity{}, err
+	}
+	e, err := errEntityNotFound(g, id)
+	if err != nil {
+		return NamedEntity{}, err
+	}
+	query := strings.Join(append([]string{e.Name}, e.Aliases...), " ")
+	draft, err := s.citedSummaryDraft(ctx, token, d, summaryRequest{scope: in.Scope, title: e.Type + ": " + e.Name, query: query}, &WikiJob{MaxTotalTokens: obsRunTokens})
+	if err != nil {
+		return NamedEntity{}, err
+	}
+	if in.DryRun {
+		out := publicEntity(*e)
+		out.SummaryDraft = draft
+		return out, nil
+	}
+	var out NamedEntity
+	err = s.editEntities(ctx, token, in.Scope, id, "summarize:entities", func(store namedEntityStore, g *entityGraph, actor string, now time.Time) error {
+		cur, err := errEntityNotFound(g, id)
+		if err != nil {
+			return err
+		}
+		next := *cur
+		next.SummaryDraft, next.UpdatedAt = draft, now
+		if err = store.PutNamedEntity(ctx, in.Scope, next); err != nil {
+			return err
+		}
+		out = publicEntity(next)
+		return nil
+	}, roleService)
+	return out, err
 }
 
 // patchedEntity applies a patch; a renamed entity keeps its old name as an alias.
@@ -127,6 +205,9 @@ func (s *Service) PatchEntity(ctx context.Context, token, id string, in EntityPa
 		next := patchedEntity(*e, in)
 		if len(next.Aliases) > entityMaxAliases || keyTaken(g, next) {
 			return ErrConflict
+		}
+		if err = s.reviewEntitySummary(ctx, in.Scope, &next, in.SummaryReview, actor, now); err != nil {
+			return err
 		}
 		next.EditedBy, next.UpdatedAt = actor, now
 		if err = store.PutNamedEntity(ctx, in.Scope, next); err != nil {

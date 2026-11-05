@@ -27,16 +27,19 @@ const (
 )
 
 type NamedEntity struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	Aliases   []string  `json:"aliases"`
-	Proposed  bool      `json:"proposed,omitempty"`
-	Deleted   bool      `json:"deleted,omitempty"`
-	Keys      []string  `json:"keys,omitempty"`
-	EditedBy  string    `json:"edited_by,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Aliases  []string `json:"aliases"`
+	Proposed bool     `json:"proposed,omitempty"`
+	Deleted  bool     `json:"deleted,omitempty"`
+	Keys     []string `json:"keys,omitempty"`
+	EditedBy string   `json:"edited_by,omitempty"`
+	// Summary is the approved description; SummaryDraft is the model's cited draft a person reviews.
+	Summary      *DerivedRevision `json:"summary,omitempty"`
+	SummaryDraft *DerivedRevision `json:"summary_draft,omitempty"`
+	CreatedAt    time.Time        `json:"created_at"`
+	UpdatedAt    time.Time        `json:"updated_at"`
 }
 
 // EntityMention is one memory -mentions-> entity edge.
@@ -188,14 +191,16 @@ func (s *Service) entityEditor(ctx context.Context, token string, scope Scope, i
 	return d, nil
 }
 
-// extractEntitiesAfterApproval runs the deterministic pass for a newly approved
-// memory. It is best effort and time boxed: approval never fails or waits long on it.
-func (s *Service) extractEntitiesAfterApproval(ctx context.Context, actor string, r Record) {
+// afterMemoryApproval runs the deterministic entity pass for a newly approved
+// memory and counts it toward automatic derivation (auto_derive.go). It is best
+// effort and time boxed: approval never fails or waits long on it.
+func (s *Service) afterMemoryApproval(ctx context.Context, actor string, r Record) {
 	defer func() {
 		if p := recover(); p != nil {
 			slog.Warn("entity extraction after approval panicked", "memory", r.ID)
 		}
 	}()
+	s.noteApprovedMemory(ctx, r.Scope)
 	if _, err := s.entityStore(); err != nil || !entityExtractable(r) || ctx.Err() != nil {
 		return // no entity store, nothing approved to read, or the request is over
 	}

@@ -114,7 +114,7 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 		return SupersedeOutput{}, e
 	}
 	// The old memory's mentions left with its status; the edited text gets its own.
-	s.extractEntitiesAfterApproval(ctx, actor.PrincipalID, out.New)
+	s.afterMemoryApproval(ctx, actor.PrincipalID, out.New)
 	return out, nil
 }
 

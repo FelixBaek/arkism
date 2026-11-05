@@ -39908,6 +39908,12 @@
                             "edited_by": {
                               "type": "string"
                             },
+                            "summary": {
+                              "$ref": "#/components/schemas/WireResponseDerivedRevision"
+                            },
+                            "summary_draft": {
+                              "$ref": "#/components/schemas/WireResponseDerivedRevision"
+                            },
                             "created_at": {
                               "type": "string",
                               "format": "date-time"
@@ -40131,7 +40137,7 @@
           "Management"
         ],
         "summary": "Entities: edit",
-        "description": "Human-only rename (the old name stays an alias), type change, alias add/remove, or confirm of a model-proposed entity and its proposed mentions. Requires write:entities.",
+        "description": "Human-only rename (the old name stays an alias), type change, alias add/remove, or confirm of a model-proposed entity and its proposed mentions. summary_review approve|reject decides the summary draft (approval needs every citation to still stand, else 409). Requires write:entities.",
         "parameters": [
           {
             "in": "path",
@@ -40183,6 +40189,12 @@
                     },
                     "edited_by": {
                       "type": "string"
+                    },
+                    "summary": {
+                      "$ref": "#/components/schemas/WireResponseDerivedRevision"
+                    },
+                    "summary_draft": {
+                      "$ref": "#/components/schemas/WireResponseDerivedRevision"
                     },
                     "created_at": {
                       "type": "string",
@@ -40558,6 +40570,7 @@
         }
       }
     },
+    "/v1/entities/{id}/summary": {"post": {"operationId": "draftEntitySummary", "tags": ["Management"], "summary": "Entities: draft a cited summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the entity's name and aliases over approved memories and approved observations (each passes the transfer gate to the server model) and asks the server model for a summary citing recalled ids only. The draft is stored as summary_draft and is published only when a person approves it (PATCH /v1/entities/{id} summary_review). dry_run returns the draft and stores nothing. Requires write:entities.", "parameters": [{"in": "path", "name": "id", "required": true, "schema": {"type": "string", "pattern": "^[a-zA-Z0-9_-]{1,128}$"}}], "responses": {"200": {"description": "NamedEntity with summary_draft"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found (entity, or nothing recalled)"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/entities/{id}/merge": {
       "post": {
         "operationId": "mergeEntity",
@@ -40617,6 +40630,12 @@
                     },
                     "edited_by": {
                       "type": "string"
+                    },
+                    "summary": {
+                      "$ref": "#/components/schemas/WireResponseDerivedRevision"
+                    },
+                    "summary_draft": {
+                      "$ref": "#/components/schemas/WireResponseDerivedRevision"
                     },
                     "created_at": {
                       "type": "string",
@@ -42948,12 +42967,12 @@
       }
     },
     "/v1/observations": {"get": {"summary": "Observations of one status (default active), newest change first, paginated (read:observations)", "description": "Filters: status proposed|active|rejected|stale, durability momentary|lasting, source_memory_id, q (substring). limit 1-100 (50), cursor from next_cursor; at most 500 rows per status are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["proposed", "active", "rejected", "stale"]}}, {"name": "durability", "in": "query", "schema": {"type": "string", "enum": ["momentary", "lasting"]}}, {"name": "source_memory_id", "in": "query", "schema": {"type": "string"}}, {"name": "q", "in": "query", "schema": {"type": "string", "maxLength": 200}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, status, revision, content, source_memories, source_memory_ids, durability, durability_reason, confidence, fresh, derived, diff, stale_mark, generator, review}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
-    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3)}. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger).", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/observations/consolidate": {"post": {"summary": "Consolidate approved memories into proposed observations (human or service principals)", "description": "Body {scope, dry_run, max_groups 1-10 (3), plan_only}. plan_only previews the strategy: it makes no model call and writes nothing, and returns plan {stale_observations, groups (member memory ids), mental_models} in run order. Marks observations whose sources are no longer approved as stale, proposes a refresh of stale ones (with a diff against the previous text), clusters approved memories and asks the server model for observations citing at least two memories of the group. Citations outside the group are refused. Due mental models are refreshed too. Everything written is a proposal or draft a person reviews. dry_run stores no observation or mental model (the model call is still recorded in the usage ledger).", "parameters": [], "responses": {"200": {"description": "{dry_run, stale_marked, groups, proposed, refreshed, rejected[{group, code, target}], mental_models, plan, calls, tokens, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/observations/review_batch": {"post": {"summary": "Review several observations (human principals only)", "description": "Body {scope, items[1-50]{id, expected_revision, action approve|reject|edit, content?, reason?}}. Each item stands alone and carries its own status and code.", "parameters": [], "responses": {"200": {"description": "{items[{id, status, code, observation}], reviewed, failed}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/observations/{id}": {"get": {"summary": "One observation", "description": "Content, cited memories, durability, freshness of the sources and, for a proposal, the diff against the last approved text.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Observation view"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/observations/{id}/history": {"get": {"summary": "All revisions of one observation with line diffs", "description": "Each revision carries the diff against the revision before it.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{id, status, revisions[{version, status, action, text, citations, by, at, diff}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/observations/{id}/review": {"post": {"summary": "A person's decision on an observation (human principals only)", "description": "Body {scope, expected_revision, action approve|reject|edit, content? (edit only), reason?}. approve makes a proposal recallable after rechecking its sources; reject retires a proposal or an active observation; edit replaces the wording and makes it active.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Observation view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
-    "/v1/mental-models": {"get": {"summary": "Mental models of the scope, paginated (read:mental_models)", "description": "limit 1-100 (50), cursor from next_cursor; at most 200 are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, revision, title, query, refresh, active, draft, draft_diff, last_refresh_at}], next_cursor, authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "post": {"summary": "Create a mental model (human principals only)", "description": "Body {scope, title 1-120, query 1-1000, refresh manual|on_change|daily}. Secrets and private spans are refused.", "parameters": [], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/mental-models": {"get": {"summary": "Mental models of the scope, paginated (read:mental_models)", "description": "limit 1-100 (50), cursor from next_cursor; at most 200 are read.", "parameters": [{"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "cursor", "in": "query", "schema": {"type": "string"}}, {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100}}], "responses": {"200": {"description": "{items[{id, revision, title, query, refresh, active, draft, draft_diff, last_refresh_at, stale, stale_reason}], next_cursor, authority}. stale is true when a cited record no longer stands (stale_reason sources_changed) or approved memories changed after the last refresh (new_memories)."}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "post": {"summary": "Create a mental model (human principals only)", "description": "Body {scope, title 1-120, query 1-1000, refresh}. refresh is {mode manual|on_change|daily, cron (5 fields, UTC; refreshes on a tick only when approved memories changed), after_consolidation, min_interval (duration up to 720h), kinds, tags (recall filters, up to 16 each), max_tokens 1000-40000}; a bare mode string is still accepted. Secrets and private spans are refused.", "parameters": [], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/mental-models/{id}": {"get": {"summary": "One mental model", "description": "The approved summary (active), a pending draft and the draft's diff against the active text.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "patch": {"summary": "Change a mental model's title, query or refresh (human principals only)", "description": "Body {scope, expected_revision, title, query, refresh}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "delete": {"summary": "Delete a mental model (human principals only)", "description": "Body {scope, expected_revision}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{deleted}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/mental-models/{id}/history": {"get": {"summary": "All summary revisions of one mental model with line diffs", "description": "Each revision carries the diff against the revision before it.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{id, revisions[{version, status, action, text, citations, by, at, diff}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view (dry_run true for a dry run)"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
@@ -70098,7 +70117,7 @@
             "type": "string"
           },
           "refresh": {
-            "type": "string"
+            "$ref": "#/components/schemas/WireResponseMentalModelRefresh"
           },
           "active": {
             "$ref": "#/components/schemas/WireResponseDerivedRevision"
@@ -70579,6 +70598,45 @@
         ],
         "x-go-type": "memory.RecallTimeWindow",
         "x-go-source": "internal/memory/recall_lanes.go"
+      },
+      "WireResponseMentalModelRefresh": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string"
+          },
+          "cron": {
+            "type": "string"
+          },
+          "after_consolidation": {
+            "type": "boolean"
+          },
+          "min_interval": {
+            "type": "string"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "max_tokens": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "mode"
+        ],
+        "x-go-type": "memory.MentalModelRefresh",
+        "x-go-source": "internal/memory/mental_models.go",
+        "description": "MentalModelRefresh says when a mental model is due and what a refresh reads.\nMode keeps the three original rules; cron (5 fields, UTC) refreshes on a\nschedule but only when approved memories changed since the last refresh;\nafter_consolidation refreshes once a consolidation run changed observations;\nmin_interval (a duration such as \"6h\") holds every trigger back; kinds and\ntags narrow the recall; max_tokens caps one refresh (prompt and answer).\nThe old form, a bare mode string, still decodes from bodies, records and bundles."
       }
     },
     "headers": {
