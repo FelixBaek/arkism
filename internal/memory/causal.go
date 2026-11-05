@@ -11,9 +11,11 @@ package memory
 // stored once; a rejected row stays as a tombstone the model cannot propose again.
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -75,9 +77,10 @@ type CausalLink struct {
 }
 
 type CausalLinkPage struct {
-	Items     []CausalLink `json:"items"`
-	Truncated bool         `json:"truncated"`
-	Authority string       `json:"authority"`
+	Items      []CausalLink `json:"items"`
+	NextCursor string       `json:"next_cursor,omitempty"`
+	Truncated  bool         `json:"truncated"` // the causalScanMax row read was full
+	Authority  string       `json:"authority"`
 }
 
 type CausalProposeResult struct {
@@ -121,8 +124,7 @@ func isCausal(r Record) bool {
 func causalLive(m Record) bool { return live(m) && entityExtractable(m) }
 
 func validCausalReason(reason string) bool {
-	return utf8.ValidString(reason) && utf8.RuneCountInString(reason) <= causalReasonMax && !containsSecret(reason) &&
-		!strings.Contains(strings.ToLower(reason), "<private")
+	return utf8.ValidString(reason) && utf8.RuneCountInString(reason) <= causalReasonMax && !containsSecret(reason) && !hasPrivateMarker(reason)
 }
 
 func causalView(r Record) CausalLink {
@@ -241,6 +243,10 @@ func (s *Service) ReviewCausalLink(ctx context.Context, token, id string, in Cau
 	if !isCausal(cur) {
 		return CausalLink{}, ErrNotFound
 	}
+	// Either decision returns the reason, so the reviewer must be able to read both memories.
+	if ok, err := s.causalReadable(ctx, token, d, cur); err != nil || !ok {
+		return CausalLink{}, cmp.Or(err, ErrDenied)
+	}
 	if in.Action == "approve" {
 		// The approver must be able to read both memories, and both must still be live.
 		for _, ref := range cur.Relations {
@@ -300,15 +306,17 @@ func decideCausal(ctx context.Context, tx Tx, r *Record, action, actor string) e
 }
 
 // ListCausalLinks pages the scope's links of one status (default candidate, the
-// review queue), newest first, keeping only links whose memories the caller may read.
-func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope, status string, limit int) (CausalLinkPage, error) {
+// review queue), newest first, keeping only links whose memories the caller may
+// read. cursor is the offset next_cursor gave (observations use the same paging).
+func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope, status, cursor string, limit int) (CausalLinkPage, error) {
 	if status == "" {
 		status = "candidate"
 	}
 	if limit == 0 {
 		limit = causalListDefault
 	}
-	if !validScope(scope) || !slices.Contains(causalStatuses, status) || limit < 1 || limit > causalListMax {
+	offset, err := strconv.Atoi(cmp.Or(cursor, "0"))
+	if err != nil || offset < 0 || offset >= causalScanMax || !validScope(scope) || !slices.Contains(causalStatuses, status) || limit < 1 || limit > causalListMax {
 		return CausalLinkPage{}, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "read:"+colMemoryRelations, scope, "", "")
@@ -319,23 +327,37 @@ func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope
 	if err != nil {
 		return CausalLinkPage{}, err
 	}
+	visible, err := s.readableCausal(ctx, token, d, scope, rows, offset+limit+1)
+	if err != nil {
+		return CausalLinkPage{}, err
+	}
 	out := CausalLinkPage{Items: []CausalLink{}, Truncated: len(rows) >= causalScanMax, Authority: AuthorityDataOnly}
+	for _, r := range visible[min(offset, len(visible)):min(offset+limit, len(visible))] {
+		out.Items = append(out.Items, causalView(r))
+	}
+	if len(visible) > offset+limit {
+		out.NextCursor = strconv.Itoa(offset + limit)
+	}
+	return out, nil
+}
+
+// readableCausal keeps the first want causal rows of scope whose two memories the caller may read.
+func (s *Service) readableCausal(ctx context.Context, token string, d Decision, scope Scope, rows []Record, want int) ([]Record, error) {
+	out := []Record{}
 	for _, r := range rows {
+		if len(out) == want {
+			break
+		}
 		if !isCausal(r) || r.Scope != scope || r.ContentErased || r.PrivacyQuarantined {
 			continue
 		}
 		ok, err := s.causalReadable(ctx, token, d, r)
 		if err != nil {
-			return CausalLinkPage{}, err
+			return nil, err
 		}
-		if !ok {
-			continue
+		if ok {
+			out = append(out, r)
 		}
-		if len(out.Items) == limit {
-			out.Truncated = true
-			break
-		}
-		out.Items = append(out.Items, causalView(r))
 	}
 	return out, nil
 }

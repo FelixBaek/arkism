@@ -43019,7 +43019,7 @@
       },
       "get": {
         "summary": "Causal links of one status (default candidate, the review queue), newest first (read:memory_relations)",
-        "description": "status candidate|active|rejected; limit 1-100 (50). At most 500 rows per call are read (truncated). Only links whose two memories the caller may read are listed.",
+        "description": "status candidate|active|rejected; limit 1-100 (50); cursor is next_cursor of the previous page. At most 500 rows of the status are read per call (truncated). Only links whose two memories the caller may read are listed.",
         "parameters": [
           {
             "name": "workspace_id",
@@ -43072,6 +43072,15 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "next_cursor of the previous page",
+            "schema": {
+              "type": "string",
+              "maxLength": 3
             }
           }
         ],
@@ -43180,7 +43189,7 @@
     "/v1/causal-links/{id}/review": {
       "post": {
         "summary": "A person's decision on a causal link (human principals only, write:memory_relations)",
-        "description": "Body {scope, expected_revision, action approve|reject}. approve turns a candidate into an active link after rechecking that both memories are active and readable; reject retires a candidate or an active link.",
+        "description": "Body {scope, expected_revision, action approve|reject}. The reviewer must be able to read both memories (403 otherwise). approve turns a candidate into an active link after rechecking that both memories are active; reject retires a candidate or an active link.",
         "parameters": [
           {
             "name": "id",
@@ -70260,6 +70269,9 @@
             "items": {
               "$ref": "#/components/schemas/CausalLink"
             }
+          },
+          "next_cursor": {
+            "type": "string"
           },
           "truncated": {
             "type": "boolean"

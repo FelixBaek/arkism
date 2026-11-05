@@ -41,10 +41,13 @@ var (
 	sessionPrivateOpenRE = regexp.MustCompile(`(?is)<private(?:\s[^>]*)?>.*`)
 )
 
+// hasPrivateMarker: text holds a <private> span; such text is never stored.
+func hasPrivateMarker(text string) bool { return strings.Contains(strings.ToLower(text), "<private") }
+
 // redactSessionPrivate masks every <private> span; an unclosed tag hides the rest.
 // Same rule as the host capture (internal/host/capture/capture_private.go).
 func redactSessionPrivate(text string) string {
-	if !strings.Contains(strings.ToLower(text), "<private") {
+	if !hasPrivateMarker(text) {
 		return text
 	}
 	text = sessionPrivateSpanRE.ReplaceAllLiteralString(text, sessionPrivateMark)

@@ -90,7 +90,7 @@ func validDirectiveInput(in DirectiveInput) error {
 		return ErrInvalid
 	}
 	// A private span is never stored, not even as a rule.
-	if strings.Contains(strings.ToLower(in.Title+in.Rule+strings.Join(in.Tags, " ")), "<private") {
+	if hasPrivateMarker(in.Title + in.Rule + strings.Join(in.Tags, " ")) {
 		return ErrInvalid
 	}
 	if containsSecret(structuredText(in)) {

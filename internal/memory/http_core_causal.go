@@ -17,7 +17,7 @@ func registerCausalCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 			respond(w, nil, e)
 			return
 		}
-		v, e := s.ListCausalLinks(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("status"), limit)
+		v, e := s.ListCausalLinks(r.Context(), bearer(r), scopeQuery(r), r.URL.Query().Get("status"), r.URL.Query().Get("cursor"), limit)
 		respond(w, v, e)
 	})
 	mux.HandleFunc("POST /v1/causal-links/propose", func(w http.ResponseWriter, r *http.Request) {

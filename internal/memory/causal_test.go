@@ -122,7 +122,7 @@ func TestCausalProposalNeverActiveUntilApproved(t *testing.T) {
 	if ids := causalHitIDs(t, f, "overnight"); slices.Contains(ids, b.ID) {
 		t.Fatal("a proposal must not expand recall")
 	}
-	queue, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, "", 0)
+	queue, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, "", "", 0)
 	if err != nil || len(queue.Items) != 1 || queue.Items[0].ID != p.ID {
 		t.Fatalf("%+v %v", queue, err)
 	}
@@ -190,5 +190,40 @@ func TestCausalNeighborsAreOneHopAndBounded(t *testing.T) {
 	}
 	if got := lineageRelations(t, f, hub.ID); len(got) != 9 {
 		t.Fatalf("hub lineage %v", got)
+	}
+}
+
+func TestCausalListPagesAndHidesUnreadableLinks(t *testing.T) {
+	f := newFixture(t)
+	a := f.activeMemory("the build cache was cleared")
+	b := f.activeMemory("the next build took an hour")
+	c := f.activeMemory("a private note about the build")
+	ab, err := f.svc.LinkCausal(testCtx, f.human, CausalLinkInput{Scope: scopeA, CauseID: a.ID, EffectID: b.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ac, err := f.svc.LinkCausal(testCtx, f.human, CausalLinkInput{Scope: scopeA, CauseID: a.ID, EffectID: c.ID, Reason: "the cleared cache is in the note"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, statusActive, "", 1)
+	if err != nil || len(first.Items) != 1 || first.NextCursor != "1" {
+		t.Fatalf("%+v %v", first, err)
+	}
+	second, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, statusActive, first.NextCursor, 1)
+	if err != nil || len(second.Items) != 1 || second.NextCursor != "" || second.Items[0].ID == first.Items[0].ID {
+		t.Fatalf("%+v %v", second, err)
+	}
+	if _, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, statusActive, "x", 1); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad cursor: %v", err)
+	}
+	// A reader who may not read c sees neither the link nor its reason, and cannot review it.
+	f.svc.Auth = reviewDenyAuth{Authorizer: f.auth, denyID: c.ID}
+	page, err := f.svc.ListCausalLinks(testCtx, f.human, scopeA, statusActive, "", 0)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != ab.ID {
+		t.Fatalf("%+v %v", page, err)
+	}
+	if _, err := f.svc.ReviewCausalLink(testCtx, f.human, ac.ID, CausalReviewInput{Scope: scopeA, ExpectedRevision: ac.Revision, Action: "reject"}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("reject of an unreadable link: %v", err)
 	}
 }
