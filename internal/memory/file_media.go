@@ -247,12 +247,26 @@ func (s *Service) hostedPages(p HostedParser) fileParserFunc {
 		if f.DryRun {
 			return nil, false, nil, errMediaDryRun
 		}
+		if hostedUnsafe(f) {
+			return nil, false, nil, ErrSecretDetected
+		}
 		if err := s.authorizeMedia(ctx, token, d, f.Scope, hostedParserDestination, f.Name, f.MIME, f.Raw); err != nil {
 			return nil, false, nil, err
 		}
 		text, err := p.Parse(ctx, strings.ToLower(path.Ext(f.Name)), f.MIME, f.Raw)
 		return []string{strings.TrimSpace(text)}, false, nil, err
 	}
+}
+
+// hostedUnsafe reports a file whose bytes, or the text the built-in reader
+// gets out of it, hold a secret or a private marker: such a file never goes
+// to an external reader, since the service would see what the local path redacts.
+func hostedUnsafe(f uploadedFile) bool {
+	texts := []string{string(f.Raw)}
+	if pages, _, err := builtinPages(strings.ToLower(path.Ext(f.Name)), f.Raw); err == nil {
+		texts = append(texts, pages...)
+	}
+	return slices.ContainsFunc(texts, func(t string) bool { return containsSecret(t) || sessionPrivateOpenRE.MatchString(t) })
 }
 
 // scannedPDFPages reads the page images of a PDF without text, up to the page limit.

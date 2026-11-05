@@ -27,6 +27,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 const (
@@ -200,7 +202,9 @@ func (p *PresignedJobParser) Parse(ctx context.Context, ext, mime string, raw []
 		return "", fmt.Errorf("file reader upload address: %w", ErrUnavailable)
 	}
 	// The upload address is signed; the service credential never goes there.
-	if err := hostedJSON(ctx, client, http.MethodPut, file.UploadURL, http.Header{"Content-Type": {mime}}, raw, nil); err != nil {
+	// The service chose that address, so it may reach a private network only
+	// when the operator's own service address is on one.
+	if err := hostedJSON(ctx, p.uploadClient(), http.MethodPut, file.UploadURL, http.Header{"Content-Type": {mime}}, raw, nil); err != nil {
 		return "", err
 	}
 	payload, _ = json.Marshal(map[string]string{"fileId": file.FileID})
@@ -232,4 +236,15 @@ func (p *PresignedJobParser) Parse(ctx context.Context, ext, mime string, raw []
 		return state.Ready, nil
 	})
 	return text, err
+}
+
+// uploadClient sends to the address the service handed back: the injected
+// client in tests, else one that refuses private addresses (checked after DNS)
+// unless the configured service itself is on a private network.
+func (p *PresignedJobParser) uploadClient() *http.Client {
+	if p.Client != nil {
+		return providerClient(p.Client, 120*time.Second)
+	}
+	u, _ := url.Parse(p.Base)
+	return httpguard.OutboundClient(u != nil && isPrivateNetworkHost(u.Hostname()), 120*time.Second, nil)
 }

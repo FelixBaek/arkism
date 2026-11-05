@@ -108,6 +108,16 @@ func TestServiceAccountStoreRoundTrip(t *testing.T) {
 	if tokens.Load() != 1 {
 		t.Fatalf("token fetched %d times", tokens.Load())
 	}
+	// A token the service stops accepting is dropped, so the next call trades a fresh one.
+	s.mu.Lock()
+	s.token = "revoked"
+	s.mu.Unlock()
+	if _, err = s.Get(ctx, digest, 10); err == nil {
+		t.Fatal("revoked token accepted")
+	}
+	if _, err = s.Get(ctx, digest, 10); !errors.Is(err, ErrNotFound) || tokens.Load() != 2 {
+		t.Fatal(err, tokens.Load())
+	}
 }
 
 func TestServiceAccountStoreSettings(t *testing.T) {

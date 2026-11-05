@@ -54,6 +54,14 @@ func registerFilesCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics) {
 		out, e := s.EditDocumentTags(r.Context(), bearer(r), r.PathValue("id"), in)
 		respond(w, out, e)
 	})
+	mux.HandleFunc("DELETE /v1/files/memories/documents/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in WikiScopeInput
+		if !decode(w, r, &in) {
+			return
+		}
+		out, e := s.DeleteExtractDocument(r.Context(), bearer(r), r.PathValue("id"), in)
+		respond(w, out, e)
+	})
 	mux.HandleFunc("POST /v1/files/memories/documents/{id}/reprocess", func(w http.ResponseWriter, r *http.Request) {
 		var in WikiScopeInput
 		if !decode(w, r, &in) {

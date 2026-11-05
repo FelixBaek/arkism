@@ -166,6 +166,13 @@ func (s *ServiceAccountBlobStore) do(ctx context.Context, method, rawURL string,
 	if err != nil {
 		return nil, ErrUnavailable
 	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		s.mu.Lock()
+		if s.token == token {
+			s.token = "" // revoked early: the next request trades a fresh assertion
+		}
+		s.mu.Unlock()
+	}
 	return resp, nil
 }
 

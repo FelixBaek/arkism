@@ -1578,6 +1578,10 @@ class ArkismClient(BaseClient):
         """PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced"""
         return self.request("PATCH", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}", None, body)
 
+    def delete_file_extract_document(self, id, body=None):
+        """DELETE /v1/files/memories/documents/{id} — Delete a memory-extraction document"""
+        return self.request("DELETE", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}", None, body)
+
     def reprocess_file_extract_document(self, id, body=None):
         """POST /v1/files/memories/documents/{id}/reprocess — Extract a finished document again"""
         return self.request("POST", f"/v1/files/memories/documents/{urllib.parse.quote(id, safe='')}/reprocess", None, body)

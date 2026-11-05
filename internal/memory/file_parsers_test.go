@@ -266,3 +266,35 @@ func TestFileBatchUpload(t *testing.T) {
 		t.Fatalf("bytes: %d %s", w.Code, w.Body)
 	}
 }
+
+// A file holding a secret or a private part never goes to an external reader.
+func TestHostedParserRefusesSecrets(t *testing.T) {
+	f, _ := mediaFixture(t, extractAnswer())
+	sent := 0
+	f.svc.Files.Hosted = map[string]HostedParser{"upload_job": hostedFunc(func(context.Context, string, string, []byte) (string, error) {
+		sent++
+		return "본문", nil
+	})}
+	for _, body := range []string{"token: sk-abcdefghijklmnopqrstuvwx", "공개 <private>숨김</private>"} {
+		in := mediaUpload("notes.txt", []byte(body))
+		in.Parsers = []string{"upload_job"}
+		if _, err := f.svc.ExtractFileMemories(testCtx, f.human, in); !errors.Is(err, ErrSecretDetected) || sent != 0 {
+			t.Fatalf("%q: %v sent=%d", body, err, sent)
+		}
+	}
+}
+
+// The upload address comes from the service, so a public service cannot
+// point the server at a private address.
+func TestPresignedUploadAddressGuarded(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer srv.Close()
+	public := &PresignedJobParser{Base: "https://parser.example"}
+	if err := hostedJSON(testCtx, public.uploadClient(), http.MethodPut, srv.URL, http.Header{}, []byte("x"), nil); err == nil {
+		t.Fatal("private upload address accepted for a public service")
+	}
+	local := &PresignedJobParser{Base: srv.URL}
+	if err := hostedJSON(testCtx, local.uploadClient(), http.MethodPut, srv.URL, http.Header{}, []byte("x"), nil); err != nil {
+		t.Fatalf("operator's own private service: %v", err)
+	}
+}

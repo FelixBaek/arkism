@@ -51,10 +51,12 @@ type DocumentTagsResult struct {
 }
 
 // ListExtractDocuments lists the scope's extraction documents, newest first,
-// optionally only those with a tag.
+// optionally only those with a tag. An agent sees only the documents whose
+// last upload it started, as with the upload jobs themselves.
 func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope Scope, page DocumentPage) (ExtractDocumentPage, error) {
 	out := ExtractDocumentPage{Items: []ExtractDocument{}}
-	if _, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
+	d, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, "", "")
+	if err != nil {
 		return out, err
 	}
 	rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, Cursor: page.Cursor, Limit: page.Limit}, "jobs")
@@ -63,8 +65,9 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 	}
 	for _, doc := range rows {
 		item := ExtractDocument{ID: doc.ID, Tags: append([]string{}, doc.Tags...), CreatedAt: doc.CreatedAt, UpdatedAt: doc.UpdatedAt}
+		var job Record
 		if doc.Target != nil {
-			job, err := s.Repo.Get(ctx, "jobs", scope, doc.Target.ID)
+			job, err = s.Repo.Get(ctx, "jobs", scope, doc.Target.ID)
 			if err != nil && !errors.Is(err, ErrNotFound) {
 				return out, err
 			}
@@ -72,6 +75,9 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 				j := job.FileExtract
 				item.JobID, item.Status, item.Label, item.Chunks, item.CandidatesCreated, item.RequestedBy = job.ID, job.Status, j.Label, j.Delta.ChunksTotal, j.CandidatesCreated, j.RequestedBy
 			}
+		}
+		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) {
+			continue
 		}
 		out.Items = append(out.Items, item)
 	}
@@ -323,4 +329,92 @@ func sourceChunkText(text string, ch FileExtractChunk) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// DocumentDeleteResult counts what a document delete reached: waiting
+// candidates it rejected, approved memories it left as they are, and the
+// upload jobs it removed.
+type DocumentDeleteResult struct {
+	DocumentID string `json:"document_id"`
+	Rejected   int    `json:"rejected"`
+	Kept       int    `json:"kept"`
+	Jobs       int    `json:"jobs"`
+}
+
+// documentJobChainMax bounds the upload history a delete walks.
+const documentJobChainMax = 1000
+
+// DeleteExtractDocument removes a document and its upload jobs. Its waiting
+// candidates are rejected through the normal review path; approved memories
+// stay, they only lose the document that listed them. Human only, audited.
+// A document whose last upload is still running is refused.
+func (s *Service) DeleteExtractDocument(ctx context.Context, token, id string, in WikiScopeInput) (DocumentDeleteResult, error) {
+	out := DocumentDeleteResult{DocumentID: id}
+	d, err := s.opsAuthorize(ctx, token, "delete:jobs", in.Scope, id, roleHuman)
+	if err != nil {
+		return out, err
+	}
+	doc, err := s.extractDocument(ctx, token, in.Scope, id)
+	if err != nil {
+		return out, err
+	}
+	job, err := s.documentJob(ctx, in.Scope, doc)
+	if err != nil {
+		return out, err
+	}
+	if job.Status != JobStatusDone && job.Status != JobStatusFailed {
+		return out, ErrConflict
+	}
+	for _, cid := range documentCandidateIDs(*job.FileExtract) {
+		cand, err := s.Repo.Get(ctx, "memory_candidates", in.Scope, cid)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return out, err
+		}
+		switch cand.Status {
+		case "approved":
+			out.Kept++
+		case "candidate":
+			_, err = s.ReviewCandidate(ctx, token, cid, CandidateReviewInput{Scope: in.Scope, ExpectedRevision: cand.Revision, Action: "reject", Reason: "document deleted"})
+			if err == nil {
+				out.Rejected++
+			} else if !errors.Is(err, ErrConflict) {
+				return out, err
+			}
+		}
+	}
+	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		out.Jobs = 0
+		cur, e := tx.Get(ctx, "jobs", in.Scope, id)
+		if e != nil {
+			return e
+		}
+		if cur.Target == nil || cur.Target.ID != job.ID {
+			return ErrConflict // a new upload arrived meanwhile
+		}
+		for next, n := job.ID, 0; next != "" && n < documentJobChainMax; n++ {
+			r, e := s.extractJob(ctx, tx, in.Scope, next)
+			if errors.Is(e, ErrNotFound) {
+				break
+			}
+			if e != nil {
+				return e
+			}
+			if r.FileExtract.Document != id {
+				break
+			}
+			if e = tx.Delete(ctx, "jobs", in.Scope, r.ID, r.Revision); e != nil {
+				return e
+			}
+			out.Jobs++
+			next = r.FileExtract.Previous
+		}
+		if e = tx.Delete(ctx, "jobs", in.Scope, id, cur.Revision); e != nil {
+			return e
+		}
+		return audit(ctx, tx, in.Scope, d.PrincipalID, "delete:file_extract_document", id)
+	})
+	return out, err
 }

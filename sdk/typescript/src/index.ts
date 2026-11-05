@@ -2215,6 +2215,10 @@ export class ArkismClient {
   edit_file_extract_document_tags(id: string, body: { "scope": Scope; "add"?: Array<string>; "remove"?: Array<string> }): Promise<{ "document_id": string; "tags": Array<string>; "candidates": number; "memories": number; "skipped": number }> {
     return this.request("PATCH", `/v1/files/memories/documents/${encodeURIComponent(id)}`, undefined, body);
   }
+  /** DELETE /v1/files/memories/documents/{id} — Delete a memory-extraction document */
+  delete_file_extract_document(id: string, body: { "scope": Scope }): Promise<{ "document_id": string; "rejected": number; "kept": number; "jobs": number }> {
+    return this.request("DELETE", `/v1/files/memories/documents/${encodeURIComponent(id)}`, undefined, body);
+  }
   /** POST /v1/files/memories/documents/{id}/reprocess — Extract a finished document again */
   reprocess_file_extract_document(id: string, body: { "scope": Scope }): Promise<{ "status": string; "job_id"?: string; "document_id"?: string }> {
     return this.request("POST", `/v1/files/memories/documents/${encodeURIComponent(id)}/reprocess`, undefined, body);

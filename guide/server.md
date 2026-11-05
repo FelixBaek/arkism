@@ -165,7 +165,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_FILE_BATCH_MAX_FILES`, `MEMORY_FILE_BATCH_MAX_BYTES` | Limits of one `POST /v1/files/memories/batch` request: files (default 10, at most 100) and their bytes together (default 100 MiB, at most 1 GiB). Files are read one at a time, so memory stays near one file |
 | `MEMORY_FILE_PARSERS`, `MEMORY_FILE_PARSER_ALLOWLIST` | Comma-separated reader order used when a request names none (default `builtin,converter,vision,transcribe` plus configured external readers), and the readers a request may name in `parsers` (default all configured). A reader that cannot read a file hands it to the next; a limit, a refusal or the model budget stops the chain |
 | `MEMORY_FILE_PARSER_JOB_URL` | Optional external reading service (reader `upload_job`) using the upload-and-poll protocol: `POST {url}/upload` (multipart `file`), `GET {url}/{id}` until done, `GET {url}/{id}?expand=markdown_full`. Key in `MEMORY_FILE_PARSER_JOB_API_KEY` |
-| `MEMORY_FILE_PARSER_PRESIGNED_URL` | Optional external reading service (reader `presigned_job`) using the presigned-upload protocol under `{url}/org/{MEMORY_FILE_PARSER_PRESIGNED_ORG}`; token in `MEMORY_FILE_PARSER_PRESIGNED_TOKEN`. Each file needs a `transfer:model_input` decision for destination `external:file_parser`; the file name never leaves the server |
+| `MEMORY_FILE_PARSER_PRESIGNED_URL` | Optional external reading service (reader `presigned_job`) using the presigned-upload protocol under `{url}/org/{MEMORY_FILE_PARSER_PRESIGNED_ORG}`; token in `MEMORY_FILE_PARSER_PRESIGNED_TOKEN`. Each file needs a `transfer:model_input` decision for destination `external:file_parser`; the file name never leaves the server, a file holding a secret or a private part is never sent, and the upload address the service returns may not be a private address unless the service URL itself is on a private network |
 | `MEMORY_FILE_KEEP_ORIGINALS` | `1` keeps each file uploaded for memory extraction as an attachment of its evidence (needs `MEMORY_BLOB_DIRECTORY` or object storage). Recall and reflect list them with `include: ["attachments"]`; download is `GET /v1/sources/{id}/artifacts/{artifact_id}`. Off by default. Files from agents and files whose text had private or secret parts removed are not kept |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
@@ -304,6 +304,10 @@ wiki. What a person approves and how is described in
    `POST /v1/files/memories/documents/{id}/reprocess` (the uploader) reads a
    finished document again from its stored evidence; it spends model calls
    like an upload and only creates candidates.
+   `DELETE /v1/files/memories/documents/{id}` (people only) removes a document
+   and its upload jobs, rejects its waiting candidates (audited) and leaves
+   approved memories and their evidence in place. An agent's document list
+   shows only the documents it uploaded.
 8. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`,
    `MEMORY_BLOB_SHAREDKEY_*` or `MEMORY_BLOB_SERVICE_ACCOUNT_*` set, attached files live in the bucket, not in
    `MEMORY_BLOB_DIRECTORY`. The server backup does not copy the bucket; with the
