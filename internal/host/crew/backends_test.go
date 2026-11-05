@@ -591,7 +591,10 @@ func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
 		map[string]any{"id": "s1", "collection": "skill_versions", "text": "스킬 본문"},
 		map[string]any{"id": "bad id\n", "collection": "memories", "text": "x"}}
 	var searchErr error
-	patch(t, &backendSearch, func(_, dest string, _ time.Duration) ([]any, error) { dests = append(dests, dest); return hits, searchErr })
+	patch(t, &backendSearch, func(_, dest string, _ time.Duration) ([]any, error) {
+		dests = append(dests, dest)
+		return hits, searchErr
+	})
 	run := func(name string, memory bool, caps ...string) (map[string]any, map[string]any) {
 		f := newFakeRunner(t, append([]string{"tool_restriction"}, caps...)...)
 		f.start = func(w http.ResponseWriter, _ map[string]any) {
