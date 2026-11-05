@@ -1,0 +1,159 @@
+//go:build linux
+
+package memory
+
+// Real-PostgreSQL checks for the entity, recall, ops, space and webhook SQL.
+// They skip when POSTGRES_TEST_DSN is not configured (see tools/check_postgres_local.sh).
+import (
+	"net/http"
+	"slices"
+	"testing"
+	"time"
+)
+
+func pgFixture(t *testing.T) (*fixture, *Postgres) {
+	t.Helper()
+	p := isolatedPostgres(t)
+	f := newFixture(t)
+	f.svc.Repo = p
+	f.auth.actors[f.human].verbs["ops"] = true
+	return f, p
+}
+
+func TestPostgresEntityMentionsFeedRecallAndLeaveWithTheMemory(t *testing.T) {
+	f, p := pgFixture(t)
+	day := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	entityMemory(t, f, p, "m1", "Arkism stores memories in Postgres.", day)
+	entityMemory(t, f, p, "m2", "We tuned Postgres for Arkism.", day.AddDate(0, 1, 0))
+	m3 := entityMemory(t, f, p, "m3", "Postgres vacuum runs nightly; see `vacuum.sh`.", day.AddDate(0, 2, 0))
+	out, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA})
+	if err != nil || out.NewEntities != 3 || out.AddedMentions != 6 {
+		t.Fatal(out, err)
+	}
+	if again, err := f.svc.ExtractEntities(testCtx, f.human, EntityExtractInput{Scope: scopeA}); err != nil || again.NewEntities != 0 || again.AddedMentions != 0 {
+		t.Fatal("rerun not idempotent", again, err)
+	}
+	list, err := f.svc.ListEntities(testCtx, f.agent, EntityListInput{Scope: scopeA, Limit: 10})
+	if err != nil || list.Total != 3 || list.Items[0].Name != "Postgres" || list.Items[0].Mentions != 3 {
+		t.Fatal(list, err)
+	}
+	graph, err := f.svc.EntityGraphView(testCtx, f.agent, EntityGraphInput{Scope: scopeA})
+	if err != nil || len(graph.Nodes) != 3 || len(graph.Edges) != 2 || graph.Edges[0].Weight != 2 {
+		t.Fatal("co-occurrence", graph, err)
+	}
+	// The recall graph lane reads the same mention rows: m2 shares two entities with m1, m3 one.
+	near, err := p.MemoryNeighbors(testCtx, scopeA, []string{"m1"}, 10)
+	if err != nil || !slices.Equal(near, []string{"m2", "m3"}) {
+		t.Fatal("neighbors", near, err)
+	}
+	hits, err := p.SearchMemoriesInWindow(testCtx, SearchInput{Scope: scopeA, Limit: 10}, day.AddDate(0, 1, -1), day.AddDate(0, 1, 1))
+	if err != nil || len(hits) != 1 || hits[0].ID != "m2" {
+		t.Fatal("window", hits, err)
+	}
+	// Deleting m3 drops its mentions and the entity only it named (migration 0006 trigger).
+	if err := p.Delete(testCtx, colMemories, scopeA, m3.ID, m3.Revision); err != nil {
+		t.Fatal(err)
+	}
+	mentions, err := p.EntityMentions(testCtx, scopeA, 100)
+	if err != nil || len(mentions) != 4 {
+		t.Fatal("mentions after delete", mentions, err)
+	}
+	ents, err := p.NamedEntities(testCtx, scopeA, 100)
+	if err != nil || len(ents) != 2 {
+		t.Fatal("entities after delete", ents, err)
+	}
+}
+
+func TestPostgresOpsAuditStatsAndTags(t *testing.T) {
+	f, p := pgFixture(t)
+	base := time.Now().UTC().Truncate(time.Millisecond)
+	put := func(col string, r Record) {
+		r.Scope, r.Revision, r.UpdatedAt = scopeA, 1, r.CreatedAt
+		if err := p.Insert(testCtx, col, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("audit_events", Record{ID: "a1", Kind: "set_reach:memories", CreatedBy: "human-1", CreatedAt: base.Add(-2 * time.Second), Target: &Ref{ID: "m1"}})
+	put("audit_events", Record{ID: "a2", Kind: "wiki:job_created", CreatedBy: "human-2", CreatedAt: base.Add(-time.Second)})
+	page, err := f.svc.ListAuditEvents(testCtx, f.human, OpsListInput{Scope: scopeA, Limit: 1})
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != "a2" || page.NextCursor == "" {
+		t.Fatalf("audit page = %+v, %v", page, err)
+	}
+	next, err := f.svc.ListAuditEvents(testCtx, f.human, OpsListInput{Scope: scopeA, Limit: 1, Cursor: page.NextCursor})
+	if err != nil || len(next.Items) != 1 || next.Items[0].ID != "a1" {
+		t.Fatalf("audit next = %+v, %v", next, err)
+	}
+	if filtered, err := f.svc.ListAuditEvents(testCtx, f.human, OpsListInput{Scope: scopeA, Action: "wiki:"}); err != nil || len(filtered.Items) != 1 {
+		t.Fatalf("action filter = %+v, %v", filtered, err)
+	}
+	if stats, err := f.svc.AuditEventStats(testCtx, f.human, scopeA, base.Add(-time.Hour), base.Add(time.Hour)); err != nil || stats.Total != 2 || len(stats.ByDay) == 0 {
+		t.Fatalf("audit stats = %+v, %v", stats, err)
+	}
+	if ops, err := f.svc.ListOperations(testCtx, f.human, OpsListInput{Scope: scopeA}); err != nil {
+		t.Fatalf("operations = %+v, %v", ops, err)
+	}
+	mem := f.activeMemory("prefer tabs over spaces", "style")
+	put(colMemories, Record{ID: "old", Kind: "lesson", Status: "superseded", CreatedAt: base})
+	st, err := f.svc.Stats(testCtx, f.human, scopeA)
+	if err != nil || st.Memories.Total != 2 || st.Memories.ByStatus["active"] != 1 || st.Memories.ByKind["lesson"] != 1 {
+		t.Fatalf("stats = %+v, %v", st, err)
+	}
+	ts, err := f.svc.StatsTimeseries(testCtx, f.human, StatsTimeseriesInput{Scope: scopeA, From: base.Add(-time.Hour), To: base.Add(time.Hour), By: "status"})
+	if err != nil || len(ts.Points) != 2 {
+		t.Fatalf("timeseries = %+v, %v", ts, err)
+	}
+	if _, err := f.svc.SetMemoryTags(testCtx, f.human, mem.ID, MemoryTagsInput{Scope: scopeA, Add: []string{"team"}}); err != nil {
+		t.Fatal(err)
+	}
+	tags, err := f.svc.ListTags(testCtx, f.human, scopeA)
+	if err != nil || !slices.ContainsFunc(tags.Items, func(c TagCount) bool { return c.Tag == "team" }) {
+		t.Fatalf("tags = %+v, %v", tags, err)
+	}
+	if res, err := f.svc.RenameTag(testCtx, f.human, TagRenameInput{Scope: scopeA, From: "team", To: "crew"}); err != nil || res.Renamed != 1 {
+		t.Fatalf("rename = %+v, %v", res, err)
+	}
+}
+
+func TestPostgresSpacesListAliasAndBundle(t *testing.T) {
+	f, p := pgFixture(t)
+	mem := f.activeMemory("prefer tabs over spaces", "style")
+	if _, err := f.svc.SetSpaceAlias(testCtx, f.human, scopeA, "front", true); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.svc.resolveSpace(testCtx, Scope{WorkspaceID: scopeA.WorkspaceID, ProjectID: "@front"}); err != nil || got != scopeA {
+		t.Fatalf("resolve = %+v %v", got, err)
+	}
+	if _, err := f.svc.SetSpaceAlias(testCtx, f.human, scopeB, "front", true); err == nil {
+		t.Fatal("duplicate alias accepted")
+	}
+	page, err := f.svc.ListSpaces(testCtx, f.human, scopeA, "", 10)
+	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") {
+		t.Fatalf("list = %+v %v", page, err)
+	}
+	report := importBundle(t, f, scopeB, exportBundle(t, f, scopeA, SpaceExportInput{}), "")
+	cands, err := p.ListRecords(testCtx, scopeB, "memory_candidates", 10)
+	if err != nil || report.Imported != 1 || len(cands) != 1 || cands[0].Text != mem.Text {
+		t.Fatalf("import = %+v %+v %v", report, cands, err)
+	}
+}
+
+func TestPostgresWebhookDeliveriesPage(t *testing.T) {
+	f, _ := pgFixture(t)
+	f.svc.WebhookKey = []byte("kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+	f.svc.WebhookAllowPrivate = true
+	v := f.hook(newHookServer(t, http.StatusOK).URL, false, EventMemoryDeleted)
+	for range 3 {
+		if _, err := f.svc.TestWebhook(testCtx, f.human, scopeA, v.ID); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	page, err := f.svc.ListWebhookDeliveries(testCtx, f.human, scopeA, v.ID, "", 2)
+	if err != nil || len(page.Items) != 2 || page.NextBefore == "" {
+		t.Fatal("first page", err, page)
+	}
+	rest, err := f.svc.ListWebhookDeliveries(testCtx, f.human, scopeA, v.ID, page.NextBefore, 2)
+	if err != nil || len(rest.Items) != 1 || rest.NextBefore != "" {
+		t.Fatal("second page", err, rest)
+	}
+}
