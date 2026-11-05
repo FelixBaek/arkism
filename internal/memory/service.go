@@ -985,7 +985,7 @@ func (s *Service) checkCreateTx(ctx context.Context, tx Tx, col string, in Creat
 			return e
 		}
 	}
-	return nil
+	return s.enqueueProvisional(ctx, tx, col, r)
 }
 
 func checkToolCallRun(ctx context.Context, tx Tx, r Record, now time.Time) error {
@@ -1478,7 +1478,6 @@ func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *Cand
 		if d.Role == roleHuman {
 			memory.Trust = 1
 		}
-		memory.Embedding = nil
 		if review.Action == "edit_approve" {
 			memory.Text = review.Content
 			memory.Summary = ""
@@ -1498,6 +1497,11 @@ func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *Cand
 		if review.Reach != "" {
 			memory.Reach, memory.ReachProject, memory.ReachOrigin = review.Reach, review.ReachProject, reachOriginHuman
 		}
+	}
+	// The candidate's provisional vector serves the memory while it still describes the approved content,
+	// so approving does not pay for the same embedding twice.
+	if v := memory.Embedding; v != nil && v.ContentHash != ContentHash(recordContent(memory)) {
+		memory.Embedding = nil
 	}
 	var e error
 	var replacementRelation Record

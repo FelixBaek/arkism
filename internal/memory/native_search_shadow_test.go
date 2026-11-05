@@ -39,7 +39,7 @@ type nativeSearchCountRepo struct {
 }
 
 func (r *nativeSearchCountRepo) SearchCollection(ctx context.Context, col string, in SearchInput, v []float64, space string) ([][]Hit, error) {
-	if col != colObservations { // counts the memory candidate retrievals only
+	if col != colObservations && col != "memory_candidates" { // counts the memory retrievals only, not the observation or provisional lanes
 		r.calls++
 	}
 	return r.Repository.SearchCollection(ctx, col, in, v, space)

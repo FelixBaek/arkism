@@ -7,6 +7,7 @@ import (
 
 type SearchCriteria struct {
 	history bool           // Local memory search only; never forwarded to the hub.
+	pending bool           // Candidates waiting for review (provisional recall, recall_quality.go); local only.
 	Kinds   []string       `json:"kinds,omitempty"`
 	Filters *SearchFilters `json:"filters,omitempty"`
 	// ProjectKey (ST-824) is the caller's project, e.g. the git repository; it only narrows the

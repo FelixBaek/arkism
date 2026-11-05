@@ -30,7 +30,7 @@ type ContextBuildInput struct {
 	MinScore   float64      `json:"min_score,omitempty"`
 	Rerank     RerankChoice `json:"rerank,omitempty"`
 	// PreferObservations passes through to the search (SearchInput).
-	PreferObservations bool `json:"prefer_observations,omitempty"`
+	PreferObservations *bool `json:"prefer_observations,omitempty"`
 }
 
 type ContextPack struct {

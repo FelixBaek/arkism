@@ -161,3 +161,30 @@ func BenchmarkParseTimeIntentMiss(b *testing.B) {
 		parseTimeIntent(q, now)
 	}
 }
+
+// Weekend words read Saturday and Sunday of the Monday-first week, even when they hold a week word.
+func TestParseTimeIntentWeekends(t *testing.T) {
+	seoul := recallLocation("")
+	day := func(d int) time.Time { return time.Date(2026, 11, d, 0, 0, 0, 0, seoul) }
+	last, this := [2]time.Time{day(1).AddDate(0, 0, -1), day(2)}, [2]time.Time{day(7), day(9)} // Oct 31..Nov 2, Nov 7..9
+	queries := map[string][2]time.Time{
+		"what did we do last weekend": last, "this weekend plans": this,
+		"지난 주말에 한 일": last, "지난주말": last, "이번 주말 일정": this,
+		"先週末の予定": last, "今週末": this, "上周末做了什么": last, "这个周末": this, "本週末": this,
+		"el fin de semana pasado": last, "este fin de semana": this,
+		"le week-end dernier": last, "ce weekend": this,
+		"letztes Wochenende": last, "am letzten Wochenende": last, "dieses Wochenende": this,
+		"no fim de semana passado": last, "lo scorso fine settimana": last, "questo weekend": this,
+	}
+	for _, now := range []time.Time{time.Date(2026, 11, 5, 10, 0, 0, 0, seoul), time.Date(2026, 11, 8, 22, 0, 0, 0, seoul)} { // Thursday, Sunday
+		for q, want := range queries {
+			if w, ok := parseTimeIntent(q, now); !ok || !w.From.Equal(want[0]) || !w.To.Equal(want[1]) {
+				t.Errorf("%s %q: got %v..%v ok=%v, want %v..%v", now.Weekday(), q, w.From, w.To, ok, want[0], want[1])
+			}
+		}
+	}
+	// The week words still read whole weeks.
+	if w, _ := parseTimeIntent("지난주 회의", time.Date(2026, 11, 5, 10, 0, 0, 0, seoul)); !w.From.Equal(time.Date(2026, 10, 26, 0, 0, 0, 0, seoul)) {
+		t.Error("지난주 lost to the weekend rule", w)
+	}
+}

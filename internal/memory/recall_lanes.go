@@ -239,7 +239,7 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
 		out.Items = append(out.Items, r.Hit)
 	}
-	if in.PreferObservations {
+	if in.PreferObservations != nil && *in.PreferObservations {
 		out.Items = preferObservations(out.Items)
 	}
 	if len(out.Items) == 0 && trace.dropStages["relevance"] > 0 {

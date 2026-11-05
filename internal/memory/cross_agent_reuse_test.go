@@ -32,7 +32,11 @@ func TestCrossAgentMemoryReuseLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		if wantID == "" {
-			if len(out.Items) != 0 || strings.Contains(out.ContextData, rule) {
+			// A pending candidate may come back only in the labelled provisional list
+			// (default on for callers holding read:memory_candidates).
+			labelled := len(out.Provisional) == 1 && out.Provisional[0].Origin == "provisional" &&
+				out.Provisional[0].TrustLevel == "agent_proposed" && out.ProvisionalNotice != ""
+			if len(out.Items) != 0 || (strings.Contains(out.ContextData, rule) && !labelled) {
 				t.Fatalf("unavailable memory leaked into context: %+v", out)
 			}
 			return

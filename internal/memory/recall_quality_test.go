@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/langnote"
 )
 
 type noAnswerEval struct {
@@ -124,8 +126,8 @@ func TestRecallQualitySettingsValidate(t *testing.T) {
 	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{RecallQuality: &bad}, false); !errors.Is(err, ErrInvalid) {
 		t.Fatal("unknown conflict_pending mode stored", err)
 	}
-	if q := (*SpaceConfig)(nil).recallQuality(); !q.gateOn() || q.Provisional || q.AutoCloseOnCorrection || q.ConflictPending != "" {
-		t.Fatal("defaults changed: gate on, provisional and auto-close off, attach", q)
+	if q := (*SpaceConfig)(nil).recallQuality(); !q.gateOn() || !q.provisionalOn() || q.AutoCloseOnCorrection || q.ConflictPending != "" {
+		t.Fatal("defaults changed: gate and provisional on, auto-close off, attach", q)
 	}
 }
 
@@ -269,22 +271,29 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 	}
 }
 
-// Provisional recall is opt-in, separate from approved memory, labelled and permission-gated.
-func TestProvisionalRecallOptIn(t *testing.T) {
+// Provisional recall is on by default (a space may turn it off), separate from approved memory,
+// labelled, permission-gated and never sent to an external destination.
+func TestProvisionalRecallDefault(t *testing.T) {
 	f := newFixture(t)
 	f.activeMemory("배포는 매주 금요일 오후에 한다", "배포")
 	claim := explicit("스테이징 배포는 목요일 저녁에 한다")
 	claim.Basis = "inferred"
 	pending := f.capture(f.agent, captureInput(scopeA, "evt-prov", claim))[0]
 	query := SearchInput{Scope: scopeA, Query: "스테이징 배포", Modes: []string{"exact", "fts"}, Limit: 5}
-	if out := f.search(f.agent, query); len(out.Provisional) != 0 {
-		t.Fatal("provisional candidates served without the space opting in", out.Provisional)
-	}
-	setRecallQuality(t, f, SpaceRecallQuality{Provisional: true})
 	out := f.search(f.agent, query)
-	if len(out.Provisional) != 1 || out.Provisional[0].ID != pending.CandidateID || out.Provisional[0].Origin != "provisional" || out.ProvisionalNotice == "" {
-		t.Fatal("opted-in provisional candidate missing or unlabelled", out.Provisional, out.ProvisionalNotice)
+	if len(out.Provisional) != 1 || out.Provisional[0].ID != pending.CandidateID || out.Provisional[0].Origin != "provisional" || out.ProvisionalNotice != langnote.Text(langnote.Provisional, "ko") {
+		t.Fatal("default provisional candidate missing or unlabelled", out.Provisional, out.ProvisionalNotice)
 	}
+	if out := f.search(f.agent, SearchInput{Scope: scopeA, Query: "스테이징 배포", Modes: []string{"exact", "fts"}, Limit: 5, Destination: "external:test"}); len(out.Provisional) != 0 {
+		t.Fatal("provisional candidates went to an external destination", out.Provisional)
+	}
+	off := false
+	setRecallQuality(t, f, SpaceRecallQuality{Provisional: &off})
+	if out := f.search(f.agent, query); len(out.Provisional) != 0 {
+		t.Fatal("provisional candidates served after the space turned them off", out.Provisional)
+	}
+	on := true
+	setRecallQuality(t, f, SpaceRecallQuality{Provisional: &on})
 	if hitByID(out.Items, pending.CandidateID) != nil {
 		t.Fatal("a candidate was mixed into approved items")
 	}
@@ -334,7 +343,6 @@ func TestPendingTextPassesTransferAndBudget(t *testing.T) {
 	claim := explicit("스테이징 배포는 목요일 저녁에 한다")
 	claim.Basis = "inferred"
 	pending := f.capture(f.agent, captureInput(scopeA, "evt-prov-x", claim))[0]
-	setRecallQuality(t, f, SpaceRecallQuality{Provisional: true})
 	for _, id := range []string{pending.CandidateID, fix.CandidateID} {
 		c := f.repo.store["memory_candidates"][recKey(scopeA, id)]
 		c.Sensitivity = "" // unclassified content never leaves the server
@@ -383,9 +391,9 @@ func TestRelevanceGateReadsIndexedConditions(t *testing.T) {
 
 // A model answering from recall sees which memory a correction is waiting on.
 func TestReflectPromptLabelsPendingCorrection(t *testing.T) {
-	run := &reflectRun{in: ReflectInput{Query: "기본 테마"}, hits: []Hit{{ID: "m1", Kind: "user", Text: "기본 테마는 다크", PendingCorrection: &PendingCorrection{CandidateID: "c1", Text: "후보 원문", Notice: pendingCorrectionNote}}}}
+	run := &reflectRun{in: ReflectInput{Query: "기본 테마"}, hits: []Hit{{ID: "m1", Kind: "user", Text: "기본 테마는 다크", PendingCorrection: &PendingCorrection{CandidateID: "c1", Text: "후보 원문", Notice: langnote.Text(langnote.PendingCorrection, "ko")}}}}
 	_, user := reflectPrompt(run, true)
-	if !strings.Contains(user, pendingCorrectionNote) || strings.Contains(user, "후보 원문") {
+	if !strings.Contains(user, langnote.Text(langnote.PendingCorrection, "ko")) || strings.Contains(user, "후보 원문") {
 		t.Fatal("reflect prompt lost the pending-correction label or sent candidate text", user)
 	}
 }
@@ -421,5 +429,94 @@ func TestPostgresRelevanceGateEval(t *testing.T) {
 				t.Fatal("gate moved the wrong way", before, after)
 			}
 		})
+	}
+}
+
+// The provisional lane finds a candidate by meaning alone once its embedding job ran, and
+// approving the candidate unchanged hands its vector to the memory instead of paying again.
+func TestProvisionalVectorLane(t *testing.T) {
+	f := newFixture(t)
+	f.emb.semantic = true
+	candidateJob := func(id string) bool {
+		return slices.ContainsFunc(f.embeddingJobs(), func(j Record) bool {
+			return j.Target.Collection == "memory_candidates" && j.Target.ID == id
+		})
+	}
+	// Off by default: candidates are not embedded until the space opts in.
+	plain := f.capture(f.human, captureInput(scopeA, "evt-prov-plain", explicit("배포 창은 화요일 오전")))[0]
+	if candidateJob(plain.CandidateID) {
+		t.Fatal("candidate embedded without provisional_vectors")
+	}
+	setRecallQuality(t, f, SpaceRecallQuality{ProvisionalVectors: true})
+	claim := explicit("스테이징 서버 교체는 목요일 저녁")
+	item := f.capture(f.human, captureInput(scopeA, "evt-prov-vec", claim))[0]
+	if !candidateJob(item.CandidateID) {
+		t.Fatal("no embedding job for the new candidate")
+	}
+	for range 4 {
+		if err := f.svc.WorkOnce(testCtx, f.work); err != nil && !errors.Is(err, ErrNotFound) {
+			t.Fatal(err)
+		}
+	}
+	cand := f.get(f.human, "memory_candidates", scopeA, item.CandidateID)
+	if cand.Embedding == nil {
+		t.Fatal("candidate was not embedded")
+	}
+	// A query that shares no keyword with the candidate: only the vector lane can find it.
+	in := SearchInput{Scope: scopeA, Query: "목요일 저녁 스테이징 서버 교체 일정", Modes: []string{"vector"}, Limit: 5}
+	if out := f.search(f.human, in); len(out.Provisional) != 1 || out.Provisional[0].ID != cand.ID {
+		t.Fatal("vector lane missed the provisional candidate", out.Provisional)
+	}
+	if m := f.approveCandidate(cand.ID); m.Embedding == nil || m.Embedding.ContentHash != cand.Embedding.ContentHash {
+		t.Fatal("approval dropped the candidate's vector", m.Embedding)
+	}
+}
+
+// Notices follow the space's memory_language, then the request locale, then the query's script.
+func TestRecallNoticesFollowLanguage(t *testing.T) {
+	en := SearchInput{Query: "staging deploy"}
+	if got := langnote.Text(langnote.Provisional, en.noticeLang()); got != langnote.Text(langnote.Provisional, "en") {
+		t.Fatal("an English query got", got)
+	}
+	ko := SearchInput{Query: "staging deploy", locale: "ko-KR,ko;q=0.9"}
+	if ko.noticeLang() != "ko" {
+		t.Fatal("request locale ignored")
+	}
+	ja := SearchInput{Query: "스테이징", locale: "ko", space: &SpaceConfig{MemoryLanguage: "ja"}}
+	if ja.noticeLang() != "ja" {
+		t.Fatal("space memory_language ignored")
+	}
+}
+
+func TestRecallQualitySpaceDefaults(t *testing.T) {
+	f := newFixture(t)
+	setRecallQuality(t, f, SpaceRecallQuality{
+		RerankOptions: &RerankOptions{Prune: true, Dedup: true}, PreferObservations: true,
+		IncludeChunks: true, ChunksMaxTokens: 300,
+	})
+	in := SearchInput{Scope: scopeA, Query: "q"}
+	if err := f.svc.applySpaceSearch(testCtx, colMemories, &in); err != nil {
+		t.Fatal(err)
+	}
+	if in.PreferObservations == nil || !*in.PreferObservations || in.RerankOptions == nil || !in.RerankOptions.Prune || !in.RerankOptions.Dedup ||
+		!slices.Equal(in.Include, []string{"sources"}) || in.IncludeOptions.Sources.MaxTokens != 300 || !validInclude(in.Include, in.IncludeOptions) {
+		t.Fatalf("space defaults not applied: %+v", in)
+	}
+	// What the request sets stays as asked.
+	off := false
+	asked := SearchInput{Scope: scopeA, Query: "q", PreferObservations: &off, RerankOptions: &RerankOptions{}, Include: []string{"entities"}}
+	if err := f.svc.applySpaceSearch(testCtx, colMemories, &asked); err != nil {
+		t.Fatal(err)
+	}
+	if *asked.PreferObservations || asked.RerankOptions.Prune || !slices.Equal(asked.Include, []string{"entities"}) || asked.IncludeOptions != nil {
+		t.Fatalf("request values overridden: %+v", asked)
+	}
+	cur, err := f.svc.GetSpaceConfig(testCtx, f.human, scopeA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := SpaceRecallQuality{ChunksMaxTokens: includeTokensMax + 1}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: cur.Revision, RecallQuality: &bad}, false); err == nil {
+		t.Fatal("chunks_max_tokens above the include limit was accepted")
 	}
 }

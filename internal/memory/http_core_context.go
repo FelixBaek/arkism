@@ -50,6 +50,7 @@ func registerSearchCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 			return
 		}
 		in.client, in.session = recallLabel(r.Header.Get("X-Arkism-Client"), 64), recallLabel(r.Header.Get("X-Arkism-Session"), 128)
+		in.locale = recallLabel(r.Header.Get("Accept-Language"), 64)
 		v, e := s.Search(r.Context(), bearer(r), in)
 		respond(w, v, e)
 	})

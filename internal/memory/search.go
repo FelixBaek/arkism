@@ -48,7 +48,8 @@ type SearchInput struct {
 	// default; "model" also lets the server model reorder the head (recall_model_rerank.go).
 	Rerank RerankChoice `json:"rerank,omitempty"`
 	// PreferObservations leaves out memories an approved observation in the result was written from.
-	PreferObservations bool `json:"prefer_observations,omitempty"`
+	// Unset takes the space's recall_quality.prefer_observations.
+	PreferObservations *bool `json:"prefer_observations,omitempty"`
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
 	Include []string `json:"include,omitempty"`
 	// IncludeOptions bounds each include part by tokens (recall_include.go).
@@ -72,6 +73,11 @@ type SearchInput struct {
 	// client and session label the receipt (which coding agent, which of its sessions). They come
 	// from request headers, not the body, so older servers that reject unknown fields keep working.
 	client, session string
+	// locale is the request's Accept-Language, which notices follow when the space sets no memory_language.
+	locale string
+	// queryVector and querySpace are the recall's embedded query, reused by the provisional lane.
+	queryVector []float64
+	querySpace  string
 }
 
 func searchModeEnabled(modes []string, mode string) bool {
@@ -306,6 +312,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		filterContextViewLanes(one, in.contextView)
 		return one[0], err
 	}
+	in.queryVector, in.querySpace = queryVector, querySpace
 	if e = s.recallItems(ctx, token, in, d, collection, lists, clean, &out); e != nil {
 		return ContextBundle{}, Decision{}, e
 	}
@@ -876,7 +883,7 @@ func sourceErasureJob(kind string) bool {
 // embedJob runs one embedding job. The bool reports whether the attempt
 // counts as finished; a successful write also advances job.Revision.
 func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
-	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages {
+	if job.Target == nil || !slices.Contains(searchableCollections, job.Target.Collection) && job.Target.Collection != colWikiPages && job.Target.Collection != "memory_candidates" {
 		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
@@ -988,6 +995,9 @@ func embeddingEligible(col string, r Record) bool {
 	if col == colWikiPages {
 		p := wikiPageOf(r)
 		return p != nil && p.Reviewed != nil && live(r)
+	}
+	if col == "memory_candidates" { // provisional recall: only while it waits for review
+		return searchableLive(r, col, "", time.Now(), nil)
 	}
 	return live(r)
 }

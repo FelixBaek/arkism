@@ -26,7 +26,7 @@ type timeRule struct {
 	lang  int
 }
 
-// Relative time words, in the order a language's alternatives are tried at one position.
+// Relative time words; relOrder is the order a language's alternatives are tried at one position.
 const (
 	relBefore = iota // the day before yesterday
 	relYesterday
@@ -38,8 +38,14 @@ const (
 	relTwoYears // the year before last
 	relLastYear
 	relThisYear
+	relLastWeekend // Saturday and Sunday of the previous Monday-first week
+	relThisWeekend
 	relKinds
 )
+
+// relOrder tries the weekend words first: they hold the week words ("지난 주말", "先週末").
+var relOrder = []int{relLastWeekend, relThisWeekend, relBefore, relYesterday, relToday, relLastWeek, relThisWeek,
+	relLastMonth, relThisMonth, relTwoYears, relLastYear, relThisYear}
 
 var relSpans = [relKinds]func(now time.Time) (time.Time, time.Time, bool){
 	func(n time.Time) (time.Time, time.Time, bool) { return daySpan(n, -2) },
@@ -52,6 +58,8 @@ var relSpans = [relKinds]func(now time.Time) (time.Time, time.Time, bool){
 	func(n time.Time) (time.Time, time.Time, bool) { return yearSpan(n, -2) },
 	func(n time.Time) (time.Time, time.Time, bool) { return yearSpan(n, -1) },
 	func(n time.Time) (time.Time, time.Time, bool) { return yearSpan(n, 0) },
+	func(n time.Time) (time.Time, time.Time, bool) { return weekendSpan(n, -1) },
+	func(n time.Time) (time.Time, time.Time, bool) { return weekendSpan(n, 0) },
 }
 
 // timeLexicon is one language's time words (data in recall_time_lexicon.go).
@@ -215,8 +223,8 @@ func (l *timeLexicon) rules(lang int) [4][]timeRule {
 		})
 	}
 	var kinds, alts []string
-	for k, p := range l.rel {
-		if p != "" {
+	for _, k := range relOrder {
+		if p := l.rel[k]; p != "" {
 			kinds, alts = append(kinds, strconv.Itoa(k)), append(alts, "("+foldTimeText(p)+")")
 		}
 	}
@@ -482,6 +490,12 @@ func daySpan(now time.Time, offset int) (time.Time, time.Time, bool) {
 func weekSpan(now time.Time, offset int) (time.Time, time.Time, bool) {
 	monday := startOfDay(now).AddDate(0, 0, -(int(now.Weekday())+6)%7+7*offset)
 	return monday, monday.AddDate(0, 0, 7), true
+}
+
+// weekendSpan is Saturday and Sunday of the Monday-first week offset weeks from now's.
+func weekendSpan(now time.Time, offset int) (time.Time, time.Time, bool) {
+	monday, _, _ := weekSpan(now, offset)
+	return monday.AddDate(0, 0, 5), monday.AddDate(0, 0, 7), true
 }
 
 func yearSpan(now time.Time, offset int) (time.Time, time.Time, bool) {

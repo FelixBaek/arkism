@@ -306,7 +306,7 @@ func TestIncludeSourceFacts(t *testing.T) {
 		t.Fatal("no observation hit", ids(res.Items))
 		return Hit{}
 	}
-	h := obsHit(SearchInput{Scope: scopeA, Query: "staging flag", Limit: 20, Include: []string{"source_facts"}, PreferObservations: true})
+	h := obsHit(SearchInput{Scope: scopeA, Query: "staging flag", Limit: 20, Include: []string{"source_facts"}, PreferObservations: new(true)})
 	if len(h.SourceFacts) != 2 || h.SourceFacts[0].Text == "" || !slices.ContainsFunc(h.SourceFacts, func(x IncludedFact) bool { return x.ID == ms[0].ID }) {
 		t.Fatalf("%+v", h.SourceFacts)
 	}

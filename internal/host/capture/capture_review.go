@@ -29,15 +29,16 @@ For each item give:
   is a one-time permission to deploy, delete, merge or skip a safety step, or contradicts OLD or a RELATED memory;
   low = a lasting, specific statement of the user's own (basis explicit_user) that repeats nothing; medium otherwise.
   basis inferred was guessed by a model: never low.
-- risk_reasons: short Korean phrases for that call (규칙 표현 포함, 출처가 사용자 발화 아님, 기존 기억과 모순, 진행 기록).
+- risk_reasons: short phrases for that call in MEMORY_LANGUAGE (given first in the user message; auto = the language of the
+  item's TEXT), such as: reads like a rule, not the user's own words, contradicts an existing memory, task progress.
 - dup_hint: the id of the RELATED or OLD memory it repeats or contradicts, else "".
 - relation: how it stands to the dup_hint memory. duplicate = says the same thing (merge them); contradiction = both cannot hold
   and nothing says which is newer (a conflict to settle); newer_version = updates or replaces it with newer information
   (it supersedes the old one); "" when dup_hint is "".
 - verdict: what you would do. keep = store as is; fix = store after rewording (put the reworded text in verdict_text, same meaning,
-  nothing the user did not say); merge = it repeats a RELATED or OLD memory; discard = not worth storing. verdict_reason: one short Korean sentence.
+  nothing the user did not say); merge = it repeats a RELATED or OLD memory; discard = not worth storing. verdict_reason: one short sentence in MEMORY_LANGUAGE.
 - semantic: three checks of TEXT against what the user said. same_meaning, missing_content (ok=false when TEXT drops a condition the
-  user stated), no_additions (ok=false when TEXT adds something the user did not say). note: a short Korean phrase when ok is false, else "".`
+  user stated), no_additions (ok=false when TEXT adds something the user did not say). note: a short phrase in MEMORY_LANGUAGE when ok is false, else "".`
 
 const reviewSchema = `{"type": "object", "additionalProperties": false, "required": ["decisions"], "properties": {"decisions": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "risk", "risk_reasons", "dup_hint", "relation", "verdict", "verdict_text", "verdict_reason", "semantic"], "properties": {"id": {"type": "string"}, ` + riskProps + `, "relation": {"type": "string", "enum": ["", "duplicate", "contradiction", "newer_version"]}, "verdict": {"type": "string", "enum": ["keep", "fix", "merge", "discard"]}, "verdict_text": {"type": "string"}, "verdict_reason": {"type": "string"}, "semantic": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["check", "ok", "note"], "properties": {"check": {"type": "string", "enum": ["same_meaning", "missing_content", "no_additions"]}, "ok": {"type": "boolean"}, "note": {"type": "string"}}}}}}}}}`
 
@@ -338,7 +339,7 @@ func reviewChunk(chunk []map[string]any, dryRun bool, stdout io.Writer) error {
 	if len(prompt) == 0 {
 		return nil
 	}
-	out, err := privateModel(reviewSystem, strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
+	out, err := privateModel(reviewSystem, "MEMORY_LANGUAGE: "+memoryLanguage()+"\n\n"+strings.Join(prompt, "\n\n"), reviewModel, 300*time.Second, reviewSchema, "decisions")
 	if err != nil {
 		if t := pyType(err); t != "RuntimeError" && t != "TimeoutExpired" && t != "ValueError" && t != "JSONDecodeError" {
 			return err
@@ -406,7 +407,7 @@ func reviewDecisions(out any, batch map[any]map[string]any, dryRun bool, stdout 
 		if c == nil {
 			continue
 		}
-		k := riskFields(d, basisTag(c), "")
+		k := riskFields(d, basisTag(c), "", str(c["text"]))
 		risk, _ := k.Get("risk")
 		reasons, _ := k.Get("risk_reasons")
 		dup, _ := k.Get("dup_hint")

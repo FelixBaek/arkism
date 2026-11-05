@@ -105,6 +105,13 @@ func searchableLive(rec Record, collection string, space string, now time.Time, 
 		}
 		rec.Status, rec.EffectiveAt, rec.ExpiresAt = statusActive, nil, nil
 	}
+	if collection == "memory_candidates" {
+		// A candidate is searchable (provisional recall) while it waits for review; liveAt checks the rest.
+		if rec.Status != "candidate" || rec.ContentErased {
+			return false
+		}
+		rec.Status, rec.EffectiveAt = statusActive, nil
+	}
 	if collection == colReflections && !reflectionEligible(rec) {
 		return false
 	}

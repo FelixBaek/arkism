@@ -471,7 +471,7 @@ func reflectionClaims(raw []any, lines []string, active, waiting []map[string]an
 		claim := host.Obj{{Key: "subject", Value: head(or(pyStrip(str(or(c["subject"], "general"))), "general").(string), 120)},
 			{Key: "text", Value: head(text, 4000)}, {Key: "kind", Value: "lesson"}, {Key: "basis", Value: "inferred"},
 			{Key: "reason", Value: head(str(or(c["reason"], "")), 500)}}
-		risk := riskFields(c, "inferred", quote)
+		risk := riskFields(c, "inferred", quote, text)
 		if _, has := risk.Get("dup_hint"); target != nil && !has { // a confirm or replace names its lesson
 			risk.Set("dup_hint", str(target["id"]))
 		}

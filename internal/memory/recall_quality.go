@@ -5,6 +5,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/langnote"
 )
 
 // Recall quality: the space block recall_quality and what memory recall does with it.
@@ -16,33 +18,73 @@ import (
 //     every hit, the result is empty with empty_reason below_relevance_floor.
 //   - conflict_pending: attach (default) puts the correction waiting for review on the old
 //     memory it would replace; exclude leaves such memories out until a person decides.
-//   - provisional (opt-in): pending candidates matching the query come back in a separate
-//     provisional list, never among approved items, and only to callers that may read
-//     candidates.
+//   - provisional (default on; false turns it off): pending candidates matching the query
+//     come back in a separate, labelled provisional list, never among approved items, only to
+//     callers holding read:memory_candidates (people and owner tokens; agents without the
+//     scope never see them) and never to an external destination or an export. Candidates are
+//     found through the same exact and keyword lanes as memories, and the vector lane too
+//     with provisional_vectors.
+//   - provisional_vectors (opt-in, spends embedding calls on candidates a person may reject):
+//     a new candidate is queued for embedding, and approving it unchanged hands that vector
+//     to the memory, so an approved fact is embedded once.
+//
+// The notices follow the space's memory_language, else the request's Accept-Language, else
+// the query's script (internal/langnote).
 //   - auto_close_on_correction (opt-in): approving a correction kept next to the old memory
 //     ends the old one at the new one's effective time; off, the old one gets a
 //     valid_to_proposal a person accepts through the expiry route.
+//   - recall defaults a request leaves unset: rerank_options (the model rerank's prune and
+//     dedup), prefer_observations, include_chunks (include "sources") and chunks_max_tokens
+//     (include_options.sources.max_tokens). A request that sets one keeps its own value.
 const (
 	conflictPendingAttach  = "attach"
 	conflictPendingExclude = "exclude"
 	provisionalMax         = 3
-	provisionalScan        = 100
+	provisionalLaneLimit   = 20 // candidates each lane returns before the checks
 	pendingTextRunes       = 600
 	emptyBelowRelevance    = "below_relevance_floor"
-	pendingCorrectionNote  = "정정 검토 중: 사람이 결정하기 전까지 이 기억은 틀렸을 수 있습니다."
-	provisionalNote        = "승인 전 후보입니다. 확정된 기억이 아니며 사람이 검토하기 전입니다."
 )
 
 // SpaceRecallQuality is the recall_quality block; the block is inherited whole.
 type SpaceRecallQuality struct {
 	RelevanceGate         *bool  `json:"relevance_gate,omitempty" bson:"relevance_gate,omitempty"`
 	ConflictPending       string `json:"conflict_pending,omitempty" bson:"conflict_pending,omitempty"`
-	Provisional           bool   `json:"provisional,omitempty" bson:"provisional,omitempty"`
+	Provisional           *bool  `json:"provisional,omitempty" bson:"provisional,omitempty"`
+	ProvisionalVectors    bool   `json:"provisional_vectors,omitempty" bson:"provisional_vectors,omitempty"`
 	AutoCloseOnCorrection bool   `json:"auto_close_on_correction,omitempty" bson:"auto_close_on_correction,omitempty"`
+	// Recall defaults (applyRecallDefaults).
+	RerankOptions      *RerankOptions `json:"rerank_options,omitempty" bson:"rerank_options,omitempty"`
+	PreferObservations bool           `json:"prefer_observations,omitempty" bson:"prefer_observations,omitempty"`
+	IncludeChunks      bool           `json:"include_chunks,omitempty" bson:"include_chunks,omitempty"`
+	ChunksMaxTokens    int            `json:"chunks_max_tokens,omitempty" bson:"chunks_max_tokens,omitempty"`
 }
 
 func (q *SpaceRecallQuality) valid() bool {
-	return q == nil || q.ConflictPending == "" || q.ConflictPending == conflictPendingAttach || q.ConflictPending == conflictPendingExclude
+	return q == nil || (q.ConflictPending == "" || q.ConflictPending == conflictPendingAttach || q.ConflictPending == conflictPendingExclude) &&
+		q.ChunksMaxTokens >= 0 && q.ChunksMaxTokens <= includeTokensMax
+}
+
+// applyRecallDefaults fills the recall options the request left unset from the space.
+func (in *SearchInput) applyRecallDefaults() {
+	q := in.space.recallQuality()
+	if in.PreferObservations == nil && q.PreferObservations {
+		in.PreferObservations = &q.PreferObservations
+	}
+	if in.RerankOptions == nil && q.RerankOptions != nil {
+		o := *q.RerankOptions
+		in.RerankOptions = &o
+	}
+	if in.Include == nil && q.IncludeChunks {
+		in.Include = []string{"sources"}
+	}
+	if q.ChunksMaxTokens > 0 && slices.Contains(in.Include, "sources") && (in.IncludeOptions == nil || in.IncludeOptions.Sources == nil) {
+		o := IncludeOptions{}
+		if in.IncludeOptions != nil {
+			o = *in.IncludeOptions
+		}
+		o.Sources = &IncludeBudget{MaxTokens: q.ChunksMaxTokens}
+		in.IncludeOptions = &o
+	}
 }
 
 func (c *SpaceConfig) recallQuality() SpaceRecallQuality {
@@ -53,6 +95,30 @@ func (c *SpaceConfig) recallQuality() SpaceRecallQuality {
 }
 
 func (q SpaceRecallQuality) gateOn() bool { return q.RelevanceGate == nil || *q.RelevanceGate }
+
+func (q SpaceRecallQuality) provisionalOn() bool { return q.Provisional == nil || *q.Provisional }
+
+// noticeLang is the language recall notices are written in.
+func (in SearchInput) noticeLang() string {
+	setting := ""
+	if in.space != nil {
+		setting = in.space.MemoryLanguage
+	}
+	return langnote.Pick(setting, in.locale, in.Query)
+}
+
+// enqueueProvisional queues a new candidate for embedding when an embedder runs and its
+// space shows provisional candidates with provisional_vectors.
+func (s *Service) enqueueProvisional(ctx context.Context, tx Tx, col string, r Record) error {
+	if col != "memory_candidates" || s.Embedder == nil || r.Status != "candidate" || r.Sensitivity == "restricted" {
+		return nil
+	}
+	settings, err := s.spaceSettings(ctx, r.Scope)
+	if q := settings.recallQuality(); err != nil || !q.provisionalOn() || !q.ProvisionalVectors {
+		return nil
+	}
+	return enqueue(ctx, tx, col, r)
+}
 
 // PendingCorrection marks an approved memory a correction is waiting on. Text is the
 // candidate's text, only for callers that may read candidates.
@@ -130,14 +196,16 @@ func (s *Service) probeAllowed(ctx context.Context, token, action string, scope 
 }
 
 // pendingRecall applies the space's conflict_pending mode to the recalled memories and
-// adds the opt-in provisional candidates. Plain memory recall only.
+// adds the provisional candidates. Plain memory recall only.
 func (s *Service) pendingRecall(ctx context.Context, token string, in SearchInput, collection string, out *ContextBundle) error {
 	if collection != colMemories || in.IncludeInactive || in.RelatedTo != nil {
 		return nil
 	}
 	q := in.space.recallQuality()
 	pending := slices.ContainsFunc(out.Items, func(h Hit) bool { return h.conflictID != "" })
-	if !pending && !q.Provisional {
+	// A context view replays a frozen set of approved refs, so it carries no candidates.
+	provisional := q.provisionalOn() && !strings.HasPrefix(in.Destination, "external:") && in.contextView == nil
+	if !pending && !provisional {
 		return nil
 	}
 	readCandidates := s.probeAllowed(ctx, token, "read:memory_candidates", in.Scope)
@@ -150,7 +218,7 @@ func (s *Service) pendingRecall(ctx context.Context, token string, in SearchInpu
 			}
 		}
 	}
-	if !q.Provisional || !readCandidates {
+	if !provisional || !readCandidates {
 		return nil
 	}
 	return s.provisionalHits(ctx, token, in, out)
@@ -159,7 +227,7 @@ func (s *Service) pendingRecall(ctx context.Context, token string, in SearchInpu
 // pendingCorrection reads the conflict a memory is held in and the correction candidate in
 // it. A conflict it cannot read still labels the memory.
 func (s *Service) pendingCorrection(ctx context.Context, token string, in SearchInput, bundle *ContextBundle, conflictID string, withText bool) *PendingCorrection {
-	out := &PendingCorrection{Notice: pendingCorrectionNote}
+	out := &PendingCorrection{Notice: langnote.Text(langnote.PendingCorrection, in.noticeLang())}
 	rel, err := s.Repo.Get(ctx, "memory_relations", in.Scope, conflictID)
 	if err != nil || !live(rel) || rel.ContentErased {
 		return out
@@ -190,30 +258,32 @@ func (s *Service) pendingReadable(ctx context.Context, token string, in SearchIn
 	return err == nil && ok
 }
 
-// provisionalHits adds up to provisionalMax pending candidates the query is about.
-// shortcut: scans the provisionalScan most trusted pending candidates lexically; add an
-// indexed candidate lane when review queues grow past that.
+// provisionalHits adds up to provisionalMax pending candidates the query is about, found by the
+// recall's own lanes (exact, keyword and, with the recall's query vector, vector) over the
+// candidates waiting for review. A lexical match must also hold the query's topic.
 func (s *Service) provisionalHits(ctx context.Context, token string, in SearchInput, out *ContextBundle) error {
-	rows, err := s.Repo.ListCandidates(ctx, ReviewInput{Scope: in.Scope, Status: "candidate", Limit: provisionalScan})
+	lane := SearchInput{Scope: in.Scope, Query: in.Query, Modes: in.Modes, Limit: provisionalLaneLimit, SearchCriteria: in.SearchCriteria}
+	lists, err := s.Repo.SearchCollection(ctx, "memory_candidates", lane, in.queryVector, in.querySpace)
 	if err != nil {
 		return err
 	}
 	terms := searchQueryTerms(in.Query)
-	for _, r := range rows {
+	for _, row := range fuseWeighted(lists, provisionalLaneLimit, nil) {
 		if len(out.Provisional) == provisionalMax {
 			break
 		}
-		if r.Scope != in.Scope || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" || r.ConflictID != "" || !in.SearchCriteria.matchesRecord(r) {
+		r, err := s.Repo.Get(ctx, "memory_candidates", in.Scope, row.Hit.ID)
+		if err != nil || r.Status != "candidate" || r.ContentErased || r.PrivacyQuarantined || r.Sensitivity == "restricted" || r.ConflictID != "" || !in.SearchCriteria.matchesRecord(r) {
 			continue
 		}
 		h := HitFromRecord("memory_candidates", r)
 		h.Origin, h.Text, h.Reasons, h.Authority = "provisional", runeCutString(h.Text, pendingTextRunes), []string{"provisional"}, AuthorityDataOnly
-		if lexicallyRelevant(terms, h) && s.pendingReadable(ctx, token, in, out, r) {
+		if (slices.Contains(row.Hit.Reasons, reasonVector) || lexicallyRelevant(terms, h)) && s.pendingReadable(ctx, token, in, out, r) {
 			out.Provisional = append(out.Provisional, h)
 		}
 	}
 	if len(out.Provisional) > 0 {
-		out.ProvisionalNotice = provisionalNote
+		out.ProvisionalNotice = langnote.Text(langnote.Provisional, in.noticeLang())
 	}
 	return nil
 }

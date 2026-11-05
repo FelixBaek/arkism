@@ -807,6 +807,7 @@ func (s *Service) applySpaceSearch(ctx context.Context, collection string, in *S
 		}
 		in.space = &settings
 	}
+	in.applyRecallDefaults()
 	if len(in.Modes) > 0 || in.space.lane("fts") && in.space.lane("vector") {
 		return nil
 	}

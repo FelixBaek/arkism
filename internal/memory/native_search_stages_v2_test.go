@@ -15,8 +15,8 @@ type nativeStageLanesRepo struct {
 }
 
 func (r *nativeStageLanesRepo) SearchCollection(_ context.Context, col string, _ SearchInput, _ []float64, _ string) ([][]Hit, error) {
-	if col == colObservations {
-		return nil, nil // the observation lanes of a memory recall are not the memory candidate set counted here
+	if col == colObservations || col == "memory_candidates" {
+		return nil, nil // the observation and provisional lanes of a memory recall are not the memory candidate set counted here
 	}
 	r.calls++
 	return nativeClone(r.lanes)

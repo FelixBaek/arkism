@@ -521,7 +521,7 @@ func TestRecallPreferObservationsDropsTheirSourceMemories(t *testing.T) {
 		t.Fatal(err)
 	}
 	search := func(prefer bool) []string {
-		res, err := f.svc.Search(testCtx, f.agent, SearchInput{Scope: scopeA, Query: "staging flag", Limit: 20, PreferObservations: prefer})
+		res, err := f.svc.Search(testCtx, f.agent, SearchInput{Scope: scopeA, Query: "staging flag", Limit: 20, PreferObservations: &prefer})
 		if err != nil {
 			t.Fatal(err)
 		}

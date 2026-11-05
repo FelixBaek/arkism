@@ -82,6 +82,9 @@ func pgSearchState(criteria SearchCriteria, now time.Time, start int) (string, [
 	if criteria.Filters != nil && len(criteria.Filters.Statuses) > 0 {
 		statuses = criteria.Filters.Statuses
 	}
+	if criteria.pending {
+		statuses = []string{"candidate"}
+	}
 	// Quarantined rows are dropped in SQL so they cannot spend the LIMIT.
 	parts := []string{fmt.Sprintf("doc->>'status' = ANY($%d::text[])", start), "COALESCE((doc->>'privacy_quarantined')::boolean,false)=false"}
 	args := []any{statuses}
@@ -187,6 +190,9 @@ func pgSearchWhere(criteria SearchCriteria, collection string, now time.Time, ex
 		// lane (and in the vector lane's nearest-neighbour cutoff).
 		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false", "NULLIF(doc->>'approved_by','') IS NOT NULL")
 	}
+	if collection == "memory_candidates" {
+		parts = append(parts, "COALESCE((doc->>'content_erased')::boolean,false)=false")
+	}
 	if collection == colReflections {
 		parts = append(parts, "COALESCE((doc->'reflection'->>'verified')::boolean,false)=true", "COALESCE((doc->'reflection'->>'secret_checked')::boolean,false)=true")
 	}
@@ -218,7 +224,8 @@ func (p *Postgres) Search(ctx context.Context, scope Scope, query string, vector
 }
 
 func (p *Postgres) SearchCollection(ctx context.Context, collection string, in SearchInput, vector []float64, space string) ([][]Hit, error) {
-	if !slices.Contains(searchableCollections, collection) || in.IncludeInactive && collection != colMemories {
+	pending := collection == "memory_candidates" // the provisional lane over candidates waiting for review
+	if !pending && !slices.Contains(searchableCollections, collection) || in.IncludeInactive && collection != colMemories {
 		return nil, ErrInvalid
 	}
 	if err := checkScope(in.Scope); err != nil || !validSearchModes(in.Modes) {
@@ -231,7 +238,7 @@ func (p *Postgres) SearchCollection(ctx context.Context, collection string, in S
 	if err != nil {
 		return nil, err
 	}
-	c.history = in.IncludeInactive
+	c.history, c.pending = in.IncludeInactive, pending
 	if in.Limit <= 0 {
 		in.Limit = defaultSearchLimit
 	}

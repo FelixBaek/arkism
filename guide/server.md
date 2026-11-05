@@ -368,6 +368,9 @@ wiki. What a person approves and how is described in
     - Time words for about 380 more CLDR locales (month names with a day or
       year, yesterday/last week words, "N days ago", last/this weekday) are read
       after the hand-tuned languages, which still decide first.
+    - "Last weekend" and "this weekend" (Saturday and Sunday of the previous
+      or current Monday-first week) in English, Korean, Japanese, Chinese,
+      Spanish, French, German, Portuguese and Italian.
 12. **Agent proposal tools.** Agents can now propose directives, mental
     models and invalidations, list and cancel their own jobs, and read
     documents. What an agent creates stays `proposed` until a person saves or
@@ -596,12 +599,17 @@ Routes added with them, none of which calls a model: `POST /v1/mental-models/{id
 
 ### Recall quality settings
 
-The `recall_quality` space block (inherited whole, like the blocks above) changes what memory search returns. Upgrading changes two things by default; the rest is opt-in.
+The `recall_quality` space block (inherited whole, like the blocks above) changes what memory search returns. Upgrading changes three things by default; the rest is opt-in.
 
 - `relevance_gate` (default **on**; `false` turns it off): an exact-keyword or keyword-search hit stays only when its text, summary and keywords share the query's topic words (one, or two once the query has three or more) or the vector lane found it too. A keyword equal to the whole query always passes. When every hit is removed the result is empty with `empty_reason: below_relevance_floor`. On the fixed no-answer set in `internal/memory/testdata/recall_no_answer_v1.json` this cut off-topic results from 14 of 14 no-answer queries to 2 of 14 with no answer lost (11 of 11). Korean question words (언제, 어디, 누가, 무엇, 왜, 어떻게, …) now count as question scaffolding, as English ones already did.
 - `conflict_pending` (default **attach**): a memory a correction is waiting on comes back with `pending_correction` (the correction's text only for callers with `read:memory_candidates`). `exclude` leaves such memories out until a person decides.
-- `provisional` (default off): pending candidates that match the query come back in a separate `provisional` list with a `provisional_notice`, only to callers with `read:memory_candidates`. They are never mixed into `items` and never exported. Like `items` they pass the read check, or the transfer check for an external destination (a pending correction's text too), and with a context budget they are packed into `context_data` after the approved items, within what the budget leaves.
+- `provisional` (default **on** since this release; `false` turns it off): pending candidates that match the query come back in a separate `provisional` list (at most 3) with a `provisional_notice`, only to callers with `read:memory_candidates` (people and owner tokens; an agent without that scope never sees them). They are never mixed into `items`, never sent to an external destination (`destination: external:…`), never part of an export or a frozen context view. Each passes the same read check as `items`, and with a context budget they are packed into `context_data` after the approved items, within what the budget leaves. Candidates are found by the recall's own exact and keyword lanes over the candidate table, no longer by a scan of the 100 newest candidates.
+- `provisional_vectors` (default off; spends embedding calls on candidates a person may reject): new candidates are queued for embedding so the vector lane finds them too. Approving a candidate unchanged hands its vector to the memory, so an approved fact is still embedded once. Candidates made before it was turned on are not back-filled.
 - `auto_close_on_correction` (default off): when a person approves a correction and keeps the old memory (`keep_both`), the old memory gets a `valid_to_proposal`; a person accepts it by setting `expires_at` to that time (`POST /v1/memories/{id}/expiry` now accepts that one past time). With this on, the approval ends the old memory at once.
+
+- Recall defaults a request leaves unset: `rerank_options` `{prune, dedup}` for the model rerank, `prefer_observations`, `include_chunks` (adds `include: ["sources"]`) and `chunks_max_tokens` (1-16384 token budget for those excerpts, `include_options.sources.max_tokens`). A request that sends its own value keeps it; `prefer_observations: false` now turns a space default off.
+
+Notices the server writes (`provisional_notice`, `pending_correction.notice`, the capture hook's `risk_reasons` and review reasons) follow the space's `memory_language`; with `auto` they follow the request's `Accept-Language`, else the script of the query (Korean, Japanese, Chinese, else English). Built-in notice texts exist for ko, en, ja, zh, es, de and fr; other languages get English.
 
 `POST /v1/memories/at` takes an optional `valid_at` next to `as_of`: `as_of` is record time (what was known then), `valid_at` keeps only memories in effect at that time. The `recall_at` MCP tool passes it through.
 
