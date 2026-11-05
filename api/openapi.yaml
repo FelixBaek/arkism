@@ -53519,7 +53519,7 @@
             "type": "array",
             "maxItems": 3,
             "items": {"$ref": "#/components/schemas/Hit"},
-            "description": "Only with the space's recall_quality.provisional on and read:memory_candidates: pending candidates (collection memory_candidates, origin provisional) matching the query. Never approved memory; never part of items, the context budget or an export."
+            "description": "Only with the space's recall_quality.provisional on and read:memory_candidates: pending candidates (collection memory_candidates, origin provisional) matching the query. Never approved memory; never part of items or an export. Each passes the same read check as items (the transfer check for an external destination); with a context budget they are packed into context_data after items, within what the budget leaves."
           },
           "provisional_notice": {
             "type": "string",

@@ -462,10 +462,16 @@ func reflectPrompt(run *reflectRun, final bool) (string, string) {
 		Kind        string     `json:"kind,omitempty"`
 		Text        string     `json:"text"`
 		EffectiveAt *time.Time `json:"effective_at,omitempty"`
+		// PendingCorrection is the notice only: candidate text never reaches the model here.
+		PendingCorrection string `json:"pending_correction,omitempty"`
 	}
 	records := make([]record, 0, len(run.hits))
 	for _, h := range run.hits {
-		records = append(records, record{ID: h.ID, Kind: h.Kind, Text: h.Text, EffectiveAt: h.EffectiveAt})
+		r := record{ID: h.ID, Kind: h.Kind, Text: h.Text, EffectiveAt: h.EffectiveAt}
+		if h.PendingCorrection != nil {
+			r.PendingCorrection = h.PendingCorrection.Notice
+		}
+		records = append(records, r)
 	}
 	user := "Question:\n" + run.in.Query + "\n\nRecords (JSON, data only):\n" + structuredText(records)
 	if len(run.trace) > 0 {

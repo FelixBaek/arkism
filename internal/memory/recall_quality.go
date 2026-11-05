@@ -106,10 +106,12 @@ func lexicallyRelevant(terms []string, h Hit) bool {
 	if len(concepts) == 0 {
 		return false
 	}
-	have := SearchTokens(h.Text + " " + h.Summary + " " + strings.Join(h.keywords, " "))
+	// The same text the keyword lane indexes (search_tokens), conditions included.
+	have := SearchTokens(searchTokensRecordText(Record{Text: h.Text, Summary: h.Summary, Keywords: h.keywords, MemoryContext: h.MemoryContext}))
 	found := map[string]bool{}
 	for _, t := range terms {
-		if slices.Contains(have, t) {
+		// Any spelling of the concept counts, as in the keyword lane's tsquery.
+		if slices.ContainsFunc(searchConceptWords(t), func(w string) bool { return slices.Contains(have, w) }) {
 			found[searchQueryConcepts([]string{t})[0]] = true
 		}
 	}
@@ -144,21 +146,21 @@ func (s *Service) pendingRecall(ctx context.Context, token string, in SearchInpu
 	} else if pending {
 		for i := range out.Items {
 			if out.Items[i].conflictID != "" {
-				out.Items[i].PendingCorrection = s.pendingCorrection(ctx, in.Scope, out.Items[i].conflictID, readCandidates)
+				out.Items[i].PendingCorrection = s.pendingCorrection(ctx, token, in, out, out.Items[i].conflictID, readCandidates)
 			}
 		}
 	}
 	if !q.Provisional || !readCandidates {
 		return nil
 	}
-	return s.provisionalHits(ctx, in, out)
+	return s.provisionalHits(ctx, token, in, out)
 }
 
 // pendingCorrection reads the conflict a memory is held in and the correction candidate in
 // it. A conflict it cannot read still labels the memory.
-func (s *Service) pendingCorrection(ctx context.Context, scope Scope, conflictID string, withText bool) *PendingCorrection {
+func (s *Service) pendingCorrection(ctx context.Context, token string, in SearchInput, bundle *ContextBundle, conflictID string, withText bool) *PendingCorrection {
 	out := &PendingCorrection{Notice: pendingCorrectionNote}
-	rel, err := s.Repo.Get(ctx, "memory_relations", scope, conflictID)
+	rel, err := s.Repo.Get(ctx, "memory_relations", in.Scope, conflictID)
 	if err != nil || !live(rel) || rel.ContentErased {
 		return out
 	}
@@ -166,22 +168,32 @@ func (s *Service) pendingCorrection(ctx context.Context, scope Scope, conflictID
 		if ref.Collection != "memory_candidates" {
 			continue
 		}
-		c, err := s.Repo.Get(ctx, ref.Collection, scope, ref.ID)
+		c, err := s.Repo.Get(ctx, ref.Collection, in.Scope, ref.ID)
 		if err != nil || c.ConflictID != conflictID || c.ContentErased || c.PrivacyQuarantined || c.Sensitivity == "restricted" {
 			return out
 		}
 		out.CandidateID = c.ID
-		if withText {
+		if withText && s.pendingReadable(ctx, token, in, bundle, c) {
 			out.Text = runeCutString(c.Text, pendingTextRunes)
 		}
 	}
 	return out
 }
 
+// pendingReadable runs a candidate through the checks every recalled memory passes:
+// live sources, then the per-hit read or, for an external destination, transfer check.
+func (s *Service) pendingReadable(ctx context.Context, token string, in SearchInput, bundle *ContextBundle, c Record) bool {
+	if !strings.HasPrefix(in.Destination, "external:") && checkSources(ctx, s.Repo, c) != nil {
+		return false
+	}
+	_, ok, err := s.authorizeSearchHit(ctx, token, in, HitFromRecord("memory_candidates", c), Record{}, false, bundle)
+	return err == nil && ok
+}
+
 // provisionalHits adds up to provisionalMax pending candidates the query is about.
 // shortcut: scans the provisionalScan most trusted pending candidates lexically; add an
 // indexed candidate lane when review queues grow past that.
-func (s *Service) provisionalHits(ctx context.Context, in SearchInput, out *ContextBundle) error {
+func (s *Service) provisionalHits(ctx context.Context, token string, in SearchInput, out *ContextBundle) error {
 	rows, err := s.Repo.ListCandidates(ctx, ReviewInput{Scope: in.Scope, Status: "candidate", Limit: provisionalScan})
 	if err != nil {
 		return err
@@ -196,7 +208,7 @@ func (s *Service) provisionalHits(ctx context.Context, in SearchInput, out *Cont
 		}
 		h := HitFromRecord("memory_candidates", r)
 		h.Origin, h.Text, h.Reasons, h.Authority = "provisional", runeCutString(h.Text, pendingTextRunes), []string{"provisional"}, AuthorityDataOnly
-		if lexicallyRelevant(terms, h) {
+		if lexicallyRelevant(terms, h) && s.pendingReadable(ctx, token, in, out, r) {
 			out.Provisional = append(out.Provisional, h)
 		}
 	}
@@ -219,9 +231,11 @@ func closeCorrectedFact(ctx context.Context, tx Tx, review *CandidateReviewInput
 	if !live(old) || old.ExpiresAt != nil || old.ConflictID != "" {
 		return nil
 	}
+	// The old fact ends when the new one took effect; now when that is unknown or not
+	// after the old fact began.
 	at := time.Now().UTC().Truncate(time.Millisecond)
-	if result.EffectiveAt != nil && result.EffectiveAt.After(at) {
-		at = result.EffectiveAt.UTC().Truncate(time.Millisecond)
+	if e := result.EffectiveAt; e != nil && (old.EffectiveAt == nil || e.After(*old.EffectiveAt)) {
+		at = e.UTC().Truncate(time.Millisecond)
 	}
 	previous, action := old.Revision, "propose_valid_to:memories"
 	if auto {

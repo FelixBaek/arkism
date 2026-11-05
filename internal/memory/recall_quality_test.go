@@ -54,14 +54,20 @@ func runNoAnswerEval(f *fixture, set noAnswerEval, ids map[string]string) noAnsw
 	return s
 }
 
-// The relevance floor measured on the fixed no-answer set, before (gate off) and after.
-func TestRelevanceGateNoAnswerEval(t *testing.T) {
-	raw, err := os.ReadFile("testdata/recall_no_answer_v1.json")
+func loadNoAnswerEval(t *testing.T, name string) noAnswerEval {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/" + name + ".json")
 	var set noAnswerEval
 	if err != nil || json.Unmarshal(raw, &set) != nil {
 		t.Fatal(err)
 	}
-	f := newFixture(t)
+	return set
+}
+
+// measureNoAnswerEval stores the set's memories in f and scores it with the gate off, then on.
+func measureNoAnswerEval(t *testing.T, f *fixture, name string) (noAnswerScore, noAnswerScore) {
+	t.Helper()
+	set := loadNoAnswerEval(t, name)
 	ids := map[string]string{}
 	for _, m := range set.Memories {
 		ids[m.Key] = f.activeMemory(m.Text, m.Keywords...).ID
@@ -71,10 +77,25 @@ func TestRelevanceGateNoAnswerEval(t *testing.T) {
 	before := runNoAnswerEval(f, set, ids)
 	setRecallQuality(t, f, SpaceRecallQuality{})
 	after := runNoAnswerEval(f, set, ids)
-	t.Logf("recall_no_answer_v1 before: no-answer returned %d/%d, answer hit@5 %d/%d", before.negativeReturned, before.negatives, before.answerHit, before.answers)
-	t.Logf("recall_no_answer_v1 after:  no-answer returned %d/%d, answer hit@5 %d/%d", after.negativeReturned, after.negatives, after.answerHit, after.answers)
+	t.Logf("%s before: no-answer returned %d/%d, answer hit@5 %d/%d", name, before.negativeReturned, before.negatives, before.answerHit, before.answers)
+	t.Logf("%s after:  no-answer returned %d/%d, answer hit@5 %d/%d", name, after.negativeReturned, after.negatives, after.answerHit, after.answers)
+	return before, after
+}
+
+// The relevance floor measured on the fixed no-answer set, before (gate off) and after.
+func TestRelevanceGateNoAnswerEval(t *testing.T) {
+	before, after := measureNoAnswerEval(t, newFixture(t), "recall_no_answer_v1")
 	if after.negativeReturned >= before.negativeReturned || after.answerHit != before.answerHit || after.answerHit != after.answers {
 		t.Fatal("relevance floor did not cut no-answer recall without losing answers", before, after)
+	}
+}
+
+// The held-out set was written after the gate and never tuned against; it records what
+// the gate costs (answers lost without a vector lane) next to what it saves.
+func TestRelevanceGateHeldOutEval(t *testing.T) {
+	before, after := measureNoAnswerEval(t, newFixture(t), "recall_no_answer_heldout_v1")
+	if after.negativeReturned > before.negativeReturned || after.answerHit > before.answerHit {
+		t.Fatal("held-out eval moved the wrong way", before, after)
 	}
 }
 
@@ -225,7 +246,11 @@ func TestChangingFactCategoryWalk(t *testing.T) {
 		}
 		return ids
 	}
-	if got := at(now, beforeMove); !slices.Contains(got, old.ID) {
+	// The old fact ends when the correction took effect (its capture), not at the review.
+	if !old.ValidToProposal.At.Equal(*newer.EffectiveAt) || !old.ValidToProposal.At.Before(beforeMove) {
+		t.Fatal("end proposal is not the correction's effective time", old.ValidToProposal.At, newer.EffectiveAt)
+	}
+	if got := at(now, *held.EffectiveAt); !slices.Contains(got, old.ID) {
 		t.Fatal("valid time before the move lost the old fact", got)
 	}
 	if got := at(now, now); slices.Contains(got, old.ID) || !slices.Contains(got, newer.ID) {
@@ -298,5 +323,103 @@ func TestRecallQualityLiveStyleScenario(t *testing.T) {
 	out := ask("self-hosted runner")
 	if h := hitByID(out.Items, moved.ID); h == nil || h.ValidToProposal == nil || h.ValidToProposal.By.ID != newer.ID {
 		t.Fatal("the moved fact did not carry its end proposal", out.Items)
+	}
+}
+
+// Review findings: provisional and pending-correction text pass the same per-hit read and
+// transfer checks as recalled memories, and count against a context budget.
+func TestPendingTextPassesTransferAndBudget(t *testing.T) {
+	f := newFixture(t)
+	held, fix := heldCorrection(t, f, "theme-x", "기본 테마는 다크", "기본 테마는 paper 라이트로 바꿨다")
+	claim := explicit("스테이징 배포는 목요일 저녁에 한다")
+	claim.Basis = "inferred"
+	pending := f.capture(f.agent, captureInput(scopeA, "evt-prov-x", claim))[0]
+	setRecallQuality(t, f, SpaceRecallQuality{Provisional: true})
+	for _, id := range []string{pending.CandidateID, fix.CandidateID} {
+		c := f.repo.store["memory_candidates"][recKey(scopeA, id)]
+		c.Sensitivity = "" // unclassified content never leaves the server
+		f.repo.store["memory_candidates"][recKey(scopeA, id)] = c
+	}
+	ext := func(q string) ContextBundle {
+		return f.search(f.agent, SearchInput{Scope: scopeA, Query: q, Modes: []string{"exact", "fts"}, Limit: 5, Destination: "external:test"})
+	}
+	if out := ext("스테이징 배포"); len(out.Provisional) != 0 {
+		t.Fatal("an unclassified candidate went to an external destination", out.Provisional)
+	}
+	if h := hitByID(ext("기본 테마").Items, held.ID); h == nil || h.PendingCorrection == nil || h.PendingCorrection.Text != "" || h.PendingCorrection.Notice == "" {
+		t.Fatal("unclassified correction text went to an external destination", h)
+	}
+	// Internal callers still see both.
+	in := SearchInput{Scope: scopeA, Query: "스테이징 배포", Modes: []string{"exact", "fts"}, Limit: 5}
+	if out := f.search(f.agent, in); len(out.Provisional) != 1 {
+		t.Fatal("internal provisional lost", out.Provisional)
+	}
+	in.BudgetTokens, in.TokenEncoding = 40, "cl100k_base"
+	out := f.search(f.agent, in)
+	if out.TokensUsed > 40 || len(out.Provisional) != 0 || out.ProvisionalNotice != "" {
+		t.Fatal("provisional text exceeded the context budget", out.TokensUsed, out.Provisional)
+	}
+	in.BudgetTokens = 4000
+	if out = f.search(f.agent, in); len(out.Provisional) != 1 || !strings.Contains(out.ContextData, "provisional") {
+		t.Fatal("provisional missing from the packed context", out.ContextData)
+	}
+}
+
+// The gate reads the same text the keyword lane indexes, conditions included.
+func TestRelevanceGateReadsIndexedConditions(t *testing.T) {
+	h := Hit{ID: "m1", Collection: colMemories, Text: "Use the blue-green script", Reasons: []string{reasonTextSearch},
+		MemoryContext: &MemoryContext{Applicability: "when deploying arkism to production"}}
+	in := SearchInput{Query: "arkism production deploy steps"}
+	if kept := relevanceGate(in, [][]Hit{{h}}, &recallTrace{}); len(kept[0]) != 1 {
+		t.Fatal("a hit the keyword lane matched on its conditions was dropped")
+	}
+	// 사본 and 백업 are one concept in the keyword lane; the gate agrees.
+	h = Hit{ID: "m2", Collection: colMemories, Text: "백업은 서버 밖에 별도 보관하고, 복원 시험으로 확인한다.", Reasons: []string{reasonTextSearch}}
+	in = SearchInput{Query: "보관한 사본이 정작 필요할 때 못 쓰는 상태인지 어떻게 예방하지?"}
+	if kept := relevanceGate(in, [][]Hit{{h}}, &recallTrace{}); len(kept[0]) != 1 {
+		t.Fatal("a synonym-group match the keyword lane returned was dropped")
+	}
+}
+
+// A model answering from recall sees which memory a correction is waiting on.
+func TestReflectPromptLabelsPendingCorrection(t *testing.T) {
+	run := &reflectRun{in: ReflectInput{Query: "기본 테마"}, hits: []Hit{{ID: "m1", Kind: "user", Text: "기본 테마는 다크", PendingCorrection: &PendingCorrection{CandidateID: "c1", Text: "후보 원문", Notice: pendingCorrectionNote}}}}
+	_, user := reflectPrompt(run, true)
+	if !strings.Contains(user, pendingCorrectionNote) || strings.Contains(user, "후보 원문") {
+		t.Fatal("reflect prompt lost the pending-correction label or sent candidate text", user)
+	}
+}
+
+// A correction effective in the past ends the old fact then, not at the review time.
+func TestCorrectionClosesAtItsEffectiveTime(t *testing.T) {
+	f := newFixture(t)
+	held, item := heldCorrection(t, f, "office", "The office is in Gangnam", "The office moved to Pangyo")
+	moved := time.Now().UTC().Add(-time.Hour).Truncate(time.Millisecond)
+	c := f.repo.store["memory_candidates"][recKey(scopeA, item.CandidateID)]
+	started := moved.Add(-48 * time.Hour)
+	held.EffectiveAt = &started
+	f.repo.store[colMemories][recKey(scopeA, held.ID)] = held
+	c.EffectiveAt = &moved
+	f.repo.store["memory_candidates"][recKey(scopeA, item.CandidateID)] = c
+	reviewCorrection(t, f, held, item, "keep_both")
+	old := f.get(f.human, colMemories, scopeA, held.ID)
+	if old.ValidToProposal == nil || !old.ValidToProposal.At.Equal(moved) {
+		t.Fatal("the end proposal ignored the correction's effective time", old.ValidToProposal)
+	}
+}
+
+// Both eval sets through the real Postgres exact and keyword lanes (search_tokens, the
+// keyword lane's own two-of-three rule), gate off then on.
+func TestPostgresRelevanceGateEval(t *testing.T) {
+	for _, name := range []string{"recall_no_answer_v1", "recall_no_answer_heldout_v1"} {
+		t.Run(name, func(t *testing.T) {
+			p := isolatedPostgres(t)
+			f := newFixture(t)
+			f.svc.Repo = p
+			before, after := measureNoAnswerEval(t, f, name)
+			if after.negativeReturned > before.negativeReturned || after.answerHit > before.answerHit {
+				t.Fatal("gate moved the wrong way", before, after)
+			}
+		})
 	}
 }

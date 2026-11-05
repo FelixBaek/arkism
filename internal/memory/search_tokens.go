@@ -153,16 +153,9 @@ func searchQueryTerms(query string) []string {
 // once even when the query or document contains both spellings, so expansion
 // cannot manufacture the two independent matches a long query requires.
 func searchQueryConcepts(terms []string) []string {
-	groups := [][]string{{"사본", "백업"}, {"복원", "복구"}}
 	concepts := []string{}
 	for _, term := range terms {
-		words := []string{term}
-		for _, group := range groups {
-			if slices.Contains(group, term) {
-				words = group
-				break
-			}
-		}
+		words := searchConceptWords(term)
 		parts := make([]string, len(words))
 		for i, word := range words {
 			parts[i] = tsQuote(word)
@@ -173,6 +166,16 @@ func searchQueryConcepts(terms []string) []string {
 		}
 	}
 	return concepts
+}
+
+// searchConceptWords are the spellings that count as term's one lexical concept.
+func searchConceptWords(term string) []string {
+	for _, group := range [][]string{{"사본", "백업"}, {"복원", "복구"}} {
+		if slices.Contains(group, term) {
+			return group
+		}
+	}
+	return []string{term}
 }
 
 // A pair of generic procedure words is not evidence about the subject of a

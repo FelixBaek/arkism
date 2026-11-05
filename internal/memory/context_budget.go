@@ -17,8 +17,10 @@ func packContext(ctx context.Context, out *ContextBundle, budget int, encoding s
 		return ErrInvalid
 	}
 	data := struct {
-		Authority string `json:"authority"`
-		Items     []Hit  `json:"items"`
+		Authority         string `json:"authority"`
+		Items             []Hit  `json:"items"`
+		Provisional       []Hit  `json:"provisional,omitempty"`
+		ProvisionalNotice string `json:"provisional_notice,omitempty"`
 	}{Authority: AuthorityDataOnly, Items: []Hit{}}
 	workBytes := 0
 	measure := func() (string, int, error) {
@@ -61,7 +63,23 @@ func packContext(ctx context.Context, out *ContextBundle, budget int, encoding s
 		}
 		text, count = candidate, n
 	}
-	out.Items = data.Items
+	// Provisional candidates come after approved items, only within what is left.
+	for _, h := range out.Provisional {
+		data.Provisional, data.ProvisionalNotice = append(data.Provisional, h), out.ProvisionalNotice
+		candidate, n, err := measure()
+		if err != nil {
+			return err
+		}
+		if n > budget {
+			data.Provisional = data.Provisional[:len(data.Provisional)-1]
+			continue
+		}
+		text, count = candidate, n
+	}
+	if len(data.Provisional) == 0 {
+		data.ProvisionalNotice = ""
+	}
+	out.Items, out.Provisional, out.ProvisionalNotice = data.Items, data.Provisional, data.ProvisionalNotice
 	out.ContextData, out.TokensUsed, out.TokenEncoding = text, count, encoding
 	return nil
 }
