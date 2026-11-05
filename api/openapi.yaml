@@ -8897,21 +8897,21 @@
     "/v1/spaces/{workspace}/{project}/config": {
       "get": {
         "summary": "A space's settings (read:space_configs)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "{workspace_id, project_id, revision, config}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1SpacesByWorkspaceByProjectConfig"
       },
       "put": {
         "summary": "Replace a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "422": {"description": "secret_detected"}},
         "operationId": "putV1SpacesByWorkspaceByProjectConfig"
       },
       "patch": {
         "summary": "Change some of a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. Extraction: extraction_mode may also be chunks (each chunk stored as a candidate, no model call); extraction_mission (at most 2000 characters) says what the space's memory is for and is sent apart from extraction_instructions; extraction_chunk_size (500-12000 characters, default 6000) sizes extraction chunks; extract_causal (default off, null inherits) asks the model for causes between claims of one chunk, stored as causal link candidates; extraction_strategies {name: {extraction_mode, extraction_instructions, extraction_mission, extraction_chunk_size, extract_causal}} (at most 16, names [a-z0-9_-]{1,32}) are named overrides an item picks with strategy, extraction_default_strategy names the one used when it picks none; default_timezone (an IANA zone, default the server's) is the zone relative dates of extracted text are read in. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "patchV1SpacesByWorkspaceByProjectConfig"
@@ -38868,7 +38868,7 @@
           "Management"
         ],
         "summary": "Preview claims from text (dry run)",
-        "description": "Proposes claims (content, kind, semantic_kind, evidence_kind, occurred_from, occurred_to, evidence_quote, confidence) from at most 64 KiB of text. Nothing is stored except the model usage record. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Proposes claims (content, kind, fact_type world|experience (experience = kind episodic), semantic_kind, evidence_kind, occurred_from, occurred_to, evidence_quote, confidence) from at most 64 KiB of text. Nothing is stored except the model usage record. The space's extraction settings apply; strategy picks a named strategy and overrides lays settings over them for this call only. causes (cause, effect: claim positions; reason) appear when extract_causal is on. prompt_only returns prompt {system, user, settings, strategy, strategies, timezone, skipped_reason} without any model call (chunks mode never calls one). chunks mode returns each chunk as one claim without a model. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -38980,8 +38980,7 @@
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "scope",
-                  "text"
+                  "scope"
                 ],
                 "properties": {
                   "scope": {
@@ -38993,6 +38992,234 @@
                   },
                   "source_label": {
                     "type": "string"
+                  },
+                  "context": {"type": "string", "maxLength": 2000, "description": "What the text is (a channel, a meeting); sent to the model next to the text, privacy-filtered, never stored as a claim."},
+                  "timestamp": {"type": "string", "format": "date-time", "description": "When the text was written; relative dates are read against it in the space's default_timezone (not in the future). Default now."},
+                  "strategy": {"type": "string", "pattern": "^[a-z0-9_-]{1,32}$", "description": "A named strategy of the space's extraction_strategies; default extraction_default_strategy."},
+                  "overrides": {"type": "object", "additionalProperties": false, "properties": {"extraction_mode": {"type": "string", "enum": ["", "concise", "verbose", "verbatim", "custom", "chunks"]}, "extraction_instructions": {"type": "string", "maxLength": 2000}, "extraction_mission": {"type": "string", "maxLength": 2000}, "extraction_chunk_size": {"type": "integer", "minimum": 0, "maximum": 12000, "description": "0 inherits; otherwise 500-12000 characters"}, "extract_causal": {"type": ["boolean", "null"]}}, "description": "Settings to try over the space's and the strategy's (a dry run of settings not yet saved)."},
+                  "prompt_only": {"type": "boolean", "description": "Render the prompt for the first chunk (text optional) and call no model."}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/memories/ingest": {
+      "post": {
+        "operationId": "ingest_memories",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Extract memory candidates from text items",
+        "description": "Extracts memory candidates from 1-16 text items (content at most 512 KiB each) under the space's extraction settings; every claim becomes a candidate through capture and a person reviews every one, nothing is approved here. Per item: context (sent to the model next to the text), timestamp (reference time for relative dates, in the space's default_timezone; also the candidates' observed time), tags, metadata (meta:<key>=<value> tags), entities (names stated on every candidate, linked when a person approves), strategy (a named extraction strategy), document_id and update_mode. Items with the same document_id are one document of the caller: replace (default) extracts only chunks whose text changed and reports removed ones in delta; append adds the text after the document's earlier chunks. Without document_id the text itself names the document, so the same text is extracted once. Each item is its own document and job (job_id, also listed under /v1/operations): up to 2 chunks run in the request, more run as a queued job; async queues every item and answers at once (poll GET /v1/files/memories/jobs/{id}). Every item is validated, defended and filtered before any is stored; a bad item is 400 and stores nothing. Mode chunks stores each chunk (at most 1000 characters) as a candidate without a model call; other modes call the server model under the daily call cap and the usage ledger. With the space's extract_causal on, causes the model states between claims of one chunk become causal link candidates (GET /v1/causal/links) once a person approved both claims. Private markers and secret-looking text are removed before the model sees any text.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the file extension has no reader and no configured converter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scope",
+                  "items"
+                ],
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "content"
+                      ],
+                      "properties": {
+                        "content": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 524288
+                        },
+                        "context": {
+                          "type": "string",
+                          "maxLength": 2000,
+                          "description": "What the text is (a channel, a meeting); sent to the model next to the text, privacy-filtered, never stored as a claim."
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "format": "date-time",
+                          "description": "When the text was written; relative dates are read against it in the space's default_timezone (not in the future). Default now."
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "maxProperties": 20,
+                          "propertyNames": {
+                            "pattern": "^[a-z0-9_.-]{1,32}$"
+                          },
+                          "additionalProperties": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "description": "Stored as meta:<key>=<value> tags."
+                        },
+                        "tags": {
+                          "type": "array",
+                          "maxItems": 20,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 128,
+                            "pattern": "^[^:]+$"
+                          },
+                          "description": "Plain labels (no ':') put on every candidate."
+                        },
+                        "entities": {
+                          "type": "array",
+                          "maxItems": 20,
+                          "items": {
+                            "type": "string",
+                            "maxLength": 80
+                          },
+                          "description": "Entity names stated for every candidate (as concept entities); approving the candidate links them."
+                        },
+                        "document_id": {
+                          "type": "string",
+                          "maxLength": 200
+                        },
+                        "update_mode": {
+                          "type": "string",
+                          "enum": [
+                            "",
+                            "replace",
+                            "append"
+                          ]
+                        },
+                        "strategy": {
+                          "type": "string",
+                          "pattern": "^[a-z0-9_-]{1,32}$",
+                          "description": "A named strategy of the space's extraction_strategies; default extraction_default_strategy. Unknown names are 400."
+                        }
+                      }
+                    }
+                  },
+                  "async": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -39008,7 +39235,7 @@
           "Management"
         ],
         "summary": "Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)",
-        "description": "Reads txt, md, json, docx, pdf, html/htm, csv, tsv, xlsx (a Markdown table per sheet), pptx (a page per slide), eml (headers, text body, attachment names) and the legacy binary doc (main text), xls (string and number cells, a table per sheet) and ppt (a page per slide) with built-in readers (base64, at most 4 MiB; encrypted PDFs, and scanned PDFs unless image reading is on, return no_extractable_text). Images (png, jpg/jpeg, webp) and scanned PDFs (JPEG page images, at most 8 pages; later pages are skipped with vision_page_limit) are read by the server chat model only when the operator set MEMORY_FILE_VISION=1; audio (mp3, wav, m4a, ogg, webm, flac) is transcribed only when MEMORY_TRANSCRIBE_ENDPOINT and MEMORY_TRANSCRIBE_MODEL are set. Each such file needs transfer:model_input (destination external:wiki-llm or external:transcription, decided on the file name, type, size and sha256) before its bytes leave the server, counts against the daily model call cap and is filed in the usage ledger (operations wiki_file_vision, wiki_file_transcribe); the returned text goes through the same privacy filters and candidate review. Without the opt-in these formats are 415. Other extensions are 415 unsupported_media_type unless the operator configured MEMORY_DOCUMENT_CONVERTER (absolute path, run without a shell, empty environment, private temporary folder, 60 s and 4 MiB output limits) and listed the extension in MEMORY_DOCUMENT_CONVERTER_EXTENSIONS; converted text goes through the same privacy filters. The result carries document_id for the document chunk and history routes. With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. When the same person uploads the same file name again in the same scope, the upload extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Reads txt, md, json, docx, pdf, html/htm, csv, tsv, xlsx (a Markdown table per sheet), pptx (a page per slide), eml (headers, text body, attachment names) and the legacy binary doc (main text), xls (string and number cells, a table per sheet) and ppt (a page per slide) with built-in readers (base64, at most 4 MiB; encrypted PDFs, and scanned PDFs unless image reading is on, return no_extractable_text). Images (png, jpg/jpeg, webp) and scanned PDFs (JPEG page images, at most 8 pages; later pages are skipped with vision_page_limit) are read by the server chat model only when the operator set MEMORY_FILE_VISION=1; audio (mp3, wav, m4a, ogg, webm, flac) is transcribed only when MEMORY_TRANSCRIBE_ENDPOINT and MEMORY_TRANSCRIBE_MODEL are set. Each such file needs transfer:model_input (destination external:wiki-llm or external:transcription, decided on the file name, type, size and sha256) before its bytes leave the server, counts against the daily model call cap and is filed in the usage ledger (operations wiki_file_vision, wiki_file_transcribe); the returned text goes through the same privacy filters and candidate review. Without the opt-in these formats are 415. Other extensions are 415 unsupported_media_type unless the operator configured MEMORY_DOCUMENT_CONVERTER (absolute path, run without a shell, empty environment, private temporary folder, 60 s and 4 MiB output limits) and listed the extension in MEMORY_DOCUMENT_CONVERTER_EXTENSIONS; converted text goes through the same privacy filters. The result carries document_id for the document chunk and history routes. With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. When the same person uploads the same file name again in the same scope, the upload extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text. context, timestamp, tags and strategy work as on POST /v1/memories/ingest.",
         "responses": {
           "200": {
             "description": "Success",
@@ -39149,7 +39376,11 @@
                   },
                   "dry_run": {
                     "type": "boolean"
-                  }
+                  },
+                  "context": {"type": "string", "maxLength": 2000, "description": "What the text is (a channel, a meeting); sent to the model next to the text, privacy-filtered, never stored as a claim."},
+                  "timestamp": {"type": "string", "format": "date-time", "description": "Reference time of the file: its relative dates are read against it in the space's default_timezone. Default the upload time."},
+                  "tags": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 128, "pattern": "^[^:]+$"}, "description": "Plain labels (no ':') put on every candidate."},
+                  "strategy": {"type": "string", "pattern": "^[a-z0-9_-]{1,32}$", "description": "A named strategy of the space's extraction_strategies; default extraction_default_strategy. Unknown names are 400."}
                 }
               }
             }
@@ -39319,7 +39550,7 @@
           "Management"
         ],
         "summary": "Resume a file extraction job (an agent only when the space config mcp_tools lists add_document)",
-        "description": "Runs the remaining chunks of a pending or stopped job (budget stop, restart). Only the person who uploaded the file may run it (others get 403). A finished job, or one an operator stopped, is returned unchanged. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Runs the remaining chunks of a pending or stopped job (budget stop, restart). Only the person who uploaded the file may run it (others get 403). A finished job, or one an operator stopped, is returned unchanged. With provider batch mode (MEMORY_EXTRACT_BATCH=1) a job of more than 2 chunks sends them as one batch and stays retry with error batch_pending until the batch ends; each run checks it. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -48209,7 +48440,7 @@
           "basis",
           "reason"
         ],
-        "properties": {
+        "properties": { "tags": {"type": "array", "maxItems": 20, "items": {"type": "string", "maxLength": 128, "pattern": "^[^:]+$"}, "description": "Plain labels (no ':') put on every candidate."}, "metadata": {"type": "object", "maxProperties": 20, "propertyNames": {"pattern": "^[a-z0-9_.-]{1,32}$"}, "additionalProperties": {"type": "string", "maxLength": 80}, "description": "Stored as meta:<key>=<value> tags."},
           "risk": {"type": "string", "enum": ["high", "medium", "low"], "description": "ADR-0022: the extractor's risk call; it only orders the review list"},
           "risk_reasons": {"type": "array", "maxItems": 8, "items": {"type": "string", "maxLength": 1000}},
           "evidence_span": {"type": "string", "maxLength": 8000},
@@ -72035,6 +72266,18 @@
           "previous": {
             "type": "string",
             "description": "the document's job before this upload"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/WireResponseExtractStrategy"
+          },
+          "options": {
+            "$ref": "#/components/schemas/WireResponseExtractOptions"
+          },
+          "zone": {
+            "type": "string"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/WireResponseExtractBatch"
           }
         },
         "additionalProperties": false,
@@ -72048,7 +72291,9 @@
           "skipped",
           "calls",
           "tokens",
-          "requested_by"
+          "requested_by",
+          "settings",
+          "options"
         ],
         "x-go-type": "memory.FileExtractJob",
         "x-go-source": "internal/memory/file_extract.go"
@@ -72767,6 +73012,87 @@
         "x-go-type": "memory.EntityInput",
         "x-go-source": "internal/memory/entity_labels.go",
         "description": "EntityInput is a named entity the caller states for a memory (a capture claim\nor a candidate). It is reviewed with the candidate and applied when the memory\nis approved, literally: no similar-name matching. Type defaults to concept;\n\"label\" takes a key:value name the space's entity_labels allow."
+      },
+      "WireResponseExtractStrategy": {
+        "type": "object",
+        "properties": {
+          "extraction_mode": {
+            "type": "string"
+          },
+          "extraction_instructions": {
+            "type": "string"
+          },
+          "extraction_mission": {
+            "type": "string"
+          },
+          "extraction_chunk_size": {
+            "type": "integer"
+          },
+          "extract_causal": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ExtractStrategy",
+        "x-go-source": "internal/memory/space_settings.go",
+        "description": "ExtractStrategy is a set of extraction settings: a space's named strategy an item\npicks by name, or a dry run's overrides. Empty fields keep the space's setting."
+      },
+      "WireResponseExtractOptions": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "entities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "strategy": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ExtractOptions",
+        "x-go-source": "internal/memory/file_extract.go",
+        "description": "ExtractOptions are one item's own fields: they shape its prompt and label its candidates."
+      },
+      "WireResponseExtractBatch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "submitted_at"
+        ],
+        "x-go-type": "memory.ExtractBatch",
+        "x-go-source": "internal/memory/file_extract_batch.go",
+        "description": "ExtractBatch is the provider batch a job's remaining chunks were sent as."
       }
     },
     "headers": {

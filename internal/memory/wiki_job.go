@@ -860,9 +860,11 @@ func (s *Service) updateWikiDraft(ctx context.Context, tx Tx, claimed Record, jo
 
 // ChatWikiLLM calls the server model (the skill LLM config, llm_chat.go).
 // Vision says the operator confirmed the endpoint's model takes image input.
+// Batch lets queued extraction jobs use the provider's batch interface (file_extract_batch.go).
 type ChatWikiLLM struct {
 	Config LLMConfig
 	Vision bool
+	Batch  bool
 }
 
 // VisionLLM is a server model that can also read one image.

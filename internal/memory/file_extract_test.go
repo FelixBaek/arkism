@@ -33,27 +33,30 @@ func TestParseExtractedClaimsIsStrict(t *testing.T) {
 		strings.Replace(extractRuleClaim, `0.9}`, `0.9,"locator":"page:9"}`, 1),
 		`"just a string"`,
 	}
-	claims, skipped, ok := parseExtractedClaims("```json\n"+extractAnswer(append([]string{extractRuleClaim}, bad...)...)+"\n```", extractKoreanSource, "chunk:1")
+	ref := time.Now()
+	res, ok := parseExtractedClaims("```json\n"+extractAnswer(append([]string{extractRuleClaim}, bad...)...)+"\n```", extractKoreanSource, "chunk:1", ref)
+	claims, skipped := res.Claims, res.Skipped
 	if !ok || len(claims) != 1 || len(skipped) != len(bad) || claims[0].Locator != "chunk:1" || claims[0].OccurredFrom != "2026-10-25" {
 		t.Fatalf("claims %+v skipped %+v ok %v", claims, skipped, ok)
 	}
 	// A far-future or reversed event date is dropped; the claim itself stays.
 	for _, dates := range [][2]string{{"2999-01-01", "2999-01-01"}, {"2026-10-25", "2026-10-01"}, {"someday", ""}} {
 		claim := strings.Replace(extractRuleClaim, `"occurred_from":"2026-10-25","occurred_to":"2026-10-25"`, `"occurred_from":"`+dates[0]+`","occurred_to":"`+dates[1]+`"`, 1)
-		claims, _, _ := parseExtractedClaims(extractAnswer(claim), extractKoreanSource, "chunk:1")
+		res, _ := parseExtractedClaims(extractAnswer(claim), extractKoreanSource, "chunk:1", ref)
+		claims := res.Claims
 		if len(claims) != 1 || claims[0].OccurredFrom != "" || claims[0].OccurredTo != "" {
 			t.Fatalf("%v kept: %+v", dates, claims)
 		}
 	}
 	for _, answer := range []string{"not json", extractAnswer() + "{}", `{"claims":[],"note":"x"}`} {
-		if _, _, ok := parseExtractedClaims(answer, extractKoreanSource, "chunk:1"); ok {
+		if _, ok := parseExtractedClaims(answer, extractKoreanSource, "chunk:1", ref); ok {
 			t.Fatalf("accepted %q", answer)
 		}
 	}
 }
 
 func TestExtractPromptKeepsSourceLanguage(t *testing.T) {
-	system, user := extractPrompt(extractKoreanSource, "")
+	system, user := extractPrompt(extractKoreanSource, &FileExtractJob{})
 	if !strings.Contains(system, "Korean stays Korean") || !strings.Contains(system, "never translate") || !strings.Contains(system, wikiDataRule) {
 		t.Fatalf("system prompt: %s", system)
 	}

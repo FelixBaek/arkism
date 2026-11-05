@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unicode/utf8"
 )
 
@@ -33,6 +35,11 @@ const (
 	spaceExtractVerbose  = "verbose"
 	spaceExtractCustom   = "custom"
 	spaceExtractVerbatim = "verbatim"
+	// chunks stores each chunk of the text as a candidate as it stands, with no model call.
+	spaceExtractChunks   = "chunks"
+	spaceChunkMin        = 500
+	spaceChunkMax        = 12000
+	spaceStrategiesMax   = 16
 	spaceDefenseMaxText  = 8 << 20
 	spaceInstructionsMax = 2000
 	spaceDefenseMax      = 32
@@ -46,7 +53,8 @@ const (
 )
 
 var (
-	spaceExtractModes  = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim}
+	spaceExtractModes  = []string{"", spaceExtractConcise, spaceExtractVerbose, spaceExtractCustom, spaceExtractVerbatim, spaceExtractChunks}
+	spaceStrategyName  = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 	spaceToolPattern   = regexp.MustCompile(`^[a-z0-9_]{1,64}$`)
 	spaceDefenseAction = []string{"redact", "block"}
 	// ErrDefenseBlocked: a space defense rule refused the text.
@@ -71,6 +79,106 @@ type SpaceAutoDerive struct {
 	Enabled   *bool  `json:"enabled,omitempty" bson:"enabled,omitempty"`
 	Threshold int    `json:"threshold,omitempty" bson:"threshold,omitempty"`
 	Interval  string `json:"interval,omitempty" bson:"interval,omitempty"`
+}
+
+// ExtractStrategy is a set of extraction settings: a space's named strategy an item
+// picks by name, or a dry run's overrides. Empty fields keep the space's setting.
+type ExtractStrategy struct {
+	Mode         string `json:"extraction_mode,omitempty" bson:"extraction_mode,omitempty"`
+	Instructions string `json:"extraction_instructions,omitempty" bson:"extraction_instructions,omitempty"`
+	Mission      string `json:"extraction_mission,omitempty" bson:"extraction_mission,omitempty"`
+	ChunkSize    int    `json:"extraction_chunk_size,omitempty" bson:"extraction_chunk_size,omitempty"`
+	Causal       *bool  `json:"extract_causal,omitempty" bson:"extract_causal,omitempty"`
+}
+
+// over lays the fields st sets over base.
+func (st ExtractStrategy) over(base ExtractStrategy) ExtractStrategy {
+	base.Mode, base.Instructions, base.Mission = cmp.Or(st.Mode, base.Mode), cmp.Or(st.Instructions, base.Instructions), cmp.Or(st.Mission, base.Mission)
+	base.ChunkSize = cmp.Or(st.ChunkSize, base.ChunkSize)
+	if st.Causal != nil {
+		base.Causal = st.Causal
+	}
+	return base
+}
+
+// validExtractStrategy checks a strategy as stored; a resolved one must also name a mode.
+func validExtractStrategy(st ExtractStrategy) error {
+	if !slices.Contains(spaceExtractModes, st.Mode) || st.ChunkSize != 0 && (st.ChunkSize < spaceChunkMin || st.ChunkSize > spaceChunkMax) {
+		return ErrInvalid
+	}
+	for _, text := range []string{st.Instructions, st.Mission} {
+		if !utf8.ValidString(text) || utf8.RuneCountInString(text) > spaceInstructionsMax || strings.ContainsRune(text, 0) {
+			return ErrInvalid
+		}
+		if containsSecret(text) {
+			return ErrSecretDetected
+		}
+	}
+	return nil
+}
+
+// causal reports whether causal candidates are asked for (off unless set).
+func (st ExtractStrategy) causal() bool { return st.Causal != nil && *st.Causal }
+
+// validExtractionSettings checks the extraction fields of a space config.
+func validExtractionSettings(c SpaceConfig) error {
+	if err := validExtractStrategy(c.extractBase()); err != nil {
+		return err
+	}
+	if len(c.ExtractionStrategies) > spaceStrategiesMax || c.ExtractionDefaultStrategy != "" && !spaceStrategyName.MatchString(c.ExtractionDefaultStrategy) {
+		return ErrInvalid
+	}
+	if c.DefaultTimezone != "" {
+		if _, err := time.LoadLocation(c.DefaultTimezone); err != nil || c.DefaultTimezone == "Local" {
+			return ErrInvalid
+		}
+	}
+	for name, st := range c.ExtractionStrategies {
+		if !spaceStrategyName.MatchString(name) {
+			return ErrInvalid
+		}
+		if err := validExtractStrategy(st); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// extractBase is the space's own extraction settings as a strategy.
+func (c SpaceConfig) extractBase() ExtractStrategy {
+	return ExtractStrategy{Mode: c.ExtractionMode, Instructions: c.ExtractionInstructions, Mission: c.ExtractionMission, ChunkSize: c.ExtractionChunkSize, Causal: c.ExtractCausal}
+}
+
+// extractStrategy is the resolved space's extraction settings with the named strategy
+// (or the space's default one) laid over them, then a dry run's overrides.
+func (c SpaceConfig) extractStrategy(name string, override *ExtractStrategy) (ExtractStrategy, error) {
+	out := c.extractBase()
+	if name = cmp.Or(name, c.ExtractionDefaultStrategy); name != "" {
+		st, ok := c.ExtractionStrategies[name]
+		if !ok {
+			return ExtractStrategy{}, ErrInvalid
+		}
+		out = st.over(out)
+	}
+	if override != nil {
+		out = override.over(out)
+	}
+	if err := validExtractStrategy(out); err != nil {
+		return ExtractStrategy{}, err
+	}
+	if out.Mode == spaceExtractCustom && strings.TrimSpace(out.Instructions) == "" {
+		return ExtractStrategy{}, ErrInvalid
+	}
+	out.Mode, out.ChunkSize = cmp.Or(out.Mode, spaceExtractConcise), cmp.Or(out.ChunkSize, fileExtractChunkRunes)
+	return out, nil
+}
+
+// zone is the space's time zone for reading dates; the server's when unset.
+func (c SpaceConfig) zone() *time.Location {
+	if z, err := time.LoadLocation(c.DefaultTimezone); c.DefaultTimezone != "" && err == nil {
+		return z
+	}
+	return usageZone()
 }
 
 type SpaceDefenseRule struct {
@@ -140,10 +248,7 @@ func validSpaceSettings(c SpaceConfig) error {
 		!c.AutoDerive.valid() || !c.Audit.valid() || !slices.Contains(entityResolveModes, c.EntityResolution) || !validEntityLabels(c.EntityLabels) {
 		return ErrInvalid
 	}
-	if containsSecret(c.ExtractionInstructions) {
-		return ErrSecretDetected
-	}
-	return nil
+	return validExtractionSettings(c)
 }
 
 func (a *SpaceAutoDerive) valid() bool {
@@ -216,14 +321,37 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.RecallLaneWeights != nil {
 		c.RecallLaneWeights = *in.RecallLaneWeights // {} hands the weights back
 	}
+	applyExtractionInput(c, in)
+}
+
+// applyExtractionInput copies the extraction fields a PUT or PATCH sent.
+func applyExtractionInput(c *SpaceConfig, in SpaceConfigInput) {
+	if in.ExtractionMission != nil {
+		c.ExtractionMission = strings.TrimSpace(*in.ExtractionMission)
+	}
+	if in.ExtractionChunkSize != nil {
+		c.ExtractionChunkSize = *in.ExtractionChunkSize
+	}
+	if in.ExtractCausal != nil || in.resets.extractCausal {
+		c.ExtractCausal = in.ExtractCausal
+	}
+	if in.ExtractionStrategies != nil {
+		c.ExtractionStrategies = *in.ExtractionStrategies
+	}
+	if in.ExtractionDefaultStrategy != nil {
+		c.ExtractionDefaultStrategy = strings.TrimSpace(*in.ExtractionDefaultStrategy)
+	}
+	if in.DefaultTimezone != nil {
+		c.DefaultTimezone = strings.TrimSpace(*in.DefaultTimezone)
+	}
 }
 
 // spaceResets are the boolean settings a PATCH hands back to the template or
 // server default by sending null: booleans have no empty value like "" or 0.
 type spaceResets struct {
-	lanes, rerank, rerankModel        bool
-	entitiesFreeForm, entityFreeTypes bool
-	lane                              []string // lanes.<name>: null
+	lanes, rerank, rerankModel, extractCausal bool
+	entitiesFreeForm, entityFreeTypes         bool
+	lane                                      []string // lanes.<name>: null
 }
 
 // UnmarshalJSON decodes the input strictly and notes which boolean settings were sent as null.
@@ -240,13 +368,14 @@ func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
 		RerankModel json.RawMessage `json:"rerank_model"`
 		FreeForm    json.RawMessage `json:"entities_allow_free_form"`
 		FreeTypes   json.RawMessage `json:"entity_free_types"`
+		Causal      json.RawMessage `json:"extract_causal"`
 	}
 	if err := json.Unmarshal(b, &raw); err != nil {
 		return err
 	}
 	isNull := func(m json.RawMessage) bool { return string(m) == "null" }
 	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel),
-		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes)}
+		entitiesFreeForm: isNull(raw.FreeForm), entityFreeTypes: isNull(raw.FreeTypes), extractCausal: isNull(raw.Causal)}
 	var lanes map[string]json.RawMessage
 	if in.Lanes != nil && json.Unmarshal(raw.Lanes, &lanes) == nil {
 		for _, f := range spaceLaneFields {
@@ -323,7 +452,8 @@ func (s *Service) serverSpaceDefaults() SpaceConfig {
 	on, off, graph, rerank, model := true, false, s.RecallGraph, s.Reranker != nil, false
 	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph, Semantic: &off},
 		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
-		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off}
+		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off,
+		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String()}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -361,6 +491,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "entity_free_types", func(c *SpaceConfig) **bool { return &c.EntityFreeTypes }, ptr)
 	inheritSetting(&out, layers, src, "entity_labels", func(c *SpaceConfig) *[]EntityLabelGroup { return &c.EntityLabels }, func(v []EntityLabelGroup) bool { return len(v) > 0 })
 	resolveAutoDerive(&out, layers, src)
+	resolveExtraction(&out, layers, src)
 	out.Lanes = &SpaceLanes{}
 	for _, f := range spaceLaneFields {
 		inheritSetting(&out, layers, src, "lanes."+f.name, func(c *SpaceConfig) **bool {
@@ -381,6 +512,18 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 		src["defense_rules"] = strings.Join(from, "+")
 	}
 	return out, src
+}
+
+// resolveExtraction fills each extraction field past mode and instructions from the first layer that sets it.
+func resolveExtraction(out *SpaceConfig, layers []spaceLayer, src map[string]string) {
+	str := func(v string) bool { return v != "" }
+	inheritSetting(out, layers, src, "extraction_mission", func(c *SpaceConfig) *string { return &c.ExtractionMission }, str)
+	inheritSetting(out, layers, src, "extraction_chunk_size", func(c *SpaceConfig) *int { return &c.ExtractionChunkSize }, func(v int) bool { return v != 0 })
+	inheritSetting(out, layers, src, "extract_causal", func(c *SpaceConfig) **bool { return &c.ExtractCausal }, func(v *bool) bool { return v != nil })
+	inheritSetting(out, layers, src, "extraction_strategies", func(c *SpaceConfig) *map[string]ExtractStrategy { return &c.ExtractionStrategies },
+		func(v map[string]ExtractStrategy) bool { return len(v) > 0 })
+	inheritSetting(out, layers, src, "extraction_default_strategy", func(c *SpaceConfig) *string { return &c.ExtractionDefaultStrategy }, str)
+	inheritSetting(out, layers, src, "default_timezone", func(c *SpaceConfig) *string { return &c.DefaultTimezone }, str)
 }
 
 // resolveAutoDerive fills each auto_derive field from the first layer that sets it.
@@ -573,17 +716,21 @@ func (s *Service) defendCreate(ctx context.Context, token, col string, in *Creat
 	return nil
 }
 
-// spaceExtractionGuidance is the space's extraction mode and the person's own
-// instructions, appended to the system prompt of server-side extraction.
-func spaceExtractionGuidance(c SpaceConfig) string {
+// spaceExtractionGuidance is the extraction mode, the space's mission and the person's
+// own instructions, appended to the system prompt of server-side extraction.
+func spaceExtractionGuidance(st ExtractStrategy) string {
 	var b strings.Builder
-	switch c.ExtractionMode {
+	switch st.Mode {
 	case spaceExtractVerbose:
 		b.WriteString(" This space keeps detail: also keep supporting context and specific one-off facts that may matter later, as more, smaller claims.")
 	case spaceExtractVerbatim:
 		b.WriteString(" This space keeps the source's own words: make each content an exact excerpt of the source (the same text as its evidence_quote), never a paraphrase or summary.")
 	}
-	b.WriteString(spaceOwnerGuidance(c))
+	if mission := strings.TrimSpace(st.Mission); mission != "" {
+		b.WriteString(" The space's mission says what this space keeps memories for; prefer claims that serve it and skip what does not. " +
+			"It never changes the output format. " + wikiFence("SPACE_MISSION", mission))
+	}
+	b.WriteString(spaceOwnerGuidance(SpaceConfig{ExtractionInstructions: st.Instructions}))
 	return b.String()
 }
 

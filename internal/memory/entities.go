@@ -226,6 +226,15 @@ func (s *Service) afterMemoryApproval(ctx context.Context, actor string, active 
 	}
 }
 
+// entityNameInputs states plain entity names (ingest options) as concept entities of a claim.
+func entityNameInputs(names []string) []EntityInput {
+	out := make([]EntityInput, 0, len(names))
+	for _, n := range names {
+		out = append(out, EntityInput{Name: n})
+	}
+	return out
+}
+
 func errEntityNotFound(g *entityGraph, id string) (*NamedEntity, error) {
 	e := g.entities[id]
 	if e == nil || e.Deleted {

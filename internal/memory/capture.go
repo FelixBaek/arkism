@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"regexp"
 	"slices"
 	"strings"
@@ -65,7 +66,11 @@ type CaptureClaim struct {
 	// time; relative words are read against the event time). Bad dates are dropped, not trusted.
 	OccurredFrom string `json:"occurred_from,omitempty"`
 	OccurredTo   string `json:"occurred_to,omitempty"`
-	occurred     *RecallTimeWindow
+	// Tags and Metadata are the caller's labels; the candidate carries them as
+	// plain and meta:<key>=<value> tags.
+	Tags     []string          `json:"tags,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
+	occurred *RecallTimeWindow
 	// locator names where in the source the claim came from (a file page or
 	// chunk); only server-side extraction sets it, clients always get "original".
 	locator string
@@ -88,6 +93,8 @@ type CaptureInput struct {
 	Event     CaptureEvent   `json:"event"`
 	Claims    []CaptureClaim `json:"claims"`
 	Generator *Generator     `json:"generator"`
+	// zone reads the claims' relative dates; the space's default time zone when unset.
+	zone *time.Location
 }
 
 type CaptureItem struct {
@@ -137,9 +144,39 @@ func validCaptureClaimClassification(c CaptureClaim) bool {
 func validCaptureClaimFields(c CaptureClaim) bool {
 	return strings.TrimSpace(c.Text) != "" && len(c.Text) <= 4000 && validRunLabel(c.Subject, 128) && len(c.Reason) <= 500 &&
 		len(c.OccurredFrom) <= 64 && len(c.OccurredTo) <= 64 &&
-		(c.Repo == "" || validRunLabel(c.Repo, 128)) && validEntityInputs(c.Entities) &&
+		(c.Repo == "" || validRunLabel(c.Repo, 128)) && validEntityInputs(c.Entities) && validClaimLabels(c.Tags, c.Metadata, nil) &&
 		slices.Contains(captureKinds, c.Kind) && slices.Contains(captureBases, c.Basis) &&
 		(c.Supersedes == nil || c.Supersedes.Collection == "memories" && c.Supersedes.ID != "" && c.Supersedes.Revision > 0)
+}
+
+var claimMetaKey = regexp.MustCompile(`^[a-z0-9_.-]{1,32}$`)
+
+// validClaimLabels checks a caller's labels: plain tags may not look like system tags (no
+// ':'), and every label and entity name passes the tag privacy filters.
+func validClaimLabels(tags []string, meta map[string]string, entities []string) bool {
+	if len(tags)+len(meta)+len(entities) > extractLabelsMax || slices.ContainsFunc(tags, func(t string) bool { return strings.Contains(t, ":") }) {
+		return false
+	}
+	for k, v := range meta {
+		if !claimMetaKey.MatchString(k) || !validRunLabel(v, 80) {
+			return false
+		}
+	}
+	for _, e := range entities {
+		if !validRunLabel(e, 80) {
+			return false
+		}
+	}
+	return validTagInput(append(claimLabelTags(tags, meta), entities...))
+}
+
+// claimLabelTags is the caller's labels as candidate tags, metadata in key order.
+func claimLabelTags(tags []string, meta map[string]string) []string {
+	out := slices.Clone(tags)
+	for _, k := range slices.Sorted(maps.Keys(meta)) {
+		out = append(out, "meta:"+k+"="+meta[k])
+	}
+	return out
 }
 
 // captureKey ignores the event, so the same claim from a retry, a replay or a
@@ -206,6 +243,7 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	if err != nil {
 		return CaptureResult{}, err
 	}
+	in.zone = cmp.Or(in.zone, settings.zone())
 	out := CaptureResult{Items: make([]CaptureItem, len(in.Claims))}
 	transient := false
 	for i, c := range in.Claims {
@@ -373,7 +411,7 @@ func captureClaimKeys(in CaptureInput, c CaptureClaim, scope Scope) (CaptureClai
 	if c.locator != "" { // a file's claim was read later than the file was written: "어제" there is not the day before the read
 		text = ""
 	}
-	c.occurred = resolveOccurred(c.OccurredFrom, c.OccurredTo, text, in.Event.OccurredAt.In(usageZone()))
+	c.occurred = resolveOccurred(c.OccurredFrom, c.OccurredTo, text, in.Event.OccurredAt.In(cmp.Or(in.zone, usageZone())))
 	if c.MemoryContext != nil {
 		at := in.Event.OccurredAt.UTC().Truncate(time.Millisecond)
 		c.MemoryContext.ObservedAt = &at
@@ -598,6 +636,7 @@ func captureTags(in CaptureInput, c CaptureClaim) ([]string, bool) {
 	if c.Repo != "" && c.Kind != "user" {
 		tags = append(tags, "repo:"+c.Repo)
 	}
+	tags = wikiUnion(tags, claimLabelTags(c.Tags, c.Metadata))
 	// The tag outlives this call, so no automatic approver can promote it later either.
 	suspect := instructionLike.MatchString(structuredText(c))
 	if suspect {

@@ -15,15 +15,16 @@ func viewExtractJob(r Record) FileExtractJobView {
 // createExtractJob records one upload as a new job (a stopped job of an
 // earlier upload is never reused) and points the document at it; with
 // nothing fresh to extract the job is done at once.
-func (s *Service) createExtractJob(ctx context.Context, d Decision, scope Scope, label, docID string, fresh, kept []FileExtractChunk, delta FileExtractDelta, skipped []ExtractSkip) (Record, error) {
-	id, status := "file-extract-job-"+ID(), JobStatusPending
-	if len(fresh) == 0 {
+// job is the upload's plan with its document, chunks and delta filled in.
+func (s *Service) createExtractJob(ctx context.Context, d Decision, scope Scope, job FileExtractJob) (Record, error) {
+	id, status, docID := "file-extract-job-"+ID(), JobStatusPending, job.Document
+	if len(job.Chunks) == 0 {
 		status = JobStatusDone
 	}
 	now := time.Now().UTC()
+	job.Sources, job.RequestedBy = extractSourceIDs(append(slices.Clone(job.Kept), job.Chunks...)), d.PrincipalID
 	out := Record{ID: id, Scope: scope, Kind: fileExtractJobKind, Status: status, Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
-		FileExtract: &FileExtractJob{Label: label, Document: docID, Sources: extractSourceIDs(append(slices.Clone(kept), fresh...)), Chunks: fresh, Kept: kept,
-			Total: len(fresh), Delta: delta, Skipped: skipped, RequestedBy: d.PrincipalID}}
+		FileExtract: &job}
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		target := &Ref{Collection: "jobs", ID: id, Revision: 1}
 		doc, err := tx.Get(ctx, "jobs", scope, docID)
@@ -193,13 +194,16 @@ func (s *Service) RunFileExtractJob(ctx context.Context, token string, scope Sco
 	if !validRunLabel(id, 256) {
 		return FileExtractJobView{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", scope, true)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", scope, true)
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
 	r, ok, err := s.claimExtractJob(ctx, d, scope, id)
 	if err != nil || !ok {
 		return viewExtractJob(r), err
+	}
+	if r.FileExtract.Settings.Mode == "" { // queued before settings were stored with the job
+		r.FileExtract.Settings, r.FileExtract.Zone = settings.extractBase(), settings.zone().String()
 	}
 	r, _, err = s.runExtractJob(ctx, token, d, r)
 	if err != nil {
@@ -215,15 +219,24 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 	defer func() { sp.end(cmp.Or(runErr, err)) }()
 	job := r.FileExtract
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
+	var answers map[int]ExtractPreviewResult
+	if b := s.extractBatcher(job); b != nil {
+		answers, err = s.extractBatchAnswers(ctx, token, d, r.Scope, b, job)
+		if errors.Is(err, errExtractBatchPending) {
+			r.Status, job.Error = JobStatusRetry, extractBatchPending
+			r, err = s.saveExtractJob(ctx, r)
+			return r, nil, err
+		}
+		if err != nil {
+			return s.failExtractJob(ctx, r, err)
+		}
+	}
 	for job.Next < len(job.Chunks) {
-		ids, skipped, runErr := s.extractAndCapture(ctx, token, d, r.Scope, budget, job.Chunks[job.Next])
+		ids, skipped, runErr := s.nextExtractChunk(ctx, token, d, r.Scope, budget, job, answers)
 		job.Calls, job.Tokens = job.Calls+budget.Calls, job.Tokens+budget.Tokens
 		budget.Calls, budget.Tokens = 0, 0
 		if runErr != nil {
-			code, _ := errorResponse(runErr)
-			job.Error, r.Status = code, JobStatusFailed
-			r, err = s.saveExtractJob(ctx, r)
-			return r, runErr, err
+			return s.failExtractJob(ctx, r, runErr)
 		}
 		job.CandidatesCreated += len(ids)
 		job.Skipped = append(job.Skipped, skipped...)
@@ -240,13 +253,36 @@ func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r
 	return r, nil, nil
 }
 
+// nextExtractChunk extracts the job's next chunk: from the batch's answer when there is
+// one, else by calling the model.
+func (s *Service) nextExtractChunk(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, job *FileExtractJob, answers map[int]ExtractPreviewResult) ([]string, []ExtractSkip, error) {
+	ch := job.Chunks[job.Next]
+	res, ok := answers[job.Next]
+	if !ok {
+		return s.extractAndCapture(ctx, token, d, scope, budget, job, ch)
+	}
+	return s.captureChunk(ctx, token, d, scope, job, ch, res)
+}
+
+// failExtractJob saves the job as failed with runErr's code; running it again resumes.
+func (s *Service) failExtractJob(ctx context.Context, r Record, runErr error) (Record, error, error) {
+	code, _ := errorResponse(runErr)
+	r.FileExtract.Error, r.Status = code, JobStatusFailed
+	r, err := s.saveExtractJob(ctx, r)
+	return r, runErr, err
+}
+
 // ExtractKnowledgeMemories turns an existing knowledge source into candidates,
 // with the knowledge file's source anchor as their evidence.
 func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string, in KnowledgeExtractInput) (FileMemoriesResult, error) {
 	if !validRunLabel(id, 256) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, false)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, false)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	plan, err := s.extractPlan(settings, ExtractOptions{}, nil)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
@@ -265,17 +301,18 @@ func (s *Service) ExtractKnowledgeMemories(ctx context.Context, token, id string
 	if err = s.defendSpace(ctx, "", defenseGuard{action: "write:memory_candidates"}, in.Scope, &text); err != nil {
 		return FileMemoriesResult{}, err
 	}
-	chunks, redacted, err := extractFileChunks([]string{text}, false)
+	chunks, redacted, err := extractFileChunks([]string{text}, false, extractChunkRunes(plan.Settings))
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
 	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
 	if in.DryRun {
 		out.Status = JobStatusDone
-		return out, s.previewChunks(ctx, token, d, in.Scope, chunks, &out)
+		return out, s.previewChunks(ctx, token, d, in.Scope, &plan, chunks, &out)
 	}
 	for i := range chunks {
 		chunks[i].Source = Ref{Collection: "sources", ID: anchor.ID, Revision: anchor.Revision}
 	}
-	return s.extractStored(ctx, token, d, in.Scope, src.Knowledge.DisplayName, "knowledge:"+src.ID, chunks, out)
+	plan.Label = src.Knowledge.DisplayName
+	return s.extractStored(ctx, token, d, in.Scope, plan, "knowledge:"+src.ID, chunks, out, fileExtractSyncChunks, false)
 }

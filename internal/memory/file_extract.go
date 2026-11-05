@@ -15,11 +15,13 @@ package memory
 // reported with their candidate ids, for a person to retire if they wish.
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -45,6 +47,11 @@ const (
 	fileExtractJobTokens   = 160000
 	fileExtractJobLease    = 10 * time.Minute
 	fileExtractQuoteRunes  = 110
+	// extractChunksModeRunes keeps a chunks-mode piece within one candidate's 4000 bytes.
+	extractChunksModeRunes = 1000
+	extractChunksVersion   = "chunks-v1"
+	extractContextMax      = 2000
+	extractLabelsMax       = 20 // tags, metadata and entities of one item together
 )
 
 var (
@@ -63,6 +70,38 @@ type ExtractedClaim struct {
 	EvidenceQuote string  `json:"evidence_quote"`
 	Confidence    float64 `json:"confidence"`
 	Locator       string  `json:"locator,omitempty"`
+	// FactType maps the kind onto world and experience facts: episodic is
+	// what the narrator or agent did or went through, every other kind is world.
+	FactType string `json:"fact_type,omitempty"`
+}
+
+// ExtractedCause is a model-proposed "claim Cause led to claim Effect" between claims of one
+// answer (indices into Claims). Stored, it is a causal link candidate a person reviews.
+type ExtractedCause struct {
+	Cause  int    `json:"cause"`
+	Effect int    `json:"effect"`
+	Reason string `json:"reason"`
+}
+
+// ExtractOptions are one item's own fields: they shape its prompt and label its candidates.
+type ExtractOptions struct {
+	Context   string            `json:"context,omitempty" bson:"context,omitempty"`
+	Timestamp *time.Time        `json:"timestamp,omitempty" bson:"timestamp,omitempty"`
+	Tags      []string          `json:"tags,omitempty" bson:"tags,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty" bson:"metadata,omitempty"`
+	Entities  []string          `json:"entities,omitempty" bson:"entities,omitempty"`
+	Strategy  string            `json:"strategy,omitempty" bson:"strategy,omitempty"`
+}
+
+// ExtractPromptView is the prompt extraction would send, rendered without a model call.
+type ExtractPromptView struct {
+	System        string          `json:"system"`
+	User          string          `json:"user"`
+	Settings      ExtractStrategy `json:"settings"`
+	Strategy      string          `json:"strategy,omitempty"`
+	Strategies    []string        `json:"strategies"`
+	Timezone      string          `json:"timezone"`
+	SkippedReason string          `json:"skipped_reason,omitempty"`
 }
 
 type ExtractSkip struct {
@@ -70,23 +109,66 @@ type ExtractSkip struct {
 	Reason  string `json:"reason"`
 }
 
+// ExtractPreviewInput is a dry run: strategy and overrides try settings without
+// changing the space, and prompt_only renders the prompt with no model call.
 type ExtractPreviewInput struct {
-	Scope       Scope  `json:"scope"`
-	Text        string `json:"text"`
-	SourceLabel string `json:"source_label,omitempty"`
+	Scope       Scope            `json:"scope"`
+	Text        string           `json:"text"`
+	SourceLabel string           `json:"source_label,omitempty"`
+	Context     string           `json:"context,omitempty"`
+	Timestamp   *time.Time       `json:"timestamp,omitempty"`
+	Strategy    string           `json:"strategy,omitempty"`
+	Overrides   *ExtractStrategy `json:"overrides,omitempty"`
+	PromptOnly  bool             `json:"prompt_only,omitempty"`
 }
 
 type ExtractPreviewResult struct {
-	Claims  []ExtractedClaim `json:"claims"`
-	Skipped []ExtractSkip    `json:"skipped"`
+	Claims  []ExtractedClaim   `json:"claims"`
+	Causes  []ExtractedCause   `json:"causes,omitempty"`
+	Skipped []ExtractSkip      `json:"skipped"`
+	Prompt  *ExtractPromptView `json:"prompt,omitempty"`
 }
 
+// FileMemoriesInput is one uploaded file; timestamp is the reference time its
+// relative dates are read against (the upload time when unset).
 type FileMemoriesInput struct {
-	Scope         Scope  `json:"scope"`
-	Filename      string `json:"filename"`
-	ContentBase64 string `json:"content_base64"`
-	MIME          string `json:"mime,omitempty"`
-	DryRun        bool   `json:"dry_run"`
+	Scope         Scope      `json:"scope"`
+	Filename      string     `json:"filename"`
+	ContentBase64 string     `json:"content_base64"`
+	MIME          string     `json:"mime,omitempty"`
+	DryRun        bool       `json:"dry_run"`
+	Context       string     `json:"context,omitempty"`
+	Timestamp     *time.Time `json:"timestamp,omitempty"`
+	Tags          []string   `json:"tags,omitempty"`
+	Strategy      string     `json:"strategy,omitempty"`
+}
+
+// IngestInput is text to extract memory candidates from (POST /v1/memories/ingest).
+// Async queues every item as a job and answers at once (poll the operations routes).
+type IngestInput struct {
+	Scope Scope        `json:"scope"`
+	Items []IngestItem `json:"items"`
+	Async bool         `json:"async,omitempty"`
+}
+
+// IngestItem is one text. Items with the same document_id are one document: sent
+// again, only changed chunks are extracted (update_mode replace, the default) or the
+// text is added after the document's earlier chunks (append). Without a document_id
+// the text itself names the document, so the same text sent twice is extracted once.
+type IngestItem struct {
+	Content    string            `json:"content"`
+	Context    string            `json:"context,omitempty"`
+	Timestamp  *time.Time        `json:"timestamp,omitempty"`
+	Metadata   map[string]string `json:"metadata,omitempty"`
+	Tags       []string          `json:"tags,omitempty"`
+	Entities   []string          `json:"entities,omitempty"`
+	DocumentID string            `json:"document_id,omitempty"`
+	UpdateMode string            `json:"update_mode,omitempty"`
+	Strategy   string            `json:"strategy,omitempty"`
+}
+
+type IngestResult struct {
+	Items []FileMemoriesResult `json:"items"`
 }
 
 type KnowledgeExtractInput struct {
@@ -102,6 +184,7 @@ type FileMemoriesResult struct {
 	Status            string            `json:"status"`
 	CandidatesCreated int               `json:"candidates_created"`
 	Claims            []ExtractedClaim  `json:"claims,omitempty"`
+	Causes            []ExtractedCause  `json:"causes,omitempty"`
 	Skipped           []ExtractSkip     `json:"skipped"`
 	Delta             *FileExtractDelta `json:"delta,omitempty"`
 }
@@ -148,6 +231,29 @@ type FileExtractJob struct {
 	Tokens            int64              `json:"tokens" bson:"tokens"`
 	Error             string             `json:"error,omitempty" bson:"error,omitempty"`
 	RequestedBy       string             `json:"requested_by" bson:"requested_by"`
+	// Settings, Options and Zone are fixed when the document is queued: the resolved
+	// extraction settings, the item's own fields and the zone its dates are read in.
+	Settings ExtractStrategy `json:"settings" bson:"settings"`
+	Options  ExtractOptions  `json:"options" bson:"options"`
+	Zone     string          `json:"zone,omitempty" bson:"zone,omitempty"`
+	// Batch is the provider batch the remaining chunks were sent as (file_extract_batch.go).
+	Batch *ExtractBatch `json:"batch,omitempty" bson:"batch,omitempty"`
+}
+
+// zone is the job's time zone; the server's for a job queued before zones were stored.
+func (j *FileExtractJob) zone() *time.Location {
+	if z, err := time.LoadLocation(j.Zone); j.Zone != "" && err == nil {
+		return z
+	}
+	return usageZone()
+}
+
+// refTime is when the item's text was written: its timestamp, else now.
+func (j *FileExtractJob) refTime() time.Time {
+	if j.Options.Timestamp != nil {
+		return j.Options.Timestamp.In(j.zone())
+	}
+	return time.Now().In(j.zone())
 }
 
 type FileExtractJobView struct {
@@ -159,14 +265,28 @@ type FileExtractJobView struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
-// guidance is the space's extraction mode and instructions (spaceExtractionGuidance).
-func extractPrompt(text, guidance string) (string, string) {
+// extractPrompt is the system and user message for one chunk under plan.
+func extractPrompt(text string, plan *FileExtractJob) (string, string) {
 	system := "You extract durable memory claims from one document for a person to review; nothing you return is saved without that review. " + wikiDataRule +
 		" Extract preferences, prohibitions (things never to do), decisions, lessons and facts that stay useful later; skip small talk and one-off details." +
 		" Write content and evidence_quote in the same language as the source and never translate: Korean stays Korean." +
 		` Return only one JSON object: {"claims":[{"content": string, "kind": "user"|"decision"|"procedural"|"lesson"|"episodic"|"semantic", "semantic_kind": "fact"|"preference"|"correction"|"lesson"|"failure_recovery", "evidence_kind": "user_statement"|"tool_observation"|"agent_statement"|"inference", "occurred_from": string, "occurred_to": string, "evidence_quote": string, "confidence": number}]}.` +
-		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date. confidence is between 0 and 1. At most 32 claims; answer {\"claims\":[]} when nothing qualifies." + guidance
-	return system, wikiFence("SOURCE_DATA", text)
+		" evidence_quote is an exact excerpt of the source, at most 300 characters. occurred_from and occurred_to are when the event the claim describes happened, as the source states it (YYYY-MM-DD or YYYY-MM; the same value twice for one day), or empty strings when the source gives no date; read relative dates such as yesterday against the reference time. confidence is between 0 and 1." +
+		" kind episodic is something the narrator or agent did or went through (an experience); facts about the world, people and projects take the other kinds." +
+		" At most 32 claims; answer {\"claims\":[]} when nothing qualifies." + extractCausalRule(plan.Settings) + spaceExtractionGuidance(plan.Settings)
+	user := "Reference time: " + plan.refTime().Format(time.RFC3339) + " (" + plan.zone().String() + ")\n"
+	if plan.Options.Context != "" {
+		user += wikiFence("SOURCE_CONTEXT", plan.Options.Context) + "\n"
+	}
+	return system, user + wikiFence("SOURCE_DATA", text)
+}
+
+// extractCausalRule asks for causes between the answer's own claims when the settings turn that on.
+func extractCausalRule(st ExtractStrategy) string {
+	if !st.causal() {
+		return ""
+	}
+	return ` Also return "causes": [{"cause": number, "effect": number, "reason": string}] next to "claims": cause and effect are 0-based positions in your claims list, only where the source states that what one claim describes led to the other; reason is one short sentence. Omit causes or return [] when none does.`
 }
 
 func extractSpaces(s string) string { return strings.Join(strings.Fields(s), " ") }
@@ -187,16 +307,18 @@ func validExtractedClaim(c ExtractedClaim, source string) bool {
 }
 
 // parseExtractedClaims keeps the well-formed claims of a strict JSON answer and
-// reports every malformed one; false means the answer itself was not JSON.
-func parseExtractedClaims(answer, source, locator string) ([]ExtractedClaim, []ExtractSkip, bool) {
+// reports every malformed one; false means the answer itself was not JSON. Dates
+// are checked against ref, the time the source was written.
+func parseExtractedClaims(answer, source, locator string, ref time.Time) (ExtractPreviewResult, bool) {
 	var raw struct {
 		Claims []json.RawMessage `json:"claims"`
+		Causes []ExtractedCause  `json:"causes"`
 	}
 	if !decodeModelJSON(answer, &raw) {
-		return nil, nil, false
+		return ExtractPreviewResult{}, false
 	}
 	claims, skipped := []ExtractedClaim{}, []ExtractSkip{}
-	now := time.Now().In(usageZone())
+	kept := map[int]int{} // answer position -> position in claims
 	for i, item := range raw.Claims {
 		if i >= fileExtractMaxClaims {
 			skipped = append(skipped, ExtractSkip{Locator: locator, Reason: "too_many_claims"})
@@ -207,13 +329,38 @@ func parseExtractedClaims(answer, source, locator string) ([]ExtractedClaim, []E
 			skipped = append(skipped, ExtractSkip{Locator: locator, Reason: "malformed_claim"})
 			continue
 		}
-		c.Content, c.Locator = strings.TrimSpace(c.Content), locator
-		if (c.OccurredFrom != "" || c.OccurredTo != "") && resolveOccurred(c.OccurredFrom, c.OccurredTo, "", now) == nil {
+		c.Content, c.Locator, c.FactType = strings.TrimSpace(c.Content), locator, extractFactType(c.Kind)
+		if (c.OccurredFrom != "" || c.OccurredTo != "") && resolveOccurred(c.OccurredFrom, c.OccurredTo, "", ref) == nil {
 			c.OccurredFrom, c.OccurredTo = "", "" // an impossible or far-future date is not shown or stored
 		}
+		kept[i] = len(claims)
 		claims = append(claims, c)
 	}
-	return claims, skipped, true
+	return ExtractPreviewResult{Claims: claims, Causes: keptCauses(raw.Causes, kept, locator, &skipped), Skipped: skipped}, true
+}
+
+func extractFactType(kind string) string {
+	if kind == "episodic" {
+		return "experience"
+	}
+	return "world"
+}
+
+// keptCauses renumbers the causes between kept claims; one naming a dropped claim,
+// itself, or with a bad reason is skipped.
+func keptCauses(raw []ExtractedCause, kept map[int]int, locator string, skipped *[]ExtractSkip) []ExtractedCause {
+	out := []ExtractedCause{}
+	for i, c := range raw {
+		cause, okC := kept[c.Cause]
+		effect, okE := kept[c.Effect]
+		c.Reason = strings.TrimSpace(c.Reason)
+		if i >= causalDraftsMax || !okC || !okE || cause == effect || !validCausalReason(c.Reason) {
+			*skipped = append(*skipped, ExtractSkip{Locator: locator, Reason: "malformed_cause"})
+			continue
+		}
+		out = append(out, ExtractedCause{Cause: cause, Effect: effect, Reason: c.Reason})
+	}
+	return out
 }
 
 // extractClean masks <private> spans and secret-looking text before any model
@@ -227,11 +374,20 @@ func extractClean(text string) (string, int) {
 	return redactCode(masked, &n), n
 }
 
-// extractChunks packs each page into model-sized chunks; paged text gets page locators.
-func extractChunks(pages []string, paged bool) []FileExtractChunk {
+// extractChunkRunes is the chunk size of st; a chunks-mode piece must fit one candidate.
+func extractChunkRunes(st ExtractStrategy) int {
+	size := cmp.Or(st.ChunkSize, fileExtractChunkRunes)
+	if st.Mode == spaceExtractChunks {
+		size = min(size, extractChunksModeRunes)
+	}
+	return size
+}
+
+// extractChunks packs each page into chunks of size runes; paged text gets page locators.
+func extractChunks(pages []string, paged bool, size int) []FileExtractChunk {
 	out := []FileExtractChunk{}
 	for p, page := range pages {
-		for c, piece := range knowledgePackParagraphs(knowledgeParagraphs(strings.Split(page, "\n"), false), fileExtractChunkRunes) {
+		for c, piece := range knowledgePackParagraphs(knowledgeParagraphs(strings.Split(page, "\n"), false), size) {
 			locator := fmt.Sprintf("chunk:%d", c+1)
 			if paged {
 				locator = fmt.Sprintf("page:%d/chunk:%d", p+1, c+1)
@@ -242,102 +398,187 @@ func extractChunks(pages []string, paged bool) []FileExtractChunk {
 	return out
 }
 
-// extractActor is a person with the scope's permission and a configured model. An agent
-// (agentOK: file upload and its job run) qualifies only where the space's MCP tool list names add_document: uploads spend the
-// model budget, so an empty list (every tool) does not let agents in.
-func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope, agentOK bool) (Decision, error) {
+// extractActor is a person with the scope's permission, returned with the space's
+// settings. An agent (agentOK: uploads, text ingest and their job runs) qualifies only
+// where the space's MCP tool list names add_document: extraction spends the model
+// budget, so an empty list (every tool) does not let agents in. Whether a model is
+// needed depends on the mode (extractPlan).
+func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope, agentOK bool) (Decision, SpaceConfig, error) {
 	roles := []string{roleHuman}
 	if agentOK {
 		roles = append(roles, roleAgent)
 	}
 	d, err := s.wikiAuthorize(ctx, token, action, scope, "", "", roles...)
 	if err != nil {
-		return d, err
-	}
-	if s.Wiki == nil {
-		return d, ErrModelNotConfigured
+		return d, SpaceConfig{}, err
 	}
 	settings, err := s.spaceSettings(ctx, scope)
 	if err == nil && d.Role == roleAgent && !slices.Contains(settings.MCPTools, agentUploadTool) {
-		return Decision{}, ErrDenied
+		return Decision{}, SpaceConfig{}, ErrDenied
 	}
 	if err == nil && !settings.ExtractionEnabled {
 		err = ErrExtractionDisabled
 	}
-	return d, err
+	return d, settings, err
+}
+
+// extractPlan is how one item is extracted: the space's settings under the item's strategy
+// and a dry run's overrides, the zone its dates are read in, and the item's own fields.
+func (s *Service) extractPlan(settings SpaceConfig, opts ExtractOptions, override *ExtractStrategy) (FileExtractJob, error) {
+	st, err := settings.extractStrategy(opts.Strategy, override)
+	if err != nil {
+		return FileExtractJob{}, err
+	}
+	if st.Mode != spaceExtractChunks && s.Wiki == nil {
+		return FileExtractJob{}, ErrModelNotConfigured
+	}
+	return FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String()}, nil
 }
 
 // agentUploadTool is the MCP tool a space must list to let agents upload files for extraction.
 const agentUploadTool = "add_document"
 
-// extractChunk sends one privacy-filtered chunk to the model under the budget gate.
-func (s *Service) extractChunk(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]ExtractedClaim, []ExtractSkip, error) {
+// extractTransfer checks that the chunk may go to the model for the person running the extraction.
+func (s *Service) extractTransfer(ctx context.Context, token string, d Decision, scope Scope, ch FileExtractChunk) error {
 	t, err := s.authorizeAt(ctx, token, "generate:memory_candidates", scope, "", ch.Text, wikiDestination)
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 	if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
-		return nil, nil, ErrDenied
+		return ErrDenied
 	}
-	settings, err := s.spaceSettings(ctx, scope)
-	if err != nil {
-		return nil, nil, err
+	return nil
+}
+
+// extractChunk sends one privacy-filtered chunk to the model under the budget gate;
+// in chunks mode the chunk itself is the claim and no model is called.
+func (s *Service) extractChunk(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, plan *FileExtractJob, ch FileExtractChunk) (ExtractPreviewResult, error) {
+	if plan.Settings.Mode == spaceExtractChunks {
+		return chunkClaims(ch), nil
 	}
-	system, user := extractPrompt(ch.Text, spaceExtractionGuidance(settings))
+	if s.Wiki == nil {
+		return ExtractPreviewResult{}, ErrModelNotConfigured
+	}
+	if err := s.extractTransfer(ctx, token, d, scope, ch); err != nil {
+		return ExtractPreviewResult{}, err
+	}
+	system, user := extractPrompt(ch.Text, plan)
 	answer, err := s.wikiCall(ctx, scope, budget, fileExtractOperation, system, user)
 	if errors.Is(err, errWikiBudget) {
-		return nil, nil, ErrModelBudget
+		return ExtractPreviewResult{}, ErrModelBudget
 	}
 	if err != nil {
-		return nil, nil, err
+		return ExtractPreviewResult{}, err
 	}
-	claims, skipped, ok := parseExtractedClaims(answer, ch.Text, ch.Locator)
+	return readExtractAnswer(answer, plan, ch), nil
+}
+
+// readExtractAnswer reads one chunk's model answer; causes are kept only where the plan asks for them.
+func readExtractAnswer(answer string, plan *FileExtractJob, ch FileExtractChunk) ExtractPreviewResult {
+	res, ok := parseExtractedClaims(answer, ch.Text, ch.Locator, plan.refTime())
 	if !ok {
-		return nil, []ExtractSkip{{Locator: ch.Locator, Reason: "malformed_answer"}}, nil
+		return ExtractPreviewResult{Skipped: []ExtractSkip{{Locator: ch.Locator, Reason: "malformed_answer"}}}
 	}
-	return claims, skipped, nil
+	if !plan.Settings.causal() {
+		res.Causes = nil
+	}
+	return res
+}
+
+// chunkClaims is a chunks-mode chunk as one claim, in the source's own words.
+func chunkClaims(ch FileExtractChunk) ExtractPreviewResult {
+	text := strings.TrimSpace(ch.Text)
+	return ExtractPreviewResult{Claims: []ExtractedClaim{{Content: text, Kind: "semantic", SemanticKind: "fact", EvidenceKind: "inference", FactType: "world",
+		EvidenceQuote: runeCutString(extractSpaces(text), fileExtractQuoteRunes), Confidence: 1, Locator: ch.Locator}}, Skipped: []ExtractSkip{}}
 }
 
 // previewChunks runs the first chunks a request may pay for and stores nothing.
-func (s *Service) previewChunks(ctx context.Context, token string, d Decision, scope Scope, chunks []FileExtractChunk, out *FileMemoriesResult) error {
+func (s *Service) previewChunks(ctx context.Context, token string, d Decision, scope Scope, plan *FileExtractJob, chunks []FileExtractChunk, out *FileMemoriesResult) error {
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
 	for i, ch := range chunks {
 		if i >= fileExtractSyncChunks {
 			out.Skipped = append(out.Skipped, ExtractSkip{Locator: ch.Locator, Reason: "dry_run_limit"})
 			continue
 		}
-		claims, skipped, err := s.extractChunk(ctx, token, d, scope, budget, ch)
+		res, err := s.extractChunk(ctx, token, d, scope, budget, plan, ch)
 		if err != nil {
 			return err
 		}
-		out.Claims, out.Skipped = append(out.Claims, claims...), append(out.Skipped, skipped...)
+		for _, c := range res.Causes { // positions in the whole result, not the chunk
+			out.Causes = append(out.Causes, ExtractedCause{Cause: c.Cause + len(out.Claims), Effect: c.Effect + len(out.Claims), Reason: c.Reason})
+		}
+		out.Claims, out.Skipped = append(out.Claims, res.Claims...), append(out.Skipped, res.Skipped...)
 	}
 	return nil
 }
 
-// ExtractPreview proposes claims from pasted text. Nothing is stored; only the
-// model call is recorded in the usage ledger.
+// ExtractPreview proposes claims from pasted text under the space's settings, a
+// named strategy and overrides (a dry run of settings not yet saved). Nothing is
+// stored; only the model call is recorded in the usage ledger. With prompt_only it
+// renders the prompt for the first chunk (or a placeholder) and calls no model.
 func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPreviewInput) (ExtractPreviewResult, error) {
-	if !validScope(in.Scope) || strings.TrimSpace(in.Text) == "" || len(in.Text) > fileExtractMaxPreview || !utf8.ValidString(in.Text) || strings.ContainsRune(in.Text, 0) ||
-		in.SourceLabel != "" && (!validRunLabel(in.SourceLabel, 200) || containsSecret(in.SourceLabel)) {
+	opts := ExtractOptions{Context: in.Context, Timestamp: in.Timestamp, Strategy: in.Strategy}
+	if !validScope(in.Scope) || !in.PromptOnly && strings.TrimSpace(in.Text) == "" || len(in.Text) > fileExtractMaxPreview || !utf8.ValidString(in.Text) || strings.ContainsRune(in.Text, 0) ||
+		in.SourceLabel != "" && (!validRunLabel(in.SourceLabel, 200) || containsSecret(in.SourceLabel)) || !validExtractOptions(opts, time.Now()) {
 		return ExtractPreviewResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope, false)
+	d, settings, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope, false)
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	if err = s.defendSpace(ctx, "", defenseGuard{action: "generate:memory_candidates"}, in.Scope, &in.Text); err != nil {
+	st, err := settings.extractStrategy(in.Strategy, in.Overrides)
+	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	if len(in.Text) > fileExtractMaxPreview {
-		return ExtractPreviewResult{}, ErrInvalid // redaction grew the text past the limit
+	plan := &FileExtractJob{Settings: st, Options: opts, Zone: settings.zone().String()}
+	if err = s.defendItem(ctx, in.Scope, "generate:memory_candidates", &plan.Options, &in.Text); err != nil {
+		return ExtractPreviewResult{}, err
 	}
 	text, redacted := extractClean(in.Text)
+	chunks := extractChunks([]string{text}, false, extractChunkRunes(st))
+	if in.PromptOnly {
+		return ExtractPreviewResult{Claims: []ExtractedClaim{}, Skipped: extractRedactionNote(redacted), Prompt: extractPromptView(settings, in.Strategy, plan, chunks)}, nil
+	}
+	if st.Mode != spaceExtractChunks && s.Wiki == nil {
+		return ExtractPreviewResult{}, ErrModelNotConfigured
+	}
 	out := FileMemoriesResult{Skipped: extractRedactionNote(redacted)}
-	if err = s.previewChunks(ctx, token, d, in.Scope, extractChunks([]string{text}, false), &out); err != nil {
+	if err = s.previewChunks(ctx, token, d, in.Scope, plan, chunks, &out); err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	return ExtractPreviewResult{Claims: append([]ExtractedClaim{}, out.Claims...), Skipped: out.Skipped}, nil
+	return ExtractPreviewResult{Claims: append([]ExtractedClaim{}, out.Claims...), Causes: out.Causes, Skipped: out.Skipped}, nil
+}
+
+// defendItem runs the space's defense rules over an item's texts and context, then
+// the privacy filter over the context (chunking filters the texts).
+func (s *Service) defendItem(ctx context.Context, scope Scope, action string, opts *ExtractOptions, texts ...*string) error {
+	if err := s.defendSpace(ctx, "", defenseGuard{action: action}, scope, append(texts, &opts.Context)...); err != nil {
+		return err
+	}
+	opts.Context, _ = extractClean(opts.Context)
+	return nil
+}
+
+// extractPromptView renders what extraction under plan would send, with no model call.
+func extractPromptView(settings SpaceConfig, strategy string, plan *FileExtractJob, chunks []FileExtractChunk) *ExtractPromptView {
+	text := "(the item's text)"
+	if len(chunks) > 0 {
+		text = chunks[0].Text
+	}
+	system, user := extractPrompt(text, plan)
+	out := &ExtractPromptView{System: system, User: user, Settings: plan.Settings, Strategy: cmp.Or(strategy, settings.ExtractionDefaultStrategy),
+		Strategies: slices.Sorted(maps.Keys(settings.ExtractionStrategies)), Timezone: plan.Zone}
+	if plan.Settings.Mode == spaceExtractChunks {
+		out.SkippedReason = "chunks_mode_calls_no_model"
+	}
+	return out
+}
+
+// validExtractOptions checks an item's own fields; context and text are cleaned later.
+func validExtractOptions(o ExtractOptions, now time.Time) bool {
+	return utf8.ValidString(o.Context) && utf8.RuneCountInString(o.Context) <= extractContextMax && !strings.ContainsRune(o.Context, 0) &&
+		(o.Timestamp == nil || storableTime(*o.Timestamp) && !o.Timestamp.After(now)) &&
+		(o.Strategy == "" || spaceStrategyName.MatchString(o.Strategy)) && validClaimLabels(o.Tags, o.Metadata, o.Entities)
 }
 
 func extractRedactionNote(n int) []ExtractSkip {
@@ -379,8 +620,9 @@ func pagePointers(pages []string) []*string {
 	return out
 }
 
-// extractFileChunks applies the privacy filter page by page and enforces size limits.
-func extractFileChunks(pages []string, paged bool) ([]FileExtractChunk, int, error) {
+// extractFileChunks applies the privacy filter page by page and enforces size limits;
+// smaller chunks allow more of them, so the text a document may hold stays the same.
+func extractFileChunks(pages []string, paged bool, size int) ([]FileExtractChunk, int, error) {
 	redacted, total := 0, 0
 	for i := range pages {
 		var n int
@@ -388,8 +630,8 @@ func extractFileChunks(pages []string, paged bool) ([]FileExtractChunk, int, err
 		redacted += n
 		total += len(pages[i])
 	}
-	chunks := extractChunks(pages, paged)
-	if total > fileExtractMaxText || len(chunks) > fileExtractMaxChunks {
+	chunks := extractChunks(pages, paged, size)
+	if total > fileExtractMaxText || len(chunks) > fileExtractMaxChunks*fileExtractChunkRunes/size {
 		return nil, 0, errBlobTooLarge
 	}
 	if len(chunks) == 0 {
@@ -403,13 +645,21 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if !validScope(in.Scope) || !validRunLabel(in.Filename, 200) || strings.ContainsAny(in.Filename, "/\\") || containsSecret(in.Filename) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	opts := ExtractOptions{Context: in.Context, Timestamp: in.Timestamp, Tags: in.Tags, Strategy: in.Strategy}
+	if !validExtractOptions(opts, time.Now()) {
+		return FileMemoriesResult{}, ErrInvalid
+	}
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	if err != nil {
+		return FileMemoriesResult{}, err
+	}
+	plan, err := s.extractPlan(settings, opts, nil)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
 	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, in)
 	if err == nil {
-		err = s.defendSpace(ctx, "", defenseGuard{action: "write:memory_candidates"}, in.Scope, pagePointers(pages)...)
+		err = s.defendItem(ctx, in.Scope, "write:memory_candidates", &plan.Options, pagePointers(pages)...)
 	}
 	if err != nil {
 		return FileMemoriesResult{}, err
@@ -417,16 +667,88 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if in.DryRun && len(pages) == 0 {
 		return FileMemoriesResult{Status: JobStatusDone, Skipped: notes}, nil
 	}
-	chunks, redacted, err := extractFileChunks(pages, paged)
+	chunks, redacted, err := extractFileChunks(pages, paged, extractChunkRunes(plan.Settings))
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
 	out := FileMemoriesResult{Skipped: append(notes, extractRedactionNote(redacted)...)}
 	if in.DryRun {
 		out.Status = JobStatusDone
-		return out, s.previewChunks(ctx, token, d, in.Scope, chunks, &out)
+		return out, s.previewChunks(ctx, token, d, in.Scope, &plan, chunks, &out)
 	}
-	return s.extractStored(ctx, token, d, in.Scope, in.Filename, "file:"+in.Filename, chunks, out)
+	plan.Label = in.Filename
+	return s.extractStored(ctx, token, d, in.Scope, plan, "file:"+in.Filename, chunks, out, fileExtractSyncChunks, false)
+}
+
+// ingestMaxItems bounds one ingest request; every item may become its own job.
+const ingestMaxItems = 16
+
+type ingestReady struct {
+	plan   FileExtractJob
+	docRef string
+	chunks []FileExtractChunk
+	out    FileMemoriesResult
+}
+
+// Ingest extracts memory candidates from text items, each its own document and job.
+// Every item is checked, filtered and chunked before any is stored, so one bad item
+// stores nothing. Async queues every item and answers at once
+// (the HTTP route starts the queued jobs).
+func (s *Service) Ingest(ctx context.Context, token string, in IngestInput) (IngestResult, error) {
+	if !validScope(in.Scope) || len(in.Items) == 0 || len(in.Items) > ingestMaxItems || slices.ContainsFunc(in.Items, func(it IngestItem) bool { return !validIngestItem(it) }) {
+		return IngestResult{}, ErrInvalid
+	}
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	if err != nil {
+		return IngestResult{}, err
+	}
+	ready := make([]ingestReady, len(in.Items))
+	for i, it := range in.Items {
+		if ready[i], err = s.ingestPrepare(ctx, in.Scope, settings, it); err != nil {
+			return IngestResult{}, err
+		}
+	}
+	sync := fileExtractSyncChunks
+	if in.Async {
+		sync = 0
+	}
+	out := IngestResult{Items: make([]FileMemoriesResult, len(ready))}
+	for i, r := range ready {
+		// shortcut: an item that fails leaves the earlier items stored; the caller sends the rest again.
+		if out.Items[i], err = s.extractStored(ctx, token, d, in.Scope, r.plan, r.docRef, r.chunks, r.out, sync, in.Items[i].UpdateMode == "append"); err != nil {
+			return IngestResult{}, err
+		}
+	}
+	return out, nil
+}
+
+func validIngestItem(it IngestItem) bool {
+	return strings.TrimSpace(it.Content) != "" && len(it.Content) <= fileExtractMaxText && utf8.ValidString(it.Content) && !strings.ContainsRune(it.Content, 0) &&
+		(it.DocumentID == "" || validRunLabel(it.DocumentID, 200) && !containsSecret(it.DocumentID)) && slices.Contains([]string{"", "replace", "append"}, it.UpdateMode) &&
+		validExtractOptions(ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}, time.Now())
+}
+
+// ingestPrepare plans, defends, filters and chunks one item without storing anything.
+func (s *Service) ingestPrepare(ctx context.Context, scope Scope, settings SpaceConfig, it IngestItem) (ingestReady, error) {
+	plan, err := s.extractPlan(settings, ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}, nil)
+	if err != nil {
+		return ingestReady{}, err
+	}
+	text := it.Content
+	if err = s.defendItem(ctx, scope, "write:memory_candidates", &plan.Options, &text); err != nil {
+		return ingestReady{}, err
+	}
+	chunks, redacted, err := extractFileChunks([]string{text}, false, extractChunkRunes(plan.Settings))
+	if err != nil {
+		return ingestReady{}, err
+	}
+	// Without a document id the text names the document, so the same text is extracted once.
+	docRef, label := "doc:"+it.DocumentID, it.DocumentID
+	if it.DocumentID == "" {
+		docRef, label = "text:"+ContentHash(it.Content), "ingest"
+	}
+	plan.Label = label
+	return ingestReady{plan: plan, docRef: docRef, chunks: chunks, out: FileMemoriesResult{Skipped: extractRedactionNote(redacted)}}, nil
 }
 
 // storeExtractSources stores the filtered text as source evidence, in parts
@@ -466,9 +788,11 @@ func extractSourceIDs(chunks []FileExtractChunk) []string {
 }
 
 // extractStored extracts the chunks that changed since the document's last
-// upload: a few now, more as a queued job. Chunks without a source yet (an
-// uploaded file) get one; unchanged chunks keep their old source.
-func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, label, docRef string, chunks []FileExtractChunk, out FileMemoriesResult) (FileMemoriesResult, error) {
+// upload: up to sync of them now, the rest as a queued job. Chunks without a source
+// yet (an uploaded file, ingested text) get one; unchanged chunks keep their old
+// source. With appendText the chunks follow the document's earlier ones instead of
+// replacing them.
+func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, plan FileExtractJob, docRef string, chunks []FileExtractChunk, out FileMemoriesResult, sync int, appendText bool) (FileMemoriesResult, error) {
 	// The uploader is part of the identity: another person's file of the same
 	// name is a different document, and its chunks and candidates stay theirs.
 	docID := extractDocID(scope, d.PrincipalID, docRef)
@@ -477,20 +801,24 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
+	if appendText {
+		chunks = appendExtractChunks(prev, chunks)
+	}
 	fresh, kept, delta := diffExtractChunks(prev, chunks)
 	if len(fresh) > 0 && fresh[0].Source.ID == "" {
-		if err = s.storeExtractSources(ctx, token, scope, label, fresh); err != nil {
+		if err = s.storeExtractSources(ctx, token, scope, plan.Label, fresh); err != nil {
 			return FileMemoriesResult{}, err
 		}
 	}
 	out.SourceIDs = extractSourceIDs(append(slices.Clone(kept), fresh...))
 	out.SourceID, out.Delta = out.SourceIDs[0], &delta
-	job, err := s.createExtractJob(ctx, d, scope, label, docID, fresh, kept, delta, out.Skipped)
+	plan.Document, plan.Chunks, plan.Kept, plan.Delta, plan.Total, plan.Skipped = docID, fresh, kept, delta, len(fresh), out.Skipped
+	job, err := s.createExtractJob(ctx, d, scope, plan)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
 	out.JobID, out.Status = job.ID, job.Status
-	if len(fresh) == 0 || len(fresh) > fileExtractSyncChunks {
+	if len(fresh) == 0 || len(fresh) > sync {
 		return out, nil
 	}
 	r, ok, err := s.claimExtractJob(ctx, d, scope, job.ID)
@@ -506,6 +834,16 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	}
 	out.Status, out.CandidatesCreated, out.Skipped = r.Status, r.FileExtract.CandidatesCreated, r.FileExtract.Skipped
 	return out, nil
+}
+
+// appendExtractChunks puts the new text after the document's earlier chunks, numbered on.
+func appendExtractChunks(prev, next []FileExtractChunk) []FileExtractChunk {
+	out := slices.Clone(prev)
+	for i, ch := range next {
+		ch.Locator = fmt.Sprintf("chunk:%d", len(prev)+i+1)
+		out = append(out, ch)
+	}
+	return out
 }
 
 func extractDocID(scope Scope, principal, docRef string) string {
@@ -544,37 +882,53 @@ func diffExtractChunks(prev, next []FileExtractChunk) ([]FileExtractChunk, []Fil
 	return fresh, kept, delta
 }
 
-// extractAndCapture returns the ids of the candidates the chunk produced or merged into.
-func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]string, []ExtractSkip, error) {
+// extractAndCapture returns the ids of the candidates the chunk produced or merged into,
+// and stores the answer's causes (when the plan asks for them) as causal link candidates.
+func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, plan *FileExtractJob, ch FileExtractChunk) ([]string, []ExtractSkip, error) {
 	// The chunk's model calls name its source document and the candidates they produced.
 	ctx, note := withLLMNote(ctx, ch.Source.ID, nil)
-	claims, skipped, err := s.extractChunk(ctx, token, d, scope, budget, ch)
+	res, err := s.extractChunk(ctx, token, d, scope, budget, plan, ch)
 	if err != nil {
 		return nil, nil, err
 	}
-	ids, more, err := s.captureExtracted(ctx, token, scope, ch, claims)
+	ids, skipped, err := s.captureChunk(ctx, token, d, scope, plan, ch, res)
 	if err == nil {
 		s.attachLLMCreated(ctx, scope, note, ids)
 	}
-	return ids, append(skipped, more...), err
+	return ids, skipped, err
+}
+
+// captureChunk stores one chunk's read answer: its claims as candidates, its causes as causal link candidates.
+func (s *Service) captureChunk(ctx context.Context, token string, d Decision, scope Scope, plan *FileExtractJob, ch FileExtractChunk, res ExtractPreviewResult) ([]string, []ExtractSkip, error) {
+	ids, more, err := s.captureExtracted(ctx, token, scope, plan, ch, res.Claims)
+	if err == nil && len(res.Causes) > 0 {
+		err = s.storeExtractCauses(ctx, d, scope, ids, res.Causes)
+	}
+	return slices.DeleteFunc(ids, func(id string) bool { return id == "" }), append(res.Skipped, more...), err
 }
 
 // captureExtracted hands claims to Capture, which dedupes and screens them and
-// only ever creates candidates; one event per chunk makes a retry a no-op.
-func (s *Service) captureExtracted(ctx context.Context, token string, scope Scope, ch FileExtractChunk, claims []ExtractedClaim) ([]string, []ExtractSkip, error) {
+// only ever creates candidates; one event per chunk makes a retry a no-op. The ids
+// are aligned with claims ("" where none was created). The item's timestamp is the
+// event time, its labels go on every claim.
+func (s *Service) captureExtracted(ctx context.Context, token string, scope Scope, plan *FileExtractJob, ch FileExtractChunk, claims []ExtractedClaim) ([]string, []ExtractSkip, error) {
 	if len(claims) == 0 {
 		return nil, nil, nil
 	}
-	gen := s.Wiki.Generator()
-	gen.PromptVersion, gen.PipelineVersion = fileExtractPromptVersion, fileExtractPipelineVersion
-	now := time.Now().UTC()
-	in := CaptureInput{Scope: scope, Generator: &gen,
-		Event: CaptureEvent{ID: "file-extract:" + ch.Source.ID + ":" + ch.Locator + ":" + ch.Hash[:min(16, len(ch.Hash))], Type: "backfill", OriginProduct: "arkism", OccurredAt: &now}}
+	gen := Generator{Model: "none", PromptVersion: extractChunksVersion, PipelineVersion: fileExtractPipelineVersion}
+	if plan.Settings.Mode != spaceExtractChunks {
+		gen = s.Wiki.Generator()
+		gen.PromptVersion, gen.PipelineVersion = fileExtractPromptVersion, fileExtractPipelineVersion
+	}
+	at, o := plan.refTime().UTC(), plan.Options
+	in := CaptureInput{Scope: scope, Generator: &gen, zone: plan.zone(),
+		Event: CaptureEvent{ID: "file-extract:" + ch.Source.ID + ":" + ch.Locator + ":" + ch.Hash[:min(16, len(ch.Hash))], Type: "backfill", OriginProduct: "arkism", OccurredAt: &at}}
 	for _, c := range claims {
 		confidence := c.Confidence
 		in.Claims = append(in.Claims, CaptureClaim{Subject: "file-extract", Text: c.Content, Kind: c.Kind, Basis: "inferred", Confidence: &confidence,
 			Reason:     ch.Locator + ": " + runeCutString(extractSpaces(c.EvidenceQuote), fileExtractQuoteRunes),
 			SourceRefs: []Ref{ch.Source}, locator: ch.Locator, OccurredFrom: c.OccurredFrom, OccurredTo: c.OccurredTo,
+			Tags: o.Tags, Metadata: o.Metadata, Entities: entityNameInputs(o.Entities),
 			// The document was read by a model, so the evidence is inference whatever the model labelled it.
 			MemoryContext: &MemoryContext{Domains: []string{"work"}, EvidenceKind: "inference", SemanticKind: c.SemanticKind}})
 	}
@@ -582,13 +936,48 @@ func (s *Service) captureExtracted(ctx context.Context, token string, scope Scop
 	if err != nil {
 		return nil, nil, err
 	}
-	ids, skipped := []string{}, []ExtractSkip{}
-	for _, item := range res.Items {
-		if item.CandidateID != "" {
-			ids = append(ids, item.CandidateID)
-			continue
+	ids, skipped := make([]string, len(claims)), []ExtractSkip{}
+	for i, item := range res.Items {
+		ids[i] = item.CandidateID
+		if item.CandidateID == "" {
+			skipped = append(skipped, ExtractSkip{Locator: ch.Locator, Reason: item.Status + ":" + item.Reason})
 		}
-		skipped = append(skipped, ExtractSkip{Locator: ch.Locator, Reason: item.Status + ":" + item.Reason})
 	}
 	return ids, skipped, nil
+}
+
+// storeExtractCauses records causes between one answer's claims as causal link
+// candidates between their candidates (ids aligned with the claims). A candidate keeps
+// its id as a memory, so the link is reviewable once a person approved both claims;
+// a pair that already has a row is left as it is.
+func (s *Service) storeExtractCauses(ctx context.Context, d Decision, scope Scope, ids []string, causes []ExtractedCause) error {
+	now := time.Now().UTC()
+	for _, c := range causes {
+		cause, effect := ids[c.Cause], ids[c.Effect]
+		if cause == "" || effect == "" || cause == effect {
+			continue
+		}
+		err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+			a, e := tx.Get(ctx, "memory_candidates", scope, cause)
+			if e != nil {
+				return e
+			}
+			b, e := tx.Get(ctx, "memory_candidates", scope, effect)
+			if e != nil {
+				return e
+			}
+			r := causalRecord(d, a, b, c.Reason, "candidate", now)
+			if _, e = tx.Get(ctx, colMemoryRelations, scope, r.ID); !errors.Is(e, ErrNotFound) {
+				return e
+			}
+			if e = tx.Insert(ctx, colMemoryRelations, r); e != nil {
+				return e
+			}
+			return audit(ctx, tx, scope, d.PrincipalID, "propose:causal_link", r.ID)
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -1562,6 +1562,10 @@ class ArkismClient(BaseClient):
         """POST /v1/extract/preview — Preview claims from text (dry run)"""
         return self.request("POST", f"/v1/extract/preview", None, body)
 
+    def ingest_memories(self, body=None):
+        """POST /v1/memories/ingest — Extract memory candidates from text items"""
+        return self.request("POST", f"/v1/memories/ingest", None, body)
+
     def extract_file_memories(self, body=None):
         """POST /v1/files/memories — Turn a file into memory candidates (an agent only when the space config mcp_tools lists add_document)"""
         return self.request("POST", f"/v1/files/memories", None, body)

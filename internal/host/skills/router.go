@@ -1009,8 +1009,9 @@ func memoryPathTexts(m map[string]any) []string {
 
 // remember submits a candidate through the existing capture gate; it never approves it.
 // remember submits one memory candidate; supersedes (propose_memory_update) makes it a
-// correction of that memory, which a person's approval alone retires.
-func remember(text, kind any, supersedes map[string]any) (host.Obj, error) {
+// correction of that memory, which a person's approval alone retires. labels carries the
+// optional tags, metadata and entities onto the candidate; the server validates them.
+func remember(text, kind any, supersedes, labels map[string]any) (host.Obj, error) {
 	t, ok := text.(string)
 	if !ok || pyStrip(t) == "" || len(t) > 4000 || !containsStr([]string{"user", "decision", "procedural", "lesson"}, str(kind)) || !isString(kind) {
 		return nil, errors.New("one nonempty memory of at most 4000 UTF-8 bytes and a valid kind are required")
@@ -1021,6 +1022,9 @@ func remember(text, kind any, supersedes map[string]any) (host.Obj, error) {
 	}
 	claim := map[string]any{"subject": "memory", "text": pyStrip(t), "kind": kind, "basis": "inferred",
 		"reason": "MCP로 제안한 기억. 사람의 검토가 필요합니다."}
+	for k, v := range labels {
+		claim[k] = v
+	}
 	if supersedes != nil {
 		claim["supersedes"], claim["reason"] = supersedes, "MCP로 제안한 기억 수정. 사람이 승인해야 이전 기억을 대신합니다."
 	}
@@ -1342,7 +1346,20 @@ func callToolRemember(n string, args map[string]any) (host.Obj, error) {
 		}
 		supersedes = ref
 	}
-	v, err := remember(arg(args, "text", ""), arg(args, "kind", "decision"), supersedes)
+	labels := map[string]any{}
+	for _, k := range []string{"tags", "metadata", "entities"} {
+		if v, ok := args[k]; ok && v != nil {
+			labels[k] = v
+		}
+	}
+	if names, ok := labels["entities"].([]any); ok { // the server takes {name} entities
+		stated := make([]any, len(names))
+		for i, n := range names {
+			stated[i] = map[string]any{"name": n}
+		}
+		labels["entities"] = stated
+	}
+	v, err := remember(arg(args, "text", ""), arg(args, "kind", "decision"), supersedes, labels)
 	if err != nil {
 		return nil, err
 	}

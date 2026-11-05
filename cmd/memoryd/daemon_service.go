@@ -151,7 +151,7 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
 			// MEMORY_FILE_VISION=1: the model reads uploaded images and scanned PDFs.
-			svc.Wiki = &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1"}
+			svc.Wiki = &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1", Batch: os.Getenv("MEMORY_EXTRACT_BATCH") == "1"}
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes

@@ -190,4 +190,3 @@ func splitTagNamespace(tag string) (string, string) {
 	}
 	return "", tag
 }
-

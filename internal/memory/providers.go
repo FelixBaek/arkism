@@ -131,7 +131,12 @@ func postJSON(ctx context.Context, client *http.Client, endpoint, credential str
 // postBody POSTs exact JSON bytes (or another body the header's Content-Type names) with extra headers (a signature is over these
 // bytes) under postJSON's rules: no redirects, bounded response body.
 func postBody(ctx context.Context, client *http.Client, endpoint string, header http.Header, body []byte, maxResponse int64) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	return sendBody(ctx, client, http.MethodPost, endpoint, header, body, maxResponse)
+}
+
+// sendBody is postBody for any method; a GET sends no body.
+func sendBody(ctx context.Context, client *http.Client, method, endpoint string, header http.Header, body []byte, maxResponse int64) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, fmt.Errorf("build request: %w", ErrInvalid)
 	}

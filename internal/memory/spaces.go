@@ -94,6 +94,14 @@ type SpaceConfig struct {
 	EntitiesAllowFreeForm *bool              `json:"entities_allow_free_form,omitempty" bson:"entities_allow_free_form,omitempty"`
 	EntityFreeTypes       *bool              `json:"entity_free_types,omitempty" bson:"entity_free_types,omitempty"`
 	EntityLabels          []EntityLabelGroup `json:"entity_labels,omitempty" bson:"entity_labels,omitempty"`
+	// Extraction settings past mode and instructions (space_settings.go): the mission, chunk size,
+	// causal candidates, named strategies an item may pick, and the zone dates are read in.
+	ExtractionMission         string                     `json:"extraction_mission,omitempty" bson:"extraction_mission,omitempty"`
+	ExtractionChunkSize       int                        `json:"extraction_chunk_size,omitempty" bson:"extraction_chunk_size,omitempty"`
+	ExtractCausal             *bool                      `json:"extract_causal,omitempty" bson:"extract_causal,omitempty"`
+	ExtractionStrategies      map[string]ExtractStrategy `json:"extraction_strategies,omitempty" bson:"extraction_strategies,omitempty"`
+	ExtractionDefaultStrategy string                     `json:"extraction_default_strategy,omitempty" bson:"extraction_default_strategy,omitempty"`
+	DefaultTimezone           string                     `json:"default_timezone,omitempty" bson:"default_timezone,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -131,6 +139,13 @@ type SpaceConfigInput struct {
 	// EntityLabels: [] hands the schema back to the template or server default.
 	EntityLabels      *[]EntityLabelGroup `json:"entity_labels,omitempty"`
 	RecallLaneWeights *map[string]float64 `json:"recall_lane_weights,omitempty"`
+	// Extraction settings; an extraction_strategies map replaces the stored one ({} clears it).
+	ExtractionMission         *string                     `json:"extraction_mission,omitempty"`
+	ExtractionChunkSize       *int                        `json:"extraction_chunk_size,omitempty"`
+	ExtractCausal             *bool                       `json:"extract_causal,omitempty"`
+	ExtractionStrategies      *map[string]ExtractStrategy `json:"extraction_strategies,omitempty"`
+	ExtractionDefaultStrategy *string                     `json:"extraction_default_strategy,omitempty"`
+	DefaultTimezone           *string                     `json:"default_timezone,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

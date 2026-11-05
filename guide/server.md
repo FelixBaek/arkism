@@ -159,6 +159,7 @@ Keep the file out of Git. All settings:
 | `MEMORY_BLOB_SHAREDKEY_ENDPOINT` | Optional object storage that speaks the Shared Key blob protocol, instead of S3: the account's blob service URL (https). Set it with `_ACCOUNT`, `_CONTAINER`, `_KEY` (the base64 account key) and optionally `_PREFIX` (all `MEMORY_BLOB_SHAREDKEY_*`). Set this or `MEMORY_BLOB_S3_*`, not both |
 | `MEMORY_DOCUMENT_CONVERTER` | Optional absolute path of a converter run as `<path> <file>` that prints text, for the extensions listed in `MEMORY_DOCUMENT_CONVERTER_EXTENSIONS` (for example `.epub,.rtf,.odt`). `.doc`, `.xls` and `.ppt` have built-in readers; listed there, the converter reads the files those readers cannot. It runs without a shell, with an empty environment, in its own temporary folder (removed afterwards) and process group (stopped as a whole on timeout), for at most 60 seconds, with 4 MiB of output. Other unsupported formats get 415 |
 | `MEMORY_FILE_VISION` | `1` when the server model (`SKILL_LLM_*` with `ARKISM_WIKI=on`) takes image input: uploaded png/jpg/webp images and scanned PDFs (JPEG page images, up to 8 pages) are read by it for memory extraction. Off by default; without it these uploads get 415 |
+| `MEMORY_EXTRACT_BATCH` | `1` lets queued extraction jobs of more than 2 chunks send them to the server model as one provider batch (messages protocol only: `{endpoint}/batches`). The job waits as `retry` with `batch_pending` and is checked every minute for up to a day; after a restart resume it with its run route. Each answer is filed in the usage ledger like a direct call and becomes review candidates only. Off by default |
 | `MEMORY_TRANSCRIBE_ENDPOINT` | Optional speech-to-text URL (https, or http on loopback) that takes multipart `file` + `model` and answers `{"text": ...}`, the common `/audio/transcriptions` protocol. Set `MEMORY_TRANSCRIBE_MODEL` and, if needed, `MEMORY_TRANSCRIBE_API_KEY`. Uploaded mp3/wav/m4a/ogg/webm/flac files (at most 4 MiB) are then transcribed for memory extraction; without it they get 415 |
 | `MEMORY_SESSION_ARCHIVE_KEY` | 32-byte hex key that encrypts archived session transcripts |
 
@@ -358,6 +359,29 @@ wiki. What a person approves and how is described in
     and `entity_free_types: true` allows types outside the built-in list; both
     are off the defaults only when set. The entity graph accepts `tags`,
     `tags_match`, `tag_groups` and `min_count`. No migration is needed.
+12. **Text ingest and extraction settings.** `POST /v1/memories/ingest` takes
+    1-16 text items (context, timestamp, tags, metadata, entities, strategy,
+    `document_id`, `update_mode` replace or append) and turns them into review
+    candidates through the same extraction as file uploads; `async: true`
+    queues every item as a job. Agents may call it only where the space lists
+    `add_document` in `mcp_tools`, as for uploads. New space settings, all
+    inherited and off or unchanged by default: `extraction_mode: "chunks"`
+    (each chunk of at most 1000 characters becomes a candidate, no model
+    call), `extraction_mission` (sent apart from `extraction_instructions`),
+    `extraction_chunk_size` (500-12000, default 6000), named
+    `extraction_strategies` with `extraction_default_strategy`, and
+    `default_timezone` (relative dates of extracted text are now read in it,
+    the server's zone when unset). `extract_causal: true` is opt-in because
+    the model returns more: causes between claims of one chunk become causal
+    link candidates, reviewable after a person approved both claims. Extracted
+    claims now show `fact_type` (`experience` for kind `episodic`, else
+    `world`). `POST /v1/extract/preview` accepts `strategy`, `overrides`,
+    `context`, `timestamp`, and `prompt_only` (renders the prompt, no model
+    call); `text` is optional with `prompt_only`. Capture claims and the MCP
+    `remember` tool accept `tags` (no `:`), `metadata` (stored as
+    `meta:<key>=<value>`) and `entities` (names stated on the candidate, linked
+    on approval). Jobs queued before this upgrade run with the space's current
+    settings.
 
 ## Model providers
 
