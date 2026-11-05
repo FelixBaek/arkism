@@ -40,10 +40,14 @@ func TestSignV4Vectors(t *testing.T) {
 
 func TestS3BlobStoreSettings(t *testing.T) {
 	for _, c := range [][]string{
-		{"http://storage.example", "b", "r", "", "a", "s"},     // plain http off loopback
-		{"https://storage.example", "", "r", "", "a", "s"},     // no bucket
-		{"https://storage.example", "b", "r", "", "", "s"},     // no key
-		{"https://storage.example", "b", "r", "../", "a", "s"}, // escaping prefix
+		{"http://storage.example", "b", "r", "", "a", "s"},      // plain http off loopback
+		{"https://storage.example", "", "r", "", "a", "s"},      // no bucket
+		{"https://storage.example", "b", "r", "", "", "s"},      // no key
+		{"https://storage.example", "b", "r", "../", "a", "s"},  // escaping prefix
+		{"https://169.254.169.254", "b", "r", "", "a", "s"},     // metadata address
+		{"https://[fe80::1]", "b", "r", "", "a", "s"},           // link-local
+		{"https://storage.example", "b", "r", "a b!", "a", "s"}, // prefix the signed path would encode differently
+		{"https://storage.example", "b?x", "r", "", "a", "s"},   // bucket outside the URL-safe alphabet
 	} {
 		if _, err := NewS3BlobStore(c[0], c[1], c[2], c[3], c[4], c[5], ""); err == nil {
 			t.Fatal("accepted", c)

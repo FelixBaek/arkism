@@ -19,8 +19,9 @@ import (
 
 // fakeObjects is a minimal in-memory object storage server.
 type fakeObjects struct {
-	mu      sync.Mutex
-	objects map[string][]byte
+	mu         sync.Mutex
+	objects    map[string][]byte
+	failDelete bool
 }
 
 func (f *fakeObjects) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +40,8 @@ func (f *fakeObjects) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		f.objects[r.URL.Path] = body
+	case r.Method == http.MethodDelete && f.failDelete:
+		w.WriteHeader(http.StatusServiceUnavailable)
 	case r.Method == http.MethodDelete:
 		delete(f.objects, r.URL.Path)
 		w.WriteHeader(http.StatusNoContent)
@@ -61,6 +64,12 @@ func (f *fakeObjects) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		_, _ = w.Write(body)
 	}
+}
+
+func (f *fakeObjects) setFailDelete(v bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failDelete = v
 }
 
 func (f *fakeObjects) has(digest string) bool {
@@ -104,14 +113,25 @@ func TestObjectBlobStorage(t *testing.T) {
 	if err = f.svc.Delete(testCtx, f.human, "sources", source.ID, ChangeInput{Scope: source.Scope, ExpectedRevision: source.Revision}); err != nil {
 		t.Fatal(err)
 	}
-	for range 2 {
-		job, e := f.svc.Repo.ClaimJob(testCtx, time.Now(), time.Minute)
-		if e != nil {
-			t.Fatal(e)
-		}
-		if e = f.svc.eraseSourceMemories(testCtx, token, job); e != nil {
-			t.Fatal(e)
-		}
+	job, err := f.svc.Repo.ClaimJob(testCtx, time.Now(), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.svc.eraseSourceMemories(testCtx, token, job); err != nil {
+		t.Fatal(err)
+	}
+	// A failed object delete is an error, not a silent success; the job is retried.
+	fake.setFailDelete(true)
+	job, err = f.svc.Repo.ClaimJob(testCtx, time.Now(), time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.svc.eraseSourceMemories(testCtx, token, job); err == nil || !fake.has(digest) {
+		t.Fatal("failed object delete was not reported", err)
+	}
+	fake.setFailDelete(false)
+	if err = f.svc.eraseSourceMemories(testCtx, token, job); err != nil {
+		t.Fatal("retry", err)
 	}
 	if fake.has(digest) {
 		t.Fatal("erasure kept the object")

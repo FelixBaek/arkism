@@ -18,10 +18,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // BlobObjectStore keeps blob bytes by digest. Put's body hashes to digest.
@@ -63,18 +66,24 @@ func S3BlobStoreFromEnv() (BlobObjectStore, error) {
 	return store, nil
 }
 
-// NewS3BlobStore checks the settings; the endpoint is https (or loopback http).
+// s3NamePattern is the bucket and prefix alphabet: safe in a URL path as is,
+// so the signed path and the sent path cannot differ.
+var s3NamePattern = regexp.MustCompile(`^[A-Za-z0-9._/-]*$`)
+
+// NewS3BlobStore checks the settings. The endpoint is https (or loopback
+// http); like a webhook URL it may be a private address but never a
+// link-local or metadata one, checked again after DNS at every connection.
 func NewS3BlobStore(endpoint, bucket, region, prefix, accessKey, secretKey, sessionToken string) (*S3BlobStore, error) {
-	if err := validateEndpoint(endpoint); err != nil {
-		return nil, fmt.Errorf("blob object storage: %w", err)
+	if err := checkWebhookURL(endpoint, true); err != nil {
+		return nil, fmt.Errorf("blob object storage endpoint: %w", err)
 	}
 	u, _ := url.Parse(endpoint)
-	if u.RawQuery != "" || u.Fragment != "" || u.User != nil || !validRunLabel(bucket, 63) || strings.ContainsAny(bucket, "/?#") ||
-		!validRunLabel(region, 64) || accessKey == "" || secretKey == "" || len(prefix) > 256 || strings.HasPrefix(prefix, "/") || strings.Contains(prefix, "..") {
+	if u.RawQuery != "" || !validRunLabel(bucket, 63) || !s3NamePattern.MatchString(bucket) || strings.Contains(bucket, "/") ||
+		!validRunLabel(region, 64) || accessKey == "" || secretKey == "" || len(prefix) > 256 || !s3NamePattern.MatchString(prefix) || strings.HasPrefix(prefix, "/") || strings.Contains(prefix, "..") {
 		return nil, fmt.Errorf("blob object storage settings: %w", ErrInvalid)
 	}
 	return &S3BlobStore{Endpoint: u, Bucket: bucket, Region: region, Prefix: prefix, AccessKey: accessKey, SecretKey: secretKey, SessionToken: sessionToken,
-		Client: &http.Client{Timeout: 10 * time.Minute, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+		Client: httpguard.OutboundClient(true, 10*time.Minute, nil)}, nil
 }
 
 func (s *S3BlobStore) objectURL(key string, query url.Values) *url.URL {
