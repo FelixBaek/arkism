@@ -246,6 +246,35 @@ func (p *Postgres) ExpiringCandidates(ctx context.Context, s Scope, before time.
 	return p.selectRecords(ctx, "memory_candidates", s, `status='candidate' AND (doc->>'conflict_id' IS NULL OR doc->>'conflict_id'='') AND `+pgDate+` > '0001-01-01T00:00:00Z'::timestamptz AND `+pgDate+` <= $6 AND `+pgUpdated+` > '0001-01-01T00:00:00Z'::timestamptz AND `+pgUpdated+` <= $6`, []any{before}, pgDate+` ASC,id ASC`, limit)
 }
 
+// JobQueueStats counts open jobs by kind across scopes, as the job worker's ClaimJob sees them.
+func (p *Postgres) JobQueueStats(ctx context.Context) ([]JobQueueStat, error) {
+	now := time.Now().UTC()
+	rows, err := p.q().Query(ctx, `SELECT kind,
+count(*) FILTER (WHERE status=ANY($1)),
+count(*) FILTER (WHERE status='running'),
+count(*) FILTER (WHERE status='failed'),
+min(COALESCE(run_at,updated_at)) FILTER (WHERE status=ANY($1))
+FROM memory_records WHERE collection='jobs' AND status=ANY($2) GROUP BY kind ORDER BY kind LIMIT $3`,
+		[]string{JobStatusPending, JobStatusRetry}, []string{JobStatusPending, JobStatusRetry, JobStatusRunning, JobStatusFailed}, jobQueueKindsMax)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []JobQueueStat{}
+	for rows.Next() {
+		var st JobQueueStat
+		var oldest *time.Time
+		if err = rows.Scan(&st.Kind, &st.Backlog, &st.Running, &st.Failed, &oldest); err != nil {
+			return nil, ErrUnavailable
+		}
+		if oldest != nil && oldest.Before(now) {
+			st.OldestAgeSeconds = now.Sub(*oldest).Seconds()
+		}
+		out = append(out, st)
+	}
+	return out, pgErr(rows.Err())
+}
+
 func (p *Postgres) OperationalMetrics(ctx context.Context, s Scope) (StoreMetrics, error) {
 	out := StoreMetrics{EmbeddingJobs: map[string]QueueMetric{}, SourceMemoryErasureJobs: map[string]QueueMetric{}}
 	if checkScope(s) != nil {

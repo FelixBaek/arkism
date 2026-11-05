@@ -71,7 +71,7 @@ func (r CostRates) priceAt(operation string, usage ProviderUsage) (int64, string
 }
 
 func validProviderUsage(u ProviderUsage) bool {
-	return u.Provider != "" && u.Model != "" && u.Requests > 0 && u.InputTokens >= 0 && u.OutputTokens >= 0 && u.TotalTokens >= 0 && (u.TotalTokens == 0 || u.TotalTokens >= u.InputTokens+u.OutputTokens)
+	return u.Provider != "" && u.Model != "" && u.Requests > 0 && u.InputTokens >= 0 && u.OutputTokens >= 0 && u.TotalTokens >= 0 && u.CachedInputTokens >= 0 && u.CachedInputTokens <= u.InputTokens && (u.TotalTokens == 0 || u.TotalTokens >= u.InputTokens+u.OutputTokens)
 }
 
 func embedMeasured(ctx context.Context, embedder Embedder, texts []string, inputType string) (EmbeddingBatch, error) {

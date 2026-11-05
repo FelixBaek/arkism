@@ -57,6 +57,7 @@ type llmSeries struct {
 	calls, errors             uint64
 	duration                  histogramCounts
 	inputTokens, outputTokens histogramCounts
+	cachedTokens              histogramCounts
 }
 
 type histogramCounts struct {
@@ -115,6 +116,7 @@ func observeLLMCall(operation, provider, model string, ok bool, elapsed time.Dur
 	s.duration.observe(latencyBounds[:], elapsed.Seconds())
 	s.inputTokens.observe(llmTokenBounds, float64(usage.InputTokens))
 	s.outputTokens.observe(llmTokenBounds, float64(usage.OutputTokens))
+	s.cachedTokens.observe(llmTokenBounds, float64(usage.CachedInputTokens))
 }
 
 func llmFamilies() []metricFamily {
@@ -124,6 +126,7 @@ func llmFamilies() []metricFamily {
 	dur := metricFamily{name: "arkism_llm_call_duration_seconds", help: "Model call latency.", kind: "histogram", bounds: latencyBounds[:]}
 	in := metricFamily{name: "arkism_llm_input_tokens", help: "Input tokens per model call.", kind: "histogram", bounds: llmTokenBounds}
 	out := metricFamily{name: "arkism_llm_output_tokens", help: "Output tokens per model call.", kind: "histogram", bounds: llmTokenBounds}
+	cached := metricFamily{name: "arkism_llm_cached_input_tokens", help: "Input tokens per model call the provider served from its prompt cache.", kind: "histogram", bounds: llmTokenBounds}
 	for key, s := range llmStats.series {
 		labels := [][2]string{{"operation", key[0]}, {"provider", key[1]}, {"model", key[2]}}
 		calls.points = append(calls.points,
@@ -132,10 +135,11 @@ func llmFamilies() []metricFamily {
 		dur.points = append(dur.points, histogramPoint(labels, s.duration))
 		in.points = append(in.points, histogramPoint(labels, s.inputTokens))
 		out.points = append(out.points, histogramPoint(labels, s.outputTokens))
+		cached.points = append(cached.points, histogramPoint(labels, s.cachedTokens))
 	}
 	dropped := metricFamily{name: "arkism_llm_calls_unlabeled_total", help: "Model calls not counted by label set (series cap reached).", kind: "counter",
 		points: []metricPoint{{value: float64(llmStats.overflow)}}}
-	return []metricFamily{calls, dur, in, out, dropped}
+	return []metricFamily{calls, dur, in, out, cached, dropped}
 }
 
 func slicesClone(l [][2]string) [][2]string { return append([][2]string(nil), l...) }
@@ -165,8 +169,11 @@ func (s *Service) metricFamilies(stats *requestMetrics) []metricFamily {
 	var out []metricFamily
 	if stats != nil {
 		out = append(out, requestFamilies(stats.snapshot())...)
+		out = append(out, gauge("arkism_http_requests_in_flight", "HTTP requests being served.", float64(stats.inFlight.Load())))
 	}
 	out = append(out, llmFamilies()...)
+	out = append(out, stageFamilies()...)
+	out = append(out, s.queueFamilies()...)
 	if s.Reranker != nil {
 		m := s.Reranker.Metrics()
 		out = append(out, counter("arkism_rerank_calls_total", "Rerank calls.", float64(m.Calls)),

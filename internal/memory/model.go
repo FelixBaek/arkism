@@ -78,6 +78,8 @@ type ProviderUsage struct {
 	InputTokens  int64  `json:"input_tokens" bson:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens" bson:"output_tokens"`
 	TotalTokens  int64  `json:"total_tokens" bson:"total_tokens"`
+	// CachedInputTokens is the part of InputTokens the provider served from its prompt cache, when it says.
+	CachedInputTokens int64 `json:"cached_input_tokens,omitempty" bson:"cached_input_tokens,omitempty"`
 }
 
 type EmbeddingBatch struct {

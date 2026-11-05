@@ -82,7 +82,7 @@ type recallTrace struct {
 	clock       *laneClock
 }
 
-// laneClock sums each lane's wall time for explain output only; without explain the
+// laneClock sums each lane's wall time for explain output; without explain the
 // context carries none and every call is a no-op.
 type laneClock struct {
 	mu sync.Mutex
@@ -104,12 +104,15 @@ func laneClockOf(ctx context.Context) *laneClock {
 }
 
 // since adds the time from start to lane: defer laneClockOf(ctx).since(lane, time.Now()).
+// Every run also lands in the recall lane histogram, with or without explain.
 func (c *laneClock) since(lane string, start time.Time) {
+	elapsed := time.Since(start)
+	observeStage(stageRecallLane, lane, elapsed)
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
-	c.d[lane] += time.Since(start)
+	c.d[lane] += elapsed
 	c.mu.Unlock()
 }
 

@@ -703,7 +703,9 @@ func validUploadName(name string) bool {
 
 // extractUploaded reads one checked upload and proposes candidates from it.
 func (s *Service) extractUploaded(ctx context.Context, token string, d Decision, plan FileExtractJob, f uploadedFile) (FileMemoriesResult, error) {
+	start := time.Now()
 	pages, paged, notes, err := s.fileMemoryPages(ctx, token, d, f)
+	observeStage(stageExtract, "parse", time.Since(start))
 	if err == nil {
 		err = s.defendItem(ctx, f.Scope, "write:memory_candidates", &plan.Options, pagePointers(pages)...)
 	}
@@ -997,11 +999,15 @@ func diffExtractChunks(prev, next []FileExtractChunk) ([]FileExtractChunk, []Fil
 func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, plan *FileExtractJob, ch FileExtractChunk) ([]string, []ExtractSkip, error) {
 	// The chunk's model calls name its source document and the candidates they produced.
 	ctx, note := withLLMNote(ctx, ch.Source.ID, nil)
+	start := time.Now()
 	res, err := s.extractChunk(ctx, token, d, scope, budget, plan, ch)
+	observeStage(stageExtract, "model", time.Since(start))
 	if err != nil {
 		return nil, nil, err
 	}
+	start = time.Now()
 	ids, skipped, err := s.captureChunk(ctx, token, d, scope, plan, ch, res)
+	observeStage(stageExtract, "capture", time.Since(start))
 	if err == nil {
 		s.attachLLMCreated(ctx, scope, note, ids)
 	}

@@ -51,6 +51,8 @@ type RequestMetric struct {
 type requestMetrics struct {
 	mu     sync.Mutex
 	routes map[string]RequestMetric
+	// inFlight counts requests the handler has started and not finished.
+	inFlight atomic.Int64
 }
 
 func (m *requestMetrics) observe(route string, status int, elapsed time.Duration) {

@@ -44,11 +44,13 @@ type LLMRequest struct {
 	InputTokens    int64      `json:"input_tokens" bson:"input_tokens"`
 	OutputTokens   int64      `json:"output_tokens" bson:"output_tokens"`
 	TotalTokens    int64      `json:"total_tokens" bson:"total_tokens"`
-	LatencyMS      int64      `json:"latency_ms" bson:"latency_ms"`
-	Status         string     `json:"status" bson:"status"` // ok | error
-	Error          string     `json:"error,omitempty" bson:"error,omitempty"`
-	Prompt         string     `json:"prompt,omitempty" bson:"prompt,omitempty"`
-	Response       string     `json:"response,omitempty" bson:"response,omitempty"`
+	// CachedInputTokens is the part of InputTokens served from the provider's prompt cache.
+	CachedInputTokens int64  `json:"cached_input_tokens,omitempty" bson:"cached_input_tokens,omitempty"`
+	LatencyMS         int64  `json:"latency_ms" bson:"latency_ms"`
+	Status            string `json:"status" bson:"status"` // ok | error
+	Error             string `json:"error,omitempty" bson:"error,omitempty"`
+	Prompt            string `json:"prompt,omitempty" bson:"prompt,omitempty"`
+	Response          string `json:"response,omitempty" bson:"response,omitempty"`
 	// TraceID groups the calls of one request or job; ParentSpanID is the job's
 	// (or, with tracing on, the enclosing) span. With tracing on they are the
 	// exported span's own ids.
@@ -281,7 +283,7 @@ func (s *Service) recordLLMRequest(ctx context.Context, m modelCallSpec, sp *spa
 	tr := LLMRequest{Operation: m.operation, Generator: &Generator{Model: usage.Model}, Provider: usage.Provider,
 		PromptChars: utf8.RuneCountInString(m.prompt), PromptSHA256: ContentHash(m.prompt),
 		InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, TotalTokens: max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens),
-		LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
+		CachedInputTokens: usage.CachedInputTokens, LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
 	tr.TraceID, tr.SpanID, tr.ParentSpanID, tr.JobID = llmTraceIDs(ctx, sp)
 	note, _ := ctx.Value(llmNoteKey{}).(*llmNote)
 	if note != nil {
@@ -392,6 +394,8 @@ type LLMRequestStat struct {
 	InputTokens  int64  `json:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens"`
 	TotalTokens  int64  `json:"total_tokens"`
+	// CachedInputTokens is the part of InputTokens served from a provider prompt cache.
+	CachedInputTokens int64 `json:"cached_input_tokens"`
 }
 
 type LLMRequestStats struct {
@@ -457,6 +461,7 @@ func addLLMStat(stats map[[2]string]*LLMRequestStat, r Record) {
 	st.InputTokens += r.LLMRequest.InputTokens
 	st.OutputTokens += r.LLMRequest.OutputTokens
 	st.TotalTokens += r.LLMRequest.TotalTokens
+	st.CachedInputTokens += r.LLMRequest.CachedInputTokens
 }
 
 func finishLLMStats(out LLMRequestStats, stats map[[2]string]*LLMRequestStat) LLMRequestStats {
