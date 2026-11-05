@@ -254,6 +254,8 @@ wiki. What a person approves and how is described in
    | `ARKISM_SPACE_DEFAULT_TEMPLATE` | Path to a space template bundle (`POST /v1/spaces/{workspace}/{project}/export` with `template: true`). Every space inherits the settings it leaves empty from the template's config, the template's defense rules apply to every space, and `POST .../import` with `default_template: true` copies its directives and mental model definitions into a space without settings. An unreadable file stops startup |
    | `ARKISM_SPACE_TEMPLATE_AUTO` | `1` applies the default template's directives and mental model definitions to a space by itself: when a person saves the space's first settings (their settings win), or on a person's first stored memory in a space without settings (the template's settings are stored too). The definitions arrive switched off (directives inactive, mental models on manual refresh) until a person turns them on in that space. Each space gets it once per server run; agent writes never apply it, since the definitions are human-only. Off by default. `GET /v1/spaces/template-schema?workspace_id=…&project_id=…` (`read:space_configs`) returns the JSON schema of a template bundle line |
    | `MEMORY_AUTO_DERIVE` | `on` lets the worker run observation, causal link and model name proposals by itself after approvals. Off by default, so an upgrade does not start spending the daily model calls. Needs the server model; results stay proposals for a person. This is the server default: a space's `auto_derive` setting (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) overrides each field |
+   | `ARKISM_EXTENSIONS_FILE` | Path to a JSON file of out-of-process extensions (see item 12). Unset means none. An unreadable file, a bad entry or an extension that does not answer `describe` stops startup |
+   | `ARKISM_MCP_TOOLS` | Comma-separated MCP tool names the server allows in every space (a tool must also pass the space's `mcp_tools`). Empty allows every tool. Shown as `server_mcp_tools` in `GET /v1/spaces/{workspace}/{project}/config/effective`. A bad name stops startup |
    | `MEMORY_AUTO_DERIVE_THRESHOLD`, `MEMORY_AUTO_DERIVE_INTERVAL` | Approvals that start a run at once (1-1000, default `10`) and the longest wait after the first counted approval (Go duration, `1m` to `720h`, default `6h`) |
    | `MEMORY_DERIVE_SCHEDULE` | `on` lets the worker run mental-model triggers (`daily`, `cron`, `full_refresh_cron`, `on_change`, `after_consolidation`) and a space's `consolidation_schedule` without anyone calling consolidate. One job per scope waits for the earliest due time; a model's `min_interval` (or the space's `mental_model_defaults.min_interval`) folds a burst of triggers into one refresh, and an attempt that wrote nothing waits an hour. Off by default, so an upgrade does not start spending the daily model calls. Results stay drafts and proposals for a person |
 
@@ -411,6 +413,50 @@ wiki. What a person approves and how is described in
     `meta:<key>=<value>`) and `entities` (names stated on the candidate, linked
     on approval). Jobs queued before this upgrade run with the space's current
     settings.
+12. **Extensions without rebuilding (optional, off by default).**
+    `ARKISM_EXTENSIONS_FILE` lists programs as
+    `{"extensions":[{"name":"house","command":["/opt/house/bin/ext"],"env":{},"timeout":"2s","fail":"closed"},{"name":"corp","url":"https://ext.example.com/rpc","token_file":"/etc/arkism/corp.token"}]}`.
+    A `command` (absolute path) is started once and spoken to over
+    stdin/stdout, one JSON-RPC 2.0 message per line, with only `PATH` and the
+    listed `env`; it must exit when its stdin closes. A `url` gets one JSON-RPC
+    POST per call (https, or loopback http with `"allow_private": true`) with
+    the bearer token read from `token_file`. Arkism calls `describe` at start,
+    then `operation` before and after capture, recall, reflect, consolidate and
+    mental model refresh and update (`before` can refuse, `after` only
+    observes; results are sent only with `"send_results": true`), `tenant` for
+    each authorized action (answers cached 30 seconds), `route` and `tool`.
+    Each call has `timeout` (default 2s, at most 30s); on failure `fail:"closed"`
+    (the default) refuses and `fail:"open"` lets operations and tenant checks
+    pass. Declared routes are served at
+    `GET|POST /v1/extensions/{name}/routes/{path}` (POST body `{scope, input}`)
+    and tools at `GET /v1/extension-tools` and
+    `POST /v1/extension-tools/call`, named `ext_<name>_<tool>` in the MCP
+    router. Arkism checks the token, the scope and the action and roles each
+    route or tool declares (default action for tools `search:memories`,
+    default roles human, agent and service); a route or tool nobody may see
+    answers `403` before `404`. Extension tools also pass both tool allowlists.
+    An extension failure answers `503 dependency_unavailable`. Nothing an
+    extension answers approves a memory, and its answers are returned as data
+    (`authority: data_only_untrusted`). Extensions cannot add database tables.
+13. **MCP tool allowlists now fail closed.** The router reads the space's
+    `mcp_tools` and the server's `ARKISM_MCP_TOOLS` and keeps them for a minute.
+    Before this release a router that could not read the space settings
+    offered every tool; now it offers none until it can (it asks again after
+    10 seconds). `ARKISM_MCP_TOOLS_ON_ERROR=open` in the router's environment
+    keeps the old behaviour. The settings are read with `search:memories`, which the router already holds.
+14. **More agent read and proposal tools.** `browse_memory` now lists
+    `memories` (active, paged, with `query`), `documents` (uploaded files,
+    `GET /v1/files/memories/documents`, `read:memory_candidates`), `spaces`,
+    `tags` and `stats`. `GET /v1/stats` now asks `read:memories`, and agents
+    may read it without `ops:metrics`; people and services still need
+    `ops:metrics` as well, so principals with listed actions need
+    `read:memories` added. The new `propose_change` tool files a maintenance
+    proposal of type `change` for knowledge folder and page create, edit and
+    delete, document delete, mental model refresh, clear and delete, directive
+    delete, a space settings change, or clearing the space's memories. The
+    target must exist at the revision the agent saw, secrets and private spans
+    are refused, and only a person accepts or dismisses it. Deciding changes
+    nothing: the person makes the change through its own screen or route.
 
 ### Reflect, consolidation and mental-model settings
 

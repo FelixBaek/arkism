@@ -277,12 +277,16 @@ one a stable name from method and path (`POST /v1/reflect` → `postV1Reflect` /
 ### Extension hooks
 
 A program that embeds `internal/memory` can add its own rules through
-`Service.Extensions` without a fork. There is no plugin loader: hooks are Go
-values compiled into that program.
+`Service.Extensions` without a fork, either as Go values compiled into that
+program or, without rebuilding, as out-of-process programs listed in
+`ARKISM_EXTENSIONS_FILE` (see [Server mode](server.md), upgrade item 12),
+which fill the same fields.
 
 | Field | Interface | When it runs | Effect of an error |
 |---|---|---|---|
-| `CaptureValidator` | `ValidateCapture(ctx, actor, CaptureInput) error` | After authorization and the built-in input checks, before any write | The capture answers 400 (`ErrInvalid` and `ErrExtensionRefused`) |
+| `OperationHook` | `BeforeOperation(ctx, actor, op, input) error` and `AfterOperation(ctx, actor, op, input, result, err)` | Around capture, recall, reflect, consolidate and mental model refresh and update (`Op*` names), after authorization and the built-in input checks | `BeforeOperation`: the operation answers 400 (`ErrInvalid` and `ErrExtensionRefused`); `AfterOperation` only observes |
+| `TenantHook` | `CheckTenant(ctx, actor, action) error` | After every allowed authorization decision | The action is denied (403) |
+| `Endpoints` | `ExtensionEndpoints` | Serves extension routes and MCP tools under Arkism's authorization | A failure answers 503 |
 | `JobHook` | `BeforeJob(ctx, job Record) error` | After the worker claims an embedding or webhook job. Erasure jobs skip it | The attempt fails and the job is retried later |
 | `ApproveHook` | `AfterApprove(ctx, Record)` | After a candidate approval is committed | None: it only observes; a panic is logged and contained |
 | `RequestHook` | `BeforeRequest(*http.Request) error` | Before routing and authorization of every HTTP request; it gets a copy without a readable body | The request answers 403 (`ErrDenied` and `ErrExtensionRefused`) |
@@ -300,7 +304,7 @@ whose `init` sets `daemonExtensions` (a `memory.Extensions`; the daemon copies
 it onto the service at start), and, for the MCP hook, a file to `cmd/arkism`
 whose `init` sets `skills.ToolCallHook`. Build with `go build -tags <tag>`.
 Go's `internal` rule keeps these packages importable only from this module,
-and there is nothing to load at run time.
+and compiled hooks need nothing loaded at run time.
 
 ### Management lists and daemon structure
 
