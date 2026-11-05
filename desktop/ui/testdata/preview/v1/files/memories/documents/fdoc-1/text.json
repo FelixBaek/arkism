@@ -1,0 +1,6 @@
+{
+ "document_id": "fdoc-1",
+ "label": "design-notes.md",
+ "chunks": 5,
+ "text": "[page:1]\n# 디자인 회의 메모\n\n선택한 탭은 글자색으로만 표시한다. 왼쪽 강조선은 쓰지 않는다.\n\n[page:2]\n버튼 문구는 동사로 끝낸다. 예: 저장하기, 내보내기.\n\n[page:3]\n어려운 설정은 「자세히」 안에 둔다."
+}

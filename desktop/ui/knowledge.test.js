@@ -92,7 +92,7 @@ async function setup(over, stateOver = {}) {
   };
   require("./catalog.js");
   ctx.fileSize = window.ArkismCatalog.fileSize;
-  require("./knowledge.js");
+  require("./spaces.js"); require("./knowledge.js");
   view = window.ArkismKnowledge(ctx);
   const files = (picked.length = 0, picked);
   const k = {
@@ -648,7 +648,7 @@ test("a busy action ignores a second click and job lines cover pending, done and
 });
 
 test("splitText: parts stay under the byte cap, cut at blank lines, then lines, then characters", () => {
-  require("./knowledge.js");
+  require("./spaces.js"); require("./knowledge.js");
   const split = window.ArkismKnowledge.splitText, bytes = (x) => Buffer.byteLength(x);
   assert.deepEqual(split("short"), ["short"]);
   // paragraphs pack greedily and are never cut inside when they fit
@@ -857,16 +857,16 @@ test("add window: pasted text goes to ingest with its 자세히 extras; several 
   assert.match(k.table().textContent, /2개 중 1개를 보냈어요\. 못 보낸 파일이 1개 있어요\./);
 });
 
-test("ingestExtras, filterDocs and deleteImpact", () => {
+test("ingestExtras, docRange and deleteImpact", () => {
   const K = window.ArkismKnowledge;
   assert.deepEqual(K.ingestExtras({ tags: " ", context: "", meta: "", parser: "builtin" }, true), {});
   assert.deepEqual(K.ingestExtras({ tags: "a，b", parser: "builtin", meta: "x=1" }, false), { tags: ["a", "b"], parsers: ["builtin"] });
   assert.match(K.ingestExtras({ when: "2026-10-01T09:30" }, true).timestamp, /^2026-10-01T/);
   assert.deepEqual(K.ingestExtras({ when: "nope" }, true), {});
-  const docs = [{ id: "d1", label: "Plan.pdf", tags: ["work"], updated_at: "2026-10-02T10:00:00Z" }, { id: "d2", label: "notes", tags: [], updated_at: "2026-10-05T00:00:00Z" }];
-  assert.deepEqual(K.filterDocs(docs, { q: "zzz" }).map((d) => d.id), ["d1", "d2"], "the text filter is the server's");
-  assert.deepEqual(K.filterDocs(docs, { from: "2026-10-03" }).map((d) => d.id), ["d2"]);
-  assert.deepEqual(K.filterDocs(docs, { to: "2026-10-02" }).map((d) => d.id), ["d1"]);
+  assert.deepEqual(K.docRange({}), {});
+  const r = K.docRange({ from: "2026-10-03", to: "2026-10-04" });
+  assert.equal(new Date(r.from).getDate(), 3); assert.equal(new Date(r.to).getDate(), 5, "to covers the whole last day");
+  assert.deepEqual(Object.keys(K.docRange({ from: "2026-10-05", to: "2026-10-01" })), ["from"], "a to before from is dropped");
   assert.deepEqual(K.deleteImpact([{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved" }] }, { candidates: [{ id: "a", status: "candidate" }, { id: "c", status: "rejected" }] }, {}]),
     { waiting: 1, kept: 1 });
 });
@@ -879,17 +879,18 @@ test("기억 문서: list with filters, tag edits, reprocess asks first, delete 
     "/v1/files/memories/documents/fd1/chunks": () => ({ items: [{ candidates: [{ id: "a", status: "candidate" }, { id: "b", status: "approved", memory_id: "b" }] }], next_cursor: "" }),
     "/v1/files/memories/documents/fd1/reprocess": () => ({ job_id: "j3", status: "done", candidates_created: 1 }),
     "/v1/files/memories/documents/fd1": (_, body) => (body.add || body.remove ? { candidates: 2, memories: 1, skipped: 0 } : { rejected: 1, kept: 1, jobs: 0 }),
-    "/v1/files/memories/documents": (path) => ({ items: path.includes("tag=work") ? [docs[0]] : docs, next_cursor: "" })
+    "/v1/files/memories/documents": (path) => ({ items: path.includes("tag=work") || path.includes("from=") ? [docs[0]] : docs, next_cursor: "" })
   });
   await k.start();
   k.table().querySelectorAll(".v4k-seg button")[2].click(); await dom.flush(); await dom.flush();
   const t = () => k.table().textContent, d = () => k.detail().textContent;
   assert.match(t(), /plan\.pdf/); assert.match(t(), /memo/);
   assert.equal(k.table().querySelector(".v4k-seg button.on output").textContent, "2", "the count sits on the open tab");
-  // date filter is local; tag filter asks the server
-  const [from] = k.table().querySelectorAll("input.v4k-date"); from.value = "2026-10-03"; dom.fire(from, "change"); await dom.flush();
-  assert.doesNotMatch(t(), /memo/); assert.match(t(), /불러온 2개 중 1개 표시/);
-  from.value = ""; dom.fire(from, "change"); await dom.flush();
+  // the period and the tag both ask the server
+  let from = k.table().querySelector("input.v4k-date"); from.value = "2026-10-03"; dom.fire(from, "change"); await dom.flush(); await dom.flush();
+  assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents?") && c.path.includes("from=")), "from goes to the server");
+  assert.doesNotMatch(t(), /memo/); assert.match(t(), /문서 1개를 불러왔어요/);
+  from = k.table().querySelector("input.v4k-date"); from.value = ""; dom.fire(from, "change"); await dom.flush(); await dom.flush();
   const tagSel = [...k.table().querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "work"));
   tagSel.value = "work"; dom.fire(tagSel, "change"); await dom.flush(); await dom.flush();
   assert.ok(k.srv.calls.some((c) => c.path.startsWith("/v1/files/memories/documents?") && c.path.includes("tag=work")));
@@ -921,6 +922,33 @@ test("기억 문서: list with filters, tag edits, reprocess asks first, delete 
   const del = k.srv.calls.filter((c) => c.method === "DELETE");
   assert.deepEqual(del, [{ path: "/v1/files/memories/documents/fd1", method: "DELETE", body: { scope: { workspace_id: "w" } } }]);
   assert.match(t() + d(), /지웠어요 · 버린 후보 1개 · 남은 기억 1개/);
+});
+
+test("기억 문서: 글 고치기 reads the text and saves it back for a re-read; 자세히 · 문서 옮기기 sends the shown documents and a zip with the conflict choice", async () => {
+  require("./crew-popup.js");
+  const k = await setup({
+    "/v1/files/memories/documents/fd1/text": (_, body) => (body ? { job_id: "j9", status: "done", candidates_created: 1, delta: { chunks_changed: 1 } } : { document_id: "fd1", label: "plan.pdf", text: "첫 글", chunks: 1 }),
+    "/v1/files/memories/documents/export": () => ({ filename: "documents.zip", content_base64: btoa("PK") }),
+    "/v1/files/memories/documents/import": () => ({ imported: 1, merged: 0, skipped: [] }),
+    "/v1/files/memories/documents": () => ({ items: [{ id: "fd1", label: "plan.pdf", status: "done", tags: [], chunks: 1, candidates_created: 1, updated_at: T, created_at: T }], next_cursor: "" })
+  });
+  await k.start();
+  k.table().querySelectorAll(".v4k-seg button")[2].click(); await dom.flush(); await dom.flush();
+  await k.press(k.detail(), "글 고치기"); await dom.flush();
+  const area = k.detail().querySelector("textarea.v4k-edit"); assert.equal(area.value, "첫 글");
+  area.value = "고친 글"; dom.fire(area, "input");
+  await k.press(k.detail(), "저장하고 다시 읽기"); await dom.flush();
+  assert.deepEqual(k.srv.calls.find((c) => c.method === "PUT"), { path: "/v1/files/memories/documents/fd1/text", method: "PUT", body: { scope: { workspace_id: "w" }, text: "고친 글" } });
+  await k.press(k.table(), "보이는 문서 1개 내보내기"); await dom.flush();
+  assert.deepEqual(k.posted("/v1/files/memories/documents/export")[0].body.document_ids, ["fd1"]);
+  assert.equal(k.saved.at(-1)[0], "documents.zip");
+  const conflict = [...k.table().querySelectorAll("select")].find((s) => s.getAttribute("aria-label") === "같은 이름의 문서가 있으면");
+  conflict.value = "skip"; dom.fire(conflict, "change");
+  await k.press(k.table(), "zip 가져오기");
+  const input = k.files.at(-1); input.files = [{ name: "d.zip", size: 2, arrayBuffer: async () => new TextEncoder().encode("PK").buffer }]; dom.fire(input, "change"); await dom.flush(); await dom.flush();
+  const sent = k.posted("/v1/files/memories/documents/import")[0].body;
+  assert.equal(sent.conflict, "skip"); assert.equal(sent.zip_base64, btoa("PK"));
+  assert.match(k.table().textContent + k.detail().textContent, /가져왔어요 · 새 문서 1개/);
 });
 
 test("원본 파일 tab downloads a kept file; a candidate with a memory opens that memory", async () => {

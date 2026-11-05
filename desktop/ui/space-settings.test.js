@@ -203,3 +203,38 @@ test("recall defaults, capture mode and density and the consolidation decision m
   assert.deepEqual(sent[0], ["/v1/spaces/w/p/config", { expected_revision: 2, capture_mode: "", capture_density: "dense", decision_models: {},
     recall_quality: { conflict_pending: "attach", provisional_vectors: true, rerank_options: { dedup: true }, prefer_observations: true, chunks_max_tokens: 800 } }]);
 });
+
+test("recall budget, extraction sizes and document text: set in 자세히, saved as one block or a value, and handed back", async () => {
+  const state = { view: "settings", settingsTab: "space", server: "s", scope: { workspace_id: "w", project_id: "p" }, caps: { actions: {} } };
+  const sent = [];
+  const stored = { extraction_batch_size: 20 };
+  const request = async (path, o) => {
+    if (o?.method) { sent.push([path, JSON.parse(o.body)]); return {}; }
+    if (path.endsWith("/config")) return { revision: 3, config: structuredClone(stored) };
+    return { revision: 3, config: { ...stored }, sources: { extraction_batch_size: "space" } };
+  };
+  const line = (title, hint, ctl) => { const r = h.el("div", "", title); r.append(h.el("small", "", hint), ctl); return r; };
+  const sws = {};
+  const kit = { side() {}, sideSec: () => h.el("div"), kvRow: () => h.el("div"), sideNote: () => h.el("p"), group: (t) => h.el("section", "", t), line,
+    more: (s, ...n) => { const d = h.el("details", "", s); d.append(...n); return d; }, spaceJob: async () => ({}),
+    sw: (on, label, set) => { const b = h.el("button", "", `sw:${label}:${on}`); sws[label] = set; return b; } };
+  let box;
+  const tab = S({ state, ...h, request, notice() {}, render() { box = h.el("div"); box.append(...tab.tab(kit)); } });
+  tab.tab(kit); await dom.flush(); await dom.flush();
+  assert.match(box.textContent, /sw:문서 글 보관:true/, "document text is kept by default");
+  const sel = (label) => box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === label);
+  const num = (label) => box.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === label);
+  const fn = sel("읽는 양 정하는 법"); fn.value = "adaptive"; dom.fire(fn, "change");
+  const low = num("적게 비율"); low.value = "0.05"; dom.fire(low, "change");
+  const max = num("최대 기억 수"); max.value = "30"; dom.fire(max, "change");
+  const imgs = num("조각마다 그림 수"); imgs.value = "99"; dom.fire(imgs, "change");
+  assert.equal(num("조각마다 그림 수").value, "", "out of range is refused");
+  const imgs2 = num("조각마다 그림 수"); imgs2.value = "4"; dom.fire(imgs2, "change");
+  sws["문서 글 보관"](false);
+  box.querySelectorAll("button").find((b) => b.textContent === "기본값으로" && b.parentNode.previousSibling?.textContent.startsWith("한 번에 보내는 조각 수")).click();
+  box.querySelectorAll("button").find((b) => b.textContent === "저장").click(); await dom.flush();
+  assert.deepEqual(sent[0], ["/v1/spaces/w/p/config", { expected_revision: 3, recall_budget: { function: "adaptive", adaptive_low: 0.05, max: 30 },
+    extraction_batch_size: 0, extraction_images_per_chunk: 4, store_document_text: false }]);
+  assert.deepEqual(S.configPatch({ recall_budget: { function: "fixed" }, store_document_text: false }, { recall_budget: null, store_document_text: null }),
+    { recall_budget: {}, store_document_text: null });
+});

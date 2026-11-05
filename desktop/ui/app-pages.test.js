@@ -719,7 +719,7 @@ test("기억 공간: a space bundle goes out and comes back as candidates, in th
   await press("기억 가져오기", app.$("#table"), 1600); await app.settle(1600);
   nextFile = null;
   const inn = app.apiCalls.find(([m, p]) => m === "POST" && /\/import$/.test(p));
-  assert.deepEqual(JSON.parse(inn[2]), { bundle: '{"format":"arkism.space"}\n', import_as: "candidate" });
+  assert.deepEqual(JSON.parse(inn[2]), { bundle: '{"format":"arkism.space"}\n', import_as: "candidate", document_conflict: "replace" });
   assert.match(text(app.$("#table")), /후보 2개를 가져왔어요/);
   assert.ok(find("후보 확인하러 가기", app.$("#table")));
 });

@@ -10,6 +10,8 @@
   const ALIAS = /^[a-z0-9][a-z0-9_.-]{0,62}$/;
   // what a person may pick to clone (spaces.go spaceParts); config and data are the server's default
   const PARTS = [["config", "설정"], ["data", "기억"], ["history", "이력"]], MORE_PARTS = [["observations", "정리된 관찰"], ["knowledge", "자료"], ["attachments", "첨부 파일"]];
+  // what an imported document does when the space already has one of that name (space_documents.go docConflict*)
+  const DOC_CONFLICT = [["replace", "새 내용으로 바꾸기"], ["skip", "건너뛰기"], ["new_id", "둘 다 두기"]];
   const SECTION = { config: "설정", directives: "규칙", mental_models: "정리 틀", memories: "기억", observations: "정리된 관찰" };
   // The first alias is the one shown first (대표). The server appends an added alias, so making one the first takes
   // the ones in front of it out and back in, after it.
@@ -48,13 +50,14 @@
     for (const r of batch?.results || []) (r.error ? failed : done).push(r.error ? [r.project_id, r.error] : r.project_id);
     return { done, failed };
   }
-  const lib = { ALIAS, PARTS, MORE_PARTS, primaryMoves, bundlePreview, matchSpace, deleteOutcome };
+  const lib = { ALIAS, PARTS, MORE_PARTS, DOC_CONFLICT, primaryMoves, bundlePreview, matchSpace, deleteOutcome };
 
   function create(ctx) {
     const { state, el, button, request, query, notice, render, go, pickFile, saveFile, spaceJob } = ctx;
     const ask = (...a) => globalThis.ask(...a), askText = (...a) => globalThis.askText(...a), askTyped = (...a) => globalThis.askTyped(...a);
     const human = () => state.caps?.actions?.review_decide !== false; // these writes take people only; an agent token never sees them
-    const S = { busy: false, line: "", warn: false, review: false, key: "", view: null, list: null, listErr: "", next: "", preview: null, parts: new Set(["config", "data"]), target: "", find: "", picked: new Set(), newID: "", plan: null };
+    const S = { busy: false, line: "", warn: false, review: false, key: "", view: null, list: null, listErr: "", next: "", preview: null, parts: new Set(["config", "data"]), target: "", find: "", picked: new Set(), newID: "", plan: null,
+      docs: null, pickedDocs: new Set(), conflict: "replace" };
     const scopeKey = () => JSON.stringify([state.server, state.scope?.workspace_id, state.scope?.project_id]);
     const enc = encodeURIComponent, data = (node) => { node.dataset.noI18n = ""; return node; }; // server text and ids stay as they are
     const spacePath = (p = state.scope?.project_id) => {
@@ -94,9 +97,11 @@
     const reload = () => { S.key = ""; S.view = null; return load().catch(() => {}); };
 
     // ---------------------------------------------------------- 기억 공간 옮기기 (also as a template)
-    const exportSpace = (template) => run(async () => {
+    // docs: the space's memories and settings plus only the picked documents (the documents part takes people only)
+    const exportSpace = (template, docs) => run(async () => {
       show("내보낼 파일을 만드는 중…");
-      const job = await spaceJob("exports", await request(`${spacePath()}/export`, { method: "POST", body: JSON.stringify(template ? { template: true } : {}) }));
+      const body = template ? { template: true } : docs ? { parts: ["config", "data", "documents"], document_ids: [...S.pickedDocs] } : {};
+      const job = await spaceJob("exports", await request(`${spacePath()}/export`, { method: "POST", body: JSON.stringify(body) }));
       const text = await request(`/v1/spaces/exports/${enc(job.id)}/download?${query()}`, { raw: true });
       saveFile(`arkism-${template ? "template" : "space"}-${state.scope.project_id}.jsonl`, text, "application/x-ndjson");
       show(template ? "템플릿 파일 다운로드를 시작했어요. 기억은 빠지고 설정과 규칙·정리 틀만 들어 있어요."
@@ -109,7 +114,7 @@
         const path = spacePath();
         if (!(await ask("이 파일의 기억을 가져올까요? 바로 저장되지 않고 모두 '확인해 주세요'에 후보로 들어가요.", "가져오기"))) return;
         show("가져오는 중…");
-        const job = await spaceJob("imports", await request(`${path}/import`, { method: "POST", body: JSON.stringify({ bundle, import_as: "candidate" }) }));
+        const job = await spaceJob("imports", await request(`${path}/import`, { method: "POST", body: JSON.stringify({ bundle, import_as: "candidate", document_conflict: S.conflict }) }));
         const r = job.report || {};
         show(`후보 ${r.imported || 0}개를 가져왔어요. 이미 있는 기억 ${r.merged || 0}개는 건너뛰었고, 받지 않은 것 ${(r.rejected || 0) + (r.skipped || []).reduce((n, x) => n + (x.count || 0), 0)}개예요.`, false, (r.imported || 0) > 0);
       });
@@ -147,6 +152,30 @@
       if ((S.view?.revision || 0) > 0) card.append(el("p", "pg-hint warn", ERR.conflict));
       return card;
     }
+    // the space's documents, read when 자세히 · 문서 opens the first time (one page: an export picks at most 200)
+    async function loadDocs() {
+      S.docs = "loading";
+      try { S.docs = (await request(`/v1/files/memories/documents?${query({ limit: 50 })}`)).items || []; } catch (_) { S.docs = false; }
+      redraw();
+    }
+    function docMoves() {
+      if (S.docs === null) void loadDocs();
+      const list = el("div", "v4s-actions");
+      if (S.docs === false) list.append(el("p", "pg-hint warn", "문서 목록을 불러오지 못했어요."));
+      else if (Array.isArray(S.docs) && !S.docs.length) list.append(el("p", "pg-hint", "이 공간에는 파일에서 읽은 문서가 없어요."));
+      for (const d of Array.isArray(S.docs) ? S.docs : []) {
+        const lab = el("label", "sp-check"), c = el("input"); c.type = "checkbox"; c.checked = S.pickedDocs.has(d.id);
+        c.addEventListener("change", () => { if (c.checked) S.pickedDocs.add(d.id); else S.pickedDocs.delete(d.id); redraw(); });
+        lab.append(c, data(el("span", "", d.label || d.id))); list.append(lab);
+      }
+      const go = button(S.pickedDocs.size ? `기억과 고른 문서 ${S.pickedDocs.size}개 내보내기` : "내보낼 문서를 골라 주세요", "", null, () => exportSpace(false, true));
+      go.disabled = S.busy || !S.pickedDocs.size;
+      const sel = el("select", "ag-select"); sel.setAttribute("aria-label", "같은 이름의 문서가 있으면");
+      for (const [k, name] of DOC_CONFLICT) { const o = el("option", "", name); o.value = k; o.selected = k === S.conflict; sel.append(o); }
+      sel.addEventListener("change", () => { S.conflict = sel.value; });
+      const f = el("label", "field wide", "가져올 때 같은 이름의 문서가 있으면"); f.append(sel);
+      return [el("p", "pg-hint", "고른 문서는 기억·설정과 함께 한 파일로 나가요."), list, go, f];
+    }
     function moveGroup(kit) {
       const g = kit.group("기억 공간 옮기기", "이 공간의 기억을 파일로 내보내거나, 받은 파일을 가져와요. 가져온 기억은 내가 확인해야 저장돼요.");
       const row = el("div", "v4s-actions");
@@ -154,6 +183,7 @@
       if (human()) row.append(button("기억 가져오기", "", null, importSpace)); // the import route takes people only; an agent token never sees it
       for (const b of row.children) b.disabled = S.busy;
       g.append(row);
+      if (human()) g.append(kit.more("자세히 · 문서", ...docMoves()));
       const t1 = button("템플릿으로 내보내기", "", null, () => exportSpace(true)), t2 = button("템플릿 가져오기", "", null, browseTemplate);
       t1.disabled = t2.disabled = S.busy;
       const tpl = [kit.line("템플릿으로 내보내기", "기억은 빼고 설정과 규칙·정리 틀만 담아요. 다른 공간을 같은 방식으로 시작할 때 써요.", t1)];
@@ -331,7 +361,7 @@
     }
 
     function groups(kit) {
-      if (S.key !== scopeKey()) { Object.assign(S, { view: null, list: null, preview: null, line: "", review: false, target: "", find: "", picked: new Set(), newID: "", plan: null }); void load().catch(() => {}); }
+      if (S.key !== scopeKey()) { Object.assign(S, { view: null, list: null, preview: null, line: "", review: false, target: "", find: "", picked: new Set(), newID: "", plan: null, docs: null, pickedDocs: new Set() }); void load().catch(() => {}); }
       return [nameGroup(kit), moveGroup(kit), cloneGroup(kit), listGroup(kit)];
     }
     return { groups };

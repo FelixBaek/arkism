@@ -46,6 +46,7 @@ function setup({ role = "human", revision = 2, aliases = ["front", "web"] } = {}
       return path.endsWith("/clone") || path.endsWith("/import") ? { id: "j1", state: "queued" } : {};
     }
     if (path === "/v1/spaces/w/p/config") return { revision, config: { display_name: "기본", aliases } };
+    if (path.startsWith("/v1/files/memories/documents?")) return { items: [{ id: "fd1", label: "plan.pdf" }, { id: "fd2", label: "memo.md" }] };
     if (path.startsWith("/v1/spaces/template-schema")) return { "x-format": "arkism.space", "x-format-version": 1 };
     if (path.startsWith("/v1/spaces?")) return { items: [{ project_id: "p", config: { display_name: "기본", aliases }, counts: { memories: 12 } }, { project_id: "orbit", config: { display_name: "", aliases: [] }, counts: { memories: 3 }, created: "2026-03-02T09:00:00Z", last_activity: "2026-11-01T10:00:00Z" }, { project_id: "busy", config: { display_name: "작업 중", aliases: [] }, counts: { memories: 1 } }], next: "" };
     throw new Error("not_found");
@@ -147,4 +148,22 @@ test("the project id changes after a preview and a confirm, through the rename r
   assert.match(t.asks.at(-1), /‘p’에서 ‘p2’로/);
   assert.deepEqual(t.sent.at(-1), ["POST", "/v1/spaces/w/p/rename", { project_id: "p2", execute: true }]);
   assert.match(t.box.textContent, /프로젝트 ID를 ‘p2’로 바꿨어요/); assert.match(t.box.textContent, /서버 관리자가 옮겨야/);
+});
+
+test("자세히 · 문서: export the memories with only the picked documents; an import carries the document conflict choice", async () => {
+  const t = setup(); await dom.flush(); await dom.flush(); await dom.flush();
+  assert.match(t.box.textContent, /plan\.pdf/); assert.match(t.box.textContent, /memo\.md/);
+  assert.ok(dom.buttons(t.box, "내보낼 문서를 골라 주세요")[0].disabled, "nothing picked, nothing to send");
+  const pick = t.box.querySelectorAll("input").filter((n) => n.type === "checkbox" && n.parentNode.textContent === "memo.md")[0];
+  pick.checked = true; dom.fire(pick, "change");
+  await t.press("기억과 고른 문서 1개 내보내기");
+  assert.deepEqual(t.sent.at(-1), ["POST", "/v1/spaces/w/p/export", { parts: ["config", "data", "documents"], document_ids: ["fd2"] }]);
+  const sel = t.box.querySelectorAll("select").find((n) => n.getAttribute("aria-label") === "같은 이름의 문서가 있으면");
+  sel.value = "new_id"; dom.fire(sel, "change");
+  t.files.push(manifest({ sections: [{ name: "documents", count: 1 }] }));
+  await t.press("기억 가져오기");
+  assert.deepEqual(t.sent.at(-1).slice(0, 2), ["POST", "/v1/spaces/w/p/import"]);
+  assert.equal(t.sent.at(-1)[2].document_conflict, "new_id");
+  const agent = setup({ role: "agent" }); await dom.flush();
+  assert.doesNotMatch(agent.box.textContent, /자세히 · 문서/, "documents travel for people only");
 });

@@ -18,7 +18,8 @@
     lanes: null, rerank: null, rerank_model: null, recall_budget_tokens: 0, reflect_max_tokens: 0,
     extraction_mission: "", extraction_chunk_size: 0, extract_causal: null, extraction_strategies: {}, extraction_default_strategy: "", default_timezone: "", memory_language: "",
     work_state_candidates: null, recall_session_archives: null, recall_lane_weights: {}, audit: {}, entity_resolution: "", entities_allow_free_form: null, entity_free_types: null,
-    entity_labels: [], reflect_default_options: {}, mental_model_defaults: {}, consolidation: {}, recall_quality: {}, capture_mode: "", capture_density: "", decision_models: {} };
+    entity_labels: [], reflect_default_options: {}, mental_model_defaults: {}, consolidation: {}, recall_quality: {}, capture_mode: "", capture_density: "", decision_models: {},
+    recall_budget: {}, extraction_batch_size: 0, extraction_images_per_chunk: 0, store_document_text: null };
   // empty all the way down ({tools: {}} is as empty as {}); false is a value
   const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) ? !v.length : typeof v === "object" && Object.values(v).every(unset));
   // a named strategy with nothing set is still a name an item can pick
@@ -243,6 +244,7 @@
         ...choice(kit, "capture_mode", CAPTURE_MODES, "대화에서 무엇을 뽑을지", "에이전트가 확인한 사실·도구 결과·다른 사람의 말도 후보로 만들지예요. 후보는 내가 승인해야 기억이 돼요."),
         ...choice(kit, "capture_density", DENSITIES, "얼마나 촘촘히 뽑을지", "촘촘할수록 후보가 많아져요."),
         ...(["balanced", "dense"].includes(S.draft?.capture_density || S.eff.capture_density) ? [el("p", "pg-hint warn", "후보가 많아지는 만큼 뽑는 모델 사용량(예산)을 더 써요.")] : []),
+        ...extractSizes(kit),
         ...strategies(kit)));
       if (human()) g.append(kit.more("자세히 · 뽑기 시험해 보기", ...trialBox(kit)));
       return g;
@@ -572,6 +574,45 @@
       return out;
     }
 
+    // file extraction sizes and whether a document's text is kept; 0 or 기본값으로 hands each back
+    function extractSizes(kit) {
+      const d = S.draft, edit = human() && d;
+      const box = (k, max, title) => numberBox(d?.[k], 1, max, S.eff[k], title, edit, (n) => { setDraft(k, n); redraw(); });
+      return [
+        kit.line("한 번에 보내는 조각 수", "큰 파일을 이만큼씩 나눠 모델에 보내요 (1~1000). 비우면 한 번에 보내요.", box("extraction_batch_size", 1000, "한 번에 보내는 조각 수")),
+        origin("extraction_batch_size", () => { setDraft("extraction_batch_size", 0); redraw(); }),
+        kit.line("조각마다 그림 수", "한 조각과 함께 읽는 그림의 상한이에요 (1~64). 비우면 제한 없이 읽어요.", box("extraction_images_per_chunk", 64, "조각마다 그림 수")),
+        origin("extraction_images_per_chunk", () => { setDraft("extraction_images_per_chunk", 0); redraw(); }),
+        ...flagOn(kit, "store_document_text", "문서 글 보관", "끄면 파일에서 읽은 글을 저장하지 않아요. 그러면 글 고치기와 다시 읽기를 할 수 없어요.")];
+    }
+    // like flag, but unset means on (the server keeps document text unless told not to)
+    const flagOn = (kit, key, title, hint) => {
+      const d = S.draft, edit = human() && d;
+      const v = d && d[key] != null ? d[key] : S.eff[key];
+      const on = v !== false;
+      return [kit.line(title, hint, edit ? kit.sw(on, title, (next) => { d[key] = next; redraw(); }) : onOff(on)), origin(key, () => { d[key] = null; redraw(); })];
+    };
+
+    // recall_budget: how many records each budget level reads (one block, inherited whole)
+    const BUDGET_FNS = [["", "기본값"], ["fixed", "개수로 정하기"], ["adaptive", "답 길이에 맞추기"]];
+    function recallBudget(kit) {
+      const d = S.draft, edit = human() && d;
+      const b = (d?.recall_budget ? d.recall_budget : S.eff.recall_budget) || {};
+      const set = (part) => setBlock("recall_budget", part);
+      const out = [kit.line("읽는 양 정하는 법", "적게·보통·많이가 기억을 몇 개 찾을지예요. 기본값은 지금처럼 정해진 개수예요.",
+        edit ? select(BUDGET_FNS, b.function || "", "읽는 양 정하는 법", (v) => set({ function: v || undefined })) : readOnly(BUDGET_FNS.find(([k]) => k === (b.function || ""))?.[1] || b.function))];
+      if (b.function === "fixed") {
+        out.push(field("단계마다 찾는 기억 수", grid(...BUDGET.map(([lv, name]) => [name, numberBox(b[`fixed_${lv}`], 1, 50, "", `${name} 기억 수`, edit, (n) => set({ [`fixed_${lv}`]: n || undefined }))])), "1~50개. 비우면 기본값을 써요."));
+      } else if (b.function === "adaptive") {
+        out.push(field("답 길이에 곱하는 비율", grid(...BUDGET.map(([lv, name]) => [name, numberBox(b[`adaptive_${lv}`], 0.01, 1, "", `${name} 비율`, edit, (n) => set({ [`adaptive_${lv}`]: n || undefined }), 0.01)])),
+          "답 토큰 수 × 비율만큼 찾아요 (0.01~1). 비우면 기본값을 써요."),
+        field("찾는 기억 수 범위", grid(["최소", numberBox(b.min, 1, 50, "", "최소 기억 수", edit, (n) => set({ min: n || undefined }))], ["최대", numberBox(b.max, 1, 50, "", "최대 기억 수", edit, (n) => set({ max: n || undefined }))]), "1~50개."));
+        if (b.min && b.max && b.min > b.max) out.push(el("p", "pg-hint warn", "최소가 최대보다 커요."));
+      }
+      out.push(origin("recall_budget", () => { d.recall_budget = null; redraw(); }));
+      return out;
+    }
+
     const LEVELS = [["0", "정하지 않음"], ["1", "1 · 아주 낮게"], ["2", "2"], ["3", "3 · 보통"], ["4", "4"], ["5", "5 · 아주 높게"]];
     const DISPOSITION = [["skepticism", "의심하는 정도", "기억끼리 다르면 얼마나 조심스럽게 말할지"], ["literalism", "글자 그대로 읽는 정도", "기억에 적힌 말을 얼마나 그대로 따를지"], ["empathy", "마음을 헤아리는 정도", "사람의 사정과 기분을 얼마나 살필지"]];
     function reflectGroup(kit) {
@@ -589,7 +630,7 @@
       const maxTok = numberBox(d?.reflect_max_tokens, 64, 4096, S.eff.reflect_max_tokens, "답 길이 상한", edit, (n) => { setDraft("reflect_max_tokens", n); redraw(); });
       g.append(kit.more("자세히 · 답하는 태도", ...rows, origin("reflect_disposition", () => { d.reflect_disposition = null; redraw(); }),
         kit.line("답 길이 상한", "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.", maxTok), origin("reflect_max_tokens", () => { setDraft("reflect_max_tokens", 0); redraw(); })));
-      g.append(kit.more("자세히 · 답할 때 읽는 것", ...reflectDefaults(kit)));
+      g.append(kit.more("자세히 · 답할 때 읽는 것", ...reflectDefaults(kit), ...recallBudget(kit)));
       return g;
     }
 

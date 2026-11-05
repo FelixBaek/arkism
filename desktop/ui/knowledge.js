@@ -34,8 +34,9 @@ window.ArkismKnowledge = (ctx) => {
     pg: { q: "", type: "", sort: "recent", chip: "all", folder: null }, pageSel: "", compare: false, edit: null,
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: SHARED, q: "", busy: false, result: null, error: "" },
     busy: false, notice: "", remove: null, upload: null, extract: null,
-    // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q and the tag go to the server, the dates filter what is loaded
-    fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", sel: "", del: null },
+    // 기억 문서: file-extraction documents (GET /v1/files/memories/documents); q, the tag and the dates go to the server
+    // edit: the text being edited ({id, state, text}); conflict: what a zip import does with a document of the same name
+    fd: { state: "idle", items: [], next: "", busy: false, error: "", q: "", tag: "", from: "", to: "", sel: "", del: null, edit: null, conflict: "replace" },
     folders: [], folderOf: {} // 위키 폴더 (GET /v1/wiki/tree); pg.folder null = every folder
   };
   let typing = 0;
@@ -997,7 +998,7 @@ window.ArkismKnowledge = (ctx) => {
     const F = K.fd, ticket = loads.begin("docs");
     F.busy = true; F.error = ""; paint();
     try {
-      const r = await get("/v1/files/memories/documents", { limit: 50, ...(F.tag ? { tag: F.tag } : {}), ...(F.q ? { q: F.q } : {}), ...(more && F.next ? { cursor: F.next } : {}) });
+      const r = await get("/v1/files/memories/documents", { limit: 50, ...(F.tag ? { tag: F.tag } : {}), ...(F.q ? { q: F.q } : {}), ...window.ArkismKnowledge.docRange(F), ...(more && F.next ? { cursor: F.next } : {}) });
       if (!ticket.live()) return;
       if (!Array.isArray(r?.items)) throw new Error("invalid_response");
       F.items = more ? [...F.items, ...r.items] : r.items; F.next = r.next_cursor || ""; F.state = "ready";
@@ -1009,14 +1010,14 @@ window.ArkismKnowledge = (ctx) => {
     const ex = extractCard(); if (ex) parts.push(ex);
     if (F.state === "idle") { F.state = "loading"; queueMicrotask(() => loadDocs()); }
     const bar = el("div", "v4s-bar");
-    const date = (key, label) => { const i = el("input", "v4s-input v4k-date"); i.type = "date"; i.value = F[key]; i.setAttribute("aria-label", label); i.title = label; i.addEventListener("change", () => { F[key] = i.value; paint(); }); return i; };
+    const date = (key, label) => { const i = el("input", "v4s-input v4k-date"); i.type = "date"; i.value = F[key]; i.setAttribute("aria-label", label); i.title = label; i.addEventListener("change", () => { F[key] = i.value; F.state = "loading"; void loadDocs(); }); return i; };
     const tags = [...new Set([F.tag, ...F.items.flatMap((d) => d.tags || [])].filter(Boolean))].sort();
     bar.append(searchBox("문서 이름·태그·내용 검색", F.q, (v) => { F.q = v; F.state = "loading"; void loadDocs(); }),
       noI18nOpts(select("태그", [["", "태그: 모두"], ...tags.map((t) => [t, t])], F.tag, (v) => { F.tag = v; F.state = "loading"; void loadDocs(); })),
       date("from", "이날부터"), date("to", "이날까지"));
     parts.push(bar);
     if (noticeLine()) parts.push(noticeLine());
-    const items = window.ArkismKnowledge.filterDocs(F.items, F);
+    const items = F.items;
     const list = el("div", "v4s-list");
     for (const d of items) {
       const meta = `부분 ${num(d.chunks)}개 · 후보 ${num(d.candidates_created)}개 · ${ago(d.updated_at)} 올림`; // one sentence, so it translates as a whole
@@ -1027,12 +1028,13 @@ window.ArkismKnowledge = (ctx) => {
       if (F.state === "loading" || F.state === "idle") box.append(el("p", "", "불러오는 중…"));
       else if (F.state === "off") box.append(el("p", "", "이 서버는 기억 문서 목록을 아직 지원하지 않아요."));
       else if (F.state === "error") box.append(el("p", "", F.error), button("다시 시도", "", null, () => loadDocs()));
-      else if (F.items.length || F.tag || F.q) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { const reload = F.tag || F.q; Object.assign(F, { q: "", tag: "", from: "", to: "" }); if (reload) void loadDocs(); else paint(); }));
+      else if (F.tag || F.q || F.from || F.to) box.append(el("p", "", "조건에 맞는 문서가 없어요."), button("조건 지우기", "", null, () => { Object.assign(F, { q: "", tag: "", from: "", to: "" }); void loadDocs(); }));
       else box.append(el("p", "", "아직 기억 후보를 만든 글이나 파일이 없어요."), button("기억 후보 만들기", "primary", null, () => openAdd()));
       list.append(box);
     }
-    parts.push(list, el("p", "v4s-foot", F.busy ? "불러오는 중…" : `불러온 ${F.items.length}개 중 ${items.length}개 표시 · 날짜는 불러온 목록에서 걸러요`));
+    parts.push(list, el("p", "v4s-foot", F.busy ? "불러오는 중…" : `문서 ${num(items.length)}개를 불러왔어요`));
     if (F.next) { const b = button("문서 더 보기", "", null, () => loadDocs(true)); b.disabled = F.busy; parts.push(b); }
+    if (human()) parts.push(docMove(items));
     table.replaceChildren(...parts);
     if (!items.some((d) => d.id === F.sel)) F.sel = items[0]?.id || "";
     docDetail(items.find((d) => d.id === F.sel));
@@ -1048,6 +1050,7 @@ window.ArkismKnowledge = (ctx) => {
     const docAct = (work, done) => act(work, done, docErr).then(() => loadDocs());
     if (d.status === "failed") box.append(card("읽다가 멈췄어요. 이어서 읽으면 남은 부분만 읽어요.", [button("이어서 하기", "primary", null, () => { K.extract = { id: d.job_id, label: d.label, phase: "failed" }; resumeExtract(); })]));
     if (F.del?.id === d.id) box.append(deleteCard(d));
+    if (F.edit?.id === d.id) box.append(editCard(d));
     // 태그
     const tagBox = el("div", "v4k-wlinks");
     for (const t of d.tags || []) {
@@ -1074,11 +1077,59 @@ window.ArkismKnowledge = (ctx) => {
     });
     again.disabled = K.busy || !!K.extract?.active || !["done"].includes(d.status);
     const del = button("지우기", "ghost danger", null, () => previewDelete(d)); del.disabled = K.busy || !human();
-    tools.append(button("원본 파일", "", null, () => openParts({ title: d.label || d.id, doc: d.id, initial: "files" })), again, del);
+    const fix = button("글 고치기", "", null, () => openEdit(d)); fix.disabled = K.busy || !!K.extract?.active || !human() || d.status !== "done";
+    tools.append(button("원본 파일", "", null, () => openParts({ title: d.label || d.id, doc: d.id, initial: "files" })), fix, again, del);
     box.append(sec("관리", null, tools, noticeLine()));
     const more = el("details", "v4k-more");
     more.append(el("summary", "", "자세히"), facts([["문서 ID", d.id, true], ["작업 ID", d.job_id, true], ["올린 사람", d.requested_by, true], ["처음 올린 때", ago(d.created_at)], ["부분", num(d.chunks)]]));
     box.append(more);
+  }
+  // 글 고치기 (GET/PUT …/{id}/text): the stored text is edited in place; saving reads only the changed parts again
+  async function openEdit(d) {
+    const F = K.fd;
+    F.edit = { id: d.id, state: "loading" }; F.del = null; paint();
+    try {
+      const r = await get(`/v1/files/memories/documents/${encodeURIComponent(d.id)}/text`);
+      if (F.edit?.id === d.id) F.edit = { id: d.id, state: "ready", text: r?.text || "" };
+    } catch (e) {
+      if (F.edit?.id === d.id) F.edit = { id: d.id, state: "error", error: /conflict/.test(e?.message || "") ? "이 문서는 글을 보관하지 않았거나 지식 문서라서 여기서 고칠 수 없어요." : errText(e) };
+    }
+    paint();
+  }
+  function editCard(d) {
+    const E = K.fd.edit, close = link("취소", () => { K.fd.edit = null; paint(); });
+    if (E.state === "loading") return card("글을 불러오는 중…", []);
+    if (E.state === "error") return card(E.error, [close]);
+    const area = el("textarea", "v4s-input v4k-edit"); area.value = E.text; area.rows = 12; area.setAttribute("aria-label", "문서 글"); noI18n(area);
+    area.addEventListener("input", () => { E.text = area.value; });
+    const save = button("저장하고 다시 읽기", "primary", null, () => {
+      if (!E.text.trim()) return;
+      K.fd.edit = null;
+      void startExtract(() => request(`/v1/files/memories/documents/${encodeURIComponent(d.id)}/text`, { method: "PUT", body: JSON.stringify({ scope: state.scope, text: E.text }) }), d.label || d.id);
+    });
+    const c = card("바뀐 부분만 다시 읽어 새 기억 후보를 만들어요. 모델 호출을 써요. 그대로인 부분의 후보와 기억은 남아요.", [save, close]);
+    c.insertBefore(area, c.lastChild);
+    return c;
+  }
+  // 자세히 · 문서 옮기기: the shown documents go out as one zip; a zip comes in with a choice for same-name documents
+  function docMove(items) {
+    const F = K.fd, more = el("details", "v4k-more");
+    const row = (...n) => { const r = el("div", "v4s-actions"); r.append(...n); return r; };
+    const out = button(`보이는 문서 ${num(Math.min(items.length, 200))}개 내보내기`, "", null, () => act(async () => {
+      const r = await post("/v1/files/memories/documents/export", { document_ids: items.slice(0, 200).map((d) => d.id) });
+      save(r.filename, Uint8Array.from(atob(r.content_base64), (ch) => ch.charCodeAt(0)), "application/zip");
+    }, "내보냈어요. 받은 zip 파일을 다른 공간에서 가져올 수 있어요.", docErr));
+    out.disabled = K.busy || !items.length;
+    const into = button("zip 가져오기", "", null, () => chooseFile((f) => {
+      if (f.size > 8 << 20) { K.notice = "파일이 너무 커요. 8MB까지 가져올 수 있어요."; paint(); return; }
+      void act(async () => post("/v1/files/memories/documents/import", { zip_base64: b64(await f.arrayBuffer()), conflict: F.conflict }),
+        (r) => `가져왔어요 · 새 문서 ${num(r?.imported)}개 · 바꾼 문서 ${num(r?.merged)}개 · 건너뛴 문서 ${num((r?.skipped || []).reduce((n, x) => n + (x.count || 0), 0))}개`, docErr).then(() => loadDocs());
+    }));
+    into.disabled = K.busy;
+    more.append(el("summary", "", "자세히 · 문서 옮기기"),
+      el("p", "meta", "문서와 글을 zip 하나로 옮겨요. 가져온 문서는 모델을 쓰지 않고 바로 들어와요."),
+      row(out), row(select("같은 이름의 문서가 있으면", window.ArkismSpaces.DOC_CONFLICT, F.conflict, (v) => { F.conflict = v; }), into));
+    return more;
   }
   const tagDone = (r) => (r?.skipped ? `태그를 고쳤어요 · 후보 ${num(r?.candidates)}개 · 기억 ${num(r?.memories)}개에도 반영 · 그사이 바뀐 ${num(r.skipped)}개는 건너뜀`
     : `태그를 고쳤어요 · 후보 ${num(r?.candidates)}개 · 기억 ${num(r?.memories)}개에도 반영`); // two whole sentences so each translates
@@ -1266,13 +1317,12 @@ window.ArkismKnowledge.ingestExtras = (A, text) => {
   } else if (A.parser) out.parsers = [A.parser];
   return out;
 };
-// 기억 문서 filters over the loaded list: q in the name, id or tags; from/to as YYYY-MM-DD against the last upload.
-// shortcut: the day is the server's UTC day and only loaded pages are searched; a server-side text query would replace this.
-// The loaded documents within the date range; the text filter is the server's (q).
-window.ArkismKnowledge.filterDocs = (items, { from = "", to = "" } = {}) => items.filter((d) => {
-  const day = String(d.updated_at || d.created_at || "").slice(0, 10);
-  return (!from || day >= from) && (!to || day <= to);
-});
+// The list's date boxes as the server's from/to: from that day's start to the end of the to day, in local time.
+// A to day before the from day is left out rather than sent as an empty range.
+window.ArkismKnowledge.docRange = ({ from = "", to = "" } = {}) => {
+  const day = (v, next) => { const d = new Date(`${v}T00:00:00`); if (next) d.setDate(d.getDate() + 1); return d.toISOString(); };
+  return { ...(from ? { from: day(from) } : {}), ...(to && (!from || to >= from) ? { to: day(to, true) } : {}) };
+};
 // What deleting a document touches, counted like the server does: waiting candidates are rejected, approved ones stay as memories.
 window.ArkismKnowledge.deleteImpact = (chunks) => {
   const seen = new Map();
