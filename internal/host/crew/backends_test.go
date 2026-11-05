@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // fakeRunner is an arkism.backend.v1 runner on loopback: its capabilities, and a handler per call that tests change.
@@ -637,5 +639,21 @@ func TestBackendMemoryOnlyWhenAllowed(t *testing.T) {
 	searchErr = errors.New("search down")
 	if body, tr := run("down", true, "memory"); body["memory"] != nil || !strings.Contains(fmt.Sprint(tr["not_applied"]), "memory") {
 		t.Fatal("a failed search sends nothing", body["memory"], tr)
+	}
+}
+
+// The shared outbound check keeps this package's refusal messages per address class.
+func TestBackendIPRefusalMessagesPerClass(t *testing.T) {
+	for ip, want := range map[string]string{
+		"100.100.100.200": "메타데이터 서버 주소에는 연결하지 않아요",
+		"224.0.0.1":       "이 주소(224.0.0.1)에는 연결하지 않아요",
+		"10.0.0.8":        "내부망 주소(10.0.0.8)는 --local로 만든 연결만 쓸 수 있어요",
+	} {
+		if err := allowBackendIP(net.ParseIP(ip), false); err == nil || err.Error() != crewErr(want).Error() {
+			t.Errorf("%s: %v, want %q", ip, err, want)
+		}
+	}
+	if err := backendIPErr(httpguard.CheckOutboundIP(nil, true)); err == nil || err.Error() != crewErr("주소를 확인하지 못했어요").Error() {
+		t.Errorf("unresolved: %v", err)
 	}
 }

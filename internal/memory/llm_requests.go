@@ -12,6 +12,8 @@ import (
 // answer, tokens, latency and outcome. The text itself is kept only when the
 // server runs with ARKISM_LLM_TRACE_CONTENT=1, redacted and truncated, and
 // rows expire with the audit retention run (ARKISM_LLM_TRACE_RETENTION_DAYS).
+// A trace names no memory ids, so deleting a memory does not erase stored
+// trace text that quoted it; with content on, retention is the bound.
 
 const (
 	colLLMRequests    = "llm_requests"
