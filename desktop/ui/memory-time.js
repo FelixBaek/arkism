@@ -205,7 +205,7 @@ window.ArkismMemoryTime = (ctx) => {
   return { draw, reset, detail, close };
 };
 // How a search lane found a memory, in plain words; also the 검색 살펴보기 screen (memory-insight.js).
-window.ArkismMemoryTime.FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억", causal: "원인과 결과" };
+window.ArkismMemoryTime.FOUND = { exact: "같은 문구", keyword: "단어", vector: "비슷한 뜻", relation: "관계", temporal: "시간", graph: "이어진 기억", causal: "원인과 결과", semantic: "뜻이 이어진 기억", sessions: "지난 대화" };
 // the server's event-time order (recall_time.go hitEventTime): occurred (the days the content states), observed_at, valid_from, then effective_at / created_at
 window.ArkismMemoryTime.eventAt = (h) => {
   const c = h.memory_context || {};

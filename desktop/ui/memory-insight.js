@@ -56,7 +56,36 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const readOpts = (form) => form.querySelectorAll("[data-opt]").forEach((n) => { opts[n.dataset.opt] = n.type === "checkbox" ? n.checked : n.value; });
   function num(name, min, max, step = "1") { const n = el("input"); n.type = "number"; n.min = min; n.max = max; n.step = step; n.placeholder = "알아서"; return opt(n, name); }
   function check(name, label) { const l = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; l.append(opt(c, name), el("span", "", label)); return l; }
+  function choose(name, choices) { const s = el("select"); for (const [k, l] of Object.entries(choices)) { const o = el("option", "", l); o.value = k; s.append(o); } return opt(s, name); }
+  // A titled group of options inside 자세히; grid: short number fields side by side.
+  function group(title, ...nodes) { const f = el("fieldset", "insight-group"); f.append(el("legend", "", title), ...nodes); return f; }
+  function grid(...nodes) { const g = el("div", "insight-grid"); g.append(...nodes); return g; }
   const int = (v, min, max) => { const n = v === "" || v == null ? NaN : Number(v); return Number.isInteger(n) && n >= min && n <= max ? n : undefined; };
+  const real = (v, min, max) => { const n = v === "" || v == null ? NaN : Number(v); return Number.isFinite(n) && n >= min && n <= max ? n : undefined; };
+  // Picked keys of a set of checks named prefix:key.
+  const picked = (prefix, keys) => keys.filter((k) => opts[`${prefix}:${k}`]);
+  const kindChecks = () => grid(...Object.keys(ctx.KINDS).map((k) => check(`kind:${k}`, ctx.kindLabel(k))));
+  // 태그, 태그 맞추는 방법, 태그 조건: the same three fields on 물어보기 and 검색 살펴보기 (both send search tag filters).
+  function tagFields() {
+    const groups = el("textarea"); groups.rows = 2; groups.maxLength = 2000; groups.placeholder = "예: 배포+운영 | -연습";
+    return [field("태그 (쉼표로 나눠요)", opt(el("input"), "tags")), field("태그 맞추는 방법", choose("match", MATCH)),
+      field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", opt(groups, "groups"))];
+  }
+  function tagFilter() {
+    const tags = [...new Set(String(opts.tags || "").split(",").map((t) => t.trim()).filter(Boolean))], groups = tagGroups(opts.groups);
+    return { ...(tags.length ? { tags, tags_match: MATCH[opts.match] ? opts.match : "any_strict" } : {}), ...(groups.length ? { tag_groups: groups } : {}) };
+  }
+  // Small tabs (the shared segmented look): the count shows next to the active tab only.
+  function seg(items, current, pick) {
+    const bar = el("div", "tm-seg insight-seg"); bar.setAttribute("role", "tablist");
+    for (const [k, label, n] of items) {
+      const t = el("button", `tm-seg-tab${k === current ? " active" : ""}`); t.type = "button"; t.setAttribute("role", "tab"); t.setAttribute("aria-selected", String(k === current));
+      t.append(el("span", "", label), el("output", "", k === current && n != null ? String(n) : ""));
+      t.addEventListener("click", () => pick(k));
+      bar.append(t);
+    }
+    return bar;
+  }
   // The whole exchange as JSON, for a bug report or a second look; server text stays data.
   function jsonView(obj) {
     const text = JSON.stringify(obj, null, 2), pre = raw(el("pre", "insight-json", text));
@@ -103,10 +132,31 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     }
     return Object.keys(properties).length ? { type: "object", properties, required: [...required], additionalProperties: false } : undefined;
   }
+  // 답 모양: 칸으로 정하기, or the same schema as JSON code (edited there, it is sent as written).
+  let shapeTab = "fields";
   function shapeEditor() {
-    const box = el("div", "insight-shape");
-    box.append(el("span", "", "답 모양 (비워 두면 글로 답해요)"), shapeFields(shape, false));
+    const box = el("div", "insight-shape"), body = el("div");
+    function fill() {
+      box.replaceChildren(el("span", "", "답 모양 (비워 두면 글로 답해요)"), seg([["fields", "칸으로 정하기"], ["json", "JSON 코드"]], shapeTab, (k) => {
+        if (k === "json" && shapeTab !== "json") opts.schema = JSON.stringify(schemaOf(shape) || {}, null, 2);
+        shapeTab = k; fill();
+      }), body);
+      if (shapeTab === "fields") { body.replaceChildren(shapeFields(shape, false)); return; }
+      const code = el("textarea", "insight-json insight-code"); code.rows = 10; code.maxLength = 20000; code.spellcheck = false; code.setAttribute("aria-label", "답 모양 JSON");
+      code.addEventListener("input", () => code.setCustomValidity(""));
+      body.replaceChildren(opt(code, "schema"), el("p", "meta", "JSON Schema의 일부(type, properties, required, items)만 써요. 여기서 고친 모양이 그대로 보내져요."));
+    }
+    fill();
     return box;
+  }
+  // The schema to send: the JSON tab's text when it is open (undefined when empty), else the fields. Throws on bad JSON.
+  function askSchema() {
+    if (shapeTab !== "json") return schemaOf(shape);
+    const text = String(opts.schema || "").trim();
+    if (!text || text === "{}") return undefined;
+    const v = JSON.parse(text);
+    if (!isGroup(v)) throw new Error("not_object");
+    return v;
   }
   // The rows of one field list and its add button; inner: the fields of a 묶음 (no groups inside).
   function shapeFields(fields, inner) {
@@ -144,13 +194,22 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       box.append(icon("magnifying-glass"), input);
       const go = button("물어보기", "primary small"); go.type = "submit";
       const goal = el("textarea"); goal.maxLength = 2000; goal.rows = 2; goal.placeholder = "비워 두면 이 공간의 목표를 써요";
-      form.append(box, go, more(field("참고할 기억 수 (1~20)", num("limit", "1", "20")),
-        field("AI가 더 찾아볼 수 있는 횟수 (1~8, 1이면 처음 찾은 기억만 봐요)", num("iterations", "1", "8")),
-        field("답 길이 한도 (64~4096 토큰)", num("tokens", "64", "4096")), field("이번 질문의 목표", opt(goal, "mission")), shapeEditor()));
+      form.append(box, go, more(
+        group("찾을 기억", field("얼마나 찾아볼까요", choose("budget", BUDGETS)), field("참고할 기억 수 (1~20)", num("limit", "1", "20")),
+          grid(check("fact:memory", "기억"), check("fact:observation", "정리된 관찰")), el("p", "meta", "둘 다 비워 두면 둘 다 봐요."),
+          ...tagFields(), check("nomodels", "생각 정리(정신 모델)는 보지 않기")),
+        group("답하는 방법", field("AI가 더 찾아볼 수 있는 횟수 (1~8, 1이면 처음 찾은 기억만 봐요)", num("iterations", "1", "8")),
+          field("답 길이 한도 (64~4096 토큰)", num("tokens", "64", "4096")), field("이번 질문의 목표", opt(goal, "mission")),
+          el("p", "meta", "이번 질문의 성향 (1 낮음 ~ 5 높음, 비워 두면 공간 설정을 따라요)"),
+          grid(field("의심하는 정도", num("skepticism", "1", "5")), field("글자 그대로 읽는 정도", num("literalism", "1", "5")), field("마음을 헤아리는 정도", num("empathy", "1", "5"))),
+          check("alldirectives", "태그가 달라도 모든 규칙 지키기"), check("promptonly", "AI에 보내지 않고 보낼 내용만 보기")),
+        shapeEditor()));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         question = input.value.trim(); readOpts(form);
         if (!question) { input.setCustomValidity("물어볼 내용을 적어 주세요."); input.reportValidity(); return; }
+        const code = form.querySelector(".insight-code");
+        try { askSchema(); } catch { code?.setCustomValidity("JSON 모양이 맞지 않아요. 중괄호로 감싼 묶음이어야 해요."); code?.reportValidity(); return; }
         void ask();
       });
       input.addEventListener("input", () => input.setCustomValidity(""));
@@ -169,15 +228,25 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       .then((r) => (typeof r?.config?.reflect_mission === "string" ? r.config.reflect_mission.trim() : ""), () => "")
       .then((m) => { if (identity() !== owner || !m) return; mission = m; if (active()) paintAsk(); });
   }
+  const BUDGETS = { "": "알아서", low: "조금 (빠르게)", mid: "보통", high: "많이 (꼼꼼하게)" };
+  // POST /v1/reflect body: only what was set; the rest stays the server's and the space's default.
+  function askBody() {
+    const own = (opts.mission || "").trim(), schema = askSchema(), facts = picked("fact", ["memory", "observation"]);
+    const n = int(opts.limit, 1, 20), iter = int(opts.iterations, 1, 8), tokens = int(opts.tokens, 64, 4096);
+    const mood = Object.fromEntries(["skepticism", "literalism", "empathy"].map((k) => [k, int(opts[k], 1, 5)]).filter(([, v]) => v));
+    return { scope: state.scope, query: question, ...(n ? { limit: n } : {}), ...(iter ? { max_iterations: iter } : {}),
+      ...(tokens ? { max_tokens: tokens } : {}), ...(own ? { mission: own } : {}), ...(schema ? { response_schema: schema } : {}),
+      ...(BUDGETS[opts.budget] && opts.budget ? { budget: opts.budget } : {}), ...(facts.length === 1 ? { fact_types: facts } : {}), ...tagFilter(),
+      ...(opts.nomodels ? { exclude_mental_models: true } : {}), ...(Object.keys(mood).length ? { disposition: mood } : {}),
+      ...(opts.alldirectives ? { apply_all_directives: true } : {}), ...(opts.promptonly ? { prompt_only: true } : {}) };
+  }
   async function ask() {
     if (busy) return;
     const now = live(loads.begin(), identity());
-    busy = true; failure = null; answer = null; paintAsk();
+    busy = true; failure = null; answer = null; evidence = "all"; paintAsk();
     try {
-      const own = (opts.mission || "").trim(), schema = schemaOf(shape);
-      const n = int(opts.limit, 1, 20), iter = int(opts.iterations, 1, 8), tokens = int(opts.tokens, 64, 4096);
-      const out = await request("/v1/reflect", { method: "POST", body: JSON.stringify({ scope: state.scope, query: question, ...(n ? { limit: n } : {}), ...(iter ? { max_iterations: iter } : {}),
-        ...(tokens ? { max_tokens: tokens } : {}), ...(own ? { mission: own } : {}), ...(schema ? { response_schema: schema } : {}) }) });
+      const body = askBody(), own = body.mission;
+      const out = await request("/v1/reflect", { method: "POST", body: JSON.stringify(body) });
       if (!now()) return;
       if (typeof out?.answer !== "string" || !Array.isArray(out.cited_memory_ids) || out.cited_memory_ids.some((id) => typeof id !== "string" || !id)) throw new Error("invalid_response");
       answer = { ...out, mission_used: own ? "own" : mission ? "space" : "" };
@@ -202,7 +271,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const ids = Array.isArray(step.ids) ? step.ids.filter((id) => typeof id === "string" && id) : [];
     const line = el("p", "", TOOLS[step.tool] || String(step.tool));
     if (what) line.append(" · ", raw(el("span", "", what)));
-    li.append(line, el("small", "meta", step.error ? TOOL_ERRORS[step.error] || String(step.error) : ids.length ? `${ids.length}개 찾음` : "찾은 것 없음"));
+    const found = step.error ? TOOL_ERRORS[step.error] || String(step.error) : ids.length ? `${ids.length}개 찾음` : "찾은 것 없음";
+    li.append(line, el("small", "meta", Number.isFinite(step.ms) ? `${found} · ${step.ms}ms` : found));
     if (ids.length) { const list = el("div", "dg-list"); for (const id of ids.slice(0, 5)) list.append(memoryLink(id)); li.append(list); }
     return li;
   }
@@ -219,6 +289,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status); // an empty line draws as a bare bordered bar
     if (failure) { table.append(askError(failure)); return; }
     if (!answer) { const m = missionLine((opts.mission || "").trim()); if (m) table.append(m); return; }
+    if (answer.prompt) { table.append(promptCard()); return; }
     const box = el("div", "quote dg-quote insight-answer"), shaped = answer.structured_answer;
     if (shaped && typeof shaped === "object" && !Array.isArray(shaped)) box.append(dataFacts(Object.entries(shaped)));
     else box.append(raw(el("p", "", answer.answer || "답할 만한 기억을 찾지 못했어요.")));
@@ -227,12 +298,41 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const card = el("div", "insight-ask");
     const m = missionLine(answer.mission_used === "own");
     card.append(box, ...(m ? [m] : []), el("h3", "insight-head", ids.length ? `근거 기억 ${ids.length}개` : "근거로 든 기억이 없어요"), list);
+    // An answer can become a rule only through the rule form: a person reads, edits and saves it.
+    if (human() && answer.answer) {
+      const row = el("div", "d-buttons");
+      row.append(button("규칙으로 만들기", "small", null, () => { editing = { title: question.slice(0, 200), rule: String(answer.answer).slice(0, 4000) }; openDetail(); detail(); }));
+      card.append(row);
+    }
+    card.append(...evidenceTabs());
     const steps = Array.isArray(answer.tool_trace) ? answer.tool_trace.filter(isGroup) : [];
     if (steps.length) { const ol = el("ol", "insight-steps"); for (const s of steps.slice(0, 32)) ol.append(toolStep(s)); card.append(el("h3", "insight-head", `AI가 더 찾아본 과정 ${steps.length}번`), ol); }
-    const { mission_used: _, ...reply } = answer;
+    const { mission_used: _, ...reply } = answer, u = answer.usage || {};
     card.append(more(facts([["찾아본 기억", `${answer.retrieved?.length || 0}개`], ["지킨 규칙", `${answer.directives_applied?.length || 0}개`],
-      ["AI 호출", answer.iterations ? `${answer.iterations}번` : ""], ["쓴 토큰", answer.usage?.total_tokens ? `${answer.usage.total_tokens}` : ""]]), ...jsonView(reply)));
+      ["AI 호출", answer.iterations ? `${answer.iterations}번` : ""], ["보낸 토큰", u.input_tokens ? `${u.input_tokens}` : ""], ["받은 토큰", u.output_tokens ? `${u.output_tokens}` : ""],
+      ["쓴 토큰", u.total_tokens ? `${u.total_tokens}` : ""]]), ...jsonView(reply)));
     table.append(card);
+  }
+  // 찾아본 기억 by kind: one tab per kind the answer looked at, the cited ones marked.
+  let evidence = "all";
+  function evidenceTabs() {
+    const got = (Array.isArray(answer.retrieved) ? answer.retrieved : []).filter((r) => typeof r?.id === "string" && r.id);
+    if (!got.length) return [];
+    const kinds = [...new Set(got.map((r) => String(r.kind || "")))], cited = new Set(answer.cited_memory_ids);
+    if (evidence !== "all" && !kinds.includes(evidence)) evidence = "all";
+    const shown = got.filter((r) => evidence === "all" || String(r.kind || "") === evidence).slice(0, 40), list = el("div", "dg-list");
+    for (const r of shown) list.append(memoryLink(r.id));
+    const tabs = [["all", "전체", got.length], ...kinds.map((k) => [k, k === "observation" ? "정리된 관찰" : k === "mental_model" ? "생각 정리" : ctx.kindLabel(k) || "기타", got.filter((r) => String(r.kind || "") === k).length])];
+    return [el("h3", "insight-head", "찾아본 기억"), seg(tabs, evidence, (k) => { evidence = k; paintAsk(); }), list,
+      el("p", "meta", `근거로 든 기억 ${shown.filter((r) => cited.has(r.id)).length}개가 이 안에 있어요.`)];
+  }
+  // prompt_only: nothing went to the model; the two prompts it would have got, as text.
+  function promptCard() {
+    const card = el("div", "insight-ask");
+    card.append(el("p", "meta", "AI에 보내지 않았어요. 이 질문으로 보낼 내용이에요."),
+      el("h3", "insight-head", "AI에게 주는 안내"), raw(el("pre", "insight-json", String(answer.prompt.system || ""))),
+      el("h3", "insight-head", "질문과 찾은 기억"), raw(el("pre", "insight-json", String(answer.prompt.user || ""))), ...evidenceTabs());
+    return card;
   }
 
   // ------------------------------------------------------------ 검색 살펴보기
@@ -245,16 +345,29 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       return { tags, ...(tags.length > 1 ? { match: "all_strict" } : {}), ...(not ? { not: true } : {}) };
     }).filter((g) => g.tags.length)).filter((g) => g.length);
   }
+  // Lanes a request may weigh (recall_weights.go recallLaneNames), the parts it may attach and the rerank choices.
+  const LANES = ["exact", "keyword", "vector", "relation", "temporal", "graph", "causal", "semantic"];
+  const PARTS = { sources: "원문 조각", entities: "나온 이름", source_facts: "정리된 관찰의 원래 기억" };
+  const RERANK = { "": "서버 기본", off: "다시 매기지 않기", model: "서버 AI로 다시 매기기" };
+  const when = (v) => { const d = v ? new Date(v) : null; return d && Number.isFinite(d.getTime()) ? d : null; };
   function searchBody() {
-    const tags = [...new Set(String(opts.tags || "").split(",").map((t) => t.trim()).filter(Boolean))], groups = tagGroups(opts.groups);
-    const at = opts.at ? new Date(opts.at) : null, min = opts.min === "" || opts.min == null ? NaN : Number(opts.min);
-    const include = [opts.sources && "sources", opts.entities && "entities"].filter(Boolean);
-    const limit = int(opts.limit, 1, 50), depth = int(opts.depth, 1, 3);
-    return { scope: state.scope, query: question, explain: true, ...(limit ? { limit } : {}), ...(depth ? { graph_depth: depth } : {}),
-      ...(at && Number.isFinite(at.getTime()) ? { query_time: at.toISOString() } : {}), ...(min > 0 && min <= 1 ? { min_score: min } : {}),
-      ...(tags.length || groups.length ? { filters: { ...(tags.length ? { tags, tags_match: MATCH[opts.match] ? opts.match : "any_strict" } : {}), ...(groups.length ? { tag_groups: groups } : {}) } } : {}),
-      ...(include.length ? { include } : {}), ...(opts.observations ? { prefer_observations: true } : {}), ...(opts.causal ? { expand_causal: true } : {}), ...(opts.norerank ? { rerank: false } : {}) };
+    const filter = tagFilter(), at = when(opts.at), from = when(opts.from), to = when(opts.to), min = real(opts.min, 0, 1);
+    const include = Object.keys(PARTS).filter((k) => opts[`part:${k}`]), kinds = picked("kind", Object.keys(ctx.KINDS));
+    const limit = int(opts.limit, 1, 50), depth = int(opts.depth, 1, 3), budget = int(opts.budget, 1, 64000);
+    const weights = Object.fromEntries(LANES.map((l) => [l, real(opts[`w:${l}`], 0.25, 8)]).filter(([, v]) => v !== undefined));
+    const floors = Object.fromEntries(["semantic", "keyword", "reranker"].map((k) => [k, real(opts[`floor:${k}`], 0, 1)]).filter(([, v]) => v));
+    const parts = Object.fromEntries(include.map((k) => [k, int(opts[`tokens:${k}`], 1, 16384)]).filter(([, v]) => v).map(([k, v]) => [k, { max_tokens: v }]));
+    const rerank = opts.rerank === "off" ? false : opts.rerank === "model" ? "model" : undefined;
+    const prune = rerank === "model" && { ...(opts.prune ? { prune: true } : {}), ...(opts.dedup ? { dedup: true } : {}) };
+    return { scope: state.scope, query: question, explain: true, ...(limit ? { limit } : {}), ...(depth ? { graph_depth: depth } : {}), ...(kinds.length ? { kinds } : {}),
+      ...(at ? { query_time: at.toISOString() } : {}), ...(min ? { min_score: min } : {}), ...(from && to && from < to ? { temporal_window: { from: from.toISOString(), to: to.toISOString() } } : {}),
+      ...(Object.keys(filter).length ? { filters: filter } : {}), ...(budget ? { budget_tokens: budget, token_encoding: "cl100k_base" } : {}),
+      ...(Object.keys(weights).length ? { lane_weights: weights } : {}), ...(Object.keys(floors).length ? { min_scores: floors } : {}),
+      ...(include.length ? { include } : {}), ...(Object.keys(parts).length ? { include_options: parts } : {}),
+      ...(opts.observations ? { prefer_observations: true } : {}), ...(opts.causal ? { expand_causal: true } : {}),
+      ...(rerank !== undefined ? { rerank } : {}), ...(prune && Object.keys(prune).length ? { rerank_options: prune } : {}) };
   }
+  function dateInput(name) { const n = el("input"); n.type = "datetime-local"; return opt(n, name); }
   function drawSearch() {
     if (!formHere()) {
       const form = el("form", "original-search insight-form"); form.dataset.tab = tab;
@@ -263,16 +376,21 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       input.placeholder = "검색어 (예: 지난주 배포 문제)"; input.setAttribute("aria-label", "검색어");
       box.append(icon("magnifying-glass"), input);
       const go = button("찾아보기", "primary small"); go.type = "submit";
-      const at = el("input"); at.type = "datetime-local";
-      const match = el("select");
-      for (const [k, l] of Object.entries(MATCH)) { const o = el("option", "", l); o.value = k; match.append(o); }
-      const groups = el("textarea"); groups.rows = 2; groups.maxLength = 2000; groups.placeholder = "예: 배포+운영 | -연습";
-      form.append(box, go, more(field("찾을 기억 수 (1~50)", num("limit", "1", "50")), field("이 시각 기준으로 찾기 (‘어제’ 같은 말도 이때로 읽어요)", opt(at, "at")),
-        field("이어서 따라갈 단계 (1~3)", num("depth", "1", "3")), field("이 점수보다 낮으면 빼기 (0~1)", num("min", "0", "1", "0.01")),
-        field("태그 (쉼표로 나눠요)", opt(el("input"), "tags")), field("태그 맞추는 방법", opt(match, "match")),
-        field("태그 조건 (한 줄에 하나, 모두 맞아야 해요. + 는 모두, | 는 하나라도, - 는 빼기)", opt(groups, "groups")),
-        check("sources", "원문 조각 붙이기"), check("entities", "나온 이름 붙이기"), check("observations", "정리된 관찰이 있으면 그 원래 기억은 빼기"),
-        check("causal", "원인과 결과로 이어진 기억도 찾기"), check("norerank", "AI로 순서 다시 매기지 않기")));
+      form.append(box, go, more(
+        group("찾는 범위", field("찾을 기억 수 (1~50)", num("limit", "1", "50")), el("p", "meta", "기억 종류 (비워 두면 모두)"), kindChecks(),
+          field("이 시각 기준으로 찾기 (‘어제’ 같은 말도 이때로 읽어요)", dateInput("at")),
+          grid(field("이 기간 기억을 앞에 (부터)", dateInput("from")), field("까지", dateInput("to"))), ...tagFields(),
+          check("observations", "정리된 관찰이 있으면 그 원래 기억은 빼기")),
+        group("점수와 순서", field("순서 다시 매기기", choose("rerank", RERANK)),
+          grid(check("prune", "서버 AI가 주제와 먼 기억 빼기"), check("dedup", "서버 AI가 겹치는 기억 빼기")),
+          el("p", "meta", "점수 하한 (0~1, 이보다 낮으면 빼요)"),
+          grid(field("최종 점수", num("min", "0", "1", "0.01")), field("비슷한 뜻", num("floor:semantic", "0", "1", "0.01")),
+            field("단어", num("floor:keyword", "0", "1", "0.01")), field("다시 매긴 점수", num("floor:reranker", "0", "1", "0.01"))),
+          el("p", "meta", "방법마다 무게 (0.25~8, 1보다 크면 그 방법으로 찾은 기억이 앞에 와요)"),
+          grid(...LANES.map((l) => field(laneName(l), num(`w:${l}`, "0.25", "8", "0.25")))),
+          field("이어서 따라갈 단계 (1~3)", num("depth", "1", "3")), check("causal", "원인과 결과로 이어진 기억도 찾기")),
+        group("결과에 붙일 것", field("결과 전체 토큰 한도 (1~64000)", num("budget", "1", "64000")),
+          ...Object.entries(PARTS).map(([k, l]) => grid(check(`part:${k}`, `${l} 붙이기`), field(`${l} 토큰 한도`, num(`tokens:${k}`, "1", "16384")))))));
       form.addEventListener("submit", (e) => {
         e.preventDefault();
         question = input.value.trim(); readOpts(form);
@@ -304,15 +422,42 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const laneTimes = (ms) => Object.entries(isGroup(ms) ? ms : {}).filter(([, v]) => Number.isFinite(v)).sort((a, b) => b[1] - a[1])
     .map(([l, v]) => `${laneName(l)} ${v}ms`).join(" · ");
   const score = (v) => (typeof v === "number" ? v.toFixed(v < 0.1 ? 4 : 2) : "");
+  // 일어난 때: the days the memory talks about (occurred, else observed_at); 기억한 때: when it was saved.
+  const happened = (h) => window.ArkismMemoryTime.span(h.occurred) || (h.memory_context?.observed_at ? day(h.memory_context.observed_at) : "");
   function hitMeta(h) {
-    const ranks = Object.entries(h.explain?.lane_ranks || {}).map(([l, r]) => `${laneName(l)} ${tr(`${r}위`)}`);
-    return [ranks.join(" · ") || lanesText(h.lanes), h.explain?.graph_hops ? `${h.explain.graph_hops}단계 이어짐` : ""].filter(Boolean).join(" · ");
+    const ranks = Object.entries(h.explain?.lane_ranks || {}).map(([l, r]) => `${laneName(l)} ${tr(`${r}위`)}`), at = happened(h);
+    return [ranks.join(" · ") || lanesText(h.lanes), h.explain?.graph_hops ? `${h.explain.graph_hops}단계 이어짐` : "", at ? `일어난 때 ${at}` : ""].filter(Boolean).join(" · ");
   }
+  const factor = (v) => (typeof v === "number" ? `×${v.toFixed(2)}` : "");
+  // Each lane's own list (explain.lane_hits), hits fusion left out included; a lane's memories are read only when it is opened.
+  function laneLists() {
+    const lanes = Object.entries(isGroup(answer.explain?.lane_hits) ? answer.explain.lane_hits : {}).filter(([, v]) => Array.isArray(v) && v.length);
+    if (!lanes.length) return [];
+    const kept = new Map((answer.items || []).map((h) => [h.id, h]));
+    return [el("h3", "insight-head", "방법마다 찾은 기억"), ...lanes.map(([lane, refs]) => {
+      const d = el("details", "insight-more"), list = el("div", "dg-list");
+      const sum = el("summary"); sum.append(el("span", "", laneName(lane)), " ", el("span", "", `${refs.length}개`)); d.append(sum, list);
+      d.addEventListener("toggle", () => {
+        if (!d.open || list.childElementCount) return;
+        for (const r of refs.filter((x) => typeof x?.id === "string" && x.id)) {
+          const h = kept.get(r.id);
+          if (r.collection === "memories") list.append(memoryLink(r.id, h ? h.text || h.summary : undefined));
+          else { const item = window.ArkismDigests.memoryItem(ctx, h?.text || h?.summary || r.id, r.collection === "observations" ? "정리된 관찰" : ""); item.disabled = true; list.append(item); }
+        }
+        d.append(el("p", "meta", `결과에 남은 것 ${refs.filter((x) => kept.has(x?.id)).length}개`));
+      });
+      return d;
+    })];
+  }
+  const DROPS = { semantic: "비슷한 뜻 하한", keyword: "단어 하한", reranker: "다시 매긴 점수 하한", prune: "주제와 멂", dedup: "겹침" };
   function searchSummary() {
-    const x = answer.explain || {}, w = x.time_window;
-    const range = w ? `‘${w.phrase}’ → ${day(w.from)} ~ ${day(new Date(Date.parse(w.to) - 1).toISOString())}` : "";
-    return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["걸린 시간", laneTimes(x.lane_ms)], ["때를 읽은 말", range], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
-      ["점수가 낮아 뺀 기억", x.min_score_dropped ? `${x.min_score_dropped}개` : ""], ["못 쓴 방법", (answer.degraded || []).join(", ")]]);
+    const x = answer.explain || {}, tw = x.time_window;
+    const range = tw ? `‘${tw.phrase}’ → ${day(tw.from)} ~ ${day(new Date(Date.parse(tw.to) - 1).toISOString())}` : "";
+    const w = sent?.temporal_window, weights = Object.entries(isGroup(x.lane_weights) ? x.lane_weights : {}).map(([l, v]) => `${laneName(l)} ×${v}`).join(" · ");
+    const dropped = Object.entries(isGroup(x.dropped) ? x.dropped : {}).filter(([, v]) => v > 0).map(([k, v]) => `${tr(DROPS[k] || k)} ${v}`).join(" · ");
+    return facts([["쓴 방법", lanesText(x.lanes) || "—"], ["걸린 시간", laneTimes(x.lane_ms)], ["때를 읽은 말", range],
+      ["앞에 둔 기간", w ? `${day(w.from)} ~ ${day(w.to)}` : ""], ["방법마다 무게", weights], ["순서 다시 매김", x.reranked ? "AI로 다시 매겼어요" : "하지 않았어요"],
+      ["점수가 낮아 뺀 기억", x.min_score_dropped ? `${x.min_score_dropped}개` : ""], ["단계별 제외", dropped], ["못 쓴 방법", (answer.degraded || []).join(", ")]]);
   }
   function searchError(e) {
     const code = e?.message;
@@ -329,7 +474,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (failure) { table.append(searchError(failure)); return; }
     if (!answer) return;
     const card = el("div", "insight-ask");
-    card.append(searchSummary());
+    card.append(searchSummary(), ...laneLists());
     table.append(card);
     items.forEach((h, i) => table.append(listRow(h, h.text || h.summary || h.id, hitMeta(h), score(h.explain?.rerank_score ?? h.score) || `${i + 1}위`)));
     const box = el("div", "insight-ask");
@@ -349,9 +494,11 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     how.append(facts([...Object.entries(x.lane_ranks || {}).map(([l, r]) => [window.ArkismMemoryTime.FOUND[l] || l, `${r}위`]),
       ["이어서 찾은 단계", x.graph_hops ? `${x.graph_hops}단계` : ""]]));
     const points = section("점수");
-    points.append(facts([["합친 점수", score(x.fused_score)], ["AI가 다시 매긴 점수", score(x.rerank_score)], ["최종 점수", score(h.score)]]),
-      el("p", "meta", "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요."));
+    points.append(facts([["합친 점수", score(x.fused_score)], ["AI가 다시 매긴 점수", score(x.rerank_score)], ["서버 AI가 매긴 순서", x.model_rank ? `${x.model_rank}위` : ""],
+      ["최근성 가산", factor(x.recency)], ["결과 가중치", factor(x.outcome)], ["최종 점수", score(h.score)]]),
+      el("p", "meta", "합친 점수는 방법마다 순위를 더한 값이라 작아요. 크기보다 순서를 보세요. 최근성과 결과 가중치는 합친 점수에 곱해요."));
     body.append(how, points);
+    if (happened(h) || h.created_at) { const time = section("때"); time.append(facts([["일어난 때", happened(h)], ["기억한 때", h.created_at ? day(h.created_at) : ""]])); body.append(time); }
     if (h.entities?.length) {
       const names = section("나온 이름"), chips = el("div", "insight-aliases");
       for (const n of h.entities.slice(0, 10)) { const c = el("span", "chip"); c.append(raw(el("span", "", n.name))); chips.append(c); }
@@ -433,6 +580,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       notice(done);
       selected = keep && out?.id ? out : null; editing = null;
     } catch (e) { notice(ruleError(e)); }
+    if (tab !== "rules") { editing = null; detail(); return; } // a draft from 물어보기: no rule list on this tab
     await loadList();
     if (keep && id && !selected) selected = rows().find((r) => r.id === id) || null;
     detail();
@@ -463,11 +611,12 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     body.append(btns);
   }
   function ruleForm(body) {
-    const r = editing.id ? editing : null;
-    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", r?.proposed ? "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요." : "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
+    const r = editing.id ? editing : null, draft = !r && editing.rule ? editing : null;
+    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", r?.proposed ? "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요."
+      : draft ? "AI 답에서 가져온 초안이에요. 읽고 고쳐서 저장해야 규칙이 돼요." : "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
     const form = el("form", "insight-edit");
-    const title = el("input"); title.maxLength = 200; title.required = true; title.value = r?.title || ""; title.placeholder = "예: 배포 규칙";
-    const rule = el("textarea"); rule.maxLength = 4000; rule.rows = 5; rule.required = true; rule.value = r?.rule || ""; rule.placeholder = "예: 운영 서버에 올리기 전에는 꼭 사람에게 물어본다.";
+    const title = el("input"); title.maxLength = 200; title.required = true; title.value = (r || draft)?.title || ""; title.placeholder = "예: 배포 규칙";
+    const rule = el("textarea"); rule.maxLength = 4000; rule.rows = 5; rule.required = true; rule.value = (r || draft)?.rule || ""; rule.placeholder = "예: 운영 서버에 올리기 전에는 꼭 사람에게 물어본다.";
     const where = el("select");
     for (const [k, l] of Object.entries(APPLIES)) { const o = el("option", "", l); o.value = k; where.append(o); }
     where.value = r?.applies_to || "both";
@@ -603,6 +752,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function detail() {
     const body = detailShell(TITLE[tab]);
+    if (tab === "ask" && editing) { ruleForm(body); return; }
     if (tab === "ask") { body.append(el("h2", "", "근거 기억을 눌러 확인하세요"), el("p", "lead", "승인된 기억만 보고 답해요. 근거 기억을 누르면 그 기억을 열어요. 답은 저장하지 않아요.")); return; }
     if (tab === "rules") { if (editing) ruleForm(body); else ruleDetail(body); return; }
     if (tab === "search") { searchDetail(body); return; }

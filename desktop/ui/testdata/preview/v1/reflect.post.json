@@ -16,6 +16,11 @@
    "id": "m7",
    "kind": "lesson",
    "score": 0.55
+  },
+  {
+   "id": "o2",
+   "kind": "observation",
+   "score": 0.48
   }
  ],
  "tool_trace": [
@@ -27,7 +32,8 @@
    "ids": [
     "m4",
     "x1"
-   ]
+   ],
+   "ms": 42
   },
   {
    "tool": "entity",
@@ -36,7 +42,8 @@
    },
    "ids": [
     "m1"
-   ]
+   ],
+   "ms": 18
   }
  ],
  "iterations": 3,

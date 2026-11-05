@@ -27,10 +27,11 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const section = (title, aside) => { const s = h.el("section", "section"), hd = h.el("h3", "", title); if (aside) hd.append(h.el("small", "", aside)); s.append(hd); return s; };
   const facts = (pairs) => { const dl = h.el("dl", "facts"); pairs.filter(([, v]) => v).forEach(([k, v]) => dl.append(h.el("dt", "", k), h.el("dd", "", v))); return dl; };
   const callout = (title, text) => { const c = h.el("div", "callout"); c.append(h.el("strong", "", title), h.el("p", "", text)); return c; };
-  const view = window.ArkismMemoryInsight({ state, $: h.$, el: h.el, raw: h.raw, icon: h.icon, button: h.button, request, query, detailShell, section, facts, callout,
+  const view = window.ArkismMemoryInsight({ state, $: h.$, el: h.el, raw: h.raw, icon: h.icon, button: h.button, request, query, detailShell, section, facts, callout, KINDS, kindLabel: (k) => (KINDS[k] || [k])[0],
     openDetail: () => h.$("#app").classList.add("detail-open"), notice: (m) => notices.push(m), openRecord: (r) => opened.push(r) }, tab);
   return { view, state, calls, notices, opened, asked, h };
 }
+const KINDS = { user: ["선호"], procedural: ["작업 규칙"], decision: ["결정"], lesson: ["교훈"], episodic: ["기록"], semantic: ["사실"] };
 const body = (call) => JSON.parse(call[1].body);
 const sentTo = (t, path) => t.calls.filter(([p]) => p === path);
 const err = (code, status) => { const e = new Error(code); e.status = status; return e; };
@@ -230,11 +231,13 @@ test("ask with its own mission says so, and a schema miss is explained", async (
 
 test("search 살펴보기 sends explain with the 자세히 options and shows lanes, ranks and scores; JSON copies", async () => {
   const hit = { id: "m4", collection: "memories", kind: "lesson", status: "active", text: "배포 전에는 스테이징에서 확인한다.", score: 0.82, lanes: ["keyword", "graph"],
-    explain: { lane_ranks: { keyword: 1, graph: 2 }, fused_score: 0.0245, rerank_score: 0.82, graph_hops: 2 }, entities: [{ id: "e1", name: "Orbit", type: "project" }],
+    occurred: { from: "2026-10-20T00:00:00+09:00", to: "2026-10-21T00:00:00+09:00" }, created_at: "2026-10-22T03:00:00Z",
+    explain: { lane_ranks: { keyword: 1, graph: 2 }, fused_score: 0.0245, rerank_score: 0.82, graph_hops: 2, recency: 0.875, outcome: 1.2 }, entities: [{ id: "e1", name: "Orbit", type: "project" }],
     source_traces: [{ excerpt: "스테이징 먼저 보자" }], tags: ["배포"] };
   const t = setup("search", [["/v1/search", () => ({ authority: "data_only_untrusted", context_id: "c1", items: [hit],
-    explain: { lanes: ["exact", "keyword", "vector", "graph"], reranked: true, min_score_dropped: 3, lane_ms: { keyword: 3, vector: 12, rerank: 40 }, time_window: { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" } } })],
-    ["/v1/memories/m4?", () => memory("m4")]]);
+    explain: { lanes: ["exact", "keyword", "vector", "graph"], reranked: true, min_score_dropped: 3, lane_ms: { keyword: 3, vector: 12, rerank: 40 }, dropped: { semantic: 2, prune: 0 }, lane_weights: { keyword: 2 },
+      lane_hits: { keyword: [{ collection: "memories", id: "m4", revision: 1 }, { collection: "memories", id: "m9", revision: 2 }] }, time_window: { phrase: "지난주", from: "2026-10-25T15:00:00Z", to: "2026-11-01T15:00:00Z" } } })],
+    ["/v1/memories/m4?", () => memory("m4")], ["/v1/memories/m9?", () => memory("m9")]]);
   let copied = "";
   t.view.draw();
   t.h.$("#table").ownerDocument.defaultView = { navigator: { clipboard: { writeText: async (x) => { copied = x; } } } }; // the button's own window
@@ -246,28 +249,44 @@ test("search 살펴보기 sends explain with the 자세히 options and shows lan
   form.querySelector("[data-opt=at]").value = "2026-11-03T09:00";
   form.querySelector("[data-opt=tags]").value = "배포, 운영, 배포"; form.querySelector("[data-opt=match]").value = "all_strict";
   form.querySelector("[data-opt=groups]").value = "a+b | -c\n\n d ";
-  for (const k of ["sources", "entities", "observations", "norerank"]) form.querySelector(`[data-opt=${k}]`).checked = true;
+  for (const k of ["part:sources", "part:entities", "observations", "kind:lesson", "kind:decision", "prune"]) form.querySelector(`[data-opt="${k}"]`).checked = true;
+  const set = (k, v) => { form.querySelector(`[data-opt="${k}"]`).value = v; };
+  set("rerank", "model"); set("budget", "3000"); set("w:keyword", "2"); set("w:vector", "9"); set("floor:semantic", "0.3"); set("tokens:sources", "500");
+  set("from", "2026-10-01T00:00"); set("to", "2026-10-08T00:00");
   dom.fire(form, "submit"); await dom.flush();
   const sent = body(sentTo(t, "/v1/search")[0]);
   assert.equal(sent.explain, true);
   assert.equal(sent.query_time, new Date("2026-11-03T09:00").toISOString());
-  delete sent.query_time;
-  assert.deepEqual(sent, { scope: SCOPE, query: "지난주 배포", explain: true, limit: 20, graph_depth: 3, min_score: 0.2,
+  assert.deepEqual(sent.temporal_window, { from: new Date("2026-10-01T00:00").toISOString(), to: new Date("2026-10-08T00:00").toISOString() });
+  delete sent.query_time; delete sent.temporal_window;
+  assert.deepEqual(sent, { scope: SCOPE, query: "지난주 배포", explain: true, limit: 20, graph_depth: 3, min_score: 0.2, kinds: ["decision", "lesson"],
     filters: { tags: ["배포", "운영"], tags_match: "all_strict", tag_groups: [[{ tags: ["a", "b"], match: "all_strict" }, { tags: ["c"], not: true }], [{ tags: ["d"] }]] },
-    include: ["sources", "entities"], prefer_observations: true, rerank: false });
+    budget_tokens: 3000, token_encoding: "cl100k_base", lane_weights: { keyword: 2 }, min_scores: { semantic: 0.3 },
+    include: ["sources", "entities"], include_options: { sources: { max_tokens: 500 } }, prefer_observations: true, rerank: "model", rerank_options: { prune: true } },
+    "out-of-range weights are left to the server default");
   const table = t.h.$("#table");
   assert.match(table.textContent, /같은 문구, 단어, 비슷한 뜻, 이어진 기억/);
   assert.match(table.textContent, /‘지난주’/);
   assert.match(table.textContent, /AI로 다시 매겼어요/);
   assert.match(table.textContent, /점수가 낮아 뺀 기억3개/);
   assert.match(table.textContent, /걸린 시간순서 다시 매김 40ms · 비슷한 뜻 12ms · 단어 3ms/, "lane times, slowest first");
+  assert.match(table.textContent, /방법마다 무게단어 ×2/);
+  assert.match(table.textContent, /단계별 제외비슷한 뜻 하한 2/);
+  // each lane's own list, read only when opened; m9 was left out of the results
+  const lane = table.querySelector("details.insight-more");
+  assert.match(lane.textContent, /단어 2개/);
+  assert.equal(sentTo(t, "/v1/memories/m9?").length, 0);
+  lane.open = true; dom.fire(lane, "toggle"); await dom.flush();
+  assert.match(lane.textContent, /기억 m9/); assert.match(lane.textContent, /결과에 남은 것 1개/);
   const row = table.querySelector(".original-row");
-  assert.match(row.textContent, /단어 1위 · 이어진 기억 2위 · 2단계 이어짐/);
+  assert.match(row.textContent, /단어 1위 · 이어진 기억 2위 · 2단계 이어짐 · 일어난 때/);
   row.click(); await dom.flush();
   const d = t.h.$("#detail");
   assert.match(d.textContent, /1위로 찾은 기억/);
   assert.match(d.textContent, /합친 점수0\.0245/);
   assert.match(d.textContent, /AI가 다시 매긴 점수0\.82/);
+  assert.match(d.textContent, /최근성 가산×0\.88/); assert.match(d.textContent, /결과 가중치×1\.20/);
+  assert.match(d.textContent, /기억한 때/);
   assert.match(d.textContent, /Orbit/);
   assert.match(d.textContent, /스테이징 먼저 보자/);
   d.querySelector(".dg-item").click(); await dom.flush();
@@ -365,4 +384,56 @@ test("asking for an entity summary without a server model says what to set up", 
   t.h.$("#table .original-row").click(); await dom.flush();
   dom.buttons(t.h.$("#detail"), "AI에게 요약 초안 쓰게 하기")[0].click(); await dom.flush();
   assert.match(t.notices.at(-1), /서버에 요약을 쓸 모델이 없어요/);
+});
+
+test("ask sends filters, budget, fact types and disposition; shows tokens in and out, step time and evidence by kind; an answer becomes a rule only through the form", async () => {
+  const t = setup("ask", [["/v1/reflect", () => ({ answer: "스테이징에서 결제를 끝까지 눌러 봐요.", cited_memory_ids: ["m4"], directives_applied: [],
+    retrieved: [{ id: "m4", kind: "lesson", score: 0.9 }, { id: "o1", kind: "observation", score: 0.5 }, { id: "m7", kind: "lesson", score: 0.4 }],
+    tool_trace: [{ tool: "recall", args: { query: "배포" }, ids: ["m4"], ms: 37 }], iterations: 2, usage: { input_tokens: 2140, output_tokens: 188, total_tokens: 2328 } })],
+    ["/v1/memories/", (p) => memory(p.split("/")[3].split("?")[0])], ["/v1/directives", (p, o) => ({ id: "d5", revision: 1, ...JSON.parse(o.body) })]]);
+  t.view.draw();
+  const form = t.h.$("#chips form"), set = (k, v) => { form.querySelector(`[data-opt="${k}"]`).value = v; };
+  t.h.$("#chips input").value = "배포 전에 뭐 해?";
+  set("budget", "high"); set("tags", "배포"); set("match", "all_strict"); set("skepticism", "4"); set("empathy", "9");
+  for (const k of ["fact:memory", "nomodels", "alldirectives"]) form.querySelector(`[data-opt="${k}"]`).checked = true;
+  dom.fire(form, "submit"); await dom.flush();
+  assert.deepEqual(body(sentTo(t, "/v1/reflect")[0]), { scope: SCOPE, query: "배포 전에 뭐 해?", budget: "high", fact_types: ["memory"], tags: ["배포"], tags_match: "all_strict",
+    exclude_mental_models: true, disposition: { skepticism: 4 }, apply_all_directives: true }, "an out-of-range disposition stays the space's");
+  const table = t.h.$("#table");
+  assert.match(table.textContent, /보낸 토큰2140/); assert.match(table.textContent, /받은 토큰188/);
+  assert.match(table.querySelector(".insight-step").textContent, /1개 찾음 · 37ms/);
+  // evidence tabs: the count only next to the active tab
+  const tabs = () => [...table.querySelectorAll(".insight-seg .tm-seg-tab")];
+  assert.deepEqual(tabs().map((b) => b.textContent), ["전체3", "교훈", "정리된 관찰"]);
+  tabs()[2].click(); await dom.flush();
+  assert.deepEqual(tabs().map((b) => b.textContent), ["전체", "교훈", "정리된 관찰1"]);
+  assert.equal(t.h.$("#table").querySelectorAll(".dg-item").length, 3, "the cited memory, the step's find and the one observation");
+  // 규칙으로 만들기 opens a prefilled form; nothing is written until the person saves
+  [...t.h.$("#table").querySelectorAll("button")].find((b) => b.textContent === "규칙으로 만들기").click(); await dom.flush();
+  assert.equal(sentTo(t, "/v1/directives").length, 0);
+  const d = t.h.$("#detail");
+  assert.match(d.textContent, /AI 답에서 가져온 초안/);
+  assert.equal(d.querySelector("textarea").value, "스테이징에서 결제를 끝까지 눌러 봐요.");
+  dom.fire(d.querySelector("form"), "submit"); await dom.flush();
+  assert.equal(body(sentTo(t, "/v1/directives")[0]).rule, "스테이징에서 결제를 끝까지 눌러 봐요.");
+  assert.match(t.h.$("#detail").textContent, /근거 기억을 눌러 확인하세요/);
+});
+
+test("ask shows the prompt only when asked, and the 답 모양 JSON tab sends its own schema or refuses bad JSON", async () => {
+  const t = setup("ask", [["/v1/reflect", () => ({ answer: "", cited_memory_ids: [], directives_applied: [], retrieved: [], tool_trace: [], prompt: { system: "규칙을 지켜요", user: "질문: 배포" } })]]);
+  t.view.draw();
+  const form = t.h.$("#chips form");
+  t.h.$("#chips input").value = "배포";
+  form.querySelector('[data-opt="promptonly"]').checked = true;
+  [...form.querySelectorAll(".tm-seg-tab")].find((b) => b.textContent === "JSON 코드").click();
+  const code = form.querySelector(".insight-code");
+  assert.equal(code.value, "{}");
+  code.value = "[1"; dom.fire(form, "submit"); await dom.flush();
+  assert.equal(sentTo(t, "/v1/reflect").length, 0, "bad JSON is not sent");
+  code.value = '{"type":"object","properties":{"답":{"type":"string"}}}'; dom.fire(form, "submit"); await dom.flush();
+  const sent = body(sentTo(t, "/v1/reflect")[0]);
+  assert.equal(sent.prompt_only, true);
+  assert.deepEqual(sent.response_schema, { type: "object", properties: { 답: { type: "string" } } });
+  assert.match(t.h.$("#table").textContent, /AI에 보내지 않았어요/);
+  assert.match(t.h.$("#table").textContent, /질문: 배포/);
 });

@@ -22,7 +22,68 @@
    "to": "2026-10-31T15:00:00Z"
   },
   "reranked": true,
-  "min_score_dropped": 2
+  "min_score_dropped": 2,
+  "lane_weights": {
+   "keyword": 1.5
+  },
+  "dropped": {
+   "semantic": 1
+  },
+  "lane_hits": {
+   "exact": [],
+   "keyword": [
+    {
+     "collection": "memories",
+     "id": "m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m9",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m7",
+     "revision": 1
+    }
+   ],
+   "vector": [
+    {
+     "collection": "memories",
+     "id": "x1",
+     "revision": 1
+    },
+    {
+     "collection": "observations",
+     "id": "ob1",
+     "revision": 1
+    }
+   ],
+   "relation": [],
+   "temporal": [
+    {
+     "collection": "memories",
+     "id": "m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "x1",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m1",
+     "revision": 1
+    },
+    {
+     "collection": "observations",
+     "id": "ob1",
+     "revision": 1
+    }
+   ]
+  }
  },
  "items": [
   {
@@ -45,9 +106,15 @@
      "temporal": 2
     },
     "fused_score": 0.033,
-    "rerank_score": 0.91
+    "rerank_score": 0.91,
+    "recency": 0.94,
+    "outcome": 1.0
    },
-   "score": 0.91
+   "score": 0.91,
+   "occurred": {
+    "from": "2026-10-10T00:00:00+09:00",
+    "to": "2026-10-11T00:00:00+09:00"
+   }
   },
   {
    "id": "x1",
@@ -66,7 +133,9 @@
      "temporal": 3
     },
     "fused_score": 0.029,
-    "rerank_score": 0.8
+    "rerank_score": 0.8,
+    "recency": 1.0,
+    "outcome": 1.2
    },
    "score": 0.8
   },
@@ -85,7 +154,9 @@
      "temporal": 3
     },
     "fused_score": 0.025,
-    "rerank_score": 0.69
+    "rerank_score": 0.69,
+    "recency": 0.81,
+    "outcome": 1.0
    },
    "score": 0.69
   },
@@ -104,7 +175,9 @@
      "keyword": 4
     },
     "fused_score": 0.021,
-    "rerank_score": 0.58
+    "rerank_score": 0.58,
+    "recency": 0.88,
+    "outcome": 0.9
    },
    "score": 0.58
   },
@@ -130,7 +203,9 @@
      "temporal": 2
     },
     "fused_score": 0.017,
-    "rerank_score": 0.47
+    "rerank_score": 0.47,
+    "recency": 1.0,
+    "outcome": 1.0
    },
    "score": 0.47
   }
