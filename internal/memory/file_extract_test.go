@@ -114,7 +114,7 @@ func TestFileMemoriesDryRunAndCapture(t *testing.T) {
 	if !found || len(f.repo.rows("memories")) != 0 {
 		t.Fatalf("source refs %+v", cands[0].Sources)
 	}
-	if _, err = f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "x.exe", ContentBase64: "AA=="}); !errors.Is(err, ErrInvalid) {
+	if _, err = f.svc.ExtractFileMemories(testCtx, f.human, FileMemoriesInput{Scope: scopeA, Filename: "x.exe", ContentBase64: "AA=="}); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatalf("unsupported type: %v", err)
 	}
 }

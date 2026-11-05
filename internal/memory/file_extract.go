@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"path"
 	"slices"
 	"strings"
 	"time"
@@ -99,6 +98,7 @@ type FileMemoriesResult struct {
 	SourceID          string            `json:"source_id,omitempty"`
 	SourceIDs         []string          `json:"source_ids,omitempty"`
 	JobID             string            `json:"job_id,omitempty"`
+	DocumentID        string            `json:"document_id,omitempty"`
 	Status            string            `json:"status"`
 	CandidatesCreated int               `json:"candidates_created"`
 	Claims            []ExtractedClaim  `json:"claims,omitempty"`
@@ -137,7 +137,8 @@ type FileExtractJob struct {
 	Sources           []string           `json:"sources" bson:"sources"`
 	Chunks            []FileExtractChunk `json:"-" bson:"chunks"`
 	Kept              []FileExtractChunk `json:"-" bson:"kept,omitempty"` // unchanged chunks carried from the last upload
-	Document          string             `json:"-" bson:"document,omitempty"`
+	Document          string             `json:"document,omitempty" bson:"document,omitempty"`
+	Previous          string             `json:"previous,omitempty" bson:"previous,omitempty"` // the document's job before this upload
 	Delta             FileExtractDelta   `json:"delta" bson:"delta"`
 	Total             int                `json:"total" bson:"total"`
 	Next              int                `json:"next" bson:"next"`
@@ -334,39 +335,19 @@ func extractRedactionNote(n int) []ExtractSkip {
 	return []ExtractSkip{{Reason: fmt.Sprintf("privacy_redacted:%d", n)}}
 }
 
-// extractFilePages reads a txt, md, json, docx or pdf file into page texts.
+// extractFilePages reads an uploaded file of any supported format into page texts.
 func extractFilePages(in FileMemoriesInput) ([]string, bool, error) {
-	ext := strings.ToLower(path.Ext(in.Filename))
-	mime := knowledgeFileMIME[ext]
-	if ext == ".pdf" {
-		mime = "application/pdf"
-	}
-	if mime == "" || in.MIME != "" && in.MIME != mime {
-		return nil, false, ErrInvalid
+	if _, err := documentMIME(in.Filename, in.MIME); err != nil {
+		return nil, false, err
 	}
 	if len(in.ContentBase64) > base64.StdEncoding.EncodedLen(fileExtractMaxFile) {
 		return nil, false, errBlobTooLarge
-	}
-	if ext == ".docx" {
-		text, err := knowledgeDOCXText(in.ContentBase64)
-		return []string{text}, false, err
 	}
 	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
 	if err != nil || len(raw) == 0 {
 		return nil, false, ErrInvalid
 	}
-	if ext == ".pdf" {
-		pages, err := pdfPagesText(raw)
-		return pages, true, err
-	}
-	if !utf8.Valid(raw) || slices.Contains(raw, 0) {
-		return nil, false, ErrInvalid
-	}
-	text, failed := normalizeKnowledgeContent(string(raw), ext)
-	if failed {
-		return nil, false, ErrInvalid
-	}
-	return []string{text}, false, nil
+	return documentPages(in.Filename, raw)
 }
 
 func pagePointers(pages []string) []*string {
@@ -466,7 +447,8 @@ func extractSourceIDs(chunks []FileExtractChunk) []string {
 func (s *Service) extractStored(ctx context.Context, token string, d Decision, scope Scope, label, docRef string, chunks []FileExtractChunk, out FileMemoriesResult) (FileMemoriesResult, error) {
 	// The uploader is part of the identity: another person's file of the same
 	// name is a different document, and its chunks and candidates stay theirs.
-	docID := "file-extract-doc-" + ContentHash(structuredText(scope)+"\x00"+d.PrincipalID+"\x00"+docRef)
+	docID := extractDocID(scope, d.PrincipalID, docRef)
+	out.DocumentID = docID
 	prev, err := s.extractDocState(ctx, scope, docID)
 	if err != nil {
 		return FileMemoriesResult{}, err
@@ -500,6 +482,10 @@ func (s *Service) extractStored(ctx context.Context, token string, d Decision, s
 	}
 	out.Status, out.CandidatesCreated, out.Skipped = r.Status, r.FileExtract.CandidatesCreated, r.FileExtract.Skipped
 	return out, nil
+}
+
+func extractDocID(scope Scope, principal, docRef string) string {
+	return "file-extract-doc-" + ContentHash(structuredText(scope)+"\x00"+principal+"\x00"+docRef)
 }
 
 // diffExtractChunks splits an upload by chunk hash against the chunks the

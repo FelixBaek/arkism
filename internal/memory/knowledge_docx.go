@@ -4,44 +4,30 @@ package memory
 // library (zip + XML) so a person can upload the documents they already have.
 // Headings become Markdown headings so the heading chunker keeps sections.
 import (
-	"archive/zip"
 	"bytes"
-	"encoding/base64"
 	"encoding/xml"
 	"errors"
 	"io"
 	"strings"
 )
 
-const (
-	knowledgeDOCXMIME     = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-	knowledgeDOCXMaxBytes = 4 << 20
-	// The unpacked document.xml is bounded too: a small zip can inflate a lot.
-	knowledgeDOCXMaxXML = 32 << 20
-)
+const knowledgeDOCXMIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
-// knowledgeDOCXText returns the document body as Markdown-like text.
-func knowledgeDOCXText(b64 string) (string, error) {
-	raw, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil || len(raw) == 0 || len(raw) > knowledgeDOCXMaxBytes {
-		return "", ErrInvalid
-	}
-	zr, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
+// docxPages returns the document body as one Markdown-like page.
+func docxPages(raw []byte) ([]string, bool, error) {
+	parts, err := officeParts(raw, func(name string) bool { return name == "word/document.xml" })
 	if err != nil {
-		return "", ErrInvalid
+		return nil, false, err
 	}
-	for _, f := range zr.File {
-		if f.Name != "word/document.xml" {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return "", ErrInvalid
-		}
-		defer rc.Close()
-		return docxBodyText(io.LimitReader(rc, knowledgeDOCXMaxXML))
+	body, ok := parts["word/document.xml"]
+	if !ok {
+		return nil, false, ErrInvalid
 	}
-	return "", ErrInvalid
+	text, err := docxBodyText(bytes.NewReader(body))
+	if err == nil && text == "" {
+		err = ErrInvalid
+	}
+	return []string{text}, false, err
 }
 
 // docxBodyText walks w:p paragraphs: w:t is text, w:tab a tab, w:br a line

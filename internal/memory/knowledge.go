@@ -4,6 +4,7 @@ package memory
 // artifact store. The source anchor is stable; documents and chunks are immutable.
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -79,7 +80,7 @@ type KnowledgeIngestInput struct {
 	Filename  string `json:"filename"`
 	MIMEType  string `json:"mime_type"`
 	Content   string `json:"content"`
-	// ContentBase64 carries a Word (.docx) file; the server reads its text into Content.
+	// ContentBase64 carries a file (Word, PDF, Excel, PowerPoint, ...); the server reads its text into Content.
 	ContentBase64    string `json:"content_base64,omitempty"`
 	Synthetic        bool   `json:"synthetic"`
 	ExpectedRevision int64  `json:"expected_revision,omitempty"`
@@ -135,10 +136,6 @@ func knowledgeLive(ctx context.Context, tx Tx, r Record) error {
 	return checkSources(ctx, tx, r)
 }
 
-// knowledgeFileMIME is the file types a person can upload as text (memory
-// extraction from files reads the same types, plus PDF).
-var knowledgeFileMIME = map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".docx": knowledgeDOCXMIME}
-
 func (s *Service) IngestKnowledge(ctx context.Context, token string, in KnowledgeIngestInput) (KnowledgeIngestResult, error) {
 	var out KnowledgeIngestResult
 	d, e := s.knowledgeAuthorization(ctx, token, "write:"+colKnowledgeSources, in.Scope, "")
@@ -149,18 +146,17 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		return out, ErrDenied
 	}
 	ext := strings.ToLower(path.Ext(in.Filename))
-	mime := knowledgeFileMIME[ext]
-	// chunkExt: a Word file's headings come out as Markdown headings.
+	mime, e := documentMIME(in.Filename, in.MIMEType)
+	if e != nil {
+		return out, e
+	}
+	// chunkExt: a converted file's headings come out as Markdown headings.
 	chunkExt := ext
-	if ext == ".docx" {
-		if in.Content != "" {
-			return out, ErrInvalid
+	if in.ContentBase64 != "" || documentFormats[ext].read != nil || documentFormats[ext].mime == "" {
+		if in.Content, e = knowledgeFileText(in); e != nil {
+			return out, e
 		}
-		text, err := knowledgeDOCXText(in.ContentBase64)
-		if err != nil {
-			return out, err
-		}
-		in.Content, in.ContentBase64, chunkExt = text, "", ".md"
+		in.ContentBase64, chunkExt = "", ".md"
 	}
 	if in.ContentBase64 != "" || !validKnowledgeIngest(in, mime) {
 		return out, ErrInvalid
@@ -259,6 +255,22 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		})
 	})
 	return out, e
+}
+
+// knowledgeFileText reads a file that is not plain text: an uploaded file
+// (content_base64) or a text format such as HTML sent as content.
+func knowledgeFileText(in KnowledgeIngestInput) (string, error) {
+	if in.ContentBase64 == "" {
+		return documentText(in.Filename, []byte(in.Content))
+	}
+	if in.Content != "" || len(in.ContentBase64) > base64.StdEncoding.EncodedLen(documentMaxFile) {
+		return "", ErrInvalid
+	}
+	raw, err := base64.StdEncoding.DecodeString(in.ContentBase64)
+	if err != nil {
+		return "", ErrInvalid
+	}
+	return documentText(in.Filename, raw)
 }
 func validKnowledgeIngest(in KnowledgeIngestInput, mime string) bool {
 	return validRunLabel(in.SourceKey, 128) && validRunLabel(in.Filename, 200) && !strings.ContainsAny(in.Filename, "/\\") && path.Base(in.Filename) == in.Filename && mime != "" && in.MIMEType == mime && len(in.Content) != 0 && len(in.Content) <= 64<<10 && utf8.ValidString(in.Content) && !strings.ContainsRune(in.Content, 0) && in.ExpectedRevision >= 0

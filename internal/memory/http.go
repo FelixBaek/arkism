@@ -80,6 +80,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerRecordsCoreHTTP(mux, s, stats)
 	registerReflectCoreHTTP(mux, s, stats)
 	registerFileextractCoreHTTP(mux, s, stats)
+	registerDocs2CoreHTTP(mux, s, stats)
 	registerEntitiesCoreHTTP(mux, s, stats)
 	registerOpsCoreHTTP(mux, s, stats)
 	registerWebhooksCoreHTTP(mux, s, stats)
@@ -274,6 +275,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "defense_blocked", 422
 	case errors.Is(e, ErrExtractionDisabled):
 		code, status = "extraction_disabled", 409
+	case errors.Is(e, errUnsupportedFormat):
+		code, status = "unsupported_media_type", http.StatusUnsupportedMediaType
 	case errors.Is(e, errPDFNoText):
 		code, status = "no_extractable_text", 422
 	case errors.Is(e, ErrModelNotConfigured):

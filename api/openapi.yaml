@@ -17634,7 +17634,7 @@
     "/v1/knowledge/ingest": {
       "post": {
         "summary": "register a synthetic canonical knowledge fixture",
-        "description": "Synthetic mode and explicit policy authorization required; no production deployment or external connector activation. Accepts TXT, Markdown, or JSON fixture metadata and reuses canonical source/artifact/RLS/privacy boundaries. No provider or embedding model is called.",
+        "description": "Synthetic mode and explicit policy authorization required; no production deployment or external connector activation. Accepts TXT, Markdown or JSON as content, HTML, CSV, TSV or EML as content or content_base64, and DOCX, PDF, XLSX or PPTX as content_base64 (the same readers and converter as file memory extraction; an unknown extension is 415 unsupported_media_type) and reuses canonical source/artifact/RLS/privacy boundaries. No provider or embedding model is called.",
         "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SyntheticKnowledgeIngest"}}}},
         "responses": {"200": {"description": "Ingestion report", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SyntheticKnowledgeIngestionReport"}}}}, "400": {"description": "Unsupported or malformed fixture"}, "403": {"description": "Scope or policy denied"},
           "401": {
@@ -17650,6 +17650,16 @@
                 "$ref": "#/components/headers/RequestID"
               }
             },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the file extension has no reader and no configured converter.",
             "content": {
               "application/json": {
                 "schema": {
@@ -38440,7 +38450,7 @@
           "Management"
         ],
         "summary": "Turn a file into memory candidates",
-        "description": "Reads txt, md, json, docx or pdf (base64, at most 4 MiB; encrypted or scanned PDFs return no_extractable_text). With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. When the same person uploads the same file name again in the same scope, the upload extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
+        "description": "Reads txt, md, json, docx, pdf, html/htm, csv, tsv, xlsx (a Markdown table per sheet), pptx (a page per slide) and eml (headers, text body, attachment names) with built-in readers (base64, at most 4 MiB; encrypted or scanned PDFs return no_extractable_text). Other extensions are 415 unsupported_media_type unless the operator configured MEMORY_DOCUMENT_CONVERTER (absolute path, run without a shell, empty environment, private temporary folder, 60 s and 4 MiB output limits) and listed the extension in MEMORY_DOCUMENT_CONVERTER_EXTENSIONS; converted text goes through the same privacy filters. The result carries document_id for the document chunk and history routes. With dry_run the claims are returned and nothing is stored. Otherwise the filtered text is stored as source evidence and claims become candidates with page/chunk locators; every stored upload returns job_id, and a file larger than one request's budget runs as that job. When the same person uploads the same file name again in the same scope, the upload extracts only the chunks whose normalized text changed (sha256 per chunk); unchanged chunks make no model call and no candidates. The delta object reports chunks_total, chunks_unchanged, chunks_changed (changed or new), chunks_removed and removed_sources (locator, source and candidate_ids of chunks that are gone); those candidates and memories are left untouched for a person to retire. Each upload gets a new job id, so a cancelled job is never reused. Claims become memory candidates through capture; nothing is ever approved here, a person reviews every candidate. Private markers and secret-looking text are removed before the model sees any text.",
         "responses": {
           "200": {
             "description": "Success",
@@ -38535,6 +38545,16 @@
           },
           "503": {
             "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "unsupported_media_type: the file extension has no reader and no configured converter.",
             "content": {
               "application/json": {
                 "schema": {
@@ -43275,6 +43295,870 @@
             }
           }
         }
+      }
+    },
+    "/v1/files/memories/documents/{id}/chunks": {
+      "get": {
+        "operationId": "get_v1_files_memories_documents_id_chunks",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Chunks of an uploaded document",
+        "description": "read:memory_candidates. The chunks of the document's last upload in order (unchanged ones carried from earlier uploads first), each with its hash, locator, state (unchanged, extracted, pending), source reference and the candidates it produced with their current status (an approved candidate keeps its id as a memory). Chunk text is never returned. cursor is an offset from next_cursor; limit 1..200, default 50. The document id is document_id of a file upload result.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseDocumentChunkPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/files/memories/documents/{id}/history": {
+      "get": {
+        "operationId": "get_v1_files_memories_documents_id_history",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Upload history of a document",
+        "description": "read:memory_candidates. The document's uploads newest first, each with its job id, state, chunk delta (total, unchanged, changed, removed with the candidates of removed chunks) and candidates created. cursor is the job id from next_cursor; limit 1..200, default 50. Uploads made before history was kept end the list.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseDocumentHistoryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/knowledge/sources/{id}/chunks": {
+      "get": {
+        "operationId": "get_v1_knowledge_sources_id_chunks",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Chunks of a knowledge source",
+        "description": "read:knowledge_sources. The chunks of the source's current document with index, section path, hash, token estimate and status. Text is withheld (text_withheld) for restricted, quarantined or erased chunks. extract_document_id names the caller's memory-extraction document of this source, for the files/memories document routes. cursor is an offset from next_cursor; limit 1..200, default 50.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseKnowledgeChunkPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/knowledge/sources/{id}/history": {
+      "get": {
+        "operationId": "get_v1_knowledge_sources_id_history",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Document versions of a knowledge source",
+        "description": "read:knowledge_sources. The source's document versions newest first with file name, MIME type, parser version, extraction status, chunk count and which one is current. cursor is an offset from next_cursor; limit 1..200, default 50.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseKnowledgeHistoryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
       }
     }
   },
@@ -48311,7 +49195,8 @@
               "attempt_replay_blocked",
               "flow_time_limit",
               "flow_legacy_run",
-              "effect_outcome_unknown"
+              "effect_outcome_unknown",
+              "unsupported_media_type"
             ]
           }
         },
@@ -70224,6 +71109,13 @@
           },
           "delta": {
             "$ref": "#/components/schemas/WireResponseFileExtractDelta"
+          },
+          "document": {
+            "type": "string"
+          },
+          "previous": {
+            "type": "string",
+            "description": "the document's job before this upload"
           }
         },
         "additionalProperties": false,
@@ -70637,6 +71529,351 @@
         "x-go-type": "memory.MentalModelRefresh",
         "x-go-source": "internal/memory/mental_models.go",
         "description": "MentalModelRefresh says when a mental model is due and what a refresh reads.\nMode keeps the three original rules; cron (5 fields, UTC) refreshes on a\nschedule but only when approved memories changed since the last refresh;\nafter_consolidation refreshes once a consolidation run changed observations;\nmin_interval (a duration such as \"6h\") holds every trigger back; kinds and\ntags narrow the recall; max_tokens caps one refresh (prompt and answer).\nThe old form, a bare mode string, still decodes from bodies, records and bundles."
+      },
+      "WireResponseDocumentChunkPage": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDocumentChunk"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "job_id",
+          "items",
+          "total",
+          "next_cursor"
+        ],
+        "x-go-type": "memory.DocumentChunkPage",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseDocumentChunk": {
+        "type": "object",
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "unchanged | extracted | pending"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WireResponseRef"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDocumentCandidate"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "locator",
+          "hash",
+          "status",
+          "source",
+          "candidates"
+        ],
+        "x-go-type": "memory.DocumentChunk",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseDocumentCandidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "memory_id": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status"
+        ],
+        "x-go-type": "memory.DocumentCandidate",
+        "x-go-source": "internal/memory/document_history.go",
+        "description": "DocumentCandidate is one candidate a chunk produced; an approved candidate\nkeeps its id as a memory."
+      },
+      "WireResponseDocumentHistoryPage": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDocumentUpload"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "items",
+          "next_cursor"
+        ],
+        "x-go-type": "memory.DocumentHistoryPage",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseDocumentUpload": {
+        "type": "object",
+        "properties": {
+          "job_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "delta": {
+            "$ref": "#/components/schemas/WireResponseFileExtractDelta"
+          },
+          "candidates_created": {
+            "type": "integer"
+          },
+          "requested_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "job_id",
+          "status",
+          "label",
+          "delta",
+          "candidates_created",
+          "requested_by",
+          "created_at",
+          "updated_at"
+        ],
+        "x-go-type": "memory.DocumentUpload",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseKnowledgeChunkPage": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "document_id": {
+            "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseKnowledgeChunkView"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "extract_document_id": {
+            "type": "string"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "document_id",
+          "items",
+          "total",
+          "next_cursor"
+        ],
+        "x-go-type": "memory.KnowledgeChunkPage",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseKnowledgeChunkView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "chunk_index": {
+            "type": "integer"
+          },
+          "section_path": {
+            "type": "string"
+          },
+          "hash": {
+            "type": "string"
+          },
+          "token_estimate": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "text_withheld": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "chunk_index",
+          "hash",
+          "token_estimate",
+          "status"
+        ],
+        "x-go-type": "memory.KnowledgeChunkView",
+        "x-go-source": "internal/memory/document_history.go",
+        "description": "KnowledgeChunkView is a knowledge chunk without its text when the text is restricted."
+      },
+      "WireResponseKnowledgeHistoryPage": {
+        "type": "object",
+        "properties": {
+          "source_id": {
+            "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseKnowledgeVersion"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "items",
+          "total",
+          "next_cursor"
+        ],
+        "x-go-type": "memory.KnowledgeHistoryPage",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseKnowledgeVersion": {
+        "type": "object",
+        "properties": {
+          "document_id": {
+            "type": "string"
+          },
+          "source_version": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "parser_version": {
+            "type": "string"
+          },
+          "extraction_status": {
+            "type": "string"
+          },
+          "chunks": {
+            "type": "integer"
+          },
+          "current": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "document_id",
+          "source_version",
+          "filename",
+          "mime_type",
+          "parser_version",
+          "extraction_status",
+          "chunks",
+          "current",
+          "created_at"
+        ],
+        "x-go-type": "memory.KnowledgeVersion",
+        "x-go-source": "internal/memory/document_history.go"
       }
     },
     "headers": {

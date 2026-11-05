@@ -24,21 +24,24 @@ func (s *Service) createExtractJob(ctx context.Context, d Decision, scope Scope,
 		FileExtract: &FileExtractJob{Label: label, Document: docID, Sources: extractSourceIDs(append(slices.Clone(kept), fresh...)), Chunks: fresh, Kept: kept,
 			Total: len(fresh), Delta: delta, Skipped: skipped, RequestedBy: d.PrincipalID}}
 	err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
-		if err := tx.Insert(ctx, "jobs", out); err != nil {
-			return err
-		}
 		target := &Ref{Collection: "jobs", ID: id, Revision: 1}
 		doc, err := tx.Get(ctx, "jobs", scope, docID)
 		switch {
 		case errors.Is(err, ErrNotFound):
 			err = tx.Insert(ctx, "jobs", Record{ID: docID, Scope: scope, Kind: fileExtractDocKind, Status: JobStatusDone, Revision: 1, Target: target, CreatedAt: now, UpdatedAt: now})
 		case err == nil && doc.Kind == fileExtractDocKind:
+			if doc.Target != nil {
+				out.FileExtract.Previous = doc.Target.ID
+			}
 			doc.Target, doc.UpdatedAt, doc.Revision = target, now, doc.Revision+1
 			err = tx.Replace(ctx, "jobs", doc, doc.Revision-1)
 		case err == nil:
 			err = ErrConflict
 		}
 		if err != nil {
+			return err
+		}
+		if err = tx.Insert(ctx, "jobs", out); err != nil {
 			return err
 		}
 		return audit(ctx, tx, scope, d.PrincipalID, "file_extract:job_created", id)

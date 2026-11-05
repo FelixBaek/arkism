@@ -1584,6 +1584,86 @@
         "scope",
         "q"
       ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/files/memories/documents/{id}/chunks",
+      "request": null,
+      "response": "DocumentChunkPage",
+      "summary": "Chunks of an uploaded document",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "description": "read:memory_candidates. The chunks of the document's last upload in order (unchanged ones carried from earlier uploads first), each with its hash, locator, state (unchanged, extracted, pending), source reference and the candidates it produced with their current status (an approved candidate keeps its id as a memory). Chunk text is never returned. cursor is an offset from next_cursor; limit 1..200, default 50. The document id is document_id of a file upload result."
+    },
+    {
+      "method": "get",
+      "path": "/v1/files/memories/documents/{id}/history",
+      "request": null,
+      "response": "DocumentHistoryPage",
+      "summary": "Upload history of a document",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "description": "read:memory_candidates. The document's uploads newest first, each with its job id, state, chunk delta (total, unchanged, changed, removed with the candidates of removed chunks) and candidates created. cursor is the job id from next_cursor; limit 1..200, default 50. Uploads made before history was kept end the list."
+    },
+    {
+      "method": "get",
+      "path": "/v1/knowledge/sources/{id}/chunks",
+      "request": null,
+      "response": "KnowledgeChunkPage",
+      "summary": "Chunks of a knowledge source",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "description": "read:knowledge_sources. The chunks of the source's current document with index, section path, hash, token estimate and status. Text is withheld (text_withheld) for restricted, quarantined or erased chunks. extract_document_id names the caller's memory-extraction document of this source, for the files/memories document routes. cursor is an offset from next_cursor; limit 1..200, default 50."
+    },
+    {
+      "method": "get",
+      "path": "/v1/knowledge/sources/{id}/history",
+      "request": null,
+      "response": "KnowledgeHistoryPage",
+      "summary": "Document versions of a knowledge source",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "description": "read:knowledge_sources. The source's document versions newest first with file name, MIME type, parser version, extraction status, chunk count and which one is current. cursor is an offset from next_cursor; limit 1..200, default 50."
     }
   ]
 }
