@@ -100,6 +100,23 @@ test("memory detail lists history, offers revert, and hands sources to the evide
   assert.ok(find(h.shell, "고치기"));
 });
 
+test("memory detail shows approved causes and effects apart from the history", async () => {
+  const h = await setup({routes: {"/v1/memories/m1/lineage": {links: [
+    {relation: "caused_by", record: {text: "스테이징 확인을 건너뜀"}},
+    {relation: "causes", record: {text: "배포 롤백"}},
+    {relation: "causes"}
+  ]}}});
+  await h.ctx.memoryDetail(memory);
+  const t = texts(h.shell);
+  assert.match(t, /원인과 결과 2개/);
+  assert.match(t, /이 기억의 원인/);
+  assert.match(t, /“배포 롤백”/);
+  assert.equal(all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent)).textContent, "변경 이력 1건");
+  const none = await setup({routes: {"/v1/memories/m1/lineage": {links: []}}});
+  await none.ctx.memoryDetail(memory);
+  assert.doesNotMatch(texts(none.shell), /원인과 결과/);
+});
+
 test("memory detail stops when the selection changed while reading", async () => {
   const h = await setup({routes: {"/v1/memories/m1/lineage": {links: [{relation: "supersedes", record: {text: "old"}}]}}});
   h.ctx.state.selected = "other";

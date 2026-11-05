@@ -1,3 +1,14 @@
 {
- "links": []
+ "memory": { "collection": "memories", "id": "m10", "revision": 1 },
+ "status": "active",
+ "links": [
+  {
+   "relation": "causes",
+   "reference": { "collection": "memories", "id": "m11", "revision": 1 },
+   "state": "active",
+   "record": { "id": "m11", "text": "Orbit 이미지 업로드는 한 장에 10MB까지 받는다.", "status": "active", "created_at": "2026-10-02T03:00:00Z" },
+   "link": { "collection": "memory_relations", "id": "causal-1f3a", "revision": 2 }
+  }
+ ],
+ "authority": "data_only_untrusted"
 }

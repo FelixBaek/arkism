@@ -1,0 +1,22 @@
+{
+ "items": [
+  {
+   "id": "causal-1f3a",
+   "scope": { "workspace_id": "default", "project_id": "default" },
+   "status": "candidate",
+   "revision": 1,
+   "cause": { "collection": "memories", "id": "m10", "revision": 1 },
+   "effect": { "collection": "memories", "id": "m11", "revision": 1 },
+   "reason": "웹 뷰에서 큰 사진을 올리면 멈춰서 업로드 한도를 10MB로 정했다.",
+   "origin": "model",
+   "confidence": 0.74,
+   "generator": { "model": "server-default" },
+   "created_by": "service:memoryd",
+   "created_at": "2026-10-15T03:00:00Z",
+   "updated_at": "2026-10-15T03:00:00Z",
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "truncated": false,
+ "authority": "data_only_untrusted"
+}

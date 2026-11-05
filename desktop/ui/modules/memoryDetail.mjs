@@ -104,8 +104,16 @@ export function createMemoryDetail(deps) {
     ]);
     if (g !== deps.generation || deps.state.selected !== m.id) return;
     deps.originals.sourceDetails(quoteBox, m, sources);
+    // 원인과 결과: approved causal links (a server without them simply sends none).
+    const CAUSE = { caused_by: "이 기억의 원인", causes: "이 기억 때문에 생긴 일" };
+    const causal = (lineage?.links || []).filter((l) => CAUSE[l.relation] && l.record?.text);
+    if (causal.length) {
+      const sec = deps.section("원인과 결과", `${causal.length}개`), ul = deps.el("ul", "plain history");
+      for (const l of causal) { const li = deps.el("li"); li.append(deps.el("strong", "", CAUSE[l.relation]), " ", deps.raw(deps.el("span", "", `“${l.record.text}”`))); ul.append(li); }
+      sec.append(ul); body.insertBefore(sec, histRow);
+    }
     for (const link of lineage?.links || []) {
-      if (link.relation === "proposal") continue;
+      if (link.relation === "proposal" || CAUSE[link.relation]) continue;
       const label = { supersedes: "옛 기억을 대체함", superseded_by: "새 기억으로 바뀜", conflict: "다른 기억과 부딪힘" }[link.relation] || link.relation;
       list.prepend(historyItem(link.record?.updated_at || link.record?.created_at, label, link.record?.text ? `“${link.record.text}”` : ""));
     }

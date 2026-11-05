@@ -62,6 +62,7 @@ function setup(opts = {}) {
     "/v1/memories/m5?": () => mem("m5", { kind: "lesson" }),
     "/v1/memories/m6?": () => mem("m6"),
     "/v1/memory_candidates/k2?": () => mem("k2", { text: "저장할 후보" }),
+    "/v1/causal-links?": () => { throw new Error("not_found"); }, // an older server without causal links
     ...opts.routes
   };
   const request = async (path, o) => {
@@ -497,4 +498,32 @@ test("AI 정리 without server support or with a failed read", async () => {
   t = setup({ routes: { "/v1/observations?": () => ({ items: [] }), "/v1/mental-models?": gone } });
   t.state.memTab = "notes"; t.view.drawNotes(); await dom.flush();
   assert.match(t.h.$("#table").textContent, /확인할 AI 정리가 없어요/);
+});
+
+test("AI 정리 also lists causal link candidates: cause → effect with the reason, a person approves or rejects without a reason", async () => {
+  const sent = [];
+  const l1 = { id: "cl1", revision: 3, status: "candidate", cause: { collection: "memories", id: "m1", revision: 1 }, effect: { collection: "memories", id: "m4", revision: 1 },
+    reason: "스테이징 확인을 빼먹어서 배포가 실패했어요", confidence: 0.7, generator: { model: "small" }, updated_at: "2026-01-06T00:00:00Z" };
+  const t = setup({ routes: {
+    "/v1/observations?": () => ({ items: [] }), "/v1/mental-models?": () => ({ items: [] }),
+    "/v1/causal-links?": (path) => { assert.match(path, /status=candidate/); return { items: [l1, { id: "bad", revision: 1 }] }; },
+    "/v1/causal-links/cl1/review": (_, o) => { sent.push(JSON.parse(o.body)); return {}; } } });
+  t.state.memTab = "notes"; t.state.caps = { role: "human" };
+  t.view.drawNotes(); await dom.flush(); await dom.flush();
+  assert.equal(t.view.notesCount(), 1, "a link without both memories is skipped");
+  assert.match(t.h.$("#table").textContent, /원인과 결과 제안/);
+  assert.match(t.h.$("#table").textContent, /→/);
+  rows(t)[0].click(); await dom.flush();
+  const d = detailText(t);
+  assert.match(d, /스테이징 확인을 빼먹어서/);
+  assert.match(d, /원인 기억/);
+  assert.match(d, /결과 기억/);
+  btn(t.h.$("#detail"), "버리기").click(); await dom.flush();
+  assert.deepEqual(sent[0], { scope: SCOPE, expected_revision: 3, action: "reject" }, "rejecting asks no reason (the route takes none)");
+  rows(t)[0].click(); await dom.flush();
+  btn(t.h.$("#detail"), "승인").click(); await dom.flush();
+  assert.deepEqual(sent[1], { scope: SCOPE, expected_revision: 3, action: "approve" });
+  t.state.caps = { role: "agent" }; t.view.detail();
+  assert.equal(btn(t.h.$("#detail"), "승인"), undefined);
+  assert.match(detailText(t), /승인과 버리기는 사람만 할 수 있어요/);
 });
