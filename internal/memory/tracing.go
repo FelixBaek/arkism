@@ -18,6 +18,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/FelixBaek/arkism/internal/httpguard"
 )
 
 // Request tracing: W3C trace context (the traceparent header) and an optional
@@ -143,11 +145,10 @@ func injectTraceparent(ctx context.Context, endpoint string, h http.Header) {
 	}
 }
 
-// isPrivateNetworkHost: loopback, or a literal private (RFC 1918 / ULA) address.
-// Host names other than localhost are not resolved, so they count as remote.
+// isPrivateNetworkHost: localhost, or a literal address the outbound guard counts as
+// private (httpguard.PrivateIP). Other host names are not resolved, so they count as remote.
 func isPrivateNetworkHost(host string) bool {
-	ip := net.ParseIP(host)
-	return isLoopbackHost(host) || ip != nil && ip.IsPrivate()
+	return isLoopbackHost(host) || httpguard.PrivateIP(net.ParseIP(host))
 }
 
 func (sp *span) set(key, value string) {

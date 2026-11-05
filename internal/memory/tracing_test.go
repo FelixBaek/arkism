@@ -198,7 +198,7 @@ func TestTraceparentStaysOffHostedProviders(t *testing.T) {
 	ctx, sp := startSpan(testCtx, "x")
 	defer sp.end(nil)
 	for endpoint, want := range map[string]bool{"https://api.example.com/v1/embeddings": false, "https://8.8.8.8/embed": false, "not a url\x00": false,
-		"http://127.0.0.1:8080/embed": true, "http://localhost/rerank": true, "https://10.2.3.4/embed": true, "https://[fd00::1]/embed": true} {
+		"http://127.0.0.1:8080/embed": true, "http://localhost/rerank": true, "https://10.2.3.4/embed": true, "https://[fd00::1]/embed": true, "https://100.64.1.2/embed": true} {
 		h := http.Header{}
 		injectTraceparent(ctx, endpoint, h)
 		if (h.Get("traceparent") != "") != want {

@@ -111,20 +111,13 @@ func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
 	return scope, page, nil
 }
 
-// pageOffset turns an offset cursor into a window of n items.
+// pageOffset is the window of a document page over n items (parseOffsetCursor, offsetWindow).
 func pageOffset(page DocumentPage, n int) (int, int, string, error) {
-	start := 0
-	if page.Cursor != "" {
-		v, err := strconv.Atoi(page.Cursor)
-		if err != nil || v < 0 || v > n || strconv.Itoa(v) != page.Cursor {
-			return 0, 0, "", ErrInvalid
-		}
-		start = v
+	offset, ok := parseOffsetCursor(page.Cursor, n)
+	if !ok {
+		return 0, 0, "", ErrInvalid
 	}
-	end, next := min(start+page.Limit, n), ""
-	if end < n {
-		next = strconv.Itoa(end)
-	}
+	start, end, next := offsetWindow(offset, page.Limit, n)
 	return start, end, next, nil
 }
 

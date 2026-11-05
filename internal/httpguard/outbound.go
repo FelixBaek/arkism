@@ -49,10 +49,15 @@ func CheckOutboundIP(ip net.IP, allowPrivate bool) error {
 	if ip.IsUnspecified() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || thisNet.Contains(ip) {
 		return &BlockedAddress{IP: ip.String(), Class: ClassReserved}
 	}
-	if !allowPrivate && (ip.IsLoopback() || ip.IsPrivate() || cgnat.Contains(ip)) {
+	if !allowPrivate && PrivateIP(ip) {
 		return &BlockedAddress{IP: ip.String(), Class: ClassPrivate}
 	}
 	return nil
+}
+
+// PrivateIP: a loopback, private (RFC 1918 / ULA) or CGNAT address; false for nil.
+func PrivateIP(ip net.IP) bool {
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate() || cgnat.Contains(ip))
 }
 
 // OutboundClient dials only addresses CheckOutboundIP allows, checked at connect time after DNS (so a
