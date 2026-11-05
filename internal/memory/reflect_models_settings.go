@@ -128,6 +128,9 @@ type SpaceConsolidation struct {
 	MaxObservationsPerScope *int                    `json:"max_observations_per_scope,omitempty" bson:"max_observations_per_scope,omitempty"`
 	BatchSize               int                     `json:"batch_size,omitempty" bson:"batch_size,omitempty"`
 	Parallel                int                     `json:"parallel,omitempty" bson:"parallel,omitempty"`
+	// MaxMemoriesPerRound stops a run from taking another group once its groups hold this many
+	// memories (the group that reaches it still runs); 0 sets no cap.
+	MaxMemoriesPerRound int `json:"max_memories_per_round,omitempty" bson:"max_memories_per_round,omitempty"`
 }
 
 // ConsolidationStrategy claims the observation scopes one of its rules matches; the first claiming strategy wins whole.
@@ -196,7 +199,8 @@ func (c *SpaceConsolidation) valid() bool {
 	if utf8.RuneCountInString(c.ObservationsMission) > consolidationMissionMax || !utf8.ValidString(c.ObservationsMission) ||
 		c.DefaultScopeMode != "" && !slices.Contains(obsScopeModes, c.DefaultScopeMode) ||
 		len(c.DefaultScopes) > consolidationRulesMax || len(c.Strategies) > consolidationStrategiesMax || len(c.ScopeLimits) > consolidationRulesMax ||
-		!validObsLimit(c.MaxObservationsPerScope) || c.BatchSize < 0 || c.BatchSize > obsGroupsMax || c.Parallel < 0 || c.Parallel > consolidationParallelMax {
+		!validObsLimit(c.MaxObservationsPerScope) || c.BatchSize < 0 || c.BatchSize > obsGroupsMax || c.Parallel < 0 || c.Parallel > consolidationParallelMax ||
+		c.MaxMemoriesPerRound < 0 || c.MaxMemoriesPerRound > obsRoundMemoriesMax {
 		return false
 	}
 	return !slices.ContainsFunc(c.DefaultScopes, func(g []string) bool { return !validGlobs(g) }) &&

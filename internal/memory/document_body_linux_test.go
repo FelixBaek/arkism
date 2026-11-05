@@ -161,3 +161,31 @@ func TestStoreDocumentTextOff(t *testing.T) {
 		t.Fatalf("reset %+v %v", settings.StoreDocumentText, err)
 	}
 }
+
+// time_field=updated filters by when a document last changed instead of when it was added.
+func TestDocumentListUpdatedTimeFilter(t *testing.T) {
+	f, _ := wikiFixture(t, extractAnswer(extractRuleClaim))
+	f.svc.Repo = opsFakeRepo{f.repo}
+	up := extractUpload(t, f, "규칙 문단.")
+	later := time.Now().Add(2 * time.Hour).UTC()
+	f.editRecord(colJobs, up.DocumentID, func(r *Record) { r.UpdatedAt = later })
+	list := func(q string) int {
+		t.Helper()
+		scope, page, err := parseDocumentQuery("workspace_id=" + scopeA.WorkspaceID + "&project_id=" + scopeA.ProjectID + q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := f.svc.ListExtractDocuments(testCtx, f.human, scope, page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(out.Items)
+	}
+	soon, after := time.Now().Add(time.Hour).UTC().Format(time.RFC3339), later.Add(time.Hour).Format(time.RFC3339)
+	if list("&from="+soon) != 0 || list("&from="+soon+"&time_field=updated") != 1 || list("&to="+soon+"&time_field=updated") != 0 || list("&to="+after+"&time_field=created") != 1 {
+		t.Fatal("updated time filter")
+	}
+	if _, _, err := parseDocumentQuery("workspace_id=w&project_id=p&time_field=deleted"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("unknown time field: %v", err)
+	}
+}

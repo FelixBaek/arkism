@@ -321,7 +321,8 @@ wiki. What a person approves and how is described in
    approved memories and their evidence in place. An agent's document list
    shows only the documents it uploaded.
    The list takes `from` and `to` (RFC 3339) to keep documents first added
-   in that period. `GET /v1/files/memories/documents/{id}/text` (people only)
+   in that period; `time_field=updated` bounds when a document last changed
+   instead (a new upload or reprocess of it, a text or tag edit). `GET /v1/files/memories/documents/{id}/text` (people only)
    shows a document's text; `PUT` on the same path (the uploader) replaces it
    and extracts only the chunks that changed, spending model calls like an
    upload and only creating candidates. `POST /v1/files/memories/documents/export`
@@ -367,7 +368,9 @@ wiki. What a person approves and how is described in
       time words from the query. It never filters.
     - `min_scores {semantic, keyword, reranker, final}` set per-stage floors;
       `rerank_options {prune, dedup}` let the model rerank drop off-topic or
-      repeated snippets in the same model call (no extra call).
+      repeated snippets in the same model call (no extra call), and the
+      space's recall decision engine (`decision_models.recall`, opt-in) do the
+      same in its own call.
       `explain.dropped` counts what each stage removed.
     - The space lane `lanes.semantic` (off by default) adds memories whose
       stored embedding is a near neighbour of a top hit.
@@ -622,6 +625,7 @@ Space settings (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the defa
   - `mental_model_refresh`: before a mental model's summary is written, recalled records that do not bear on its title and query are left out of the prompt; when none bear on it, the refresh ends with `content_preserved_no_new_facts` and no summary call.
   - `mental_model_delta`: a delta refresh (`refresh.strategy` `delta`) asks, for each record that changed after the approval, whether it could change the approved text; only those go to the edit call, and none means no edit call (`content_preserved_no_new_facts`). The approved text is only sent when every record it cites passes the transfer check for the engine.
   - `reflect`: the records the first search found that do not bear on the question are dropped before the answer, and when the engine says the rest already answers it, the first model call is the last one (no tool rounds). `prompt_only` never asks the engine.
+  - `recall`: a search's results are checked as its `rerank_options` ask (a request's own, else the space's `recall_quality.rerank_options`): `prune` drops results that do not bear on the query, `dedup` drops results that only repeat one ranked above them (the top result is never a repeat). It runs before the model rerank, in one decision call per search; without `prune` or `dedup` it asks nothing. Private results and a query that may not leave the host are never sent; `explain.dropped` counts `decision_prune` and `decision_dedup`.
 
   One decision call per task run asks about at most 40 records; records past that, records that may not leave, and every record of a failed call stay, so anything the engine does not settle goes to the model as before. The result is still a draft or an answer a person reads; the engine never writes. Each decision call is recorded as a model call (operation `wiki_decision_<task>`) and counts against the server model's daily limit, and every record passes the external transfer check first.
 
@@ -634,7 +638,7 @@ Three space settings blocks (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`
 - `reflect_default_options`: `budget` (`low`, `mid`, `high`), `fact_types`, `exclude_mental_models` and `tools` (token caps per reflect tool) for requests that leave them unset. `tag_scoped_directives: true` (opt-in) applies a tagged directive only to a reflect whose tags share one of its tags; a request's `apply_all_directives` turns that off.
 - `mental_model_defaults`: the `trigger` a mental model created without a refresh mode takes, and a space-wide `min_interval`.
 - `recall_budget`: how many records reflect and mental-model refreshes recall for each budget level when the call sets no limit. `function: fixed` (the default) takes `fixed_low`/`fixed_mid`/`fixed_high` (0-50; 0 keeps the shipped count: low 5 and high 20 for reflect, 10/20/40 for mental models); `adaptive` takes `round(max_tokens x adaptive_<level>)` (ratios 0-1) clamped to `min`..`max` (0-50; defaults 1 and 50). Reflect reads at most 20. Unset keeps today's behaviour.
-- `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size` and `parallel` (1-4). More scopes mean more model calls per consolidation run, all counted against the daily limit; one run or preview builds at most 1000 scopes.
+- `consolidation`: `observations_mission`, `default_scope_mode` (`shared`, `combined`, `per_tag`, `all_combinations`) or `default_scopes`, `strategies` (tag-glob rules, each with its own mission, cap and source token budget; the first claiming strategy wins), `scope_limits`, `max_observations_per_scope`, `batch_size`, `parallel` (1-4) and `max_memories_per_round` (0-100000, 0 = no cap: a run takes no further group once its groups hold that many memories; the group that reaches it still runs, the stop is listed in `rejected` as `round_limit`). More scopes mean more model calls per consolidation run, all counted against the daily limit; one run or preview builds at most 1000 scopes.
 
 Three extraction settings (plain fields, inherited one by one; the first two also go in `extraction_strategies`) keep today's behaviour unless set:
 

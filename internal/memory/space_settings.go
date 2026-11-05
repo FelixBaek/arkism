@@ -526,7 +526,7 @@ func (s *Service) serverSpaceDefaults() SpaceConfig {
 		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off,
 		ExtractionChunkSize: fileExtractChunkRunes, ExtractCausal: &model, DefaultTimezone: usageZone().String(),
 		MemoryLanguage: memoryLanguageAuto, WorkStateCandidates: &off, StoreDocumentText: &on, RecallSessionArchives: &off,
-		CaptureMode: captureModeUser, CaptureDensity: captureDensityDurable, DecisionModels: map[string]string{decisionTaskConsolidation: decisionModelOff, decisionTaskRefresh: decisionModelOff, decisionTaskDelta: decisionModelOff, decisionTaskReflect: decisionModelOff}}
+		CaptureMode: captureModeUser, CaptureDensity: captureDensityDurable, DecisionModels: map[string]string{decisionTaskConsolidation: decisionModelOff, decisionTaskRefresh: decisionModelOff, decisionTaskDelta: decisionModelOff, decisionTaskReflect: decisionModelOff, decisionTaskRecall: decisionModelOff}}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {

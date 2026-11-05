@@ -656,7 +656,7 @@ export type WireResponseEntityLabelValue = { "value": string; "description"?: st
 export type WireResponseSpaceReflectDefaults = { "budget"?: string; "fact_types"?: Array<string>; "exclude_mental_models"?: boolean; "tag_scoped_directives"?: boolean; "tools": WireResponseReflectToolBudget };
 export type WireResponseReflectToolBudget = { "recall_max_tokens"?: number; "recall_max_chunk_tokens"?: number; "observations_max_tokens"?: number; "mental_models_max_tokens"?: number; "read_mental_models_max_tokens"?: number; "expand_max_tokens"?: number };
 export type WireResponseSpaceMentalModelDefaults = { "trigger"?: WireResponseMentalModelRefresh; "min_interval"?: string };
-export type WireResponseSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireResponseConsolidationStrategy>; "scope_limits"?: Array<WireResponseObservationScopeLimit>; "max_observations_per_scope"?: number; "batch_size"?: number; "parallel"?: number };
+export type WireResponseSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireResponseConsolidationStrategy>; "scope_limits"?: Array<WireResponseObservationScopeLimit>; "max_observations_per_scope"?: number; "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
 export type WireResponseConsolidationStrategy = { "name": string; "scopes": (Array<WireResponseObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: number; "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
 export type WireResponseObservationTagRule = { "tags": (Array<string> | null); "tags_match"?: string };
 export type WireResponseObservationScopeLimit = { "scope": (Array<string> | null); "limit": number };
@@ -675,7 +675,7 @@ export type WireRequestReflectToolBudget = { "recall_max_tokens"?: number; "reca
 export type WireRequestSpaceMentalModelDefaults = { "trigger"?: (WireRequestMentalModelRefresh | null); "min_interval"?: string };
 export type WireRequestMentalModelRefresh = { "mode"?: string; "cron"?: string; "after_consolidation"?: boolean; "min_interval"?: string; "kinds"?: Array<string>; "tags"?: Array<string>; "max_tokens"?: number; "strategy"?: string; "full_refresh_cron"?: string; "budget"?: string; "fact_types"?: Array<string>; "tags_match"?: string; "tag_groups"?: Array<(Array<WireRequestTagTest> | null)>; "include_chunks"?: boolean; "recall_max_tokens"?: number; "response_schema"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
 export type WireRequestTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireRequestTagTest>; "or"?: Array<WireRequestTagTest> };
-export type WireRequestSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireRequestConsolidationStrategy>; "scope_limits"?: Array<WireRequestObservationScopeLimit>; "max_observations_per_scope"?: (number | null); "batch_size"?: number; "parallel"?: number };
+export type WireRequestSpaceConsolidation = { "observations_mission"?: string; "default_scope_mode"?: string; "default_scopes"?: Array<(Array<string> | null)>; "strategies"?: Array<WireRequestConsolidationStrategy>; "scope_limits"?: Array<WireRequestObservationScopeLimit>; "max_observations_per_scope"?: (number | null); "batch_size"?: number; "parallel"?: number; "max_memories_per_round"?: number };
 export type WireRequestConsolidationStrategy = { "name"?: string; "scopes"?: (Array<WireRequestObservationTagRule> | null); "observations_mission"?: string; "max_observations_per_scope"?: (number | null); "source_max_tokens"?: number; "source_max_tokens_per_observation"?: number };
 export type WireRequestObservationTagRule = { "tags"?: (Array<string> | null); "tags_match"?: string };
 export type WireRequestObservationScopeLimit = { "scope"?: (Array<string> | null); "limit"?: number };
@@ -2282,7 +2282,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
   }
   /** GET /v1/files/memories/documents — List memory-extraction documents */
-  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string; "q"?: string; "from"?: string; "to"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
+  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string; "q"?: string; "from"?: string; "to"?: string; "time_field"?: "created" | "updated" }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
     return this.request("GET", `/v1/files/memories/documents`, query, undefined);
   }
   /** PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced */

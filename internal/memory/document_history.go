@@ -6,6 +6,7 @@ package memory
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -93,17 +94,19 @@ type DocumentPage struct {
 	Tag    string // the document list only
 	// Q is the document list's text filter over name, tags and chunk text, case-insensitive (at most 200 bytes).
 	Q string
-	// From and To bound when the document was first added (the document list only; zero is open).
-	From, To time.Time
+	// From and To bound when the document was first added, or with TimeField "updated" when it
+	// last changed (the document list only; zero is open).
+	From, To  time.Time
+	TimeField string
 }
 
 // parseDocumentQuery reads the scope plus cursor and limit (1..200, default 50).
 func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
-	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag", "q", "from", "to")
+	scope, q, err := parseWikiQuery(raw, "cursor", "limit", "tag", "q", "from", "to", "time_field")
 	if err != nil {
 		return Scope{}, DocumentPage{}, err
 	}
-	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag"), Q: strings.TrimSpace(q.Get("q"))}
+	page := DocumentPage{Cursor: q.Get("cursor"), Limit: documentPageDefault, Tag: q.Get("tag"), Q: strings.TrimSpace(q.Get("q")), TimeField: q.Get("time_field")}
 	if page.From, page.To, err = parseOpsRange(q, false); err != nil {
 		return Scope{}, DocumentPage{}, err
 	}
@@ -114,7 +117,7 @@ func parseDocumentQuery(raw string) (Scope, DocumentPage, error) {
 		}
 		page.Limit = n
 	}
-	if len(page.Cursor) > 256 || len(page.Q) > 200 || page.Tag != "" && !validTagEdit([]string{page.Tag}) {
+	if len(page.Cursor) > 256 || len(page.Q) > 200 || page.Tag != "" && !validTagEdit([]string{page.Tag}) || !slices.Contains([]string{"", "created", "updated"}, page.TimeField) {
 		return Scope{}, DocumentPage{}, ErrInvalid
 	}
 	return scope, page, nil

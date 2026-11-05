@@ -42,7 +42,9 @@ func (m *MinScores) valid() bool {
 
 // RerankOptions widen what the model rerank (rerank: "model") may do in its one call:
 // prune drops snippets it marks off-topic, dedup drops snippets it marks as repeating
-// a higher one. Neither runs without the model rerank, so neither spends extra budget.
+// a higher one. The space's recall decision engine (decision_models.recall) reads them
+// too, in its own call before the model rerank (decisionRecall). Neither runs without
+// one of the two, so neither spends extra budget on its own.
 type RerankOptions struct {
 	Prune bool `json:"prune,omitempty"`
 	Dedup bool `json:"dedup,omitempty"`

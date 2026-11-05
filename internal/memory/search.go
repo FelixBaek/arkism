@@ -61,7 +61,7 @@ type SearchInput struct {
 	TemporalWindow *TemporalWindow `json:"temporal_window,omitempty"`
 	// MinScores drops lane hits and reranked hits below per-stage floors (recall_floors.go).
 	MinScores *MinScores `json:"min_scores,omitempty"`
-	// RerankOptions lets the model rerank also drop off-topic hits and near-duplicates.
+	// RerankOptions lets the model rerank and the recall decision engine also drop off-topic hits and near-duplicates.
 	RerankOptions  *RerankOptions `json:"rerank_options,omitempty"`
 	retrievalQuery string
 	// space is the resolved space settings (space_settings.go); spaceModes marks Modes the space set, not the caller.

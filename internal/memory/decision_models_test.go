@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -84,6 +85,16 @@ func TestPickedChoice(t *testing.T) {
 // itemDecisionServer answers each per-item question with pick(item text) and every other
 // question (enough) with other; requests counts the calls.
 func itemDecisionServer(t *testing.T, pick func(text string) string, other string, requests *atomic.Int32) *JevJudge {
+	return itemQuestionServer(t, func(text, suffix string) string {
+		if suffix != "" {
+			return other
+		}
+		return pick(text)
+	}, other, requests)
+}
+
+// itemQuestionServer answers a per-item question (h3, h3_repeat) with pick(item text, suffix) and every other with other.
+func itemQuestionServer(t *testing.T, pick func(text, suffix string) string, other string, requests *atomic.Int32) *JevJudge {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -101,8 +112,12 @@ func itemDecisionServer(t *testing.T, pick func(text string) string, other strin
 		answers := map[string]any{}
 		for key := range in.Questions {
 			choice := other
-			if item, ok := in.State.Items[key]; ok {
-				choice = pick(item.Text)
+			if key == "h0"+decisionRepeat.suffix {
+				t.Error("the first item has nothing above it to repeat")
+			}
+			base, _, _ := strings.Cut(key, "_")
+			if item, ok := in.State.Items[base]; ok {
+				choice = pick(item.Text, strings.TrimPrefix(key, base))
 			}
 			answers[key] = map[string]any{"type": "choice", "choice": choice, "probabilities": map[string]float64{choice: 0.9}}
 		}
@@ -230,5 +245,67 @@ func TestReflectDecisionPrunesAndStops(t *testing.T) {
 	// prompt_only never asks the engine.
 	if _, err := f.svc.Reflect(testCtx, f.human, ReflectInput{Scope: scopeA, Query: "needle", PromptOnly: true}); err != nil || requests.Load() != 2 {
 		t.Fatalf("prompt only: %v requests=%d", err, requests.Load())
+	}
+}
+
+// The recall decision engine prunes and dedups the fused rows only when the space picks it and the
+// search (or the space's recall defaults) asks; the first row is never asked to be a repeat.
+func TestRecallDecisionPruneDedup(t *testing.T) {
+	f, _ := modelRerankFixture(t)
+	f.svc.Wiki = nil
+	requests := &atomic.Int32{}
+	f.svc.Judges = map[string]SkillJudge{"jev": itemQuestionServer(t, func(text, suffix string) string {
+		switch {
+		case suffix == "_repeat" && strings.Contains(text, "follow up"):
+			return "repeats"
+		case suffix == "_repeat":
+			return "adds"
+		case strings.Contains(text, "note"):
+			return "unrelated"
+		}
+		return "relevant"
+	}, "", requests)}
+	search := func(o *RerankOptions) ContextBundle {
+		t.Helper()
+		out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "alpha deploy", Explain: true, RerankOptions: o})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	both := &RerankOptions{Prune: true, Dedup: true}
+	base := search(both)
+	if len(base.Items) < 3 || requests.Load() != 0 {
+		t.Fatalf("off by default: %v requests=%d", ids(base.Items), requests.Load())
+	}
+	setDecisionModels(t, f, map[string]string{decisionTaskRecall: "jev"})
+	if out := search(nil); len(out.Items) != len(base.Items) || requests.Load() != 0 {
+		t.Fatalf("no options, no call: %v", ids(out.Items))
+	}
+	dedup := search(&RerankOptions{Dedup: true})
+	if requests.Load() != 1 || slices.Contains(ids(dedup.Items), "delta") || !slices.Contains(ids(dedup.Items), "alpha") || dedup.Explain.Dropped["decision_dedup"] != 1 {
+		t.Fatalf("dedup: %v %+v", ids(dedup.Items), dedup.Explain.Dropped)
+	}
+	out := search(both)
+	if slices.Contains(ids(out.Items), "alpha") || slices.Contains(ids(out.Items), "delta") || out.Explain.Dropped["decision_prune"] != 1 || !slices.Contains(ids(out.Items), "secret") || !slices.Contains(ids(out.Items), "personal") {
+		t.Fatalf("prune+dedup (restricted and private rows are never sent, so they stay): %v %+v", ids(out.Items), out.Explain.Dropped)
+	}
+	if usage := ledgerOf(f, "wiki_decision_recall"); len(usage) != 2 {
+		t.Fatalf("each call is recorded: %+v", usage)
+	}
+	// The space's recall defaults ask too; a failed engine keeps every row.
+	var q SpaceConfigInput
+	if err := json.Unmarshal([]byte(`{"expected_revision":-1,"recall_quality":{"rerank_options":{"dedup":true}}}`), &q); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, q, false); err != nil {
+		t.Fatal(err)
+	}
+	if out := search(nil); slices.Contains(ids(out.Items), "delta") || requests.Load() != 3 {
+		t.Fatalf("space default: %v", ids(out.Items))
+	}
+	f.svc.Judges = map[string]SkillJudge{"jev": &JevJudge{APIKey: "k", Endpoint: "http://127.0.0.1:1"}}
+	if out := search(both); len(out.Items) != len(base.Items) {
+		t.Fatalf("failed engine: %v", ids(out.Items))
 	}
 }

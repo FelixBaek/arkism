@@ -56,7 +56,8 @@ const documentScanMax = 1000
 
 // ListExtractDocuments lists the scope's extraction documents, newest first,
 // optionally only those with a tag or whose name, tags or chunk text contain
-// page.Q. An agent sees only the documents whose last upload it started, as
+// page.Q, and that were added (or with time_field updated, last changed) in the
+// page's range. An agent sees only the documents whose last upload it started, as
 // with the upload jobs themselves.
 func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope Scope, page DocumentPage) (ExtractDocumentPage, error) {
 	out := ExtractDocumentPage{Items: []ExtractDocument{}}
@@ -64,18 +65,21 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 	if err != nil {
 		return out, err
 	}
-	cursor, scanned := page.Cursor, 0
+	cursor, scanned, from := page.Cursor, 0, page.From
+	if page.TimeField == "updated" {
+		from = time.Time{} // a document changes after it is added: only the end bounds the query, the rest is read here
+	}
 	for {
-		rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, From: page.From, To: page.To, Cursor: cursor, Limit: page.Limit - len(out.Items)}, "jobs")
+		rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Tag: page.Tag, From: from, To: page.To, Cursor: cursor, Limit: page.Limit - len(out.Items)}, "jobs")
 		if err != nil {
 			return out, err
 		}
-		if err = s.addExtractDocuments(ctx, d, scope, page.Q, rows, &out); err != nil {
+		if err = s.addExtractDocuments(ctx, d, scope, page, rows, &out); err != nil {
 			return out, err
 		}
 		scanned += len(rows)
 		cursor = next
-		if page.Q == "" || next == "" || len(out.Items) >= page.Limit || scanned >= documentScanMax {
+		if page.Q == "" && from.Equal(page.From) || next == "" || len(out.Items) >= page.Limit || scanned >= documentScanMax {
 			break
 		}
 	}
@@ -83,8 +87,8 @@ func (s *Service) ListExtractDocuments(ctx context.Context, token string, scope 
 	return out, nil
 }
 
-// addExtractDocuments appends the rows the caller may see and, with q, that match it.
-func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Scope, q string, rows []Record, out *ExtractDocumentPage) error {
+// addExtractDocuments appends the rows the caller may see and that match page.Q and, by update time, the range.
+func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Scope, page DocumentPage, rows []Record, out *ExtractDocumentPage) error {
 	var err error
 	for _, doc := range rows {
 		item := ExtractDocument{ID: doc.ID, Tags: append([]string{}, doc.Tags...), CreatedAt: doc.CreatedAt, UpdatedAt: doc.UpdatedAt}
@@ -99,12 +103,17 @@ func (s *Service) addExtractDocuments(ctx context.Context, d Decision, scope Sco
 				item.JobID, item.Status, item.Label, item.Chunks, item.CandidatesCreated, item.RequestedBy = job.ID, job.Status, j.Label, j.Delta.ChunksTotal, j.CandidatesCreated, j.RequestedBy
 			}
 		}
-		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) || q != "" && !documentMatches(item, job.FileExtract, q) {
+		if d.Role == roleAgent && (item.JobID == "" || !ownsJob(d, job)) || page.Q != "" && !documentMatches(item, job.FileExtract, page.Q) || !updatedIn(page, doc.UpdatedAt) {
 			continue
 		}
 		out.Items = append(out.Items, item)
 	}
 	return nil
+}
+
+// updatedIn reports whether a document last changed at t is in the page's range when the range is by update time.
+func updatedIn(page DocumentPage, t time.Time) bool {
+	return page.TimeField != "updated" || (page.From.IsZero() || !t.Before(page.From)) && (page.To.IsZero() || t.Before(page.To))
 }
 
 // documentMatches reports whether q is in the document's name, a tag or a chunk's text, ignoring case.

@@ -404,3 +404,56 @@ func TestReflectModelSettingsRoundTrip(t *testing.T) {
 		t.Fatal("a remote ref is refused")
 	}
 }
+
+// consolidation.max_memories_per_round stops a run once its groups hold that many memories;
+// the group that reaches it still runs, and an empty block hands the cap back (no cap).
+func TestConsolidationMaxMemoriesPerRound(t *testing.T) {
+	f, _, ms := obsFixture(t)
+	for _, m := range ms[:3] {
+		f.editRecord(colMemories, m.ID, func(r *Record) { r.Tags = []string{"a", "b", "c", "d"} })
+	}
+	put := func(block *SpaceConsolidation) error {
+		_, err := f.svc.PutSpaceConfig(testCtx, f.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, Consolidation: block}, false)
+		return err
+	}
+	plan := func() ObservationConsolidateResult {
+		t.Helper()
+		out, err := f.svc.ConsolidateObservations(testCtx, f.human, ObservationConsolidateInput{Scope: scopeA, PlanOnly: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	limits := func(out ObservationConsolidateResult) int {
+		n := 0
+		for _, r := range out.Rejected {
+			if r.Code == "round_limit" {
+				n++
+			}
+		}
+		return n
+	}
+	if err := put(&SpaceConsolidation{DefaultScopeMode: "per_tag", BatchSize: 4}); err != nil {
+		t.Fatal(err)
+	}
+	if out := plan(); out.Groups != 4 || limits(out) != 0 {
+		t.Fatalf("no cap: %+v", out)
+	}
+	for cap, groups := range map[int]int{3: 1, 4: 2, 12: 4} {
+		if err := put(&SpaceConsolidation{DefaultScopeMode: "per_tag", BatchSize: 4, MaxMemoriesPerRound: cap}); err != nil {
+			t.Fatal(err)
+		}
+		if out := plan(); out.Groups != groups || limits(out) != min(1, 4-groups) {
+			t.Fatalf("cap %d: %+v", cap, out)
+		}
+	}
+	if err := put(&SpaceConsolidation{MaxMemoriesPerRound: -1}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("a negative cap is refused: %v", err)
+	}
+	if err := put(&SpaceConsolidation{}); err != nil {
+		t.Fatal(err)
+	}
+	if view, err := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA); err != nil || view.Config.Consolidation != nil && view.Config.Consolidation.MaxMemoriesPerRound != 0 {
+		t.Fatalf("reset: %+v %v", view.Config.Consolidation, err)
+	}
+}

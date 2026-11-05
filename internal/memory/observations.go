@@ -18,6 +18,7 @@ package memory
 // Every change is kept as a revision (History), so a person can compare them.
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -44,12 +45,14 @@ const (
 	obsHistoryMax    = 50
 	obsGroupsDefault = 3
 	obsGroupsMax     = 10
-	obsRunTokens     = 40000
-	obsListLimit     = 500
-	obsPageDefault   = 50
-	obsPageMax       = 100
-	obsBatchMax      = 50
-	obsPromptVersion = "observation-v1"
+	// obsRoundMemoriesMax bounds the space setting consolidation.max_memories_per_round.
+	obsRoundMemoriesMax = 100000
+	obsRunTokens        = 40000
+	obsListLimit        = 500
+	obsPageDefault      = 50
+	obsPageMax          = 100
+	obsBatchMax         = 50
+	obsPromptVersion    = "observation-v1"
 )
 
 var (
@@ -144,6 +147,8 @@ type ObservationConsolidateInput struct {
 	// scopeTags and mission are the observation scope a group is asked in (consolidation_scopes.go).
 	scopeTags []string
 	mission   string
+	// roundMax is the space's consolidation.max_memories_per_round (0: no cap).
+	roundMax int
 }
 
 // ConsolidationPlan is what a run would do, in the order it would do it.
@@ -171,6 +176,21 @@ type ObservationConsolidateResult struct {
 	Calls        int                    `json:"calls"`
 	Tokens       int64                  `json:"tokens"`
 	Authority    string                 `json:"authority"`
+	// memories counts the memories the run's groups hold, for max_memories_per_round.
+	memories int
+}
+
+// roundFull reports whether the run already holds the space's max_memories_per_round memories
+// (listing the stop once as round_limit); otherwise it counts the next group's n memories.
+func (in ObservationConsolidateInput) roundFull(n int, out *ObservationConsolidateResult) bool {
+	if in.roundMax > 0 && out.memories >= in.roundMax {
+		if !slices.ContainsFunc(out.Rejected, func(r ObservationRejection) bool { return r.Code == "round_limit" }) {
+			out.Rejected = append(out.Rejected, ObservationRejection{Group: out.Groups, Code: "round_limit"})
+		}
+		return true
+	}
+	out.memories += n
+	return false
 }
 
 type ObservationReviewInput struct {
@@ -576,12 +596,11 @@ func (s *Service) consolidateObservations(ctx context.Context, token string, in 
 	if err != nil {
 		return ObservationConsolidateResult{}, err
 	}
-	if in.MaxGroups == 0 {
-		in.MaxGroups = obsGroupsDefault
-		if c, err := s.spaceSettings(ctx, in.Scope); err == nil && c.Consolidation != nil && c.Consolidation.BatchSize > 0 {
-			in.MaxGroups = c.Consolidation.BatchSize // read only after authorization
-		}
+	if c, err := s.spaceSettings(ctx, in.Scope); err == nil && c.Consolidation != nil { // read only after authorization
+		in.MaxGroups = cmp.Or(in.MaxGroups, c.Consolidation.BatchSize)
+		in.roundMax = c.Consolidation.MaxMemoriesPerRound
 	}
+	in.MaxGroups = cmp.Or(in.MaxGroups, obsGroupsDefault)
 	out := ObservationConsolidateResult{DryRun: in.DryRun, Proposed: []ObservationView{}, Refreshed: []ObservationView{}, Rejected: []ObservationRejection{},
 		MentalModels: []MentalModelView{}, Authority: AuthorityDataOnly}
 	if in.PlanOnly {
@@ -706,6 +725,9 @@ func (s *Service) refreshStaleObservations(ctx context.Context, token string, d 
 		if len(members) < 2 {
 			continue
 		}
+		if in.roundFull(len(members), out) {
+			break
+		}
 		done++
 		out.Groups++
 		if out.Plan != nil {
@@ -819,6 +841,9 @@ func (s *Service) proposeObservations(ctx context.Context, token string, d Decis
 			}
 			if out.Plan == nil && s.settledByDecision(ctx, token, in.Scope, settings, mine, group, out.Groups, out) {
 				continue
+			}
+			if in.roundFull(len(group), out) {
+				break
 			}
 			count, asked = count+1, asked+1
 			out.Groups++
