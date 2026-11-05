@@ -113,6 +113,8 @@ type SpaceConfigInput struct {
 	RecallBudgetTokens     *int                `json:"recall_budget_tokens,omitempty"`
 	ReflectMaxTokens       *int                `json:"reflect_max_tokens,omitempty"`
 	AutoDerive             *SpaceAutoDerive    `json:"auto_derive,omitempty"`
+
+	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }
 
 type SpaceView struct {

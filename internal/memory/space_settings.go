@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"regexp"
@@ -173,20 +175,11 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.ExtractionInstructions != nil {
 		c.ExtractionInstructions = strings.TrimSpace(*in.ExtractionInstructions)
 	}
-	if in.Lanes != nil {
-		if c.Lanes == nil {
-			c.Lanes = &SpaceLanes{}
-		}
-		for _, f := range spaceLaneFields {
-			if v := *f.get(in.Lanes); v != nil {
-				*f.get(c.Lanes) = v
-			}
-		}
-	}
-	if in.Rerank != nil {
+	applySpaceLanes(c, in)
+	if in.Rerank != nil || in.resets.rerank {
 		c.Rerank = in.Rerank
 	}
-	if in.RerankModel != nil {
+	if in.RerankModel != nil || in.resets.rerankModel {
 		c.RerankModel = in.RerankModel
 	}
 	if in.DefenseRules != nil {
@@ -203,6 +196,65 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	}
 	if in.AutoDerive != nil {
 		c.AutoDerive = mergeAutoDerive(c.AutoDerive, *in.AutoDerive)
+	}
+}
+
+// spaceResets are the boolean settings a PATCH hands back to the template or
+// server default by sending null: booleans have no empty value like "" or 0.
+type spaceResets struct {
+	lanes, rerank, rerankModel bool
+	lane                       []string // lanes.<name>: null
+}
+
+// UnmarshalJSON decodes the input strictly and notes which boolean settings were sent as null.
+func (in *SpaceConfigInput) UnmarshalJSON(b []byte) error {
+	type plain SpaceConfigInput
+	d := json.NewDecoder(bytes.NewReader(b))
+	d.DisallowUnknownFields()
+	if err := d.Decode((*plain)(in)); err != nil {
+		return err
+	}
+	var raw struct {
+		Lanes       json.RawMessage `json:"lanes"`
+		Rerank      json.RawMessage `json:"rerank"`
+		RerankModel json.RawMessage `json:"rerank_model"`
+	}
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+	isNull := func(m json.RawMessage) bool { return string(m) == "null" }
+	in.resets = spaceResets{lanes: isNull(raw.Lanes), rerank: isNull(raw.Rerank), rerankModel: isNull(raw.RerankModel)}
+	var lanes map[string]json.RawMessage
+	if in.Lanes != nil && json.Unmarshal(raw.Lanes, &lanes) == nil {
+		for _, f := range spaceLaneFields {
+			if isNull(lanes[f.name]) {
+				in.resets.lane = append(in.resets.lane, f.name)
+			}
+		}
+	}
+	return nil
+}
+
+// applySpaceLanes sets the lanes a PUT or PATCH sent; null or {} hands them all
+// back, a lane sent as null hands back that lane.
+func applySpaceLanes(c *SpaceConfig, in SpaceConfigInput) {
+	if in.resets.lanes || in.Lanes != nil && *in.Lanes == (SpaceLanes{}) && len(in.resets.lane) == 0 {
+		c.Lanes = nil
+		return
+	}
+	if in.Lanes == nil {
+		return
+	}
+	if c.Lanes == nil {
+		c.Lanes = &SpaceLanes{}
+	}
+	for _, f := range spaceLaneFields {
+		if v := *f.get(in.Lanes); v != nil || slices.Contains(in.resets.lane, f.name) {
+			*f.get(c.Lanes) = v
+		}
+	}
+	if *c.Lanes == (SpaceLanes{}) {
+		c.Lanes = nil
 	}
 }
 

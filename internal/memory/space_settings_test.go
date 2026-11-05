@@ -331,3 +331,51 @@ func TestSpaceReflectGuidanceInherits(t *testing.T) {
 		t.Fatal("space mission over template", view.Sources, out.Prompt, err)
 	}
 }
+
+// Booleans have no empty value, so a PATCH sends null to hand lanes, one lane,
+// rerank or rerank_model back to the template or server default.
+func TestSpaceSettingsPatchNullInherits(t *testing.T) {
+	f := newFixture(t)
+	f.svc.SpaceTemplate = &SpaceTemplate{Config: SpaceConfig{Rerank: new(bool)}}
+	patch := func(body string) (int, string) {
+		req := httptest.NewRequest("PATCH", "/v1/spaces/ws-a/proj-a/config", strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+f.human)
+		w := httptest.NewRecorder()
+		Handler(f.svc).ServeHTTP(w, req)
+		return w.Code, w.Body.String()
+	}
+	if code, body := patch(`{"expected_revision":-1,"lanes":{"fts":false,"graph":false},"rerank":true,"rerank_model":true}`); code != 200 {
+		t.Fatal(code, body)
+	}
+	view, _ := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
+	if view.Sources["rerank"] != spaceSourceSpace || !*view.Config.Rerank || view.Sources["lanes.fts"] != spaceSourceSpace {
+		t.Fatalf("set: %+v %v", view.Config, view.Sources)
+	}
+	if code, body := patch(`{"expected_revision":-1,"lanes":{"fts":null},"rerank":null,"rerank_model":null}`); code != 200 {
+		t.Fatal(code, body)
+	}
+	got, _ := f.svc.GetSpaceConfig(testCtx, f.human, scopeA)
+	if c := got.Config; c.Rerank != nil || c.RerankModel != nil || c.Lanes == nil || c.Lanes.FTS != nil || c.Lanes.Graph == nil || *c.Lanes.Graph {
+		t.Fatalf("after null: %+v lanes %+v", c, c.Lanes)
+	}
+	view, _ = f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
+	if view.Sources["rerank"] != spaceSourceTemplate || *view.Config.Rerank || view.Sources["lanes.fts"] != spaceSourceServer || view.Sources["lanes.graph"] != spaceSourceSpace {
+		t.Fatalf("inherits: %+v %v", view.Config, view.Sources)
+	}
+	// An absent key stays; null or {} hands every lane back.
+	for _, body := range []string{`{"expected_revision":-1,"lanes":null}`, `{"expected_revision":-1,"lanes":{}}`} {
+		patch(`{"expected_revision":-1,"lanes":{"vector":false}}`)
+		if code, out := patch(body); code != 200 {
+			t.Fatal(code, out)
+		}
+		if got, _ = f.svc.GetSpaceConfig(testCtx, f.human, scopeA); got.Config.Lanes != nil {
+			t.Fatalf("%s left %+v", body, got.Config.Lanes)
+		}
+	}
+	if code, _ := patch(`{"expected_revision":-1,"lanes":{"fts":null,"bogus":true}}`); code != 400 {
+		t.Fatal("unknown lane accepted", code)
+	}
+	if code, _ := patch(`{"expected_revision":-1,"other":null}`); code != 400 {
+		t.Fatal("unknown key accepted", code)
+	}
+}
