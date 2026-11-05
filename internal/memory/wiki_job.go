@@ -298,14 +298,20 @@ func wikiWritePrompt(plan []wikiPlanItem, current map[string]string, source stri
 
 func parseWikiPlan(out string) (wikiPlan, bool) {
 	var p wikiPlan
+	if !decodeModelJSON(out, &p) {
+		return wikiPlan{}, false
+	}
+	return p, true
+}
+
+// decodeModelJSON strictly decodes one JSON value from a model answer, allowing
+// only a surrounding code fence: unknown fields and trailing data are refused.
+func decodeModelJSON(out string, v any) bool {
 	out = strings.TrimSpace(out)
 	out = strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(out, "```json"), "```"), "```")
 	dec := json.NewDecoder(strings.NewReader(out))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&p) != nil || dec.Decode(new(any)) != io.EOF {
-		return wikiPlan{}, false
-	}
-	return p, true
+	return dec.Decode(v) == nil && dec.Decode(new(any)) == io.EOF
 }
 
 // wikiDailyCalls counts wiki model calls already made in the scope today.
@@ -595,6 +601,21 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 }
 
 func (s *Service) wikiSourceText(ctx context.Context, scope Scope, src Record) (string, error) {
+	source, err := s.knowledgeSourceText(ctx, scope, src)
+	if err != nil {
+		return "", err
+	}
+	if utf8.RuneCountInString(source) > wikiMaxSourceRunes {
+		return "", errWikiBudget
+	}
+	if containsSecret(source) {
+		return "", ErrSecretDetected
+	}
+	return source, nil
+}
+
+// knowledgeSourceText joins the chunks of the source's current document.
+func (s *Service) knowledgeSourceText(ctx context.Context, scope Scope, src Record) (string, error) {
 	doc, err := s.Repo.Get(ctx, colKnowledgeDocuments, scope, src.Knowledge.DocumentID)
 	if err != nil {
 		return "", err
@@ -607,17 +628,10 @@ func (s *Service) wikiSourceText(ctx context.Context, scope Scope, src Record) (
 		}
 		text.WriteString(c.Text)
 	}
-	source := text.String()
-	if strings.TrimSpace(source) == "" {
+	if strings.TrimSpace(text.String()) == "" {
 		return "", ErrInvalid
 	}
-	if utf8.RuneCountInString(source) > wikiMaxSourceRunes {
-		return "", errWikiBudget
-	}
-	if containsSecret(source) {
-		return "", ErrSecretDetected
-	}
-	return source, nil
+	return text.String(), nil
 }
 
 func wikiPagesBySlug(existing []Record) map[string]Record {

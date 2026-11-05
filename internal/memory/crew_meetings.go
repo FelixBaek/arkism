@@ -365,19 +365,12 @@ func briefMeeting(r Record) Record {
 	m.TeamSnapshot = nil
 	turns := make([]MeetingTurn, len(m.Turns))
 	for i, t := range m.Turns {
-		t.Text = clipRunes(t.Text, 0)
+		t.Text = runeCutString(t.Text, 0)
 		turns[i] = t
 	}
-	m.Turns, m.Topic = turns, clipRunes(m.Topic, 300)
+	m.Turns, m.Topic = turns, runeCutString(m.Topic, 300)
 	r.CrewMeeting = &m
 	return r
-}
-
-func clipRunes(s string, n int) string {
-	if r := []rune(s); len(r) > n {
-		return string(r[:n])
-	}
-	return s
 }
 
 // ListCrewMeetings returns meetings newest first with counts; brief leaves out texts and snapshots.

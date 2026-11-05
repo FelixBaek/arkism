@@ -134,6 +134,11 @@ func knowledgeLive(ctx context.Context, tx Tx, r Record) error {
 	}
 	return checkSources(ctx, tx, r)
 }
+
+// knowledgeFileMIME is the file types a person can upload as text (memory
+// extraction from files reads the same types, plus PDF).
+var knowledgeFileMIME = map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".docx": knowledgeDOCXMIME}
+
 func (s *Service) IngestKnowledge(ctx context.Context, token string, in KnowledgeIngestInput) (KnowledgeIngestResult, error) {
 	var out KnowledgeIngestResult
 	d, e := s.knowledgeAuthorization(ctx, token, "write:"+colKnowledgeSources, in.Scope, "")
@@ -144,7 +149,7 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 		return out, ErrDenied
 	}
 	ext := strings.ToLower(path.Ext(in.Filename))
-	mime := map[string]string{".txt": "text/plain", ".md": "text/markdown", ".json": "application/json", ".docx": knowledgeDOCXMIME}[ext]
+	mime := knowledgeFileMIME[ext]
 	// chunkExt: a Word file's headings come out as Markdown headings.
 	chunkExt := ext
 	if ext == ".docx" {

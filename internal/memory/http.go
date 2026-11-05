@@ -78,6 +78,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerCaptureCoreHTTP(mux, s, stats)
 	registerRecordsCoreHTTP(mux, s, stats)
 	registerReflectCoreHTTP(mux, s, stats)
+	registerFileextractCoreHTTP(mux, s, stats)
 	catalogQueryRoutes(mux, s)
 	s.registerKnowledgeHTTP(mux)
 	googleLoginRoutes(mux, s.GoogleLogin)
@@ -260,6 +261,10 @@ func errorResponse(e error) (string, int) {
 		code, status = "digest_mismatch", 422
 	case errors.Is(e, ErrSecretDetected):
 		code, status = "secret_detected", 422
+	case errors.Is(e, errPDFNoText):
+		code, status = "no_extractable_text", 422
+	case errors.Is(e, errModelNotConfigured):
+		code, status = "model_not_configured", 503
 	case errors.Is(e, ErrSemanticLaneDown):
 		code, status = "semantic_lane_unavailable", 503
 	case errors.Is(e, ErrInvalid):

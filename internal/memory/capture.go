@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"log/slog"
@@ -58,6 +59,9 @@ type CaptureClaim struct {
 	RiskReasons  []string `json:"risk_reasons,omitempty"`
 	EvidenceSpan string   `json:"evidence_span,omitempty"`
 	DupHint      string   `json:"dup_hint,omitempty"`
+	// locator names where in the source the claim came from (a file page or
+	// chunk); only server-side extraction sets it, clients always get "original".
+	locator string
 }
 
 // classification is nil for a claim without a risk call.
@@ -360,7 +364,7 @@ func (s *Service) captureSourceRefs(ctx context.Context, token string, c Capture
 		if src.ID == "" {
 			src = r
 		}
-		canonicalSources = append(canonicalSources, sourceReference(r, "original"))
+		canonicalSources = append(canonicalSources, sourceReference(r, cmp.Or(c.locator, "original")))
 	}
 	return canonicalSources, src, nil
 }

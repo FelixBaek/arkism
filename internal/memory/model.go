@@ -125,6 +125,7 @@ type Record struct {
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`
 	Wiki                 *WikiRecord            `json:"wiki,omitempty" bson:"wiki,omitempty"`
 	Directive            *Directive             `json:"directive,omitempty" bson:"directive,omitempty"`
+	FileExtract          *FileExtractJob        `json:"file_extract,omitempty" bson:"file_extract,omitempty"`
 	Consultation         *Consultation          `json:"consultation,omitempty" bson:"consultation,omitempty"`
 	Handoff              *SpecialistHandoff     `json:"handoff,omitempty" bson:"handoff,omitempty"`
 	Audit                *AuditMetadata         `json:"audit,omitempty" bson:"audit,omitempty"`

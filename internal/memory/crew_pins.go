@@ -204,14 +204,6 @@ func resolveKnowledgePin(ctx context.Context, tx Tx, scope Scope, r Record, p Cr
 	return h, pinOK, nil
 }
 
-func clipText(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n])
-}
-
 // shapePin applies the pin's injection mode to a full hit.
 func shapePin(h Hit, p CrewPin) Hit {
 	h.Reasons = []string{"pinned", "pin_" + p.Injection}
@@ -219,17 +211,17 @@ func shapePin(h Hit, p CrewPin) Hit {
 	switch p.Injection {
 	case "full":
 		if runes(h.Text) > pinFullRunes {
-			h.Text = clipText(h.Text, pinFullRunes)
+			h.Text = runeCutString(h.Text, pinFullRunes)
 			h.Reasons = append(h.Reasons, "context_text_truncated")
 		}
 	case "summary":
 		summary := strings.TrimSpace(h.Summary)
 		if h.Collection == colKnowledgeSources && summary != "" {
-			summary += ": " + clipText(h.Text, pinSummaryRunes)
+			summary += ": " + runeCutString(h.Text, pinSummaryRunes)
 		} else if summary == "" {
-			summary = clipText(h.Text, pinSummaryRunes)
+			summary = runeCutString(h.Text, pinSummaryRunes)
 		}
-		h.Text, h.Summary = "", clipText(summary, pinSummaryRunes+pinReferenceRune)
+		h.Text, h.Summary = "", runeCutString(summary, pinSummaryRunes+pinReferenceRune)
 	default: // reference: a label and the id; the agent recalls the rest when it needs it
 		label := strings.TrimSpace(h.Summary)
 		if label == "" || h.Collection != colKnowledgeSources {
@@ -238,7 +230,7 @@ func shapePin(h Hit, p CrewPin) Hit {
 				label = strings.TrimSpace(h.Summary)
 			}
 		}
-		h.Text, h.Summary = "", clipText(label, pinReferenceRune)
+		h.Text, h.Summary = "", runeCutString(label, pinReferenceRune)
 	}
 	return h
 }

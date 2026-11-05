@@ -252,13 +252,13 @@ func (s *Service) BuildMergePool(ctx context.Context, token string, in MergePool
 			return out, err
 		}
 		out.Degraded = appendMissing(out.Degraded, degraded)
-		item := MergePoolItem{Ref: Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}, Kind: r.Kind, Text: clipText(r.Text, mergePoolTextRunes), UpdatedAt: r.UpdatedAt}
+		item := MergePoolItem{Ref: Ref{Collection: "memory_candidates", ID: r.ID, Revision: r.Revision}, Kind: r.Kind, Text: runeCutString(r.Text, mergePoolTextRunes), UpdatedAt: r.UpdatedAt}
 		for _, m := range similar {
 			item.Similar = append(item.Similar, m.ID)
 			if !memories[m.ID] {
 				memories[m.ID] = true
 				pool.Memories = append(pool.Memories, Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision})
-				out.Memories = append(out.Memories, MergePoolItem{Ref: Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision}, Kind: m.Kind, Text: clipText(m.Text, mergePoolTextRunes), UpdatedAt: m.UpdatedAt})
+				out.Memories = append(out.Memories, MergePoolItem{Ref: Ref{Collection: colMemories, ID: m.ID, Revision: m.Revision}, Kind: m.Kind, Text: runeCutString(m.Text, mergePoolTextRunes), UpdatedAt: m.UpdatedAt})
 			}
 		}
 		pool.Candidates = append(pool.Candidates, item.Ref)
@@ -300,7 +300,7 @@ func appendMissing(list, values []string) []string {
 // similarMemories returns the k approved memories closest to the candidate's
 // text, with the query vector and its space (empty when the text was not embedded).
 func (s *Service) similarMemories(ctx context.Context, token string, d Decision, scope Scope, cand Record, k int) ([]Record, []float64, string, []string, error) {
-	query := clipText(strings.TrimSpace(cand.Text), 1000)
+	query := runeCutString(strings.TrimSpace(cand.Text), 1000)
 	sd, err := s.authorize(ctx, token, "search:"+colMemories, scope, "", query)
 	if err != nil {
 		return nil, nil, "", nil, err

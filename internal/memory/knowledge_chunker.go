@@ -45,7 +45,7 @@ func knowledgeChunkText(normalized, ext string) []knowledgeChunk {
 	}
 	out := []knowledgeChunk{}
 	for _, section := range sections {
-		for _, text := range knowledgePackParagraphs(knowledgeParagraphs(section.lines, markdown)) {
+		for _, text := range knowledgePackParagraphs(knowledgeParagraphs(section.lines, markdown), knowledgeChunkMaxRunes) {
 			out = append(out, knowledgeChunk{Text: text, SectionPath: section.path})
 		}
 	}
@@ -173,25 +173,25 @@ func knowledgeParagraphs(lines []string, markdown bool) []string {
 	return out
 }
 
-// knowledgePackParagraphs joins paragraphs up to the chunk size and hard-cuts
-// any paragraph that alone exceeds it.
-func knowledgePackParagraphs(paragraphs []string) []string {
+// knowledgePackParagraphs joins paragraphs up to maxRunes and hard-cuts any
+// paragraph that alone exceeds it. Memory extraction packs larger chunks.
+func knowledgePackParagraphs(paragraphs []string, maxRunes int) []string {
 	out := []string{}
 	current := ""
 	for _, p := range paragraphs {
-		if utf8.RuneCountInString(p) > knowledgeChunkMaxRunes {
+		if utf8.RuneCountInString(p) > maxRunes {
 			if current != "" {
 				out = append(out, current)
 				current = ""
 			}
-			out = append(out, knowledgeHardCut(p)...)
+			out = append(out, knowledgeHardCut(p, maxRunes)...)
 			continue
 		}
 		joined := p
 		if current != "" {
 			joined = current + "\n\n" + p
 		}
-		if utf8.RuneCountInString(joined) > knowledgeChunkMaxRunes {
+		if utf8.RuneCountInString(joined) > maxRunes {
 			out = append(out, current)
 			joined = p
 		}
@@ -206,11 +206,11 @@ func knowledgePackParagraphs(paragraphs []string) []string {
 // knowledgeHardCut windows a long paragraph. Consecutive windows share up to
 // knowledgeChunkOverlapRunes runes so a sentence on a cut is found from either
 // side; a window ends at whitespace when one is close to the limit.
-func knowledgeHardCut(text string) []string {
+func knowledgeHardCut(text string, maxRunes int) []string {
 	runes := []rune(text)
 	out := []string{}
 	for start := 0; start < len(runes); {
-		end := min(start+knowledgeChunkMaxRunes, len(runes))
+		end := min(start+maxRunes, len(runes))
 		if end < len(runes) {
 			for i := end - 1; i > end-knowledgeChunkBreakWindow && i > start+knowledgeChunkOverlapRunes; i-- {
 				if unicode.IsSpace(runes[i]) {
