@@ -526,9 +526,9 @@ class ArkismClient(BaseClient):
         """POST /v1/spaces/{workspace}/{project}/export — Start exporting a space as a versioned JSONL bundle (read:memories with a transfer grant)"""
         return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/export", None, None)
 
-    def post_v1_spaces_by_workspace_by_project_import(self, workspace, project):
+    def post_v1_spaces_by_workspace_by_project_import(self, workspace, project, query=None):
         """POST /v1/spaces/{workspace}/{project}/import — Import a bundle into a space (human principals only)"""
-        return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/import", None, None)
+        return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/import", query, None)
 
     def get_v1_merge_proposals(self, query=None):
         """GET /v1/merge_proposals — Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals)"""

@@ -1,8 +1,11 @@
 package memory
 
 import (
+	"log/slog"
+	"mime"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // Space routes keep their policies here; init merges them into the one route table.
@@ -109,13 +112,32 @@ func (s *Service) coreHTTPPostV1SpacesExport(w http.ResponseWriter, r *http.Requ
 	respondAccepted(w, out, err)
 }
 
+// coreHTTPPostV1SpacesImport takes a JSON body ({bundle, ...}, up to 8 MB) or,
+// as application/x-ndjson, the bundle itself of any size up to 1 GiB with the
+// options in the query (import_as, as_template).
 func (s *Service) coreHTTPPostV1SpacesImport(w http.ResponseWriter, r *http.Request) {
+	if mt, _, _ := mime.ParseMediaType(r.Header.Get(headerContentType)); mt == "application/x-ndjson" {
+		extendSpaceTransfer(w)
+		q := r.URL.Query()
+		in := SpaceImportInput{ImportAs: q.Get("import_as"), AsTemplate: q.Get("as_template") == "true"}
+		out, err := s.ImportSpaceStream(r.Context(), bearer(r), pathSpace(r), in, http.MaxBytesReader(w, r.Body, spaceStreamMaxBytes))
+		respondAccepted(w, out, err)
+		return
+	}
 	var in SpaceImportInput
 	if !decodeLimit(w, r, &in, spaceBundleMaxBytes+(64<<10)) {
 		return
 	}
 	out, err := s.ImportSpace(r.Context(), bearer(r), pathSpace(r), in)
 	respondAccepted(w, out, err)
+}
+
+// extendSpaceTransfer lifts the server-wide read and write deadlines for one bundle transfer.
+func extendSpaceTransfer(w http.ResponseWriter) {
+	rc := http.NewResponseController(w)
+	deadline := time.Now().Add(spaceJobTimeout)
+	_ = rc.SetReadDeadline(deadline)
+	_ = rc.SetWriteDeadline(deadline)
 }
 
 func (s *Service) coreHTTPPostV1SpacesClone(w http.ResponseWriter, r *http.Request) {
@@ -141,10 +163,17 @@ func (s *Service) coreHTTPGetV1SpacesJob(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Service) coreHTTPGetV1SpacesExportDownload(w http.ResponseWriter, r *http.Request) {
-	bundle, err := s.DownloadSpaceExport(r.Context(), bearer(r), scopeQuery(r), r.PathValue("job"))
+	stream, err := s.DownloadSpaceExport(r.Context(), bearer(r), scopeQuery(r), r.PathValue("job"))
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
-	writeAttachment(w, "application/x-ndjson", "space-bundle.jsonl", []byte(bundle))
+	// Streamed without a length: a transfer cut by an error ends without the trailer line, and import refuses it.
+	extendSpaceTransfer(w)
+	w.Header().Set(headerContentType, "application/x-ndjson")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": "space-bundle.jsonl"}))
+	w.WriteHeader(http.StatusOK)
+	if err = stream(w); err != nil {
+		slog.Warn("space bundle stream cut", "job", r.PathValue("job"), "error", captureErrorCode(err))
+	}
 }

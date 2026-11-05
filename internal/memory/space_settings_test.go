@@ -270,7 +270,7 @@ func TestSpaceExportHidesRulesFromAgents(t *testing.T) {
 		t.Skipf("agent cannot export in this fixture: %v", err)
 	}
 	waitSpaceJob(t, f, scopeA, job.ID)
-	bundle, err := f.svc.DownloadSpaceExport(testCtx, f.agent, scopeA, job.ID)
+	bundle, err := downloadBundle(f, f.agent, scopeA, job.ID)
 	if err != nil || strings.Contains(bundle, "falcon") || strings.Contains(bundle, "codename") {
 		t.Fatalf("agent export carries rules: %v", err)
 	}

@@ -64,7 +64,7 @@ func (s *Service) autoApplySpaceTemplate(ctx context.Context, token string, d De
 	}
 	job := SpaceJob{Kind: spaceJobImport, Template: true, BundleID: manifest.BundleID, Manifest: &manifest}
 	if _, err = s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
-		report, err := s.importSpaceLines(ctx, token, d, scope, manifest, lines, false)
+		report, err := s.importSpaceLines(ctx, token, d, scope, manifest, sliceLines(lines), false)
 		job.Report = &report
 		return err
 	}); err != nil {

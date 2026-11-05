@@ -1175,8 +1175,8 @@ export class ArkismClient {
     return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/export`, undefined, undefined);
   }
   /** POST /v1/spaces/{workspace}/{project}/import — Import a bundle into a space (human principals only) */
-  postV1SpacesByWorkspaceByProjectImport(workspace: string, project: string): Promise<unknown> {
-    return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/import`, undefined, undefined);
+  postV1SpacesByWorkspaceByProjectImport(workspace: string, project: string, query?: { "import_as"?: "candidate" | "approved"; "as_template"?: "true" | "false" }): Promise<unknown> {
+    return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/import`, query, undefined);
   }
   /** GET /v1/merge_proposals — Memory merge proposals of one status (default open), newest first, up to 500 (read:merge_proposals) */
   getV1MergeProposals(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "status"?: "open" | "accepted" | "dismissed" | "stale" }): Promise<unknown> {

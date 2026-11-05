@@ -78,11 +78,21 @@ func exportBundle(t *testing.T, f *fixture, scope Scope, in SpaceExportInput) st
 		t.Fatal(err)
 	}
 	waitSpaceJob(t, f, scope, job.ID)
-	bundle, err := f.svc.DownloadSpaceExport(testCtx, f.human, scope, job.ID)
+	bundle, err := downloadBundle(f, f.human, scope, job.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return bundle
+}
+
+func downloadBundle(f *fixture, token string, scope Scope, id string) (string, error) {
+	stream, err := f.svc.DownloadSpaceExport(testCtx, token, scope, id)
+	if err != nil {
+		return "", err
+	}
+	var out strings.Builder
+	err = stream(&out)
+	return out.String(), err
 }
 
 func importBundle(t *testing.T, f *fixture, scope Scope, bundle, as string) SpaceReport {
@@ -188,27 +198,33 @@ func TestSpaceExportLeavesOutErasedAndPrivate(t *testing.T) {
 	for _, s := range m.Skipped {
 		reasons = append(reasons, s.Section+":"+s.Reason)
 	}
-	for _, want := range []string{"memories:erased", "memories:privacy_excluded", "observations:not_exportable", "nonsense:not_exportable"} {
+	for _, want := range []string{"memories:erased", "memories:privacy_excluded", "nonsense:not_exportable"} {
 		if !slices.Contains(reasons, want) {
 			t.Fatalf("skipped %v lacks %s", reasons, want)
 		}
 	}
 }
 
-func TestSpaceDownloadRefusesBundleStaleAfterErasure(t *testing.T) {
+func TestSpaceDownloadStreamsFreshAfterErasure(t *testing.T) {
 	f := newFixture(t)
 	mem := f.activeMemory("short lived", "z")
 	job, err := f.svc.ExportSpace(testCtx, f.human, scopeA, SpaceExportInput{Include: []string{colMemories}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitSpaceJob(t, f, scopeA, job.ID)
+	if done := waitSpaceJob(t, f, scopeA, job.ID); done.Manifest.Sections[0].Count != 1 {
+		t.Fatalf("export counted %+v", done.Manifest)
+	}
 	mem.ContentErased = true
 	if err = f.repo.Replace(testCtx, colMemories, mem, mem.Revision); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.svc.DownloadSpaceExport(testCtx, f.human, scopeA, job.ID); !errors.Is(err, ErrConflict) {
-		t.Fatalf("stale download err = %v", err)
+	bundle, err := downloadBundle(f, f.human, scopeA, job.ID)
+	if err != nil || strings.Contains(bundle, "short lived") {
+		t.Fatalf("download after erasure = %v %q", err, bundle)
+	}
+	if m, _, err := parseSpaceBundle(bundle); err != nil || m.Sections[0].Count != 0 || m.Skipped[0].Reason != "erased" {
+		t.Fatalf("fresh manifest = %+v %v", m, err)
 	}
 }
 
@@ -280,24 +296,26 @@ func TestSpaceExportNeedsExternalTransferGrant(t *testing.T) {
 	}
 }
 
-func TestSpaceStaleBundleIsDroppedAndDeadJobReported(t *testing.T) {
+func TestSpaceLegacyBundleIsDroppedAndDeadJobReported(t *testing.T) {
 	f := newFixture(t)
-	mem := f.activeMemory("temporary rule", "t")
+	f.activeMemory("temporary rule", "t")
 	job, err := f.svc.ExportSpace(testCtx, f.human, scopeA, SpaceExportInput{Include: []string{colMemories}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitSpaceJob(t, f, scopeA, job.ID)
-	mem.ContentErased = true
-	if err = f.repo.Replace(testCtx, colMemories, mem, mem.Revision); err != nil {
+	row, _ := f.repo.Get(testCtx, colJobs, scopeA, job.ID)
+	legacy := *row.SpaceJob
+	legacy.Bundle = "old bundle text"
+	row.SpaceJob = &legacy
+	if err = f.repo.Replace(testCtx, colJobs, row, row.Revision); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.svc.DownloadSpaceExport(testCtx, f.human, scopeA, job.ID); !errors.Is(err, ErrConflict) {
-		t.Fatalf("stale download err = %v", err)
+	if _, err = downloadBundle(f, f.human, scopeA, job.ID); err != nil {
+		t.Fatal(err)
 	}
-	row, _ := f.repo.Get(testCtx, colJobs, scopeA, job.ID)
-	if row.SpaceJob.Bundle != "" {
-		t.Fatal("stale bundle text stayed on the job row")
+	if row, _ = f.repo.Get(testCtx, colJobs, scopeA, job.ID); row.SpaceJob.Bundle != "" {
+		t.Fatal("legacy bundle text stayed on the job row")
 	}
 	old := time.Now().Add(-time.Hour)
 	dead := Record{ID: "spj_dead", Scope: scopeA, Kind: spaceJobExport, Status: JobStatusDone, Revision: 1, CreatedAt: old, UpdatedAt: old, SpaceJob: &SpaceJob{Kind: spaceJobExport, State: "queued"}}
