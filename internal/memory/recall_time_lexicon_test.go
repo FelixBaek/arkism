@@ -22,6 +22,7 @@ func TestParseTimeIntentLexicons(t *testing.T) {
 		"ko":    {"2주 전": twoWeeks, "두 주 전": twoWeeks, "3개월 전": threeMonths, "2025년": lastYear, "이틀 전": before},
 		"ja":    {"2週間前": twoWeeks, "3ヶ月前": threeMonths, "1年前": lastYear},
 		"zh":    {"两周前": twoWeeks, "三个月前": threeMonths, "一年前": lastYear},
+		"yue":   {"琴日": yesterday, "尋日開咗會": yesterday, "上個禮拜": lastWeek, "呢個禮拜": span(day(2026, 11, 2), day(2026, 11, 9)), "今個月": span(day(2026, 11, 1), day(2026, 12, 1)), "舊年": lastYear},
 		"es":    {"hace dos semanas": twoWeeks, "hace un año": lastYear},
 		"de":    {"vor zwei Wochen": twoWeeks, "vor einem Jahr": lastYear, "Mitte Oktober": midOct},
 		"pt":    {"ontem": yesterday, "hoje": today, "anteontem": before, "há 3 dias": threeDays, "3 dias atrás": threeDays, "semana passada": lastWeek, "ano passado": lastYear, "31 de outubro de 2026": oct31, "em outubro": october, "fim de outubro": lateOct},
@@ -174,6 +175,7 @@ func TestParseTimeIntentWeekends(t *testing.T) {
 		"el fin de semana pasado": last, "este fin de semana": this,
 		"le week-end dernier": last, "ce weekend": this,
 		"letztes Wochenende": last, "am letzten Wochenende": last, "dieses Wochenende": this,
+		"на прошлых выходных": last, "прошлые выходные": last, "в эти выходные": this, "呢個週末": this, "上個週末": last,
 		"no fim de semana passado": last, "lo scorso fine settimana": last, "questo weekend": this,
 	}
 	for _, now := range []time.Time{time.Date(2026, 11, 5, 10, 0, 0, 0, seoul), time.Date(2026, 11, 8, 22, 0, 0, 0, seoul)} { // Thursday, Sunday
