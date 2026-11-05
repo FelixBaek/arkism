@@ -31,6 +31,9 @@ type chatRequest struct {
 	maxTokens    int
 	jsonOut      bool // ask for a JSON object where the protocol has a switch for it
 	timeout      time.Duration
+	// keyless allows an empty key (a model on this computer); lenientUsage books one
+	// request without token counts when the reply's usage is missing or malformed.
+	keyless, lenientUsage bool
 }
 
 type chatReply struct {
@@ -43,7 +46,7 @@ type chatReply struct {
 func ValidLLMProtocol(p string) bool { return p == "" || p == llmProtocolMessages }
 
 func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error) {
-	if c.APIKey == "" || c.Model == "" || !ValidLLMProtocol(c.Protocol) || validateEndpoint(c.Endpoint) != nil {
+	if c.APIKey == "" && !req.keyless || c.Model == "" || !ValidLLMProtocol(c.Protocol) || validateEndpoint(c.Endpoint) != nil {
 		return chatReply{}, ErrUnavailable
 	}
 	client := providerClient(nil, req.timeout)
@@ -86,7 +89,8 @@ func (c LLMConfig) chat(ctx context.Context, req chatRequest) (chatReply, error)
 		return chatReply{}, ErrUnavailable
 	}
 	usage := ProviderUsage{Provider: req.provider, Model: c.Model, Requests: 1, InputTokens: response.Usage.PromptTokens, OutputTokens: response.Usage.CompletionTokens, TotalTokens: response.Usage.TotalTokens}
-	if !validProviderUsage(usage) {
+	usage, ok := req.checkUsage(usage)
+	if !ok {
 		return chatReply{}, ErrUnavailable
 	}
 	return chatReply{text: response.Choices[0].Message.Content, usage: usage, complete: response.Choices[0].FinishReason == "stop"}, nil
@@ -117,8 +121,17 @@ func (c LLMConfig) messagesChat(ctx context.Context, client *http.Client, req ch
 		return chatReply{}, ErrUnavailable
 	}
 	usage.Provider, usage.Model = req.provider, c.Model
-	if !validProviderUsage(usage) {
+	usage, ok = req.checkUsage(usage)
+	if !ok {
 		return chatReply{}, ErrUnavailable
 	}
 	return chatReply{text: text, usage: usage, complete: stop == "end_turn"}, nil
+}
+
+// checkUsage refuses a reply whose usage is malformed, unless the request is lenient.
+func (req chatRequest) checkUsage(u ProviderUsage) (ProviderUsage, bool) {
+	if validProviderUsage(u) {
+		return u, true
+	}
+	return ProviderUsage{Provider: u.Provider, Model: u.Model, Requests: 1}, req.lenientUsage
 }

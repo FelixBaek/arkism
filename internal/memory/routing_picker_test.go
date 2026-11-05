@@ -49,6 +49,10 @@ func TestChatModelPickerAnswersWithOptionKey(t *testing.T) {
 	if id, _, err = p.PickModel(testCtx, "write the tests", options); err != nil || id != "b/y" {
 		t.Fatal("thinking is skipped", id, err)
 	}
+	reply = `{"choices":[{"message":{"content":"m0"}}],"usage":{"prompt_tokens":9,"completion_tokens":9,"total_tokens":1}}` // bad counts: one request is still booked
+	if id, usage, err = p.PickModel(testCtx, "write the tests", options); err != nil || id != "a/x" || usage != (ProviderUsage{Provider: "chat", Model: "qwen3:4b", Requests: 1}) {
+		t.Fatal("malformed usage is tolerated", id, usage, err)
+	}
 	reply = `{"choices":[{"message":{"content":"Not m0, use m1"}}]}`
 	if _, _, err = p.PickModel(testCtx, "write the tests", options); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("prose around keys is refused", err)
