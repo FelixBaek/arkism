@@ -657,7 +657,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const known = (ref) => { const m = ref && memOf(ref.id); return !!m && (ref.revision == null || m.revision === ref.revision); };
   // a proposal whose memory is gone or changed since is hidden, as on the 기억 screen: deciding it would only go stale
   const dreamItems = () => (D().maintenance || []).filter((p) => { const t = p.maintenance || {}; return t.change ? !!CHANGES[t.change.action] : t.memory ? known(t.memory) : known(t.keep) && known(t.retire); }).map((p) => { const t = p.maintenance || {}, chg = t.change && CHANGES[t.change.action];
-    return { dream: p, id: p.id, created_at: p.created_at, text: chg ? chg.title : memText(t.memory?.id || t.keep?.id), label: chg ? chg.label : t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
+    return { dream: p, id: p.id, created_at: p.created_at, text: chg ? (!chg.ask && changeOn(t.change)) || chg.title : memText(t.memory?.id || t.keep?.id), label: chg ? chg.label : t.memory ? "고치기" : DREAM_LABEL[t.type] || "정리" }; });
   // 충돌: the existing memory beside the new candidate, resolved here with the 기억 screen's resolveConflict (its notices and guards);
   // AI 제안 only lights one button and says why, the person still clicks
   const CONFLICT_PICK = { new: "새 내용으로 바꾸기", both: "둘 다 남기기", keep_old: "기존 것 유지" };

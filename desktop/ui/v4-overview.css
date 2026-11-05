@@ -455,5 +455,5 @@ input.ov-wide-search { padding-left: 32px !important; background-image: url("dat
 .ov-ops-pick { cursor: pointer; } .ov-ops-pick:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.0625rem; }
 .ov-ops-pick.on .ov-win-item-title { color: var(--nc-accent); font-weight: 500; }
 .ov-wide-detail .ov-detail-facts strong { overflow-wrap: anywhere; min-width: 0; }
-.ov-ops-text { max-height: 12rem; overflow: auto; margin: 0; padding: 0.625rem 0.75rem; border-radius: var(--nc-radius-control); background: var(--bg-muted); font-size: calc(0.75rem * var(--fs, 1)); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ov-ops-text { flex-shrink: 0; max-height: 12rem; overflow: auto; margin: 0; padding: 0.625rem 0.75rem; border-radius: var(--nc-radius-control); background: var(--bg-muted); font-size: calc(0.75rem * var(--fs, 1)); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ov-wide-foot { display: flex; align-items: center; gap: 8px; }
