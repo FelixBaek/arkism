@@ -114,6 +114,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /v1/skill_versions/{id}/zip":                      {action: "read:skill_versions", scope: routeQuery},
 	"GET /v1/{collection}/{id}":                            {action: "read:{collection}", scope: routeQuery},
 	"GET /{$}":                                             {},
+	"GET /app/":                                            {},
 	"POST /v1/agent_runs/{id}/finish":                      {action: "finish:agent_runs", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/agent_tools":                                 {action: "write:agent_tools", scope: routeJSON, limit: 256 << 10},
 	"POST /v1/agent_tools/requests":                        {action: "write:agent_tools", scope: routeJSON, limit: 256 << 10},

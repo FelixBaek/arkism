@@ -51,6 +51,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	mux := newAuthorizationMux(s)
 	registerHandoffsCoreHTTP(mux, s, stats)
 	registerHealthCoreHTTP(mux, s, stats)
+	registerWebuiCoreHTTP(mux, s, stats)
 	registerCapabilitiesCoreHTTP(mux, s, stats)
 	registerSourcesCoreHTTP(mux, s, stats)
 	registerDeletionsCoreHTTP(mux, s, stats)

@@ -123,6 +123,8 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes
+	// Empty: no web screens, and GET / keeps the plain text.
+	svc.WebUIDir = os.Getenv("ARKISM_WEB_UI_DIR")
 	if cfg.Recovery {
 		return nil
 	}

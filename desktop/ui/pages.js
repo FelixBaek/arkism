@@ -1190,6 +1190,14 @@ window.ArkismPages = (ctx) => {
   function tabConnect() {
     // 연결 방식: 이 PC(내장) 또는 SSH. SSH는 서버의 Arkism을 터널로 잇는다 — 토큰·주소를 넣을 일이 없다.
     const g = group("연결 방식");
+    // Web screens (memoryd /app/): SSH, this-PC mode and the model router token belong to the desktop app.
+    if (state.defaults.web) {
+      g.append(el("p", "pg-hint", `웹 화면으로 이 서버(${location.host})에 접속 토큰으로 연결돼 있어요. SSH 연결, 이 PC에서 쓰기, 백업, 에이전트 연결은 Arkism 데스크톱 앱에서 할 수 있어요.`));
+      const acts = el("div", "pg-actions mode-actions");
+      acts.append(button("연결 끊기", "ghost", null, disconnect));
+      g.append(acts);
+      return [g];
+    }
     const modes = [];
     if (state.defaults.local) modes.push(["local", "이 PC", "이 PC에서 Arkism을 실행해요. 인터넷 없이도 돼요."]);
     modes.push(["ssh", "SSH로 연결", "서버의 Arkism을 SSH로 이어요. 서버에서 따로 할 일은 없어요."]);

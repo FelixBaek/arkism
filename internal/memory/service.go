@@ -34,6 +34,8 @@ type Service struct {
 	// ReadinessToken binds /readyz's blob-root check to the service principal
 	// on Postgres, the same binding startup uses. Empty elsewhere.
 	ReadinessToken string
+	// WebUIDir, when set, is the built desktop UI served at /app/ to browsers (ARKISM_WEB_UI_DIR).
+	WebUIDir string
 	// ReflectionToken is the service principal that evaluates failed
 	// skill.usage traces and records their lessons. Empty disables it.
 	ReflectionToken string

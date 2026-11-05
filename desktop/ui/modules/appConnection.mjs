@@ -1,5 +1,7 @@
 // Owns lock and server connections. Dependencies are explicit live ports, never a global scope.
 import { createServerBanner } from "./serverVersion.mjs";
+import { loadFailure } from "./appApi.mjs";
+import { cleanToken, readWebToken, saveWebToken } from "./webMode.mjs";
 
 export function createAppConnection(deps) {
   let appVersion = "";
@@ -116,6 +118,18 @@ export function createAppConnection(deps) {
 
   let sshFormSeq = 0;
 
+  // One labelled input row (title and hint on the left): the SSH form and the web token form share it.
+  function inputRow(into, label, hint, ph, value) {
+    const r = deps.el("label", "ssh-row");
+    const text = deps.el("span", "ssh-row-text");
+    text.append(deps.el("strong", "", label), deps.el("small", "", hint));
+    const i = deps.el("input");
+    i.placeholder = ph; i.value = value || ""; i.autocomplete = "off"; i.spellcheck = false; i.setAttribute("autocapitalize", "off");
+    r.append(text, i);
+    into.append(r);
+    return i;
+  }
+
   // SSH 입력 칸: 연결 화면과 설정 › 고급 › 연결 방식이 같이 쓴다. 빈 칸은 ssh가 정한다(~/.ssh/config, ssh-agent).
   function sshFields(saved) {
     const box = deps.el("div", "ssh-rows");
@@ -125,16 +139,7 @@ export function createAppConnection(deps) {
     more.append(deps.el("summary", "", "자세히 (사용자·포트·인증 방식)"));
     more.open = !!(f.user || f.port || f.key || f.bin || f.auth === "password");
     let into = box;
-    const row = (label, hint, ph, value) => {
-      const r = deps.el("label", "ssh-row");
-      const text = deps.el("span", "ssh-row-text");
-      text.append(deps.el("strong", "", label), deps.el("small", "", hint));
-      const i = deps.el("input");
-      i.placeholder = ph; i.value = value || ""; i.autocomplete = "off"; i.spellcheck = false; i.setAttribute("autocapitalize", "off");
-      r.append(text, i);
-      into.append(r);
-      return i;
-    };
+    const row = (label, hint, ph, value) => inputRow(into, label, hint, ph, value);
     const host = row("서버 주소", "user@서버주소 또는 ~/.ssh/config의 Host 별칭", "server.example.com", f.host);
     box.append(more);
     into = more;
@@ -247,13 +252,64 @@ export function createAppConnection(deps) {
     deps.store("arkism.scope", null);
   }
 
+  // ---------------------------------------------------------------- web mode (memoryd /app/)
+  // A browser cannot open SSH tunnels: the person pastes an access token instead. It is kept in
+  // sessionStorage only and goes out as a Bearer header to this same origin.
+  const web = () => !!deps.state.defaults.web;
+
+  function tokenFields() {
+    const box = deps.el("div", "ssh-rows");
+    const row = (into, label, hint, value) => inputRow(into, label, hint, "", value);
+    const token = row(box, "접속 토큰", "서버 관리자에게 받은 Arkism 접속 토큰. 이 탭을 닫으면 지워져요", "");
+    token.type = "password";
+    const more = deps.el("details", "ssh-more");
+    more.append(deps.el("summary", "", "자세히 (워크스페이스·프로젝트)"));
+    box.append(more);
+    const ws = row(more, "워크스페이스", "비우면 default", deps.state.scope.workspace_id === "default" ? "" : deps.state.scope.workspace_id);
+    const project = row(more, "프로젝트", "비우면 default", deps.state.scope.project_id === "default" ? "" : deps.state.scope.project_id);
+    more.open = !!(ws.value || project.value);
+    return {
+      node: box,
+      read: () => ({ token: token.value, workspace_id: ws.value.trim() || "default", project_id: project.value.trim() || "default" }),
+      fill: (value) => { token.value = value; },
+      focus: () => token.focus()
+    };
+  }
+
+  async function webConnect(form) {
+    const token = cleanToken(form.token);
+    if (!token) throw new Error("접속 토큰을 넣어 주세요. 띄어쓰기 없이 한 줄이어야 해요.");
+    deps.state.mode = "remote";
+    deps.state.server = location.origin;
+    deps.state.token = token;
+    deps.state.scope = { ...deps.defaults, workspace_id: form.workspace_id, project_id: form.project_id };
+    try {
+      await open();
+    } catch (err) {
+      deps.state.token = "";
+      saveWebToken(globalThis.sessionStorage, "");
+      const f = loadFailure(err);
+      throw new Error(f.text ? `${f.title}. ${f.text}` : `${f.title}. 서버 주소와 네트워크를 확인하세요.`, { cause: err });
+    }
+    saveWebToken(globalThis.sessionStorage, token);
+    deps.store("arkism.scope", JSON.stringify({ workspace_id: form.workspace_id, project_id: form.project_id }));
+  }
+
+  // Page reload in the same tab: reconnect with the token this tab already holds.
+  function webResume() {
+    const token = readWebToken(globalThis.sessionStorage);
+    if (!token) return;
+    unlockSSH().fill(token);
+    return unlockConnect();
+  }
+
   let unlockForm = null;
   // 처음 실행(고르기 전·고른 뒤 첫 연결 전): 아직 쓸 메뉴가 없으니 사이드바를 덮는다.
   let firstRun = false;
 
   function unlockSSH() {
     if (!unlockForm) {
-      unlockForm = sshFields(deps.state.ssh);
+      unlockForm = web() ? tokenFields() : sshFields(deps.state.ssh);
       deps.$("#ssh-form").replaceChildren(unlockForm.node);
     }
     return unlockForm;
@@ -268,6 +324,12 @@ export function createAppConnection(deps) {
     b.disabled = true;
     b.lastChild.textContent = "연결하는 중…";
     const form = unlockSSH().read();
+    if (web()) {
+      try { await webConnect(form); if (manual === true) deps.go("todo"); }
+      catch (err) { deps.$("#unlock-error").textContent = err.message; unlocked(false); unlockMode(); unlockSSH().focus(); }
+      finally { b.disabled = false; b.lastChild.textContent = "연결하기"; }
+      return;
+    }
     try {
       await sshConnect(form);
       if (manual === true) { deps.state.start = 2; deps.go("todo"); }
@@ -317,6 +379,13 @@ export function createAppConnection(deps) {
     if (!failed) deps.$("#local-doctor-result").hidden = true;
     deps.$("#local-code").textContent = failed ? deps.state.localError : "";
     deps.$("#local-link").hidden = builtIn || choose || !deps.state.defaults.local;
+    if (web()) {
+      deps.$("#ssh-test").hidden = true;
+      deps.$("#ssh-hint").hidden = true;
+      deps.$("#unlock-title").textContent = "Arkism 서버에 로그인";
+      deps.$("#unlock-intro").textContent = "서버 관리자에게 받은 접속 토큰을 붙여 넣으세요. 토큰은 이 브라우저 탭에만 두고, 탭을 닫으면 지워져요.";
+      return;
+    }
     deps.$("#unlock-intro").textContent = choose ? "처음 한 번만 고르면 돼요. 나중에 설정 › 연결에서 바꿀 수 있어요." : builtIn
       ? (failed ? `${localErrorText(deps.state.localError)} 다시 시도해 보고, 그래도 안 되면 점검하고 고치기를 누르세요.` : "이 PC의 Arkism을 준비하고 있어요. 처음에는 1분쯤 걸릴 수 있어요.")
       : "SSH로 접속하듯 서버 주소만 넣으면 돼요. 토큰이나 로그인은 필요 없어요.";
@@ -358,6 +427,7 @@ export function createAppConnection(deps) {
 
   // 연결 끊기: 서버 연결을 닫고 주소 입력으로 돌아간다. 다음 시작 때 자동으로 다시 붙지 않는다.
   function disconnect() {
+    saveWebToken(globalThis.sessionStorage, "");
     deps.tauri?.invoke("ssh_disconnect").catch(() => {});
     // "choose", not cleared: no choice at all reads as an older install that used this PC.
     deps.store("arkism.mode", deps.state.defaults.local ? "choose" : null);
@@ -553,6 +623,7 @@ export function createAppConnection(deps) {
     get unlockConnect() { return unlockConnect; },
     get unlockSSH() { return unlockSSH; },
     get useLocal() { return useLocal; },
-    get useServer() { return useServer; }
+    get useServer() { return useServer; },
+    get webResume() { return webResume; }
   };
 }

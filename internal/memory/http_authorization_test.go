@@ -23,6 +23,7 @@ func TestHTTPRoutePolicyCoverage(t *testing.T) {
 		"GET /{$}": true, "GET /healthz": true, "GET /readyz": true,
 		"GET /recovery-identity": true, // recovery listener only; loopback identity
 		"GET /v1/auth/google":    true, "POST /v1/auth/google": true,
+		"GET /app/": true, // static web UI files only; the API calls they make need a Bearer token
 	}
 	seen := map[string]bool{}
 	for _, route := range sourceRoutes(t) {

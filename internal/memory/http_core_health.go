@@ -10,6 +10,10 @@ import (
 
 func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		if s.WebUIDir != "" {
+			http.Redirect(w, r, webUIPrefix, http.StatusFound)
+			return
+		}
 		w.Header().Set(headerContentType, "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("Arkism API. 화면은 Arkism 데스크톱 프로그램에서 열어요.\n"))
 	})

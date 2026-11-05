@@ -17,19 +17,21 @@ import { createDesignViews } from "./modules/designViews.mjs";
 import { createToolViews } from "./modules/toolViews.mjs";
 import { createMemoryDetail } from "./modules/memoryDetail.mjs";
 import { createAppConnection } from "./modules/appConnection.mjs";
+import { isWebMode } from "./modules/webMode.mjs";
 export function startApp() {
   "use strict";
 
   const defaults = { workspace_id: "default", project_id: "default", user_id: "management:owner", agent_id: "" };
   const readJSON = (raw) => { try { return JSON.parse(raw || "null"); } catch (_) { return null; } };
   const tauri = window.ArkismSSH(window.__TAURI__?.core);
+  const web = isWebMode(location, tauri); // served by memoryd under /app/: the API is this origin
   const store = (key, value) => { try { value === null ? localStorage.removeItem(key) : localStorage.setItem(key, value); } catch (_) { /* storage off: ask again next time */ } };
   const stored = (key) => { try { return localStorage.getItem(key); } catch (_) { return null; } };
   const emptyData = () => ({ memories: [], candidates: [], conflicted: [], maintenance: [], skills: [], prompts: [], designSystems: [], tools: null, crew: [] });
   const state = createAppState({
     // Build-time defaults come from the desktop shell (app_defaults); a plain browser keeps these.
-    defaults: { server: "http://127.0.0.1:8091", ssh_host: "localhost", updates: false, local: false },
-    server: stored("arkism.server") || "http://127.0.0.1:8091",
+    defaults: { server: "http://127.0.0.1:8091", ssh_host: "localhost", updates: false, local: false, web },
+    server: web ? location.origin : stored("arkism.server") || "http://127.0.0.1:8091",
     token: "",
     ssh: readSSH(stored("arkism.ssh")),
     email: stored("arkism.email") || "",
@@ -2390,5 +2392,6 @@ export function startApp() {
     // 지난번에 연결한 서버로 다시 붙는다.
     // 비밀번호 방식은 키체인에 저장된 비밀번호로 붙고, 없으면 폼에서 받는다.
     if (state.ssh && stored("arkism.mode") === "remote" && tauri) void appConnection.unlockConnect();
+    if (web) void appConnection.webResume();
   })();
 }

@@ -362,6 +362,14 @@ window.ArkismI18nEN = {
   "연결 끊김": "Disconnected",
   "다른 서버에 연결": "Connect to another server",
   "서버 연결은 Arkism 앱에서만 돼요.": "Connecting to a server works only in the Arkism app.",
+  "접속 토큰": "Access token",
+  "서버 관리자에게 받은 Arkism 접속 토큰. 이 탭을 닫으면 지워져요": "The Arkism access token from your server admin. It is cleared when you close this tab",
+  "자세히 (워크스페이스·프로젝트)": "Details (workspace · project)",
+  "워크스페이스": "Workspace",
+  "비우면 default": "Empty means default",
+  "접속 토큰을 넣어 주세요. 띄어쓰기 없이 한 줄이어야 해요.": "Enter the access token: one line, no spaces.",
+  "Arkism 서버에 로그인": "Sign in to the Arkism server",
+  "서버 관리자에게 받은 접속 토큰을 붙여 넣으세요. 토큰은 이 브라우저 탭에만 두고, 탭을 닫으면 지워져요.": "Paste the access token from your server admin. It stays in this browser tab only and is cleared when you close the tab.",
   "주소를 확인하세요. user@서버주소 또는 user@서버주소:포트 처럼 적어요.": "Check the address. Write it like user@server or user@server:port.",
   "이 PC에서 ssh 프로그램을 찾지 못했어요. OpenSSH(또는 Git for Windows)를 설치해 주세요.": "Couldn't find ssh on this PC. Install OpenSSH (or Git for Windows).",
   "SSH 로그인이 거부됐어요. 이 PC에서 ‘ssh 주소’가 비밀번호 없이(SSH 키로) 되는지 확인하세요.": "SSH login was refused. Check that ‘ssh address’ works on this PC without a password (with an SSH key).",
@@ -2946,6 +2954,8 @@ window.ArkismI18nEN = {
   "연결된 기억": "Linked memories"
  },
  "patterns": {
+  "{0}. 서버 주소와 네트워크를 확인하세요.": "{0}. Check the server address and the network.",
+  "웹 화면으로 이 서버({0})에 접속 토큰으로 연결돼 있어요. SSH 연결, 이 PC에서 쓰기, 백업, 에이전트 연결은 Arkism 데스크톱 앱에서 할 수 있어요.": "This web page is connected to this server ({0}) with an access token. SSH connection, using this PC, backups and agent setup are in the Arkism desktop app.",
   "{0}를 찾지 못해 대화에서 기억 후보를 뽑지 못해요. Claude Code나 Codex를 설치하고 로그인하거나, 다른 모델을 고르세요.": "{0} was not found, so no memory candidates can be extracted. Install and sign in to Claude Code or Codex, or choose another model.",
   "{0}에 로그인하면 대화에서 기억 후보를 뽑기 시작해요.": "Sign in to {0} and memory candidates start coming from your conversations.",
   "{0} 로그인이 끝났거나 사용 한도에 걸렸을 수 있어요. 다시 로그인하거나 다른 모델을 고르세요.": "The {0} sign-in may have expired or hit its usage limit. Sign in again or choose another model.",
