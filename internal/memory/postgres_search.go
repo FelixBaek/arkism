@@ -104,6 +104,28 @@ var pgTagsMatch = map[string]string{
 	"exact":      "(doc->'tags' ?& $%[1]d::text[] AND doc->'tags' <@ to_jsonb($%[1]d::text[]))",
 }
 
+// pgTagTests is TagTest.holds in SQL for tests joined by op, binding each leaf's tags at *next.
+func pgTagTests(tests []TagTest, op string, next *int, args *[]any) string {
+	sql := make([]string, len(tests))
+	for i, t := range tests {
+		switch {
+		case len(t.And) > 0:
+			sql[i] = pgTagTests(t.And, " AND ", next, args)
+		case len(t.Or) > 0:
+			sql[i] = pgTagTests(t.Or, " OR ", next, args)
+		default:
+			// COALESCE: a NULL from untagged rows must negate like Go's false does.
+			sql[i] = fmt.Sprintf("COALESCE(("+pgTagsMatch[t.Match]+"), false)", *next)
+			*args = append(*args, t.Tags)
+			*next++
+		}
+		if t.Not {
+			sql[i] = "NOT " + sql[i]
+		}
+	}
+	return "(" + strings.Join(sql, op) + ")"
+}
+
 func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 	parts := []string{}
 	args := []any{}
@@ -123,14 +145,7 @@ func pgCriteria(criteria SearchCriteria, start int) (string, []any) {
 			add(pgTagsMatch[f.TagsMatch], f.Tags)
 		}
 		for _, group := range f.TagGroups {
-			tests := make([]string, len(group))
-			for i, t := range group {
-				// COALESCE: a NULL from untagged rows must negate like Go's false does.
-				tests[i] = fmt.Sprintf("COALESCE(("+pgTagsMatch[t.Match]+"), false) <> %t", next, t.Not)
-				args = append(args, t.Tags)
-				next++
-			}
-			parts = append(parts, "("+strings.Join(tests, " OR ")+")")
+			parts = append(parts, pgTagTests(group, " OR ", &next, &args))
 		}
 		if len(f.CreatedBy) > 0 {
 			add("doc->>'created_by' = ANY($%d::text[])", f.CreatedBy)

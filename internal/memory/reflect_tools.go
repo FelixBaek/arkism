@@ -98,7 +98,8 @@ func (s *Service) reflectRecall(ctx context.Context, token string, in ReflectInp
 	search := reflectSearch(in, call.Args.Query)
 	search.ExpandCausal = call.Args.Causal
 	if call.Args.From != nil || call.Args.To != nil {
-		f := SearchFilters{Tags: in.Tags, CreatedFrom: call.Args.From, CreatedTo: call.Args.To}
+		f := reflectFilters(in)
+		f.CreatedFrom, f.CreatedTo = call.Args.From, call.Args.To
 		search.Filters = &f
 	}
 	if call.Name == reflectToolObservations {

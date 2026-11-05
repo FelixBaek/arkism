@@ -81,6 +81,8 @@ type SpaceConfig struct {
 	RecallBudgetTokens     int                `json:"recall_budget_tokens,omitempty" bson:"recall_budget_tokens,omitempty"`
 	ReflectMaxTokens       int                `json:"reflect_max_tokens,omitempty" bson:"reflect_max_tokens,omitempty"`
 	AutoDerive             *SpaceAutoDerive   `json:"auto_derive,omitempty" bson:"auto_derive,omitempty"`
+	// RecallLaneWeights scales each recall lane in fusion (recall_weights.go).
+	RecallLaneWeights map[string]float64 `json:"recall_lane_weights,omitempty" bson:"recall_lane_weights,omitempty"`
 	// ReflectMission and ReflectDisposition guide reflect answers in this space (reflect.go).
 	ReflectMission     string              `json:"reflect_mission" bson:"reflect_mission"`
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
@@ -127,7 +129,8 @@ type SpaceConfigInput struct {
 	EntitiesAllowFreeForm *bool       `json:"entities_allow_free_form,omitempty"`
 	EntityFreeTypes       *bool       `json:"entity_free_types,omitempty"`
 	// EntityLabels: [] hands the schema back to the template or server default.
-	EntityLabels *[]EntityLabelGroup `json:"entity_labels,omitempty"`
+	EntityLabels      *[]EntityLabelGroup `json:"entity_labels,omitempty"`
+	RecallLaneWeights *map[string]float64 `json:"recall_lane_weights,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

@@ -125,6 +125,8 @@ func tagFilterCases() (filters []SearchFilters, stored [][]string) {
 		SearchFilters{TagGroups: [][]TagTest{{{Tags: []string{"a"}, Match: "any"}}, {{Tags: []string{"c"}, Not: true}}}},
 		// tags plus a group: has a, and exactly {a, b} or not b
 		SearchFilters{Tags: []string{"a"}, TagGroups: [][]TagTest{{{Tags: []string{"a", "b"}, Match: "exact"}, {Tags: []string{"b"}, Not: true}}}},
+		// not (a and (b or c)): nested groups under a negation
+		SearchFilters{TagGroups: [][]TagTest{{{Not: true, And: []TagTest{{Tags: []string{"a"}}, {Or: []TagTest{{Tags: []string{"b"}}, {Tags: []string{"c"}}}}}}}}},
 	)
 	return filters, [][]string{nil, {}, {"a"}, {"b"}, {"c"}, {"a", "b"}, {"b", "a"}, {"a", "c"}, {"a", "b", "c"}, {"z"}}
 }
@@ -139,6 +141,7 @@ func TestTagGroups(t *testing.T) {
 		{filters[6], []string{"b", "a"}, true}, {filters[6], []string{"c"}, true}, {filters[6], []string{"a"}, false}, {filters[6], nil, false},
 		{filters[7], nil, true}, {filters[7], []string{"a"}, true}, {filters[7], []string{"a", "c"}, false}, {filters[7], []string{"z"}, false},
 		{filters[8], []string{"a", "b"}, true}, {filters[8], []string{"a", "c"}, true}, {filters[8], []string{"a", "b", "c"}, false}, {filters[8], nil, false},
+		{filters[9], []string{"a", "c"}, false}, {filters[9], []string{"a", "b"}, false}, {filters[9], []string{"a"}, true}, {filters[9], []string{"b", "c"}, true}, {filters[9], nil, true},
 	} {
 		if got := (SearchCriteria{Filters: &tc.f}).matches("", tc.have, time.Time{}, time.Time{}); got != tc.ok {
 			t.Errorf("%+v %v: got %v", tc.f.TagGroups, tc.have, got)

@@ -439,7 +439,9 @@ type Hit struct {
 	// SourceTraces and Entities are filled only when the search asked for them (recall_include.go).
 	SourceTraces []SourceTrace `json:"source_traces,omitempty" bson:"-"`
 	Entities     []HitEntity   `json:"entities,omitempty" bson:"-"`
-	Kind         string        `json:"kind,omitempty" bson:"kind"`
+	// SourceFacts are an observation hit's source memories (include source_facts).
+	SourceFacts []IncludedFact `json:"source_facts,omitempty" bson:"-"`
+	Kind        string         `json:"kind,omitempty" bson:"kind"`
 	// Derived marks an approved observation: written from the memories in SourceIDs, not captured.
 	Derived     bool        `json:"derived,omitempty" bson:"-"`
 	SourceIDs   []string    `json:"source_ids,omitempty" bson:"-"`
@@ -476,6 +478,9 @@ type ContextBundle struct {
 	Items         []Hit           `json:"items"`
 	Degraded      []string        `json:"degraded,omitempty"`
 	Explain       *RecallExplain  `json:"explain,omitempty"`
+	// sourceFacts are the cleaned source memories of observation hits, held for
+	// include source_facts until the search's checks are done (recall_include.go).
+	sourceFacts map[string][]Hit
 }
 
 type HistoricalHit struct {

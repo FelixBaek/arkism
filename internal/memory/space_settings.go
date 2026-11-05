@@ -61,6 +61,8 @@ type SpaceLanes struct {
 	Vector   *bool `json:"vector,omitempty" bson:"vector,omitempty"`
 	Temporal *bool `json:"temporal,omitempty" bson:"temporal,omitempty"`
 	Graph    *bool `json:"graph,omitempty" bson:"graph,omitempty"`
+	// Semantic links each top hit to its nearest stored embeddings (off by default; Postgres only).
+	Semantic *bool `json:"semantic,omitempty" bson:"semantic,omitempty"`
 }
 
 // SpaceAutoDerive tunes automatic derivation (auto_derive.go); empty fields inherit.
@@ -126,7 +128,7 @@ func validSpaceSettings(c SpaceConfig) error {
 	if !slices.Contains(spaceExtractModes, c.ExtractionMode) || utf8.RuneCountInString(c.ExtractionInstructions) > spaceInstructionsMax ||
 		c.ExtractionMode == spaceExtractCustom && strings.TrimSpace(c.ExtractionInstructions) == "" ||
 		c.RecallBudgetTokens < 0 || c.RecallBudgetTokens > 64000 || c.ReflectMaxTokens != 0 && (c.ReflectMaxTokens < 64 || c.ReflectMaxTokens > reflectMaxTokens) ||
-		len(c.DefenseRules) > spaceDefenseMax || len(c.MCPTools) > spaceMCPToolsMax {
+		len(c.DefenseRules) > spaceDefenseMax || len(c.MCPTools) > spaceMCPToolsMax || !validLaneWeights(c.RecallLaneWeights) {
 		return ErrInvalid
 	}
 	for i, tool := range c.MCPTools {
@@ -210,6 +212,9 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	}
 	if in.EntityLabels != nil {
 		c.EntityLabels = *in.EntityLabels
+	}
+	if in.RecallLaneWeights != nil {
+		c.RecallLaneWeights = *in.RecallLaneWeights // {} hands the weights back
 	}
 }
 
@@ -305,6 +310,7 @@ var spaceLaneFields = []struct {
 	{"vector", func(l *SpaceLanes) **bool { return &l.Vector }},
 	{"temporal", func(l *SpaceLanes) **bool { return &l.Temporal }},
 	{"graph", func(l *SpaceLanes) **bool { return &l.Graph }},
+	{"semantic", func(l *SpaceLanes) **bool { return &l.Semantic }},
 }
 
 type spaceLayer struct {
@@ -314,10 +320,10 @@ type spaceLayer struct {
 
 // serverSpaceDefaults is the built-in layer every inherited field ends at.
 func (s *Service) serverSpaceDefaults() SpaceConfig {
-	on, graph, rerank, model, freeTypes := true, s.RecallGraph, s.Reranker != nil, false, false
-	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph},
+	on, off, graph, rerank, model := true, false, s.RecallGraph, s.Reranker != nil, false
+	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph, Semantic: &off},
 		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive(),
-		EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &freeTypes}
+		RecallLaneWeights: serverLaneWeights(), EntityResolution: entityResolvePropose, EntitiesAllowFreeForm: &on, EntityFreeTypes: &off}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -346,6 +352,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "rerank_model", func(c *SpaceConfig) **bool { return &c.RerankModel }, ptr)
 	inheritSetting(&out, layers, src, "recall_budget_tokens", func(c *SpaceConfig) *int { return &c.RecallBudgetTokens }, num)
 	inheritSetting(&out, layers, src, "reflect_max_tokens", func(c *SpaceConfig) *int { return &c.ReflectMaxTokens }, num)
+	inheritSetting(&out, layers, src, "recall_lane_weights", func(c *SpaceConfig) *map[string]float64 { return &c.RecallLaneWeights }, func(v map[string]float64) bool { return len(v) > 0 })
 	inheritSetting(&out, layers, src, "mcp_tools", func(c *SpaceConfig) *[]string { return &c.MCPTools }, func(v []string) bool { return len(v) > 0 })
 	inheritSetting(&out, layers, src, "reflect_mission", func(c *SpaceConfig) *string { return &c.ReflectMission }, str)
 	inheritSetting(&out, layers, src, "reflect_disposition", func(c *SpaceConfig) **ReflectDisposition { return &c.ReflectDisposition }, func(v *ReflectDisposition) bool { return v != nil })

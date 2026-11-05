@@ -34,12 +34,15 @@ const (
 )
 
 type ReflectInput struct {
-	Scope      Scope    `json:"scope"`
-	Query      string   `json:"query"`
-	Limit      int      `json:"limit,omitempty"`
-	Tags       []string `json:"tags,omitempty"`
-	MaxTokens  int      `json:"max_tokens,omitempty"`
-	PromptOnly bool     `json:"prompt_only,omitempty"`
+	Scope Scope    `json:"scope"`
+	Query string   `json:"query"`
+	Limit int      `json:"limit,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
+	// TagsMatch and TagGroups narrow every search as on POST /v1/search (search_filters.go).
+	TagsMatch  string      `json:"tags_match,omitempty"`
+	TagGroups  [][]TagTest `json:"tag_groups,omitempty"`
+	MaxTokens  int         `json:"max_tokens,omitempty"`
+	PromptOnly bool        `json:"prompt_only,omitempty"`
 	// MaxIterations bounds the model calls; 1 answers from the first search only.
 	MaxIterations int `json:"max_iterations,omitempty"`
 	// ResponseSchema asks for a JSON answer valid against this JSON Schema subset (reflect_schema.go).
@@ -130,9 +133,21 @@ func validReflectInput(in *ReflectInput) bool {
 		in.MaxIterations = reflectDefaultIter
 	}
 	in.Mission = strings.TrimSpace(in.Mission)
-	return validScope(in.Scope) && in.Limit >= 0 && in.Limit <= 20 && in.MaxTokens >= 64 && in.MaxTokens <= reflectMaxTokens && validTags(in.Tags) &&
+	return validScope(in.Scope) && in.Limit >= 0 && in.Limit <= 20 && in.MaxTokens >= 64 && in.MaxTokens <= reflectMaxTokens && validReflectTags(*in) &&
 		in.MaxIterations >= 1 && in.MaxIterations <= reflectMaxIter && utf8.RuneCountInString(in.Mission) <= reflectMissionMax && utf8.ValidString(in.Mission) &&
 		in.Disposition.valid() && len(in.ResponseSchema) <= reflectSchemaMax
+}
+
+// validReflectTags checks tags, tags_match and tag_groups as the search would.
+func validReflectTags(in ReflectInput) bool {
+	f := reflectFilters(in)
+	_, err := normalizeSearchCriteria(SearchCriteria{Filters: &f})
+	return err == nil
+}
+
+// reflectFilters is the tag part of every reflect search.
+func reflectFilters(in ReflectInput) SearchFilters {
+	return SearchFilters{Tags: in.Tags, TagsMatch: in.TagsMatch, TagGroups: in.TagGroups}
 }
 
 func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (ReflectOutput, error) {
@@ -196,8 +211,8 @@ func reflectSearch(in ReflectInput, query string) SearchInput {
 	if !in.PromptOnly {
 		search.Destination = wikiDestination
 	}
-	if len(in.Tags) > 0 {
-		search.Filters = &SearchFilters{Tags: in.Tags}
+	if f := reflectFilters(in); len(f.Tags) > 0 || len(f.TagGroups) > 0 {
+		search.Filters = &f
 	}
 	return search
 }

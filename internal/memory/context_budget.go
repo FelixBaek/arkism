@@ -83,3 +83,37 @@ func boundedTokenRuns(text string) bool {
 	}
 	return true
 }
+
+// tokenPacker keeps adding items (counted as their JSON) while the cl100k token count
+// stays under the cap; used starts at the caller's fixed overhead.
+type tokenPacker struct {
+	codec tokenizer.Codec
+	cap   int
+	used  int
+}
+
+func newTokenPacker(capacity, overhead int) (*tokenPacker, error) {
+	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		return nil, ErrUnavailable
+	}
+	return &tokenPacker{codec: codec, cap: capacity, used: overhead}, nil
+}
+
+func (p *tokenPacker) fits(v any) bool {
+	n := p.count(v)
+	if p.used+n > p.cap {
+		return false
+	}
+	p.used += n
+	return true
+}
+
+func (p *tokenPacker) count(v any) int {
+	raw, _ := json.Marshal(v)
+	n, err := p.codec.Count(string(raw))
+	if err != nil {
+		n = len(raw) / 3
+	}
+	return n
+}

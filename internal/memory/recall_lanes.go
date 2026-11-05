@@ -18,6 +18,7 @@ const (
 	reasonTemporal  = "temporal"
 	reasonGraph     = "graph"
 	reasonCausal    = "causal"
+	reasonSemantic  = "semantic"
 	graphLaneWeight = 0.5 // RRF weight: a neighbour is weaker evidence than a direct match.
 	graphSeedCount  = 5
 	graphFanOut     = 20
@@ -49,6 +50,11 @@ type RecallExplain struct {
 	ModelRerank string `json:"model_rerank,omitempty"`
 	// MinScoreDropped counts hits the request's min_score removed.
 	MinScoreDropped int `json:"min_score_dropped,omitempty"`
+	// Dropped counts hits each stage removed: the semantic, keyword and reranker floors
+	// (min_scores) and the model rerank's prune and dedup (rerank_options).
+	Dropped map[string]int `json:"dropped,omitempty"`
+	// LaneWeights are the fusion weights other than 1 that applied (request over space).
+	LaneWeights map[string]float64 `json:"lane_weights,omitempty"`
 	// LaneMS is each lane's wall time in whole milliseconds (all collections summed), plus rerank when it ran.
 	LaneMS map[string]int64 `json:"lane_ms,omitempty"`
 }
@@ -71,6 +77,8 @@ type recallTrace struct {
 	modelRerank string
 	modelRank   map[string]int
 	dropped     int
+	dropStages  map[string]int
+	weights     map[string]float64
 	clock       *laneClock
 }
 
@@ -141,7 +149,8 @@ func boundRecallOptions(in *SearchInput) bool {
 	if in.GraphDepth == 0 {
 		in.GraphDepth = 2
 	}
-	return in.GraphDepth >= 1 && in.GraphDepth <= graphDepthMax && in.MinScore >= 0 && in.MinScore <= 1 && validInclude(in.Include)
+	return in.GraphDepth >= 1 && in.GraphDepth <= graphDepthMax && in.MinScore >= 0 && in.MinScore <= 1 && validInclude(in.Include, in.IncludeOptions) &&
+		validLaneWeights(in.LaneWeights) && in.TemporalWindow.valid() && in.MinScores.valid()
 }
 
 func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
@@ -149,14 +158,15 @@ func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
 // recallLanes appends the temporal and graph lanes to plain memory recall. Lanes
 // chosen explicitly (in.Modes) and history searches keep exactly the lanes asked for.
 func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error)) ([][]Hit, *recallTrace, error) {
-	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx)}
+	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx), weights: in.laneWeights()}
 	for i := range lists {
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
+	lists = laneFloors(in, lists, trace)
 	if collection != colMemories || in.IncludeInactive || len(in.Modes) > 0 && !in.spaceModes {
 		return lists, trace, nil
 	}
-	if w, ok := parseTimeIntent(in.Query, s.recallClock(in).In(recallLocation(in.Timezone))); ok && spaceLaneOn(in.space, "temporal", true) {
+	if w, ok := in.timeWindow(s.recallClock(in)); ok && spaceLaneOn(in.space, "temporal", true) {
 		start := time.Now()
 		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
 		if err == nil {
@@ -176,10 +186,13 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 	if in.ExpandCausal {
 		sources = append(sources, neighborSource{reasonCausal, s.causalNeighbors})
 	}
+	if spaceLaneOn(in.space, "semantic", false) {
+		sources = append(sources, neighborSource{reasonSemantic, s.semanticNeighbors})
+	}
 	if len(sources) == 0 {
 		return lists, trace, nil
 	}
-	lanes, err := s.neighborLanes(ctx, in, FuseScored(lists, graphSeedCount), sources, clean)
+	lanes, err := s.neighborLanes(ctx, in, fuseWeighted(lists, graphSeedCount, trace.weights), sources, clean)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -200,8 +213,9 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 		return err
 	}
 	out.Items = make([]Hit, 0, len(scored))
+	final := max(in.MinScore, in.floor().Final)
 	for _, r := range scored {
-		if r.Score < in.MinScore {
+		if r.Score < final {
 			trace.dropped++
 			continue
 		}
@@ -212,7 +226,7 @@ func (s *Service) recallItems(ctx context.Context, token string, in SearchInput,
 		out.Items = preferObservations(out.Items)
 	}
 	trace.annotate(out, lists)
-	return nil
+	return s.collectSourceFacts(ctx, in, out, clean)
 }
 
 // preferObservations drops the memories an approved observation among items was written from.
@@ -231,6 +245,25 @@ func preferObservations(items []Hit) []Hit {
 type neighborSource struct {
 	reason string
 	next   func(context.Context, Scope, []string, int) ([]string, error)
+}
+
+// semanticNeighbors is the semantic link step: each seed's nearest stored vectors at
+// cosine similarity >= memoryGraphSimilarMin, through the same per-memory nearest-neighbour
+// query the memory map draws its lines from (same scope, embedding space and reach), nearest
+// first. No embedding call is made.
+func (s *Service) semanticNeighbors(ctx context.Context, scope Scope, seeds []string, limit int) ([]string, error) {
+	pairs, err := s.Repo.MemoryGraphSimilar(ctx, MemoryGraphQuery{Scope: scope, Mode: MemoryGraphModeAll}, seeds, 1-memoryGraphSimilarMin, min(limit, memoryGraphMaxNodes))
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(pairs, func(i, j int) bool { return pairs[i].Distance < pairs[j].Distance })
+	out := []string{}
+	for _, p := range pairs {
+		if !slices.Contains(out, p.To) && !slices.Contains(seeds, p.To) {
+			out = append(out, p.To)
+		}
+	}
+	return out[:min(limit, len(out))], nil
 }
 
 // neighborLanes walks up to in.GraphDepth steps from the top fused hits over all
@@ -324,7 +357,7 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 	}
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Score > rows[j].Score })
 	trace.reranked = true
-	return rows, nil
+	return rerankFloor(in, rows, trace), nil
 }
 
 // rerankTexts picks the head rows whose text may leave the host, cut to rerankTextMax runes.
@@ -375,7 +408,8 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		}
 		out.Items[i].Explain = e
 	}
-	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped, LaneMS: t.clock.millis()}
+	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped,
+		Dropped: t.dropStages, LaneWeights: t.weights, LaneMS: t.clock.millis()}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}

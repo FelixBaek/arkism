@@ -50,7 +50,18 @@ type SearchInput struct {
 	// PreferObservations leaves out memories an approved observation in the result was written from.
 	PreferObservations bool `json:"prefer_observations,omitempty"`
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
-	Include        []string `json:"include,omitempty"`
+	Include []string `json:"include,omitempty"`
+	// IncludeOptions bounds each include part by tokens (recall_include.go).
+	IncludeOptions *IncludeOptions `json:"include_options,omitempty"`
+	// LaneWeights scales each lane's pull in fusion over the space's (recall_weights.go).
+	LaneWeights map[string]float64 `json:"lane_weights,omitempty"`
+	// TemporalWindow is the temporal lane's [from, to) instead of time words in the query:
+	// memories in it rank higher, the others still match (recall_floors.go).
+	TemporalWindow *TemporalWindow `json:"temporal_window,omitempty"`
+	// MinScores drops lane hits and reranked hits below per-stage floors (recall_floors.go).
+	MinScores *MinScores `json:"min_scores,omitempty"`
+	// RerankOptions lets the model rerank also drop off-topic hits and near-duplicates.
+	RerankOptions  *RerankOptions `json:"rerank_options,omitempty"`
 	retrievalQuery string
 	// space is the resolved space settings (space_settings.go); spaceModes marks Modes the space set, not the caller.
 	space      *SpaceConfig
@@ -86,12 +97,12 @@ type ScoredHit struct {
 }
 
 // laneByReason names the lane each search reason comes from (existing policy).
-var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation", reasonTemporal: "temporal", reasonGraph: "graph", reasonCausal: "causal"}
+var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation", reasonTemporal: "temporal", reasonGraph: "graph", reasonCausal: "causal", reasonSemantic: "semantic"}
 
 // hitLanes lists the lanes that found a fused hit, in a fixed order.
 func hitLanes(reasons []string) []string {
 	lanes := []string{}
-	for _, lane := range []string{"exact", "keyword", "vector", "relation", "temporal", "graph", "causal"} {
+	for _, lane := range recallLaneNames {
 		for _, r := range reasons {
 			if laneByReason[r] == lane {
 				lanes = append(lanes, lane)
@@ -113,7 +124,12 @@ func Fuse(lists [][]Hit, limit int) []Hit {
 }
 
 // FuseScored is Fuse with each hit's score kept, for measurement (existing policy).
-func FuseScored(lists [][]Hit, limit int) []ScoredHit {
+func FuseScored(lists [][]Hit, limit int) []ScoredHit { return fuseWeighted(lists, limit, nil) }
+
+// fuseWeighted is FuseScored with per-lane weights (recall_weights.go): a weight w
+// counts a hit at lane rank r as if it were at rank r/w, so a boosted lane's rank r
+// beats another lane's rank s exactly when r < w*s, whatever the pool size.
+func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []ScoredHit {
 	if limit <= 0 {
 		return []ScoredHit{}
 	}
@@ -145,10 +161,10 @@ func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
-			} else if slices.Contains(hit.Reasons, reasonGraph) || slices.Contains(hit.Reasons, reasonCausal) {
+			} else if slices.ContainsFunc(hit.Reasons, isNeighborReason) {
 				weight = graphLaneWeight * math.Pow(graphHopDecay, float64(max(hit.graphHops, 1)-1))
 			}
-			entry.Score += weight / float64(rankOffset+position+1)
+			entry.Score += weight / (rankOffset + float64(position+1)/laneWeight(weights, hit.Reasons))
 			for _, reason := range hit.Reasons {
 				if !slices.Contains(entry.Hit.Reasons, reason) {
 					entry.Hit.Reasons = append(entry.Hit.Reasons, reason)
@@ -207,6 +223,9 @@ func (s *Service) authorizeSearch(ctx context.Context, token, collection string,
 	d, err := s.authorize(ctx, token, "search:"+collection, in.Scope, "", searchContent)
 	if err == nil {
 		err = s.applySpaceSearch(ctx, collection, in)
+	}
+	if err == nil {
+		err = s.resolveFuzzyTags(ctx, in)
 	}
 	return d, err
 }

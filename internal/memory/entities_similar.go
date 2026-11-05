@@ -59,7 +59,7 @@ func trigramSet(s string) map[string]bool {
 	return out
 }
 
-// trigramSimilarity is pg_trgm similarity(): shared trigrams over all trigrams.
+// trigramSimilarity is pg_trgm similarity(): shared trigrams over all trigrams (entity names and fuzzy tags).
 func trigramSimilarity(a, b map[string]bool) float64 {
 	shared := 0
 	for t := range a {

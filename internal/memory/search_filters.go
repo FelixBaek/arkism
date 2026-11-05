@@ -19,7 +19,7 @@ type SearchFilters struct {
 	// TagsMatch is how Tags match (tagsMatch): any_strict (default), any, all, all_strict or exact.
 	TagsMatch string `json:"tags_match,omitempty"`
 	// TagGroups is a boolean tag filter: every group must hold, and a group holds when any
-	// of its tests does (tagsMatch, negated by Not). It applies on top of Tags.
+	// of its tests does (TagTest.holds). A test may nest and/or groups. It applies on top of Tags.
 	TagGroups   [][]TagTest `json:"tag_groups,omitempty"`
 	CreatedFrom *time.Time  `json:"created_from,omitempty"`
 	CreatedTo   *time.Time  `json:"created_to,omitempty"`
@@ -34,14 +34,23 @@ type SearchFilters struct {
 	FileDigests     []string `json:"file_digests,omitempty"`
 }
 
-// TagTest is one test in a tag group: Tags matched as Match says (tagsMatch), or not.
+// TagTest is one test in a tag group: a leaf (Tags matched as Match says, tagsMatch) or a
+// nested group (every test of And, or any test of Or), negated by Not. Resolve "fuzzy" lets a
+// leaf's tags also match the space's tags spelled alike (tag_resolve.go).
 type TagTest struct {
-	Tags  []string `json:"tags"`
-	Match string   `json:"match,omitempty"`
-	Not   bool     `json:"not,omitempty"`
+	Tags    []string  `json:"tags,omitempty"`
+	Match   string    `json:"match,omitempty"`
+	Resolve string    `json:"resolve,omitempty"`
+	Not     bool      `json:"not,omitempty"`
+	And     []TagTest `json:"and,omitempty"`
+	Or      []TagTest `json:"or,omitempty"`
 }
 
-const tagGroupsMax = 8 // groups, and tests per group
+const (
+	tagGroupsMax     = 8  // groups, and tests per group or nested and/or
+	tagGroupDepthMax = 5  // a group's tests are depth 1; each and/or adds one
+	tagGroupNodesMax = 64 // tests in all groups together, nested ones included
+)
 
 func normalizeSearchCriteria(in SearchCriteria) (SearchCriteria, error) {
 	if len(in.Kinds) > 16 || !validTags(in.Kinds) {
@@ -101,17 +110,40 @@ func validTagGroups(groups [][]TagTest) bool {
 	if len(groups) > tagGroupsMax {
 		return false
 	}
+	nodes := 0
 	for _, group := range groups {
-		if len(group) == 0 || len(group) > tagGroupsMax {
+		if !validTagTests(group, 1, &nodes) {
 			return false
-		}
-		for _, test := range group {
-			if len(test.Tags) == 0 || !validTags(test.Tags) || test.Match != "" && !slices.Contains(tagsMatchModes, test.Match) || slices.ContainsFunc(test.Tags, containsSecret) {
-				return false
-			}
 		}
 	}
 	return true
+}
+
+// validTagTests checks 1..tagGroupsMax tests at depth, counting every test into nodes.
+func validTagTests(tests []TagTest, depth int, nodes *int) bool {
+	if len(tests) == 0 || len(tests) > tagGroupsMax || depth > tagGroupDepthMax {
+		return false
+	}
+	for _, t := range tests {
+		if *nodes++; *nodes > tagGroupNodesMax || !validTagTest(t, depth, nodes) {
+			return false
+		}
+	}
+	return true
+}
+
+// validTagTest: exactly one of tags, and, or; match and resolve only on a leaf.
+func validTagTest(t TagTest, depth int, nodes *int) bool {
+	switch {
+	case len(t.Tags) > 0:
+		return len(t.And) == 0 && len(t.Or) == 0 && validTags(t.Tags) && !slices.ContainsFunc(t.Tags, containsSecret) &&
+			(t.Match == "" || slices.Contains(tagsMatchModes, t.Match)) && (t.Resolve == "" || t.Resolve == "exact" || t.Resolve == tagResolveFuzzy)
+	case len(t.And) > 0 && len(t.Or) == 0 && t.Match == "" && t.Resolve == "":
+		return validTagTests(t.And, depth+1, nodes)
+	case len(t.Or) > 0 && len(t.And) == 0 && t.Match == "" && t.Resolve == "":
+		return validTagTests(t.Or, depth+1, nodes)
+	}
+	return false
 }
 
 func normalizeFilterIdentities(f *SearchFilters) bool {
@@ -262,11 +294,25 @@ func (f *SearchFilters) tagsHold(tags []string) bool {
 
 func tagGroupsMatch(groups [][]TagTest, have []string) bool {
 	for _, group := range groups {
-		if !slices.ContainsFunc(group, func(t TagTest) bool { return tagsMatch(t.Match, t.Tags, have) != t.Not }) {
+		if !slices.ContainsFunc(group, func(t TagTest) bool { return t.holds(have) }) {
 			return false
 		}
 	}
 	return true
+}
+
+// holds evaluates the test on a memory's tags. A fuzzy leaf not yet resolved matches literally.
+func (t TagTest) holds(have []string) bool {
+	ok := false
+	switch {
+	case len(t.And) > 0:
+		ok = !slices.ContainsFunc(t.And, func(c TagTest) bool { return !c.holds(have) })
+	case len(t.Or) > 0:
+		ok = slices.ContainsFunc(t.Or, func(c TagTest) bool { return c.holds(have) })
+	default:
+		ok = tagsMatch(t.Match, t.Tags, have)
+	}
+	return ok != t.Not
 }
 
 var memorySearchStatuses = []string{"active", "superseded", "conflicted", "rejected", "expired"}

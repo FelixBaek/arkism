@@ -32,13 +32,29 @@ func TestRerankChoiceJSON(t *testing.T) {
 }
 
 func TestParseModelOrder(t *testing.T) {
-	if got, ok := parseModelOrder("```json\n{\"order\":[3,1]}\n```", 3); !ok || !slices.Equal(got, []int{3, 1, 2}) {
+	if got, ok := parseModelRerank("```json\n{\"order\":[3,1]}\n```", 3, RerankOptions{}); !ok || !slices.Equal(got.Order, []int{3, 1, 2}) {
 		t.Fatal(got, ok)
 	}
 	for _, bad := range []string{`{"order":[1,1]}`, `{"order":[4]}`, `{"order":[0]}`, `{"order":[]}`, `{"order":[1],"why":"x"}`, `order: 1,2`, `{"order":[1,2,3,1]}`} {
-		if got, ok := parseModelOrder(bad, 3); ok {
+		if got, ok := parseModelRerank(bad, 3, RerankOptions{}); ok {
 			t.Fatal(bad, got)
 		}
+	}
+	// drop and duplicates count only when asked for, are checked like order, and a number in both is removed once.
+	both := RerankOptions{Prune: true, Dedup: true}
+	if got, ok := parseModelRerank(`{"order":[2,1,3],"drop":[3],"duplicates":[1,3]}`, 3, both); !ok || !slices.Equal(got.Drop, []int{3}) || !slices.Equal(got.Duplicates, []int{1}) {
+		t.Fatal(got, ok)
+	}
+	if got, ok := parseModelRerank(`{"order":[2],"drop":[3]}`, 3, RerankOptions{}); !ok || got.Drop != nil {
+		t.Fatal(got, ok)
+	}
+	for _, bad := range []string{`{"order":[1],"drop":[4]}`, `{"order":[1],"duplicates":[2,2]}`} {
+		if got, ok := parseModelRerank(bad, 3, both); ok {
+			t.Fatal(bad, got)
+		}
+	}
+	if !strings.Contains(modelRerankPrompt(both), `"drop"`) || strings.Contains(modelRerankPrompt(RerankOptions{}), `"drop"`) {
+		t.Fatal("prompt")
 	}
 }
 
@@ -118,15 +134,15 @@ func TestRecallModelRerankGates(t *testing.T) {
 	a := f.auth.actors[f.human]
 	a.verbs["generate"] = false
 	f.auth.actors[f.human] = a
-	if status, order := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "denied" || order != nil || len(llm.prompts) != 0 {
+	if status, order, _ := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "denied" || order != nil || len(llm.prompts) != 0 {
 		t.Fatal(status, order)
 	}
 	a.verbs["generate"] = true
 	// A query that may not leave the host is not sent either.
-	if status, _ := f.svc.modelRerankOrder(testCtx, f.human, SearchInput{Scope: scopeA, Query: "token sk-ant-api03-" + strings.Repeat("a", 40), Rerank: rerankModel}, rows); status != "denied" {
+	if status, _, _ := f.svc.modelRerankOrder(testCtx, f.human, SearchInput{Scope: scopeA, Query: "token sk-ant-api03-" + strings.Repeat("a", 40), Rerank: rerankModel}, rows); status != "denied" {
 		t.Fatal(status)
 	}
-	if status, _ := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "applied" {
+	if status, _, _ := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "applied" {
 		t.Fatal(status)
 	}
 	// The day's cap counts this project's ledger rows; at the cap nothing more is sent.
@@ -139,7 +155,29 @@ func TestRecallModelRerankGates(t *testing.T) {
 	if calls, err := f.svc.dailyModelCalls(testCtx, projectScope(scopeA), modelRerankOperation, time.Now()); err != nil || calls != modelRerankDailyCalls+1 {
 		t.Fatal(calls, err)
 	}
-	if status, _ := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "budget_exceeded" || len(llm.prompts) != 1 {
+	if status, _, _ := f.svc.modelRerankOrder(testCtx, f.human, in, rows); status != "budget_exceeded" || len(llm.prompts) != 1 {
 		t.Fatal(status, len(llm.prompts))
+	}
+}
+
+func TestRecallModelRerankPruneDedup(t *testing.T) {
+	f, llm := modelRerankFixture(t, `{"order":[2,1],"drop":[2],"duplicates":[1]}`, `{"order":[1,2],"drop":[2]}`)
+	base, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "alpha deploy", Explain: true})
+	if err != nil || len(base.Items) < 2 {
+		t.Fatal(ids(base.Items), err)
+	}
+	// The model's first pick stays even when it also listed it to drop; the other one goes.
+	opts := &RerankOptions{Prune: true, Dedup: true}
+	out, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "alpha deploy", Explain: true, Rerank: rerankModel, RerankOptions: opts})
+	if err != nil || out.Explain.ModelRerank != "applied" || len(out.Items) != len(base.Items)-1 || out.Explain.Dropped["model_dedup"] != 1 || out.Explain.Dropped["model_prune"] != 0 {
+		t.Fatal(ids(out.Items), out.Explain, err)
+	}
+	if !strings.Contains(llm.prompts[0], "Snippets:") {
+		t.Fatal(llm.prompts)
+	}
+	// Without prune the drop list is ignored.
+	kept, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "alpha deploy", Explain: true, Rerank: rerankModel})
+	if err != nil || len(kept.Items) != len(base.Items) || kept.Explain.Dropped != nil {
+		t.Fatal(ids(kept.Items), kept.Explain, err)
 	}
 }

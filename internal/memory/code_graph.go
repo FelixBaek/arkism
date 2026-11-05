@@ -12,8 +12,6 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
-
-	"github.com/tiktoken-go/tokenizer"
 )
 
 // Code graph (코드 그래프): symbols and call edges of a project's repositories,
@@ -465,37 +463,9 @@ func resolveCodeSymbol(ctx context.Context, store codeGraphStore, scope Scope, r
 	return nil, cands, nil
 }
 
-// codePacker keeps adding items while the token estimate stays under the cap.
-type codePacker struct {
-	codec tokenizer.Codec
-	cap   int
-	used  int
-}
-
-func newCodePacker(capacity int) (*codePacker, error) {
-	codec, err := tokenizer.Get(tokenizer.Cl100kBase)
-	if err != nil {
-		return nil, ErrUnavailable
-	}
-	return &codePacker{codec: codec, cap: capacity, used: 40}, nil
-}
-
-func (p *codePacker) fits(h CodeHit) bool {
-	raw, _ := json.Marshal(h)
-	n, err := p.codec.Count(string(raw))
-	if err != nil {
-		n = len(raw) / 3
-	}
-	if p.used+n > p.cap {
-		return false
-	}
-	p.used += n
-	return true
-}
-
 // pack fills out.Items from hits up to the limit and the token cap.
 func packCodeHits(out *CodeGraphAnswer, hits []CodeHit, limit, maxTokens int) error {
-	p, err := newCodePacker(maxTokens)
+	p, err := newTokenPacker(maxTokens, 40)
 	if err != nil {
 		return err
 	}

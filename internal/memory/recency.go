@@ -69,7 +69,7 @@ func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hi
 	if recall || s.Reranker != nil {
 		n = in.Limit * 3
 	}
-	rows := FuseScored(lists, n)
+	rows := fuseWeighted(lists, n, trace.weights)
 	trace.noteFused(rows)
 	rows, err := s.rerankRows(ctx, in, d, rows, trace)
 	if err != nil {
