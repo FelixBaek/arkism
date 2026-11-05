@@ -72,7 +72,11 @@ func (s *Service) deleteMemoryAndProposal(ctx context.Context, token, id string,
 		if e = eraseMemoryFromDigests(ctx, tx, in.Scope, id, actor.PrincipalID); e != nil {
 			return e
 		}
-		return audit(ctx, tx, in.Scope, actor.PrincipalID, "delete:memories", id)
+		if e = audit(ctx, tx, in.Scope, actor.PrincipalID, "delete:memories", id); e != nil {
+			return e
+		}
+		gone := Record{ID: id, Scope: in.Scope, Kind: current.Kind, Status: "deleted", Revision: in.ExpectedRevision, CreatedAt: current.CreatedAt, UpdatedAt: time.Now().UTC()}
+		return queueMemoryEvent(ctx, tx, EventMemoryDeleted, colMemories, gone)
 	})
 }
 

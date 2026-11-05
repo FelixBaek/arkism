@@ -41384,7 +41384,7 @@
           "Management"
         ],
         "summary": "Webhooks: delivery log",
-        "description": "Human principals only. Webhooks notify an HTTPS endpoint of memory state changes (candidate.created, memory.approved, memory.rejected, memory.updated, memory.deleted). Payloads carry ids, kind, status, scope and timestamps; text only when a human set include_content, and never private-marked, private, restricted or secret-bearing text. Each delivery is signed in X-Arkism-Signature as t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">. Private, link-local and metadata addresses are refused at registration and again at connect time. The secret is write-only. Newest first; failed sends retry with exponential backoff up to 5 attempts.",
+        "description": "Human principals only. Webhooks notify an HTTPS endpoint of memory state changes (candidate.created, memory.approved, memory.rejected, memory.updated, memory.deleted). Payloads carry ids, kind, status, scope and timestamps; text only when a human set include_content, and never private-marked, private, restricted or secret-bearing text. Each delivery is signed in X-Arkism-Signature as t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">. Private, link-local and metadata addresses are refused at registration and again at connect time. The secret is write-only. Newest first. Deliveries are queued in the transaction of the change itself. Failed sends retry with exponential backoff up to 5 attempts; a 4xx answer other than 408 and 429 is final (failed) at once.",
         "parameters": [
           {
             "name": "id",

@@ -19,8 +19,8 @@ import (
 )
 
 // Outbound webhooks: a person names an https endpoint and the memory events it
-// wants. A state transition queues one delivery job per matching webhook after
-// it committed; the worker signs and sends it with retries. A payload carries
+// wants. A state transition queues one delivery job per matching webhook in its
+// own transaction (outbox); the worker signs and sends it with retries. A payload carries
 // ids, kind, status, scope and times; memory text only when a person turned
 // include_content on, and never text marked private, restricted or secret.
 
@@ -36,7 +36,7 @@ const (
 )
 
 // Memory events a webhook may subscribe to. Observation events join this list
-// when observations exist; emitMemoryEvent needs no other change.
+// when observations exist; queueMemoryEvent needs no other change.
 const (
 	EventCandidateCreated = "candidate.created"
 	EventMemoryApproved   = "memory.approved"
@@ -416,18 +416,15 @@ func webhookDeliveryJob(scope Scope, webhookID, event string, subject *WebhookSu
 		CreatedAt: now, UpdatedAt: now, WebhookDelivery: &WebhookDelivery{WebhookID: webhookID, Event: event, OccurredAt: now, Subject: subject}}
 }
 
-// emitMemoryEvent queues one delivery per active webhook subscribed to event in
-// the record's scope (and its agent-less scope). It runs after the transition
-// committed and is best effort: it never returns an error, never panics into the
-// caller and gives up after a short bound.
-func (s *Service) emitMemoryEvent(ctx context.Context, event, col string, r Record) {
-	store, ok := s.Repo.(scopedRowStore)
-	if !ok || r.ID == "" || !validScope(r.Scope) {
-		return
+// queueMemoryEvent queues, inside the transaction that makes the change, one
+// delivery job per active webhook subscribed to event in the record's scope (and
+// its agent-less scope), so a committed change always has its deliveries and a
+// rolled-back one has none. An empty event or a store without webhooks queues nothing.
+func queueMemoryEvent(ctx context.Context, tx Tx, event, col string, r Record) error {
+	store, ok := tx.(scopedRowStore)
+	if event == "" || !ok || r.ID == "" || !validScope(r.Scope) {
+		return nil
 	}
-	defer func() { _ = recover() }()
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-	defer cancel()
 	subject := &WebhookSubject{Collection: col, ID: r.ID, Kind: r.Kind, Status: r.Status, Revision: r.Revision, Scope: r.Scope, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 	scopes := []Scope{r.Scope}
 	if r.Scope.AgentID != "" {
@@ -437,28 +434,35 @@ func (s *Service) emitMemoryEvent(ctx context.Context, event, col string, r Reco
 	for _, sc := range scopes {
 		hooks, err := store.ListScopedRows(ctx, scopedRowQuery{Collection: colWebhooks, Kind: webhookKind, Scope: sc, Limit: webhooksMax})
 		if err != nil {
-			return
+			return err
 		}
 		for _, h := range hooks {
 			if h.Webhook != nil && h.Webhook.Active && slices.Contains(h.Webhook.Events, event) {
-				_ = s.Repo.Insert(ctx, colJobs, webhookDeliveryJob(sc, h.ID, event, subject, now))
+				if err = tx.Insert(ctx, colJobs, webhookDeliveryJob(sc, h.ID, event, subject, now)); err != nil {
+					return err
+				}
 			}
 		}
 	}
+	return nil
 }
 
-// emitTransitionEvent emits the webhook event of a committed transition, if any;
-// an approved candidate is reported as the memory it became.
-func (s *Service) emitTransitionEvent(ctx context.Context, col, status string, result Record) {
-	event := transitionEvent(col, status)
-	if event == "" {
-		return
+// createdEvent names the webhook event of a created record ("" for none).
+func createdEvent(col string) string {
+	if col == "memory_candidates" {
+		return EventCandidateCreated
 	}
+	return ""
+}
+
+// queueTransitionEvent queues the webhook event of a transition (writeTransition),
+// if any; an approved candidate is reported as the memory it became.
+func queueTransitionEvent(ctx context.Context, tx Tx, col, status string, result Record) error {
 	subject := colMemories
 	if col == "memory_candidates" && status != "approved" {
 		subject = col
 	}
-	s.emitMemoryEvent(ctx, event, subject, result)
+	return queueMemoryEvent(ctx, tx, transitionEvent(col, status), subject, result)
 }
 
 // transitionEvent names the webhook event of a committed transition ("" for none).
@@ -547,6 +551,12 @@ func (s *Service) deliverWebhook(ctx context.Context, job *Record) (bool, error)
 	return ok, s.recordWebhookAttempt(ctx, job, d)
 }
 
+// webhookTerminal: a gone webhook or a client error the receiver will repeat
+// (4xx other than 408 timeout and 429 rate limit) is not retried.
+func webhookTerminal(d WebhookDelivery) bool {
+	return d.Error == "webhook_gone" || d.HTTPStatus >= 400 && d.HTTPStatus < 500 && d.HTTPStatus != http.StatusRequestTimeout && d.HTTPStatus != http.StatusTooManyRequests
+}
+
 func webhookErrorCode(err error) string {
 	var blocked *httpguard.BlockedAddress
 	if errors.As(err, &blocked) {
@@ -559,7 +569,7 @@ func webhookErrorCode(err error) string {
 }
 
 // recordWebhookAttempt writes the attempt result onto the leased job (advancing
-// job.Revision so FinishJob still matches). A gone webhook ends the job as failed.
+// job.Revision so FinishJob still matches). A terminal outcome ends the job as failed.
 func (s *Service) recordWebhookAttempt(ctx context.Context, job *Record, d WebhookDelivery) error {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	d.AttemptAt = &now
@@ -573,7 +583,7 @@ func (s *Service) recordWebhookAttempt(ctx context.Context, job *Record, d Webho
 		}
 		prev := cur.Revision
 		cur.WebhookDelivery, cur.Revision, cur.UpdatedAt = &d, cur.Revision+1, now
-		if d.Error == "webhook_gone" {
+		if webhookTerminal(d) {
 			cur.Attempts = maxJobAttempts // nothing left to retry
 		}
 		if err = tx.Replace(ctx, colJobs, cur, prev); err != nil {

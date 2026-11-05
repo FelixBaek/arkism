@@ -15,14 +15,6 @@ type MemoryRestoreInput struct {
 // Only a human can do it, the same permission as the delete; it never revives an erased,
 // quarantined, expired or superseded memory, or one nobody approved.
 func (s *Service) RestoreMemory(ctx context.Context, token, id string, in MemoryRestoreInput) (Record, error) {
-	r, err := s.restoreMemory(ctx, token, id, in)
-	if err == nil {
-		s.emitMemoryEvent(ctx, EventMemoryUpdated, colMemories, r)
-	}
-	return r, err
-}
-
-func (s *Service) restoreMemory(ctx context.Context, token, id string, in MemoryRestoreInput) (Record, error) {
 	if !validScope(in.Scope) || !validRunLabel(id, 256) || in.ExpectedRevision < 1 || containsSecret(structuredText(in.Scope)) {
 		return Record{}, ErrInvalid
 	}

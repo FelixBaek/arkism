@@ -14,13 +14,19 @@ import (
 	"time"
 )
 
-// ListScopedRows makes the fake repository a scopedRowStore.
-func (f *fakeRepo) ListScopedRows(_ context.Context, q scopedRowQuery) ([]Record, error) {
+// ListScopedRows makes the fake repository and its transactions scopedRowStores.
+func (f *fakeRepo) ListScopedRows(ctx context.Context, q scopedRowQuery) ([]Record, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.view().ListScopedRows(ctx, q)
+}
+
+func (x fakeTx) ListScopedRows(_ context.Context, q scopedRowQuery) ([]Record, error) {
 	if q.Limit < 1 || q.Limit > 1000 || q.Kind == "" {
 		return nil, ErrInvalid
 	}
 	out := []Record{}
-	for _, r := range f.rows(q.Collection) {
+	for _, r := range x.store[q.Collection] {
 		if r.Scope == q.Scope && r.Kind == q.Kind && (q.Status == "" || r.Status == q.Status) &&
 			(q.Before == "" || r.ID < q.Before) && (q.Value == "" || docPath(r, q.Path) == q.Value) {
 			out = append(out, r)
@@ -292,21 +298,107 @@ func TestWebhookDeliveryRefusesRebindingToPrivateAddress(t *testing.T) {
 	}
 }
 
-type brokenHookRepo struct{ *fakeRepo }
-
-func (brokenHookRepo) ListScopedRows(context.Context, scopedRowQuery) ([]Record, error) {
-	panic("webhook store down")
+// Deliveries are queued in the approval's own transaction: a rolled-back
+// approval leaves none, a committed one always has its delivery.
+func TestWebhookDeliveryIsQueuedInTheChangeTransaction(t *testing.T) {
+	f := webhookFixture(t)
+	v := f.hook("https://hooks.example.com/x", false, EventMemoryApproved)
+	c := f.create(f.agent, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: "outbox", Generator: &Generator{Model: "test-model", PromptVersion: "p1", PipelineVersion: "v1"}, Sources: refs(f.source())}))
+	f.repo.failAudit = true
+	if _, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "approve"}); err == nil {
+		t.Fatal("approval committed despite failed audit")
+	}
+	if d := f.deliveries(v.ID); len(d) != 0 {
+		t.Fatalf("rolled-back approval queued deliveries %+v", d)
+	}
+	f.repo.failAudit = false
+	if _, err := f.svc.ReviewCandidate(testCtx, f.human, c.ID, CandidateReviewInput{Scope: scopeA, ExpectedRevision: c.Revision, Action: "approve"}); err != nil {
+		t.Fatal(err)
+	}
+	if d := f.deliveries(v.ID); len(d) != 1 || d[0].Status != JobStatusPending {
+		t.Fatalf("committed approval deliveries %+v", d)
+	}
 }
 
-func TestWebhookEmissionFailureDoesNotFailApproval(t *testing.T) {
+func TestWebhookEventsForCandidateApprovalAndDelete(t *testing.T) {
 	f := webhookFixture(t)
-	f.svc.Repo = brokenHookRepo{f.repo}
-	m := approveCandidate(t, f, "still approved")
-	if m.Status != "active" && m.Status != "approved" {
-		t.Fatal("approval status", m.Status)
+	v := f.hook("https://hooks.example.com/x", false, EventCandidateCreated, EventMemoryApproved, EventMemoryDeleted)
+	m := approveCandidate(t, f, "event chain")
+	if err := f.svc.Delete(testCtx, f.human, colMemories, m.ID, ChangeInput{Scope: scopeA, ExpectedRevision: m.Revision}); err != nil {
+		t.Fatal(err)
 	}
-	if got, err := f.repo.Get(testCtx, colMemories, scopeA, m.ID); err != nil || got.ID != m.ID {
-		t.Fatal("approved memory missing", err)
+	got := []string{}
+	for _, d := range f.deliveries(v.ID) {
+		if d.Delivery.Subject == nil || d.Delivery.Subject.ID != m.ID {
+			t.Fatalf("subject %+v", d.Delivery.Subject)
+		}
+		got = append(got, d.Delivery.Event)
+	}
+	sort.Strings(got)
+	if strings.Join(got, ",") != "candidate.created,memory.approved,memory.deleted" {
+		t.Fatal("events", got)
+	}
+}
+
+func TestWebhookClientErrorIsTerminalExceptTimeoutAndRateLimit(t *testing.T) {
+	for status, terminal := range map[int]bool{400: true, 404: true, 410: true, 408: false, 429: false, 500: false, 503: false} {
+		f := webhookFixture(t)
+		srv := newHookServer(t, status)
+		v := f.hook(srv.URL, false, EventMemoryApproved)
+		approveCandidate(t, f, "status")
+		_ = f.svc.WorkOnce(testCtx, f.work)
+		d := f.deliveries(v.ID)[0]
+		want := JobStatusRetry
+		if terminal {
+			want = JobStatusFailed
+		}
+		if d.Status != want || srv.hits() != 1 {
+			t.Errorf("status %d: delivery %s after %d hits, want %s", status, d.Status, srv.hits(), want)
+		}
+	}
+}
+
+// ListScopedRows compares doc #>> path as text; the delivery and trace filters
+// must name plain string fields of the stored document (not {"$date"} objects).
+func TestScopedRowFilterPathsAreStoredStrings(t *testing.T) {
+	job := webhookDeliveryJob(scopeA, "hook-1", EventMemoryApproved, nil, time.Now())
+	trace := Record{ID: "t", Scope: scopeA, Kind: llmRequestKind, LLMRequest: &LLMRequest{Operation: "wiki.page"}, CreatedAt: time.Now()}
+	for _, c := range []struct {
+		r    Record
+		path []string
+		want string
+	}{{job, []string{"webhook_delivery", "webhook_id"}, "hook-1"}, {trace, []string{"llm_request", "operation"}, "wiki.page"}} {
+		_, doc, err := encodeRecord(c.r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var v any
+		if err = json.Unmarshal(doc, &v); err != nil {
+			t.Fatal(err)
+		}
+		for _, p := range c.path {
+			v = v.(map[string]any)[p]
+		}
+		if got, ok := v.(string); !ok || got != c.want {
+			t.Fatalf("doc %v = %#v, want string %q", c.path, v, c.want)
+		}
+	}
+	if !strings.Contains(scopedRowsWhere, "doc #>> $10::text[] = $9") || strings.Contains(scopedRowsWhere, "timestamptz") {
+		t.Fatal("ListScopedRows filter changed; re-check it against the stored document form", scopedRowsWhere)
+	}
+}
+
+// Session archive chunks sealed before sealAEAD/openAEAD were extracted (fixed
+// nonce, same AES-256-GCM layout) still open.
+func TestSessionArchiveOpensChunkSealedByEarlierCode(t *testing.T) {
+	s := &Service{SessionArchiveKey: []byte(strings.Repeat("a", 32))}
+	const sealed = "MDEyMzQ1Njc4OWFi71CwJj6xIkGwiVvM/dvpUNk3gVhbHOirAQ+CHm+j"
+	plain, err := s.openSessionArchiveChunk(scopeA, "parent-1", "sha-1", sealed)
+	if err != nil || string(plain) != "archived chunk" {
+		t.Fatal("old chunk unreadable", err, string(plain))
+	}
+	if _, err = s.openSessionArchiveChunk(scopeA, "parent-2", "sha-1", sealed); !errors.Is(err, errSessionArchiveCiphertext) {
+		t.Fatal("chunk opened under another header", err)
 	}
 }
 

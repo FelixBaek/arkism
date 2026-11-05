@@ -587,13 +587,13 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 		if e := s.checkCreateTx(ctx, tx, col, in, r, d, now); e != nil {
 			return e
 		}
-		return writeCreateTx(ctx, tx, col, in, r, d, inspection)
+		if e := writeCreateTx(ctx, tx, col, in, r, d, inspection); e != nil {
+			return e
+		}
+		return queueMemoryEvent(ctx, tx, createdEvent(col), col, r)
 	})
 	if e != nil {
 		return Record{}, e
-	}
-	if col == "memory_candidates" {
-		s.emitMemoryEvent(ctx, EventCandidateCreated, col, r)
 	}
 	return r, nil
 }
@@ -1248,7 +1248,6 @@ func (s *Service) transition(ctx context.Context, token, col, id string, in Chan
 	if e != nil {
 		return Record{}, e
 	}
-	s.emitTransitionEvent(ctx, col, in.Status, result)
 	return result, nil
 }
 
@@ -1379,6 +1378,7 @@ func writeTransition(ctx context.Context, tx Tx, col string, r Record, expectedR
 		return nil, e
 	}
 	var promoted *Record
+	subject := r
 	if col == "memory_candidates" && r.Status == "approved" {
 		memory, e := promoteApprovedCandidate(ctx, tx, r, review, replaced, d)
 		if e != nil {
@@ -1387,6 +1387,7 @@ func writeTransition(ctx context.Context, tx Tx, col string, r Record, expectedR
 		if review != nil {
 			promoted = &memory
 		}
+		subject = memory
 	}
 	if col == "memories" && r.Status == "active" {
 		if e := enqueue(ctx, tx, col, r); e != nil {
@@ -1396,7 +1397,7 @@ func writeTransition(ctx context.Context, tx Tx, col string, r Record, expectedR
 			return nil, e
 		}
 	}
-	return promoted, nil
+	return promoted, queueTransitionEvent(ctx, tx, col, r.Status, subject)
 }
 
 func promoteApprovedCandidate(ctx context.Context, tx Tx, r Record, review *CandidateReviewInput, replaced *Record, d Decision) (Record, error) {
@@ -1675,10 +1676,7 @@ func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeIn
 		return ErrDenied
 	}
 	if col == "memories" {
-		if e = s.deleteMemoryAndProposal(ctx, token, id, in, d); e == nil {
-			s.emitMemoryEvent(ctx, EventMemoryDeleted, col, Record{ID: id, Scope: in.Scope, Kind: "memory", Status: "deleted", Revision: in.ExpectedRevision, UpdatedAt: time.Now().UTC()})
-		}
-		return e
+		return s.deleteMemoryAndProposal(ctx, token, id, in, d)
 	}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		current, e := tx.Get(ctx, col, in.Scope, id)
