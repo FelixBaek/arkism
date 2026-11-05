@@ -19,7 +19,7 @@ A server backup is a nightly job you schedule yourself (a systemd timer or cron)
 2. bundles the `pg_dump -Fc` archive and the files (`arkism backup-bundle create`),
 3. encrypts the bundle with CMS into `/srv/arkism/backups/arkism-prod-pg-<time>.cms` (`arkism backup-archive encrypt`).
 
-Attached files kept in object storage (`MEMORY_BLOB_S3_*` or `MEMORY_BLOB_SHAREDKEY_*`, see [server.md](server.md#upgrade-to-the-memory-review-features)) are not copied into this backup. When those settings are in the environment of `arkism backup-bundle create`, the bundle lists every stored object's digest and size, and the restore checks the storage still holds each one. Back the bucket up separately (versioning or a scheduled copy) and restore it to the same time as the database.
+Attached files kept in object storage (`MEMORY_BLOB_S3_*`, `MEMORY_BLOB_SHAREDKEY_*` or `MEMORY_BLOB_SERVICE_ACCOUNT_*`, see [server.md](server.md#upgrade-to-the-memory-review-features)) are not copied into this backup. When those settings are in the environment of `arkism backup-bundle create`, the bundle lists every stored object's digest and size, and the restore checks the storage still holds each one. Back the bucket up separately (versioning or a scheduled copy) and restore it to the same time as the database.
 
 A bundle made with object storage on carries an extra `objects` list in its manifest. Only `arkism` and `memoryd` binaries that include this change can read it; an older binary refuses the bundle as an unsupported manifest, so restore it with the same or a newer version. Bundles made without object storage have no `objects` list and still restore with older binaries, and the new binaries restore every older bundle.
 
@@ -60,7 +60,7 @@ Keep every writer (API, worker, timers) stopped, and restore into a **new, empty
    memoryd --check-indexes
    ```
 
-   With object storage on, set the same `MEMORY_BLOB_S3_*` or `MEMORY_BLOB_SHAREDKEY_*`
+   With object storage on, set the same `MEMORY_BLOB_S3_*`, `MEMORY_BLOB_SHAREDKEY_*` or `MEMORY_BLOB_SERVICE_ACCOUNT_*`
    settings here. Adoption then refuses unless the storage holds every object the
    bundle lists at its recorded size, uploads the files the bundle carried, and
    removes their local copies.

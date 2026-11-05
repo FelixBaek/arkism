@@ -54,17 +54,25 @@ func NewSharedKeyBlobStore(endpoint, account, container, prefix, key string) (*S
 }
 
 // BlobObjectStoreFromEnv picks the object storage the settings name
-// (MEMORY_BLOB_S3_* or MEMORY_BLOB_SHAREDKEY_*); nil, nil when neither is set.
+// (MEMORY_BLOB_S3_*, MEMORY_BLOB_SHAREDKEY_* or MEMORY_BLOB_SERVICE_ACCOUNT_*);
+// nil, nil when none is set, an error when more than one is.
 func BlobObjectStoreFromEnv() (BlobObjectStore, error) {
-	endpoint := os.Getenv("MEMORY_BLOB_SHAREDKEY_ENDPOINT")
-	if endpoint == "" {
-		return S3BlobStoreFromEnv()
+	set := 0
+	for _, name := range []string{"MEMORY_BLOB_SHAREDKEY_ENDPOINT", "MEMORY_BLOB_S3_ENDPOINT", "MEMORY_BLOB_SERVICE_ACCOUNT_ENDPOINT"} {
+		if os.Getenv(name) != "" {
+			set++
+		}
 	}
-	if os.Getenv("MEMORY_BLOB_S3_ENDPOINT") != "" {
-		return nil, fmt.Errorf("blob object storage: set one storage, not both: %w", ErrInvalid)
+	switch {
+	case set > 1:
+		return nil, fmt.Errorf("blob object storage: set one storage, not several: %w", ErrInvalid)
+	case os.Getenv("MEMORY_BLOB_SERVICE_ACCOUNT_ENDPOINT") != "":
+		return ServiceAccountBlobStoreFromEnv()
+	case os.Getenv("MEMORY_BLOB_SHAREDKEY_ENDPOINT") != "":
+		return NewSharedKeyBlobStore(os.Getenv("MEMORY_BLOB_SHAREDKEY_ENDPOINT"), os.Getenv("MEMORY_BLOB_SHAREDKEY_ACCOUNT"), os.Getenv("MEMORY_BLOB_SHAREDKEY_CONTAINER"),
+			os.Getenv("MEMORY_BLOB_SHAREDKEY_PREFIX"), os.Getenv("MEMORY_BLOB_SHAREDKEY_KEY"))
 	}
-	return NewSharedKeyBlobStore(endpoint, os.Getenv("MEMORY_BLOB_SHAREDKEY_ACCOUNT"), os.Getenv("MEMORY_BLOB_SHAREDKEY_CONTAINER"),
-		os.Getenv("MEMORY_BLOB_SHAREDKEY_PREFIX"), os.Getenv("MEMORY_BLOB_SHAREDKEY_KEY"))
+	return S3BlobStoreFromEnv()
 }
 
 func (s *SharedKeyBlobStore) blobURL(key string, query url.Values) *url.URL {
