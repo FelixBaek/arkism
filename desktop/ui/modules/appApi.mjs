@@ -35,13 +35,13 @@ export function createAppApi(deps) {
       error.status = 0; error.code = "api_context_changed";
       throw error;
     }
-    const body = deps.readJSON(text) || {};
+    const body = (options.raw && status >= 200 && status < 300 ? null : deps.readJSON(text)) || {};
     if (status < 200 || status >= 300) {
       const error = new Error(body.code || `HTTP ${status}`);
       error.status = status; error.code = body.code || "http_error";
       throw error;
     }
-    return body;
+    return options.raw ? text : body; // raw: a file body (NDJSON download) the caller saves as is
   }
 
   return {

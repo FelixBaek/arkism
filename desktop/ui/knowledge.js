@@ -27,7 +27,7 @@ window.ArkismKnowledge = (ctx) => {
     src: { q: "", status: "", sort: "recent", format: "" }, srcSel: "", docs: {},
     pg: { q: "", type: "", sort: "recent", chip: "all" }, pageSel: "", compare: false, edit: null,
     doc: "", docTab: "sections", secSel: 0, verSel: "", search: { profile: SHARED, q: "", busy: false, result: null, error: "" },
-    busy: false, notice: "", remove: null, upload: null
+    busy: false, notice: "", remove: null, upload: null, extract: null
   };
   let typing = 0;
   const loads = globalThis.ArkismKeep.latest(); // "sources" and "wiki": a newer read or reset() drops the older answer
@@ -263,9 +263,78 @@ window.ArkismKnowledge = (ctx) => {
       : choice === "use" ? `${n}개로 나눠 올렸어요. 이제 내 모든 AI가 이 자료를 찾아 써요.` : `${n}개로 나눠 올렸어요. 자료를 열어 확인하고 '쓰게 하기'를 눌러 주세요.`);
   }
 
+  // ---------------------------------------------------------------- 파일 → 기억 후보 (POST /v1/files/memories, …/extract_memories)
+  // The server only proposes: every claim lands as a memory candidate a person approves in 확인해 주세요.
+  // A big file runs as a job polled here (GET /v1/files/memories/jobs/{id}); 멈추기 asks /v1/operations/{id}/cancel.
+  const extractErr = (e) => ({ no_extractable_text: "파일에서 글자를 찾지 못했어요. 스캔한 PDF나 암호가 걸린 PDF는 읽지 못해요.", model_not_configured: "서버에 기억을 뽑을 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.",
+    model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요.", candidate_daily_limit: "오늘 만들 수 있는 후보 수를 넘었어요. 내일 다시 해 주세요." }[e?.message] || errText(e));
+  let extractTimer = 0;
+  function showExtract(r, label) {
+    const prev = K.extract?.id === (r?.id || r?.job_id) ? K.extract : null;
+    const next = window.ArkismKnowledge.extractState(r);
+    K.extract = { ...next, label: label || prev?.label || "", error: prev?.phase === next.phase ? prev.error || "" : "" }; // a refused cancel stays readable while the job runs
+    clearTimeout(extractTimer);
+    if (K.extract.active && K.extract.id) extractTimer = setTimeout(pollExtract, 1500);
+    paint();
+  }
+  async function pollExtract() {
+    const x = K.extract;
+    if (!x?.id || !x.active) return;
+    try { showExtract(await get(`/v1/files/memories/jobs/${encodeURIComponent(x.id)}`)); }
+    catch (e) { if (K.extract === x) { x.error = extractErr(e); x.active = false; paint(); } }
+  }
+  async function startExtract(work, label) {
+    if (K.busy) return;
+    K.busy = true; K.notice = ""; K.extract = { label, phase: "queued", active: true, total: 0, next: 0, created: 0, skipped: 0 }; paint();
+    try { showExtract(await work(), label); } catch (e) { K.extract = { label, phase: "failed", active: false, error: extractErr(e) }; }
+    K.busy = false; paint();
+  }
+  async function cancelExtract() {
+    const x = K.extract;
+    if (!x?.id || !(await confirmPop("기억 후보 만들기를 멈출까요?", "이미 만든 후보는 그대로 남아요.", "멈추기"))) return;
+    try { await post(`/v1/operations/${encodeURIComponent(x.id)}/cancel`, x.revision ? { expected_revision: x.revision } : {}); await pollExtract(); }
+    catch (e) { x.error = e?.message === "invalid_request" ? "이 작업은 멈출 수 없어요. 끝날 때까지 기다려 주세요." : extractErr(e); paint(); }
+  }
+  function pickExtractFile() {
+    const input = el("input"); input.type = "file"; input.accept = ".pdf,.docx,.md,.txt,.json";
+    input.addEventListener("change", async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      const ext = (f.name.match(/\.[^.]+$/)?.[0] || "").toLowerCase();
+      if (!MIME[ext] && ext !== ".pdf") { K.notice = `PDF·${KINDS} 파일에서 기억 후보를 만들 수 있어요.`; paint(); return; }
+      if (f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
+      const content = b64(await f.arrayBuffer());
+      void startExtract(() => post("/v1/files/memories", { filename: f.name, content_base64: content, mime: MIME[ext] || "application/pdf" }), f.name);
+    });
+    input.click();
+  }
+  const extractFromSource = (s) => startExtract(() => post(`/v1/knowledge/sources/${encodeURIComponent(s.id)}/extract_memories`, {}), s.display_name);
+  const EXTRACT_WORD = { queued: "기다리는 중", running: "읽는 중", done: "끝났어요", cancelled: "멈췄어요", failed: "멈췄어요" };
+  function extractCard() {
+    const x = K.extract;
+    if (!x) return null;
+    const c = el("div", "v4k-card v4k-extract");
+    const head = el("p"); head.append(el("strong", "", "기억 후보 만들기"), " · ", EXTRACT_WORD[x.phase] || EXTRACT_WORD.queued);
+    c.append(head);
+    if (x.label) c.append(noI18n(el("p", "v4k-card-note mono", x.label)));
+    if (x.active && x.total) { const bar = el("progress", "v4k-progress"); bar.max = x.total; bar.value = x.next; bar.setAttribute("aria-label", "진행"); c.append(bar, el("p", "v4k-card-note", `${num(x.total)}부분 중 ${num(x.next)}부분 읽음`)); }
+    if (x.active && !x.total) c.append(el("p", "v4k-card-note", "파일을 읽고 있어요…"));
+    if (!x.active && !x.error) c.append(el("p", "", x.created ? `기억 후보 ${num(x.created)}개를 만들었어요. 저장할지는 내가 골라요.` : "새로 만든 후보가 없어요."));
+    if (x.delta) c.append(el("p", "v4k-card-note", `전체 ${num(x.delta.total)} · 그대로 ${num(x.delta.unchanged)} · 바뀜 ${num(x.delta.changed)} · 빠짐 ${num(x.delta.removed)}`));
+    if (x.error || x.jobError) c.append(el("p", "v4k-warn", x.error || extractErr({ message: x.jobError })));
+    const a = el("div", "v4s-actions");
+    if (x.created && !x.active) a.append(button("후보 확인하러 가기", "primary", null, () => ctx.go?.("memories", "candidate")));
+    if (x.active && x.id) a.append(button("멈추기", "ghost", null, cancelExtract));
+    if (!x.active) a.append(link("닫기", () => { K.extract = null; paint(); }));
+    c.append(a);
+    if (x.skipped) { const more = el("details", "v4k-more"); more.append(el("summary", "", "자세히"), el("p", "meta", `건너뛴 부분 ${num(x.skipped)}곳 (비공개·비밀값이거나 읽을 수 없는 부분)`)); c.append(more); }
+    return c;
+  }
+
   // ---------------------------------------------------------------- 자료 (384:30031)
   function renderSources(table) {
     const parts = [];
+    const ex = extractCard(); if (ex) parts.push(ex);
     const pending = K.sources.filter((s) => s.lifecycle_status === "draft" || (s.lifecycle_status !== "failed" && s.trust_level !== "reviewed")).length;
     const failed = K.sources.filter((s) => s.lifecycle_status === "failed").length;
     if (pending + failed) parts.push(attn(pending + failed, [pending && `확인 전 ${pending}`, failed && `읽기 실패 ${failed}`].filter(Boolean).join(" · "), "하나씩 확인하기",
@@ -360,8 +429,8 @@ window.ArkismKnowledge = (ctx) => {
     box.append(wikiSection(s));
     box.append(sec("정보", null, facts([["형식", s.format], ["상태", srcState(s)[0]], ["확인한 사람", s.approved_by || "", true], ["올린 때", ago(s.created_at)]])));
     const tools = el("div", "v4s-actions");
-    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)));
-    tools.lastChild.disabled = K.busy;
+    tools.append(button("새 버전 올리기", "", null, () => pickFile(s)), button("이 자료로 기억 후보 만들기", "", null, () => extractFromSource(s)));
+    for (const b of tools.children) b.disabled = K.busy || (b.textContent.includes("기억 후보") && !!K.extract?.active);
     box.append(sec("관리", null, tools, noticeLine(), el("p", "meta", "AI는 자료를 지시가 아닌 참고로만 읽어요.")));
     // 자세히: specialist bindings and index facts for people who need them
     const more = el("details", "v4k-more");
@@ -737,16 +806,25 @@ window.ArkismKnowledge = (ctx) => {
   }
 
   return {
-    reset: () => { sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
+    reset: () => { clearTimeout(extractTimer); K.extract = null; sourcePages.reset(); loads.cancel(); sourceBusy = false; sourceError = ""; K.sources = []; K.total = 0; Object.assign(K, { state: "idle", doc: "", notice: "", remove: null, edit: null, docs: {} }); },
     views: { knowledge: {
       title: () => (K.doc ? K.sources.find((x) => x.id === K.doc)?.display_name || "지식" : "지식"),
       sub: () => (K.doc ? "AI는 문서를 통째로 읽지 않고 이 부분 단위로 찾아 써요. 새 버전은 다시 확인해야 AI가 써요." : "올려 둔 문서를 내 AI가 찾아 써요. 올릴 때 내용을 확인하면 바로 쓰여요."),
       render: renderView, keepDetail: true,
       head: () => K.doc
         ? [button("새 버전 올리기", "", null, () => { const s = K.sources.find((x) => x.id === K.doc); if (s) pickFile(s); })]
-        : [button("+ 파일 올리기", "primary", null, () => pickFile(null))]
+        : [button("파일로 기억 후보 만들기", "", null, pickExtractFile), button("+ 파일 올리기", "primary", null, () => pickFile(null))]
     } }
   };
+};
+// One shape for a file-extraction answer: the first POST ({job_id, status, …}) or a job read ({id, status, revision, job}).
+// Re-extraction counts (chunks_total/unchanged/changed/removed) show only when the server sends them.
+window.ArkismKnowledge.extractState = (r = {}) => {
+  const j = r.job || r, phase = { pending: "queued", retry: "queued", waiting: "queued", running: "running", done: "done", cancelled: "cancelled", failed: "failed" }[r.status] || "queued";
+  const d = [r, j, r.delta, j.delta].find((x) => x && x.chunks_total != null);
+  return { id: r.id || r.job_id || "", revision: r.revision || 0, phase, active: !r.job_id && !r.id ? false : phase === "queued" || phase === "running",
+    total: j.total || 0, next: j.next || 0, created: j.candidates_created || 0, skipped: (j.skipped || []).length, jobError: phase === "failed" ? j.error || "failed" : "",
+    delta: d ? { total: d.chunks_total, unchanged: d.chunks_unchanged || 0, changed: d.chunks_changed || 0, removed: d.chunks_removed || 0 } : null };
 };
 // Cuts text into parts of at most max UTF-8 bytes (the server's per-file cap): at blank lines first,
 // then at line ends, then between characters. Parts that hold only spaces are dropped.

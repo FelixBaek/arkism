@@ -438,3 +438,8 @@ input.ov-wide-search { padding-left: 32px !important; background-image: url("dat
 .ov-verdict-line strong { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .ov-verdict-line .ov-verdict-again { margin-left: auto; }
 .ov-detail-sec-verdict .ov-verdict .ov-checks { margin-top: 4px; padding-top: 0; border-top: 0; }
+/* 기억 관리 window: a tag row turns into its rename field in place */
+.ov-tag-row .ov-win-item-l { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ov-tag-row .mono { overflow-wrap: anywhere; }
+.ov-tag-edit { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.ov-tag-edit input { height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: inherit; font: inherit; }

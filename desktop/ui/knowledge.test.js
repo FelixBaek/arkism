@@ -79,13 +79,13 @@ async function setup(over, stateOver = {}) {
   const state = { view: "knowledge", server: "local", scope: { workspace_id: "w" }, connection: { generation: 1 }, ...stateOver };
   const srv = server(over);
   const heads = [];
-  const confirms = [];
+  const confirms = [], gone = [];
   let view;
   const ctx = {
     ...h, query: (o = {}) => h.query(o), state, request: srv.request, ago: (v) => (v ? `ago(${v})` : "—"),
     render: () => view.views.knowledge.render(),
     detailShell: (label) => { const body = h.el("div", "detail-body"); body.dataset.label = label; h.$("#detail").replaceChildren(body); return body; },
-    headExtras: (o) => heads.push(o),
+    headExtras: (o) => heads.push(o), go: (...a) => gone.push(a),
     confirmPop: async (...a) => { confirms.push(a); return confirms.answer ?? true; },
     remoteCollection: (read) => createRemoteCollection({ state, read, createPager }),
     virtualList: createVirtualList()
@@ -94,7 +94,7 @@ async function setup(over, stateOver = {}) {
   view = window.ArkismKnowledge(ctx);
   const files = (picked.length = 0, picked);
   const k = {
-    view, state, srv, heads, confirms, files, h, document,
+    view, state, srv, heads, confirms, gone, files, h, document,
     table: () => h.$("#table"), detail: () => h.$("#detail"),
     btn(root, label) { const b = dom.buttons(root, label)[0]; assert.ok(b, `button ${label}`); return b; },
     async press(root, label) { k.btn(root, label).click(); await dom.flush(); },
@@ -249,7 +249,7 @@ test("document view: sections with neighbours, versions and a test search with i
   // back to sources
   k.heads.at(-1).back[1](); await dom.flush();
   assert.equal(v.title(), "지식");
-  assert.equal(v.head().length, 1);
+  assert.equal(v.head().length, 2); // 파일로 기억 후보 만들기 · + 파일 올리기
 });
 
 test("search answers: no binding, empty receipt, invalid response and failure", async () => {
@@ -290,7 +290,7 @@ test("document loading and errors, a source without sections and a source that v
   assert.match(k.table().textContent, /문서를 불러오지 못했어요/);
   // the opened document disappears from the server list: back to sources
   k.srv.db.sources = k.srv.db.sources.filter((s) => s.id !== "s2");
-  k.view.views.knowledge.head()[0].click();
+  k.view.views.knowledge.head().at(-1).click();
   k.files.at(-1).files = [file("b2.txt", "x")]; dom.fire(k.files.at(-1), "change"); await dom.flush();
   k.document.body.querySelector("dialog").close("only"); await dom.flush();
   assert.equal(k.view.views.knowledge.title(), "지식");
@@ -300,7 +300,7 @@ test("document loading and errors, a source without sections and a source that v
 test("upload: wrong type, PDF, too large, Word, the uploader's check and a duplicate", async () => {
   const k = await setup({ "/v1/knowledge/ingest": (_, body) => (body.content === "same" ? { duplicate: true, source: { id: "s2", revision: 2 } } : { source: { id: body.source_key === "a.md" ? "s1" : "new", revision: 4 } }) });
   await k.start();
-  const add = k.view.views.knowledge.head()[0];
+  const add = k.view.views.knowledge.head().at(-1);
   const pick = async (f, choice) => {
     add.click(); const input = k.files.at(-1); input.files = f ? [f] : []; dom.fire(input, "change"); await dom.flush();
     if (choice === undefined) return;
@@ -659,7 +659,7 @@ test("upload: text over 64KB goes up in parts with one progress line and a plain
     return { source: { id: "p" + body.filename, revision: 1 } };
   } });
   await k.start();
-  const add = k.view.views.knowledge.head()[0];
+  const add = k.view.views.knowledge.head().at(-1);
   const para = (c) => c + "x".repeat((40 << 10) - c.length) + "\n\n";
   const pick = async (content, choice) => {
     add.click(); const input = k.files.at(-1); input.files = [file("big.md", content)]; dom.fire(input, "change"); await dom.flush();
@@ -687,4 +687,38 @@ test("upload: text over 64KB goes up in parts with one progress line and a plain
   const input = k.files.at(-1); input.files = [file("big.md", para("a") + para("b"))]; dom.fire(input, "change"); await dom.flush();
   assert.match(k.table().textContent, /새 버전은 64KB까지/);
   assert.equal(k.document.body.querySelector("dialog.v4k-ask"), null);
+});
+
+test("file → memory candidates: upload, poll to done with delta counts, open the candidate review; cancel asks first", async () => {
+  let reads = 0;
+  const k = await setup({
+    "/v1/files/memories/jobs/": () => (++reads < 2 ? { id: "fx", status: "running", revision: 1, job: { total: 4, next: 1 } }
+      : { id: "fx", status: "done", revision: 2, job: { total: 4, next: 4, candidates_created: 3, skipped: [{}], delta: { chunks_total: 4, chunks_unchanged: 1, chunks_changed: 2, chunks_removed: 1 } } }),
+    "/v1/files/memories": () => ({ job_id: "fx", status: "pending" }),
+    "/v1/operations/": () => { throw new Error("invalid_request"); }
+  });
+  await k.start();
+  const hb = k.view.views.knowledge.head();
+  assert.equal(hb[0].textContent.trim(), "파일로 기억 후보 만들기");
+  hb[0].click(); const input = k.files.at(-1);
+  input.files = [{ name: "notes.exe", size: 3, arrayBuffer: async () => new ArrayBuffer(3) }]; dom.fire(input, "change"); await dom.flush();
+  assert.match(k.table().textContent, /기억 후보를 만들 수 있어요/);
+  assert.equal(k.posted("/v1/files/memories").length, 0);
+  hb[0].click(); const input2 = k.files.at(-1);
+  input2.files = [{ name: "plan.pdf", size: 3, arrayBuffer: async () => new TextEncoder().encode("abc").buffer }]; dom.fire(input2, "change"); await dom.flush();
+  assert.deepEqual(k.posted("/v1/files/memories")[0].body, { scope: { workspace_id: "w" }, filename: "plan.pdf", content_base64: "YWJj", mime: "application/pdf" });
+  assert.doesNotMatch(k.table().textContent, /기억 후보를 만들 수 있어요/, "a fresh start clears the old notice");
+  await wait(1600); await dom.flush();
+  assert.match(k.table().textContent, /4부분 중 1부분 읽음/);
+  // cancel: declined asks and sends nothing; accepted shows the server's refusal plainly
+  k.confirms.answer = false; await k.press(k.table(), "멈추기");
+  assert.equal(k.confirms.length, 1); assert.equal(k.posted("/v1/operations/fx/cancel").length, 0);
+  k.confirms.answer = true; await k.press(k.table(), "멈추기"); await dom.flush();
+  assert.match(k.table().textContent, /멈출 수 없어요/);
+  await wait(1600); await dom.flush();
+  assert.match(k.table().textContent, /기억 후보 3개를 만들었어요/);
+  assert.match(k.table().textContent, /전체 4 · 그대로 1 · 바뀜 2 · 빠짐 1/);
+  await k.press(k.table(), "후보 확인하러 가기");
+  assert.deepEqual(k.gone.at(-1), ["memories", "candidate"]);
+  k.view.views.knowledge.render?.(); // leaves no timer behind
 });

@@ -566,7 +566,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   }
 
   function wide(kindKey, ...args) {
-    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap, trace: wideTrace, recall: wideRecall }[kindKey])(...args); // each sets its own recipe, so a redraw can still pop out
+    ({ review: wideReview, active: wideActive, sessions: wideSessions, usage: wideUsage, map: wideMap, trace: wideTrace, recall: wideRecall, ops: wideOps }[kindKey])(...args); // each sets its own recipe, so a redraw can still pop out
   }
   // Search on its own line; under it the sort control at the far left, a divider, then the filter chips on one line that scrolls sideways (never wraps).
   // wide windows: sort first, then the search, then the kind chips on their own line (they wrap, never scroll sideways)
@@ -1168,6 +1168,74 @@ window.ArkismOverviewWindows = (ctx, env) => {
     d.addEventListener("click", () => { if (menuFor) { menuFor = ""; paint(); } }); // a click outside the open handoff menu closes it
     d.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && menuFor) { ev.preventDefault(); menuFor = ""; paint(); } });
     left.append(bar, chipHost, ...(stage ? [sum] : []), list); body.append(left, right); d.append(body); paint();
+  }
+
+  // 기억 관리: numbers (GET /v1/stats), tags (GET /v1/tags, POST /v1/tags/rename) and upkeep — waiting 정리 제안 and stopped
+  // background work (GET /v1/operations?status=failed). Renaming onto an existing tag merges; "session:" tags are the server's own.
+  async function wideOps(focusTag = "") {
+    const M = window.ArkismMemoryManagement, d = shell("기억 관리", null, "숫자·태그·정리 상태", "dream");
+    recipe(d, { wide: "ops", args: [focusTag] });
+    const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
+    left.append(el("p", "ov-win-empty", "불러오는 중…")); body.append(left, right); d.append(body);
+    const [st, tg, ops] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`)]);
+    if (!d.isConnected) return;
+    const redo = () => { if (dlg === d) wideOps(focusTag); };
+    // left: the numbers, then upkeep
+    const t = st.status === "fulfilled" ? M.statTiles(st.value) : null, show = (v, unit) => (v == null ? "—" : `${num(v)}${unit}`);
+    const tiles = el("div", "ov-win-tiles ov-win-tiles-4");
+    for (const [v, l] of [[show(t?.active, "개"), "쓰는 기억"], [show(t?.pending, "건"), "확인 기다림"], [show(t?.sources, "개"), "올린 자료"], [`${num(dreamItems().length)}건`, "정리 제안"]]) { const x = el("div", "ov-win-tile"); x.append(el("strong", "", v), el("span", "", l)); tiles.append(x); }
+    left.replaceChildren(tiles);
+    if (st.status === "rejected") left.append(el("p", "ov-win-err", "숫자를 불러오지 못했어요. 잠시 뒤 다시 열어 보세요."));
+    if (t?.kinds.length) { const f = el("div", "ov-detail-facts"); for (const [k, c] of t.kinds) { const p = el("p", ""); p.append(el("span", "", kind(k)), el("strong", "", `${num(c)}개`)); f.append(p); } left.append(el("div", "ov-win-list-title", "종류별 기억"), f); }
+    left.append(el("div", "ov-win-list-title", "정리 상태"));
+    const upkeep = el("div", "ov-win-list"), dreams = dreamItems().length;
+    upkeep.append(row("", dreams ? `정리 제안 ${num(dreams)}건이 기다려요` : "기다리는 정리 제안이 없어요", "비슷하거나 서로 다른 기억을 사람이 골라 정리해요.", "", dreams ? [button("정리 제안 보기", "small", null, () => open("dream"))] : []));
+    if (ops.status === "rejected") upkeep.append(row("", "작업 상태를 볼 수 없어요", ops.reason?.message === "access_denied" ? "사람 계정으로 로그인하면 보여요." : "잠시 뒤 다시 열어 보세요."));
+    else {
+      const failed = ops.value?.items || [];
+      if (!failed.length) upkeep.append(row("", "멈춘 작업이 없어요", "색인·위키 같은 뒤에서 하는 일이 잘 돌고 있어요."));
+      for (const o of failed.slice(0, 10)) {
+        const again = o.operable ? [button("다시 시도", "small", null, async (ev) => { const b = ev.currentTarget; b.disabled = true;
+          try { await request(`/v1/operations/${encodeURIComponent(o.id)}/retry`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: o.revision }) }); redo(); }
+          catch (e) { b.disabled = false; b.title = e.message === "revision_conflict" ? tr("그새 바뀌었어요. 다시 열어 주세요.") : tr("다시 시도하지 못했어요."); } })] : [];
+        upkeep.append(row("", `멈춘 작업 · ${OP_KIND[o.kind] || "기타 작업"}`, ago(o.updated_at), "", again));
+      }
+    }
+    left.append(upkeep);
+    // right: tags
+    right.append(el("h3", "", "태그"));
+    if (tg.status === "rejected") { right.append(el("p", "ov-win-err", "태그를 불러오지 못했어요.")); return; }
+    const rows = M.tagRows(tg.value);
+    if (!rows.length) { right.append(el("p", "ov-win-empty", "아직 태그가 붙은 기억이 없어요.")); return; }
+    right.append(el("p", "ov-detail-hint", "이름을 바꾸면 그 태그가 붙은 기억이 모두 바뀌어요. 있는 태그 이름으로 바꾸면 둘이 합쳐져요."));
+    const list = el("div", "ov-detail-list");
+    for (const r of rows) {
+      const name = el("span", "mono", r.tag); name.dataset.noI18n = "";
+      const item = el("div", "ov-win-item ov-tag-row"), l = el("div", "ov-win-item-l"), side = el("div", "ov-win-item-r");
+      l.append(name, el("small", "", r.system ? `기억 ${num(r.count)}개 · 대화에서 자동으로 붙어 바꿀 수 없어요` : `기억 ${num(r.count)}개`));
+      if (!r.system) side.append(button("이름 바꾸기", "small", null, () => editTag(item, rows, r, redo)));
+      item.append(l, side); list.append(item);
+      if (r.tag === focusTag) requestAnimationFrame(() => item.scrollIntoView({ block: "nearest" }));
+    }
+    right.append(list);
+  }
+  const OP_KIND = { embedding: "벡터 색인", wiki_job: "위키 만들기", file_memory_extract: "파일에서 기억 후보 만들기", webhook_delivery: "웹훅 알림" };
+  // inline rename: one input; a merge or a rename confirms with the count it moves, then repeats while the server says more
+  function editTag(item, rows, r, done) {
+    const box = el("div", "ov-tag-edit"), input = el("input"), st = el("p", "ov-win-err", "");
+    input.value = r.tag; input.setAttribute("aria-label", "새 태그 이름"); input.dataset.noI18n = "";
+    const go2 = async () => {
+      const c = window.ArkismMemoryManagement.tagChange(rows, r.tag, input.value);
+      if (!c) { st.textContent = tr("다른 이름을 넣어 주세요. 띄어쓰기와 'session:'은 쓸 수 없어요."); return; }
+      const msg = c.merge ? `'${c.from}' 태그를 '${c.to}'에 합칠까요? 기억 ${num(c.moving)}개가 '${c.to}' 태그로 바뀌어요.` : `'${c.from}' 태그 이름을 '${c.to}'(으)로 바꿀까요? 기억 ${num(c.moving)}개가 바뀌어요.`;
+      if (!(await window.ask(msg))) return;
+      box.querySelectorAll("button,input").forEach((b) => (b.disabled = true)); st.textContent = tr("바꾸는 중…");
+      try { for (let i = 0; i < 100; i++) { const res = await request("/v1/tags/rename", { method: "POST", body: JSON.stringify({ scope: state.scope, from: c.from, to: c.to }) }); if (!res?.more) break; } done(); }
+      catch (e) { st.textContent = tr(e.message === "invalid_request" ? "이 이름은 쓸 수 없어요." : e.message === "access_denied" ? "태그는 사람 계정만 바꿀 수 있어요." : "바꾸지 못했어요. 다시 시도해 주세요."); box.querySelectorAll("button,input").forEach((b) => (b.disabled = false)); }
+    };
+    input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); void go2(); } });
+    const act = el("div", "ov-detail-actions"); act.append(button("바꾸기", "small primary", null, go2), button("취소", "small", null, done));
+    box.append(input, act, st); item.replaceChildren(box); input.focus();
   }
 
   // 사용량 (580:54204)

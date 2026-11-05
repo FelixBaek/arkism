@@ -67,7 +67,25 @@
       backup: r.backup_expiry_pending ? "보관 기한 대기" : r.backup_oldest_retained_at ? "보관 시점 확인 기록 있음" : "확인 기록 없음",
       externalVerification: "외부 사본 직접 검증은 별도 확인" };
   }
-  const api = { approval, groups, evidence, deletionStatus };
+  // 기억 관리 › 태그 (GET /v1/tags): "session:" tags record where a memory came from; the server refuses edits to them.
+  const SYSTEM_TAG = "session:";
+  function tagRows(list) {
+    return (list?.items || []).filter(t => t && typeof t.tag === "string" && t.tag).map(t => ({ tag: t.tag, count: Number(t.count) || 0, system: t.tag.startsWith(SYSTEM_TAG) }));
+  }
+  // Renaming onto a tag that already exists merges the two; anything else is a plain rename. null = not allowed.
+  function tagChange(rows, from, to) {
+    const name = String(to || "").trim();
+    if (!name || name === from || from.startsWith(SYSTEM_TAG) || name.startsWith(SYSTEM_TAG) || /[\s,]/u.test(name) || name.length > 64) return null;
+    const into = rows.find(r => r.tag === name);
+    return { from, to: name, merge: !!into, moving: rows.find(r => r.tag === from)?.count || 0, into: into?.count || 0 };
+  }
+  // GET /v1/stats in plain numbers; a missing field stays unknown (null), never 0.
+  function statTiles(stats) {
+    const n = v => (typeof v === "number" ? v : null);
+    return { active: n(stats?.memories?.by_status?.active), total: n(stats?.memories?.total), pending: n(stats?.pending_candidates), sources: n(stats?.sources?.total),
+      kinds: Object.entries(stats?.memories?.by_kind || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]) };
+  }
+  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles };
   root.ArkismMemoryManagement = api;
   if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

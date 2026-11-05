@@ -377,6 +377,7 @@ textarea.code { font: 12px/1.5 var(--mono); }
 .pg-content, .design-page { display: flex; flex-direction: column; gap: 22px; max-width: 780px; min-width: 0; padding-bottom: 24px; }
 .pg-group h2 { margin: 0 0 2px; font-size: calc(15px * var(--fs, 1)); font-weight: 600; }
 .pg-hint { margin: 2px 0 8px; color: var(--text-3); font-size: calc(12px * var(--fs, 1)); }
+.pg-hint.warn { color: var(--nc-amber); }
 .pg-sub { margin: 14px 0 6px; color: var(--text-2); font-size: calc(12px * var(--fs, 1)); font-weight: 500; }
 .pg-card { border-radius: 10px; background: var(--bg-surface); border: 1px solid var(--border); overflow: hidden; margin: 8px 0; }
 .pg-card .setting { padding: 10px 14px; }

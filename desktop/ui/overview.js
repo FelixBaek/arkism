@@ -303,6 +303,7 @@ window.ArkismOverview = (ctx) => {
       chip("쓰는 중인 기억", memN, () => openWide("active")),
       chip("세션 기록", sess.n === null ? sess.text : `오늘 ${num(sess.n)}`, () => openWide("sessions")),
       chip("사용량", by.recall.unknown ? "—" : `7일 ${num(by.recall.big.replace(/\D/g, ""))}회`, () => openWide("usage")),
+      chip("기억 관리", "숫자·태그", () => openWide("ops")),
       chip("기억 지도", `점 ${ctx.memoryCount().replace(/\d+/, (n) => num(Math.min(+n, MAP_NODES)))}`, () => openWide("map"))); // the map draws at most MAP_NODES (#181)
   }
 

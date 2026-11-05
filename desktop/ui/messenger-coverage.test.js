@@ -57,10 +57,10 @@ test("empty server: loading, then new discord, telegram and slack forms save", a
   assert.equal(s.notices.pop(), "채팅 ID를 먼저 넣어 주세요.");
   chat.value = "@room"; await chat.fire("input");
   btn(tgToken.closest(".mg-token"), "저장하고 연결").click(); await flush();
-  assert.deepEqual(s.calls.at(-3)[1], { scope: { workspace_id: "w" }, channel: "telegram", bot_token: "1".repeat(25), chat_id: "@room" });
+  assert.deepEqual(s.calls.at(-4)[1], { scope: { workspace_id: "w" }, channel: "telegram", bot_token: "1".repeat(25), chat_id: "@room" });
   slack.value = "https://hooks.slack.com/services/abc";
   btn(slack.closest(".mg-token"), "저장하고 연결").click(); await flush();
-  assert.equal(s.calls.at(-3)[1].webhook_url, "https://hooks.slack.com/services/abc");
+  assert.equal(s.calls.at(-4)[1].webhook_url, "https://hooks.slack.com/services/abc");
 });
 
 test("connected bot and destinations: change, check, invite, test, disconnect", async () => {
@@ -155,7 +155,7 @@ test("unsupported servers, failed reads, retry and error texts", async () => {
   v = s2.view();
   assert.ok(has(v, "디스코드 상태를 불러오지 못했어요 (down)") && has(v, "연결 상태를 불러오지 못했어요 (offline)"));
   btn(v, "다시 불러오기").click(); await flush();
-  assert.equal(s2.calls.length, 4);
+  assert.equal(s2.calls.length, 6); // two loads of discord, messengers and webhooks
   // errText: known codes, and a save failure reloads quietly
   for (const [code, text] of [["secret_detected", "키나 토큰처럼"], ["invalid_request", "토큰 형식을"], ["revision_conflict", "다른 곳에서 먼저"]]) {
     const s3 = setup({ "/v1/discord": { bots: [] }, "/v1/messengers": { destinations: [] }, "/v1/discord/bots": fail(code) });

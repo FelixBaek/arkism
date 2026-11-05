@@ -1377,7 +1377,7 @@ window.ArkismPages = (ctx) => {
       return box;
     })), asSide(comfy)));
     // shortcut: the UI has no dev-build flag, so 속도 기록 is folded instead of hidden; gate it if one is added.
-    return [...dataGroup(), ctx.privacyGroup(), more("자세히 · 속도 기록", speedGroup())];
+    return [...dataGroup(), spaceGroup(), ctx.privacyGroup(), more("자세히 · 속도 기록", speedGroup())];
   }
   // 속도 기록 (perf.js): the slowest kinds first; 100ms or more is what a person notices as a stall.
   function speedGroup() {
@@ -1474,6 +1474,62 @@ window.ArkismPages = (ctx) => {
   }
 
   // 데이터: 이 PC의 Arkism(내장 모드)만. 백업은 문서 › Arkism Backups에 폴더로 남는다.
+  // 기억 공간 옮기기 (POST /v1/spaces/{workspace}/{project}/export · import): a bundle file of this space's memories.
+  // Export needs the external:space_bundle grant; an import never saves directly — everything lands as candidates to review.
+  const space = { busy: false, line: "", warn: false, review: false };
+  const spacePath = () => `/v1/spaces/${encodeURIComponent(state.scope.workspace_id || "default")}/${encodeURIComponent(state.scope.project_id || "default")}`;
+  const spaceQuery = () => new URLSearchParams(Object.entries(state.scope).filter(([, v]) => v !== "")).toString();
+  const spaceShow = (line, warn = false, review = false) => { Object.assign(space, { line, warn, review }); if (state.view === "settings" && state.settingsTab === "advanced") render(false); };
+  async function spaceJob(kind, job) { // until done or failed; 10 minutes is the server's own job limit
+    for (let i = 0; i < 400 && ["queued", "running"].includes(job.state); i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      job = await request(`/v1/spaces/${kind}/${encodeURIComponent(job.id)}?${spaceQuery()}`);
+    }
+    if (job.state !== "done") throw new Error(job.error || "space_job_failed");
+    return job;
+  }
+  const SPACE_ERR = { access_denied: "이 계정에는 기억을 밖으로 내보낼 권한이 없어요. 서버 관리자에게 'external:space_bundle' 권한을 받아 주세요.",
+    invalid_request: "Arkism에서 내보낸 기억 공간 파일인지 확인해 주세요.", payload_too_large: "파일이 너무 커요. 8MB까지 가져올 수 있어요." };
+  async function spaceRun(work) {
+    if (space.busy) return;
+    space.busy = true;
+    try { await work(); } catch (e) { spaceShow(SPACE_ERR[e.message] || "처리하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.", true); }
+    space.busy = false;
+    if (state.view === "settings" && state.settingsTab === "advanced") render(false);
+  }
+  const spaceExport = () => spaceRun(async () => {
+    spaceShow("내보낼 파일을 만드는 중…");
+    const job = await spaceJob("exports", await request(`${spacePath()}/export`, { method: "POST", body: "{}" }));
+    const text = await request(`/v1/spaces/exports/${encodeURIComponent(job.id)}/download?${spaceQuery()}`, { raw: true });
+    const url = URL.createObjectURL(new Blob([text], { type: "application/x-ndjson" }));
+    const a = el("a"); a.href = url; a.download = `arkism-space-${state.scope.project_id || "default"}.jsonl`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    spaceShow("파일 다운로드를 시작했어요. 다른 Arkism의 설정 › 고급에서 가져오세요. 기억 내용이 들어 있으니 안전한 곳에 두세요.");
+  });
+  const spaceImport = () => {
+    const input = el("input"); input.type = "file"; input.accept = ".jsonl,application/x-ndjson";
+    input.addEventListener("change", () => spaceRun(async () => {
+      const f = input.files?.[0];
+      if (!f) return;
+      if (f.size > 8 << 20) throw new Error("payload_too_large");
+      if (!(await window.ask("이 파일의 기억을 가져올까요? 바로 저장되지 않고 모두 '확인해 주세요'에 후보로 들어가요.", "가져오기"))) return;
+      spaceShow("가져오는 중…");
+      const job = await spaceJob("imports", await request(`${spacePath()}/import`, { method: "POST", body: JSON.stringify({ bundle: await f.text(), import_as: "candidate" }) }));
+      const r = job.report || {};
+      spaceShow(`후보 ${r.imported || 0}개를 가져왔어요. 이미 있는 기억 ${r.merged || 0}개는 건너뛰었고, 받지 않은 것 ${(r.rejected || 0) + (r.skipped || []).reduce((n, x) => n + (x.count || 0), 0)}개예요.`, false, (r.imported || 0) > 0);
+    }));
+    input.click();
+  };
+  function spaceGroup() {
+    const g = group("기억 공간 옮기기", "이 공간의 기억을 파일로 내보내거나, 받은 파일을 가져와요. 가져온 기억은 내가 확인해야 저장돼요.");
+    const row = el("div", "v4s-actions");
+    row.append(button("기억 내보내기", "", null, spaceExport), button("기억 가져오기", "", null, spaceImport));
+    for (const b of row.children) b.disabled = space.busy;
+    g.append(row);
+    if (space.line) g.append(el("p", `pg-hint${space.warn ? " warn" : ""}`, space.line));
+    if (space.review) g.append(button("후보 확인하러 가기", "primary", null, () => go("memories", "candidate")));
+    return g;
+  }
   function dataGroup() {
     if (state.mode !== "local" || !tauri) return [];
     const g = group("데이터", "이 PC에 저장한 기억·세션·스킬 기록을 백업하고 되돌려요. 백업에는 모든 기억이 들어 있으니 안전한 곳에 두세요.");

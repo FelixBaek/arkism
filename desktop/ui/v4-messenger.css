@@ -35,3 +35,12 @@
 :is(#app, body) .mg-field input:focus { border-color: var(--nc-accent) !important; }
 .v4-side .mg-note { color: var(--nc-quiet); }
 .mg-logo.brand-mono[style*="slack-logo"] { --brand: url("img/brand/slack-mark.svg") !important; }
+/* 웹훅 card: one row per address, the add form under them */
+.mg-hook, .mg-hook-form { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--nc-line); }
+.mg-hook .mg-title strong { font-size: calc(13px * var(--fs, 1)); overflow-wrap: anywhere; }
+.mg-hook .mg-actions { flex-wrap: wrap; }
+.mg-events { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; border: 0; }
+.mg-check { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; font: 400 calc(13px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.mg-more summary { cursor: pointer; font: 400 calc(12px * var(--fs, 1))/1.6 var(--sans); color: var(--nc-muted); }
+.mg-more[open] { display: flex; flex-direction: column; gap: 8px; }
+.mg-hook-form > .btn { align-self: flex-start; }

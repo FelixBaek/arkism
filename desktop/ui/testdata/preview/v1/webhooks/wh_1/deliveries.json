@@ -1,0 +1,5 @@
+{"items": [
+  {"id": "dl_3", "status": "retry", "attempts": 2, "next_attempt_at": "2026-11-05T09:40:00Z", "delivery": {"event": "memory.approved", "http_status": 503, "latency_ms": 812, "error": "http_503"}},
+  {"id": "dl_2", "status": "done", "attempts": 1, "delivery": {"event": "candidate.created", "http_status": 200, "latency_ms": 96}},
+  {"id": "dl_1", "status": "done", "attempts": 1, "delivery": {"event": "webhook.test", "http_status": 204, "latency_ms": 71}}
+]}
