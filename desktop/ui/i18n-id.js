@@ -5255,7 +5255,11 @@
  "● 사람이 승인한 관찰이에요": "● Pengamatan yang disetujui orang",
  "지도에 있는 기억과 이어지지 않았어요.": "Tidak terhubung dengan memori mana pun di peta.",
  "원인→결과": "Sebab → akibat",
- "원인": "Sebab"
+ "원인": "Sebab",
+ "일어난 첫날": "Hari pertama kejadian",
+ "일어난 마지막 날": "Hari terakhir kejadian",
+ "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요.": "Kalau salah, perbaiki atau hapus saja. Akan ikut tersimpan saat Anda menyetujui.",
+ "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요.": "Kalau kejadiannya punya tanggal, tulis di sini. Boleh dikosongkan."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -6416,6 +6420,7 @@
  "요청마다 {0}개": "{0} per permintaan",
  "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "Pengamatan yang merangkum beberapa memori. Berdasarkan {0} memori",
  "기억 {0}개에 나옴": "Muncul di {0} memori",
- "바탕 기억 {0}개": "Berdasarkan {0} memori"
+ "바탕 기억 {0}개": "Berdasarkan {0} memori",
+ "일어난 때 · 글의 \"{0}\"를 보고 정했어요": "Waktu kejadian · ditentukan dari \"{0}\" di dalam teks"
  }
 };

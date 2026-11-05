@@ -5255,7 +5255,11 @@
  "● 사람이 승인한 관찰이에요": "● Đây là quan sát đã được người duyệt",
  "지도에 있는 기억과 이어지지 않았어요.": "Chưa liên kết với bộ nhớ nào trên bản đồ.",
  "원인→결과": "Nguyên nhân → kết quả",
- "원인": "Nguyên nhân"
+ "원인": "Nguyên nhân",
+ "일어난 첫날": "Ngày đầu tiên xảy ra",
+ "일어난 마지막 날": "Ngày cuối cùng xảy ra",
+ "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요.": "Nếu sai, bạn hãy sửa hoặc xóa đi nhé. Nội dung sẽ được lưu cùng khi bạn duyệt.",
+ "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요.": "Nếu việc này có ngày cụ thể, bạn hãy ghi vào nhé. Để trống cũng được."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -6416,6 +6420,7 @@
  "요청마다 {0}개": "{0} mỗi yêu cầu",
  "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "Đây là nhận xét tổng hợp từ nhiều ký ức. Dựa trên {0} ký ức",
  "기억 {0}개에 나옴": "Có trong {0} ký ức",
- "바탕 기억 {0}개": "Dựa trên {0} ký ức"
+ "바탕 기억 {0}개": "Dựa trên {0} ký ức",
+ "일어난 때 · 글의 \"{0}\"를 보고 정했어요": "Thời điểm xảy ra · Đã chọn dựa vào \"{0}\" trong nội dung"
  }
 };

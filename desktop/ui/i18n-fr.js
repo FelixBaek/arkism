@@ -5255,7 +5255,11 @@
  "● 사람이 승인한 관찰이에요": "● Observation approuvée par une personne",
  "지도에 있는 기억과 이어지지 않았어요.": "Non lié à une mémoire de la carte.",
  "원인→결과": "Cause → effet",
- "원인": "Cause"
+ "원인": "Cause",
+ "일어난 첫날": "Premier jour",
+ "일어난 마지막 날": "Dernier jour",
+ "틀렸으면 고치거나 지우세요. 승인할 때 같이 저장돼요.": "Si c'est incorrect, corrigez-le ou effacez-le. Il sera enregistré quand vous approuverez.",
+ "날짜가 있는 일이면 적어 두세요. 비워 둬도 돼요.": "Si cela s'est passé à une date précise, indiquez-la. Vous pouvez aussi laisser vide."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -6416,6 +6420,7 @@
  "요청마다 {0}개": "{0} par requête",
  "여러 기억을 정리한 관찰이에요. 바탕 기억 {0}개": "Une observation qui résume plusieurs souvenirs. Basée sur {0} souvenirs",
  "기억 {0}개에 나옴": "Présent dans {0} souvenirs",
- "바탕 기억 {0}개": "Basé sur {0} souvenirs"
+ "바탕 기억 {0}개": "Basé sur {0} souvenirs",
+ "일어난 때 · 글의 \"{0}\"를 보고 정했어요": "Date · choisie d'après « {0} » dans le texte"
  }
 };
