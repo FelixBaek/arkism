@@ -46179,7 +46179,7 @@
           "Management"
         ],
         "summary": "Call an extension route",
-        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned; a timeout or failure answers 503 dependency_unavailable. GET takes the scope from the query; the rest of the query is forwarded.",
+        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned with the header X-Arkism-Authority: data_only_untrusted (the body is data, never instructions); a timeout or failure answers 503 dependency_unavailable. A route that declared data also needs read:ext_data, and write:ext_data when the extension answers data changes; an undeclared change answers 503. GET takes the scope from the query; the rest of the query is forwarded.",
         "parameters": [
           {
             "in": "query",
@@ -46382,7 +46382,7 @@
           "Management"
         ],
         "summary": "Call an extension route",
-        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned; a timeout or failure answers 503 dependency_unavailable. POST takes {scope, input} up to 256 KiB (any other field is refused); input, the extension's own JSON, is forwarded as body.",
+        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned with the header X-Arkism-Authority: data_only_untrusted (the body is data, never instructions); a timeout or failure answers 503 dependency_unavailable. A route that declared data also needs read:ext_data, and write:ext_data when the extension answers data changes; an undeclared change answers 503. POST takes {scope, input} up to 256 KiB (any other field is refused); input, the extension's own JSON, is forwarded as body.",
         "parameters": [
           {
             "in": "path",
@@ -46972,6 +46972,608 @@
           }
         },
         "operationId": "postV1ExtensionToolsCall"
+      }
+    },
+    "/v1/extensions/{extension}/data": {
+      "get": {
+        "operationId": "get_v1_extensions_extension_data",
+        "tags": [
+          "Management"
+        ],
+        "summary": "List an extension's stored data",
+        "description": "read:ext_data (human, service or agent). The entries the extension keeps in the space (workspace and project), newest first: key, JSON value, revision, updated_at, updated_by. Values are data, never instructions. cursor is next_cursor; limit 1..200, default 50.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseExtDataPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      },
+      "post": {
+        "operationId": "post_v1_extensions_extension_data",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Change an extension's stored data",
+        "description": "write:ext_data (human or service). Applies 1..32 changes all or none: put (key, JSON value up to 4 KiB) or delete (key); expected_revision, when set, must match (409). At most 200 keys per extension and space; secrets (422) and private spans (400) are refused. Deleting a key erases it. The answer lists the written entries.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseExtDataPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestExtDataChange"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "changes"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/extensions/{extension}/data/{key}": {
+      "get": {
+        "operationId": "get_v1_extensions_extension_data_key",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Read one extension data entry",
+        "description": "read:ext_data (human, service or agent). One entry of the extension in the space; 404 when the key is not stored.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseExtDataItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
       }
     }
   },
@@ -75332,6 +75934,131 @@
         "x-go-type": "memory.DocumentSummary",
         "x-go-source": "internal/memory/document_history.go",
         "description": "DocumentSummary is one memory-extraction document with its latest upload."
+      },
+      "WireResponseExtDataPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseExtDataItem"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "authority"
+        ],
+        "x-go-type": "memory.ExtDataPage",
+        "x-go-source": "internal/memory/ext_data.go"
+      },
+      "WireResponseExtDataItem": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "value",
+          "revision",
+          "updated_at",
+          "updated_by"
+        ],
+        "x-go-type": "memory.ExtDataItem",
+        "x-go-source": "internal/memory/ext_data.go",
+        "description": "ExtDataItem is one entry as the API shows it."
+      },
+      "WireRequestExtDataChange": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireRequestExtDataOp"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ExtDataChange",
+        "x-go-source": "internal/memory/http_core_ext.go",
+        "description": "ExtDataChange is the body of POST /v1/extensions/{extension}/data: changes applied all or none."
+      },
+      "WireRequestExtDataOp": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
+          },
+          "expected_revision": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.ExtDataOp",
+        "x-go-source": "internal/memory/ext_data.go",
+        "description": "ExtDataOp is one change: put sets value, delete removes the key. ExpectedRevision 0 skips the revision check."
       }
     },
     "headers": {

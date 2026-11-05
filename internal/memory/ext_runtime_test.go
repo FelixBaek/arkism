@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -23,14 +25,16 @@ func extAnswer(method string, params json.RawMessage) any {
 		Phase, Path, Tool string
 		Actor             map[string]string
 		Body              json.RawMessage
+		Data              map[string]int
 	}
 	_ = json.Unmarshal(params, &p)
 	text := string(params)
 	switch method {
 	case "describe":
 		return map[string]any{"operations": []string{OpCapture, OpRecall}, "tenant": true,
-			"routes": []map[string]any{{"method": "GET", "path": "/hello", "action": "read:memories"}, {"method": "GET", "path": "/env", "action": "read:memories", "roles": []string{"human"}}, {"method": "POST", "path": "/echo", "action": "read:memories"}},
-			"tools":  []map[string]any{{"name": "lookup", "description": "Look a thing up", "inputSchema": map[string]any{"type": "object"}}}}
+			"routes": []map[string]any{{"method": "GET", "path": "/hello", "action": "read:memories"}, {"method": "GET", "path": "/env", "action": "read:memories", "roles": []string{"human"}}, {"method": "POST", "path": "/echo", "action": "read:memories"},
+				{"method": "POST", "path": "/count", "action": "read:memories", "data": true}, {"method": "POST", "path": "/sneaky", "action": "read:memories"}},
+			"tools": []map[string]any{{"name": "lookup", "description": "Look a thing up", "inputSchema": map[string]any{"type": "object"}}}}
 	case "operation":
 		if strings.Contains(text, "sleepy") && p.Phase == "before" {
 			time.Sleep(2 * time.Second)
@@ -46,6 +50,9 @@ func extAnswer(method string, params json.RawMessage) any {
 				names = append(names, strings.SplitN(kv, "=", 2)[0])
 			}
 			body["env"] = names
+		}
+		if p.Path == "/count" || p.Path == "/sneaky" {
+			return map[string]any{"status": 200, "body": map[string]any{"seen": p.Data["n"]}, "data": []map[string]any{{"op": "put", "key": "n", "value": p.Data["n"] + 1}}}
 		}
 		return map[string]any{"status": 200, "body": body}
 	case "tool":
@@ -279,5 +286,174 @@ func TestExtensionsDisabledWithoutConfig(t *testing.T) {
 	tools, err := f.svc.ExtensionTools(context.Background(), f.agent, scopeA)
 	if err != nil || len(tools) != 0 {
 		t.Fatal(tools, err)
+	}
+}
+
+func TestProcessExtensionEnvRefusesCredentialNamesUnlessListed(t *testing.T) {
+	good := stdioExtension(t, "house")
+	for _, name := range []string{"API_KEY", "GH_TOKEN", "DB_PASSWORD", "MEMORY_DATABASE_URL", "AUTH_HEADER", "CLIENT_SECRET"} {
+		cfg := good
+		cfg.Env = map[string]string{"ARKISM_TEST_HELPER": "extension", name: "x"}
+		if _, err := LoadProcessExtensions(testCtx, extConfigFile(t, cfg)); !errors.Is(err, ErrInvalid) {
+			t.Fatal(name, err)
+		}
+		cfg.SecretEnv = []string{name}
+		ext, err := LoadProcessExtensions(testCtx, extConfigFile(t, cfg))
+		if err != nil {
+			t.Fatal(name, "listed in secret_env", err)
+		}
+		ext.Close()
+	}
+	cfg := good
+	cfg.SecretEnv = []string{"NOT_IN_ENV"}
+	if _, err := LoadProcessExtensions(testCtx, extConfigFile(t, cfg)); !errors.Is(err, ErrInvalid) {
+		t.Fatal("secret_env without the env entry", err)
+	}
+}
+
+func TestProcessExtensionCloseStopsTheProgram(t *testing.T) {
+	ext, err := LoadProcessExtensions(testCtx, extConfigFile(t, stdioExtension(t, "house")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	proc := ext.list[0].t.(*stdioTransport).cmd.Process
+	ext.Close()
+	if err := proc.Signal(syscall.Signal(0)); err == nil {
+		t.Fatal("the program still runs after Close")
+	}
+}
+
+func TestTenantCacheKeysOnCallerAndSkipsFailures(t *testing.T) {
+	f := newFixture(t)
+	cfg := stdioExtension(t, "house")
+	cfg.Fail = "open"
+	ext := loadExtensions(t, f, cfg)
+	if _, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
+		t.Fatal(err)
+	}
+	// human-1's cached allow must not answer for human-2 in the same space and action.
+	if _, err := f.svc.Search(testCtx, f.human2, SearchInput{Scope: scopeA, Query: "답"}); !errors.Is(err, ErrDenied) {
+		t.Fatal("a cached answer stood in for another principal", err)
+	}
+	n := len(ext.tenant)
+	// A failed call (fail open) lets the request through but is not kept.
+	ext.list[0].t.close()
+	ext.list[0].t = brokenTransport{}
+	ext.mu.Lock()
+	clear(ext.tenant)
+	ext.mu.Unlock()
+	if _, err := f.svc.Search(testCtx, f.human2, SearchInput{Scope: scopeA, Query: "답"}); err != nil {
+		t.Fatal("fail open", err)
+	}
+	if len(ext.tenant) != 0 || n == 0 {
+		t.Fatal("a failed tenant answer was cached", len(ext.tenant), n)
+	}
+}
+
+type brokenTransport struct{}
+
+func (brokenTransport) call(context.Context, string, any) (json.RawMessage, error) {
+	return nil, errExtFailed
+}
+func (brokenTransport) close() {}
+
+func TestExtensionRoutePathsAndUntrustedAnswers(t *testing.T) {
+	f := newFixture(t)
+	loadExtensions(t, f, stdioExtension(t, "house"))
+	h := handlerMode(f.svc, time.Minute, true)
+	q := "?workspace_id=ws-a&project_id=proj-a"
+	rec := extRequest(t, h, f.human, http.MethodGet, "/v1/extensions/house/routes/hello"+q, "")
+	if rec.Header().Get("X-Arkism-Authority") != AuthorityDataOnly || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatal("route answer not marked untrusted", rec.Header())
+	}
+	for _, path := range []string{"/v1/extensions/house/routes/..%2Fenv", "/v1/extensions/house/routes/hello%2F..%2Fenv", "/v1/extensions/house/routes/x/../env", "/v1/extensions/house/routes/HELLO"} {
+		if rec := extRequest(t, h, f.agent, http.MethodGet, path+q, ""); rec.Code == 200 {
+			t.Fatal("a path outside the declared routes answered", path, rec.Code, rec.Body)
+		}
+	}
+	big := `{"scope":{"workspace_id":"ws-a","project_id":"proj-a"},"input":"` + strings.Repeat("x", extensionBodyLimit) + `"}`
+	if rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/routes/echo", big); rec.Code != http.StatusRequestEntityTooLarge && rec.Code != 400 {
+		t.Fatal("an oversized body was forwarded", rec.Code)
+	}
+}
+
+func TestExtensionDataStore(t *testing.T) {
+	f := newOpsFixture(t)
+	loadExtensions(t, f, stdioExtension(t, "house"))
+	h := handlerMode(f.svc, time.Minute, true)
+	q := "?workspace_id=ws-a&project_id=proj-a"
+	body := func(changes string) string {
+		return `{"scope":{"workspace_id":"ws-a","project_id":"proj-a"},"changes":` + changes + `}`
+	}
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"put","key":"color","value":{"v":"blue"}}]`)); rec.Code != 200 {
+		t.Fatal("put", rec.Code, rec.Body)
+	}
+	rec := extRequest(t, h, f.agent, http.MethodGet, "/v1/extensions/house/data/color"+q, "")
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"value":{"v":"blue"}`) || !strings.Contains(rec.Body.String(), `"revision":1`) {
+		t.Fatal("get", rec.Code, rec.Body)
+	}
+	if rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"put","key":"color","value":1}]`)); rec.Code != 403 {
+		t.Fatal("an agent changed data over HTTP", rec.Code)
+	}
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"put","key":"color","value":2,"expected_revision":7}]`)); rec.Code != 409 {
+		t.Fatal("stale revision", rec.Code)
+	}
+	for name, change := range map[string]string{
+		"secret":  `[{"op":"put","key":"k","value":"sk-ant-api03-` + strings.Repeat("a", 90) + `"}]`,
+		"private": `[{"op":"put","key":"k","value":"<private>x</private>"}]`,
+		"large":   `[{"op":"put","key":"k","value":"` + strings.Repeat("x", extDataValueBytes) + `"}]`,
+		"key":     `[{"op":"put","key":"../k","value":1}]`,
+		"op":      `[{"op":"drop","key":"k"}]`,
+	} {
+		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(change)); rec.Code != 400 && rec.Code != 422 {
+			t.Fatal(name, rec.Code, rec.Body)
+		}
+	}
+	// Other spaces see nothing; the generic record routes never serve the collection.
+	if rec := extRequest(t, h, f.human, http.MethodGet, "/v1/extensions/house/data?workspace_id=ws-a&project_id=proj-b", ""); !strings.Contains(rec.Body.String(), `"items":[]`) {
+		t.Fatal("another space saw the data", rec.Body)
+	}
+	if rec := extRequest(t, h, f.human, http.MethodGet, "/v1/ext_data/house:color"+q, ""); rec.Code == 200 {
+		t.Fatal("generic read served extension data", rec.Body)
+	}
+	if _, err := f.svc.Create(testCtx, f.human, colExtData, CreateInput{Scope: scopeA, Kind: "house", Text: "x"}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("generic create wrote extension data", err)
+	}
+
+	// A data route reads its entries and its answer's changes are applied with the caller's permission.
+	post := `{"scope":{"workspace_id":"ws-a","project_id":"proj-a"},"input":{}}`
+	for want := 0; want < 2; want++ {
+		rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/routes/count", post)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), fmt.Sprintf(`"seen":%d`, want)) {
+			t.Fatal("data route", want, rec.Code, rec.Body)
+		}
+	}
+	if rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/routes/sneaky", post); rec.Code != 503 {
+		t.Fatal("a route without data changed data", rec.Code, rec.Body)
+	}
+	delete(f.auth.actors[f.agent].verbs, "write")
+	if rec := extRequest(t, h, f.agent, http.MethodPost, "/v1/extensions/house/routes/count", post); rec.Code != 403 {
+		t.Fatal("an extension wrote data the caller may not write", rec.Code, rec.Body)
+	}
+
+	// Removing an entry is the erasure path; the key count is bounded.
+	if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body(`[{"op":"delete","key":"color"}]`)); rec.Code != 200 {
+		t.Fatal("delete", rec.Code, rec.Body)
+	}
+	if rec := extRequest(t, h, f.human, http.MethodGet, "/v1/extensions/house/data/color"+q, ""); rec.Code != 404 {
+		t.Fatal("deleted entry still served", rec.Code)
+	}
+	for i := 0; i < extDataMaxKeys; i += 25 {
+		changes := []string{}
+		for j := i; j < i+25; j++ {
+			changes = append(changes, fmt.Sprintf(`{"op":"put","key":"k%d","value":%d}`, j, j))
+		}
+		want := 200
+		if i+25 > extDataMaxKeys-1 { // "n" from the data route already holds one key
+			want = 400
+		}
+		if rec := extRequest(t, h, f.human, http.MethodPost, "/v1/extensions/house/data", body("["+strings.Join(changes, ",")+"]")); rec.Code != want {
+			t.Fatal("key cap", i, rec.Code, rec.Body)
+		}
 	}
 }

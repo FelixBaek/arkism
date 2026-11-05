@@ -92,6 +92,7 @@ func run() error {
 	if cfg.Reindex {
 		return runDaemonReindex(ctx, pg, embed)
 	}
+	defer closeDaemonExtensions()
 	svc, err := newDaemonService(ctx, pg, cfg, store, standalone, synthetic, auth, embed)
 	if err != nil {
 		return err

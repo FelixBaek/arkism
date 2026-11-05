@@ -14,6 +14,15 @@ import (
 // Without recompiling, ARKISM_EXTENSIONS_FILE adds extension programs (memory.LoadProcessExtensions).
 var daemonExtensions memory.Extensions
 
+// daemonExtensionPrograms are the running extension programs; closeDaemonExtensions stops them at shutdown.
+var daemonExtensionPrograms *memory.ProcessExtensions
+
+func closeDaemonExtensions() {
+	if daemonExtensionPrograms != nil {
+		daemonExtensionPrograms.Close()
+	}
+}
+
 // configureDaemonExtensions sets the compiled-in hooks, the extension programs and the server MCP tool allowlist.
 func configureDaemonExtensions(svc *memory.Service) error {
 	svc.Extensions = daemonExtensions
@@ -29,6 +38,7 @@ func configureDaemonExtensions(svc *memory.Service) error {
 	if err != nil {
 		return err
 	}
-	ext.Apply(&svc.Extensions) // the programs live as long as the daemon; each exits when its stdin closes
+	daemonExtensionPrograms = ext
+	ext.Apply(&svc.Extensions) // the programs live as long as the daemon (closeDaemonExtensions)
 	return nil
 }

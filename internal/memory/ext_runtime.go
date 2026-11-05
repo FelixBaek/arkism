@@ -14,8 +14,13 @@ package memory
 //	describe  {} -> {"operations":["capture","recall",...],"tenant":true,"routes":[...],"tools":[...]}
 //	operation {"phase":"before"|"after","operation","actor","scope","input","ok","error","result"?} -> {"allow":bool,"reason"?}
 //	tenant    {"actor","scope","action"} -> {"allow":bool}
-//	route     {"actor","scope","method","path","query","body"} -> {"status":200,"body":{...}}
-//	tool      {"actor","scope","tool","body"} -> {"result":...}
+//	route     {"actor","scope","method","path","query","body","data"?} -> {"status":200,"body":{...},"data"?:[...]}
+//	tool      {"actor","scope","tool","body","data"?} -> {"result":...,"data"?:[...]}
+//
+// A route or tool that declares "data": true gets the extension's stored
+// entries for the space ("data": {key: value}) and may answer changes
+// ([{"op":"put","key","value"},{"op":"delete","key"}]); Arkism applies them with
+// the caller's read:ext_data and write:ext_data permission (ext_data.go).
 //
 // Every call has a timeout. When an extension fails or times out, "fail":"closed"
 // (the default) refuses the operation, tenant check, route or tool; "open" lets
@@ -43,6 +48,7 @@ import (
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/httpguard"
+	"github.com/FelixBaek/arkism/internal/procgroup"
 )
 
 const (
@@ -59,19 +65,23 @@ var (
 	extPathPattern   = regexp.MustCompile(`^/[A-Za-z0-9._~/-]{0,200}$`)
 	extActionPattern = regexp.MustCompile(`^[a-z][a-z_]{0,31}:[a-z][a-z0-9_]{0,63}$`)
 	extEnvPattern    = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
-	errExtFailed     = errors.New("extension failed")
+	// extSecretEnv names look like credentials; one is passed only when secret_env lists it.
+	extSecretEnv = regexp.MustCompile(`KEY|TOKEN|SECRET|PASS|AUTH|DATABASE|CREDENTIAL`)
+	errExtFailed = errors.New("extension failed")
 )
 
 // ProcessExtensionConfig is one entry of ARKISM_EXTENSIONS_FILE.
 type ProcessExtensionConfig struct {
-	Name         string            `json:"name"`
-	Command      []string          `json:"command,omitempty"`
-	Env          map[string]string `json:"env,omitempty"`
-	URL          string            `json:"url,omitempty"`
-	TokenFile    string            `json:"token_file,omitempty"`
-	AllowPrivate bool              `json:"allow_private,omitempty"`
-	Timeout      string            `json:"timeout,omitempty"`
-	Fail         string            `json:"fail,omitempty"`
+	Name    string            `json:"name"`
+	Command []string          `json:"command,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	// SecretEnv names env entries whose names look like credentials and are still meant to be passed.
+	SecretEnv    []string `json:"secret_env,omitempty"`
+	URL          string   `json:"url,omitempty"`
+	TokenFile    string   `json:"token_file,omitempty"`
+	AllowPrivate bool     `json:"allow_private,omitempty"`
+	Timeout      string   `json:"timeout,omitempty"`
+	Fail         string   `json:"fail,omitempty"`
 	// SendResults adds the operation's result to the "after" call; off, the extension hears only ok/error.
 	SendResults bool `json:"send_results,omitempty"`
 }
@@ -81,6 +91,7 @@ type extToolSpec struct {
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Action      string          `json:"action"`
+	Data        bool            `json:"data,omitempty"`
 }
 
 type extDescription struct {
@@ -137,7 +148,9 @@ func LoadProcessExtensions(ctx context.Context, path string) (*ProcessExtensions
 		}
 		e, err := newProcessExtension(cfg)
 		if err == nil {
-			err = e.describe(ctx)
+			if err = e.describe(ctx); err != nil {
+				e.t.close() // started for describe
+			}
 		}
 		if err != nil {
 			out.Close()
@@ -267,21 +280,24 @@ func (e *processExtension) ask(ctx context.Context, method string, params any) (
 	return raw, err
 }
 
-// allowed asks one extension a yes/no question; a failure follows its fail setting.
-func (e *processExtension) allowed(ctx context.Context, method string, params any) bool {
+// allowed asks one extension a yes/no question; a failure follows its fail setting and says so.
+func (e *processExtension) allowed(ctx context.Context, method string, params any) (allow, failed bool) {
 	raw, err := e.ask(ctx, method, params)
 	var answer struct {
-		Allow bool `json:"allow"`
+		Allow *bool `json:"allow"`
 	}
-	if err != nil || json.Unmarshal(raw, &answer) != nil {
-		return e.failOpen
+	if err != nil || json.Unmarshal(raw, &answer) != nil || answer.Allow == nil {
+		return e.failOpen, true
 	}
-	return answer.Allow
+	return *answer.Allow, false
 }
 
 func (p *ProcessExtensions) BeforeOperation(ctx context.Context, actor Decision, op string, input any) error {
 	for _, e := range p.list {
-		if slices.Contains(e.desc.Operations, op) && !e.allowed(ctx, "operation", map[string]any{"phase": "before", "operation": op, "actor": extActor(actor), "scope": actor.Scope, "input": input}) {
+		if !slices.Contains(e.desc.Operations, op) {
+			continue
+		}
+		if allow, _ := e.allowed(ctx, "operation", map[string]any{"phase": "before", "operation": op, "actor": extActor(actor), "scope": actor.Scope, "input": input}); !allow {
 			return fmt.Errorf("%s refused %s: %w", e.cfg.Name, op, ErrExtensionRefused)
 		}
 	}
@@ -304,6 +320,8 @@ func (p *ProcessExtensions) AfterOperation(ctx context.Context, actor Decision, 
 }
 
 // CheckTenant asks the tenant extensions once per principal, space and action every 30 seconds.
+// The key holds everything the extension is told, so one answer never stands in for another
+// caller; an answer that failed (fail open or closed) is not kept.
 func (p *ProcessExtensions) CheckTenant(ctx context.Context, actor Decision, action string) error {
 	key := strings.Join([]string{actor.PrincipalID, actor.Role, structuredText(actor.Scope), action}, "\x00")
 	p.mu.Lock()
@@ -311,18 +329,26 @@ func (p *ProcessExtensions) CheckTenant(ctx context.Context, actor Decision, act
 	p.mu.Unlock()
 	if !ok || time.Since(cached.at) > extTenantTTL {
 		cached = extTenantAnswer{allow: true, at: time.Now()}
+		keep := true
 		for _, e := range p.list {
-			if e.desc.Tenant && !e.allowed(ctx, "tenant", map[string]any{"actor": extActor(actor), "scope": actor.Scope, "action": action}) {
+			if !e.desc.Tenant {
+				continue
+			}
+			allow, failed := e.allowed(ctx, "tenant", map[string]any{"actor": extActor(actor), "scope": actor.Scope, "action": action})
+			keep = keep && !failed
+			if !allow {
 				cached.allow = false
 				break
 			}
 		}
-		p.mu.Lock()
-		if len(p.tenant) >= extTenantCacheMax {
-			clear(p.tenant)
+		if keep {
+			p.mu.Lock()
+			if len(p.tenant) >= extTenantCacheMax {
+				clear(p.tenant)
+			}
+			p.tenant[key] = cached
+			p.mu.Unlock()
 		}
-		p.tenant[key] = cached
-		p.mu.Unlock()
 	}
 	if !cached.allow {
 		return ErrExtensionRefused
@@ -347,19 +373,22 @@ func (p *ProcessExtensions) Tools() []ExtensionTool {
 	out := []ExtensionTool{}
 	for _, e := range p.list {
 		for _, t := range e.desc.Tools {
-			out = append(out, ExtensionTool{Name: "ext_" + e.cfg.Name + "_" + t.Name, Description: t.Description, InputSchema: t.InputSchema, Action: t.Action})
+			out = append(out, ExtensionTool{Name: "ext_" + e.cfg.Name + "_" + t.Name, Description: t.Description, InputSchema: t.InputSchema, Action: t.Action, Data: t.Data})
 		}
 	}
 	return out
 }
 
-// Serve forwards an authorized route or tool call; any failure is a 502 for the caller.
-func (p *ProcessExtensions) Serve(ctx context.Context, call ExtensionCall) (int, json.RawMessage, error) {
+// Serve forwards an authorized route or tool call; any failure is a 503 for the caller.
+func (p *ProcessExtensions) Serve(ctx context.Context, call ExtensionCall) (ExtensionAnswer, error) {
 	e := p.find(call.Extension)
 	if e == nil {
-		return 0, nil, ErrNotFound
+		return ExtensionAnswer{}, ErrNotFound
 	}
 	params := map[string]any{"actor": extActor(call.Actor), "scope": call.Scope, "body": call.Body}
+	if call.Data != nil {
+		params["data"] = call.Data
+	}
 	method := "route"
 	if call.Tool != "" {
 		method, params["tool"] = "tool", call.Tool
@@ -368,23 +397,24 @@ func (p *ProcessExtensions) Serve(ctx context.Context, call ExtensionCall) (int,
 	}
 	raw, err := e.ask(ctx, method, params)
 	if err != nil {
-		return 0, nil, errExtFailed
+		return ExtensionAnswer{}, errExtFailed
 	}
 	var answer struct {
 		Status int             `json:"status"`
 		Body   json.RawMessage `json:"body"`
 		Result json.RawMessage `json:"result"`
+		Data   []ExtDataOp     `json:"data"`
 	}
 	if json.Unmarshal(raw, &answer) != nil {
-		return 0, nil, errExtFailed
+		return ExtensionAnswer{}, errExtFailed
 	}
 	if call.Tool != "" {
-		return http.StatusOK, answer.Result, nil
+		return ExtensionAnswer{Status: http.StatusOK, Body: answer.Result, Data: answer.Data}, nil
 	}
 	if answer.Status < 200 || answer.Status > 499 {
-		return 0, nil, errExtFailed
+		return ExtensionAnswer{}, errExtFailed
 	}
-	return answer.Status, answer.Body, nil
+	return ExtensionAnswer{Status: answer.Status, Body: answer.Body, Data: answer.Data}, nil
 }
 
 type rpcResponse struct {
@@ -414,6 +444,7 @@ type stdioTransport struct {
 	argv, env []string
 	mu        sync.Mutex
 	cmd       *exec.Cmd
+	cancel    context.CancelFunc
 	stdin     io.WriteCloser
 	lines     chan []byte
 	next      int64
@@ -423,31 +454,57 @@ func newStdioTransport(cfg ProcessExtensionConfig) (*stdioTransport, error) {
 	if !filepath.IsAbs(cfg.Command[0]) || cfg.TokenFile != "" || cfg.AllowPrivate {
 		return nil, fmt.Errorf("command needs an absolute program path (token_file and allow_private are for url): %w", ErrInvalid)
 	}
-	// The program gets PATH and its own env only, never the server's tokens or keys.
-	env := []string{"PATH=" + os.Getenv("PATH")}
-	for k, v := range cfg.Env {
-		if !extEnvPattern.MatchString(k) {
-			return nil, fmt.Errorf("env name %q: %w", k, ErrInvalid)
-		}
-		env = append(env, k+"="+v)
+	env, err := extEnv(cfg)
+	if err != nil {
+		return nil, err
 	}
 	return &stdioTransport{argv: cfg.Command, env: env}, nil
 }
 
+// extEnv is the program's whole environment: PATH and its own env, never the
+// server's. A name that looks like a credential is refused unless secret_env lists it.
+func extEnv(cfg ProcessExtensionConfig) ([]string, error) {
+	env := []string{"PATH=" + os.Getenv("PATH")}
+	for k, v := range cfg.Env {
+		if !extEnvPattern.MatchString(k) || k == "PATH" || extSecretEnv.MatchString(k) && !slices.Contains(cfg.SecretEnv, k) {
+			return nil, fmt.Errorf("env name %q (a credential-like name needs secret_env): %w", k, ErrInvalid)
+		}
+		env = append(env, k+"="+v)
+	}
+	for _, k := range cfg.SecretEnv {
+		if _, ok := cfg.Env[k]; !ok {
+			return nil, fmt.Errorf("secret_env %q is not in env: %w", k, ErrInvalid)
+		}
+	}
+	return env, nil
+}
+
 func (t *stdioTransport) start() error {
-	cmd := exec.Command(t.argv[0], t.argv[1:]...)
-	cmd.Env, cmd.Stderr = t.env, os.Stderr
+	// Its own process group: stopping the program also stops anything it started.
+	ctx, cancel := context.WithCancel(context.Background())
+	cmd := exec.CommandContext(ctx, t.argv[0], t.argv[1:]...)
+	procgroup.Set(cmd)
+	cmd.Env, cmd.Stderr, cmd.WaitDelay = t.env, os.Stderr, 2*time.Second
 	stdin, err := cmd.StdinPipe()
+	if err == nil {
+		var stdout io.ReadCloser
+		if stdout, err = cmd.StdoutPipe(); err == nil {
+			err = cmd.Start()
+		}
+		if err == nil {
+			t.read(stdout)
+		}
+	}
 	if err != nil {
+		cancel()
 		return err
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	if err := cmd.Start(); err != nil {
-		return err
-	}
+	t.cmd, t.stdin, t.cancel = cmd, stdin, cancel
+	return nil
+}
+
+// read passes the program's answer lines on; a line over extMaxMessage ends the stream.
+func (t *stdioTransport) read(stdout io.Reader) {
 	lines := make(chan []byte, 1)
 	go func() {
 		defer close(lines)
@@ -457,28 +514,39 @@ func (t *stdioTransport) start() error {
 			lines <- bytes.Clone(sc.Bytes())
 		}
 	}()
-	t.cmd, t.stdin, t.lines = cmd, stdin, lines
-	return nil
+	t.lines = lines
 }
 
-func (t *stdioTransport) stop() {
+// stop ends the program and its process group; done closes once it has exited.
+func (t *stdioTransport) stop() (done chan struct{}) {
+	done = make(chan struct{})
 	if t.cmd == nil {
-		return
+		close(done)
+		return done
 	}
 	_ = t.stdin.Close()
-	_ = t.cmd.Process.Kill()
-	go func(c *exec.Cmd, lines chan []byte) {
-		_ = c.Wait()
+	t.cancel() // SIGTERM to the group, SIGKILL a second later (procgroup)
+	go func(lines chan []byte) {
 		for range lines { // let the reader finish
 		}
-	}(t.cmd, t.lines)
+	}(t.lines)
+	go func(c *exec.Cmd) {
+		_ = c.Wait()
+		close(done)
+	}(t.cmd)
 	t.cmd = nil
+	return done
 }
 
+// close stops the program and waits a little for it, so a daemon shutdown leaves no program behind.
 func (t *stdioTransport) close() {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.stop()
+	done := t.stop()
+	t.mu.Unlock()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+	}
 }
 
 func (t *stdioTransport) call(ctx context.Context, method string, params any) (json.RawMessage, error) {

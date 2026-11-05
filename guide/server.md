@@ -418,7 +418,10 @@ wiki. What a person approves and how is described in
     `{"extensions":[{"name":"house","command":["/opt/house/bin/ext"],"env":{},"timeout":"2s","fail":"closed"},{"name":"corp","url":"https://ext.example.com/rpc","token_file":"/etc/arkism/corp.token"}]}`.
     A `command` (absolute path) is started once and spoken to over
     stdin/stdout, one JSON-RPC 2.0 message per line, with only `PATH` and the
-    listed `env`; it must exit when its stdin closes. A `url` gets one JSON-RPC
+    listed `env` (a name containing KEY, TOKEN, SECRET, PASS, AUTH, DATABASE or
+    CREDENTIAL is refused unless `secret_env` also lists it). It runs in its
+    own process group, which is stopped when a call fails or times out and
+    when the daemon shuts down; answers over 1 MiB are refused. A `url` gets one JSON-RPC
     POST per call (https, or loopback http with `"allow_private": true`) with
     the bearer token read from `token_file`. Arkism calls `describe` at start,
     then `operation` before and after capture, recall, reflect, consolidate and
@@ -437,7 +440,20 @@ wiki. What a person approves and how is described in
     answers `403` before `404`. Extension tools also pass both tool allowlists.
     An extension failure answers `503 dependency_unavailable`. Nothing an
     extension answers approves a memory, and its answers are returned as data
-    (`authority: data_only_untrusted`). Extensions cannot add database tables.
+    (`authority: data_only_untrusted`; route answers carry the header
+    `X-Arkism-Authority: data_only_untrusted`). Instead of their own tables,
+    extensions get a small store per space in the existing records table
+    (collection `ext_data`, so backup, restore, row security and space
+    deletion cover it): at most 200 keys per extension and space, JSON values
+    up to 4 KiB, secrets and private spans refused. A route or tool that
+    declares `"data": true` receives the entries as `data` and may answer
+    `data` changes (`[{"op":"put","key","value"},{"op":"delete","key"}]`),
+    applied with the caller's `read:ext_data` and `write:ext_data`. People and
+    services read and change entries at `GET /v1/extensions/{name}/data`
+    (`?cursor`, `limit`), `GET /v1/extensions/{name}/data/{key}` and
+    `POST /v1/extensions/{name}/data` (`{scope, changes}`, all or none, optional
+    `expected_revision`); deleting a key is how its data is erased. Principals
+    with listed actions need `read:ext_data` and `write:ext_data` for these.
 13. **MCP tool allowlists now fail closed.** The router reads the space's
     `mcp_tools` and the server's `ARKISM_MCP_TOOLS` and keeps them for a minute.
     Before this release a router that could not read the space settings

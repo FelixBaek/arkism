@@ -637,6 +637,10 @@ export type WireResponseMentalModelOutcome = { "code": string; "trigger": string
 export type WireResponseChangeRequest = { "action": string; "target"?: string; "revision"?: number; "params"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
 export type WireResponseDocumentListPage = { "items": (Array<WireResponseDocumentSummary> | null); "next_cursor"?: string };
 export type WireResponseDocumentSummary = { "id": string; "revision": number; "updated_at": string; "latest"?: WireResponseDocumentUpload };
+export type WireResponseExtDataPage = { "items": (Array<WireResponseExtDataItem> | null); "next_cursor"?: string; "authority": string };
+export type WireResponseExtDataItem = { "key": string; "value": ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "revision": number; "updated_at": string; "updated_by": string };
+export type WireRequestExtDataChange = { "scope"?: WireRequestScope; "changes"?: (Array<WireRequestExtDataOp> | null) };
+export type WireRequestExtDataOp = { "op"?: string; "key"?: string; "value"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "expected_revision"?: number };
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -2459,5 +2463,17 @@ export class ArkismClient {
   /** POST /v1/extension-tools/call — Run an extension MCP tool */
   postV1ExtensionToolsCall(body: { "scope": Scope; "name": string; "arguments"?: { [key: string]: unknown } }): Promise<{ "result": unknown; "authority": "data_only_untrusted" }> {
     return this.request("POST", `/v1/extension-tools/call`, undefined, body);
+  }
+  /** GET /v1/extensions/{extension}/data — List an extension's stored data */
+  get_v1_extensions_extension_data(extension: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string }): Promise<WireResponseExtDataPage> {
+    return this.request("GET", `/v1/extensions/${encodeURIComponent(extension)}/data`, query, undefined);
+  }
+  /** POST /v1/extensions/{extension}/data — Change an extension's stored data */
+  post_v1_extensions_extension_data(extension: string, body: (WireRequestExtDataChange & unknown)): Promise<WireResponseExtDataPage> {
+    return this.request("POST", `/v1/extensions/${encodeURIComponent(extension)}/data`, undefined, body);
+  }
+  /** GET /v1/extensions/{extension}/data/{key} — Read one extension data entry */
+  get_v1_extensions_extension_data_key(extension: string, key: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<WireResponseExtDataItem> {
+    return this.request("GET", `/v1/extensions/${encodeURIComponent(extension)}/data/${encodeURIComponent(key)}`, query, undefined);
   }
 }

@@ -28,7 +28,7 @@ var (
 	ErrCandidateQuota     = errors.New("candidate_daily_limit")
 )
 
-var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives", "observations", "mental_models"}
+var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives", "observations", "mental_models", "ext_data"}
 
 const (
 	VerificationCandidate = "candidate"
@@ -274,6 +274,8 @@ type Record struct {
 	// SpaceConfig is a space's settings (space_configs); SpaceJob a space export/import/clone job (jobs). See spaces.go.
 	SpaceConfig *SpaceConfig `json:"-" bson:"space_config,omitempty"`
 	SpaceJob    *SpaceJob    `json:"-" bson:"space_job,omitempty"`
+	// ExtData is one extension data entry (ext_data, ext_data.go).
+	ExtData *ExtDataEntry `json:"-" bson:"ext_data,omitempty"`
 
 	// RoutingAttribution is an RTE-06 step record (jobs, kind routing_attribution).
 	RoutingAttribution *RoutingAttribution `json:"routing_attribution,omitempty" bson:"routing_attribution,omitempty"`

@@ -6,15 +6,17 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 // Extension routes and tools (ext_runtime.go) are served under Arkism's own
 // authorization: the action an extension declares is checked like any other.
 const (
-	extensionActionTemplate = "{extension_action}"
-	extensionToolCallPath   = "/v1/extension-tools/call"
-	extensionBodyLimit      = 256 << 10
+	extensionActionTemplate  = "{extension_action}"
+	extensionToolCallPath    = "/v1/extension-tools/call"
+	extensionBodyLimit       = 256 << 10
+	extensionAuthorityHeader = "X-Arkism-Authority"
 )
 
 var extDefaultRoles = []string{roleHuman, roleAgent, roleService}
@@ -24,6 +26,9 @@ var extensionRoutePolicies = map[string]routePolicy{
 	"POST /v1/extensions/{extension}/routes/{path...}": {action: extensionActionTemplate, scope: routeJSON, limit: extensionBodyLimit},
 	"GET /v1/extension-tools":                          {action: "search:memories", scope: routeQuery},
 	"POST " + extensionToolCallPath:                    {action: extensionActionTemplate, scope: routeJSON, limit: extensionBodyLimit},
+	"GET /v1/extensions/{extension}/data":              {action: "read:" + colExtData, scope: routeQuery},
+	"GET /v1/extensions/{extension}/data/{key}":        {action: "read:" + colExtData, scope: routeQuery},
+	"POST /v1/extensions/{extension}/data":             {action: "write:" + colExtData, scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman, roleService}},
 }
 
 func init() {
@@ -37,6 +42,29 @@ func registerExtensionsCoreHTTP(mux routeRegistrar, s *Service) {
 	mux.HandleFunc("POST /v1/extensions/{extension}/routes/{path...}", s.coreHTTPExtensionRoute)
 	mux.HandleFunc("GET /v1/extension-tools", s.coreHTTPExtensionTools)
 	mux.HandleFunc("POST "+extensionToolCallPath, s.coreHTTPExtensionToolCall)
+	mux.HandleFunc("GET /v1/extensions/{extension}/data", func(w http.ResponseWriter, r *http.Request) {
+		limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+		out, err := s.ListExtensionData(r.Context(), bearer(r), scopeQuery(r), r.PathValue("extension"), r.URL.Query().Get("cursor"), limit)
+		respond(w, out, err)
+	})
+	mux.HandleFunc("GET /v1/extensions/{extension}/data/{key}", func(w http.ResponseWriter, r *http.Request) {
+		out, err := s.GetExtensionData(r.Context(), bearer(r), scopeQuery(r), r.PathValue("extension"), r.PathValue("key"))
+		respond(w, out, err)
+	})
+	mux.HandleFunc("POST /v1/extensions/{extension}/data", func(w http.ResponseWriter, r *http.Request) {
+		var in ExtDataChange
+		if !decodeLimit(w, r, &in, 64<<10) {
+			return
+		}
+		out, err := s.ChangeExtensionData(r.Context(), bearer(r), in.Scope, r.PathValue("extension"), in.Changes)
+		respond(w, ExtDataPage{Items: out, Authority: AuthorityDataOnly}, err)
+	})
+}
+
+// ExtDataChange is the body of POST /v1/extensions/{extension}/data: changes applied all or none.
+type ExtDataChange struct {
+	Scope   Scope       `json:"scope"`
+	Changes []ExtDataOp `json:"changes"`
 }
 
 // extensionRouteBody is the body of a POST extension route: the scope and the extension's own input.
@@ -54,35 +82,36 @@ func (s *Service) extensionPolicy(r *http.Request, input routeInput, policy rout
 	if r.URL.Path == extensionToolCallPath {
 		tool = input.Name
 	}
-	action, roles, err := s.extensionAction(r.PathValue("extension"), r.Method, "/"+r.PathValue("path"), tool)
+	route, err := s.extensionEndpoint(r.PathValue("extension"), r.Method, "/"+r.PathValue("path"), tool)
 	if err != nil {
-		action, roles = "read:memories", extDefaultRoles
+		route = ExtensionRoute{Action: "read:memories", Roles: extDefaultRoles}
 	}
-	policy.action, policy.roles = action, roles
+	policy.action, policy.roles = route.Action, route.Roles
 	return policy
 }
 
-// extensionAction finds what a route (or, with tool set, a tool) asks for.
-func (s *Service) extensionAction(extension, method, path, tool string) (string, []string, error) {
+// extensionEndpoint finds what a route (or, with tool set, a tool) asks for; Roles is never empty.
+func (s *Service) extensionEndpoint(extension, method, path, tool string) (ExtensionRoute, error) {
 	ep := s.Extensions.Endpoints
 	if ep == nil {
-		return "", nil, ErrNotFound
+		return ExtensionRoute{}, ErrNotFound
 	}
 	if tool != "" {
-		i := slices.IndexFunc(ep.Tools(), func(t ExtensionTool) bool { return t.Name == tool })
+		tools := ep.Tools()
+		i := slices.IndexFunc(tools, func(t ExtensionTool) bool { return t.Name == tool })
 		if i < 0 {
-			return "", nil, ErrNotFound
+			return ExtensionRoute{}, ErrNotFound
 		}
-		return ep.Tools()[i].Action, extDefaultRoles, nil
+		return ExtensionRoute{Action: tools[i].Action, Roles: extDefaultRoles, Data: tools[i].Data}, nil
 	}
 	route, ok := ep.Route(extension, method, path)
 	if !ok {
-		return "", nil, ErrNotFound
+		return ExtensionRoute{}, ErrNotFound
 	}
 	if len(route.Roles) == 0 {
-		return route.Action, extDefaultRoles, nil
+		route.Roles = extDefaultRoles
 	}
-	return route.Action, route.Roles, nil
+	return route, nil
 }
 
 func (s *Service) authorizeExtension(ctx context.Context, token string, scope Scope, action string, roles []string) (Decision, error) {
@@ -94,15 +123,37 @@ func (s *Service) authorizeExtension(ctx context.Context, token string, scope Sc
 }
 
 // CallExtensionRoute forwards one authorized request to the extension that declared the route.
-func (s *Service) CallExtensionRoute(ctx context.Context, token string, call ExtensionCall) (int, json.RawMessage, error) {
-	action, roles, err := s.extensionAction(call.Extension, call.Method, call.Path, "")
+func (s *Service) CallExtensionRoute(ctx context.Context, token string, call ExtensionCall) (ExtensionAnswer, error) {
+	route, err := s.extensionEndpoint(call.Extension, call.Method, call.Path, "")
 	if err != nil {
-		return 0, nil, err
+		return ExtensionAnswer{}, err
 	}
-	if call.Actor, err = s.authorizeExtension(ctx, token, call.Scope, action, roles); err != nil {
-		return 0, nil, err
+	if call.Actor, err = s.authorizeExtension(ctx, token, call.Scope, route.Action, route.Roles); err != nil {
+		return ExtensionAnswer{}, err
 	}
-	return s.Extensions.Endpoints.Serve(ctx, call)
+	return s.serveExtension(ctx, token, route.Data, call)
+}
+
+// serveExtension runs one authorized call; with data, the extension reads its
+// entries and its changes are applied under the caller's own permission.
+func (s *Service) serveExtension(ctx context.Context, token string, data bool, call ExtensionCall) (ExtensionAnswer, error) {
+	var err error
+	if data {
+		if call.Data, err = s.extDataSnapshot(ctx, token, call.Scope, call.Extension); err != nil {
+			return ExtensionAnswer{}, err
+		}
+	}
+	answer, err := s.Extensions.Endpoints.Serve(ctx, call)
+	if err != nil || len(answer.Data) == 0 {
+		return answer, err
+	}
+	if !data {
+		return ExtensionAnswer{}, errExtFailed // changes from a call that did not declare data
+	}
+	if _, err := s.ChangeExtensionData(ctx, token, call.Scope, call.Extension, answer.Data); err != nil {
+		return ExtensionAnswer{}, err
+	}
+	return answer, nil
 }
 
 // ParseMCPTools reads ARKISM_MCP_TOOLS: comma-separated tool names, empty for every tool.
@@ -160,11 +211,11 @@ func (s *Service) CallExtensionTool(ctx context.Context, token string, in Extens
 	if !ok || !ok2 {
 		return nil, ErrNotFound
 	}
-	action, roles, err := s.extensionAction(extension, "", "", in.Name)
+	spec, err := s.extensionEndpoint(extension, "", "", in.Name)
 	if err != nil {
 		return nil, err
 	}
-	d, err := s.authorizeExtension(ctx, token, in.Scope, action, roles)
+	d, err := s.authorizeExtension(ctx, token, in.Scope, spec.Action, spec.Roles)
 	if err != nil {
 		return nil, err
 	}
@@ -178,11 +229,11 @@ func (s *Service) CallExtensionTool(ctx context.Context, token string, in Extens
 	if len(in.Arguments) == 0 {
 		in.Arguments = json.RawMessage(`{}`)
 	}
-	_, result, err := s.Extensions.Endpoints.Serve(ctx, ExtensionCall{Actor: d, Scope: in.Scope, Extension: extension, Tool: tool, Body: in.Arguments})
+	answer, err := s.serveExtension(ctx, token, spec.Data, ExtensionCall{Actor: d, Scope: in.Scope, Extension: extension, Tool: tool, Body: in.Arguments})
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"result": result, "authority": "data_only_untrusted"}, nil
+	return map[string]any{"result": answer.Body, "authority": AuthorityDataOnly}, nil
 }
 
 func (s *Service) coreHTTPExtensionRoute(w http.ResponseWriter, r *http.Request) {
@@ -194,17 +245,20 @@ func (s *Service) coreHTTPExtensionRoute(w http.ResponseWriter, r *http.Request)
 		}
 		call.Scope, call.Body = in.Scope, in.Input
 	}
-	status, body, err := s.CallExtensionRoute(r.Context(), bearer(r), call)
+	answer, err := s.CallExtensionRoute(r.Context(), bearer(r), call)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
-	if len(body) == 0 {
-		body = json.RawMessage(`{}`)
+	if len(answer.Body) == 0 {
+		answer.Body = json.RawMessage(`{}`)
 	}
+	// The body is the extension's own answer: data, never instructions or an approval.
 	w.Header().Set(headerContentType, "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write(body)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set(extensionAuthorityHeader, AuthorityDataOnly)
+	w.WriteHeader(answer.Status)
+	_, _ = w.Write(answer.Body)
 }
 
 func (s *Service) coreHTTPExtensionTools(w http.ResponseWriter, r *http.Request) {

@@ -220,12 +220,14 @@ type observationAnswer struct {
 	Observations []observationDraft `json:"observations"`
 }
 
-// isDerivedCollection: observations and mental models are served only by their own routes, never by generic record CRUD.
-func isDerivedCollection(col string) bool { return col == colObservations || col == colMentalModels }
+// ownRoutesOnly: observations, mental models and extension data are served only by their own routes, never by generic record CRUD.
+func ownRoutesOnly(col string) bool {
+	return col == colObservations || col == colMentalModels || col == colExtData
+}
 
 // servedByOwnRoutes: digests and derived records are read only through their own routes, which recheck their basis.
 func servedByOwnRoutes(col string) bool {
-	return col == colTopicDigests || col == colUserDigests || isDerivedCollection(col)
+	return col == colTopicDigests || col == colUserDigests || ownRoutesOnly(col)
 }
 
 func recordIDs(records []Record) []string {

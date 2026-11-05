@@ -1817,3 +1817,15 @@ class ArkismClient(BaseClient):
     def post_v1_extension_tools_call(self, body=None):
         """POST /v1/extension-tools/call — Run an extension MCP tool"""
         return self.request("POST", f"/v1/extension-tools/call", None, body)
+
+    def get_v1_extensions_extension_data(self, extension, query=None):
+        """GET /v1/extensions/{extension}/data — List an extension's stored data"""
+        return self.request("GET", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/data", query, None)
+
+    def post_v1_extensions_extension_data(self, extension, body=None):
+        """POST /v1/extensions/{extension}/data — Change an extension's stored data"""
+        return self.request("POST", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/data", None, body)
+
+    def get_v1_extensions_extension_data_key(self, extension, key, query=None):
+        """GET /v1/extensions/{extension}/data/{key} — Read one extension data entry"""
+        return self.request("GET", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/data/{urllib.parse.quote(key, safe='')}", query, None)

@@ -555,7 +555,7 @@ func validCreateKind(collection, kind string) bool {
 	}
 }
 func (s *Service) Create(ctx context.Context, token, col string, in CreateInput) (Record, error) {
-	if isDerivedCollection(col) {
+	if ownRoutesOnly(col) {
 		return Record{}, ErrInvalid
 	}
 	return s.create(ctx, token, col, in, nil)
@@ -1725,7 +1725,7 @@ func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeIn
 	if col == colProviderUsage {
 		return ErrInvalid
 	}
-	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) || isDerivedCollection(col) || col == colDirectives {
+	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) || ownRoutesOnly(col) || col == colDirectives {
 		return ErrInvalid
 	}
 	if col == "sources" {

@@ -64,6 +64,8 @@ type ExtensionRoute struct {
 	Path   string   `json:"path"`
 	Action string   `json:"action"`
 	Roles  []string `json:"roles,omitempty"`
+	// Data: the call gets the extension's stored entries for the space and may answer changes to them (ext_data.go).
+	Data bool `json:"data,omitempty"`
 }
 
 // ExtensionTool is one MCP tool an extension serves; Name is the full ext_{extension}_{tool} name.
@@ -72,6 +74,7 @@ type ExtensionTool struct {
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"inputSchema"`
 	Action      string          `json:"-"`
+	Data        bool            `json:"-"`
 }
 
 // ExtensionCall is an authorized call forwarded to an extension.
@@ -84,6 +87,16 @@ type ExtensionCall struct {
 	Query     string          `json:"query,omitempty"`
 	Tool      string          `json:"tool,omitempty"`
 	Body      json.RawMessage `json:"body,omitempty"`
+	// Data is the extension's stored entries in the space, set only for a route or tool that declared data.
+	Data map[string]json.RawMessage `json:"data,omitempty"`
+}
+
+// ExtensionAnswer is an extension's answer to a route (status and JSON body) or
+// tool call (status 200 and the result in Body), with the data changes it asks for.
+type ExtensionAnswer struct {
+	Status int
+	Body   json.RawMessage
+	Data   []ExtDataOp
 }
 
 // ExtensionEndpoints serves extension routes and tools.
@@ -92,8 +105,8 @@ type ExtensionEndpoints interface {
 	Route(extension, method, path string) (ExtensionRoute, bool)
 	// Tools lists every extension tool.
 	Tools() []ExtensionTool
-	// Serve answers a route call (status and JSON body) or a tool call (status 200 and the tool result).
-	Serve(ctx context.Context, call ExtensionCall) (int, json.RawMessage, error)
+	// Serve answers a route or tool call.
+	Serve(ctx context.Context, call ExtensionCall) (ExtensionAnswer, error)
 }
 
 // RequestHook sees a copy of each HTTP request (method, URL, headers without
