@@ -51,17 +51,40 @@ type autoDeriveSettings struct {
 	Interval  time.Duration
 }
 
-// autoDeriveSettingsFor returns the server defaults, set by MEMORY_AUTO_DERIVE (on
-// enables; off by default), MEMORY_AUTO_DERIVE_THRESHOLD (approvals, 1-1000) and
-// MEMORY_AUTO_DERIVE_INTERVAL (a duration, 1m-720h). Invalid values keep the default.
-// Per-space overrides plug in here: read the scope's SpaceConfig and let set fields win.
-func autoDeriveSettingsFor(Scope) autoDeriveSettings {
-	out := autoDeriveSettings{Enabled: os.Getenv("MEMORY_AUTO_DERIVE") == "on", Threshold: autoDeriveDefaultThreshold, Interval: autoDeriveDefaultInterval}
+// serverAutoDerive is the server layer of the auto_derive space setting, set by
+// MEMORY_AUTO_DERIVE (on enables; off by default), MEMORY_AUTO_DERIVE_THRESHOLD
+// (approvals, 1-1000) and MEMORY_AUTO_DERIVE_INTERVAL (a duration, 1m-720h).
+// Invalid values keep the default.
+func serverAutoDerive() *SpaceAutoDerive {
+	on := os.Getenv("MEMORY_AUTO_DERIVE") == "on"
+	out := &SpaceAutoDerive{Enabled: &on, Threshold: autoDeriveDefaultThreshold, Interval: autoDeriveDefaultInterval.String()}
 	if n, err := strconv.Atoi(os.Getenv("MEMORY_AUTO_DERIVE_THRESHOLD")); err == nil && n >= 1 && n <= 1000 {
 		out.Threshold = n
 	}
-	if d, err := time.ParseDuration(os.Getenv("MEMORY_AUTO_DERIVE_INTERVAL")); err == nil && d >= time.Minute && d <= 720*time.Hour {
+	if _, ok := autoDeriveInterval(os.Getenv("MEMORY_AUTO_DERIVE_INTERVAL")); ok {
+		out.Interval = os.Getenv("MEMORY_AUTO_DERIVE_INTERVAL")
+	}
+	return out
+}
+
+func autoDeriveInterval(raw string) (time.Duration, bool) {
+	d, err := time.ParseDuration(raw)
+	return d, err == nil && d >= time.Minute && d <= 720*time.Hour
+}
+
+// autoDeriveSettingsFor is the scope's resolved auto_derive setting (space, then
+// template, then server). A space read failure falls back to the server layer.
+func (s *Service) autoDeriveSettingsFor(ctx context.Context, scope Scope) autoDeriveSettings {
+	block := serverAutoDerive()
+	if c, err := s.spaceSettings(ctx, scope); err == nil && c.AutoDerive != nil {
+		block = c.AutoDerive
+	}
+	out := autoDeriveSettings{Enabled: block.Enabled != nil && *block.Enabled, Threshold: block.Threshold, Interval: autoDeriveDefaultInterval}
+	if d, ok := autoDeriveInterval(block.Interval); ok {
 		out.Interval = d
+	}
+	if out.Threshold < 1 || out.Threshold > 1000 {
+		out.Threshold = autoDeriveDefaultThreshold
 	}
 	return out
 }
@@ -74,8 +97,11 @@ func autoDeriveJobID(scope Scope) string {
 // approval never fails on it. One arriving while the job runs leaves the job alone
 // (the run holds its lease); the run queues itself again when it ends (Started).
 func (s *Service) noteApprovedMemory(ctx context.Context, scope Scope) {
-	set := autoDeriveSettingsFor(scope)
-	if s.Wiki == nil || !set.Enabled || s.Repo == nil || ctx.Err() != nil {
+	if s.Wiki == nil || s.Repo == nil || ctx.Err() != nil {
+		return
+	}
+	set := s.autoDeriveSettingsFor(ctx, scope)
+	if !set.Enabled {
 		return
 	}
 	count := func() error {
@@ -146,6 +172,7 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 	done := outcome != "ok" || state.Pass >= len(autoDerivePasses)
 	// Approvals that arrived after the run began are not in every pass it made: start the next count.
 	again := done && (state.Approved > 0 || latestApprovedMemory(ctx, s.Repo, job.Scope).After(*state.Started))
+	set := s.autoDeriveSettingsFor(ctx, job.Scope) // read before the transaction: it reads the space outside tx
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, err := tx.Get(ctx, colJobs, job.Scope, job.ID)
 		if err != nil {
@@ -157,7 +184,6 @@ func (s *Service) runAutoDerive(ctx context.Context, workerToken string, job Rec
 		cur.Status, cur.RunAt, cur.LeaseToken, cur.LeaseUntil, cur.UpdatedAt = JobStatusPending, &now, "", time.Time{}, now
 		switch {
 		case again:
-			set := autoDeriveSettingsFor(job.Scope)
 			at := now.Add(set.Interval)
 			if state.Approved >= set.Threshold {
 				at = now

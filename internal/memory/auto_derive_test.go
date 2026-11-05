@@ -363,3 +363,32 @@ func TestEntitySummaryServiceDraftsOnceAndCannotPublish(t *testing.T) {
 		t.Fatal("reject", e, err)
 	}
 }
+
+// A space's auto_derive block wins over the server environment, field by field.
+func TestAutoDerivePerSpaceSetting(t *testing.T) {
+	f, _ := wikiFixture(t)
+	on, off := true, false
+	putSettings(t, f, scopeA, SpaceConfigInput{AutoDerive: &SpaceAutoDerive{Enabled: &on, Threshold: 1}})
+	view, err := f.svc.EffectiveSpaceConfig(testCtx, f.human, scopeA)
+	if err != nil || view.Sources["auto_derive.enabled"] != spaceSourceSpace || view.Sources["auto_derive.threshold"] != spaceSourceSpace ||
+		view.Sources["auto_derive.interval"] != spaceSourceServer || view.Config.AutoDerive.Interval != "6h0m0s" {
+		t.Fatalf("effective = %+v %v %v", view.Config.AutoDerive, view.Sources, err)
+	}
+	_ = approveCandidate(t, f, "the space opted in although the server is off")
+	if jobs := autoDeriveJobs(f); len(jobs) != 1 || jobs[0].RunAt.After(time.Now()) {
+		t.Fatalf("space opt-in with threshold 1 is due now: %+v", jobs)
+	}
+
+	t.Setenv("MEMORY_AUTO_DERIVE", "on")
+	g, _ := wikiFixture(t)
+	putSettings(t, g, scopeA, SpaceConfigInput{AutoDerive: &SpaceAutoDerive{Enabled: &off}})
+	_ = approveCandidate(t, g, "the space opted out although the server is on")
+	if n := len(autoDeriveJobs(g)); n != 0 {
+		t.Fatalf("space opt-out queued %d jobs", n)
+	}
+	for _, bad := range []SpaceAutoDerive{{Threshold: 1001}, {Threshold: -1}, {Interval: "30s"}, {Interval: "soon"}} {
+		if _, err := g.svc.PutSpaceConfig(testCtx, g.human, scopeA, SpaceConfigInput{ExpectedRevision: -1, AutoDerive: &bad}, false); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%+v accepted: %v", bad, err)
+		}
+	}
+}

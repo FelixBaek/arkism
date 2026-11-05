@@ -79,6 +79,7 @@ type SpaceConfig struct {
 	MCPTools               []string           `json:"mcp_tools,omitempty" bson:"mcp_tools,omitempty"`
 	RecallBudgetTokens     int                `json:"recall_budget_tokens,omitempty" bson:"recall_budget_tokens,omitempty"`
 	ReflectMaxTokens       int                `json:"reflect_max_tokens,omitempty" bson:"reflect_max_tokens,omitempty"`
+	AutoDerive             *SpaceAutoDerive   `json:"auto_derive,omitempty" bson:"auto_derive,omitempty"`
 	// ReflectMission and ReflectDisposition guide reflect answers in this space (reflect.go).
 	ReflectMission     string              `json:"reflect_mission" bson:"reflect_mission"`
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
@@ -109,6 +110,7 @@ type SpaceConfigInput struct {
 	MCPTools               *[]string           `json:"mcp_tools,omitempty"`
 	RecallBudgetTokens     *int                `json:"recall_budget_tokens,omitempty"`
 	ReflectMaxTokens       *int                `json:"reflect_max_tokens,omitempty"`
+	AutoDerive             *SpaceAutoDerive    `json:"auto_derive,omitempty"`
 }
 
 type SpaceView struct {

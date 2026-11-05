@@ -60,6 +60,14 @@ type SpaceLanes struct {
 	Graph    *bool `json:"graph,omitempty" bson:"graph,omitempty"`
 }
 
+// SpaceAutoDerive tunes automatic derivation (auto_derive.go); empty fields inherit.
+// Interval is a Go duration from 1m to 720h.
+type SpaceAutoDerive struct {
+	Enabled   *bool  `json:"enabled,omitempty" bson:"enabled,omitempty"`
+	Threshold int    `json:"threshold,omitempty" bson:"threshold,omitempty"`
+	Interval  string `json:"interval,omitempty" bson:"interval,omitempty"`
+}
+
 type SpaceDefenseRule struct {
 	Name    string `json:"name,omitempty" bson:"name,omitempty"`
 	Pattern string `json:"pattern,omitempty" bson:"pattern"`
@@ -124,10 +132,21 @@ func validSpaceSettings(c SpaceConfig) error {
 			return ErrInvalid
 		}
 	}
+	if !c.AutoDerive.valid() {
+		return ErrInvalid
+	}
 	if containsSecret(c.ExtractionInstructions) {
 		return ErrSecretDetected
 	}
 	return nil
+}
+
+func (a *SpaceAutoDerive) valid() bool {
+	if a == nil {
+		return true
+	}
+	_, ok := autoDeriveInterval(a.Interval)
+	return (a.Threshold == 0 || a.Threshold >= 1 && a.Threshold <= 1000) && (a.Interval == "" || ok)
 }
 
 // validDefenseRule: a pattern that matches nothing-at-all or the redaction mark
@@ -174,6 +193,30 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.ReflectMaxTokens != nil {
 		c.ReflectMaxTokens = *in.ReflectMaxTokens
 	}
+	if in.AutoDerive != nil {
+		c.AutoDerive = mergeAutoDerive(c.AutoDerive, *in.AutoDerive)
+	}
+}
+
+// mergeAutoDerive lays the fields a PATCH sent over the stored block; an all-empty block clears it.
+func mergeAutoDerive(cur *SpaceAutoDerive, in SpaceAutoDerive) *SpaceAutoDerive {
+	if in == (SpaceAutoDerive{}) {
+		return nil
+	}
+	out := SpaceAutoDerive{}
+	if cur != nil {
+		out = *cur
+	}
+	if in.Enabled != nil {
+		out.Enabled = in.Enabled
+	}
+	if in.Threshold != 0 {
+		out.Threshold = in.Threshold
+	}
+	if in.Interval != "" {
+		out.Interval = strings.TrimSpace(in.Interval)
+	}
+	return &out
 }
 
 var spaceLaneFields = []struct {
@@ -195,7 +238,7 @@ type spaceLayer struct {
 func (s *Service) serverSpaceDefaults() SpaceConfig {
 	on, graph, rerank := true, s.RecallGraph, s.Reranker != nil
 	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph},
-		Rerank: &rerank, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens}
+		Rerank: &rerank, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive()}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -224,6 +267,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "recall_budget_tokens", func(c *SpaceConfig) *int { return &c.RecallBudgetTokens }, num)
 	inheritSetting(&out, layers, src, "reflect_max_tokens", func(c *SpaceConfig) *int { return &c.ReflectMaxTokens }, num)
 	inheritSetting(&out, layers, src, "mcp_tools", func(c *SpaceConfig) *[]string { return &c.MCPTools }, func(v []string) bool { return len(v) > 0 })
+	resolveAutoDerive(&out, layers, src)
 	out.Lanes = &SpaceLanes{}
 	for _, f := range spaceLaneFields {
 		inheritSetting(&out, layers, src, "lanes."+f.name, func(c *SpaceConfig) **bool {
@@ -244,6 +288,20 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 		src["defense_rules"] = strings.Join(from, "+")
 	}
 	return out, src
+}
+
+// resolveAutoDerive fills each auto_derive field from the first layer that sets it.
+func resolveAutoDerive(out *SpaceConfig, layers []spaceLayer, src map[string]string) {
+	block := func(c *SpaceConfig) *SpaceAutoDerive {
+		if c.AutoDerive == nil {
+			c.AutoDerive = &SpaceAutoDerive{}
+		}
+		return c.AutoDerive
+	}
+	out.AutoDerive = &SpaceAutoDerive{}
+	inheritSetting(out, layers, src, "auto_derive.enabled", func(c *SpaceConfig) **bool { return &block(c).Enabled }, func(v *bool) bool { return v != nil })
+	inheritSetting(out, layers, src, "auto_derive.threshold", func(c *SpaceConfig) *int { return &block(c).Threshold }, func(v int) bool { return v != 0 })
+	inheritSetting(out, layers, src, "auto_derive.interval", func(c *SpaceConfig) *string { return &block(c).Interval }, func(v string) bool { return v != "" })
 }
 
 // spaceSettings is the resolved settings of the space scope belongs to (internal read, no authorization).
