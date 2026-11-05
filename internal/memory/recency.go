@@ -63,7 +63,7 @@ func decayByRecency(rows []ScoredHit, now time.Time, weights map[string]float64,
 
 // fuseRecallHits fuses the lanes, reranks the head when a reranker is set, and for
 // memory recall applies recency and outcome weights before keeping in.Limit rows.
-func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection string, in SearchInput, d Decision, trace *recallTrace) ([]ScoredHit, error) {
+func (s *Service) fuseRecallHits(ctx context.Context, token string, lists [][]Hit, collection string, in SearchInput, d Decision, trace *recallTrace) ([]ScoredHit, error) {
 	recall := collection == colMemories && !in.IncludeInactive
 	n := in.Limit
 	if recall || s.Reranker != nil {
@@ -75,6 +75,7 @@ func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection 
 	if err != nil {
 		return nil, err
 	}
+	rows = s.modelRerankRows(ctx, token, in, rows, trace)
 	if recall {
 		return decayByRecency(rows, s.recallClock(in), s.outcomeWeights(ctx, in.Scope, rows), in.Limit), nil
 	}

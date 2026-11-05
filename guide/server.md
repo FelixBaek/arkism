@@ -267,6 +267,17 @@ wiki. What a person approves and how is described in
    backup, and restore it to the same time as the database. Switch storage
    only on an empty blob folder: blob garbage collection stops with an error
    while digest files are still in the folder.
+7. **Model rerank (optional, off by default).** A search or context build
+   that sends `"rerank": "model"`, or any search in a space whose config sets
+   `rerank_model: true`, lets the server model reorder the top 20 results.
+   `"rerank": false` still turns every reranker off. Each call spends the
+   server model under operation `recall_rerank` (usage ledger and
+   `GET /v1/llm-requests`), at most 200 calls per project a day. The caller
+   needs `generate:recall_rerank`, and only memories cleared for
+   `external:wiki-llm` (classified, not restricted, sources classified) are
+   sent. When anything fails the order stays as it was, and
+   `explain.model_rerank` names why. Search and context build `rerank` now
+   accepts the string `"model"` as well as a boolean.
 
 ## Model providers
 

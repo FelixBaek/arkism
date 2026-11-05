@@ -25,10 +25,10 @@ type ContextBuildInput struct {
 	// ExpandCausal passes through to the search (SearchInput).
 	ExpandCausal bool `json:"expand_causal,omitempty"`
 	// QueryTime, GraphDepth, MinScore and Rerank pass through to the search (SearchInput).
-	QueryTime  *time.Time `json:"query_time,omitempty"`
-	GraphDepth int        `json:"graph_depth,omitempty"`
-	MinScore   float64    `json:"min_score,omitempty"`
-	Rerank     *bool      `json:"rerank,omitempty"`
+	QueryTime  *time.Time   `json:"query_time,omitempty"`
+	GraphDepth int          `json:"graph_depth,omitempty"`
+	MinScore   float64      `json:"min_score,omitempty"`
+	Rerank     RerankChoice `json:"rerank,omitempty"`
 	// PreferObservations passes through to the search (SearchInput).
 	PreferObservations bool `json:"prefer_observations,omitempty"`
 }

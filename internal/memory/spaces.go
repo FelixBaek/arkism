@@ -75,6 +75,7 @@ type SpaceConfig struct {
 	ExtractionInstructions string             `json:"extraction_instructions,omitempty" bson:"extraction_instructions,omitempty"`
 	Lanes                  *SpaceLanes        `json:"lanes,omitempty" bson:"lanes,omitempty"`
 	Rerank                 *bool              `json:"rerank,omitempty" bson:"rerank,omitempty"`
+	RerankModel            *bool              `json:"rerank_model,omitempty" bson:"rerank_model,omitempty"`
 	DefenseRules           []SpaceDefenseRule `json:"defense_rules,omitempty" bson:"defense_rules,omitempty"`
 	MCPTools               []string           `json:"mcp_tools,omitempty" bson:"mcp_tools,omitempty"`
 	RecallBudgetTokens     int                `json:"recall_budget_tokens,omitempty" bson:"recall_budget_tokens,omitempty"`
@@ -106,6 +107,7 @@ type SpaceConfigInput struct {
 	ExtractionInstructions *string             `json:"extraction_instructions,omitempty"`
 	Lanes                  *SpaceLanes         `json:"lanes,omitempty"`
 	Rerank                 *bool               `json:"rerank,omitempty"`
+	RerankModel            *bool               `json:"rerank_model,omitempty"`
 	DefenseRules           *[]SpaceDefenseRule `json:"defense_rules,omitempty"`
 	MCPTools               *[]string           `json:"mcp_tools,omitempty"`
 	RecallBudgetTokens     *int                `json:"recall_budget_tokens,omitempty"`

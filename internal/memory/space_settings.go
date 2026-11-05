@@ -186,6 +186,9 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	if in.Rerank != nil {
 		c.Rerank = in.Rerank
 	}
+	if in.RerankModel != nil {
+		c.RerankModel = in.RerankModel
+	}
 	if in.DefenseRules != nil {
 		c.DefenseRules = *in.DefenseRules
 	}
@@ -241,9 +244,9 @@ type spaceLayer struct {
 
 // serverSpaceDefaults is the built-in layer every inherited field ends at.
 func (s *Service) serverSpaceDefaults() SpaceConfig {
-	on, graph, rerank := true, s.RecallGraph, s.Reranker != nil
+	on, graph, rerank, model := true, s.RecallGraph, s.Reranker != nil, false
 	return SpaceConfig{ExtractionMode: spaceExtractConcise, Lanes: &SpaceLanes{FTS: &on, Vector: &on, Temporal: &on, Graph: &graph},
-		Rerank: &rerank, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive()}
+		Rerank: &rerank, RerankModel: &model, RecallBudgetTokens: 2000, ReflectMaxTokens: reflectDefaultMaxTokens, AutoDerive: serverAutoDerive()}
 }
 
 func inheritSetting[T any](out *SpaceConfig, layers []spaceLayer, src map[string]string, name string, field func(*SpaceConfig) *T, set func(T) bool) {
@@ -269,6 +272,7 @@ func (s *Service) resolveSpaceSettings(space SpaceConfig) (SpaceConfig, map[stri
 	inheritSetting(&out, layers, src, "extraction_mode", func(c *SpaceConfig) *string { return &c.ExtractionMode }, str)
 	inheritSetting(&out, layers, src, "extraction_instructions", func(c *SpaceConfig) *string { return &c.ExtractionInstructions }, str)
 	inheritSetting(&out, layers, src, "rerank", func(c *SpaceConfig) **bool { return &c.Rerank }, ptr)
+	inheritSetting(&out, layers, src, "rerank_model", func(c *SpaceConfig) **bool { return &c.RerankModel }, ptr)
 	inheritSetting(&out, layers, src, "recall_budget_tokens", func(c *SpaceConfig) *int { return &c.RecallBudgetTokens }, num)
 	inheritSetting(&out, layers, src, "reflect_max_tokens", func(c *SpaceConfig) *int { return &c.ReflectMaxTokens }, num)
 	inheritSetting(&out, layers, src, "mcp_tools", func(c *SpaceConfig) *[]string { return &c.MCPTools }, func(v []string) bool { return len(v) > 0 })

@@ -44,8 +44,9 @@ type SearchInput struct {
 	GraphDepth int `json:"graph_depth,omitempty"`
 	// MinScore (0..1) drops hits whose final score is below it; explain counts them.
 	MinScore float64 `json:"min_score,omitempty"`
-	// Rerank false skips the reranker for this search; nil or true keeps the server default.
-	Rerank *bool `json:"rerank,omitempty"`
+	// Rerank false skips every reranker for this search; omitted or true keeps the server
+	// default; "model" also lets the server model reorder the head (recall_model_rerank.go).
+	Rerank RerankChoice `json:"rerank,omitempty"`
 	// PreferObservations leaves out memories an approved observation in the result was written from.
 	PreferObservations bool `json:"prefer_observations,omitempty"`
 	// Include attaches "sources" (bounded source excerpts) and "entities" (names) to memory hits.
@@ -278,7 +279,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 		filterContextViewLanes(one, in.contextView)
 		return one[0], err
 	}
-	if e = s.recallItems(ctx, in, d, collection, lists, clean, &out); e != nil {
+	if e = s.recallItems(ctx, token, in, d, collection, lists, clean, &out); e != nil {
 		return ContextBundle{}, Decision{}, e
 	}
 	snapshots := map[Ref]string{}

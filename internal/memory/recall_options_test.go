@@ -177,8 +177,8 @@ func TestRecallMinScoreAndRerankToggle(t *testing.T) {
 	}
 	// rerank=false skips the reranker before any call or usage row.
 	f.svc.Reranker, _ = NewTEIReranker(TEIRerankConfig{URL: "http://127.0.0.1:1"})
-	off, usage := false, len(f.repo.rows(colProviderUsage))
-	rows, err := f.svc.rerankRows(testCtx, SearchInput{Scope: scopeA, Query: "q", Limit: 3, Rerank: &off}, Decision{ExternalTransfer: true, ContentSafe: true}, rerankRowsFixture(), &recallTrace{rerank: map[string]float64{}})
+	usage := len(f.repo.rows(colProviderUsage))
+	rows, err := f.svc.rerankRows(testCtx, SearchInput{Scope: scopeA, Query: "q", Limit: 3, Rerank: rerankOff}, Decision{ExternalTransfer: true, ContentSafe: true}, rerankRowsFixture(), &recallTrace{rerank: map[string]float64{}})
 	if err != nil || rows[0].ID != "a" || f.svc.Reranker.Metrics().Calls != 0 || len(f.repo.rows(colProviderUsage)) != usage {
 		t.Fatal(rows, err)
 	}

@@ -33,6 +33,8 @@ type HitExplain struct {
 	LaneRanks   map[string]int `json:"lane_ranks"`
 	FusedScore  float64        `json:"fused_score"`
 	RerankScore *float64       `json:"rerank_score,omitempty"`
+	// ModelRank is the hit's 1-based place in the model rerank order.
+	ModelRank int `json:"model_rank,omitempty"`
 	// GraphHops is how many graph or causal steps from a top hit the hit was first reached.
 	GraphHops int `json:"graph_hops,omitempty"`
 }
@@ -42,6 +44,8 @@ type RecallExplain struct {
 	Lanes      []string          `json:"lanes"`
 	TimeWindow *RecallTimeWindow `json:"time_window,omitempty"`
 	Reranked   bool              `json:"reranked"`
+	// ModelRerank is set when the model rerank was asked for: applied, or why the fused order was kept.
+	ModelRerank string `json:"model_rerank,omitempty"`
 	// MinScoreDropped counts hits the request's min_score removed.
 	MinScoreDropped int `json:"min_score_dropped,omitempty"`
 }
@@ -60,7 +64,10 @@ type recallTrace struct {
 	fused    map[string]float64
 	rerank   map[string]float64
 	reranked bool
-	dropped  int
+	// modelRerank is the model rerank outcome (recall_model_rerank.go); modelRank its 1-based order.
+	modelRerank string
+	modelRank   map[string]int
+	dropped     int
 }
 
 func (s *Service) recallNow() time.Time {
@@ -133,12 +140,12 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 }
 
 // recallItems adds the recall lanes, fuses and fills out.Items (with the explain trace when asked).
-func (s *Service) recallItems(ctx context.Context, in SearchInput, d Decision, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error), out *ContextBundle) error {
+func (s *Service) recallItems(ctx context.Context, token string, in SearchInput, d Decision, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error), out *ContextBundle) error {
 	lists, trace, err := s.recallLanes(ctx, in, collection, lists, clean)
 	if err != nil {
 		return err
 	}
-	scored, err := s.fuseRecallHits(ctx, lists, collection, in, d, trace)
+	scored, err := s.fuseRecallHits(ctx, token, lists, collection, in, d, trace)
 	if err != nil {
 		return err
 	}
@@ -239,7 +246,7 @@ func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []s
 // the local reranker sends nothing, so it skips the transfer decision but keeps the
 // text filters (call traces may keep the text).
 func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
-	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(s.Reranker.local || d.ExternalTransfer && d.ContentSafe) || !safeTransfer(in.Query) {
+	if s.Reranker == nil || in.Rerank == rerankOff || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(s.Reranker.local || d.ExternalTransfer && d.ContentSafe) || !safeTransfer(in.Query) {
 		return rows, nil
 	}
 	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])
@@ -309,13 +316,13 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 	}
 	for i := range out.Items {
 		k := hitKey(out.Items[i])
-		e := &HitExplain{LaneRanks: ranks[k], FusedScore: t.fused[k], GraphHops: hops[k]}
+		e := &HitExplain{LaneRanks: ranks[k], FusedScore: t.fused[k], GraphHops: hops[k], ModelRank: t.modelRank[k]}
 		if v, ok := t.rerank[k]; ok {
 			e.RerankScore = &v
 		}
 		out.Items[i].Explain = e
 	}
-	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, MinScoreDropped: t.dropped}
+	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}
