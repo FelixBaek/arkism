@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"math"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -182,9 +182,9 @@ func entityMatches(e NamedEntity, query, typ string) bool {
 
 // ListEntities pages a scope's entities, most mentioned first.
 func (s *Service) ListEntities(ctx context.Context, token string, in EntityListInput) (EntityList, error) {
-	offset, err := strconv.Atoi(cmp.Or(in.Cursor, "0"))
+	offset, ok := parseOffsetCursor(in.Cursor, math.MaxInt-entityListMax)
 	in.Limit = cmp.Or(in.Limit, entityListDefault)
-	if err != nil || offset < 0 || in.Limit < 1 || in.Limit > entityListMax || len(in.Query) > 200 || in.Type != "" && !entityTypes[in.Type] {
+	if !ok || in.Limit < 1 || in.Limit > entityListMax || len(in.Query) > 200 || in.Type != "" && !entityTypes[in.Type] {
 		return EntityList{}, ErrInvalid
 	}
 	v, err := s.entityReader(ctx, token, in.Scope, "")
@@ -201,11 +201,8 @@ func (s *Service) ListEntities(ctx context.Context, token string, in EntityListI
 	slices.SortFunc(items, func(a, b EntitySummary) int {
 		return cmp.Or(b.Mentions-a.Mentions, strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)), strings.Compare(a.ID, b.ID))
 	})
-	out := EntityList{Items: items[min(offset, len(items)):min(offset+in.Limit, len(items))], Total: len(items), Truncated: v.g.truncated}
-	if offset+in.Limit < len(items) {
-		out.NextCursor = strconv.Itoa(offset + in.Limit)
-	}
-	return out, nil
+	page, next := offsetPage(items, offset, in.Limit)
+	return EntityList{Items: page, Total: len(items), Truncated: v.g.truncated, NextCursor: next}, nil
 }
 
 // GetEntity is one entity page: mentioning memories, related entities, timeline.

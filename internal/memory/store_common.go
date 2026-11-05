@@ -7,10 +7,31 @@ import (
 	"errors"
 	mathrand "math/rand/v2"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 )
+
+// parseOffsetCursor reads the decimal-offset cursor offsetPage returns; "" is the first page.
+// ok is false unless 0 <= offset <= max.
+func parseOffsetCursor(cursor string, max int) (int, bool) {
+	if cursor == "" {
+		return 0, true
+	}
+	n, err := strconv.Atoi(cursor)
+	return n, err == nil && n >= 0 && n <= max
+}
+
+// offsetPage is rows[offset:offset+limit], clamped, and the next page's cursor ("" on the last page).
+// The list routes that read one bounded slice of rows page this way.
+func offsetPage[T any](rows []T, offset, limit int) ([]T, string) {
+	page := rows[min(offset, len(rows)):min(offset+limit, len(rows))]
+	if offset+limit < len(rows) {
+		return page, strconv.Itoa(offset + limit)
+	}
+	return page, ""
+}
 
 const (
 	statusActive = "active"

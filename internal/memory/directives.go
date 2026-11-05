@@ -10,7 +10,6 @@ import (
 	"cmp"
 	"context"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -224,13 +223,9 @@ func (s *Service) DeleteDirective(ctx context.Context, token, id string, in Dire
 // ListDirectives pages a scope's directives by priority (highest first). cursor is an offset.
 func (s *Service) ListDirectives(ctx context.Context, token string, scope Scope, limit int, cursor string) (DirectiveList, error) {
 	out := DirectiveList{Items: []DirectiveView{}}
-	offset := 0
-	if cursor != "" {
-		n, err := strconv.Atoi(cursor)
-		if err != nil || n < 0 || n >= directiveMaxPerScope {
-			return out, ErrInvalid
-		}
-		offset = n
+	offset, ok := parseOffsetCursor(cursor, directiveMaxPerScope-1)
+	if !ok {
+		return out, ErrInvalid
 	}
 	if limit == 0 {
 		limit = directiveListDefault
@@ -245,12 +240,11 @@ func (s *Service) ListDirectives(ctx context.Context, token string, scope Scope,
 	if err != nil {
 		return out, err
 	}
-	for i := offset; i < len(rows) && i < offset+limit; i++ {
-		out.Items = append(out.Items, viewDirective(rows[i]))
+	page, next := offsetPage(rows, offset, limit)
+	for _, r := range page {
+		out.Items = append(out.Items, viewDirective(r))
 	}
-	if offset+limit < len(rows) {
-		out.NextCursor = strconv.Itoa(offset + limit)
-	}
+	out.NextCursor = next
 	return out, nil
 }
 

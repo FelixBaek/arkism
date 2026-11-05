@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -319,13 +318,10 @@ func validObservationFilter(f *ObservationFilter) bool {
 	if f.Limit == 0 {
 		f.Limit = obsPageDefault
 	}
-	offset, err := 0, error(nil)
-	if f.Cursor != "" {
-		offset, err = strconv.Atoi(f.Cursor)
-	}
+	_, ok := parseOffsetCursor(f.Cursor, obsListLimit)
 	return slices.Contains(obsStatuses, f.Status) && (f.Durability == "" || slices.Contains(obsDurability, f.Durability)) &&
 		(f.SourceMemoryID == "" || validRunLabel(f.SourceMemoryID, 256)) && utf8.RuneCountInString(f.Query) <= 200 && utf8.ValidString(f.Query) &&
-		f.Limit >= 1 && f.Limit <= obsPageMax && err == nil && offset >= 0 && offset <= obsListLimit
+		f.Limit >= 1 && f.Limit <= obsPageMax && ok
 }
 
 func (f ObservationFilter) matches(r Record) bool {
@@ -348,14 +344,13 @@ func (s *Service) ListObservations(ctx context.Context, token string, scope Scop
 		return ObservationPage{}, err
 	}
 	rows = slices.DeleteFunc(rows, func(r Record) bool { return r.Scope != scope || !f.matches(r) })
-	offset, _ := strconv.Atoi(f.Cursor)
+	offset, _ := parseOffsetCursor(f.Cursor, obsListLimit) // checked by validObservationFilter
 	out := ObservationPage{Items: []ObservationView{}, Authority: AuthorityDataOnly}
-	for _, r := range rows[min(offset, len(rows)):min(offset+f.Limit, len(rows))] {
+	page, next := offsetPage(rows, offset, f.Limit)
+	for _, r := range page {
 		out.Items = append(out.Items, s.observationView(ctx, r))
 	}
-	if offset+f.Limit < len(rows) {
-		out.NextCursor = strconv.Itoa(offset + f.Limit)
-	}
+	out.NextCursor = next
 	return out, nil
 }
 

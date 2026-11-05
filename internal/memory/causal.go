@@ -15,7 +15,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -315,8 +314,8 @@ func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope
 	if limit == 0 {
 		limit = causalListDefault
 	}
-	offset, err := strconv.Atoi(cmp.Or(cursor, "0"))
-	if err != nil || offset < 0 || offset >= causalScanMax || !validScope(scope) || !slices.Contains(causalStatuses, status) || limit < 1 || limit > causalListMax {
+	offset, ok := parseOffsetCursor(cursor, causalScanMax-1)
+	if !ok || !validScope(scope) || !slices.Contains(causalStatuses, status) || limit < 1 || limit > causalListMax {
 		return CausalLinkPage{}, ErrInvalid
 	}
 	d, err := s.authorize(ctx, token, "read:"+colMemoryRelations, scope, "", "")
@@ -332,12 +331,11 @@ func (s *Service) ListCausalLinks(ctx context.Context, token string, scope Scope
 		return CausalLinkPage{}, err
 	}
 	out := CausalLinkPage{Items: []CausalLink{}, Truncated: len(rows) >= causalScanMax, Authority: AuthorityDataOnly}
-	for _, r := range visible[min(offset, len(visible)):min(offset+limit, len(visible))] {
+	page, next := offsetPage(visible, offset, limit)
+	for _, r := range page {
 		out.Items = append(out.Items, causalView(r))
 	}
-	if len(visible) > offset+limit {
-		out.NextCursor = strconv.Itoa(offset + limit)
-	}
+	out.NextCursor = next
 	return out, nil
 }
 

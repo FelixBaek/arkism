@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -201,11 +200,8 @@ func (s *Service) ListMentalModels(ctx context.Context, token string, scope Scop
 	if limit == 0 {
 		limit = mmPageDefault
 	}
-	offset, err := 0, error(nil)
-	if cursor != "" {
-		offset, err = strconv.Atoi(cursor)
-	}
-	if !validScope(scope) || limit < 1 || limit > mmPageMax || err != nil || offset < 0 || offset > mmListLimit {
+	offset, ok := parseOffsetCursor(cursor, mmListLimit)
+	if !validScope(scope) || limit < 1 || limit > mmPageMax || !ok {
 		return MentalModelPage{}, ErrInvalid
 	}
 	if _, err := s.authorize(ctx, token, "read:"+colMentalModels, scope, "", ""); err != nil {
@@ -217,12 +213,11 @@ func (s *Service) ListMentalModels(ctx context.Context, token string, scope Scop
 	}
 	rows = slices.DeleteFunc(rows, func(r Record) bool { return r.Scope != scope || r.MentalModel == nil })
 	out := MentalModelPage{Items: []MentalModelView{}, Authority: AuthorityDataOnly}
-	for _, r := range rows[min(offset, len(rows)):min(offset+limit, len(rows))] {
+	page, next := offsetPage(rows, offset, limit)
+	for _, r := range page {
 		out.Items = append(out.Items, s.mentalModelView(ctx, r))
 	}
-	if offset+limit < len(rows) {
-		out.NextCursor = strconv.Itoa(offset + limit)
-	}
+	out.NextCursor = next
 	return out, nil
 }
 
