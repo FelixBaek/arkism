@@ -55,7 +55,7 @@ func (s *Service) ReviewCandidate(ctx context.Context, token, id string, in Cand
 		return Record{}, ErrInvalid
 	}
 	if in.Content != "" || in.Reason != "" {
-		if e = s.defendSpace(ctx, in.Scope, "review:memory_candidates", &in.Content, &in.Reason); e != nil {
+		if e = s.defendSpace(ctx, token, defenseGuard{action: "transition:memory_candidates", id: id, human: true}, in.Scope, &in.Content, &in.Reason); e != nil {
 			return Record{}, e
 		}
 	}

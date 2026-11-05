@@ -278,3 +278,33 @@ func TestSpaceExportHidesRulesFromAgents(t *testing.T) {
 		t.Fatal("human export lost its rules")
 	}
 }
+
+func TestSpaceDefenseBlockHiddenFromUnauthorizedCallers(t *testing.T) {
+	f := newFixture(t)
+	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{{Pattern: `INC-\d+`, Action: "block"}}})
+	blocked := CreateInput{Scope: scopeA, Kind: "semantic", Text: "see INC-12"}
+	if _, err := f.svc.Create(testCtx, "unknown-token", "memory_candidates", blocked); err == nil || errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("unauthenticated create err = %v", err)
+	}
+	if _, err := f.svc.ReviewCandidate(testCtx, f.agent, "cand-1", CandidateReviewInput{Scope: scopeA, ExpectedRevision: 1, Action: "edit_approve", Content: "INC-1"}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("agent review err = %v", err)
+	}
+	sup := SupersedeInput{Scope: scopeA, ExpectedRevision: 1, Reason: "INC-2 fixed", NewContent: "new", Sources: []SourceRef{{SourceID: "s"}}}
+	if _, err := f.svc.Supersede(testCtx, f.agent, "mem-1", sup); !errors.Is(err, ErrDenied) {
+		t.Fatalf("agent supersede err = %v", err)
+	}
+	// The same texts from a person who may write are refused by the rule.
+	if _, err := f.svc.Create(testCtx, f.human, "memory_candidates", blocked); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("human create err = %v", err)
+	}
+	if _, err := f.svc.Supersede(testCtx, f.human, "mem-1", sup); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatalf("human supersede err = %v", err)
+	}
+	// Over HTTP an unauthenticated caller gets 401, not defense_blocked.
+	req := httptest.NewRequest("POST", "/v1/memory_candidates", strings.NewReader(structuredText(blocked)))
+	w := httptest.NewRecorder()
+	Handler(f.svc).ServeHTTP(w, req)
+	if w.Code != 401 || strings.Contains(w.Body.String(), "defense_blocked") {
+		t.Fatalf("http = %d %s", w.Code, w.Body.String())
+	}
+}

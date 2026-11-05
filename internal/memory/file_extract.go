@@ -313,7 +313,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
-	if err = s.defendSpace(ctx, in.Scope, "generate:memory_candidates", &in.Text); err != nil {
+	if err = s.defendSpace(ctx, "", defenseGuard{action: "generate:memory_candidates"}, in.Scope, &in.Text); err != nil {
 		return ExtractPreviewResult{}, err
 	}
 	if len(in.Text) > fileExtractMaxPreview {
@@ -407,7 +407,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	}
 	pages, paged, err := extractFilePages(in)
 	if err == nil {
-		err = s.defendSpace(ctx, in.Scope, "write:memory_candidates", pagePointers(pages)...)
+		err = s.defendSpace(ctx, "", defenseGuard{action: "write:memory_candidates"}, in.Scope, pagePointers(pages)...)
 	}
 	if err != nil {
 		return FileMemoriesResult{}, err

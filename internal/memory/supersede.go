@@ -29,7 +29,7 @@ func (s *Service) Supersede(ctx context.Context, token, id string, in SupersedeI
 		return out, ErrInvalid
 	}
 	// The new content's limits are checked below on the redacted text; a reason a redaction grew is cut back.
-	if e := s.defendSpace(ctx, in.Scope, "write:memories", &in.NewContent, &in.Reason); e != nil {
+	if e := s.defendSpace(ctx, token, defenseGuard{action: "transition:memories", id: id, human: true}, in.Scope, &in.NewContent, &in.Reason); e != nil {
 		return out, e
 	}
 	in.Reason = cutUTF8(in.Reason, 2000)

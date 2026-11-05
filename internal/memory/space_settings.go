@@ -320,21 +320,41 @@ func (c SpaceConfig) lane(name string) bool {
 // defendSpace is the one entry every ingestion path calls (capture, create, file
 // and pasted-text extraction, knowledge documents, uploaded text, supersede and
 // review edits): it applies the space's defense rules to texts in place before
-// the privacy and secret checks. A block is audited under action, without its text.
-func (s *Service) defendSpace(ctx context.Context, scope Scope, action string, texts ...*string) error {
+// the privacy and secret checks. Callers already past their authorization pass
+// a zero guard; a path that defends ahead of it passes its check as guard.
+func (s *Service) defendSpace(ctx context.Context, token string, guard defenseGuard, scope Scope, texts ...*string) error {
 	cfg, err := s.spaceSettings(ctx, scope)
 	if err != nil {
 		return err
 	}
-	return s.defendWith(ctx, scope, action, cfg.DefenseRules, texts...)
+	return s.defendWith(ctx, token, guard, scope, cfg.DefenseRules, texts...)
 }
 
-// defendWith is defendSpace with settings the caller already read.
-func (s *Service) defendWith(ctx context.Context, scope Scope, action string, rules []SpaceDefenseRule, texts ...*string) error {
+// defenseGuard is the authorization a block is reported under. With a token
+// given, a block is shown (and audited) only to a caller that check allows (and,
+// with human set, only to a person); anyone else gets the check's own error, so
+// unauthenticated or unauthorized callers cannot probe the rules.
+type defenseGuard struct {
+	action, id string
+	human      bool
+}
+
+// defendWith is defendSpace with rules the caller already read.
+func (s *Service) defendWith(ctx context.Context, token string, guard defenseGuard, scope Scope, rules []SpaceDefenseRule, texts ...*string) error {
 	err := defendAll(rules, texts...)
-	if errors.Is(err, ErrDefenseBlocked) {
-		s.auditDeniedInput(ctx, action+":defense_blocked", scope, "")
+	if !errors.Is(err, ErrDefenseBlocked) {
+		return err
 	}
+	if token != "" {
+		d, authErr := s.authorize(ctx, token, guard.action, scope, guard.id, "")
+		if authErr == nil && guard.human && d.Role != roleHuman {
+			authErr = ErrDenied
+		}
+		if authErr != nil {
+			return authErr
+		}
+	}
+	s.auditDeniedInput(ctx, guard.action+":defense_blocked", scope, "")
 	return err
 }
 
@@ -367,7 +387,7 @@ func defendAll(rules []SpaceDefenseRule, texts ...*string) error {
 }
 
 // defendCreate runs the space rules on the text a memory, candidate or source create stores.
-func (s *Service) defendCreate(ctx context.Context, col string, in *CreateInput, file *textArtifact) error {
+func (s *Service) defendCreate(ctx context.Context, token, col string, in *CreateInput, file *textArtifact) error {
 	if col != colMemories && col != "memory_candidates" && col != "sources" {
 		return nil
 	}
@@ -377,7 +397,7 @@ func (s *Service) defendCreate(ctx context.Context, col string, in *CreateInput,
 		content = string(file.content)
 		texts = append(texts, &content)
 	}
-	if err := s.defendSpace(ctx, in.Scope, "write:"+col, texts...); err != nil {
+	if err := s.defendSpace(ctx, token, defenseGuard{action: "write:" + col}, in.Scope, texts...); err != nil {
 		return err
 	}
 	if len(content) > maxTextArtifactBytes {

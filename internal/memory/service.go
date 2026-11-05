@@ -541,7 +541,7 @@ func (s *Service) create(ctx context.Context, token, col string, in CreateInput,
 	if containsSecret(structuredText(in.Scope)) {
 		return Record{}, ErrSecretDetected
 	}
-	if err := s.defendCreate(ctx, col, &in, file); err != nil {
+	if err := s.defendCreate(ctx, token, col, &in, file); err != nil {
 		return Record{}, err
 	}
 	clean, inspection, err := s.inspectCreateRequest(ctx, token, col, in, file)

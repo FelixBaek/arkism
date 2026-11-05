@@ -236,7 +236,7 @@ func (s *Service) defendedClaim(ctx context.Context, token string, in CaptureInp
 	if !settings.ExtractionEnabled && slices.Contains(captureAutomaticEvents, in.Event.Type) {
 		return CaptureItem{}, ErrExtractionDisabled
 	}
-	if err := s.defendWith(ctx, in.Scope, "capture", settings.DefenseRules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
+	if err := s.defendWith(ctx, "", defenseGuard{action: "capture"}, in.Scope, settings.DefenseRules, &c.Subject, &c.Text, &c.Reason, &c.EvidenceSpan); err != nil {
 		return CaptureItem{}, err
 	}
 	return s.captureClaim(ctx, token, in, c)

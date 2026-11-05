@@ -165,7 +165,7 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 	if in.ContentBase64 != "" || !validKnowledgeIngest(in, mime) {
 		return out, ErrInvalid
 	}
-	if e = s.defendSpace(ctx, in.Scope, "write:"+colKnowledgeSources, &in.Content); e != nil {
+	if e = s.defendSpace(ctx, "", defenseGuard{action: "write:" + colKnowledgeSources}, in.Scope, &in.Content); e != nil {
 		return out, e
 	}
 	if !validKnowledgeIngest(in, mime) {
