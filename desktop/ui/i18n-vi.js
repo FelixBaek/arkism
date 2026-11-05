@@ -6187,7 +6187,14 @@
  "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Đang bật. Mỗi lần phán định đều được tính vào giới hạn dùng mỗi ngày của mô hình máy chủ.",
  "호출 자세히": "Chi tiết lượt gọi",
  "그중 캐시에서": "Trong đó từ bộ nhớ đệm",
- "그중 생각": "Trong đó phần suy nghĩ"
+ "그중 생각": "Trong đó phần suy nghĩ",
+ "보기 방식": "Cách xem",
+ "간격: 하루": "Khoảng cách: một ngày",
+ "간격: 한 주": "Khoảng cách: một tuần",
+ "간격: 한 달": "Khoảng cách: một tháng",
+ "타임라인": "Dòng thời gian",
+ "기억 타임라인": "Dòng thời gian ký ức",
+ "더 이전 불러오기": "Tải thêm mục cũ hơn"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",

@@ -6187,7 +6187,14 @@
  "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Ist eingeschaltet. Jede Entscheidung zählt zum Tageslimit des Servermodells.",
  "호출 자세히": "Aufruf-Details",
  "그중 캐시에서": "Davon aus dem Cache",
- "그중 생각": "Davon Denken"
+ "그중 생각": "Davon Denken",
+ "보기 방식": "Ansicht",
+ "간격: 하루": "Abstand: Tag",
+ "간격: 한 주": "Abstand: Woche",
+ "간격: 한 달": "Abstand: Monat",
+ "타임라인": "Zeitleiste",
+ "기억 타임라인": "Erinnerungs-Zeitleiste",
+ "더 이전 불러오기": "Frühere laden"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

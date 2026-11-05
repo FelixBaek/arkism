@@ -8,6 +8,7 @@ const { document } = dom.install();
 const h = dom.helpers(document);
 require("./session-list.js");
 require("./delete-reason.js"); // the reason picker the review rows share
+require("./memory-bubbles.js"); // the shared kind colours
 require("./overview-windows.js");
 require("./home-start.js"); // 분석's extractor failure words
 

@@ -12,7 +12,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   const KIND = { user: "선호", decision: "결정", lesson: "교훈", procedural: "작업 규칙", episodic: "사건", fact: "사실" };
   const kind = (k) => KIND[k] || k || "기억";
   // one colour per kind (tags here and the 종류별 map); the label decides, so a row helper given only text still colours it
-  const KIND_COLOR = { user: "#c48ef0", decision: "#7c9cff", lesson: "#e8a65d", procedural: "#5fc6a8", episodic: "#6cc3e0", fact: "#b9c56b" };
+  const KIND_COLOR = window.ArkismMemoryBubbles.KIND_COLOR; // shared with the 기억 page's 그래프 view
   const KIND_BY_LABEL = Object.fromEntries(Object.entries(KIND).map(([k, l]) => [l, k]));
   const DREAM_TAGS = new Set(["합치기", "고치기", "정리"]);
   function tagEl(text, cls = "") {

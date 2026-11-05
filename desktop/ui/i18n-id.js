@@ -6187,7 +6187,14 @@
  "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Aktif. Setiap penilaian dihitung ke batas penggunaan harian model server.",
  "호출 자세히": "Detail panggilan",
  "그중 캐시에서": "Di antaranya dari cache",
- "그중 생각": "Di antaranya penalaran"
+ "그중 생각": "Di antaranya penalaran",
+ "보기 방식": "Cara tampilan",
+ "간격: 하루": "Jarak: sehari",
+ "간격: 한 주": "Jarak: seminggu",
+ "간격: 한 달": "Jarak: sebulan",
+ "타임라인": "Linimasa",
+ "기억 타임라인": "Linimasa memori",
+ "더 이전 불러오기": "Muat yang lebih lama"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

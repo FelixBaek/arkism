@@ -321,6 +321,125 @@
     "basis:explicit_user"
    ],
    "created_by_type": "human"
+  },
+  {
+   "id": "m12",
+   "text": "Orbit 결제는 카드 한 가지로 시작하고 계좌이체는 나중에 붙인다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-07-02T09:20:00Z",
+   "updated_at": "2026-07-02T09:20:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m13",
+   "text": "Orbit 첫 출시 때 캐시를 끄지 않아 오래된 가격이 보였다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-07-16T14:05:00Z",
+   "updated_at": "2026-07-16T14:05:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m14",
+   "text": "Alex는 회의록을 결론 세 줄로 먼저 받고 싶어 한다.",
+   "kind": "user",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-07-29T08:40:00Z",
+   "updated_at": "2026-07-29T08:40:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m15",
+   "text": "Orbit 릴리스 노트는 영어와 한국어 두 벌로 쓴다.",
+   "kind": "procedural",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-08-07T11:00:00Z",
+   "updated_at": "2026-08-07T11:00:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m16",
+   "text": "Orbit 베타 사용자 인터뷰를 8월 둘째 주에 다섯 번 했다.",
+   "kind": "episodic",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-08-12T16:30:00Z",
+   "updated_at": "2026-08-12T16:30:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m17",
+   "text": "Orbit 알림은 하루 한 번 묶어서 보낸다.",
+   "kind": "decision",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-08-12T10:10:00Z",
+   "updated_at": "2026-08-12T10:10:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
+  },
+  {
+   "id": "m18",
+   "text": "Orbit 데이터 이전은 주말에 해야 사용자 불편이 적다.",
+   "kind": "lesson",
+   "status": "active",
+   "revision": 1,
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default",
+    "user_id": "management:owner"
+   },
+   "created_at": "2026-08-27T07:45:00Z",
+   "updated_at": "2026-08-27T07:45:00Z",
+   "tags": [
+    "basis:explicit_user"
+   ]
   }
  ],
  "next_cursor": "",

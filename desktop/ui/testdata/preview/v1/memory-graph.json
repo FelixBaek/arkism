@@ -104,6 +104,55 @@
       "kind": "user",
       "uses": 6,
       "vector_pending": false
+    },
+    {
+      "id": "m12",
+      "reach": "personal",
+      "kind": "decision",
+      "uses": 6,
+      "vector_pending": false
+    },
+    {
+      "id": "m13",
+      "reach": "project",
+      "kind": "lesson",
+      "uses": 2,
+      "vector_pending": false
+    },
+    {
+      "id": "m14",
+      "reach": "personal",
+      "kind": "user",
+      "uses": 19,
+      "vector_pending": false
+    },
+    {
+      "id": "m15",
+      "reach": "general",
+      "kind": "procedural",
+      "uses": 3,
+      "vector_pending": false
+    },
+    {
+      "id": "m16",
+      "reach": "project",
+      "kind": "episodic",
+      "uses": 0,
+      "vector_pending": false
+    },
+    {
+      "id": "m17",
+      "reach": "general",
+      "kind": "decision",
+      "uses": 5,
+      "vector_pending": false
+    },
+    {
+      "id": "m18",
+      "reach": "project",
+      "kind": "lesson",
+      "uses": 4,
+      "vector_pending": false
     }
   ],
   "edges": [
@@ -201,6 +250,21 @@
       "from": "m10",
       "to": "m11",
       "type": "causes"
+    },
+    {
+      "from": "m12",
+      "to": "m1",
+      "type": "supports"
+    },
+    {
+      "from": "m16",
+      "to": "m14",
+      "type": "same_session"
+    },
+    {
+      "from": "m17",
+      "to": "m15",
+      "type": "supports"
     }
   ],
   "truncated": false

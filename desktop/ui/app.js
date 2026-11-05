@@ -55,6 +55,7 @@ export function startApp() {
     query: "",
     validAt: "", // 시점 on the memory list: a YYYY-MM-DD day, "" = now
     validAsOf: "", // when that day was picked; fixed so the server cursor stays bound to it
+    memView: stored("arkism.memView") || "list", // 기억: 목록 · 타임라인 · 그래프
     selected: null,
     data: emptyData(),
     crewCat: "all",
@@ -1447,7 +1448,7 @@ export function startApp() {
     return r;
   }
   function markSelected() {
-    document.querySelectorAll(".row[data-id], .cn-row[data-id], .todo-item[data-id], .prompt-card[data-id], .ds-card[data-id], .crew-card[data-id]").forEach((r) => r.classList.toggle("selected", r.dataset.id === state.selected));
+    document.querySelectorAll(".row[data-id], .cn-row[data-id], .todo-item[data-id], .prompt-card[data-id], .ds-card[data-id], .crew-card[data-id], .mem-tl-item[data-id], .mem-tl-pop-row[data-id]").forEach((r) => r.classList.toggle("selected", r.dataset.id === state.selected));
   }
 
   // ---------------------------------------------------------------- 할 일 (Figma v4 · 01 홈: 198:200, 198:2178, 198:2264, 198:3812, 210:17783)
@@ -1830,6 +1831,7 @@ export function startApp() {
     get row() { return row; },
     get savedHow() { return savedHow; },
     get segment() { return segment; },
+    get store() { return store; },
     get standing() { return standing; },
     get state() { return state; },
     get stateNotice() { return stateNotice; },

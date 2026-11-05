@@ -7,7 +7,7 @@
  */
 export function createAppState(initial) {
   const connectionKeys = new Set(["defaults", "server", "token", "ssh", "email", "scope", "caps", "mode"]);
-  const memoryKeys = new Set(["memTab", "kind", "repo", "sort", "query", "validAt", "validAsOf"]);
+  const memoryKeys = new Set(["memTab", "kind", "repo", "sort", "query", "validAt", "validAsOf", "memView"]);
   const skillKeys = new Set(["skillTab", "skillModel", "skillSort", "skillDir", "openCopies", "skillCat", "versions", "versionsDone", "usage", "usageDone", "pending"]);
   const crewKeys = new Set(["crewCat"]);
   const connection = { generation: 0 };

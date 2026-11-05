@@ -3,6 +3,7 @@ import { candidateGroup } from "./candidateGroups.mjs";
 import { collectionFooter, serverCount } from "./collectionPaging.mjs";
 import { memoryLabels, labelLine, rowLabels } from "./memoryLabels.mjs";
 import { whenPick as pickDay } from "./memoryTimeline.mjs";
+import { timelineView, graphView } from "./memoryViews.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.
 export function createMemoryList(deps) {
 
@@ -159,6 +160,11 @@ export function createMemoryList(deps) {
     tools.append(memSearch());
     if (past) tools.append(whenPick());
     tools.append(deps.button("기억 추가", "primary small", null, deps.openMemoryAdd));
+    // 목록 · 타임라인 · 그래프: one page, three ways to see the same filtered memories; the choice is remembered
+    const view = VIEWS.some(([k]) => k === deps.memory.memView) ? deps.memory.memView : "list";
+    const seg = deps.segment(VIEWS, view, (k) => { deps.memory.memView = k; deps.store?.("arkism.memView", k); deps.render(false); });
+    seg.classList.add("mem-seg", "mem-view-seg"); seg.setAttribute("aria-label", "보기 방식");
+    tools.append(seg);
     deps.$("#controls").replaceChildren(...top, tools);
     // 자세히: 시점 · 저장소 · 정렬 · 에이전트가 받는 기억 · 지운 기억
     const more = [];
@@ -171,7 +177,8 @@ export function createMemoryList(deps) {
       more.push(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
         deps.memory.repo || "", (v) => { deps.memory.repo = v; deps.render(false); }));
     }
-    if (!past) more.push(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
+    if (view === "timeline") more.push(memSelect("간격", [["day", "간격: 하루"], ["week", "간격: 한 주"], ["month", "간격: 한 달"]], tl.zoom, (v) => { tl.zoom = v; tl.fromRight = 0; deps.render(false); }));
+    if (!past && view === "list") more.push(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
     more.push(deps.inject.button());
     if (deps.state.caps?.actions?.review_decide) more.push(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
     // 모아보기: one menu with every view; one tap opens it
@@ -190,6 +197,8 @@ export function createMemoryList(deps) {
     deps.$("#stats").replaceChildren(catalogNote());
 
     const items = source; // Already filtered and ordered across the server catalog.
+    if (view !== "graph" && graphHost) { graphHost.destroy(); graphHost = null; } // a map left from the graph view stops its animation
+    if (view !== "list" && items.length) { drawView(view, items, snap, past); return; }
     const tpl = "minmax(0,1fr) auto";
     const shown = memPage(items);
     drawRows(shown, (m) => past
@@ -199,6 +208,47 @@ export function createMemoryList(deps) {
     if (!items.length && !snap.error && !snap.loading) deps.$("#table").append(deps.memory.query || (deps.memory.kind && deps.memory.kind !== "all") || deps.memory.repo ? deps.el("div", "empty", "검색과 맞는 기억이 없어요.") : emptyMemories());
     else if (!items.length && deps.memory.query) deps.$("#table").append(deps.el("div", "empty", "검색과 맞는 기억이 없어요."));
     memMore(items.length, shown.length);
+  }
+
+  // 타임라인 · 그래프 draw every loaded memory (no 50-row reveal); the timeline loads older pages from its left end.
+  const VIEWS = [["list", "목록"], ["timeline", "타임라인"], ["graph", "그래프"]];
+  const tl = { zoom: "day", fromRight: 0, key: "" };
+  let graphHost = null, graphEdges = { generation: -1, edges: [] };
+  function pick(id, past) {
+    deps.catalogQuery.pin(id); deps.state.selected = id; deps.markSelected(); graphHost?.select(id);
+    if (past) void openCurrent(id); else deps.renderDetail();
+    deps.openDetail();
+  }
+  // the map's lines (GET /v1/memory-graph), read once per connection; the map draws without them meanwhile
+  function edges() {
+    if (graphEdges.generation !== deps.generation) {
+      const g = graphEdges = { generation: deps.generation, edges: [] };
+      deps.request(`/v1/memory-graph?${deps.query({ mode: "all" })}`).then((r) => {
+        if (graphEdges !== g || !Array.isArray(r?.edges)) return;
+        g.edges = r.edges; if (graphHost) { graphHost.destroy(); graphHost = null; deps.render(false); }
+      }, () => {});
+    }
+    return graphEdges.edges;
+  }
+  function drawView(view, items, snap, past) {
+    deps.virtualList.clear?.();
+    const table = deps.$("#table");
+    if (view === "timeline") {
+      const key = [deps.generation, deps.memory.kind, deps.memory.repo, deps.memory.query, deps.memory.validAt, tl.zoom].join("|");
+      if (tl.key !== key) { tl.key = key; tl.fromRight = 0; }
+      const more = snap.cursor && !snap.error ? () => deps.catalogQuery.more("memories").catch(() => deps.render(false)) : null;
+      const strip = timelineView(items, { el: deps.el, raw: deps.raw, kindLabel: deps.kindLabel, memStat: deps.memStat, idle: deps.idle, usageDone: deps.state.usageDone,
+        maintenance: deps.state.data.maintenance, selected: deps.state.selected, onPick: (id) => pick(id, past), more: snap.loading ? null : more }, tl);
+      table.replaceChildren(strip); strip.place();
+      return;
+    }
+    const key = JSON.stringify([deps.generation, items.map((m) => m.id), graphEdges.edges.length]);
+    if (graphHost?.key !== key) {
+      graphHost?.destroy();
+      graphHost = Object.assign(graphView(items, edges(), { el: deps.el, kindLabel: deps.kindLabel, memStat: deps.memStat, selected: deps.state.selected, onPick: (id) => pick(id, past) }), { key });
+    } else graphHost.select(deps.state.selected);
+    table.replaceChildren(graphHost);
+    memMore(items.length, items.length);
   }
 
   // A fresh install: say where memories come from and offer the one thing to do now.

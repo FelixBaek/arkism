@@ -398,5 +398,7 @@ window.ArkismMemoryBubbles = (() => {
     }
     return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, fitView, groupLinesOnly, setGroup, svg, destroy };
   }
-  return { create, toSvg };
+  // one colour per memory kind: the 종류별 map here and on the 기억 page, and the kind tags of the overview windows
+  const KIND_COLOR = { user: "#c48ef0", decision: "#7c9cff", lesson: "#e8a65d", procedural: "#5fc6a8", episodic: "#6cc3e0", fact: "#b9c56b" };
+  return { create, toSvg, KIND_COLOR };
 })();

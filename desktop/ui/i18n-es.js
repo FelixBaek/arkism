@@ -6187,7 +6187,14 @@
  "켜져 있어요. 판정할 때마다 서버 모델의 하루 사용 한도에 함께 셈해요.": "Está activado. Cada decisión cuenta para el límite diario de uso del modelo del servidor.",
  "호출 자세히": "Detalles de las llamadas",
  "그중 캐시에서": "De ellos, desde la caché",
- "그중 생각": "De ellos, razonamiento"
+ "그중 생각": "De ellos, razonamiento",
+ "보기 방식": "Vista",
+ "간격: 하루": "Intervalo: un día",
+ "간격: 한 주": "Intervalo: una semana",
+ "간격: 한 달": "Intervalo: un mes",
+ "타임라인": "Cronología",
+ "기억 타임라인": "Cronología de recuerdos",
+ "더 이전 불러오기": "Cargar anteriores"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

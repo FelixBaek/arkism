@@ -131,7 +131,7 @@ test("the main list draws check card, filters, chips, badges, paging and empty s
   assert.deepEqual(env.gone.at(-1), ["memories", "candidate"]);
   // the toolbar holds only the search and 기억 추가; everything else waits under 자세히 and 모아보기 next to the kind tabs
   const tools = controls.querySelector(".mem-tools");
-  assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가"]);
+  assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가", "segment mem-seg mem-view-seg"]); // 목록 · 타임라인 · 그래프 at the right end
   assert.equal(controls.querySelectorAll("select").length, 0);
   const more = h.$("#chips .mem-more-pop");
   assert.equal(more.querySelector("summary").textContent, "자세히");
