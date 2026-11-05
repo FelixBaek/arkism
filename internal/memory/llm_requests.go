@@ -368,8 +368,7 @@ func (s *Service) humanLLMRequests(ctx context.Context, token string, scope Scop
 }
 
 func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope, f LLMRequestFilter) (LLMRequestPage, error) {
-	if f.Limit < 0 || f.Limit > 200 || f.Operation != "" && !validRunLabel(f.Operation, 128) || f.CallKind != "" && !slices.Contains(llmCallKinds, f.CallKind) ||
-		f.Status != "" && f.Status != "ok" && f.Status != "error" || f.Before != "" && !validRunLabel(f.Before, 64) {
+	if !f.valid() {
 		return LLMRequestPage{}, ErrInvalid
 	}
 	if f.Limit == 0 {
@@ -406,6 +405,11 @@ func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope
 }
 
 var llmCallKinds = []string{"llm", "embedding", "rerank"}
+
+func (f LLMRequestFilter) valid() bool {
+	return f.Limit >= 0 && f.Limit <= 200 && (f.Operation == "" || validRunLabel(f.Operation, 128)) && (f.CallKind == "" || slices.Contains(llmCallKinds, f.CallKind)) &&
+		(f.Status == "" || f.Status == "ok" || f.Status == "error") && (f.Before == "" || validRunLabel(f.Before, 64))
+}
 
 // llmCallKind names a call's kind from its operation: the embedding and rerank
 // operations are named so by meteredEmbed and meteredRerank (cost.go).
