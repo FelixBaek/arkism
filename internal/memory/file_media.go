@@ -65,8 +65,9 @@ type uploadedFile struct {
 	Blocks []fileBlock
 }
 
-// FileBlock is one part of text-with-images input: a text block, or an image
-// block that the opted-in image model reads in place.
+// FileBlock is one part of text-with-images input (an upload's or an ingest item's
+// blocks): a text block, or an image block (png, jpeg or webp) that the opted-in image
+// model reads in place. Without the vision opt-in an image block fails as an unsupported format.
 type FileBlock struct {
 	Type          string `json:"type"` // text | image
 	Text          string `json:"text,omitempty"`
@@ -90,26 +91,18 @@ func decodeBlocks(blocks []FileBlock, limit int64) ([]fileBlock, error) {
 	out := make([]fileBlock, 0, len(blocks))
 	var total int64
 	for _, b := range blocks {
-		var fb fileBlock
-		switch b.Type {
-		case "text":
-			if b.ContentBase64 != "" || b.MIME != "" || strings.TrimSpace(b.Text) == "" || !utf8.ValidString(b.Text) || strings.ContainsRune(b.Text, 0) {
-				return nil, ErrInvalid
-			}
-			fb.Text = b.Text
-			total += int64(len(b.Text))
-		case "image":
-			if b.Text != "" || b.MIME != "" && !slices.Contains([]string{"image/png", "image/jpeg", "image/webp"}, b.MIME) {
-				return nil, ErrInvalid
-			}
+		if !validFileBlock(b) {
+			return nil, ErrInvalid
+		}
+		fb := fileBlock{Text: b.Text}
+		total += int64(len(b.Text))
+		if b.Type == "image" {
 			raw, err := decodeUpload(b.ContentBase64, limit)
 			if err != nil {
 				return nil, err
 			}
 			fb.Image, fb.MIME = raw, b.MIME
 			total += int64(len(raw))
-		default:
-			return nil, ErrInvalid
 		}
 		if total > limit {
 			return nil, errBlobTooLarge
@@ -117,6 +110,18 @@ func decodeBlocks(blocks []FileBlock, limit int64) ([]fileBlock, error) {
 		out = append(out, fb)
 	}
 	return out, nil
+}
+
+// validFileBlock: a text block carries text only, an image block content and at most a
+// supported image type (sniffed when absent).
+func validFileBlock(b FileBlock) bool {
+	switch b.Type {
+	case "text":
+		return b.ContentBase64 == "" && b.MIME == "" && strings.TrimSpace(b.Text) != "" && len(b.Text) <= fileExtractMaxText && utf8.ValidString(b.Text) && !strings.ContainsRune(b.Text, 0)
+	case "image":
+		return b.Text == "" && b.ContentBase64 != "" && (b.MIME == "" || slices.Contains([]string{"image/png", "image/jpeg", "image/webp"}, b.MIME))
+	}
+	return false
 }
 
 // blockPages joins the blocks into one page; each image becomes the image
@@ -334,28 +339,6 @@ func (s *Service) readImages(ctx context.Context, token string, d Decision, f up
 		pages[i] = strings.TrimSpace(text)
 	}
 	return pages, nil
-}
-
-// ingestBlocksText joins an ingest item's blocks in order; each image block is read into
-// text exactly like an uploaded image (transfer check, budget, usage ledger).
-func (s *Service) ingestBlocksText(ctx context.Context, token string, d Decision, scope Scope, blocks []IngestBlock) (string, error) {
-	parts := make([]string, 0, len(blocks))
-	for i, b := range blocks {
-		if b.Type == "text" {
-			parts = append(parts, b.Text)
-			continue
-		}
-		raw, err := decodeUpload(b.ContentBase64, s.Files.maxBytes())
-		if err != nil {
-			return "", err
-		}
-		pages, err := s.readImages(ctx, token, d, uploadedFile{Scope: scope, Name: fmt.Sprintf("block-%d", i+1), MIME: b.MIME}, [][]byte{raw})
-		if err != nil {
-			return "", err
-		}
-		parts = append(parts, pages[0])
-	}
-	return strings.Join(parts, "\n\n"), nil
 }
 
 // transcribeFile turns one audio file into text through the transcription endpoint.

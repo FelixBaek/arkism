@@ -169,17 +169,7 @@ type IngestItem struct {
 	UpdateMode string            `json:"update_mode,omitempty"`
 	Strategy   string            `json:"strategy,omitempty"`
 	// Blocks is the content as ordered text and image blocks, instead of content.
-	Blocks []IngestBlock `json:"blocks,omitempty"`
-}
-
-// IngestBlock is one piece of an item's content in order: text, or an image (png, jpeg
-// or webp) the server model reads into text. Image blocks need the vision opt-in
-// (MEMORY_FILE_VISION); without it the item fails as an unsupported format.
-type IngestBlock struct {
-	Type          string `json:"type"`
-	Text          string `json:"text,omitempty"`
-	ContentBase64 string `json:"content_base64,omitempty"`
-	MIME          string `json:"mime,omitempty"`
+	Blocks []FileBlock `json:"blocks,omitempty"`
 }
 
 // IngestResult has one result per item, in order; a failed item has status failed and error.
@@ -796,7 +786,7 @@ func ingestImages(items []IngestItem) int {
 }
 
 func validIngestItem(it IngestItem) bool {
-	content := strings.TrimSpace(it.Content) != "" && len(it.Blocks) == 0 || it.Content == "" && len(it.Blocks) > 0 && len(it.Blocks) <= ingestMaxBlocks && !slices.ContainsFunc(it.Blocks, func(b IngestBlock) bool { return !validIngestBlock(b) })
+	content := strings.TrimSpace(it.Content) != "" && len(it.Blocks) == 0 || it.Content == "" && len(it.Blocks) > 0 && len(it.Blocks) <= ingestMaxBlocks && !slices.ContainsFunc(it.Blocks, func(b FileBlock) bool { return !validFileBlock(b) })
 	return content && len(it.Content) <= fileExtractMaxText && utf8.ValidString(it.Content) && !strings.ContainsRune(it.Content, 0) &&
 		(it.DocumentID == "" || validRunLabel(it.DocumentID, 200) && !containsSecret(it.DocumentID)) && slices.Contains([]string{"", "replace", "append"}, it.UpdateMode) &&
 		validExtractOptions(ingestOptions(it), time.Now())
@@ -804,17 +794,6 @@ func validIngestItem(it IngestItem) bool {
 
 func ingestOptions(it IngestItem) ExtractOptions {
 	return ExtractOptions{Context: it.Context, Timestamp: it.Timestamp, Tags: it.Tags, Metadata: it.Metadata, Entities: it.Entities, Strategy: it.Strategy}
-}
-
-// validIngestBlock: a text block carries text only, an image block a supported image type.
-func validIngestBlock(b IngestBlock) bool {
-	switch b.Type {
-	case "text":
-		return b.ContentBase64 == "" && b.MIME == "" && strings.TrimSpace(b.Text) != "" && len(b.Text) <= fileExtractMaxText && utf8.ValidString(b.Text) && !strings.ContainsRune(b.Text, 0)
-	case "image":
-		return b.Text == "" && b.ContentBase64 != "" && strings.HasPrefix(b.MIME, "image/") && slices.Contains(slices.Collect(maps.Values(mediaFormats)), b.MIME)
-	}
-	return false
 }
 
 // ingestItem plans, defends, filters, chunks and stores one item.
@@ -826,9 +805,15 @@ func (s *Service) ingestItem(ctx context.Context, token string, d Decision, scop
 	text, docRef := it.Content, "text:"+ContentHash(it.Content)
 	if len(it.Blocks) > 0 {
 		docRef = "text:" + ContentHash(structuredText(it.Blocks))
-		if text, err = s.ingestBlocksText(ctx, token, d, scope, it.Blocks); err != nil {
+		blocks, err := decodeBlocks(it.Blocks, s.Files.maxBytes())
+		if err != nil {
 			return FileMemoriesResult{}, err
 		}
+		pages, err := s.blockPages(ctx, token, d, uploadedFile{Scope: scope, Name: "ingest", Blocks: blocks})
+		if err != nil {
+			return FileMemoriesResult{}, err
+		}
+		text = pages[0]
 	}
 	if err = s.defendItem(ctx, scope, "write:memory_candidates", &plan.Options, &text); err != nil {
 		return FileMemoriesResult{}, err

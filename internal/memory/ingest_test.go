@@ -291,16 +291,16 @@ func TestExtractionSettingsValidation(t *testing.T) {
 func TestIngestImageBlocksAndPerItemResults(t *testing.T) {
 	claim := `{"content":"금요일에는 배포하지 않는다","kind":"decision","semantic_kind":"preference","evidence_kind":"inference","evidence_quote":"금요일 배포 금지","confidence":0.8}`
 	f, llm := mediaFixture(t, extractAnswer(claim))
-	png := IngestBlock{Type: "image", MIME: "image/png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PNGDATA"))}
+	png := FileBlock{Type: "image", MIME: "image/png", ContentBase64: base64.StdEncoding.EncodeToString([]byte("PNGDATA"))}
 	// Without the vision opt-in an image block is refused before anything is stored.
-	if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Blocks: []IngestBlock{png}}}}); !errors.Is(err, errUnsupportedFormat) {
+	if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{{Blocks: []FileBlock{png}}}}); !errors.Is(err, errUnsupportedFormat) {
 		t.Fatalf("no vision: %v", err)
 	}
 	for _, bad := range [][]IngestItem{
-		{{Content: "x", Blocks: []IngestBlock{png}}},
-		{{Blocks: []IngestBlock{{Type: "image", MIME: "image/gif", ContentBase64: png.ContentBase64}}}},
-		{{Blocks: []IngestBlock{{Type: "text", Text: "x", MIME: "image/png"}}}},
-		{{Blocks: slices.Repeat([]IngestBlock{png}, fileVisionPagesDefault+1)}},
+		{{Content: "x", Blocks: []FileBlock{png}}},
+		{{Blocks: []FileBlock{{Type: "image", MIME: "image/gif", ContentBase64: png.ContentBase64}}}},
+		{{Blocks: []FileBlock{{Type: "text", Text: "x", MIME: "image/png"}}}},
+		{{Blocks: slices.Repeat([]FileBlock{png}, fileVisionPagesDefault+1)}},
 	} {
 		if _, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: bad}); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("%+v: %v", bad, err)
@@ -313,12 +313,12 @@ func TestIngestImageBlocksAndPerItemResults(t *testing.T) {
 	f.svc.Wiki = v
 	// The second item's image cannot be read: it fails on its own, the first stays stored.
 	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Items: []IngestItem{
-		{Blocks: []IngestBlock{{Type: "text", Text: "Board notes:"}, png}}, {Blocks: []IngestBlock{png}}}})
+		{Blocks: []FileBlock{{Type: "text", Text: "Board notes:"}, png}}, {Blocks: []FileBlock{png}}}})
 	if err != nil || len(out.Items) != 2 || out.Items[0].Status != JobStatusDone || out.Items[0].CandidatesCreated != 1 || out.Items[0].Error != "" ||
 		out.Items[1].Status != JobStatusFailed || out.Items[1].Error == "" || out.Items[1].JobID != "" {
 		t.Fatalf("ingest %+v %v", out, err)
 	}
-	if len(llm.prompts) != 1 || !strings.Contains(llm.prompts[0], "Board notes:\n\n금요일 배포 금지") || strings.Contains(llm.prompts[0], "집 주소") {
+	if len(llm.prompts) != 1 || !strings.Contains(llm.prompts[0], "Board notes:\n\n[image 2]\n금요일 배포 금지") || strings.Contains(llm.prompts[0], "집 주소") {
 		t.Fatalf("prompts %q", llm.prompts)
 	}
 }
