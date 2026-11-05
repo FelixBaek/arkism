@@ -13,9 +13,20 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const TYPES = { person: "사람", project: "프로젝트", repo: "저장소", tool: "도구", product: "제품", file: "파일", service: "서비스", place: "장소", organization: "단체", concept: "개념" };
   const TITLE = { ask: "물어보기", rules: "규칙", entities: "자주 나온 이름" };
   const loads = globalThis.ArkismKeep.latest();
-  let key = "", rows = [], cursor = "", loaded = false, selected = null, editing = null, busy = false, error = "", answer = null, failure = null, question = "", limit = "", q = "";
+  let key = "", selected = null, editing = null, busy = false, answer = null, failure = null, question = "", limit = "", q = "";
   let memo = new Map(), views = new Map();
-  function reset() { loads.cancel(); key = ""; rows = []; cursor = ""; loaded = false; selected = null; editing = null; busy = false; error = ""; answer = null; failure = null; memo = new Map(); views = new Map(); }
+  // 규칙 · 자주 나온 이름 pages go through the shared cursor pager (memory-pages.js): order, repeats and stale reads handled there.
+  const pager = window.ArkismMemoryPages.create(async (k, at) => {
+    const { find } = JSON.parse(k);
+    const out = await request(`${tab === "rules" ? "/v1/directives" : "/v1/entities"}?${query({ limit: at.limit, ...(at.cursor ? { cursor: at.cursor } : {}), ...(find ? { q: find } : {}) })}`);
+    if (!Array.isArray(out?.items) || out.items.some((r) => typeof (tab === "rules" ? r?.rule : r?.name) !== "string")) throw new Error("invalid_response");
+    // These pages carry no authority label; their rows are drawn as plain text all the same.
+    return { items: out.items, next_cursor: typeof out.next_cursor === "string" ? out.next_cursor : "", authority: "data_only_untrusted" };
+  });
+  const pageKey = () => JSON.stringify({ id: identity(), find: tab === "entities" ? q : "" });
+  const page = () => { const s = pager.snapshot(); return s.key === pageKey() ? s : { items: [], cursor: "", ready: false, loading: false, error: "" }; };
+  const rows = () => page().items;
+  function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; failure = null; memo = new Map(); views = new Map(); }
   const live = (ticket, owner) => () => ticket.live() && active() && identity() === owner;
   const formHere = () => $("#chips .insight-form")?.dataset.tab === tab;
 
@@ -96,21 +107,14 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
 
   // ------------------------------------------------------------ 규칙 · 자주 나온 이름 (lists)
-  async function loadList(next = false) {
-    if (busy) return;
-    const now = live(loads.begin(), identity()), after = next ? cursor : "";
-    busy = true; error = ""; if (!next) { rows = []; cursor = ""; } paintList();
-    try {
-      const page = await request(`${tab === "rules" ? "/v1/directives" : "/v1/entities"}?${query({ limit: 50, ...(after ? { cursor: after } : {}), ...(tab === "entities" && q ? { q } : {}) })}`);
-      if (!now()) return;
-      if (!Array.isArray(page?.items) || page.items.some((r) => !r || typeof r.id !== "string" || !r.id || typeof (tab === "rules" ? r.rule : r.name) !== "string")) throw new Error("invalid_response");
-      const seen = new Set(rows.map((r) => r.id));
-      rows = [...rows, ...page.items.filter((r) => !seen.has(r.id))];
-      cursor = typeof page.next_cursor === "string" && page.next_cursor !== after ? page.next_cursor : ""; // a repeated cursor ends the list
-      loaded = true;
-      if (selected) selected = rows.find((r) => r.id === selected.id) || selected;
-    } catch (_) { if (now()) error = "불러오지 못했어요. 연결과 접근 권한을 확인하고 다시 불러와 주세요."; }
-    finally { if (now()) { busy = false; paintList(); } }
+  // how: "load" (first or next page), "retry", "refresh" (after a write: every loaded page again)
+  async function loadList(how = "refresh") {
+    const k = pageKey(), run = pager[how](k);
+    paintList();
+    await run.catch(() => {});
+    if (k !== pageKey()) return;
+    if (selected) selected = rows().find((r) => r.id === selected.id) || selected;
+    paintList();
   }
   function drawList() {
     if (!formHere()) {
@@ -121,12 +125,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
         box.append(icon("magnifying-glass"), input);
         const go = button("찾기", "small"); go.type = "submit";
         form.append(box, go);
-        form.addEventListener("submit", (e) => { e.preventDefault(); q = input.value.trim(); selected = null; void loadList(); });
+        form.addEventListener("submit", (e) => { e.preventDefault(); q = input.value.trim(); selected = null; void loadList("load"); });
         bar.append(form);
       } else if (human()) bar.append(button("규칙 추가", "primary small", null, () => { selected = null; editing = {}; paintList(); openDetail(); detail(); }));
       else bar.append(el("p", "meta", "규칙은 사람만 만들고 바꿀 수 있어요."));
       $("#chips").replaceChildren(bar);
-      if (!loaded && !busy) void loadList();
+      const s = page();
+      if (!s.ready && !s.loading && !s.error) void loadList("load");
     }
     paintList();
   }
@@ -140,17 +145,18 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   function paintList() {
     if (!active()) return;
-    const table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(busy));
+    const s = page(), table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(s.loading));
     const rules = tab === "rules";
     const empty = rules ? "아직 규칙이 없어요. 규칙을 적어 두면 AI가 답할 때 꼭 지켜요." : q ? "검색과 맞는 이름이 없어요." : "아직 모인 이름이 없어요. 승인된 기억에 사람·도구·프로젝트 이름이 나오면 여기에 모여요.";
-    const status = el("p", "meta original-notice", busy && !rows.length ? "불러오는 중…" : error || (loaded && !rows.length ? empty : ""));
+    const error = s.error ? "불러오지 못했어요. 연결과 접근 권한을 확인하고 다시 불러와 주세요." : "";
+    const status = el("p", "meta original-notice", s.loading && !s.items.length ? "불러오는 중…" : error || (s.ready && !s.items.length ? empty : ""));
     status.setAttribute("role", "status"); table.append(status);
-    for (const r of rows) {
+    for (const r of s.items) {
       table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, r.active ? "켜짐" : "꺼짐", !r.active)
         : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : "확인됨", r.proposed));
     }
-    if (error) table.append(button("다시 불러오기", "small", null, () => loadList()));
-    else if (cursor) table.append(button("더 보기", "small", null, () => loadList(true)));
+    if (error) table.append(button("다시 불러오기", "small", null, () => loadList("retry")));
+    else if (s.cursor) table.append(button("더 보기", "small", null, () => loadList("load")));
   }
 
   // ------------------------------------------------------------ 규칙 detail and form
@@ -167,7 +173,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       selected = keep && out?.id ? out : null; editing = null;
     } catch (e) { notice(ruleError(e)); }
     await loadList();
-    if (keep && id && !selected) selected = rows.find((r) => r.id === id) || null;
+    if (keep && id && !selected) selected = rows().find((r) => r.id === id) || null;
     detail();
   }
   const saveRule = (fields, prev) => writeRule(() => request(prev ? `/v1/directives/${encodeURIComponent(prev.id)}` : "/v1/directives",
@@ -198,8 +204,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const r = editing.id ? editing : null;
     body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
     const form = el("form", "insight-edit");
-    const title = el("input"); title.maxLength = 800; title.required = true; title.value = r?.title || ""; title.placeholder = "예: 배포 규칙";
-    const rule = el("textarea"); rule.maxLength = 16000; rule.rows = 5; rule.required = true; rule.value = r?.rule || ""; rule.placeholder = "예: 운영 서버에 올리기 전에는 꼭 사람에게 물어본다.";
+    const title = el("input"); title.maxLength = 200; title.required = true; title.value = r?.title || ""; title.placeholder = "예: 배포 규칙";
+    const rule = el("textarea"); rule.maxLength = 4000; rule.rows = 5; rule.required = true; rule.value = r?.rule || ""; rule.placeholder = "예: 운영 서버에 올리기 전에는 꼭 사람에게 물어본다.";
     const where = el("select");
     for (const [k, l] of Object.entries(APPLIES)) { const o = el("option", "", l); o.value = k; where.append(o); }
     where.value = r?.applies_to || "both";
@@ -225,7 +231,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     return { revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", access_denied: "이 계정은 이름을 고칠 수 없어요.", not_found: "이미 없어진 이름이에요." }[e?.message] || `처리하지 못했어요 (${e?.message})`;
   }
   async function editEntity(id, work, done, next) {
-    try { const out = await work(); notice(done); views.clear(); await loadList(); selected = rows.find((r) => r.id === (next === undefined ? out?.id || id : next)) || null; }
+    try { const out = await work(); notice(done); views.clear(); await loadList(); selected = rows().find((r) => r.id === (next === undefined ? out?.id || id : next)) || null; }
     catch (e) { notice(entityError(e)); views.delete(id); }
     detail();
   }
@@ -264,7 +270,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       const near = section("같이 나온 이름"), list = el("div", "insight-aliases");
       for (const r of v.related.slice(0, 12)) {
         const b = el("button", "chip"); b.type = "button"; b.append(raw(el("span", "", r.name)));
-        b.addEventListener("click", () => { selected = rows.find((x) => x.id === r.id) || { id: r.id, name: r.name, type: r.type, aliases: [] }; paintList(); detail(); });
+        b.addEventListener("click", () => { selected = rows().find((x) => x.id === r.id) || { id: r.id, name: r.name, type: r.type, aliases: [] }; paintList(); detail(); });
         list.append(b);
       }
       near.append(list); body.append(near);
@@ -281,7 +287,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     }));
     body.append(btns);
     const into = el("select");
-    for (const r of rows.filter((x) => x.id !== item.id)) { const o = el("option", "", r.name); o.value = r.id; into.append(o); }
+    for (const r of rows().filter((x) => x.id !== item.id)) { const o = el("option", "", r.name); o.value = r.id; into.append(o); }
     const merge = button("합치기", "small", null, async () => {
       if (!into.value || !await window.ask("두 이름을 하나로 합칠까요?\n이 이름이 나온 기억은 모두 고른 이름으로 옮겨지고, 이 이름은 다른 이름으로 남아요.", "합치기")) return;
       void editEntity(item.id, () => request(`/v1/entities/${encodeURIComponent(item.id)}/merge`, { method: "POST", body: JSON.stringify({ scope: state.scope, into: into.value }) }), "이름을 합쳤어요.", into.value);

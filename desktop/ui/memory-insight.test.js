@@ -9,6 +9,7 @@ const SCOPE = { workspace_id: "w", project_id: "p" };
 function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const { document, window } = dom.install();
   dom.Element.prototype.setCustomValidity = function (m) { this.validity = m; };
+  require("./memory-pages.js");
   delete require.cache[require.resolve("./memory-insight.js")];
   require("./memory-insight.js");
   const h = dom.helpers(document);
