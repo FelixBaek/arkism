@@ -25,6 +25,9 @@ type AuditMetadata struct {
 	Method      string `json:"method,omitempty" bson:"method,omitempty"`
 	DurationMS  int64  `json:"duration_ms,omitempty" bson:"duration_ms,omitempty"`
 	RequestBody string `json:"request_body,omitempty" bson:"request_body,omitempty"`
+	// ResponseStatus and ResponseBody are set on the response:<action> follow-up event (auditResponse).
+	ResponseStatus int    `json:"response_status,omitempty" bson:"response_status,omitempty"`
+	ResponseBody   string `json:"response_body,omitempty" bson:"response_body,omitempty"`
 }
 
 // Denial classes stored in audit_events. Verified policy denials keep the

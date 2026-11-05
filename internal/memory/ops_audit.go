@@ -24,6 +24,8 @@ type AuditEventView struct {
 	Route            string    `json:"route,omitempty"`
 	DurationMS       int64     `json:"duration_ms,omitempty"`
 	RequestBody      string    `json:"request_body,omitempty"`
+	ResponseStatus   int       `json:"response_status,omitempty"`
+	ResponseBody     string    `json:"response_body,omitempty"`
 	Mandatory        bool      `json:"mandatory"`
 	CreatedAt        time.Time `json:"created_at"`
 }
@@ -47,7 +49,7 @@ func viewAuditEvent(r Record) AuditEventView {
 	if a := r.Audit; a != nil {
 		v.Decision, v.ReasonCode, v.RequestID, v.PolicyDecisionID = opsText(a.Decision), opsText(a.ReasonCode), opsText(a.RequestID), opsText(a.PolicyDecisionID)
 		v.Transport, v.Method, v.Route, v.DurationMS = opsText(a.Transport), opsText(a.Method), opsText(a.Route), a.DurationMS
-		v.RequestBody = opsText(a.RequestBody)
+		v.RequestBody, v.ResponseStatus, v.ResponseBody = opsText(a.RequestBody), a.ResponseStatus, opsText(a.ResponseBody)
 	}
 	return v
 }
@@ -82,7 +84,7 @@ func (s *Service) ListAuditEvents(ctx context.Context, token string, in OpsListI
 	}
 	for _, r := range rows {
 		v := viewAuditEvent(r)
-		v.RequestBody = "" // read one event by id for its body
+		v.RequestBody, v.ResponseBody = "", "" // read one event by id for its bodies
 		out.Items = append(out.Items, v)
 	}
 	out.NextCursor = next

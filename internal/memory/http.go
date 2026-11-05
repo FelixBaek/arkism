@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -186,8 +187,10 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		requestID := ID()
 		w.Header().Set("X-Request-ID", requestID)
 		r = r.WithContext(ContextWithPostgresToken(withAuditRequest(context.WithValue(r.Context(), auditRequestKey{}, requestID), r, pattern, started), bearer(r)))
+		var capture *auditCapture
 		if s.AuditBodies {
-			r = captureAuditBody(r)
+			r, capture = captureAuditBody(r)
+			recorded.tee = &capture.response
 		}
 		r, sp := startServerSpan(r, pattern)
 		stats.inFlight.Add(1)
@@ -198,6 +201,9 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 				status = http.StatusOK
 			}
 			sp.endHTTP(status)
+			if capture != nil {
+				s.auditResponse(r.Context(), capture, status)
+			}
 			stats.observe(pattern, status, time.Since(started))
 			slog.Info("memory request", "status", status, "request_id", requestID, "method", r.Method, "route", pattern, "duration_ms", time.Since(started).Milliseconds())
 		}()
@@ -323,6 +329,7 @@ func errorResponse(e error) (string, int) {
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+	tee    *auditBody // ARKISM_AUDIT_BODIES: the first bytes of a JSON response
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -339,6 +346,11 @@ func (w *statusWriter) WriteHeader(status int) {
 func (w *statusWriter) Write(b []byte) (int, error) {
 	if w.status == 0 {
 		w.WriteHeader(http.StatusOK)
+	}
+	if w.tee != nil {
+		if media, _, _ := mime.ParseMediaType(w.Header().Get("Content-Type")); media == "application/json" {
+			_, _ = w.tee.Write(b)
+		}
 	}
 	return w.ResponseWriter.Write(b)
 }

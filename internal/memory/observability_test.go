@@ -270,7 +270,7 @@ func TestAuditBodyIsOptInRedactedAndCapped(t *testing.T) {
 	send := func(contentType, body string) context.Context {
 		req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(body))
 		req.Header.Set("Content-Type", contentType)
-		req = captureAuditBody(req.WithContext(withAuditRequest(testCtx, req, "POST /v1/x", time.Now())))
+		req, _ = captureAuditBody(req.WithContext(withAuditRequest(testCtx, req, "POST /v1/x", time.Now())))
 		if got, _ := io.ReadAll(req.Body); string(got) != body {
 			t.Fatal("the handler must read the body unchanged")
 		}
@@ -290,11 +290,72 @@ func TestAuditBodyIsOptInRedactedAndCapped(t *testing.T) {
 		t.Fatal("a non-JSON body was kept", b)
 	}
 	req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(`{}`))
-	if captureAuditBody(req).Context().Value(auditBodyKey{}) != nil {
+	if req, c := captureAuditBody(req); req.Body.(io.ReadCloser) == nil || c.request.text() != "" {
 		t.Fatal("a body without a JSON content type was captured")
 	}
 	if v := viewAuditEvent(auditRows(f, scopeA)["write:memories"]); v.RequestBody != body {
 		t.Fatal("the detail view drops the body", v.RequestBody)
+	}
+}
+
+func TestAuditResponseBodyIsAFollowUpEvent(t *testing.T) {
+	f := newFixture(t)
+	secret := "ghp_" + strings.Repeat("a1B2c3D4e5", 4)
+	req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(`{"q":1}`))
+	req.Header.Set("Content-Type", "application/json")
+	req, c := captureAuditBody(req.WithContext(withAuditRequest(context.WithValue(testCtx, auditRequestKey{}, "req-1"), req, "POST /v1/x", time.Now())))
+	_, _ = io.ReadAll(req.Body)
+	writeAudit(t, f, req.Context(), "write:memories", "search:memories")
+	w := &statusWriter{ResponseWriter: httptest.NewRecorder(), tee: &c.response}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_, _ = w.Write([]byte(`{"text":"ok <private>pin 1234</private> ` + secret + `","pad":"` + strings.Repeat("x", 5000) + `"}`))
+	f.svc.auditResponse(req.Context(), c, http.StatusCreated)
+	rows := auditRows(f, scopeA)
+	first, resp := rows["write:memories"], rows["response:write:memories"]
+	a := resp.Audit
+	if a == nil || a.ResponseStatus != http.StatusCreated || a.RequestBody != "" || a.RequestID != "req-1" || first.Audit.RequestID != "req-1" || resp.Target == nil || resp.Target.ID != first.ID {
+		t.Fatalf("response event %+v %+v", resp, a)
+	}
+	if !strings.Contains(a.ResponseBody, `"text":"ok`) || strings.Contains(a.ResponseBody, "pin 1234") || strings.Contains(a.ResponseBody, secret) || len(a.ResponseBody) > auditBodyBytes {
+		t.Fatalf("response body %q", a.ResponseBody)
+	}
+	if _, twice := rows["response:search:memories"]; twice || !auditMandatory(resp.Kind) {
+		t.Fatal("one response event per scope, always kept")
+	}
+	if v := viewAuditEvent(resp); v.ResponseBody != a.ResponseBody || v.ResponseStatus != http.StatusCreated {
+		t.Fatalf("view %+v", v)
+	}
+
+	// Through the HTTP handler: the response event follows the request's own events.
+	f.svc.AuditBodies = true
+	put := httptest.NewRequest(http.MethodPut, "/v1/spaces/"+scopeA.WorkspaceID+"/"+scopeA.ProjectID+"/config", strings.NewReader(`{"notes":"audited"}`)).WithContext(testCtx)
+	put.Header.Set("Authorization", "Bearer "+f.human)
+	put.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	Handler(f.svc).ServeHTTP(rec, put)
+	found := false
+	for kind, r := range auditRows(f, scopeA) {
+		if strings.HasPrefix(kind, "response:") && kind != "response:write:memories" {
+			found = r.Audit.ResponseStatus == rec.Code && strings.Contains(r.Audit.ResponseBody, "audited") && r.Audit.Route != ""
+		}
+	}
+	if !found {
+		t.Fatalf("no response event for the HTTP request (%d)", rec.Code)
+	}
+
+	// A non-JSON response keeps no body; a request that wrote no event writes no response event.
+	req2, c2 := captureAuditBody(httptest.NewRequest(http.MethodGet, "/v1/y", nil).WithContext(testCtx))
+	w2 := &statusWriter{ResponseWriter: httptest.NewRecorder(), tee: &c2.response}
+	w2.Header().Set("Content-Type", "text/plain")
+	_, _ = w2.Write([]byte("plain"))
+	if c2.response.text() != "" {
+		t.Fatal("a non-JSON response was kept")
+	}
+	before := len(auditRows(f, scopeA))
+	f.svc.auditResponse(req2.Context(), c2, http.StatusOK)
+	if len(auditRows(f, scopeA)) != before {
+		t.Fatal("a request without audit events wrote a response event")
 	}
 }
 

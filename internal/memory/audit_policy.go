@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"io"
+	"log/slog"
 	"mime"
 	"net/http"
 	"slices"
@@ -138,14 +139,69 @@ func auditMeta(ctx context.Context, role string, m AuditMetadata) *AuditMetadata
 	}
 	m.Route, m.Method = info.route, info.method
 	m.DurationMS = time.Since(info.start).Milliseconds()
-	if body, ok := ctx.Value(auditBodyKey{}).(*auditBody); ok {
-		m.RequestBody = body.text()
+	if c, ok := ctx.Value(auditBodyKey{}).(*auditCapture); ok && m.ResponseStatus == 0 {
+		m.RequestBody = c.request.text()
 	}
 	return &m
 }
 
-// auditBodyBytes caps how much of a request body an audit event keeps.
-const auditBodyBytes = 4 << 10
+const (
+	// auditBodyBytes caps how much of a request or response body an audit event keeps.
+	auditBodyBytes = 4 << 10
+	// auditResponseScopes caps the response events one request writes (one per audited scope).
+	auditResponseScopes = 8
+)
+
+// auditCapture is what ARKISM_AUDIT_BODIES keeps of one request: both bodies
+// and the allow events written for it, so the response, known only after the
+// handler, is stored as a follow-up event in each audited scope.
+type auditCapture struct {
+	request, response auditBody
+	mu                sync.Mutex
+	events            []auditWritten
+}
+
+type auditWritten struct {
+	scope             Scope
+	id, actor, action string
+}
+
+// noteAuditEvent remembers the first allow event of each scope this request wrote.
+func noteAuditEvent(ctx context.Context, scope Scope, id, actor, action string) {
+	c, ok := ctx.Value(auditBodyKey{}).(*auditCapture)
+	if !ok {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.events) < auditResponseScopes && !slices.ContainsFunc(c.events, func(e auditWritten) bool { return e.scope == scope }) {
+		c.events = append(c.events, auditWritten{scope: scope, id: id, actor: actor, action: action})
+	}
+}
+
+// auditResponse stores the response of a request that wrote allow events: one
+// response:<action> event per audited scope, pointing at the first event of that
+// scope, with the same request id, the status and the first auditBodyBytes of a
+// JSON response, redacted. A failed write is logged; the response is already sent.
+func (s *Service) auditResponse(ctx context.Context, c *auditCapture, status int) {
+	c.mu.Lock()
+	events := slices.Clone(c.events)
+	c.mu.Unlock()
+	if len(events) == 0 || s.Repo == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	body := c.response.text()
+	for _, e := range events {
+		now := time.Now().UTC()
+		r := Record{ID: ID(), Scope: e.scope, Kind: "response:" + e.action, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: e.actor,
+			Target: &Ref{ID: e.id}, Audit: auditMeta(ctx, "", AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow", ResponseStatus: status, ResponseBody: body})}
+		if err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error { return tx.Insert(ctx, "audit_events", r) }); err != nil {
+			slog.Warn("audit response event not stored", "error", captureErrorCode(err))
+		}
+	}
+}
 
 type auditBodyKey struct{}
 
@@ -170,18 +226,18 @@ func (a *auditBody) text() string {
 	return traceText(strings.ToValidUTF8(string(a.b), ""))
 }
 
-// captureAuditBody tees a JSON request body for audit events (ARKISM_AUDIT_BODIES).
-// Uploads and other media types are never kept.
-func captureAuditBody(r *http.Request) *http.Request {
+// captureAuditBody binds an auditCapture and tees a JSON request body into it
+// (ARKISM_AUDIT_BODIES). Uploads and other media types are never kept.
+func captureAuditBody(r *http.Request) (*http.Request, *auditCapture) {
+	c := &auditCapture{}
+	r = r.WithContext(context.WithValue(r.Context(), auditBodyKey{}, c))
 	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if r.Body == nil || r.Body == http.NoBody || media != "application/json" {
-		return r
+		return r, c
 	}
-	body := &auditBody{}
-	r = r.WithContext(context.WithValue(r.Context(), auditBodyKey{}, body))
 	r.Body = struct {
 		io.Reader
 		io.Closer
-	}{io.TeeReader(r.Body, body), r.Body}
-	return r
+	}{io.TeeReader(r.Body, &c.request), r.Body}
+	return r, c
 }

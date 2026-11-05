@@ -3938,7 +3938,7 @@
     "/v1/audit-events/{id}": {
       "get": {
         "summary": "Read one audit event (human read:audit_events)",
-        "description": "Redacted metadata. Bodies are not captured unless the server runs with ARKISM_AUDIT_BODIES=1; then request_body holds the first 4 KiB of the JSON request body, redacted. Response bodies are never captured.",
+        "description": "Redacted metadata. Bodies are not captured unless the server runs with ARKISM_AUDIT_BODIES=1; then request_body holds the first 4 KiB of the JSON request body, redacted, and a request that wrote events also writes one response:<action> event per audited scope (target: that scope's first event of the request, same request_id) with response_status and the first 4 KiB of a JSON response body, redacted.",
         "parameters": [
           {
             "in": "query",
@@ -4065,6 +4065,14 @@
                     "request_body": {
                       "type": "string",
                       "description": "First 4 KiB of the JSON request body with private spans and secret-looking text removed. Present only when the server runs with ARKISM_AUDIT_BODIES=1."
+                    },
+                    "response_status": {
+                      "type": "integer",
+                      "description": "HTTP status of the response; only on a response:<action> event (ARKISM_AUDIT_BODIES=1)."
+                    },
+                    "response_body": {
+                      "type": "string",
+                      "description": "First 4 KiB of a JSON response body with private spans and secret-looking text removed; only on a response:<action> event (ARKISM_AUDIT_BODIES=1)."
                     },
                     "mandatory": {
                       "type": "boolean",
@@ -62789,6 +62797,12 @@
             "type": "integer"
           },
           "request_body": {
+            "type": "string"
+          },
+          "response_status": {
+            "type": "integer"
+          },
+          "response_body": {
             "type": "string"
           }
         },

@@ -233,7 +233,7 @@ wiki. What a person approves and how is described in
    | `SKILL_LLM_PRESET` | `local`, `runner`, `proxy` or `gateway`: a known kind of server, so no endpoint is needed (see [Server model presets](#server-model-presets)). Unset by default |
    | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
    | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
-   | `ARKISM_AUDIT_BODIES` | `1` keeps the first 4 KiB of each JSON request body, redacted, on its audit events (see [Audit events](#audit-events)). Off by default |
+   | `ARKISM_AUDIT_BODIES` | `1` keeps the first 4 KiB of each JSON request body, redacted, on its audit events, and the response status and first 4 KiB of a JSON response in a `response:<action>` follow-up event (see [Audit events](#audit-events)). Off by default |
 
    Without it these routes answer `503 model_not_configured`; everything else
    keeps working. Calls share one daily cap and are recorded in the usage ledger.
@@ -883,9 +883,14 @@ raw URL or query) and `duration_ms`. Bodies are not captured by default.
 With `ARKISM_AUDIT_BODIES=1` an event written during a JSON request also keeps
 `request_body`: the first 4 KiB the handler read, with private spans and
 secret-looking text removed. Only `GET /v1/audit-events/{id}` returns it, not
-the list. Uploads and other media types are never kept, and response bodies
-are not kept (the event is written before the answer exists; model call
-traces keep answers with `ARKISM_LLM_TRACE_CONTENT=1`). A kept body is part of
+the list. Uploads and other media types are never kept. Events are written
+before the answer exists, so the answer goes in a follow-up: once the
+response is sent, a request that wrote events also writes one
+`response:<action>` event per audited scope (at most 8), with the same
+`request_id`, `target` set to that scope's first event of the request,
+`response_status` and `response_body` (the first 4 KiB of a JSON response,
+redacted the same way; other media types keep only the status). Model call
+traces keep model answers with `ARKISM_LLM_TRACE_CONTENT=1`. A kept body is part of
 the audit history: deleting a source does not erase it, it expires with
 `memoryd --audit-expiry` and travels in a space export that includes history.
 
