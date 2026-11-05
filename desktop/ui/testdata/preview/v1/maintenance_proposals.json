@@ -51,6 +51,18 @@
     },
     "reason": "자주 어겨요"
    }
+  },
+  {
+   "id": "mp-path",
+   "revision": 1,
+   "maintenance": {
+    "type": "invalidation",
+    "reason": "path_missing",
+    "memory": {
+     "id": "m3",
+     "revision": 1
+    }
+   }
   }
  ]
 }

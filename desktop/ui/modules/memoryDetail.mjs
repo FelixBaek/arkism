@@ -1,3 +1,5 @@
+import { timelineEntries, timelineList } from "./memoryTimeline.mjs";
+import { memoryLabels, labelLine } from "./memoryLabels.mjs";
 // Owns memory details and capture. Dependencies are explicit live ports, never a global scope.
 export function createMemoryDetail(deps) {
 
@@ -5,6 +7,8 @@ export function createMemoryDetail(deps) {
     const body = deps.detailShell("기억");
     const u = deps.usageOf(m.id), s = deps.memStat(m.id);
     deps.detailHead(body, deps.kindLabel(m.kind), m.text, `${deps.originOf(m)} · ${deps.shortDate(m.created_at)} 저장 · ${deps.memRepo(m) ? `${deps.memRepo(m).split("/").pop()} 저장소에서만` : "모든 에이전트"}`);
+    const labels = labelLine(memoryLabels(m, { maintenance: deps.state.data?.maintenance }), deps);
+    if (labels) body.append(labels);
     const contextPanel = deps.renderMemoryContext(m);
     if (contextPanel) body.append(contextPanel);
     const modelPanel = deps.renderModelGeneration(m);
@@ -87,14 +91,18 @@ export function createMemoryDetail(deps) {
     body.append(management);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...deps.state.scope },
       request: deps.request, el: deps.el, section: deps.section, facts: deps.facts, button: deps.button });
-    // 변경 이력 N건 › (folded) · 이전으로 되돌리기 (Figma 198:630): the lineage walk fills both once it answers.
+    // 변경 이력 N건 › (folded) · 이전으로 되돌리기 (Figma 198:630): a dated timeline (memoryTimeline.mjs) the lineage walk fills once it answers.
+    // A correction waiting on this memory goes on top, open, so the reader sees it before the older revisions.
+    const pending = m.conflict_id ? [...(deps.state.data?.conflicted || []), ...(deps.state.data?.candidates || [])].find((c) => c.conflict_id === m.conflict_id) || null : null;
     const hist = deps.el("details", "d-history");
-    const histHead = deps.el("summary", "", "변경 이력 1건");
-    const list = deps.el("ul", "plain history");
-    list.append(historyItem(m.created_at, "저장", deps.tr(deps.withAgent(m))));
+    const drawHistory = (lineage) => {
+      const rows = timelineEntries(m, lineage, pending);
+      hist.replaceChildren(deps.el("summary", "", `변경 이력 ${rows.length}건`), timelineList(rows, deps));
+      if (pending) hist.open = true;
+    };
+    drawHistory(null);
     const histRow = deps.el("div", "d-history-row");
     histRow.append(hist);
-    hist.append(histHead, list);
     body.append(histRow);
     body.append(...deps.privacy.memorySections(m));
     const g = deps.generation;
@@ -112,12 +120,7 @@ export function createMemoryDetail(deps) {
       for (const l of causal) { const li = deps.el("li"); li.append(deps.el("strong", "", CAUSE[l.relation]), " ", deps.raw(deps.el("span", "", `“${l.record.text}”`))); ul.append(li); }
       sec.append(ul); body.insertBefore(sec, histRow);
     }
-    for (const link of lineage?.links || []) {
-      if (link.relation === "proposal" || CAUSE[link.relation]) continue;
-      const label = { supersedes: "옛 기억을 대체함", superseded_by: "새 기억으로 바뀜", conflict: "다른 기억과 부딪힘" }[link.relation] || link.relation;
-      list.prepend(historyItem(link.record?.updated_at || link.record?.created_at, label, link.record?.text ? `“${link.record.text}”` : ""));
-    }
-    histHead.textContent = `변경 이력 ${list.children.length}건`;
+    drawHistory(lineage);
     // The newest memory this one replaced; going back saves its sentence again the same way 고치기 does.
     const prev = (lineage?.links || []).filter((l) => l.relation === "supersedes" && l.record?.text)
       .sort((a, b) => new Date(b.record.updated_at || b.record.created_at || 0) - new Date(a.record.updated_at || a.record.created_at || 0))[0];
@@ -243,15 +246,6 @@ export function createMemoryDetail(deps) {
     dlg.showModal();
   }
 
-  function historyItem(when, title, desc) {
-    const li = deps.el("li", "");
-    const t = deps.el("time", "", deps.shortDate(when));
-    const c = deps.el("div", "");
-    c.append(deps.el("strong", "", title), deps.raw(deps.el("span", "", desc || ""))); // desc: 스킬 설명·기억 본문 같은 데이터
-    li.append(t, c);
-    return li;
-  }
-
   // Figma 198:716 (새 후보) · 198:1748 (헷갈림): kind · title · meta → action card → 어디서 왔나요 → 자동 저장 규칙.
   async function candidateDetail(c) {
     const body = deps.detailShell("새 기억 확인");
@@ -321,6 +315,8 @@ export function createMemoryDetail(deps) {
       return;
     }
     deps.detailHead(body, `${deps.kindLabel(c.kind)} · 새 기억`, c.text, `${deps.withAgent(c)}에서 뽑음 · ${deps.ago(c.created_at)}`);
+    const labels = labelLine(memoryLabels(c), deps);
+    if (labels) body.append(labels);
     const text = instructionLike ? "AI에게 명령하는 문장처럼 보여요. 저장하면 다른 에이전트가 이 말을 따를 수 있어요."
       : `${why ? why + ". " : ""}저장하면 모든 에이전트가 자료로 써요.`;
     if (canDecide) {

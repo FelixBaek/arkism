@@ -1,3 +1,38 @@
 {
- "links": []
+ "links": [
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m1-old",
+    "text": "Orbit 백엔드는 Postgres와 별도 검색 엔진을 함께 쓴다.",
+    "kind": "decision",
+    "status": "superseded",
+    "revision": 2,
+    "memory_context": {
+     "valid_from": "2026-08-02T09:00:00Z"
+    },
+    "review": {
+     "by": "management:owner",
+     "action": "approve"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s2"
+     }
+    ]
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m1-first",
+    "text": "Orbit 백엔드 저장소는 아직 정하지 않았다.",
+    "kind": "decision",
+    "status": "superseded",
+    "revision": 1,
+    "effective_at": "2026-06-20T09:00:00Z"
+   }
+  }
+ ]
 }

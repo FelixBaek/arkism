@@ -1,0 +1,25 @@
+{
+ "as_of": "2026-11-01T00:00:00Z",
+ "authority": "data_only_untrusted",
+ "next_cursor": "",
+ "unknown": [],
+ "items": [
+  {
+   "id": "m1",
+   "text": "Orbit 백엔드는 Postgres와 별도 검색 엔진을 함께 쓴다.",
+   "kind": "decision",
+   "observed_at": "2026-08-02T09:00:00Z",
+   "historical_revision": 2,
+   "current_revision": 3,
+   "effective_at": "2026-08-02T09:00:00Z"
+  },
+  {
+   "id": "m2",
+   "text": "Orbit PR은 설명을 짧게 쓰고, 리뷰 승인 한 번이면 병합한다.",
+   "kind": "procedural",
+   "observed_at": "2026-07-14T09:00:00Z",
+   "historical_revision": 1,
+   "current_revision": 1
+  }
+ ]
+}

@@ -5,7 +5,8 @@ export function createRemoteCollection({ state, read, createPager }) {
   const pager = createPager(async (key, page) => {
     const { filters } = JSON.parse(key);
     const result = await read(filters, page);
-    if (!Number.isSafeInteger(result?.total) || result.total < 0) throw Error("catalog_page_invalid");
+    // total null: a page that cannot count (a past day read from history); anything else must be a count
+    if (result?.total !== null && (!Number.isSafeInteger(result?.total) || result.total < 0)) throw Error("catalog_page_invalid");
     return { ...result, metadata: { total: result.total, facets: result.facets || {} } };
   });
   const keyOf = filters => JSON.stringify({ server: state.server, scope: state.scope, generation: state.connection.generation, filters });

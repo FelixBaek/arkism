@@ -478,6 +478,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const card = el("div", "insight-ask");
     card.append(searchSummary(), ...laneLists());
     table.append(card);
+    const pending = window.ArkismMemoryLabels?.provisionalBlock(answer, { el, raw }); // pending candidates the answer carries apart
+    if (pending) table.append(pending);
     items.forEach((h, i) => table.append(listRow(h, h.text || h.summary || h.id, hitMeta(h), score(h.explain?.rerank_score ?? h.score) || `${i + 1}위`)));
     const box = el("div", "insight-ask");
     box.append(more(...jsonView({ request: sent, response: answer })));

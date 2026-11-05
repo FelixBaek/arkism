@@ -1,6 +1,8 @@
 // @ts-check
 // Server-wide management filtering and ordering. The client retains only opened
 // result pages; query/scope changes discard late replies and old cursors.
+import { endOfDay, validPage } from "./memoryTimeline.mjs";
+export { endOfDay };
 const paths = { memories: "/v1/memories/query", candidates: "/v1/memory_candidates/query", conflicted: "/v1/memory_candidates/query", skills: "/v1/skills/query", skillTrash: "/v1/skills/query" };
 export function createCatalogQuery({ state, request, createPager, preferences, render }) {
   const entries = new Map(); let picked = null;
@@ -8,6 +10,8 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
   function spec(name) {
     const base = { scope: state.scope, q: state.query || "" };
     if (["skills", "skillTrash"].includes(name)) return { ...base, state: name === "skillTrash" ? "trash" : state.skillTab, sort: state.skillSort, direction: state.skillDir || 0, model: state.skillModel, category: state.skillCat, categories: preferences().categories.map(({ id, rules }) => ({ id, rules })), agents: preferences().agents };
+    // 시점: which memories were true on that day, as recorded when it was picked (POST /v1/memories/at)
+    if (name === "memories" && state.memTab === "active" && state.validAt) return { scope: state.scope, q: base.q, kind: state.kind === "all" ? "" : state.kind, as_of: state.validAsOf, valid_at: endOfDay(state.validAt) };
     return { ...base, state: name === "candidates" ? "candidate" : name === "conflicted" ? "conflicted" : ["idle", "provenance", "removed"].includes(state.memTab) ? state.memTab : "active", kind: state.kind === "all" ? "" : state.kind, repository: state.repo || "", sort: name === "candidates" ? "risk" : name === "conflicted" ? "recent" : state.sort, kept_ids: preferences().kept, collect_unused: preferences().collectUnused };
   }
   const key = name => JSON.stringify({ identity: identity(), body: spec(name) });
@@ -16,6 +20,7 @@ export function createCatalogQuery({ state, request, createPager, preferences, r
       const value = {};
       value.pager = createPager(async (serialized, page) => {
         const { body } = JSON.parse(serialized);
+        if (body.valid_at) return validPage(await request("/v1/memories/at", { method: "POST", body: JSON.stringify({ ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }) }));
         const result = await request(paths[name], { method: "POST", body: JSON.stringify({ ...body, limit: page.limit, ...(page.cursor ? { cursor: page.cursor } : {}) }) });
         if (!Number.isSafeInteger(result?.total) || result.total < 0 || !result.facets || typeof result.next_cursor !== "string") throw Error("catalog_page_invalid");
         const pageResult = { ...result, metadata: { total: result.total, facets: result.facets } };

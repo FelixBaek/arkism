@@ -15,9 +15,32 @@
    "updated_at": "2026-10-13T11:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude_code:session_01JX8K2M2QWERTY"
+    "event_id:claude_code:session_01JX8K2M2QWERTY",
+    "rule:always",
+    "decision_status:confirmed"
    ],
-   "created_by_type": "agent"
+   "created_by_type": "agent",
+   "memory_context": {
+    "valid_from": "2026-10-13T11:16:34Z"
+   },
+   "approved_by": "management:owner",
+   "sources": [
+    {
+     "type": "session",
+     "ref": "claude_code:session_01JX8K2M2QWERTY"
+    },
+    {
+     "type": "file",
+     "ref": "docs/adr/0003-postgres.md"
+    }
+   ],
+   "entity_relations": [
+    {
+     "source": "Orbit",
+     "relation": "uses",
+     "target": "Postgres"
+    }
+   ]
   },
   {
    "id": "m2",
@@ -34,7 +57,8 @@
    "updated_at": "2026-10-13T10:16:34.299802Z",
    "tags": [
     "basis:explicit_user",
-    "event_id:claude_code:session_01JX8K2M2QWERTY"
+    "event_id:claude_code:session_01JX8K2M2QWERTY",
+    "temporary"
    ],
    "created_by_type": "agent"
   },
@@ -81,7 +105,8 @@
     "from": "2026-10-03T00:00:00+09:00",
     "to": "2026-10-04T00:00:00+09:00",
     "phrase": "10월 3일"
-   }
+   },
+   "conflict_id": "r1"
   },
   {
    "id": "m5",

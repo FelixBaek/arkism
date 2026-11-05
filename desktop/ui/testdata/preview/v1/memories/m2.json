@@ -13,7 +13,8 @@
  "updated_at": "2026-10-13T10:16:34.299802Z",
  "tags": [
   "basis:explicit_user",
-  "event_id:claude-code:s1"
+  "event_id:claude-code:s1",
+  "temporary"
  ],
  "created_by_type": "agent"
 }

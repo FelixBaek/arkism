@@ -148,10 +148,10 @@
     async function recall(text) {
       const body = { scope: state.scope, query: head(head(text, 2000), 1000), modes: ["exact", "fts", "vector"], purpose: "answer", destination: "internal", limit: 6, max_chars: 6000 };
       try {
-        return (await request("/v1/search", { method: "POST", body: JSON.stringify(body) }))?.items || [];
+        return await request("/v1/search", { method: "POST", body: JSON.stringify(body) }) || {};
       } catch (e) {
         if (!String(e.message).includes("503") && !String(e.message).includes("unavailable")) throw e;
-        return (await request("/v1/search", { method: "POST", body: JSON.stringify({ ...body, modes: ["exact", "fts"] }) }))?.items || [];
+        return await request("/v1/search", { method: "POST", body: JSON.stringify({ ...body, modes: ["exact", "fts"] }) }) || {};
       }
     }
     async function loadSession() {
@@ -170,7 +170,8 @@
       if (len(clean) < 8) { prompt = { text: "", chars: 0, included: [], short: true }; paint(); return; }
       const t = loads.begin(); busy = "prompt"; error = ""; paint();
       try {
-        const res = promptPreview(await recall(clean), repo);
+        const page = await recall(clean);
+        const res = { ...promptPreview(Array.isArray(page.items) ? page.items : [], repo), page }; // page: the provisional candidates are drawn beside the preview
         res.count = await countTokens(res.text).catch(() => null);
         if (!t.live()) return;
         prompt = res;
@@ -253,6 +254,8 @@
       else if (prompt) {
         s.append(el("p", "meta", prompt.text ? tokenLine(prompt.count, prompt.chars) : "이 질문에는 더 들어가는 기억이 없어요."));
         if (prompt.text) s.append(codeBox("UserPromptSubmit", prompt.text));
+        const pending = window.ArkismMemoryLabels?.provisionalBlock(prompt.page, { el, raw });
+        if (pending) s.append(pending);
       }
       s.append(el("p", "meta", "실제 검색을 한 번 해요. 이 검색도 서버의 검색 기록에 남아요."));
       return s;

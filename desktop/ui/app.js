@@ -16,6 +16,10 @@ import { createImageViews } from "./modules/imageViews.mjs";
 import { createDesignViews } from "./modules/designViews.mjs";
 import { createToolViews } from "./modules/toolViews.mjs";
 import { createMemoryDetail } from "./modules/memoryDetail.mjs";
+import { memoryLabels, labelLine, provisionalBlock } from "./modules/memoryLabels.mjs";
+window.ArkismMemoryLabels = { memoryLabels, labelLine, provisionalBlock };
+import { whenPick, validPage, endOfDay } from "./modules/memoryTimeline.mjs";
+window.ArkismMemoryTimeline = { whenPick, validPage, endOfDay }; // the Memory window (overview-windows.js) offers the same 시점 // the classic-script windows (overview-windows.js) draw the same labels
 import { createAppConnection } from "./modules/appConnection.mjs";
 import { isWebMode } from "./modules/webMode.mjs";
 export function startApp() {
@@ -49,6 +53,8 @@ export function startApp() {
     repo: "",
     sort: "recent",
     query: "",
+    validAt: "", // 시점 on the memory list: a YYYY-MM-DD day, "" = now
+    validAsOf: "", // when that day was picked; fixed so the server cursor stays bound to it
     selected: null,
     data: emptyData(),
     crewCat: "all",
@@ -1079,6 +1085,8 @@ export function startApp() {
       const pick = el("div", "sim-pick");
       for (const [v, label] of [[true, "저장"], [false, "버리기"]]) { const b = button(label, `small${on === v ? " primary" : " ghost"}`, null, () => { keep.set(c.id, v); paintAll(); }); b.setAttribute("aria-pressed", String(on === v)); pick.append(b); }
       card.append(raw(text), el("small", "dim", [kindLabel(c.kind), shortDate(c.created_at), riskLabel(c), suspect ? "지시처럼 보이는 문장" : "", isRule(c) ? "규칙 — 승인하면 매 세션 맨 앞 지시가 됨" : ""].filter(Boolean).join(" · ")));
+      const labels = labelLine(memoryLabels(c, { maintenance: state.data.maintenance }), { el }); // 정정 검토 중 · 이번만 · 결정 · 관계: what saving it means
+      if (labels) card.append(labels);
       if (open && c.classification.risk_reasons?.length) card.append(el("small", "dim", c.classification.risk_reasons.join(" · ")));
       card.append(pick);
       return card;
@@ -1760,6 +1768,7 @@ export function startApp() {
   const ver = (v) => (/^\d/.test(v || "") ? `v${v}` : v || "");
   const memoryList = createMemoryList({
     get memory() { return state.screens.memory; },
+    get shortDate() { return shortDate; },
     get openMemoryAdd() { return memoryDetail.openMemoryAdd; },
     get listCount() { return listCount; },
     get idleCount() { return idleCount; },

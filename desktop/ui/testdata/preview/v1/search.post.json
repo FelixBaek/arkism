@@ -209,5 +209,23 @@
    },
    "score": 0.47
   }
- ]
+ ],
+ "provisional": [
+  {
+   "id": "c3",
+   "collection": "memory_candidates",
+   "kind": "lesson",
+   "status": "candidate",
+   "origin": "provisional",
+   "text": "배포 전 체크리스트는 이번 주만 결제 흐름을 두 번 확인한다.",
+   "tags": [
+    "temporary"
+   ],
+   "reasons": [
+    "provisional"
+   ],
+   "authority": "data_only_untrusted"
+  }
+ ],
+ "provisional_notice": "승인 전 후보입니다. 확정된 기억이 아니며 사람이 검토하기 전입니다."
 }

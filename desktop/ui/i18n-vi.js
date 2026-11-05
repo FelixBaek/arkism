@@ -1013,7 +1013,6 @@
  "기록 지우기": "Xóa nhật ký",
  "속도 기록을 지웠어요.": "Đã xóa nhật ký tốc độ.",
  "바뀐 이력": "Lịch sử thay đổi",
- "옛 기억을 대체함": "Đã thay thế ký ức cũ",
  "새 기억으로 바뀜": "Đã được thay bằng ký ức mới",
  "다른 기억과 부딪힘": "Mâu thuẫn với ký ức khác",
  "이 계정은 기억을 지울 수 없어요.": "Tài khoản này không thể xóa ký ức.",
@@ -2889,7 +2888,6 @@
  "프로그램 실행": "Chạy chương trình",
  "영문·숫자·@._/- · 최대 128자": "Chữ cái, chữ số, @._/- · tối đa 128 ký tự",
  "대화를 시작할 때마다 들어가서 따로 세지 않아요": "Được thêm vào mỗi khi bắt đầu cuộc trò chuyện nên không tính riêng",
- "변경 이력 1건": "1 thay đổi trong lịch sử",
  "수동 실행": "Chạy thủ công",
  "단계 하나로 시작해요.": "Bắt đầu với một bước.",
  "규칙 검사": "Kiểm tra quy tắc",
@@ -6150,7 +6148,25 @@
  "이 작업 공간의 공간": "Các không gian trong không gian làm việc này",
  "기억이 있거나 설정을 저장한 공간이에요. 쓰는 공간은 설정 › 연결에서 바꿔요.": "Là các không gian có ký ức hoặc đã lưu cài đặt. Đổi không gian đang dùng ở Cài đặt › Kết nối.",
  "아직 공간이 없어요.": "Chưa có không gian nào.",
- "지금 공간": "Không gian hiện tại"
+ "지금 공간": "Không gian hiện tại",
+ "결정: 제안": "Quyết định: đề xuất",
+ "결정: 확정": "Quyết định: đã xác nhận",
+ "결정: 취소": "Quyết định: đã hủy",
+ "임시 · 승인 전": "Tạm thời · chưa duyệt",
+ "정정 검토 중": "Đang xem xét chỉnh sửa",
+ "이번만 · 7일 뒤 만료": "Chỉ lần này · hết hạn sau 7 ngày",
+ "규칙: 항상": "Quy tắc: luôn luôn",
+ "규칙: 하지 않기": "Quy tắc: không bao giờ",
+ "파일 경로 없음": "Thiếu đường dẫn tệp",
+ "승인 전 후보 · 확정된 기억이 아니에요": "Ứng viên chưa duyệt · không phải ký ức đã xác nhận",
+ "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "Nội dung đúng vào ngày đã chọn. Nhấn để mở nội dung hiện tại.",
+ "시점": "Thời điểm",
+ "이 날 맞던 기억만 보기. 비우면 지금": "Chỉ hiện ký ức đúng vào ngày này. Để trống là hiện tại",
+ "지금 내용": "Nội dung hiện tại",
+ "이전 내용": "Nội dung trước",
+ "새 내용으로 바뀜": "Đã thay bằng nội dung mới",
+ "승인 전": "Chưa duyệt",
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "Nội dung hiện tại vẫn được dùng cho đến khi có người chọn"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7391,6 +7407,8 @@
  "{0} 대표로": "Đặt {0} làm chính",
  "이 공간을 ‘{0}’에 복제할까요?\n복제한 기억은 그 공간의 '확인해 주세요'에 후보로 들어가요.": "Sao chép không gian này sang ‘{0}’ nhé?\nCác ký ức được sao chép sẽ vào mục 'Cần bạn xác nhận' của không gian đó dưới dạng ứng viên.",
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Đã thêm {1} ứng viên vào ‘{0}’. Hãy chuyển sang không gian đó rồi duyệt trong 'Cần bạn xác nhận'.",
- "· 기억 {0}개": "· {0} ký ức"
+ "· 기억 {0}개": "· {0} ký ức",
+ "관계 {0}개": "{0} quan hệ",
+ "근거 {0}개": "{0} nguồn"
  }
 };

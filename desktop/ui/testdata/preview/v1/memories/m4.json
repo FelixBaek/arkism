@@ -17,5 +17,6 @@
  "created_by_type": "agent",
  "generator": {
   "prompt_version": "session-reflect-v2"
- }
+ },
+ "conflict_id": "r1"
 }

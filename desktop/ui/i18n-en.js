@@ -1014,7 +1014,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "기록 지우기": "Clear log",
   "속도 기록을 지웠어요.": "Cleared the speed log.",
   "바뀐 이력": "Change history",
-  "옛 기억을 대체함": "Replaced an older memory",
   "새 기억으로 바뀜": "Replaced by a newer memory",
   "다른 기억과 부딪힘": "Conflicts with another memory",
   "이 계정은 기억을 지울 수 없어요.": "This account can't delete memories.",
@@ -2880,7 +2879,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "프로그램 실행": "Run a program",
   "영문·숫자·@._/- · 최대 128자": "Letters, digits, @._/- · up to 128 characters",
   "대화를 시작할 때마다 들어가서 따로 세지 않아요": "Included at the start of every conversation, so it isn't counted separately",
-  "변경 이력 1건": "1 change in history",
   "수동 실행": "Manual run",
   "단계 하나로 시작해요.": "Starts with a single step.",
   "규칙 검사": "Rule check",
@@ -7380,3 +7378,25 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "이 공간을 ‘{0}’에 복제할까요?\n복제한 기억은 그 공간의 '확인해 주세요'에 후보로 들어가요.": "Copy this space to ‘{0}’?\nCopied memories go into that space's 'Please check' as candidates.",
   "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Added {1} candidates to ‘{0}’. Switch to that space and approve them in 'Please check'.",
   "· 기억 {0}개": "· {0} memories" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "결정: 제안": "Decision: proposed",
+  "결정: 확정": "Decision: confirmed",
+  "결정: 취소": "Decision: dropped",
+  "임시 · 승인 전": "Provisional · not approved",
+  "정정 검토 중": "Correction under review",
+  "이번만 · 7일 뒤 만료": "This time only · expires in 7 days",
+  "규칙: 항상": "Rule: always",
+  "규칙: 하지 않기": "Rule: never",
+  "파일 경로 없음": "File path missing",
+  "승인 전 후보 · 확정된 기억이 아니에요": "Unapproved candidates · not confirmed memories",
+  "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "What held on the chosen day. Click to open the current version.",
+  "시점": "As of",
+  "이 날 맞던 기억만 보기. 비우면 지금": "Show only memories that held on this day. Leave empty for now",
+  "지금 내용": "Current",
+  "이전 내용": "Previous",
+  "새 내용으로 바뀜": "Replaced by newer",
+  "승인 전": "Not approved",
+  "사람이 고르기 전까지 지금 내용을 계속 써요": "The current version stays in use until a person chooses" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "관계 {0}개": "{0} relations",
+  "근거 {0}개": "{0} sources" });

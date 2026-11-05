@@ -1013,7 +1013,6 @@
  "기록 지우기": "Borrar registro",
  "속도 기록을 지웠어요.": "Se borró el registro de velocidad.",
  "바뀐 이력": "Historial de cambios",
- "옛 기억을 대체함": "Reemplazó a un recuerdo anterior",
  "새 기억으로 바뀜": "Fue reemplazado por un recuerdo nuevo",
  "다른 기억과 부딪힘": "Choca con otro recuerdo",
  "이 계정은 기억을 지울 수 없어요.": "Esta cuenta no puede borrar recuerdos.",
@@ -2889,7 +2888,6 @@
  "프로그램 실행": "Ejecutar un programa",
  "영문·숫자·@._/- · 최대 128자": "Letras, números, @._/- · hasta 128 caracteres",
  "대화를 시작할 때마다 들어가서 따로 세지 않아요": "Se incluye al inicio de cada conversación, por eso no se cuenta aparte",
- "변경 이력 1건": "1 cambio en el historial",
  "수동 실행": "Ejecución manual",
  "단계 하나로 시작해요.": "Empieza con un solo paso.",
  "규칙 검사": "Revisión de reglas",
@@ -6151,7 +6149,25 @@
  "이 작업 공간의 공간": "Espacios de este espacio de trabajo",
  "기억이 있거나 설정을 저장한 공간이에요. 쓰는 공간은 설정 › 연결에서 바꿔요.": "Son espacios que tienen recuerdos o ajustes guardados. El espacio que usas se cambia en Ajustes › Conexión.",
  "아직 공간이 없어요.": "Aún no hay espacios.",
- "지금 공간": "Espacio actual"
+ "지금 공간": "Espacio actual",
+ "결정: 제안": "Decisión: propuesta",
+ "결정: 확정": "Decisión: confirmada",
+ "결정: 취소": "Decisión: descartada",
+ "임시 · 승인 전": "Provisional · sin aprobar",
+ "정정 검토 중": "Corrección en revisión",
+ "이번만 · 7일 뒤 만료": "Solo esta vez · caduca en 7 días",
+ "규칙: 항상": "Regla: siempre",
+ "규칙: 하지 않기": "Regla: nunca",
+ "파일 경로 없음": "Falta la ruta del archivo",
+ "승인 전 후보 · 확정된 기억이 아니에요": "Candidatos sin aprobar · no son recuerdos confirmados",
+ "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "Lo que valía el día elegido. Haz clic para abrir la versión actual.",
+ "시점": "Fecha",
+ "이 날 맞던 기억만 보기. 비우면 지금": "Mostrar solo los recuerdos válidos ese día. Vacío = ahora",
+ "지금 내용": "Actual",
+ "이전 내용": "Anterior",
+ "새 내용으로 바뀜": "Reemplazado por uno nuevo",
+ "승인 전": "Sin aprobar",
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "La versión actual se sigue usando hasta que una persona elija"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -7392,6 +7408,8 @@
  "{0} 대표로": "Hacer {0} principal",
  "이 공간을 ‘{0}’에 복제할까요?\n복제한 기억은 그 공간의 '확인해 주세요'에 후보로 들어가요.": "¿Copiar este espacio en ‘{0}’?\nLos recuerdos copiados irán como candidatos a 'Revisa esto' de ese espacio.",
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Se agregaron {1} candidatos a ‘{0}’. Cambia a ese espacio y apruébalos en 'Revisa esto'.",
- "· 기억 {0}개": "· {0} recuerdos"
+ "· 기억 {0}개": "· {0} recuerdos",
+ "관계 {0}개": "{0} relaciones",
+ "근거 {0}개": "{0} fuentes"
  }
 };

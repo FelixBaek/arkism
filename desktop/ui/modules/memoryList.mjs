@@ -1,6 +1,8 @@
 // @ts-check
 import { candidateGroup } from "./candidateGroups.mjs";
 import { collectionFooter, serverCount } from "./collectionPaging.mjs";
+import { memoryLabels, labelLine } from "./memoryLabels.mjs";
+import { whenPick as pickDay } from "./memoryTimeline.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.
 export function createMemoryList(deps) {
 
@@ -88,9 +90,13 @@ export function createMemoryList(deps) {
     return badge(`${u.d30}번 참고`);
   }
 
+  // labels (memoryLabels.mjs) lead the meta line in accent text: 정정 검토 중 · 규칙 · 이번만 · 결정 · 관계 · 파일 경로 없음
   function memCell(m, meta) {
-    const cell = deps.el("div", "cell mem-cell");
-    cell.append(deps.raw(deps.el("div", "text", m.text)), deps.el("div", "mem-meta", meta.filter(Boolean).join(" · ")));
+    const cell = deps.el("div", "cell mem-cell"), line = deps.el("div", "mem-meta");
+    const labels = labelLine(memoryLabels(m, { maintenance: deps.state.data.maintenance }), deps);
+    if (labels) line.append(labels);
+    line.append(meta.filter(Boolean).join(" · "));
+    cell.append(deps.raw(deps.el("div", "text", m.text)), line);
     return cell;
   }
 
@@ -129,17 +135,17 @@ export function createMemoryList(deps) {
       card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", firstCheck())));
       top.push(card);
     }
-    const tools = deps.el("div", "mem-tools");
-    tools.append(memSearch());
+    const tools = deps.el("div", "mem-tools"), past = !!deps.memory.validAt;
+    tools.append(memSearch(), whenPick());
     const facetRepos = deps.catalogQuery.snapshot("memories").facets.repositories || {};
     const repos = [...new Set([...Object.keys(facetRepos).filter(Boolean), ...(deps.memory.repo && deps.memory.repo !== "shared" ? [deps.memory.repo] : [])])].sort((a, b) => a.localeCompare(b));
     // Keep a chosen repository while the next server page is loading.
-    if (repos.length) {
+    if (repos.length && !past) { // a past day is read from the record history, which has no repository or order choice
       const shared = facetRepos[""] || 0;
       tools.append(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
         deps.memory.repo || "", (v) => { deps.memory.repo = v; deps.render(false); }));
     }
-    tools.append(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
+    if (!past) tools.append(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
     tools.append(deps.inject.button());
     if (deps.state.caps?.actions?.review_decide) tools.append(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
     tools.append(deps.button("기억 추가", "primary small", null, deps.openMemoryAdd)); // in the toolbar, not alone above the panel
@@ -162,7 +168,9 @@ export function createMemoryList(deps) {
     const items = source; // Already filtered and ordered across the server catalog.
     const tpl = "minmax(0,1fr) auto";
     const shown = memPage(items);
-    drawRows(shown, (m) => deps.row(m.id, tpl, [memCell(m, [deps.kindLabel(m.kind), deps.originOf(m), deps.ago(m.created_at), deps.memRepo(m).split("/").pop()]), memBadge(m)], deps.renderDetail));
+    drawRows(shown, (m) => past
+      ? deps.row(m.id, tpl, [memCell(m, [deps.kindLabel(m.kind), deps.shortDate(m.created_at)]), deps.el("span")], () => openCurrent(m.id))
+      : deps.row(m.id, tpl, [memCell(m, [deps.kindLabel(m.kind), deps.originOf(m), deps.ago(m.created_at), deps.memRepo(m).split("/").pop()]), memBadge(m)], deps.renderDetail));
     // a failed or loading list says so in #stats; only a list that answered empty is a fresh start
     if (!items.length && !snap.error && !snap.loading) deps.$("#table").append(deps.memory.query || (deps.memory.kind && deps.memory.kind !== "all") || deps.memory.repo ? deps.el("div", "empty", "검색과 맞는 기억이 없어요.") : emptyMemories());
     else if (!items.length && deps.memory.query) deps.$("#table").append(deps.el("div", "empty", "검색과 맞는 기억이 없어요."));
@@ -243,8 +251,17 @@ export function createMemoryList(deps) {
   // The list filter (state.query): the top-bar #search is hidden (shell.css), so each memory list draws this box.
   function catalogNote() {
     const snap = deps.catalogQuery.snapshot(catalogName());
-    const message = snap.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : snap.loading ? "전체 목록에서 찾는 중…" : ""; // only trouble or waiting is worth a line
+    const past = catalogName() === "memories" && deps.memory.memTab === "active" && deps.memory.validAt;
+    const message = snap.error ? "전체 목록을 불러오지 못했어요. 다시 불러오기를 눌러 주세요." : snap.loading ? "전체 목록에서 찾는 중…" : past ? "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요." : ""; // only trouble, waiting or a past day is worth a line
     return deps.el("p", "meta memory-page-note", message);
+  }
+  // 시점 (next to search): which memories were true on a past day. Empty = now.
+  const whenPick = () => pickDay(deps.memory.validAt, (day, asOf) => { deps.memory.validAt = day; deps.memory.validAsOf = asOf; deps.render(false); }, deps);
+  // A row of a past day carries that day's text only: open the current record so actions use its revision.
+  async function openCurrent(id) {
+    const rec = await deps.request(`/v1/memories/${encodeURIComponent(id)}?${deps.query()}`).catch(() => null);
+    if (rec?.id !== id || deps.state.selected !== id) return;
+    deps.catalogQuery.pin(id, rec); deps.renderDetail();
   }
   function memSearch() {
     const search = deps.el("label", "panel-search");

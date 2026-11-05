@@ -1013,7 +1013,6 @@
  "기록 지우기": "Protokoll löschen",
  "속도 기록을 지웠어요.": "Das Geschwindigkeitsprotokoll wurde gelöscht.",
  "바뀐 이력": "Änderungsverlauf",
- "옛 기억을 대체함": "Hat eine ältere Erinnerung ersetzt",
  "새 기억으로 바뀜": "Durch eine neuere Erinnerung ersetzt",
  "다른 기억과 부딪힘": "Widerspricht einer anderen Erinnerung",
  "이 계정은 기억을 지울 수 없어요.": "Dieses Konto kann keine Erinnerungen löschen.",
@@ -2889,7 +2888,6 @@
  "프로그램 실행": "Programm ausführen",
  "영문·숫자·@._/- · 최대 128자": "Buchstaben, Ziffern, @._/- · max. 128 Zeichen",
  "대화를 시작할 때마다 들어가서 따로 세지 않아요": "Wird bei jedem Gesprächsstart mitgeschickt und deshalb nicht extra gezählt",
- "변경 이력 1건": "1 Änderung im Verlauf",
  "수동 실행": "Manuell ausführen",
  "단계 하나로 시작해요.": "Beginnt mit einem einzigen Schritt.",
  "규칙 검사": "Regelprüfung",
@@ -6151,7 +6149,25 @@
  "이 작업 공간의 공간": "Spaces in diesem Workspace",
  "기억이 있거나 설정을 저장한 공간이에요. 쓰는 공간은 설정 › 연결에서 바꿔요.": "Spaces mit Erinnerungen oder gespeicherten Einstellungen. Den Space, den du nutzt, änderst du unter Einstellungen › Verbindung.",
  "아직 공간이 없어요.": "Noch keine Spaces vorhanden.",
- "지금 공간": "Aktueller Space"
+ "지금 공간": "Aktueller Space",
+ "결정: 제안": "Entscheidung: vorgeschlagen",
+ "결정: 확정": "Entscheidung: bestätigt",
+ "결정: 취소": "Entscheidung: verworfen",
+ "임시 · 승인 전": "Vorläufig · nicht freigegeben",
+ "정정 검토 중": "Korrektur in Prüfung",
+ "이번만 · 7일 뒤 만료": "Nur dieses Mal · läuft in 7 Tagen ab",
+ "규칙: 항상": "Regel: immer",
+ "규칙: 하지 않기": "Regel: nie",
+ "파일 경로 없음": "Dateipfad fehlt",
+ "승인 전 후보 · 확정된 기억이 아니에요": "Nicht freigegebene Kandidaten · keine bestätigten Erinnerungen",
+ "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "Was am gewählten Tag galt. Klicken öffnet die aktuelle Fassung.",
+ "시점": "Zeitpunkt",
+ "이 날 맞던 기억만 보기. 비우면 지금": "Nur Erinnerungen zeigen, die an diesem Tag galten. Leer = jetzt",
+ "지금 내용": "Aktuell",
+ "이전 내용": "Vorher",
+ "새 내용으로 바뀜": "Durch neuere ersetzt",
+ "승인 전": "Nicht freigegeben",
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "Die aktuelle Fassung bleibt in Gebrauch, bis ein Mensch wählt"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -7392,6 +7408,8 @@
  "{0} 대표로": "{0} zum Haupt-Alias",
  "이 공간을 ‘{0}’에 복제할까요?\n복제한 기억은 그 공간의 '확인해 주세요'에 후보로 들어가요.": "Diesen Space nach „{0}“ kopieren?\nKopierte Erinnerungen landen in „Bitte prüfen“ jenes Spaces als Kandidaten.",
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "{1} Kandidaten wurden zu „{0}“ hinzugefügt. Wechsle zu diesem Space und genehmige sie unter „Bitte prüfen“.",
- "· 기억 {0}개": "· {0} Erinnerungen"
+ "· 기억 {0}개": "· {0} Erinnerungen",
+ "관계 {0}개": "{0} Beziehungen",
+ "근거 {0}개": "{0} Belege"
  }
 };
