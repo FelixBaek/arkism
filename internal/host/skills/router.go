@@ -828,7 +828,7 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	return out, nil
 }
 
-// recallAnchorOptions checks query_time (RFC3339), rerank (bool, false is kept),
+// recallAnchorOptions checks query_time (RFC3339), rerank (bool, false is kept, or "model"),
 // graph_depth (1-3) and include ("sources", "entities") into out.
 func recallAnchorOptions(opts, out map[string]any) error {
 	if v, ok := opts["query_time"]; ok && v != nil {
@@ -839,11 +839,10 @@ func recallAnchorOptions(opts, out map[string]any) error {
 		out["query_time"] = text
 	}
 	if v, ok := opts["rerank"]; ok && v != nil {
-		b, isBool := v.(bool)
-		if !isBool {
-			return errors.New("rerank must be true or false")
+		if _, isBool := v.(bool); !isBool && v != "model" {
+			return errors.New(`rerank must be true, false or "model"`)
 		}
-		out["rerank"] = b
+		out["rerank"] = v
 	}
 	if v, ok := opts["graph_depth"]; ok && v != nil {
 		n, isInt := host.Int(v)

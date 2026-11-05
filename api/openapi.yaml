@@ -48680,7 +48680,7 @@
           "timezone": {
             "type": "string",
             "maxLength": 64,
-            "description": "IANA zone that time words in the query (yesterday, last week, 10월 말) resolve in. Empty means Asia/Seoul. Unknown names are rejected."
+            "description": "IANA zone that time words in the query (yesterday, last week, 10월 말, 2026-W44) resolve in. Numeric dates with dots or dashes are day first (03-04-2026 is 3 April); slashed dates are not read. Empty means Asia/Seoul. Unknown names are rejected."
           },
           "project_key": {
             "type": "string",

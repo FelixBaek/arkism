@@ -42,7 +42,7 @@ func TestParseModelOrder(t *testing.T) {
 	}
 }
 
-// modelRerankFixture: three memories the transfer gate lets out and one restricted one, all matching "alpha".
+// modelRerankFixture: memories the transfer gate lets out plus a restricted and a private one, all matching "alpha".
 func modelRerankFixture(t *testing.T, answers ...string) (*fixture, *fakeWikiLLM) {
 	f, _ := recallFixture(t)
 	a := f.auth.actors[f.human]
@@ -54,6 +54,11 @@ func modelRerankFixture(t *testing.T, answers ...string) (*fixture, *fakeWikiLLM
 	secret, _ := f.repo.Get(testCtx, colMemories, scopeA, "alpha")
 	secret.ID, secret.Text, secret.Sensitivity = "secret", "alpha deploy secret plan", "restricted"
 	if err := f.repo.Insert(testCtx, colMemories, secret); err != nil {
+		t.Fatal(err)
+	}
+	personal := secret
+	personal.ID, personal.Text, personal.Sensitivity = "personal", "alpha deploy personal note", "private"
+	if err := f.repo.Insert(testCtx, colMemories, personal); err != nil {
 		t.Fatal(err)
 	}
 	llm := &fakeWikiLLM{answers: answers}
@@ -73,12 +78,12 @@ func TestRecallModelRerankAppliesAndFallsBack(t *testing.T) {
 	}
 	// Only the two shareable memories were sent; the model put the second first.
 	prompt := llm.prompts[0]
-	if strings.Contains(prompt, "secret plan") || !strings.Contains(prompt, "Query: alpha deploy") || !strings.Contains(prompt, "[2]") || strings.Contains(prompt, "[3]") {
+	if strings.Contains(prompt, "secret plan") || strings.Contains(prompt, "personal note") || !strings.Contains(prompt, "Query: alpha deploy") || !strings.Contains(prompt, "[2]") || strings.Contains(prompt, "[3]") {
 		t.Fatal(prompt)
 	}
 	sent := []string{}
 	for _, h := range base.Items {
-		if h.ID != "secret" && len(sent) < 2 {
+		if h.ID != "secret" && h.ID != "personal" && len(sent) < 2 {
 			sent = append(sent, h.ID)
 		}
 	}

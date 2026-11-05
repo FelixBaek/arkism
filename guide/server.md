@@ -274,10 +274,16 @@ wiki. What a person approves and how is described in
    server model under operation `recall_rerank` (usage ledger and
    `GET /v1/llm-requests`), at most 200 calls per project a day. The caller
    needs `generate:recall_rerank`, and only memories cleared for
-   `external:wiki-llm` (classified, not restricted, sources classified) are
+   `external:wiki-llm` (classified, not private or restricted, sources
+   classified) are
    sent. When anything fails the order stays as it was, and
-   `explain.model_rerank` names why. Search and context build `rerank` now
-   accepts the string `"model"` as well as a boolean.
+   `explain.model_rerank` names why. Search, context build and the MCP
+   `recall` tool now accept the `rerank` string `"model"` as well as a boolean.
+8. **Time words in more languages.** Recall now reads time words ("yesterday",
+   "3 months ago", "fin octobre", "Ekim'de") from per-language tables, plus
+   ISO weeks (`2026-W44`) and a year alone (`2025년`). Numeric dates with dots
+   or dashes are read day first: `03-04-2026` is 3 April, never March 4.
+   Dates with slashes are not read, since both orders are common there.
 
 ## Model providers
 

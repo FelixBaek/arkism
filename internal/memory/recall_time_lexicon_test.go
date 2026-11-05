@@ -77,6 +77,83 @@ func TestParseTimeIntentLanguageSafety(t *testing.T) {
 	}
 }
 
+// Ordinary words and phrases of each language that must not read as a time.
+func TestParseTimeIntentOrdinaryWords(t *testing.T) {
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
+	cases := map[string][]string{
+		"en":     {"how do we rotate the api keys", "may we merge this branch", "march the tests forward", "a dec of cards", "fine tuning the model", "5 to 10", "version 1.2.3"},
+		"ko":     {"세일 전 가격", "한일전 결과 정리", "열일 전에 쉬자", "네 일 전부", "배포 전 체크리스트", "지난 번 회의록", "세 번 전에"},
+		"ja/zh":  {"上旬の予定は未定", "前回の会議"},
+		"es":     {"el mar está en calma", "mayo es un nombre", "cuando hicimos el despliegue", "mi casa"},
+		"fr":     {"la fin du projet", "le mois de mars rover", "fin de la session"},
+		"de":     {"die Mitte des Projekts", "Ende gut alles gut", "die Notizen von hier"},
+		"pt/it":  {"o ano novo", "em casa", "a fine progetto", "il mese prossimo"},
+		"nl":     {"het einde", "half werk", "wat hebben we hier besloten"},
+		"ru/uk":  {"в начале проекта", "в конце концов", "конец файла", "на початку проекту"},
+		"pl/cs":  {"na początku projektu", "koniec pliku", "na začátku projektu", "koncem dne"},
+		"tr":     {"ocak başında", "bir ay sonra", "ekim planı"},
+		"ar/fa":  {"في البداية", "نهاية الملف", "در می‌آید", "ماه عسل"},
+		"vi/id":  {"tháng năm rực rỡ", "vào đầu", "cuối cùng", "pada awal proyek", "akhir kata", "trong 3 tháng tới"},
+		"nordic": {"i början av projektet", "under mars rover", "i slutet av dagen", "alussa", "lopussa"},
+		"el/he":  {"στις αρχές του έργου", "τέλος του αρχείου", "בסוף הקובץ"},
+		"ro/hu":  {"la începutul proiectului", "mai mult", "a projekt elején", "a hét napjai", "ask ma about it"},
+	}
+	for lang, queries := range cases {
+		for _, q := range queries {
+			if w, ok := parseTimeIntent(q, now); ok {
+				t.Errorf("%s %q: unexpected window %v..%v (%q)", lang, q, w.From, w.To, w.Phrase)
+			}
+		}
+	}
+	// Korean native numbers still count weeks and months; days and years need digits.
+	for q, from := range map[string]time.Time{"두 달 전": time.Date(2026, 9, 1, 0, 0, 0, 0, now.Location()), "세 주 전": time.Date(2026, 10, 12, 0, 0, 0, 0, now.Location()), "세일 전 어제 가격": time.Date(2026, 11, 4, 0, 0, 0, 0, now.Location())} {
+		if w, ok := parseTimeIntent(q, now); !ok || !w.From.Equal(from) {
+			t.Errorf("%q: %v %v", q, w, ok)
+		}
+	}
+}
+
+// Numeric dates: dots and dashes are day first, slashes are not read at all.
+func TestParseTimeIntentNumericOrder(t *testing.T) {
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
+	for q, want := range map[string]string{"03-04-2026": "2026-04-03", "03.04.2026": "2026-04-03", "2026-04-03": "2026-04-03", "31-10-2026": "2026-10-31"} {
+		if w, ok := parseTimeIntent(q, now); !ok || w.From.Format(time.DateOnly) != want {
+			t.Errorf("%q: %v %v, want %s", q, w.From, ok, want)
+		}
+	}
+	for _, q := range []string{"03/04/2026", "04/03/2026", "10-31-2026"} {
+		if w, ok := parseTimeIntent(q, now); ok {
+			t.Errorf("%q: unexpected %v", q, w)
+		}
+	}
+}
+
+// The parser is a fixed set of RE2 rules: linear time, and the longest query search
+// accepts (1000 runes) stays well under a request's budget.
+func TestParseTimeIntentLongQueryBounded(t *testing.T) {
+	now := time.Now()
+	for _, unit := range []string{"1 2 3 4 5 6 7 8 9 ", "세 일 전 ", "in mars under mai de ", "一二三四五六七八九十", "die hier wir "} {
+		q := []rune(strings.Repeat(unit, 1000))[:1000]
+		start := time.Now()
+		parseTimeIntent(string(q), now)
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("%q x1000: %v", unit, d)
+		}
+	}
+}
+
+func FuzzParseTimeIntent(f *testing.F) {
+	for _, q := range []string{"어제", "3 months ago", "2026-W44", "31-10-2026", "fin octobre 2026", "세일 전", "ปีที่แล้ว"} {
+		f.Add(q)
+	}
+	now := time.Date(2026, 11, 5, 10, 0, 0, 0, recallLocation(""))
+	f.Fuzz(func(t *testing.T, q string) {
+		if w, ok := parseTimeIntent(q, now); ok && !w.From.Before(w.To) {
+			t.Fatalf("%q: empty window %v..%v", q, w.From, w.To)
+		}
+	})
+}
+
 func BenchmarkParseTimeIntentMiss(b *testing.B) {
 	q := strings.Repeat("the deploy pipeline failed again because of the cache key ", 4)
 	now := time.Now()

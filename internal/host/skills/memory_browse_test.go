@@ -164,7 +164,12 @@ func TestRecallPassesQueryTimeRerankDepthAndInclude(t *testing.T) {
 		t.Fatal(got)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`, `{"query":"q","min_score":2}`, `{"query":"q","min_score":"0.1"}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tags":[]}`, `{"query":"q","tags":[1]}`, `{"query":"q","prefer_observations":"yes"}`} {
+	structured(t, call(t, "recall", `{"query":"q","rerank":"model"}`))
+	if payload := asMap((*calls)[0].payload); payload["rerank"] != "model" {
+		t.Fatal(payload)
+	}
+	*calls = nil
+	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","rerank":"Model"}`, `{"query":"q","rerank":1}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`, `{"query":"q","min_score":2}`, `{"query":"q","min_score":"0.1"}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tags":[]}`, `{"query":"q","tags":[1]}`, `{"query":"q","prefer_observations":"yes"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}

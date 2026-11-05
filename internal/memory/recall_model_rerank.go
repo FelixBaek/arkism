@@ -107,8 +107,8 @@ func (s *Service) modelRerankOrder(ctx context.Context, token string, in SearchI
 	at := []int{}
 	for i, r := range head {
 		text := runeCutString(r.Text, modelRerankTextMax)
-		if text == "" {
-			continue
+		if text == "" || r.Sensitivity == "private" {
+			continue // private stays on the host as in space bundles (spaceRecordSkip)
 		}
 		if _, err := s.authorizeTransfer(ctx, token, "context:read", in.Scope, r.ID, r.Sensitivity, wikiDestination, text, r.Sources); err != nil {
 			continue // not sent; the row keeps its place by score

@@ -71,8 +71,10 @@ type timeLexicon struct {
 	nums                 [10]string
 	numExtra             string    // pattern for other numerals (CJK)
 	units                [4]string // patterns: day, week, month, year
-	ago                  []string  // patterns with {n} and {u}; a space is optional
-	rel                  [relKinds]string
+	// digitUnits are units only read after digits: "세일 전" is a sale, "한일전" a match, not days ago.
+	digitUnits [4]bool
+	ago        []string // patterns with {n} and {u}; a space is optional
+	rel        [relKinds]string
 	// stop holds frequent ordinary words, to tell languages apart (foreignWord).
 	stop string
 
@@ -126,7 +128,8 @@ func numericTimeRules() []timeRule {
 		{regexp.MustCompile(`(?:(\d{4})\s*년\s*)?(\d{1,2})\s*월\s*(?:(\d{1,2})\s*일|(초|중순|말))?`), cjkMonth, false, -1},
 		// Japanese and Chinese: 2026年10月31日, 10月31号, 10月下旬, 10月末, 10月底.
 		{regexp.MustCompile(`(?:(\d{4})\s*年\s*)?(\d{1,2})\s*月\s*(?:(\d{1,2})\s*[日号號]|(上旬|中旬|下旬|初め?|末|底))?`), cjkMonth, false, -1},
-		// Day first: 31.10.2026, 31-10-2026 (slashes stay out, they are ambiguous).
+		// Day first: 31.10.2026, 31-10-2026; 03-04-2026 is 3 April, never the month-first
+		// reading (slashes stay out, both orders are common there).
 		{regexp.MustCompile(`\b(\d{1,2})[.-](\d{1,2})[.-](\d{4})\b`), func(m []string, now time.Time) (time.Time, time.Time, bool) {
 			return dateSpan(atoi(m[3]), atoi(m[2]), atoi(m[1]), now.Location())
 		}, false, -1},
@@ -203,8 +206,11 @@ func (l *timeLexicon) rules(lang int) [4][]timeRule {
 	for _, tpl := range l.ago {
 		p := strings.ReplaceAll(foldTimeText(tpl), " ", " ?")
 		p = strings.NewReplacer("{n}", num, "{u}", "(?:"+strings.Join(units, "|")+")").Replace(p)
-		add(2, p, false, func(m []string, now time.Time) (time.Time, time.Time, bool) {
+		add(2, p, true, func(m []string, now time.Time) (time.Time, time.Time, bool) {
 			unit := slices.IndexFunc(m[2:], func(s string) bool { return s != "" })
+			if _, err := strconv.Atoi(m[1]); l.digitUnits[unit] && err != nil {
+				return time.Time{}, time.Time{}, false
+			}
 			return agoSpan(now, unit, l.number(m[1]))
 		})
 	}
