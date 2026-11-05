@@ -540,6 +540,19 @@ func TestLLMRequestKindFilterAndRuns(t *testing.T) {
 	if err != nil || len(stats.Runs) != 1 || stats.Runs[0].Calls != 2 || stats.Runs[0].TotalTokens != 30 {
 		t.Fatal("runs", err, stats.Runs)
 	}
+	if _, _, err := f.svc.modelCall(testCtx, scopeA, "wiki.page", "sys", "u", 100); err != nil {
+		t.Fatal(err)
+	}
+	run := stats.Runs[0].Run
+	if page, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Run: run, Operation: "wiki.page"}); err != nil || len(page.Items) != 2 {
+		t.Fatal("calls of one run", err, page)
+	}
+	if page, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Run: run, CallKind: "embedding"}); err != nil || len(page.Items) != 0 {
+		t.Fatal("run and kind", err, page)
+	}
+	if _, err = f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Run: strings.Repeat("a", 65)}); !errors.Is(err, ErrInvalid) {
+		t.Fatal("bad run", err)
+	}
 	for op, want := range map[string]string{"embed_query": "embedding", "rerank": "rerank", "recall_rerank": "rerank", "wiki.page": "llm"} {
 		if got := llmCallKind(op); got != want {
 			t.Errorf("llmCallKind(%q) = %q, want %q", op, got, want)

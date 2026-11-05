@@ -1364,7 +1364,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 모델 호출: every server-side model call (embedding and rerank included) with its tokens, time and outcome.
   // The server filters by 종류 (language model, embedding, rerank) and counts runs over 30 days; 모델별 folds the calls loaded so far.
   const CALL_KINDS = [["", "모든 종류"], ["llm", "언어 모델"], ["embedding", "검색용 색인"], ["rerank", "다시 고르기"]];
-  const modelF = { status: "", operation: "", kind: "" };
+  const modelF = { status: "", operation: "", kind: "", run: "" };
   function opsModels(d, M) {
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     const redo = () => { if (dlg === d) wideOps("", "models"); };
@@ -1392,6 +1392,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     }, (e) => { if (d.isConnected) summary.replaceChildren(el("h3", "", "최근 30일"), el("p", "ov-win-err", deniedText(e))); });
     bar.append(selectBox(CALL_KINDS, modelF.kind, "호출 종류", (v) => { modelF.kind = v; modelF.operation = ""; redo(); }),
       selectBox([["", "모든 결과"], ["error", "실패만"]], modelF.status, "결과", (v) => { modelF.status = v; redo(); }), opSlot);
+    if (modelF.run) bar.append(button("한 실행만 보는 중 · 모두 보기", "small", null, () => { modelF.run = ""; redo(); }));
     left.append(bar, el("p", "ov-detail-hint", "서버가 모델을 부른 기록이에요. 대화 내용은 서버가 따로 켜 둔 때만 가려서 남아요."));
     // a picked call is read again by id, so the detail shows the whole stored trace
     const detail = async (it) => {
@@ -1408,10 +1409,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
         ["읽은 기억", (q.source_memory_ids || []).length ? `${num(q.source_memory_ids.length)}개` : ""], ["만든 기억 후보", (q.created_memory_ids || []).length ? `${num(q.created_memory_ids.length)}개` : ""],
         ["같은 실행의 호출", runMates > 1 ? tr(`${num(runMates)}번 (30일)`) : ""]]));
       for (const [label, text] of [["보낸 글", q.prompt], ["받은 글", q.response]]) if (text) { const pre = el("pre", "mono ov-ops-text", text); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", label), pre); }
-      const back = el("div", "ov-detail-actions"); back.append(button("요약으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(summary, groups); })); right.append(back);
+      const back = el("div", "ov-detail-actions");
+      if (q.trace_id && !modelF.run) back.append(button("이 실행의 호출 모두 보기", "small", null, () => { modelF.run = q.trace_id; redo(); }));
+      back.append(button("요약으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(summary, groups); })); right.append(back);
     };
     pagedList(left, async (before, limit) => {
-      const r = await request(`/v1/llm-requests?${query({ limit, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.kind ? { kind: modelF.kind } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
+      const r = await request(`/v1/llm-requests?${query({ limit, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.kind ? { kind: modelF.kind } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(modelF.run ? { run: modelF.run } : {}), ...(before ? { before } : {}) })}`);
       const items = r.items || [];
       loaded.push(...items); queueMicrotask(paintGroups);
       return { items, next: r.next_before };

@@ -351,6 +351,8 @@ type LLMRequestFilter struct {
 	Status   string
 	Before   string
 	Limit    int
+	// Run is a trace_id: every call of one request or job.
+	Run string
 }
 
 func (s *Service) humanLLMRequests(ctx context.Context, token string, scope Scope) (scopedRowStore, error) {
@@ -382,6 +384,8 @@ func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope
 	switch {
 	case f.Operation != "" && f.CallKind != "" && llmCallKind(f.Operation) != f.CallKind:
 		return LLMRequestPage{Items: []LLMRequestView{}}, nil
+	case f.Run != "":
+		q.Path, q.Value = []string{"llm_request", "trace_id"}, f.Run
 	case f.Operation != "":
 		q.Path, q.Value = []string{"llm_request", "operation"}, f.Operation
 	case f.CallKind != "":
@@ -397,7 +401,7 @@ func (s *Service) ListLLMRequests(ctx context.Context, token string, scope Scope
 		out.NextBefore = rows[f.Limit-1].ID
 	}
 	for _, r := range rows {
-		if r.LLMRequest != nil {
+		if r.LLMRequest != nil && f.matchesRun(*r.LLMRequest) {
 			out.Items = append(out.Items, LLMRequestView{ID: r.ID, Scope: r.Scope, CreatedAt: r.CreatedAt, Request: *r.LLMRequest})
 		}
 	}
@@ -408,7 +412,13 @@ var llmCallKinds = []string{"llm", "embedding", "rerank"}
 
 func (f LLMRequestFilter) valid() bool {
 	return f.Limit >= 0 && f.Limit <= 200 && (f.Operation == "" || validRunLabel(f.Operation, 128)) && (f.CallKind == "" || slices.Contains(llmCallKinds, f.CallKind)) &&
-		(f.Status == "" || f.Status == "ok" || f.Status == "error") && (f.Before == "" || validRunLabel(f.Before, 64))
+		(f.Status == "" || f.Status == "ok" || f.Status == "error") && (f.Before == "" || validRunLabel(f.Before, 64)) && (f.Run == "" || validRunLabel(f.Run, 64))
+}
+
+// matchesRun applies operation and kind in Go when the store filtered by run.
+// shortcut: such a page can hold fewer than limit items; one run has few calls, so add a second store path if runs grow large.
+func (f LLMRequestFilter) matchesRun(q LLMRequest) bool {
+	return f.Run == "" || (f.Operation == "" || q.Operation == f.Operation) && (f.CallKind == "" || llmCallKind(q.Operation) == f.CallKind)
 }
 
 // llmCallKind names a call's kind from its operation: the embedding and rerank

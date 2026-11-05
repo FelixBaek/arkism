@@ -2374,7 +2374,7 @@ export class ArkismClient {
     return this.request("POST", `/v1/webhooks/${encodeURIComponent(id)}/test`, undefined, body);
   }
   /** GET /v1/llm-requests — Model call traces: list */
-  get_v1_llm_requests(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "operation"?: string; "status"?: "ok" | "error"; "kind"?: "llm" | "embedding" | "rerank"; "before"?: string; "limit"?: number }): Promise<LLMRequestPage> {
+  get_v1_llm_requests(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "operation"?: string; "status"?: "ok" | "error"; "kind"?: "llm" | "embedding" | "rerank"; "run"?: string; "before"?: string; "limit"?: number }): Promise<LLMRequestPage> {
     return this.request("GET", `/v1/llm-requests`, query, undefined);
   }
   /** GET /v1/llm-requests/stats — Model call traces: daily stats */

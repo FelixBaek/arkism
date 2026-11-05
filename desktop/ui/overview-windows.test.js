@@ -350,6 +350,10 @@ test("기억 관리 ops: link kinds, an audit event's detail and transport filte
   pickRow("질문에 답하기").click(); await dom.flush(); await dom.flush();
   assert.ok(calls.some((c) => c.startsWith("/v1/llm-requests/l1?")), "the detail is read by id");
   for (const t of ["입력 토큰", "20 토큰", "그중 캐시에서", "8 토큰", "그중 생각", "4 토큰", "t-run-1", "j9", "같은 실행의 호출", "3번 (30일)"]) assert.ok(last().textContent.includes(t), t);
+  btn(last(), "이 실행의 호출 모두 보기").click(); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/llm-requests\?.*run=t-run-1/.test(c)), "one run's calls come from the server");
+  btn(last(), "한 실행만 보는 중 · 모두 보기").click(); await dom.flush(); await dom.flush();
+  assert.equal(btn(last(), "한 실행만 보는 중 · 모두 보기"), undefined);
   // 추이: the time axis goes to the server
   btn(last(), "추이").click(); await dom.flush(); await dom.flush();
   sel("어느 때 기준").value = "occurred"; sel("어느 때 기준").dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();

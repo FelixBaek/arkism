@@ -88,7 +88,7 @@ func registerWebhooksCoreHTTP(mux routeRegistrar, s *Service, _ *requestMetrics)
 			return
 		}
 		q := r.URL.Query()
-		out, e := s.ListLLMRequests(r.Context(), bearer(r), scopeQuery(r), LLMRequestFilter{Operation: q.Get("operation"), CallKind: q.Get("kind"), Status: q.Get("status"), Before: q.Get("before"), Limit: limit})
+		out, e := s.ListLLMRequests(r.Context(), bearer(r), scopeQuery(r), LLMRequestFilter{Operation: q.Get("operation"), CallKind: q.Get("kind"), Status: q.Get("status"), Before: q.Get("before"), Limit: limit, Run: q.Get("run")})
 		respond(w, out, e)
 	})
 	mux.HandleFunc("GET /v1/llm-requests/{id}", func(w http.ResponseWriter, r *http.Request) {
