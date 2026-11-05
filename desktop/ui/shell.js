@@ -68,6 +68,11 @@ window.ArkismShell = (ctx) => {
       b.classList.toggle("active", on);
       if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
+    // Memory 59: what waits for a person, as a quiet number beside the menu, only when something waits
+    const mem = $('.nav-item[data-menu="memory"]'), wait = check()?.checkTotal().sum ? check().checkTotal().text : "";
+    let out = mem?.querySelector(".nav-count");
+    if (mem && wait && !out) { out = el("output", "nav-count"); out.setAttribute("data-no-i18n", ""); mem.append(out); }
+    if (out) { out.textContent = wait; out.hidden = !wait; }
     const box = $("#area-tabs");
     // No tab line for a menu of one page (HOME, FLOW 1424:2375) nor for MEMORY, whose 한눈에 chips are the way in
     const tabs = key === "memory" || MENUS[key].tabs.length < 2 ? [] : MENUS[key].tabs;

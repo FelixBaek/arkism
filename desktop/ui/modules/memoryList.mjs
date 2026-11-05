@@ -76,6 +76,8 @@ export function createMemoryList(deps) {
   const isCheck = (tab) => MEM_CHECK.some(([k]) => k === tab);
   // 확인해 주세요 tab: the first list with something waiting, and the total next to the open tab.
   const firstCheck = () => { const n = checkCounts(); return MEM_CHECK.find(([k]) => n[k].min)?.[0] || "candidate"; };
+  // 확인할 것 (side panel): [label, count] of each list with something waiting; what a person decides first, then what tidies up
+  const checkLines = () => { const n = checkCounts(), label = Object.fromEntries(MEM_CHECK); return ["candidate", "conflicted", "idle", "merge", "notes"].filter((k) => n[k].min).map((k) => [label[k], n[k].text]); };
 
   // One badge per row: how often it is used, or why it needs a look.
   function memBadge(m) {
@@ -142,19 +144,6 @@ export function createMemoryList(deps) {
     if (deps.memory.memTab === "removed") { renderRemoved(); return; }
 
     const source = memorySource();
-    // 확인해 주세요: what is waiting, and one button that starts with the first non-empty list.
-    const n = checkCounts(), total = checkTotal();
-    const top = [];
-    if (total.sum) {
-      const card = deps.el("div", "mem-check");
-      const txt = deps.el("div", "mem-check-text");
-      const line = deps.el("p", "mem-check-title"); line.append("확인해 주세요", deps.el("strong", "", total.text));
-      txt.append(line, deps.el("p", "mem-check-sub", `새 기억 확인 ${n.candidate.text} · 서로 다른 기억 ${n.conflicted.text} · 다시 볼 기억 ${n.idle.text}`));
-      if (n.merge.min) txt.lastChild.append(` · 합치기 제안 ${n.merge.text}`);
-      if (n.notes.min) txt.lastChild.append(` · AI 정리 ${n.notes.text}`);
-      card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", firstCheck())));
-      top.push(card);
-    }
     // toolbar: search and 기억 추가 only; a picked past day stays in sight so the list never looks like today's
     const tools = deps.el("div", "mem-tools"), past = !!deps.memory.validAt;
     tools.append(memSearch());
@@ -165,7 +154,7 @@ export function createMemoryList(deps) {
     const seg = deps.segment(VIEWS, view, (k) => { deps.memory.memView = k; deps.store?.("arkism.memView", k); deps.render(false); });
     seg.classList.add("mem-seg", "mem-view-seg"); seg.setAttribute("aria-label", "보기 방식");
     tools.append(seg);
-    deps.$("#controls").replaceChildren(...top, tools);
+    deps.$("#controls").replaceChildren(tools); // what waits for a person is told in the rail (Memory 59) and the side panel (확인할 것)
     // 자세히: 시점 · 저장소 · 정렬 · 에이전트가 받는 기억 · 지운 기억
     const more = [];
     if (!past) more.push(whenPick());
@@ -500,6 +489,7 @@ export function createMemoryList(deps) {
     get decide() { return decide; },
     get checkTotal() { return checkTotal; },
     get firstCheck() { return firstCheck; },
+    get checkLines() { return checkLines; },
     get isCheck() { return isCheck; },
     get restore() { return restore; },
     get memSelect() { return memSelect; },

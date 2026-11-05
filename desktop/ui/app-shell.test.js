@@ -23,6 +23,17 @@ test("MEMORY and one-page menus draw no tab line; 한눈에 chips lead to 확인
   }
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
   assert.ok(app.$("#table .ov-chips"), "MEMORY opens on 한눈에");
+  const waiting = app.$('.nav-item[data-menu="memory"] .nav-count');
+  assert.ok(waiting && !waiting.hidden && /^[1-9]\d*\+?$/.test(app.dom.text(waiting)), "the rail shows what waits beside Memory");
+  // the memory list: no 확인해 주세요 banner; the side panel opens with 확인할 것 and one way in
+  await app.click(app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c))), 50);
+  await app.click(app.$("#mem-back"), 50); // ← 기억: the main list, nothing selected
+  assert.equal(app.$("#controls .mem-check"), null, "no banner over the list");
+  const todo = app.$$("section.section").find((x) => app.dom.text(x.querySelector("h3")) === "확인할 것");
+  assert.ok(todo && /새 기억 확인/.test(app.dom.text(todo)), "확인할 것 lists what waits");
+  await app.click([...todo.querySelectorAll("button")].find((b) => app.dom.text(b) === "하나씩 확인하기"), 50);
+  assert.equal(app.$(".nav-item.active").dataset.menu, "memory");
+  await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
   const chip = app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c)));
   assert.ok(chip, "the 확인해 주세요 chip");
   await app.click(chip, 50);

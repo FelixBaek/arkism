@@ -2083,6 +2083,12 @@ export function startApp() {
     const body = detailShell("요약");
     const d = state.data;
     body.append(el("h2", "", "Arkism"), el("p", "lead", "에이전트들이 함께 쓰는 기억과 스킬이에요. 목록에서 하나를 고르면 왜 저장됐는지와 언제 쓰였는지 볼 수 있어요."));
+    // 확인할 것: what waits for a person, first, with the one way in (the rail shows the same total next to Memory)
+    const waiting = memoryList.checkLines();
+    if (waiting.length) {
+      const c = section("확인할 것"); c.append(facts(waiting), button("하나씩 확인하기", "primary small", null, () => go("memories", memoryList.firstCheck())));
+      body.append(c);
+    }
     // Kinds across every memory on the server; without its totals, the loaded rows say so in the title.
     const kinds = state.memoryTotals?.kinds;
     const byKind = Object.keys(KINDS).map((k) => [kindLabel(k), `${kinds ? kinds[k] || 0 : d.memories.filter((m) => m.kind === k).length}개`]).filter(([, v]) => v !== "0개");
