@@ -1006,7 +1006,7 @@ func (s *Service) Get(ctx context.Context, token, col string, scope Scope, id st
 	}
 	// Digests are served only by /v1/digests, which withholds a body whose basis is gone;
 	// skill decisions only by /v1/routing/skills, under read:routing.
-	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || col == colTopicDigests || col == colUserDigests || isWikiCollection(col) || col == colSkillRoutes {
+	if !knownCollection(col) || col == "jobs" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || col == colTopicDigests || col == colUserDigests || isWikiCollection(col) || slices.Contains([]string{colSkillRoutes, colDirectives}, col) {
 		return Record{}, ErrInvalid
 	}
 	d, e := s.authorize(ctx, token, "read:"+col, scope, id, "")
@@ -1636,7 +1636,7 @@ func (s *Service) Delete(ctx context.Context, token, col, id string, in ChangeIn
 	if col == colProviderUsage {
 		return ErrInvalid
 	}
-	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) {
+	if !knownCollection(col) || col == "audit_events" || col == "jobs" || col == "skills" || col == "execution_traces" || col == colConsultations || col == colHandoffs || isKnowledgeCollection(col) || isWikiCollection(col) || col == colDirectives {
 		return ErrInvalid
 	}
 	if col == "sources" {

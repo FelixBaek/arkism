@@ -310,6 +310,11 @@ func parseWikiPlan(out string) (wikiPlan, bool) {
 
 // wikiDailyCalls counts wiki model calls already made in the scope today.
 func (s *Service) wikiDailyCalls(ctx context.Context, scope Scope, now time.Time) (int, error) {
+	return s.dailyModelCalls(ctx, scope, "wiki_", now)
+}
+
+// dailyModelCalls counts provider calls whose operation starts with prefix made in the scope today.
+func (s *Service) dailyModelCalls(ctx context.Context, scope Scope, prefix string, now time.Time) (int, error) {
 	rows, err := s.Repo.ListRecords(ctx, scope, colProviderUsage, wikiListLimit)
 	if err != nil {
 		return 0, err
@@ -317,7 +322,7 @@ func (s *Service) wikiDailyCalls(ctx context.Context, scope Scope, now time.Time
 	day := now.UTC().Format(time.DateOnly)
 	n := 0
 	for _, r := range rows {
-		if r.Kind == providerUsageKind && r.Cost != nil && strings.HasPrefix(r.Cost.Operation, "wiki_") && r.CreatedAt.UTC().Format(time.DateOnly) == day {
+		if r.Kind == providerUsageKind && r.Cost != nil && strings.HasPrefix(r.Cost.Operation, prefix) && r.CreatedAt.UTC().Format(time.DateOnly) == day {
 			n++
 		}
 	}
@@ -337,13 +342,27 @@ func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, opera
 	if calls >= wikiDailyCallLimit || job.Tokens+estimate > job.MaxTotalTokens {
 		return "", errWikiBudget
 	}
-	gen := s.Wiki.Generator()
-	reserved, err := s.beginProviderCall(ctx, scope, operation, wikiProvider, gen.Model)
+	job.Calls++
+	text, usage, err := s.modelCall(ctx, scope, operation, system, user, wikiMaxCallTokens)
 	if err != nil {
 		return "", err
 	}
-	job.Calls++
-	text, usage, err := s.Wiki.Complete(ctx, system, user, wikiMaxCallTokens)
+	job.Tokens += max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens)
+	return text, nil
+}
+
+// modelCall makes one call to the configured server model (Service.Wiki) and
+// files it in the provider_usage ledger; callers gate the budget first.
+func (s *Service) modelCall(ctx context.Context, scope Scope, operation, system, user string, maxTokens int) (string, ProviderUsage, error) {
+	if s.Wiki == nil {
+		return "", ProviderUsage{}, ErrModelNotConfigured
+	}
+	gen := s.Wiki.Generator()
+	reserved, err := s.beginProviderCall(ctx, scope, operation, wikiProvider, gen.Model)
+	if err != nil {
+		return "", ProviderUsage{}, err
+	}
+	text, usage, err := s.Wiki.Complete(ctx, system, user, maxTokens)
 	if usage.Provider == "" {
 		usage.Provider = wikiProvider
 	}
@@ -355,16 +374,15 @@ func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, opera
 	}
 	if err != nil {
 		_ = s.finishProviderCall(ctx, reserved, usage, false)
-		return "", err
+		return "", usage, err
 	}
 	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
-		return "", err
+		return "", usage, err
 	}
-	job.Tokens += max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens)
 	if len(text) > 256<<10 || !utf8.ValidString(text) {
-		return "", ErrUnavailable
+		return "", usage, ErrUnavailable
 	}
-	return text, nil
+	return text, usage, nil
 }
 
 // RunWikiJob takes the job's lease, runs the two model steps, checks every

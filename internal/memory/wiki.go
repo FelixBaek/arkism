@@ -175,6 +175,7 @@ func wikiServable(ctx context.Context, tx Tx, r Record) bool {
 	return checkSources(ctx, tx, r) == nil
 }
 
+// wikiAuthorize is the shared role-checked authorization (wiki and directives).
 func (s *Service) wikiAuthorize(ctx context.Context, token, action string, scope Scope, id, content string, roles ...string) (Decision, error) {
 	if !validScope(scope) {
 		return Decision{}, ErrInvalid

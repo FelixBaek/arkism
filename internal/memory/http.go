@@ -77,6 +77,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerSearchCoreHTTP(mux, s, stats)
 	registerCaptureCoreHTTP(mux, s, stats)
 	registerRecordsCoreHTTP(mux, s, stats)
+	registerReflectCoreHTTP(mux, s, stats)
 	catalogQueryRoutes(mux, s)
 	s.registerKnowledgeHTTP(mux)
 	googleLoginRoutes(mux, s.GoogleLogin)
@@ -267,6 +268,8 @@ func errorResponse(e error) (string, int) {
 		code, status = "access_denied", 403
 	case errors.Is(e, ErrNotFound):
 		code, status = "not_found", 404
+	case errors.Is(e, ErrModelNotConfigured):
+		code = "model_not_configured"
 	case errors.Is(e, ErrModelBudget):
 		return e.Error(), http.StatusTooManyRequests
 	case errors.Is(e, ErrDynamicsQueueFull):

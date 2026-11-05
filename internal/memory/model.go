@@ -23,10 +23,12 @@ var (
 	// the deterministic fallback.
 	ErrSemanticLaneDown = errors.New("semantic_lane_unavailable")
 	ErrModelBudget      = errors.New("model_budget_exceeded")
-	ErrCandidateQuota   = errors.New("candidate_daily_limit")
+	// ErrModelNotConfigured: this server has no model for server-side answers (Service.Wiki is nil).
+	ErrModelNotConfigured = errors.New("model_not_configured")
+	ErrCandidateQuota     = errors.New("candidate_daily_limit")
 )
 
-var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations"}
+var Collections = []string{"skill_trials", "knowledge_sources", "knowledge_documents", "knowledge_chunks", "knowledge_bindings", "retrieval_logs", "consultations", "agent_handoffs", "sources", "memories", "memory_candidates", "memory_relations", "skills", "skill_versions", "agent_runs", "execution_traces", "tool_calls", "evaluations", "reflections", "audit_events", "jobs", "provider_usage", "blobs", "artifacts", "agent_tools", "prompts", "design_systems", "crew", "crew_runs", "providers", "crew_assists", "code_reviews", "maintenance_proposals", "routing", "routing_calls", "skill_routes", "usage_sessions", "crew_meetings", "discord_bots", "merge_proposals", "topic_digests", "user_digests", "wiki_pages", "wiki_links", "eval_tasks", "eval_runs", "eval_trials", "judge_calibrations", "directives"}
 
 const (
 	VerificationCandidate = "candidate"
@@ -122,6 +124,7 @@ type Record struct {
 	KnowledgeRetrieval   *KnowledgeRetrievalLog `json:"knowledge_retrieval,omitempty" bson:"knowledge_retrieval,omitempty"`
 	Knowledge            *KnowledgeRecord       `json:"knowledge,omitempty" bson:"knowledge,omitempty"`
 	Wiki                 *WikiRecord            `json:"wiki,omitempty" bson:"wiki,omitempty"`
+	Directive            *Directive             `json:"directive,omitempty" bson:"directive,omitempty"`
 	Consultation         *Consultation          `json:"consultation,omitempty" bson:"consultation,omitempty"`
 	Handoff              *SpecialistHandoff     `json:"handoff,omitempty" bson:"handoff,omitempty"`
 	Audit                *AuditMetadata         `json:"audit,omitempty" bson:"audit,omitempty"`
