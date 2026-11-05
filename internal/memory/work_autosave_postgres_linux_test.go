@@ -152,8 +152,18 @@ func lossyServer(t *testing.T, f *fixture, before func(*http.Request)) (*httptes
 	return server, &lose
 }
 
+// pinDurableCapture keeps the capture hook on durable, which reads only the turns that need it: these
+// tests queue an exact list of model replies for the work handoff, and the balanced server default
+// would add a capture extraction call per turn.
+func pinDurableCapture(t *testing.T, f *fixture) {
+	t.Helper()
+	durable := "durable"
+	putSettings(t, f, scopeA, SpaceConfigInput{ExpectedRevision: -1, CaptureDensity: &durable})
+}
+
 func TestPostgresReturningWorkWriterPreservesLatest(t *testing.T) {
 	f, _ := archiveSearchFixture(t, isolatedPostgres(t))
+	pinDurableCapture(t, f)
 	if _, err := workCheckpointSave(f, f.agent, "return-work", "initial", 0, workCheckpointPackage()); err != nil {
 		t.Fatal(err)
 	}
@@ -298,6 +308,7 @@ func (z *zcodeWorkDB) add(id, role, text, origin string, completed any) {
 
 func TestPostgresAutomaticWorkWriterExactRetryAndConflict(t *testing.T) {
 	f, now := archiveSearchFixture(t, isolatedPostgres(t))
+	pinDurableCapture(t, f)
 	pkg := workCheckpointPackage()
 	if _, err := workCheckpointSave(f, f.agent, "auto-work", "initial", 0, pkg); err != nil {
 		t.Fatal(err)
