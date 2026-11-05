@@ -194,6 +194,38 @@ need the actual handlers: source shapes alone cannot prove field semantics or
 endpoint authorization. Gateway extension descriptions belong to another
 process and are excluded from management-route coverage.
 
+### Client libraries
+
+`sdk/typescript` (typed client, `ArkismClient`) and `sdk/python` (thin client,
+standard library only) are generated from `api/openapi.yaml`. Regenerate after
+changing the spec; CI fails while they are stale:
+
+```bash
+python3 tools/generate_sdk.py
+python3 tools/generate_sdk.py --check
+```
+
+Each route is one method: path parameters first, then the JSON body and query
+object. Routes without an `operationId` get a name from method and path
+(`POST /v1/reflect` → `postV1Reflect` / `post_v1_reflect`). `request(method, path,
+query, body)` reaches any route. A non-2xx answer raises `ArkismError` with the
+status and the server's JSON error body.
+
+### Extension hooks
+
+A program that embeds `internal/memory` can add its own rules through
+`Service.Extensions` without a fork. There is no plugin loader: hooks are Go
+values compiled into that program.
+
+| Field | Interface | When it runs | Effect of an error |
+|---|---|---|---|
+| `CaptureValidator` | `ValidateCapture(ctx, actor, CaptureInput) error` | After authorization and the built-in input checks, before any write | The capture answers 400 (`ErrInvalid` and `ErrExtensionRefused`) |
+| `JobHook` | `BeforeJob(ctx, job Record) error` | After the worker claims an embedding or webhook job. Erasure jobs skip it | The attempt fails and the job is retried later |
+| `ApproveHook` | `AfterApprove(ctx, Record)` | After a candidate approval is committed | None: it only observes; a panic is logged and contained |
+
+Hooks cannot approve anything: captures still land as candidates a person
+reviews. Keep hooks fast; they run in the request or worker goroutine.
+
 ### Management lists and daemon structure
 
 Full-scope management search uses the four documented `POST .../query` routes;

@@ -1,0 +1,10 @@
+{
+  "name": "arkism-client",
+  "version": "0.1.0",
+  "description": "Typed client for the Arkism memory server API (generated from api/openapi.yaml)",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": ["src"]
+}
