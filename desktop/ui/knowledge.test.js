@@ -330,8 +330,9 @@ test("upload: a format the server can't read (415), PDF, too large, Word, the up
   await pick(file("big.json", "x".repeat(65 * 1024)));
   assert.match(k.table().textContent, /JSON 파일은 나누면 깨져서/);
   assert.equal(k.posted("/v1/knowledge/ingest").length, 0);
-  await pick(bin("big.docx", 5 << 20));
-  assert.match(k.table().textContent, /4MB까지 올릴 수 있어요/);
+  // no size check here either: a file bigger than the old 4MB goes up whole and the server's limit decides
+  await pick(bin("big.docx", 5 << 20), "only");
+  assert.equal(k.posted("/v1/knowledge/ingest").at(-1).body.content_base64, "YWJj");
   // any other file goes up whole; a server without a converter answers 415, said in plain words
   await pick(bin("x.hwp"), "only");
   const hwp = k.posted("/v1/knowledge/ingest").at(-1).body;

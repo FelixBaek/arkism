@@ -142,7 +142,6 @@
  "기억 후보 만들기를 멈출까요?": "Parar de criar candidatas de memória?",
  "이미 만든 후보는 그대로 남아요.": "As candidatas que já foram criadas continuam como estão.",
  "그사이 작업이 바뀌었어요. 다시 눌러 주세요.": "A tarefa mudou nesse meio-tempo. Toque de novo.",
- "파일이 너무 커요. 4MB까지 올릴 수 있어요.": "O arquivo é grande demais. O limite é 4MB.",
  "읽는 중": "Lendo",
  "기억 후보 만들기": "Criar candidatas de memória",
  "파일을 읽고 있어요…": "Lendo o arquivo…",

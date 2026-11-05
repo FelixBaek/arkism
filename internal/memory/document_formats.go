@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	// fileMaxBytesDefault bounds one uploaded file unless MEMORY_FILE_MAX_BYTES says otherwise.
-	fileMaxBytesDefault = 4 << 20
+	// fileMaxBytesDefault bounds one uploaded file unless MEMORY_FILE_MAX_BYTES says otherwise:
+	// one file may be as large as a whole default batch.
+	fileMaxBytesDefault = fileBatchBytesDefault
 	// fileMaxBytesCap is the largest per-file limit an operator may set.
 	fileMaxBytesCap         = 200 << 20
 	fileBatchFilesDefault   = 10
@@ -75,7 +76,7 @@ const (
 var defaultParserOrder = []string{parserBuiltin, parserConverter, parserVision, parserTranscribe}
 
 // FileSettings are the operator's upload limits and reader order
-// (MEMORY_FILE_*). A zero value means the defaults: 4 MiB per file, 10 files
+// (MEMORY_FILE_*). A zero value means the defaults: 100 MiB per file, 10 files
 // and 100 MiB per batch, 8 scanned pages, readers builtin, converter, vision,
 // transcribe, every configured reader allowed.
 type FileSettings struct {

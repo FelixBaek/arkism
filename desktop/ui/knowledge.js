@@ -19,7 +19,7 @@ window.ArkismKnowledge = (ctx) => {
     ".xlsx": `${OOXML}spreadsheetml.sheet`, ".pptx": `${OOXML}presentationml.presentation`, ".html": "text/html", ".htm": "text/html", ".csv": "text/csv",
     ".tsv": "text/tab-separated-values", ".eml": "message/rfc822" };
   const IMAGE = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }; // the image blocks the server reads
-  const TEXT = [".md", ".txt", ".json"]; // sent as text and split past 64KB; any other file goes up whole (4MB) and the server reads it
+  const TEXT = [".md", ".txt", ".json"]; // sent as text and split past 64KB; any other file goes up whole and the server reads it (its MEMORY_FILE_MAX_BYTES decides the size)
   const KINDS = "Word·PDF·표·발표 자료·웹 페이지·메일·Markdown·텍스트·JSON";
   const REJECT = {
     path_outside_wiki: "위키 밖 경로", path_identity_mismatch: "경로와 제목이 다름", forbidden_field: "금지된 머리말", unknown_attribute: "모르는 속성",
@@ -245,7 +245,6 @@ window.ArkismKnowledge = (ctx) => {
   function pickFile(source) {
     chooseFile(async (f, ext) => {
       const whole = !TEXT.includes(ext);
-      if (whole && f.size > 4 << 20) { K.notice = "파일이 너무 커요. 4MB까지 올릴 수 있어요."; paint(); return; }
       const data = whole ? { content_base64: b64(await f.arrayBuffer()) } : { content: await f.text() };
       const parts = whole ? [] : window.ArkismKnowledge.splitText(data.content);
       if (parts.length > 1) {

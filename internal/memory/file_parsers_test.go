@@ -57,6 +57,13 @@ func TestFileSizeLimitIsConfigurable(t *testing.T) {
 	f, _ := mediaFixture(t)
 	in := mediaUpload("a.txt", []byte("0123456789A"))
 	in.DryRun = true
+	if (FileSettings{}).maxBytes() != 100<<20 || (FileSettings{}).maxBytes() != (FileSettings{}).batchBytes() {
+		t.Fatal("one file may be as large as a whole default batch", (FileSettings{}).maxBytes())
+	}
+	big := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte("a"), 5<<20)) // above the old 4 MiB default
+	if raw, err := decodeUpload(big, (FileSettings{}).maxBytes()); err != nil || len(raw) != 5<<20 || int64(len(big)) > (FileSettings{}).requestBytes() {
+		t.Fatal(len(raw), err)
+	}
 	f.svc.Files.MaxBytes = 10
 	if _, err := f.svc.ExtractFileMemories(testCtx, f.human, in); !errors.Is(err, errBlobTooLarge) {
 		t.Fatal(err)

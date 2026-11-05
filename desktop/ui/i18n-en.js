@@ -144,7 +144,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "기억 후보 만들기를 멈출까요?": "Stop making memory candidates?",
   "이미 만든 후보는 그대로 남아요.": "Candidates already made stay as they are.",
   "그사이 작업이 바뀌었어요. 다시 눌러 주세요.": "The job changed in the meantime. Press it again.",
-  "파일이 너무 커요. 4MB까지 올릴 수 있어요.": "The file is too large. Up to 4 MB.",
   "읽는 중": "Reading",
   "기억 후보 만들기": "Make memory candidates",
   "파일을 읽고 있어요…": "Reading the file…",
