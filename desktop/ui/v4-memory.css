@@ -28,7 +28,7 @@
 .mem-check-title strong { font-weight: 500; color: var(--nc-amber); }
 .mem-check-sub { font-size: calc(0.75rem * var(--fs, 1)); color: var(--nc-muted); }
 
-.memory-mode .btn.small { height: auto; padding: 0.4375rem 0.875rem; font: 500 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); gap: 0.375rem; }
+.memory-mode .btn.small { height: auto; padding: 0.4375rem 0.875rem; font: 500 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); gap: 0.375rem; max-width: 100%; white-space: normal; text-align: left; } /* long labels (German) wrap inside the panel */
 .memory-mode .btn.small .icon { width: 0.875rem; height: 0.875rem; }
 
 .mem-tools { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
