@@ -102,9 +102,13 @@ func validSpaceDocument(doc SpaceBundleDocument, now time.Time) bool {
 	if _, err := time.LoadLocation(doc.Zone); len(doc.Zone) > 64 || err != nil {
 		return false
 	}
-	for i, ch := range doc.Chunks {
+	return validSpaceDocumentChunks(doc.Chunks)
+}
+
+func validSpaceDocumentChunks(chunks []SpaceDocumentChunk) bool {
+	for i, ch := range chunks {
 		if ch.Locator == "" || len(ch.Locator) > 256 || strings.ContainsAny(ch.Locator, "]\n") || strings.TrimSpace(ch.Text) == "" || !utf8.ValidString(ch.Text) ||
-			slices.ContainsFunc(doc.Chunks[:i], func(o SpaceDocumentChunk) bool { return o.Locator == ch.Locator }) {
+			slices.ContainsFunc(chunks[:i], func(o SpaceDocumentChunk) bool { return o.Locator == ch.Locator }) {
 			return false
 		}
 	}
