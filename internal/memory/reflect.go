@@ -137,10 +137,10 @@ type ReflectOutput struct {
 	ToolTrace         []ReflectToolStep  `json:"tool_trace"`
 	Iterations        int                `json:"iterations,omitempty"`
 	// GraphNodes counts the memories reached by following links: the relation graph, entity mentions or graph and causal search lanes.
-	GraphNodes int `json:"graph_nodes"`
-	Usage             *ProviderUsage     `json:"usage,omitempty"`
-	Generator         *Generator         `json:"generator,omitempty"`
-	Prompt            *ReflectPrompt     `json:"prompt,omitempty"`
+	GraphNodes int            `json:"graph_nodes"`
+	Usage      *ProviderUsage `json:"usage,omitempty"`
+	Generator  *Generator     `json:"generator,omitempty"`
+	Prompt     *ReflectPrompt `json:"prompt,omitempty"`
 }
 
 // reflectRun is one reflect call's state: the guidance and every record retrieved so far.
