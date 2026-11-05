@@ -66,6 +66,8 @@ func TestBrowseMemoryListsEachKindReadOnly(t *testing.T) {
 		"mental_models": "/v1/mental-models?" + scope + "&limit=20",
 		"entities":      "/v1/entities?" + scope + "&limit=20&q=arkism",
 		"causal_links":  "/v1/causal-links?" + scope + "&status=active&limit=20",
+		// the server pages knowledge sources by an offset cursor
+		"knowledge_sources": "/v1/knowledge/sources?" + scope + "&limit=5&cursor=40",
 	} {
 		args := `{"kind":"` + kind + `"}`
 		switch kind {
@@ -73,14 +75,16 @@ func TestBrowseMemoryListsEachKindReadOnly(t *testing.T) {
 			args = `{"kind":"observations","limit":5,"cursor":"c/1","query":"배포"}`
 		case "entities":
 			args = `{"kind":"entities","query":"arkism"}`
+		case "knowledge_sources":
+			args = `{"kind":"knowledge_sources","limit":5,"cursor":"40","query":"ignored"}`
 		}
-		calls := fakeRequest(t, `{"items":[{"id":"x","active":{"text":"ok"},"draft":{"text":"unreviewed"},"draft_diff":[1]}],"next_cursor":"20"}`)
+		calls := fakeRequest(t, `{"items":[{"id":"x","active":{"text":"ok"},"draft":{"text":"unreviewed"},"draft_diff":[1]}],"next_cursor":"20","truncated":false}`)
 		out := structured(t, call(t, "browse_memory", args))
 		if len(*calls) != 1 || (*calls)[0].path != path || (*calls)[0].payload != nil {
 			t.Fatal(kind, *calls)
 		}
 		item := asMap(asList(field(out, "items"))[0])
-		if field(out, "next_cursor") != "20" || field(out, "authority") != "data_only_untrusted" || item["active"] == nil {
+		if field(out, "next_cursor") != "20" || field(out, "truncated") != false || field(out, "authority") != "data_only_untrusted" || item["active"] == nil {
 			t.Fatal(kind, out)
 		}
 		if _, hasDraft := item["draft"]; hasDraft != (kind != "mental_models") {

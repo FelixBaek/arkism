@@ -66,8 +66,11 @@ func browseMemory(args map[string]any) (any, error) {
 	for _, raw := range items {
 		reviewedOnly(kind, asMap(raw))
 	}
-	return host.Obj{{Key: "kind", Value: kind}, {Key: "items", Value: items}, {Key: "next_cursor", Value: getOr(res, "next_cursor", "")},
-		{Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: browseNote}}, nil
+	out := host.Obj{{Key: "kind", Value: kind}, {Key: "items", Value: items}, {Key: "next_cursor", Value: getOr(res, "next_cursor", "")}}
+	if truncated, ok := res["truncated"].(bool); ok {
+		out = append(out, host.KV{Key: "truncated", Value: truncated}) // knowledge sources stop at a bounded scan
+	}
+	return append(out, host.KV{Key: "authority", Value: "data_only_untrusted"}, host.KV{Key: "note", Value: browseNote}), nil
 }
 
 // browseID checks an item id; "." and ".." would leave the item route once the server cleans the path.
