@@ -233,6 +233,7 @@ wiki. What a person approves and how is described in
    | `SKILL_LLM_PRESET` | `local`, `runner`, `proxy` or `gateway`: a known kind of server, so no endpoint is needed (see [Server model presets](#server-model-presets)). Unset by default |
    | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
    | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
+   | `ARKISM_AUDIT_BODIES` | `1` keeps the first 4 KiB of each JSON request body, redacted, on its audit events (see [Audit events](#audit-events)). Off by default |
 
    Without it these routes answer `503 model_not_configured`; everything else
    keeps working. Calls share one daily cap and are recorded in the usage ledger.
@@ -852,8 +853,15 @@ service token sends `X-Arkism-Transport: mcp`, as the router tools do; `http`
 for every other request, including a person's token that sends the header;
 `system` for background work, never taken from a request; the label is the
 router's claim, not proof), `method`, the route pattern (never the
-raw URL or query) and `duration_ms`. Request and response bodies are never
-captured.
+raw URL or query) and `duration_ms`. Bodies are not captured by default.
+With `ARKISM_AUDIT_BODIES=1` an event written during a JSON request also keeps
+`request_body`: the first 4 KiB the handler read, with private spans and
+secret-looking text removed. Only `GET /v1/audit-events/{id}` returns it, not
+the list. Uploads and other media types are never kept, and response bodies
+are not kept (the event is written before the answer exists; model call
+traces keep answers with `ARKISM_LLM_TRACE_CONTENT=1`). A kept body is part of
+the audit history: deleting a source does not erase it, it expires with
+`memoryd --audit-expiry` and travels in a space export that includes history.
 
 A space can narrow its optional events with an `audit` block in its config
 (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`):

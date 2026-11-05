@@ -2,9 +2,12 @@ package memory
 
 import (
 	"context"
+	"io"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -135,5 +138,50 @@ func auditMeta(ctx context.Context, role string, m AuditMetadata) *AuditMetadata
 	}
 	m.Route, m.Method = info.route, info.method
 	m.DurationMS = time.Since(info.start).Milliseconds()
+	if body, ok := ctx.Value(auditBodyKey{}).(*auditBody); ok {
+		m.RequestBody = body.text()
+	}
 	return &m
+}
+
+// auditBodyBytes caps how much of a request body an audit event keeps.
+const auditBodyBytes = 4 << 10
+
+type auditBodyKey struct{}
+
+// auditBody keeps the first auditBodyBytes of a JSON request body as the
+// handler reads it, so events written after decoding carry what was sent.
+type auditBody struct {
+	mu sync.Mutex
+	b  []byte
+}
+
+func (a *auditBody) Write(p []byte) (int, error) {
+	a.mu.Lock()
+	a.b = append(a.b, p[:min(len(p), auditBodyBytes-len(a.b))]...)
+	a.mu.Unlock()
+	return len(p), nil
+}
+
+// text is the kept body with private spans and secret-looking text removed.
+func (a *auditBody) text() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return traceText(strings.ToValidUTF8(string(a.b), ""))
+}
+
+// captureAuditBody tees a JSON request body for audit events (ARKISM_AUDIT_BODIES).
+// Uploads and other media types are never kept.
+func captureAuditBody(r *http.Request) *http.Request {
+	media, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if r.Body == nil || r.Body == http.NoBody || media != "application/json" {
+		return r
+	}
+	body := &auditBody{}
+	r = r.WithContext(context.WithValue(r.Context(), auditBodyKey{}, body))
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.TeeReader(r.Body, body), r.Body}
+	return r
 }

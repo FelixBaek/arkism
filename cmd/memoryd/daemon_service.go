@@ -141,6 +141,7 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Unsplash = &memory.Unsplash{Key: key}
 	}
 	svc.LLMTraceContent = os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1" // model call traces keep redacted text
+	svc.AuditBodies = os.Getenv("ARKISM_AUDIT_BODIES") == "1"          // audit events keep the redacted JSON request body
 	// Which operations get a trace row: comma lists, a trailing * matches a prefix.
 	svc.LLMTraceInclude, svc.LLMTraceExclude = envList("ARKISM_LLM_TRACE_OPERATIONS"), envList("ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS")
 	svc.Prometheus = memory.PrometheusConfig{Enabled: os.Getenv("ARKISM_PROMETHEUS") == "1", Token: os.Getenv("ARKISM_PROMETHEUS_TOKEN")}

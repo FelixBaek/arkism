@@ -18,11 +18,13 @@ type AuditMetadata struct {
 	// ReasonCode and Reason are set on decision rows (see recordDecision).
 	ReasonCode string `json:"reason_code,omitempty" bson:"reason_code,omitempty"`
 	Reason     string `json:"reason,omitempty" bson:"reason,omitempty"`
-	// Request metadata (auditMeta): no body, query or header value is stored.
-	Transport  string `json:"transport,omitempty" bson:"transport,omitempty"` // http | mcp | system
-	Route      string `json:"route,omitempty" bson:"route,omitempty"`
-	Method     string `json:"method,omitempty" bson:"method,omitempty"`
-	DurationMS int64  `json:"duration_ms,omitempty" bson:"duration_ms,omitempty"`
+	// Request metadata (auditMeta): no query or header value is stored, and no
+	// body unless ARKISM_AUDIT_BODIES is on (RequestBody, redacted and capped).
+	Transport   string `json:"transport,omitempty" bson:"transport,omitempty"` // http | mcp | system
+	Route       string `json:"route,omitempty" bson:"route,omitempty"`
+	Method      string `json:"method,omitempty" bson:"method,omitempty"`
+	DurationMS  int64  `json:"duration_ms,omitempty" bson:"duration_ms,omitempty"`
+	RequestBody string `json:"request_body,omitempty" bson:"request_body,omitempty"`
 }
 
 // Denial classes stored in audit_events. Verified policy denials keep the

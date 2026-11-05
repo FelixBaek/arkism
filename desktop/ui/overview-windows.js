@@ -1346,8 +1346,10 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const a = M.auditLine(x), who = x.actor_type === "human" ? tr("사람") : x.actor_type === "agent" ? tr("에이전트") : tr("서비스");
       right.replaceChildren(el("h3", "", a.what || tr("기타 활동")), facts([["언제", stamp(x.created_at)], ["누가", `${x.actor || "—"} · ${who}`], ["결과", x.decision === "deny" || x.decision === "denied" ? tr("막힘") : x.decision ? tr("허용") : ""],
         ["어디서", transportLabel(x.transport) ? tr(transportLabel(x.transport)) : x.transport], ["요청", [x.method, x.route].filter(Boolean).join(" ")], ["걸린 시간", x.duration_ms ? `${num(x.duration_ms)}ms` : ""],
-        ["대상", [x.target?.collection, x.target?.id].filter(Boolean).join(" · ")], ["코드", x.action], ["이유 코드", x.reason_code], ["요청 ID", x.request_id], ["꼭 남는 기록", x.mandatory ? tr("예 — 끌 수 없어요") : ""]]),
-        el("div", "ov-detail-actions"));
+        ["대상", [x.target?.collection, x.target?.id].filter(Boolean).join(" · ")], ["코드", x.action], ["이유 코드", x.reason_code], ["요청 ID", x.request_id], ["꼭 남는 기록", x.mandatory ? tr("예 — 끌 수 없어요") : ""]]));
+      // only when the server keeps bodies (ARKISM_AUDIT_BODIES); already redacted and capped
+      if (x.request_body) { const pre = el("pre", "mono ov-ops-text", x.request_body); pre.dataset.noI18n = ""; right.append(el("div", "ov-win-list-title", "보낸 내용"), pre); }
+      right.append(el("div", "ov-detail-actions"));
       right.lastChild.append(button("요청량으로", "small", null, () => { left.querySelectorAll(".ov-ops-pick.on").forEach((n) => n.classList.remove("on")); right.replaceChildren(volume); }));
     };
     pagedList(left, async (cursor, limit) => {

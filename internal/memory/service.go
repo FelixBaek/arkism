@@ -116,6 +116,8 @@ type Service struct {
 	Extensions Extensions
 	// ExtData raises the extension data store's per-space limits (ARKISM_EXT_DATA_*); zero keeps the defaults.
 	ExtData ExtDataLimits
+	// AuditBodies keeps the first 4 KiB of each JSON request body, redacted, on its audit events (ARKISM_AUDIT_BODIES=1).
+	AuditBodies bool
 	// MCPTools is the server-wide MCP tool allowlist (ARKISM_MCP_TOOLS); empty allows every tool.
 	MCPTools []string
 

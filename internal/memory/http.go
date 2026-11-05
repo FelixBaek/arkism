@@ -186,6 +186,9 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		requestID := ID()
 		w.Header().Set("X-Request-ID", requestID)
 		r = r.WithContext(ContextWithPostgresToken(withAuditRequest(context.WithValue(r.Context(), auditRequestKey{}, requestID), r, pattern, started), bearer(r)))
+		if s.AuditBodies {
+			r = captureAuditBody(r)
+		}
 		r, sp := startServerSpan(r, pattern)
 		stats.inFlight.Add(1)
 		defer func() {

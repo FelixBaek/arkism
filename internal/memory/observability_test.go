@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 func llmTraces(t *testing.T, f *fixture, scope Scope, operation string) []LLMRequestView {
@@ -260,6 +261,40 @@ func TestAuditMandatoryClassification(t *testing.T) {
 		if auditMandatory(action) != want {
 			t.Error(action, want)
 		}
+	}
+}
+
+func TestAuditBodyIsOptInRedactedAndCapped(t *testing.T) {
+	f := newFixture(t)
+	secret := "ghp_" + strings.Repeat("a1B2c3D4e5", 4)
+	send := func(contentType, body string) context.Context {
+		req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(body))
+		req.Header.Set("Content-Type", contentType)
+		req = captureAuditBody(req.WithContext(withAuditRequest(testCtx, req, "POST /v1/x", time.Now())))
+		if got, _ := io.ReadAll(req.Body); string(got) != body {
+			t.Fatal("the handler must read the body unchanged")
+		}
+		return req.Context()
+	}
+	writeAudit(t, f, send("application/json; charset=utf-8", `{"text":"hi <private>pin 1234</private> `+secret+`"}`), "write:memories")
+	body := auditRows(f, scopeA)["write:memories"].Audit.RequestBody
+	if !strings.Contains(body, `"text":"hi`) || strings.Contains(body, "pin 1234") || strings.Contains(body, secret) {
+		t.Fatalf("stored body %q", body)
+	}
+	writeAudit(t, f, send("application/json", `{"text":"`+strings.Repeat("가", 3000)+`"}`), "erase:memories")
+	if b := auditRows(f, scopeA)["erase:memories"].Audit.RequestBody; len(b) > auditBodyBytes || !utf8.ValidString(b) || b == "" {
+		t.Fatalf("capped body %d bytes", len(b))
+	}
+	writeAudit(t, f, send("text/plain", "plain words"), "delete:memories")
+	if b := auditRows(f, scopeA)["delete:memories"].Audit.RequestBody; b != "" {
+		t.Fatal("a non-JSON body was kept", b)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/v1/x", strings.NewReader(`{}`))
+	if captureAuditBody(req).Context().Value(auditBodyKey{}) != nil {
+		t.Fatal("a body without a JSON content type was captured")
+	}
+	if v := viewAuditEvent(auditRows(f, scopeA)["write:memories"]); v.RequestBody != body {
+		t.Fatal("the detail view drops the body", v.RequestBody)
 	}
 }
 

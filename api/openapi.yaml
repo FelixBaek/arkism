@@ -3938,7 +3938,7 @@
     "/v1/audit-events/{id}": {
       "get": {
         "summary": "Read one audit event (human read:audit_events)",
-        "description": "Redacted metadata only: request and response bodies are never captured.",
+        "description": "Redacted metadata. Bodies are not captured unless the server runs with ARKISM_AUDIT_BODIES=1; then request_body holds the first 4 KiB of the JSON request body, redacted. Response bodies are never captured.",
         "parameters": [
           {
             "in": "query",
@@ -4061,6 +4061,10 @@
                     "duration_ms": {
                       "type": "integer",
                       "description": "Elapsed request time when the event was recorded."
+                    },
+                    "request_body": {
+                      "type": "string",
+                      "description": "First 4 KiB of the JSON request body with private spans and secret-looking text removed. Present only when the server runs with ARKISM_AUDIT_BODIES=1."
                     },
                     "mandatory": {
                       "type": "boolean",
@@ -62721,6 +62725,9 @@
           },
           "duration_ms": {
             "type": "integer"
+          },
+          "request_body": {
+            "type": "string"
           }
         },
         "additionalProperties": false,

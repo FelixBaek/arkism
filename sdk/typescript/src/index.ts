@@ -970,7 +970,7 @@ export class ArkismClient {
     return this.request("GET", `/v1/audit-events/stats`, query, undefined);
   }
   /** GET /v1/audit-events/{id} — Read one audit event (human read:audit_events) */
-  getV1AuditEventsId(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "id": string; "action": string; "actor": string; "actor_type"?: string; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "decision"?: string; "reason_code"?: string; "request_id"?: string; "created_at": string; "policy_decision_id"?: string; "transport"?: "http" | "mcp" | "system"; "method"?: string; "route"?: string; "duration_ms"?: number; "mandatory"?: boolean }> {
+  getV1AuditEventsId(id: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "id": string; "action": string; "actor": string; "actor_type"?: string; "target"?: { "collection"?: string; "id"?: string; "revision"?: number }; "decision"?: string; "reason_code"?: string; "request_id"?: string; "created_at": string; "policy_decision_id"?: string; "transport"?: "http" | "mcp" | "system"; "method"?: string; "route"?: string; "duration_ms"?: number; "request_body"?: string; "mandatory"?: boolean }> {
     return this.request("GET", `/v1/audit-events/${encodeURIComponent(id)}`, query, undefined);
   }
   /** GET /v1/operations — List background jobs (read:jobs; an agent sees only the jobs it created) */
