@@ -3883,7 +3883,7 @@
     "/v1/operations": {
       "get": {
         "summary": "List background jobs (human/service read:jobs)",
-        "description": "Every jobs row of the scope, newest first, as metadata (no payloads). Only embedding and wiki_build jobs are operable.",
+        "description": "Every jobs row of the scope, newest first, as metadata (no payloads). Only embedding, wiki_build and file_memory_extract jobs are operable.",
         "parameters": [
           {
             "in": "query",
@@ -4369,7 +4369,7 @@
       },
       "delete": {
         "summary": "Delete a finished operable job (human delete:jobs)",
-        "description": "Only done, failed or cancelled embedding/wiki_build jobs. Audited.",
+        "description": "Only done, failed or cancelled embedding/wiki_build/file_memory_extract jobs. Audited.",
         "parameters": [
           {
             "name": "id",
@@ -4591,7 +4591,7 @@
     "/v1/operations/{id}/cancel": {
       "post": {
         "summary": "Cancel a pending or running operable job (human transition:jobs)",
-        "description": "pending/retry/running -> cancelled. A running job's lease is revoked: its holder can no longer finish it and no worker claims a cancelled job. Audited.",
+        "description": "pending/retry/running -> cancelled. A running job's lease is revoked: its holder can no longer finish it and no worker claims a cancelled job. A running file extraction stops before its next chunk. Audited.",
         "parameters": [
           {
             "name": "id",
@@ -4813,7 +4813,7 @@
     "/v1/operations/{id}/retry": {
       "post": {
         "summary": "Requeue a failed operable job (human transition:jobs)",
-        "description": "failed -> pending with fresh attempts, at most 3 operator retries per job (409 after). Audited.",
+        "description": "failed -> pending with fresh attempts, at most 3 operator retries per job (409 after). A file_memory_extract job is not requeued here (400); its uploader resumes it with POST /v1/files/memories/jobs/{id}/run. Audited.",
         "parameters": [
           {
             "name": "id",

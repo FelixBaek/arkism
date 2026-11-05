@@ -7,7 +7,9 @@ import (
 
 // Only background work kinds are operable. Erasure, privacy, quota, receipt,
 // approval and counter rows in jobs keep their own state machines untouched.
-var operableJobKinds = map[string]bool{"embedding": true, wikiJobKind: true}
+// A file extraction runs under its uploader's token, so an operator may cancel
+// or delete it but not requeue it; the uploader resumes it with its run route.
+var operableJobKinds = map[string]bool{"embedding": true, wikiJobKind: true, fileExtractJobKind: true}
 
 // OperationView is the metadata form of one jobs row; payloads stay inside.
 type OperationView struct {
@@ -102,6 +104,9 @@ func (s *Service) CancelOperation(ctx context.Context, token, id string, in Oper
 // maxManualJobRetries times per job.
 func (s *Service) RetryOperation(ctx context.Context, token, id string, in OperationChangeInput) (OperationView, error) {
 	return s.changeOperation(ctx, token, id, in, "transition:jobs", "retry:jobs", func(r *Record) (bool, error) {
+		if r.Kind == fileExtractJobKind {
+			return false, ErrInvalid
+		}
 		if r.Status != JobStatusFailed || r.ManualRetries >= maxManualJobRetries {
 			return false, ErrConflict
 		}

@@ -3,6 +3,7 @@ package memory
 import (
 	"bytes"
 	"compress/zlib"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -304,5 +305,50 @@ func TestFileExtractReuploadIsPerUploader(t *testing.T) {
 	other := extractUploadAs(t, f, f.human2, "다른 사람의 문서."+strings.Repeat(" 다른 내용.", 300))
 	if other.Delta.ChunksChanged != other.Delta.ChunksTotal || other.Delta.ChunksRemoved != 0 || len(llm.prompts) != 2 {
 		t.Fatalf("another uploader saw the first upload: %d %+v", len(llm.prompts), other.Delta)
+	}
+}
+
+// cancelOnCallLLM cancels the job through the operations route during its first model call.
+type cancelOnCallLLM struct {
+	*fakeWikiLLM
+	cancel func()
+}
+
+func (c *cancelOnCallLLM) Complete(ctx context.Context, system, user string, max int) (string, ProviderUsage, error) {
+	if len(c.prompts) == 0 {
+		c.cancel()
+	}
+	return c.fakeWikiLLM.Complete(ctx, system, user, max)
+}
+
+func TestFileExtractCancelStopsTheRunningJob(t *testing.T) {
+	f, llm := wikiFixture(t, extractAnswer(), extractAnswer(), extractAnswer(), extractAnswer(), extractAnswer())
+	f.auth.actors[f.human].verbs["ops"] = true
+	para := strings.Repeat("배포 전에 테스트를 실행한다. ", 200)
+	paras := []string{para, para, para, para, para}
+	out := extractUpload(t, f, paras...)
+	if out.Status != JobStatusPending {
+		t.Fatalf("expected a queued job %+v", out)
+	}
+	f.svc.Wiki = &cancelOnCallLLM{fakeWikiLLM: llm, cancel: func() {
+		if _, err := f.svc.CancelOperation(testCtx, f.human, out.JobID, OperationChangeInput{Scope: scopeA}); err != nil {
+			t.Error(err)
+		}
+	}}
+	if _, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.JobID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("run after cancel: %v", err)
+	}
+	job, _ := f.repo.Get(testCtx, "jobs", scopeA, out.JobID)
+	if len(llm.prompts) != 1 || job.Status != JobStatusCancelled {
+		t.Fatalf("model calls %d, status %s", len(llm.prompts), job.Status)
+	}
+	if v, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, out.JobID); err != nil || v.Status != JobStatusCancelled || len(llm.prompts) != 1 {
+		t.Fatalf("cancelled job ran again %+v %v", v, err)
+	}
+	if _, err := f.svc.RetryOperation(testCtx, f.human, out.JobID, OperationChangeInput{Scope: scopeA}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("operator retry of an extraction: %v", err)
+	}
+	if again := extractUpload(t, f, paras...); again.JobID == out.JobID {
+		t.Fatal("re-upload reused the cancelled job")
 	}
 }
