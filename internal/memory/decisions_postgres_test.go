@@ -110,8 +110,8 @@ func TestSchemaMigrationDecisionDailyCountsFromRelease4(t *testing.T) {
 	if err := p.Init(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if schemaCount(t, p) != 5 {
-		t.Fatal("migration 5 not recorded")
+	if schemaCount(t, p) != len(schemaMigrations()) {
+		t.Fatal("migrations from 5 on not recorded")
 	}
 	scope := Scope{WorkspaceID: "w", ProjectID: "p"}
 	pgDecision(t, p, scope, "candidate_expired", "automatic", time.Now().UTC())
