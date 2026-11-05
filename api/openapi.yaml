@@ -69525,6 +69525,9 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          },
+          "withheld": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false,

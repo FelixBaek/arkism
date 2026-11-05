@@ -302,7 +302,8 @@ func (s *Service) eraseSourceMemories(ctx context.Context, token string, job Rec
 			return failed
 		}
 	}
-	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+	// digestCtx lets an erased row clear the mental-model text citing it (eraseCitedFromMentalModels).
+	return s.Repo.Transaction(s.digestCtx(ctx), func(ctx context.Context, tx Tx) error {
 		lease, e := erasureLease(ctx, tx, job)
 		if e != nil {
 			return e
@@ -486,6 +487,9 @@ func eraseErasureRow(ctx context.Context, tx Tx, job Record, ref Ref, currentPar
 		progress.DeletedRecords["context_usage"]++
 		return nil
 	} else if e = tx.Delete(ctx, ref.Collection, job.Scope, ref.ID, ref.Revision); e != nil {
+		return e
+	}
+	if e = eraseCitedFromMentalModels(ctx, tx, job.Scope, ref, principalID); e != nil {
 		return e
 	}
 	if ref.Collection == "memories" {

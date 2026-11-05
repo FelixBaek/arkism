@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func obsAnswer(t *testing.T, drafts ...observationDraft) string {
@@ -321,5 +322,187 @@ func TestMentalModelRefreshReviewAndHistory(t *testing.T) {
 	}
 	if err := f.svc.DeleteMentalModel(testCtx, f.human, scopeA, mm.ID, after.Revision); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func (f *fixture) editRecord(col, id string, change func(*Record)) Record {
+	f.t.Helper()
+	r, err := f.repo.Get(testCtx, col, scopeA, id)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	change(&r)
+	r.Revision++
+	if err := f.repo.Replace(testCtx, col, r, r.Revision-1); err != nil {
+		f.t.Fatal(err)
+	}
+	return r
+}
+
+func TestObservationTransferGateIsPerMemory(t *testing.T) {
+	f, llm := wikiFixture(t)
+	text := "deploy to staging requires the staging flag in the deploy script"
+	ms := []Record{f.activeMemory(text), f.activeMemory(text + " always"), f.activeMemory(text + " too"), f.activeMemory(text + " again")}
+	own := f.create(f.human, "sources", sourceInput(CreateInput{Scope: scopeA, Text: "a restricted message"}))
+	cand := f.create(f.human, "memory_candidates", candidateInput(CreateInput{Scope: scopeA, Text: text + " still", Sources: refs(own)}))
+	cand = f.transition(f.human, "memory_candidates", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "approved"})
+	ms = append(ms, f.transition(f.human, "memories", cand.ID, ChangeInput{Scope: scopeA, ExpectedRevision: cand.Revision, Status: "active"}))
+	f.editRecord(colMemories, ms[2].ID, func(r *Record) { r.Sensitivity = "restricted" })
+	f.editRecord(colMemories, ms[3].ID, func(r *Record) { r.Sensitivity = "" })
+	f.editRecord("sources", own.ID, func(r *Record) { r.Sensitivity = "restricted" })
+	all := []Record{}
+	for _, m := range ms {
+		cur, _ := f.repo.Get(testCtx, colMemories, scopeA, m.ID)
+		all = append(all, cur)
+	}
+	kept, err := f.svc.transferableMemories(testCtx, f.human, scopeA, all)
+	if err != nil || len(kept) != 2 || kept[0].ID != ms[0].ID || kept[1].ID != ms[1].ID {
+		t.Fatalf("restricted, unclassified and restricted-source memories must not pass: %v %v", refIDs(memRefs(kept...)), err)
+	}
+	llm.answers = []string{obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID))}
+	out, err := f.consolidate(f.human, false)
+	if err != nil || len(out.Proposed) != 1 || len(llm.prompts) != 1 {
+		t.Fatalf("%+v %v", out, err)
+	}
+	for _, m := range ms[2:] {
+		if strings.Contains(llm.prompts[0], m.ID) {
+			t.Fatalf("memory %s reached the model", m.ID)
+		}
+	}
+	if got := f.repo.store[colObservations][recKey(scopeA, out.Proposed[0].ID)].Sensitivity; got != ms[0].Sensitivity || got == "" {
+		t.Fatalf("observation sensitivity %q", got)
+	}
+	// A mental-model refresh recalls for the model, so the same gate filters its recall.
+	mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Staging", Query: "staging flag", Refresh: mmRefreshManual})
+	if err != nil {
+		t.Fatal(err)
+	}
+	answer, _ := json.Marshal(mentalModelAnswer{Summary: "Staging needs the flag.", Citations: []string{ms[0].ID}})
+	llm.answers = append(llm.answers, string(answer))
+	if _, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA, DryRun: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range ms[2:] {
+		if strings.Contains(llm.prompts[1], m.ID) {
+			t.Fatalf("memory %s reached the mental-model prompt", m.ID)
+		}
+	}
+}
+
+func TestObservationPromptDatesNotesOldestFirst(t *testing.T) {
+	f, llm := wikiFixture(t)
+	newer := f.activeMemory("the staging deploy port changed to 9090 in the deploy script")
+	older := f.activeMemory("the staging deploy port is 8080 in the deploy script")
+	jan, mar := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), time.Date(2026, 3, 9, 0, 0, 0, 0, time.UTC)
+	f.editRecord(colMemories, older.ID, func(r *Record) { r.EffectiveAt = &jan })
+	f.editRecord(colMemories, newer.ID, func(r *Record) { r.EffectiveAt = &mar })
+	llm.answers = []string{obsAnswer(t)}
+	if _, err := f.consolidate(f.human, false); err != nil || len(llm.prompts) != 1 {
+		t.Fatal(err, len(llm.prompts))
+	}
+	p := llm.prompts[0]
+	i, j := strings.Index(p, "id: "+older.ID+"\n  date: 2026-01-05"), strings.Index(p, "id: "+newer.ID+"\n  date: 2026-03-09")
+	if i < 0 || j < 0 || i > j || !strings.Contains(p, "changed or ended") {
+		t.Fatalf("notes must carry server dates, oldest first, with the change rule:\n%s", p)
+	}
+}
+
+func TestSourceErasureClearsMentalModelText(t *testing.T) {
+	f, llm, ms := obsFixture(t)
+	llm.answers = []string{obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID, ms[2].ID))}
+	out, err := f.consolidate(f.human, false)
+	if err != nil || len(out.Proposed) != 1 {
+		t.Fatal(out, err)
+	}
+	obs, err := f.svc.ReviewObservation(testCtx, f.human, out.Proposed[0].ID, ObservationReviewInput{Scope: scopeA, ExpectedRevision: out.Proposed[0].Revision, Action: "approve"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved := func(title string, cites ...string) MentalModelView {
+		t.Helper()
+		mm, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: title, Query: "staging flag", Refresh: mmRefreshManual})
+		if err != nil {
+			t.Fatal(err)
+		}
+		answer, _ := json.Marshal(mentalModelAnswer{Summary: title + " needs the flag.", Citations: cites})
+		llm.answers = append(llm.answers, string(answer))
+		v, err := f.svc.RefreshMentalModel(testCtx, f.human, mm.ID, MentalModelRefreshInput{Scope: scopeA})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v, err = f.svc.ReviewMentalModel(testCtx, f.human, mm.ID, MentalModelReviewInput{Scope: scopeA, ExpectedRevision: v.Revision, Action: mmReviewApprove}); err != nil || v.Active == nil {
+			t.Fatal(v, err)
+		}
+		return v
+	}
+	viaObservation, viaMemory := approved("Observed", obs.ID), approved("Direct", ms[0].ID)
+	// Quarantine is not erasure: the text is withheld from readers at once.
+	f.editRecord(colMemories, ms[0].ID, func(r *Record) { r.PrivacyQuarantined = true })
+	if v, _ := f.svc.GetMentalModel(testCtx, f.human, scopeA, viaMemory.ID); v.Active == nil || v.Active.Text != "" || !v.Active.Withheld {
+		t.Fatalf("quarantined citation: %+v", v.Active)
+	}
+	f.editRecord(colMemories, ms[0].ID, func(r *Record) { r.PrivacyQuarantined = false })
+	src := f.repo.store["sources"][recKey(scopeA, ms[0].Sources[0].SourceID)]
+	if err := f.svc.Delete(testCtx, f.human, "sources", src.ID, ChangeInput{Scope: scopeA, ExpectedRevision: src.Revision}); err != nil {
+		t.Fatal(err)
+	}
+	token := erasureWorker(f)
+	f.auth.actors[token] = actor("eraser-1", "service", true, "erase", "embed", "read")
+	for i := 0; i < 50; i++ {
+		if err := f.svc.WorkOnce(testCtx, token); errors.Is(err, ErrNotFound) {
+			break
+		}
+	}
+	if _, err := f.repo.Get(testCtx, colObservations, scopeA, obs.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("the observation survived the erasure of its source", err)
+	}
+	for _, id := range []string{viaObservation.ID, viaMemory.ID} {
+		m := f.repo.store[colMentalModels][recKey(scopeA, id)].MentalModel
+		if m.Active != nil {
+			t.Fatalf("mental model %s kept text citing erased data: %+v", id, m.Active)
+		}
+		for _, rev := range m.History {
+			if rev.Text != "" {
+				t.Fatalf("mental model %s history kept text: %+v", id, rev)
+			}
+		}
+	}
+}
+
+// The search SQL reads doc fields as stored: approved_by as a top-level string,
+// content_erased dropped when false (COALESCE), never a typed date cast.
+func TestObservationSearchSQLMatchesStoredDoc(t *testing.T) {
+	now := time.Now().UTC()
+	raw, err := storeMarshal(Record{ID: "ob_1", Scope: scopeA, Status: obsActive, ApprovedBy: "human-1", Text: "x", UpdatedAt: now, Observation: &ObservationData{Durability: "lasting"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc["approved_by"] != "human-1" || doc["status"] != obsActive {
+		t.Fatalf("stored doc %v", doc)
+	}
+	if _, ok := doc["content_erased"]; ok {
+		t.Fatal("content_erased is stored when false; the SQL relies on COALESCE for its absence")
+	}
+	w, _ := pgSearchWhere(SearchCriteria{}, colObservations, now, "", nil)
+	for _, want := range []string{"COALESCE((doc->>'content_erased')::boolean,false)=false", "NULLIF(doc->>'approved_by','') IS NOT NULL", "(doc->'effective_at'->>'$date')::timestamptz"} {
+		if !strings.Contains(w, want) {
+			t.Fatalf("missing %q in %s", want, w)
+		}
+	}
+	if strings.Contains(w, "(doc->>'effective_at')::timestamptz") || strings.Contains(w, "(doc->>'updated_at')::timestamptz") {
+		t.Fatal("a stored date is an object; it must be read through $date")
+	}
+}
+
+func TestNativeServingKeepsBaselineWithObservations(t *testing.T) {
+	a := &nativeSearchAttempt{runtime: &NativeSearchShadowRuntime{config: NativeSearchShadowConfig{Mode: "on"}}, served: &nativeBridgeResult{}}
+	a.record.Status = "selected"
+	base := ContextBundle{Items: []Hit{{ID: "m1", Collection: colMemories}, {ID: "ob_1", Collection: colObservations}}}
+	if got := a.serve(base, map[Ref]string{}); len(got.Items) != 2 || a.serving {
+		t.Fatalf("served %+v", got)
 	}
 }

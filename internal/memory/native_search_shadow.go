@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	_ "embed"
+	"slices"
 	"sync"
 	"time"
 
@@ -266,6 +267,10 @@ func (a *nativeSearchAttempt) compute(ctx context.Context, s *Service, token str
 // snapshots, so the commit transaction checks them like baseline items.
 func (a *nativeSearchAttempt) serve(out ContextBundle, snapshots map[Ref]string) ContextBundle {
 	if a == nil || (a.runtime.config.Mode != "on" && a.runtime.config.Mode != "dynamic") || a.served == nil || a.record.Status != "selected" {
+		return out
+	}
+	// The native ranking covers memories only; a baseline carrying approved observations is kept whole.
+	if slices.ContainsFunc(out.Items, func(h Hit) bool { return h.Collection == colObservations }) {
 		return out
 	}
 	served := a.served.served

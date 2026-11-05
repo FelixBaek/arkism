@@ -12,7 +12,8 @@ import (
 //     and observation (any status) that lists it, marking it stale and erased, and
 //     the mental-model revisions that cite it or such an observation;
 //   - erasing a source deletes the digests and observations that carry it
-//     (sourceErasureCollections), since they keep their members' sources.
+//     (sourceErasureCollections), since they keep their members' sources, and
+//     clears the mental-model revisions citing each memory or observation it deletes.
 var digestErasureStatuses = []string{digestActive, digestCandidate, digestSuperseded, digestRejected, digestStale}
 
 func eraseMemoryFromDerived(ctx context.Context, tx Tx, scope Scope, memoryID, actor string) error {
@@ -150,4 +151,18 @@ func eraseFromMentalModels(ctx context.Context, tx Tx, lister statusLister, scop
 		}
 	}
 	return nil
+}
+
+// eraseCitedFromMentalModels scrubs mental-model text citing a memory or an
+// observation an erasure job deleted: mental models keep no sources of their
+// own, so the job's source match never reaches them.
+func eraseCitedFromMentalModels(ctx context.Context, tx Tx, scope Scope, ref Ref, actor string) error {
+	if ref.Collection != colMemories && ref.Collection != colObservations {
+		return nil
+	}
+	lister := listerOf(ctx, tx)
+	if lister == nil {
+		return ErrUnavailable
+	}
+	return eraseFromMentalModels(ctx, tx, lister, scope, []string{ref.ID}, actor, time.Now().UTC().Truncate(time.Millisecond))
 }

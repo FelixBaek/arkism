@@ -17,6 +17,19 @@ var recencyHalfLife = map[string]time.Duration{
 	"lesson":   180 * 24 * time.Hour,
 }
 
+// contentTime is when a memory's content took effect: UpdatedAt also moves on
+// metadata-only edits such as reach, so creation and effective time win.
+func contentTime(updated time.Time, created, effective *time.Time) time.Time {
+	at := updated
+	if created != nil && !created.IsZero() {
+		at = *created
+	}
+	if effective != nil && !effective.IsZero() {
+		at = *effective
+	}
+	return at
+}
+
 // recencyFactor keeps at least half of a hit's score, so an old memory that is the
 // only real match still surfaces; it only loses ties to fresher ones.
 func recencyFactor(h Hit, now time.Time) float64 {
@@ -33,15 +46,7 @@ func recencyFactor(h Hit, now time.Time) float64 {
 
 // hitContentTime is a hit's content time: effective_at, else created_at, else updated_at.
 // UpdatedAt is last because it also moves on metadata-only edits such as reach.
-func hitContentTime(h Hit) time.Time {
-	if h.EffectiveAt != nil && !h.EffectiveAt.IsZero() {
-		return *h.EffectiveAt
-	}
-	if h.CreatedAt != nil && !h.CreatedAt.IsZero() {
-		return *h.CreatedAt
-	}
-	return h.UpdatedAt
-}
+func hitContentTime(h Hit) time.Time { return contentTime(h.UpdatedAt, h.CreatedAt, h.EffectiveAt) }
 
 // decayByRecency rescales fused scores by age and by each hit's outcome
 // weight (1 when absent), and keeps the best limit rows.

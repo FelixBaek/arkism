@@ -353,6 +353,9 @@ func (s *Service) dailyModelCalls(ctx context.Context, scope Scope, prefix strin
 
 var errWikiBudget = errors.New("wiki_budget_exceeded")
 
+// wikiDestination is the transfer destination of every server-side wiki model call.
+const wikiDestination = "external:wiki-llm"
+
 // wikiCall is the budget gate: it refuses before calling when the daily call
 // cap or the job token budget would be passed, and records every call made.
 func (s *Service) wikiCall(ctx context.Context, scope Scope, job *WikiJob, operation, system, user string) (string, error) {
@@ -590,7 +593,7 @@ func newWikiWrite(refs []SourceRef, gen Generator) *wikiWrite {
 // boundary checks in w. writeRule is appended to the write step's system prompt.
 func (s *Service) wikiPlanAndWrite(ctx context.Context, token string, d Decision, scope Scope, job *WikiJob, w *wikiWrite, resourceID, source, writeRule string) error {
 	// The source leaves the server for the model: an explicit transfer decision.
-	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, resourceID, source, wikiLLMDestination)
+	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, resourceID, source, wikiDestination)
 	if err != nil {
 		return err
 	}
