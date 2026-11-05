@@ -418,11 +418,7 @@ func extractChunks(pages []string, paged bool, size int) []FileExtractChunk {
 // where the space's MCP tool list names add_document: extraction spends the model
 // budget, so an empty list (every tool) does not let agents in. Whether a model is
 // needed depends on the mode (extractPlan).
-func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope, agentOK bool) (Decision, SpaceConfig, error) {
-	roles := []string{roleHuman}
-	if agentOK {
-		roles = append(roles, roleAgent)
-	}
+func (s *Service) extractActor(ctx context.Context, token, action string, scope Scope, roles ...string) (Decision, SpaceConfig, error) {
 	d, err := s.wikiAuthorize(ctx, token, action, scope, "", "", roles...)
 	if err != nil {
 		return d, SpaceConfig{}, err
@@ -537,7 +533,7 @@ func (s *Service) ExtractPreview(ctx context.Context, token string, in ExtractPr
 		in.SourceLabel != "" && (!validRunLabel(in.SourceLabel, 200) || containsSecret(in.SourceLabel)) || !validExtractOptions(opts, time.Now()) {
 		return ExtractPreviewResult{}, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope, false)
+	d, settings, err := s.extractActor(ctx, token, "generate:memory_candidates", in.Scope, roleHuman)
 	if err != nil {
 		return ExtractPreviewResult{}, err
 	}
@@ -674,7 +670,7 @@ func (s *Service) ExtractFileMemories(ctx context.Context, token string, in File
 	if !validExtractOptions(opts, time.Now()) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman, roleAgent)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
@@ -743,7 +739,7 @@ func (s *Service) Ingest(ctx context.Context, token string, in IngestInput) (Ing
 		ingestImages(in.Items) > s.Files.visionPages() {
 		return IngestResult{}, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman, roleAgent)
 	if err != nil {
 		return IngestResult{}, err
 	}

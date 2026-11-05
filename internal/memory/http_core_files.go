@@ -163,7 +163,7 @@ func (s *Service) ExtractFileBatch(ctx context.Context, token string, in FileBat
 	if !validScope(in.Scope) || len(in.Files) > s.Files.batchFiles() {
 		return out, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman, roleAgent)
 	if err != nil {
 		return out, err
 	}

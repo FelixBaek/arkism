@@ -232,7 +232,7 @@ func (s *Service) ReprocessDocument(ctx context.Context, token, id string, in Wi
 	if !validScope(in.Scope) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, _, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, true)
+	d, _, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman, roleAgent)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}

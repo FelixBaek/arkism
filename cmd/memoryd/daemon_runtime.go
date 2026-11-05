@@ -54,6 +54,7 @@ type daemonWorkerStep struct {
 	expiryDays               int
 	nextSweep, nextWatch     time.Time
 	nextDeriveSeed           time.Time
+	nextBatchResume          time.Time
 }
 
 func serveDaemonWorker(ctx context.Context, svc *memory.Service, cfg daemonOptions, control *desktopcontrol.Controller) error {
@@ -100,6 +101,13 @@ func (w *daemonWorkerStep) run(ctx context.Context) {
 			slog.Warn("derive schedule seed deferred; retried next hour")
 		}
 		w.nextDeriveSeed = time.Now().Add(time.Hour)
+	}
+	// Extraction jobs waiting on a provider batch resume at start and hourly, without their owner's poll.
+	if !w.recovery && time.Now().After(w.nextBatchResume) {
+		if _, err := w.service.ResumeExtractBatches(op, w.token); err != nil {
+			slog.Warn("extraction batch resume deferred; retried next hour")
+		}
+		w.nextBatchResume = time.Now().Add(time.Hour)
 	}
 	slog.Debug("memory worker iteration")
 	if err := w.service.WorkOnce(op, w.token); err != nil && !errors.Is(err, memory.ErrNotFound) {

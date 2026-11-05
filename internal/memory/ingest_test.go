@@ -490,3 +490,53 @@ func TestCaptureLabelsPassDefenseRules(t *testing.T) {
 		t.Fatalf("blocked label %+v %v", out, err)
 	}
 }
+
+func (f *fakeRepo) WaitingExtractBatches(_ context.Context, limit int) ([]Record, error) {
+	out := []Record{}
+	for _, r := range f.rows(colJobs) {
+		if r.Kind == fileExtractJobKind && r.Status == JobStatusRetry && r.FileExtract != nil && r.FileExtract.Batch != nil && len(out) < limit {
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+func TestWorkerResumesWaitingExtractBatchAfterRestart(t *testing.T) {
+	f, _ := wikiFixture(t)
+	llm := &fakeBatchLLM{}
+	f.svc.Wiki = llm
+	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionChunkSize: ptr(500)})
+	out, err := f.svc.Ingest(testCtx, f.human, IngestInput{Scope: scopeA, Async: true, Items: []IngestItem{{Content: strings.Repeat(strings.Repeat("alpha beta gamma ", 25)+"\n\n", 3)}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := out.Items[0].JobID
+	if v, err := f.svc.RunFileExtractJob(testCtx, f.human, scopeA, id); err != nil || !extractBatchWaiting(v) {
+		t.Fatalf("submit %+v %v", v, err)
+	}
+	llm.done = true
+	// A worker that may not write candidates leaves the job for its owner.
+	worker := f.auth.actors[f.work]
+	f.auth.actors[f.work] = actor("worker-1", roleService, true, "read", "embed")
+	if n, err := f.svc.ResumeExtractBatches(testCtx, f.work); err != nil || n != 0 {
+		t.Fatalf("resumed without the grant: %d %v", n, err)
+	}
+	f.auth.actors[f.work] = worker
+	if n, err := f.svc.ResumeExtractBatches(testCtx, f.work); err != nil || n != 1 {
+		t.Fatalf("resumed %d %v", n, err)
+	}
+	r, err := f.svc.extractJob(testCtx, f.svc.Repo, scopeA, id)
+	if err != nil || r.Status != JobStatusDone {
+		t.Fatalf("job %s %v", r.Status, err)
+	}
+	for _, row := range f.repo.rows(colProviderUsage) {
+		if row.Status != JobStatusDone {
+			t.Fatalf("ledger row %+v", row)
+		}
+	}
+	// The worker may not run someone's job that is not waiting on a batch.
+	f.editRecord(colJobs, id, func(r *Record) { r.Status = JobStatusFailed })
+	if _, err := f.svc.RunFileExtractJob(testCtx, f.work, scopeA, id); !errors.Is(err, ErrDenied) {
+		t.Fatalf("the worker ran a job not waiting on a batch: %v", err)
+	}
+}

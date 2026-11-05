@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -273,4 +274,64 @@ func (c *ChatWikiLLM) batchAnswers(body []byte) (map[string]BatchAnswer, bool, e
 		return nil, false, fmt.Errorf("read batch results: %w", ErrUnavailable)
 	}
 	return out, true, nil
+}
+
+// extractResumeLimit bounds one worker pass over waiting batches.
+const extractResumeLimit = 100
+
+// extractBatchLister is the cross-scope read the worker's batch resume needs (Postgres).
+type extractBatchLister interface {
+	WaitingExtractBatches(ctx context.Context, limit int) ([]Record, error)
+}
+
+// ResumeExtractBatches runs the extraction jobs waiting on a provider batch with the
+// worker's token, so a batch submitted before a restart is read even when nobody polls
+// its job. The worker needs write:memory_candidates and read:memory_candidates in each
+// scope (guide/server.md); a scope it may not write is skipped and its job waits for its
+// owner. Candidates still wait for a person's review. It returns how many jobs it ran.
+func (s *Service) ResumeExtractBatches(ctx context.Context, workerToken string) (int, error) {
+	lister, ok := s.Repo.(extractBatchLister)
+	if !ok || s.Wiki == nil {
+		return 0, nil
+	}
+	jobs, err := lister.WaitingExtractBatches(ctx, extractResumeLimit)
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range jobs {
+		d, settings, err := s.extractActor(ctx, workerToken, "write:memory_candidates", r.Scope, roleService)
+		if err == nil {
+			_, err = s.runClaimedExtractJob(ctx, workerToken, d, settings, r.Scope, r.ID)
+		}
+		if err != nil {
+			code, _ := errorResponse(err)
+			slog.Warn("extraction batch resume deferred; the owner's poll or the next pass resumes it", "job", r.ID, "reason", code)
+			continue
+		}
+		n++
+	}
+	return n, nil
+}
+
+// WaitingExtractBatches lists extraction jobs across scopes that wait on a submitted provider batch.
+func (p *Postgres) WaitingExtractBatches(ctx context.Context, limit int) ([]Record, error) {
+	rows, e := p.q().Query(ctx, `SELECT payload FROM memory_records WHERE collection='jobs' AND kind=$1 AND status=$2 AND doc->'file_extract'->'batch' IS NOT NULL AND jsonb_typeof(doc->'file_extract'->'batch')='object' ORDER BY updated_at,id LIMIT $3`, fileExtractJobKind, JobStatusRetry, limit)
+	if e != nil {
+		return nil, pgErr(e)
+	}
+	defer rows.Close()
+	out := []Record{}
+	for rows.Next() {
+		var b []byte
+		if e = rows.Scan(&b); e != nil {
+			return nil, ErrUnavailable
+		}
+		r, e := pgDecode(b)
+		if e != nil {
+			return nil, e
+		}
+		out = append(out, r)
+	}
+	return out, pgErr(rows.Err())
 }

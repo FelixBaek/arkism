@@ -154,7 +154,8 @@ func (s *Service) claimExtractJob(ctx context.Context, d Decision, scope Scope, 
 		if !ownsJob(d, r) {
 			return ErrNotFound // an agent is not told another principal's job exists
 		}
-		if r.FileExtract.RequestedBy != d.PrincipalID {
+		// The worker (a service) may only resume a job waiting on a provider batch (ResumeExtractBatches).
+		if r.FileExtract.RequestedBy != d.PrincipalID && (d.Role != roleService || r.FileExtract.Batch == nil) {
 			return ErrDenied
 		}
 		now := time.Now().UTC()
@@ -202,10 +203,15 @@ func (s *Service) RunFileExtractJob(ctx context.Context, token string, scope Sco
 	if !validRunLabel(id, 256) {
 		return FileExtractJobView{}, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", scope, true)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", scope, roleHuman, roleAgent)
 	if err != nil {
 		return FileExtractJobView{}, err
 	}
+	return s.runClaimedExtractJob(ctx, token, d, settings, scope, id)
+}
+
+// runClaimedExtractJob claims the job for d and runs it.
+func (s *Service) runClaimedExtractJob(ctx context.Context, token string, d Decision, settings SpaceConfig, scope Scope, id string) (FileExtractJobView, error) {
 	r, ok, err := s.claimExtractJob(ctx, d, scope, id)
 	if err != nil || !ok {
 		return viewExtractJob(r), err
@@ -290,7 +296,7 @@ func (s *Service) extractKnowledge(ctx context.Context, token, id string, in Kno
 	if !validRunLabel(id, 256) {
 		return FileMemoriesResult{}, ErrInvalid
 	}
-	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, false)
+	d, settings, err := s.extractActor(ctx, token, "write:memory_candidates", in.Scope, roleHuman)
 	if err != nil {
 		return FileMemoriesResult{}, err
 	}
