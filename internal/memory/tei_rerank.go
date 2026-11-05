@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -28,7 +29,10 @@ type TEIRerankConfig struct {
 
 // TEIReranker scores (query, text) pairs. Search never fails on it: an error or
 // timeout serves the fused order and is counted in metrics.
+// A local reranker (NewLocalReranker) scores in process with lexical BM25 and sends
+// nothing anywhere.
 type TEIReranker struct {
+	local                   bool
 	endpoint, model, apiKey string
 	client                  *http.Client
 	metrics                 rerankCounters
@@ -53,8 +57,15 @@ func NewTEIReranker(cfg TEIRerankConfig) (*TEIReranker, error) {
 	return &TEIReranker{endpoint: base + "/rerank", model: model, apiKey: strings.TrimSpace(cfg.APIKey), client: providerClient(cfg.Client, timeout)}, nil
 }
 
+// NewLocalReranker is the fallback when no rerank service is configured: BM25 over
+// the hit texts, scaled so the best text scores 1.
+func NewLocalReranker() *TEIReranker { return &TEIReranker{local: true} }
+
 // usage is the ledger entry of one rerank call.
 func (t *TEIReranker) usage() ProviderUsage {
+	if t.local {
+		return ProviderUsage{Provider: "local", Model: "lexical", Requests: 1}
+	}
 	if t.model != "" {
 		return ProviderUsage{Provider: "rerank_api", Model: t.model, Requests: 1}
 	}
@@ -116,6 +127,9 @@ func (t *TEIReranker) rows(body []byte) ([]teiRerankRow, error) {
 // Rerank returns one score in [0,1] per text, in input order.
 func (t *TEIReranker) Rerank(ctx context.Context, query string, texts []string) ([]float64, error) {
 	t.metrics.calls.Add(1)
+	if t.local {
+		return localRerank(query, texts), nil
+	}
 	body, status, err := postJSON(ctx, t.client, t.endpoint, t.apiKey, t.request(query, texts), defaultRequestMax, defaultResponseMax)
 	if err != nil {
 		return nil, err
@@ -136,6 +150,21 @@ func (t *TEIReranker) Rerank(ctx context.Context, query string, texts []string) 
 		scores[*r.Index] = min(max(*r.Score, 0), 1)
 	}
 	return scores, nil
+}
+
+func localRerank(query string, texts []string) []float64 {
+	docs := make([]bm25Doc, len(texts))
+	for i, text := range texts {
+		docs[i].text = text
+	}
+	scores := bm25(query, docs)
+	best := slices.Max(scores)
+	for i := range scores {
+		if best > 0 {
+			scores[i] /= best
+		}
+	}
+	return scores
 }
 
 // fellBack counts a rerank failure that served the fused order instead.

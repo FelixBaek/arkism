@@ -369,3 +369,23 @@ func TestRecallContextBuildPassesExplainAndTimezone(t *testing.T) {
 		t.Fatal("unknown timezone must be rejected", err)
 	}
 }
+
+func TestLocalLexicalRerank(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Reranker = NewLocalReranker()
+	in := SearchInput{Scope: scopeA, Query: "staging flag", Limit: 3}
+	rows := rerankRowsFixture()
+	rows[2].Text = "deploys to staging need the staging flag"
+	trace := &recallTrace{rerank: map[string]float64{}}
+	// Runs in process even without an external transfer decision.
+	got, err := f.svc.rerankRows(testCtx, in, Decision{}, rows, trace)
+	if err != nil || got[0].ID != "c" || trace.rerank[hitKey(got[0].Hit)] != 1 || !trace.reranked {
+		t.Fatal(got, trace, err)
+	}
+	if usage := f.repo.rows(colProviderUsage); len(usage) != 1 || usage[0].Cost.Provider != "local" || usage[0].Cost.Model != "lexical" {
+		t.Fatalf("%+v", usage)
+	}
+	if scores := localRerank("absent", []string{"a", "b"}); !slices.Equal(scores, []float64{0, 0}) {
+		t.Fatal(scores)
+	}
+}

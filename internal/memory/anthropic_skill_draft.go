@@ -217,7 +217,8 @@ func draftModelListed(models []byte, model string) bool {
 	return found
 }
 
-// parseDraftResponse returns the billed usage, the stop reason and the joined text blocks.
+// parseDraftResponse returns the billed usage, the stop reason and the joined text blocks
+// of a messages-protocol answer; model "" accepts any answering model.
 func parseDraftResponse(raw []byte, model string) (ProviderUsage, string, string, bool) {
 	var response struct {
 		Model   string `json:"model"`
@@ -233,7 +234,7 @@ func parseDraftResponse(raw []byte, model string) (ProviderUsage, string, string
 			CacheWrite int64  `json:"cache_creation_input_tokens"`
 		} `json:"usage"`
 	}
-	if json.Unmarshal(raw, &response) != nil || response.Model != model || response.Usage.Input == nil || response.Usage.Output == nil || *response.Usage.Input < 0 || *response.Usage.Output < 0 || response.Usage.CacheRead != 0 || response.Usage.CacheWrite != 0 {
+	if json.Unmarshal(raw, &response) != nil || (model != "" && response.Model != model) || response.Usage.Input == nil || response.Usage.Output == nil || *response.Usage.Input < 0 || *response.Usage.Output < 0 || response.Usage.CacheRead != 0 || response.Usage.CacheWrite != 0 {
 		return ProviderUsage{}, "", "", false
 	}
 	usage := ProviderUsage{Provider: "skill_llm", Model: model, Requests: 1, InputTokens: *response.Usage.Input, OutputTokens: *response.Usage.Output, TotalTokens: *response.Usage.Input + *response.Usage.Output}

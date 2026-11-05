@@ -854,7 +854,7 @@ func (s *Service) updateWikiDraft(ctx context.Context, tx Tx, claimed Record, jo
 	return nil
 }
 
-// ChatWikiLLM calls an OpenAI-compatible chat endpoint (the skill LLM config).
+// ChatWikiLLM calls the server model (the skill LLM config, llm_chat.go).
 type ChatWikiLLM struct{ Config LLMConfig }
 
 func (c *ChatWikiLLM) Generator() Generator {
@@ -862,40 +862,11 @@ func (c *ChatWikiLLM) Generator() Generator {
 }
 
 func (c *ChatWikiLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
-	if c.Config.APIKey == "" || c.Config.Model == "" || validateEndpoint(c.Config.Endpoint) != nil {
-		return "", ProviderUsage{}, ErrUnavailable
-	}
-	payload := map[string]any{"model": c.Config.Model, "temperature": 0, "max_tokens": maxTokens, "messages": []map[string]string{
-		{"role": "system", "content": system},
-		{"role": "user", "content": user},
-	}}
-	body, status, err := postJSON(ctx, providerClient(nil, 120*time.Second), c.Config.Endpoint, c.Config.APIKey, payload, defaultRequestMax, defaultResponseMax)
+	reply, err := c.Config.chat(ctx, chatRequest{op: "wiki llm", provider: wikiProvider, system: system, user: user, maxTokens: maxTokens, timeout: 120 * time.Second})
 	if err != nil {
 		return "", ProviderUsage{}, err
 	}
-	if status != 200 {
-		return "", ProviderUsage{}, dependencyStatusError("wiki llm", status)
-	}
-	var response struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int64 `json:"prompt_tokens"`
-			CompletionTokens int64 `json:"completion_tokens"`
-			TotalTokens      int64 `json:"total_tokens"`
-		} `json:"usage"`
-	}
-	if json.Unmarshal(body, &response) != nil || len(response.Choices) != 1 {
-		return "", ProviderUsage{}, ErrUnavailable
-	}
-	usage := ProviderUsage{Provider: wikiProvider, Model: c.Config.Model, Requests: 1, InputTokens: response.Usage.PromptTokens, OutputTokens: response.Usage.CompletionTokens, TotalTokens: response.Usage.TotalTokens}
-	if !validProviderUsage(usage) {
-		return "", ProviderUsage{}, ErrUnavailable
-	}
-	return response.Choices[0].Message.Content, usage, nil
+	return reply.text, reply.usage, nil
 }
 
 func wikiBaseCitations(p WikiPage) []string {

@@ -212,6 +212,7 @@ wiki. What a person approves and how is described in
    | Name | Meaning |
    |---|---|
    | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | Chat model the server calls |
+   | `SKILL_LLM_PROTOCOL` | Empty for the common chat-completions protocol, `messages` for the messages protocol (see [Model providers](#model-providers)). Any other value stops startup |
    | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
    | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
 
@@ -225,9 +226,11 @@ wiki. What a person approves and how is described in
    | `ARKISM_WEBHOOK_ALLOW_PRIVATE` | `1` lets webhooks reach loopback and private addresses (development only). Link-local and metadata addresses stay refused |
    | `ARKISM_RERANK_URL`, `ARKISM_RERANK_TIMEOUT` | Base URL of a `POST /rerank` service and its timeout (Go duration, at most `1m`). On error or timeout recall keeps the fused order |
    | `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Model name and bearer key of a hosted rerank API. Setting the model switches to the hosted request shape (see [Model providers](#model-providers)) |
+   | `ARKISM_RERANK_LOCAL` | `1` without `ARKISM_RERANK_URL` turns on an in-process lexical (BM25) reranker. It sends nothing off the server, so it does not need `external:transfer`; it is weaker than a cross-encoder. Off by default, so an upgrade does not change recall order. Calls are filed in the usage ledger as provider `local`, model `lexical` |
    | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME`, `ARKISM_OTLP_SAMPLE_RATIO` | Request tracing (see [Tracing](#tracing)). Off by default |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
    | `ARKISM_SPACE_DEFAULT_TEMPLATE` | Path to a space template bundle (`POST /v1/spaces/{workspace}/{project}/export` with `template: true`). Every space inherits the settings it leaves empty from the template's config, the template's defense rules apply to every space, and `POST .../import` with `default_template: true` copies its directives and mental model definitions into a space without settings. An unreadable file stops startup |
+   | `ARKISM_SPACE_TEMPLATE_AUTO` | `1` applies the default template's directives and mental model definitions to a space by itself: when a person saves the space's first settings (their settings win), or on a person's first stored memory in a space without settings (the template's settings are stored too). Each space gets it once per server run; agent writes never apply it, since the definitions are human-only. Off by default. `GET /v1/spaces/template-schema` returns the JSON schema of a template bundle |
    | `MEMORY_AUTO_DERIVE` | `on` lets the worker run observation, causal link and model name proposals by itself after approvals. Off by default, so an upgrade does not start spending the daily model calls. Needs the server model; results stay proposals for a person. This is the server default: a space's `auto_derive` setting (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) overrides each field |
    | `MEMORY_AUTO_DERIVE_THRESHOLD`, `MEMORY_AUTO_DERIVE_INTERVAL` | Approvals that start a run at once (1-1000, default `10`) and the longest wait after the first counted approval (Go duration, `1m` to `720h`, default `6h`) |
 
@@ -245,10 +248,18 @@ wiki. What a person approves and how is described in
    also needs `external:transfer`. The audit log names the destination:
    `external:wiki-llm` for server model calls and `external:space_bundle` for a
    space export. These are destinations, not actions you grant.
-5. **File extraction jobs.** Cancel a running extraction with
+5. **Delta refresh of topic summaries (optional).** A mental model with
+   `refresh.strategy: "delta"` sends the server model only the approved summary,
+   the records it cites and the recalled records changed since the approval,
+   instead of the whole recall. Every record sent passes the transfer check again;
+   if a cited record no longer stands or may not leave the server, the refresh
+   falls back to a full rewrite and the approved text is not sent. With nothing
+   new the refresh answers `404`. The draft still waits for a person. Existing
+   models keep `full`.
+6. **File extraction jobs.** Cancel a running extraction with
    `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
    resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
-6. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
+7. **Object storage for attached files (optional).** With `MEMORY_BLOB_S3_*`
    set, attached files live in the bucket, not in `MEMORY_BLOB_DIRECTORY`.
    The server backup does not copy the bucket, and `memoryd --adopt-restored-blobs`
    refuses to run while object storage is on. Back the bucket up yourself
@@ -259,17 +270,19 @@ wiki. What a person approves and how is described in
 
 ## Model providers
 
-The server reaches models through three plain HTTP protocols, so most hosted
+The server reaches models through a few plain HTTP protocols, so most hosted
 APIs and self-hosted inference servers work without new code:
 
 | Need | Setting | Protocol |
 |---|---|---|
 | Chat (server model) | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | the common `/chat/completions` protocol |
+| Chat (server model) | the same, plus `SKILL_LLM_PROTOCOL=messages` | Messages protocol `POST {url}` `{model, max_tokens, system, messages}` with the key in `x-api-key` and the protocol version header `2023-06-01` → `{content: [{type, text}], stop_reason, usage}` |
 | Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embed` | Text Embeddings Inference `POST /embed` |
 | Embeddings | `MEMORY_EMBEDDER=tei`, `TEI_ENDPOINT_URL` ending in `/embeddings` (for example `https://api.example.com/v1/embeddings`), `TEI_API_KEY` | `POST .../embeddings` `{model, input}` → `{data: [{index, embedding}], usage}` |
 | Embeddings | `MEMORY_EMBEDDER=ollama` or `gemini` | Their own embedding routes |
 | Rerank | `ARKISM_RERANK_URL` | Text Embeddings Inference `POST /rerank` `{query, texts}` |
 | Rerank | `ARKISM_RERANK_URL` (for example `https://api.example.com/v1`), `ARKISM_RERANK_MODEL`, `ARKISM_RERANK_API_KEY` | Hosted rerank `POST {url}/rerank` `{model, query, documents, top_n}` → `{results` or `data: [{index, relevance_score}]}` |
+| Rerank | `ARKISM_RERANK_LOCAL=1`, no URL | In-process lexical BM25 over the hit texts, best text scaled to 1 |
 
 Notes:
 

@@ -235,9 +235,11 @@ func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []s
 // rerankRows reorders the fused head by the reranker (blend above). A reranker failure
 // keeps the fused order; only a usage-ledger failure is returned, as for the query
 // embedding. Text is sent only when the vector lane could send the query too, and
-// only for hits the embedding worker would send (not restricted, safe to transfer).
+// only for hits the embedding worker would send (not restricted, safe to transfer);
+// the local reranker sends nothing, so it skips the transfer decision but keeps the
+// text filters (call traces may keep the text).
 func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, rows []ScoredHit, trace *recallTrace) ([]ScoredHit, error) {
-	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(d.ExternalTransfer && d.ContentSafe && safeTransfer(in.Query)) {
+	if s.Reranker == nil || in.Rerank != nil && !*in.Rerank || !spaceRerankOn(in.space) || len(rows) < 2 || rows[0].Score <= 0 || !(s.Reranker.local || d.ExternalTransfer && d.ContentSafe) || !safeTransfer(in.Query) {
 		return rows, nil
 	}
 	texts, at := rerankTexts(rows[:min(len(rows), in.Limit*3, rerankMaxRows)])

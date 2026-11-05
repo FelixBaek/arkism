@@ -74,41 +74,19 @@ func (a *ChatSkillDrafter) Draft(ctx context.Context, in SkillDraftInput) (Skill
 		clone.SkillID, clone.Version, clone.ContentHash, clone.SourcePath, clone.SourceFile = "", "", "", "", ""
 		in.BaselineAnalysis = &clone
 	}
-	payload := map[string]any{"model": a.Config.Model, "temperature": 0, "max_tokens": 8192, "response_format": map[string]string{"type": "json_object"}, "messages": []map[string]string{
-		{"role": "system", "content": skillDraftSystemPrompt(in)},
-		{"role": "user", "content": structuredText(in)},
-	}}
-	body, status, err := postJSON(ctx, providerClient(nil, 60*time.Second), a.Config.Endpoint, a.Config.APIKey, payload, defaultRequestMax, defaultResponseMax)
+	reply, err := a.Config.chat(ctx, chatRequest{op: "skill draft", provider: "skill_llm", maxTokens: 8192, jsonOut: true, timeout: 60 * time.Second,
+		system: skillDraftSystemPrompt(in), user: structuredText(in)})
 	if err != nil {
 		return zero, ProviderUsage{}, err
 	}
-	if status != 200 {
-		return zero, ProviderUsage{}, dependencyStatusError("skill draft", status)
-	}
-	var response struct {
-		Choices []struct {
-			FinishReason string `json:"finish_reason"`
-			Message      struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-		Usage struct {
-			PromptTokens     int64 `json:"prompt_tokens"`
-			CompletionTokens int64 `json:"completion_tokens"`
-			TotalTokens      int64 `json:"total_tokens"`
-		} `json:"usage"`
-	}
-	if json.Unmarshal(body, &response) != nil {
+	usage := reply.usage
+	if usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens {
 		return zero, ProviderUsage{}, ErrUnavailable
 	}
-	usage := ProviderUsage{Provider: "skill_llm", Model: a.Config.Model, Requests: 1, InputTokens: response.Usage.PromptTokens, OutputTokens: response.Usage.CompletionTokens, TotalTokens: response.Usage.TotalTokens}
-	if !validProviderUsage(usage) || usage.TotalTokens == 0 || usage.InputTokens > usage.TotalTokens || usage.OutputTokens > usage.TotalTokens-usage.InputTokens {
-		return zero, ProviderUsage{}, ErrUnavailable
-	}
-	if len(response.Choices) != 1 || response.Choices[0].FinishReason != "stop" {
+	if !reply.complete {
 		return zero, usage, ErrUnavailable
 	}
-	raw := response.Choices[0].Message.Content
+	raw := reply.text
 	out, err := decodeSkillDraft(in, raw)
 	return out, usage, err
 }

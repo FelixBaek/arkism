@@ -310,35 +310,48 @@ func sortedWikiIDs(scores map[string]float64) []string {
 
 // wikiBM25 scores reviewed pages; the title field counts five times.
 func wikiBM25(query string, pages map[string]*Record) map[string]float64 {
+	ids := make([]string, 0, len(pages))
+	docs := make([]bm25Doc, 0, len(pages))
+	for id, r := range pages {
+		ids = append(ids, id)
+		docs = append(docs, bm25Doc{title: r.Wiki.Page.Reviewed.Title, text: r.Wiki.Page.Reviewed.Text})
+	}
+	out := map[string]float64{}
+	for i, score := range bm25(query, docs) {
+		if score > 0 {
+			out[ids[i]] = score
+		}
+	}
+	return out
+}
+
+type bm25Doc struct{ title, text string }
+
+// bm25 scores each document against the query (k1 1.2, b 0.75) over wikiTokens;
+// title tokens count five times. One score per document, in input order.
+func bm25(query string, docs []bm25Doc) []float64 {
 	terms := map[string]bool{}
 	for _, t := range wikiTokens(query) {
 		terms[t] = true
 	}
-	out := map[string]float64{}
-	if len(terms) == 0 || len(pages) == 0 {
+	out := make([]float64, len(docs))
+	if len(terms) == 0 || len(docs) == 0 {
 		return out
 	}
-	type doc struct {
-		tf  map[string]float64
-		len float64
-	}
-	docs := map[string]doc{}
+	tfs, lens := make([]map[string]float64, len(docs)), make([]float64, len(docs))
 	df := map[string]int{}
 	total := 0.0
-	for id, r := range pages {
-		body := r.Wiki.Page.Reviewed
+	for i, d := range docs {
 		tf := map[string]float64{}
-		n := 0.0
-		for _, t := range wikiTokens(body.Title) {
+		for _, t := range wikiTokens(d.title) {
 			tf[t] += 5
-			n += 5
+			lens[i] += 5
 		}
-		for _, t := range wikiTokens(body.Text) {
+		for _, t := range wikiTokens(d.text) {
 			tf[t]++
-			n++
+			lens[i]++
 		}
-		docs[id] = doc{tf: tf, len: n}
-		total += n
+		tfs[i], total = tf, total+lens[i]
 		for t := range terms {
 			if tf[t] > 0 {
 				df[t]++
@@ -351,18 +364,12 @@ func wikiBM25(query string, pages map[string]*Record) map[string]float64 {
 	}
 	const k1, b = 1.2, 0.75
 	n := float64(len(docs))
-	for id, d := range docs {
-		score := 0.0
+	for i, tf := range tfs {
 		for t := range terms {
-			f := d.tf[t]
-			if f == 0 {
-				continue
+			if f := tf[t]; f > 0 {
+				idf := math.Log(1 + (n-float64(df[t])+0.5)/(float64(df[t])+0.5))
+				out[i] += idf * f * (k1 + 1) / (f + k1*(1-b+b*lens[i]/avg))
 			}
-			idf := math.Log(1 + (n-float64(df[t])+0.5)/(float64(df[t])+0.5))
-			score += idf * f * (k1 + 1) / (f + k1*(1-b+b*d.len/avg))
-		}
-		if score > 0 {
-			out[id] = score
 		}
 	}
 	return out

@@ -129,10 +129,14 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 
 // configuredReranker reads ARKISM_RERANK_URL (base URL of a POST /rerank service), the
 // optional ARKISM_RERANK_MODEL (switches to the hosted model/documents protocol),
-// ARKISM_RERANK_API_KEY and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables reranking.
+// ARKISM_RERANK_API_KEY and ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables
+// reranking unless ARKISM_RERANK_LOCAL=1 asks for the in-process lexical reranker.
 func configuredReranker() (*memory.TEIReranker, error) {
 	raw := os.Getenv("ARKISM_RERANK_URL")
 	if raw == "" {
+		if os.Getenv("ARKISM_RERANK_LOCAL") == "1" {
+			return memory.NewLocalReranker(), nil
+		}
 		return nil, nil
 	}
 	var timeout time.Duration

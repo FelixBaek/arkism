@@ -140,7 +140,10 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 	}
 	svc.LLMTraceContent = os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1" // model call traces keep redacted text
 	if !cfg.Recovery && os.Getenv("SKILL_LLM_API_KEY") != "" {
-		config := memory.LLMConfig{Endpoint: os.Getenv("SKILL_LLM_ENDPOINT_URL"), APIKey: os.Getenv("SKILL_LLM_API_KEY"), Model: os.Getenv("SKILL_LLM_MODEL")}
+		config := memory.LLMConfig{Endpoint: os.Getenv("SKILL_LLM_ENDPOINT_URL"), APIKey: os.Getenv("SKILL_LLM_API_KEY"), Model: os.Getenv("SKILL_LLM_MODEL"), Protocol: os.Getenv("SKILL_LLM_PROTOCOL")}
+		if !memory.ValidLLMProtocol(config.Protocol) {
+			return errors.New(`SKILL_LLM_PROTOCOL must be empty or "messages"`)
+		}
 		svc.Analyzer = &memory.ChatSkillAnalyzer{Config: config}
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
