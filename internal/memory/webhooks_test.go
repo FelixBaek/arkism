@@ -99,6 +99,19 @@ func (f *fixture) hook(url string, includeContent bool, events ...string) Webhoo
 	return v
 }
 
+// workUntilTried runs the worker until the hook's first delivery was attempted:
+// the approval's embedding job has a random id and may be claimed first.
+func (f *fixture) workUntilTried(id string) WebhookDeliveryView {
+	f.t.Helper()
+	for range 4 {
+		if d := f.deliveries(id)[0]; d.Attempts > 0 {
+			return d
+		}
+		_ = f.svc.WorkOnce(testCtx, f.work)
+	}
+	return f.deliveries(id)[0]
+}
+
 func (f *fixture) deliveries(id string) []WebhookDeliveryView {
 	f.t.Helper()
 	page, err := f.svc.ListWebhookDeliveries(testCtx, f.human, scopeA, id, "", 0)
@@ -261,8 +274,7 @@ func TestWebhookRetryStateAndGiveUp(t *testing.T) {
 	srv := newHookServer(t, http.StatusInternalServerError)
 	v := f.hook(srv.URL, false, EventMemoryApproved)
 	approveCandidate(t, f, "retry me")
-	_ = f.svc.WorkOnce(testCtx, f.work)
-	d := f.deliveries(v.ID)[0]
+	d := f.workUntilTried(v.ID)
 	if d.Status != JobStatusRetry || d.Attempts != 1 || d.Delivery.HTTPStatus != 500 || d.Delivery.Error != "http_500" {
 		t.Fatalf("after first failure %+v", d)
 	}
@@ -289,11 +301,11 @@ func TestWebhookDeliveryRefusesRebindingToPrivateAddress(t *testing.T) {
 	v := f.hook(strings.Replace(srv.URL, "127.0.0.1", "localhost", 1), false, EventMemoryApproved)
 	f.svc.WebhookAllowPrivate = false
 	approveCandidate(t, f, "rebinding")
-	_ = f.svc.WorkOnce(testCtx, f.work)
+	d := f.workUntilTried(v.ID)
 	if srv.hits() != 0 {
 		t.Fatal("request reached a private address")
 	}
-	if d := f.deliveries(v.ID)[0]; d.Delivery.Error != "blocked_address" || d.Status != JobStatusRetry {
+	if d.Delivery.Error != "blocked_address" || d.Status != JobStatusRetry {
 		t.Fatalf("delivery %+v", d)
 	}
 }
@@ -351,8 +363,7 @@ func TestWebhookClientErrorIsTerminalExceptTimeoutAndRateLimit(t *testing.T) {
 		srv := newHookServer(t, status)
 		v := f.hook(srv.URL, false, EventMemoryApproved)
 		approveCandidate(t, f, "status")
-		_ = f.svc.WorkOnce(testCtx, f.work)
-		d := f.deliveries(v.ID)[0]
+		d := f.workUntilTried(v.ID)
 		want := JobStatusRetry
 		if terminal {
 			want = JobStatusFailed
