@@ -61,14 +61,37 @@ func runDaemonMemoryReach(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 
 // runDaemonSpaceRepair previews unless told to execute; the report goes to stdout as JSON.
 func runDaemonSpaceRepair(ctx context.Context, pg *memory.Postgres, cfg daemonOptions, standalone string) error {
-	workspace, project, ok := strings.Cut(cfg.Space, "/")
-	if cfg.SpaceRepair != "preview" && cfg.SpaceRepair != "execute" || !ok || strings.Contains(project, "/") {
+	space, ok := daemonSpace(cfg.Space)
+	if cfg.SpaceRepair != "preview" && cfg.SpaceRepair != "execute" || !ok {
 		return memory.ErrInvalid
 	}
 	svc := &memory.Service{Repo: pg}
 	op, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	report, err := svc.RepairSpace(op, memory.Scope{WorkspaceID: workspace, ProjectID: project}, cfg.SpaceRepair == "execute")
+	report, err := svc.RepairSpace(op, space, cfg.SpaceRepair == "execute")
+	return printDaemonReport(report, err)
+}
+
+// runDaemonSpaceRename previews unless told to execute; the report goes to stdout as JSON.
+func runDaemonSpaceRename(ctx context.Context, pg *memory.Postgres, cfg daemonOptions, standalone string) error {
+	from, okFrom := daemonSpace(cfg.SpaceFrom)
+	to, okTo := daemonSpace(cfg.SpaceTo)
+	if cfg.SpaceRename != "preview" && cfg.SpaceRename != "execute" || !okFrom || !okTo {
+		return memory.ErrInvalid
+	}
+	op, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	defer cancel()
+	report, err := pg.RenameSpace(op, from, to, cfg.SpaceRename == "execute")
+	return printDaemonReport(report, err)
+}
+
+// daemonSpace reads a workspace/project flag value.
+func daemonSpace(raw string) (memory.Scope, bool) {
+	workspace, project, ok := strings.Cut(raw, "/")
+	return memory.Scope{WorkspaceID: workspace, ProjectID: project}, ok && !strings.Contains(project, "/")
+}
+
+func printDaemonReport(report any, err error) error {
 	if e := json.NewEncoder(os.Stdout).Encode(report); err == nil {
 		err = e
 	}
@@ -161,6 +184,8 @@ func runDaemonMaintenance(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 		return true, runDaemonMemoryReach(ctx, pg, cfg, standalone)
 	case "SpaceRepair":
 		return true, runDaemonSpaceRepair(ctx, pg, cfg, standalone)
+	case "SpaceRename":
+		return true, runDaemonSpaceRename(ctx, pg, cfg, standalone)
 	case "BackupExpiry":
 		return true, runDaemonBackupExpiry(ctx, pg, cfg, standalone)
 	case "AuditExpiry":

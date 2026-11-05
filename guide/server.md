@@ -128,6 +128,7 @@ remain supported.
 | `--semantic-index create\|drop` | Create or drop the optional pgvector index (`MEMORY_SEMANTIC_RETRIEVAL=1`) |
 | `--reindex` | Queue embedding jobs for records the current embedder has not indexed, then exit |
 | `--space-repair preview\|execute --space workspace/project` | Repair one space's derived state, then print a JSON report: observations whose cited memories are gone or retired (execute marks them stale, as a live delete would), and bundle text older exports left on job rows (execute clears it). Run `preview` first; it changes nothing |
+| `--space-rename preview\|execute --from workspace/project --to workspace/project2` | Move one space to a new project id of the same workspace in one transaction, then print a JSON report of what moved: records (scope columns, documents, and ids derived from the scope, recomputed with every reference to them), graph, traces, code index, memberships, permissions and decision counts. The target must be empty and no job of the space may hold a lease. Stop the server first. Run `preview` first; it counts the same rows and changes nothing. Stored files are keyed by digest and do not move. Knowledge sources and idempotency receipts keep their ids, so repeating an old request under the new name is not recognized as a repeat |
 | `--collect-blobs` | Remove files nothing points to |
 | `--adopt-restored-blobs`, `--recovery` | Restore steps, see [backup-restore.md](backup-restore.md) |
 
@@ -523,6 +524,10 @@ wiki. What a person approves and how is described in
     (`memories` or `mental_models`), `limit` and `offset`, and returns
     `total`. Stats count links by kind, and the timeseries takes `time_field`
     (`created`, `occurred` or `mentioned`).
+16. **Space rename.** `memoryd --space-rename preview|execute --from
+    workspace/project --to workspace/project2` moves a space to a new project
+    id offline (see the command table). Nothing changes until an administrator
+    runs it.
 
 ### Reflect, consolidation and mental-model settings
 

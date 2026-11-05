@@ -12,7 +12,7 @@ func TestDaemonModesAreExplicitAndMutuallyExclusive(t *testing.T) {
 		{"HTTP", daemonOptions{}}, {"Worker", daemonOptions{Worker: true}}, {"InitDB", daemonOptions{InitDB: true}},
 		{"WriteGate", daemonOptions{WriteGate: "status"}}, {"ExportSnapshot", daemonOptions{ExportSnapshot: true}}, {"InspectRestore", daemonOptions{InspectRestore: true}},
 		{"RecallBaseline", daemonOptions{RecallBaseline: "self"}}, {"TrainReview", daemonOptions{TrainReview: "model.json"}}, {"SemanticIndex", daemonOptions{SemanticIndex: "create"}}, {"CheckIndexes", daemonOptions{CheckIndexes: true}},
-		{"MemoryReach", daemonOptions{MemoryReach: "apply"}}, {"SpaceRepair", daemonOptions{SpaceRepair: "preview", Space: "ws/proj"}}, {"BackupExpiry", daemonOptions{BackupExpiry: "2026-10-21T00:00:00Z"}}, {"AuditExpiry", daemonOptions{AuditExpiry: "preview"}},
+		{"MemoryReach", daemonOptions{MemoryReach: "apply"}}, {"SpaceRepair", daemonOptions{SpaceRepair: "preview", Space: "ws/proj"}}, {"SpaceRename", daemonOptions{SpaceRename: "preview", SpaceFrom: "ws/a", SpaceTo: "ws/b"}}, {"BackupExpiry", daemonOptions{BackupExpiry: "2026-10-21T00:00:00Z"}}, {"AuditExpiry", daemonOptions{AuditExpiry: "preview"}},
 		{"CollectBlobs", daemonOptions{CollectBlobs: true}}, {"AdoptBlobs", daemonOptions{AdoptBlobs: true}}, {"Reindex", daemonOptions{Reindex: true}}, {"DynamicsRepair", daemonOptions{DynamicsRepair: true}},
 	}
 	for _, tc := range modes {
@@ -56,5 +56,8 @@ func TestDaemonLocalAndRecoveryLoopback(t *testing.T) {
 	}
 	if validateDaemonRuntimeOptions(daemonOptions{Listen: "127.0.0.1:8091", Space: "ws/proj"}, "") == nil {
 		t.Fatal("-space without -space-repair accepted")
+	}
+	if validateDaemonRuntimeOptions(daemonOptions{Listen: "127.0.0.1:8091", SpaceTo: "ws/b"}, "") == nil {
+		t.Fatal("-to without -space-rename accepted")
 	}
 }
