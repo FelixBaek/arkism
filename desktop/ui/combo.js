@@ -22,7 +22,7 @@
         const g = o.parentElement.tagName === "OPTGROUP" ? o.parentElement : null;
         if (g && g !== og) rows.push({ head: g.label, icon: g.dataset.icon || g.label, logo: g.logo, badges: g.dataset.badges || "", disabled: true });
         og = g;
-        rows.push({ value: o.value, label: o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", badges: o.dataset.badges || "", disabled: o.disabled, on: o.selected });
+        rows.push({ value: o.value, label: o.dataset.name || o.label || o.textContent, hint: o.dataset.hint || "", tag: o.dataset.tag || "", badges: o.dataset.badges || "", disabled: o.disabled, on: o.selected });
       }
       return rows;
     }

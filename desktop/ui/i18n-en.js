@@ -6751,3 +6751,4 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.strings, {
   "규칙 — 승인하면 매 세션 맨 앞 지시가 됨": "Rule — approving it makes it a directive at the top of every session",
   "이번만 — 승인해도 7일 뒤 만료": "This time only — expires 7 days after approval" });
+Object.assign(window.ArkismI18nEN.strings, { "기억을 뽑을 API 키가 없어요": "No API key to extract memories with", "API 키로 쓰도록 고른 모델인데 이 서버에 그 키가 없어요. 설정 › 에이전트에서 키를 넣거나, 역할별 모델에서 구독으로 고르세요.": "This model was picked to run on an API key, but this server has no such key. Add the key in Settings › Agents, or pick the subscription in Role models.", "API 키 없음": "No API key" });

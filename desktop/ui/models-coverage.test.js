@@ -104,17 +104,17 @@ test("the tab lists providers, accounts, quotas, CLI versions, keys and models",
   const pick = v.m.assistPicker();
   assert.equal(pick.getAttribute("aria-label"), "AI 도구 기본 모델");
   // xAI has no login or key: its model waits behind 「연결 안 된 모델도 보기」 (model-pick.js), then shows greyed with a way to connect
-  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "custom-abc|m1", window.ArkismModelPick.MORE]);
+  assert.deepEqual([...pick.options].map((o) => o.value), ["", "\u0000sub", "anthropic|opus", "openai|gpt-5", "openai|hand", "\u0000api", "openai|api|gpt-5", "openai|api|hand", "custom-abc|m1", window.ArkismModelPick.MORE]);
   assert.equal(pick.value, "openai|gpt-5");
   pick.value = window.ArkismModelPick.MORE; pick.fire("change");
   assert.equal(pick.value, "openai|gpt-5");
-  assert.deepEqual([...pick.options].map((o) => o.value), ["", "anthropic|opus", "openai|gpt-5", "openai|hand", "custom-abc|m1", "xai|grok", window.ArkismModelPick.CONNECT]);
+  assert.deepEqual([...pick.options].map((o) => o.value), ["", "\u0000sub", "anthropic|opus", "openai|gpt-5", "openai|hand", "\u0000api", "openai|api|gpt-5", "openai|api|hand", "custom-abc|m1", "xai|grok", window.ArkismModelPick.CONNECT]);
   assert.equal(pick.options.find((o) => o.value === "xai|grok").disabled, true);
   assert.deepEqual(v.m.enabledModels(), ["opus", "gpt-5", "hand", "grok", "m1"]);
   assert.deepEqual(v.m.enabledByProvider().map((p) => p.id), ["anthropic", "openai", "xai", "custom-abc"]);
   // each provider heading carries its 모델 설정 chip logo: the brand tile, or the stack fallback for xAI and custom ones
   const heads = pick.children.filter((c) => c.tagName === "OPTGROUP");
-  assert.deepEqual(heads.map((g) => g.logo.className), ["agent-tile", "agent-tile", "agent-tile mono-logo", "agent-tile mono-logo"]);
+  assert.deepEqual(heads.map((g) => g.logo.className), ["agent-tile", "agent-tile", "agent-tile", "agent-tile mono-logo", "agent-tile mono-logo"]); // OpenAI twice: its login, its key
   // every provider draws its parts
   for (const id of ["anthropic", "google", "zai", "xai", "custom-abc"]) { v.pick(id); assert.match(text(v.nodes.main), /계정/); }
   assert.match(text(v.nodes.main), /직접 추가한 제공자는 키로만 연결해요/);
@@ -301,7 +301,7 @@ test("provider rows and AI 도구 headings show the LobeHub mark by id, name or 
     const pick = v.m.assistPicker();
     pick.value = window.ArkismModelPick.MORE; pick.fire("change"); // xAI is not connected: shown after the toggle
     const heads = pick.children.filter((c) => c.tagName === "OPTGROUP");
-    assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "mark-deepseek.com", "mark-xai"]);
+    assert.deepEqual(heads.map((g) => g.logo.children[0]?.className || g.logo.className), ["mark-anthropic", "agent-tile", "agent-tile", "mark-deepseek.com", "mark-xai"]); // OpenAI twice: its login, its key
   } finally { delete window.ArkismBrand; }
 });
 
@@ -321,22 +321,35 @@ test("AI 도구 기본 모델 saves the provider and model, falls back to the se
   assert.ok(sel().options.some((o) => o.value === "|gone"));
 });
 
-test("a provider with a login and a key is one picker group with both badges, so picking another model saves it", async () => {
+test("a provider with a login and a key is two picker groups, subscription and API, and the pick saves its billing", async () => {
   const v = mk();
   v.server.providers[0].accounts[0].plan = "pro";
   v.server.role_defaults = { extract: "haiku" };
   await v.m.load();
   const sel = v.m.assistPicker();
   const heads = sel.children.filter((c) => c.tagName === "OPTGROUP" && c.label === "OpenAI");
-  assert.deepEqual(heads.map((g) => g.dataset.badges), ["PRO,API"]);
+  assert.deepEqual(heads.map((g) => g.dataset.badges), ["구독 · Pro", "API"]);
   const vals = sel.options.map((o) => o.value).filter(Boolean);
   assert.equal(new Set(vals).size, vals.length, "every option saves its own value");
-  assert.equal(sel.value, "openai|gpt-5");
+  assert.equal(sel.value, "openai|gpt-5"); // a pick saved before the choice reads as the subscription
   // the POST answer leaves out role_defaults (the server adds them only on a read): the last read's stay
   v.server = { ...v.server }; delete v.server.role_defaults; // mk's stand-in answers every POST with v.server
-  sel.value = "openai|hand"; sel.fire("change"); await settle();
-  assert.deepEqual(v.calls.at(-1), ["/v1/providers/assist_model", { scope: { project_id: "p" }, model: "hand", provider: "openai" }]);
+  sel.value = "openai|api|hand"; sel.fire("change"); await settle();
+  assert.deepEqual(v.calls.at(-1), ["/v1/providers/assist_model", { scope: { project_id: "p" }, model: "hand", provider: "openai", via: "api" }]);
   assert.deepEqual(v.state.data.providers.role_defaults, { extract: "haiku" });
+  const again = v.m.assistPicker();
+  again.value = "openai|hand"; again.fire("change"); await settle();
+  assert.deepEqual(v.calls.at(-1), ["/v1/providers/assist_model", { scope: { project_id: "p" }, model: "hand", provider: "openai", via: "subscription" }]);
+  v.m.publish({ ...v.server, assist_model: "gpt-5", assist_provider: "openai", assist_via: "api" });
+  assert.equal(v.m.assistPicker().value, "openai|api|gpt-5"); // a key pick reads back on the API group
+});
+
+test("a login's tier reads from what the CLI reports, and an unknown tier says only 구독", () => {
+  const v = mk();
+  for (const [plan, name] of [["pro", "Pro"], ["max", "Max"], ["Claude Max", "Max"], ["default_claude_max_20x", "Max"], ["ultra", "Ultra"], ["ULTRA", "Ultra"], ["super_grok", "SuperGrok"], ["galaxy", ""], ["", ""], [null, ""]]) {
+    assert.equal(v.m.planName(plan), name, String(plan));
+    assert.equal(v.m.subscriptionLabel(plan), name ? `구독 · ${name}` : "구독", String(plan));
+  }
 });
 
 test("key dialog: peek, test, pick found models and save", async () => {

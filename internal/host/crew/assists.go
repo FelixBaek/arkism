@@ -238,18 +238,18 @@ func expandSkillRefs(prompt string) (string, error) {
 	return b.String(), nil
 }
 
-// assistModel is the model the owner picked in 모델 설정 for AI 도움 and the provider it was picked under,
+// assistModel is the model the owner picked in 모델 설정 for AI 도움, the provider and billing it was picked under,
 // or the default (no provider) when none is set or Arkism is unreachable.
-func assistModel() (string, string) {
-	picked, provider := "", ""
+func assistModel() (string, string, string) {
+	picked, provider, via := "", "", ""
 	if page, err := runnerCall("/v1/providers?"+scopeQuery(), nil, 15*time.Second); err == nil {
 		p := obj(page["providers"])
-		picked, provider = sOr(p["assist_model"]), sOr(p["assist_provider"])
+		picked, provider, via = sOr(p["assist_model"]), sOr(p["assist_provider"]), sOr(p["assist_via"])
 	}
 	if modelID.MatchString(picked) {
-		return picked, provider
+		return picked, provider, via
 	}
-	return defaultAssistModel(), ""
+	return defaultAssistModel(), "", ""
 }
 
 // personaRun is a fill·polish·… assist: the fixed persona on the picked model (the default if it cannot run), inside work.
@@ -270,13 +270,16 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 		guide += englishReader
 	}
 	persona = strings.TrimSpace(persona + "\n\n" + guide)
-	model, provider := pyStr(a["model"]), ""
+	model, provider, via := pyStr(a["model"]), "", ""
 	if !truthy(a["model"]) || !modelID.MatchString(model) {
-		model, provider = assistModel()
+		model, provider, via = assistModel()
 	}
 	spec := map[string]any{"model": model, "effort": "medium", "instructions": persona, "task": prompt, "cwd": work}
 	if provider != "" { // 직접 추가 keys are chosen by provider
 		spec["provider"] = provider
+	}
+	if via != "" {
+		spec["via"] = via
 	}
 	fallback := defaultAssistModel()
 	if model == fallback && provider == "" { // the same name on another provider still falls back
@@ -286,7 +289,7 @@ func personaRun(a map[string]any, runner runFn, work string) (map[string]any, er
 	if err == nil && truthy(out["ok"]) {
 		return out, nil
 	}
-	if err != nil && !isCrewErr(err) {
+	if err != nil && (!isCrewErr(err) || via == host.BillingAPI) { // a missing key is said, never billed elsewhere
 		return nil, err
 	}
 	// It could not run or answer (no CLI or key on this host): the default answers instead.

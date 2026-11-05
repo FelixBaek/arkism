@@ -5,11 +5,22 @@
 (() => {
   const MORE = "\u0000more", CONNECT = "\u0000connect"; // values no model name has
   const OFF = "연결 필요";
+  // What a provider|model option saves. A group billed by API key (models.pickerGroups) saves provider|api|model, so the
+  // same model on the subscription (provider|model, as every pick saved before) is a separate choice.
+  const pickValue = (p, m) => (p.billing === "api" ? `${p.id}|api|${m}` : `${p.id}|${m}`);
+  // A saved value back as { provider, model, via }: via is the billing of the group it came from ("" = as the runner is set up).
+  function parsePick(value, groups = []) {
+    const parts = String(value || "").split("|");
+    if (parts.length < 2) return { provider: "", model: parts[0] || "", via: "" };
+    if (parts.length === 3 && parts[1] === "api") return { provider: parts[0], model: parts[2], via: "api" };
+    const g = groups.find((x) => x.id === parts[0] && x.billing !== "api" && x.models.includes(parts[1]));
+    return { provider: parts[0], model: parts[1], via: g?.billing || "" };
+  }
 
   // groups: [{ name, models, usable }] (usable missing = connected). valueFor(group, model) is what an option saves.
   // → shown: the groups to draw, each with the models to list and off (not connected); hidden: how many models wait behind the toggle;
   //   currentOff: the saved pick is one of the not connected models.
-  function plan(groups, current = "", valueFor = (p, m) => `${p.id}|${m}`, all = false) {
+  function plan(groups, current = "", valueFor = pickValue, all = false) {
     const shown = [];
     const picks = (p) => (m) => !!current && valueFor(p, m) === current;
     // a name several providers offer is fine while one of them is connected
@@ -23,8 +34,8 @@
       if (off && !all) hidden += p.models.length - models.length;
       if (models.length) shown.push({ ...p, models, off });
     }
-    // subscriptions (MAX, Pro …) first, then API keys, the not connected ones last (asked: 구독/API 구분)
-    const rank = (p) => (p.off ? 2 : (p.badges || []).some((b) => b !== "API") ? 0 : 1); // no badge (a hand-added endpoint) counts as API
+    // subscriptions (Max, Pro …) first, then API keys, the not connected ones last (asked: 구독/API 구분)
+    const rank = (p) => (p.off ? 2 : p.billing ? Number(p.billing === "api") : (p.badges || []).some((b) => b !== "API") ? 0 : 1); // no badge (a hand-added endpoint) counts as API
     for (const p of shown) p.via = ["sub", "api", "off"][rank(p)];
     shown.sort((a, b) => rank(a) - rank(b));
     return { shown, hidden, currentOff };
@@ -35,7 +46,7 @@
   // group(p, value) → <optgroup>: the screen's own drawing (models.modelGroup). onConnect: opens where providers connect;
   // without it (an unsaved editor that a jump would lose) the not connected rows only say 연결 필요.
   // Call before the screen adds its change listener: picking 보기 or 연결하러 가기 is not a pick and never reaches it.
-  function fill(sel, groups, { current = "", valueFor = (p, m) => `${p.id}|${m}`, group, onConnect = null }) {
+  function fill(sel, groups, { current = "", valueFor = pickValue, group, onConnect = null }) {
     let all = false, added = [];
     const opt = (text, value) => { const o = document.createElement("option"); o.textContent = text; o.value = value; return o; };
     function draw() {
@@ -46,6 +57,8 @@
       for (const [i, p] of shown.entries()) {
         if (both && p.via !== "off" && p.via !== shown[i - 1]?.via) { const h = opt(p.via === "sub" ? "구독으로 쓰는 모델" : "API 키로 쓰는 모델", `\u0000${p.via}`); h.disabled = true; h.dataset.section = ""; added.push(h); }
         const g = group(p, (m) => valueFor(p, m));
+        // the closed picker shows only the picked row: it says the billing too (the open list keeps the bare name, data-name)
+        if (p.billing) for (const o of g.children) { o.dataset.name = o.textContent; o.label = `${o.textContent} · ${p.billing === "api" ? "API" : "구독"}`; }
         if (p.off) {
           g.label = `${g.label} · ${OFF}`;
           for (const o of [...g.children]) {
@@ -80,7 +93,7 @@
     return sel;
   }
 
-  const api = { plan, fill, MORE, CONNECT };
+  const api = { plan, fill, pickValue, parsePick, MORE, CONNECT };
   globalThis.ArkismModelPick = api;
   if (typeof module !== "undefined") module.exports = api;
 })();

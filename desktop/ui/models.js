@@ -65,9 +65,19 @@ window.ArkismModels = (ctx) => {
   // Models workflow AI nodes may pick: every listed model that is on.
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
   // The same, per provider ({name, models}), for pickers that show where a model comes from.
-  // Pickers show each provider once with all its connection badges (MAX, API) on the row: the server keeps only provider+model,
-  // so a copy per connection would share a value and a pick could never move off the first copy.
-  const pickerGroups = () => enabledByProvider();
+  // 설정 › 역할별 모델 and AI 도구 split a provider the way 설정 › 에이전트 lists it (its account row and its API row): one group
+  // on the subscription (구독 · Max, 구독 · Pro…) and one on the stored key (API), each saved with its billing (model-pick.js pickValue),
+  // so the pick decides which one pays. Workflow pickers save a plain model name and keep enabledByProvider().
+  const pickerGroups = () => enabledByProvider().flatMap(byBilling);
+  function byBilling(g) {
+    const p = providers().find((x) => x.id === g.id);
+    if (!p || !Object.values(AGENT_SOURCE).some(([pid]) => pid === p.id)) return [g]; // only an agent's CLI runs on a login or a key
+    const sub = (p.accounts || []).some((a) => a.status === "connected"), api = (p.keys || []).length > 0;
+    if (!sub && !api) return [g];
+    const tiers = [...new Set((p.accounts || []).filter((a) => a.status === "connected").map((a) => subscriptionLabel(a.plan)))];
+    const subs = tiers.length > 1 ? tiers.filter((t) => t !== "구독") : tiers; // a known tier says it all
+    return [...(sub ? [{ ...g, billing: "subscription", badges: subs }] : []), ...(api ? [{ ...g, billing: "api", badges: ["API"] }] : [])];
+  }
   const enabledByProvider = () => providers().map((p) => ({ id: p.id, name: p.name || p.id, keys: p.keys, badges: viaBadges(p), usable: usable(p), models: modelsOf(p).filter((m) => enabled(p.id, m)) })).filter((p) => p.models.length);
   // Signed in, a key stored, or added by hand: its models can run. model-pick.js keeps the others behind 「연결 안 된 모델도 보기」.
   const usable = (p) => !!(p.custom || isCustom(p.id) || (p.keys || []).length || (p.accounts || []).some((a) => a.status === "connected"));
@@ -493,9 +503,17 @@ window.ArkismModels = (ctx) => {
   // ---------------------------------------------------------------- 설정 › 에이전트 (Figma 1300:5254)
   // Which provider and CLI an agent runs on, so its row and detail read the same providers report.
   const AGENT_SOURCE = { claude_code: ["anthropic", "claude"], codex: ["openai", "codex"], gemini: ["google", "gemini"], zcode: ["zai", "glm"], grok: ["xai", "grok"] };
-  const PLAN_NAMES = { max: "MAX", pro: "PRO", plus: "PLUS", team: "TEAM", free: "FREE", enterprise: "ENTERPRISE", supergrok: "SUPER GROK" };
-  const planName = (plan) => (plan ? PLAN_NAMES[String(plan).toLowerCase().replace(/[\s_-]/g, "")] || String(plan).toUpperCase() : "");
-  // How a provider is connected, as its 설정 › 에이전트 rows say it: each signed-in subscription's plan (MAX, PRO…), then API when a key is stored.
+  // The tier a CLI's own login reports (the server reads its sign-in file: Claude's subscriptionType, Codex's plan), as a name;
+  // "" for a tier this app does not know, so nothing made up is shown. One reading for 설정 › 에이전트 and every picker.
+  const PLAN_TIERS = { free: "Free", pro: "Pro", plus: "Plus", max: "Max", ultra: "Ultra", team: "Team", business: "Business", enterprise: "Enterprise", supergrok: "SuperGrok" };
+  function planName(plan) {
+    const words = String(plan || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); // "max", "Claude Max", "default_claude_max_20x"
+    const hit = [words.join(""), ...words].find((w) => PLAN_TIERS[w]);
+    return hit ? PLAN_TIERS[hit] : "";
+  }
+  // A subscription as pickers name it: 구독 · Max, or plain 구독 when the tier is unknown.
+  const subscriptionLabel = (plan) => ["구독", planName(plan)].filter(Boolean).join(" · ");
+  // How a provider is connected, as its 설정 › 에이전트 rows say it: each signed-in subscription's tier (Max, Pro…), then API when a key is stored.
   const viaBadges = (p) => [...new Set((p.accounts || []).filter((a) => a.status === "connected").map((a) => planName(a.plan)).filter(Boolean)), ...((p.keys || []).length ? ["API"] : [])];
   // An agent's report: its provider, its CLI's accounts (the default first) and whether a key is stored.
   function agentSource(agentId) {
@@ -626,16 +644,17 @@ window.ArkismModels = (ctx) => {
     const d = doc();
     const sel = el("select", "mp-assist");
     sel.setAttribute("aria-label", "AI 도구 기본 모델");
-    const current = d.assist_model ? `${d.assist_provider || ""}|${d.assist_model}` : "";
+    const { pickValue, parsePick } = globalThis.ArkismModelPick;
+    const current = d.assist_model ? pickValue({ id: d.assist_provider || "", billing: d.assist_via }, d.assist_model) : "";
     sel.append(Object.assign(el("option", "", "기본값 · 서버 설정"), { value: "" }));
-    const groups = enabledByProvider();
-    globalThis.ArkismModelPick.fill(sel, pickerGroups(), { current, group: modelGroup, onConnect: toAgents });
+    const groups = pickerGroups();
+    globalThis.ArkismModelPick.fill(sel, groups, { current, group: modelGroup, onConnect: toAgents });
     sel.addEventListener("change", async () => {
-      const [provider, model] = sel.value ? sel.value.split("|") : ["", ""];
+      const { provider, model, via } = parsePick(sel.value, groups);
       const from = groups.find((p) => p.id === provider)?.name;
       sel.disabled = true;
       try {
-        publish((await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model, ...(provider ? { provider } : {}) }) })).providers);
+        publish((await request("/v1/providers/assist_model", { method: "POST", body: JSON.stringify({ scope: state.scope, model, ...(provider ? { provider } : {}), ...(via ? { via } : {}) }) })).providers);
         notice(!model ? "AI 도움은 서버 기본 모델로 답해요." : from ? `AI 도움은 이제 ${from}의 ${model}로 답해요.` : `AI 도움은 이제 ${model}로 답해요.`);
         render(false);
       } catch (e) { notice(errText(e)); sel.value = current; } finally { sel.disabled = false; }
@@ -923,5 +942,5 @@ window.ArkismModels = (ctx) => {
     (p.custom ? base : key).focus();
   }
 
-  return { openAccountHelp, canAppLogin, load, publish, providers, usable, toAgents, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, agentAccounts, agentKeys, modelsCard, logo };
+  return { openAccountHelp, canAppLogin, load, publish, providers, usable, toAgents, looseProviders, providerDetail, notices, addProvider, enabledModels, enabledByProvider, pickerGroups, modelGroup, assistPicker, openKeyDialog, agentSource, cliBadge, planName, subscriptionLabel, agentAccounts, agentKeys, modelsCard, logo };
 };

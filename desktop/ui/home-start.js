@@ -8,7 +8,7 @@
 
   // The extractor failures extractorIssue explains, as analysis_run.error/reason or extractor.state carries them;
   // action is the one button: login (로그인하기), model (다른 모델 고르기) or retry (다시 시도).
-  const EXTRACTOR_CODES = ["extractor_missing", "login_needed", "extractor_exit_", "extractor_no_json", "TimeoutExpired"];
+  const EXTRACTOR_CODES = ["extractor_missing", "login_needed", "extractor_exit_", "extractor_no_json", "extractor_no_key", "TimeoutExpired"];
 
   // tools: agent_tools from the server. extractor is the host's pick (cli, state); analysis_run.reason/error carries
   // the last failure code. null: ready, or not reported yet (an older host sends no extractor).
@@ -23,6 +23,8 @@
       return fix("기억을 뽑으려면 로그인이 필요해요", `${name}에 로그인하면 대화에서 기억 후보를 뽑기 시작해요.`, "로그인 필요", "login");
     if (code.startsWith("extractor_exit"))
       return fix("기억을 뽑는 모델이 답하지 않았어요", `${name} 로그인이 끝났거나 사용 한도에 걸렸을 수 있어요. 다시 로그인하거나 다른 모델을 고르세요.`, "응답 없음", "login");
+    if (code.startsWith("extractor_no_key")) // picked to run on an API key that is not stored: it never quietly bills the subscription
+      return fix("기억을 뽑을 API 키가 없어요", "API 키로 쓰도록 고른 모델인데 이 서버에 그 키가 없어요. 설정 › 에이전트에서 키를 넣거나, 역할별 모델에서 구독으로 고르세요.", "API 키 없음", "model");
     if (code.startsWith("extractor_no_json"))
       return fix("기억을 뽑는 모델의 답을 읽지 못했어요", "모델이 정해진 모양으로 답하지 않았어요. 다른 모델을 고르면 나아질 수 있어요.", "답을 못 읽음", "model");
     if (code === "TimeoutExpired")

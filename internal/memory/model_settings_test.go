@@ -794,8 +794,17 @@ func TestProviderAssistModelSetReadAndClear(t *testing.T) {
 	if r, err := f.svc.SetAssistModel(testCtx, f.human, ProviderAssistModel{Scope: scopeA, Model: "glm-4.6", Provider: "zai"}); err != nil || r.Providers.AssistProvider != "zai" {
 		t.Fatal("provider", r.Providers, err)
 	}
+	// The billing goes with a model of its own provider only.
+	for _, bad := range []ProviderAssistModel{{Scope: scopeA, Model: "sonnet 5.5", Provider: "openai", Via: "api"}, {Scope: scopeA, Model: "sonnet 5.5", Provider: "anthropic", Via: "card"}} {
+		if _, err := f.svc.SetAssistModel(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal("bad billing accepted", bad, err)
+		}
+	}
+	if r, err := f.svc.SetAssistModel(testCtx, f.human, ProviderAssistModel{Scope: scopeA, Model: "sonnet 5.5", Provider: "anthropic", Via: "api"}); err != nil || r.Providers.AssistVia != "api" {
+		t.Fatal("billing", r.Providers, err)
+	}
 	in.Model = ""
-	if r, err := f.svc.SetAssistModel(testCtx, f.human, in); err != nil || r.Providers.AssistModel != "" || r.Providers.AssistProvider != "" {
+	if r, err := f.svc.SetAssistModel(testCtx, f.human, in); err != nil || r.Providers.AssistModel != "" || r.Providers.AssistProvider != "" || r.Providers.AssistVia != "" {
 		t.Fatal("clear", r.Providers, err)
 	}
 }

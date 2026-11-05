@@ -86,6 +86,39 @@ func TestRoleModelSetReadAndClear(t *testing.T) {
 	}
 }
 
+// 구독/API: a CLI role's pick keeps how it is billed; a billing only goes with a model of the pick's own provider.
+func TestRoleModelKeepsBilling(t *testing.T) {
+	f := newFixture(t)
+	for _, bad := range []ProviderRoleModel{
+		{Scope: scopeA, Role: "extract", Model: "sonnet 5.5", Provider: "anthropic", Via: "card"},
+		{Scope: scopeA, Role: "route_judge", Model: "jev", Via: "api"},
+		{Scope: scopeA, Role: "skill_summary", Model: "basic", Via: "subscription"},
+		{Scope: scopeA, Role: "extract", Via: "api"},
+	} {
+		if _, err := f.svc.SetRoleModel(testCtx, f.human, bad); !errors.Is(err, ErrInvalid) {
+			t.Fatal("bad billing accepted", bad, err)
+		}
+	}
+	r, err := f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "reflect", Model: "sonnet 5.5", Provider: "anthropic", Via: "api"})
+	if err != nil || r.Providers.Roles["reflect"].Via != "api" {
+		t.Fatal("api pick", err)
+	}
+	if r, err = f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "reflect", Model: "sonnet 5.5", Provider: "anthropic", Via: "subscription"}); err != nil || r.Providers.Roles["reflect"].Via != "subscription" {
+		t.Fatal("subscription pick", err)
+	}
+	reasons := []string{}
+	for _, d := range decisionsOf(f.repo, "role_model_changed") {
+		reasons = append(reasons, d.Audit.Reason)
+	}
+	slices.Sort(reasons)
+	if !slices.Equal(reasons, []string{"- -> sonnet 5.5 (api)", "sonnet 5.5 (api) -> sonnet 5.5 (subscription)"}) {
+		t.Fatalf("a billing change is a change: %q", reasons)
+	}
+	if _, err := f.svc.SetRoleModel(testCtx, f.human, ProviderRoleModel{Scope: scopeA, Role: "extract", Model: "gpt-6-sol", Provider: "openai", Via: "api"}); err != nil {
+		t.Fatal("codex billing", err)
+	}
+}
+
 // route_skills runs the judge and the candidate count picked for the scope, and the defaults without a pick.
 func TestRouteSkillsUsesPickedJudgeAndCount(t *testing.T) {
 	f := newFixture(t)

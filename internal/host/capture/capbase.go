@@ -98,14 +98,20 @@ var llm = func(system, user, model string, timeout time.Duration, schema, key st
 }
 
 // runExtractor runs one headless model call; its failures are codes the app can explain (기억 추출 상태).
-func runExtractor(ctx context.Context, argv []string, stdin string) ([]byte, error) {
+// model's billing is the one picked with it in 설정 › 역할별 모델 (modelVia); a picked API key that is not stored stops
+// the run with extractor_no_key instead of billing the subscription.
+func runExtractor(ctx context.Context, model string, argv []string, stdin string) ([]byte, error) {
+	env, err := host.RoleEnviron(model, modelVia[model])
+	if err != nil {
+		return nil, runtimeErr("extractor_no_key")
+	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Env = append(os.Environ(), "ARKISM_CAPTURE_CHILD=1")
+	cmd.Env = env
 	cmd.Dir = capState
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
-	err := cmd.Run()
+	err = cmd.Run()
 	if ctx.Err() != nil {
 		return nil, errTimeoutExpired
 	}
@@ -121,7 +127,7 @@ func runExtractor(ctx context.Context, argv []string, stdin string) ([]byte, err
 
 // claudeJSON: Claude Code checks the answer against the schema itself.
 func claudeJSON(ctx context.Context, system, user, model, schema string) (map[string]any, error) {
-	raw, err := runExtractor(ctx, []string{host.ClaudeBin, "-p", "--model", model, "--output-format", "json", "--system-prompt", system,
+	raw, err := runExtractor(ctx, model, []string{host.ClaudeBin, "-p", "--model", model, "--output-format", "json", "--system-prompt", system,
 		"--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--json-schema", schema}, user)
 	if err != nil {
 		return nil, err
@@ -162,7 +168,7 @@ func codexJSON(ctx context.Context, system, user, model, schema string) (map[str
 	if model != "codex" {
 		argv = append(argv, "-m", model)
 	}
-	if _, err := runExtractor(ctx, append(argv, "-"), user); err != nil {
+	if _, err := runExtractor(ctx, model, append(argv, "-"), user); err != nil {
 		return nil, err
 	}
 	raw, err := os.ReadFile(outFile)
@@ -216,7 +222,7 @@ func geminiJSON(ctx context.Context, system, user, model, schema string) (map[st
 	if model != "gemini" {
 		argv = append(argv, "-m", model)
 	}
-	raw, err := runExtractor(ctx, argv, user) // the CLI puts stdin before -p
+	raw, err := runExtractor(ctx, model, argv, user) // the CLI puts stdin before -p
 	if err != nil {
 		return nil, err
 	}

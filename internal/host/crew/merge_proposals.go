@@ -36,9 +36,17 @@ const (
 	mergePipelineVersion = "merge-proposals-v1"
 )
 
-func mergeModel() string { return host.Env("ARKISM_MERGE_MODEL", maintainModel()) }
+func mergeModel() string { model, _ := mergePick(); return model }
 func mergeLimit() int    { return envInt("ARKISM_MERGE_MAX_CANDIDATES", 10) } // candidates per run (server max 20)
 func mergeK() int        { return envInt("ARKISM_MERGE_K", 3) }               // similar memories per candidate (max 5)
+
+// mergePick is the merge judge's model and billing: ARKISM_MERGE_MODEL as the CLI is set up, else the 반성·검토 pick.
+func mergePick() (string, string) {
+	if m := host.Env("ARKISM_MERGE_MODEL", ""); m != "" {
+		return m, ""
+	}
+	return maintainModel()
+}
 
 const mergePrompt = `You help one person keep their AI agents' saved memories tidy. You get EXISTING memories (already
 approved, labels m1, m2, ...) and NEW candidates (labels c1, c2, ...; each lists the existing memories found most
@@ -143,11 +151,14 @@ func mergeVerdicts(p mergePool, raw []any) (verdicts []any, dropped int) {
 func mergeJudge(input string) ([]any, host.Obj, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host.ClaudeBin, "-p", "--model", mergeModel(), "--output-format", "json", "--system-prompt", mergePrompt,
+	model, via := mergePick()
+	env, err := host.RoleEnviron(model, via)
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.CommandContext(ctx, host.ClaudeBin, "-p", "--model", model, "--output-format", "json", "--system-prompt", mergePrompt,
 		"--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--json-schema", mergeSchema)
-	env := osEnv()
-	env["ARKISM_CAPTURE_CHILD"] = "1"
-	cmd.Env, cmd.Dir, cmd.Stdin = envList(env), host.CaptureState, strings.NewReader(input)
+	cmd.Env, cmd.Dir, cmd.Stdin = env, host.CaptureState, strings.NewReader(input)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
 	if err := cmd.Run(); err != nil {
@@ -166,7 +177,7 @@ func mergeJudge(input string) ([]any, host.Obj, error) {
 	if truthy(res["is_error"]) || !ok {
 		return nil, nil, errors.New("judge_no_json")
 	}
-	return list(so["verdicts"]), cliUsage(res, mergeModel()), nil
+	return list(so["verdicts"]), cliUsage(res, model), nil
 }
 
 // mergeRun is one pass: pool, judge, post. It returns the verdicts kept and the proposals Arkism stored.

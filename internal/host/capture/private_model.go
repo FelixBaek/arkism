@@ -75,7 +75,7 @@ func privateModel(system, user, model string, timeout time.Duration, schema, key
 		return nil, sessionWait("model_private_content")
 	}
 	out, err := llm(system, user, model, timeout, schema, key)
-	if def, ok := fallbackModel[model]; ok && err != nil { // the picked model could not answer here: the default does
+	if def, ok := fallbackModel[model]; ok && err != nil && !errors.Is(err, runtimeErr("extractor_no_key")) { // the picked model could not answer here: the default does (a missing picked key is said, not billed elsewhere)
 		if policyErr := privateCapturePolicy("model_capture_policy_wait", policyPaths...); policyErr != nil {
 			return nil, policyErr // capture was switched off during the first call: nothing more is sent
 		}

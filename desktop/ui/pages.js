@@ -1046,7 +1046,7 @@ window.ArkismPages = (ctx) => {
     // Claude CLI, and for 기억 추출 every provider the server lists in role_options (Codex, Gemini).
     function picker(role, title, defaultLabel, options, claude, ...extra) {
       const pick = d().roles?.[role] || {};
-      const current = pick.model ? (pick.provider ? `${pick.provider}|${pick.model}` : pick.model) : "";
+      const current = pick.model ? (pick.provider ? globalThis.ArkismModelPick.pickValue({ id: pick.provider, billing: pick.via }, pick.model) : pick.model) : "";
       const sel = el("select", claude ? "mp-assist" : "ag-select");
       sel.setAttribute("aria-label", `${title} 모델`);
       // The host roles' defaults arrive with the runner's report; until then the server cannot name them.
@@ -1054,11 +1054,12 @@ window.ArkismPages = (ctx) => {
       for (const [v, name] of options) sel.append(Object.assign(el("option", "", name), { value: v }));
       // A pick made earlier and now off still shows (model-pick.js adds it).
       const runs = role === "extract" && d().role_options?.extract || ["anthropic"];
-      globalThis.ArkismModelPick.fill(sel, claude ? models.pickerGroups().filter((x) => runs.includes(x.id)) : [], { current, group: models.modelGroup, onConnect: models.toAgents });
+      const groups = claude ? models.pickerGroups().filter((x) => runs.includes(x.id)) : [];
+      globalThis.ArkismModelPick.fill(sel, groups, { current, group: models.modelGroup, onConnect: models.toAgents });
       sel.addEventListener("change", () => {
-        const [provider, model] = sel.value.includes("|") ? sel.value.split("|") : ["", sel.value];
+        const { provider, model, via } = globalThis.ArkismModelPick.parsePick(sel.value, groups);
         sel.disabled = true;
-        void save(role, { model, ...(provider ? { provider } : {}) }, model ? `${title}: ${sel.selectedOptions[0].textContent}. 다음 실행부터 써요.` : `${title}: 서버 기본값으로 돌아갔어요.`);
+        void save(role, { model, ...(provider ? { provider } : {}), ...(via ? { via } : {}) }, model ? `${title}: ${sel.selectedOptions[0].label}. 다음 실행부터 써요.` : `${title}: 서버 기본값으로 돌아갔어요.`);
       });
       return controls(...extra, source(!!current), sel); // the select last, so every row lines up on the right
     }

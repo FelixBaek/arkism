@@ -21,6 +21,7 @@ import (
 type ProviderRole struct {
 	Model    string   `json:"model,omitempty"`
 	Provider string   `json:"provider,omitempty"`
+	Via      string   `json:"via,omitempty"` // subscription | api; empty for a pick saved before billing was chosen
 	Off      []string `json:"off,omitempty"` // skill_scan: engines not to run
 }
 
@@ -30,6 +31,7 @@ type ProviderRoleModel struct {
 	Role     string   `json:"role"`
 	Model    string   `json:"model,omitempty"`
 	Provider string   `json:"provider,omitempty"`
+	Via      string   `json:"via,omitempty"`
 	Off      []string `json:"off,omitempty"`
 }
 
@@ -51,9 +53,18 @@ func validRoleModel(in ProviderRoleModel) bool {
 		return false
 	}
 	if in.Role == "skill_scan" {
-		return validScanOff(in.Off) && in.Model == "" && in.Provider == ""
+		return validScanOff(in.Off) && in.Model == "" && in.Provider == "" && in.Via == ""
 	}
-	return len(in.Off) == 0 && validRolePick(in)
+	return len(in.Off) == 0 && validRolePick(in) && (in.Via == "" || slices.Contains(cliRoles, in.Role) && validVia(in.Provider, in.Model, in.Via))
+}
+
+// validVia: a billing goes with a model of a provider whose CLI can run on its login or on a stored key.
+func validVia(provider, model, via string) bool {
+	if via != host.BillingSubscription && via != host.BillingAPI {
+		return false
+	}
+	row, ok := host.CLIByName(host.ModelCLI(model))
+	return ok && row.KeyEnv != "" && row.Provider == provider
 }
 
 // validScanOff: known engines, each once.
@@ -134,8 +145,9 @@ func (s *Service) SetRoleModel(ctx context.Context, token string, in ProviderRol
 		return Record{}, err
 	}
 	var before string
+	after := roleLabel(in.Model, in.Via)
 	out, err := s.updateProviders(ctx, in.Scope, func(p *Providers, _ time.Time) error {
-		before = p.Roles[in.Role].Model
+		before = roleLabel(p.Roles[in.Role].Model, p.Roles[in.Role].Via)
 		roles := map[string]ProviderRole{}
 		for k, v := range p.Roles {
 			roles[k] = v
@@ -143,21 +155,29 @@ func (s *Service) SetRoleModel(ctx context.Context, token string, in ProviderRol
 		if in.Model == "" && len(in.Off) == 0 {
 			delete(roles, in.Role)
 		} else {
-			roles[in.Role] = ProviderRole{Model: in.Model, Provider: in.Provider, Off: in.Off}
+			roles[in.Role] = ProviderRole{Model: in.Model, Provider: in.Provider, Via: in.Via, Off: in.Off}
 		}
 		p.Roles = roles
 		return nil
 	}, "set:role_model", d.PrincipalID, func(ctx context.Context, tx Tx) error {
-		if before == in.Model {
+		if before == after {
 			return nil // only the off list changed
 		}
-		// The reason keeps the model before and after: the only history of this setting.
-		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, "role_model_changed", providersID(in.Scope), in.Role, cmp.Or(before, "-")+" -> "+cmp.Or(in.Model, "-"))
+		// The reason keeps the model (and billing) before and after: the only history of this setting.
+		return recordDecision(ctx, tx, in.Scope, d.PrincipalID, "role_model_changed", providersID(in.Scope), in.Role, cmp.Or(before, "-")+" -> "+cmp.Or(after, "-"))
 	})
 	if err == nil && out.Providers != nil {
 		s.addRoleDefaults(out.Providers) // the screen redraws from this reply
 	}
 	return out, err
+}
+
+// roleLabel is a pick as the decision history says it: the model, then its billing when one was chosen.
+func roleLabel(model, via string) string {
+	if via == "" || model == "" {
+		return model
+	}
+	return model + " (" + via + ")"
 }
 
 // role is the owner's pick for name; zero when none (or no record).

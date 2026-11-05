@@ -8,7 +8,10 @@ import (
 )
 
 // fallbackModel maps a model picked in 설정 › 역할별 모델 to the default it replaced; privateModel retries with it.
-var fallbackModel = map[string]string{}
+// modelVia is how each picked model is billed (host.BillingEnv).
+// shortcut: keyed by model name, so 기억 추출 and 반성·검토 picking one name under different billings share the last one;
+// pass the role through llm if that pairing is ever needed.
+var fallbackModel, modelVia = map[string]string{}, map[string]string{}
 
 // useRoleModels swaps in the models picked in 설정 › 역할별 모델 (기억 추출, 반성·검토) for this run.
 func useRoleModels() {
@@ -26,7 +29,11 @@ func useRoleModels() {
 		cur  *string
 		role string
 	}{{&capModel, "extract"}, {&reflectModel, "reflect"}, {&reviewModel, "reflect"}} {
-		if m := host.RoleModel(get, capScope(), r.role, *r.cur); m != *r.cur {
+		m, via := host.RoleModel(get, capScope(), r.role, *r.cur)
+		if via != "" {
+			modelVia[m] = via
+		}
+		if m != *r.cur {
 			fallbackModel[m] = *r.cur
 			*r.cur = m
 		}

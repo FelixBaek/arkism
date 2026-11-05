@@ -57,6 +57,7 @@ var (
 	llmModel  = host.Env("ARKISM_SKILL_LLM_MODEL", "qwen3.8-flash")
 	// The 스킬 요약 pick from 설정 › 역할별 모델: a Claude CLI model, or basic (the SKILL.md description as is).
 	summaryModel, summaryBasic = "", false
+	summaryVia                 = "" // its billing (host.BillingEnv)
 	llmKey                     = orDefault(os.Getenv("ARKISM_SKILL_LLM_KEY_FILE"), filepath.Join(host.Home, ".config", "arkism", "skill-llm.key"))
 	// syncPost is the hub call (a test seam).
 	syncPost = postHub
@@ -377,7 +378,11 @@ var summaryCLI = func(system, user string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, host.ClaudeBin, "-p", "--model", summaryModel, "--output-format", "text", "--system-prompt", system,
 		"--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence")
-	cmd.Env = append(os.Environ(), "ARKISM_CAPTURE_CHILD=1")
+	env, err := host.RoleEnviron(summaryModel, summaryVia) // billed as picked; a missing picked key fails the summary
+	if err != nil {
+		return "", err
+	}
+	cmd.Env = env
 	cmd.Stdin = strings.NewReader(user)
 	out, err := cmd.Output()
 	return string(out), err
@@ -574,7 +579,7 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return 2
 	}
 	scope := map[string]any{"workspace_id": *workspace, "project_id": *project, "user_id": *user, "agent_id": ""}
-	pick, _ := host.RolePick(func(path string, timeout time.Duration) (map[string]any, error) { // the --url server the sync goes to
+	pick, _, via := host.RolePick(func(path string, timeout time.Duration) (map[string]any, error) { // the --url server the sync goes to
 		token, err := readToken(*tokenFile)
 		if err != nil {
 			return nil, err
@@ -588,7 +593,7 @@ func syncMain(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		req.Header.Set("Authorization", "Bearer "+token)
 		return host.DoJSON(http.DefaultClient, req)
 	}, scope, "skill_summary")
-	summaryBasic, summaryModel = pick == "basic", host.CLIRoleModel(pick, "")
+	summaryBasic, summaryModel, summaryVia = pick == "basic", host.CLIRoleModel(pick, ""), via
 	summary, err := syncRun(*url, *tokenFile, scope, *limit, *execute)
 	if err != nil {
 		fmt.Fprintln(stderr, err)

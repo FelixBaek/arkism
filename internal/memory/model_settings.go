@@ -134,6 +134,8 @@ type Providers struct {
 	AssistModel string `json:"assist_model,omitempty"`
 	// The provider the AI 도움 model was picked under: several providers offer the same model name.
 	AssistProvider string `json:"assist_provider,omitempty"`
+	// How the AI 도움 model is billed: subscription | api; empty = the runner as set up.
+	AssistVia string `json:"assist_via,omitempty"`
 	// The owner's picks in 설정 › 역할별 모델 (role_models.go); a role without one runs its server default.
 	Roles map[string]ProviderRole `json:"roles,omitempty"`
 	// What each role runs when nothing is picked: the runner reports the host's roles, memoryd adds its own on read.
@@ -147,6 +149,7 @@ type ProviderAssistModel struct {
 	Scope    Scope  `json:"scope"`
 	Model    string `json:"model"`
 	Provider string `json:"provider,omitempty"`
+	Via      string `json:"via,omitempty"`
 }
 
 // ProviderLabel names an account or a model on the screen; an empty Label goes back to the default.
@@ -797,7 +800,8 @@ func (s *Service) LabelProvider(ctx context.Context, token string, in ProviderLa
 
 // SetAssistModel stores which model answers AI 도움 requests.
 func (s *Service) SetAssistModel(ctx context.Context, token string, in ProviderAssistModel) (Record, error) {
-	if !validScope(in.Scope) || in.Model != "" && !providerModelRe.MatchString(in.Model) || in.Provider != "" && (in.Model == "" || !providerIDRe.MatchString(in.Provider)) {
+	if !validScope(in.Scope) || in.Model != "" && !providerModelRe.MatchString(in.Model) || in.Provider != "" && (in.Model == "" || !providerIDRe.MatchString(in.Provider)) ||
+		in.Via != "" && !validVia(in.Provider, in.Model, in.Via) {
 		return Record{}, ErrInvalid
 	}
 	d, err := s.humanProviders(ctx, token, in.Scope)
@@ -805,7 +809,7 @@ func (s *Service) SetAssistModel(ctx context.Context, token string, in ProviderA
 		return Record{}, err
 	}
 	return s.updateProviders(ctx, in.Scope, func(p *Providers, _ time.Time) error {
-		p.AssistModel, p.AssistProvider = in.Model, in.Provider
+		p.AssistModel, p.AssistProvider, p.AssistVia = in.Model, in.Provider, in.Via
 		return nil
 	}, "set:assist_model", d.PrincipalID)
 }

@@ -66,8 +66,8 @@ func maxSignalPassRate() float64 {
 }
 func useLLM() bool { return host.Env("ARKISM_MAINTAIN_LLM", "1") == "1" }
 
-// maintainModel is the 반성·검토 model picked in 설정 › 역할별 모델, else the host default.
-func maintainModel() string {
+// maintainModel is the 반성·검토 model picked in 설정 › 역할별 모델 and its billing, else the host default.
+func maintainModel() (string, string) {
 	def := host.Env("ARKISM_MAINTAIN_MODEL", host.HarnessCLIModel("consolidator", "sonnet"))
 	return host.RoleModel(func(path string, timeout time.Duration) (map[string]any, error) {
 		return runnerCall(path, nil, timeout)
@@ -336,11 +336,14 @@ func judge(pairs []memPair) ([]any, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 600*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, host.ClaudeBin, "-p", "--model", maintainModel(), "--output-format", "json", "--system-prompt", maintainPrompt,
+	model, via := maintainModel()
+	env, err := host.RoleEnviron(model, via)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, host.ClaudeBin, "-p", "--model", model, "--output-format", "json", "--system-prompt", maintainPrompt,
 		"--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--json-schema", maintainSchema)
-	env := osEnv()
-	env["ARKISM_CAPTURE_CHILD"] = "1"
-	cmd.Env, cmd.Dir, cmd.Stdin = envList(env), host.CaptureState, strings.NewReader(strings.Join(lines, "\n\n"))
+	cmd.Env, cmd.Dir, cmd.Stdin = env, host.CaptureState, strings.NewReader(strings.Join(lines, "\n\n"))
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, io.Discard
 	if err := cmd.Run(); err != nil {
@@ -627,7 +630,8 @@ func maintainRun(dryRun bool, stdout io.Writer) (int, int, error) {
 	if useLLM() {
 		// The model judge spends the user's own Claude; near a limit the pairs wait for another night.
 		// Signal proposals above use no model and went out anyway.
-		if why := capture.LLMBudgetReason(maintainModel()); why != "" {
+		model, _ := maintainModel()
+		if why := capture.LLMBudgetReason(model); why != "" {
 			fmt.Fprintln(stdout, why)
 			mMetric(map[string]any{"event": "maintain", "memories": len(items), "pairs": len(pairs), "proposed": sigPosted, "signal_proposed": sigPosted, "judge": "budget"})
 			return sigFound, sigPosted, nil

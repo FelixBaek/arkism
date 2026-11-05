@@ -680,7 +680,7 @@ var scanGet = host.Get
 // skipScanners drops the engines switched off in 설정 › 역할별 모델 (스킬 보안 검사) for this run: an engine
 // without a binary is not run, and checkSource then rescans with the rest.
 func skipScanners() {
-	_, off := host.RolePick(scanGet, host.Scope(), "skill_scan")
+	_, off, _ := host.RolePick(scanGet, host.Scope(), "skill_scan")
 	for _, k := range off {
 		switch k {
 		case "spector":

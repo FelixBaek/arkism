@@ -323,23 +323,8 @@ func removeKey(keyID string) error {
 	return nil
 }
 
-func osEnv() map[string]string {
-	env := map[string]string{}
-	for _, kv := range os.Environ() {
-		if k, v, ok := strings.Cut(kv, "="); ok {
-			env[k] = v
-		}
-	}
-	return env
-}
-
-func envList(env map[string]string) []string {
-	out := make([]string, 0, len(env))
-	for k, v := range env {
-		out = append(out, k+"="+v)
-	}
-	return out
-}
+// The child environment helpers live in host (role picks use them too).
+var osEnv, envList = host.EnvMap, host.EnvList
 
 // customEnv points Claude Code at a 직접 추가 provider's Anthropic endpoint, with that key (it has no login).
 func customEnv(env map[string]string, model string, key map[string]any) (map[string]string, error) {
@@ -416,27 +401,8 @@ func childEnv(row host.CLI, keys []map[string]any, model string, key map[string]
 			return nil, err
 		}
 	}
-	applyStoredKey(env, row, keys)
+	host.ApplyStoredKey(env, row, keys)
 	return env, nil
-}
-
-// applyStoredKey puts the row's first stored key, and its address, into a CLI's environment.
-func applyStoredKey(env map[string]string, row host.CLI, keys []map[string]any) {
-	if row.Provider == "zai" && !strings.HasPrefix(env[row.BaseEnv], "https://") { // nor an inherited http one
-		delete(env, row.BaseEnv)
-	}
-	for _, k := range keys {
-		if k["provider"] == row.Provider && truthy(k["key"]) {
-			env[row.KeyEnv] = str(k["key"])
-			if row.Name == "codex" {
-				env["CODEX_API_KEY"] = str(k["key"])
-			}
-			if b := str(k["base_url"]); b != "" && (row.Provider != "zai" || strings.HasPrefix(b, "https://")) { // a wrapper gets no pre-0.1.4 http Z.ai address (#170)
-				env[row.BaseEnv] = b
-			}
-			return
-		}
-	}
 }
 
 // redact keeps a child that echoes its key from carrying it out through our output.

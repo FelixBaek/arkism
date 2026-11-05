@@ -363,7 +363,16 @@ func runLocalNode(spec map[string]any) (res map[string]any, err error) {
 	if err != nil {
 		return nil, err
 	}
-	env, profile, reason := accountEnv(row, model, env)
+	via := sOr(spec["via"]) // AI 도움 picked under a subscription or an API key (설정 › 에이전트)
+	if key == nil {
+		if err := host.BillingEnv(env, model, via); err != nil {
+			return nil, err
+		}
+	}
+	env, profile, reason := env, map[string]any(nil), ""
+	if via != host.BillingAPI {
+		env, profile, reason = accountEnv(row, model, env)
+	}
 	if reason == "quota_exhausted" { // refused before the CLI starts: no start time, so 라우팅 may fall over
 		return result(false, "", model, effort, row.Name, time.Time{}, reason), nil
 	}

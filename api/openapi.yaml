@@ -11354,7 +11354,7 @@
         "operationId": "postV1ProvidersKeys"}
     },
     "/v1/providers/assist_model": {
-      "post": {"summary": "Pick the model that answers AI help requests (human principals only)", "description": "Body {scope, model, provider?}. model matches the provider model pattern; empty goes back to the runner default (ARKISM_ASSIST_MODEL). provider (optional, needs a model) names the provider the model was picked under, since several providers offer the same model name. Returned as providers.assist_model and providers.assist_provider by GET /v1/providers. If the host runner cannot run the stored model it falls back to its default.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
+      "post": {"summary": "Pick the model that answers AI help requests (human principals only)", "description": "Body {scope, model, provider?, via?}. model matches the provider model pattern; empty goes back to the runner default (ARKISM_ASSIST_MODEL). provider (optional, needs a model) names the provider the model was picked under, since several providers offer the same model name. via (optional, subscription|api, needs the model's own provider) says how it is billed: the CLI's login, or the provider's stored key (a missing key fails the request instead of falling back). Returned as providers.assist_model, providers.assist_provider and providers.assist_via by GET /v1/providers. If the host runner cannot run the stored model it falls back to its default, billed the same way.", "responses": {"200": {"description": "Updated record"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"},
           "401": {
             "description": "Missing bearer credentials.",
             "headers": {
@@ -37576,7 +37576,7 @@
           "Management"
         ],
         "summary": "Providers: role model",
-        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
+        "description": "Human only. Returns the providers record envelope. Sets or clears (model and off empty) the owner's pick for one role, stored as providers.roles[role]. route_judge takes fixed|clef|jev|chat and skill_judge fixed|clef|jev (memoryd applies them per request; an engine this server lacks keeps the default); skill_candidates takes 1-8; extract, reflect and skill_summary take an anthropic model (skill_summary also basic) that the host runs through the Claude CLI, falling back to its default when the pick cannot run; with a model, via (subscription|api, optional) says how those three are billed: subscription runs the CLI on its own login with every key taken out, api puts the provider's stored key in its environment and fails (no fallback) when none is stored; skill_scan takes off, a subset of spector|evaluator|cisco not to run. GET /v1/providers adds role_defaults (memoryd's own roles plus what the runner reported) and role_options (engines this server can run); the embedder is one per server and is shown, not picked.",
         "parameters": [],
         "responses": {
           "200": {
@@ -64358,6 +64358,9 @@
                 }
               ]
             }
+          },
+          "assist_via": {
+            "type": "string"
           }
         },
         "additionalProperties": false,
@@ -73906,6 +73909,10 @@
               "type": "string"
             },
             "description": "skill_scan: engines not to run"
+          },
+          "via": {
+            "type": "string",
+            "description": "subscription | api; empty for a pick saved before billing was chosen"
           }
         },
         "additionalProperties": false,
@@ -73933,6 +73940,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "via": {
+            "type": "string"
           }
         },
         "additionalProperties": false,

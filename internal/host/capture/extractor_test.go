@@ -81,18 +81,41 @@ func TestGeminiJSONParsesTheResponse(t *testing.T) {
 
 func TestRunExtractorCodes(t *testing.T) {
 	capState = t.TempDir()
-	if _, err := runExtractor(context.Background(), []string{filepath.Join(t.TempDir(), "nothing")}, ""); errorCode(err) != "extractor_missing" {
+	if _, err := runExtractor(context.Background(), "", []string{filepath.Join(t.TempDir(), "nothing")}, ""); errorCode(err) != "extractor_missing" {
 		t.Fatal(err)
 	}
 	dir := fakeCLI(t, "fail", "exit 3\n")
-	if _, err := runExtractor(context.Background(), []string{filepath.Join(dir, "fail")}, ""); errorCode(err) != "extractor_exit_3" {
+	if _, err := runExtractor(context.Background(), "", []string{filepath.Join(dir, "fail")}, ""); errorCode(err) != "extractor_exit_3" {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	slow := fakeCLI(t, "slow", "sleep 2\n")
-	if _, err := runExtractor(ctx, []string{filepath.Join(slow, "slow")}, ""); err != errTimeoutExpired {
+	if _, err := runExtractor(ctx, "", []string{filepath.Join(slow, "slow")}, ""); err != errTimeoutExpired {
 		t.Fatal(err)
+	}
+}
+
+// A model picked under an API key with no key stored stops before the CLI starts, and the picked model's default
+// is not tried on the subscription instead.
+func TestPickedAPIKeyMissingNeverFallsBack(t *testing.T) {
+	capState = t.TempDir()
+	old, oldLLM := host.KeysFile, llm
+	host.KeysFile = filepath.Join(t.TempDir(), "none.json")
+	modelVia["claude-sonnet-5-5"], fallbackModel["claude-sonnet-5-5"] = host.BillingAPI, "haiku"
+	calls := []string{}
+	llm = func(system, user, model string, timeout time.Duration, schema, key string) (any, error) {
+		calls = append(calls, model)
+		_, err := runExtractor(context.Background(), model, []string{"true"}, "")
+		return nil, err
+	}
+	t.Cleanup(func() {
+		host.KeysFile, llm = old, oldLLM
+		delete(modelVia, "claude-sonnet-5-5")
+		delete(fallbackModel, "claude-sonnet-5-5")
+	})
+	if _, err := privateModel("system", "user", "claude-sonnet-5-5", time.Second, `{}`, ""); errorCode(err) != "extractor_no_key" || len(calls) != 1 {
+		t.Fatal(err, calls)
 	}
 }
 

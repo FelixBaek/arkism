@@ -13,6 +13,7 @@ test("each extractor state and failure code turns into a plain sentence with the
     [{ extractor: { cli: "codex", state: "ready" }, analysis_run: { reason: "extractor_exit_1" } }, /답하지 않았어요/, "login", /Codex 로그인이 끝났거나/],
     [{ extractor: { cli: "codex", state: "ready" }, analysis_run: { reason: "extractor_missing" } }, /프로그램이 없어요/, "login", /Codex/],
     [{ analysis_run: { error: "extractor_no_json" } }, /답을 읽지 못했어요/, "model", /다른 모델/],
+    [{ analysis_run: { error: "extractor_no_key" } }, /API 키가 없어요/, "model", /구독으로 고르세요/],
     [{ analysis_run: { reason: "TimeoutExpired" } }, /너무 오래 걸렸어요/, "retry", /더 빠른 모델/]
   ];
   for (const [tools, title, action, text] of cases) {
@@ -24,7 +25,7 @@ test("each extractor state and failure code turns into a plain sentence with the
 });
 
 test("every extractor failure code has a short sentence and exactly one of the three fixes", () => {
-  assert.equal(EXTRACTOR_CODES.length, 5);
+  assert.equal(EXTRACTOR_CODES.length, 6);
   for (const code of EXTRACTOR_CODES) {
     const tools = code === "login_needed" ? { extractor: { cli: "gemini", state: code } } : { extractor: { cli: "gemini", state: "ready" }, analysis_run: { error: code.endsWith("_") ? code + "137" : code } };
     const r = extractorIssue(tools);
