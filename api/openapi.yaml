@@ -39766,12 +39766,12 @@
     },
     "/v1/files/memories/documents": {
       "get": {
-        "operationId": "get_v1_files_memories_documents",
+        "operationId": "list_file_extract_documents",
         "tags": [
           "Management"
         ],
-        "summary": "Uploaded documents",
-        "description": "read:memory_candidates. The space's uploaded file documents, each with its id, revision and its latest upload (job id, state, chunk delta). cursor is next_cursor; limit 1..200, default 50.",
+        "summary": "List memory-extraction documents",
+        "description": "read:memory_candidates. The scope's extraction documents newest first, each with its last upload's label, job state, chunk count and candidates created, and its tags. tag keeps documents with that tag. cursor is next_cursor; limit 1..200, default 50.",
         "parameters": [
           {
             "in": "query",
@@ -39824,31 +39824,105 @@
               "type": "string",
               "maxLength": 256
             }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Success",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
+            "description": "One page of documents.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WireResponseDocumentListPage"
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "next_cursor"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "next_cursor": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
           },
           "400": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
               }
-            },
+            }
+          },
+          "403": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
             "content": {
               "application/json": {
                 "schema": {
@@ -39877,99 +39951,8 @@
                 }
               }
             }
-          },
-          "403": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
-            "headers": {
-              "X-Request-ID": {
-                "$ref": "#/components/headers/RequestID"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           }
-        },
-        "x-go-contract": true
+        }
       }
     },
     "/v1/files/memories/documents/{id}": {
@@ -76637,60 +76620,6 @@
         "x-go-type": "memory.ChangeRequest",
         "x-go-source": "internal/memory/maintenance_change.go",
         "description": "ChangeRequest is the change a \"change\" proposal asks for."
-      },
-      "WireResponseDocumentListPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "anyOf": [
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/WireResponseDocumentSummary"
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "next_cursor": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "items"
-        ],
-        "x-go-type": "memory.DocumentListPage",
-        "x-go-source": "internal/memory/document_history.go"
-      },
-      "WireResponseDocumentSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "latest": {
-            "$ref": "#/components/schemas/WireResponseDocumentUpload"
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "revision",
-          "updated_at"
-        ],
-        "x-go-type": "memory.DocumentSummary",
-        "x-go-source": "internal/memory/document_history.go",
-        "description": "DocumentSummary is one memory-extraction document with its latest upload."
       },
       "WireResponseExtDataPage": {
         "type": "object",

@@ -227,47 +227,6 @@ func documentUpload(r Record) DocumentUpload {
 	return DocumentUpload{JobID: r.ID, Status: r.Status, Label: j.Label, Delta: j.Delta, CandidatesCreated: j.CandidatesCreated, RequestedBy: j.RequestedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 }
 
-// DocumentSummary is one memory-extraction document with its latest upload.
-type DocumentSummary struct {
-	ID        string          `json:"id"`
-	Revision  int64           `json:"revision"`
-	UpdatedAt time.Time       `json:"updated_at"`
-	Latest    *DocumentUpload `json:"latest,omitempty"`
-}
-
-type DocumentListPage struct {
-	Items      []DocumentSummary `json:"items"`
-	NextCursor string            `json:"next_cursor,omitempty"`
-}
-
-// ListDocuments pages the space's memory-extraction documents, newest change first.
-func (s *Service) ListDocuments(ctx context.Context, token string, scope Scope, page DocumentPage) (DocumentListPage, error) {
-	out := DocumentListPage{Items: []DocumentSummary{}}
-	if _, err := s.wikiAuthorize(ctx, token, "read:memory_candidates", scope, "", ""); err != nil {
-		return out, err
-	}
-	rows, next, err := s.opsPage(ctx, OpsListInput{Scope: scope, Kind: fileExtractDocKind, Cursor: page.Cursor, Limit: page.Limit}, colJobs)
-	if err != nil {
-		return out, err
-	}
-	for _, r := range rows {
-		item := DocumentSummary{ID: r.ID, Revision: r.Revision, UpdatedAt: r.UpdatedAt}
-		if r.Target != nil {
-			last, err := s.extractJob(ctx, s.Repo, scope, r.Target.ID)
-			if err != nil && !errors.Is(err, ErrNotFound) {
-				return out, err
-			}
-			if err == nil {
-				u := documentUpload(last)
-				item.Latest = &u
-			}
-		}
-		out.Items = append(out.Items, item)
-	}
-	out.NextCursor = next
-	return out, nil
-}
-
 // KnowledgeChunks lists the current document's chunks. Chunk text is shown to
 // a person only: an agent reads knowledge through retrieval, which requires a
 // reviewed source and a binding. Restricted, quarantined or erased text is

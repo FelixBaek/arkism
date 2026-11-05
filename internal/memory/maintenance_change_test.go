@@ -89,11 +89,11 @@ func TestListDocumentsPagesDocumentsWithTheirLatestUpload(t *testing.T) {
 		f.put(colJobs, Record{ID: id, Kind: fileExtractDocKind})
 	}
 	f.put(colJobs, Record{ID: "other", Kind: "file_memory_extract"})
-	first, err := f.svc.ListDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 2})
+	first, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 2})
 	if err != nil || len(first.Items) != 2 || first.NextCursor == "" {
 		t.Fatalf("first page = %+v, %v", first, err)
 	}
-	rest, err := f.svc.ListDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 2, Cursor: first.NextCursor})
+	rest, err := f.svc.ListExtractDocuments(testCtx, f.human, scopeA, DocumentPage{Limit: 2, Cursor: first.NextCursor})
 	if err != nil || len(rest.Items) != 1 || rest.NextCursor != "" {
 		t.Fatalf("second page = %+v, %v", rest, err)
 	}
@@ -104,7 +104,7 @@ func TestListDocumentsPagesDocumentsWithTheirLatestUpload(t *testing.T) {
 	if len(seen) != 3 || seen["other"] {
 		t.Fatalf("listed %v", seen)
 	}
-	if _, err := f.svc.ListDocuments(testCtx, "no-such-token", scopeA, DocumentPage{}); err == nil {
+	if _, err := f.svc.ListExtractDocuments(testCtx, "no-such-token", scopeA, DocumentPage{}); err == nil {
 		t.Fatal("listed without a token")
 	}
 }

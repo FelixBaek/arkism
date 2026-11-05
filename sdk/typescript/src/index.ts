@@ -635,8 +635,6 @@ export type WireResponseExtractBatch = { "id": string; "submitted_at": string };
 export type WireResponseTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireResponseTagTest>; "or"?: Array<WireResponseTagTest> };
 export type WireResponseMentalModelOutcome = { "code": string; "trigger": string; "at": string };
 export type WireResponseChangeRequest = { "action": string; "target"?: string; "revision"?: number; "params"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
-export type WireResponseDocumentListPage = { "items": (Array<WireResponseDocumentSummary> | null); "next_cursor"?: string };
-export type WireResponseDocumentSummary = { "id": string; "revision": number; "updated_at": string; "latest"?: WireResponseDocumentUpload };
 export type WireResponseExtDataPage = { "items": (Array<WireResponseExtDataItem> | null); "next_cursor"?: string; "authority": string };
 export type WireResponseExtDataItem = { "key": string; "value": ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null); "revision": number; "updated_at": string; "updated_by": string };
 export type WireRequestExtDataChange = { "scope"?: WireRequestScope; "changes"?: (Array<WireRequestExtDataOp> | null) };
@@ -2222,8 +2220,8 @@ export class ArkismClient {
   extract_file_memories_batch(body: { "metadata": { "scope": Scope; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
   }
-  /** GET /v1/files/memories/documents — Uploaded documents */
-  get_v1_files_memories_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string }): Promise<WireResponseDocumentListPage> {
+  /** GET /v1/files/memories/documents — List memory-extraction documents */
+  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
     return this.request("GET", `/v1/files/memories/documents`, query, undefined);
   }
   /** PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced */
