@@ -87,6 +87,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	registerOpsCoreHTTP(mux, s, stats)
 	registerWebhooksCoreHTTP(mux, s, stats)
 	registerSpacesCoreHTTP(mux, s, stats)
+	registerExtensionsCoreHTTP(mux, s)
 	registerCausalCoreHTTP(mux, s, stats)
 	registerReflectModelsCoreHTTP(mux, s)
 	catalogQueryRoutes(mux, s)

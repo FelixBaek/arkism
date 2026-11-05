@@ -384,7 +384,7 @@ export type WireResponseReviewSettings = { "provider": string; "on_blocking": st
 export type WireResponseReviewRerun = { "id": string; "repo": string; "number": number; "status": string; "error"?: string; "requested_at": string; "done_at"?: string };
 export type WireResponseDesignSystem = { "title": string; "product"?: string; "purpose"?: string; "description"?: string; "source"?: string; "colors"?: Array<WireResponseDesignColor>; "fonts"?: Array<string>; "guide"?: string; "tags"?: Array<string> };
 export type WireResponseDesignColor = { "name": string; "value": string };
-export type WireResponseMaintenanceProposal = { "type": string; "keep": WireResponseRef; "retire": WireResponseRef; "memory"?: WireResponseRef; "evidence"?: WireResponseMaintenanceEvidence; "reason": string; "decision"?: string; "decided_by"?: string; "decided_at"?: string };
+export type WireResponseMaintenanceProposal = { "type": string; "keep": WireResponseRef; "retire": WireResponseRef; "memory"?: WireResponseRef; "evidence"?: WireResponseMaintenanceEvidence; "reason": string; "decision"?: string; "decided_by"?: string; "decided_at"?: string; "change"?: WireResponseChangeRequest };
 export type WireResponseMaintenanceEvidence = { "samples": number; "passed": number; "pass_rate": number };
 export type WireResponseMergeRecord = { "pool"?: WireResponseMergePool; "proposal"?: WireResponseMergeProposal };
 export type WireResponseMergePool = { "candidates": (Array<WireResponseRef> | null); "memories": (Array<WireResponseRef> | null); "expires_at": string };
@@ -634,6 +634,9 @@ export type WireResponseExtractOptions = { "context"?: string; "timestamp"?: str
 export type WireResponseExtractBatch = { "id": string; "submitted_at": string };
 export type WireResponseTagTest = { "tags"?: Array<string>; "match"?: string; "resolve"?: string; "not"?: boolean; "and"?: Array<WireResponseTagTest>; "or"?: Array<WireResponseTagTest> };
 export type WireResponseMentalModelOutcome = { "code": string; "trigger": string; "at": string };
+export type WireResponseChangeRequest = { "action": string; "target"?: string; "revision"?: number; "params"?: ({ [key: string]: unknown } | Array<unknown> | string | number | boolean | null) };
+export type WireResponseDocumentListPage = { "items": (Array<WireResponseDocumentSummary> | null); "next_cursor"?: string };
+export type WireResponseDocumentSummary = { "id": string; "revision": number; "updated_at": string; "latest"?: WireResponseDocumentUpload };
 
 export interface ClientOptions {
   /** Server base URL, e.g. http://127.0.0.1:8080 */
@@ -2209,8 +2212,8 @@ export class ArkismClient {
   extract_file_memories_batch(body: { "metadata": { "scope": Scope; "dry_run"?: boolean; "parsers"?: Array<string>; "files"?: Array<{ "mime"?: string; "parsers"?: Array<string> }> }; "file": Array<string> }): Promise<{ "files": Array<{ "filename": string; "result"?: { [key: string]: unknown }; "error"?: string }> }> {
     return this.request("POST", `/v1/files/memories/batch`, undefined, body === undefined ? undefined : formData(body, [["metadata", true], ["file", true]]));
   }
-  /** GET /v1/files/memories/documents — List memory-extraction documents */
-  list_file_extract_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string; "tag"?: string }): Promise<{ "items": Array<{ [key: string]: unknown }>; "next_cursor": string }> {
+  /** GET /v1/files/memories/documents — Uploaded documents */
+  get_v1_files_memories_documents(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "limit"?: number; "cursor"?: string }): Promise<WireResponseDocumentListPage> {
     return this.request("GET", `/v1/files/memories/documents`, query, undefined);
   }
   /** PATCH /v1/files/memories/documents/{id} — Edit a document's tags and pass them to what it produced */
@@ -2440,5 +2443,21 @@ export class ArkismClient {
   /** GET /v1/spaces/template-schema — JSON schema of one line of a space template bundle (read:space_configs) */
   getSpaceTemplateSchema(query: { "workspace_id": string; "project_id": string }): Promise<{ [key: string]: unknown }> {
     return this.request("GET", `/v1/spaces/template-schema`, query, undefined);
+  }
+  /** GET /v1/extensions/{extension}/routes/{path...} — Call an extension route */
+  getV1ExtensionsByExtensionRoutesByPath(extension: string, path: string, query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<unknown> {
+    return this.request("GET", `/v1/extensions/${encodeURIComponent(extension)}/routes/${encodeURIComponent(path)}`, query, undefined);
+  }
+  /** POST /v1/extensions/{extension}/routes/{path...} — Call an extension route */
+  postV1ExtensionsByExtensionRoutesByPath(extension: string, path: string, body: { "scope": Scope; "input"?: unknown }): Promise<unknown> {
+    return this.request("POST", `/v1/extensions/${encodeURIComponent(extension)}/routes/${encodeURIComponent(path)}`, undefined, body);
+  }
+  /** GET /v1/extension-tools — List extension MCP tools */
+  getV1ExtensionTools(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "tools": Array<{ "name": string; "description": string; "inputSchema": { [key: string]: unknown } }> }> {
+    return this.request("GET", `/v1/extension-tools`, query, undefined);
+  }
+  /** POST /v1/extension-tools/call — Run an extension MCP tool */
+  postV1ExtensionToolsCall(body: { "scope": Scope; "name": string; "arguments"?: { [key: string]: unknown } }): Promise<{ "result": unknown; "authority": "data_only_untrusted" }> {
+    return this.request("POST", `/v1/extension-tools/call`, undefined, body);
   }
 }

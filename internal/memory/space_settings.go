@@ -194,6 +194,8 @@ type SpaceEffectiveView struct {
 	Revision    int64             `json:"revision"`
 	Config      SpaceConfig       `json:"config"`
 	Sources     map[string]string `json:"sources"`
+	// ServerMCPTools is the server-wide allowlist; a tool runs only when both lists allow it.
+	ServerMCPTools []string `json:"server_mcp_tools,omitempty"`
 }
 
 // SpaceTemplate is the server's default template bundle (config, directives and mental model definitions).
@@ -589,7 +591,7 @@ func (s *Service) EffectiveSpaceConfig(ctx context.Context, token string, scope 
 		config.Notes = ""
 	}
 	config = shownSpaceConfig(config, d.Role)
-	return SpaceEffectiveView{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, Revision: view.Revision, Config: config, Sources: src}, nil
+	return SpaceEffectiveView{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, Revision: view.Revision, Config: config, Sources: src, ServerMCPTools: s.MCPTools}, nil
 }
 
 // shownSpaceConfig is c as role may see it. Defense rules, names and patterns alike,

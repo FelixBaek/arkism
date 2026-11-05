@@ -37,6 +37,8 @@ func memoryWriteValue(n string, args map[string]any) (any, error) {
 		return proposeMentalModel(args)
 	case "propose_invalidation":
 		return proposeInvalidation(args)
+	case "propose_change":
+		return proposeChange(args)
 	case "add_document":
 		return addDocument(args)
 	case "cancel_job":
@@ -123,6 +125,34 @@ func proposeInvalidation(args map[string]any) (any, error) {
 	}
 	res, err := routerRequest("/v1/maintenance_proposals", map[string]any{"scope": host.Scope(),
 		"proposal": map[string]any{"type": "invalidation", "memory": ref, "reason": reason}})
+	if err != nil {
+		return nil, err
+	}
+	return proposed(res), nil
+}
+
+// proposeChange asks a person for a change the agent may not make itself; the server checks the action, target and params.
+func proposeChange(args map[string]any) (any, error) {
+	action, okA := toolString(args, "action", 64)
+	change := map[string]any{"action": action}
+	target, hasTarget := args["target_id"]
+	id, okT := toolID(target)
+	rev, okR := toolInt(args, "revision", 0, 0, 1<<53)
+	params, okP := args["params"].(map[string]any)
+	if _, has := args["params"]; !okA || hasTarget && !okT || !okR || has && !okP {
+		return nil, errors.New("action is required; target_id, revision and an object params are optional by action")
+	}
+	if hasTarget {
+		change["target"] = id
+	}
+	if rev > 0 {
+		change["revision"] = rev
+	}
+	if okP {
+		change["params"] = params
+	}
+	res, err := routerRequest("/v1/maintenance_proposals", map[string]any{"scope": host.Scope(),
+		"proposal": map[string]any{"type": "change", "reason": action, "change": change}})
 	if err != nil {
 		return nil, err
 	}

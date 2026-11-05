@@ -51,12 +51,14 @@ type MaintenanceProposal struct {
 	Keep   Ref    `json:"keep"`
 	Retire Ref    `json:"retire"`
 	// Memory and Evidence are set only on a signal proposal (ST-814).
-	Memory    *Ref                 `json:"memory,omitempty"`
-	Evidence  *MaintenanceEvidence `json:"evidence,omitempty"`
-	Reason    string               `json:"reason"`
-	Decision  string               `json:"decision,omitempty"`
-	DecidedBy string               `json:"decided_by,omitempty"`
-	DecidedAt *time.Time           `json:"decided_at,omitempty"`
+	Memory   *Ref                 `json:"memory,omitempty"`
+	Evidence *MaintenanceEvidence `json:"evidence,omitempty"`
+	// Change is set only on a change proposal (maintenance_change.go).
+	Change    *ChangeRequest `json:"change,omitempty"`
+	Reason    string         `json:"reason"`
+	Decision  string         `json:"decision,omitempty"`
+	DecidedBy string         `json:"decided_by,omitempty"`
+	DecidedAt *time.Time     `json:"decided_at,omitempty"`
 }
 
 // MaintenanceEvidence is the stored signal's counts when the proposal was made.
@@ -89,6 +91,9 @@ func validMaintenance(p MaintenanceProposal) bool {
 	if p.Decision != "" || p.DecidedBy != "" || p.DecidedAt != nil {
 		return false
 	}
+	if isChangeProposal(p) || p.Type == changeType {
+		return isChangeProposal(p) && validChange(p)
+	}
 	_, signal := signalTypes[p.Type]
 	if p.Type == invalidationType || signal {
 		return p.Memory != nil && ref(*p.Memory) && p.Keep == (Ref{}) && p.Retire == (Ref{}) && validOneMemory(p, signal)
@@ -109,8 +114,14 @@ func validOneMemory(p MaintenanceProposal, signal bool) bool {
 // isSignalProposal is true for every one-memory proposal: a signal or an invalidation.
 func isSignalProposal(p MaintenanceProposal) bool { return p.Memory != nil }
 
+// agreementOnly: a signal or change proposal changes no memory either way; accept records that a person agrees.
+func agreementOnly(p MaintenanceProposal) bool { return isSignalProposal(p) || isChangeProposal(p) }
+
 // proposalRefs is the memories a proposal names: one for a signal proposal, else the pair.
 func proposalRefs(p MaintenanceProposal) []Ref {
+	if isChangeProposal(p) {
+		return nil
+	}
 	if isSignalProposal(p) {
 		return []Ref{*p.Memory}
 	}
@@ -120,6 +131,8 @@ func proposalRefs(p MaintenanceProposal) []Ref {
 // proposalID is one record per pair, or per memory for a signal proposal (NUL is no valid id).
 func proposalID(scope Scope, p MaintenanceProposal) string {
 	switch {
+	case isChangeProposal(p):
+		return changeProposalID(scope, p.Change)
 	case p.Type == invalidationType:
 		// Its own id: an agent's question never stands in for (or blocks) a stored signal's proposal.
 		return pairID(scope, "\x00invalidation", p.Memory.ID)
@@ -142,6 +155,9 @@ func pairID(scope Scope, a, b string) string {
 }
 
 func sameRevisions(a, b MaintenanceProposal) bool {
+	if isChangeProposal(a) || isChangeProposal(b) {
+		return isChangeProposal(a) && isChangeProposal(b) && a.Change.Revision == b.Change.Revision
+	}
 	if isSignalProposal(a) || isSignalProposal(b) {
 		return isSignalProposal(a) && isSignalProposal(b) && a.Memory.Revision == b.Memory.Revision
 	}
@@ -186,6 +202,14 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 	if err != nil {
 		return Record{}, err
 	}
+	if change := in.Proposal.Change; change != nil {
+		if err := checkChangeText(change); err != nil {
+			return Record{}, err
+		}
+		if err := s.authorizeChangeTarget(ctx, token, in.Scope, change); err != nil {
+			return Record{}, err
+		}
+	}
 	// The evidence is checked against stored signals, so the proposer must be able to read them.
 	hasEvidence := in.Proposal.Evidence != nil
 	if hasEvidence {
@@ -208,6 +232,11 @@ func (s *Service) ProposeMaintenance(ctx context.Context, token string, in Maint
 		}
 		if err := checkProposalMemories(ctx, tx, in); err != nil {
 			return err
+		}
+		if in.Proposal.Change != nil {
+			if err := checkChangeTarget(ctx, tx, in.Scope, in.Proposal.Change); err != nil {
+				return err
+			}
 		}
 		p := in.Proposal
 		if hasEvidence {
@@ -301,7 +330,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 	if seen.Revision != in.ExpectedRevision || seen.Status != maintenanceOpen || seen.Maintenance == nil {
 		return Record{}, ErrConflict
 	}
-	signal := isSignalProposal(*seen.Maintenance)
+	signal := agreementOnly(*seen.Maintenance)
 	if !decisionFits(*seen.Maintenance, in.Decision, signal) {
 		return Record{}, ErrInvalid
 	}
@@ -314,7 +343,6 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 		}
 		removal = &Removal{Code: in.ReasonCode, Note: in.Reason, By: d.PrincipalID}
 	} else if in.Decision != "dismiss" && !signal {
-		// A signal proposal changes no memory either way: accept records that a person agrees.
 		m := supersedeInput(in.Scope, seen, in.Decision)
 		// The same permission the conflict path asks for: a human who may change both memories.
 		if _, err := s.conflictPrincipal(ctx, token, m); err != nil {
@@ -355,6 +383,9 @@ func (s *Service) forgettable(ctx context.Context, token string, scope Scope, p 
 // decisionFits says whether a decision applies to the proposal: a signal has one memory to
 // forget and nothing to swap; a pair can forget either side or both.
 func decisionFits(p MaintenanceProposal, decision string, signal bool) bool {
+	if isChangeProposal(p) {
+		return decision == "accept" || decision == "dismiss"
+	}
 	switch decision {
 	case "swap", "forget_keep", "forget_retire", "forget_both":
 		return !signal

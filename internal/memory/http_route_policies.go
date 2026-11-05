@@ -384,7 +384,7 @@ var httpRoutePolicies = map[string]routePolicy{
 	"POST /v1/operations/{id}/cancel":                      {action: "transition:jobs", scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman, roleAgent}},
 	"POST /v1/operations/{id}/retry":                       {action: "transition:jobs", scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman}},
 	"DELETE /v1/operations/{id}":                           {action: "delete:jobs", scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman}},
-	"GET /v1/stats":                                        {action: "ops:metrics", scope: routeQuery, roles: []string{roleHuman, roleService}},
+	"GET /v1/stats":                                        {action: "read:memories", scope: routeQuery, roles: []string{roleHuman, roleService, roleAgent}},
 	"GET /v1/stats/timeseries":                             {action: "ops:metrics", scope: routeQuery, roles: []string{roleHuman, roleService}},
 	"GET /v1/tags":                                         {action: "read:memories", scope: routeQuery},
 	"POST /v1/memories/{id}/tags":                          {action: "transition:memories", scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman}},

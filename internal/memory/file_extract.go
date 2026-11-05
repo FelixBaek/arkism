@@ -438,7 +438,7 @@ func (s *Service) extractActor(ctx context.Context, token, action string, scope 
 		return d, SpaceConfig{}, err
 	}
 	settings, err := s.spaceSettings(ctx, scope)
-	if err == nil && d.Role == roleAgent && !slices.Contains(settings.MCPTools, agentUploadTool) {
+	if err == nil && d.Role == roleAgent && (!slices.Contains(settings.MCPTools, agentUploadTool) || !s.mcpToolAllowed(nil, agentUploadTool)) {
 		return Decision{}, SpaceConfig{}, ErrDenied
 	}
 	if err == nil && !settings.ExtractionEnabled {

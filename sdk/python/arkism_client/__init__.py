@@ -1570,8 +1570,8 @@ class ArkismClient(BaseClient):
         """POST /v1/files/memories/batch — Turn several files into memory candidates in one multipart request; body: {metadata JSON, file JSON} sent as multipart in this order"""
         return self.request("POST", f"/v1/files/memories/batch", None, None, form=None if body is None else [(k, body.get(k), j) for k, j in [('metadata', True), ('file', True)]])
 
-    def list_file_extract_documents(self, query=None):
-        """GET /v1/files/memories/documents — List memory-extraction documents"""
+    def get_v1_files_memories_documents(self, query=None):
+        """GET /v1/files/memories/documents — Uploaded documents"""
         return self.request("GET", f"/v1/files/memories/documents", query, None)
 
     def edit_file_extract_document_tags(self, id, body=None):
@@ -1801,3 +1801,19 @@ class ArkismClient(BaseClient):
     def get_space_template_schema(self, query=None):
         """GET /v1/spaces/template-schema — JSON schema of one line of a space template bundle (read:space_configs)"""
         return self.request("GET", f"/v1/spaces/template-schema", query, None)
+
+    def get_v1_extensions_by_extension_routes_by_path(self, extension, path, query=None):
+        """GET /v1/extensions/{extension}/routes/{path...} — Call an extension route"""
+        return self.request("GET", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/routes/{urllib.parse.quote(path, safe='')}", query, None)
+
+    def post_v1_extensions_by_extension_routes_by_path(self, extension, path, body=None):
+        """POST /v1/extensions/{extension}/routes/{path...} — Call an extension route"""
+        return self.request("POST", f"/v1/extensions/{urllib.parse.quote(extension, safe='')}/routes/{urllib.parse.quote(path, safe='')}", None, body)
+
+    def get_v1_extension_tools(self, query=None):
+        """GET /v1/extension-tools — List extension MCP tools"""
+        return self.request("GET", f"/v1/extension-tools", query, None)
+
+    def post_v1_extension_tools_call(self, body=None):
+        """POST /v1/extension-tools/call — Run an extension MCP tool"""
+        return self.request("POST", f"/v1/extension-tools/call", None, body)

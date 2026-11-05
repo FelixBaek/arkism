@@ -563,6 +563,10 @@ func sameSources(a []Ref, ids []string) bool {
 // propose new ones from memory clusters and refresh due mental models, at most
 // max_groups model calls of each kind. dry_run writes no observation or mental model.
 func (s *Service) ConsolidateObservations(ctx context.Context, token string, in ObservationConsolidateInput) (ObservationConsolidateResult, error) {
+	return withOperation(s, ctx, token, OpConsolidate, in.Scope, in, func() (ObservationConsolidateResult, error) { return s.consolidateObservations(ctx, token, in) })
+}
+
+func (s *Service) consolidateObservations(ctx context.Context, token string, in ObservationConsolidateInput) (ObservationConsolidateResult, error) {
 	if in.MaxGroups < 0 || in.MaxGroups > obsGroupsMax {
 		return ObservationConsolidateResult{}, ErrInvalid
 	}

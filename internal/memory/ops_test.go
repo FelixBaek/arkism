@@ -270,8 +270,9 @@ func TestOpsStatsAndLivez(t *testing.T) {
 	if err != nil || st.Memories.Total != 2 || st.Memories.ByKind["lesson"] != 1 || st.Memories.ByStatus["active"] != 1 || st.PendingCandidates != 1 {
 		t.Fatalf("stats = %+v, %v", st, err)
 	}
-	if _, err = f.svc.Stats(testCtx, f.agent, scopeA); !errors.Is(err, ErrDenied) {
-		t.Fatalf("agent stats err = %v", err)
+	// An agent reads its space's counts with read:memories alone.
+	if ast, err := f.svc.Stats(testCtx, f.agent, scopeA); err != nil || ast.Memories.Total != 2 || ast.PendingCandidates != 1 {
+		t.Fatalf("agent stats = %+v, %v", ast, err)
 	}
 	now := time.Now().UTC()
 	ts, err := f.svc.StatsTimeseries(testCtx, f.human, StatsTimeseriesInput{Scope: scopeA, From: now.Add(-time.Hour), To: now.Add(time.Hour), By: "status"})

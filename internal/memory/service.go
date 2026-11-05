@@ -115,6 +115,8 @@ type Service struct {
 	Prometheus PrometheusConfig
 	// Extensions are an embedding program's own checks and reactions (extensions.go).
 	Extensions Extensions
+	// MCPTools is the server-wide MCP tool allowlist (ARKISM_MCP_TOOLS); empty allows every tool.
+	MCPTools []string
 
 	// SignalRankingOff keeps judged outcomes (memory_signal) out of recall ranking (ARKISM_RANK_SIGNAL=off).
 	SignalRankingOff bool
@@ -279,6 +281,10 @@ func (s *Service) authorizeAt(ctx context.Context, token, action string, scope S
 	if !sameRequestActor(ctx, d) {
 		s.auditDeniedInput(ctx, action, scope, id)
 		return Decision{}, ErrDenied
+	}
+	if err := s.Extensions.checkTenant(ctx, d, action); err != nil {
+		s.auditDeniedInput(ctx, action, scope, id)
+		return Decision{}, err
 	}
 	return d, nil
 }

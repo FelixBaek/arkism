@@ -1664,6 +1664,26 @@
         }
       },
       "description": "read:knowledge_sources. The source's document versions newest first with file name, MIME type, parser version, extraction status, chunk count and which one is current. cursor is an offset from next_cursor; limit 1..200, default 50."
+    },
+    {
+      "method": "get",
+      "path": "/v1/files/memories/documents",
+      "request": null,
+      "response": "DocumentListPage",
+      "summary": "Uploaded documents",
+      "query": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200,
+          "default": 50
+        },
+        "cursor": {
+          "type": "string",
+          "maxLength": 256
+        }
+      },
+      "description": "read:memory_candidates. The space's uploaded file documents, each with its id, revision and its latest upload (job id, state, chunk delta). cursor is next_cursor; limit 1..200, default 50."
     }
   ]
 }

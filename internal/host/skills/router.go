@@ -1158,6 +1158,12 @@ func routerToolNames() map[string]bool {
 
 // routerToolEnabled refuses a tool the router does not have or the space's settings leave out.
 func routerToolEnabled(n string) error {
+	if receiveOnly && n == "record_skill_usage" {
+		return errors.New("skills_receive_only: skill usage writes are disabled for this client")
+	}
+	if strings.HasPrefix(n, "ext_") && extensionToolKnown(n) {
+		return nil
+	}
 	if !routerToolNames()[n] {
 		return errors.New("unknown tool")
 	}
@@ -1181,7 +1187,7 @@ func routerTools() ([]json.RawMessage, error) {
 			out = append(out, raw)
 		}
 	}
-	return out, nil
+	return append(out, extensionTools()...), nil
 }
 
 func arg(args map[string]any, key string, def any) any { return getOr(args, key, def) }
@@ -1215,15 +1221,15 @@ func pyFloat(v any) (float64, error) {
 
 func callTool(name, argsAny any) (host.Obj, error) {
 	n, _ := name.(string)
-	if receiveOnly && n == "record_skill_usage" {
-		return nil, errors.New("skills_receive_only: skill usage writes are disabled for this client")
-	}
 	if err := routerToolEnabled(n); err != nil {
 		return nil, err
 	}
 	args, err := toolArgs(n, argsAny)
 	if err != nil {
 		return nil, err
+	}
+	if strings.HasPrefix(n, "ext_") {
+		return callExtensionTool(n, args)
 	}
 	var value any
 	switch n {
@@ -1255,7 +1261,7 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	case "search_knowledge", "recall", "recall_digest", "search_session_archives", "recall_at", "trace_memory_sources",
 		"read_session_message", "record_memory_usage", "read_wiki", "reflect", "browse_memory":
 		value, err = callToolMemory(n, args)
-	case "remember", "propose_memory_update", "propose_directive", "propose_mental_model", "propose_invalidation",
+	case "remember", "propose_memory_update", "propose_directive", "propose_mental_model", "propose_invalidation", "propose_change",
 		"add_document", "cancel_job", "read_document", "read_space_config":
 		return callMemoryWrite(n, args)
 	case "code_search_symbols", "code_callers", "code_callees", "code_impact":

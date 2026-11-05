@@ -17,12 +17,14 @@ type testExtension struct {
 	jobs                     []string
 }
 
-func (x *testExtension) ValidateCapture(_ context.Context, _ Decision, in CaptureInput) error {
-	if x.refuseCapture && strings.Contains(in.Claims[0].Text, "forbidden") {
+func (x *testExtension) BeforeOperation(_ context.Context, _ Decision, op string, input any) error {
+	if in, ok := input.(CaptureInput); ok && op == OpCapture && x.refuseCapture && strings.Contains(in.Claims[0].Text, "forbidden") {
 		return errors.New("house rule")
 	}
 	return nil
 }
+
+func (x *testExtension) AfterOperation(context.Context, Decision, string, any, any, error) {}
 
 func (x *testExtension) BeforeJob(_ context.Context, job Record) error {
 	x.jobs = append(x.jobs, job.Kind)
@@ -39,7 +41,7 @@ func (x *testExtension) AfterApprove(_ context.Context, r Record) {
 func TestExtensionHooks(t *testing.T) {
 	f := newFixture(t)
 	x := &testExtension{refuseCapture: true, refuseJob: true}
-	f.svc.Extensions = Extensions{CaptureValidator: x, JobHook: x, ApproveHook: x}
+	f.svc.Extensions = Extensions{OperationHook: x, JobHook: x, ApproveHook: x}
 
 	if _, err := f.svc.Capture(testCtx, f.human, captureInput(scopeA, "evt-x", explicit("앞으로 forbidden 단어를 쓴다."))); !errors.Is(err, ErrInvalid) || !errors.Is(err, ErrExtensionRefused) {
 		t.Fatal("validator did not refuse", err)
@@ -79,14 +81,15 @@ func TestApproveHookPanicDoesNotUndoApproval(t *testing.T) {
 
 type panicHooks struct{}
 
-func (panicHooks) ValidateCapture(context.Context, Decision, CaptureInput) error { panic("boom") }
-func (panicHooks) BeforeJob(context.Context, Record) error                       { panic("boom") }
+func (panicHooks) BeforeOperation(context.Context, Decision, string, any) error      { panic("boom") }
+func (panicHooks) AfterOperation(context.Context, Decision, string, any, any, error) {}
+func (panicHooks) BeforeJob(context.Context, Record) error                           { panic("boom") }
 
 // A panicking validator or job hook refuses (fails closed) instead of
 // crashing the request or the worker; erasure never asks the job hook.
 func TestRefusingHooksContainPanics(t *testing.T) {
 	f := newFixture(t)
-	f.svc.Extensions = Extensions{CaptureValidator: panicHooks{}, JobHook: panicHooks{}}
+	f.svc.Extensions = Extensions{OperationHook: panicHooks{}, JobHook: panicHooks{}}
 	if _, err := f.svc.Capture(testCtx, f.human, captureInput(scopeA, "evt-p", explicit("앞으로 답은 짧게 한다."))); !errors.Is(err, ErrExtensionRefused) {
 		t.Fatal("panicking validator", err)
 	}

@@ -225,7 +225,12 @@ func applyReflectDefaults(in *ReflectInput, run *reflectRun, space SpaceConfig, 
 	}
 }
 
+// Reflect answers from approved memories; an extension's OperationHook may refuse it first.
 func (s *Service) Reflect(ctx context.Context, token string, in ReflectInput) (ReflectOutput, error) {
+	return withOperation(s, ctx, token, OpReflect, in.Scope, in, func() (ReflectOutput, error) { return s.reflect(ctx, token, in) })
+}
+
+func (s *Service) reflect(ctx context.Context, token string, in ReflectInput) (ReflectOutput, error) {
 	spaceTokens, iterSet, limitSet := in.MaxTokens == 0, in.MaxIterations != 0, in.Limit != 0
 	if !validReflectInput(&in) {
 		return ReflectOutput{}, ErrInvalid

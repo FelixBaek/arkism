@@ -241,3 +241,38 @@ func TestRecallKeepsTemporalOnlyHitUnderDefaultFloor(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestBrowseMemoryNewKinds(t *testing.T) {
+	swapRouter(t)
+	scope := scopeQueryAll()
+	for kind, c := range map[string][2]string{
+		"memories":  {`{"kind":"memories","query":"deploy"}`, "/v1/memories?" + scope + "&status=active&limit=20&q=deploy"},
+		"documents": {`{"kind":"documents","cursor":"c1"}`, "/v1/files/memories/documents?" + scope + "&limit=20&cursor=c1"},
+		"spaces":    {`{"kind":"spaces","cursor":"w/p"}`, "/v1/spaces?" + scope + "&limit=20&after=w%2Fp"},
+	} {
+		calls := fakeRequest(t, `{"items":[{"id":"x"}],"next_cursor":"n1","next":"n2"}`)
+		out := structured(t, call(t, "browse_memory", c[0]))
+		if len(*calls) != 1 || (*calls)[0].path != c[1] {
+			t.Fatal(kind, *calls)
+		}
+		want := "n1"
+		if kind == "spaces" {
+			want = "n2"
+		}
+		if field(out, "next_cursor") != want {
+			t.Fatal(kind, out)
+		}
+	}
+	for _, kind := range []string{"tags", "stats"} {
+		calls := fakeRequest(t, `{"items":[{"tag":"a","count":2}]}`)
+		out := structured(t, call(t, "browse_memory", `{"kind":"`+kind+`"}`))
+		if (*calls)[0].path != "/v1/"+kind+"?"+scope || field(out, "item") == nil || field(out, "authority") != "data_only_untrusted" {
+			t.Fatal(kind, *calls, out)
+		}
+	}
+	for _, args := range []string{`{"kind":"documents","id":"d1"}`, `{"kind":"spaces","id":"s"}`, `{"kind":"memories","id":"m1"}`} {
+		if _, err := callTool("browse_memory", j(t, args)); err == nil {
+			t.Fatal("no item route", args)
+		}
+	}
+}

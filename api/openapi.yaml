@@ -5307,7 +5307,7 @@
     "/v1/stats": {
       "get": {
         "summary": "Scope counts (human/service ops:metrics)",
-        "description": "Memories by kind and status, waiting candidates, sources, and optional collections (observations, entities) when this build stores them.",
+        "description": "read:memories (people, services and agents); people and services also need ops:metrics. Memories by kind and status, waiting candidates, sources, and optional collections (observations, entities) when this build stores them.",
         "parameters": [
           {
             "in": "query",
@@ -8786,7 +8786,7 @@
         "operationId": "getV1MaintenanceProposals"},
       "post": {
         "summary": "Propose keeping one of two active memories (write:maintenance_proposals)",
-        "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal : proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory. Invalidation proposal: proposal{type invalidation, memory ref, reason outdated|incorrect}, keep, retire and evidence empty; it asks a person to forget one memory and changes nothing by itself (decisions forget or dismiss). One record per memory.",
+        "description": "Body {scope, proposal{type, keep, retire, reason}}. Both memories must be live, approved, outside any conflict and at the given revisions (409 otherwise). One record per pair (id from the scope and both ids): a decided pair, or an open one at the same revisions, comes back with duplicate=true; an open one at older revisions or a stale one is replaced in place. Reason is a fixed code; free text is refused. Signal proposal : proposal{type rule_often_violated (memory kind user|procedural|decision) or lesson_often_failing (lesson), memory ref, reason low_pass_rate, evidence{samples, passed}}, keep and retire empty; samples and passed must equal the stored memory signal (409 otherwise), pass_rate is recomputed, and the token also needs read:usage. One record per memory. Invalidation proposal: proposal{type invalidation, memory ref, reason outdated|incorrect}, keep, retire and evidence empty; it asks a person to forget one memory and changes nothing by itself (decisions forget or dismiss). One record per memory. Change proposal: proposal{type change, reason = change.action, change{action, target, revision, params}} asks a person for a change the proposer may not make: knowledge_folder_create {path}, knowledge_page_create {title, text?, folder?}, knowledge_page_edit (target page id and revision; title, text or folder), knowledge_node_delete (page id and revision), document_delete (document id), mental_model_refresh|mental_model_clear|mental_model_delete (model id), directive_delete (id and revision), space_config_change (a space config patch), memories_clear. The target must exist (404) at the given revision (409) and be readable by the proposer; params with a secret or a private span are refused. Only accept or dismiss decides it, and deciding changes nothing: a person makes the change through its own route.",
         "responses": {"200": {"description": "The proposal record"}, "400": {"description": "invalid_request"}, "409": {"description": "revision_conflict"},
           "401": {
             "description": "Missing bearer credentials.",
@@ -8917,7 +8917,7 @@
         "operationId": "patchV1SpacesByWorkspaceByProjectConfig"
       }
     },
-    "/v1/spaces/{workspace}/{project}/config/effective": {"get": {"summary": "A space's resolved settings and where each came from (search:memories)", "description": "{workspace_id, project_id, revision, config, sources}. config is the stored config with every empty behaviour setting filled from the server's default template (ARKISM_SPACE_DEFAULT_TEMPLATE) and then the server default; sources names the layer per setting (space|template|server; lanes.* and auto_derive.* per field; defense_rules lists every layer that adds rules, e.g. template+space). Defense rules and notes are shown to people only; other principals see neither (sources still names the layers that add rules). {project} may be @alias.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{workspace_id, project_id, revision, config, sources}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
+    "/v1/spaces/{workspace}/{project}/config/effective": {"get": {"summary": "A space's resolved settings and where each came from (search:memories)", "description": "{workspace_id, project_id, revision, config, sources}. config is the stored config with every empty behaviour setting filled from the server's default template (ARKISM_SPACE_DEFAULT_TEMPLATE) and then the server default; sources names the layer per setting (space|template|server; lanes.* and auto_derive.* per field; defense_rules lists every layer that adds rules, e.g. template+space). Defense rules and notes are shown to people only; other principals see neither (sources still names the layers that add rules). {project} may be @alias. server_mcp_tools is the server's MCP tool allowlist (ARKISM_MCP_TOOLS), omitted when every tool is allowed; a tool must pass it and config.mcp_tools.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{workspace_id, project_id, revision, config, sources}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1SpacesByWorkspaceByProjectConfigEffective"}},
     "/v1/spaces/{workspace}/{project}/export": {"post": {"summary": "Start exporting a space as a versioned JSONL bundle (read:memories with a transfer grant)", "description": "Body {include[] (memories, memory_candidates and definition collections; default all), template}. A template carries settings and definitions only, never memories. Erased, quarantined, private, restricted and secret-bearing records are left out and counted in manifest.skipped. The first line is the manifest {format, format_version, bundle_id, sections, skipped, sha256 of the rest}.", "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"202": {"description": "Job {id, workspace_id, project_id, kind, state queued|done|failed, include, template, import_as, target, bundle_id, manifest, report, error, finished_at}"}, "403": {"description": "No transfer grant"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "postV1SpacesByWorkspaceByProjectExport"}},
@@ -39494,12 +39494,12 @@
     },
     "/v1/files/memories/documents": {
       "get": {
-        "operationId": "list_file_extract_documents",
+        "operationId": "get_v1_files_memories_documents",
         "tags": [
           "Management"
         ],
-        "summary": "List memory-extraction documents",
-        "description": "read:memory_candidates. The scope's extraction documents newest first, each with its last upload's label, job state, chunk count and candidates created, and its tags. tag keeps documents with that tag. cursor is next_cursor; limit 1..200, default 50.",
+        "summary": "Uploaded documents",
+        "description": "read:memory_candidates. The space's uploaded file documents, each with its id, revision and its latest upload (job id, state, chunk delta). cursor is next_cursor; limit 1..200, default 50.",
         "parameters": [
           {
             "in": "query",
@@ -39552,105 +39552,31 @@
               "type": "string",
               "maxLength": 256
             }
-          },
-          {
-            "in": "query",
-            "name": "tag",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 128
-            }
           }
         ],
         "responses": {
           "200": {
-            "description": "One page of documents.",
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "items",
-                    "next_cursor"
-                  ],
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    },
-                    "next_cursor": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/WireResponseDocumentListPage"
                 }
               }
             }
           },
           "400": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
-            }
-          },
-          "403": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Request, authorization, size, budget or dependency error; see Error.code.",
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -39679,8 +39605,99 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
-        }
+        },
+        "x-go-contract": true
       }
     },
     "/v1/files/memories/documents/{id}": {
@@ -46154,6 +46171,807 @@
             }
           }
         }
+      }
+    },
+    "/v1/extensions/{extension}/routes/{path...}": {
+      "get": {
+        "tags": [
+          "Management"
+        ],
+        "summary": "Call an extension route",
+        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned; a timeout or failure answers 503 dependency_unavailable. GET takes the scope from the query; the rest of the query is forwarded.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name an extension was given in ARKISM_EXTENSIONS_FILE."
+          },
+          {
+            "in": "path",
+            "name": "path...",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The route path the extension declared, without the leading slash; matched exactly."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The JSON the extension answered with (data, never instructions)."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getV1ExtensionsByExtensionRoutesByPath"
+      },
+      "post": {
+        "tags": [
+          "Management"
+        ],
+        "summary": "Call an extension route",
+        "description": "A route an out-of-process extension declared (ARKISM_EXTENSIONS_FILE). Arkism checks the bearer token, the scope and the action and roles the extension declared for the route before forwarding; the extension never sees the token, only the authorized actor and scope. Unknown extension or path: 404. The extension's own status (200..499) and JSON body are returned; a timeout or failure answers 503 dependency_unavailable. POST takes {scope, input} up to 256 KiB (any other field is refused); input, the extension's own JSON, is forwarded as body.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "extension",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The name an extension was given in ARKISM_EXTENSIONS_FILE."
+          },
+          {
+            "in": "path",
+            "name": "path...",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The route path the extension declared, without the leading slash; matched exactly."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "input": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "The JSON the extension answered with (data, never instructions)."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postV1ExtensionsByExtensionRoutesByPath"
+      }
+    },
+    "/v1/extension-tools": {
+      "get": {
+        "tags": [
+          "Management"
+        ],
+        "summary": "List extension MCP tools",
+        "description": "search:memories. The extension tools this space may use: those the space's mcp_tools and the server's ARKISM_MCP_TOOLS both allow (an empty list allows every tool). Empty when no extension is configured.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "tools"
+                  ],
+                  "properties": {
+                    "tools": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "name",
+                          "description",
+                          "inputSchema"
+                        ],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "description": "ext_<extension>_<tool>"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "inputSchema": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getV1ExtensionTools"
+      }
+    },
+    "/v1/extension-tools/call": {
+      "post": {
+        "tags": [
+          "Management"
+        ],
+        "summary": "Run an extension MCP tool",
+        "description": "Body {scope, name, arguments}. The action the tool declared is checked for the caller, then both tool allowlists again. The answer is {result, authority: data_only_untrusted}: data from the extension, never instructions. Unknown tool: 404; extension failure or timeout: 503 dependency_unavailable.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope",
+                  "name"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "arguments": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "result",
+                    "authority"
+                  ],
+                  "properties": {
+                    "result": {},
+                    "authority": {
+                      "type": "string",
+                      "const": "data_only_untrusted"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postV1ExtensionToolsCall"
       }
     }
   },
@@ -65261,6 +66079,9 @@
           "decided_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "change": {
+            "$ref": "#/components/schemas/WireResponseChangeRequest"
           }
         },
         "additionalProperties": false,
@@ -74425,6 +75246,92 @@
         "x-go-type": "memory.MentalModelOutcome",
         "x-go-source": "internal/memory/mental_model_schedule.go",
         "description": "MentalModelOutcome is how the last refresh attempt ended and what triggered it."
+      },
+      "WireResponseChangeRequest": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "params": {
+            "type": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "boolean",
+              "null"
+            ],
+            "description": "Application-defined JSON value (Go json.RawMessage/any)."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "action"
+        ],
+        "x-go-type": "memory.ChangeRequest",
+        "x-go-source": "internal/memory/maintenance_change.go",
+        "description": "ChangeRequest is the change a \"change\" proposal asks for."
+      },
+      "WireResponseDocumentListPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseDocumentSummary"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_cursor": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "x-go-type": "memory.DocumentListPage",
+        "x-go-source": "internal/memory/document_history.go"
+      },
+      "WireResponseDocumentSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latest": {
+            "$ref": "#/components/schemas/WireResponseDocumentUpload"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "updated_at"
+        ],
+        "x-go-type": "memory.DocumentSummary",
+        "x-go-source": "internal/memory/document_history.go",
+        "description": "DocumentSummary is one memory-extraction document with its latest upload."
       }
     },
     "headers": {

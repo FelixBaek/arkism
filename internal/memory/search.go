@@ -200,8 +200,10 @@ func fuseWeighted(lists [][]Hit, limit int, weights map[string]float64) []Scored
 	return out
 }
 func (s *Service) Search(ctx context.Context, token string, in SearchInput) (ContextBundle, error) {
-	out, _, err := s.searchWithActor(ctx, token, in)
-	return out, err
+	return withOperation(s, ctx, token, OpRecall, in.Scope, in, func() (ContextBundle, error) {
+		out, _, err := s.searchWithActor(ctx, token, in)
+		return out, err
+	})
 }
 
 // The HTTP permission and the retrieval lane must resolve the same collection.

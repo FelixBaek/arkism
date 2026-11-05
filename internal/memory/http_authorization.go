@@ -140,6 +140,9 @@ func (s *Service) authorizeHTTPRoute(w http.ResponseWriter, r *http.Request, pol
 			return Decision{}, err
 		}
 	}
+	if policy.action == extensionActionTemplate {
+		policy = s.extensionPolicy(r, input, policy)
+	}
 	actions, err := policy.requestActions(r, input)
 	if err != nil {
 		return Decision{}, err
@@ -181,6 +184,7 @@ type routeInput struct {
 		Scope Scope `json:"scope"`
 	} `json:"source"`
 	Purpose            string `json:"purpose"`
+	Name               string `json:"name"`
 	Kind               string `json:"kind"`
 	Memories           []Ref  `json:"memories"`
 	TargetType         string `json:"target_type"`

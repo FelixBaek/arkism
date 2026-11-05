@@ -19,6 +19,7 @@ var proposalTools = map[string][2]string{
 	"cancel_job":            {`{"id":"job1"}`, "/v1/operations/job1/cancel"},
 	"read_document":         {`{"source":"file","id":"doc1"}`, "/v1/files/memories/documents/doc1/chunks?"},
 	"read_space_config":     {`{}`, "/v1/spaces/"},
+	"propose_change":        {`{"action":"directive_delete","target_id":"d1","revision":2}`, "/v1/maintenance_proposals"},
 }
 
 // Routes that approve, review, decide, transition, supersede or activate anything.
@@ -109,6 +110,7 @@ func TestMemoryWriteToolsValidateBeforeTheNetwork(t *testing.T) {
 		"propose_invalidation":  {`{"memory_id":"m1"}`, `{"memory_id":"m1","revision":1,"reason":"boring"}`},
 		"add_document":          {`{"filename":"a.md"}`, `{"filename":"a.md","text":"x","content_base64":"eA=="}`, `{"filename":"../a.md","text":"x"}`, `{"filename":"a.md","text":""}`},
 		"cancel_job":            {`{}`, `{"id":"a/b"}`, `{"id":"j","expected_revision":-1}`},
+		"propose_change":        {`{}`, `{"action":"directive_delete","target_id":"a/b"}`, `{"action":"x","params":"text"}`, `{"action":"x","revision":-1}`},
 		"read_document":         {`{"source":"web","id":"d"}`, `{"source":"file","id":"d","view":"raw"}`, `{"source":"file","id":"d","limit":201}`},
 	} {
 		for _, args := range bad {
@@ -131,5 +133,20 @@ func TestMemoryWriteToolsFollowTheSpaceAllowlist(t *testing.T) {
 		if name == "propose_invalidation" && err != nil || name != "propose_invalidation" && (err == nil || !strings.Contains(err.Error(), "tool_not_enabled")) {
 			t.Fatal(name, err)
 		}
+	}
+}
+
+func TestProposeChangeSendsAChangeProposal(t *testing.T) {
+	swapRouter(t)
+	calls := fakeRequest(t, `{"id":"mp_1","status":"open"}`)
+	out := structured(t, call(t, "propose_change", `{"action":"space_config_change","params":{"display_name":"Ops"}}`))
+	p := asMap((*calls)[0].payload)
+	proposal := asMap(p["proposal"])
+	change := asMap(proposal["change"])
+	if proposal["type"] != "change" || proposal["reason"] != "space_config_change" || asMap(change["params"])["display_name"] != "Ops" || change["target"] != nil {
+		t.Fatal(p)
+	}
+	if field(out, "note") != proposalNote {
+		t.Fatal(out)
 	}
 }

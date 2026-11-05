@@ -375,7 +375,14 @@ func (s *Service) mentalModelWrite(ctx context.Context, d Decision, scope Scope,
 	return out, err
 }
 
+// UpdateMentalModel is a person's edit of a mental model; an extension's OperationHook may refuse it first.
 func (s *Service) UpdateMentalModel(ctx context.Context, token, id string, in MentalModelInput) (MentalModelView, error) {
+	return withOperation(s, ctx, token, OpMentalModelEdit, in.Scope, map[string]any{"id": id, "input": in}, func() (MentalModelView, error) {
+		return s.updateMentalModel(ctx, token, id, in)
+	})
+}
+
+func (s *Service) updateMentalModel(ctx context.Context, token, id string, in MentalModelInput) (MentalModelView, error) {
 	if err := validMentalModelInput(in); err != nil {
 		return MentalModelView{}, err
 	}
@@ -468,6 +475,12 @@ func validMentalModelAnswer(a mentalModelAnswer, hits map[string]Hit) ([]Ref, er
 
 // RefreshMentalModel recalls the model's query and asks the server model for a cited summary.
 func (s *Service) RefreshMentalModel(ctx context.Context, token, id string, in MentalModelRefreshInput) (MentalModelView, error) {
+	return withOperation(s, ctx, token, OpMentalModelFresh, in.Scope, map[string]any{"id": id, "input": in}, func() (MentalModelView, error) {
+		return s.refreshMentalModelByID(ctx, token, id, in)
+	})
+}
+
+func (s *Service) refreshMentalModelByID(ctx context.Context, token, id string, in MentalModelRefreshInput) (MentalModelView, error) {
 	if !validRunLabel(id, 256) {
 		return MentalModelView{}, ErrInvalid
 	}

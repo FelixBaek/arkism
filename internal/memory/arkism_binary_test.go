@@ -230,6 +230,8 @@ func fakeHelper(kind string) int {
 		return fakeSSH()
 	case "adapter":
 		return fakeAdapter()
+	case "extension":
+		return fakeExtension()
 	}
 	return 2
 }

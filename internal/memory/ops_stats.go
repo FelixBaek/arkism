@@ -63,7 +63,12 @@ func (s *Service) statGroup(ctx context.Context, st opsStore, scope Scope, colle
 // Stats counts a scope's memories, waiting candidates and sources.
 func (s *Service) Stats(ctx context.Context, token string, scope Scope) (ScopeStats, error) {
 	out := ScopeStats{Scope: scope}
-	if _, err := s.opsAuthorize(ctx, token, "ops:metrics", scope, "", roleHuman, roleService); err != nil {
+	// An agent reads the counts of a space it may read (its MCP space stats); people and services also need ops:metrics.
+	d, err := s.opsAuthorize(ctx, token, "read:memories", scope, "", roleHuman, roleService, roleAgent)
+	if err == nil && d.Role != roleAgent {
+		_, err = s.opsAuthorize(ctx, token, "ops:metrics", scope, "", roleHuman, roleService)
+	}
+	if err != nil {
 		return out, err
 	}
 	st, err := s.opsStore()

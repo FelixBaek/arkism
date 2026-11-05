@@ -196,16 +196,12 @@ func captureKey(scope Scope, kind, text string, correction ...*Ref) string {
 	return key
 }
 
-// captureAllowed: automated captures come from service principals only, and an
-// extension may refuse a capture after that.
-func (s *Service) captureAllowed(ctx context.Context, actor Decision, in CaptureInput) error {
-	if in.Automated && actor.Role != roleService {
-		return ErrDenied
-	}
-	return s.Extensions.validateCapture(ctx, actor, in)
+// Capture stores claims as candidates; an extension's OperationHook may refuse it first.
+func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (CaptureResult, error) {
+	return withOperation(s, ctx, token, OpCapture, in.Scope, in, func() (CaptureResult, error) { return s.capture(ctx, token, in) })
 }
 
-func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (CaptureResult, error) {
+func (s *Service) capture(ctx context.Context, token string, in CaptureInput) (CaptureResult, error) {
 	started := time.Now()
 	if !validCaptureInput(in, started.UTC()) {
 		return CaptureResult{}, ErrInvalid
@@ -220,8 +216,8 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 	if authErr != nil {
 		return CaptureResult{}, authErr
 	}
-	if err := s.captureAllowed(ctx, actor, in); err != nil {
-		return CaptureResult{}, err
+	if in.Automated && actor.Role != roleService { // automated captures come from service principals only
+		return CaptureResult{}, ErrDenied
 	}
 	ctx = bindRequestActor(ctx, actor)
 	var seen Record
