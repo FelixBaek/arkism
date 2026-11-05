@@ -2,11 +2,12 @@
 
 package memory
 
-// Real-PostgreSQL checks for the entity, recall, ops, space and webhook SQL.
+// Real-PostgreSQL checks for the entity, recall, ops, space, webhook, causal and file-delta SQL.
 // They skip when POSTGRES_TEST_DSN is not configured (see tools/check_postgres_local.sh).
 import (
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -155,5 +156,48 @@ func TestPostgresWebhookDeliveriesPage(t *testing.T) {
 	rest, err := f.svc.ListWebhookDeliveries(testCtx, f.human, scopeA, v.ID, page.NextBefore, 2)
 	if err != nil || len(rest.Items) != 1 || rest.NextBefore != "" {
 		t.Fatal("second page", err, rest)
+	}
+}
+
+// Phase 2 SQL: a model-proposed causal link waits for a person, then feeds lineage and the
+// causal recall lane; a re-uploaded document only sends its changed chunks to the model.
+func TestPostgresCausalReviewAndDocumentDelta(t *testing.T) {
+	f, llm := wikiFixture(t)
+	f.svc.Repo = isolatedPostgres(t)
+	a := f.activeMemory("the cache server ran out of memory overnight")
+	b := f.activeMemory("search answered slowly all morning")
+	llm.answers = []string{causalAnswerText(t, causalDraft{CauseID: a.ID, EffectID: b.ID, Reason: "no cache, slow search", Confidence: 0.7})}
+	out, err := f.svc.ProposeCausalLinks(testCtx, f.human, CausalProposeInput{Scope: scopeA})
+	if err != nil || len(out.Proposed) != 1 || out.Proposed[0].Status != "candidate" {
+		t.Fatalf("%+v %v", out, err)
+	}
+	if ids := causalHitIDs(t, f, "overnight"); slices.Contains(ids, b.ID) {
+		t.Fatal("a proposal must not expand recall")
+	}
+	p := out.Proposed[0]
+	if _, err := f.svc.ReviewCausalLink(testCtx, f.human, p.ID, CausalReviewInput{Scope: scopeA, ExpectedRevision: p.Revision, Action: "approve"}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := f.svc.ListCausalLinks(testCtx, f.agent, scopeA, statusActive, "", 0)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != p.ID || page.Items[0].ApprovedBy == "" {
+		t.Fatalf("%+v %v", page, err)
+	}
+	if got := lineageRelations(t, f, b.ID); !slices.Equal(got, []string{"caused_by:" + a.ID}) {
+		t.Fatalf("lineage %v", got)
+	}
+	if ids := causalHitIDs(t, f, "overnight"); !slices.Contains(ids, b.ID) {
+		t.Fatalf("approved link expands recall: %v", ids)
+	}
+
+	llm.answers, llm.prompts = []string{extractAnswer(extractRuleClaim), extractAnswer()}, nil
+	filler := strings.Repeat(" 배포 전에 테스트를 실행한다.", 200)
+	p1, p2 := "선택 상태에는 주황 강조선을 쓰지 않는다."+filler, "둘째 문단."+filler
+	first := extractUpload(t, f, p1, p2)
+	if first.CandidatesCreated != 1 || len(llm.prompts) != 2 || first.Delta.ChunksChanged != 2 {
+		t.Fatalf("first %+v %+v", first, first.Delta)
+	}
+	same := extractUpload(t, f, p1, p2)
+	if len(llm.prompts) != 2 || same.JobID == first.JobID || same.Delta.ChunksUnchanged != 2 || same.Delta.ChunksChanged != 0 {
+		t.Fatalf("unchanged re-upload called the model: %d %+v", len(llm.prompts), same.Delta)
 	}
 }
