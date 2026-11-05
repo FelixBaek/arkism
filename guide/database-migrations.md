@@ -26,6 +26,12 @@ backfill. A paused recovery gate keeps backfill paused. Resume through the norma
 recovery procedure, then rerun initialization to finish pending index work.
 Approvals, source references, revisions and embeddings are unchanged.
 
+Version six (`0006_named_entities`) adds a `metadata` column to
+`arkism.entities` for names, types and aliases, and triggers that drop a
+memory's name mentions when it is deleted, erased, quarantined or leaves
+`active`. A name no other memory mentions is removed with a deleted, erased or
+quarantined memory. Existing rows get empty metadata; no record is rewritten.
+
 ## Upgrade
 
 1. Keep a tested backup and its matching binary. Stop the API, worker, timers and

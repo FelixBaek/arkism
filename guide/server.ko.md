@@ -30,6 +30,8 @@
 
 6. `/srv/arkism/bin/arkism connect-info`가 접속 정보를 JSON으로 보여 주면 준비가 끝났어요.
 
+이미 설치한 서버를 올릴 때는 새 바이너리로 `memoryd --init-db`를 먼저 돌려요(마이그레이션 `0006_named_entities`). AI 정리·주제 요약·물어보기·파일 추출은 서버 모델 설정이, 웹훅은 `MEMORY_WEBHOOK_KEY`가 있어야 해요. 토큰에 권한을 하나씩 적었다면 새 권한도 더해요. 자세한 목록은 [Upgrade to the memory review features](server.md#upgrade-to-the-memory-review-features)에 있어요.
+
 ## PC에서 할 일
 
 1. 이 PC의 터미널에서 `ssh 사용자@서버주소`로 접속되는지 먼저 확인해요. SSH 키를 쓰면 비밀번호를 묻지 않아요. 비밀번호로도 연결할 수 있고, 그 비밀번호는 PC의 키체인에 저장돼요.

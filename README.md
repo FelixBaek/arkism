@@ -45,7 +45,7 @@ Turn decisions, preferences and solutions from connected agents' conversations i
 
 ![Compare the source with the note, then approve, edit or reject it yourself](images/en/review-approval.png)
 
-Even candidates quoting your own words wait for review. Check the source and meaning, then approve, edit or reject the note. AI analysis does not replace your approval.
+Even candidates quoting your own words wait for review. Check the source and meaning, then approve, edit or reject the note. AI analysis does not replace your approval. Notes, summaries and cause links the model writes from approved memories wait the same way ([how](guide/model-written-review.md)).
 
 ### 2.3 Find and hand over
 
@@ -73,7 +73,7 @@ The [roadmap](ROADMAP.md) describes the order of improvements and the conditions
 
 | Area | What you can do |
 |---|---|
-| **MEMORY** | Review candidates; search, edit, merge and delete memories; view and export sessions; check usage. |
+| **MEMORY** | Review candidates and AI-written notes, topic summaries and cause links; search by meaning, words or time ("last week", "10월 말"); ask questions answered from cited memories; set rules agents follow; see a memory map with names; turn files into candidates; move a space as a bundle; edit, merge and delete memories; view and export sessions; check usage, operations and webhooks. |
 | **FLOW** | Manage individual work, collaboration, meetings, and automations together, retaining role/persona settings, graphs, and history. |
 | **ROUTER** | Register model providers and accounts, set routing rules and fallback order, and inspect call records. |
 | **TOOLS** | Manage skill versions and validation records, see the success or failure results agents report after using a skill (self-reported, not independently checked), connect MCP servers and plugins per agent, and manage knowledge sources. |

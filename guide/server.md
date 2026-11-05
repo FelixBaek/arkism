@@ -193,6 +193,54 @@ for the hook user, and schedule `arkism capture outcomes` (a systemd timer or cr
 with the same `--spool` directory. `arkism capture reflect` reports `session_trace_recorded`,
 `session_trace_pending` and `session_trace_dropped` in its metrics so you can see the ledger moving.
 
+## Upgrade to the memory review features
+
+This release adds observations, topic summaries, rules, answers from memory,
+names, causal links, file extraction, webhooks, space bundles and the memory
+wiki. What a person approves and how is described in
+[reviewing model-written content](model-written-review.md).
+
+1. **Migration.** Back up, stop the API and worker, and run the new binary's
+   `memoryd --init-db` as `arkism_init` ([database migrations](database-migrations.md)).
+   It applies `0006_named_entities`.
+2. **Server model.** Answers (`/v1/reflect`), observation runs, topic summary
+   refreshes, causal link proposals, file extraction, text extraction preview
+   and model name extraction call the server model. Configure it on the API:
+
+   | Name | Meaning |
+   |---|---|
+   | `SKILL_LLM_ENDPOINT_URL`, `SKILL_LLM_API_KEY`, `SKILL_LLM_MODEL` | Chat model the server calls |
+   | `ARKISM_WIKI` | `on` turns the server model on for the features above. Off by default |
+   | `ARKISM_LLM_TRACE_CONTENT` | `1` keeps redacted prompt text in model call traces. Off by default |
+
+   Without it these routes answer `503 model_not_configured`; everything else
+   keeps working. Calls share one daily cap and are recorded in the usage ledger.
+3. **Optional settings.**
+
+   | Name | Meaning |
+   |---|---|
+   | `MEMORY_WEBHOOK_KEY` | 32-byte hex key that seals webhook signing secrets. Required to create webhooks; an invalid value stops startup |
+   | `ARKISM_WEBHOOK_ALLOW_PRIVATE` | `1` lets webhooks reach loopback and private addresses (development only). Link-local and metadata addresses stay refused |
+   | `ARKISM_RERANK_URL`, `ARKISM_RERANK_TIMEOUT` | Base URL of a `POST /rerank` service and its timeout (Go duration, at most `1m`). On error or timeout recall keeps the fused order |
+   | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
+
+4. **Permissions.** Principals registered with `--actions '*'` (the examples
+   above and the desktop app) need nothing. If you list actions, add these:
+
+   | Principal | Actions to add |
+   |---|---|
+   | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates` |
+   | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages` |
+   | Service that runs model jobs | the job's write action (`write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `generate:wiki_pages`) plus `search:memories` and `context:read` |
+
+   Anything that sends memory text to the server model or out of the server
+   also needs `external:transfer`. The audit log names the destination:
+   `external:wiki-llm` for server model calls and `external:space_bundle` for a
+   space export. These are destinations, not actions you grant.
+5. **File extraction jobs.** Cancel a running extraction with
+   `POST /v1/operations/{id}/cancel`. Operator retry is refused; the uploader
+   resumes a failed job with `POST /v1/files/memories/jobs/{id}/run`.
+
 ## Host tools and systemd
 
 Run `arkism` with no arguments to list its subcommands (capture hooks, skill sync, gateway, crew runner, Discord, backups and more). `arkism-crew` runs workflows (`serve`, `run CREW_ID`, `hook-url WORKFLOW_ID`).

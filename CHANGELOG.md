@@ -17,6 +17,20 @@ source changes only; they do not claim that a signed installer is available.
   a day; let `session-archive` name the file it cannot inspect and skip it
   instead of failing; prove migration files and numbers agree; back the
   database up right before an update and cap the backup count.
+- Let the server model draft observations, topic summaries and cause links from
+  approved memories and turn files into memory candidates; nothing it writes is
+  used until a person approves it ([guide](guide/model-written-review.md)).
+- Answer questions from cited memories (`/v1/reflect`), keep person-written
+  rules for answers and agent context, and track names that memories mention
+  (migration `0006_named_entities`).
+- Search by time words in Korean and English with a request timezone, explain
+  lane ranks, and add optional rerank and relations-graph lanes.
+- Add operator views (stats, tags, operations cancel and retry), signed
+  webhooks with retries (`MEMORY_WEBHOOK_KEY`), space export and import
+  bundles and a memory wiki. Upgrade steps and new permissions are in
+  [server mode](guide/server.md#upgrade-to-the-memory-review-features).
+- Give agents `reflect`, `browse_memory`, causal and time options on `recall`,
+  and the wiki folder tree over MCP; show these features in the desktop app.
 
 ## [0.1.5](https://github.com/FelixBaek/arkism/releases/tag/v0.1.5) — 2026-10-23
 
