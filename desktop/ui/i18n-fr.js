@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Recherche par liens",
  "같은 이름으로 이어진 기억": "Souvenirs reliés par le même nom",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "C'est la façon dont les agents cherchent des souvenirs. Elle est utilisée quand un agent n'en choisit pas une autre.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Un modèle relit une fois de plus les souvenirs trouvés et les remet dans l'ordre. Tant que c'est activé, chaque recherche consomme de l'utilisation du modèle (budget).",
  "에이전트에 줄 기억 양": "Quantité de souvenirs donnée aux agents",
  "자세히 · 찾는 방법과 양": "Détails · Méthodes de recherche et quantité",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Nombre de tokens de souvenirs transmis en une fois (1~64000). Laissez vide pour hériter.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Pour rétablir les méthodes de recherche et le nouveau tri aux valeurs héritées, utilisez ‘Tout hériter’.",
  "답 길이 상한": "Longueur maximale de réponse",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Nombre de tokens utilisables pour une réponse (64~4096). Laissez vide pour hériter.",
  "새 기억 있음": "Nouveaux souvenirs",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Seule une personne peut approuver ou refuser.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Refuser cette suggestion ?\nLa règle suggérée sera supprimée.",
  "제안을 거절했어요.": "La suggestion a été refusée.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Cette règle a été suggérée par un agent. Si vous l'enregistrez, elle est approuvée et appliquée tout de suite."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Cette règle a été suggérée par un agent. Si vous l'enregistrez, elle est approuvée et appliquée tout de suite.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Réorganise encore une fois l'ordre des souvenirs trouvés. Cette option ne fonctionne que si le serveur propose un service de reclassement.",
+ "서버 모델로 다시 고르기": "Reclasser avec le modèle du serveur",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Le modèle du serveur lit les 20 premiers souvenirs trouvés et en réorganise l'ordre. Désactivé au départ.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "C'est activé. À chaque recherche, le modèle du serveur est sollicité et consomme du budget de modèle."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",

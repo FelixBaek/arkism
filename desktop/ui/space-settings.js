@@ -12,9 +12,9 @@
   const sourceLabel = (src) => String(src || "server").split("+").map((s) => SOURCE[s] || s).join(" + ");
   // The behaviour settings this screen edits and the value that hands each back to the layer below (PATCH semantics:
   // an empty string, 0, [] or {} clears; the server treats an all-empty auto_derive or reflect_disposition as cleared).
-  // lanes and rerank have no empty value: a PATCH can set them but only 모두 물려받기 (PUT) hands them back.
+  // The switches lanes, rerank and rerank_model hand back with null (one lane: lanes.<name> null; all lanes cleared: lanes null).
   const EDIT = { extraction_enabled: undefined, extraction_mode: "", extraction_instructions: "", defense_rules: [], mcp_tools: [], reflect_mission: "", reflect_disposition: {}, auto_derive: {},
-    lanes: undefined, rerank: undefined, recall_budget_tokens: 0, reflect_max_tokens: 0 };
+    lanes: null, rerank: null, rerank_model: null, recall_budget_tokens: 0, reflect_max_tokens: 0 };
   const unset = (v) => v === undefined || v === null || v === "" || v === 0 || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x !== undefined && x !== null && x !== "" && x !== 0));
   // What a PATCH must carry to turn stored into draft: only the keys that changed, cleared ones as their empty value.
   function configPatch(stored, draft) {
@@ -262,20 +262,24 @@
       return g;
     }
 
-    // 기억 찾기: which recall lanes run when the caller names none, the model re-ranking (budget) and the default context size
+    // 기억 찾기: which recall lanes run when the caller names none, the re-ranking, the server-model re-ranking (budget) and the default context size
     const LANES = [["fts", "낱말로 찾기", "적힌 낱말이 맞는 기억"], ["vector", "뜻으로 찾기", "낱말이 달라도 뜻이 비슷한 기억"], ["temporal", "시간으로 찾기", "물어본 때와 가까운 기억"], ["graph", "연결로 찾기", "같은 이름으로 이어진 기억"]];
     function recallGroup(kit) {
       const g = kit.group("기억 찾기", "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.");
       const d = S.draft, edit = human() && d;
       const lane = (k) => (d?.lanes?.[k] ?? S.eff.lanes?.[k]) !== false;
-      const rows = LANES.map(([k, title, hint]) => [kit.line(title, hint, edit ? kit.sw(lane(k), title, (next) => { d.lanes = { ...(d.lanes || {}), [k]: next }; redraw(); }) : readOnly(lane(k) ? "켜짐" : "꺼짐")), origin(`lanes.${k}`)]).flat();
+      const rows = LANES.map(([k, title, hint]) => [kit.line(title, hint, edit ? kit.sw(lane(k), title, (next) => { d.lanes = { ...(d.lanes || {}), [k]: next }; redraw(); }) : readOnly(lane(k) ? "켜짐" : "꺼짐")),
+        origin(`lanes.${k}`, () => { d.lanes = { ...d.lanes, [k]: null }; redraw(); })]).flat();
       const rr = d?.rerank ?? S.eff.rerank;
-      g.append(kit.line("검색 결과 다시 고르기", "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.",
-        edit ? kit.sw(!!rr, "검색 결과 다시 고르기", (next) => { d.rerank = next; redraw(); }) : readOnly(rr ? "켜짐" : "꺼짐")), origin("rerank"));
+      g.append(kit.line("검색 결과 다시 고르기", "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.",
+        edit ? kit.sw(!!rr, "검색 결과 다시 고르기", (next) => { d.rerank = next; redraw(); }) : readOnly(rr ? "켜짐" : "꺼짐")), origin("rerank", () => { d.rerank = null; redraw(); }));
+      const rm = !!(d?.rerank_model ?? S.eff.rerank_model);
+      g.append(kit.line("서버 모델로 다시 고르기", "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.",
+        edit ? kit.sw(rm, "서버 모델로 다시 고르기", (next) => { d.rerank_model = next; redraw(); }) : readOnly(rm ? "켜짐" : "꺼짐")), origin("rerank_model", () => { d.rerank_model = null; redraw(); }));
+      if (rm) g.append(el("p", "pg-hint warn", "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요."));
       const budget = numberBox(d?.recall_budget_tokens, 1, 64000, S.eff.recall_budget_tokens, "에이전트에 줄 기억 양", edit, (n) => { setDraft("recall_budget_tokens", n); redraw(); });
       g.append(kit.more("자세히 · 찾는 방법과 양", ...rows, kit.line("에이전트에 줄 기억 양", "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.", budget),
         origin("recall_budget_tokens", () => { setDraft("recall_budget_tokens", 0); redraw(); })));
-      if (edit) g.append(el("p", "pg-hint", "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요."));
       return g;
     }
 

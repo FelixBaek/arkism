@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Buscar por vínculos",
  "같은 이름으로 이어진 기억": "Recuerdos enlazados por el mismo nombre",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "Es la forma en que los agentes buscan recuerdos. Se usa tal cual cuando el agente no elige otra.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Un modelo vuelve a leer los recuerdos encontrados y cambia su orden. Si lo activas, cada búsqueda gasta uso del modelo (presupuesto).",
  "에이전트에 줄 기억 양": "Cantidad de recuerdos para los agentes",
  "자세히 · 찾는 방법과 양": "Detalles · Métodos y cantidad de búsqueda",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Es el número de tokens de recuerdos que se entregan de una vez (1~64000). Si lo dejas vacío, se hereda.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Para devolver los métodos de búsqueda y la reordenación a los valores heredados, usa ‘Heredar todo’.",
  "답 길이 상한": "Límite de longitud de respuesta",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Es el número de tokens que puede usar una respuesta (64~4096). Si lo dejas vacío, se hereda.",
  "새 기억 있음": "Hay recuerdos nuevos",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Solo una persona puede aprobar o rechazar.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "¿Quieres rechazar esta sugerencia?\nSe eliminará la regla sugerida.",
  "제안을 거절했어요.": "Has rechazado la sugerencia.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regla la sugirió un agente. Al guardarla, se aprueba y se usa de inmediato."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regla la sugirió un agente. Al guardarla, se aprueba y se usa de inmediato.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Vuelve a ordenar una vez más los recuerdos encontrados. Solo se usa cuando el servidor tiene preparada la función de volver a elegir.",
+ "서버 모델로 다시 고르기": "Volver a elegir con el modelo del servidor",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "El modelo del servidor lee los 20 primeros recuerdos encontrados y corrige su orden. Al principio está desactivado.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Está activado. En cada búsqueda se llama al modelo del servidor y se gasta presupuesto de modelo."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",

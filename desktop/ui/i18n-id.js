@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Cari dengan tautan",
  "같은 이름으로 이어진 기억": "Memori yang terhubung lewat nama yang sama",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "Ini cara agen mencari memori. Cara ini dipakai saat agen tidak menentukan sendiri.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Model membaca memori yang ditemukan sekali lagi lalu memperbaiki urutannya. Jika diaktifkan, setiap pencarian memakai penggunaan model (anggaran).",
  "에이전트에 줄 기억 양": "Jumlah memori untuk agen",
  "자세히 · 찾는 방법과 양": "Detail · Cara mencari dan jumlahnya",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Jumlah token memori yang diberikan sekaligus (1~64000). Kosongkan untuk mewarisi.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Untuk mengembalikan cara mencari dan pemilihan ulang ke nilai turunan, gunakan ‘Warisi semuanya’.",
  "답 길이 상한": "Batas panjang jawaban",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Jumlah token yang boleh dipakai untuk satu jawaban (64~4096). Kosongkan untuk mewarisi.",
  "새 기억 있음": "Ada memori baru",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Hanya manusia yang bisa menyetujui atau menolak.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Tolak saran ini?\nAturan yang disarankan akan dihapus.",
  "제안을 거절했어요.": "Saran ditolak.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Ini aturan yang disarankan agen. Jika disimpan, aturan ini disetujui dan langsung dipakai."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Ini aturan yang disarankan agen. Jika disimpan, aturan ini disetujui dan langsung dipakai.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Mengurutkan ulang sekali lagi memori yang ditemukan. Hanya dipakai jika server sudah menyiapkan fitur pemilihan ulang.",
+ "서버 모델로 다시 고르기": "Pilih ulang dengan model server",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Model server membaca 20 memori teratas yang ditemukan lalu mengurutkannya ulang. Awalnya dalam keadaan mati.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Sedang aktif. Setiap kali mencari, model server dipanggil dan memakai anggaran model."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",

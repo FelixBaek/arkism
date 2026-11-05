@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Buscar por conexões",
  "같은 이름으로 이어진 기억": "Memórias ligadas pelo mesmo nome",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "É o jeito que os agentes usam para buscar memórias. Se um agente não definir outro, a busca será feita assim.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "O modelo lê mais uma vez as memórias encontradas e reorganiza a ordem. Se ficar ligado, cada busca usa o uso do modelo (orçamento).",
  "에이전트에 줄 기억 양": "Quantidade de memória para os agentes",
  "자세히 · 찾는 방법과 양": "Detalhes · Métodos de busca e quantidade",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "É o número de tokens de memória enviados de uma vez (1~64000). Se deixar vazio, será herdado.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Para voltar os métodos de busca e a nova seleção aos valores herdados, use ‘Herdar tudo’.",
  "답 길이 상한": "Limite de tamanho da resposta",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "É o número de tokens que uma resposta pode usar (64~4096). Se deixar vazio, será herdado.",
  "새 기억 있음": "Há memórias novas",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Só uma pessoa pode aprovar ou recusar.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Quer recusar esta sugestão?\nA regra sugerida será apagada.",
  "제안을 거절했어요.": "Você recusou a sugestão.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regra foi sugerida por um agente. Ao salvar, ela é aprovada e passa a valer na hora."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regra foi sugerida por um agente. Ao salvar, ela é aprovada e passa a valer na hora.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Ajusta mais uma vez a ordem das memórias encontradas. Só funciona quando o servidor tem o recurso de reordenação ativado.",
+ "서버 모델로 다시 고르기": "Reordenar com o modelo do servidor",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "O modelo do servidor lê as 20 primeiras memórias encontradas e ajusta a ordem. Começa desativado.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Está ativado. A cada busca, o modelo do servidor é chamado e gasta o orçamento de modelo."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",

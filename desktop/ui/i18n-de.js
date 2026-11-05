@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Nach Verknüpfungen suchen",
  "같은 이름으로 이어진 기억": "Erinnerungen, die über denselben Namen verknüpft sind",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "So finden Agenten Erinnerungen. Das gilt immer, wenn ein Agent nichts anderes festlegt.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Ein Modell liest die gefundenen Erinnerungen noch einmal und sortiert sie neu. Solange es an ist, verbraucht jede Suche Modellnutzung (Budget).",
  "에이전트에 줄 기억 양": "Menge an Erinnerungen für Agenten",
  "자세히 · 찾는 방법과 양": "Details · Suchmethoden und Menge",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Anzahl der Tokens an Erinnerungen, die auf einmal übergeben werden (1–64000). Leer lassen, um zu erben.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Um Suchmethoden und Neusortierung auf die geerbten Werte zurückzusetzen, nutze „Alles übernehmen“.",
  "답 길이 상한": "Obergrenze für die Antwortlänge",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Anzahl der Tokens, die eine Antwort verwenden darf (64–4096). Leer lassen, um zu erben.",
  "새 기억 있음": "Neue Erinnerungen",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Nur ein Mensch kann genehmigen oder ablehnen.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Diesen Vorschlag ablehnen?\nDie vorgeschlagene Regel wird gelöscht.",
  "제안을 거절했어요.": "Der Vorschlag wurde abgelehnt.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Dies ist eine von einem Agenten vorgeschlagene Regel. Mit dem Speichern wird sie genehmigt und sofort verwendet."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Dies ist eine von einem Agenten vorgeschlagene Regel. Mit dem Speichern wird sie genehmigt und sofort verwendet.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Sortiert die gefundenen Erinnerungen noch einmal neu. Wird nur genutzt, wenn der Server eine Neusortierung bereitstellt.",
+ "서버 모델로 다시 고르기": "Mit Servermodell neu sortieren",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Das Servermodell liest die obersten 20 gefundenen Erinnerungen und sortiert sie neu. Standardmäßig aus.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Ist an. Bei jeder Suche wird das Servermodell aufgerufen und Modellbudget verbraucht."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",

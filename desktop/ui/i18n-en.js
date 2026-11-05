@@ -6664,11 +6664,9 @@ Object.assign(window.ArkismI18nEN.strings, {
   "연결로 찾기": "Find by links",
   "같은 이름으로 이어진 기억": "Memories linked by the same name",
   "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "How agents find memories. Used whenever an agent doesn't choose for itself.",
-  "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "A model reads the found memories once more and reorders them. While on, every search uses model usage (budget).",
   "에이전트에 줄 기억 양": "Memory given to agents",
   "자세히 · 찾는 방법과 양": "Details · Search methods and amount",
   "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Tokens of memory handed over at once (1–64000). Leave empty to inherit.",
-  "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "To put search methods and reordering back to inherited values, use ‘Inherit everything’.",
   "답 길이 상한": "Answer length limit",
   "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Tokens one answer may use (64–4096). Leave empty to inherit." });
 Object.assign(window.ArkismI18nEN.patterns, {
@@ -6741,3 +6739,8 @@ Object.assign(window.ArkismI18nEN.strings, {
   "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "An agent suggested this rule. Saving approves it and puts it to use right away." });
 Object.assign(window.ArkismI18nEN.patterns, {
   "규칙 · {0}": "Rule · {0}" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Reorders the found memories once more. Used only when the server has a re-ranking service set up.",
+  "서버 모델로 다시 고르기": "Re-rank with the server model",
+  "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "The server model reads the top 20 found memories and reorders them. Off at first.",
+  "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "It's on. Every search calls the server model and spends the model budget." });

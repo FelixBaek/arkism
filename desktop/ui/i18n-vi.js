@@ -5524,11 +5524,9 @@
  "연결로 찾기": "Tìm theo liên kết",
  "같은 이름으로 이어진 기억": "Những ký ức được nối với nhau bằng cùng một tên",
  "에이전트가 기억을 찾을 때 쓰는 방법이에요. 에이전트가 따로 정하지 않을 때 이대로 찾아요.": "Đây là cách agent tìm ký ức. Khi agent không tự chọn, sẽ tìm theo cách này.",
- "찾은 기억을 모델이 한 번 더 읽고 순서를 고쳐요. 켜 두면 찾을 때마다 모델 사용량(예산)을 써요.": "Mô hình sẽ đọc lại các ký ức đã tìm được rồi sắp xếp lại thứ tự. Nếu bật, mỗi lần tìm sẽ tốn lượng dùng mô hình (ngân sách).",
  "에이전트에 줄 기억 양": "Lượng ký ức đưa cho agent",
  "자세히 · 찾는 방법과 양": "Chi tiết · Cách tìm và lượng ký ức",
  "한 번에 넘기는 기억의 토큰 수예요 (1~64000). 비우면 물려받아요.": "Đây là số token của ký ức được đưa đi mỗi lần (1~64000). Để trống thì sẽ kế thừa.",
- "찾는 방법과 다시 고르기를 물려받은 값으로 되돌리려면 ‘모두 물려받기’를 써요.": "Muốn đưa cách tìm và việc chọn lại về giá trị kế thừa, hãy dùng ‘Kế thừa tất cả’.",
  "답 길이 상한": "Giới hạn độ dài câu trả lời",
  "답 한 번에 쓸 수 있는 토큰 수예요 (64~4096). 비우면 물려받아요.": "Đây là số token tối đa cho mỗi câu trả lời (64~4096). Để trống thì sẽ kế thừa.",
  "새 기억 있음": "Có ký ức mới",
@@ -5586,7 +5584,11 @@
  "승인과 거절은 사람만 할 수 있어요.": "Chỉ con người mới có thể duyệt hoặc từ chối.",
  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Bạn muốn từ chối đề xuất này không?\nQuy tắc được đề xuất sẽ bị xóa.",
  "제안을 거절했어요.": "Đã từ chối đề xuất.",
- "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Đây là quy tắc do tác nhân đề xuất. Khi bạn lưu, quy tắc sẽ được duyệt và dùng ngay."
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Đây là quy tắc do tác nhân đề xuất. Khi bạn lưu, quy tắc sẽ được duyệt và dùng ngay.",
+ "찾은 기억의 순서를 한 번 더 고쳐요. 서버에 다시 고르는 기능이 준비돼 있을 때만 쓰여요.": "Sắp xếp lại thứ tự các ký ức đã tìm được thêm một lần nữa. Chỉ dùng khi máy chủ đã có sẵn tính năng chọn lại.",
+ "서버 모델로 다시 고르기": "Chọn lại bằng mô hình của máy chủ",
+ "서버 모델이 찾은 기억 위쪽 20개를 읽고 순서를 고쳐요. 처음에는 꺼져 있어요.": "Mô hình của máy chủ sẽ đọc 20 ký ức đứng đầu trong số đã tìm được rồi sắp xếp lại thứ tự. Ban đầu tính năng này đang tắt.",
+ "켜져 있어요. 찾을 때마다 서버 모델을 불러 모델 예산을 써요.": "Đang bật. Mỗi lần tìm kiếm sẽ gọi mô hình của máy chủ và tốn ngân sách mô hình."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
