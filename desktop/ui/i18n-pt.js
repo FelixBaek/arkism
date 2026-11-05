@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "Regra criada. Ela será seguida a partir de agora.",
  "규칙을 고르세요": "Escolha uma regra",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Frases que a IA sempre segue ao responder ou ao dar memórias aos agentes. Só valem as regras escritas por uma pessoa.",
- "규칙 · 켜짐": "Regra · Ativada",
- "규칙 · 꺼짐": "Regra · Desativada",
  "쓰는 때": "Quando é usada",
  "우선순위": "Prioridade",
  "적은 사람": "Escrita por",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "Pedir à IA um rascunho de resumo",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "O rascunho de resumo está pronto. Leia e aprove.",
  "확인을 기다리는 초안이 이미 있어요.": "Já existe um rascunho aguardando confirmação.",
- "사람·도구": "Pessoas · ferramentas"
+ "사람·도구": "Pessoas · ferramentas",
+ "에이전트가 제안한 주제": "Tópico sugerido por um agente",
+ "AI 정리 · 에이전트가 제안한 주제": "Resumo da IA · Tópico sugerido por um agente",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Você aprovou o tópico. O resumo será escrito na próxima vez que for refeito.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "A sugestão mudou nesse meio tempo. Carregamos a nova versão.",
+ "이 계정은 주제를 승인할 수 없어요.": "Esta conta não pode aprovar tópicos.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Um agente sugeriu criar um resumo sobre este tópico. Nenhum resumo será escrito antes de você aprovar.",
+ "만든 날": "Criado em",
+ "규칙을 승인했어요. 지금부터 지켜요.": "Você aprovou a regra. A partir de agora, ela será seguida.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Você aprovou a regra. Ela continua desativada.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Esta regra foi sugerida por um agente. A IA não vai segui-la antes de uma pessoa aprovar.",
+ "승인과 거절은 사람만 할 수 있어요.": "Só uma pessoa pode aprovar ou recusar.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Quer recusar esta sugestão?\nA regra sugerida será apagada.",
+ "제안을 거절했어요.": "Você recusou a sugestão.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regra foi sugerida por um agente. Ao salvar, ela é aprovada e passa a valer na hora."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} partes removidas · as sugestões delas continuam como estão",
  "{0} 승인 · 근거 기억 {1}개": "Aprovado {0} · {1} memórias citadas",
  "일어난 때 · {0}": "Aconteceu · {0}",
- "{0}쪽": "página {0}"
+ "{0}쪽": "página {0}",
+ "규칙 · {0}": "Regra · {0}"
  }
 };

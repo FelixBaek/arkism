@@ -8,7 +8,7 @@ const path = require("path");
 test("UI DELETE paths are allowed by the desktop app", () => {
   const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
   const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
-  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_]+\/)"/g)].map((m) => m[1]);
+  const allowed = [...body.matchAll(/(?:one_id\(|query_id\(|starts_with\()"(\/v1\/[a-z_-]+\/)"/g)].map((m) => m[1]);
   const missing = [];
   for (const f of fs.readdirSync(__dirname).filter((n) => n.endsWith(".js") && !n.endsWith(".test.js"))) {
     const src = fs.readFileSync(path.join(__dirname, f), "utf8");
@@ -44,4 +44,14 @@ test("space config PATCH and PUT are allowed by the desktop app", () => {
   assert.match(body, /strip_prefix\("\/v1\/spaces\/"\)[^;]*strip_suffix\("\/config"\)/);
   assert.match(body, /method == "PATCH" && \([^;]*space_config\)/);
   assert.match(body, /let put = method == "PUT" && space_config;/);
+});
+
+// 제안된 주제 승인·버리기 in digests.js: PATCH and DELETE on /v1/mental-models/{id} only (the PATCH hides in a ternary the scan above skips).
+test("proposed topic PATCH and DELETE are allowed by the desktop app", () => {
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
+  const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
+  const ui = fs.readFileSync(path.join(__dirname, "digests.js"), "utf8");
+  assert.match(ui, /request\(`\/v1\/mental-models\/\$\{encodeURIComponent\(m\.id\)\}`, action === "approve"/);
+  assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/mental-models\/"\)/);
+  assert.match(body, /method == "DELETE"[^;]*one_id\("\/v1\/mental-models\/"\)/);
 });

@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "Regla creada. Se cumplirá desde ahora.",
  "규칙을 고르세요": "Elige una regla",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Frases que la IA siempre cumple al responder o al dar recuerdos a los agentes. Solo se usan las reglas escritas por una persona.",
- "규칙 · 켜짐": "Regla · Activada",
- "규칙 · 꺼짐": "Regla · Desactivada",
  "쓰는 때": "Cuándo se usa",
  "우선순위": "Prioridad",
  "적은 사람": "Escrita por",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "Pedir a la IA un borrador de resumen",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Ya hay un borrador de resumen. Léelo y apruébalo.",
  "확인을 기다리는 초안이 이미 있어요.": "Ya hay un borrador esperando revisión.",
- "사람·도구": "Personas · herramientas"
+ "사람·도구": "Personas · herramientas",
+ "에이전트가 제안한 주제": "Tema sugerido por un agente",
+ "AI 정리 · 에이전트가 제안한 주제": "Resumen de IA · Tema sugerido por un agente",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Has aprobado el tema. Se escribirá un resumen cuando toque volver a crearlo.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "La sugerencia cambió mientras tanto. Se ha vuelto a cargar.",
+ "이 계정은 주제를 승인할 수 없어요.": "Esta cuenta no puede aprobar temas.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Un agente propuso crear un resumen con este tema. No se escribirá ningún resumen hasta que lo apruebes.",
+ "만든 날": "Fecha de creación",
+ "규칙을 승인했어요. 지금부터 지켜요.": "Has aprobado la regla. Desde ahora se cumplirá.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Has aprobado la regla. Se ha dejado desactivada.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Esta regla la sugirió un agente. La IA no la cumplirá hasta que una persona la apruebe.",
+ "승인과 거절은 사람만 할 수 있어요.": "Solo una persona puede aprobar o rechazar.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "¿Quieres rechazar esta sugerencia?\nSe eliminará la regla sugerida.",
+ "제안을 거절했어요.": "Has rechazado la sugerencia.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Esta regla la sugirió un agente. Al guardarla, se aprueba y se usa de inmediato."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} partes omitidas · sus candidatos se conservan",
  "{0} 승인 · 근거 기억 {1}개": "Aprobado {0} · {1} recuerdos de base",
  "일어난 때 · {0}": "Ocurrió · {0}",
- "{0}쪽": "página {0}"
+ "{0}쪽": "página {0}",
+ "규칙 · {0}": "Regla · {0}"
  }
 };

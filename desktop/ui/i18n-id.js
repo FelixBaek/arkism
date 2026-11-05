@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "Aturan dibuat. Mulai sekarang dipatuhi.",
  "규칙을 고르세요": "Pilih aturan",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Kalimat yang selalu dipatuhi AI saat menjawab atau memberi memori ke agen. Hanya aturan yang ditulis manusia yang dipakai.",
- "규칙 · 켜짐": "Aturan · Aktif",
- "규칙 · 꺼짐": "Aturan · Nonaktif",
  "쓰는 때": "Dipakai saat",
  "우선순위": "Prioritas",
  "적은 사람": "Ditulis oleh",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "Minta AI menulis draf ringkasan",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Draf ringkasan sudah dibuat. Silakan baca lalu setujui.",
  "확인을 기다리는 초안이 이미 있어요.": "Sudah ada draf yang menunggu diperiksa.",
- "사람·도구": "Orang · alat"
+ "사람·도구": "Orang · alat",
+ "에이전트가 제안한 주제": "Topik yang disarankan agen",
+ "AI 정리 · 에이전트가 제안한 주제": "Catatan AI · Topik yang disarankan agen",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Topik disetujui. Ringkasan akan ditulis saat tiba waktunya dibuat ulang.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "Sementara itu saran berubah. Sudah dimuat ulang.",
+ "이 계정은 주제를 승인할 수 없어요.": "Akun ini tidak bisa menyetujui topik.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Agen menyarankan membuat ringkasan dengan topik ini. Ringkasan tidak akan ditulis sebelum Anda menyetujuinya.",
+ "만든 날": "Tanggal dibuat",
+ "규칙을 승인했어요. 지금부터 지켜요.": "Aturan disetujui. Mulai sekarang AI akan mengikutinya.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Aturan disetujui. Aturan tetap dimatikan.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Ini aturan yang disarankan agen. AI tidak akan mengikutinya sebelum disetujui oleh manusia.",
+ "승인과 거절은 사람만 할 수 있어요.": "Hanya manusia yang bisa menyetujui atau menolak.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Tolak saran ini?\nAturan yang disarankan akan dihapus.",
+ "제안을 거절했어요.": "Saran ditolak.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Ini aturan yang disarankan agen. Jika disimpan, aturan ini disetujui dan langsung dipakai."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} bagian hilang · kandidatnya tetap ada",
  "{0} 승인 · 근거 기억 {1}개": "Disetujui {0} · {1} memori dasar",
  "일어난 때 · {0}": "Terjadi pada · {0}",
- "{0}쪽": "halaman {0}"
+ "{0}쪽": "halaman {0}",
+ "규칙 · {0}": "Aturan · {0}"
  }
 };

@@ -45,10 +45,11 @@ window.ArkismDigests = (ctx) => {
   async function load() {
     const key = identity();
     loading = (async () => {
-      const [ta, tc, ua, uc, uo, mp, ob, mm, cl] = await Promise.all([list("topic", "active"), list("topic", "candidate"), list("user", "active"), list("user", "candidate"), list("user", "superseded"),
+      const [ta, tc, ua, uc, uo, mp, ob, mm, cl, pm] = await Promise.all([list("topic", "active"), list("topic", "candidate"), list("user", "active"), list("user", "candidate"), list("user", "superseded"),
         request(`/v1/merge_proposals?${query({ status: "open" })}`).catch(absent),
         request(`/v1/observations?${query({ status: "proposed", limit: 100 })}`).catch(absent), request(`/v1/mental-models?${query({ limit: 100 })}`).catch(absent),
-        request(`/v1/causal-links?${query({ status: "candidate", limit: 100 })}`).catch(absent)]);
+        request(`/v1/causal-links?${query({ status: "candidate", limit: 100 })}`).catch(absent),
+        request(`/v1/mental-models?${query({ status: "proposed", limit: 100 })}`).catch(() => null)]); // an older server refuses status=proposed
       if (key !== identity()) return;
       const before = JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed, data.notes]);
       const items = (p) => (Array.isArray(p?.items) ? p.items : []);
@@ -56,7 +57,7 @@ window.ArkismDigests = (ctx) => {
         user: items(ua)[0] || null, userCand: items(uc), userOld: items(uo), failed: [ta, tc, ua, uc, uo].includes(FAILED),
         merge: mp === FAILED ? false : mp ? items(mp).filter((r) => r.merge?.proposal) : null, // merge: false failed, null not supported
         models: items(mm), notes: [ob, mm, cl].includes(FAILED) ? false : !ob && !mm && !cl ? null
-          : [...items(ob).map((o) => ({ id: `obs:${o.id}`, obs: o })), ...items(mm).filter((m) => m.draft || m.stale).map((m) => ({ id: `model:${m.id}`, model: m })),
+          : [...items(ob).map((o) => ({ id: `obs:${o.id}`, obs: o })), ...items(pm).filter((m) => m.status === "proposed").map((m) => ({ id: `model:${m.id}`, model: m })), ...items(mm).filter((m) => m.draft || m.stale).map((m) => ({ id: `model:${m.id}`, model: m })),
             ...items(cl).filter((l) => l.cause?.id && l.effect?.id).map((l) => ({ id: `causal:${l.id}`, link: l }))] });
       if (key !== data.other.key) data.other = { key };
       if (before !== JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed, data.notes])) repaint();
@@ -323,7 +324,7 @@ window.ArkismDigests = (ctx) => {
     const ok = button("승인", "primary small", null, () => decide("approve", "", btns));
     ok.disabled = !c.fresh;
     const no = button("버리기", "ghost small", null, () => {
-      if (reason.hidden && kind !== "causal") { reason.hidden = false; reason.focus(); return; }
+      if (reason.hidden && kind !== "causal" && kind !== "proposal") { reason.hidden = false; reason.focus(); return; }
       void decide("reject", reason.value.trim(), btns);
     });
     btns.append(ok, no);
@@ -562,14 +563,14 @@ window.ArkismDigests = (ctx) => {
   function paintNotes() {
     if (state.view !== "memories" || state.memTab !== "notes") return;
     const items = (data.notes || []).filter((n) => !state.query || `${n.model?.title || ""} ${noteText(n)}`.toLowerCase().includes(state.query));
-    const KIND = (n) => (n.obs ? "기억에서 뽑은 정리" : n.link ? "원인과 결과 제안" : n.model.draft ? "주제 요약 초안" : "다시 만들 주제 요약");
+    const KIND = (n) => (n.obs ? "기억에서 뽑은 정리" : n.link ? "원인과 결과 제안" : proposedModel(n) ? "에이전트가 제안한 주제" : n.model.draft ? "주제 요약 초안" : "다시 만들 주제 요약");
     const table = $("#table");
     table.replaceChildren(...items.map((n) => {
       const cell = el("div", "cell mem-cell");
       cell.append(raw(el("div", "text", noteTitle(n))),
         el("div", "mem-meta", [KIND(n), `근거 기억 ${noteRefs(n).length}개`, occurred(n.obs), ago((n.obs || n.link || n.model).updated_at)].filter(Boolean).join(" · ")));
       const stale = n.obs ? !n.obs.fresh : n.link ? false : !!n.model.draft?.withheld;
-      const badge = stale ? "근거 바뀜" : n.model && !n.model.draft ? STALE[n.model.stale_reason] || "오래됨" : n.obs?.diff?.length ? "고침" : "새 정리";
+      const badge = stale ? "근거 바뀜" : proposedModel(n) ? "AI 제안" : n.model && !n.model.draft ? STALE[n.model.stale_reason] || "오래됨" : n.obs?.diff?.length ? "고침" : "새 정리";
       return row(`note:${n.id}`, "minmax(0,1fr) auto", [cell, el("span", "mem-badge warn", badge)], () => notesDetail());
     }));
     if (!data.key) table.append(el("div", "empty", "AI 정리를 불러오는 중…"));
@@ -585,6 +586,7 @@ window.ArkismDigests = (ctx) => {
     const body = detailShell("AI 정리");
     if (!n) { body.append(el("h2", "", "정리를 고르세요"), el("p", "lead", "AI가 승인된 기억 여러 개를 읽고 쓴 정리예요. 승인하기 전에는 쓰이지 않아요.")); return; }
     if (n.link) { causalDetail(body, n); return; }
+    if (proposedModel(n)) { proposedTopic(body, n); return; }
     const o = n.obs, m = n.model, d = m?.draft;
     const head = el("div", "d-head");
     head.append(el("p", "d-kind", o ? "AI 정리 · 기억에서 뽑음" : d ? "AI 정리 · 주제 요약 초안" : "주제 요약 · 다시 만들 때가 됐어요"), raw(el("h2", "", o ? o.content : m.title)));
@@ -638,6 +640,25 @@ window.ArkismDigests = (ctx) => {
     body.append(card);
     const refs = noteRefs(n), mems = refs.filter((r) => r.collection === "memories");
     body.append(members(mems, [], "근거 기억"));
+  }
+
+  // An agent may only propose a topic (status proposed): it is never refreshed or read until a person approves it.
+  // 승인 saves it as it is (PATCH, which makes it active); 버리기 deletes it.
+  const proposedModel = (n) => n.model?.status === "proposed";
+  function proposedTopic(body, n) {
+    const m = n.model;
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", "AI 정리 · 에이전트가 제안한 주제"), raw(el("h2", "", m.title)));
+    body.append(head);
+    const send = (action, _reason, btns) => decideOnce(n.id, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}`, action === "approve"
+      ? { method: "PATCH", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision, title: m.title, query: m.query, refresh: m.refresh }) }
+      : { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }),
+    { ok: action === "approve" ? "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요." : "제안을 버렸어요.", conflict: "그사이 제안이 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 주제를 승인할 수 없어요." }, btns);
+    body.append(candidateCard({ id: n.id, fresh: true, body: m.query }, "proposal",
+      "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.", state.caps?.role === "human" ? send : null));
+    const info = [["다시 만드는 때", { manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh?.mode ?? m.refresh] || (m.refresh?.mode ?? m.refresh)], ["만든 날", day(m.created_at)]];
+    const more = el("details", "insight-more"); more.append(el("summary", "", "자세히"), ctx.facts(info));
+    body.append(more);
   }
 
   // 원인과 결과 제안: AI가 "이 기억이 저 기억으로 이어졌다"고 본 것. 승인하면 기억을 찾을 때 서로 함께 불려 나와요.

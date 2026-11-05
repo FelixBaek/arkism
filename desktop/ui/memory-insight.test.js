@@ -108,6 +108,34 @@ test("rules list, turn off, edit and delete with the revision; agents only read"
   assert.match(agent.h.$("#detail").textContent, /사람만 만들고 바꿀 수 있어요/);
 });
 
+test("an agent's proposed rule waits for a person: 승인 saves it on, 거절 deletes it; an agent sees no buttons", async () => {
+  const proposed = rule({ id: "d1", active: false, proposed: true, created_by: "agent-1" });
+  const t = setup("rules", [["/v1/directives?", () => ({ items: [proposed], next_cursor: "" })],
+    ["/v1/directives/d1", (p, o) => (o.method === "DELETE" ? { deleted: true } : { ...proposed, ...JSON.parse(o.body), proposed: false, revision: 4 })]]);
+  t.view.draw(); await dom.flush();
+  const row = t.h.$("#table .original-row");
+  assert.match(row.textContent, /AI 제안/);
+  row.click();
+  assert.match(t.h.$("#detail").textContent, /규칙 · AI 제안/);
+  assert.match(t.h.$("#detail").textContent, /승인하기 전에는 AI가 지키지 않아요/);
+  dom.buttons(t.h.$("#detail"), "승인")[0].click(); await dom.flush();
+  const ok = t.calls.find(([p, o]) => p === "/v1/directives/d1" && o?.method === "POST");
+  assert.equal(body(ok).active, true); assert.equal(body(ok).expected_revision, 3);
+  assert.equal(t.notices.at(-1), "규칙을 승인했어요. 지금부터 지켜요.");
+  t.view.close(); await t.view.draw();
+  t.h.$("#table .original-row").click();
+  dom.buttons(t.h.$("#detail"), "거절")[0].click(); await dom.flush();
+  assert.match(t.asked.at(-1), /제안을 거절할까요/);
+  assert.deepEqual(body(t.calls.find(([, o]) => o?.method === "DELETE")), { scope: SCOPE, expected_revision: 3 });
+  assert.equal(t.notices.at(-1), "제안을 거절했어요.");
+
+  const agent = setup("rules", [["/v1/directives?", () => ({ items: [proposed] })]], { role: "agent" });
+  agent.view.draw(); await dom.flush();
+  agent.h.$("#table .original-row").click();
+  assert.equal(dom.buttons(agent.h.$("#detail"), "승인").length, 0);
+  assert.match(agent.h.$("#detail").textContent, /승인과 거절은 사람만 할 수 있어요/);
+});
+
 test("a failed rule list says so and offers a retry", async () => {
   let down = true;
   const t = setup("rules", [["/v1/directives?", () => { if (down) throw err("x", 500); return { items: [rule()] }; }]]);

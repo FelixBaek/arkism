@@ -614,8 +614,9 @@ fn allowed(method: &str, path: &str) -> bool {
     // /healthz carries the server version that 설정 › 업데이트 compares with the app.
     let api = path.starts_with("/v1/") || path == "/readyz" || path.starts_with("/readyz?") || path == "/healthz";
     // DELETE only for 기억 잊기 (DELETE /v1/memories/{id}), 워크플로우 지우기 (DELETE /v1/crew/{id}) and the
-    // gallery's 삭제 (DELETE /v1/prompts/{id}, /v1/design_systems/{id}), 규칙·이름 지우기 (DELETE /v1/directives/{id}, /v1/entities/{id})
-    // and 웹훅 지우기 (DELETE /v1/webhooks/{id}?scope); PATCH only for 이름 고치기 (PATCH /v1/entities/{id}),
+    // gallery's 삭제 (DELETE /v1/prompts/{id}, /v1/design_systems/{id}), 규칙·이름 지우기 (DELETE /v1/directives/{id}, /v1/entities/{id}),
+    // 제안된 주제 버리기 (DELETE /v1/mental-models/{id}) and 웹훅 지우기 (DELETE /v1/webhooks/{id}?scope); PATCH only for
+    // 이름 고치기 (PATCH /v1/entities/{id}), 제안된 주제 승인 (PATCH /v1/mental-models/{id}),
     // 웹훅 켜기·끄기 (PATCH /v1/webhooks/{id}) and the space config below (also its PUT); every other change goes through POST.
     // desktop/ui/delete-allowlist.test.js checks every DELETE the UI sends is listed here.
     let one_id = |prefix: &str| path.strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/') && !id.contains('?'));
@@ -623,11 +624,11 @@ fn allowed(method: &str, path: &str) -> bool {
     let query_id = |prefix: &str| path.split(['?', '#']).next().unwrap_or("").strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/'));
     let delete = method == "DELETE"
         && (path.starts_with("/v1/memories/") || one_id("/v1/crew/") || one_id("/v1/prompts/") || one_id("/v1/design_systems/")
-            || one_id("/v1/directives/") || one_id("/v1/entities/") || query_id("/v1/webhooks/"));
+            || one_id("/v1/directives/") || one_id("/v1/entities/") || one_id("/v1/mental-models/") || query_id("/v1/webhooks/"));
     // 설정 › 기억 공간 saves with PATCH and resets with PUT, on /v1/spaces/{workspace}/{project}/config only.
     let space_config = path.strip_prefix("/v1/spaces/").and_then(|p| p.strip_suffix("/config"))
         .is_some_and(|p| p.split('/').count() == 2 && p.split('/').all(|s| !s.is_empty() && !s.contains('?') && !s.contains('#')));
-    let patch = method == "PATCH" && (one_id("/v1/entities/") || one_id("/v1/webhooks/") || space_config);
+    let patch = method == "PATCH" && (one_id("/v1/entities/") || one_id("/v1/mental-models/") || one_id("/v1/webhooks/") || space_config);
     let put = method == "PUT" && space_config;
     // `..` (or %2e%2e) only matters in the path: a search query may contain it.
     let route = path.split(['?', '#']).next().unwrap_or("").to_ascii_lowercase().replace("%2e", ".");
@@ -1293,6 +1294,7 @@ mod tests {
         assert!(!allowed("DELETE", "/v1/crew_runs/x"));
         assert!(allowed("DELETE", "/v1/directives/d1") && allowed("DELETE", "/v1/entities/e1") && !allowed("DELETE", "/v1/entities/e1/merge"));
         assert!(allowed("PATCH", "/v1/entities/e1") && !allowed("PATCH", "/v1/entities/e1/merge") && !allowed("PATCH", "/v1/directives/d1"));
+        assert!(allowed("PATCH", "/v1/mental-models/m1") && allowed("DELETE", "/v1/mental-models/m1") && !allowed("PATCH", "/v1/mental-models/m1/review"));
         assert!(allowed("DELETE", "/v1/webhooks/wh1?workspace_id=w&project_id=p") && allowed("DELETE", "/v1/webhooks/wh1"));
         assert!(!allowed("DELETE", "/v1/webhooks/") && !allowed("DELETE", "/v1/webhooks/wh1/deliveries") && !allowed("DELETE", "/v1/webhooks?x=1"));
         assert!(allowed("PATCH", "/v1/webhooks/wh1") && !allowed("PATCH", "/v1/webhooks/wh1/test") && !allowed("PATCH", "/v1/memories/m1"));

@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "Đã tạo quy tắc. Từ giờ sẽ được tuân theo.",
  "규칙을 고르세요": "Hãy chọn một quy tắc",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Đây là những câu AI luôn tuân theo khi trả lời hoặc khi đưa ký ức cho tác tử. Chỉ những quy tắc do người viết mới được dùng.",
- "규칙 · 켜짐": "Quy tắc · Bật",
- "규칙 · 꺼짐": "Quy tắc · Tắt",
  "쓰는 때": "Dùng khi nào",
  "우선순위": "Mức ưu tiên",
  "적은 사람": "Người viết",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "Nhờ AI viết bản nháp tóm tắt",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Đã tạo bản nháp tóm tắt. Bạn hãy đọc và duyệt nhé.",
  "확인을 기다리는 초안이 이미 있어요.": "Đã có một bản nháp đang chờ bạn xem.",
- "사람·도구": "Người · công cụ"
+ "사람·도구": "Người · công cụ",
+ "에이전트가 제안한 주제": "Chủ đề do tác nhân đề xuất",
+ "AI 정리 · 에이전트가 제안한 주제": "AI tổng hợp · Chủ đề do tác nhân đề xuất",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Đã duyệt chủ đề. Đến lần tạo lại tiếp theo, bản tóm tắt sẽ được viết.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "Đề xuất đã thay đổi trong lúc này. Đã tải lại bản mới.",
+ "이 계정은 주제를 승인할 수 없어요.": "Tài khoản này không thể duyệt chủ đề.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Tác nhân đã đề xuất tạo bản tóm tắt cho chủ đề này. Bản tóm tắt sẽ không được viết nếu bạn chưa duyệt.",
+ "만든 날": "Ngày tạo",
+ "규칙을 승인했어요. 지금부터 지켜요.": "Đã duyệt quy tắc. Từ bây giờ AI sẽ tuân theo.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Đã duyệt quy tắc. Quy tắc vẫn được để ở trạng thái tắt.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Đây là quy tắc do tác nhân đề xuất. AI sẽ không tuân theo cho đến khi có người duyệt.",
+ "승인과 거절은 사람만 할 수 있어요.": "Chỉ con người mới có thể duyệt hoặc từ chối.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Bạn muốn từ chối đề xuất này không?\nQuy tắc được đề xuất sẽ bị xóa.",
+ "제안을 거절했어요.": "Đã từ chối đề xuất.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Đây là quy tắc do tác nhân đề xuất. Khi bạn lưu, quy tắc sẽ được duyệt và dùng ngay."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} phần bị thiếu · các ứng viên của phần đó vẫn được giữ nguyên",
  "{0} 승인 · 근거 기억 {1}개": "Đã duyệt {0} · {1} ký ức làm căn cứ",
  "일어난 때 · {0}": "Xảy ra lúc · {0}",
- "{0}쪽": "trang {0}"
+ "{0}쪽": "trang {0}",
+ "규칙 · {0}": "Quy tắc · {0}"
  }
 };

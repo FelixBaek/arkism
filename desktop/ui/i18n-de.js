@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "Regel erstellt. Sie wird ab jetzt befolgt.",
  "규칙을 고르세요": "Wähle eine Regel",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Sätze, an die sich die KI immer hält, wenn sie antwortet oder Agents Erinnerungen gibt. Nur von Menschen geschriebene Regeln werden verwendet.",
- "규칙 · 켜짐": "Regel · An",
- "규칙 · 꺼짐": "Regel · Aus",
  "쓰는 때": "Verwendet bei",
  "우선순위": "Priorität",
  "적은 사람": "Geschrieben von",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "KI einen Zusammenfassungsentwurf schreiben lassen",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Der Zusammenfassungsentwurf ist fertig. Lies ihn durch und gib ihn frei.",
  "확인을 기다리는 초안이 이미 있어요.": "Es wartet bereits ein Entwurf auf deine Prüfung.",
- "사람·도구": "Personen · Tools"
+ "사람·도구": "Personen · Tools",
+ "에이전트가 제안한 주제": "Von einem Agenten vorgeschlagenes Thema",
+ "AI 정리 · 에이전트가 제안한 주제": "KI-Notizen · Von einem Agenten vorgeschlagenes Thema",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Das Thema ist genehmigt. Beim nächsten Neuerstellen wird eine Zusammenfassung geschrieben.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "Der Vorschlag hat sich inzwischen geändert. Er wurde neu geladen.",
+ "이 계정은 주제를 승인할 수 없어요.": "Mit diesem Konto kannst du keine Themen genehmigen.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Ein Agent hat vorgeschlagen, eine Zusammenfassung zu diesem Thema zu erstellen. Ohne deine Genehmigung wird keine Zusammenfassung geschrieben.",
+ "만든 날": "Erstellt am",
+ "규칙을 승인했어요. 지금부터 지켜요.": "Die Regel ist genehmigt. Ab jetzt wird sie befolgt.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Die Regel ist genehmigt. Sie bleibt ausgeschaltet.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Dies ist eine von einem Agenten vorgeschlagene Regel. Die KI befolgt sie erst, wenn ein Mensch sie genehmigt.",
+ "승인과 거절은 사람만 할 수 있어요.": "Nur ein Mensch kann genehmigen oder ablehnen.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Diesen Vorschlag ablehnen?\nDie vorgeschlagene Regel wird gelöscht.",
+ "제안을 거절했어요.": "Der Vorschlag wurde abgelehnt.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Dies ist eine von einem Agenten vorgeschlagene Regel. Mit dem Speichern wird sie genehmigt und sofort verwendet."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} fehlende Teile · ihre Kandidaten bleiben erhalten",
  "{0} 승인 · 근거 기억 {1}개": "{0} freigegeben · {1} zugrunde liegende Erinnerungen",
  "일어난 때 · {0}": "Passiert · {0}",
- "{0}쪽": "Seite {0}"
+ "{0}쪽": "Seite {0}",
+ "규칙 · {0}": "Regel · {0}"
  }
 };

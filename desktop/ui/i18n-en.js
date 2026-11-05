@@ -94,8 +94,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
  "규칙을 만들었어요. 지금부터 지켜요.": "Rule created. It is followed from now on.",
  "규칙을 고르세요": "Pick a rule",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Sentences AI always follows when answering or giving agents memories. Only rules a person wrote are used.",
- "규칙 · 켜짐": "Rule · On",
- "규칙 · 꺼짐": "Rule · Off",
  "쓰는 때": "Used when",
  "우선순위": "Priority",
  "적은 사람": "Written by",
@@ -6726,3 +6724,20 @@ Object.assign(window.ArkismI18nEN.patterns, {
   "일어난 때 · {0}": "Happened · {0}" });
 Object.assign(window.ArkismI18nEN.strings, { "사람·도구": "People · tools" });
 Object.assign(window.ArkismI18nEN.patterns, { "{0}쪽": "page {0}" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "에이전트가 제안한 주제": "Topic suggested by an agent",
+  "AI 정리 · 에이전트가 제안한 주제": "AI notes · Topic suggested by an agent",
+  "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Topic approved. A summary is written when it is next due.",
+  "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "The suggestion changed in the meantime. Reloaded it.",
+  "이 계정은 주제를 승인할 수 없어요.": "This account can't approve topics.",
+  "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "An agent suggested making a summary on this topic. No summary is written until you approve it.",
+  "만든 날": "Created",
+  "규칙을 승인했어요. 지금부터 지켜요.": "Rule approved. AI follows it from now on.",
+  "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "Rule approved. It stays turned off.",
+  "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "An agent suggested this rule. AI doesn't follow it until a person approves it.",
+  "승인과 거절은 사람만 할 수 있어요.": "Only a person can approve or decline.",
+  "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Decline this suggestion?\nThe suggested rule will be deleted.",
+  "제안을 거절했어요.": "Suggestion declined.",
+  "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "An agent suggested this rule. Saving approves it and puts it to use right away." });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "규칙 · {0}": "Rule · {0}" });

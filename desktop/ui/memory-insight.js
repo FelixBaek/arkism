@@ -411,7 +411,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     const status = el("p", "meta original-notice", s.loading && !s.items.length ? "불러오는 중…" : error || (s.ready && !s.items.length ? empty : ""));
     status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status);
     for (const r of s.items) {
-      table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, r.active ? "켜짐" : "꺼짐", !r.active)
+      table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, ruleState(r), !r.active)
         : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : r.summary_draft ? "요약 초안" : "확인됨", r.proposed || !!r.summary_draft));
     }
     if (error) table.append(button("다시 불러오기", "small", null, () => loadList("retry")));
@@ -420,6 +420,8 @@ window.ArkismMemoryInsight = (ctx, tab) => {
 
   // ------------------------------------------------------------ 규칙 detail and form
   const ruleFields = (r) => ({ title: r.title, rule: r.rule, priority: r.priority, applies_to: r.applies_to, active: r.active, tags: r.tags || [] });
+  // An agent's rule waits as proposed (never applied) until a person saves it: 승인 saves it on, 거절 deletes it.
+  const ruleState = (r) => (r.proposed ? "AI 제안" : r.active ? "켜짐" : "꺼짐");
   function ruleError(e) {
     return { revision_conflict: "그사이 다른 곳에서 바뀌었어요. 새로 불러왔어요.", access_denied: "이 계정은 규칙을 바꿀 수 없어요.",
       secret_detected: "비밀번호나 키처럼 보이는 내용은 규칙에 넣을 수 없어요." }[e?.message] || `처리하지 못했어요 (${e?.message})`;
@@ -437,31 +439,32 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   }
   const saveRule = (fields, prev) => writeRule(() => request(prev ? `/v1/directives/${encodeURIComponent(prev.id)}` : "/v1/directives",
     { method: "POST", body: JSON.stringify({ scope: state.scope, ...fields, ...(prev ? { expected_revision: prev.revision } : {}) }) }),
-  prev ? (fields.active === prev.active ? "규칙을 바꿨어요." : fields.active ? "규칙을 켰어요. 지금부터 지켜요." : "규칙을 껐어요.") : "규칙을 만들었어요. 지금부터 지켜요.");
+  prev ? (prev.proposed ? (fields.active ? "규칙을 승인했어요. 지금부터 지켜요." : "규칙을 승인했어요. 꺼 둔 채로 두었어요.") : fields.active === prev.active ? "규칙을 바꿨어요." : fields.active ? "규칙을 켰어요. 지금부터 지켜요." : "규칙을 껐어요.") : "규칙을 만들었어요. 지금부터 지켜요.");
   function ruleDetail(body) {
     const r = selected;
     if (!r) { body.append(el("h2", "", "규칙을 고르세요"), el("p", "lead", "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.")); return; }
     const head = el("div", "d-head");
-    head.append(el("p", "d-kind", r.active ? "규칙 · 켜짐" : "규칙 · 꺼짐"), raw(el("h2", "", r.title)));
+    head.append(el("p", "d-kind", `규칙 · ${ruleState(r)}`), raw(el("h2", "", r.title)));
+    if (r.proposed) head.append(el("p", "dg-warn", "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요."));
     const text = section("내용"); text.append(raw(el("p", "original-text", r.rule)));
     const use = section("언제 쓰나요");
     use.append(facts([["쓰는 때", APPLIES[r.applies_to] || r.applies_to], ["우선순위", `${r.priority} · 클수록 먼저 지켜요`], ["적은 사람", r.created_by], ["고친 날", day(r.updated_at)]]));
     body.append(head, text, use);
-    if (!human()) { body.append(el("p", "meta", "규칙은 사람만 만들고 바꿀 수 있어요.")); return; }
+    if (!human()) { body.append(el("p", "meta", r.proposed ? "승인과 거절은 사람만 할 수 있어요." : "규칙은 사람만 만들고 바꿀 수 있어요.")); return; }
     const btns = el("div", "d-buttons");
     const lock = () => btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
-    btns.append(button(r.active ? "끄기" : "켜기", "primary small", null, () => { lock(); void saveRule({ ...ruleFields(r), active: !r.active }, r); }),
+    btns.append(button(r.proposed ? "승인" : r.active ? "끄기" : "켜기", "primary small", null, () => { lock(); void saveRule({ ...ruleFields(r), active: r.proposed || !r.active }, r); }),
       button("고치기", "small", null, () => { editing = r; detail(); }),
-      button("지우기", "ghost small", null, async () => {
-        if (!await window.ask("이 규칙을 지울까요?\n지우면 AI가 더 이상 지키지 않아요.", "지우기")) return;
+      button(r.proposed ? "거절" : "지우기", "ghost small", null, async () => {
+        if (!await window.ask(r.proposed ? "이 제안을 거절할까요?\n제안한 규칙을 지워요." : "이 규칙을 지울까요?\n지우면 AI가 더 이상 지키지 않아요.", r.proposed ? "거절" : "지우기")) return;
         lock();
-        void writeRule(() => request(`/v1/directives/${encodeURIComponent(r.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: r.revision }) }), "규칙을 지웠어요.", false);
+        void writeRule(() => request(`/v1/directives/${encodeURIComponent(r.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: r.revision }) }), r.proposed ? "제안을 거절했어요." : "규칙을 지웠어요.", false);
       }));
     body.append(btns);
   }
   function ruleForm(body) {
     const r = editing.id ? editing : null;
-    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
+    body.append(el("h2", "", r ? "규칙 고치기" : "새 규칙"), el("p", "lead", r?.proposed ? "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요." : "AI가 꼭 지킬 문장을 적어 주세요. 저장하면 바로 쓰여요."));
     const form = el("form", "insight-edit");
     const title = el("input"); title.maxLength = 200; title.required = true; title.value = r?.title || ""; title.placeholder = "예: 배포 규칙";
     const rule = el("textarea"); rule.maxLength = 4000; rule.rows = 5; rule.required = true; rule.value = r?.rule || ""; rule.placeholder = "예: 운영 서버에 올리기 전에는 꼭 사람에게 물어본다.";
@@ -479,7 +482,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       const p = priority.value === "" ? null : Number(priority.value);
       save.disabled = true;
       void saveRule({ title: title.value.trim(), rule: rule.value.trim(), applies_to: where.value, ...(Number.isInteger(p) && p >= 0 && p <= 100 ? { priority: p } : {}),
-        active: r ? r.active : true, tags: r?.tags || [] }, r);
+        active: r ? r.active || !!r.proposed : true, tags: r?.tags || [] }, r);
     });
     body.append(form);
     title.focus();

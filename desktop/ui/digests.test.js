@@ -486,6 +486,29 @@ test("AI 정리 lists observations and mental-model drafts; only a person approv
   assert.match(detailText(t), /승인과 버리기는 사람만 할 수 있어요/);
 });
 
+test("AI 정리: an agent's proposed topic waits for a person; 승인 saves it as it is, 버리기 deletes it", async () => {
+  const sent = [];
+  const pm = { id: "pm1", revision: 1, status: "proposed", title: "배포 절차", query: "배포는 어떻게 하나요?", refresh: { mode: "manual" }, created_at: "2026-01-04T00:00:00Z", updated_at: "2026-01-04T00:00:00Z" };
+  const t = setup({ routes: {
+    "/v1/observations?": () => ({ items: [] }), "/v1/mental-models?": (p) => ({ items: p.includes("status=proposed") ? [pm] : [] }),
+    "/v1/mental-models/pm1": (_, o) => { sent.push([o.method, JSON.parse(o.body)]); return {}; } } });
+  t.state.memTab = "notes"; t.state.caps = { role: "human" };
+  t.view.drawNotes(); await dom.flush();
+  assert.equal(rows(t).length, 1);
+  assert.match(t.h.$("#table").textContent, /에이전트가 제안한 주제/);
+  assert.match(t.h.$("#table").textContent, /AI 제안/);
+  rows(t)[0].click(); await dom.flush();
+  assert.match(detailText(t), /승인하기 전에는 요약을 쓰지 않아요/);
+  assert.match(detailText(t), /배포는 어떻게 하나요/);
+  btn(t.h.$("#detail"), "승인").click(); await dom.flush();
+  assert.deepEqual(sent[0], ["PATCH", { scope: SCOPE, expected_revision: 1, title: "배포 절차", query: "배포는 어떻게 하나요?", refresh: { mode: "manual" } }]);
+  rows(t)[0].click(); await dom.flush(); // the mock still lists it
+  btn(t.h.$("#detail"), "버리기").click(); await dom.flush();
+  assert.deepEqual(sent.at(-1), ["DELETE", { scope: SCOPE, expected_revision: 1 }]);
+  t.state.caps = { role: "agent" }; t.view.detail();
+  assert.equal(btn(t.h.$("#detail"), "승인"), undefined);
+});
+
 test("AI 정리 without server support or with a failed read", async () => {
   const gone = () => { throw new Error("not_found"); };
   let t = setup({ routes: { "/v1/observations?": gone, "/v1/mental-models?": gone } });

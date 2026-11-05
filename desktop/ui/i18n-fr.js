@@ -92,8 +92,6 @@
  "규칙을 만들었어요. 지금부터 지켜요.": "La règle a été créée. Elle est respectée dès maintenant.",
  "규칙을 고르세요": "Choisissez une règle",
  "AI가 답하거나 에이전트에게 기억을 줄 때 꼭 지키는 문장이에요. 사람이 적은 규칙만 쓰여요.": "Phrases que l'IA respecte toujours quand elle répond ou donne des souvenirs aux agents. Seules les règles écrites par une personne sont utilisées.",
- "규칙 · 켜짐": "Règle · Activée",
- "규칙 · 꺼짐": "Règle · Désactivée",
  "쓰는 때": "Utilisée quand",
  "우선순위": "Priorité",
  "적은 사람": "Rédigée par",
@@ -5574,7 +5572,21 @@
  "AI에게 요약 초안 쓰게 하기": "Demander à l'IA d'écrire un brouillon de résumé",
  "요약 초안을 만들었어요. 읽어 보고 승인해 주세요.": "Un brouillon de résumé est prêt. Lisez-le, puis approuvez-le.",
  "확인을 기다리는 초안이 이미 있어요.": "Un brouillon attend déjà votre vérification.",
- "사람·도구": "Personnes · outils"
+ "사람·도구": "Personnes · outils",
+ "에이전트가 제안한 주제": "Sujet suggéré par un agent",
+ "AI 정리 · 에이전트가 제안한 주제": "Résumé IA · Sujet suggéré par un agent",
+ "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요.": "Le sujet est approuvé. Un résumé sera rédigé à la prochaine mise à jour.",
+ "그사이 제안이 바뀌었어요. 새로 불러왔어요.": "La suggestion a changé entre-temps. Elle a été rechargée.",
+ "이 계정은 주제를 승인할 수 없어요.": "Ce compte ne peut pas approuver de sujets.",
+ "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.": "Un agent propose de créer un résumé sur ce sujet. Aucun résumé n'est rédigé tant que vous n'avez pas approuvé.",
+ "만든 날": "Date de création",
+ "규칙을 승인했어요. 지금부터 지켜요.": "La règle est approuvée. L'IA la respecte dès maintenant.",
+ "규칙을 승인했어요. 꺼 둔 채로 두었어요.": "La règle est approuvée. Elle reste désactivée.",
+ "에이전트가 제안한 규칙이에요. 사람이 승인하기 전에는 AI가 지키지 않아요.": "Cette règle a été suggérée par un agent. L'IA ne la respecte pas tant qu'une personne ne l'a pas approuvée.",
+ "승인과 거절은 사람만 할 수 있어요.": "Seule une personne peut approuver ou refuser.",
+ "이 제안을 거절할까요?\n제안한 규칙을 지워요.": "Refuser cette suggestion ?\nLa règle suggérée sera supprimée.",
+ "제안을 거절했어요.": "La suggestion a été refusée.",
+ "에이전트가 제안한 규칙이에요. 저장하면 승인되고 바로 쓰여요.": "Cette règle a été suggérée par un agent. Si vous l'enregistrez, elle est approuvée et appliquée tout de suite."
  },
  "patterns": {
  "근거 기억 {0}개": "{0} mémoires sources",
@@ -6755,6 +6767,7 @@
  "빠진 부분 {0}곳 · 그 후보는 그대로 남아 있어요": "{0} parties manquantes · leurs candidats restent tels quels",
  "{0} 승인 · 근거 기억 {1}개": "Approuvé {0} · {1} souvenirs cités",
  "일어난 때 · {0}": "Survenu · {0}",
- "{0}쪽": "page {0}"
+ "{0}쪽": "page {0}",
+ "규칙 · {0}": "Règle · {0}"
  }
 };
