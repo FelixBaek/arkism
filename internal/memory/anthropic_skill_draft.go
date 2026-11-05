@@ -1,11 +1,9 @@
 package memory
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"reflect"
 	"slices"
@@ -109,23 +107,11 @@ func (a *AnthropicSkillDrafter) DraftAuthorized(ctx context.Context, token strin
 	}
 	client := providerClient(a.Client, 120*time.Second)
 	sent := false
+	header := http.Header{"X-Api-Key": {a.APIKey}, "Anthropic-Version": {"2023-06-01"}, "Anthropic-Workspace-Id": {a.WorkspaceID}}
 	request := func(method, path string, payload []byte) ([]byte, error) {
-		req, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(endpoint, "/")+path, bytes.NewReader(payload))
-		if e != nil {
-			return nil, e
-		}
-		req.Header.Set("x-api-key", a.APIKey)
-		req.Header.Set("anthropic-version", "2023-06-01")
-		req.Header.Set("anthropic-workspace-id", a.WorkspaceID)
-		req.Header.Set("Content-Type", "application/json")
 		sent = true
-		response, e := client.Do(req)
-		if e != nil {
-			return nil, ErrUnavailable
-		}
-		defer response.Body.Close()
-		raw, e := io.ReadAll(io.LimitReader(response.Body, defaultResponseMax+1))
-		if e != nil || len(raw) > defaultResponseMax || response.StatusCode != 200 {
+		raw, status, e := sendBody(ctx, client, method, strings.TrimRight(endpoint, "/")+path, header, payload, defaultResponseMax)
+		if e != nil || status != http.StatusOK {
 			return nil, ErrUnavailable
 		}
 		return raw, nil
