@@ -48,9 +48,9 @@ them from paid model executions and from operation of the deployed service.
 | MCP `recent_sessions`, HTTP `/v1/work-checkpoints/recent` | Recent distinct sessions in the exact repository and authorized scope |
 | MCP `recall_for_role`, HTTP `/v1/memory/role-search` | Researcher, implementer and reviewer relevance profiles |
 | MCP `expand_knowledge_graph`, HTTP `/v1/knowledge-graph/expand` | Evidence-backed directed traversal |
-| MCP `recall` (`explain`, `timezone`), HTTP `/v1/search` | Default search lanes plus time words and the relations graph when enabled; `explain` returns lane ranks |
+| MCP `recall` (`explain`, `timezone`, `expand_causal`), HTTP `/v1/search` | Default search lanes plus time words and the relations graph when enabled; `explain` returns lane ranks; `expand_causal` adds memories one approved cause/effect link from the top hits |
 | MCP `reflect`, HTTP `/v1/reflect` | Server-model answer from approved memories under directives, with cited memory ids; not stored |
-| MCP `browse_memory`, HTTP `GET /v1/directives`, `/v1/observations`, `/v1/mental-models`, `/v1/entities`, `/v1/files/memories/jobs/{id}` | Read-only pages; active observations and approved mental-model text only; no create, review or approve |
+| MCP `browse_memory`, HTTP `GET /v1/directives`, `/v1/observations`, `/v1/mental-models`, `/v1/entities`, `/v1/causal-links`, `/v1/files/memories/jobs/{id}` | Read-only pages; active observations, approved causal links and approved mental-model text only; no create, propose, review or approve |
 | MCP `read_wiki` (`tree`), HTTP `/v1/wiki/tree` | Folders and reviewed page titles |
 | HTTP `/v1/knowledge-graph/relations` | Human-only assertion; an agent cannot approve its own relation |
 

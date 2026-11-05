@@ -40,6 +40,7 @@ func TestBrowseMemoryListsEachKindReadOnly(t *testing.T) {
 		"observations":  "/v1/observations?" + scope + "&limit=5&cursor=c%2F1&q=%EB%B0%B0%ED%8F%AC",
 		"mental_models": "/v1/mental-models?" + scope + "&limit=20",
 		"entities":      "/v1/entities?" + scope + "&limit=20&q=arkism",
+		"causal_links":  "/v1/causal-links?" + scope + "&status=active&limit=20",
 	} {
 		args := `{"kind":"` + kind + `"}`
 		switch kind {
@@ -85,7 +86,7 @@ func TestBrowseMemoryReadsOneItem(t *testing.T) {
 		t.Fatal("mental model draft leaked", item)
 	}
 	*calls = nil
-	for _, bad := range []string{`{}`, `{"kind":"reviews"}`, `{"kind":"file_job"}`, `{"kind":"file_job","id":".."}`, `{"kind":"entities","limit":51}`, `{"kind":"entities","limit":true}`,
+	for _, bad := range []string{`{}`, `{"kind":"reviews"}`, `{"kind":"file_job"}`, `{"kind":"file_job","id":".."}`, `{"kind":"causal_links","id":"c1"}`, `{"kind":"entities","limit":51}`, `{"kind":"entities","limit":true}`,
 		`{"kind":"entities","query":"` + strings.Repeat("a", 201) + `"}`} {
 		if _, err := callTool("browse_memory", j(t, bad)); err == nil {
 			t.Fatal(bad)
@@ -101,16 +102,16 @@ func TestRecallPassesExplainAndTimezoneWithServerLanes(t *testing.T) {
 	t.Setenv("ARKISM_REPO", "")
 	hit := `{"id":"m1","kind":"decision","status":"active","text":"어제 결정","sources":[{"source_id":"s"}],"score":0.04,"lanes":["keyword","temporal"],"explain":{"lane_ranks":{"temporal":1}}}`
 	calls := fakeRequest(t, `{"items":[`+hit+`],"explain":{"lanes":["exact","keyword","vector","temporal"],"time_window":{"phrase":"어제"}}}`)
-	out := structured(t, call(t, "recall", `{"query":"어제 뭘 정했지","explain":true,"timezone":"Asia/Seoul"}`))
+	out := structured(t, call(t, "recall", `{"query":"어제 뭘 정했지","explain":true,"expand_causal":true,"timezone":"Asia/Seoul"}`))
 	payload := asMap((*calls)[0].payload)
-	if _, hasModes := payload["modes"]; hasModes || payload["explain"] != true || payload["timezone"] != "Asia/Seoul" {
+	if _, hasModes := payload["modes"]; hasModes || payload["explain"] != true || payload["expand_causal"] != true || payload["timezone"] != "Asia/Seoul" {
 		t.Fatal(payload)
 	}
 	if asMap(field(out, "explain"))["time_window"] == nil || !strings.Contains(canon(t, field(out, "memories")), `"explain":{"lane_ranks":{"temporal":1}}`) {
 		t.Fatal(out)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","timezone":3}`, `{"query":"q","timezone":"Asia/Seoul?x=1"}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
+	for _, bad := range []string{`{"query":"q","explain":"yes"}`, `{"query":"q","expand_causal":1}`, `{"query":"q","timezone":3}`, `{"query":"q","timezone":"Asia/Seoul?x=1"}`, `{"query":"q","timezone":"` + strings.Repeat("a", 65) + `"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}
@@ -133,15 +134,17 @@ func TestReadWikiTree(t *testing.T) {
 }
 
 // A hit only the time-word lane found scores one-lane RRF (about 1/61), under the default floor;
-// it still answers "what did we decide yesterday", so the floor keeps it like an exact match.
+// it still answers "what did we decide yesterday", so the floor keeps it like an exact match;
+// a hit the asked-for causal lane found (an approved link from a top hit) is kept the same way.
 func TestRecallKeepsTemporalOnlyHitUnderDefaultFloor(t *testing.T) {
 	swapRouter(t)
 	t.Setenv("ARKISM_REPO", "")
 	t.Setenv("ARKISM_RECALL_MIN_SCORE", "")
 	fakeRequest(t, `{"items":[{"id":"t1","kind":"episodic","status":"active","text":"어제 배포","score":0.016,"lanes":["temporal"]},`+
+		`{"id":"c1","kind":"decision","status":"active","text":"원인","score":0.016,"lanes":["causal"]},`+
 		`{"id":"v1","kind":"episodic","status":"active","text":"무관","score":0.016,"lanes":["vector"]}]}`)
-	out := structured(t, call(t, "recall", `{"query":"어제 뭐 했지"}`))
-	if got := canon(t, field(out, "memories")); !strings.Contains(got, `"id":"t1"`) || strings.Contains(got, `"id":"v1"`) {
+	out := structured(t, call(t, "recall", `{"query":"어제 뭐 했지","expand_causal":true}`))
+	if got := canon(t, field(out, "memories")); !strings.Contains(got, `"id":"t1"`) || !strings.Contains(got, `"id":"c1"`) || strings.Contains(got, `"id":"v1"`) {
 		t.Fatal(got)
 	}
 }

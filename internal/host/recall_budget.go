@@ -175,10 +175,11 @@ func score(v any) (float64, bool) {
 
 // textLane: a lane that matched the query itself. A temporal hit lies inside the date window the
 // query named ("yesterday"), so it is as direct a match as an exact keyword; one-lane RRF would floor it out.
+// A causal hit runs only when the caller asked for expand_causal and follows a person-approved link.
 func textLane(v any) bool {
 	lanes, _ := v.([]any)
 	for _, l := range lanes {
-		if l == "exact" || l == "keyword" || l == "temporal" {
+		if l == "exact" || l == "keyword" || l == "temporal" || l == "causal" {
 			return true
 		}
 	}

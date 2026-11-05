@@ -718,7 +718,7 @@ func sessionProjectKey() string {
 }
 
 // recall reads current memories by id (from the SessionStart index) or query.
-// opts carries the search-only options explain (bool) and timezone (IANA name).
+// opts carries the search-only options explain and expand_causal (bool) and timezone (IANA name).
 func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error) {
 	all, err := pyIter(idsArg)
 	if err != nil {
@@ -799,13 +799,15 @@ func recallByIDs(ids []string, project string) ([]any, error) {
 // recallSearchOptions checks the search-only recall options before any request.
 func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	out := map[string]any{}
-	if v, ok := opts["explain"]; ok && v != nil {
-		b, isBool := v.(bool)
-		if !isBool {
-			return nil, errors.New("explain must be true or false")
-		}
-		if b {
-			out["explain"] = true
+	for _, key := range []string{"explain", "expand_causal"} {
+		if v, ok := opts[key]; ok && v != nil {
+			b, isBool := v.(bool)
+			if !isBool {
+				return nil, errors.New(key + " must be true or false")
+			}
+			if b {
+				out[key] = true
+			}
 		}
 	}
 	if v, ok := opts["timezone"]; ok && v != nil {
@@ -823,8 +825,8 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 // recallSearch runs the memory search for a query or a related_to anchor. A query search
 // leaves modes to the server so its default lanes run, including the time-word lane
 // ("yesterday", "10월 말") and the relations-graph lane when enabled; the server keeps
-// exactly the lanes asked for once modes are explicit. A later causal-link filter would
-// be one more related_to field here, next to collection/id/revision.
+// exactly the lanes asked for once modes are explicit, so expand_causal (memories one
+// approved causal link from the top hits) only adds a lane to a query search.
 func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[string]any) ([]any, map[string]any, error) {
 	text := "related memory evidence"
 	if isStr && pyStrip(q) != "" {
