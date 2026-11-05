@@ -139,6 +139,9 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Unsplash = &memory.Unsplash{Key: key}
 	}
 	svc.LLMTraceContent = os.Getenv("ARKISM_LLM_TRACE_CONTENT") == "1" // model call traces keep redacted text
+	// Which operations get a trace row: comma lists, a trailing * matches a prefix.
+	svc.LLMTraceInclude, svc.LLMTraceExclude = envList("ARKISM_LLM_TRACE_OPERATIONS"), envList("ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS")
+	svc.Prometheus = memory.PrometheusConfig{Enabled: os.Getenv("ARKISM_PROMETHEUS") == "1", Token: os.Getenv("ARKISM_PROMETHEUS_TOKEN")}
 	config, err := configuredServerLLM(cfg.Recovery)
 	if err != nil {
 		return err
@@ -148,7 +151,7 @@ func configureDaemonProviders(svc *memory.Service, cfg daemonOptions) error {
 		svc.Drafter = &memory.ChatSkillDrafter{Config: config}
 		if os.Getenv("ARKISM_WIKI") == "on" { // optional LLM-Wiki jobs, off by default
 			// MEMORY_FILE_VISION=1: the model reads uploaded images and scanned PDFs.
-			svc.Wiki = memory.TraceLLM(svc, &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1"})
+			svc.Wiki = &memory.ChatWikiLLM{Config: config, Vision: os.Getenv("MEMORY_FILE_VISION") == "1"}
 		}
 	}
 	svc.SignalRankingOff = os.Getenv("ARKISM_RANK_SIGNAL") == "off" // recall ranking ignores judged outcomes
@@ -228,4 +231,15 @@ func configureDaemonRouting(svc *memory.Service) {
 		svc.ModelPicker = pickers["chat"]
 	}
 	svc.Judges, svc.Pickers = judges, pickers
+}
+
+// envList reads a comma-separated variable; blanks are dropped.
+func envList(name string) []string {
+	var out []string
+	for part := range strings.SplitSeq(os.Getenv(name), ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

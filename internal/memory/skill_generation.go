@@ -115,27 +115,24 @@ func (s *Service) draftSkill(ctx context.Context, token string, in GenerateSkill
 			return draft, err
 		}
 	}
-	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_draft", "skill_llm", generation.Model)
-	if err != nil {
-		return SkillDraft{}, err
-	}
-	var draft SkillDraft
-	var usage ProviderUsage
-	var draftErr error
-	if direct, ok := s.Drafter.(interface {
-		DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
-	}); ok {
-		draft, usage, draftErr = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
-	} else {
-		draft, usage, draftErr = s.Drafter.Draft(ctx, material)
-	}
-	if invalidSkillDraftUsage(usage, generation.Model) {
-		usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
-		if draftErr == nil {
-			draftErr = ErrUnavailable
+	m := modelCallSpec{scope: in.Scope, operation: "skill_draft", kind: "draft", provider: "skill_llm", model: generation.Model, prompt: structuredText(material)}
+	draft, _, draftErr, err := meteredCall(ctx, s, m, func(ctx context.Context) (draft SkillDraft, usage ProviderUsage, err error) {
+		if direct, ok := s.Drafter.(interface {
+			DraftAuthorized(context.Context, string, Scope, string, []Ref, SkillDraftInput) (SkillDraft, ProviderUsage, error)
+		}); ok {
+			draft, usage, err = direct.DraftAuthorized(ctx, token, in.Scope, in.EventID, in.Lessons, material)
+		} else {
+			draft, usage, err = s.Drafter.Draft(ctx, material)
 		}
-	}
-	if err = s.finishProviderCall(ctx, reserved, usage, draftErr == nil); err != nil {
+		if invalidSkillDraftUsage(usage, generation.Model) {
+			usage = ProviderUsage{Provider: "skill_llm", Model: generation.Model, Requests: 1}
+			if err == nil {
+				err = ErrUnavailable
+			}
+		}
+		return draft, usage, err
+	})
+	if err != nil {
 		return draft, err
 	}
 	if draftErr != nil {

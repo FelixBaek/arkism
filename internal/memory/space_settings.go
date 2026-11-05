@@ -139,7 +139,7 @@ func validSpaceSettings(c SpaceConfig) error {
 			return ErrInvalid
 		}
 	}
-	if !c.AutoDerive.valid() {
+	if !c.AutoDerive.valid() || !c.Audit.valid() {
 		return ErrInvalid
 	}
 	if containsSecret(c.ExtractionInstructions) {
@@ -196,6 +196,12 @@ func applySpaceSettingsInput(c *SpaceConfig, in SpaceConfigInput) {
 	}
 	if in.AutoDerive != nil {
 		c.AutoDerive = mergeAutoDerive(c.AutoDerive, *in.AutoDerive)
+	}
+	if in.Audit != nil {
+		c.Audit = in.Audit
+		if c.Audit.Enabled == nil && len(c.Audit.Actions) == 0 {
+			c.Audit = nil
+		}
 	}
 }
 

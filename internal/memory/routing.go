@@ -908,15 +908,11 @@ func (s *Service) pickModel(ctx context.Context, picker ModelPicker, scope Scope
 	provider, model := pickerIdentity(picker)
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
-	reserved, err := s.beginProviderCall(op, scope, "model_routing", provider, model)
-	choice, usage, err2 := picker.PickModel(op, task, options)
-	if err == nil {
-		if usage.Provider == "" {
-			usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
-		}
-		_ = s.finishProviderCall(ctx, reserved, usage, err2 == nil)
-	}
-	return choice, err2 == nil
+	m := modelCallSpec{scope: scope, operation: "model_routing", kind: "route", provider: provider, model: model, prompt: task + "\n" + structuredText(options)}
+	choice, _, callErr, err := meteredCall(op, s, m, func(ctx context.Context) (string, ProviderUsage, error) {
+		return picker.PickModel(ctx, task, options)
+	})
+	return choice, callErr == nil && err == nil
 }
 
 // ------------------------------------------------------------------ calls

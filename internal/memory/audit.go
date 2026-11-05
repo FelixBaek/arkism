@@ -18,6 +18,11 @@ type AuditMetadata struct {
 	// ReasonCode and Reason are set on decision rows (see recordDecision).
 	ReasonCode string `json:"reason_code,omitempty" bson:"reason_code,omitempty"`
 	Reason     string `json:"reason,omitempty" bson:"reason,omitempty"`
+	// Request metadata (auditMeta): no body, query or header value is stored.
+	Transport  string `json:"transport,omitempty" bson:"transport,omitempty"` // http | mcp | system
+	Route      string `json:"route,omitempty" bson:"route,omitempty"`
+	Method     string `json:"method,omitempty" bson:"method,omitempty"`
+	DurationMS int64  `json:"duration_ms,omitempty" bson:"duration_ms,omitempty"`
 }
 
 // Denial classes stored in audit_events. Verified policy denials keep the
@@ -99,7 +104,7 @@ func (s *Service) auditDenial(ctx context.Context, class string, request Authori
 		Kind: class + ":" + request.Action, Status: "active", Revision: 1,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: principal, CreatedByType: role,
 		Target: auditTarget(request),
-		Audit:  &AuditMetadata{RequestID: boundRequestID, Decision: "deny", PolicyDecisionID: policyDecisionID}}
+		Audit:  auditMeta(ctx, AuditMetadata{RequestID: boundRequestID, Decision: "deny", PolicyDecisionID: policyDecisionID})}
 	return s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		if _, err := tx.Get(ctx, "audit_events", r.Scope, r.ID); err == nil {
 			return nil

@@ -2,30 +2,41 @@ package memory
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"slices"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
 
-// Model call traces: every server-side model call (WikiLLM.Complete, and the
-// embedding and rerank calls as operation "embed" and "rerank") is recorded as one
-// llm_requests row in the caller's scope: sizes and hashes of the prompt and the
-// answer, tokens, latency and outcome. The text itself is kept only when the
-// server runs with ARKISM_LLM_TRACE_CONTENT=1, redacted and truncated, and
-// rows expire with the audit retention run (ARKISM_LLM_TRACE_RETENTION_DAYS).
-// A trace names no memory ids, so deleting a memory does not erase stored
-// trace text that quoted it; with content on, retention is the bound.
+// Model call traces: every server-side model call goes through meteredCall,
+// which reserves and settles its provider_usage row, opens a model span with
+// gen_ai.* attributes, feeds the process metrics and files one llm_requests
+// row in the caller's scope: sizes and hashes of the prompt and the answer,
+// tokens, latency, outcome, the trace/span/parent ids that place the call in
+// its request or job, and the memory ids it read and created. The text itself
+// is kept only when the server runs with ARKISM_LLM_TRACE_CONTENT=1, redacted
+// and truncated. Rows expire with the audit retention run
+// (ARKISM_LLM_TRACE_RETENTION_DAYS) and are deleted with the source document
+// they were made from; LLMTraceInclude/LLMTraceExclude limit which operations
+// are recorded at all (the ledger row is written either way).
 
 const (
 	colLLMRequests    = "llm_requests"
 	llmRequestKind    = "llm_request"
 	llmTraceTextRunes = 4000
 	llmStatsMaxRows   = 5000
+	llmTraceMaxIDs    = 64
 )
 
 type LLMRequest struct {
 	Operation      string     `json:"operation" bson:"operation"`
 	Generator      *Generator `json:"generator,omitempty" bson:"generator,omitempty"`
+	Provider       string     `json:"provider,omitempty" bson:"provider,omitempty"`
 	PromptChars    int        `json:"prompt_chars" bson:"prompt_chars"`
 	PromptSHA256   string     `json:"prompt_sha256" bson:"prompt_sha256"`
 	ResponseChars  int        `json:"response_chars" bson:"response_chars"`
@@ -38,102 +49,256 @@ type LLMRequest struct {
 	Error          string     `json:"error,omitempty" bson:"error,omitempty"`
 	Prompt         string     `json:"prompt,omitempty" bson:"prompt,omitempty"`
 	Response       string     `json:"response,omitempty" bson:"response,omitempty"`
+	// TraceID groups the calls of one request or job; ParentSpanID is the job's
+	// (or, with tracing on, the enclosing) span. With tracing on they are the
+	// exported span's own ids.
+	TraceID      string `json:"trace_id,omitempty" bson:"trace_id,omitempty"`
+	SpanID       string `json:"span_id,omitempty" bson:"span_id,omitempty"`
+	ParentSpanID string `json:"parent_span_id,omitempty" bson:"parent_span_id,omitempty"`
+	JobID        string `json:"job_id,omitempty" bson:"job_id,omitempty"`
+	// DocumentID is the source document the call read; deleting it deletes the trace.
+	DocumentID       string   `json:"document_id,omitempty" bson:"document_id,omitempty"`
+	SourceMemoryIDs  []string `json:"source_memory_ids,omitempty" bson:"source_memory_ids,omitempty"`
+	CreatedMemoryIDs []string `json:"created_memory_ids,omitempty" bson:"created_memory_ids,omitempty"`
 }
 
-type llmCallKey struct{}
-
-type llmCall struct {
-	operation string
-	scope     Scope
+// modelCallSpec names one metered model call. kind picks the span name
+// (model.<kind>) and the gen_ai.operation.name; prompt is traced as a size and
+// a hash, and as redacted text only with LLMTraceContent.
+type modelCallSpec struct {
+	scope           Scope
+	operation, kind string
+	provider, model string
+	prompt          string
 }
 
-// WithLLMOperation names the model calls made with ctx and the scope their
-// traces are filed in. A call without it is not traced.
-func WithLLMOperation(ctx context.Context, operation string, scope Scope) context.Context {
-	return context.WithValue(ctx, llmCallKey{}, llmCall{operation, scope})
+// meteredCall is the one shared ledger call: it reserves a provider_usage row,
+// makes the call, files what it used and traces it. callErr is the provider's
+// failure (filed as unsuccessful); err is a ledger failure, and with a ledger
+// failure before the call the call is not made.
+func meteredCall[T any](ctx context.Context, s *Service, m modelCallSpec, call func(context.Context) (T, ProviderUsage, error)) (out T, usage ProviderUsage, callErr, err error) {
+	reserved, err := s.beginProviderCall(ctx, m.scope, m.operation, m.provider, m.model)
+	if err != nil {
+		return out, ProviderUsage{}, nil, err
+	}
+	ctx, sp := startSpan(ctx, "model."+m.kind)
+	start := time.Now()
+	out, usage, callErr = call(ctx)
+	usage = filledUsage(usage, m.provider, m.model)
+	setGenAI(sp, m, usage)
+	sp.end(callErr)
+	observeLLMCall(m.operation, usage.Provider, usage.Model, callErr == nil, time.Since(start), usage)
+	text, _ := any(out).(string)
+	s.recordLLMRequest(ctx, m, sp, text, usage, start, callErr)
+	// The ledger row is settled even after the caller gave up on the call.
+	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err = s.finishProviderCall(fctx, reserved, usage, callErr == nil); err != nil && callErr == nil {
+		return out, usage, nil, err
+	}
+	return out, usage, callErr, nil
 }
 
-// tracedLLM decorates a WikiLLM; it changes nothing about the call itself.
-type tracedLLM struct {
-	inner WikiLLM
-	svc   *Service
+func filledUsage(usage ProviderUsage, provider, model string) ProviderUsage {
+	if usage.Provider == "" {
+		usage.Provider = provider
+	}
+	if usage.Model == "" {
+		usage.Model = model
+	}
+	if usage.Requests == 0 {
+		usage.Requests = 1
+	}
+	return usage
 }
 
-// TraceLLM wraps inner so every Complete call is recorded; nil stays nil.
-// Service.LLMTraceContent decides whether redacted text is kept.
-func TraceLLM(svc *Service, inner WikiLLM) WikiLLM {
-	if inner == nil {
+// setGenAI sets the generative-AI semantic convention attributes of a model span.
+func setGenAI(sp *span, m modelCallSpec, usage ProviderUsage) {
+	op := "chat"
+	switch m.kind {
+	case "embed":
+		op = "embeddings"
+	case "rerank":
+		op = "rerank"
+	}
+	sp.set("arkism.operation", m.operation)
+	sp.set("gen_ai.operation.name", op)
+	sp.set("gen_ai.provider.name", usage.Provider)
+	sp.set("gen_ai.request.model", m.model)
+	sp.set("gen_ai.response.model", usage.Model)
+	sp.setInt("gen_ai.usage.input_tokens", usage.InputTokens)
+	sp.setInt("gen_ai.usage.output_tokens", usage.OutputTokens)
+}
+
+type llmJobKey struct{}
+
+type llmJob struct{ id, traceID, spanID string }
+
+// startJobSpan opens the span of one background job. Model calls under the
+// returned ctx share its trace id and name it as their parent, tracing on or off.
+func startJobSpan(ctx context.Context, name, jobID string) (context.Context, *span) {
+	ctx, sp := startSpan(ctx, name)
+	traceID, spanID, _ := sp.ids()
+	if sp == nil {
+		traceID, spanID = ContentHash("job:" + jobID)[:32], randomHex(8)
+	}
+	return context.WithValue(ctx, llmJobKey{}, llmJob{jobID, traceID, spanID}), sp
+}
+
+// llmTraceIDs places one call: the span's own ids with tracing on; otherwise
+// the job's trace, else the request's, else a fresh one.
+func llmTraceIDs(ctx context.Context, sp *span) (traceID, spanID, parentID, jobID string) {
+	job, _ := ctx.Value(llmJobKey{}).(llmJob)
+	if sp != nil {
+		traceID, spanID, parentID = sp.ids()
+		return traceID, spanID, parentID, job.id
+	}
+	spanID = randomHex(8)
+	if job.traceID != "" {
+		return job.traceID, spanID, job.spanID, job.id
+	}
+	if id := boundAuditRequestID(ctx); id != "" {
+		return ContentHash("request:" + id)[:32], spanID, "", ""
+	}
+	return randomHex(16), spanID, "", ""
+}
+
+func randomHex(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
+}
+
+type llmNoteKey struct{}
+
+// llmNote is what a caller tells the traces of the calls made under its ctx:
+// the document and memories they read. recordLLMRequest adds the rows it wrote
+// so attachLLMCreated can name the memories the calls produced.
+type llmNote struct {
+	document string
+	sources  []string
+	mu       sync.Mutex
+	rows     []string
+}
+
+func withLLMNote(ctx context.Context, document string, sources []string) (context.Context, *llmNote) {
+	n := &llmNote{document: document, sources: clipIDs(sources)}
+	return context.WithValue(ctx, llmNoteKey{}, n), n
+}
+
+func clipIDs(ids []string) []string {
+	if len(ids) > llmTraceMaxIDs {
+		ids = ids[:llmTraceMaxIDs]
+	}
+	return slices.Clone(ids)
+}
+
+// attachLLMCreated names the memories created from the calls noted in n on
+// their trace rows. Best effort, like the trace itself.
+func (s *Service) attachLLMCreated(ctx context.Context, scope Scope, n *llmNote, created []string) {
+	if n == nil || len(created) == 0 || s.Repo == nil {
+		return
+	}
+	n.mu.Lock()
+	rows := slices.Clone(n.rows)
+	n.mu.Unlock()
+	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	for _, id := range rows {
+		_ = s.Repo.Transaction(wctx, func(ctx context.Context, tx Tx) error {
+			r, err := tx.Get(ctx, colLLMRequests, scope, id)
+			if err != nil || r.LLMRequest == nil {
+				return err
+			}
+			tr := *r.LLMRequest
+			tr.CreatedMemoryIDs = clipIDs(append(tr.CreatedMemoryIDs, created...))
+			r.LLMRequest, r.UpdatedAt = &tr, time.Now().UTC().Truncate(time.Millisecond)
+			prev := r.Revision
+			r.Revision++
+			return tx.Replace(ctx, colLLMRequests, r, prev)
+		})
+	}
+}
+
+// deleteLLMTracesFor deletes, inside tx, the traces of calls that read the
+// source document id. A repository without row listing keeps them until retention.
+func deleteLLMTracesFor(ctx context.Context, tx Tx, scope Scope, id string) error {
+	store, ok := tx.(scopedRowStore)
+	if !ok || id == "" {
 		return nil
 	}
-	return &tracedLLM{inner: inner, svc: svc}
-}
-
-func (t *tracedLLM) Generator() Generator { return t.inner.Generator() }
-
-func (t *tracedLLM) Complete(ctx context.Context, system, user string, maxTokens int) (string, ProviderUsage, error) {
-	return t.traced(ctx, system+"\n\n"+user, func(ctx context.Context) (string, ProviderUsage, error) {
-		return t.inner.Complete(ctx, system, user, maxTokens)
-	})
-}
-
-func (t *tracedLLM) ImageInput() bool {
-	v, ok := t.inner.(VisionLLM)
-	return ok && v.ImageInput()
-}
-
-// CompleteImage traces the prompt and the image's digest, never its bytes.
-func (t *tracedLLM) CompleteImage(ctx context.Context, system, user, mime string, image []byte, maxTokens int) (string, ProviderUsage, error) {
-	v, ok := t.inner.(VisionLLM)
-	if !ok {
-		return "", ProviderUsage{}, ErrModelNotConfigured
+	for {
+		rows, err := store.ListScopedRows(ctx, scopedRowQuery{Collection: colLLMRequests, Kind: llmRequestKind, Scope: scope,
+			Path: []string{"llm_request", "document_id"}, Value: id, Limit: 500})
+		if err != nil {
+			return err
+		}
+		for _, r := range rows {
+			if err := tx.Delete(ctx, colLLMRequests, scope, r.ID, r.Revision); err != nil && !errors.Is(err, ErrNotFound) {
+				return err
+			}
+		}
+		if len(rows) < 500 {
+			return nil
+		}
 	}
-	prompt := system + "\n\n" + user + "\n\n[image " + mime + " sha256:" + ContentHash(string(image)) + "]"
-	return t.traced(ctx, prompt, func(ctx context.Context) (string, ProviderUsage, error) {
-		return v.CompleteImage(ctx, system, user, mime, image, maxTokens)
-	})
 }
 
-func (t *tracedLLM) traced(ctx context.Context, prompt string, call func(context.Context) (string, ProviderUsage, error)) (string, ProviderUsage, error) {
-	trace, traced := ctx.Value(llmCallKey{}).(llmCall)
-	ctx, span := startSpan(ctx, "model.complete")
-	span.set("arkism.operation", trace.operation)
-	start := time.Now()
-	out, usage, err := call(ctx)
-	span.end(err)
-	if traced && t.svc != nil {
-		t.svc.recordLLMRequest(ctx, trace.scope, trace.operation, t.inner.Generator(), prompt, out, usage, start, err)
+// traceOperation reports whether calls of operation are recorded: listed by
+// LLMTraceInclude (empty: all) and not by LLMTraceExclude. A pattern ending in
+// * matches a prefix.
+func (s *Service) traceOperation(operation string) bool {
+	match := func(patterns []string) bool {
+		return slices.ContainsFunc(patterns, func(p string) bool {
+			if prefix, ok := strings.CutSuffix(p, "*"); ok {
+				return strings.HasPrefix(operation, prefix)
+			}
+			return p == operation
+		})
 	}
-	return out, usage, err
+	return (len(s.LLMTraceInclude) == 0 || match(s.LLMTraceInclude)) && !match(s.LLMTraceExclude)
 }
 
-// recordLLMRequest files one model call (completion, embedding or rerank) as an
-// llm_requests row. It is best effort: tracing never changes or fails the call
-// it describes. out is empty for calls that return no text.
-func (s *Service) recordLLMRequest(ctx context.Context, scope Scope, operation string, gen Generator, prompt, out string, usage ProviderUsage, start time.Time, callErr error) {
-	if s.Repo == nil || !validScope(scope) || !validRunLabel(operation, 128) {
+// recordLLMRequest files one model call as an llm_requests row. It is best
+// effort: tracing never changes or fails the call it describes. out is empty
+// for calls that return no text.
+func (s *Service) recordLLMRequest(ctx context.Context, m modelCallSpec, sp *span, out string, usage ProviderUsage, start time.Time, callErr error) {
+	if s.Repo == nil || !validScope(m.scope) || !validRunLabel(m.operation, 128) || !s.traceOperation(m.operation) {
 		return
 	}
 	defer func() { _ = recover() }()
-	tr := LLMRequest{Operation: operation, Generator: &gen, PromptChars: utf8.RuneCountInString(prompt), PromptSHA256: ContentHash(prompt),
+	tr := LLMRequest{Operation: m.operation, Generator: &Generator{Model: usage.Model}, Provider: usage.Provider,
+		PromptChars: utf8.RuneCountInString(m.prompt), PromptSHA256: ContentHash(m.prompt),
 		InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens, TotalTokens: max(usage.TotalTokens, usage.InputTokens+usage.OutputTokens),
 		LatencyMS: time.Since(start).Milliseconds(), Status: "ok"}
+	tr.TraceID, tr.SpanID, tr.ParentSpanID, tr.JobID = llmTraceIDs(ctx, sp)
+	note, _ := ctx.Value(llmNoteKey{}).(*llmNote)
+	if note != nil {
+		tr.DocumentID, tr.SourceMemoryIDs = note.document, note.sources
+	}
 	if callErr != nil {
 		tr.Status, tr.Error = "error", captureErrorCode(callErr)
 	} else if out != "" {
 		tr.ResponseChars, tr.ResponseSHA256 = utf8.RuneCountInString(out), ContentHash(out)
 	}
 	if s.LLMTraceContent {
-		tr.Prompt = traceText(prompt)
+		tr.Prompt = traceText(m.prompt)
 		if callErr == nil {
 			tr.Response = traceText(out)
 		}
 	}
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	r := Record{ID: timeOrderedID(now.UnixMilli()), Scope: scope, Kind: llmRequestKind, Status: tr.Status, Revision: 1,
+	r := Record{ID: timeOrderedID(now.UnixMilli()), Scope: m.scope, Kind: llmRequestKind, Status: tr.Status, Revision: 1,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: "server", CreatedByType: roleService, LLMRequest: &tr}
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
 	defer cancel()
-	_ = s.Repo.Insert(wctx, colLLMRequests, r)
+	if s.Repo.Insert(wctx, colLLMRequests, r) == nil && note != nil {
+		note.mu.Lock()
+		if len(note.rows) < llmTraceMaxIDs {
+			note.rows = append(note.rows, r.ID)
+		}
+		note.mu.Unlock()
+	}
 }
 
 // traceText is stored model text: private spans masked, secrets redacted, clipped.

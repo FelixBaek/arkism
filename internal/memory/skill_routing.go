@@ -192,17 +192,19 @@ func (s *Service) RouteSkills(ctx context.Context, token string, in SearchInput)
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
 	provider, model := judgeIdentity(router)
-	reserved, e := s.beginProviderCall(ctx, in.Scope, "skill_routing", provider, model)
+	ids := make([]string, len(candidates))
+	for i, c := range candidates {
+		ids[i] = c.ID
+	}
+	m := modelCallSpec{scope: in.Scope, operation: "skill_routing", kind: "judge", provider: provider, model: model, prompt: in.Query + "\n" + strings.Join(ids, "\n")}
+	result, _, callErr, e := meteredCall(op, s, m, func(ctx context.Context) (RouteResult, ProviderUsage, error) {
+		return judgeMeasured(ctx, router, in.Query, candidates)
+	})
 	if e != nil {
 		return RouteResult{}, e
 	}
-	result, usage, e := judgeMeasured(op, router, in.Query, candidates)
-	if e != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: provider, Model: model, Requests: 1}, false)
+	if callErr != nil {
 		return fallback, nil
-	}
-	if e = s.finishProviderCall(ctx, reserved, usage, true); e != nil {
-		return RouteResult{}, e
 	}
 	if !vetSkillRoute(&result, len(candidates), known) {
 		return fallback, nil

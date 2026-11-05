@@ -51,6 +51,8 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		}
 		writeJSON(w, http.StatusOK, body)
 	})
+	// Opt-in and outside the policy provider: a scraper holds no principal token.
+	mux.HandleFunc("GET /metrics/prometheus", servePrometheus(s, stats))
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()

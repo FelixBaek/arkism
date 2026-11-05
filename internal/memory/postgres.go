@@ -689,3 +689,13 @@ func (p *Postgres) FinishJob(ctx context.Context, r Record, success bool) error 
 		return nil
 	})
 }
+
+// PoolStats reports the connection pool; a transaction-bound handle has none.
+func (p *Postgres) PoolStats() (PoolStats, bool) {
+	if p == nil || p.pool == nil || p.tx != nil {
+		return PoolStats{}, false
+	}
+	st := p.pool.Stat()
+	return PoolStats{Acquired: int64(st.AcquiredConns()), Idle: int64(st.IdleConns()), Total: int64(st.TotalConns()), Max: int64(st.MaxConns()),
+		Acquires: st.AcquireCount(), EmptyAcquires: st.EmptyAcquireCount(), Cancel: st.CanceledAcquireCount(), AcquireSeconds: st.AcquireDuration().Seconds()}, true
+}

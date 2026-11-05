@@ -3,7 +3,9 @@
 package main
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -94,15 +96,44 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if endpoint := os.Getenv("ARKISM_OTLP_ENDPOINT"); endpoint != "" { // request tracing, off by default
+	stopTelemetry, err := startTelemetry(svc)
+	if err != nil {
+		return err
+	}
+	defer stopTelemetry()
+	return serveDaemon(ctx, svc, cfg)
+}
+
+// startTelemetry starts the OTLP span and metrics exports, each off by default.
+func startTelemetry(svc *memory.Service) (func(), error) {
+	stops := []func(){}
+	stopAll := func() {
+		for _, stop := range stops {
+			stop()
+		}
+	}
+	if endpoint := os.Getenv("ARKISM_OTLP_ENDPOINT"); endpoint != "" { // request tracing
 		ratio, _ := strconv.ParseFloat(os.Getenv("ARKISM_OTLP_SAMPLE_RATIO"), 64) // unset or unreadable keeps every trace
 		stop, err := memory.StartTracing(endpoint, os.Getenv("ARKISM_OTLP_SERVICE_NAME"), ratio)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		defer stop()
+		stops = append(stops, stop)
 	}
-	return serveDaemon(ctx, svc, cfg)
+	if endpoint := os.Getenv("ARKISM_OTLP_METRICS_ENDPOINT"); endpoint != "" { // metrics push
+		every, err := time.ParseDuration(cmp.Or(os.Getenv("ARKISM_OTLP_METRICS_INTERVAL"), "30s"))
+		if err != nil {
+			stopAll()
+			return nil, errors.New("ARKISM_OTLP_METRICS_INTERVAL must be a duration such as 30s")
+		}
+		stop, err := memory.StartMetricsExport(svc, endpoint, os.Getenv("ARKISM_OTLP_SERVICE_NAME"), every)
+		if err != nil {
+			stopAll()
+			return nil, err
+		}
+		stops = append(stops, stop)
+	}
+	return stopAll, nil
 }
 func checkDaemonReadiness(ctx context.Context, pg *memory.Postgres) error {
 

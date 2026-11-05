@@ -347,6 +347,7 @@ type hubClient struct {
 	scope      map[string]any
 	cache      string
 	timeout    time.Duration
+	transport  string // X-Arkism-Transport sent with each request; "mcp" for the MCP router
 }
 
 func newHubClient(url, token string, scope map[string]any, cacheDir string, timeout time.Duration) (*hubClient, error) {
@@ -383,6 +384,9 @@ func (c *hubClient) post(path string, payload any) (map[string]any, error) {
 		return nil, &offlineError{err}
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.transport != "" {
+		req.Header.Set("X-Arkism-Transport", c.transport) // audit events name the caller's transport
+	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

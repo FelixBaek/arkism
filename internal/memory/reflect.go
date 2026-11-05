@@ -246,7 +246,12 @@ func (s *Service) reflectLoop(ctx context.Context, token string, run *reflectRun
 	for i := 1; i <= run.in.MaxIterations; i++ {
 		final := i == run.in.MaxIterations
 		system, user := reflectPrompt(run, final)
-		text, usage, err := s.reflectCall(ctx, token, run.in, system, user)
+		read := make([]string, 0, len(run.hits))
+		for _, h := range run.hits {
+			read = append(read, h.ID)
+		}
+		callCtx, _ := withLLMNote(ctx, "", read) // the trace names the memories this call was shown
+		text, usage, err := s.reflectCall(callCtx, token, run.in, system, user)
 		total.Provider, total.Model = usage.Provider, usage.Model
 		total.Requests, total.InputTokens, total.OutputTokens, total.TotalTokens = total.Requests+usage.Requests, total.InputTokens+usage.InputTokens, total.OutputTokens+usage.OutputTokens, total.TotalTokens+usage.TotalTokens
 		out.Iterations = i

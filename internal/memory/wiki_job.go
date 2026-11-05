@@ -388,32 +388,20 @@ func (s *Service) modelCall(ctx context.Context, scope Scope, operation, system,
 	if s.Wiki == nil {
 		return "", ProviderUsage{}, ErrModelNotConfigured
 	}
-	return s.ledgerCall(ctx, scope, operation, wikiProvider, s.Wiki.Generator().Model, func(ctx context.Context) (string, ProviderUsage, error) {
-		return s.Wiki.Complete(ctx, system, user, maxTokens)
-	})
+	return s.ledgerCall(ctx, modelCallSpec{scope: scope, operation: operation, kind: "complete", provider: wikiProvider, model: s.Wiki.Generator().Model, prompt: system + "\n\n" + user},
+		func(ctx context.Context) (string, ProviderUsage, error) {
+			return s.Wiki.Complete(ctx, system, user, maxTokens)
+		})
 }
 
-// ledgerCall reserves a provider_usage row, makes the call and files what it used.
-func (s *Service) ledgerCall(ctx context.Context, scope Scope, operation, provider, model string, call func(context.Context) (string, ProviderUsage, error)) (string, ProviderUsage, error) {
-	reserved, err := s.beginProviderCall(ctx, scope, operation, provider, model)
-	if err != nil {
-		return "", ProviderUsage{}, err
-	}
-	text, usage, err := call(WithLLMOperation(ctx, operation, scope))
-	if usage.Provider == "" {
-		usage.Provider = provider
-	}
-	if usage.Model == "" {
-		usage.Model = model
-	}
-	if usage.Requests == 0 {
-		usage.Requests = 1
+// ledgerCall is meteredCall for a text answer: a failed call, a ledger failure
+// and an oversized or non-UTF-8 answer are all errors.
+func (s *Service) ledgerCall(ctx context.Context, m modelCallSpec, call func(context.Context) (string, ProviderUsage, error)) (string, ProviderUsage, error) {
+	text, usage, callErr, err := meteredCall(ctx, s, m, call)
+	if err == nil {
+		err = callErr
 	}
 	if err != nil {
-		_ = s.finishProviderCall(ctx, reserved, usage, false)
-		return "", usage, err
-	}
-	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
 		return "", usage, err
 	}
 	if len(text) > 256<<10 || !utf8.ValidString(text) {
@@ -466,7 +454,9 @@ func (s *Service) RunWikiJob(ctx context.Context, token string, scope Scope, id 
 		return viewWikiJob(claimed), nil
 	}
 	job := *claimed.Wiki.Job
-	result, runErr := s.buildWiki(ctx, token, d, claimed, &job)
+	jobCtx, sp := startJobSpan(ctx, "job.wiki", claimed.ID)
+	result, runErr := s.buildWiki(jobCtx, token, d, claimed, &job)
+	sp.end(runErr)
 	return s.finishWikiJob(ctx, d, claimed, job, result, runErr)
 }
 

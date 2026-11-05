@@ -84,6 +84,8 @@ type SpaceConfig struct {
 	// ReflectMission and ReflectDisposition guide reflect answers in this space (reflect.go).
 	ReflectMission     string              `json:"reflect_mission" bson:"reflect_mission"`
 	ReflectDisposition *ReflectDisposition `json:"reflect_disposition,omitempty" bson:"reflect_disposition,omitempty"`
+	// Audit narrows the optional audit events of this space (audit_policy.go); nil records all.
+	Audit *SpaceAudit `json:"audit,omitempty" bson:"audit,omitempty"`
 }
 
 func defaultSpaceConfig() SpaceConfig {
@@ -113,6 +115,8 @@ type SpaceConfigInput struct {
 	RecallBudgetTokens     *int                `json:"recall_budget_tokens,omitempty"`
 	ReflectMaxTokens       *int                `json:"reflect_max_tokens,omitempty"`
 	AutoDerive             *SpaceAutoDerive    `json:"auto_derive,omitempty"`
+	// Audit replaces the whole block; {} hands it back to recording everything.
+	Audit *SpaceAudit `json:"audit,omitempty"`
 
 	resets spaceResets // keys a PATCH sent as null (UnmarshalJSON)
 }

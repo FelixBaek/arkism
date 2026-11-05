@@ -140,7 +140,7 @@ func TestTracingExportsNoContent(t *testing.T) {
 	}
 	defer stop()
 	f := newFixture(t)
-	f.svc.Wiki = TraceLLM(f.svc, traceLLM{})
+	f.svc.Wiki = traceLLM{}
 	const query, text, secret, private = "QRYzz91", "MEMzz92 기억", "sk-live-ZZ93abcdefghijklmnopqrstuv", "PRIVzz94"
 	f.activeMemory(text+" "+query, query)
 	h := Handler(f.svc)
@@ -149,13 +149,14 @@ func TestTracingExportsNoContent(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+f.human)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	ctx, sp := startSpan(WithLLMOperation(testCtx, "wiki.page", scopeA), "job")
-	_, _, _ = f.svc.Wiki.Complete(ctx, "sys "+secret, "user "+text+" <private>"+private+"</private>", 10)
+	ctx, sp := startJobSpan(testCtx, "job", "job-1")
+	_, _, _ = f.svc.modelCall(ctx, scopeA, "wiki.page", "sys "+secret, "user "+text+" <private>"+private+"</private>", 10)
 	_, _, _ = f.svc.meteredEmbed(ctx, scopeA, "embedding_query", []string{text, query}, "query")
 	sp.end(errors.New(text))
 	stop()
 	all := bytes.Join(col.bodies, nil)
-	if len(all) == 0 || !bytes.Contains(all, []byte("POST /v1/search")) || !bytes.Contains(all, []byte("model.complete")) || !bytes.Contains(all, []byte("model.embed")) {
+	if len(all) == 0 || !bytes.Contains(all, []byte("POST /v1/search")) || !bytes.Contains(all, []byte("model.complete")) || !bytes.Contains(all, []byte("model.embed")) ||
+		!bytes.Contains(all, []byte(`"key":"gen_ai.usage.input_tokens","value":{"intValue":"10"}`)) || !bytes.Contains(all, []byte(`"key":"gen_ai.operation.name","value":{"stringValue":"embeddings"}`)) {
 		t.Fatalf("spans missing (search status %d): %s", rec.Code, all)
 	}
 	for _, leak := range []string{query, "MEMzz92", secret, private, "user ", "sys "} {
@@ -163,7 +164,9 @@ func TestTracingExportsNoContent(t *testing.T) {
 			t.Fatalf("span export leaked %q: %s", leak, all)
 		}
 	}
-	allowed := map[string]bool{"service.name": true, "http.request.method": true, "http.route": true, "http.response.status_code": true, "arkism.operation": true, "arkism.collection": true}
+	allowed := map[string]bool{"service.name": true, "http.request.method": true, "http.route": true, "http.response.status_code": true, "arkism.operation": true, "arkism.collection": true,
+		"gen_ai.operation.name": true, "gen_ai.provider.name": true, "gen_ai.request.model": true, "gen_ai.response.model": true,
+		"gen_ai.usage.input_tokens": true, "gen_ai.usage.output_tokens": true}
 	var payload struct {
 		ResourceSpans []struct {
 			ScopeSpans []struct {

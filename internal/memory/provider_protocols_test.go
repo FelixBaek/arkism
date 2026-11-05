@@ -111,7 +111,7 @@ func TestEmbedAndRerankCallsAreTraced(t *testing.T) {
 	if _, callErr, err := f.svc.meteredRerank(testCtx, scopeA, "q", []string{"a", "b"}); callErr == nil || err != nil {
 		t.Fatal("rerank failure", callErr, err)
 	}
-	embeds, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Operation: "embed"})
+	embeds, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Operation: "embedding_query"})
 	if err != nil || len(embeds.Items) != 1 || embeds.Items[0].Request.InputTokens != 7 || embeds.Items[0].Request.Status != "ok" || embeds.Items[0].Request.Prompt != "" {
 		t.Fatal("embed trace", err, embeds)
 	}
@@ -144,7 +144,7 @@ func TestSearchTraceWriteIsBestEffortAndContentFree(t *testing.T) {
 	if _, err := f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "trace QZX77"}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Operation: "embed"})
+	page, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{Operation: "embedding_query"})
 	if err != nil || len(page.Items) == 0 {
 		t.Fatal("search embed not traced", page, err)
 	}

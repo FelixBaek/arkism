@@ -28,6 +28,10 @@ func registerOpsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) 
 		v, e := s.AuditEventStats(r.Context(), bearer(r), scopeQuery(r), from, to)
 		respond(w, v, e)
 	})
+	mux.HandleFunc("GET /v1/audit-events/{id}", func(w http.ResponseWriter, r *http.Request) {
+		v, e := s.GetAuditEvent(r.Context(), bearer(r), scopeQuery(r), r.PathValue("id"))
+		respond(w, v, e)
+	})
 	mux.HandleFunc("GET /v1/operations", func(w http.ResponseWriter, r *http.Request) {
 		in, e := ParseOpsListQuery(r.URL.Query())
 		if e != nil {

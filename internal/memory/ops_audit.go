@@ -2,21 +2,29 @@ package memory
 
 import (
 	"context"
+	"strings"
 	"time"
 )
 
 // AuditEventView is the redacted operator form of one audit_events row. The
-// free-form decision reason and any stored body are never returned.
+// free-form decision reason is never returned, and no request or response
+// body is ever stored: the request is described by its metadata only.
 type AuditEventView struct {
-	ID         string    `json:"id"`
-	Action     string    `json:"action"`
-	Actor      string    `json:"actor"`
-	ActorType  string    `json:"actor_type,omitempty"`
-	Target     *Ref      `json:"target,omitempty"`
-	Decision   string    `json:"decision,omitempty"`
-	ReasonCode string    `json:"reason_code,omitempty"`
-	RequestID  string    `json:"request_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID               string    `json:"id"`
+	Action           string    `json:"action"`
+	Actor            string    `json:"actor"`
+	ActorType        string    `json:"actor_type,omitempty"`
+	Target           *Ref      `json:"target,omitempty"`
+	Decision         string    `json:"decision,omitempty"`
+	ReasonCode       string    `json:"reason_code,omitempty"`
+	RequestID        string    `json:"request_id,omitempty"`
+	PolicyDecisionID string    `json:"policy_decision_id,omitempty"`
+	Transport        string    `json:"transport,omitempty"`
+	Method           string    `json:"method,omitempty"`
+	Route            string    `json:"route,omitempty"`
+	DurationMS       int64     `json:"duration_ms,omitempty"`
+	Mandatory        bool      `json:"mandatory"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 type AuditEventPage struct {
@@ -33,11 +41,28 @@ type AuditStats struct {
 }
 
 func viewAuditEvent(r Record) AuditEventView {
-	v := AuditEventView{ID: r.ID, Action: opsText(r.Kind), Actor: opsText(r.CreatedBy), ActorType: opsText(r.CreatedByType), Target: opsRef(r.Target), CreatedAt: r.CreatedAt}
-	if r.Audit != nil {
-		v.Decision, v.ReasonCode, v.RequestID = opsText(r.Audit.Decision), opsText(r.Audit.ReasonCode), opsText(r.Audit.RequestID)
+	v := AuditEventView{ID: r.ID, Action: opsText(r.Kind), Actor: opsText(r.CreatedBy), ActorType: opsText(r.CreatedByType), Target: opsRef(r.Target), CreatedAt: r.CreatedAt,
+		Mandatory: r.Audit != nil && r.Audit.Decision == "deny" || strings.HasPrefix(r.Kind, "decision:") || auditMandatory(r.Kind)}
+	if a := r.Audit; a != nil {
+		v.Decision, v.ReasonCode, v.RequestID, v.PolicyDecisionID = opsText(a.Decision), opsText(a.ReasonCode), opsText(a.RequestID), opsText(a.PolicyDecisionID)
+		v.Transport, v.Method, v.Route, v.DurationMS = opsText(a.Transport), opsText(a.Method), opsText(a.Route), a.DurationMS
 	}
 	return v
+}
+
+// GetAuditEvent reads one audit event of a scope. Only a human reads it.
+func (s *Service) GetAuditEvent(ctx context.Context, token string, scope Scope, id string) (AuditEventView, error) {
+	if _, err := s.opsAuthorize(ctx, token, "read:audit_events", scope, id, roleHuman); err != nil {
+		return AuditEventView{}, err
+	}
+	r, err := s.Repo.Get(ctx, "audit_events", scope, id)
+	if err != nil {
+		return AuditEventView{}, err
+	}
+	if r.Audit == nil {
+		return AuditEventView{}, ErrNotFound
+	}
+	return viewAuditEvent(r), nil
 }
 
 // ListAuditEvents pages a scope's audit trail. Only a human reads it.

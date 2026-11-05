@@ -124,6 +124,11 @@ func (s *Service) modelRerankOrder(ctx context.Context, token string, in SearchI
 	if calls, err := s.dailyModelCalls(ctx, ledger, modelRerankOperation, time.Now()); err != nil || calls >= modelRerankDailyCalls {
 		return "budget_exceeded", nil
 	}
+	sent := make([]string, len(at))
+	for k, i := range at {
+		sent[k] = head[i].ID
+	}
+	ctx, _ = withLLMNote(ctx, "", sent) // the trace names the memories that were sent
 	out, _, err := s.modelCall(ctx, ledger, modelRerankOperation, modelRerankSystem, "Query: "+in.Query+"\n\nSnippets:\n"+prompt.String(), modelRerankMaxTokens)
 	if errors.Is(err, ErrModelBudget) {
 		return "budget_exceeded", nil

@@ -371,6 +371,8 @@ var httpRoutePolicies = map[string]routePolicy{
 	"GET /livez":                                           {},
 	"GET /v1/audit-events":                                 {action: "read:audit_events", scope: routeQuery, roles: []string{roleHuman}},
 	"GET /v1/audit-events/stats":                           {action: "read:audit_events", scope: routeQuery, roles: []string{roleHuman}},
+	"GET /v1/audit-events/{id}":                            {action: "read:audit_events", scope: routeQuery, roles: []string{roleHuman}},
+	"GET /metrics/prometheus":                              {},
 	"GET /v1/operations":                                   {action: "read:jobs", scope: routeQuery, roles: []string{roleHuman, roleService, roleAgent}},
 	"GET /v1/operations/{id}":                              {action: "read:jobs", scope: routeQuery, roles: []string{roleHuman, roleService, roleAgent}},
 	"POST /v1/operations/{id}/cancel":                      {action: "transition:jobs", scope: routeJSON, limit: 64 << 10, roles: []string{roleHuman, roleAgent}},

@@ -101,6 +101,13 @@ type Service struct {
 	// LLMTraceContent keeps redacted, clipped prompt and answer text in model
 	// call traces (llm_requests.go); off stores sizes and hashes only.
 	LLMTraceContent bool
+	// LLMTraceInclude and LLMTraceExclude limit which operations get an
+	// llm_requests row (memoryd: ARKISM_LLM_TRACE_OPERATIONS and
+	// ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS); a trailing * matches a prefix.
+	// Empty include records every operation; the cost ledger is unaffected.
+	LLMTraceInclude, LLMTraceExclude []string
+	// Prometheus turns on GET /metrics/prometheus (off: 404).
+	Prometheus PrometheusConfig
 	// Extensions are an embedding program's own checks and reactions (extensions.go).
 	Extensions Extensions
 
@@ -293,8 +300,11 @@ func audit(ctx context.Context, tx Tx, scope Scope, actor, action, id string) er
 	if containsSecret(structuredText(scope)) || containsSecret(actor) || containsSecret(action) || containsSecret(id) {
 		return ErrSecretDetected
 	}
+	if !auditRecorded(ctx, tx, scope, action) {
+		return nil // an optional event this space switched off
+	}
 	now := time.Now().UTC()
-	return tx.Insert(ctx, "audit_events", Record{Audit: &AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow"}, ID: ID(), Scope: scope, Kind: action, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
+	return tx.Insert(ctx, "audit_events", Record{Audit: auditMeta(ctx, AuditMetadata{RequestID: auditRequestID(ctx), Decision: "allow"}), ID: ID(), Scope: scope, Kind: action, Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: actor, Target: &Ref{ID: id}})
 }
 
 // Match the Create source-reference limit; bound even legacy/direct DB inputs.

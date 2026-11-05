@@ -39,16 +39,14 @@ func invalidAnalyzeSkillInput(in AnalyzeSkillInput) bool {
 }
 
 func (s *Service) measureSkillAnalysis(ctx context.Context, in AnalyzeSkillInput, model string) (SkillAnalysis, error) {
-	reserved, err := s.beginProviderCall(ctx, in.Scope, "skill_analysis", "skill_llm", model)
-	if err != nil {
-		return SkillAnalysis{}, err
+	m := modelCallSpec{scope: in.Scope, operation: "skill_analysis", kind: "analyze", provider: "skill_llm", model: model, prompt: in.Content}
+	analysis, _, callErr, err := meteredCall(ctx, s, m, func(ctx context.Context) (SkillAnalysis, ProviderUsage, error) {
+		return analyzeMeasured(ctx, s.Analyzer, in.Content)
+	})
+	if err == nil {
+		err = callErr
 	}
-	analysis, usage, err := analyzeMeasured(ctx, s.Analyzer, in.Content)
 	if err != nil {
-		_ = s.finishProviderCall(ctx, reserved, ProviderUsage{Provider: "skill_llm", Model: model, Requests: 1}, false)
-		return SkillAnalysis{}, err
-	}
-	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
 		return SkillAnalysis{}, err
 	}
 	analysis.SkillID = in.SkillID

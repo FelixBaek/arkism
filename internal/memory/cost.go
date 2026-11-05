@@ -83,54 +83,33 @@ func embedMeasured(ctx context.Context, embedder Embedder, texts []string, input
 }
 
 // meteredEmbed is the one path for a service embedding call: the call is filed in
-// the provider_usage ledger under operation and traced in llm_requests as "embed".
+// the provider_usage ledger and traced in llm_requests under operation.
 // callErr is the provider's failure or a short answer (callers degrade on it);
 // err is a ledger failure (callers return it).
-func (s *Service) meteredEmbed(ctx context.Context, scope Scope, operation string, texts []string, purpose string) (batch EmbeddingBatch, callErr, err error) {
-	provider, model := embeddingProvider(s.Embedder), s.Embedder.Space()
-	reserved, err := s.beginProviderCall(ctx, scope, operation, provider, model)
-	if err != nil {
-		return EmbeddingBatch{}, nil, err
-	}
-	ctx, span := startSpan(ctx, "model.embed")
-	span.set("arkism.operation", operation)
-	start := time.Now()
-	batch, callErr = embedMeasured(ctx, s.Embedder, texts, purpose)
-	if callErr == nil && len(batch.Items) != len(texts) {
-		callErr = ErrUnavailable
-	}
-	span.end(callErr)
-	usage := batch.Usage
-	if callErr != nil {
-		usage = ProviderUsage{Provider: provider, Model: model, Requests: 1}
-	}
-	s.recordLLMRequest(ctx, scope, "embed", Generator{Model: model}, strings.Join(texts, "\n"), "", usage, start, callErr)
-	if callErr != nil {
-		_ = s.finishProviderCall(ctx, reserved, usage, false)
-		return EmbeddingBatch{}, callErr, nil
-	}
-	if err = s.finishProviderCall(ctx, reserved, usage, true); err != nil {
-		return EmbeddingBatch{}, nil, err
-	}
-	return batch, nil, nil
+func (s *Service) meteredEmbed(ctx context.Context, scope Scope, operation string, texts []string, purpose string) (EmbeddingBatch, error, error) {
+	m := modelCallSpec{scope: scope, operation: operation, kind: "embed", provider: embeddingProvider(s.Embedder), model: s.Embedder.Space(), prompt: strings.Join(texts, "\n")}
+	batch, _, callErr, err := meteredCall(ctx, s, m, func(ctx context.Context) (EmbeddingBatch, ProviderUsage, error) {
+		batch, err := embedMeasured(ctx, s.Embedder, texts, purpose)
+		if err == nil && len(batch.Items) != len(texts) {
+			err = ErrUnavailable
+		}
+		if err != nil {
+			return EmbeddingBatch{}, ProviderUsage{}, err
+		}
+		return batch, batch.Usage, nil
+	})
+	return batch, callErr, err
 }
 
-// meteredRerank is meteredEmbed for the reranker: operation "rerank" in both ledgers.
-func (s *Service) meteredRerank(ctx context.Context, scope Scope, query string, texts []string) (scores []float64, callErr, err error) {
+// meteredRerank is meteredEmbed for the reranker: operation "rerank".
+func (s *Service) meteredRerank(ctx context.Context, scope Scope, query string, texts []string) ([]float64, error, error) {
 	usage := s.Reranker.usage()
-	reserved, err := s.beginProviderCall(ctx, scope, "rerank", usage.Provider, usage.Model)
-	if err != nil {
-		return nil, nil, err
-	}
-	ctx, span := startSpan(ctx, "model.rerank")
-	start := time.Now()
-	scores, callErr = s.Reranker.Rerank(ctx, query, texts)
-	span.end(callErr)
-	s.recordLLMRequest(ctx, scope, "rerank", Generator{Model: usage.Model}, query+"\n"+strings.Join(texts, "\n"), "", usage, start, callErr)
-	if err = s.finishProviderCall(ctx, reserved, usage, callErr == nil); err != nil {
-		return nil, nil, err
-	}
-	return scores, callErr, nil
+	m := modelCallSpec{scope: scope, operation: "rerank", kind: "rerank", provider: usage.Provider, model: usage.Model, prompt: query + "\n" + strings.Join(texts, "\n")}
+	scores, _, callErr, err := meteredCall(ctx, s, m, func(ctx context.Context) ([]float64, ProviderUsage, error) {
+		scores, err := s.Reranker.Rerank(ctx, query, texts)
+		return scores, usage, err
+	})
+	return scores, callErr, err
 }
 
 func embeddingProvider(embedder Embedder) string {

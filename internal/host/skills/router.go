@@ -145,6 +145,7 @@ func postJSON(path string, payload any, tokenFile string, refused func(int) erro
 		return nil, errors.New("Arkism request failed")
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("X-Arkism-Transport", "mcp") // audit events name the MCP router as their transport
 	req.Header.Set("Content-Type", "application/json")
 	res, err := host.DoJSON(http.DefaultClient, req)
 	if code := host.HTTPCode(err); code != 0 {
@@ -161,7 +162,11 @@ func newRouterClient() (*hubClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newHubClient(routerBaseURL, tok, host.Scope(), routerCacheDir, 15*time.Second)
+	c, err := newHubClient(routerBaseURL, tok, host.Scope(), routerCacheDir, 15*time.Second)
+	if c != nil {
+		c.transport = "mcp"
+	}
+	return c, err
 }
 
 func skillVersion(versionID string) (host.Obj, error) {

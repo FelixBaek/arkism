@@ -456,15 +456,17 @@ func (l traceLLM) Complete(context.Context, string, string, int) (string, Provid
 
 func TestLLMTraceRecordsSuccessAndError(t *testing.T) {
 	f := newFixture(t)
-	ctx := WithLLMOperation(testCtx, "wiki.page", scopeA)
-	ok := TraceLLM(f.svc, traceLLM{})
-	if _, _, err := ok.Complete(ctx, "sys", "user <private>pin 1234</private>", 100); err != nil {
+	f.svc.Wiki = traceLLM{}
+	f.svc.LLMTraceExclude = []string{"untraced*"}
+	if _, _, err := f.svc.modelCall(testCtx, scopeA, "wiki.page", "sys", "user <private>pin 1234</private>", 100); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := TraceLLM(f.svc, traceLLM{err: ErrUnavailable}).Complete(ctx, "sys", "u", 100); !errors.Is(err, ErrUnavailable) {
-		t.Fatal("decorator changed the error", err)
+	f.svc.Wiki = traceLLM{err: ErrUnavailable}
+	if _, _, err := f.svc.modelCall(testCtx, scopeA, "wiki.page", "sys", "u", 100); !errors.Is(err, ErrUnavailable) {
+		t.Fatal("ledger call changed the error", err)
 	}
-	if _, _, err := ok.Complete(testCtx, "untraced", "u", 1); err != nil {
+	f.svc.Wiki = traceLLM{}
+	if _, _, err := f.svc.modelCall(testCtx, scopeA, "untraced.op", "untraced", "u", 1); err != nil {
 		t.Fatal(err)
 	}
 	page, err := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{})
@@ -497,9 +499,8 @@ func TestLLMTraceRecordsSuccessAndError(t *testing.T) {
 
 func TestLLMTraceStoresRedactedContentOnlyWithFlag(t *testing.T) {
 	f := newFixture(t)
-	ctx := WithLLMOperation(testCtx, "wiki.page", scopeA)
-	f.svc.LLMTraceContent = true
-	if _, _, err := TraceLLM(f.svc, traceLLM{}).Complete(ctx, "sys", "user <private>pin 1234</private>", 100); err != nil {
+	f.svc.Wiki, f.svc.LLMTraceContent = traceLLM{}, true
+	if _, _, err := f.svc.modelCall(testCtx, scopeA, "wiki.page", "sys", "user <private>pin 1234</private>", 100); err != nil {
 		t.Fatal(err)
 	}
 	page, _ := f.svc.ListLLMRequests(testCtx, f.human, scopeA, LLMRequestFilter{})

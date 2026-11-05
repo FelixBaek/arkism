@@ -351,6 +351,12 @@ func (s *Service) eraseSourceMemories(ctx context.Context, token string, job Rec
 			if !pending {
 				lease.Status = JobStatusDone
 			}
+			if !pending && job.Target.Collection == "sources" {
+				// Model call traces that read the document go with it.
+				if e = deleteLLMTracesFor(ctx, tx, job.Scope, job.Target.ID); e != nil {
+					return e
+				}
+			}
 		}
 		lease.LeaseToken = ""
 		lease.LeaseUntil = time.Time{}

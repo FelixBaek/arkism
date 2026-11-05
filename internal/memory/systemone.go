@@ -458,22 +458,33 @@ func (s *Service) EvaluateSystemOne(ctx context.Context, token string, in System
 	}
 	op, cancel := context.WithTimeout(ctx, jevTimeout)
 	defer cancel()
-	reserved, err := s.beginProviderCall(op, in.Scope, "systemone", provider, model)
-	if err != nil {
-		return SystemOneResult{}, err
-	}
 	started := time.Now()
-	body, status, callErr := postJSON(op, providerClient(nil, jevTimeout), endpoint, judge.APIKey, payload, systemOneRequestMax, systemOneResponseMax)
+	var reason string
+	var callErr error
+	called := false
+	m := modelCallSpec{scope: in.Scope, operation: "systemone", kind: "systemone", provider: provider, model: model, prompt: content}
+	out, usage, failed, finishErr := meteredCall(op, s, m, func(ctx context.Context) (SystemOneResult, ProviderUsage, error) {
+		body, status, err := postJSON(ctx, providerClient(nil, jevTimeout), endpoint, judge.APIKey, payload, systemOneRequestMax, systemOneResponseMax)
+		called = true
+		var out SystemOneResult
+		var usage ProviderUsage
+		out, usage, reason, callErr = systemOneOutcome(body, status, err, judge, questions)
+		if callErr == nil && status != http.StatusOK {
+			return out, usage, ErrUnavailable // an upstream error answer: returned, but not a successful call
+		}
+		return out, usage, callErr
+	})
+	if !called {
+		return SystemOneResult{}, finishErr // the ledger refused the reservation
+	}
 	latency := time.Since(started).Milliseconds()
-	out, usage, reason, callErr := systemOneOutcome(body, status, callErr, judge, questions)
-	success := callErr == nil && status == http.StatusOK
+	success := failed == nil
 	if success {
 		reason = ""
 	}
 	// Record even after caller cancellation, without retaining request content.
 	recordCtx, recordCancel := context.WithTimeout(context.WithoutCancel(ctx), jevTimeout)
 	defer recordCancel()
-	finishErr := s.finishProviderCall(recordCtx, reserved, usage, success)
 	_, recordErr := s.RecordRoutingCall(recordCtx, token, RoutingCallInput{Scope: in.Scope, Call: RoutingCall{
 		Model: provider + "/" + model, Decision: "fixed", OK: success, Error: reason,
 		LatencyMS: latency, InputTokens: usage.InputTokens, OutputTokens: usage.OutputTokens,

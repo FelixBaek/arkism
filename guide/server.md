@@ -237,6 +237,10 @@ wiki. What a person approves and how is described in
    | `ARKISM_RERANK_API_KEY_FILE` | File holding the rerank bearer key, read on every call instead of `ARKISM_RERANK_API_KEY`, so a short-lived access token can be rotated on disk without a restart |
    | `ARKISM_RERANK_LOCAL` | `1` without `ARKISM_RERANK_URL` turns on an in-process lexical (BM25) reranker. It sends nothing off the server, so it does not need `external:transfer`; it is weaker than a cross-encoder. Off by default, so an upgrade does not change recall order. Calls are filed in the usage ledger as provider `local`, model `lexical` |
    | `ARKISM_OTLP_ENDPOINT`, `ARKISM_OTLP_SERVICE_NAME`, `ARKISM_OTLP_SAMPLE_RATIO` | Request tracing (see [Tracing](#tracing)). Off by default |
+   | `ARKISM_OTLP_METRICS_ENDPOINT`, `ARKISM_OTLP_METRICS_INTERVAL` | Metrics export (see [Metrics](#metrics)). Off by default |
+   | `ARKISM_PROMETHEUS`, `ARKISM_PROMETHEUS_TOKEN` | `GET /metrics/prometheus` (see [Metrics](#metrics)). Off by default |
+   | `ARKISM_LLM_TRACE_OPERATIONS`, `ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS` | Which model call operations get a trace row (see [Model call traces](#model-call-traces)). Empty records all |
+   | `ARKISM_LLM_TRACE_RETENTION_DAYS` | Days model call traces are kept by `memoryd --audit-expiry execute` (default `30`) |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
    | `ARKISM_SPACE_DEFAULT_TEMPLATE` | Path to a space template bundle (`POST /v1/spaces/{workspace}/{project}/export` with `template: true`). Every space inherits the settings it leaves empty from the template's config, the template's defense rules apply to every space, and `POST .../import` with `default_template: true` copies its directives and mental model definitions into a space without settings. An unreadable file stops startup |
    | `ARKISM_SPACE_TEMPLATE_AUTO` | `1` applies the default template's directives and mental model definitions to a space by itself: when a person saves the space's first settings (their settings win), or on a person's first stored memory in a space without settings (the template's settings are stored too). The definitions arrive switched off (directives inactive, mental models on manual refresh) until a person turns them on in that space. Each space gets it once per server run; agent writes never apply it, since the definitions are human-only. Off by default. `GET /v1/spaces/template-schema?workspace_id=…&project_id=…` (`read:space_configs`) returns the JSON schema of a template bundle line |
@@ -360,8 +364,10 @@ Notes:
 - Each protocol has its own vector space, so switching endpoint or protocol
   needs a reindex (`memoryd --reindex`).
 - Every chat, embedding and rerank call is filed in the usage ledger and in the
-  model call traces (`GET /v1/llm-requests`, operations `embed` and `rerank`
-  besides the chat steps), with tokens when the provider reports them. The
+  model call traces (`GET /v1/llm-requests`) under its ledger operation (for
+  example `embedding_query`, `embedding_document`, `rerank`), with tokens when
+  the provider reports them. **Upgrade note.** Embedding traces used to be filed
+  as `embed`; filters on that name need the ledger names. The
   rerank protocols are filed as provider `rerank_passages` and `rerank_records`.
 - **Upgrade note.** The new protocols, presets and the sidecar are all off
   until set; existing settings behave as before. A set but unknown
@@ -446,6 +452,74 @@ the API exports spans as OTLP JSON. Off when unset; nothing is recorded then.
   and `sample_ratio` while tracing is on. Export never fails a request; stop
   waits at most about 10 seconds for the collector.
 - `ARKISM_OTLP_SERVICE_NAME` sets `service.name` (default `arkism-memoryd`).
+- Background jobs (wiki and file extraction) open a `job.*` span; the model
+  calls of the job are its children.
+- Model call spans carry `gen_ai.operation.name`, `gen_ai.provider.name`,
+  `gen_ai.request.model`, `gen_ai.response.model` and
+  `gen_ai.usage.input_tokens` / `output_tokens`; never prompts or answers.
+
+## Model call traces
+
+Every model call (chat steps, answers, file and media extraction, embeddings,
+rerank, the model picker, skill drafts, skill routing and analysis) goes
+through one ledger call that also writes a trace row (`GET /v1/llm-requests`).
+Each row holds the trace id, span id and parent span id (the job's trace when
+the call ran inside a job, so rows of one job group together even with tracing
+off), the job id, the source document it worked on, and up to 64 ids of the
+memories it read and created.
+
+- `ARKISM_LLM_TRACE_OPERATIONS` (comma list) records only those operations;
+  `ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS` skips them. A trailing `*` matches a
+  prefix (`embedding_*`). The usage ledger still counts every call.
+- Erasing a source deletes its trace rows in the same transaction.
+- Rows older than `ARKISM_LLM_TRACE_RETENTION_DAYS` (default 30) are deleted by
+  `memoryd --audit-expiry execute` (`preview` counts them first).
+
+## Metrics
+
+`GET /metrics` (`ops:metrics`) stays the scoped JSON view. Two opt-in exports
+add process-wide counters (requests, model calls with token histograms per
+operation, rerank, tracing, database pool, goroutines, heap, GC, CPU, RSS and
+open files). They hold no memory text and no scope data.
+
+- `ARKISM_PROMETHEUS=1` serves `GET /metrics/prometheus` in Prometheus text
+  format. With `ARKISM_PROMETHEUS_TOKEN` set, scrapers send it as
+  `Authorization: Bearer …`; without a token only loopback peers are served.
+  Behind a reverse proxy every peer looks like loopback, so set a token there.
+  Off: `404`; refused: `403`.
+- `ARKISM_OTLP_METRICS_ENDPOINT` (an OTLP/HTTP metrics URL, for example
+  `https://collector.example.com:4318/v1/metrics`; plain http only on loopback)
+  pushes the same counters as OTLP JSON every `ARKISM_OTLP_METRICS_INTERVAL`
+  (Go duration, default `30s`, at least `5s`), and once more on stop.
+
+## Audit events
+
+`GET /v1/audit-events` lists a scope's audit events and
+`GET /v1/audit-events/{id}` reads one (both human `read:audit_events`). Each
+event carries redacted request metadata: `transport` (`mcp` when the caller
+sends `X-Arkism-Transport: mcp`, as the router tools do; `http` for other
+requests; `system` for background work), `method`, the route pattern (never the
+raw URL or query) and `duration_ms`. Request and response bodies are never
+captured.
+
+A space can narrow its optional events with an `audit` block in its config
+(`PUT/PATCH /v1/spaces/{workspace}/{project}/config`):
+`{"audit": {"enabled": false}}` drops them, and `{"audit": {"actions":
+["read:memories", "search:*"]}}` keeps only the listed ones (at most 64; a
+trailing `*` matches a prefix). `{"audit": {}}` records everything again, the
+default. Optional events are routine reads, previews, searches, job progress
+and model usage bookkeeping. These are always recorded, whatever the block
+says (the event's `mandatory` field is `true`):
+
+- denials and policy decisions;
+- deletes, erasures, restores, exports, imports, transfers and handoffs,
+  privacy requests and holds, settings and policy changes, writes, creates,
+  updates, reviews and maintenance;
+- raw-content reads (`read:session_archive_raw`, `read:artifacts`,
+  `read:sources`);
+- any action added later, until it is listed as optional.
+
+If the space settings cannot be read, the event is recorded.
 
 ## Host tools and systemd
 

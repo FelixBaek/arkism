@@ -278,6 +278,10 @@ class ArkismClient(BaseClient):
         """GET /v1/audit-events/stats — Count a scope's audit events by action and UTC day (human read:audit_events)"""
         return self.request("GET", f"/v1/audit-events/stats", query, None)
 
+    def get_v1_audit_events_id(self, id, query=None):
+        """GET /v1/audit-events/{id} — Read one audit event (human read:audit_events)"""
+        return self.request("GET", f"/v1/audit-events/{urllib.parse.quote(id, safe='')}", query, None)
+
     def get_v1_operations(self, query=None):
         """GET /v1/operations — List background jobs (read:jobs; an agent sees only the jobs it created)"""
         return self.request("GET", f"/v1/operations", query, None)
@@ -841,6 +845,10 @@ class ArkismClient(BaseClient):
     def get_metrics(self, query=None):
         """GET /metrics — Operator metrics; requires human/service ops:metrics permission (includes process-wide traffic aggregates)"""
         return self.request("GET", f"/metrics", query, None)
+
+    def get_metrics_prometheus(self):
+        """GET /metrics/prometheus — Prometheus text exposition (opt-in)"""
+        return self.request("GET", f"/metrics/prometheus", None, None)
 
     def get_v1_memory_candidates(self, query=None):
         """GET /v1/memory_candidates — Human candidate review queue"""

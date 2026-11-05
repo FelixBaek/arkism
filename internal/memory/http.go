@@ -48,6 +48,7 @@ func handler(s *Service, timeout time.Duration) http.Handler {
 
 func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler {
 	stats := &requestMetrics{}
+	lastRequestStats.Store(stats)
 	mux := newAuthorizationMux(s)
 	registerHandoffsCoreHTTP(mux, s, stats)
 	registerHealthCoreHTTP(mux, s, stats)
@@ -180,7 +181,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 		started := time.Now()
 		requestID := ID()
 		w.Header().Set("X-Request-ID", requestID)
-		r = r.WithContext(ContextWithPostgresToken(context.WithValue(r.Context(), auditRequestKey{}, requestID), bearer(r)))
+		r = r.WithContext(ContextWithPostgresToken(withAuditRequest(context.WithValue(r.Context(), auditRequestKey{}, requestID), r, pattern, started), bearer(r)))
 		r, sp := startServerSpan(r, pattern)
 		defer func() {
 			status := recorded.status

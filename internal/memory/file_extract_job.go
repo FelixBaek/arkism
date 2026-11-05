@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -209,10 +210,11 @@ func (s *Service) RunFileExtractJob(ctx context.Context, token string, scope Sco
 
 // runExtractJob runs a claimed job; runErr is the chunk failure the job was
 // saved as failed with, err a failure to save. A done chunk drops its text.
-func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r Record) (Record, error, error) {
+func (s *Service) runExtractJob(ctx context.Context, token string, d Decision, r Record) (_ Record, runErr, err error) {
+	ctx, sp := startJobSpan(ctx, "job.file_extract", r.ID)
+	defer func() { sp.end(cmp.Or(runErr, err)) }()
 	job := r.FileExtract
 	budget := &WikiJob{MaxTotalTokens: fileExtractJobTokens}
-	var err error
 	for job.Next < len(job.Chunks) {
 		ids, skipped, runErr := s.extractAndCapture(ctx, token, d, r.Scope, budget, job.Chunks[job.Next])
 		job.Calls, job.Tokens = job.Calls+budget.Calls, job.Tokens+budget.Tokens

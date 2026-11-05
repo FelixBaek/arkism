@@ -546,11 +546,16 @@ func diffExtractChunks(prev, next []FileExtractChunk) ([]FileExtractChunk, []Fil
 
 // extractAndCapture returns the ids of the candidates the chunk produced or merged into.
 func (s *Service) extractAndCapture(ctx context.Context, token string, d Decision, scope Scope, budget *WikiJob, ch FileExtractChunk) ([]string, []ExtractSkip, error) {
+	// The chunk's model calls name its source document and the candidates they produced.
+	ctx, note := withLLMNote(ctx, ch.Source.ID, nil)
 	claims, skipped, err := s.extractChunk(ctx, token, d, scope, budget, ch)
 	if err != nil {
 		return nil, nil, err
 	}
 	ids, more, err := s.captureExtracted(ctx, token, scope, ch, claims)
+	if err == nil {
+		s.attachLLMCreated(ctx, scope, note, ids)
+	}
 	return ids, append(skipped, more...), err
 }
 

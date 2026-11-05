@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,8 +26,9 @@ import (
 // Request tracing: W3C trace context (the traceparent header) and an optional
 // OTLP/HTTP JSON span exporter, standard library only. It is off until
 // StartTracing is called (memoryd: ARKISM_OTLP_ENDPOINT); off, every helper
-// here is a no-op. A span carries names, ids, routes and status codes only,
-// never memory text, queries or tokens. traceparent goes out only to loopback
+// here is a no-op. A span carries names, ids, routes, status codes and, on
+// model calls, the gen_ai.* operation, provider, model and token counts; never
+// memory text, prompts or queries. traceparent goes out only to loopback
 // and private-network model servers, never to a hosted provider.
 
 const (
@@ -85,6 +87,7 @@ type span struct {
 	kind     int
 	start    time.Time
 	attrs    map[string]string
+	ints     map[string]int64
 	errCode  string
 	ended    atomic.Bool
 }
@@ -155,6 +158,27 @@ func (sp *span) set(key, value string) {
 	if sp != nil && value != "" {
 		sp.attrs[key] = value
 	}
+}
+
+func (sp *span) setInt(key string, value int64) {
+	if sp == nil {
+		return
+	}
+	if sp.ints == nil {
+		sp.ints = map[string]int64{}
+	}
+	sp.ints[key] = value
+}
+
+// ids returns the hex trace, span and parent span ids; all empty for a nil span.
+func (sp *span) ids() (traceID, spanID, parentID string) {
+	if sp == nil {
+		return "", "", ""
+	}
+	if sp.parent != [8]byte{} {
+		parentID = hex.EncodeToString(sp.parent[:])
+	}
+	return hex.EncodeToString(sp.sc.TraceID[:]), hex.EncodeToString(sp.sc.SpanID[:]), parentID
 }
 
 // end closes the span once; err sets an error status with its fixed code, never its text.
@@ -313,37 +337,44 @@ func (e *spanExporter) flush(parent context.Context, batch []finishedSpan) {
 		return
 	}
 	n := uint64(len(batch))
-	body, err := json.Marshal(otlpPayload(e.service, batch))
-	if err != nil {
+	if err := otlpPost(parent, e.client, e.endpoint, otlpPayload(e.service, batch)); err != nil {
 		e.failed.Add(n)
-		return
-	}
-	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.endpoint, bytes.NewReader(body))
-	if err != nil {
-		e.failed.Add(n)
-		return
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := e.client.Do(req)
-	if err != nil {
-		e.failed.Add(n)
-		slog.Warn("trace export failed", "spans", n, "error", captureErrorCode(err))
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10)) // lets the connection be reused
-	_ = resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		e.failed.Add(n)
-		slog.Warn("trace export refused", "spans", n, "status", resp.StatusCode)
+		slog.Warn("trace export failed", "spans", n, "error", err.Error())
 		return
 	}
 	e.exported.Add(n)
 }
 
+// otlpPost sends one OTLP/HTTP JSON export (traces or metrics) within 5 seconds;
+// the error is a fixed code or an HTTP status, never a response body.
+func otlpPost(parent context.Context, client *http.Client, endpoint string, payload any) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return errors.New(captureErrorCode(err))
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10)) // lets the connection be reused
+	_ = resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("http_%d", resp.StatusCode)
+	}
+	return nil
+}
+
+// otlpValue is one OTLP AnyValue: a string, or an int64 (a decimal string in OTLP JSON).
 type otlpValue struct {
-	StringValue string `json:"stringValue"`
+	StringValue string `json:"stringValue,omitempty"`
+	IntValue    string `json:"intValue,omitempty"`
 }
 
 type otlpAttr struct {
@@ -379,7 +410,10 @@ func otlpPayload(service string, batch []finishedSpan) map[string]any {
 			o.ParentSpanID = hex.EncodeToString(sp.parent[:])
 		}
 		for k, v := range sp.attrs {
-			o.Attributes = append(o.Attributes, otlpAttr{k, otlpValue{v}})
+			o.Attributes = append(o.Attributes, otlpAttr{k, otlpValue{StringValue: v}})
+		}
+		for k, v := range sp.ints {
+			o.Attributes = append(o.Attributes, otlpAttr{k, otlpValue{IntValue: strconv.FormatInt(v, 10)}})
 		}
 		if sp.errCode != "" {
 			o.Status = otlpStatus{Code: 2, Message: sp.errCode}
@@ -387,7 +421,7 @@ func otlpPayload(service string, batch []finishedSpan) map[string]any {
 		spans = append(spans, o)
 	}
 	return map[string]any{"resourceSpans": []any{map[string]any{
-		"resource":   map[string]any{"attributes": []otlpAttr{{"service.name", otlpValue{service}}}},
+		"resource":   map[string]any{"attributes": []otlpAttr{{"service.name", otlpValue{StringValue: service}}}},
 		"scopeSpans": []any{map[string]any{"scope": map[string]string{"name": "arkism"}, "spans": spans}},
 	}}}
 }
