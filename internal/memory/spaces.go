@@ -3,8 +3,6 @@ package memory
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -45,6 +43,9 @@ const (
 	spaceJobTimeout       = 10 * time.Minute
 	spaceExportTTL        = 24 * time.Hour
 	spaceSectionConfig    = "config"
+	// spaceExportDestination: a bundle leaves the server, so the export needs
+	// the principal's external:transfer grant, as every other transfer does.
+	spaceExportDestination = "external:space_bundle"
 )
 
 var (
@@ -263,7 +264,8 @@ func (s *Service) ListSpaces(ctx context.Context, token string, scope Scope, aft
 		order, page.Next = order[:limit], order[limit-1]
 	}
 	for _, project := range order {
-		view, err := s.GetSpaceConfig(ctx, token, Scope{WorkspaceID: scope.WorkspaceID, ProjectID: project})
+		// Listed ids are literal projects: a project named "@x" is not the alias x.
+		view, err := s.getSpaceConfig(ctx, token, Scope{WorkspaceID: scope.WorkspaceID, ProjectID: project})
 		if errors.Is(err, ErrDenied) {
 			continue
 		}
@@ -281,7 +283,11 @@ func (s *Service) GetSpaceConfig(ctx context.Context, token string, scope Scope)
 	if err != nil {
 		return SpaceView{}, err
 	}
-	if _, err = s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, ""); err != nil {
+	return s.getSpaceConfig(ctx, token, scope)
+}
+
+func (s *Service) getSpaceConfig(ctx context.Context, token string, scope Scope) (SpaceView, error) {
+	if _, err := s.authorize(ctx, token, "read:"+colSpaceConfigs, scope, spaceConfigID, ""); err != nil {
 		return SpaceView{}, err
 	}
 	rec, err := s.Repo.Get(ctx, colSpaceConfigs, scope, spaceConfigID)
@@ -494,8 +500,7 @@ func buildSpaceBundle(ctx context.Context, repo Repository, scope Scope, in Spac
 		}
 		manifest.Sections = append(manifest.Sections, SpaceSection{Name: name, Count: len(lines)})
 	}
-	sum := sha256.Sum256(body.Bytes())
-	manifest.SHA256 = hex.EncodeToString(sum[:])
+	manifest.SHA256 = ContentHash(body.String())
 	head, _ := json.Marshal(spaceBundleLine{Manifest: &manifest})
 	if len(head)+1+body.Len() > spaceBundleMaxBytes {
 		return "", SpaceManifest{}, errBlobTooLarge
@@ -551,8 +556,7 @@ func parseSpaceBundle(bundle string) (SpaceManifest, []spaceBundleLine, error) {
 		return SpaceManifest{}, nil, ErrInvalid
 	}
 	m := *first.Manifest
-	sum := sha256.Sum256([]byte(body))
-	if m.Format != spaceBundleFormat || m.FormatVersion != spaceBundleVersion || !validRunLabel(m.BundleID, 64) || m.SHA256 != hex.EncodeToString(sum[:]) {
+	if m.Format != spaceBundleFormat || m.FormatVersion != spaceBundleVersion || !validRunLabel(m.BundleID, 64) || m.SHA256 != ContentHash(body) {
 		return SpaceManifest{}, nil, ErrInvalid
 	}
 	dec := json.NewDecoder(strings.NewReader(body))
@@ -577,13 +581,9 @@ func (s *Service) ExportSpace(ctx context.Context, token string, scope Scope, in
 	if !validSpaceInclude(in.Include) {
 		return SpaceJobView{}, ErrInvalid
 	}
-	d, err := s.authorize(ctx, token, "read:memories", scope, "", "")
+	d, err := s.authorizeSpaceExport(ctx, token, scope, "")
 	if err != nil {
 		return SpaceJobView{}, err
-	}
-	// The bundle leaves the server: the same external-transfer grant other transfers need.
-	if !d.ExternalTransfer || !d.ContentSafe {
-		return SpaceJobView{}, ErrDenied
 	}
 	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Template: in.Template, BundleID: "sb_" + ID()}
 	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
@@ -700,65 +700,112 @@ func (s *Service) startSpaceJob(ctx context.Context, scope Scope, d Decision, jo
 	return SpaceJobView{ID: rec.ID, WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, SpaceJob: job}, nil
 }
 
-func (s *Service) spaceJob(ctx context.Context, token string, scope Scope, id string) (Record, Decision, error) {
+// authorizeSpaceExport is the read of a space whose content leaves the server.
+func (s *Service) authorizeSpaceExport(ctx context.Context, token string, scope Scope, id string) (Decision, error) {
+	d, err := s.authorizeAt(ctx, token, "read:memories", scope, id, "", spaceExportDestination)
+	if err != nil {
+		return Decision{}, err
+	}
+	if !d.ExternalTransfer || !d.ContentSafe {
+		return Decision{}, ErrDenied
+	}
+	return d, nil
+}
+
+func (s *Service) spaceJob(ctx context.Context, token string, scope Scope, id string) (Record, error) {
 	scope, err := s.resolveSpace(ctx, scope)
 	if err != nil {
-		return Record{}, Decision{}, err
+		return Record{}, err
 	}
-	d, err := s.authorize(ctx, token, "read:memories", scope, id, "")
-	if err != nil {
-		return Record{}, Decision{}, err
+	if _, err = s.authorize(ctx, token, "read:memories", scope, id, ""); err != nil {
+		return Record{}, err
 	}
 	rec, err := s.Repo.Get(ctx, colJobs, scope, id)
 	if err != nil {
-		return Record{}, Decision{}, err
+		return Record{}, err
 	}
 	if rec.SpaceJob == nil || !strings.HasPrefix(rec.Kind, "space_") {
-		return Record{}, Decision{}, ErrNotFound
+		return Record{}, ErrNotFound
 	}
-	return rec, d, nil
+	return rec, nil
 }
 
 func (s *Service) GetSpaceJob(ctx context.Context, token string, scope Scope, id string) (SpaceJobView, error) {
-	rec, _, err := s.spaceJob(ctx, token, scope, id)
+	rec, err := s.spaceJob(ctx, token, scope, id)
 	if err != nil {
 		return SpaceJobView{}, err
 	}
-	return SpaceJobView{ID: rec.ID, WorkspaceID: rec.Scope.WorkspaceID, ProjectID: rec.Scope.ProjectID, SpaceJob: *rec.SpaceJob}, nil
+	view := SpaceJobView{ID: rec.ID, WorkspaceID: rec.Scope.WorkspaceID, ProjectID: rec.Scope.ProjectID, SpaceJob: *rec.SpaceJob}
+	// Jobs run in-process: one still queued past its timeout died with a restart.
+	if view.State == "queued" && time.Since(rec.CreatedAt) > spaceJobTimeout+time.Minute {
+		view.State, view.Error = "failed", "interrupted"
+	}
+	return view, nil
 }
 
 // DownloadSpaceExport returns a finished export bundle. A record erased, made
 // private or retired since the export makes the bundle stale: export again.
 func (s *Service) DownloadSpaceExport(ctx context.Context, token string, scope Scope, id string) (string, error) {
-	rec, d, err := s.spaceJob(ctx, token, scope, id)
+	rec, err := s.spaceJob(ctx, token, scope, id)
 	if err != nil {
 		return "", err
 	}
 	job := rec.SpaceJob
-	if rec.Kind != spaceJobExport || job.State != "done" || job.Bundle == "" || time.Since(rec.CreatedAt) > spaceExportTTL {
+	if rec.Kind != spaceJobExport || job.State != "done" || job.Bundle == "" {
 		return "", ErrNotFound
 	}
-	if !d.ExternalTransfer || !d.ContentSafe {
-		return "", ErrDenied
+	if time.Since(rec.CreatedAt) > spaceExportTTL {
+		s.dropSpaceBundle(ctx, rec)
+		return "", ErrNotFound
+	}
+	if _, err = s.authorizeSpaceExport(ctx, token, rec.Scope, id); err != nil {
+		return "", err
 	}
 	_, lines, err := parseSpaceBundle(job.Bundle)
 	if err != nil {
 		return "", ErrUnavailable
 	}
+	if err = s.checkSpaceBundleCurrent(ctx, rec.Scope, lines); errors.Is(err, ErrConflict) {
+		s.dropSpaceBundle(ctx, rec)
+	}
+	if err != nil {
+		return "", err
+	}
+	return job.Bundle, nil
+}
+
+func (s *Service) checkSpaceBundleCurrent(ctx context.Context, scope Scope, lines []spaceBundleLine) error {
 	now := time.Now().UTC()
 	for _, line := range lines {
 		if line.Record == nil {
 			continue
 		}
-		cur, err := s.Repo.Get(ctx, line.Section, rec.Scope, line.Record.ID)
+		cur, err := s.Repo.Get(ctx, line.Section, scope, line.Record.ID)
 		if errors.Is(err, ErrNotFound) || err == nil && spaceRecordSkip(line.Section, cur, now) != "" {
-			return "", ErrConflict
+			return ErrConflict
 		}
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
-	return job.Bundle, nil
+	return nil
+}
+
+// dropSpaceBundle clears an expired or stale bundle from its job row so erased
+// or retired text does not stay at rest there. Best effort: a caller who may
+// only read cannot write, and the bundle is refused either way.
+// shortcut: bundles nobody asks for again stay until a sweep exists; add one to maintenance when jobs get retention.
+func (s *Service) dropSpaceBundle(ctx context.Context, rec Record) {
+	_ = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
+		cur, err := tx.Get(ctx, colJobs, rec.Scope, rec.ID)
+		if err != nil || cur.SpaceJob == nil {
+			return err
+		}
+		job := *cur.SpaceJob
+		job.Bundle = ""
+		cur.SpaceJob, cur.UpdatedAt, cur.Revision = &job, time.Now().UTC(), cur.Revision+1
+		return tx.Replace(ctx, colJobs, cur, cur.Revision-1)
+	})
 }
 
 // importSpaceLines brings bundle lines into a space. Memories go through Capture
@@ -835,13 +882,13 @@ func (s *Service) importSpaceChunk(ctx context.Context, token string, scope Scop
 	return nil
 }
 
-// approveImported is the person's own approval, through the ordinary review transition.
+// approveImported is the person's own approval, through the candidate review path.
 func (s *Service) approveImported(ctx context.Context, token string, scope Scope, id string) error {
 	cand, err := s.Repo.Get(ctx, "memory_candidates", scope, id)
 	if err != nil {
 		return err
 	}
-	_, err = s.Transition(ctx, token, "memory_candidates", id, ChangeInput{Scope: scope, ExpectedRevision: cand.Revision, Status: "approved"})
+	_, err = s.ReviewCandidate(ctx, token, id, CandidateReviewInput{Scope: scope, ExpectedRevision: cand.Revision, Action: "approve"})
 	return err
 }
 

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http/httptest"
 	"slices"
@@ -146,8 +147,8 @@ func TestSpaceImportApprovedOnlyForHumansAndApprovedRecords(t *testing.T) {
 		t.Fatalf("report = %+v", report)
 	}
 	mems := scopeRecords(f, colMemories, scopeB)
-	if len(mems) != 1 || mems[0].Status != "approved" {
-		t.Fatalf("approved import = %+v", mems)
+	if len(mems) != 1 || mems[0].Status != statusActive || mems[0].Review == nil || mems[0].Review.Action != "approve" || mems[0].Review.By != "human-1" {
+		t.Fatalf("approved import must go through the candidate review: %+v", mems)
 	}
 }
 
@@ -252,5 +253,77 @@ func TestSpaceAliasResolution(t *testing.T) {
 	}
 	if _, err = f.svc.resolveSpace(testCtx, alias); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("removed alias resolve err = %v", err)
+	}
+}
+
+// transferAuth grants external transfer only for an external destination, as
+// the Postgres authorizer does (external:transfer is checked only then).
+type transferAuth struct{ inner *fakeAuth }
+
+func (a transferAuth) Authorize(ctx context.Context, token string, req Authorization) (Decision, error) {
+	d, err := a.inner.Authorize(ctx, token, req)
+	d.ExternalTransfer = d.ExternalTransfer && strings.HasPrefix(req.Context.Destination, "external:")
+	return d, err
+}
+
+func TestSpaceExportNeedsExternalTransferGrant(t *testing.T) {
+	f := newFixture(t)
+	f.svc.Auth = transferAuth{f.auth}
+	f.activeMemory("ship small changes", "flow")
+	if bundle := exportBundle(t, f, scopeA, SpaceExportInput{}); !strings.Contains(bundle, "ship small changes") {
+		t.Fatal("export lost the memory")
+	}
+	local := testPrincipalToken("tok-local")
+	f.auth.actors[local] = actor("human-3", "human", false, allVerbs...)
+	if _, err := f.svc.ExportSpace(testCtx, local, scopeA, SpaceExportInput{}); !errors.Is(err, ErrDenied) {
+		t.Fatalf("export without external transfer err = %v", err)
+	}
+}
+
+func TestSpaceStaleBundleIsDroppedAndDeadJobReported(t *testing.T) {
+	f := newFixture(t)
+	mem := f.activeMemory("temporary rule", "t")
+	job, err := f.svc.ExportSpace(testCtx, f.human, scopeA, SpaceExportInput{Include: []string{colMemories}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitSpaceJob(t, f, scopeA, job.ID)
+	mem.ContentErased = true
+	if err = f.repo.Replace(testCtx, colMemories, mem, mem.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.svc.DownloadSpaceExport(testCtx, f.human, scopeA, job.ID); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale download err = %v", err)
+	}
+	row, _ := f.repo.Get(testCtx, colJobs, scopeA, job.ID)
+	if row.SpaceJob.Bundle != "" {
+		t.Fatal("stale bundle text stayed on the job row")
+	}
+	old := time.Now().Add(-time.Hour)
+	dead := Record{ID: "spj_dead", Scope: scopeA, Kind: spaceJobExport, Status: JobStatusDone, Revision: 1, CreatedAt: old, UpdatedAt: old, SpaceJob: &SpaceJob{Kind: spaceJobExport, State: "queued"}}
+	if err = f.repo.Insert(testCtx, colJobs, dead); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := f.svc.GetSpaceJob(testCtx, f.human, scopeA, dead.ID); err != nil || got.State != "failed" || got.Error != "interrupted" {
+		t.Fatalf("dead job = %+v %v", got, err)
+	}
+}
+
+// SpaceAliasOwners queries doc->'space_config'->'aliases' ? alias: the stored
+// form must keep aliases as a plain JSON string array under those bson names.
+func TestSpaceAliasStoredShapeMatchesSQL(t *testing.T) {
+	cfg := defaultSpaceConfig()
+	cfg.Aliases = []string{"front"}
+	b, err := storeMarshal(Record{ID: spaceConfigID, Scope: scopeA, SpaceConfig: &cfg})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		SpaceConfig struct {
+			Aliases []string `json:"aliases"`
+		} `json:"space_config"`
+	}
+	if err = json.Unmarshal(b, &doc); err != nil || !slices.Equal(doc.SpaceConfig.Aliases, []string{"front"}) {
+		t.Fatalf("stored doc %s: %v", b, err)
 	}
 }

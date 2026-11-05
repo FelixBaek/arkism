@@ -25,11 +25,7 @@ func (s *Service) coreHTTPPostV1PrivacyDeletions(w http.ResponseWriter, r *http.
 		return
 	}
 	out, err := s.RequestPrivacyDeletion(r.Context(), bearer(r), in)
-	if err != nil {
-		respond(w, nil, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, out)
+	respondAccepted(w, out, err)
 }
 
 func (s *Service) coreHTTPGetV1PrivacyDeletionsId(w http.ResponseWriter, r *http.Request) {
