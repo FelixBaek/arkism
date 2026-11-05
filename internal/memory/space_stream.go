@@ -62,8 +62,9 @@ func (r *SpaceReport) skip(section, reason string, n int) {
 }
 
 // writeSpaceBundle streams the bundle of one space to w; it reads only that exact scope.
-// role is the reader's: settings are the ones that role may see, history only a person gets.
-func writeSpaceBundle(ctx context.Context, repo Repository, scope Scope, in SpaceExportInput, role, bundleID string, at time.Time, w io.Writer) (SpaceManifest, error) {
+// d is the reader's decision: settings are the ones that role may see; history,
+// knowledge files and attachments only a person gets.
+func (s *Service) writeSpaceBundle(ctx context.Context, token string, d Decision, scope Scope, in SpaceExportInput, bundleID string, at time.Time, w io.Writer) (SpaceManifest, error) {
 	m := SpaceManifest{Format: spaceBundleFormat, FormatVersion: spaceBundleVersion, BundleID: bundleID, Template: in.Template, Source: scope, CreatedAt: at, Sections: []SpaceSection{}, Skipped: []SpaceSkip{}}
 	bw := bufio.NewWriter(w)
 	if err := json.NewEncoder(bw).Encode(spaceBundleLine{Manifest: &m}); err != nil {
@@ -71,7 +72,7 @@ func writeSpaceBundle(ctx context.Context, repo Repository, scope Scope, in Spac
 	}
 	h := sha256.New()
 	enc := json.NewEncoder(io.MultiWriter(bw, h))
-	sections, skipped, err := eachSpaceLine(ctx, repo, scope, spaceSections(in), role, at, func(l spaceBundleLine) error {
+	sections, skipped, err := s.eachSpaceLine(ctx, token, d, scope, spaceSections(in), at, func(l spaceBundleLine) error {
 		if enc.Encode(l) != nil {
 			return ErrUnavailable
 		}
@@ -90,13 +91,13 @@ func writeSpaceBundle(ctx context.Context, repo Repository, scope Scope, in Spac
 }
 
 // eachSpaceLine emits the lines of every section in order and returns the per-section counts and skips.
-func eachSpaceLine(ctx context.Context, repo Repository, scope Scope, sections []string, role string, now time.Time, emit func(spaceBundleLine) error) ([]SpaceSection, []SpaceSkip, error) {
+func (s *Service) eachSpaceLine(ctx context.Context, token string, d Decision, scope Scope, sections []string, now time.Time, emit func(spaceBundleLine) error) ([]SpaceSection, []SpaceSkip, error) {
 	counts := []SpaceSection{}
 	report := SpaceReport{Skipped: []SpaceSkip{}}
 	for _, name := range sections {
 		n := 0
 		count := func(l spaceBundleLine) error { n++; return emit(l) }
-		if err := emitSpaceSection(ctx, repo, scope, name, role, now, count, &report); err != nil {
+		if err := s.emitSpaceSection(ctx, token, d, scope, name, now, count, &report); err != nil {
 			return nil, nil, err
 		}
 		counts = append(counts, SpaceSection{Name: name, Count: n})
@@ -104,13 +105,16 @@ func eachSpaceLine(ctx context.Context, repo Repository, scope Scope, sections [
 	return counts, report.Skipped, nil
 }
 
-func emitSpaceSection(ctx context.Context, repo Repository, scope Scope, name, role string, now time.Time, emit func(spaceBundleLine) error, report *SpaceReport) error {
+func (s *Service) emitSpaceSection(ctx context.Context, token string, d Decision, scope Scope, name string, now time.Time, emit func(spaceBundleLine) error, report *SpaceReport) error {
+	repo := s.Repo
 	switch {
 	case name == spaceSectionConfig:
-		return emitSpaceConfig(ctx, repo, scope, role, emit)
-	case slices.Contains(spaceHistory, name) && role != roleHuman:
+		return emitSpaceConfig(ctx, repo, scope, d.Role, emit)
+	case (slices.Contains(spaceHistory, name) || slices.Contains(spaceFiles, name)) && d.Role != roleHuman:
 		report.skip(name, "not_human", 1)
 		return nil
+	case slices.Contains(spaceFiles, name):
+		return s.emitSpaceFiles(ctx, token, d, scope, name, emit, report)
 	case name == colLLMRequests:
 		return emitLLMRequests(ctx, repo, scope, emit)
 	case name == "audit_events":
@@ -359,6 +363,8 @@ func (imp *spaceImporter) add(ctx context.Context, line spaceBundleLine) error {
 		}
 	case line.Record != nil && defs:
 		imp.s.importSpaceDefinition(ctx, imp.token, imp.d.Role, imp.scope, line, &imp.report)
+	case line.File != nil && slices.Contains(spaceFiles, line.Section):
+		imp.addFile(ctx, line.Section, *line.File)
 	case (line.Audit != nil || line.LLMRequest != nil) && slices.Contains(spaceHistory, line.Section):
 		imp.addHistory(ctx, line)
 	default:

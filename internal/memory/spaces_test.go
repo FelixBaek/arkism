@@ -53,6 +53,21 @@ func (f *fakeRepo) SpaceAliasOwners(_ context.Context, workspace, alias string) 
 	return out, nil
 }
 
+func (f *fakeRepo) SpaceSubScopes(_ context.Context, space Scope, collections []string, limit int) ([]Scope, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := []Scope{}
+	for _, col := range collections {
+		for _, r := range f.store[col] {
+			if r.Scope.WorkspaceID == space.WorkspaceID && r.Scope.ProjectID == space.ProjectID && !slices.Contains(out, r.Scope) {
+				out = append(out, r.Scope)
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b Scope) int { return strings.Compare(a.UserID+"\x00"+a.AgentID, b.UserID+"\x00"+b.AgentID) })
+	return out[:min(limit, len(out))], nil
+}
+
 func waitSpaceJob(t *testing.T, f *fixture, scope Scope, id string) SpaceJobView {
 	t.Helper()
 	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {

@@ -50,3 +50,24 @@ func (p *Postgres) SpaceAliasOwners(ctx context.Context, workspace, alias string
 	}
 	return out, pgErr(rows.Err())
 }
+
+// SpaceSubScopes lists the scopes of one space holding rows of the collections, ordered, at most limit.
+func (p *Postgres) SpaceSubScopes(ctx context.Context, space Scope, collections []string, limit int) ([]Scope, error) {
+	if !scopeName(space.WorkspaceID) || !scopeName(space.ProjectID) || limit < 1 || limit > spaceSubScopeMax+1 {
+		return nil, ErrInvalid
+	}
+	rows, err := p.q().Query(ctx, `SELECT DISTINCT user_id, agent_id FROM memory_records WHERE workspace_id=$1 AND project_id=$2 AND collection=ANY($3) ORDER BY 1,2 LIMIT $4`, space.WorkspaceID, space.ProjectID, collections, limit)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	defer rows.Close()
+	out := []Scope{}
+	for rows.Next() {
+		sub := Scope{WorkspaceID: space.WorkspaceID, ProjectID: space.ProjectID}
+		if err := rows.Scan(&sub.UserID, &sub.AgentID); err != nil {
+			return nil, ErrUnavailable
+		}
+		out = append(out, sub)
+	}
+	return out, pgErr(rows.Err())
+}

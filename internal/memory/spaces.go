@@ -59,7 +59,7 @@ var (
 	spaceData         = []string{colMemories, "memory_candidates", colMentalModels, colDirectives, "entities"}
 	spaceCaptured     = []string{colMemories, "memory_candidates", colObservations}
 	spaceHistory      = []string{"audit_events", colLLMRequests}
-	spaceParts        = []string{spaceSectionConfig, "data", colObservations, "history"}
+	spaceParts        = []string{spaceSectionConfig, "data", colObservations, "history", spaceSectionKnowledge, spaceSectionAttachments}
 	spaceDefinitions  = []string{colDirectives, colMentalModels}
 	spaceAliasPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]{0,62}$`)
 	spaceSchedules    = []string{"off", "daily", "weekly"}
@@ -187,6 +187,9 @@ type SpaceCount struct {
 type spaceStore interface {
 	SpaceCounts(ctx context.Context, workspace, after string, collections []string, limit int) ([]SpaceCount, error)
 	SpaceAliasOwners(ctx context.Context, workspace, alias string) ([]Record, error)
+	// SpaceSubScopes lists the scopes (project level and user or agent sub-scopes)
+	// of one space that hold rows of the collections, at most limit.
+	SpaceSubScopes(ctx context.Context, space Scope, collections []string, limit int) ([]Scope, error)
 }
 
 type SpaceSection struct {
@@ -236,6 +239,7 @@ type spaceBundleLine struct {
 	Record     *SpaceBundleRecord `json:"record,omitempty"`
 	Audit      *AuditEventView    `json:"audit,omitempty"`
 	LLMRequest *LLMRequestView    `json:"llm_request,omitempty"`
+	File       *SpaceBundleFile   `json:"file,omitempty"`
 	End        *SpaceBundleEnd    `json:"end,omitempty"`
 }
 
@@ -274,7 +278,8 @@ type SpaceJobView struct {
 }
 
 // SpaceExportInput picks sections by Include (collection names) or by Parts
-// (config, data, observations, history; default config and data), not both.
+// (config, data, observations, history, knowledge, attachments; default config
+// and data), not both. Knowledge and attachments read the space's sub-scopes too.
 type SpaceExportInput struct {
 	Include  []string `json:"include,omitempty"`
 	Parts    []string `json:"parts,omitempty"`
@@ -646,7 +651,7 @@ func (s *Service) ExportSpace(ctx context.Context, token string, scope Scope, in
 	job := SpaceJob{Kind: spaceJobExport, Include: in.Include, Parts: in.Parts, Template: in.Template, BundleID: "sb_" + ID()}
 	// The job counts what the bundle holds now; the download streams it fresh.
 	return s.startSpaceJob(ctx, scope, d, job, func(ctx context.Context, job *SpaceJob) error {
-		manifest, err := writeSpaceBundle(ctx, s.Repo, scope, in, d.Role, job.BundleID, time.Now().UTC().Truncate(time.Millisecond), io.Discard)
+		manifest, err := s.writeSpaceBundle(ctx, token, d, scope, in, job.BundleID, time.Now().UTC().Truncate(time.Millisecond), io.Discard)
 		job.Manifest = &manifest
 		return err
 	})
@@ -773,7 +778,7 @@ func (s *Service) CloneSpace(ctx context.Context, token string, scope Scope, in 
 		imp := &spaceImporter{s: s, token: token, d: td, scope: target, m: manifest, approved: approved, history: true}
 		report, err := s.runSpaceImport(ctx, imp, func(yield func(spaceBundleLine) error) error {
 			var err error
-			manifest.Sections, manifest.Skipped, err = eachSpaceLine(ctx, s.Repo, scope, spaceSections(export), d.Role, now, yield)
+			manifest.Sections, manifest.Skipped, err = s.eachSpaceLine(ctx, token, d, scope, spaceSections(export), now, yield)
 			return err
 		})
 		job.Manifest, job.Report = &manifest, &report
@@ -884,7 +889,7 @@ func (s *Service) DownloadSpaceExport(ctx context.Context, token string, scope S
 	}
 	in := SpaceExportInput{Include: job.Include, Parts: job.Parts, Template: job.Template}
 	return func(w io.Writer) error {
-		_, err := writeSpaceBundle(ctx, s.Repo, rec.Scope, in, d.Role, job.BundleID, job.Manifest.CreatedAt, w)
+		_, err := s.writeSpaceBundle(ctx, token, d, rec.Scope, in, job.BundleID, job.Manifest.CreatedAt, w)
 		return err
 	}, nil
 }

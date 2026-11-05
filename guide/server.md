@@ -484,13 +484,20 @@ wiki. What a person approves and how is described in
     `application/x-ndjson` body (up to 1 GiB, spooled to a temp file and checked
     before anything is written), with `import_as` and `as_template=true` in the
     query. Export and clone take `parts` (`config`, `data`, `observations`,
-    `history`; default `config` and `data`, as before). Observations arrive as
+    `history`, `knowledge`, `attachments`; default `config` and `data`, as
+    before). Observations arrive as
     memory candidates. History (audit rows and model-call traces without their
     text) is only for people; an uploaded bundle's history is never written,
     and only a clone inside the server copies it. `as_template` takes the
     settings and definitions of any bundle into a space without settings.
-    Knowledge documents and source files are not carried: they are always
-    private. Old bundle text on export job rows is cleared on the next download
+    The `knowledge` part carries knowledge files as their stored text and the
+    `attachments` part carries text and JSON source attachments (up to 512 KiB,
+    base64), both from the space's user and agent sub-scopes. Only a person
+    gets them, and only their own: knowledge files the caller supplied,
+    private attachments the caller created; restricted attachments never
+    leave. Import and clone restore each file into the same sub-scope of the
+    target, knowledge as a draft source, and importing again adds nothing.
+    Old bundle text on export job rows is cleared on the next download
     or by `memoryd --space-repair execute`.
 13. **Webhooks.** A webhook can set its `method` (POST, PUT or PATCH),
     `timeout_seconds` (up to 30), and extra `headers` and `query_params` (16
@@ -499,11 +506,15 @@ wiki. What a person approves and how is described in
     address check is unchanged. New events: `consolidation.completed`,
     `ingest.completed` (knowledge and file ingest) and `defense.triggered`
     (a space defense rule redacted or blocked a write). Existing webhooks keep
-    their events; subscribe to the new ones to receive them.
+    their events; subscribe to the new ones to receive them. Changing a
+    webhook's URL to another scheme, host or port drops its sealed headers and
+    query values unless the same update sends them again.
 14. **Wiki folders and query pages.** `PATCH /v1/wiki/folders` renames or
     moves a folder with everything in it, `DELETE /v1/wiki/folders` deletes an
     empty folder (or, with `recursive=true`, its pages too), and `DELETE
-    /v1/wiki/pages/{id}` deletes one page. All three are for people only.
+    /v1/wiki/pages/{id}` deletes one page. All three are for people only, and
+    moving or deleting a folder that holds query pages also needs the
+    mental model write permission.
     Mental models take a `folder` and show in the wiki tree as query pages. A
     query page refreshes only on the refresh mode a person chose, and every
     refresh is a draft a person approves; nothing new spends model budget by
