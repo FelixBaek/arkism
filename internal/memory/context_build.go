@@ -19,6 +19,8 @@ type ContextBuildInput struct {
 	// Explain and Timezone pass through to the search (SearchInput).
 	Explain  bool   `json:"explain,omitempty"`
 	Timezone string `json:"timezone,omitempty"`
+	// ExpandCausal passes through to the search (SearchInput).
+	ExpandCausal bool `json:"expand_causal,omitempty"`
 }
 
 type ContextPack struct {
@@ -50,7 +52,7 @@ func (s *Service) BuildContext(ctx context.Context, token string, in ContextBuil
 		SearchCriteria: in.SearchCriteria, Scope: in.Scope, Query: in.Task, contextView: view,
 		Limit: maxItems, BudgetTokens: budget, TokenEncoding: in.TokenEncoding,
 		Destination: in.Destination, RunID: in.RunID, Modes: in.Modes, Purpose: "answer", RelatedTo: in.RelatedTo,
-		Explain: in.Explain, Timezone: in.Timezone,
+		Explain: in.Explain, Timezone: in.Timezone, ExpandCausal: in.ExpandCausal,
 	}
 	directives, err := s.directivesFirst(ctx, token, &search)
 	if err != nil {

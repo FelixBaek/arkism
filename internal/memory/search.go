@@ -30,6 +30,8 @@ type SearchInput struct {
 	Query           string           `json:"query"`
 	Limit           int              `json:"limit"`
 	MaxChars        int              `json:"max_chars"`
+	// ExpandCausal adds memories one active causal link from the top hits (recall_lanes.go).
+	ExpandCausal bool `json:"expand_causal,omitempty"`
 	// Explain returns each hit's lane ranks and rerank score (recall_lanes.go).
 	Explain bool `json:"explain,omitempty"`
 	// Timezone (IANA) is the calendar time words like "yesterday" resolve in; empty is Asia/Seoul.
@@ -66,12 +68,12 @@ type ScoredHit struct {
 }
 
 // laneByReason names the lane each search reason comes from (existing policy).
-var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation", reasonTemporal: "temporal", reasonGraph: "graph"}
+var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation", reasonTemporal: "temporal", reasonGraph: "graph", reasonCausal: "causal"}
 
 // hitLanes lists the lanes that found a fused hit, in a fixed order.
 func hitLanes(reasons []string) []string {
 	lanes := []string{}
-	for _, lane := range []string{"exact", "keyword", "vector", "relation", "temporal", "graph"} {
+	for _, lane := range []string{"exact", "keyword", "vector", "relation", "temporal", "graph", "causal"} {
 		for _, r := range reasons {
 			if laneByReason[r] == lane {
 				lanes = append(lanes, lane)
@@ -125,7 +127,7 @@ func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
-			} else if slices.Contains(hit.Reasons, reasonGraph) {
+			} else if slices.Contains(hit.Reasons, reasonGraph) || slices.Contains(hit.Reasons, reasonCausal) {
 				weight = graphLaneWeight
 			}
 			entry.Score += weight / float64(rankOffset+position+1)

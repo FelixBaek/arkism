@@ -42956,7 +42956,298 @@
     "/v1/mental-models/{id}": {"get": {"summary": "One mental model", "description": "The approved summary (active), a pending draft and the draft's diff against the active text.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "patch": {"summary": "Change a mental model's title, query or refresh (human principals only)", "description": "Body {scope, expected_revision, title, query, refresh}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}, "delete": {"summary": "Delete a mental model (human principals only)", "description": "Body {scope, expected_revision}.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "{deleted}"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/mental-models/{id}/history": {"get": {"summary": "All summary revisions of one mental model with line diffs", "description": "Each revision carries the diff against the revision before it.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "workspace_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "project_id", "in": "query", "required": true, "schema": {"type": "string"}}, {"name": "user_id", "in": "query", "required": false, "schema": {"type": "string"}}, {"name": "agent_id", "in": "query", "required": false, "schema": {"type": "string"}}], "responses": {"200": {"description": "{id, revisions[{version, status, action, text, citations, by, at, diff}], authority}"}, "400": {"description": "invalid_request"}, "403": {"description": "access_denied"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
     "/v1/mental-models/{id}/refresh": {"post": {"summary": "Write a new draft summary (human or service principals)", "description": "Body {scope, dry_run}. Recalls the query over approved memories and approved observations and asks the server model for a summary citing recalled ids only. dry_run returns the draft and stores nothing on the mental model; otherwise the draft waits for a person's review.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view (dry_run true for a dry run)"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "429": {"description": "Model budget exhausted"}, "502": {"description": "invalid_model_output"}, "503": {"description": "model_not_configured"}, "404": {"description": "not_found"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
-    "/v1/mental-models/{id}/review": {"post": {"summary": "Approve or reject the draft summary (human principals only)", "description": "Body {scope, expected_revision, action approve|reject, reason?}. approve rechecks every citation and makes the draft the active revision; the previous active revision is kept in history as superseded.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}}
+    "/v1/mental-models/{id}/review": {"post": {"summary": "Approve or reject the draft summary (human principals only)", "description": "Body {scope, expected_revision, action approve|reject, reason?}. approve rechecks every citation and makes the draft the active revision; the previous active revision is kept in history as superseded.", "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}], "responses": {"200": {"description": "Mental model view"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "404": {"description": "not_found"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}}}},
+    "/v1/causal-links": {
+      "post": {
+        "summary": "Link two memories as cause and effect (human principals only, write:memory_relations)",
+        "description": "Body {scope, cause_id, effect_id, reason?}. Both memories must be approved, active and readable by the caller in the same scope, and differ. The link is active at once. A pair already linked or proposed is a conflict; a rejected pair is revived. Cycles are allowed; reads walk at most one hop.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CausalLinkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CausalLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not permitted (see summary for the role rule)"
+          },
+          "404": {
+            "description": "not_found"
+          },
+          "409": {
+            "description": "duplicate link, or a memory is not active"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Causal links of one status (default candidate, the review queue), newest first (read:memory_relations)",
+        "description": "status candidate|active|rejected; limit 1-100 (50). At most 500 rows per call are read (truncated). Only links whose two memories the caller may read are listed.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "candidate",
+                "active",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Links (untrusted data)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CausalLinkPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not permitted (see summary for the role rule)"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/causal-links/propose": {
+      "post": {
+        "summary": "Ask the server model for causal links between approved memories (human or service, write:memory_relations)",
+        "description": "Body {scope, dry_run?, max_groups? 1-10 (3)}. Approved memories that pass the per-memory external transfer check are sent newest first in groups of 20, one budgeted model call per group. Every link is checked against its group and stored as a candidate that a person must approve; nothing becomes active here. Pairs that already have a row (any status, rejected included) are refused as conflict. 503 model_not_configured when no server model is set.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CausalProposeInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Proposals and refusals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CausalProposeResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not permitted (see summary for the role rule)"
+          },
+          "429": {
+            "description": "model budget exhausted"
+          },
+          "503": {
+            "description": "model_not_configured"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/causal-links/{id}/review": {
+      "post": {
+        "summary": "A person's decision on a causal link (human principals only, write:memory_relations)",
+        "description": "Body {scope, expected_revision, action approve|reject}. approve turns a candidate into an active link after rechecking that both memories are active and readable; reject retires a candidate or an active link.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CausalReviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CausalLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request"
+          },
+          "403": {
+            "description": "Not permitted (see summary for the role rule)"
+          },
+          "404": {
+            "description": "not_found"
+          },
+          "409": {
+            "description": "revision_conflict or wrong status"
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   },
   "components": {
     "securitySchemes": {
@@ -45893,10 +46184,11 @@
                 "vector",
                 "relation",
                 "temporal",
-                "graph"
+                "graph",
+                "causal"
               ]
             },
-            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph. temporal: the query named a time and the memory happened then; graph: one relations step from a top hit."
+            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph, causal. temporal: the query named a time and the memory happened then; graph: one relations step from a top hit. causal: one active causal link from a top hit (expand_causal)."
           },
           "path_check": {
             "type": "string",
@@ -46804,6 +47096,11 @@
               }
             ],
             "description": "Omitted/null keeps original nil behavior; an explicit versioned object selects this invocation only."
+          },
+          "expand_causal": {
+            "type": "boolean",
+            "default": false,
+            "description": "Passed to the search: add memories one active causal link from the top hits."
           }
         },
         "required": [
@@ -47107,6 +47404,11 @@
               }
             ],
             "description": "Exact scoped anchor revision. Requires explicit relation mode, answer purpose and internal destination. One-hop stored source, supersession or evaluation references only; target memories retain normal policy, filters, history separation and final transaction checks."
+          },
+          "expand_causal": {
+            "type": "boolean",
+            "default": false,
+            "description": "Add memories one active causal link (either direction) from the top hits as the causal lane, at most 20. Ignored with modes, include_inactive or non-memory collections."
           }
         },
         "required": [
@@ -49828,7 +50130,9 @@
             "enum": [
               "proposal",
               "superseded_by",
-              "supersedes"
+              "supersedes",
+              "causes",
+              "caused_by"
             ]
           },
           "reference": {
@@ -49846,6 +50150,14 @@
           },
           "record": {
             "$ref": "#/components/schemas/Record"
+          },
+          "link": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "description": "memory_relations row of a causes/caused_by link (active links only)"
           }
         }
       },
@@ -53038,8 +53350,10 @@
               "supports",
               "human_link",
               "same_session",
-              "similar"
-            ]
+              "similar",
+              "causes"
+            ],
+            "description": "causes: an active causal link, from the cause to the effect"
           },
           "relation": {
             "allOf": [
@@ -69775,6 +70089,245 @@
         "x-go-type": "memory.FileExtractRemoved",
         "x-go-source": "internal/memory/file_extract.go",
         "description": "FileExtractRemoved is a chunk of the last upload that is gone now; its\ncandidates (an approved candidate keeps its id as a memory) stay as they are."
+      },
+      "CausalLink": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "scope",
+          "status",
+          "revision",
+          "cause",
+          "effect",
+          "origin",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "authority"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "candidate",
+              "active",
+              "rejected"
+            ]
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cause": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/Ref"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1200
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "human",
+              "model"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "generator": {
+            "$ref": "#/components/schemas/Generator"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "approved_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "authority": {
+            "type": "string"
+          }
+        },
+        "description": "memory_relations row of kind causes: cause causes effect. Only active links are read as links."
+      },
+      "CausalLinkInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "cause_id",
+          "effect_id"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "cause_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "effect_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1200,
+            "description": "At most 300 characters; no secrets or private spans."
+          }
+        }
+      },
+      "CausalReviewInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope",
+          "expected_revision",
+          "action"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          }
+        }
+      },
+      "CausalProposeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/Scope"
+          },
+          "dry_run": {
+            "type": "boolean",
+            "default": false
+          },
+          "max_groups": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10,
+            "description": "0 means 3"
+          }
+        }
+      },
+      "CausalLinkPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "truncated",
+          "authority"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/CausalLink"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "authority": {
+            "type": "string"
+          }
+        }
+      },
+      "CausalProposeResult": {
+        "type": "object",
+        "required": [
+          "dry_run",
+          "groups",
+          "proposed",
+          "rejected",
+          "calls",
+          "tokens",
+          "authority"
+        ],
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "groups": {
+            "type": "integer"
+          },
+          "proposed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CausalLink"
+            }
+          },
+          "rejected": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "integer"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "invalid_model_output",
+                    "citation_outside_group",
+                    "self_link",
+                    "invalid_reason",
+                    "invalid_confidence",
+                    "conflict"
+                  ]
+                },
+                "target": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "calls": {
+            "type": "integer"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "authority": {
+            "type": "string"
+          }
+        }
       }
     },
     "headers": {

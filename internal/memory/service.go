@@ -513,6 +513,8 @@ func validCreateKind(collection, kind string) bool {
 		return slices.Contains([]string{"conversation", "message", "note", "document", "url", "image", "tool_result", "design_page"}, kind)
 	case "memory_candidates":
 		return slices.Contains([]string{"raw", "semantic", "episodic", "procedural", "user", "decision", "lesson"}, kind)
+	case colMemoryRelations:
+		return kind != causalKind // causal links go through /v1/causal-links and human review
 	default:
 		return true
 	}

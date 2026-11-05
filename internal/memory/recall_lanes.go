@@ -15,6 +15,7 @@ import (
 const (
 	reasonTemporal  = "temporal"
 	reasonGraph     = "graph"
+	reasonCausal    = "causal"
 	graphLaneWeight = 0.5 // RRF weight: a neighbour is weaker evidence than a direct match.
 	graphSeedCount  = 5
 	graphFanOut     = 20
@@ -83,18 +84,26 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		trace.window = &w
 		lists, trace.lanes = append(lists, hits), append(trace.lanes, "temporal")
 	}
-	if !s.RecallGraph {
-		return lists, trace, nil
+	// Neighbour lanes step from the same top fused hits, so a causal hop is one hop from a direct match.
+	top := FuseScored(lists, graphSeedCount)
+	for _, lane := range []struct {
+		on     bool
+		reason string
+		next   func(context.Context, Scope, []string, int) ([]string, error)
+	}{{s.RecallGraph, reasonGraph, s.Repo.MemoryNeighbors}, {in.ExpandCausal, reasonCausal, s.causalNeighbors}} {
+		if !lane.on {
+			continue
+		}
+		hits, err := s.neighborLane(ctx, in, top, lane.reason, lane.next)
+		if err == nil {
+			hits, err = clean(hits)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		lists, trace.lanes = append(lists, hits), append(trace.lanes, lane.reason)
 	}
-	hits, err := s.graphLane(ctx, in, FuseScored(lists, graphSeedCount))
-	if err == nil {
-		hits, err = clean(hits)
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	trace.lanes = append(trace.lanes, "graph")
-	return append(lists, hits), trace, nil
+	return lists, trace, nil
 }
 
 // recallItems adds the recall lanes, fuses and fills out.Items (with the explain trace when asked).
@@ -116,8 +125,8 @@ func (s *Service) recallItems(ctx context.Context, in SearchInput, d Decision, c
 	return nil
 }
 
-// graphLane reads the approved memories one relations step from the top fused hits.
-func (s *Service) graphLane(ctx context.Context, in SearchInput, top []ScoredHit) ([]Hit, error) {
+// neighborLane reads the approved memories one step (found by next) from the top fused hits.
+func (s *Service) neighborLane(ctx context.Context, in SearchInput, top []ScoredHit, reason string, next func(context.Context, Scope, []string, int) ([]string, error)) ([]Hit, error) {
 	seeds := make([]string, 0, len(top))
 	for _, r := range top {
 		seeds = append(seeds, r.ID)
@@ -125,7 +134,7 @@ func (s *Service) graphLane(ctx context.Context, in SearchInput, top []ScoredHit
 	if len(seeds) == 0 {
 		return []Hit{}, nil
 	}
-	ids, err := s.Repo.MemoryNeighbors(ctx, in.Scope, seeds, min(graphFanOut, 2*in.Limit))
+	ids, err := next(ctx, in.Scope, seeds, min(graphFanOut, 2*in.Limit))
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +142,7 @@ func (s *Service) graphLane(ctx context.Context, in SearchInput, top []ScoredHit
 	for _, id := range ids {
 		// A neighbour that is gone or unreadable simply drops out; cleaning rechecks the rest.
 		if r, err := s.Repo.Get(ctx, colMemories, in.Scope, id); err == nil {
-			hits = append(hits, searchHit(r, colMemories, reasonGraph))
+			hits = append(hits, searchHit(r, colMemories, reason))
 		}
 	}
 	return hits, nil

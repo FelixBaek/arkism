@@ -18,6 +18,7 @@ const (
 	GraphConflicts   = "conflicts"
 	GraphSupports    = "supports"
 	GraphHumanLink   = "human_link"
+	GraphCauses      = causalKind
 	GraphSameSession = "same_session"
 	GraphSimilar     = "similar"
 
@@ -174,6 +175,8 @@ func storedGraphEdge(rel Record) (MemoryGraphEdge, bool) {
 		typ = GraphConflicts
 	case rel.Kind == "supports":
 		typ = GraphSupports
+	case rel.Kind == causalKind:
+		typ = GraphCauses // From is the cause, To the effect
 	case rel.CreatedByType == roleHuman:
 		typ = GraphHumanLink
 	default:

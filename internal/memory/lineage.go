@@ -10,6 +10,8 @@ type LineageLink struct {
 	Reference Ref     `json:"reference"`
 	State     string  `json:"state"`
 	Record    *Record `json:"record,omitempty"`
+	// Link is the memory_relations row of a causes/caused_by link.
+	Link *Ref `json:"link,omitempty"`
 }
 type MemoryLineage struct {
 	Memory    Ref           `json:"memory"`
@@ -28,6 +30,10 @@ func (s *Service) MemoryLineage(ctx context.Context, token string, scope Scope, 
 	}
 	if s.Repo == nil {
 		return MemoryLineage{}, ErrUnavailable
+	}
+	causal, e := s.causalLineage(ctx, scope, id)
+	if e != nil {
+		return MemoryLineage{}, e
 	}
 	var out MemoryLineage
 	// shortcut: bounded one-hop walk; preauthorize with revision fences if policy latency grows.
@@ -53,6 +59,10 @@ func (s *Service) MemoryLineage(ctx context.Context, token string, scope Scope, 
 		for _, ref := range r.Supersedes {
 			out.Links = append(out.Links, LineageLink{Relation: "supersedes", Reference: ref})
 		}
+		if e = followCausalRevisions(ctx, tx, scope, causal); e != nil {
+			return e
+		}
+		out.Links = append(out.Links, causal...)
 		for i := range out.Links {
 			if e = s.resolveLineageLink(ctx, tx, token, scope, d, &out.Links[i]); e != nil {
 				return e
@@ -111,5 +121,21 @@ func (s *Service) resolveLineageLink(ctx context.Context, tx Tx, token string, s
 	}
 	link.State = "available"
 	link.Record = &target
+	return nil
+}
+
+// followCausalRevisions points causal links at each memory's current revision: a
+// link names the memory, not the wording it had when the link was made.
+func followCausalRevisions(ctx context.Context, tx Tx, scope Scope, links []LineageLink) error {
+	for i := range links {
+		m, e := tx.Get(ctx, colMemories, scope, links[i].Reference.ID)
+		if errors.Is(e, ErrNotFound) {
+			continue
+		}
+		if e != nil {
+			return e
+		}
+		links[i].Reference.Revision = m.Revision
+	}
 	return nil
 }
