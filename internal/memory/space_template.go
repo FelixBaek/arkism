@@ -9,6 +9,9 @@ package memory
 // human-written), the settings land only in a space that has none, and the run
 // is an import job the person can read like any other. The first settings a
 // person stores win over the template's: then only its definitions are added.
+// No person chose these definitions for this space, so they arrive switched off:
+// directives inactive and mental models refreshed only on request, until a person
+// turns them on.
 
 import (
 	"context"
@@ -46,6 +49,7 @@ func (s *Service) autoApplySpaceTemplate(ctx context.Context, token string, d De
 	if err != nil {
 		return
 	}
+	dormantDefinitions(lines)
 	isConfig := func(l spaceBundleLine) bool { return l.Section == spaceSectionConfig }
 	if definitionsOnly {
 		lines = slices.DeleteFunc(lines, isConfig)
@@ -66,6 +70,22 @@ func (s *Service) autoApplySpaceTemplate(ctx context.Context, token string, d De
 	}); err != nil {
 		t.applied.Delete(scope)
 		slog.Warn("space template not applied", "workspace", scope.WorkspaceID, "project", scope.ProjectID, "error", captureErrorCode(err))
+	}
+}
+
+// dormantDefinitions switches the template's directives off and its mental models to
+// manual refresh, so nothing the template defines acts or spends model budget before
+// a person enables it in this space.
+func dormantDefinitions(lines []spaceBundleLine) {
+	for _, l := range lines {
+		switch {
+		case l.Record == nil:
+		case l.Section == colDirectives:
+			l.Record.Status = "inactive"
+		case l.Section == colMentalModels && l.Record.MentalModel != nil:
+			r := &l.Record.MentalModel.Refresh
+			r.Mode, r.Cron, r.AfterConsolidation = mmRefreshManual, "", false
+		}
 	}
 }
 

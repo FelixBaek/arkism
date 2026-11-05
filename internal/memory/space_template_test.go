@@ -31,6 +31,9 @@ func TestSpaceTemplateAutoApply(t *testing.T) {
 	if _, err := f.svc.CreateDirective(testCtx, f.human, in); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := f.svc.CreateMentalModel(testCtx, f.human, MentalModelInput{Scope: scopeA, Title: "Units", Query: "units", Refresh: MentalModelRefresh{Mode: mmRefreshDaily, AfterConsolidation: true}}); err != nil {
+		t.Fatal(err)
+	}
 	putSettings(t, f, scopeA, SpaceConfigInput{ExtractionMode: ptr(spaceExtractVerbose)})
 	path := t.TempDir() + "/template.jsonl"
 	if err := os.WriteFile(path, []byte(exportBundle(t, f, scopeA, SpaceExportInput{Template: true})), 0o600); err != nil {
@@ -55,8 +58,19 @@ func TestSpaceTemplateAutoApply(t *testing.T) {
 	}
 	// A person's first capture into a space without settings: settings and definitions.
 	f.capture(f.human, captureInput(scopeC, "evt-human", explicit("the team prefers metric units always")))
-	if report := spaceTemplateJob(t, f, scopeC); report.Config != "applied" || report.Imported != 1 {
+	if report := spaceTemplateJob(t, f, scopeC); report.Config != "applied" || report.Imported != 2 {
 		t.Fatalf("capture apply report = %+v", report)
+	}
+	// No person chose the definitions for this space: they arrive switched off.
+	for _, r := range scopeRecords(f, colDirectives, scopeC) {
+		if r.Status == "active" {
+			t.Fatalf("auto-applied directive is active: %+v", r)
+		}
+	}
+	for _, r := range scopeRecords(f, colMentalModels, scopeC) {
+		if m := r.MentalModel.Refresh; m.Mode != mmRefreshManual || m.AfterConsolidation || m.Cron != "" {
+			t.Fatalf("auto-applied mental model refreshes on its own: %+v", m)
+		}
 	}
 	if cfg := f.svc.mustSpace(t, scopeC); cfg.ExtractionMode != spaceExtractVerbose {
 		t.Fatalf("template settings not stored: %+v", cfg)
@@ -67,7 +81,7 @@ func TestSpaceTemplateAutoApply(t *testing.T) {
 	}
 	// A person's first settings win; only the definitions are added.
 	putSettings(t, f, scopeD, SpaceConfigInput{DisplayName: ptr("D")})
-	if report := spaceTemplateJob(t, f, scopeD); report.Config != "" || report.Imported != 1 {
+	if report := spaceTemplateJob(t, f, scopeD); report.Config != "" || report.Imported != 2 {
 		t.Fatalf("config apply report = %+v", report)
 	}
 	if cfg := f.svc.mustSpace(t, scopeD); cfg.DisplayName != "D" || cfg.ExtractionMode != "" {
