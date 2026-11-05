@@ -624,10 +624,13 @@ fn allowed(method: &str, path: &str) -> bool {
     let query_id = |prefix: &str| path.split(['?', '#']).next().unwrap_or("").strip_prefix(prefix).is_some_and(|id| !id.is_empty() && !id.contains('/'));
     // 지식 › 기억 문서 (태그 고치기·지우기) and 위키 폴더·페이지 (옮기기·이름 바꾸기·지우기): /v1/wiki/folders takes its path in the body or query.
     let wiki_folders = path.split(['?', '#']).next() == Some("/v1/wiki/folders");
+    // 별칭 빼기 in 설정 › 기억 공간: DELETE /v1/spaces/{workspace}/{project}/aliases/{alias} only.
+    let space_alias = path.strip_prefix("/v1/spaces/").map(|p| p.split('/').collect::<Vec<_>>())
+        .is_some_and(|p| p.len() == 4 && p[2] == "aliases" && p.iter().all(|s| !s.is_empty() && !s.contains('?') && !s.contains('#')));
     let delete = method == "DELETE"
         && (path.starts_with("/v1/memories/") || one_id("/v1/crew/") || one_id("/v1/prompts/") || one_id("/v1/design_systems/")
             || one_id("/v1/directives/") || one_id("/v1/entities/") || one_id("/v1/mental-models/") || query_id("/v1/webhooks/")
-            || one_id("/v1/files/memories/documents/") || query_id("/v1/wiki/pages/") || wiki_folders);
+            || one_id("/v1/files/memories/documents/") || query_id("/v1/wiki/pages/") || wiki_folders || space_alias);
     // 설정 › 기억 공간 saves with PATCH and resets with PUT, on /v1/spaces/{workspace}/{project}/config only.
     let space_config = path.strip_prefix("/v1/spaces/").and_then(|p| p.strip_suffix("/config"))
         .is_some_and(|p| p.split('/').count() == 2 && p.split('/').all(|s| !s.is_empty() && !s.contains('?') && !s.contains('#')));
@@ -1308,6 +1311,9 @@ mod tests {
         assert!(allowed("POST", "/v1/context/tokens"));
         assert!(!allowed("DELETE", "/v1/context/tokens"));
         assert!(allowed("DELETE", "/v1/memories/x"));
+        assert!(allowed("DELETE", "/v1/spaces/default/default/aliases/front"));
+        assert!(!allowed("DELETE", "/v1/spaces/default/default/config"));
+        assert!(!allowed("DELETE", "/v1/spaces/default/default/aliases/a/b"));
         assert!(allowed("DELETE", "/v1/crew/x"));
         assert!(!allowed("DELETE", "/v1/crew/x/runs"));
         assert!(!allowed("DELETE", "/v1/crew/"));

@@ -970,6 +970,29 @@ test("overview: 기억 지도 adds names and observations, links them and pages 
   await closeAll(); offs.forEach((o) => o());
 });
 
+test("overview: 기억 지도 draws names seen together, filters names by tag and count under 자세히, and saves as SVG", async () => {
+  const graph = { nodes: [{ id: "m1", label: "Orbit 백엔드", kind: "decision", reach: "project" }], edges: [] };
+  const asked = [];
+  const offs = [route("GET", "/v1/memory-graph", () => ok(graph)), route("GET", "/v1/entities/", () => ok({ memories: [], related: [], timeline: [] })),
+    route("GET", "/v1/entities/graph", (a) => { asked.push(a.path); return ok({ nodes: [{ id: "a", name: "Orbit", type: "project", mentions: 3 }, { id: "b", name: "민지", type: "person", mentions: 2 }], edges: [{ source: "a", target: "b", weight: 2 }, { source: "a", target: "gone", weight: 1 }] }); }),
+    route("GET", "/v1/observations", () => ok({ items: [] }))];
+  let d = await openWindow({ wide: "map" }); await app.settle(80); d = win();
+  assert.match(text(d.querySelector(".ov-map-legend")), /같이 나온 이름/);
+  assert.doesNotMatch(asked[0], /tags=|min_count=/, "no filter by default");
+  const opts = d.querySelector(".ov-map-opts"); assert.match(text(opts.querySelector("summary")), /자세히/);
+  const [tagIn, minIn] = opts.querySelectorAll("input");
+  tagIn.value = " orbit , 배포,"; minIn.value = "3";
+  await press("적용", opts, 50);
+  const last = new URLSearchParams(asked.at(-1).split("?")[1]);
+  assert.equal(last.get("tags"), "orbit,배포"); assert.equal(last.get("min_count"), "3");
+  const made = [], real = [URL.createObjectURL, URL.revokeObjectURL];
+  URL.createObjectURL = (b) => { made.push(b); return "blob:t"; }; URL.revokeObjectURL = () => {};
+  await press("SVG로 저장", d, 10);
+  assert.equal(made.length, 1); assert.equal(made[0].type, "image/svg+xml");
+  [URL.createObjectURL, URL.revokeObjectURL] = real;
+  await closeAll(); offs.forEach((o) => o());
+});
+
 test("overview: the screen's chips, steps and cards open windows; motion follows the settings", async () => {
   await openWindow({ key: "collect" }); await closeAll();
   const table = app.$("#table");

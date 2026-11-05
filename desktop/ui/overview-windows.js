@@ -4,7 +4,7 @@
 // Everything shown comes from data the app already loaded or a documented read API; a field the server does not have is left out.
 window.ArkismOverviewWindows = (ctx, env) => {
   "use strict";
-  const { state, el, button, icon, request, query, ago, go, render } = ctx;
+  const { state, el, button, icon, request, query, ago, go, render, saveFile } = ctx;
   const HOUR = 3600000;
   const num = (n) => Number(n || 0).toLocaleString("ko-KR");
   const loc = () => globalThis.ArkismI18n?.locale() || "ko-KR"; // dates follow the screen language
@@ -1099,15 +1099,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const exportAs = async (format) => {
         if (xp.busy) return;
         Object.assign(xp, { busy: true, id: x.id, note: "" }); paint();
-        let url = "";
         try {
           const r = await request("/v1/usage/sessions/export", { method: "POST", body: JSON.stringify({ scope: state.scope, ids: [x.id], format, transcript: true }) });
           if (typeof r?.content !== "string") throw new Error("invalid_response");
-          url = URL.createObjectURL(new Blob([r.content], { type: r.content_type || "text/plain" }));
-          const link = el("a"); link.href = url; link.download = r.filename || (format === "json" ? "arkism-session.json" : "arkism-session.md"); link.click();
+          saveFile(r.filename || (format === "json" ? "arkism-session.json" : "arkism-session.md"), r.content, r.content_type || "text/plain");
           xp.note = r.truncated ? "다운로드를 시작했어요. 너무 길어 일부 대화는 잘렸어요." : "세션 다운로드를 시작했어요."; // a link click cannot tell whether the save went through
         } catch (e) { xp.note = `내보내지 못했어요 (${e.message}).`; }
-        finally { if (url) setTimeout(() => URL.revokeObjectURL(url), 1000); xp.busy = false; if (d.isConnected) paint(); }
+        finally { xp.busy = false; if (d.isConnected) paint(); }
       };
       if (xp.id === x.id) st.textContent = xp.busy ? "내보내는 중…" : xp.note;
       const md = button("Markdown 내보내기", "small", null, () => exportAs("markdown")), js = button("JSON", "small", null, () => exportAs("json"));
@@ -1617,7 +1615,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
   // 기억 지도 (611:54134 · 611:56374): GET /v1/memory-graph?mode=all, grouped by 칸 (reach), curved lines between memories.
   // The map has no AI-suggestion write API (POST /v1/knowledge-graph/relations writes a separate store the map never reads), so 연결/아니요 are not drawn.
   const REACH = { personal: ["개인", 0], general: ["범용", 1], project: ["프로젝트", 2] };
-  const EDGE = { supports: "지지", supersedes: "대체", conflicts: "서로 다름", human_link: "직접 연결", same_session: "관련", similar: "비슷함", mentions: "이름 언급", derived_from: "정리 바탕", causes: "원인→결과" };
+  const EDGE = { supports: "지지", supersedes: "대체", conflicts: "서로 다름", human_link: "직접 연결", same_session: "관련", similar: "비슷함", mentions: "이름 언급", derived_from: "정리 바탕", causes: "원인→결과", together: "같이 나온 이름" };
   const REACH_COLOR = { personal: "#7fc79c", general: "#6aa3ff", project: "#f5b955" }; // same colours as the 칸 chips (v4-overview.css .ov-map-personal …)
   // names (GET /v1/entities/graph) and approved observations (GET /v1/observations) join the map as their own areas; their lines are 이름 언급 and 정리 바탕
   const NAMED = { key: "_named", name: "이름", ord: 997, color: "#e0a3c8" }, OBSERVED = { key: "_observed", name: "정리된 관찰", ord: 998, color: "#9fb4c8" };
@@ -1655,9 +1653,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
     // extra nodes: "ent:<id>" names and "obs:<id>" observations; read after the memories so the map draws first
     const extra = new Map(); let extraEdges = [], namesLimit = NAMES_STEP, namesMore = false, namesBusy = false;
     const entInfo = new Map(); // entity id → its page (memories, related), null while it loads, false when it failed
+    // 자세히 · 이름 거르기: names only from memories with these tags (any of them), name-to-name lines only when together this often
+    const nameF = { tags: "", min: "" };
     async function loadExtra() {
       namesBusy = true;
-      const [g, obs] = await Promise.all([request(`/v1/entities/graph?${query({ limit: namesLimit })}`).catch(() => null), request(`/v1/observations?${query({ status: "active", limit: 100 })}`).then((r) => r.items || [], () => [])]); // an older server or no read:entities / read:observations: no extra areas
+      const tags = nameF.tags.split(",").map((t) => t.trim()).filter(Boolean).join(","), min = Number(nameF.min) > 1 ? String(Math.min(1000, Math.floor(Number(nameF.min)))) : "";
+      const [g, obs] = await Promise.all([request(`/v1/entities/graph?${query({ limit: namesLimit, ...(tags ? { tags } : {}), ...(min ? { min_count: min } : {}) })}`).catch(() => null), request(`/v1/observations?${query({ status: "active", limit: 100 })}`).then((r) => r.items || [], () => [])]); // an older server or no read:entities / read:observations: no extra areas
       if (!d.isConnected) return;
       const ents = Array.isArray(g?.nodes) ? g.nodes.filter((e) => typeof e?.id === "string") : [];
       namesMore = ents.length >= namesLimit && namesLimit < NAMES_MAX;
@@ -1669,6 +1670,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
         extra.set(`ent:${e.id}`, { id: `ent:${e.id}`, kind: "entity", label: e.name || "이름", uses: e.mentions || 0, ent: e, group: NAMED });
         for (const m of entInfo.get(e.id)?.memories || []) if (byId.has(m.id)) lines.push({ from: `ent:${e.id}`, to: m.id, type: "mentions" });
       }
+      for (const e of Array.isArray(g?.edges) ? g.edges : []) if (extra.has(`ent:${e?.source}`) && extra.has(`ent:${e?.target}`)) lines.push({ from: `ent:${e.source}`, to: `ent:${e.target}`, type: "together" });
       for (const o of obs) {
         if (typeof o?.id !== "string") continue;
         extra.set(`obs:${o.id}`, { id: `obs:${o.id}`, kind: "observation", label: o.content || "", uses: (o.source_memory_ids || []).length, obs: o, group: OBSERVED });
@@ -1677,7 +1679,15 @@ window.ArkismOverviewWindows = (ctx, env) => {
       extraEdges = lines; namesBusy = false; relink(); paint();
     }
     const bar = el("div", "ov-map-bar"), seg = el("div", "ov-wide-seg ov-map-seg"), searchBox = el("label", "ov-map-search"), search = el("input", "ov-wide-search"); search.placeholder = "기억·주제 찾기"; search.setAttribute("aria-label", "기억·주제 찾기"); searchBox.append(search);
-    const chipHost = el("div", "ov-map-reach"); bar.append(seg, searchBox, el("small", "", "쓰는 범위"), chipHost);
+    const chipHost = el("div", "ov-map-reach");
+    const saveSvg = button("SVG로 저장", "ghost small", null, () => saveFile(`arkism-memory-map-${state.scope?.project_id || "default"}.svg`, bubbles.svg(), "image/svg+xml"));
+    // names filter under 자세히: tags (comma separated) and how often two names must appear together for a line
+    const opts = el("details", "ov-map-opts"), tagIn = el("input"), minIn = el("input");
+    tagIn.placeholder = "예: orbit, 배포"; tagIn.setAttribute("aria-label", "이 태그가 붙은 기억의 이름만"); minIn.type = "number"; minIn.min = "1"; minIn.max = "1000"; minIn.placeholder = "1"; minIn.setAttribute("aria-label", "같이 나온 횟수가 이만큼 넘는 이름만 잇기");
+    const optRow = (label, input) => { const l = el("label", "ov-map-opt"); l.append(el("span", "", label), input); return l; };
+    const applyF = button("적용", "small", null, () => { nameF.tags = tagIn.value; nameF.min = minIn.value; void loadExtra(); });
+    opts.append(el("summary", "", "자세히"), optRow("이 태그가 붙은 기억의 이름만", tagIn), optRow("같이 나온 횟수가 이만큼 넘는 이름만 잇기", minIn), applyF);
+    bar.append(seg, searchBox, el("small", "", "쓰는 범위"), chipHost, saveSvg, opts);
     const canvas = el("div", "ov-map-canvas");
     const groups = {}; nodes.forEach((n) => { (groups[reachOf(n)] ||= []).push(n); });
     const proj = state.scope?.project_id && state.scope.project_id !== "default" ? state.scope.project_id : "";
@@ -1722,7 +1732,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
     const legend = el("div", "ov-map-legend"), zoomLab = el("span", "ov-map-zoom", "100%");
     const zb = (txt, label, fn) => { const b = el("button", "ov-map-zbtn", txt); b.type = "button"; b.setAttribute("aria-label", label); b.addEventListener("click", fn); return b; };
     function drawLegend() {
-      const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes", ...["causes", "mentions", "derived_from"].filter((t) => [...edges, ...extraEdges].some((e) => e.type === t))]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t] || t)); items.append(i); }
+      const items = el("div", "ov-map-lg-items"); for (const t of ["supports", "same_session", "conflicts", "supersedes", ...["causes", "mentions", "derived_from", "together"].filter((t) => [...edges, ...extraEdges].some((e) => e.type === t))]) { const i = el("span", ""); i.append(el("i", `ov-map-e-${t}`), document.createTextNode(EDGE[t] || t)); items.append(i); }
       // the note takes its own top line, and the zoom buttons wrap as one group, so ⤢ never drops alone (#181)
       const note = bubbles.groupLinesOnly() ? [el("span", "ov-map-lg-note", "점이 많아 무리 사이 선만 그려요")] : [], zoom = el("span", "ov-map-lg-zoom");
       const tog = el("div", "ov-map-lg-tog"); for (const [v, l] of [[true, "전체 관계"], [false, "선택한 연결"]]) { const on = mode === "all" ? v : v === allEdges, b = el("button", on ? "on" : "", l); b.type = "button"; b.disabled = mode === "all"; b.setAttribute("aria-pressed", String(on)); b.addEventListener("click", () => { allEdges = v; drawMap(); drawLegend(); }); tog.append(b); }

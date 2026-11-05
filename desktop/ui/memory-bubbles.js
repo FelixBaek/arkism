@@ -9,7 +9,7 @@ window.ArkismMemoryBubbles = (() => {
   "use strict";
   // Line styles = the legend bar (v4-overview.css .ov-map-e-*): 뒷받침 solid, 같은 대화 dotted, 서로 다름 red dashed, 새로 바뀜 purple dotted.
   const EDGE = { supports: { c: "#7fc7a0", dash: [], n: "뒷받침" }, same_session: { c: "#c8c8c2", dash: [1, 3.5], n: "같은 대화" }, conflicts: { c: "#ef5a64", dash: [6, 5], n: "서로 다름" }, supersedes: { c: "#a596f7", dash: [1, 3.5], n: "새로 바뀜" },
-    mentions: { c: "#e0a3c8", dash: [2, 3], n: "이름 언급" }, derived_from: { c: "#9fb4c8", dash: [], n: "정리 바탕" },
+    mentions: { c: "#e0a3c8", dash: [2, 3], n: "이름 언급" }, derived_from: { c: "#9fb4c8", dash: [], n: "정리 바탕" }, together: { c: "#e0a3c8", dash: [], n: "같이 나온 이름" },
     causes: { c: "#f0a35e", dash: [], n: "원인→결과", arrow: true } }; // causes runs from the cause to the effect: an arrowhead at the effect
   // a line kind this build does not know yet (a newer server's) still draws: grey dashes named by its kind
   const edgeStyle = (t) => EDGE[t] || { c: "#9a9a94", dash: [4, 3], n: String(t || "관계") };
@@ -19,6 +19,25 @@ window.ArkismMemoryBubbles = (() => {
   const PAD = { l: 18, r: 18, t: 84, b: 76 }; // top clears the tabs + group labels, bottom clears the legend bar
   const GOLDEN = Math.PI * (3 - Math.sqrt(5)); // spiral step
   const GLIDE = 420, ZMIN = 0.5, ZMAX = 4, LABEL_ZOOM = 1.6, LABEL_MAX = 60, LABEL_CHARS = 10;
+
+  // SVG로 저장: the map at rest as a standalone SVG (areas, quiet lines, dots, area names and dot labels), no zoom or pan.
+  // snap: { bg, text, groups: [{ x, y, r, color, name }], lines: [{ x1, y1, x2, y2, color, dash }], dots: [{ x, y, r, color, label }] }
+  const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const n2 = (v) => Math.round(v * 10) / 10;
+  function toSvg(snap) {
+    const parts = [...snap.groups, ...snap.dots].filter((p) => p.r > 0), M = 24;
+    const x0 = Math.min(0, ...parts.map((p) => p.x - p.r)) - M, y0 = Math.min(0, ...parts.map((p) => p.y - p.r)) - M - 16;
+    const x1 = Math.max(0, ...parts.map((p) => p.x + p.r)) + M, y1 = Math.max(0, ...parts.map((p) => p.y + p.r)) + M;
+    const w = n2(x1 - x0), h = n2(y1 - y0), out = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${n2(x0)} ${n2(y0)} ${w} ${h}" width="${w}" height="${h}" font-family="sans-serif">`,
+      `<rect x="${n2(x0)}" y="${n2(y0)}" width="${w}" height="${h}" fill="${esc(snap.bg)}"/>`];
+    for (const g of snap.groups) if (g.r > 0) out.push(`<circle cx="${n2(g.x)}" cy="${n2(g.y)}" r="${n2(g.r)}" fill="${esc(g.color)}" fill-opacity="0.06" stroke="${esc(g.color)}" stroke-opacity="0.35" stroke-dasharray="3 4"/>`,
+      `<text x="${n2(g.x)}" y="${n2(g.y - g.r - 6)}" text-anchor="middle" font-size="12" fill="${esc(snap.text)}">${esc(g.name)}</text>`);
+    for (const l of snap.lines) out.push(`<line x1="${n2(l.x1)}" y1="${n2(l.y1)}" x2="${n2(l.x2)}" y2="${n2(l.y2)}" stroke="${esc(l.color)}" stroke-opacity="0.5" stroke-width="1.2"${l.dash?.length ? ` stroke-dasharray="${l.dash.join(" ")}"` : ""}/>`);
+    for (const d of snap.dots) out.push(`<circle cx="${n2(d.x)}" cy="${n2(d.y)}" r="${n2(d.r)}" fill="${esc(d.color)}" fill-opacity="0.9"><title>${esc(d.label)}</title></circle>`,
+      `<text x="${n2(d.x)}" y="${n2(d.y + d.r + 11)}" text-anchor="middle" font-size="9" fill="${esc(snap.text)}">${esc(String(d.label || "").slice(0, LABEL_CHARS + 6))}</text>`);
+    out.push("</svg>");
+    return out.join("\n");
+  }
 
   function create(opts) {
     const { tabs, groupOf, tip, card, onSelect, onClear, onZoom } = opts;
@@ -369,7 +388,15 @@ window.ArkismMemoryBubbles = (() => {
     function destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; ro?.disconnect(); }
 
     const groupLinesOnly = () => showAll && items.length > MANY; // the legend says so: above MANY dots only area-to-area lines are drawn
-    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, fitView, groupLinesOnly, setGroup, destroy };
+    // the dots where they come to rest (the glide's end while one runs), in the current grouping; labels from tip()
+    function svg() {
+      const at = (p) => glide?.to.get(p) || [p.x, p.y];
+      return toSvg({ bg: tok("--nc-canvas", "#0b0b0b"), text: tok("--nc-text", "#eee"),
+        groups: groups.map((g) => ({ x: g.rx, y: g.ry, r: g.rr || 0, color: g.color, name: g.name })),
+        lines: links.map((l) => { const s = edgeStyle(l.t), [ax, ay] = at(l.a), [bx, by] = at(l.b); return { x1: ax, y1: ay, x2: bx, y2: by, color: s.c, dash: s.dash }; }),
+        dots: items.map((p) => { const [x, y] = at(p); return { x, y, r: p.r, color: p.g?.color || p.color, label: tip(p.id)?.text || "" }; }) });
+    }
+    return { el: root, setItems, setEdges, setSelected, setEdgeAll, setZoom, zoomBy, fitView, groupLinesOnly, setGroup, svg, destroy };
   }
-  return { create };
+  return { create, toSvg };
 })();

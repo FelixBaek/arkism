@@ -16,18 +16,20 @@ window.ArkismMemoryInsight = (ctx, tab) => {
   const loads = globalThis.ArkismKeep.latest();
   // answer: the last reflect or search reply; sent: the search body it answered; mission: the space's reflect mission (undefined until read).
   let key = "", selected = null, editing = null, busy = false, answer = null, sent = null, failure = null, question = "", q = "", mission;
+  // similar: list only names with an open merge proposal (GET /v1/entities?similar=true)
+  let similar = false;
   let memo = new Map(), views = new Map();
   // form options under 자세히, kept per tab across redraws; shape: the 답 모양 fields [{ name, type, required }]
   const opts = { match: "any_strict" }, shape = [];
   // 규칙 · 자주 나온 이름 pages go through the shared cursor pager (memory-pages.js): order, repeats and stale reads handled there.
   const pager = window.ArkismMemoryPages.create(async (k, at) => {
-    const { find } = JSON.parse(k);
-    const out = await request(`${tab === "rules" ? "/v1/directives" : "/v1/entities"}?${query({ limit: at.limit, ...(at.cursor ? { cursor: at.cursor } : {}), ...(find ? { q: find } : {}) })}`);
+    const { find, near } = JSON.parse(k);
+    const out = await request(`${tab === "rules" ? "/v1/directives" : "/v1/entities"}?${query({ limit: at.limit, ...(at.cursor ? { cursor: at.cursor } : {}), ...(find ? { q: find } : {}), ...(near ? { similar: "true" } : {}) })}`);
     if (!Array.isArray(out?.items) || out.items.some((r) => typeof (tab === "rules" ? r?.rule : r?.name) !== "string")) throw new Error("invalid_response");
     // These pages carry no authority label; their rows are drawn as plain text all the same.
     return { items: out.items, next_cursor: typeof out.next_cursor === "string" ? out.next_cursor : "", authority: "data_only_untrusted" };
   });
-  const pageKey = () => JSON.stringify({ id: identity(), find: tab === "entities" ? q : "" });
+  const pageKey = () => JSON.stringify({ id: identity(), find: tab === "entities" ? q : "", near: tab === "entities" && similar });
   const page = () => { const s = pager.snapshot(); return s.key === pageKey() ? s : { items: [], cursor: "", ready: false, loading: false, error: "" }; };
   const rows = () => page().items;
   function reset() { loads.cancel(); pager.reset(); key = ""; selected = null; editing = null; busy = false; answer = null; sent = null; failure = null; mission = undefined; memo = new Map(); views = new Map(); }
@@ -533,6 +535,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
         form.append(box, go);
         form.addEventListener("submit", (e) => { e.preventDefault(); q = input.value.trim(); selected = null; void loadList("load"); });
         bar.append(form);
+        // merge proposals reach people only (the server sends none to an agent token)
+        if (human()) {
+          const l = el("label", "insight-check"), c = el("input"); c.type = "checkbox"; c.checked = similar;
+          c.addEventListener("change", () => { similar = c.checked; selected = null; void loadList("load"); });
+          l.append(c, el("span", "", "합칠 이름 후보만"));
+          bar.append(l);
+        }
       } else if (human()) bar.append(button("규칙 추가", "primary small", null, () => { selected = null; editing = {}; paintList(); openDetail(); detail(); }));
       else bar.append(el("p", "meta", "규칙은 사람만 만들고 바꿀 수 있어요."));
       $("#chips").replaceChildren(bar);
@@ -553,13 +562,13 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     if (!active()) return;
     const s = page(), table = $("#table"); table.replaceChildren(); table.setAttribute("aria-busy", String(s.loading));
     const rules = tab === "rules";
-    const empty = rules ? "아직 규칙이 없어요. 규칙을 적어 두면 AI가 답할 때 꼭 지켜요." : q ? "검색과 맞는 이름이 없어요." : "아직 모인 이름이 없어요. 승인된 기억에 사람·도구·프로젝트 이름이 나오면 여기에 모여요.";
+    const empty = rules ? "아직 규칙이 없어요. 규칙을 적어 두면 AI가 답할 때 꼭 지켜요." : q ? "검색과 맞는 이름이 없어요." : similar ? "합칠지 물어볼 이름이 없어요." : "아직 모인 이름이 없어요. 승인된 기억에 사람·도구·프로젝트 이름이 나오면 여기에 모여요.";
     const error = s.error ? "불러오지 못했어요. 연결과 접근 권한을 확인하고 다시 불러와 주세요." : "";
     const status = el("p", "meta original-notice", s.loading && !s.items.length ? "불러오는 중…" : error || (s.ready && !s.items.length ? empty : ""));
     status.setAttribute("role", "status"); status.hidden = !status.textContent; table.append(status);
     for (const r of s.items) {
       table.append(rules ? listRow(r, r.title, `${APPLIES[r.applies_to] || r.applies_to} · 우선순위 ${r.priority}`, ruleState(r), !r.active)
-        : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : r.summary_draft ? "요약 초안" : "확인됨", r.proposed || !!r.summary_draft));
+        : listRow(r, r.name, `${TYPES[r.type] || r.type} · 기억 ${r.mentions ?? 0}개`, r.proposed ? "확인 필요" : r.similar?.length ? "합칠 후보" : r.summary_draft ? "요약 초안" : "확인됨", r.proposed || !!r.similar?.length || !!r.summary_draft));
     }
     if (error) table.append(button("다시 불러오기", "small", null, () => loadList("retry")));
     else if (s.cursor) table.append(button("더 보기", "small", null, () => loadList("load")));
@@ -678,6 +687,23 @@ window.ArkismMemoryInsight = (ctx, tab) => {
     }
     return box;
   }
+  // 비슷한 이름: merge proposals the server found (EntitySimilar). 합치기 moves this name into the picked one;
+  // 다른 이름이에요 closes every proposal on this name (PATCH dismiss_similar).
+  function similarNames(id, list) {
+    const box = section("비슷한 이름"), rowsBox = el("div", "insight-similar-list");
+    box.append(el("p", "meta", "같은 것을 가리키면 합쳐 주세요."));
+    for (const s of list) {
+      const row = el("div", "insight-similar");
+      row.append(raw(el("strong", "", s.name)), el("span", "meta", `${Math.round((s.score || 0) * 100)}% 비슷해요`),
+        button("합치기", "small", null, async () => {
+          if (!await window.ask(`이 이름을 '${s.name}'에 합칠까요?\n이 이름이 나온 기억은 모두 그 이름으로 옮겨지고, 이 이름은 다른 이름으로 남아요.`, "합치기")) return;
+          void editEntity(id, () => request(`/v1/entities/${encodeURIComponent(id)}/merge`, { method: "POST", body: JSON.stringify({ scope: state.scope, into: s.id }) }), "이름을 합쳤어요.", s.id);
+        }));
+      rowsBox.append(row);
+    }
+    box.append(rowsBox, button("다른 이름이에요", "ghost small", null, () => patch(id, { dismiss_similar: true }, "합치지 않고 그대로 두었어요.")));
+    return box;
+  }
   function entityDetail(body) {
     const item = selected;
     if (!item) { body.append(el("h2", "", "이름을 고르세요"), el("p", "lead", "승인된 기억에 나온 사람·도구·프로젝트 이름이에요. 고르면 그 이름이 나온 기억을 볼 수 있어요.")); return; }
@@ -718,6 +744,7 @@ window.ArkismMemoryInsight = (ctx, tab) => {
       near.append(list); body.append(near);
     }
     if (!can) { body.append(el("p", "meta", "이름 고치기와 합치기는 사람만 할 수 있어요.")); return; }
+    if (e.similar?.length) body.append(similarNames(item.id, e.similar));
     const btns = el("div", "d-buttons");
     if (e.proposed) btns.append(button("맞아요", "primary small", null, () => patch(item.id, { confirm: true }, "이름을 확인했어요.")));
     btns.append(button("이름 바꾸기", "small", null, async () => {

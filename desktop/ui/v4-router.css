@@ -558,6 +558,14 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .v4-set-space .sp-sub { display: block; margin: 14px 0 6px; color: var(--nc-text); font-weight: 500; }
 .v4-set-space .sp-claim { display: flex; flex-direction: column; gap: 2px; padding: 6px 0; border-top: 1px solid var(--nc-line); }
 .v4-set-space .sp-test-out > strong { color: var(--nc-text); }
+/* 설정 › 기억 공간 › 이름과 별칭 · 템플릿 · 복제 · 공간 목록 (spaces.js): the current space and 대표 read as accent text */
+.v4-set-space .sp-here { color: var(--nc-accent); font-weight: 500; }
+.v4-set-space .pg-group .sp-chip .btn.link-btn { flex: none; width: auto; margin-left: 4px; padding: 0; min-height: 0; min-width: 0; height: auto; border: 0; border-radius: 0; background: none; color: var(--nc-muted); font: inherit; }
+.v4-set-space .sp-check { display: inline-flex; align-items: center; gap: 6px; font-size: calc(13px * var(--fs, 1)); color: var(--nc-text); cursor: pointer; }
+.v4-set-space .sp-check input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--nc-accent); }
+.v4-set-space .sp-preview { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
+.v4-set-space .sp-preview p { margin: 0; overflow-wrap: anywhere; }
+.v4-set-space .setting small .mono { font: calc(12px * var(--fs, 1)) var(--mono); }
 /* a number beside its label, as wide as a choice box (the folded 자세히 rows otherwise stretch inputs full width) */
 .v4-set-space .setting > input.ag-select { width: min(160px, 40%); }
 @media (max-width: 720px) { .v4-set-space .sp-rule { grid-template-columns: minmax(0, 1fr) 28px; } }

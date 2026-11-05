@@ -188,6 +188,29 @@ test("the entity search goes to the server and an empty result says so", async (
   assert.match(t.h.$("#table").textContent, /검색과 맞는 이름이 없어요/);
 });
 
+test("비슷한 이름: the list can keep only merge proposals; 합치기 merges into the proposed name, 다른 이름이에요 dismisses", async () => {
+  const near = [{ id: "e2", name: "Alexx", score: 0.71 }];
+  const t = setup("entities", [["/v1/entities?", () => ({ items: [entity({ proposed: false, similar: near })] })],
+    ["/v1/entities/e1?", () => ({ ...entity({ proposed: false, similar: near }), memories: [], related: [], timeline: [] })],
+    ["/v1/entities/e1/merge", () => entity({ id: "e2" })], ["/v1/entities/e1", () => entity({ proposed: false })]]);
+  t.view.draw(); await dom.flush();
+  assert.match(t.h.$("#table").textContent, /합칠 후보/);
+  const only = t.h.$("#chips input[type=checkbox]"); only.checked = true; dom.fire(only, "change"); await dom.flush();
+  assert.match(t.calls.at(-1)[0], /similar=true/);
+  t.h.$("#table .original-row").click(); await dom.flush();
+  assert.match(t.h.$("#detail").textContent, /비슷한 이름/); assert.match(t.h.$("#detail").textContent, /71% 비슷해요/);
+  dom.buttons(t.h.$("#detail .insight-similar"), "합치기")[0].click(); await dom.flush(); await dom.flush();
+  assert.match(t.asked.at(-1), /Alexx/);
+  assert.deepEqual(body(t.calls.find(([p]) => p === "/v1/entities/e1/merge")), { scope: SCOPE, into: "e2" });
+  t.h.$("#table .original-row").click(); await dom.flush();
+  dom.buttons(t.h.$("#detail"), "다른 이름이에요")[0].click(); await dom.flush();
+  assert.deepEqual(body(t.calls.filter(([, o]) => o?.method === "PATCH").at(-1)), { scope: SCOPE, dismiss_similar: true });
+
+  const agent = setup("entities", [["/v1/entities?", () => ({ items: [entity()] })]], { role: "agent" });
+  agent.view.draw(); await dom.flush();
+  assert.equal(agent.h.$("#chips input[type=checkbox]"), null, "agents get no proposals, so no filter");
+});
+
 test("ask sends the 자세히 options and a field list as a JSON schema, then shows steps, the structured answer and the space mission", async () => {
   const t = setup("ask", [["/v1/spaces/w/p/config/effective", () => ({ config: { reflect_mission: "배포 안전을 먼저 본다" } })],
     ["/v1/reflect", () => ({ answer: '{"할 일":"스테이징 확인","급함":true}', structured_answer: { "할 일": "스테이징 확인", "급함": true }, cited_memory_ids: ["m4"], directives_applied: [], retrieved: [{ id: "m4", kind: "lesson", score: 0.9 }],

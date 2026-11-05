@@ -1,0 +1,8 @@
+{
+ "items": [
+  {"workspace_id": "default", "project_id": "default", "revision": 3, "config": {"display_name": "기본 공간", "aliases": ["main", "home"]}, "counts": {"memories": 42}},
+  {"workspace_id": "default", "project_id": "orbit", "revision": 1, "config": {"display_name": "Orbit", "aliases": ["orbit-app"]}, "counts": {"memories": 18}},
+  {"workspace_id": "default", "project_id": "side-notes", "revision": 0, "config": {"display_name": "", "aliases": []}, "counts": {"memories": 3}}
+ ],
+ "next": ""
+}

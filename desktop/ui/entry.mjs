@@ -59,6 +59,7 @@ import "./skill-generate.js";
 import "./skill-improve.js";
 import "./catalog.js";
 import "./space-settings.js";
+import "./spaces.js";
 import "./messenger.js";
 import "./alerts.js";
 import "./shell.js";

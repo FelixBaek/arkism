@@ -7,7 +7,7 @@ window.ArkismSaveFile = (name, data, type) => {
 };
 window.ArkismPages = (ctx) => {
   "use strict";
-  const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus } = ctx;
+  const { state, $, el, icon, button, segment, go, render, query, AGENTS, agentLogo, allowed, notice, store, stored, disconnect, useLocal, startLocal, sshFields, sshTest, sshConnect, sshLabel, storageRow, tauri, models, routing, crew, request, reloadTools, assist, pcStatus, saveFile } = ctx;
 
   // ---------------------------------------------------------------- saved choices (this PC only)
   const PREFS_KEY = "arkism.prefs";
@@ -1473,19 +1473,8 @@ window.ArkismPages = (ctx) => {
     input.addEventListener("change", () => { const f = input.files?.[0]; if (!f) return resolve(null); if (f.size > max) { tooBig(); return resolve(null); } f.text().then(resolve, () => resolve(null)); });
     input.click();
   });
-  const saveFile = window.ArkismSaveFile;
 
-  // 데이터: 이 PC의 Arkism(내장 모드)만. 백업은 문서 › Arkism Backups에 폴더로 남는다.
-  // 기억 공간 옮기기 (POST /v1/spaces/{workspace}/{project}/export · import): a bundle file of this space's memories.
-  // Export needs the external:space_bundle grant; an import never saves directly — everything lands as candidates to review.
-  // The space is the app's current scope (설정 › 고급 › 연결), never a guessed "default": a missing one stops with a message.
-  const space = { busy: false, line: "", warn: false, review: false };
-  const spacePath = () => {
-    const { workspace_id: w, project_id: p } = state.scope;
-    if (!w || !p) throw new Error("no_space");
-    return `/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}`;
-  };
-  const spaceShow = (line, warn = false, review = false) => { Object.assign(space, { line, warn, review }); if (state.view === "settings" && state.settingsTab === "space") render(false); };
+  // 설정 › 기억 공간 below the space's own settings (spaces.js): moving a space, its name and aliases, cloning, the workspace's spaces.
   async function spaceJob(kind, job) { // until done or failed; 10 minutes is the server's own job limit
     for (let i = 0; i < 400 && ["queued", "running"].includes(job.state); i++) {
       await new Promise((r) => setTimeout(r, 1500));
@@ -1494,46 +1483,8 @@ window.ArkismPages = (ctx) => {
     if (job.state !== "done") throw new Error(job.error || "space_job_failed");
     return job;
   }
-  const SPACE_ERR = { access_denied: "이 계정에는 기억을 밖으로 내보낼 권한이 없어요. 서버 관리자에게 'external:space_bundle' 권한을 받아 주세요.",
-    invalid_request: "Arkism에서 내보낸 기억 공간 파일인지 확인해 주세요.", payload_too_large: "파일이 너무 커요. 8MB까지 가져올 수 있어요.",
-    no_space: "작업 공간과 프로젝트가 정해지지 않았어요. 설정 › 고급 › 연결에서 범위를 먼저 정해 주세요." };
-  async function spaceRun(work) {
-    if (space.busy) return;
-    space.busy = true;
-    try { await work(); } catch (e) { spaceShow(SPACE_ERR[e.message] || "처리하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.", true); }
-    space.busy = false;
-    if (state.view === "settings" && state.settingsTab === "space") render(false);
-  }
-  const spaceExport = () => spaceRun(async () => {
-    spaceShow("내보낼 파일을 만드는 중…");
-    const job = await spaceJob("exports", await request(`${spacePath()}/export`, { method: "POST", body: "{}" }));
-    const text = await request(`/v1/spaces/exports/${encodeURIComponent(job.id)}/download?${query()}`, { raw: true });
-    saveFile(`arkism-space-${state.scope.project_id}.jsonl`, text, "application/x-ndjson");
-    spaceShow("파일 다운로드를 시작했어요. 다른 Arkism의 설정 › 고급에서 가져오세요. 기억 내용이 들어 있으니 안전한 곳에 두세요.");
-  });
-  const spaceImport = async () => {
-    const bundle = await pickFile(".jsonl,application/x-ndjson", 8 << 20, () => spaceShow(SPACE_ERR.payload_too_large, true));
-    if (!bundle) return;
-    void spaceRun(async () => {
-      const path = spacePath();
-      if (!(await ask("이 파일의 기억을 가져올까요? 바로 저장되지 않고 모두 '확인해 주세요'에 후보로 들어가요.", "가져오기"))) return;
-      spaceShow("가져오는 중…");
-      const job = await spaceJob("imports", await request(`${path}/import`, { method: "POST", body: JSON.stringify({ bundle, import_as: "candidate" }) }));
-      const r = job.report || {};
-      spaceShow(`후보 ${r.imported || 0}개를 가져왔어요. 이미 있는 기억 ${r.merged || 0}개는 건너뛰었고, 받지 않은 것 ${(r.rejected || 0) + (r.skipped || []).reduce((n, x) => n + (x.count || 0), 0)}개예요.`, false, (r.imported || 0) > 0);
-    });
-  };
-  function spaceGroup() {
-    const g = group("기억 공간 옮기기", "이 공간의 기억을 파일로 내보내거나, 받은 파일을 가져와요. 가져온 기억은 내가 확인해야 저장돼요.");
-    const row = el("div", "v4s-actions");
-    row.append(button("기억 내보내기", "", null, spaceExport));
-    if (state.caps?.actions?.review_decide !== false) row.append(button("기억 가져오기", "", null, spaceImport)); // the import route takes people only; an agent token never sees it
-    for (const b of row.children) b.disabled = space.busy;
-    g.append(row);
-    if (space.line) g.append(el("p", `pg-hint${space.warn ? " warn" : ""}`, space.line));
-    if (space.review) g.append(button("후보 확인하러 가기", "primary", null, () => go("memories", "candidate")));
-    return g;
-  }
+  const spaces = window.ArkismSpaces({ ...ctx, pickFile, spaceJob });
+  // 데이터: 이 PC의 Arkism(내장 모드)만. 백업은 문서 › Arkism Backups에 폴더로 남는다.
   function dataGroup() {
     if (state.mode !== "local" || !tauri) return [];
     const g = group("데이터", "이 PC에 저장한 기억·세션·스킬 기록을 백업하고 되돌려요. 백업에는 모든 기억이 들어 있으니 안전한 곳에 두세요.");
@@ -1610,7 +1561,7 @@ window.ArkismPages = (ctx) => {
     sideParts = []; headParts = [];
     const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote, group, line, sw, more, spaceJob };
     const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards, routing: () => routing.tab(kit),
-      workflow: () => crew.settingsTab({ group }), categories: tabCategories, space: () => spaceSettings.tab(kit, [spaceGroup()]), advanced: tabAdvanced, info: tabInfo }[tab]();
+      workflow: () => crew.settingsTab({ group }), categories: tabCategories, space: () => spaceSettings.tab(kit, spaces.groups(kit)), advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
     content.append(...body);

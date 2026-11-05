@@ -68,6 +68,24 @@
    "proposed": true,
    "created_at": "2026-10-14T03:00:00Z",
    "updated_at": "2026-10-14T03:00:00Z"
+  },
+  {
+   "id": "en4",
+   "name": "Orbit 앱",
+   "type": "project",
+   "aliases": [],
+   "mentions": 2,
+   "proposed_mentions": 0,
+   "proposed": false,
+   "similar": [
+    {
+     "id": "en2",
+     "name": "Orbit",
+     "score": 0.67
+    }
+   ],
+   "created_at": "2026-10-20T03:00:00Z",
+   "updated_at": "2026-10-20T03:00:00Z"
   }
  ],
  "next_cursor": ""

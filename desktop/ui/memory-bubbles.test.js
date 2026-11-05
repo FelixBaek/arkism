@@ -242,3 +242,20 @@ test("a line kind the map does not know draws dashed grey and its card names the
   assert.ok(calls.some(([k]) => k === "closePath"), "an arrowhead at the effect");
   reduced = false; b.destroy();
 });
+
+test("SVG로 저장: toSvg escapes labels and keeps lines and dashes; svg() snapshots the laid-out map", () => {
+  const out = window.ArkismMemoryBubbles.toSvg({ bg: "#000", text: "#fff", groups: [{ x: 100, y: 100, r: 40, color: "#7fc79c", name: "개인 <a>" }],
+    lines: [{ x1: 90, y1: 100, x2: 110, y2: 100, color: "#e0a3c8", dash: [2, 3] }], dots: [{ x: 90, y: 100, r: 6, color: "#abc", label: "Tom & \"Jerry\"" }, { x: 110, y: 100, r: 0, color: "#abc", label: "" }] });
+  assert.match(out, /^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/); assert.match(out, /<\/svg>$/);
+  assert.match(out, /개인 &lt;a&gt;/); assert.match(out, /Tom &amp; &quot;Jerry&quot;/); assert.doesNotMatch(out, /<a>/);
+  assert.match(out, /stroke-dasharray="2 3"/);
+  assert.equal(out.match(/<line /g).length, 1);
+  const { b, items, resize } = make();
+  b.setItems(items); b.setEdges([{ from: "m0", to: "m1", t: "together" }]); resize();
+  const svg = b.svg();
+  assert.equal(svg.match(/<circle [^>]*fill-opacity="0.9"/g).length, items.length, "one dot per memory");
+  assert.equal(svg.match(/<line /g).length, 1);
+  assert.match(svg, /stroke="#e0a3c8"/, "the together line keeps its colour");
+  assert.match(svg, /기억 이름 0/);
+  b.destroy();
+});
