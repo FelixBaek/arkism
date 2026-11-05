@@ -33,6 +33,8 @@ type daemonOptions struct {
 	Recovery              bool
 	Worker                bool
 	MemoryReach           string
+	SpaceRepair           string
+	Space                 string
 	Reindex               bool
 	TrainReview           string
 	TrainReviewExclude    string
@@ -61,6 +63,8 @@ func daemonFlags() daemonOptions {
 	flag.BoolVar(&cfg.Recovery, "recovery", false, "isolated deletion recovery only; loopback API or erasure-only worker")
 	flag.BoolVar(&cfg.Worker, "worker", false, "run embedding worker instead of HTTP API")
 	flag.StringVar(&cfg.MemoryReach, "memory-reach", "", "offline administrator: apply|revert the default memory reach (user=personal, rest=general), then exit")
+	flag.StringVar(&cfg.SpaceRepair, "space-repair", "", "offline administrator: preview|execute repairing one space (-space workspace/project): orphan observations, bundle text left on job rows; then exit")
+	flag.StringVar(&cfg.Space, "space", "", "workspace/project for -space-repair")
 	flag.BoolVar(&cfg.Reindex, "reindex", false, "queue embedding jobs for Postgres records not in the configured embedder's space, then exit")
 	flag.StringVar(&cfg.TrainReview, "train-review-classifier", "", "offline: train a scope-bound review advice model and write it to this path")
 	flag.StringVar(&cfg.TrainReviewExclude, "train-review-exclude", "arkism-memory-reviewer", "comma-separated reviewer principals excluded from training")
@@ -144,7 +148,7 @@ func validateDaemonRuntimeOptions(cfg daemonOptions, standalone string) error {
 	if standalone == "true" && !cfg.Worker && !daemonLoopback(cfg.Listen) {
 		return memory.ErrInvalid
 	}
-	if cfg.Recovery && (!daemonLoopback(cfg.Listen) || cfg.InitDB || cfg.CheckIndexes) {
+	if cfg.Recovery && (!daemonLoopback(cfg.Listen) || cfg.InitDB || cfg.CheckIndexes) || (cfg.Space != "") != (cfg.SpaceRepair != "") {
 		return memory.ErrInvalid
 	}
 	return validateDaemonDynamicsOptions(cfg)
@@ -169,6 +173,7 @@ func daemonMode(cfg daemonOptions) (string, error) {
 		{"SemanticIndex", cfg.SemanticIndex != ""},
 		{"CheckIndexes", cfg.CheckIndexes},
 		{"MemoryReach", cfg.MemoryReach != ""},
+		{"SpaceRepair", cfg.SpaceRepair != ""},
 		{"BackupExpiry", cfg.BackupExpiry != ""},
 		{"AuditExpiry", cfg.AuditExpiry != ""},
 		{"CollectBlobs", cfg.CollectBlobs},

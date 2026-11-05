@@ -892,7 +892,7 @@ func (s *Service) DownloadSpaceExport(ctx context.Context, token string, scope S
 // dropSpaceBundle clears the bundle an older export kept on its job row, so
 // erased or retired text does not stay at rest there. Best effort: a caller who
 // may only read cannot write.
-// shortcut: old bundles nobody downloads again stay until a sweep exists; add one to maintenance when jobs get retention.
+// Bundles nobody downloads again are cleared by RepairSpace (memoryd --space-repair).
 func (s *Service) dropSpaceBundle(ctx context.Context, rec Record) {
 	_ = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		cur, err := tx.Get(ctx, colJobs, rec.Scope, rec.ID)
@@ -1009,4 +1009,42 @@ func mentalModelDefinition(r Record) *MentalModelInput {
 		return nil
 	}
 	return &MentalModelInput{Title: r.MentalModel.Title, Query: r.MentalModel.Query, Refresh: r.MentalModel.Refresh, Folder: r.MentalModel.Folder}
+}
+
+// SpaceRepairReport is what RepairSpace found (preview) or fixed (execute) in one space.
+type SpaceRepairReport struct {
+	WorkspaceID string `json:"workspace_id"`
+	ProjectID   string `json:"project_id"`
+	Execute     bool   `json:"execute"`
+	// StaleObservations: active or proposed observations whose cited memories are gone or retired.
+	StaleObservations int `json:"stale_observations"`
+	// LegacyBundles: export job rows still holding bundle text at rest from before streamed bundles.
+	LegacyBundles int `json:"legacy_bundles"`
+}
+
+// RepairSpace is the offline administrator repair of one space's derived state
+// (memoryd --space-repair). Preview counts; execute marks orphan observations
+// stale through the ordinary sweep and clears bundle text left on job rows.
+// It runs with the server's database credentials, not a principal's token.
+func (s *Service) RepairSpace(ctx context.Context, scope Scope, execute bool) (SpaceRepairReport, error) {
+	scope = spaceScope(scope)
+	out := SpaceRepairReport{WorkspaceID: scope.WorkspaceID, ProjectID: scope.ProjectID, Execute: execute}
+	if !validScope(scope) {
+		return out, ErrInvalid
+	}
+	var err error
+	if out.StaleObservations, err = s.sweepObservationsAt(ctx, scope, "space-repair", execute); err != nil {
+		return out, err
+	}
+	err = eachCatalogRecord(ctx, s.Repo, scope, colJobs, func(r Record) error {
+		if r.SpaceJob == nil || r.SpaceJob.Bundle == "" {
+			return nil
+		}
+		out.LegacyBundles++
+		if execute {
+			s.dropSpaceBundle(ctx, r)
+		}
+		return nil
+	})
+	return out, err
 }

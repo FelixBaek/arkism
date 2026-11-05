@@ -613,6 +613,11 @@ func (s *Service) consolidateObservations(ctx context.Context, token string, in 
 // sweepObservations turns active and proposed observations whose sources are no
 // longer approved, active memories into stale ones (rejected, expired or erased sources).
 func (s *Service) sweepObservations(ctx context.Context, scope Scope, actor string) (int, error) {
+	return s.sweepObservationsAt(ctx, scope, actor, true)
+}
+
+// sweepObservationsAt with execute false only counts what a sweep would mark.
+func (s *Service) sweepObservationsAt(ctx context.Context, scope Scope, actor string, execute bool) (int, error) {
 	count := 0
 	for _, status := range []string{obsActive, obsProposed} {
 		rows, err := s.Repo.ListRecordsByStatus(ctx, scope, colObservations, status, obsListLimit)
@@ -621,6 +626,10 @@ func (s *Service) sweepObservations(ctx context.Context, scope Scope, actor stri
 		}
 		for _, r := range rows {
 			if r.Observation == nil || observationFresh(ctx, s.Repo, r) {
+				continue
+			}
+			if !execute {
+				count++
 				continue
 			}
 			err := s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {

@@ -208,3 +208,41 @@ func reflectTraces(f *fixture, scope Scope) []Record {
 	}
 	return out
 }
+
+func TestRepairSpacePreviewsThenStalesOrphansAndClearsLegacyBundles(t *testing.T) {
+	f, llm, ms := obsFixture(t)
+	llm.answers = []string{obsAnswer(t, obsDraft("Staging deploys need the staging flag.", ms[0].ID, ms[1].ID, ms[2].ID))}
+	out, err := f.consolidate(f.human, false)
+	if err != nil || len(out.Proposed) != 1 {
+		t.Fatal(err)
+	}
+	// A source erased behind the cascade's back (an older release) leaves an orphan.
+	gone, _ := f.repo.Get(testCtx, colMemories, scopeA, ms[0].ID)
+	gone.ContentErased = true
+	legacy := Record{ID: "spj_old", Scope: scopeA, Kind: spaceJobExport, Status: JobStatusDone, Revision: 1, CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		SpaceJob: &SpaceJob{Kind: spaceJobExport, State: "done", Bundle: "old bundle text"}}
+	if err = f.repo.Replace(testCtx, colMemories, gone, gone.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.repo.Insert(testCtx, colJobs, legacy); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := f.svc.RepairSpace(testCtx, scopeA, false)
+	obs, _ := f.repo.Get(testCtx, colObservations, scopeA, out.Proposed[0].ID)
+	job, _ := f.repo.Get(testCtx, colJobs, scopeA, legacy.ID)
+	if err != nil || preview.StaleObservations != 1 || preview.LegacyBundles != 1 || obs.Status != obsProposed || job.SpaceJob.Bundle == "" {
+		t.Fatalf("preview %+v %v changed something: %s %q", preview, err, obs.Status, job.SpaceJob.Bundle)
+	}
+	done, err := f.svc.RepairSpace(testCtx, scopeA, true)
+	obs, _ = f.repo.Get(testCtx, colObservations, scopeA, out.Proposed[0].ID)
+	job, _ = f.repo.Get(testCtx, colJobs, scopeA, legacy.ID)
+	if err != nil || done.StaleObservations != 1 || obs.Status != obsStale || job.SpaceJob.Bundle != "" {
+		t.Fatalf("execute %+v %v: %s %q", done, err, obs.Status, job.SpaceJob.Bundle)
+	}
+	if again, _ := f.svc.RepairSpace(testCtx, scopeA, false); again.StaleObservations != 0 || again.LegacyBundles != 0 {
+		t.Fatalf("repair not idempotent: %+v", again)
+	}
+	if _, err = f.svc.RepairSpace(testCtx, Scope{WorkspaceID: "ws-a"}, false); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad scope err = %v", err)
+	}
+}

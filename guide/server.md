@@ -127,6 +127,7 @@ remain supported.
 | `--check-indexes` | Check migration history, schema, search indexes and row-level security |
 | `--semantic-index create\|drop` | Create or drop the optional pgvector index (`MEMORY_SEMANTIC_RETRIEVAL=1`) |
 | `--reindex` | Queue embedding jobs for records the current embedder has not indexed, then exit |
+| `--space-repair preview\|execute --space workspace/project` | Repair one space's derived state, then print a JSON report: observations whose cited memories are gone or retired (execute marks them stale, as a live delete would), and bundle text older exports left on job rows (execute clears it). Run `preview` first; it changes nothing |
 | `--collect-blobs` | Remove files nothing points to |
 | `--adopt-restored-blobs`, `--recovery` | Restore steps, see [backup-restore.md](backup-restore.md) |
 
@@ -473,6 +474,44 @@ wiki. What a person approves and how is described in
     target must exist at the revision the agent saw, secrets and private spans
     are refused, and only a person accepts or dismisses it. Deciding changes
     nothing: the person makes the change through its own screen or route.
+12. **Space bundles stream.** Export downloads are now format version 2:
+    the manifest line, the body, then a trailer line `{"end": {sha256,
+    sections, skipped}}`. They stream fresh from the database, with no 8 MB or
+    5,000 record cap, so a record erased after the export is left out instead
+    of failing the download with 409. Older servers cannot import version 2
+    bundles; this server still imports version 1. `POST
+    /v1/spaces/{workspace}/{project}/import` also takes the bundle itself as an
+    `application/x-ndjson` body (up to 1 GiB, spooled to a temp file and checked
+    before anything is written), with `import_as` and `as_template=true` in the
+    query. Export and clone take `parts` (`config`, `data`, `observations`,
+    `history`; default `config` and `data`, as before). Observations arrive as
+    memory candidates. History (audit rows and model-call traces without their
+    text) is only for people; an uploaded bundle's history is never written,
+    and only a clone inside the server copies it. `as_template` takes the
+    settings and definitions of any bundle into a space without settings.
+    Knowledge documents and source files are not carried: they are always
+    private. Old bundle text on export job rows is cleared on the next download
+    or by `memoryd --space-repair execute`.
+13. **Webhooks.** A webhook can set its `method` (POST, PUT or PATCH),
+    `timeout_seconds` (up to 30), and extra `headers` and `query_params` (16
+    each). Their values are sealed with the webhook key and never shown again:
+    reads return only `header_names` and `query_param_names`. The outbound
+    address check is unchanged. New events: `consolidation.completed`,
+    `ingest.completed` (knowledge and file ingest) and `defense.triggered`
+    (a space defense rule redacted or blocked a write). Existing webhooks keep
+    their events; subscribe to the new ones to receive them.
+14. **Wiki folders and query pages.** `PATCH /v1/wiki/folders` renames or
+    moves a folder with everything in it, `DELETE /v1/wiki/folders` deletes an
+    empty folder (or, with `recursive=true`, its pages too), and `DELETE
+    /v1/wiki/pages/{id}` deletes one page. All three are for people only.
+    Mental models take a `folder` and show in the wiki tree as query pages. A
+    query page refreshes only on the refresh mode a person chose, and every
+    refresh is a draft a person approves; nothing new spends model budget by
+    itself.
+15. **Tags and stats.** `GET /v1/tags` takes `q` (`*` wildcards), `source`
+    (`memories` or `mental_models`), `limit` and `offset`, and returns
+    `total`. Stats count links by kind, and the timeseries takes `time_field`
+    (`created`, `occurred` or `mentioned`).
 
 ### Reflect, consolidation and mental-model settings
 

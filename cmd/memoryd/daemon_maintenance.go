@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/FelixBaek/arkism/internal/memory"
@@ -55,6 +56,22 @@ func runDaemonMemoryReach(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 	}
 	changed, err := pg.MigrateMemoryReach(ctx, cfg.MemoryReach == "revert")
 	fmt.Printf("{\"changed\":%d,\"direction\":%q}\n", changed, cfg.MemoryReach)
+	return err
+}
+
+// runDaemonSpaceRepair previews unless told to execute; the report goes to stdout as JSON.
+func runDaemonSpaceRepair(ctx context.Context, pg *memory.Postgres, cfg daemonOptions, standalone string) error {
+	workspace, project, ok := strings.Cut(cfg.Space, "/")
+	if cfg.SpaceRepair != "preview" && cfg.SpaceRepair != "execute" || !ok || strings.Contains(project, "/") {
+		return memory.ErrInvalid
+	}
+	svc := &memory.Service{Repo: pg}
+	op, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	report, err := svc.RepairSpace(op, memory.Scope{WorkspaceID: workspace, ProjectID: project}, cfg.SpaceRepair == "execute")
+	if e := json.NewEncoder(os.Stdout).Encode(report); err == nil {
+		err = e
+	}
 	return err
 }
 
@@ -142,6 +159,8 @@ func runDaemonMaintenance(ctx context.Context, pg *memory.Postgres, cfg daemonOp
 		return true, runDaemonCheckIndexes(ctx, pg, cfg, standalone)
 	case "MemoryReach":
 		return true, runDaemonMemoryReach(ctx, pg, cfg, standalone)
+	case "SpaceRepair":
+		return true, runDaemonSpaceRepair(ctx, pg, cfg, standalone)
 	case "BackupExpiry":
 		return true, runDaemonBackupExpiry(ctx, pg, cfg, standalone)
 	case "AuditExpiry":
