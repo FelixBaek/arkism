@@ -151,3 +151,12 @@ test("crew editor: reopening while the post-save reload is out drops the old sav
   assert.equal(await saving, false);
   assert.deepEqual(notices, []);
 });
+
+test("each runs at most limit at a time and starts nothing once alive() turns false", async () => {
+  let now = 0, peak = 0, live = true;
+  const seen = [];
+  await keep.each([1, 2, 3, 4, 5, 6], 2, async (n) => { now++; peak = Math.max(peak, now); seen.push(n); await new Promise((r) => setTimeout(r, 1)); now--; if (n === 3) live = false; }, () => live);
+  assert.equal(peak, 2);
+  assert.deepEqual(seen, [1, 2, 3, 4], "the item in flight when alive() turned false finishes; no new one starts");
+  await keep.each([], 4, () => assert.fail("no items, no calls"));
+});

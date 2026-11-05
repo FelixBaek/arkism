@@ -32,14 +32,12 @@ window.ArkismMemoryInsight = (ctx, tab) => {
 
   // A cited or mentioning memory: its text (or the server's snippet), one tap opens it in the memory screen.
   function memoryLink(id, snippet) {
-    const item = el("button", "dg-item"); item.type = "button";
-    const text = raw(el("p", "", snippet || "불러오는 중…"));
-    item.append(text);
+    const D = window.ArkismDigests, item = D.memoryItem(ctx, snippet || D.memoryText(undefined)), text = item.querySelector("p");
     const read = () => {
       if (!memo.has(id)) memo.set(id, request(`/v1/memories/${encodeURIComponent(id)}?${query()}`).then((r) => (r?.id === id ? r : null), () => null));
       return memo.get(id);
     };
-    const show = (r) => { if (!snippet) text.textContent = r ? r.text : "읽을 수 없는 기억이에요 (지워졌거나 바뀜)"; item.disabled = !(r?.status === "active"); return r; };
+    const show = (r) => { if (!snippet) text.textContent = D.memoryText(r); item.disabled = !(r?.status === "active"); return r; };
     if (!snippet) void read().then(show);
     item.addEventListener("click", async () => {
       const r = show(await read());

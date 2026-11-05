@@ -1,5 +1,5 @@
 // @ts-check
-// Two shared guards for the screens. latest(): a reply that comes back after a newer request for the same key
+// Shared guards for the screens. each(): a bounded number of reads at a time. latest(): a reply that comes back after a newer request for the same key
 // (or after cancel) is dropped, so an older answer never overwrites a newer choice. view(): a redraw that rebuilds
 // a box keeps the field being typed in (text, caret, focus), open <details> and the scroll of the boxes it names.
 (() => {
@@ -58,7 +58,13 @@
     };
   }
 
-  const api = { latest, view };
+  // each(items, limit, fn, alive): fn on every item, at most limit at a time; no new item starts once alive() is false.
+  async function each(items, limit, fn, alive = () => true) {
+    const queue = [...items];
+    await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, async () => { while (queue.length && alive()) await fn(queue.shift()); }));
+  }
+
+  const api = { latest, view, each };
   globalThis.ArkismKeep = api;
   if (typeof module !== "undefined") module.exports = api;
 })();

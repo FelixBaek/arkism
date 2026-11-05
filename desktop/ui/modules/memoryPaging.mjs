@@ -1,5 +1,6 @@
 // @ts-check
 import { serverCount } from "./collectionPaging.mjs";
+import "../keep.js"; // ArkismKeep.each: the bounded read loop shared with the screens
 // Owns memory cursors and refresh. Dependencies are explicit live ports, never a global scope.
 export function createMemoryPaging(deps) {
 
@@ -61,15 +62,12 @@ export function createMemoryPaging(deps) {
     const refs = (deps.state.data.maintenance || []).flatMap(p => [p.maintenance?.keep, p.maintenance?.retire, p.maintenance?.memory]).filter(ref => ref?.id);
     const cached = new Map(deps.state.data.memories.map(m => [m.id, m]));
     const queue = [...new Map(refs.filter(ref => !cached.has(ref.id) || (ref.revision != null && cached.get(ref.id).revision !== ref.revision)).map(ref => [ref.id, ref])).values()];
-    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-      while (queue.length && g === deps.generation) {
-        const ref = queue.shift();
-        const record = await deps.request(`/v1/memories/${encodeURIComponent(ref.id)}?${deps.query()}`).catch(() => null);
-        if (g !== deps.generation) return;
-        if (record?.id === ref.id && (ref.revision == null || record.revision === ref.revision)) maintenanceRecords.set(ref.id, record);
-        else maintenanceRecords.delete(ref.id);
-      }
-    }));
+    await globalThis.ArkismKeep.each(queue, 4, async (ref) => {
+      const record = await deps.request(`/v1/memories/${encodeURIComponent(ref.id)}?${deps.query()}`).catch(() => null);
+      if (g !== deps.generation) return;
+      if (record?.id === ref.id && (ref.revision == null || record.revision === ref.revision)) maintenanceRecords.set(ref.id, record);
+      else maintenanceRecords.delete(ref.id);
+    }, () => g === deps.generation);
     if (g === deps.generation && refs.length) deps.render(false);
   }
 

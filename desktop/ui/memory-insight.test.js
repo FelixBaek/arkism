@@ -10,8 +10,7 @@ function setup(tab, routes, { role = "human", answers = [] } = {}) {
   const { document, window } = dom.install();
   dom.Element.prototype.setCustomValidity = function (m) { this.validity = m; };
   require("./memory-pages.js");
-  delete require.cache[require.resolve("./memory-insight.js")];
-  require("./memory-insight.js");
+  for (const f of ["./digests.js", "./memory-insight.js"]) { delete require.cache[require.resolve(f)]; require(f); } // memory rows come from digests.js
   const h = dom.helpers(document);
   for (const id of ["app", "chips", "stats", "table", "detail"]) { const n = h.el("div"); n.id = id; document.body.append(n); }
   const state = { view: "memories", memTab: tab, server: "s", token: "t", scope: { ...SCOPE }, caps: { role } };

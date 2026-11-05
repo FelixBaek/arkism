@@ -1399,8 +1399,7 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const ents = Array.isArray(g?.nodes) ? g.nodes.filter((e) => typeof e?.id === "string") : [];
       namesMore = ents.length >= namesLimit && namesLimit < NAMES_MAX;
       // shortcut: no bulk mentions route yet (GET /v1/entities/graph has entity-to-entity edges only), so one page per new name, 4 at a time; switch to a bulk route when the server has one
-      const todo = ents.filter((e) => !entInfo.has(e.id)), one = async () => { for (let e; d.isConnected && (e = todo.shift());) entInfo.set(e.id, await request(`/v1/entities/${encodeURIComponent(e.id)}?${query()}`).then((r) => r || false, () => false)); };
-      await Promise.all(Array.from({ length: Math.min(4, todo.length) }, one));
+      await globalThis.ArkismKeep.each(ents.filter((e) => !entInfo.has(e.id)), 4, async (e) => entInfo.set(e.id, await request(`/v1/entities/${encodeURIComponent(e.id)}?${query()}`).then((r) => r || false, () => false)), () => d.isConnected);
       if (!d.isConnected) return;
       extra.clear(); const lines = [];
       for (const e of ents) {

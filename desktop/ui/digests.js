@@ -368,11 +368,7 @@ window.ArkismDigests = (ctx) => {
     const isNew = new Set(added.map((r) => r.id));
     for (const ref of refs.slice(0, expanded.has(key) ? 64 : 3)) {
       const m = record("memories", ref.id);
-      const item = el("button", "dg-item"); item.type = "button";
-      const txt = el("div", "dg-item-text");
-      txt.append(raw(el("p", "", m ? m.text : m === null ? "읽을 수 없는 기억이에요 (지워졌거나 바뀜)" : "불러오는 중…")),
-        el("small", "", m ? [kindLabel(m.kind), day(m.created_at), isNew.has(ref.id) ? "새로 묶임" : ""].filter(Boolean).join(" · ") : ""));
-      item.append(txt);
+      const item = window.ArkismDigests.memoryItem(ctx, window.ArkismDigests.memoryText(m), m ? [kindLabel(m.kind), day(m.created_at), isNew.has(ref.id) ? "새로 묶임" : ""].filter(Boolean).join(" · ") : "");
       if (isNew.has(ref.id)) item.append(el("span", "mem-badge new", "새"));
       if (m && m.status === "active" && ctx.openRecord) item.addEventListener("click", () => ctx.openRecord(m)); else item.disabled = !m;
       box.append(item);
@@ -635,4 +631,14 @@ window.ArkismDigests = (ctx) => {
     detail();
   }
   return { title: () => (data.key ? `주제 ${data.topic.length}개` : ""), draw, drawMerge, drawNotes, detail, close, reset, mergeCount, notesCount, digestCounts, menuRows, refresh: () => { data.at = 0; ensure(); } };
+};
+// One memory row for 모아보기 and 물어보기 · 자주 나온 이름 (memory-insight.js): its text and an optional meta line.
+// memoryText: m is the record, null when it can't be read, undefined while it loads.
+window.ArkismDigests.memoryText = (m) => (m ? m.text : m === null ? "읽을 수 없는 기억이에요 (지워졌거나 바뀜)" : "불러오는 중…");
+window.ArkismDigests.memoryItem = ({ el, raw }, text, meta = "") => {
+  const item = el("button", "dg-item"); item.type = "button";
+  const box = el("div", "dg-item-text"); box.append(raw(el("p", "", text)));
+  if (meta) box.append(el("small", "", meta));
+  item.append(box);
+  return item;
 };
