@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"unicode/utf8"
 )
 
@@ -87,6 +88,10 @@ type SpaceEffectiveView struct {
 type SpaceTemplate struct {
 	Bundle string
 	Config SpaceConfig
+	// Auto applies the template to a space the first time a person gives it settings
+	// or a memory (space_template.go); off unless ARKISM_SPACE_TEMPLATE_AUTO=1.
+	Auto    bool
+	applied sync.Map // scopes this process already applied the template to
 }
 
 // LoadSpaceTemplate reads a template bundle exported with template=true; "" means none.

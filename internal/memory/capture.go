@@ -227,6 +227,9 @@ func (s *Service) Capture(ctx context.Context, token string, in CaptureInput) (C
 			slog.Warn("memory capture receipt not stored", "workspace", in.Scope.WorkspaceID, "error", err)
 		}
 	}
+	if capturedAny(out) {
+		s.autoApplySpaceTemplate(ctx, token, actor, in.Scope, false)
+	}
 	return out, nil
 }
 

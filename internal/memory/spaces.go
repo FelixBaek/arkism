@@ -357,7 +357,11 @@ func (s *Service) PutSpaceConfig(ctx context.Context, token string, scope Scope,
 	if err != nil {
 		return SpaceView{}, err
 	}
-	return s.changeSpaceConfig(ctx, scope, d, in.ExpectedRevision, func(c *SpaceConfig) error { return applySpaceConfig(c, in, replace) })
+	out, err := s.changeSpaceConfig(ctx, scope, d, in.ExpectedRevision, func(c *SpaceConfig) error { return applySpaceConfig(c, in, replace) })
+	if err == nil && out.Revision == 1 {
+		s.autoApplySpaceTemplate(ctx, token, d, scope, true)
+	}
+	return out, err
 }
 
 func applySpaceConfig(c *SpaceConfig, in SpaceConfigInput, replace bool) error {

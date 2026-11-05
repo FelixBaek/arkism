@@ -7,7 +7,8 @@ import (
 
 // Space routes keep their policies here; init merges them into the one route table.
 var spaceRoutePolicies = map[string]routePolicy{
-	"GET /v1/spaces": {action: "read:memories", scope: routeQuery},
+	"GET /v1/spaces":                                          {action: "read:memories", scope: routeQuery},
+	"GET /v1/spaces/template-schema":                          {scope: routePublic},
 	"GET /v1/spaces/{workspace}/{project}/config":             {action: "read:space_configs", scope: routePath},
 	"PUT /v1/spaces/{workspace}/{project}/config":             {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 	"PATCH /v1/spaces/{workspace}/{project}/config":           {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
@@ -34,6 +35,7 @@ func pathSpace(r *http.Request) Scope {
 
 func registerSpacesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
 	mux.HandleFunc("GET /v1/spaces", s.coreHTTPGetV1Spaces)
+	mux.HandleFunc("GET /v1/spaces/template-schema", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, http.StatusOK, SpaceTemplateSchema()) })
 	mux.HandleFunc("GET /v1/spaces/{workspace}/{project}/config", s.coreHTTPGetV1SpacesConfig)
 	mux.HandleFunc("PUT /v1/spaces/{workspace}/{project}/config", s.coreHTTPPutV1SpacesConfig)
 	mux.HandleFunc("PATCH /v1/spaces/{workspace}/{project}/config", s.coreHTTPPatchV1SpacesConfig)

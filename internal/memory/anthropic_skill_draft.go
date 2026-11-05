@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 )
@@ -28,29 +29,46 @@ func (a *AnthropicSkillDrafter) Draft(context.Context, SkillDraftInput) (SkillDr
 	return SkillDraft{}, ProviderUsage{}, ErrDenied
 }
 
-func draftSchema(t reflect.Type) map[string]any {
+// draftSchema is the strict structured-output schema: every field required.
+func draftSchema(t reflect.Type) map[string]any { return jsonSchemaOf(t, true) }
+
+// jsonSchemaOf describes a Go type as JSON Schema. strict requires every field
+// (structured model output); otherwise omitempty fields are optional.
+func jsonSchemaOf(t reflect.Type, strict bool) map[string]any {
+	if t == reflect.TypeOf(time.Time{}) {
+		return map[string]any{"type": "string", "format": "date-time"}
+	}
 	switch t.Kind() {
+	case reflect.Pointer:
+		return jsonSchemaOf(t.Elem(), strict)
 	case reflect.Struct:
 		properties := map[string]any{}
 		required := []string{}
 		for i := 0; i < t.NumField(); i++ {
 			f := t.Field(i)
-			name := strings.Split(f.Tag.Get("json"), ",")[0]
-			if name == "" || name == "-" {
+			tag := strings.Split(f.Tag.Get("json"), ",")
+			if tag[0] == "" || tag[0] == "-" {
 				continue
 			}
-			properties[name] = draftSchema(f.Type)
-			required = append(required, name)
+			properties[tag[0]] = jsonSchemaOf(f.Type, strict)
+			if strict || !slices.Contains(tag[1:], "omitempty") {
+				required = append(required, tag[0])
+			}
 		}
 		return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
 	case reflect.Slice:
-		return map[string]any{"type": "array", "items": draftSchema(t.Elem())}
+		return map[string]any{"type": "array", "items": jsonSchemaOf(t.Elem(), strict)}
 	case reflect.Map:
+		if !strict {
+			return map[string]any{"type": "object", "additionalProperties": jsonSchemaOf(t.Elem(), strict)}
+		}
 		return map[string]any{"type": "object", "properties": map[string]any{}, "required": []string{}, "additionalProperties": false}
 	case reflect.Bool:
 		return map[string]any{"type": "boolean"}
-	case reflect.Int:
+	case reflect.Int, reflect.Int64, reflect.Int32:
 		return map[string]any{"type": "integer"}
+	case reflect.Float64, reflect.Float32:
+		return map[string]any{"type": "number"}
 	default:
 		return map[string]any{"type": "string"}
 	}

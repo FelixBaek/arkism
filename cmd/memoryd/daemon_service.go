@@ -76,6 +76,9 @@ func configureDaemonPolicies(svc *memory.Service) error {
 	if svc.SpaceTemplate, e = memory.LoadSpaceTemplate(os.Getenv("ARKISM_SPACE_DEFAULT_TEMPLATE")); e != nil {
 		return e
 	}
+	if svc.SpaceTemplate != nil {
+		svc.SpaceTemplate.Auto = os.Getenv("ARKISM_SPACE_TEMPLATE_AUTO") == "1"
+	}
 	svc.ModelBudgetPolicy, e = memory.ParseModelBudgetPolicy(os.Getenv("MEMORY_MODEL_BUDGET_POLICY"))
 	if e != nil {
 		return e
