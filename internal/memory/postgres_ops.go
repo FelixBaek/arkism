@@ -25,14 +25,19 @@ func (w *pgOpsWhere) add(clause string, values ...any) {
 func (w *pgOpsWhere) sql() string { return strings.Join(w.clauses, " AND ") }
 
 func (w *pgOpsWhere) common(statuses []string, from, to time.Time) {
+	w.commonAt(statuses, from, to, pgDate)
+}
+
+// commonAt is common on another time axis (opsTimeExpr).
+func (w *pgOpsWhere) commonAt(statuses []string, from, to time.Time, at string) {
 	if len(statuses) > 0 {
 		w.add(`status=ANY($?)`, statuses)
 	}
 	if !from.IsZero() {
-		w.add(pgDate+` >= $?`, from)
+		w.add(at+` >= $?`, from)
 	}
 	if !to.IsZero() {
-		w.add(pgDate+` < $?`, to)
+		w.add(at+` < $?`, to)
 	}
 }
 
@@ -82,18 +87,45 @@ var opsBucketExpr = map[string]string{
 	"week": `to_char(date_trunc('week', ` + pgDate + ` AT TIME ZONE 'UTC'),'YYYY-MM-DD')`,
 }
 
+const (
+	pgObservedAt = `(doc->'memory_context'->'observed_at'->>'$date')::timestamptz`
+	pgEffective  = `(doc->'effective_at'->>'$date')::timestamptz`
+)
+
+// opsTimeExpr is the time axis a count filters and buckets on: when the row was
+// stored (created, the default), when its content was said (mentioned) or when
+// the event it tells happened (occurred). An event axis falls back per row to the
+// next one, ending at created, so a row without event time still counts.
+var opsTimeExpr = map[string]string{
+	"":          pgDate,
+	"created":   pgDate,
+	"mentioned": `COALESCE(` + pgObservedAt + `, ` + pgEffective + `, ` + pgDate + `)`,
+	"occurred":  `COALESCE((doc->'occurred'->'from'->>'$date')::timestamptz, ` + pgObservedAt + `, ` + pgEffective + `, ` + pgDate + `)`,
+}
+
+// opsTagsPath is where a collection keeps its tags; a mental model's are its refresh filter.
+func opsTagsPath(collection string) string {
+	if collection == colMentalModels {
+		return `doc->'mental_model'->'refresh'->'tags'`
+	}
+	return `doc->'tags'`
+}
+
 func (p *Postgres) OpsCounts(ctx context.Context, q opsCountQuery) ([]OpsCount, error) {
 	key, okKey := opsKeyExpr[q.By]
 	bucket, okBucket := opsBucketExpr[q.Bucket]
-	if checkScope(q.Scope) != nil || !knownCollection(q.Collection) || !okKey || !okBucket {
+	at, okAt := opsTimeExpr[q.TimeField]
+	if checkScope(q.Scope) != nil || !knownCollection(q.Collection) || !okKey || !okBucket || !okAt {
 		return nil, ErrInvalid
 	}
+	bucket = strings.ReplaceAll(bucket, pgDate, at)
 	from := `memory_records`
 	if q.By == "tag" {
-		from += ` CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(doc->'tags')='array' THEN doc->'tags' ELSE '[]'::jsonb END) AS t(tag)`
+		tags := opsTagsPath(q.Collection)
+		from += ` CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(` + tags + `)='array' THEN ` + tags + ` ELSE '[]'::jsonb END) AS t(tag)`
 	}
 	w := &pgOpsWhere{clauses: []string{"true"}}
-	w.common(q.Statuses, q.From, q.To)
+	w.commonAt(q.Statuses, q.From, q.To, at)
 	query := `SELECT ` + bucket + `, ` + key + `, count(*) FROM ` + from + ` WHERE collection=$1 AND workspace_id=$2 AND project_id=$3 AND user_id=$4 AND agent_id=$5 AND (` + w.sql() + `) GROUP BY 1,2 ORDER BY 1,2 LIMIT ` + fmt.Sprint(opsCountRows)
 	params := append([]any{q.Collection, q.Scope.WorkspaceID, q.Scope.ProjectID, q.Scope.UserID, q.Scope.AgentID}, w.args...)
 	rows, err := p.q().Query(ctx, query, params...)

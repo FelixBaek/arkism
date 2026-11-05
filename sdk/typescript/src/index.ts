@@ -949,15 +949,15 @@ export class ArkismClient {
     return this.request("POST", `/v1/operations/${encodeURIComponent(id)}/retry`, undefined, body);
   }
   /** GET /v1/stats — Scope counts (human/service ops:metrics) */
-  getV1Stats(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "scope": Scope; "memories": { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } }; "pending_candidates": number; "sources": { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } }; "collections"?: { [key: string]: { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } } } }> {
+  getV1Stats(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "links"?: { [key: string]: number }; "scope": Scope; "memories": { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } }; "pending_candidates": number; "sources": { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } }; "collections"?: { [key: string]: { "total": number; "by_kind"?: { [key: string]: number }; "by_status": { [key: string]: number } } } }> {
     return this.request("GET", `/v1/stats`, query, undefined);
   }
   /** GET /v1/stats/timeseries — Ingestion counts per day or week (human/service ops:metrics) */
-  getV1StatsTimeseries(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "from"?: string; "to"?: string; "collection"?: "memories" | "memory_candidates" | "sources"; "bucket"?: "day" | "week"; "by"?: "kind" | "status" | "source" }): Promise<{ "collection": string; "bucket": string; "by": string; "from": string; "to": string; "points": Array<{ "bucket"?: string; "key": string; "count": number }> }> {
+  getV1StatsTimeseries(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "from"?: string; "to"?: string; "collection"?: "memories" | "memory_candidates" | "sources"; "bucket"?: "day" | "week"; "by"?: "kind" | "status" | "source"; "time_field"?: "created" | "mentioned" | "occurred" }): Promise<{ "time_field"?: string; "collection": string; "bucket": string; "by": string; "from": string; "to": string; "points": Array<{ "bucket"?: string; "key": string; "count": number }> }> {
     return this.request("GET", `/v1/stats/timeseries`, query, undefined);
   }
   /** GET /v1/tags — Tag counts over a scope's active memories (read:memories) */
-  getV1Tags(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string }): Promise<{ "items": Array<{ "tag": string; "count": number }> }> {
+  getV1Tags(query: { "workspace_id": string; "project_id": string; "user_id"?: string; "agent_id"?: string; "q"?: string; "source"?: "memories" | "mental_models"; "limit"?: number; "offset"?: number }): Promise<{ "total"?: number; "limit"?: number; "offset"?: number; "items": Array<{ "tag": string; "count": number }> }> {
     return this.request("GET", `/v1/tags`, query, undefined);
   }
   /** POST /v1/memories/{id}/tags — Add or remove tags on one active memory (human transition:memories) */

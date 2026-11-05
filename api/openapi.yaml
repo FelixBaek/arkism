@@ -5360,6 +5360,13 @@
                     "sources"
                   ],
                   "properties": {
+                    "links": {
+                      "type": "object",
+                      "description": "Active memory links counted by link type",
+                      "additionalProperties": {
+                        "type": "integer"
+                      }
+                    },
                     "scope": {
                       "$ref": "#/components/schemas/Scope"
                     },
@@ -5622,6 +5629,16 @@
                 "source"
               ]
             }
+          },
+          {
+            "in": "query",
+            "name": "time_field",
+            "required": false,
+            "description": "Time axis: created (default), mentioned (observed time, else created) or occurred (event start, else observed, else created)",
+            "schema": {
+              "type": "string",
+              "enum": ["created", "mentioned", "occurred"]
+            }
           }
         ],
         "responses": {
@@ -5640,6 +5657,9 @@
                     "points"
                   ],
                   "properties": {
+                    "time_field": {
+                      "type": "string"
+                    },
                     "collection": {
                       "type": "string"
                     },
@@ -5797,6 +5817,46 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "description": "Tag filter; '*' matches any run of characters, case-insensitive, whole tag",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "description": "memories (default) or mental_models",
+            "schema": {
+              "type": "string",
+              "enum": ["memories", "mental_models"]
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "Page size, default 100, at most 1000",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "description": "Rows to skip",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
@@ -5810,6 +5870,15 @@
                     "items"
                   ],
                   "properties": {
+                    "total": {
+                      "type": "integer"
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
                     "items": {
                       "type": "array",
                       "items": {

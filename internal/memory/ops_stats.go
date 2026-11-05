@@ -19,6 +19,8 @@ type ScopeStats struct {
 	Sources           StatGroup `json:"sources"`
 	// Collections holds optional collections (observations, entities) when this build stores them.
 	Collections map[string]StatGroup `json:"collections,omitempty"`
+	// Links counts the live links between memories by link type (memory_relations kinds such as causes).
+	Links map[string]int64 `json:"links"`
 }
 
 // StatsTimeseriesInput asks for ingestion counts of one collection per bucket.
@@ -28,12 +30,15 @@ type StatsTimeseriesInput struct {
 	Bucket     string
 	By         string
 	From, To   time.Time
+	// TimeField: created (default, when stored), mentioned or occurred (event time; see opsTimeExpr).
+	TimeField string
 }
 
 type StatsTimeseries struct {
 	Collection string     `json:"collection"`
 	Bucket     string     `json:"bucket"`
 	By         string     `json:"by"`
+	TimeField  string     `json:"time_field"`
 	From       time.Time  `json:"from"`
 	To         time.Time  `json:"to"`
 	Points     []OpsCount `json:"points"`
@@ -99,6 +104,11 @@ func (s *Service) Stats(ctx context.Context, token string, scope Scope) (ScopeSt
 		}
 		out.Collections[c] = g
 	}
+	links, err := st.OpsCounts(ctx, opsCountQuery{Scope: scope, Collection: colMemoryRelations, By: "kind", Statuses: []string{statusActive}})
+	if err != nil {
+		return out, err
+	}
+	out.Links, _ = opsCountMap(links)
 	return out, nil
 }
 
@@ -113,8 +123,11 @@ func (s *Service) StatsTimeseries(ctx context.Context, token string, in StatsTim
 	if in.By == "" {
 		in.By = "kind"
 	}
-	out := StatsTimeseries{Collection: in.Collection, Bucket: in.Bucket, By: in.By, From: in.From, To: in.To, Points: []OpsCount{}}
-	if !slices.Contains(timeseriesCollections, in.Collection) || in.Bucket != "day" && in.Bucket != "week" ||
+	if in.TimeField == "" {
+		in.TimeField = "created"
+	}
+	out := StatsTimeseries{Collection: in.Collection, Bucket: in.Bucket, By: in.By, TimeField: in.TimeField, From: in.From, To: in.To, Points: []OpsCount{}}
+	if _, ok := opsTimeExpr[in.TimeField]; !ok || !slices.Contains(timeseriesCollections, in.Collection) || in.Bucket != "day" && in.Bucket != "week" ||
 		!slices.Contains([]string{"kind", "status", "source"}, in.By) || in.From.IsZero() || in.To.IsZero() {
 		return out, ErrInvalid
 	}
@@ -125,7 +138,7 @@ func (s *Service) StatsTimeseries(ctx context.Context, token string, in StatsTim
 	if err != nil {
 		return out, err
 	}
-	rows, err := st.OpsCounts(ctx, opsCountQuery{Scope: in.Scope, Collection: in.Collection, By: in.By, Bucket: in.Bucket, From: in.From, To: in.To})
+	rows, err := st.OpsCounts(ctx, opsCountQuery{Scope: in.Scope, Collection: in.Collection, By: in.By, Bucket: in.Bucket, From: in.From, To: in.To, TimeField: in.TimeField})
 	if err != nil {
 		return out, err
 	}

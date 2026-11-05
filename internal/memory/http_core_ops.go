@@ -74,11 +74,18 @@ func registerStatsTagsHTTP(mux routeRegistrar, s *Service) {
 			respond(w, nil, e)
 			return
 		}
-		v, e := s.StatsTimeseries(r.Context(), bearer(r), StatsTimeseriesInput{Scope: scopeQuery(r), Collection: q.Get("collection"), Bucket: q.Get("bucket"), By: q.Get("by"), From: from, To: to})
+		v, e := s.StatsTimeseries(r.Context(), bearer(r), StatsTimeseriesInput{Scope: scopeQuery(r), Collection: q.Get("collection"), Bucket: q.Get("bucket"), By: q.Get("by"), TimeField: q.Get("time_field"), From: from, To: to})
 		respond(w, v, e)
 	})
 	mux.HandleFunc("GET /v1/tags", func(w http.ResponseWriter, r *http.Request) {
-		v, e := s.ListTags(r.Context(), bearer(r), scopeQuery(r))
+		q := r.URL.Query()
+		limit, e1 := optionalInt(q.Get("limit"))
+		offset, e2 := optionalInt(q.Get("offset"))
+		if e1 != nil || e2 != nil {
+			respond(w, nil, ErrInvalid)
+			return
+		}
+		v, e := s.ListTags(r.Context(), bearer(r), TagListInput{Scope: scopeQuery(r), Q: q.Get("q"), Source: q.Get("source"), Limit: limit, Offset: offset})
 		respond(w, v, e)
 	})
 	mux.HandleFunc("POST /v1/memories/{id}/tags", func(w http.ResponseWriter, r *http.Request) {

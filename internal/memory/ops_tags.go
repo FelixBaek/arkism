@@ -18,7 +18,28 @@ type TagCount struct {
 
 type TagList struct {
 	Items []TagCount `json:"items"`
+	// Total counts the tags matching Q before Offset and Limit cut the page.
+	Total  int `json:"total"`
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
 }
+
+// TagListInput filters ListTags. Q is a case-insensitive pattern where * matches
+// any run of characters ("user:*", "*-admin"); without * it must match the whole
+// tag. Source picks the tags of active memories (default) or of mental models.
+type TagListInput struct {
+	Scope  Scope
+	Q      string
+	Source string
+	Limit  int
+	Offset int
+}
+
+const (
+	tagPageDefault = 100
+	tagPageMax     = 1000
+	tagPatternMax  = 256
+)
 
 type MemoryTagsInput struct {
 	Scope            Scope    `json:"scope"`
@@ -61,25 +82,61 @@ func validTagInput(tags []string) bool {
 	return true
 }
 
-// ListTags counts tags over a scope's active memories, most used first.
-func (s *Service) ListTags(ctx context.Context, token string, scope Scope) (TagList, error) {
-	out := TagList{Items: []TagCount{}}
-	if _, err := s.opsAuthorize(ctx, token, "read:memories", scope, "", roleHuman, roleService, roleAgent, rolePipeline); err != nil {
+// ListTags counts tags over a scope's active memories (or mental models), most used first.
+func (s *Service) ListTags(ctx context.Context, token string, in TagListInput) (TagList, error) {
+	if in.Limit == 0 {
+		in.Limit = tagPageDefault
+	}
+	out := TagList{Items: []TagCount{}, Limit: in.Limit, Offset: in.Offset}
+	collection := map[string]string{"": colMemories, "memories": colMemories, "mental_models": colMentalModels}[in.Source]
+	if collection == "" || in.Limit < 1 || in.Limit > tagPageMax || in.Offset < 0 || len(in.Q) > tagPatternMax {
+		return out, ErrInvalid
+	}
+	if _, err := s.opsAuthorize(ctx, token, "read:"+collection, in.Scope, "", roleHuman, roleService, roleAgent, rolePipeline); err != nil {
 		return out, err
 	}
 	st, err := s.opsStore()
 	if err != nil {
 		return out, err
 	}
-	rows, err := st.OpsCounts(ctx, opsCountQuery{Scope: scope, Collection: colMemories, By: "tag", Statuses: []string{"active"}})
+	rows, err := st.OpsCounts(ctx, opsCountQuery{Scope: in.Scope, Collection: collection, By: "tag", Statuses: []string{"active"}})
 	if err != nil {
 		return out, err
 	}
+	all := []TagCount{}
 	for _, r := range rows {
-		out.Items = append(out.Items, TagCount{Tag: opsText(r.Key), Count: r.Count})
+		if tag := opsText(r.Key); tagMatches(in.Q, tag) {
+			all = append(all, TagCount{Tag: tag, Count: r.Count})
+		}
 	}
-	sort.SliceStable(out.Items, func(i, j int) bool { return out.Items[i].Count > out.Items[j].Count })
+	sort.SliceStable(all, func(i, j int) bool { return all[i].Count > all[j].Count })
+	out.Total = len(all)
+	out.Items = append(out.Items, all[min(in.Offset, len(all)):min(in.Offset+in.Limit, len(all))]...)
 	return out, nil
+}
+
+// tagMatches: "" matches every tag; otherwise * is any run of characters, case-insensitive, whole tag.
+func tagMatches(pattern, tag string) bool {
+	if pattern == "" {
+		return true
+	}
+	parts := strings.Split(strings.ToLower(pattern), "*")
+	rest := strings.ToLower(tag)
+	if !strings.HasPrefix(rest, parts[0]) {
+		return false
+	}
+	rest = rest[len(parts[0]):]
+	for i, part := range parts[1:] {
+		if i == len(parts)-2 {
+			return strings.HasSuffix(rest, part)
+		}
+		at := strings.Index(rest, part)
+		if at < 0 {
+			return false
+		}
+		rest = rest[at+len(part):]
+	}
+	return rest == ""
 }
 
 // editTags returns the tag list after removing then adding, keeping order.

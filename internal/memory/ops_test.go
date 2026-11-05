@@ -55,7 +55,14 @@ func (o opsFakeRepo) OpsCounts(_ context.Context, q opsCountQuery) ([]OpsCount, 
 		if q.Bucket == "day" {
 			bucket = r.CreatedAt.UTC().Format("2006-01-02")
 		}
-		keys := map[string][]string{"": {""}, "kind": {r.Kind}, "status": {r.Status}, "tag": r.Tags}[q.By]
+		tags := r.Tags
+		if r.MentalModel != nil {
+			tags = r.MentalModel.Refresh.Tags
+		}
+		if q.Bucket == "day" && q.TimeField == "occurred" && r.Occurred != nil {
+			bucket = r.Occurred.From.UTC().Format("2006-01-02")
+		}
+		keys := map[string][]string{"": {""}, "kind": {r.Kind}, "status": {r.Status}, "tag": tags}[q.By]
 		for _, k := range keys {
 			counts[[2]string{bucket, k}]++
 		}
@@ -245,7 +252,7 @@ func TestOpsTagsHumanOnlyMetadataEdit(t *testing.T) {
 	if err != nil || res.Renamed != 2 || res.More {
 		t.Fatalf("rename = %+v, %v", res, err)
 	}
-	tags, err := f.svc.ListTags(testCtx, f.agent, scopeA)
+	tags, err := f.svc.ListTags(testCtx, f.agent, TagListInput{Scope: scopeA})
 	if err != nil || len(tags.Items) != 2 || tags.Items[0] != (TagCount{Tag: "legacy", Count: 2}) {
 		t.Fatalf("tags = %+v, %v", tags, err)
 	}
@@ -349,5 +356,67 @@ func TestOpsSQLReadsTheStoredDocForm(t *testing.T) {
 	}
 	if strings.Contains(strings.ReplaceAll(sql, pgDate, ""), "created_at") || len(w.args) != 8 {
 		t.Fatalf("operator SQL reads created_at outside pgDate or binds %d args:\n%s", len(w.args), sql)
+	}
+}
+
+func TestOpsTagsWildcardPagingAndMentalModels(t *testing.T) {
+	f := newOpsFixture(t)
+	f.put(colMemories, Record{ID: "m1", Kind: "decision", Status: "active", Tags: []string{"user:alice", "role-admin"}})
+	f.put(colMemories, Record{ID: "m2", Kind: "decision", Status: "active", Tags: []string{"user:bob", "User:Carol"}})
+	f.put(colMemories, Record{ID: "m3", Kind: "decision", Status: "active", Tags: []string{"user:alice", "env-prod"}})
+	f.put(colMentalModels, Record{ID: "mm1", Kind: mentalModelKind, Status: "active", MentalModel: &MentalModelData{Title: "t", Query: "q", Refresh: MentalModelRefresh{Mode: mmRefreshManual, Tags: []string{"team:core"}}}})
+	got, err := f.svc.ListTags(testCtx, f.agent, TagListInput{Scope: scopeA, Q: "USER:*"})
+	if err != nil || got.Total != 3 || got.Items[0] != (TagCount{Tag: "user:alice", Count: 2}) {
+		t.Fatalf("wildcard = %+v, %v", got, err)
+	}
+	page, err := f.svc.ListTags(testCtx, f.agent, TagListInput{Scope: scopeA, Q: "user:*", Limit: 1, Offset: 1})
+	if err != nil || page.Total != 3 || len(page.Items) != 1 || page.Offset != 1 || page.Items[0].Tag == "user:alice" {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+	for pattern, want := range map[string]int{"*-admin": 1, "env*-prod": 1, "user:alice": 1, "user": 0, "*": 5} {
+		if got, _ := f.svc.ListTags(testCtx, f.agent, TagListInput{Scope: scopeA, Q: pattern}); got.Total != want {
+			t.Fatalf("pattern %q total = %d, want %d", pattern, got.Total, want)
+		}
+	}
+	mm, err := f.svc.ListTags(testCtx, f.agent, TagListInput{Scope: scopeA, Source: "mental_models"})
+	if err != nil || mm.Total != 1 || mm.Items[0].Tag != "team:core" {
+		t.Fatalf("mental model tags = %+v, %v", mm, err)
+	}
+	for _, in := range []TagListInput{{Scope: scopeA, Source: "wiki"}, {Scope: scopeA, Limit: tagPageMax + 1}, {Scope: scopeA, Offset: -1}} {
+		if _, err := f.svc.ListTags(testCtx, f.agent, in); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%+v err = %v", in, err)
+		}
+	}
+}
+
+func TestOpsStatsLinksAndOccurredTimeseries(t *testing.T) {
+	f := newOpsFixture(t)
+	old := time.Date(2020, 3, 4, 10, 0, 0, 0, time.UTC)
+	f.put(colMemories, Record{ID: "m1", Kind: "decision", Status: "active", Occurred: &RecallTimeWindow{From: old, To: old.Add(time.Hour)}})
+	f.put(colMemoryRelations, Record{ID: "r1", Kind: causalKind, Status: "active"})
+	f.put(colMemoryRelations, Record{ID: "r2", Kind: "conflicts_with", Status: "active"})
+	f.put(colMemoryRelations, Record{ID: "r3", Kind: causalKind, Status: "candidate"})
+	st, err := f.svc.Stats(testCtx, f.human, scopeA)
+	if err != nil || st.Links[causalKind] != 1 || st.Links["conflicts_with"] != 1 {
+		t.Fatalf("links = %+v, %v", st.Links, err)
+	}
+	now := time.Now().UTC()
+	ts, err := f.svc.StatsTimeseries(testCtx, f.human, StatsTimeseriesInput{Scope: scopeA, From: now.Add(-time.Hour), To: now.Add(time.Hour), TimeField: "occurred"})
+	if err != nil || ts.TimeField != "occurred" || len(ts.Points) != 1 || ts.Points[0].Bucket != "2020-03-04" {
+		t.Fatalf("occurred timeseries = %+v, %v", ts, err)
+	}
+	if _, err = f.svc.StatsTimeseries(testCtx, f.human, StatsTimeseriesInput{Scope: scopeA, From: now.Add(-time.Hour), To: now, TimeField: "updated"}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("bad time field err = %v", err)
+	}
+}
+
+func TestOpsTimeAxisSQL(t *testing.T) {
+	for field, want := range map[string]string{"created": pgDate, "mentioned": "observed_at", "occurred": "doc->'occurred'->'from'"} {
+		if !strings.Contains(opsTimeExpr[field], want) || !strings.HasSuffix(strings.TrimSuffix(opsTimeExpr[field], ")"), pgDate) && field != "created" {
+			t.Fatalf("%s axis = %s", field, opsTimeExpr[field])
+		}
+	}
+	if opsTagsPath(colMentalModels) != `doc->'mental_model'->'refresh'->'tags'` || opsTagsPath(colMemories) != `doc->'tags'` {
+		t.Fatal("tag paths")
 	}
 }

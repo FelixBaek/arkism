@@ -46,6 +46,8 @@ type opsCountQuery struct {
 	Bucket     string
 	Statuses   []string
 	From, To   time.Time
+	// TimeField is the axis From, To and Bucket use: "" or created, mentioned, occurred (opsTimeExpr).
+	TimeField string
 }
 
 type OpsCount struct {

@@ -106,7 +106,7 @@ func TestPostgresOpsAuditStatsAndTags(t *testing.T) {
 	if _, err := f.svc.SetMemoryTags(testCtx, f.human, mem.ID, MemoryTagsInput{Scope: scopeA, Add: []string{"team"}}); err != nil {
 		t.Fatal(err)
 	}
-	tags, err := f.svc.ListTags(testCtx, f.human, scopeA)
+	tags, err := f.svc.ListTags(testCtx, f.human, TagListInput{Scope: scopeA})
 	if err != nil || !slices.ContainsFunc(tags.Items, func(c TagCount) bool { return c.Tag == "team" }) {
 		t.Fatalf("tags = %+v, %v", tags, err)
 	}
