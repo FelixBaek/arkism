@@ -188,36 +188,37 @@
 .memory-mode .d-history .history strong { color: var(--nc-text); }
 .memory-mode .d-history .history time { color: var(--nc-quiet); }
 
-/* 변경 이력 (198:630) as one thin horizontal line (memoryTimeline.mjs): dots sized by evidence, labels alternating above and below,
-   a tick joining each label to its dot; the picked version reads underneath. Picked = accent text and dot, never a bar. */
-.mem-tlh { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-.mem-tlh-grid { display: grid; grid-template-rows: auto 0.75rem 1.5rem 0.75rem auto; column-gap: 0; align-items: center; min-width: 0; }
-.mem-tlh-line { position: relative; align-self: center; height: 0.0625rem; background: var(--nc-quiet); }
-.mem-tlh-line::before, .mem-tlh-line::after { content: ""; position: absolute; top: -0.1875rem; width: 0.0625rem; height: 0.4375rem; background: var(--nc-quiet); }
-.mem-tlh-line::before { left: 0; } .mem-tlh-line::after { right: 0; }
-.mem-tlh-tick { justify-self: center; width: 0.0625rem; height: 100%; background: var(--nc-line); }
-.mem-tlh-dot { position: relative; z-index: 1; justify-self: center; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%;
-  background: none; cursor: pointer; }
-.mem-tlh-dot::before { content: ""; width: var(--d, 0.5rem); height: var(--d, 0.5rem); border-radius: 50%; background: var(--nc-muted); box-shadow: 0 0 0 0.1875rem var(--nc-canvas); }
-.mem-tlh-dot.current::before, .mem-tlh-dot.on::before { background: var(--nc-accent); }
-.mem-tlh-dot.pending::before { box-sizing: border-box; background: var(--nc-canvas); border: 0.0625rem dashed var(--nc-muted); }
-.mem-tlh-dot.pending.on::before { border-color: var(--nc-accent); }
-.mem-tlh-dot:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.0625rem; }
-.mem-tlh-label { display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0 0.25rem; text-align: center; cursor: pointer; overflow-wrap: anywhere; }
-.mem-tlh-label.up { align-self: end; } .mem-tlh-label.down { align-self: start; }
-.mem-tlh-label.start { text-align: start; padding-left: 0; } .mem-tlh-label.end { text-align: end; padding-right: 0; }
-.mem-tlh-label > span { font: 400 calc(0.8125rem * var(--fs, 1))/1.35 var(--sans); color: var(--nc-text); }
-.mem-tlh-label > small { font: 400 calc(0.6875rem * var(--fs, 1))/1.4 var(--sans); color: var(--nc-quiet); font-variant-numeric: tabular-nums; }
-.mem-tlh-label.on > span, .mem-tlh-label.on > small { color: var(--nc-accent); }
-.memory-mode .link-btn.mem-tlh-more { justify-self: start; align-self: center; margin-right: 0.5rem; padding: 0; color: var(--nc-muted); font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; cursor: pointer; }
-.memory-mode .link-btn.mem-tlh-more:hover { color: var(--nc-text); }
-.mem-tlh-version { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
-.mem-tlh-version p { margin: 0; overflow-wrap: anywhere; }
-.mem-tlh-when, .mem-tlh-meta { font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); font-variant-numeric: tabular-nums; }
-.mem-tlh-text { font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+/* 변경 이력 (198:630) as a vertical date briefing (memoryTimeline.mjs): a 1px line down the left, a small hollow dot per
+   version (the current one filled with a soft accent, a waiting correction dashed), a date heading and a two-line brief.
+   No boxes; an opened entry only turns its brief to normal ink. */
+.mem-brief { --dot: 0.5625rem; --rail: 1.5rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; min-width: 0; }
+.mem-brief-list { align-self: stretch; margin: 0.5rem 0 0; padding: 0; list-style: none; }
+.mem-brief-item { position: relative; padding: 0 0 1.25rem var(--rail); }
+.mem-brief-item:last-child, .mem-brief-item:has(+ .mem-brief-item[hidden]) { padding-bottom: 0; }
+.mem-brief-item::before { content: ""; position: absolute; left: calc((var(--dot) - 0.0625rem) / 2); top: 0.75rem; bottom: -0.375rem; width: 0.0625rem; background: var(--nc-line); }
+.mem-brief-item:last-child::before, .mem-brief-item:has(+ .mem-brief-item[hidden])::before { display: none; }
+.mem-brief-item::after { content: ""; position: absolute; left: 0; top: 0.375rem; box-sizing: border-box; width: var(--dot); height: var(--dot); border-radius: 50%;
+  border: 0.0625rem solid var(--nc-quiet); background: var(--nc-canvas); }
+.mem-brief-item.current::after { border-color: color-mix(in srgb, var(--nc-accent) 70%, transparent); background: color-mix(in srgb, var(--nc-accent) 55%, var(--nc-canvas)); }
+.mem-brief-item.pending::after { border-style: dashed; border-color: var(--nc-muted); }
+.mem-brief-head { display: flex; flex-direction: column; gap: 0.25rem; width: 100%; min-width: 0; margin: 0; padding: 0; border: 0; background: none; color: inherit; text-align: start; cursor: pointer; }
+.mem-brief-head:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.25rem; border-radius: 0.125rem; }
+.mem-brief-date { font: 500 calc(0.8125rem * var(--fs, 1))/1.4 var(--sans); letter-spacing: 0.02em; color: var(--nc-text); font-variant-numeric: tabular-nums; }
+.mem-brief-tag { font-weight: 400; letter-spacing: 0; color: var(--nc-quiet); }
+.mem-brief-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; word-break: keep-all;
+  font: 400 calc(0.8125rem * var(--fs, 1))/1.55 var(--sans); color: var(--nc-muted); }
+.mem-brief-head:hover .mem-brief-text { color: var(--nc-text); }
+.mem-brief-head[aria-expanded="true"] .mem-brief-text { display: block; -webkit-line-clamp: unset; line-clamp: none; color: var(--nc-text); }
+.mem-brief-more { display: flex; flex-direction: column; gap: 0.25rem; padding-top: 0.5rem; min-width: 0; }
+.mem-brief-more[hidden] { display: none; }
+.mem-brief-meta { margin: 0; overflow-wrap: anywhere; font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); font-variant-numeric: tabular-nums; }
+.memory-mode .link-btn.mem-brief-older { margin-left: var(--rail); padding: 0; color: var(--nc-muted); font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.memory-mode .link-btn.mem-brief-older:hover { color: var(--nc-text); }
+.mem-brief-older:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.125rem; }
+.memory-mode .link-btn.mem-brief-older[hidden] { display: none; }
 .memory-mode .link-btn.d-revert { align-self: flex-start; padding: 0; color: var(--nc-accent); font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
 .memory-mode .link-btn.d-revert:disabled { color: var(--nc-quiet); }
-@media (prefers-reduced-motion: no-preference) { .mem-tlh-dot::before { transition: background-color 120ms ease-out; } }
+@media (prefers-reduced-motion: no-preference) { .mem-brief-text { transition: color 120ms ease-out; } }
 
 /* labels a memory carries (memoryLabels.mjs): accent text, never a pill or a bar */
 .mem-labels { display: inline-flex; flex-wrap: wrap; gap: 0 0.5rem; margin-right: 0.5rem; }

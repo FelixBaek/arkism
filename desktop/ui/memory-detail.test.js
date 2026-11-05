@@ -88,13 +88,15 @@ test("memory detail lists history, offers revert, and hands sources to the evide
   }});
   await h.ctx.memoryDetail(memory);
   assert.deepEqual(h.sources, [["m1", {items: ["src"]}]]);
-  // 변경 이력: one dot per version, oldest left; a conflict is another memory, so it gets no dot
+  // 변경 이력: one entry per version, newest on top; a conflict is another memory, so it gets none
   assert.match(texts(h.shell), /변경 이력/);
-  const dots = all(h.shell).filter(node => /mem-tlh-dot/.test(node.className));
-  assert.deepEqual(dots.map(d => d.attrs["aria-label"]), ["이전 내용 · 2026-08-01", "이전 내용 · 2026-08-20", "지금 내용 · 2026-09-01"]);
-  assert.doesNotMatch(texts(h.shell), /ignored|다른 기억과 부딪힘/);
-  assert.equal(all(h.shell).find(node => node.textContent === "이전으로 되돌리기"), undefined, "the current version is picked first");
-  dots[1].listeners.click();
+  const heads = all(h.shell).filter(node => /mem-brief-head/.test(node.className));
+  const brief = b => all(b).find(n => n.className === "mem-brief-text").textContent;
+  assert.deepEqual(heads.map(brief), ["결론부터 쓴다", "newer", "older"]);
+  assert.doesNotMatch(texts(h.shell), /ignored|다른 말/);
+  assert.equal(all(h.shell).filter(node => node.textContent === "이전으로 되돌리기").length, 2, "only the older versions offer it");
+  heads[1].listeners.click();
+  assert.equal(heads[1].attrs["aria-expanded"], "true");
   const back = all(h.shell).find(node => node.textContent === "이전으로 되돌리기");
   back.listeners.click();
   await settle();

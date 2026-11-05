@@ -1015,7 +1015,6 @@ window.ArkismI18nEN = (window.ArkismI18nDicts ||= {}).en = {
   "속도 기록을 지웠어요.": "Cleared the speed log.",
   "바뀐 이력": "Change history",
   "새 기억으로 바뀜": "Replaced by a newer memory",
-  "다른 기억과 부딪힘": "Conflicts with another memory",
   "이 계정은 기억을 지울 수 없어요.": "This account can't delete memories.",
   "Arkism 앱에서 사용자가 고침": "Edited by the user in the Arkism app",
   "Arkism 앱에서 사용자가 직접 추가": "Added directly by the user in the Arkism app",
@@ -7391,10 +7390,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "What held on the chosen day. Click to open the current version.",
   "시점": "As of",
   "이 날 맞던 기억만 보기. 비우면 지금": "Show only memories that held on this day. Leave empty for now",
-  "지금 내용": "Current",
-  "이전 내용": "Previous",
-  "새 내용으로 바뀜": "Replaced by newer",
-  "승인 전": "Not approved",
   "사람이 고르기 전까지 지금 내용을 계속 써요": "The current version stays in use until a person chooses" });
 Object.assign(window.ArkismI18nEN.patterns, {
   "관계 {0}개": "{0} relations",
@@ -7402,7 +7397,7 @@ Object.assign(window.ArkismI18nEN.patterns, {
 Object.assign(window.ArkismI18nEN.strings, {
   "검토 중": "In review" });
 Object.assign(window.ArkismI18nEN.patterns, {
-  "이전 {0}개": "{0} earlier" });
+  "이전 {0}개 더 보기": "Show {0} earlier" });
 Object.assign(window.ArkismI18nEN.strings, {
   "대화에서 무엇을 뽑을지": "What to capture from conversations",
   "에이전트가 확인한 사실·도구 결과·다른 사람의 말도 후보로 만들지예요. 후보는 내가 승인해야 기억이 돼요.": "Whether facts the agent confirmed, tool results and what other people said also become candidates. A candidate becomes a memory only after you approve it.",

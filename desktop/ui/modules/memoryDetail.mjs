@@ -92,11 +92,11 @@ export function createMemoryDetail(deps) {
     body.append(management);
     window.ArkismMemoryEvaluation.mount({ container: body, record: m, scope: { ...deps.state.scope },
       request: deps.request, el: deps.el, section: deps.section, facts: deps.facts });
-    // 변경 이력 (Figma 198:630): a dated horizontal timeline (memoryTimeline.mjs) the lineage walk fills once it answers;
-    // a memory that never changed has none. A correction waiting on this memory sits at the right end.
+    // 변경 이력 (Figma 198:630): a vertical date briefing (memoryTimeline.mjs) the lineage walk fills once it answers;
+    // a memory that never changed has none. A correction waiting on this memory sits on top.
     const pending = m.conflict_id ? [...(deps.state.data?.conflicted || []), ...(deps.state.data?.candidates || [])].find((c) => c.conflict_id === m.conflict_id) || null : null;
     const histRow = deps.el("div", "d-history-row");
-    // 이전으로 되돌리기 saves the picked older version's sentence again the same way 고치기 does
+    // 이전으로 되돌리기 saves an opened older version's sentence again the same way 고치기 does
     const revert = m.status === "active" && deps.state.caps?.actions?.propose ? (r, b) => revertMemory(m, r.text, b) : null;
     const drawHistory = (lineage) => {
       const rows = timelineEntries(m, lineage, pending);

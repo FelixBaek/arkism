@@ -1014,7 +1014,6 @@
  "속도 기록을 지웠어요.": "Se borró el registro de velocidad.",
  "바뀐 이력": "Historial de cambios",
  "새 기억으로 바뀜": "Fue reemplazado por un recuerdo nuevo",
- "다른 기억과 부딪힘": "Choca con otro recuerdo",
  "이 계정은 기억을 지울 수 없어요.": "Esta cuenta no puede borrar recuerdos.",
  "Arkism 앱에서 사용자가 고침": "Editado por el usuario en la app Arkism",
  "Arkism 앱에서 사용자가 직접 추가": "Añadido directamente por el usuario en la app Arkism",
@@ -6160,10 +6159,6 @@
  "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "Lo que valía el día elegido. Haz clic para abrir la versión actual.",
  "시점": "Fecha",
  "이 날 맞던 기억만 보기. 비우면 지금": "Mostrar solo los recuerdos válidos ese día. Vacío = ahora",
- "지금 내용": "Actual",
- "이전 내용": "Anterior",
- "새 내용으로 바뀜": "Reemplazado por uno nuevo",
- "승인 전": "Sin aprobar",
  "사람이 고르기 전까지 지금 내용을 계속 써요": "La versión actual se sigue usando hasta que una persona elija",
  "검토 중": "En revisión",
  "대화에서 무엇을 뽑을지": "Qué extraer de las conversaciones",
@@ -7435,6 +7430,6 @@
  "· 기억 {0}개": "· {0} recuerdos",
  "관계 {0}개": "{0} relaciones",
  "근거 {0}개": "{0} fuentes",
- "이전 {0}개": "{0} anteriores"
+ "이전 {0}개 더 보기": "Ver {0} anteriores"
  }
 };

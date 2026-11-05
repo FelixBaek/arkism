@@ -1,118 +1,98 @@
 // @ts-check
-// 변경 이력 as a dated horizontal timeline: each revision from when it held (valid_from) to when it stopped
-// (valid_to), who approved it and how many sources back it. A correction waiting for a person sits at the right end.
+// 변경 이력 as a vertical date briefing: newest on top, one date heading and a two-line brief per revision, a thin line
+// with a dot each down the left. Each revision held from valid_from to valid_to; a correction waiting for a person sits on top.
 
 /** When a record started to hold: the stated valid_from, else when it took effect, else when it was saved. */
 const from = (r) => r?.memory_context?.valid_from || r?.effective_at || r?.created_at || r?.updated_at || "";
 const time = (v) => { const t = Date.parse(v || ""); return Number.isFinite(t) ? t : 0; };
+/** A date heading with the year ("2026. 10. 13." in Korean), in the UI language. */
+const day = (v) => time(v) ? new Intl.DateTimeFormat(globalThis.ArkismI18n?.locale?.() || "ko-KR", { year: "numeric", month: "numeric", day: "numeric" }).format(time(v)) : "";
 
 /**
  * The timeline rows, newest first. pending: the correction candidate waiting on this memory, if any.
- * @returns {{kind: string, title: string, text: string, from: string, to: string, approver: string, evidence: number}[]}
+ * @returns {{kind: string, text: string, from: string, to: string, approver: string, evidence: number}[]}
  */
 export function timelineEntries(m, lineage, pending = null) {
   const links = Array.isArray(lineage?.links) ? lineage.links : [];
-  const row = (kind, title, r) => ({ kind, title, text: r?.text || "", from: from(r), to: r?.expires_at || "",
+  const KIND = { supersedes: "previous", superseded_by: "next", conflict: "conflict" };
+  const row = (kind, r) => ({ kind, text: r?.text || "", from: from(r), to: r?.expires_at || "",
     approver: r?.approved_by || r?.review?.by || "", evidence: Array.isArray(r?.sources) ? r.sources.length : 0 });
-  const rows = [row("current", "지금 내용", m)];
-  for (const l of links) {
-    if (!l?.record) continue;
-    if (l.relation === "supersedes") rows.push(row("previous", "이전 내용", l.record));
-    else if (l.relation === "superseded_by") rows.push(row("next", "새 내용으로 바뀜", l.record));
-    else if (l.relation === "conflict") rows.push(row("conflict", "다른 기억과 부딪힘", l.record));
-  }
+  const rows = [row("current", m), ...links.filter((l) => l?.record && KIND[l.relation]).map((l) => row(KIND[l.relation], l.record))];
   rows.sort((a, b) => time(b.from) - time(a.from));
   // A revision without its own end held until the next newer revision began; the newest holds until now.
   const chain = rows.filter((r) => r.kind !== "conflict");
   chain.forEach((r, i) => { if (!r.to && i > 0) r.to = chain[i - 1].from; });
   if (!m?.expires_at && m?.valid_to_proposal?.at) rows.find((r) => r.kind === "current").to = m.valid_to_proposal.at;
-  if (pending) rows.unshift({ ...row("pending", "검토 중", pending), to: "" });
+  if (pending) rows.unshift({ ...row("pending", pending), to: "" });
   return rows;
 }
 
-/**
- * Where each dot sits on the horizontal line: oldest left, newest right, a waiting correction last.
- * More than `limit` dots: only the newest `limit`, and `hidden` says how many are left out. A conflict is another
- * memory, not a version, so it has no dot. Grid lines are 1-based on 2 half-columns per dot (+1 leading column for
- * 이전 N개): dot i is centred on line 2i+2; its label spans one dot either side (lines 2i…2i+4), so labels on the same
- * side never share a column and alternate up/down.
- * @returns {{hidden: number, dots: {row: any, up: boolean, size: number, from: number, to: number}[]}}
- */
-export function timelineLayout(rows, { limit = 5, all = false } = {}) {
-  const dots = [...rows.filter((r) => r.kind !== "pending" && r.kind !== "conflict").reverse(), ...rows.filter((r) => r.kind === "pending")];
-  const hidden = all ? 0 : Math.max(0, dots.length - limit), shown = dots.slice(hidden), n = shown.length;
-  // dot size follows the evidence count (8–16px); the current version is always the largest
-  const size = (r) => r.kind === "current" ? 18 : r.kind === "pending" ? 12 : Math.min(16, 8 + 2 * r.evidence);
-  return { hidden, dots: shown.map((row, i) => ({ row, up: i % 2 === 0, size: size(row), from: Math.max(1, 2 * i), to: Math.min(2 * n + 1, 2 * i + 4) })) };
-}
+let ids = 0;
 
-const LABEL = { current: "지금 내용", previous: "이전 내용", next: "새 내용으로 바뀜", pending: "검토 중" };
-
-/** One version under the line: when it held, its text, who approved it and how many sources back it. deps: el, raw, shortDate. */
-function versionBlock(r, { el, raw, shortDate }) {
-  const box = el("div", `mem-tlh-version ${r.kind}`);
-  box.append(el("p", "mem-tlh-when", r.kind === "pending" ? "승인 전" : `${r.from ? shortDate(r.from) : "날짜 모름"} → ${r.to ? shortDate(r.to) : "지금"}`));
-  if (r.text) box.append(raw(el("p", "mem-tlh-text", `“${r.text}”`)));
-  // one span per piece, so each is translated on its own and the approver id stays as written
-  const meta = el("p", "mem-tlh-meta"), first = r.kind === "pending" || !!r.approver;
-  if (r.kind === "pending") meta.append(el("span", "", "사람이 고르기 전까지 지금 내용을 계속 써요"));
-  else if (r.approver) meta.append(el("span", "", "승인"), " ", raw(el("span", "", r.approver)));
-  if (r.evidence) meta.append(...(first ? [" · "] : []), el("span", "", `근거 ${r.evidence}개`));
-  if (first || r.evidence) box.append(meta);
-  return box;
+/** What an opened entry adds under its brief: 기간, who approved it, how many sources back it. deps: el, raw. */
+function entryMore(r, { el, raw }) {
+  const meta = el("p", "mem-brief-meta"), parts = [];
+  if (r.kind === "pending") parts.push(el("span", "", "사람이 고르기 전까지 지금 내용을 계속 써요"));
+  else {
+    // one span per piece, so each is translated on its own and dates and the approver id stay as written
+    const span = el("span");
+    span.append(el("span", "", "기간"), " ", raw(el("span", "", day(r.from) || "—")), " → ", r.to ? raw(el("span", "", day(r.to))) : el("span", "", "지금"));
+    parts.push(span);
+    if (r.approver) { const a = el("span"); a.append(el("span", "", "승인"), " ", raw(el("span", "", r.approver))); parts.push(a); }
+  }
+  if (r.evidence) parts.push(el("span", "", `근거 ${r.evidence}개`));
+  parts.forEach((p, i) => meta.append(...(i ? [" · ", p] : [p])));
+  return meta;
 }
 
 /**
- * 변경 이력 as one thin horizontal line: a dot per version (a button), labels alternating above and below, and the
- * picked version's text under it (default: the current one). revert(row, button): 이전으로 되돌리기 for a picked
- * older version, or null. deps: el, raw, shortDate.
+ * 변경 이력 as a briefing list: each entry is a button (date, then the text clamped to two lines) that opens in place,
+ * one at a time, to show 기간, approver, evidence and — for an older version — 이전으로 되돌리기. All closed at first.
+ * More than `limit` versions: the newest `limit` and 이전 N개 더 보기. revert(row, button) or null. deps: el, raw.
  */
 export function timelineView(rows, deps, { revert = null, limit = 5 } = {}) {
-  const { el } = deps, box = el("div", "mem-tlh");
-  let all = false, picked = rows.find((r) => r.kind === "current") || rows[0];
-  const paint = (focus) => {
-    const { hidden, dots } = timelineLayout(rows, { limit, all }), o = hidden ? 1 : 0, n = dots.length;
-    if (!dots.some((d) => d.row === picked)) picked = dots.find((d) => d.row.kind === "current")?.row || dots.at(-1)?.row;
-    const grid = el("div", "mem-tlh-grid");
-    grid.style.gridTemplateColumns = `${o ? "auto " : ""}repeat(${2 * n}, minmax(0, 1fr))`;
-    const at = (node, from, to, row) => { node.style.gridColumn = `${from + o} / ${to + o}`; node.style.gridRow = String(row); grid.append(node); return node; };
-    if (hidden) {
-      const more = el("button", "link-btn mem-tlh-more", `이전 ${hidden}개`); more.type = "button";
-      more.addEventListener("click", () => { all = true; paint(true); });
-      more.style.gridColumn = "1"; more.style.gridRow = "3"; grid.append(more);
-    }
-    if (n > 1) at(el("span", "mem-tlh-line"), 2, 2 * n, 3);
-    const buttons = dots.map((d, i) => {
-      const label = LABEL[d.row.kind] || d.row.title, date = d.row.from ? deps.shortDate(d.row.from) : "날짜 모름", on = d.row === picked;
-      const dot = el("button", `mem-tlh-dot ${d.row.kind}${on ? " on" : ""}`); dot.type = "button";
-      dot.style.setProperty?.("--d", `${d.size / 16}rem`);
-      dot.setAttribute("aria-label", `${label} · ${date}`); dot.setAttribute("aria-pressed", String(on)); dot.tabIndex = on ? 0 : -1;
-      dot.addEventListener("click", () => { picked = d.row; paint(true); });
-      at(dot, 2 * i + 1, 2 * i + 3, 3);
-      at(el("span", `mem-tlh-tick ${d.up ? "up" : "down"}`), 2 * i + 1, 2 * i + 3, d.up ? 2 : 4);
-      const edge = i === 0 && n > 1 ? " start" : i === n - 1 && n > 1 ? " end" : "";
-      const tag = el("p", `mem-tlh-label ${d.up ? "up" : "down"}${edge}${on ? " on" : ""}`);
-      tag.append(el("span", "", label), el("small", "", date));
-      tag.addEventListener("click", () => { picked = d.row; paint(true); });
-      at(tag, d.from, d.to, d.up ? 1 : 5);
-      return dot;
-    });
-    // ← → Home End move the pick along the line, like a radio group (one tab stop)
-    grid.addEventListener("keydown", (e) => {
-      const i = dots.findIndex((d) => d.row === picked), next = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: n - 1 }[e.key];
-      if (next === undefined || !dots[next] || !buttons.includes(e.target)) return;
-      e.preventDefault(); picked = dots[next].row; paint(true);
-    });
-    const version = versionBlock(picked, deps);
-    if (revert && picked.kind === "previous" && picked.text) {
+  const { el, raw } = deps, box = el("div", "mem-brief"), list = el("ol", "mem-brief-list");
+  const shown = rows.filter((r) => r.kind !== "conflict");
+  let versions = 0;
+  const items = shown.map((r) => {
+    const id = `mem-brief-${++ids}`, li = el("li", `mem-brief-item ${r.kind}`);
+    if (r.kind !== "pending" && ++versions > limit) li.hidden = true;
+    const head = el("button", "mem-brief-head"); head.type = "button";
+    head.setAttribute("aria-expanded", "false"); head.setAttribute("aria-controls", id);
+    const date = el("span", "mem-brief-date");
+    date.append(raw(el("span", "", day(r.from) || "—")));
+    const tag = r.kind === "current" ? "지금" : r.kind === "pending" ? "검토 중" : "";
+    if (tag) { const t = el("span", "mem-brief-tag"); t.append(" · ", el("span", "", tag)); date.append(t); }
+    head.append(date, raw(el("span", "mem-brief-text", r.text)));
+    const more = el("div", "mem-brief-more"); more.id = id; more.hidden = true;
+    more.append(entryMore(r, deps));
+    if (revert && r.kind === "previous" && r.text) {
       const back = el("button", "link-btn d-revert", "이전으로 되돌리기"); back.type = "button";
-      back.addEventListener("click", () => revert(picked, back));
-      version.append(back);
+      back.addEventListener("click", () => revert(r, back));
+      more.append(back);
     }
-    box.replaceChildren(grid, version);
-    if (focus) buttons[dots.findIndex((d) => d.row === picked)]?.focus?.();
-  };
-  paint(false);
+    head.addEventListener("click", () => {
+      const open = more.hidden;
+      for (const it of items) { it.head.setAttribute("aria-expanded", "false"); it.more.hidden = true; }
+      if (open) { head.setAttribute("aria-expanded", "true"); more.hidden = false; }
+    });
+    li.append(head, more); list.append(li);
+    return { li, head, more };
+  });
+  // ↑ ↓ Home End move between the visible entries
+  list.addEventListener("keydown", (e) => {
+    const heads = items.filter((it) => !it.li.hidden).map((it) => it.head), i = heads.indexOf(e.target);
+    const next = { ArrowUp: i - 1, ArrowDown: i + 1, Home: 0, End: heads.length - 1 }[e.key];
+    if (i < 0 || next === undefined || !heads[next]) return;
+    e.preventDefault(); heads[next].focus?.();
+  });
+  box.append(list);
+  const hidden = items.filter((it) => it.li.hidden);
+  if (hidden.length) {
+    const older = el("button", "link-btn mem-brief-older", `이전 ${hidden.length}개 더 보기`); older.type = "button";
+    older.addEventListener("click", () => { for (const it of hidden) it.li.hidden = false; older.hidden = true; hidden[0].head.focus?.(); });
+    box.append(older);
+  }
   return box;
 }
 

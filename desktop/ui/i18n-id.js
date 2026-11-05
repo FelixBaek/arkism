@@ -1014,7 +1014,6 @@
  "속도 기록을 지웠어요.": "Catatan kecepatan sudah dihapus.",
  "바뀐 이력": "Riwayat perubahan",
  "새 기억으로 바뀜": "Diganti dengan memori baru",
- "다른 기억과 부딪힘": "Bertentangan dengan memori lain",
  "이 계정은 기억을 지울 수 없어요.": "Akun ini tidak bisa menghapus memori.",
  "Arkism 앱에서 사용자가 고침": "Diubah oleh pengguna di aplikasi Arkism",
  "Arkism 앱에서 사용자가 직접 추가": "Ditambahkan langsung oleh pengguna di aplikasi Arkism",
@@ -6160,10 +6159,6 @@
  "고른 날 맞던 내용이에요. 누르면 지금 내용이 열려요.": "Isi yang berlaku pada hari yang dipilih. Klik untuk membuka versi saat ini.",
  "시점": "Waktu",
  "이 날 맞던 기억만 보기. 비우면 지금": "Tampilkan hanya memori yang berlaku hari ini. Kosongkan untuk sekarang",
- "지금 내용": "Saat ini",
- "이전 내용": "Sebelumnya",
- "새 내용으로 바뀜": "Diganti yang lebih baru",
- "승인 전": "Belum disetujui",
  "사람이 고르기 전까지 지금 내용을 계속 써요": "Versi saat ini tetap dipakai sampai seseorang memilih",
  "검토 중": "Sedang ditinjau",
  "대화에서 무엇을 뽑을지": "Apa yang diambil dari percakapan",
@@ -7435,6 +7430,6 @@
  "· 기억 {0}개": "· {0} memori",
  "관계 {0}개": "{0} relasi",
  "근거 {0}개": "{0} sumber",
- "이전 {0}개": "{0} sebelumnya"
+ "이전 {0}개 더 보기": "Tampilkan {0} sebelumnya"
  }
 };
