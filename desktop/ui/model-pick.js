@@ -58,7 +58,7 @@
         if (both && p.via !== "off" && p.via !== shown[i - 1]?.via) { const h = opt(p.via === "sub" ? "구독으로 쓰는 모델" : "API 키로 쓰는 모델", `\u0000${p.via}`); h.disabled = true; h.dataset.section = ""; added.push(h); }
         const g = group(p, (m) => valueFor(p, m));
         // the closed picker shows only the picked row: it says the billing too (the open list keeps the bare name, data-name)
-        if (p.billing) for (const o of g.children) { o.dataset.name = o.textContent; o.label = `${o.textContent} · ${p.billing === "api" ? "API" : "구독"}`; }
+        if (p.billing) for (const o of g.children) { o.dataset.name = o.textContent; o.label = `${o.textContent} · ${p.billing === "api" ? "API" : (p.badges || []).join(", ") || "구독"}`; }
         if (p.off) {
           g.label = `${g.label} · ${OFF}`;
           for (const o of [...g.children]) {

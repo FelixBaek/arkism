@@ -192,7 +192,7 @@ export const createCrew = (ctx) => {
   }, () => {});
   const autoLabel = () => (router ? tr(`자동 — ${router} 라우터가 일마다 골라요`) : tr("자동 — 라우터가 일마다 골라요"));
   // The same live list as a plain choice (자동화 팝업, 그래프 노드): "" = the fallback, "auto" = the router picks, then the models grouped
-  // like 설정 › 역할별 모델 (logo, MAX·PRO·API, input kind). The value is the plain model name; a saved model off the list stays choosable.
+  // like 설정 › 역할별 모델 (logo, Max·Pro·API, input kind). The value is the plain model name; a saved model off the list stays choosable.
   function modelSelect(value, emptyLabel) {
     const s = select([["", emptyLabel], ["auto", autoLabel()]], value || "");
     s.querySelector('option[value="auto"]').dataset.router = "1";
@@ -211,7 +211,7 @@ export const createCrew = (ctx) => {
     if (!only) dl.append(auto);
     // Grouped by provider, the provider's logo before its name; each model says on the right what it takes in. The server keeps a plain model name (no provider), so a name offered by several providers
     // says so on every copy: picking either saves the same name, and the runner picks the CLI from the name.
-    // One group per way a provider is connected (MAX·PRO·API, as in 설정 › 역할별 모델).
+    // One group per way a provider is connected (Max·Pro·API, as in 설정 › 역할별 모델).
     const byProvider = (models?.enabledByProvider?.() || []).filter((p) => p.usable !== false); // a typed name still works for the rest
     const where = new Map();
     for (const p of byProvider) for (const m of p.models) where.set(m, [...new Set([...(where.get(m) || []), p.name])]);

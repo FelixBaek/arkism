@@ -343,7 +343,7 @@ window.ArkismPages = (ctx) => {
       info.type = "button";
       const top = el("div", "ag-row-top");
       top.append(el("strong", "", a.name));
-      const plan = e.api ? "API" : models.planName(src?.main?.plan);
+      const plan = e.api ? "API" : src?.main?.plan ? models.subscriptionLabel(src.main.plan) : "";
       if (plan) top.append(el("span", `ag-plan${e.api ? " api" : ""}`, plan));
       if (!e.api && src) top.append(...models.cliBadge(src));
       if (pendingAgent(a.id)) top.append(el("span", "tag warn", "적용 대기"));

@@ -427,8 +427,8 @@ test("역할별 모델 reads the providers report again and shows how each model
     await settings("info"); await settings("roles"); // the card draws from the loaded report, reads it again and redraws its pickers in place
     assert.ok(picker().querySelectorAll("option").some((o) => o.value === "anthropic|claude-new"));
     // a provider with a login and a key shows twice, like its 설정 › 에이전트 rows: the subscription, then the key; each value is unique
-    assert.deepEqual(groups("Anthropic").map((g) => g.dataset.badges), ["구독 · Max", "API"]);
-    assert.deepEqual(groups("OpenAI").map((g) => g.dataset.badges), ["구독 · Pro", "API"]);
+    assert.deepEqual(groups("Anthropic").map((g) => g.dataset.badges), ["Max", "API"]);
+    assert.deepEqual(groups("OpenAI").map((g) => g.dataset.badges), ["Pro", "API"]);
     assert.ok(groups("Anthropic")[1].querySelectorAll("option").every((o) => o.dataset.badges === "API" && o.value.startsWith("anthropic|api|")));
     const vals = picker().querySelectorAll("option").map((o) => o.value).filter(Boolean);
     assert.equal(new Set(vals).size, vals.length);

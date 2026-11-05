@@ -66,7 +66,7 @@ window.ArkismModels = (ctx) => {
   const enabledModels = () => providers().flatMap((p) => modelsOf(p).filter((m) => enabled(p.id, m)));
   // The same, per provider ({name, models}), for pickers that show where a model comes from.
   // 설정 › 역할별 모델 and AI 도구 split a provider the way 설정 › 에이전트 lists it (its account row and its API row): one group
-  // on the subscription (구독 · Max, 구독 · Pro…) and one on the stored key (API), each saved with its billing (model-pick.js pickValue),
+  // on the subscription (Max, Pro…) and one on the stored key (API), each saved with its billing (model-pick.js pickValue),
   // so the pick decides which one pays. Workflow pickers save a plain model name and keep enabledByProvider().
   const pickerGroups = () => enabledByProvider().flatMap(byBilling);
   function byBilling(g) {
@@ -511,8 +511,8 @@ window.ArkismModels = (ctx) => {
     const hit = [words.join(""), ...words].find((w) => PLAN_TIERS[w]);
     return hit ? PLAN_TIERS[hit] : "";
   }
-  // A subscription as pickers name it: 구독 · Max, or plain 구독 when the tier is unknown.
-  const subscriptionLabel = (plan) => ["구독", planName(plan)].filter(Boolean).join(" · ");
+  // A subscription as pickers and 설정 › 에이전트 name it: its tier alone (Max, Ultra…), or plain 구독 when the tier is unknown.
+  const subscriptionLabel = (plan) => planName(plan) || "구독";
   // How a provider is connected, as its 설정 › 에이전트 rows say it: each signed-in subscription's tier (Max, Pro…), then API when a key is stored.
   const viaBadges = (p) => [...new Set((p.accounts || []).filter((a) => a.status === "connected").map((a) => planName(a.plan)).filter(Boolean)), ...((p.keys || []).length ? ["API"] : [])];
   // An agent's report: its provider, its CLI's accounts (the default first) and whether a key is stored.
@@ -571,7 +571,7 @@ window.ArkismModels = (ctx) => {
       const top = el("div", "ag-account-top");
       const shown = labelOf("account", src.p.id, a.id) || a.label || CLI_NAMES[a.cli] || a.id;
       top.append(el("strong", "", shown), pencil("account", src.p.id, a.id, labelOf("account", src.p.id, a.id), shown));
-      if (a.plan) top.append(el("span", "ag-plan", planName(a.plan)));
+      if (a.plan) top.append(el("span", "ag-plan", subscriptionLabel(a.plan)));
       name.append(top);
       const windows = a.quotas?.length ? a.quotas : a.quota ? [a.quota] : [];
       if (on && windows.length) { const qs = el("div", "ag-quotas"); windows.slice(0, 2).forEach((q) => qs.append(quotaMini(q))); name.append(qs); }

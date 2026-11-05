@@ -57,7 +57,7 @@
     pop.style.maxHeight = `${Math.round(Math.min(320, up ? above : below))}px`;
     pop.style.top = up ? `${Math.round(r.top - 4 - Math.min(pop.scrollHeight, 320, above))}px` : `${Math.round(r.bottom + 4)}px`;
   }
-  // data-badges ("MAX,API"): how the model is connected, the same small marks as 설정 › 에이전트's rows (.ag-plan), after the name.
+  // data-badges ("Max,API"): how the model is connected, the same small marks as 설정 › 에이전트's rows (.ag-plan), after the name.
   const badges = (t, list) => { for (const b of (list || "").split(",").filter(Boolean)) { const s = document.createElement("span"); s.className = b === "API" ? "ag-plan api" : "ag-plan"; s.textContent = b; t.append(" ", s); } };
   function paint() {
     const bar = open.tabs && document.createElement("div");

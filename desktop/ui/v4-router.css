@@ -100,7 +100,7 @@ button.v4-tr:hover { background: var(--nc-raised); }
 .ag-row-top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ag-row-top strong { font: 500 calc(14px * var(--fs, 1))/1.5 var(--sans); }
 .ag-row-main > small { font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
-.ag-plan { padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font: 500 calc(10px * var(--fs, 1))/1.6 var(--mono); color: var(--nc-text); background: none; letter-spacing: .02em; }
+.ag-plan { display: inline-block; padding: calc((18px * var(--fs, 1) - 1cap) / 2 - 1px) 5px; border: 1px solid currentColor; border-radius: 4px; font: 500 calc(10px * var(--fs, 1))/1 var(--mono); text-box: trim-both cap alphabetic; color: var(--nc-text); background: none; } /* trimmed to the capitals, so the even padding centers them */
 .ag-plan.api { --plan-api: #6fb2e8; color: var(--plan-api); } /* Figma 1300:5254: plans in a white outline, API in a blue one */
 :root[data-theme="light"] .ag-plan.api { --plan-api: #2f6fa8; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .ag-plan.api { --plan-api: #2f6fa8; } }

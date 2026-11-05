@@ -328,7 +328,7 @@ test("a provider with a login and a key is two picker groups, subscription and A
   await v.m.load();
   const sel = v.m.assistPicker();
   const heads = sel.children.filter((c) => c.tagName === "OPTGROUP" && c.label === "OpenAI");
-  assert.deepEqual(heads.map((g) => g.dataset.badges), ["구독 · Pro", "API"]);
+  assert.deepEqual(heads.map((g) => g.dataset.badges), ["Pro", "API"]);
   const vals = sel.options.map((o) => o.value).filter(Boolean);
   assert.equal(new Set(vals).size, vals.length, "every option saves its own value");
   assert.equal(sel.value, "openai|gpt-5"); // a pick saved before the choice reads as the subscription
@@ -348,7 +348,7 @@ test("a login's tier reads from what the CLI reports, and an unknown tier says o
   const v = mk();
   for (const [plan, name] of [["pro", "Pro"], ["max", "Max"], ["Claude Max", "Max"], ["default_claude_max_20x", "Max"], ["ultra", "Ultra"], ["ULTRA", "Ultra"], ["super_grok", "SuperGrok"], ["galaxy", ""], ["", ""], [null, ""]]) {
     assert.equal(v.m.planName(plan), name, String(plan));
-    assert.equal(v.m.subscriptionLabel(plan), name ? `구독 · ${name}` : "구독", String(plan));
+    assert.equal(v.m.subscriptionLabel(plan), name || "구독", String(plan));
   }
 });
 
