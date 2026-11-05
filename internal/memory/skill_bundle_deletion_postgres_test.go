@@ -103,8 +103,13 @@ func TestPostgresSkillBundleDeletionRemovesProjectedCopies(t *testing.T) {
 	if arkismMCP(t, env(server.URL), mcpCall{"load_skill", map[string]any{"skill_id": "demo"}})[0]["error"] == nil {
 		t.Fatal("deleted skill still loads")
 	}
+	// Offline, the space tool list cannot be read: tools are refused unless the operator opens them.
+	if message := mcpError(arkismMCP(t, env("http://127.0.0.1:9"), mcpCall{"load_skill", map[string]any{"skill_id": "demo"}})[0]); !strings.Contains(message, "tool_not_enabled") {
+		t.Fatal("offline router kept its tools", message)
+	}
+	offline := append(env("http://127.0.0.1:9"), "ARKISM_MCP_TOOLS_ON_ERROR=open")
 	for _, ref := range []string{"demo", "demo@1"} {
-		if message := mcpError(arkismMCP(t, env("http://127.0.0.1:9"), mcpCall{"load_skill", map[string]any{"skill_id": ref}})[0]); !strings.Contains(message, "skill_unavailable_offline") {
+		if message := mcpError(arkismMCP(t, offline, mcpCall{"load_skill", map[string]any{"skill_id": ref}})[0]); !strings.Contains(message, "skill_unavailable_offline") {
 			t.Fatal("deleted skill served from offline cache", ref, message)
 		}
 	}

@@ -18,7 +18,7 @@ import (
 func TestPostgresSessionArchiveUsageMCPProfiles(t *testing.T) {
 	p := isolatedPostgres(t)
 	f, now := archiveSearchFixture(t, p)
-	f.auth.actors[f.agent] = actor("usage-agent", "agent", true, "read", "use")
+	f.auth.actors[f.agent] = actor("usage-agent", "agent", true, "read", "use", "search") // the router reads the space tool list (search-guarded)
 	var clock atomic.Int64
 	clock.Store(now.UnixNano())
 	f.svc.SessionArchiveNow = func() time.Time { return time.Unix(0, clock.Load()).UTC() }
