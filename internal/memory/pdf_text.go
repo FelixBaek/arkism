@@ -11,6 +11,8 @@ import (
 	"bytes"
 	"compress/zlib"
 	"errors"
+	"image"
+	"image/png"
 	"io"
 	"math"
 	"regexp"
@@ -346,9 +348,11 @@ func pdfPagesText(raw []byte) ([]string, error) {
 	return out, nil
 }
 
-// pdfPageImages returns each page's largest JPEG image, the form a scanner
-// usually writes a page in; a page without one gets nil.
-// shortcut: JPEG (DCTDecode) only; Flate, CCITT and JBIG2 scans are not read.
+// pdfPageImages returns each page's largest image a model can read: a JPEG
+// as stored (the form a scanner usually writes), or an 8-bit gray or RGB
+// Flate image re-encoded as PNG. A page without one gets nil.
+// shortcut: CCITT, JBIG2, JPEG 2000, indexed colour and predictor-coded
+// Flate images are not read; add them when real scans need them.
 func pdfPageImages(raw []byte) ([][]byte, error) {
 	d, err := pdfParse(raw)
 	if err != nil {
@@ -357,18 +361,65 @@ func pdfPageImages(raw []byte) ([][]byte, error) {
 	pages := d.pages()
 	out := make([][]byte, len(pages))
 	for i, page := range pages {
+		var best pdfStream
 		for _, ref := range d.dictOf(d.dictOf(page["Resources"])["XObject"]) {
 			st, ok := d.resolve(ref).(pdfStream)
-			filter := d.resolve(st.dict["Filter"])
-			if arr, single := filter.([]any); single && len(arr) == 1 {
-				filter = d.resolve(arr[0])
+			if ok && st.dict["Subtype"] == pdfName("Image") && d.imageFilter(st) != "" && len(st.data) > len(best.data) {
+				best = st
 			}
-			if ok && st.dict["Subtype"] == pdfName("Image") && filter == pdfName("DCTDecode") && len(st.data) > len(out[i]) {
-				out[i] = st.data
-			}
+		}
+		if best.dict != nil {
+			out[i] = d.pageImage(best)
 		}
 	}
 	return out, nil
+}
+
+// imageFilter names a readable image stream's single filter, or "".
+func (d *pdfDoc) imageFilter(st pdfStream) pdfName {
+	filter := d.resolve(st.dict["Filter"])
+	if arr, single := filter.([]any); single && len(arr) == 1 {
+		filter = d.resolve(arr[0])
+	}
+	if filter == pdfName("DCTDecode") || filter == pdfName("FlateDecode") && st.dict["DecodeParms"] == nil {
+		return filter.(pdfName)
+	}
+	return ""
+}
+
+// pageImage returns a JPEG as stored or a Flate image as PNG; nil when the
+// image is in a form not read here or inflates past the document limit.
+func (d *pdfDoc) pageImage(st pdfStream) []byte {
+	if d.imageFilter(st) == "DCTDecode" {
+		return st.data
+	}
+	w, wok := pdfInt(d.resolve(st.dict["Width"]))
+	h, hok := pdfInt(d.resolve(st.dict["Height"]))
+	bits, _ := pdfInt(d.resolve(st.dict["BitsPerComponent"]))
+	comps := map[any]int{pdfName("DeviceRGB"): 3, pdfName("DeviceGray"): 1}[d.resolve(st.dict["ColorSpace"])]
+	if !wok || !hok || w < 1 || h < 1 || w > 1<<15 || h > 1<<15 || bits != 8 || comps == 0 || w*h*comps > pdfMaxStream {
+		return nil
+	}
+	pixels, ok := d.decode(st)
+	if !ok || len(pixels) != w*h*comps {
+		return nil
+	}
+	var img image.Image
+	if comps == 1 {
+		img = &image.Gray{Pix: pixels, Stride: w, Rect: image.Rect(0, 0, w, h)}
+	} else {
+		rgba := image.NewRGBA(image.Rect(0, 0, w, h))
+		for p := 0; p < w*h; p++ {
+			copy(rgba.Pix[4*p:4*p+3], pixels[3*p:3*p+3])
+			rgba.Pix[4*p+3] = 0xff
+		}
+		img = rgba
+	}
+	var buf bytes.Buffer
+	if png.Encode(&buf, img) != nil {
+		return nil
+	}
+	return buf.Bytes()
 }
 
 func (d *pdfDoc) resolve(v any) any {

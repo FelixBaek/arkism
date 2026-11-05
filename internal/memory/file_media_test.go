@@ -1,10 +1,13 @@
 package memory
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"image/png"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -144,6 +147,41 @@ func TestScannedPDFPagesReadByVision(t *testing.T) {
 	images, _ := pdfPageImages(scannedPDF(many...))
 	if len(images) != len(many) || string(images[9]) != "J9" {
 		t.Fatalf("page images %q", images)
+	}
+}
+
+// A Flate-coded RGB scan becomes a PNG page, and the scanned page bound comes
+// from the operator's setting.
+func TestScannedPDFFlatePagesAndPageBound(t *testing.T) {
+	var z bytes.Buffer
+	zw := zlib.NewWriter(&z)
+	_, _ = zw.Write([]byte{255, 0, 0, 0, 0, 255})
+	_ = zw.Close()
+	flate := stream("/Type /XObject /Subtype /Image /Width 2 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceRGB /Filter /FlateDecode", z.String())
+	pdf := strings.Replace(string(scannedPDF("J0")), stream("/Type /XObject /Subtype /Image /Filter [/DCTDecode]", "J0"), flate, 1)
+	images, err := pdfPageImages([]byte(pdf))
+	if err != nil || len(images) != 1 {
+		t.Fatal(images, err)
+	}
+	img, err := png.Decode(bytes.NewReader(images[0]))
+	if err != nil || img.Bounds().Dx() != 2 {
+		t.Fatal(err)
+	}
+	if r, g, b, _ := img.At(1, 0).RGBA(); r != 0 || g != 0 || b != 0xffff {
+		t.Fatal(r, g, b)
+	}
+	reads := make([]string, 12)
+	pages := make([]string, 12)
+	for i := range pages {
+		reads[i], pages[i] = fmt.Sprintf("쪽 %d 글자", i), fmt.Sprintf("J%d", i)
+	}
+	f, llm := mediaFixture(t, extractAnswer(), extractAnswer(), extractAnswer())
+	v := &fakeVisionLLM{fakeWikiLLM: llm, reads: reads}
+	f.svc.Wiki = v
+	f.svc.Files.VisionPages = 10
+	out, err := f.svc.ExtractFileMemories(testCtx, f.human, mediaUpload("scan.pdf", scannedPDF(pages...)))
+	if err != nil || len(v.images) != 10 || len(out.Skipped) < 2 || out.Skipped[0].Reason != "vision_page_limit" {
+		t.Fatalf("%+v %v %d", out, err, len(v.images))
 	}
 }
 
