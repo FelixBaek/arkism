@@ -371,7 +371,7 @@ wiki. What a person approves and how is described in
     until a person lists `add_document` in the space's `mcp_tools`
     (`PATCH /v1/spaces/{workspace}/{project}/config`). Space bundle import is
     now refused for non-human principals.
-12. **Entity names, labels and graph filters.** Extraction now compares a new
+13. **Entity names, labels and graph filters.** Extraction now compares a new
     name with the space's entities by trigram similarity. With the new space
     setting `entity_resolution` at its default `propose`, a similar name still
     becomes its own entity and carries `similar` merge proposals that only
@@ -388,7 +388,7 @@ wiki. What a person approves and how is described in
     and `entity_free_types: true` allows types outside the built-in list; both
     are off the defaults only when set. The entity graph accepts `tags`,
     `tags_match`, `tag_groups` and `min_count`. No migration is needed.
-12. **Text ingest and extraction settings.** `POST /v1/memories/ingest` takes
+14. **Text ingest and extraction settings.** `POST /v1/memories/ingest` takes
     1-16 text items (context, timestamp, tags, metadata, entities, strategy,
     `document_id`, `update_mode` replace or append) and turns them into review
     candidates through the same extraction as file uploads; `async: true`
@@ -415,7 +415,7 @@ wiki. What a person approves and how is described in
     `meta:<key>=<value>`) and `entities` (names stated on the candidate, linked
     on approval). Jobs queued before this upgrade run with the space's current
     settings.
-12. **Extensions without rebuilding (optional, off by default).**
+15. **Extensions without rebuilding (optional, off by default).**
     `ARKISM_EXTENSIONS_FILE` lists programs as
     `{"extensions":[{"name":"house","command":["/opt/house/bin/ext"],"env":{},"timeout":"2s","fail":"closed"},{"name":"corp","url":"https://ext.example.com/rpc","token_file":"/etc/arkism/corp.token"}]}`.
     A `command` (absolute path) is started once and spoken to over
@@ -456,15 +456,16 @@ wiki. What a person approves and how is described in
     `POST /v1/extensions/{name}/data` (`{scope, changes}`, all or none, optional
     `expected_revision`); deleting a key is how its data is erased. Principals
     with listed actions need `read:ext_data` and `write:ext_data` for these.
-13. **MCP tool allowlists now fail closed.** The router reads the space's
+16. **MCP tool allowlists now fail closed.** The router reads the space's
     `mcp_tools` and the server's `ARKISM_MCP_TOOLS` and keeps them for a minute.
     Before this release a router that could not read the space settings
     offered every tool; now it offers none until it can (it asks again after
     10 seconds). `ARKISM_MCP_TOOLS_ON_ERROR=open` in the router's environment
     keeps the old behaviour. The settings are read with `search:memories`, which the router already holds.
-14. **More agent read and proposal tools.** `browse_memory` now lists
-    `memories` (active, paged, with `query`), `documents` (uploaded files,
-    `GET /v1/files/memories/documents`, `read:memory_candidates`), `spaces`,
+17. **More agent read and proposal tools.** `browse_memory` now lists
+    `memories` (active, paged, with `query`), `documents` (extraction documents,
+    `GET /v1/files/memories/documents`, `read:memory_candidates`; an agent
+    sees only the documents whose last upload it started), `spaces`,
     `tags` and `stats`. `GET /v1/stats` now asks `read:memories`, and agents
     may read it without `ops:metrics`; people and services still need
     `ops:metrics` as well, so principals with listed actions need
@@ -475,7 +476,7 @@ wiki. What a person approves and how is described in
     target must exist at the revision the agent saw, secrets and private spans
     are refused, and only a person accepts or dismisses it. Deciding changes
     nothing: the person makes the change through its own screen or route.
-12. **Space bundles stream.** Export downloads are now format version 2:
+18. **Space bundles stream.** Export downloads are now format version 2:
     the manifest line, the body, then a trailer line `{"end": {sha256,
     sections, skipped}}`. They stream fresh from the database, with no 8 MB or
     5,000 record cap, so a record erased after the export is left out instead
@@ -500,7 +501,7 @@ wiki. What a person approves and how is described in
     target, knowledge as a draft source, and importing again adds nothing.
     Old bundle text on export job rows is cleared on the next download
     or by `memoryd --space-repair execute`.
-13. **Webhooks.** A webhook can set its `method` (POST, PUT or PATCH),
+19. **Webhooks.** A webhook can set its `method` (POST, PUT or PATCH),
     `timeout_seconds` (up to 30), and extra `headers` and `query_params` (16
     each). Their values are sealed with the webhook key and never shown again:
     reads return only `header_names` and `query_param_names`. The outbound
@@ -510,7 +511,7 @@ wiki. What a person approves and how is described in
     their events; subscribe to the new ones to receive them. Changing a
     webhook's URL to another scheme, host or port drops its sealed headers and
     query values unless the same update sends them again.
-14. **Wiki folders and query pages.** `PATCH /v1/wiki/folders` renames or
+20. **Wiki folders and query pages.** `PATCH /v1/wiki/folders` renames or
     moves a folder with everything in it, `DELETE /v1/wiki/folders` deletes an
     empty folder (or, with `recursive=true`, its pages too), and `DELETE
     /v1/wiki/pages/{id}` deletes one page. All three are for people only, and
@@ -520,11 +521,11 @@ wiki. What a person approves and how is described in
     query page refreshes only on the refresh mode a person chose, and every
     refresh is a draft a person approves; nothing new spends model budget by
     itself.
-15. **Tags and stats.** `GET /v1/tags` takes `q` (`*` wildcards), `source`
+21. **Tags and stats.** `GET /v1/tags` takes `q` (`*` wildcards), `source`
     (`memories` or `mental_models`), `limit` and `offset`, and returns
     `total`. Stats count links by kind, and the timeseries takes `time_field`
     (`created`, `occurred` or `mentioned`).
-16. **Space rename.** `memoryd --space-rename preview|execute --from
+22. **Space rename.** `memoryd --space-rename preview|execute --from
     workspace/project --to workspace/project2` moves a space to a new project
     id offline (see the command table). Nothing changes until an administrator
     runs it.
