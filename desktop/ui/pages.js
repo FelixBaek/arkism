@@ -118,6 +118,7 @@ window.ArkismPages = (ctx) => {
 
   // ---------------------------------------------------------------- 설정
   const messenger = window.ArkismMessenger(ctx);
+  const spaceSettings = window.ArkismSpaceSettings(ctx);
   // 설정 pages (Figma 07 · 설정, 03 · 모델): [title, one-line description]. The tabs themselves are the area tabs in shell.js.
   const SETTINGS_TABS = {
     general: ["일반", "대화 수집과 앱 시작을 정해요."],
@@ -128,6 +129,7 @@ window.ArkismPages = (ctx) => {
     roles: ["역할별 모델", "일마다 쓸 모델과, 스킬을 요약·찾기·판정·검사하는 방법을 정해요."],
     workflow: ["페르소나", "AI 노드가 맡을 역할과 말투예요."],
     categories: ["카테고리", "스킬을 규칙에 따라 묶어요. 위에 있는 카테고리가 먼저 맞춰져요."],
+    space: ["기억 공간", "이 공간에서 기억을 뽑고 막고 답하는 방식을 정해요."],
     advanced: ["고급", "백업·진단·데이터 지우기처럼 자주 바꾸지 않는 설정이에요."],
     info: ["정보", "앱 버전과 Arkism이 기억을 다루는 규칙이에요."],
     routing: ["라우팅 설정", "질문마다 어떤 모델로 보낼지, 실패하면 어디로 넘길지 정해요."]
@@ -1360,7 +1362,7 @@ window.ArkismPages = (ctx) => {
       return box;
     })), asSide(comfy)));
     // shortcut: the UI has no dev-build flag, so 속도 기록 is folded instead of hidden; gate it if one is added.
-    return [...dataGroup(), spaceGroup(), ctx.privacyGroup(), more("자세히 · 속도 기록", speedGroup())];
+    return [...dataGroup(), ctx.privacyGroup(), more("자세히 · 속도 기록", speedGroup())];
   }
   // 속도 기록 (perf.js): the slowest kinds first; 100ms or more is what a person notices as a stall.
   function speedGroup() {
@@ -1478,7 +1480,7 @@ window.ArkismPages = (ctx) => {
     if (!w || !p) throw new Error("no_space");
     return `/v1/spaces/${encodeURIComponent(w)}/${encodeURIComponent(p)}`;
   };
-  const spaceShow = (line, warn = false, review = false) => { Object.assign(space, { line, warn, review }); if (state.view === "settings" && state.settingsTab === "advanced") render(false); };
+  const spaceShow = (line, warn = false, review = false) => { Object.assign(space, { line, warn, review }); if (state.view === "settings" && state.settingsTab === "space") render(false); };
   async function spaceJob(kind, job) { // until done or failed; 10 minutes is the server's own job limit
     for (let i = 0; i < 400 && ["queued", "running"].includes(job.state); i++) {
       await new Promise((r) => setTimeout(r, 1500));
@@ -1495,7 +1497,7 @@ window.ArkismPages = (ctx) => {
     space.busy = true;
     try { await work(); } catch (e) { spaceShow(SPACE_ERR[e.message] || "처리하지 못했어요. 연결 상태를 확인하고 다시 시도해 주세요.", true); }
     space.busy = false;
-    if (state.view === "settings" && state.settingsTab === "advanced") render(false);
+    if (state.view === "settings" && state.settingsTab === "space") render(false);
   }
   const spaceExport = () => spaceRun(async () => {
     spaceShow("내보낼 파일을 만드는 중…");
@@ -1601,9 +1603,9 @@ window.ArkismPages = (ctx) => {
     if (shownTab !== tab) { draft = null; open = null; kitCard = null; shownTab = tab; }
     $("#controls").replaceChildren();
     sideParts = []; headParts = [];
-    const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote };
+    const kit = { side: toSide, head: toHead, sideSec, kvRow, sideNote, group, line, sw, more, spaceJob };
     const body = { general: tabGeneral, connect: tabConnect, messenger: () => messenger.tab(kit), appearance: tabAppearance, agents: tabAgents, roles: agentRoleCards, routing: () => routing.tab(kit),
-      workflow: () => crew.settingsTab({ group }), categories: tabCategories, advanced: tabAdvanced, info: tabInfo }[tab]();
+      workflow: () => crew.settingsTab({ group }), categories: tabCategories, space: () => spaceSettings.tab(kit, [spaceGroup()]), advanced: tabAdvanced, info: tabInfo }[tab]();
     if (tab === "workflow") toSide(sideNote("목록을 누르면 펼쳐서 고쳐요. 노드에서 쓰는 페르소나는 지울 수 없어요."));
     const content = el("div", `pg-content v4-set v4-set-${tab}`);
     content.append(...body);

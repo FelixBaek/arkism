@@ -1,0 +1,11 @@
+{
+  "items": [
+    { "id": "lr_0921", "created_at": "2026-11-05T09:42:01Z", "request": { "operation": "embed", "generator": { "model": "embed-small" }, "total_tokens": 412, "latency_ms": 180, "status": "ok" } },
+    { "id": "lr_0920", "created_at": "2026-11-05T09:41:58Z", "request": { "operation": "rerank", "generator": { "model": "rerank-small" }, "total_tokens": 1630, "latency_ms": 420, "status": "ok" } },
+    { "id": "lr_0919", "created_at": "2026-11-05T09:41:55Z", "request": { "operation": "reflect", "generator": { "model": "large-model" }, "total_tokens": 5821, "latency_ms": 6300, "status": "ok" } },
+    { "id": "lr_0918", "created_at": "2026-11-05T09:10:12Z", "request": { "operation": "wiki_memory_extract", "generator": { "model": "large-model" }, "total_tokens": 9204, "latency_ms": 14100, "status": "error", "error": "timeout" } },
+    { "id": "lr_0917", "created_at": "2026-11-05T08:58:44Z", "request": { "operation": "wiki_entities", "generator": { "model": "large-model" }, "total_tokens": 3110, "latency_ms": 4800, "status": "ok" } },
+    { "id": "lr_0916", "created_at": "2026-11-05T08:21:07Z", "request": { "operation": "embed", "generator": { "model": "embed-small" }, "total_tokens": 288, "latency_ms": 150, "status": "ok" } }
+  ],
+  "next_before": "2026-11-05T08:21:07Z"
+}

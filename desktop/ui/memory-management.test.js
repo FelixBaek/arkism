@@ -88,3 +88,18 @@ test("wording groups preserve signs, units, comparisons and directional word ord
     ["표현은 자동짧게", "표현은 자동간결하게"]
   ]) assert.equal(management.groups([candidate("a", { text: first }), candidate("b", { text: second })]).length, 2);
 });
+
+test("audit lines, model-call names and the two stats folds read in plain words, unknown codes kept", () => {
+  assert.deepEqual(management.auditLine({ action: "write:memories", actor: "felix", actor_type: "human" }), { what: "기억 바꿈", code: "write:memories", blocked: false, person: true, known: true });
+  assert.equal(management.auditLine({ action: "write:memories:defense_blocked", actor_type: "agent" }).blocked, true);
+  assert.equal(management.auditLine({ action: "read:memories", decision: "deny" }).blocked, true);
+  assert.deepEqual(management.auditLine({ action: "zap:things" }), { what: "", code: "zap:things", blocked: false, person: false, known: false });
+  assert.equal(management.opLabel("embed"), "검색용 색인 만들기"); assert.equal(management.opLabel("rerank"), "검색 결과 다시 고르기"); assert.equal(management.opLabel("new_op"), "");
+  const m = management.modelStats({ items: [{ day: "2026-11-02", operation: "embed", calls: 10, errors: 1, total_tokens: 100 }, { day: "2026-11-01", operation: "reflect", calls: 2, errors: 0, total_tokens: 900 }, { day: "2026-11-02", operation: "reflect", calls: 1, errors: 0, total_tokens: 50 }] });
+  assert.deepEqual(m.days.map((d) => [d.day, d.calls]), [["2026-11-01", 2], ["2026-11-02", 11]]);
+  assert.deepEqual(m.ops.map((o) => [o.operation, o.calls]), [["embed", 10], ["reflect", 3]]);
+  assert.deepEqual([m.calls, m.errors, m.tokens], [13, 1, 1050]);
+  assert.deepEqual(management.modelStats(null), { days: [], ops: [], calls: 0, errors: 0, tokens: 0 });
+  const s = management.series({ points: [{ bucket: "2026-11-02", key: "user", count: 2 }, { bucket: "2026-11-01", key: "user", count: 1 }, { bucket: "2026-11-02", key: "fact", count: 5 }] });
+  assert.deepEqual(s, { buckets: [["2026-11-01", 1], ["2026-11-02", 7]], keys: [["fact", 5], ["user", 3]], total: 8 });
+});

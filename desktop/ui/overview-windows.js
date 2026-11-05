@@ -1187,9 +1187,13 @@ window.ArkismOverviewWindows = (ctx, env) => {
 
   // 기억 관리: numbers (GET /v1/stats), tags (GET /v1/tags, POST /v1/tags/rename) and upkeep — waiting 정리 제안 and stopped
   // background work (GET /v1/operations?status=failed). Renaming onto an existing tag merges; "session:" tags are the server's own.
-  async function wideOps(focusTag = "") {
-    const M = window.ArkismMemoryManagement, d = shell("기억 관리", null, "숫자·태그·정리 상태", "dream");
-    recipe(d, { wide: "ops", args: [focusTag] });
+  // view: 한눈에 (the numbers, upkeep and tags below), 활동 기록 (opsAudit), 모델 호출 (opsModels) or 추이 (opsTrend)
+  const OPS_VIEWS = [["summary", "한눈에"], ["audit", "활동 기록"], ["models", "모델 호출"], ["trend", "추이"]];
+  async function wideOps(focusTag = "", view = "summary") {
+    const M = window.ArkismMemoryManagement, d = shell("기억 관리", null, "숫자·태그·정리 상태·기록", "dream");
+    recipe(d, { wide: "ops", args: [focusTag, view] });
+    d.append(chipBar(OPS_VIEWS, view, (k) => { if (k !== view) wideOps(focusTag, k); }));
+    if (view !== "summary") return void ({ audit: opsAudit, models: opsModels, trend: opsTrend }[view] || opsAudit)(d, M);
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     left.append(el("p", "ov-win-empty", "불러오는 중…")); body.append(left, right); d.append(body);
     const [st, tg, ops] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`)]);
@@ -1235,6 +1239,117 @@ window.ArkismOverviewWindows = (ctx, env) => {
       if (r.tag === focusTag) requestAnimationFrame(() => item.scrollIntoView({ block: "nearest" }));
     }
     right.append(list);
+  }
+  // ------------------------------------------------------------ 기억 관리 › 기록 (people only: the server answers access_denied to an agent token)
+  const DAY = 24 * HOUR;
+  const iso = (t) => new Date(t).toISOString();
+  const stamp = (v) => (time(v) ? new Date(v).toLocaleString(loc(), { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—");
+  const RANGE = [["1", "오늘"], ["7", "최근 7일"], ["30", "최근 30일"], ["90", "최근 90일"]];
+  const deniedText = (e) => (e?.message === "access_denied" ? "사람 계정으로 로그인하면 보여요." : /HTTP 404|not_found|HTTP 501/.test(e?.message || "") ? "이 서버는 아직 이 기록을 주지 않아요." : "불러오지 못했어요. 잠시 뒤 다시 열어 보세요.");
+  const selectBox = (list, cur, label, onPick) => { const s = sortSelect(list, cur, onPick); s.setAttribute("aria-label", label); return s; };
+  // a list that grows by 더 보기: get(cursor) → { items, next }; draw(item) → a row
+  function pagedList(host, get, draw, empty) {
+    const list = el("div", "ov-win-list"), foot = el("div", "ov-wide-foot");
+    host.append(list, foot);
+    let next = "", busy = false;
+    async function more(first) {
+      if (busy) return; busy = true;
+      foot.replaceChildren(el("p", "ov-wide-foot-note", "불러오는 중…"));
+      try {
+        const page = await get(first ? "" : next);
+        if (!host.isConnected) return;
+        list.append(...page.items.map(draw)); next = page.next || "";
+        if (first && !page.items.length) list.append(el("p", "ov-win-empty", empty));
+        foot.replaceChildren(...(next ? [button("더 보기", "small", null, () => more(false))] : []));
+      } catch (e) { foot.replaceChildren(el("p", "ov-win-err", deniedText(e)), ...(e?.message === "access_denied" ? [] : [button("다시 시도", "small", null, () => more(first))])); }
+      finally { busy = false; }
+    }
+    void more(true);
+  }
+  // 활동 기록: who did what to which record, newest first; reasons and bodies never come back from the server
+  const AUDIT_KINDS = [["", "모든 활동"], ["write:", "바꾼 것"], ["create:", "만든 것"], ["review:", "검토한 것"], ["delete:", "지운 것"], ["read:", "읽은 것"]];
+  const auditF = { action: "", days: "7" };
+  function opsAudit(d, M) {
+    const body = el("div", "ov-wide-body ov-ops-one"), left = el("div", "ov-wide-left");
+    const redo = () => { if (dlg === d) wideOps("", "audit"); };
+    const bar = el("div", "ov-wide-bar");
+    bar.append(selectBox(AUDIT_KINDS, auditF.action, "활동 종류", (v) => { auditF.action = v; redo(); }), selectBox(RANGE, auditF.days, "기간", (v) => { auditF.days = v; redo(); }));
+    left.append(bar, el("p", "ov-detail-hint", "누가 언제 무엇을 했는지 남은 기록이에요. 이유와 내용은 보여 주지 않고, 비밀처럼 보이는 값은 가려요."));
+    body.append(left); d.append(body);
+    const from = iso(Date.now() - Number(auditF.days) * DAY);
+    pagedList(left, async (cursor) => {
+      const r = await request(`/v1/audit-events?${query({ from, limit: 50, ...(auditF.action ? { action: auditF.action } : {}), ...(cursor ? { cursor } : {}) })}`);
+      return { items: r.items || [], next: r.next_cursor };
+    }, (e) => {
+      const a = M.auditLine(e), who = el("span", "mono", e.actor || "—"); who.dataset.noI18n = "";
+      const r = row(a.blocked ? "막힘" : "", a.what || tr("기타 활동"), `${stamp(e.created_at)} · ${a.person ? tr("사람") : e.actor_type === "agent" ? tr("에이전트") : tr("서비스")}`, "");
+      const code = el("small", "mono ov-ops-code", [a.code, e.target?.id].filter(Boolean).join(" · ")); code.dataset.noI18n = "";
+      r.querySelector(".ov-win-item-l").append(code); r.querySelector(".ov-win-item-r").append(who);
+      return r;
+    }, "이 기간에 남은 활동이 없어요.");
+  }
+  // 모델 호출: every server-side model call (embedding and rerank included) with its tokens, time and outcome
+  const modelF = { status: "", operation: "" };
+  function opsModels(d, M) {
+    const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
+    const redo = () => { if (dlg === d) wideOps("", "models"); };
+    const bar = el("div", "ov-wide-bar"), opSlot = el("span");
+    body.append(left, right); d.append(body);
+    right.append(el("h3", "", "최근 30일"), el("p", "ov-win-empty", "불러오는 중…"));
+    request(`/v1/llm-requests/stats?${query({ days: 30 })}`).then((st) => {
+      if (!d.isConnected) return;
+      const m = M.modelStats(st), tiles = el("div", "ov-win-tiles");
+      for (const [v, l] of [[`${num(m.calls)}번`, "모델 호출"], [`${num(m.errors)}번`, "실패"], [num(m.tokens), "토큰"]]) { const x = el("div", "ov-win-tile"); x.append(el("strong", "", v), el("span", "", l)); tiles.append(x); }
+      const chart = el("div", "ov-win-chart"), bars = el("div", "ov-win-bars"), max = Math.max(1, ...m.days.map((x) => x.calls));
+      bars.style.gridTemplateColumns = `repeat(${Math.max(1, m.days.length)}, 1fr)`;
+      for (const x of m.days) { const b = el("i", x.errors ? "a" : ""); b.style.height = `${6 + (x.calls / max) * 54}px`; b.title = `${x.day} · ${num(x.calls)}`; bars.append(b); }
+      chart.append(el("div", "ov-win-chart-title", "날짜별 호출"), bars, el("div", "ov-win-axis", m.days.length ? `${m.days[0].day} ··· ${m.days.at(-1).day}` : tr("아직 호출이 없어요")));
+      const ops = m.ops.map((o) => [M.opLabel(o.operation) || o.operation, o.calls]);
+      right.replaceChildren(el("h3", "", "최근 30일"), tiles, chart, ...(ops.length ? [el("div", "ov-win-list-title", "하는 일별 호출"), barList(ops)] : []),
+        ...(st.truncated ? [el("p", "ov-detail-hint", "기록이 많아 일부만 셌어요.")] : []));
+      const ops2 = [["", "모든 일"], ...m.ops.map((o) => [o.operation, M.opLabel(o.operation) || o.operation])];
+      opSlot.replaceChildren(selectBox(ops2, modelF.operation, "하는 일", (v) => { modelF.operation = v; redo(); }));
+    }, (e) => { if (d.isConnected) right.replaceChildren(el("h3", "", "최근 30일"), el("p", "ov-win-err", deniedText(e))); });
+    bar.append(selectBox([["", "모든 결과"], ["error", "실패만"]], modelF.status, "결과", (v) => { modelF.status = v; redo(); }), opSlot);
+    left.append(bar, el("p", "ov-detail-hint", "서버가 모델을 부른 기록이에요. 대화 내용은 서버가 따로 켜 둔 때만 가려서 남아요."));
+    pagedList(left, async (before) => {
+      const r = await request(`/v1/llm-requests?${query({ limit: 50, ...(modelF.status ? { status: modelF.status } : {}), ...(modelF.operation ? { operation: modelF.operation } : {}), ...(before ? { before } : {}) })}`);
+      return { items: r.items || [], next: r.next_before };
+    }, (it) => {
+      const q = it.request || {}, failed = q.status === "error";
+      const model = el("small", "mono ov-ops-code", [q.generator?.model, failed && q.error].filter(Boolean).join(" · ")); model.dataset.noI18n = "";
+      const r = row(failed ? "실패" : "", M.opLabel(q.operation) || q.operation || tr("기타 호출"), `${stamp(it.created_at)} · ${(q.latency_ms / 1000 || 0).toFixed(1)}${tr("초")}`, `${num(q.total_tokens)} ${tr("토큰")}`);
+      r.querySelector(".ov-win-item-l").append(model);
+      return r;
+    }, "아직 모델을 부른 기록이 없어요.");
+  }
+  // 추이: rows created per day or week (memories, candidates or uploaded sources), split by kind, status or origin
+  const TREND_COL = [["memories", "기억"], ["memory_candidates", "기억 후보"], ["sources", "올린 자료"]];
+  const TREND_BY = [["kind", "종류별"], ["status", "상태별"], ["source", "어디서 왔는지"]];
+  const STATUS = { active: "쓰는 중", candidate: "확인 기다림", approved: "승인됨", superseded: "바뀜", rejected: "버림", expired: "기한 지남", conflicted: "헷갈림" };
+  const trendF = { collection: "memories", by: "kind", days: "30" };
+  async function opsTrend(d, M) {
+    const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
+    const redo = () => { if (dlg === d) wideOps("", "trend"); };
+    const bar = el("div", "ov-wide-bar");
+    bar.append(selectBox(TREND_COL, trendF.collection, "무엇을", (v) => { trendF.collection = v; redo(); }), selectBox(TREND_BY, trendF.by, "나눠 보기", (v) => { trendF.by = v; redo(); }),
+      selectBox([["30", "최근 30일"], ["90", "최근 90일"], ["365", "최근 1년"]], trendF.days, "기간", (v) => { trendF.days = v; redo(); }));
+    left.append(bar, el("p", "ov-win-empty", "불러오는 중…")); body.append(left, right); d.append(body);
+    const week = Number(trendF.days) > 90;
+    let doc;
+    try { doc = await request(`/v1/stats/timeseries?${query({ collection: trendF.collection, by: trendF.by, bucket: week ? "week" : "day", from: iso(Date.now() - Number(trendF.days) * DAY) })}`); }
+    catch (e) { if (d.isConnected) left.lastChild.replaceWith(el("p", "ov-win-err", deniedText(e))); return; }
+    if (!d.isConnected) return;
+    const s = M.series(doc), max = Math.max(1, ...s.buckets.map(([, n]) => n));
+    const chart = el("div", "ov-win-chart"), bars = el("div", "ov-win-bars");
+    bars.style.gridTemplateColumns = `repeat(${Math.max(1, s.buckets.length)}, 1fr)`;
+    for (const [b, n] of s.buckets) { const i = el("i", n ? "" : "none"); i.style.height = `${6 + (n / max) * 54}px`; i.title = `${String(b).slice(0, 10)} · ${num(n)}`; bars.append(i); }
+    const label = TREND_COL.find(([k]) => k === trendF.collection)[1];
+    chart.append(el("div", "ov-win-chart-title", week ? `주별로 새로 생긴 ${tr(label)}` : `날짜별로 새로 생긴 ${tr(label)}`), bars,
+      el("div", "ov-win-axis", s.buckets.length ? `${String(s.buckets[0][0]).slice(0, 10)} ··· ${String(s.buckets.at(-1)[0]).slice(0, 10)}` : tr("이 기간에 새로 생긴 것이 없어요")));
+    left.lastChild.replaceWith(chart);
+    const name = (k) => (trendF.by === "kind" ? kind(k) : trendF.by === "status" ? STATUS[k] || k : k || tr("알 수 없음"));
+    right.append(el("h3", "", `모두 ${num(s.total)}개`), ...(s.keys.length ? [barList(s.keys.map(([k, n]) => [name(k), n, trendF.by === "kind" ? k : ""]))] : [el("p", "ov-win-empty", "보여 줄 것이 없어요.")]));
   }
   const OP_KIND = { embedding: "벡터 색인", wiki_job: "위키 만들기", file_memory_extract: "파일에서 기억 후보 만들기", webhook_delivery: "웹훅 알림" };
   // inline rename: one input; a merge or a rename confirms with the count it moves, then repeats while the server says more

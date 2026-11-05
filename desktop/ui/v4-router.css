@@ -534,3 +534,22 @@ button.v4-tr:hover { background: var(--nc-raised); }
 /* 모양 (Figma 198:6048): a narrower side column with a page-level heading */
 @media (min-width: 1181px) { .panel:has(.v4-set-appearance) > .detail { width: 340px; flex: none; } }
 .panel:has(.v4-set-appearance) .v4-side-sec > h3 { font: 500 calc(15px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+/* 설정 › 기억 공간 (space-settings.js): where each value comes from, defense rule rows, the live test, tool chips */
+.v4-set-space .sp-origin { display: flex; align-items: center; gap: 8px; min-height: 28px; margin: -6px 0 6px; }
+.v4-set-space .sp-origin small { color: var(--nc-quiet); font-size: calc(12px * var(--fs, 1)); }
+.v4-set-space .sp-origin small.sp-own { color: var(--nc-accent); }
+.v4-set-space .sp-rules { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.v4-set-space .sp-rule { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(104px, max-content) 28px; gap: 8px; align-items: center; }
+.v4-set-space .sp-rule input, .v4-set-space .sp-rule select { width: 100%; height: 34px; min-width: 0; padding: 0 10px; border-radius: var(--nc-radius-control); border: 1px solid var(--nc-line); background: var(--nc-surface); color: var(--nc-text); font: calc(13px * var(--fs, 1)) var(--sans); }
+.v4-set-space .sp-rule input.mono, .v4-set-space .sp-rule code { font: calc(12.5px * var(--fs, 1)) var(--mono); }
+.v4-set-space .sp-rule-err { grid-column: 1 / -1; }
+.v4-set-space .sp-rule-fixed { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto; padding: 8px 10px; border-radius: var(--nc-radius-control); background: var(--nc-raised); color: var(--nc-muted); }
+.v4-set-space .sp-rule code { overflow-wrap: anywhere; }
+.v4-set-space .sp-test-out { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; padding: 10px 12px; border-radius: var(--nc-radius-control); background: var(--nc-raised); }
+.v4-set-space .sp-test-out p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--nc-text); }
+.v4-set-space .sp-test-out small { color: var(--nc-quiet); }
+.v4-set-space .sp-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.v4-set-space .sp-chip { display: inline-flex; align-items: center; gap: 4px; }
+.v4-set-space .warn { color: var(--nc-amber); }
+@media (max-width: 720px) { .v4-set-space .sp-rule { grid-template-columns: minmax(0, 1fr) 28px; } }
+.v4-kv.sp-kv > span:first-child { width: auto; min-width: 72px; max-width: 50%; }

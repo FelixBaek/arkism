@@ -45,7 +45,7 @@ window.ArkismShell = (ctx) => {
     // 설정 tabs (Figma 07 · 설정): one area tab per settings page. 라우팅 설정 opens from ROUTER › 라우팅 현황.
     settings: { label: "Settings", tabs: [
       ["general", "일반"], ["connect", "연결"], ["messenger", "메신저"], ["appearance", "모양"], ["agents", "에이전트"], ["roles", "역할별 모델"],
-      ["workflow", "페르소나"], ["categories", "카테고리"], ["advanced", "고급"], ["info", "정보"]
+      ["workflow", "페르소나"], ["categories", "카테고리"], ["space", "기억 공간"], ["advanced", "고급"], ["info", "정보"]
     ].map(([k, label]) => [k, label, () => settings(k), () => state.view === "settings" && state.settingsTab === k]) }
   };
   for (const [key, menu] of Object.entries(MENUS)) {

@@ -443,3 +443,8 @@ input.ov-wide-search { padding-left: 32px !important; background-image: url("dat
 .ov-tag-row .mono { overflow-wrap: anywhere; }
 .ov-tag-edit { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
 .ov-tag-edit input { height: 2.125rem; padding: 0 0.625rem; border: 1px solid var(--border); border-radius: 0.5rem; background: transparent; color: inherit; font: inherit; }
+/* 기억 관리 › 활동 기록 · 모델 호출 · 추이 (overview-windows.js opsAudit/opsModels/opsTrend) */
+.ov-wide-win > .ov-wide-chips { padding: 14px 24px 0; }
+.ov-wide-body.ov-ops-one { grid-template-columns: minmax(0, 1fr); }
+.ov-ops-code { color: var(--text-2); overflow-wrap: anywhere; }
+.ov-wide-foot { display: flex; align-items: center; gap: 8px; }

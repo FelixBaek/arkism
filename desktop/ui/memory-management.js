@@ -86,7 +86,44 @@
     return { active: byStatus && typeof byStatus === "object" ? n(byStatus.active ?? 0) : null, total: n(stats?.memories?.total), pending: n(stats?.pending_candidates), sources: n(stats?.sources?.total),
       kinds: Object.entries(stats?.memories?.by_kind || {}).filter(([, c]) => typeof c === "number" && c > 0).sort((a, b) => b[1] - a[1]) };
   }
-  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles };
+  // 기억 관리 › 활동 기록 (GET /v1/audit-events): "verb:collection[:detail]" in plain words; anything unknown keeps its code.
+  const VERB = { write: "바꿈", create: "만듦", update: "고침", delete: "지움", review: "검토함", read: "읽음", start: "시작함", decide: "결정함", expire: "기한 지나 정리됨", cancel: "취소함", erase: "지움", finish: "끝냄", confirm: "확인함" };
+  const THING = { memories: "기억", memory_candidates: "기억 후보", sources: "자료", space_configs: "공간 설정", directives: "규칙", entities: "이름", observations: "관찰",
+    mental_models: "정리 틀", wiki_pages: "위키", webhooks: "웹훅", jobs: "작업", tags: "태그", session_archives: "대화 원문", memory_relations: "기억 연결", crew: "워크플로우", crew_runs: "워크플로우 실행", providers: "모델 연결", skills: "스킬", llm_requests: "모델 호출 기록", audit_events: "활동 기록" };
+  function auditLine(e) {
+    const [verb, thing = "", ...rest] = String(e?.action || "").split(":");
+    const known = VERB[verb] && (!thing || THING[thing]);
+    const blocked = rest.includes("defense_blocked") || e?.decision === "deny" || e?.decision === "denied";
+    const what = known ? `${THING[thing] || "항목"} ${VERB[verb]}` : "";
+    return { what, code: e?.action || "", blocked, person: e?.actor_type === "human", known: !!known };
+  }
+  // 기억 관리 › 모델 호출 (GET /v1/llm-requests): what each server-side call was for
+  const OPERATION = { embed: "검색용 색인 만들기", rerank: "검색 결과 다시 고르기", reflect: "질문에 답하기", wiki_memory_extract: "파일에서 기억 뽑기", wiki_entities: "이름 찾기",
+    wiki_analyse: "위키 내용 살피기", wiki_write: "위키 쓰기", wiki_observation: "관찰 정리 제안", wiki_causal: "원인과 결과 제안", wiki_mental_model: "정리 틀 만들기" };
+  const opLabel = (op) => OPERATION[op] || "";
+  // GET /v1/llm-requests/stats rows (day × operation) folded into days, oldest first, and operations, busiest first
+  function modelStats(stats) {
+    const days = new Map(), ops = new Map();
+    for (const r of stats?.items || []) {
+      const d = days.get(r.day) || { day: r.day, calls: 0, errors: 0, tokens: 0 };
+      d.calls += r.calls || 0; d.errors += r.errors || 0; d.tokens += r.total_tokens || 0; days.set(r.day, d);
+      const o = ops.get(r.operation) || { operation: r.operation, calls: 0, errors: 0, tokens: 0 };
+      o.calls += r.calls || 0; o.errors += r.errors || 0; o.tokens += r.total_tokens || 0; ops.set(r.operation, o);
+    }
+    const all = [...days.values()];
+    return { days: all.sort((a, b) => String(a.day).localeCompare(String(b.day))), ops: [...ops.values()].sort((a, b) => b.calls - a.calls),
+      calls: all.reduce((n, d) => n + d.calls, 0), errors: all.reduce((n, d) => n + d.errors, 0), tokens: all.reduce((n, d) => n + d.tokens, 0) };
+  }
+  // GET /v1/stats/timeseries points (bucket × key) as one total per bucket, oldest first, and one per key, biggest first
+  function series(doc) {
+    const buckets = new Map(), keys = new Map();
+    for (const p of doc?.points || []) {
+      buckets.set(p.bucket, (buckets.get(p.bucket) || 0) + (p.count || 0));
+      keys.set(p.key || "", (keys.get(p.key || "") || 0) + (p.count || 0));
+    }
+    return { buckets: [...buckets].sort((a, b) => String(a[0]).localeCompare(String(b[0]))), keys: [...keys].sort((a, b) => b[1] - a[1]), total: [...keys.values()].reduce((n, c) => n + c, 0) };
+  }
+  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles, auditLine, opLabel, modelStats, series };
   root.ArkismMemoryManagement = api;
   if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

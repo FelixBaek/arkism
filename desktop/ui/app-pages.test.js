@@ -20,8 +20,24 @@ function agentTools() {
   return d;
 }
 let retentionDays = 7;
+// 기억 공간: a stored config with one rule of its own under one template rule; writes are recorded, not applied
+const TEMPLATE_RULE = { name: "사번", pattern: "EMP-\\d{4}", action: "block" };
+const spaceStored = () => ({ display_name: "기본", extraction_enabled: true, extraction_mode: "verbose", defense_rules: [{ name: "고객번호", pattern: "고객번호-\\d{6}", action: "redact" }], mcp_tools: ["recall"] });
+let spaceWrites = [];
+function spaceConfig(a, p) {
+  const base = "/v1/spaces/default/default/config";
+  if (p === base && a.method === "GET") return { status: 200, body: JSON.stringify({ revision: 2, config: spaceStored() }) };
+  if (p === base) { spaceWrites.push([a.method, JSON.parse(a.body)]); return { status: 200, body: JSON.stringify({ revision: 3, config: spaceStored() }) }; }
+  if (p === `${base}/effective`) {
+    const c = spaceStored();
+    return { status: 200, body: JSON.stringify({ revision: 2, config: { ...c, defense_rules: [TEMPLATE_RULE, ...c.defense_rules], auto_derive: { threshold: 20, interval: "24h" } },
+      sources: { extraction_mode: "space", extraction_enabled: "space", defense_rules: "template+space", mcp_tools: "space", "auto_derive.threshold": "server", "auto_derive.interval": "template" } }) };
+  }
+  return null;
+}
 async function api(a) {
   const p = a.path.split("?")[0];
+  const sc = spaceConfig(a, p); if (sc) return sc;
   if (a.method === "GET" && p === "/v1/agent_tools") return { status: 200, body: JSON.stringify(agentTools()) };
   // the capabilities echo the asked scope, so the account checks of the transfer buttons pass
   if (p === "/v1/capabilities") return { status: 200, body: JSON.stringify({ ...fixture("capabilities.json"), scope: Object.fromEntries(new URLSearchParams(a.path.split("?")[1])) }) };
@@ -687,8 +703,8 @@ test("연결: SSH test, connect, failure, then the server side", async () => {
   assert.equal(app.storage.getItem("arkism.mode"), "local");
 });
 
-test("고급: a space bundle goes out and comes back as candidates, in the app's own scope", async () => {
-  await settings("advanced");
+test("기억 공간: a space bundle goes out and comes back as candidates, in the app's own scope", async () => {
+  await settings("space");
   blobs = [];
   await press("기억 내보내기", app.$("#table"), 1600);
   const out = app.apiCalls.find(([m, p]) => m === "POST" && /\/export$/.test(p));
@@ -702,4 +718,37 @@ test("고급: a space bundle goes out and comes back as candidates, in the app's
   assert.deepEqual(JSON.parse(inn[2]), { bundle: '{"format":"arkism.space"}\n', import_as: "candidate" });
   assert.match(text(app.$("#table")), /후보 2개를 가져왔어요/);
   assert.ok(find("후보 확인하러 가기", app.$("#table")));
+});
+
+test("기억 공간: each value says where it comes from; a save sends only what changed; the rule test runs as you type", async () => {
+  spaceWrites = [];
+  await settings("space"); await app.settle(200);
+  const t = () => text(app.$("#table"));
+  assert.match(t(), /이 공간에서 정함/);
+  assert.match(t(), /템플릿 규칙이라 여기서 못 바꿔요/, "the template's rule is shown, not editable");
+  const field = (label) => app.$$("#table textarea, #table input, #table select").find((n) => n.getAttribute("aria-label") === label);
+  // 시험해 보기: the space's own rule hides, the template's rule blocks
+  const sample = field("시험해 볼 글");
+  sample.value = "고객번호-123456 으로 연락"; sample.dispatchEvent(new app.window.Event("input"));
+  assert.match(t(), /가려서 저장해요 · 1곳/); assert.match(t(), /\[redacted\] 으로 연락/);
+  sample.value = "EMP-1234"; sample.dispatchEvent(new app.window.Event("input"));
+  assert.match(t(), /막혀요 · ‘사번’ 규칙/);
+  // a new mode and a new tool: the PATCH carries those two keys and the revision it read
+  const mode = field("뽑는 방식"); mode.value = "concise"; mode.dispatchEvent(new app.window.Event("change")); await app.settle();
+  assert.ok(app.$(".pg-save"), "a change shows the save bar");
+  assert.match(t(), /처음에는 꺼져 있어요\. 켜면 모델 사용량\(예산\)을 써요/);
+  const tool = () => field("도구 이름");
+  tool().value = "Bad Name"; tool().dispatchEvent(new app.window.Event("input")); await press("도구 추가"); assert.match(t(), /영어 소문자/);
+  tool().value = "reflect"; tool().dispatchEvent(new app.window.Event("input")); await press("도구 추가");
+  await press("저장"); await app.settle(200);
+  assert.deepEqual(spaceWrites.at(-1), ["PATCH", { expected_revision: 2, extraction_mode: "concise", mcp_tools: ["recall", "reflect"] }]);
+  // the space's own rule handed back: an empty list, not a missing key
+  assert.ok(app.$$("#table button").filter((b) => text(b) === "기본값으로").length >= 3, "기본값으로 beside each value this space sets");
+  await press("규칙 지우기"); await press("저장"); await app.settle(200);
+  assert.deepEqual(spaceWrites.at(-1), ["PATCH", { expected_revision: 2, defense_rules: [] }]);
+  // 모두 물려받기 asks, then PUTs only the name and switches
+  answers.length = 0; answers.push(true);
+  await press("모두 물려받기"); await app.settle(200);
+  assert.deepEqual(spaceWrites.at(-1), ["PUT", { expected_revision: 2, display_name: "기본", default_reach: "", extraction_enabled: true, consolidation_schedule: "off", notes: "" }]);
+  assert.equal(find("기본 템플릿 가져오기").disabled, true, "a space with saved settings cannot take the template");
 });

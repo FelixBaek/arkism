@@ -34,3 +34,14 @@ test("webhook DELETE and PATCH are allowed by the desktop app", () => {
   assert.match(body, /query_id\("\/v1\/webhooks\/"\)/, "DELETE /v1/webhooks/{id}?scope");
   assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/webhooks\/"\)/, "PATCH /v1/webhooks/{id}");
 });
+
+// 설정 › 기억 공간 builds its path with a helper too: PATCH saves, PUT hands everything back, both on …/config only.
+test("space config PATCH and PUT are allowed by the desktop app", () => {
+  const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
+  const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
+  const ui = fs.readFileSync(path.join(__dirname, "space-settings.js"), "utf8");
+  assert.match(ui, /write\("PATCH"/); assert.match(ui, /write\("PUT"/); assert.match(ui, /request\(`\$\{path\(\)\}\/config`, \{ method, body/);
+  assert.match(body, /strip_prefix\("\/v1\/spaces\/"\)[^;]*strip_suffix\("\/config"\)/);
+  assert.match(body, /method == "PATCH" && \([^;]*space_config\)/);
+  assert.match(body, /let put = method == "PUT" && space_config;/);
+});

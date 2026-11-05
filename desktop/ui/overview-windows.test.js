@@ -253,3 +253,38 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
   const agent = last("dialog.ov-wide-win");
   assert.equal(btn(agent, "이름 바꾸기"), undefined); assert.equal(btn(agent, "다시 시도"), undefined);
 });
+
+test("기억 관리 › 활동 기록, 모델 호출, 추이: filters reach the server, 더 보기 follows the cursor, an agent token is told plainly", async () => {
+  require("./memory-management.js");
+  const last = () => document.querySelectorAll("dialog.ov-wide-win").at(-1);
+  const btn = (root, t) => root.querySelectorAll("button").find((b) => b.textContent.trim() === t);
+  let denied = false;
+  const read = (path) => {
+    if (denied && /audit-events|llm-requests/.test(path)) throw Error("access_denied");
+    if (path.startsWith("/v1/audit-events?")) return /cursor=c2/.test(path) ? { items: [{ id: "a2", action: "delete:memories", actor: "felix", actor_type: "human", created_at: "2026-11-04T00:00:00Z" }] }
+      : { items: [{ id: "a1", action: "write:memories:defense_blocked", actor: "codex", actor_type: "agent", target: { collection: "memories", id: "m1" }, created_at: "2026-11-05T00:00:00Z" }], next_cursor: "c2" };
+    if (path.startsWith("/v1/llm-requests/stats")) return { items: [{ day: "2026-11-05", operation: "embed", calls: 4, errors: 1, total_tokens: 40 }] };
+    if (path.startsWith("/v1/llm-requests?")) return { items: [{ id: "l1", created_at: "2026-11-05T00:00:00Z", request: { operation: "rerank", generator: { model: "small-rerank" }, total_tokens: 12, latency_ms: 300, status: "error", error: "timeout" } }] };
+    if (path.startsWith("/v1/stats/timeseries")) return { points: [{ bucket: "2026-11-04T00:00:00Z", key: "user", count: 2 }, { bucket: "2026-11-05T00:00:00Z", key: "user", count: 3 }] };
+    return {};
+  };
+  const { win, calls } = windows([], {}, read);
+  win.wide("ops"); await dom.flush(); await dom.flush();
+  btn(last(), "활동 기록").click(); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /기억 바꿈/); assert.match(last().textContent, /막힘/); assert.match(last().textContent, /write:memories:defense_blocked · m1/);
+  btn(last(), "더 보기").click(); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/audit-events\?.*cursor=c2/.test(c)), "더 보기 asks for the next page");
+  assert.match(last().textContent, /기억 지움/); assert.equal(btn(last(), "더 보기"), undefined);
+  const kindSel = last().querySelectorAll("select").find((s) => s.getAttribute("aria-label") === "활동 종류");
+  kindSel.value = "delete:"; kindSel.dispatchEvent(new dom.Event("change")); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/audit-events\?.*action=delete%3A/.test(c)), "the kind filter goes to the server");
+  btn(last(), "모델 호출").click(); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /검색 결과 다시 고르기/); assert.match(last().textContent, /small-rerank · timeout/); assert.match(last().textContent, /4번모델 호출/);
+  btn(last(), "추이").click(); await dom.flush(); await dom.flush();
+  assert.ok(calls.some((c) => /\/v1\/stats\/timeseries\?.*collection=memories.*by=kind.*bucket=day/.test(c)));
+  assert.match(last().textContent, /모두 5개/);
+  denied = true;
+  btn(last(), "활동 기록").click(); await dom.flush(); await dom.flush();
+  assert.match(last().textContent, /사람 계정으로 로그인하면 보여요/); assert.equal(btn(last(), "다시 시도"), undefined);
+  win.reset?.();
+});

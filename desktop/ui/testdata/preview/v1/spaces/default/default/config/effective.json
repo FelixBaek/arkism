@@ -1,11 +1,31 @@
 {
- "workspace_id": "default",
- "project_id": "default",
- "revision": 2,
- "config": {
-  "reflect_mission": "Orbit 팀이 배포를 안전하게 하도록 돕는다."
- },
- "sources": {
-  "reflect_mission": "space"
- }
+  "workspace_id": "default",
+  "project_id": "default",
+  "revision": 3,
+  "config": {
+    "display_name": "기본 공간",
+    "extraction_enabled": true,
+    "extraction_mode": "verbose",
+    "extraction_instructions": "배포 절차와 고객 요청은 꼭 남기고, 잡담은 빼 주세요.",
+    "defense_rules": [
+      { "name": "사번", "pattern": "EMP-\\d{4}", "action": "block" },
+      { "name": "고객번호", "pattern": "고객번호-\\d{6}", "action": "redact" }
+    ],
+    "mcp_tools": ["recall", "remember", "reflect"],
+    "reflect_mission": "이 저장소의 결정 이유를 짧게, 근거 기억과 함께 알려 줘요.",
+    "reflect_disposition": { "skepticism": 4, "literalism": 3, "empathy": 2 },
+    "auto_derive": { "threshold": 20, "interval": "24h" }
+  },
+  "sources": {
+    "display_name": "space",
+    "extraction_enabled": "space",
+    "extraction_mode": "space",
+    "extraction_instructions": "space",
+    "defense_rules": "template+space",
+    "mcp_tools": "space",
+    "reflect_mission": "space",
+    "reflect_disposition": "template",
+    "auto_derive.threshold": "template",
+    "auto_derive.interval": "server"
+  }
 }

@@ -1,0 +1,1356 @@
+{
+ "since": "2026-10-07T00:00:00Z",
+ "truncated": false,
+ "items": [
+  {
+   "day": "2026-10-07",
+   "operation": "embed",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 270,
+   "output_tokens": 90,
+   "total_tokens": 360
+  },
+  {
+   "day": "2026-10-07",
+   "operation": "rerank",
+   "calls": 18,
+   "errors": 0,
+   "input_tokens": 1620,
+   "output_tokens": 540,
+   "total_tokens": 2160
+  },
+  {
+   "day": "2026-10-07",
+   "operation": "reflect",
+   "calls": 6,
+   "errors": 1,
+   "input_tokens": 23400,
+   "output_tokens": 7800,
+   "total_tokens": 31200
+  },
+  {
+   "day": "2026-10-07",
+   "operation": "wiki_memory_extract",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 19800,
+   "output_tokens": 6600,
+   "total_tokens": 26400
+  },
+  {
+   "day": "2026-10-07",
+   "operation": "wiki_entities",
+   "calls": 2,
+   "errors": 0,
+   "input_tokens": 4500,
+   "output_tokens": 1500,
+   "total_tokens": 6000
+  },
+  {
+   "day": "2026-10-08",
+   "operation": "embed",
+   "calls": 41,
+   "errors": 0,
+   "input_tokens": 276,
+   "output_tokens": 92,
+   "total_tokens": 369
+  },
+  {
+   "day": "2026-10-08",
+   "operation": "rerank",
+   "calls": 19,
+   "errors": 0,
+   "input_tokens": 1710,
+   "output_tokens": 570,
+   "total_tokens": 2280
+  },
+  {
+   "day": "2026-10-08",
+   "operation": "reflect",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 27300,
+   "output_tokens": 9100,
+   "total_tokens": 36400
+  },
+  {
+   "day": "2026-10-08",
+   "operation": "wiki_memory_extract",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 26400,
+   "output_tokens": 8800,
+   "total_tokens": 35200
+  },
+  {
+   "day": "2026-10-08",
+   "operation": "wiki_entities",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 6750,
+   "output_tokens": 2250,
+   "total_tokens": 9000
+  },
+  {
+   "day": "2026-10-09",
+   "operation": "embed",
+   "calls": 82,
+   "errors": 0,
+   "input_tokens": 553,
+   "output_tokens": 184,
+   "total_tokens": 738
+  },
+  {
+   "day": "2026-10-09",
+   "operation": "rerank",
+   "calls": 38,
+   "errors": 0,
+   "input_tokens": 3420,
+   "output_tokens": 1140,
+   "total_tokens": 4560
+  },
+  {
+   "day": "2026-10-09",
+   "operation": "reflect",
+   "calls": 14,
+   "errors": 0,
+   "input_tokens": 54600,
+   "output_tokens": 18200,
+   "total_tokens": 72800
+  },
+  {
+   "day": "2026-10-09",
+   "operation": "wiki_memory_extract",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 52800,
+   "output_tokens": 17600,
+   "total_tokens": 70400
+  },
+  {
+   "day": "2026-10-09",
+   "operation": "wiki_entities",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 13500,
+   "output_tokens": 4500,
+   "total_tokens": 18000
+  },
+  {
+   "day": "2026-10-10",
+   "operation": "embed",
+   "calls": 83,
+   "errors": 0,
+   "input_tokens": 560,
+   "output_tokens": 186,
+   "total_tokens": 747
+  },
+  {
+   "day": "2026-10-10",
+   "operation": "rerank",
+   "calls": 39,
+   "errors": 0,
+   "input_tokens": 3510,
+   "output_tokens": 1170,
+   "total_tokens": 4680
+  },
+  {
+   "day": "2026-10-10",
+   "operation": "reflect",
+   "calls": 15,
+   "errors": 0,
+   "input_tokens": 58500,
+   "output_tokens": 19500,
+   "total_tokens": 78000
+  },
+  {
+   "day": "2026-10-10",
+   "operation": "wiki_memory_extract",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 59400,
+   "output_tokens": 19800,
+   "total_tokens": 79200
+  },
+  {
+   "day": "2026-10-10",
+   "operation": "wiki_entities",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 15750,
+   "output_tokens": 5250,
+   "total_tokens": 21000
+  },
+  {
+   "day": "2026-10-11",
+   "operation": "embed",
+   "calls": 84,
+   "errors": 0,
+   "input_tokens": 567,
+   "output_tokens": 189,
+   "total_tokens": 756
+  },
+  {
+   "day": "2026-10-11",
+   "operation": "rerank",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 3600,
+   "output_tokens": 1200,
+   "total_tokens": 4800
+  },
+  {
+   "day": "2026-10-11",
+   "operation": "reflect",
+   "calls": 16,
+   "errors": 0,
+   "input_tokens": 62400,
+   "output_tokens": 20800,
+   "total_tokens": 83200
+  },
+  {
+   "day": "2026-10-11",
+   "operation": "wiki_memory_extract",
+   "calls": 10,
+   "errors": 1,
+   "input_tokens": 66000,
+   "output_tokens": 22000,
+   "total_tokens": 88000
+  },
+  {
+   "day": "2026-10-11",
+   "operation": "wiki_entities",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 18000,
+   "output_tokens": 6000,
+   "total_tokens": 24000
+  },
+  {
+   "day": "2026-10-12",
+   "operation": "embed",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 270,
+   "output_tokens": 90,
+   "total_tokens": 360
+  },
+  {
+   "day": "2026-10-12",
+   "operation": "rerank",
+   "calls": 18,
+   "errors": 0,
+   "input_tokens": 1620,
+   "output_tokens": 540,
+   "total_tokens": 2160
+  },
+  {
+   "day": "2026-10-12",
+   "operation": "reflect",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 23400,
+   "output_tokens": 7800,
+   "total_tokens": 31200
+  },
+  {
+   "day": "2026-10-12",
+   "operation": "wiki_memory_extract",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 19800,
+   "output_tokens": 6600,
+   "total_tokens": 26400
+  },
+  {
+   "day": "2026-10-12",
+   "operation": "wiki_entities",
+   "calls": 2,
+   "errors": 0,
+   "input_tokens": 4500,
+   "output_tokens": 1500,
+   "total_tokens": 6000
+  },
+  {
+   "day": "2026-10-13",
+   "operation": "embed",
+   "calls": 41,
+   "errors": 0,
+   "input_tokens": 276,
+   "output_tokens": 92,
+   "total_tokens": 369
+  },
+  {
+   "day": "2026-10-13",
+   "operation": "rerank",
+   "calls": 19,
+   "errors": 0,
+   "input_tokens": 1710,
+   "output_tokens": 570,
+   "total_tokens": 2280
+  },
+  {
+   "day": "2026-10-13",
+   "operation": "reflect",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 27300,
+   "output_tokens": 9100,
+   "total_tokens": 36400
+  },
+  {
+   "day": "2026-10-13",
+   "operation": "wiki_memory_extract",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 26400,
+   "output_tokens": 8800,
+   "total_tokens": 35200
+  },
+  {
+   "day": "2026-10-13",
+   "operation": "wiki_entities",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 6750,
+   "output_tokens": 2250,
+   "total_tokens": 9000
+  },
+  {
+   "day": "2026-10-14",
+   "operation": "embed",
+   "calls": 42,
+   "errors": 0,
+   "input_tokens": 283,
+   "output_tokens": 94,
+   "total_tokens": 378
+  },
+  {
+   "day": "2026-10-14",
+   "operation": "rerank",
+   "calls": 20,
+   "errors": 0,
+   "input_tokens": 1800,
+   "output_tokens": 600,
+   "total_tokens": 2400
+  },
+  {
+   "day": "2026-10-14",
+   "operation": "reflect",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 31200,
+   "output_tokens": 10400,
+   "total_tokens": 41600
+  },
+  {
+   "day": "2026-10-14",
+   "operation": "wiki_memory_extract",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 33000,
+   "output_tokens": 11000,
+   "total_tokens": 44000
+  },
+  {
+   "day": "2026-10-14",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-10-15",
+   "operation": "embed",
+   "calls": 43,
+   "errors": 0,
+   "input_tokens": 290,
+   "output_tokens": 96,
+   "total_tokens": 387
+  },
+  {
+   "day": "2026-10-15",
+   "operation": "rerank",
+   "calls": 21,
+   "errors": 0,
+   "input_tokens": 1890,
+   "output_tokens": 630,
+   "total_tokens": 2520
+  },
+  {
+   "day": "2026-10-15",
+   "operation": "reflect",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 35100,
+   "output_tokens": 11700,
+   "total_tokens": 46800
+  },
+  {
+   "day": "2026-10-15",
+   "operation": "wiki_memory_extract",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 39600,
+   "output_tokens": 13200,
+   "total_tokens": 52800
+  },
+  {
+   "day": "2026-10-15",
+   "operation": "wiki_entities",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 11250,
+   "output_tokens": 3750,
+   "total_tokens": 15000
+  },
+  {
+   "day": "2026-10-16",
+   "operation": "embed",
+   "calls": 84,
+   "errors": 0,
+   "input_tokens": 567,
+   "output_tokens": 189,
+   "total_tokens": 756
+  },
+  {
+   "day": "2026-10-16",
+   "operation": "rerank",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 3600,
+   "output_tokens": 1200,
+   "total_tokens": 4800
+  },
+  {
+   "day": "2026-10-16",
+   "operation": "reflect",
+   "calls": 16,
+   "errors": 1,
+   "input_tokens": 62400,
+   "output_tokens": 20800,
+   "total_tokens": 83200
+  },
+  {
+   "day": "2026-10-16",
+   "operation": "wiki_memory_extract",
+   "calls": 10,
+   "errors": 0,
+   "input_tokens": 66000,
+   "output_tokens": 22000,
+   "total_tokens": 88000
+  },
+  {
+   "day": "2026-10-16",
+   "operation": "wiki_entities",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 18000,
+   "output_tokens": 6000,
+   "total_tokens": 24000
+  },
+  {
+   "day": "2026-10-17",
+   "operation": "embed",
+   "calls": 80,
+   "errors": 0,
+   "input_tokens": 540,
+   "output_tokens": 180,
+   "total_tokens": 720
+  },
+  {
+   "day": "2026-10-17",
+   "operation": "rerank",
+   "calls": 36,
+   "errors": 0,
+   "input_tokens": 3240,
+   "output_tokens": 1080,
+   "total_tokens": 4320
+  },
+  {
+   "day": "2026-10-17",
+   "operation": "reflect",
+   "calls": 12,
+   "errors": 0,
+   "input_tokens": 46800,
+   "output_tokens": 15600,
+   "total_tokens": 62400
+  },
+  {
+   "day": "2026-10-17",
+   "operation": "wiki_memory_extract",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 39600,
+   "output_tokens": 13200,
+   "total_tokens": 52800
+  },
+  {
+   "day": "2026-10-17",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-10-18",
+   "operation": "embed",
+   "calls": 81,
+   "errors": 0,
+   "input_tokens": 546,
+   "output_tokens": 182,
+   "total_tokens": 729
+  },
+  {
+   "day": "2026-10-18",
+   "operation": "rerank",
+   "calls": 37,
+   "errors": 0,
+   "input_tokens": 3330,
+   "output_tokens": 1110,
+   "total_tokens": 4440
+  },
+  {
+   "day": "2026-10-18",
+   "operation": "reflect",
+   "calls": 13,
+   "errors": 0,
+   "input_tokens": 50700,
+   "output_tokens": 16900,
+   "total_tokens": 67600
+  },
+  {
+   "day": "2026-10-18",
+   "operation": "wiki_memory_extract",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 46200,
+   "output_tokens": 15400,
+   "total_tokens": 61600
+  },
+  {
+   "day": "2026-10-18",
+   "operation": "wiki_entities",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 11250,
+   "output_tokens": 3750,
+   "total_tokens": 15000
+  },
+  {
+   "day": "2026-10-19",
+   "operation": "embed",
+   "calls": 42,
+   "errors": 0,
+   "input_tokens": 283,
+   "output_tokens": 94,
+   "total_tokens": 378
+  },
+  {
+   "day": "2026-10-19",
+   "operation": "rerank",
+   "calls": 20,
+   "errors": 0,
+   "input_tokens": 1800,
+   "output_tokens": 600,
+   "total_tokens": 2400
+  },
+  {
+   "day": "2026-10-19",
+   "operation": "reflect",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 31200,
+   "output_tokens": 10400,
+   "total_tokens": 41600
+  },
+  {
+   "day": "2026-10-19",
+   "operation": "wiki_memory_extract",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 33000,
+   "output_tokens": 11000,
+   "total_tokens": 44000
+  },
+  {
+   "day": "2026-10-19",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-10-20",
+   "operation": "embed",
+   "calls": 43,
+   "errors": 0,
+   "input_tokens": 290,
+   "output_tokens": 96,
+   "total_tokens": 387
+  },
+  {
+   "day": "2026-10-20",
+   "operation": "rerank",
+   "calls": 21,
+   "errors": 0,
+   "input_tokens": 1890,
+   "output_tokens": 630,
+   "total_tokens": 2520
+  },
+  {
+   "day": "2026-10-20",
+   "operation": "reflect",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 35100,
+   "output_tokens": 11700,
+   "total_tokens": 46800
+  },
+  {
+   "day": "2026-10-20",
+   "operation": "wiki_memory_extract",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 39600,
+   "output_tokens": 13200,
+   "total_tokens": 52800
+  },
+  {
+   "day": "2026-10-20",
+   "operation": "wiki_entities",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 11250,
+   "output_tokens": 3750,
+   "total_tokens": 15000
+  },
+  {
+   "day": "2026-10-21",
+   "operation": "embed",
+   "calls": 44,
+   "errors": 0,
+   "input_tokens": 297,
+   "output_tokens": 99,
+   "total_tokens": 396
+  },
+  {
+   "day": "2026-10-21",
+   "operation": "rerank",
+   "calls": 22,
+   "errors": 0,
+   "input_tokens": 1980,
+   "output_tokens": 660,
+   "total_tokens": 2640
+  },
+  {
+   "day": "2026-10-21",
+   "operation": "reflect",
+   "calls": 10,
+   "errors": 0,
+   "input_tokens": 39000,
+   "output_tokens": 13000,
+   "total_tokens": 52000
+  },
+  {
+   "day": "2026-10-21",
+   "operation": "wiki_memory_extract",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 46200,
+   "output_tokens": 15400,
+   "total_tokens": 61600
+  },
+  {
+   "day": "2026-10-21",
+   "operation": "wiki_entities",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 13500,
+   "output_tokens": 4500,
+   "total_tokens": 18000
+  },
+  {
+   "day": "2026-10-22",
+   "operation": "embed",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 270,
+   "output_tokens": 90,
+   "total_tokens": 360
+  },
+  {
+   "day": "2026-10-22",
+   "operation": "rerank",
+   "calls": 18,
+   "errors": 0,
+   "input_tokens": 1620,
+   "output_tokens": 540,
+   "total_tokens": 2160
+  },
+  {
+   "day": "2026-10-22",
+   "operation": "reflect",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 23400,
+   "output_tokens": 7800,
+   "total_tokens": 31200
+  },
+  {
+   "day": "2026-10-22",
+   "operation": "wiki_memory_extract",
+   "calls": 3,
+   "errors": 1,
+   "input_tokens": 19800,
+   "output_tokens": 6600,
+   "total_tokens": 26400
+  },
+  {
+   "day": "2026-10-22",
+   "operation": "wiki_entities",
+   "calls": 2,
+   "errors": 0,
+   "input_tokens": 4500,
+   "output_tokens": 1500,
+   "total_tokens": 6000
+  },
+  {
+   "day": "2026-10-23",
+   "operation": "embed",
+   "calls": 81,
+   "errors": 0,
+   "input_tokens": 546,
+   "output_tokens": 182,
+   "total_tokens": 729
+  },
+  {
+   "day": "2026-10-23",
+   "operation": "rerank",
+   "calls": 37,
+   "errors": 0,
+   "input_tokens": 3330,
+   "output_tokens": 1110,
+   "total_tokens": 4440
+  },
+  {
+   "day": "2026-10-23",
+   "operation": "reflect",
+   "calls": 13,
+   "errors": 0,
+   "input_tokens": 50700,
+   "output_tokens": 16900,
+   "total_tokens": 67600
+  },
+  {
+   "day": "2026-10-23",
+   "operation": "wiki_memory_extract",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 46200,
+   "output_tokens": 15400,
+   "total_tokens": 61600
+  },
+  {
+   "day": "2026-10-23",
+   "operation": "wiki_entities",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 11250,
+   "output_tokens": 3750,
+   "total_tokens": 15000
+  },
+  {
+   "day": "2026-10-24",
+   "operation": "embed",
+   "calls": 82,
+   "errors": 0,
+   "input_tokens": 553,
+   "output_tokens": 184,
+   "total_tokens": 738
+  },
+  {
+   "day": "2026-10-24",
+   "operation": "rerank",
+   "calls": 38,
+   "errors": 0,
+   "input_tokens": 3420,
+   "output_tokens": 1140,
+   "total_tokens": 4560
+  },
+  {
+   "day": "2026-10-24",
+   "operation": "reflect",
+   "calls": 14,
+   "errors": 0,
+   "input_tokens": 54600,
+   "output_tokens": 18200,
+   "total_tokens": 72800
+  },
+  {
+   "day": "2026-10-24",
+   "operation": "wiki_memory_extract",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 52800,
+   "output_tokens": 17600,
+   "total_tokens": 70400
+  },
+  {
+   "day": "2026-10-24",
+   "operation": "wiki_entities",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 13500,
+   "output_tokens": 4500,
+   "total_tokens": 18000
+  },
+  {
+   "day": "2026-10-25",
+   "operation": "embed",
+   "calls": 83,
+   "errors": 0,
+   "input_tokens": 560,
+   "output_tokens": 186,
+   "total_tokens": 747
+  },
+  {
+   "day": "2026-10-25",
+   "operation": "rerank",
+   "calls": 39,
+   "errors": 0,
+   "input_tokens": 3510,
+   "output_tokens": 1170,
+   "total_tokens": 4680
+  },
+  {
+   "day": "2026-10-25",
+   "operation": "reflect",
+   "calls": 15,
+   "errors": 1,
+   "input_tokens": 58500,
+   "output_tokens": 19500,
+   "total_tokens": 78000
+  },
+  {
+   "day": "2026-10-25",
+   "operation": "wiki_memory_extract",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 59400,
+   "output_tokens": 19800,
+   "total_tokens": 79200
+  },
+  {
+   "day": "2026-10-25",
+   "operation": "wiki_entities",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 15750,
+   "output_tokens": 5250,
+   "total_tokens": 21000
+  },
+  {
+   "day": "2026-10-26",
+   "operation": "embed",
+   "calls": 44,
+   "errors": 0,
+   "input_tokens": 297,
+   "output_tokens": 99,
+   "total_tokens": 396
+  },
+  {
+   "day": "2026-10-26",
+   "operation": "rerank",
+   "calls": 22,
+   "errors": 0,
+   "input_tokens": 1980,
+   "output_tokens": 660,
+   "total_tokens": 2640
+  },
+  {
+   "day": "2026-10-26",
+   "operation": "reflect",
+   "calls": 10,
+   "errors": 0,
+   "input_tokens": 39000,
+   "output_tokens": 13000,
+   "total_tokens": 52000
+  },
+  {
+   "day": "2026-10-26",
+   "operation": "wiki_memory_extract",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 46200,
+   "output_tokens": 15400,
+   "total_tokens": 61600
+  },
+  {
+   "day": "2026-10-26",
+   "operation": "wiki_entities",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 13500,
+   "output_tokens": 4500,
+   "total_tokens": 18000
+  },
+  {
+   "day": "2026-10-27",
+   "operation": "embed",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 270,
+   "output_tokens": 90,
+   "total_tokens": 360
+  },
+  {
+   "day": "2026-10-27",
+   "operation": "rerank",
+   "calls": 18,
+   "errors": 0,
+   "input_tokens": 1620,
+   "output_tokens": 540,
+   "total_tokens": 2160
+  },
+  {
+   "day": "2026-10-27",
+   "operation": "reflect",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 23400,
+   "output_tokens": 7800,
+   "total_tokens": 31200
+  },
+  {
+   "day": "2026-10-27",
+   "operation": "wiki_memory_extract",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 19800,
+   "output_tokens": 6600,
+   "total_tokens": 26400
+  },
+  {
+   "day": "2026-10-27",
+   "operation": "wiki_entities",
+   "calls": 2,
+   "errors": 0,
+   "input_tokens": 4500,
+   "output_tokens": 1500,
+   "total_tokens": 6000
+  },
+  {
+   "day": "2026-10-28",
+   "operation": "embed",
+   "calls": 41,
+   "errors": 0,
+   "input_tokens": 276,
+   "output_tokens": 92,
+   "total_tokens": 369
+  },
+  {
+   "day": "2026-10-28",
+   "operation": "rerank",
+   "calls": 19,
+   "errors": 0,
+   "input_tokens": 1710,
+   "output_tokens": 570,
+   "total_tokens": 2280
+  },
+  {
+   "day": "2026-10-28",
+   "operation": "reflect",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 27300,
+   "output_tokens": 9100,
+   "total_tokens": 36400
+  },
+  {
+   "day": "2026-10-28",
+   "operation": "wiki_memory_extract",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 26400,
+   "output_tokens": 8800,
+   "total_tokens": 35200
+  },
+  {
+   "day": "2026-10-28",
+   "operation": "wiki_entities",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 6750,
+   "output_tokens": 2250,
+   "total_tokens": 9000
+  },
+  {
+   "day": "2026-10-29",
+   "operation": "embed",
+   "calls": 42,
+   "errors": 0,
+   "input_tokens": 283,
+   "output_tokens": 94,
+   "total_tokens": 378
+  },
+  {
+   "day": "2026-10-29",
+   "operation": "rerank",
+   "calls": 20,
+   "errors": 0,
+   "input_tokens": 1800,
+   "output_tokens": 600,
+   "total_tokens": 2400
+  },
+  {
+   "day": "2026-10-29",
+   "operation": "reflect",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 31200,
+   "output_tokens": 10400,
+   "total_tokens": 41600
+  },
+  {
+   "day": "2026-10-29",
+   "operation": "wiki_memory_extract",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 33000,
+   "output_tokens": 11000,
+   "total_tokens": 44000
+  },
+  {
+   "day": "2026-10-29",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-10-30",
+   "operation": "embed",
+   "calls": 83,
+   "errors": 0,
+   "input_tokens": 560,
+   "output_tokens": 186,
+   "total_tokens": 747
+  },
+  {
+   "day": "2026-10-30",
+   "operation": "rerank",
+   "calls": 39,
+   "errors": 0,
+   "input_tokens": 3510,
+   "output_tokens": 1170,
+   "total_tokens": 4680
+  },
+  {
+   "day": "2026-10-30",
+   "operation": "reflect",
+   "calls": 15,
+   "errors": 0,
+   "input_tokens": 58500,
+   "output_tokens": 19500,
+   "total_tokens": 78000
+  },
+  {
+   "day": "2026-10-30",
+   "operation": "wiki_memory_extract",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 59400,
+   "output_tokens": 19800,
+   "total_tokens": 79200
+  },
+  {
+   "day": "2026-10-30",
+   "operation": "wiki_entities",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 15750,
+   "output_tokens": 5250,
+   "total_tokens": 21000
+  },
+  {
+   "day": "2026-10-31",
+   "operation": "embed",
+   "calls": 84,
+   "errors": 0,
+   "input_tokens": 567,
+   "output_tokens": 189,
+   "total_tokens": 756
+  },
+  {
+   "day": "2026-10-31",
+   "operation": "rerank",
+   "calls": 40,
+   "errors": 0,
+   "input_tokens": 3600,
+   "output_tokens": 1200,
+   "total_tokens": 4800
+  },
+  {
+   "day": "2026-10-31",
+   "operation": "reflect",
+   "calls": 16,
+   "errors": 0,
+   "input_tokens": 62400,
+   "output_tokens": 20800,
+   "total_tokens": 83200
+  },
+  {
+   "day": "2026-10-31",
+   "operation": "wiki_memory_extract",
+   "calls": 10,
+   "errors": 0,
+   "input_tokens": 66000,
+   "output_tokens": 22000,
+   "total_tokens": 88000
+  },
+  {
+   "day": "2026-10-31",
+   "operation": "wiki_entities",
+   "calls": 8,
+   "errors": 0,
+   "input_tokens": 18000,
+   "output_tokens": 6000,
+   "total_tokens": 24000
+  },
+  {
+   "day": "2026-11-01",
+   "operation": "embed",
+   "calls": 80,
+   "errors": 0,
+   "input_tokens": 540,
+   "output_tokens": 180,
+   "total_tokens": 720
+  },
+  {
+   "day": "2026-11-01",
+   "operation": "rerank",
+   "calls": 36,
+   "errors": 0,
+   "input_tokens": 3240,
+   "output_tokens": 1080,
+   "total_tokens": 4320
+  },
+  {
+   "day": "2026-11-01",
+   "operation": "reflect",
+   "calls": 12,
+   "errors": 0,
+   "input_tokens": 46800,
+   "output_tokens": 15600,
+   "total_tokens": 62400
+  },
+  {
+   "day": "2026-11-01",
+   "operation": "wiki_memory_extract",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 39600,
+   "output_tokens": 13200,
+   "total_tokens": 52800
+  },
+  {
+   "day": "2026-11-01",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-11-02",
+   "operation": "embed",
+   "calls": 41,
+   "errors": 0,
+   "input_tokens": 276,
+   "output_tokens": 92,
+   "total_tokens": 369
+  },
+  {
+   "day": "2026-11-02",
+   "operation": "rerank",
+   "calls": 19,
+   "errors": 0,
+   "input_tokens": 1710,
+   "output_tokens": 570,
+   "total_tokens": 2280
+  },
+  {
+   "day": "2026-11-02",
+   "operation": "reflect",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 27300,
+   "output_tokens": 9100,
+   "total_tokens": 36400
+  },
+  {
+   "day": "2026-11-02",
+   "operation": "wiki_memory_extract",
+   "calls": 4,
+   "errors": 1,
+   "input_tokens": 26400,
+   "output_tokens": 8800,
+   "total_tokens": 35200
+  },
+  {
+   "day": "2026-11-02",
+   "operation": "wiki_entities",
+   "calls": 3,
+   "errors": 0,
+   "input_tokens": 6750,
+   "output_tokens": 2250,
+   "total_tokens": 9000
+  },
+  {
+   "day": "2026-11-03",
+   "operation": "embed",
+   "calls": 42,
+   "errors": 0,
+   "input_tokens": 283,
+   "output_tokens": 94,
+   "total_tokens": 378
+  },
+  {
+   "day": "2026-11-03",
+   "operation": "rerank",
+   "calls": 20,
+   "errors": 0,
+   "input_tokens": 1800,
+   "output_tokens": 600,
+   "total_tokens": 2400
+  },
+  {
+   "day": "2026-11-03",
+   "operation": "reflect",
+   "calls": 8,
+   "errors": 1,
+   "input_tokens": 31200,
+   "output_tokens": 10400,
+   "total_tokens": 41600
+  },
+  {
+   "day": "2026-11-03",
+   "operation": "wiki_memory_extract",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 33000,
+   "output_tokens": 11000,
+   "total_tokens": 44000
+  },
+  {
+   "day": "2026-11-03",
+   "operation": "wiki_entities",
+   "calls": 4,
+   "errors": 0,
+   "input_tokens": 9000,
+   "output_tokens": 3000,
+   "total_tokens": 12000
+  },
+  {
+   "day": "2026-11-04",
+   "operation": "embed",
+   "calls": 43,
+   "errors": 0,
+   "input_tokens": 290,
+   "output_tokens": 96,
+   "total_tokens": 387
+  },
+  {
+   "day": "2026-11-04",
+   "operation": "rerank",
+   "calls": 21,
+   "errors": 0,
+   "input_tokens": 1890,
+   "output_tokens": 630,
+   "total_tokens": 2520
+  },
+  {
+   "day": "2026-11-04",
+   "operation": "reflect",
+   "calls": 9,
+   "errors": 0,
+   "input_tokens": 35100,
+   "output_tokens": 11700,
+   "total_tokens": 46800
+  },
+  {
+   "day": "2026-11-04",
+   "operation": "wiki_memory_extract",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 39600,
+   "output_tokens": 13200,
+   "total_tokens": 52800
+  },
+  {
+   "day": "2026-11-04",
+   "operation": "wiki_entities",
+   "calls": 5,
+   "errors": 0,
+   "input_tokens": 11250,
+   "output_tokens": 3750,
+   "total_tokens": 15000
+  },
+  {
+   "day": "2026-11-05",
+   "operation": "embed",
+   "calls": 44,
+   "errors": 0,
+   "input_tokens": 297,
+   "output_tokens": 99,
+   "total_tokens": 396
+  },
+  {
+   "day": "2026-11-05",
+   "operation": "rerank",
+   "calls": 22,
+   "errors": 0,
+   "input_tokens": 1980,
+   "output_tokens": 660,
+   "total_tokens": 2640
+  },
+  {
+   "day": "2026-11-05",
+   "operation": "reflect",
+   "calls": 10,
+   "errors": 0,
+   "input_tokens": 39000,
+   "output_tokens": 13000,
+   "total_tokens": 52000
+  },
+  {
+   "day": "2026-11-05",
+   "operation": "wiki_memory_extract",
+   "calls": 7,
+   "errors": 0,
+   "input_tokens": 46200,
+   "output_tokens": 15400,
+   "total_tokens": 61600
+  },
+  {
+   "day": "2026-11-05",
+   "operation": "wiki_entities",
+   "calls": 6,
+   "errors": 0,
+   "input_tokens": 13500,
+   "output_tokens": 4500,
+   "total_tokens": 18000
+  }
+ ]
+}
