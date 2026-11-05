@@ -3,6 +3,7 @@ package memory
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -156,5 +157,53 @@ func TestPostgresAgentToolsPerScope(t *testing.T) {
 		if _, err := s.updateAgentTools(ctx, scope, func(*AgentTools, time.Time) {}); err != nil {
 			t.Fatalf("scope %s: %v", scope.AgentID, err)
 		}
+	}
+}
+
+// The provisional lane reads waiting candidates only (never erased ones), and the job
+// queue gauges count each kind's backlog, running and failed jobs across scopes.
+func TestPostgresPendingCandidateSearchAndJobQueueStats(t *testing.T) {
+	ctx := context.Background()
+	p := isolatedPostgres(t)
+	scope := Scope{WorkspaceID: "pending-" + ID(), ProjectID: "integration", UserID: "u", AgentID: "a"}
+	defer func() { _, _ = p.q().Exec(ctx, `DELETE FROM memory_records WHERE workspace_id=$1`, scope.WorkspaceID) }()
+	now, marker := time.Now().UTC(), "pgpending-"+ID()
+	for _, r := range []Record{
+		{ID: "waiting", Status: "candidate"},
+		{ID: "erased", Status: "candidate", ContentErased: true},
+		{ID: "rejected", Status: "rejected"},
+	} {
+		r.Scope, r.Kind, r.Revision, r.Text, r.Keywords, r.CreatedAt, r.UpdatedAt = scope, "memory", 1, "pending "+marker, []string{marker}, now, now
+		if err := p.Insert(ctx, "memory_candidates", r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lanes, err := p.SearchCollection(ctx, "memory_candidates", SearchInput{Scope: scope, Query: marker, Limit: 10}, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, lane := range lanes {
+		if hasPostgresHit(lane, "erased") || hasPostgresHit(lane, "rejected") {
+			t.Fatal("lane", i, lane)
+		}
+	}
+	if !hasPostgresHit(lanes[0], "waiting") {
+		t.Fatal("exact lane missed the waiting candidate", lanes[0])
+	}
+	kind := "pgqueue_" + strings.ToLower(ID()[:8])
+	old := now.Add(-time.Hour)
+	for i, st := range []string{JobStatusPending, JobStatusRetry, JobStatusRunning, JobStatusFailed, "done"} {
+		j := Record{ID: fmt.Sprintf("job%d", i), Scope: scope, Kind: kind, Status: st, Revision: 1, CreatedAt: old, UpdatedAt: old}
+		if err := p.Insert(ctx, colJobs, j); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stats, err := p.JobQueueStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(stats, func(s JobQueueStat) bool { return s.Kind == kind })
+	if i < 0 || stats[i].Backlog != 2 || stats[i].Running != 1 || stats[i].Failed != 1 || stats[i].OldestAgeSeconds < 3500 {
+		t.Fatal(stats)
 	}
 }
