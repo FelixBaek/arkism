@@ -6320,7 +6320,9 @@
  "전략 더하기": "Strategie hinzufügen",
  "모델 예산을 다 써서 멈췄어요.": "Gestoppt: Das Modellbudget ist aufgebraucht.",
  "서버 모델이 없어 멈췄어요.": "Gestoppt: Es ist kein Servermodell eingerichtet.",
- "작업 계정에 권한이 없어 멈췄어요.": "Gestoppt: Dem Arbeitskonto fehlt die Berechtigung."
+ "작업 계정에 권한이 없어 멈췄어요.": "Gestoppt: Dem Arbeitskonto fehlt die Berechtigung.",
+ "비우는 중…": "Wird geleert …",
+ "기억만 비우기": "Nur Erinnerungen leeren"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} Quell-Memories",
@@ -7584,6 +7586,9 @@
  "글 칸 {0}": "Textfeld {0}",
  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Du kannst mehrere Dateien auf einmal auswählen.",
  "기다림 {0}": "{0} wartend",
- "묶음 {0}개 맡음": "Übernimmt {0} Gruppen"
+ "묶음 {0}개 맡음": "Übernimmt {0} Gruppen",
+ "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "Nur die Erinnerungen im Bereich „{0}“ leeren?\nAlle Erinnerungen, Kandidaten und Beobachtungen werden gelöscht und lassen sich nicht wiederherstellen. Einstellungen, Dokumente, Wiki und angehängte Dateien bleiben erhalten. Gib zum Leeren die Projekt-ID genau so ein.",
+ "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "Im Bereich „{0}“ wurden {1} Einträge gelöscht.",
+ "{0} 기억만 비우기": "Nur Erinnerungen in {0} leeren"
  }
 };

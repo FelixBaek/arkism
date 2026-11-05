@@ -6320,7 +6320,9 @@
  "전략 더하기": "Añadir estrategia",
  "모델 예산을 다 써서 멈췄어요.": "Se detuvo porque se agotó el presupuesto del modelo.",
  "서버 모델이 없어 멈췄어요.": "Se detuvo porque no hay ningún modelo de servidor.",
- "작업 계정에 권한이 없어 멈췄어요.": "Se detuvo porque la cuenta de trabajo no tiene permisos."
+ "작업 계정에 권한이 없어 멈췄어요.": "Se detuvo porque la cuenta de trabajo no tiene permisos.",
+ "비우는 중…": "Vaciando…",
+ "기억만 비우기": "Vaciar solo los recuerdos"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -7584,6 +7586,9 @@
  "글 칸 {0}": "Parte de texto {0}",
  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Puedes elegir varios archivos a la vez.",
  "기다림 {0}": "En espera: {0}",
- "묶음 {0}개 맡음": "Se encarga de {0} grupos"
+ "묶음 {0}개 맡음": "Se encarga de {0} grupos",
+ "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "¿Quieres vaciar solo los recuerdos del espacio ‘{0}’?\nSe borrarán todos los recuerdos, candidatos y observaciones, y no se podrá deshacer. La configuración, los documentos, la wiki y los archivos adjuntos se conservan. Para vaciarlo, escribe el ID del proyecto tal cual.",
+ "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "Se eliminaron {1} registros del espacio ‘{0}’.",
+ "{0} 기억만 비우기": "Vaciar solo los recuerdos de {0}"
  }
 };

@@ -6320,7 +6320,9 @@
  "전략 더하기": "Adicionar estratégia",
  "모델 예산을 다 써서 멈췄어요.": "Parei porque o orçamento do modelo acabou.",
  "서버 모델이 없어 멈췄어요.": "Parei porque não há nenhum modelo de servidor configurado.",
- "작업 계정에 권한이 없어 멈췄어요.": "Parei porque a conta de trabalho não tem permissão."
+ "작업 계정에 권한이 없어 멈췄어요.": "Parei porque a conta de trabalho não tem permissão.",
+ "비우는 중…": "Limpando…",
+ "기억만 비우기": "Limpar só as memórias"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -7584,6 +7586,9 @@
  "글 칸 {0}": "Parte de texto {0}",
  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Você pode escolher vários arquivos de uma vez.",
  "기다림 {0}": "Em espera: {0}",
- "묶음 {0}개 맡음": "Assume {0} grupos"
+ "묶음 {0}개 맡음": "Assume {0} grupos",
+ "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "Limpar só as memórias do espaço ‘{0}’?\nTodas as memórias, candidatas e observações serão apagadas e não será possível desfazer. Configurações, documentos, wiki e arquivos anexados continuam como estão. Para limpar, digite o ID do projeto exatamente como ele é.",
+ "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "{1} registros foram apagados do espaço ‘{0}’.",
+ "{0} 기억만 비우기": "Limpar só as memórias de {0}"
  }
 };

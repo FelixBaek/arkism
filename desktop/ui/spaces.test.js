@@ -42,6 +42,7 @@ function setup({ role = "human", revision = 2, aliases = ["front", "web"] } = {}
       const body = o.body ? JSON.parse(o.body) : null;
       sent.push([o.method, path, body]);
       if (path.startsWith("/v1/spaces/delete?")) return { results: body.spaces.map((x) => x.project_id === "busy" ? { project_id: x.project_id, error: "revision_conflict" } : { project_id: x.project_id, report: { deleted: { memories: 3 } } }) };
+      if (path.includes("/memories?confirm=")) return { workspace_id: "w", project_id: path.split("/")[4], deleted: { memories: 3, memory_candidates: 1 } };
       if (path.endsWith("/rename")) return { records: { memories: 12, wiki_pages: 2 }, skipped: body.execute ? ["project_memberships"] : [], executed: body.execute };
       return path.endsWith("/clone") || path.endsWith("/import") ? { id: "j1", state: "queued" } : {};
     }
@@ -93,7 +94,7 @@ test("clone sends the target and the picked parts after asking; a template impor
 
 test("an agent token sees the list and names but no write buttons", async () => {
   const t = setup({ role: "agent" }); await dom.flush(); await dom.flush();
-  for (const label of ["기억 가져오기", "템플릿 가져오기", "대표로", "빼기", "지우기", "미리 보기"]) assert.equal(dom.buttons(t.box, label).length, 0, label);
+  for (const label of ["기억 가져오기", "템플릿 가져오기", "대표로", "빼기", "지우기", "기억만 비우기", "미리 보기"]) assert.equal(dom.buttons(t.box, label).length, 0, label);
   assert.ok(dom.buttons(t.box, "이름 바꾸기")[0].disabled); assert.ok(dom.buttons(t.box, "복제하기")[0].disabled);
   assert.match(t.box.textContent, /orbit/);
 });
@@ -166,4 +167,21 @@ test("자세히 · 문서: export the memories with only the picked documents; a
   assert.equal(t.sent.at(-1)[2].document_conflict, "new_id");
   const agent = setup({ role: "agent" }); await dom.flush();
   assert.doesNotMatch(agent.box.textContent, /자세히 · 문서/, "documents travel for people only");
+});
+
+test("기억만 비우기 empties one space's memories after typing its id, the space in use too; 취소 sends nothing", async () => {
+  typed = undefined;
+  const t = setup(); await dom.flush(); await dom.flush();
+  assert.equal(dom.buttons(t.box, "기억만 비우기").length, 3, "every space, the one in use included");
+  typed = null;
+  dom.buttons(t.box, "기억만 비우기")[1].click(); await dom.flush(); await dom.flush();
+  assert.equal(t.sent.length, 0, "취소 sends nothing");
+  typed = undefined;
+  const orbit = t.box.querySelectorAll("button").find((b) => b.getAttribute("aria-label") === "orbit 기억만 비우기");
+  orbit.click(); await dom.flush(); await dom.flush(); await dom.flush();
+  assert.match(t.asks.at(-1), /‘orbit’ 공간의 기억만 비울까요/); assert.match(t.asks.at(-1), /설정·문서·위키·첨부 파일은 그대로 남아요/);
+  assert.deepEqual(t.sent.at(-1), ["DELETE", "/v1/spaces/w/orbit/memories?confirm=orbit", null]);
+  assert.match(t.box.textContent, /‘orbit’ 공간에서 기록 4개를 지웠어요/);
+  assert.match(t.box.textContent, /orbit · 기억 0개/, "the row count drops without a reload");
+  assert.match(t.box.textContent, /orbit/, "the space itself stays");
 });

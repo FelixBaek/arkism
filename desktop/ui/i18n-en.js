@@ -7594,3 +7594,10 @@ Object.assign(window.ArkismI18nEN.strings, {
   "모델 예산을 다 써서 멈췄어요.": "Stopped: the model budget ran out.",
   "서버 모델이 없어 멈췄어요.": "Stopped: no server model is set up.",
   "작업 계정에 권한이 없어 멈췄어요.": "Stopped: the worker account lacks permission." });
+Object.assign(window.ArkismI18nEN.strings, {
+  "비우는 중…": "Clearing…",
+  "기억만 비우기": "Clear memories only" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "Clear only the memories of the ‘{0}’ space?\nAll memories, candidates and observations are deleted and cannot be restored. Settings, documents, wiki and attached files stay. To clear, type the project ID exactly.",
+  "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "Deleted {1} records from the ‘{0}’ space.",
+  "{0} 기억만 비우기": "Clear memories only in {0}" });

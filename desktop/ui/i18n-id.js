@@ -6320,7 +6320,9 @@
  "전략 더하기": "Tambah strategi",
  "모델 예산을 다 써서 멈췄어요.": "Berhenti karena anggaran model sudah habis.",
  "서버 모델이 없어 멈췄어요.": "Berhenti karena tidak ada model server.",
- "작업 계정에 권한이 없어 멈췄어요.": "Berhenti karena akun pekerja tidak punya izin."
+ "작업 계정에 권한이 없어 멈췄어요.": "Berhenti karena akun pekerja tidak punya izin.",
+ "비우는 중…": "Mengosongkan…",
+ "기억만 비우기": "Kosongkan memori saja"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7584,6 +7586,9 @@
  "글 칸 {0}": "Kolom teks {0}",
  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Anda bisa memilih beberapa file sekaligus.",
  "기다림 {0}": "Menunggu {0}",
- "묶음 {0}개 맡음": "Menangani {0} kelompok"
+ "묶음 {0}개 맡음": "Menangani {0} kelompok",
+ "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "Kosongkan hanya memori di ruang ‘{0}’?\nSemua memori, kandidat, dan observasi akan terhapus dan tidak bisa dikembalikan. Pengaturan, dokumen, wiki, dan berkas lampiran tetap ada. Untuk mengosongkan, ketik ID proyek persis seperti aslinya.",
+ "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "{1} catatan di ruang ‘{0}’ sudah dihapus.",
+ "{0} 기억만 비우기": "Kosongkan memori saja di {0}"
  }
 };

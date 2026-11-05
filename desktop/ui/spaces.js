@@ -318,8 +318,18 @@
       const why = (code) => ERR[code === "revision_conflict" ? "space_busy" : code] || "처리하지 못했어요.";
       show([done.length ? `공간 ${done.length}개를 지웠어요.` : "", ...failed.map(([id, code]) => `‘${id}’: ${why(code)}`)].filter(Boolean).join(" "), failed.length > 0);
     }, "list");
+    // 기억만 비우기: the space's memories, candidates and observations go after typing its project id; settings, documents, wiki and attachments stay
+    const clearMemories = (id) => run(async () => {
+      if (!(await askTyped(`‘${id}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.`, id, "비우기"))) return;
+      show("비우는 중…");
+      const r = await request(`${spacePath(id)}/memories?confirm=${enc(id)}`, { method: "DELETE" });
+      const n = Object.values(r?.deleted || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+      const row = (S.list || []).find((x) => x.project_id === id);
+      if (row) row.counts = { ...(row.counts || {}), memories: 0 };
+      show(`‘${id}’ 공간에서 기록 ${n}개를 지웠어요.`);
+    }, "list");
     const day = (v) => { const t = v ? new Date(v) : null; return t && !Number.isNaN(t.getTime()) ? t.toLocaleDateString() : "—"; };
-    function spaceRow(s, can) {
+    function spaceRow(s, can, canClear) {
       const here = s.project_id === state.scope?.project_id, name = s.config?.display_name || s.project_id;
       const t = el("div"), meta = el("small"), r = el("div", "setting sp-row");
       meta.append(data(el("span", "mono", s.project_id)), el("span", "", ` · 기억 ${(s.counts?.memories || 0).toLocaleString()}개`), ...(s.config?.aliases?.length ? [data(el("span", "", ` · ${s.config.aliases.map((a) => `@${a}`).join(" ")}`))] : []));
@@ -332,7 +342,8 @@
       } else if (can) r.append(el("span", "sp-gap")); // keeps the names in one column
       const right = el("span", "v4s-actions");
       if (here) right.append(el("span", "sp-here", "지금 공간"));
-      else if (can) { const x = button("지우기", "small ghost", null, () => deleteSpaces([s.project_id])); x.setAttribute("aria-label", `${s.project_id} 지우기`); x.disabled = S.busy; right.append(x); }
+      if (canClear) { const c = button("기억만 비우기", "small ghost", null, () => clearMemories(s.project_id)); c.setAttribute("aria-label", `${s.project_id} 기억만 비우기`); c.disabled = S.busy; right.append(c); }
+      if (!here && can) { const x = button("지우기", "small ghost", null, () => deleteSpaces([s.project_id])); x.setAttribute("aria-label", `${s.project_id} 지우기`); x.disabled = S.busy; right.append(x); }
       r.append(t, right);
       return r;
     }
@@ -341,9 +352,9 @@
       if (S.listErr) g.append(el("p", "pg-hint warn", S.listErr));
       if (!S.list) { g.append(el("p", "pg-hint", "불러오는 중…")); return g; }
       if (!S.list.length && !S.listErr) { g.append(el("p", "pg-hint", "아직 공간이 없어요.")); return g; }
-      const can = human() && state.caps?.actions?.delete_spaces !== false;
+      const can = human() && state.caps?.actions?.delete_spaces !== false, canClear = human() && state.caps?.actions?.delete_memories !== false;
       const find = el("input", "sp-find"); find.value = S.find; find.placeholder = "이름·ID·@별칭으로 찾기"; find.setAttribute("aria-label", "공간 찾기");
-      const none = el("p", "pg-hint", "찾는 공간이 없어요."), rows = S.list.map((s) => [s, spaceRow(s, can)]);
+      const none = el("p", "pg-hint", "찾는 공간이 없어요."), rows = S.list.map((s) => [s, spaceRow(s, can, canClear)]);
       // rows hide in place while typing: a redraw would take the focus out of the box
       const filter = () => { let n = 0; for (const [s, r] of rows) { r.hidden = !matchSpace(s, S.find); n += r.hidden ? 0 : 1; } none.hidden = n > 0; };
       find.addEventListener("input", () => { S.find = find.value; filter(); });

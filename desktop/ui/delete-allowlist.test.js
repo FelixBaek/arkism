@@ -70,12 +70,14 @@ test("wiki folder and page, and extraction document PATCH and DELETE are allowed
   assert.match(body, /method == "PATCH" && \([^;]*one_id\("\/v1\/files\/memories\/documents\/"\)[^;]*one_id\("\/v1\/wiki\/pages\/"\)[^;]*wiki_folders/);
 });
 
-// 별칭 빼기 in spaces.js builds its path with spacePath(): DELETE …/aliases/{alias} only.
+// 별칭 빼기 and 기억만 비우기 in spaces.js build their paths with spacePath(): DELETE …/aliases/{alias} and …/memories?confirm= only.
 test("space alias DELETE is allowed by the desktop app", () => {
   const rust = fs.readFileSync(path.join(__dirname, "..", "src-tauri", "src", "main.rs"), "utf8");
   const body = rust.slice(rust.indexOf("fn allowed("), rust.indexOf("fn valid_base("));
   const ui = fs.readFileSync(path.join(__dirname, "spaces.js"), "utf8");
   assert.match(ui, /request\(`\$\{spacePath\(\)\}\/aliases\$\{add \? "" : `\/\$\{enc\(alias\)\}`\}`[^\n]*method: "DELETE"/);
   assert.match(body, /p\.len\(\) == 4 && p\[2\] == "aliases"/);
-  assert.match(body, /method == "DELETE"[^;]*\|\| space_alias\)/);
+  assert.match(body, /method == "DELETE"[^;]*\|\| space_alias \|\| space_clear\)/);
+  assert.match(fs.readFileSync(path.join(__dirname, "spaces.js"), "utf8"), /request\(`\$\{spacePath\(id\)\}\/memories\?confirm=\$\{enc\(id\)\}`, \{ method: "DELETE" \}\)/, "기억만 비우기");
+  assert.match(body, /p\.len\(\) == 3 && p\[2\] == "memories"/);
 });

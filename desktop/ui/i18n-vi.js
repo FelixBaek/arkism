@@ -6320,7 +6320,9 @@
  "전략 더하기": "Thêm chiến lược",
  "모델 예산을 다 써서 멈췄어요.": "Đã dừng vì ngân sách model đã dùng hết.",
  "서버 모델이 없어 멈췄어요.": "Đã dừng vì chưa có model máy chủ.",
- "작업 계정에 권한이 없어 멈췄어요.": "Đã dừng vì tài khoản làm việc không có quyền."
+ "작업 계정에 권한이 없어 멈췄어요.": "Đã dừng vì tài khoản làm việc không có quyền.",
+ "비우는 중…": "Đang xóa…",
+ "기억만 비우기": "Chỉ xóa ký ức"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7584,6 +7586,9 @@
  "글 칸 {0}": "Phần chữ {0}",
  "{0} 파일을 한 번에 여러 개 고를 수 있어요.": "{0} Bạn có thể chọn nhiều tệp cùng lúc.",
  "기다림 {0}": "Đang chờ {0}",
- "묶음 {0}개 맡음": "Nhận {0} nhóm"
+ "묶음 {0}개 맡음": "Nhận {0} nhóm",
+ "‘{0}’ 공간의 기억만 비울까요?\n기억·후보·관찰이 모두 지워지고 되돌릴 수 없어요. 설정·문서·위키·첨부 파일은 그대로 남아요. 비우려면 프로젝트 ID를 그대로 적어 주세요.": "Chỉ xóa ký ức trong không gian ‘{0}’ nhé?\nTất cả ký ức, ứng viên và quan sát sẽ bị xóa và không thể khôi phục. Cài đặt, tài liệu, wiki và tệp đính kèm vẫn được giữ lại. Để xóa, hãy nhập đúng ID dự án.",
+ "‘{0}’ 공간에서 기록 {1}개를 지웠어요.": "Đã xóa {1} bản ghi khỏi không gian ‘{0}’.",
+ "{0} 기억만 비우기": "Chỉ xóa ký ức trong {0}"
  }
 };
