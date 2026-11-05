@@ -158,6 +158,7 @@ type fakeRepo struct {
 	store           map[string]map[string]Record
 	failAudit       bool
 	stale           []Hit // index rows that outlived the document they describe
+	relations       []fakeRelation
 }
 
 func (*fakeRepo) allowLegacySourceDeleteForTest() {}

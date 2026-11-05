@@ -306,6 +306,12 @@ type Repository interface {
 	// ListCrewRunsByStatus returns up to limit crew runs of one status in a scope, newest first.
 	ListCrewRunsByStatus(context.Context, Scope, string, int) ([]Record, error)
 	SearchRelatedMemories(context.Context, SearchInput, Record) ([]Hit, error)
+	// SearchMemoriesInWindow returns up to in.Limit approved memories whose event time
+	// (hitEventTime) falls in [from, to), newest event first.
+	SearchMemoriesInWindow(ctx context.Context, in SearchInput, from, to time.Time) ([]Hit, error)
+	// MemoryNeighbors returns up to limit memory ids one relations-table step from the seeds
+	// (either direction, or co-mentioning one entity), most connected first, seeds excluded.
+	MemoryNeighbors(ctx context.Context, scope Scope, seeds []string, limit int) ([]string, error)
 	ValidateBlobRestore(context.Context, map[string]int64) error
 	BlobGCBatch(context.Context, string) ([]string, error)
 	BlobStorageIdentity(context.Context) (string, error)
@@ -409,6 +415,7 @@ type Hit struct {
 	Score              float64        `json:"score,omitempty" bson:"-"`
 	Lanes              []string       `json:"lanes,omitempty" bson:"-"`
 	VectorMatch        *VectorMatch   `json:"vector_match,omitempty" bson:"-"`
+	Explain            *HitExplain    `json:"explain,omitempty" bson:"-"`
 	Kind               string         `json:"kind,omitempty" bson:"kind"`
 	Sensitivity        string         `json:"sensitivity,omitempty" bson:"sensitivity"`
 	ID                 string         `json:"id" bson:"id"`
@@ -440,6 +447,7 @@ type ContextBundle struct {
 	Authority     string          `json:"authority"`
 	Items         []Hit           `json:"items"`
 	Degraded      []string        `json:"degraded,omitempty"`
+	Explain       *RecallExplain  `json:"explain,omitempty"`
 }
 
 type HistoricalHit struct {

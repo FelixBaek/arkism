@@ -38451,6 +38451,16 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "explain": {
+            "type": "object",
+            "readOnly": true,
+            "description": "Present only with explain=true.",
+            "properties": {
+              "lane_ranks": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}},
+              "fused_score": {"type": "number"},
+              "rerank_score": {"type": "number", "minimum": 0, "maximum": 1}
+            }
+          },
           "reach": {
             "type": "string",
             "enum": [
@@ -38481,10 +38491,12 @@
                 "exact",
                 "keyword",
                 "vector",
-                "relation"
+                "relation",
+                "temporal",
+                "graph"
               ]
             },
-            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation."
+            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph. temporal: the query named a time and the memory happened then; graph: one relations step from a top hit."
           },
           "path_check": {
             "type": "string",
@@ -39530,6 +39542,16 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "explain": {
+            "type": "boolean",
+            "default": false,
+            "description": "Return each hit's 1-based rank per lane, its fused score and rerank score, plus the search-level lanes and detected time window. For debugging."
+          },
+          "timezone": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "IANA zone that time words in the query (yesterday, last week, 10월 말) resolve in. Empty means Asia/Seoul. Unknown names are rejected."
+          },
           "project_key": {
             "type": "string",
             "maxLength": 256,
@@ -40267,6 +40289,15 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "explain": {
+            "type": "object",
+            "description": "Present only with explain=true. lanes names every lane fused for this search; time_window is the span time words in the query resolved to (a ranking lane, never a filter).",
+            "properties": {
+              "lanes": {"type": "array", "items": {"type": "string"}},
+              "reranked": {"type": "boolean"},
+              "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
+            }
+          },
           "authority": {
             "const": "data_only_untrusted"
           },

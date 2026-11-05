@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/FelixBaek/arkism/internal/memory"
 )
@@ -123,6 +124,24 @@ func configuredEmbedder(worker, recovery bool) (memory.Embedder, error) {
 	default:
 		return nil, memory.ErrInvalid
 	}
+}
+
+// configuredReranker reads ARKISM_RERANK_URL (base URL of a POST /rerank service) and the
+// optional ARKISM_RERANK_TIMEOUT (Go duration). Unset URL disables reranking.
+func configuredReranker() (*memory.TEIReranker, error) {
+	raw := os.Getenv("ARKISM_RERANK_URL")
+	if raw == "" {
+		return nil, nil
+	}
+	var timeout time.Duration
+	if v := os.Getenv("ARKISM_RERANK_TIMEOUT"); v != "" {
+		parsed, err := time.ParseDuration(v)
+		if err != nil || parsed <= 0 || parsed > time.Minute {
+			return nil, fmt.Errorf("ARKISM_RERANK_TIMEOUT: %w", memory.ErrInvalid)
+		}
+		timeout = parsed
+	}
+	return memory.NewTEIReranker(memory.TEIRerankConfig{URL: raw, Timeout: timeout})
 }
 
 // PostgreSQL permissions are canonical; the other authorizers serve non-Postgres test wiring.

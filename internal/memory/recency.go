@@ -24,18 +24,23 @@ func recencyFactor(h Hit, now time.Time) float64 {
 	if !ok {
 		return 1
 	}
-	// Age from content time: UpdatedAt also moves on metadata-only edits such as reach.
-	at := h.UpdatedAt
-	if h.CreatedAt != nil && !h.CreatedAt.IsZero() {
-		at = *h.CreatedAt
-	}
-	if h.EffectiveAt != nil && !h.EffectiveAt.IsZero() {
-		at = *h.EffectiveAt
-	}
+	at := hitContentTime(h)
 	if at.IsZero() || !at.Before(now) {
 		return 1
 	}
 	return 0.5 + 0.5*math.Exp2(-float64(now.Sub(at))/float64(half))
+}
+
+// hitContentTime is a hit's content time: effective_at, else created_at, else updated_at.
+// UpdatedAt is last because it also moves on metadata-only edits such as reach.
+func hitContentTime(h Hit) time.Time {
+	if h.EffectiveAt != nil && !h.EffectiveAt.IsZero() {
+		return *h.EffectiveAt
+	}
+	if h.CreatedAt != nil && !h.CreatedAt.IsZero() {
+		return *h.CreatedAt
+	}
+	return h.UpdatedAt
 }
 
 // decayByRecency rescales fused scores by age and by each hit's outcome
@@ -51,10 +56,19 @@ func decayByRecency(rows []ScoredHit, now time.Time, weights map[string]float64,
 	return rows[:min(limit, len(rows))]
 }
 
-func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection string, in SearchInput) []ScoredHit {
-	if collection == colMemories && !in.IncludeInactive {
-		rows := FuseScored(lists, in.Limit*3)
-		return decayByRecency(rows, time.Now(), s.outcomeWeights(ctx, in.Scope, rows), in.Limit)
+// fuseRecallHits fuses the lanes, reranks the head when a reranker is set, and for
+// memory recall applies recency and outcome weights before keeping in.Limit rows.
+func (s *Service) fuseRecallHits(ctx context.Context, lists [][]Hit, collection string, in SearchInput, d Decision, trace *recallTrace) []ScoredHit {
+	recall := collection == colMemories && !in.IncludeInactive
+	n := in.Limit
+	if recall || s.Reranker != nil {
+		n = in.Limit * 3
 	}
-	return FuseScored(lists, in.Limit)
+	rows := FuseScored(lists, n)
+	trace.noteFused(rows)
+	rows = s.rerankRows(ctx, in, d, rows, trace)
+	if recall {
+		return decayByRecency(rows, s.recallNow(), s.outcomeWeights(ctx, in.Scope, rows), in.Limit)
+	}
+	return rows[:min(in.Limit, len(rows))]
 }

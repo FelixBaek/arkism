@@ -2,6 +2,7 @@ package memory
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -89,4 +90,16 @@ func (m *requestMetrics) snapshot() map[string]RequestMetric {
 		out[route] = clone
 	}
 	return out
+}
+
+// RerankMetrics counts rerank calls in this process; a fallback served the fused order.
+type RerankMetrics struct {
+	Calls     uint64 `json:"calls"`
+	Fallbacks uint64 `json:"fallbacks"`
+	Timeouts  uint64 `json:"timeouts"`
+}
+type rerankCounters struct{ calls, fallbacks, timeouts atomic.Uint64 }
+
+func (c *rerankCounters) snapshot() RerankMetrics {
+	return RerankMetrics{Calls: c.calls.Load(), Fallbacks: c.fallbacks.Load(), Timeouts: c.timeouts.Load()}
 }

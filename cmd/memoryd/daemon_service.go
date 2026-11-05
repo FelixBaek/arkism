@@ -37,7 +37,12 @@ func newDaemonService(ctx context.Context, pg *memory.Postgres, cfg daemonOption
 	if err != nil {
 		return nil, err
 	}
-	svc := &memory.Service{GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CostRates: costRates}
+	reranker, err := configuredReranker()
+	if err != nil {
+		return nil, err
+	}
+	svc := &memory.Service{GoogleLogin: google, SyntheticHandoff: syntheticHandoff == "1", BlobDirectory: os.Getenv("MEMORY_BLOB_DIRECTORY"), Repo: pg, Auth: auth, Embedder: embed, CandidateDailyLimit: candidateLimit, CaptureMergeSimilarity: mergeSimilarity, CostRates: costRates,
+		Reranker: reranker, RecallGraph: os.Getenv("ARKISM_RECALL_GRAPH") == "1"}
 
 	if !cfg.Recovery {
 		if path := os.Getenv("MEMORY_REVIEW_CLASSIFIER"); path != "" {

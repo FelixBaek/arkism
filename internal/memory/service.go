@@ -76,7 +76,13 @@ type Service struct {
 	Repo          Repository
 	Auth          Authorizer
 	Embedder      Embedder
-	CostRates     CostRates
+	// Reranker, when set, reorders the fused recall candidates (recall_lanes.go).
+	Reranker *TEIReranker
+	// RecallGraph adds the relations-graph lane to memory recall.
+	RecallGraph bool
+	// RecallNow replaces the clock recall resolves "yesterday" against. Nil means time.Now.
+	RecallNow func() time.Time
+	CostRates CostRates
 	// Wiki, when set, is the model the optional LLM-Wiki jobs call.
 	Wiki WikiLLM
 

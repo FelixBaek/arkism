@@ -7,6 +7,7 @@ import (
 func searchHitHash(h Hit) string {
 	h.Reasons, h.Score, h.Lanes = nil, 0, nil // lane/rank annotations are not stored record content.
 	h.VectorMatch = nil                       // query-specific cosine evidence is not stored memory content.
+	h.Explain = nil                           // per-query lane ranks are not stored content either.
 	return ContentHash(structuredText(h))
 }
 

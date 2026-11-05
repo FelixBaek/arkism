@@ -576,7 +576,7 @@ func (s *Service) discordStats(ctx context.Context, scope Scope) (DiscordStats, 
 		return out, err
 	}
 	now := time.Now()
-	day := startOfDay(now)
+	day := startOfDay(now.In(usageZone()))
 	targets := map[string]*DiscordTarget{}
 	for _, r := range calls {
 		c := r.RoutingCall

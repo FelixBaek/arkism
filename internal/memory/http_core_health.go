@@ -42,7 +42,11 @@ func registerHealthCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 		}
 		ready := s.Repo.SearchReady(ctx) == nil
 		deletion := DeletionWorkflowMetrics{Available: true, Coverage: "tracked_jobs_only"}
-		writeJSON(w, http.StatusOK, map[string]any{"store": store, "requests": stats.snapshot(), "requests_scope": "process", "latency_bounds_seconds": latencyBounds, "indexes_ready": ready, "cost": store.Cost, "deletion_workflow": deletion})
+		body := map[string]any{"store": store, "requests": stats.snapshot(), "requests_scope": "process", "latency_bounds_seconds": latencyBounds, "indexes_ready": ready, "cost": store.Cost, "deletion_workflow": deletion}
+		if s.Reranker != nil {
+			body["rerank"] = s.Reranker.Metrics()
+		}
+		writeJSON(w, http.StatusOK, body)
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

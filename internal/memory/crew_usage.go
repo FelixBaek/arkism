@@ -19,9 +19,10 @@ import (
 var crewUsageRanges = map[string]time.Duration{"today": 0, "7d": 7 * 24 * time.Hour, "30d": 30 * 24 * time.Hour, "90d": 90 * 24 * time.Hour, "all": -1}
 var crewUsageKinds = []string{"all", "workflow", "agent", "team"}
 
+// startOfDay is midnight of t's day in t's own location.
 func startOfDay(t time.Time) time.Time {
-	y, m, d := t.In(usageZone()).Date()
-	return time.Date(y, m, d, 0, 0, 0, 0, usageZone())
+	y, m, d := t.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 }
 
 func roundUSD(v float64) float64 { return math.Round(v*1e6) / 1e6 }
@@ -174,7 +175,7 @@ func (s *Service) CrewUsage(ctx context.Context, token string, scope Scope, rang
 	var from time.Time
 	switch {
 	case span == 0:
-		from = startOfDay(now)
+		from = startOfDay(now.In(usageZone()))
 	case span > 0:
 		from = now.Add(-span)
 	}

@@ -30,7 +30,11 @@ type SearchInput struct {
 	Query           string           `json:"query"`
 	Limit           int              `json:"limit"`
 	MaxChars        int              `json:"max_chars"`
-	retrievalQuery  string
+	// Explain returns each hit's lane ranks and rerank score (recall_lanes.go).
+	Explain bool `json:"explain,omitempty"`
+	// Timezone (IANA) is the calendar time words like "yesterday" resolve in; empty is Asia/Seoul.
+	Timezone       string `json:"timezone,omitempty"`
+	retrievalQuery string
 	// pinned: memories a context build already injected ahead of this search
 	// (crew_pins.go); the receipt lists them first and the search hits after.
 	pinned []Ref
@@ -62,12 +66,12 @@ type ScoredHit struct {
 }
 
 // laneByReason names the lane each search reason comes from (existing policy).
-var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation"}
+var laneByReason = map[string]string{reasonExactKeyword: "exact", reasonTextSearch: "keyword", reasonVector: "vector", "relation": "relation", reasonTemporal: "temporal", reasonGraph: "graph"}
 
 // hitLanes lists the lanes that found a fused hit, in a fixed order.
 func hitLanes(reasons []string) []string {
 	lanes := []string{}
-	for _, lane := range []string{"exact", "keyword", "vector", "relation"} {
+	for _, lane := range []string{"exact", "keyword", "vector", "relation", "temporal", "graph"} {
 		for _, r := range reasons {
 			if laneByReason[r] == lane {
 				lanes = append(lanes, lane)
@@ -121,6 +125,8 @@ func FuseScored(lists [][]Hit, limit int) []ScoredHit {
 			weight := 1.0
 			if slices.Contains(hit.Reasons, "exact_keyword") {
 				weight = exactKeywordWeight
+			} else if slices.Contains(hit.Reasons, reasonGraph) {
+				weight = graphLaneWeight
 			}
 			entry.Score += weight / float64(rankOffset+position+1)
 			for _, reason := range hit.Reasons {
@@ -238,11 +244,14 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	shadow := s.beginNativeSearchShadow(ctx, in, collection, lists, historyRecords)
 	defer shadow.finish()
 	shadow.bindFinalRejection(&in)
-	scored := s.fuseRecallHits(ctx, lists, collection, in)
-	out.Items = make([]Hit, len(scored))
-	for i, r := range scored {
-		r.Hit.Score, r.Hit.Lanes = r.Score, hitLanes(r.Hit.Reasons)
-		out.Items[i] = r.Hit
+	clean := func(hits []Hit) ([]Hit, error) {
+		one := [][]Hit{hits}
+		err := s.cleanSearchLanes(ctx, token, in, d, collection, anchor, run, -1, queryVector, querySpace, historyRecords, &out, one)
+		filterContextViewLanes(one, in.contextView)
+		return one[0], err
+	}
+	if e = s.recallItems(ctx, in, d, collection, lists, clean, &out); e != nil {
+		return ContextBundle{}, Decision{}, e
 	}
 	snapshots := map[Ref]string{}
 	for _, h := range out.Items {
@@ -350,6 +359,9 @@ func boundSearchInput(in *SearchInput) bool {
 		return false
 	}
 	if strings.TrimSpace(in.Query) == "" || !utf8.ValidString(in.Query) || utf8.RuneCountInString(in.Query) > 1000 || in.Limit < 0 || in.Limit > 50 || in.MaxChars < 0 || in.MaxChars > 64000 {
+		return false
+	}
+	if !validTimezone(in.Timezone) {
 		return false
 	}
 	if in.Limit == 0 {
