@@ -561,6 +561,15 @@ func TestWebhookRequestShapeIsSealedAndSent(t *testing.T) {
 	if err != nil || h.Headers["Authorization"] != "Bearer hook-token-value" || len(h.Query) != 0 {
 		t.Fatal("sealed shape after update", err, h)
 	}
+	// A new path on the same origin keeps the sealed headers; a new origin drops them.
+	same := srv.URL + "/other"
+	if u, err = f.svc.UpdateWebhook(testCtx, f.human, v.ID, WebhookUpdate{Scope: scopeA, ExpectedRevision: u.Revision, URL: &same}); err != nil || len(u.HeaderNames) != 1 {
+		t.Fatal("same origin", err, u)
+	}
+	moved := strings.Replace(srv.URL, "127.0.0.1", "localhost", 1) + "/in"
+	if u, err = f.svc.UpdateWebhook(testCtx, f.human, v.ID, WebhookUpdate{Scope: scopeA, ExpectedRevision: u.Revision, URL: &moved}); err != nil || len(u.HeaderNames) != 0 || len(u.QueryParamNames) != 0 {
+		t.Fatal("new origin kept sealed headers", err, u)
+	}
 }
 
 func queuedEvents(f *fixture) []string {

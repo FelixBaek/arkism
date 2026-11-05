@@ -400,6 +400,15 @@ func TestWikiFolderMoveDeleteAndQueryPages(t *testing.T) {
 	if _, err = f.svc.MoveWikiFolder(testCtx, f.agent, WikiFolderMoveInput{Scope: scope, From: "docs", To: "manual"}); !errors.Is(err, ErrDenied) {
 		t.Fatal("agent moved a folder", err)
 	}
+	// A person who may edit wiki pages but not query pages cannot move them with a folder.
+	pagesOnly := testPrincipalToken("tok-pages-only")
+	f.auth.actors[pagesOnly] = actor("human-1", "human", true, append(slices.Clone(allVerbs), "!write:"+colMentalModels)...)
+	if _, err = f.svc.MoveWikiFolder(testCtx, pagesOnly, WikiFolderMoveInput{Scope: scope, From: "docs", To: "manual"}); !errors.Is(err, ErrDenied) {
+		t.Fatal("folder move changed query pages without mental model write", err)
+	}
+	if _, err = f.svc.DeleteWikiFolder(testCtx, pagesOnly, WikiFolderDeleteInput{Scope: scope, Path: "docs", Recursive: true}); !errors.Is(err, ErrDenied) {
+		t.Fatal("folder delete removed query pages without mental model write", err)
+	}
 	moved, err := f.svc.MoveWikiFolder(testCtx, f.human, WikiFolderMoveInput{Scope: scope, From: "docs", To: "manual/docs"})
 	if err != nil || len(moved.Moved) != 3 {
 		t.Fatal("move", err, moved)

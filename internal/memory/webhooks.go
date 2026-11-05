@@ -477,6 +477,15 @@ func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in Webhoo
 	return webhookView(out), nil
 }
 
+// webhookOrigin is scheme://host:port of raw, or raw itself when it does not parse.
+func webhookOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	return strings.ToLower(u.Scheme + "://" + u.Host)
+}
+
 func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) error {
 	if in.Method != nil {
 		w.Method = *in.Method
@@ -484,15 +493,18 @@ func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) er
 	if in.TimeoutSeconds != nil {
 		w.TimeoutSeconds = *in.TimeoutSeconds
 	}
-	if in.Headers != nil || in.QueryParams != nil {
+	// A new origin must not inherit sealed credentials meant for the old one:
+	// parts the same update does not resend are dropped.
+	moved := in.URL != nil && w.SealedHTTP != "" && webhookOrigin(*in.URL) != webhookOrigin(w.URL)
+	if in.Headers != nil || in.QueryParams != nil || moved {
 		h, err := s.openWebhookHTTP(w, in.Scope, id)
 		if err != nil {
 			return err
 		}
-		if in.Headers != nil {
+		if in.Headers != nil || moved {
 			h.Headers = in.Headers
 		}
-		if in.QueryParams != nil {
+		if in.QueryParams != nil || moved {
 			h.Query = in.QueryParams
 		}
 		if err = sealWebhookHTTP(s.WebhookKey, w, h, in.Scope, id); err != nil {

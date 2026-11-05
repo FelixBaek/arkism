@@ -404,8 +404,9 @@ type wikiFolderSet struct {
 }
 
 // readWikiFolder collects the rows under path. A change over a cut list could
-// leave part of a folder behind, so a full window is refused.
-func (s *Service) readWikiFolder(ctx context.Context, scope Scope, path string) (wikiFolderSet, error) {
+// leave part of a folder behind, so a full window is refused. Query pages under
+// path are mental models: changing them also needs the caller's mental model write.
+func (s *Service) readWikiFolder(ctx context.Context, scope Scope, path, token string) (wikiFolderSet, error) {
 	var set wikiFolderSet
 	rows, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit+1)
 	if err != nil {
@@ -431,6 +432,11 @@ func (s *Service) readWikiFolder(ctx context.Context, scope Scope, path string) 
 			set.models = append(set.models, r)
 		}
 	}
+	if len(set.models) > 0 {
+		if _, err = s.derivedHuman(ctx, token, colMentalModels, scope, ""); err != nil {
+			return wikiFolderSet{}, err
+		}
+	}
 	return set, nil
 }
 
@@ -447,7 +453,7 @@ func (s *Service) MoveWikiFolder(ctx context.Context, token string, in WikiFolde
 	if err != nil {
 		return WikiFolderMoveResult{}, err
 	}
-	set, err := s.readWikiFolder(ctx, in.Scope, from)
+	set, err := s.readWikiFolder(ctx, in.Scope, from, token)
 	if err != nil {
 		return WikiFolderMoveResult{}, err
 	}
@@ -550,7 +556,7 @@ func (s *Service) DeleteWikiFolder(ctx context.Context, token string, in WikiFol
 	if err != nil {
 		return out, err
 	}
-	set, err := s.readWikiFolder(ctx, in.Scope, path)
+	set, err := s.readWikiFolder(ctx, in.Scope, path, token)
 	if err != nil {
 		return out, err
 	}

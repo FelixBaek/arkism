@@ -439,7 +439,7 @@ func (a *fakeAuth) Authorize(_ context.Context, token string, req Authorization)
 		scope = scopeFar
 	}
 	return Decision{
-		Allowed: who.verbs[verb], PrincipalID: who.principal, Role: who.role,
+		Allowed: who.verbs[verb] && !who.verbs["!"+req.Action], PrincipalID: who.principal, Role: who.role,
 		Scope: scope, ExternalTransfer: who.external, ContentSafe: true,
 	}, nil
 }
