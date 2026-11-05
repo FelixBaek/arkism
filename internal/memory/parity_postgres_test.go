@@ -128,7 +128,7 @@ func TestPostgresSpacesListAliasAndBundle(t *testing.T) {
 		t.Fatal("duplicate alias accepted")
 	}
 	page, err := f.svc.ListSpaces(testCtx, f.human, scopeA, "", 10)
-	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") {
+	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") || page.Items[0].Created == nil || page.Items[0].LastActivity == nil || page.Items[0].LastActivity.Before(*page.Items[0].Created) {
 		t.Fatalf("list = %+v %v", page, err)
 	}
 	report := importBundle(t, f, scopeB, exportBundle(t, f, scopeA, SpaceExportInput{}), "")

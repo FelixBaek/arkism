@@ -268,7 +268,7 @@ wiki. What a person approves and how is described in
 
    | Principal | Actions to add |
    |---|---|
-   | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates` |
+   | Owner (person) | `read:directives`, `write:directives`, `read:observations`, `write:observations`, `read:mental_models`, `write:mental_models`, `read:entities`, `write:entities`, `read:memory_relations`, `write:memory_relations`, `read:wiki_pages`, `write:wiki_pages`, `read:space_configs`, `write:space_configs`, `write:webhooks`, `read:jobs`, `transition:jobs`, `delete:jobs`, `ops:metrics`, `read:audit_events`, `generate:memory_candidates`, `delete:spaces` and `delete:memories` (deleting or clearing a space) |
    | Agent (MCP router) | `search:memories`, `generate:reflect`, `read:directives`, `read:observations`, `read:mental_models`, `read:entities`, `read:memory_relations`, `read:memory_candidates`, `read:wiki_pages`, and for the proposal tools `write:directives`, `write:mental_models`, `write:maintenance_proposals`, `read:jobs`, `transition:jobs`, `read:knowledge_sources`, `read:knowledge_documents`; `add_document` also needs `write:memory_candidates`, `generate:memory_candidates` and `external:transfer` |
    | Service that runs model jobs | the job's write action (`write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `generate:wiki_pages`) plus `search:memories` and `context:read` |
    | Worker (`MEMORY_WORKER_TOKEN`), only with `MEMORY_AUTO_DERIVE=on` or `MEMORY_DERIVE_SCHEDULE=on` | `write:observations`, `write:mental_models`, `write:memory_relations`, `write:entities`, `generate:entities`, `search:memories`, `read:memories`, `context:read`, `external:transfer`. Without them a run ends as `denied`; a scheduled run names the missing action (job outcome `denied:<action>`, and a warning in the worker log) and waits an hour |
@@ -553,7 +553,19 @@ wiki. What a person approves and how is described in
 22. **Space rename.** `memoryd --space-rename preview|execute --from
     workspace/project --to workspace/project2` moves a space to a new project
     id offline (see the command table). Nothing changes until an administrator
-    runs it.
+    runs it. A person can also rename from the Spaces screen
+    (`POST /v1/spaces/{workspace}/{project}/rename`, preview first); that runs
+    the same move under the person's own database permissions, so memberships,
+    permissions and decision counts, which the app role may not update, stay
+    under the old name and are listed in `skipped`. Use the command for those.
+24. **Space delete.** A person (never an agent) can delete a space with
+    everything in it (`DELETE /v1/spaces/{workspace}/{project}?confirm=<project>`,
+    or several at once with `POST /v1/spaces/delete`), or clear only its
+    memories (`DELETE /v1/spaces/{workspace}/{project}/memories`). The typed
+    confirm must repeat the project id. A space with a running job or a privacy
+    deletion on legal hold is refused. Accepting an agent's `space_delete` or
+    `memories_clear` proposal with the same confirm now runs it. Grant
+    `delete:spaces` to owners who list actions.
 23. **Unnamed keys.** The secret check now also catches long random tokens
     no named rule knows (32 characters or more, mixed letters and digits),
     and lets a reference through (`token: ~/.config/x/token`, `$API_KEY`,

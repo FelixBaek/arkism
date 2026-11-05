@@ -14,7 +14,9 @@ import (
 // clearing the space's memories, creating a space or deleting this one. It names its target (checked to exist, at
 // the revision the agent saw) and the change's parameters. Deciding it changes
 // nothing: accept records that a person agrees, who then makes the change
-// through the ordinary route; dismiss records that they do not.
+// through the ordinary route; dismiss records that they do not. memories_clear
+// and space_delete are the exception: their accept carries the person's typed
+// confirm and runs the clear or delete itself (space_delete.go).
 const changeType = "change"
 
 const changeParamsMax = 16 << 10

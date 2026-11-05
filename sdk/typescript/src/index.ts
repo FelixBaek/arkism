@@ -1195,6 +1195,22 @@ export class ArkismClient {
   postV1SpacesByWorkspaceByProjectClone(workspace: string, project: string): Promise<unknown> {
     return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/clone`, undefined, undefined);
   }
+  /** POST /v1/spaces/delete — Delete several spaces of one workspace (human principals only, delete:spaces) */
+  postV1SpacesDelete(query: { "workspace_id": string; "project_id"?: string }): Promise<unknown> {
+    return this.request("POST", `/v1/spaces/delete`, query, undefined);
+  }
+  /** DELETE /v1/spaces/{workspace}/{project} — Delete a space and everything in it (human principals only, delete:spaces) */
+  deleteV1SpacesByWorkspaceByProject(workspace: string, project: string, query: { "confirm": string }): Promise<unknown> {
+    return this.request("DELETE", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}`, query, undefined);
+  }
+  /** DELETE /v1/spaces/{workspace}/{project}/memories — Clear a space's memories (human principals only, delete:memories) */
+  deleteV1SpacesByWorkspaceByProjectMemories(workspace: string, project: string, query: { "confirm": string; "kind"?: string }): Promise<unknown> {
+    return this.request("DELETE", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/memories`, query, undefined);
+  }
+  /** POST /v1/spaces/{workspace}/{project}/rename — Rename a space's project id (human principals only, write:space_configs on both names) */
+  postV1SpacesByWorkspaceByProjectRename(workspace: string, project: string): Promise<unknown> {
+    return this.request("POST", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/rename`, undefined, undefined);
+  }
   /** GET /v1/spaces/{workspace}/{project}/config — A space's settings (read:space_configs) */
   getV1SpacesByWorkspaceByProjectConfig(workspace: string, project: string): Promise<SpaceConfigResponse> {
     return this.request("GET", `/v1/spaces/${encodeURIComponent(workspace)}/${encodeURIComponent(project)}/config`, undefined, undefined);

@@ -506,6 +506,22 @@ class ArkismClient(BaseClient):
         """POST /v1/spaces/{workspace}/{project}/clone — Copy a space into another (export then import in one job)"""
         return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/clone", None, None)
 
+    def post_v1_spaces_delete(self, query=None):
+        """POST /v1/spaces/delete — Delete several spaces of one workspace (human principals only, delete:spaces)"""
+        return self.request("POST", f"/v1/spaces/delete", query, None)
+
+    def delete_v1_spaces_by_workspace_by_project(self, workspace, project, query=None):
+        """DELETE /v1/spaces/{workspace}/{project} — Delete a space and everything in it (human principals only, delete:spaces)"""
+        return self.request("DELETE", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}", query, None)
+
+    def delete_v1_spaces_by_workspace_by_project_memories(self, workspace, project, query=None):
+        """DELETE /v1/spaces/{workspace}/{project}/memories — Clear a space's memories (human principals only, delete:memories)"""
+        return self.request("DELETE", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/memories", query, None)
+
+    def post_v1_spaces_by_workspace_by_project_rename(self, workspace, project):
+        """POST /v1/spaces/{workspace}/{project}/rename — Rename a space's project id (human principals only, write:space_configs on both names)"""
+        return self.request("POST", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/rename", None, None)
+
     def get_v1_spaces_by_workspace_by_project_config(self, workspace, project):
         """GET /v1/spaces/{workspace}/{project}/config — A space's settings (read:space_configs)"""
         return self.request("GET", f"/v1/spaces/{urllib.parse.quote(workspace, safe='')}/{urllib.parse.quote(project, safe='')}/config", None, None)

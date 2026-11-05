@@ -33,6 +33,8 @@ type SpaceRenameReport struct {
 	Records     map[string]int64 `json:"records"`
 	Tables      map[string]int64 `json:"tables"`
 	IDsRemapped int              `json:"ids_remapped"`
+	// Skipped names the tables the connecting role may not update; their rows keep the old name.
+	Skipped []string `json:"skipped,omitempty"`
 }
 
 type spaceRenamer struct {

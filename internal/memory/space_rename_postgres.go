@@ -15,8 +15,12 @@ const spaceRenamePage = 500
 // remapped ids), the graph, traces and source events, code index, memberships,
 // permissions and decision counts. A preview runs the same transaction and
 // rolls it back, so its counts are exact. The target must be empty and no job
-// of the source may hold a lease. Run it with the server stopped: a running
-// server could write to the old name between the check and the commit.
+// of the source may hold a lease. memory_records is locked against writes until
+// the commit, so a running server (POST /v1/spaces/{workspace}/{project}/rename)
+// waits rather than writing to the old name halfway; a write already waiting
+// for the old name lands there after the commit. Tables the connecting role
+// may not update (grants, decision counts) stay with the old name and are
+// listed in Skipped.
 func (p *Postgres) RenameSpace(ctx context.Context, from, to Scope, execute bool) (SpaceRenameReport, error) {
 	from, to = spaceScope(from), spaceScope(to)
 	if !validScope(from) || !validScope(to) || from.WorkspaceID != to.WorkspaceID || from == to {
@@ -44,6 +48,10 @@ func (p *Postgres) RenameSpace(ctx context.Context, from, to Scope, execute bool
 }
 
 func (p *Postgres) renameSpaceRows(ctx context.Context, from, to Scope, report *SpaceRenameReport) error {
+	// A running server (the HTTP route) waits its writes until the move commits, so none lands under the old name halfway.
+	if _, err := p.q().Exec(ctx, `LOCK TABLE memory_records IN SHARE ROW EXCLUSIVE MODE`); err != nil {
+		return pgErr(err)
+	}
 	if err := p.checkSpaceRename(ctx, from, to); err != nil {
 		return err
 	}
@@ -163,6 +171,15 @@ func (p *Postgres) moveSpaceTables(ctx context.Context, from, to Scope, m *space
 		{[]string{"decision_daily_counts"}, `WITH d AS (UPDATE decision_daily_counts SET project_id=$3 WHERE workspace_id=$1 AND project_id=$2 RETURNING 1) SELECT count(*) FROM d`},
 	}
 	for _, st := range statements {
+		// The server's own role may not write grants or decision counts; those stay with the old name and are reported.
+		var writable bool
+		if err := p.q().QueryRow(ctx, `SELECT bool_and(has_table_privilege(t,'UPDATE')) FROM unnest($1::text[]) t`, st.names).Scan(&writable); err != nil {
+			return pgErr(err)
+		}
+		if !writable {
+			report.Skipped = append(report.Skipped, st.names...)
+			continue
+		}
 		counts := make([]int64, len(st.names))
 		dest := make([]any, len(counts))
 		for i := range counts {

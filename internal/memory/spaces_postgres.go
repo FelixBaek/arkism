@@ -1,6 +1,9 @@
 package memory
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // SpaceCounts counts project-level records per collection for up to limit
 // projects of one workspace after the given project id. RLS keeps it to the
@@ -10,7 +13,7 @@ func (p *Postgres) SpaceCounts(ctx context.Context, workspace, after string, col
 		return nil, ErrInvalid
 	}
 	rows, err := p.q().Query(ctx, `WITH p AS (SELECT DISTINCT project_id FROM memory_records WHERE workspace_id=$1 AND user_id='' AND agent_id='' AND project_id>$2 AND collection=ANY($3) ORDER BY project_id LIMIT $4)
-SELECT m.project_id, m.collection, count(*) FROM memory_records m JOIN p USING (project_id) WHERE m.workspace_id=$1 AND m.user_id='' AND m.agent_id='' AND m.collection=ANY($3) GROUP BY 1,2 ORDER BY 1,2`, workspace, after, collections, limit)
+SELECT m.project_id, m.collection, count(*), min((m.doc->'created_at'->>'$date')::timestamptz), max(m.updated_at) FROM memory_records m JOIN p USING (project_id) WHERE m.workspace_id=$1 AND m.user_id='' AND m.agent_id='' AND m.collection=ANY($3) GROUP BY 1,2 ORDER BY 1,2`, workspace, after, collections, limit)
 	if err != nil {
 		return nil, pgErr(err)
 	}
@@ -18,8 +21,15 @@ SELECT m.project_id, m.collection, count(*) FROM memory_records m JOIN p USING (
 	out := []SpaceCount{}
 	for rows.Next() {
 		var c SpaceCount
-		if err := rows.Scan(&c.ProjectID, &c.Collection, &c.Count); err != nil {
+		var first, last *time.Time
+		if err := rows.Scan(&c.ProjectID, &c.Collection, &c.Count, &first, &last); err != nil {
 			return nil, ErrUnavailable
+		}
+		if first != nil {
+			c.First = *first
+		}
+		if last != nil {
+			c.Last = *last
 		}
 		out = append(out, c)
 	}

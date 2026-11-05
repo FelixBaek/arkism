@@ -194,6 +194,9 @@ type SpaceView struct {
 	Revision    int64            `json:"revision"`
 	Config      SpaceConfig      `json:"config"`
 	Counts      map[string]int64 `json:"counts,omitempty"`
+	// Created is the oldest record's creation and LastActivity the newest change, over the counted collections.
+	Created      *time.Time `json:"created,omitempty"`
+	LastActivity *time.Time `json:"last_activity,omitempty"`
 }
 
 type SpacePage struct {
@@ -205,6 +208,8 @@ type SpaceCount struct {
 	ProjectID  string
 	Collection string
 	Count      int64
+	First      time.Time // oldest created_at of the rows
+	Last       time.Time // newest updated_at of the rows
 }
 
 // spaceStore is the cross-project read a space list and alias lookup need.
@@ -376,12 +381,13 @@ func (s *Service) ListSpaces(ctx context.Context, token string, scope Scope, aft
 	if err != nil {
 		return SpacePage{}, err
 	}
-	counts, order := map[string]map[string]int64{}, []string{}
+	counts, order, spans := map[string]map[string]int64{}, []string{}, map[string][2]time.Time{}
 	for _, row := range rows {
 		if counts[row.ProjectID] == nil {
 			counts[row.ProjectID] = map[string]int64{}
 			order = append(order, row.ProjectID)
 		}
+		spans[row.ProjectID] = widenSpan(spans[row.ProjectID], row.First, row.Last)
 		if row.Collection != colSpaceConfigs {
 			counts[row.ProjectID][row.Collection] = row.Count
 		}
@@ -400,9 +406,23 @@ func (s *Service) ListSpaces(ctx context.Context, token string, scope Scope, aft
 			return SpacePage{}, err
 		}
 		view.Counts = counts[project]
+		if span := spans[project]; !span[0].IsZero() {
+			view.Created, view.LastActivity = &span[0], &span[1]
+		}
 		page.Items = append(page.Items, view)
 	}
 	return page, nil
+}
+
+// widenSpan grows [first, last] to take in another row's times; zero times are left out.
+func widenSpan(span [2]time.Time, first, last time.Time) [2]time.Time {
+	if !first.IsZero() && (span[0].IsZero() || first.Before(span[0])) {
+		span[0] = first
+	}
+	if last.After(span[1]) {
+		span[1] = last
+	}
+	return span
 }
 
 func (s *Service) GetSpaceConfig(ctx context.Context, token string, scope Scope) (SpaceView, error) {

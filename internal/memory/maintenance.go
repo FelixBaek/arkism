@@ -80,6 +80,9 @@ type MaintenanceDecision struct {
 	// ReasonCode (required for a forget decision) and Reason are stored on each removed memory.
 	ReasonCode string `json:"reason_code,omitempty"`
 	Reason     string `json:"reason,omitempty"`
+	// Confirm repeats the project id when accepting a space_delete or memories_clear
+	// proposal; that accept then deletes, through the same path as the space routes.
+	Confirm string `json:"confirm,omitempty"`
 }
 
 type MaintenancePage struct {
@@ -313,15 +316,12 @@ func checkSignalEvidence(ctx context.Context, tx Tx, scope Scope, p *Maintenance
 func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in MaintenanceDecision) (Record, error) {
 	status, ok := maintenanceDecisions[in.Decision]
 	forgets := strings.HasPrefix(in.Decision, "forget")
-	if !ok || !validScope(in.Scope) || !validRunLabel(id, 256) || !validDecisionInput(in, forgets) {
+	if !ok || !validDecisionInput(in, forgets) {
 		return Record{}, ErrInvalid
 	}
-	d, err := s.authorize(ctx, token, "write:"+colMaintenance, in.Scope, id, "")
+	d, err := s.opsAuthorize(ctx, token, "write:"+colMaintenance, in.Scope, id, roleHuman) // also checks the scope and id
 	if err != nil {
 		return Record{}, err
-	}
-	if d.Role != roleHuman {
-		return Record{}, ErrDenied
 	}
 	seen, err := s.Repo.Get(ctx, colMaintenance, in.Scope, id)
 	if err != nil {
@@ -333,6 +333,9 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 	signal := agreementOnly(*seen.Maintenance)
 	if !decisionFits(*seen.Maintenance, in.Decision, signal) {
 		return Record{}, ErrInvalid
+	}
+	if in.Decision == "accept" && destructiveChange(*seen.Maintenance) {
+		return s.acceptDestructiveChange(ctx, token, in, seen, status, d.PrincipalID)
 	}
 	var mark *ConflictInput
 	var forget []Ref
@@ -362,7 +365,7 @@ func (s *Service) DecideMaintenance(ctx context.Context, token, id string, in Ma
 
 // validDecisionInput: a forget decision carries a known reason code, every other decision none.
 func validDecisionInput(in MaintenanceDecision, forgets bool) bool {
-	return in.ExpectedRevision >= 1 && validRemoval(in.ReasonCode, in.Reason) && forgets == (in.ReasonCode != "")
+	return in.ExpectedRevision >= 1 && validRemoval(in.ReasonCode, in.Reason) && forgets == (in.ReasonCode != "") && (in.Confirm == "" || in.Decision == "accept")
 }
 
 // forgettable is the memories a forget decision removes, once the same person may reject each of them.

@@ -21,6 +21,7 @@ var capabilityCatalog = []Capability{
 	{"supersede", "transition:memories"},
 	{"delete_memories", "delete:memories"},
 	{"delete_sources", "delete:sources"},
+	{"delete_spaces", "delete:spaces"},
 	{"search", "search:memories"},
 	{"context", "context:read"},
 }
@@ -33,6 +34,7 @@ var humanOnlyActions = map[string]bool{
 	"supersede":       true,
 	"delete_memories": true,
 	"delete_sources":  true,
+	"delete_spaces":   true,
 }
 
 type Capabilities struct {

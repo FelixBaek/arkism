@@ -24,6 +24,10 @@ var spaceRoutePolicies = map[string]routePolicy{
 	"GET /v1/spaces/exports/{job}":                            {action: "read:memories", scope: routeQuery},
 	"GET /v1/spaces/exports/{job}/download":                   {action: "read:memories", scope: routeQuery},
 	"GET /v1/spaces/imports/{job}":                            {action: "read:memories", scope: routeQuery},
+	"DELETE /v1/spaces/{workspace}/{project}":                 {action: "delete:spaces", scope: routePath, roles: []string{roleHuman}},
+	"DELETE /v1/spaces/{workspace}/{project}/memories":        {action: "delete:memories", scope: routePath, roles: []string{roleHuman}},
+	"POST /v1/spaces/delete":                                  {action: "delete:spaces", scope: routeQuery, roles: []string{roleHuman}},
+	"POST /v1/spaces/{workspace}/{project}/rename":            {action: "write:space_configs", scope: routePath, roles: []string{roleHuman}},
 }
 
 func init() {
@@ -51,6 +55,36 @@ func registerSpacesCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetric
 	mux.HandleFunc("GET /v1/spaces/exports/{job}", s.coreHTTPGetV1SpacesJob)
 	mux.HandleFunc("GET /v1/spaces/imports/{job}", s.coreHTTPGetV1SpacesJob)
 	mux.HandleFunc("GET /v1/spaces/exports/{job}/download", s.coreHTTPGetV1SpacesExportDownload)
+	mux.HandleFunc("DELETE /v1/spaces/{workspace}/{project}", func(w http.ResponseWriter, r *http.Request) {
+		out, err := s.DeleteSpace(r.Context(), bearer(r), pathSpace(r), r.URL.Query().Get("confirm"))
+		respond(w, out, err)
+	})
+	mux.HandleFunc("DELETE /v1/spaces/{workspace}/{project}/memories", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		out, err := s.ClearSpaceMemories(r.Context(), bearer(r), pathSpace(r), q.Get("confirm"), q.Get("kind"))
+		respond(w, out, err)
+	})
+	mux.HandleFunc("POST /v1/spaces/delete", s.coreHTTPPostV1SpacesDelete)
+	mux.HandleFunc("POST /v1/spaces/{workspace}/{project}/rename", s.coreHTTPPostV1SpacesRename)
+}
+
+func (s *Service) coreHTTPPostV1SpacesDelete(w http.ResponseWriter, r *http.Request) {
+	var in SpaceDeleteBatchInput
+	if !decode(w, r, &in) {
+		return
+	}
+	out, err := s.DeleteSpaces(r.Context(), bearer(r), scopeQuery(r).WorkspaceID, in)
+	respond(w, out, err)
+}
+
+func (s *Service) coreHTTPPostV1SpacesRename(w http.ResponseWriter, r *http.Request) {
+	var in SpaceRenameInput
+	if !decode(w, r, &in) {
+		return
+	}
+	extendSpaceTransfer(w) // a large space can take longer than one ordinary request
+	out, err := s.RenameSpace(r.Context(), bearer(r), pathSpace(r), in)
+	respond(w, out, err)
 }
 
 func (s *Service) coreHTTPGetV1Spaces(w http.ResponseWriter, r *http.Request) {

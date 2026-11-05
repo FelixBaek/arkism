@@ -14,7 +14,7 @@ import (
 func (f *fakeRepo) SpaceCounts(_ context.Context, workspace, after string, collections []string, limit int) ([]SpaceCount, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	counts := map[string]map[string]int64{}
+	counts, spans := map[string]map[string]int64{}, map[[2]string][2]time.Time{}
 	for _, col := range collections {
 		for _, r := range f.store[col] {
 			s := r.Scope
@@ -25,6 +25,7 @@ func (f *fakeRepo) SpaceCounts(_ context.Context, workspace, after string, colle
 				counts[s.ProjectID] = map[string]int64{}
 			}
 			counts[s.ProjectID][col]++
+			spans[[2]string{s.ProjectID, col}] = widenSpan(spans[[2]string{s.ProjectID, col}], r.CreatedAt, r.UpdatedAt)
 		}
 	}
 	projects := make([]string, 0, len(counts))
@@ -35,7 +36,8 @@ func (f *fakeRepo) SpaceCounts(_ context.Context, workspace, after string, colle
 	out := []SpaceCount{}
 	for _, p := range projects[:min(limit, len(projects))] {
 		for col, n := range counts[p] {
-			out = append(out, SpaceCount{ProjectID: p, Collection: col, Count: n})
+			span := spans[[2]string{p, col}]
+			out = append(out, SpaceCount{ProjectID: p, Collection: col, Count: n, First: span[0], Last: span[1]})
 		}
 	}
 	return out, nil
@@ -276,7 +278,7 @@ func TestSpaceAliasResolution(t *testing.T) {
 		t.Fatalf("alias route = %d %s", w.Code, w.Body.String())
 	}
 	page, err := f.svc.ListSpaces(testCtx, f.human, scopeA, "", 10)
-	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") {
+	if err != nil || len(page.Items) != 1 || !slices.Contains(page.Items[0].Config.Aliases, "front") || page.Items[0].Created == nil || page.Items[0].LastActivity == nil || page.Items[0].LastActivity.Before(*page.Items[0].Created) {
 		t.Fatalf("list = %+v %v", page, err)
 	}
 	if _, err = f.svc.SetSpaceAlias(testCtx, f.human, scopeA, "front", false); err != nil {
