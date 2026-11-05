@@ -8897,21 +8897,21 @@
     "/v1/spaces/{workspace}/{project}/config": {
       "get": {
         "summary": "A space's settings (read:space_configs)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "{workspace_id, project_id, revision, config}"}, "404": {"description": "not_found (unknown alias)"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "getV1SpacesByWorkspaceByProjectConfig"
       },
       "put": {
         "summary": "Replace a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Body is the config plus expected_revision (-1 any, 0 create). Aliases are kept; change them through /aliases. A secret in any text is refused. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}, "422": {"description": "secret_detected"}},
         "operationId": "putV1SpacesByWorkspaceByProjectConfig"
       },
       "patch": {
         "summary": "Change some of a space's settings (human principals only)",
-        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph} booleans and rerank boolean shape memory recall when the caller names no modes; rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
+        "description": "Config {display_name, aliases[], default_reach ''|personal|general|project, extraction_enabled (off: automatic hook captures and server-side extraction are refused with extraction_disabled), consolidation_schedule off|daily|weekly, notes} plus behaviour settings, each empty to inherit (template config, then server default; see /config/effective): extraction_mode concise|verbose|verbatim|custom and extraction_instructions (at most 2000 characters; custom needs instructions) shape server-side extraction and observation prompts and the capture hook's prompt; lanes {fts, vector, temporal, graph, semantic (server default off)} booleans and rerank boolean shape memory recall when the caller names no modes; recall_lane_weights {lane: 0.25-8} weighs recall lanes in fusion (server default ARKISM_RECALL_LANE_WEIGHTS, a request's lane_weights lays over it); rerank_model boolean (server default off) lets the server model reorder the recall head as if each search sent rerank \"model\"; defense_rules[] {name, pattern, action redact|block} (at most 32, RE2 patterns of at most 512 bytes that match neither the empty text nor [redacted]) run before the privacy and secret checks on capture (session and bundle imports included), file, knowledge and pasted-text extraction, knowledge documents, uploaded text files, supersede and review edits and memory, candidate and source creates (texts over 8 MiB are refused), add to the template's rules, and are shown to people only; mcp_tools[] lists the MCP router tools this space keeps (empty = all); recall_budget_tokens (1-64000) is context/build's default budget_tokens; reflect_max_tokens (64-4096) is reflect's default max_tokens; auto_derive {enabled, threshold 1-1000, interval a Go duration 1m-720h} decides when approvals start automatic derivation proposals (server default: MEMORY_AUTO_DERIVE, off); reflect_mission (at most 2000 characters) and reflect_disposition {skepticism, literalism, empathy 0-5; all 0 clears} guide POST /v1/reflect. rerank_enabled is the old advisory switch, ignored. {project} may be @alias. A space without stored settings returns the defaults with revision 0. Only the fields sent change. Booleans have no empty value: send null for lanes, one lane (lanes {fts: null}), rerank or rerank_model to inherit it again; lanes {} also hands every lane back. Entity settings: entity_resolution exact|propose|similar (server default propose) decides what extraction does with a name similar to an existing entity: exact ignores it, propose stores a merge proposal for a person, similar also links names that differ only in case, punctuation or word order; entity_labels[] {key, description, type value|multi-values|text|multi-text, tag, values[] {value, description}} (at most 16 groups of at most 64 values; value kinds need values, text kinds take none; empty to inherit) is the space's classification schema: labels are entities of type label named key:value, and groups with tag true copy stated labels into the candidate's tags; entities_allow_free_form (default true; with labels set, false keeps only labels) and entity_free_types (default false; true allows other well-formed entity types) are booleans, null inherits.",
         "parameters": [{"name": "workspace", "in": "path", "required": true, "schema": {"type": "string"}}, {"name": "project", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {"200": {"description": "The stored space"}, "400": {"description": "invalid_request"}, "403": {"description": "Not a human principal"}, "409": {"description": "revision_conflict"}, "401": {"description": "Missing bearer credentials.", "headers": {"WWW-Authenticate": {"schema": {"type": "string", "const": "Bearer realm=\"arkism\""}}, "X-Request-ID": {"$ref": "#/components/headers/RequestID"}}, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}},
         "operationId": "patchV1SpacesByWorkspaceByProjectConfig"
@@ -45169,6 +45169,17 @@
               "type": "string"
             }
           },
+          "tags_match": {
+            "type": "string",
+            "enum": ["any", "all", "any_strict", "all_strict", "exact"],
+            "description": "How tags match, as on POST /v1/search filters.tags_match. Requires tags."
+          },
+          "tag_groups": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/components/schemas/TagTest"}},
+            "description": "Boolean tag filter on every search the answer runs, as on POST /v1/search filters.tag_groups."
+          },
           "max_tokens": {
             "type": "integer",
             "minimum": 64,
@@ -47905,8 +47916,15 @@
             "type": "array",
             "readOnly": true,
             "maxItems": 10,
-            "items": {"type": "object", "additionalProperties": false, "required": ["id", "name", "type"], "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "type": {"type": "string"}}},
-            "description": "Present only with include containing entities, on memory hits: named entities the memory mentions, as the entity reads show them (agents see confirmed entities only). At most 10."
+            "items": {"type": "object", "additionalProperties": false, "required": ["id", "name", "type"], "properties": {"id": {"type": "string"}, "name": {"type": "string"}, "type": {"type": "string"}, "summary": {"type": "string", "description": "person-approved entity summary; only with include_options.entities.max_tokens."}, "observations": {"type": "array", "maxItems": 5, "items": {"$ref": "#/components/schemas/IncludedFact"}, "description": "approved, recallable observations that mention the entity (needs read:observations); only with include_options.entities.max_tokens."}}},
+            "description": "Present only with include containing entities, on memory hits: named entities the memory mentions, as the entity reads show them (agents see confirmed entities only). At most 10. With include_options.entities.max_tokens each also carries its approved summary and up to 5 observations, all within that token budget for the hit, cleared for outside transfer."
+          },
+          "source_facts": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 8,
+            "items": {"$ref": "#/components/schemas/IncludedFact"},
+            "description": "Present only with include containing source_facts, on observation hits: the source memories the observation was written from that this caller may read, passing the same filters as the search, within include_options.source_facts (default 4096 tokens; max_tokens_per_observation cuts each)."
           },
           "reach": {
             "type": "string",
@@ -47942,10 +47960,11 @@
                 "relation",
                 "temporal",
                 "graph",
-                "causal"
+                "causal",
+                "semantic"
               ]
             },
-            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph, causal. temporal: the query named a time and the memory happened then; graph: relations or shared-entity steps from a top hit, up to graph_depth. causal: active causal links from a top hit (expand_causal), up to graph_depth. Each further step halves the lane weight."
+            "description": "lanes that found this hit, in fixed order exact, keyword, vector, relation, temporal, graph, causal, semantic. temporal: the query named a time (or temporal_window was sent) and the memory happened then; graph: relations or shared-entity steps from a top hit, up to graph_depth. causal: active causal links from a top hit (expand_causal), up to graph_depth. semantic: memories whose stored embedding is a near neighbour (cosine at least 0.80) of a top hit, when the space turns lanes.semantic on (server default off). Each further step halves the lane weight."
           },
           "path_check": {
             "type": "string",
@@ -48634,6 +48653,27 @@
           "expected_revision"
         ]
       },
+      "IncludedFact": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {"id": {"type": "string"}, "text": {"type": "string"}},
+        "x-go-source": "internal/memory/recall_include.go"
+      },
+      "TagTest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One tag test: a leaf (tags, matched as match says) or a nested group (every test of and, or any test of or); exactly one of tags, and, or. not negates the test.",
+        "x-go-source": "internal/memory/search_filters.go",
+        "properties": {
+          "tags": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
+          "match": {"type": "string", "enum": ["any", "all", "any_strict", "all_strict", "exact"], "description": "As tags_match; default any_strict. Leaves only."},
+          "resolve": {"type": "string", "enum": ["fuzzy"], "description": "fuzzy: each tag also matches the space's tags spelled alike (trigram similarity at least 0.45, same namespace, up to 8 each). Leaves only."},
+          "not": {"type": "boolean", "description": "true passes the memories the test rejects."},
+          "and": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/components/schemas/TagTest"}},
+          "or": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/components/schemas/TagTest"}}
+        }
+      },
       "SearchFilters": {
         "type": [
           "object",
@@ -48664,21 +48704,12 @@
           "tag_groups": {
             "type": "array",
             "maxItems": 8,
-            "description": "Boolean tag filter on top of tags: every group must hold, and a group holds when any of its tests does. Example: (a AND b) OR c is [[{\"tags\":[\"a\",\"b\"],\"match\":\"all_strict\"},{\"tags\":[\"c\"]}]]; NOT c is [[{\"tags\":[\"c\"],\"not\":true}]].",
+            "description": "Boolean tag filter on top of tags: every group must hold, and a group holds when any of its tests does. A test is a tag leaf or a nested and/or group (TagTest), at most 5 levels deep and 64 tests in all. Example: (a AND b) OR c is [[{\"tags\":[\"a\",\"b\"],\"match\":\"all_strict\"},{\"tags\":[\"c\"]}]]; NOT (a AND (b OR c)) is [[{\"not\":true,\"and\":[{\"tags\":[\"a\"]},{\"or\":[{\"tags\":[\"b\"]},{\"tags\":[\"c\"]}]}]}]].",
             "items": {
               "type": "array",
               "minItems": 1,
               "maxItems": 8,
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["tags"],
-                "properties": {
-                  "tags": {"type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 128}},
-                  "match": {"type": "string", "enum": ["any", "all", "any_strict", "all_strict", "exact"], "description": "As tags_match; default any_strict."},
-                  "not": {"type": "boolean", "description": "true passes the memories the test rejects."}
-                }
-              }
+              "items": {"$ref": "#/components/schemas/TagTest"}
             }
           },
           "created_from": {
@@ -49038,6 +49069,8 @@
               "reranked": {"type": "boolean"},
               "model_rerank": {"type": "string", "enum": ["applied", "failed", "denied", "nothing_to_send", "budget_exceeded", "model_not_configured"], "description": "Outcome of the model rerank; omitted when it did not run. Anything but applied kept the order."},
               "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
+              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options); omitted when none."},
+              "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }
@@ -49297,10 +49330,42 @@
           },
           "include": {
             "type": "array",
-            "maxItems": 2,
+            "maxItems": 3,
             "uniqueItems": true,
-            "items": {"type": "string", "enum": ["sources", "entities"]},
-            "description": "Attach to each memory hit its checked source traces with short excerpts (sources) and the named entities it mentions (entities). See Hit.source_traces and Hit.entities. These extras are not counted against max_chars or budget_tokens; they are bounded instead: at most 3 sources (excerpts cut to 300 characters) and 10 entities per hit."
+            "items": {"type": "string", "enum": ["sources", "entities", "source_facts"]},
+            "description": "Attach to each memory hit its checked source traces with short excerpts (sources), the named entities it mentions (entities) and, on observation hits, the source memories it was written from (source_facts). See Hit.source_traces, Hit.entities and Hit.source_facts. These extras are not counted against max_chars or budget_tokens; they are bounded instead: at most 3 sources (excerpts cut to 300 characters) and 10 entities per hit, or the include_options token budgets."
+          },
+          "include_options": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"sources": {"type": "object", "additionalProperties": false, "properties": {"max_tokens": {"type": "integer", "minimum": 1, "maximum": 16384}, "max_tokens_per_observation": {"type": "integer", "minimum": 1, "maximum": 16384, "description": "source_facts only; at most max_tokens."}}}, "entities": {"type": "object", "additionalProperties": false, "properties": {"max_tokens": {"type": "integer", "minimum": 1, "maximum": 16384}, "max_tokens_per_observation": {"type": "integer", "minimum": 1, "maximum": 16384, "description": "source_facts only; at most max_tokens."}}}, "source_facts": {"type": "object", "additionalProperties": false, "properties": {"max_tokens": {"type": "integer", "minimum": 1, "maximum": 16384}, "max_tokens_per_observation": {"type": "integer", "minimum": 1, "maximum": 16384, "description": "source_facts only; at most max_tokens."}}}},
+            "description": "Token budgets (cl100k) per include part, each needing that part in include. sources: excerpts up to 4000 characters fill the budget, ones that do not fit are left out. entities: adds approved summaries and observations. source_facts: default 4096."
+          },
+          "lane_weights": {
+            "type": "object",
+            "maxProperties": 8,
+            "propertyNames": {"enum": ["exact", "keyword", "vector", "relation", "temporal", "graph", "causal", "semantic"]},
+            "additionalProperties": {"type": "number", "minimum": 0.25, "maximum": 8},
+            "description": "Fusion weight per lane, laid over the space's recall_lane_weights (then ARKISM_RECALL_LANE_WEIGHTS); a hit at rank r in a lane of weight w counts as rank r/w. Default 1."
+          },
+          "temporal_window": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["from", "to"],
+            "properties": {"from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}},
+            "description": "[from, to) for the temporal lane instead of time words read from the query: memories that happened inside rank higher; it never filters. from before to, years 1970-9999."
+          },
+          "min_scores": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"semantic": {"type": "number", "minimum": 0, "maximum": 1}, "keyword": {"type": "number", "minimum": 0, "maximum": 1}, "reranker": {"type": "number", "minimum": 0, "maximum": 1}, "final": {"type": "number", "minimum": 0, "maximum": 1}},
+            "description": "Per-stage floors, 0 off. semantic: vector-lane hits need 1 - cosine distance at least this; keyword: keyword-lane hits need this share of the query's terms (both inside their lane, before fusion); reranker: after a rerank, hits it scored lower or did not score are dropped; final: as min_score, the higher applies. explain.dropped counts each."
+          },
+          "rerank_options": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {"prune": {"type": "boolean"}, "dedup": {"type": "boolean"}},
+            "description": "With rerank \"model\" only, in the same model call: prune drops snippets the model marks off-topic, dedup drops snippets it marks as repeating a higher one. The model's first pick is never dropped."
           }
         },
         "required": [
@@ -49911,6 +49976,8 @@
               "reranked": {"type": "boolean"},
               "model_rerank": {"type": "string", "enum": ["applied", "failed", "denied", "nothing_to_send", "budget_exceeded", "model_not_configured"], "description": "Outcome of the model rerank; omitted when it did not run. Anything but applied kept the order."},
               "min_score_dropped": {"type": "integer", "minimum": 1, "description": "hits min_score removed; omitted when none."},
+              "dropped": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "hits each other stage removed (semantic, keyword, reranker floors of min_scores; model_prune, model_dedup of rerank_options); omitted when none."},
+              "lane_weights": {"type": "object", "additionalProperties": {"type": "number"}, "description": "lane weights other than 1 that fusion used (request over space over server)."},
               "lane_ms": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Wall time per lane in whole milliseconds (summed over collections), plus rerank when it ran. Coarse, for debugging only."},
               "time_window": {"type": "object", "properties": {"phrase": {"type": "string"}, "from": {"type": "string", "format": "date-time"}, "to": {"type": "string", "format": "date-time"}}}
             }

@@ -821,6 +821,9 @@ func recallSearchOptions(opts map[string]any) (map[string]any, error) {
 	if err := recallFilterOptions(opts, out); err != nil {
 		return nil, err
 	}
+	if err := objectArgs(opts, out, "lane_weights", "temporal_window", "min_scores", "rerank_options", "include_options"); err != nil {
+		return nil, err
+	}
 	if v, ok := opts["timezone"]; ok && v != nil {
 		tz, isStr := v.(string)
 		if !isStr || len(tz) > 64 || strings.Trim(tz, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/_+-") != "" {
@@ -859,7 +862,7 @@ func recallAnchorOptions(opts, out map[string]any) error {
 	if v, ok := opts["include"]; ok && v != nil {
 		list, isList := v.([]any)
 		if !isList || !validRecallInclude(list) {
-			return errors.New(`include must list "sources" and/or "entities"`)
+			return errors.New(`include must list "sources", "entities" and/or "source_facts"`)
 		}
 		out["include"] = list
 	}
@@ -891,6 +894,9 @@ func recallFilterOptions(opts, out map[string]any) error {
 		}
 		filters["tags_match"] = v
 	}
+	if err := tagGroupsArg(opts, filters); err != nil {
+		return err
+	}
 	if len(filters) > 0 {
 		out["filters"] = filters
 	}
@@ -899,11 +905,40 @@ func recallFilterOptions(opts, out map[string]any) error {
 
 func validRecallInclude(list []any) bool {
 	for i, item := range list {
-		if (item != "sources" && item != "entities") || slices.Contains(list[:i], item) {
+		if (item != "sources" && item != "entities" && item != "source_facts") || slices.Contains(list[:i], item) {
 			return false
 		}
 	}
-	return len(list) <= 2
+	return len(list) <= 3
+}
+
+// objectArgs copies the named object options as given; the server checks their fields
+// (lanes, ranges, budgets) in full, so a malformed value fails there before any search.
+func objectArgs(args, out map[string]any, keys ...string) error {
+	for _, key := range keys {
+		if v, ok := args[key]; ok && v != nil {
+			if _, isObj := v.(map[string]any); !isObj {
+				return errors.New(key + " must be an object")
+			}
+			out[key] = v
+		}
+	}
+	return nil
+}
+
+// tagGroupsArg copies tag_groups (a list of groups, each a list of tag tests) into out;
+// the server checks the tests, their nesting depth and size.
+func tagGroupsArg(args, out map[string]any) error {
+	v, ok := args["tag_groups"]
+	if !ok || v == nil {
+		return nil
+	}
+	groups, isList := v.([]any)
+	if !isList || len(groups) == 0 || len(groups) > 8 || slices.ContainsFunc(groups, func(g any) bool { l, isList := g.([]any); return !isList || len(l) == 0 }) {
+		return errors.New("tag_groups must list 1 to 8 groups, each a list of tag tests")
+	}
+	out["tag_groups"] = groups
+	return nil
 }
 
 // recallSearch runs the memory search for a query or a related_to anchor. A query search

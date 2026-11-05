@@ -11,8 +11,8 @@ func TestReflectAsksTheServerAndLabelsTheAnswer(t *testing.T) {
 	swapRouter(t)
 	reply := `{"answer":"staging 먼저","cited_memory_ids":["m1"],"directives_applied":["d1"],"retrieved":[{"id":"m1","kind":"decision","score":0.5}],"usage":{"input_tokens":9}}`
 	calls := fakeRequest(t, reply)
-	out := structured(t, call(t, "reflect", `{"query":"배포 순서는?","limit":5,"tags":["deploy"],"max_tokens":256}`))
-	want := map[string]any{"scope": host.Scope(), "query": "배포 순서는?", "limit": 5, "tags": []any{"deploy"}, "max_tokens": 256}
+	out := structured(t, call(t, "reflect", `{"query":"배포 순서는?","limit":5,"tags":["deploy"],"tags_match":"all","tag_groups":[[{"tags":["x"],"not":true}]],"max_tokens":256}`))
+	want := map[string]any{"scope": host.Scope(), "query": "배포 순서는?", "limit": 5, "tags": []any{"deploy"}, "tags_match": "all", "tag_groups": []any{[]any{map[string]any{"tags": []any{"x"}, "not": true}}}, "max_tokens": 256}
 	if len(*calls) != 1 || (*calls)[0].path != "/v1/reflect" || canon(t, (*calls)[0].payload) != canon(t, want) {
 		t.Fatal(*calls)
 	}
@@ -22,7 +22,7 @@ func TestReflectAsksTheServerAndLabelsTheAnswer(t *testing.T) {
 	}
 	*calls = nil
 	for _, bad := range []string{`{}`, `{"query":"  "}`, `{"query":"q","limit":21}`, `{"query":"q","max_tokens":10}`, `{"query":"q","limit":true}`,
-		`{"query":"q","tags":"x"}`, `{"query":"q","tags":[3]}`, `{"query":"q","tags":[""]}`, `{"query":"` + strings.Repeat("가", 2001) + `"}`} {
+		`{"query":"q","tags":"x"}`, `{"query":"q","tags":[3]}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tag_groups":[[]]}`, `{"query":"q","tags":[""]}`, `{"query":"` + strings.Repeat("가", 2001) + `"}`} {
 		if _, err := callTool("reflect", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}
@@ -173,7 +173,16 @@ func TestRecallPassesQueryTimeRerankDepthAndInclude(t *testing.T) {
 		t.Fatal(payload)
 	}
 	*calls = nil
-	for _, bad := range []string{`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","rerank":"Model"}`, `{"query":"q","rerank":1}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`, `{"query":"q","min_score":2}`, `{"query":"q","min_score":"0.1"}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tags":[]}`, `{"query":"q","tags":[1]}`, `{"query":"q","prefer_observations":"yes"}`} {
+	tuning := `"lane_weights":{"graph":2},"temporal_window":{"from":"2026-10-01T00:00:00Z","to":"2026-11-01T00:00:00Z"},"min_scores":{"semantic":0.3},"rerank_options":{"prune":true},"include_options":{"source_facts":{"max_tokens":500}}`
+	structured(t, call(t, "recall", `{"query":"q","include":["source_facts"],"tags":["a"],"tag_groups":[[{"not":true,"or":[{"tags":["b"]},{"tags":["c"],"resolve":"fuzzy"}]}]],`+tuning+`}`))
+	payload = asMap((*calls)[0].payload)
+	if canon(t, payload["filters"]) != `{"tag_groups":[[{"not":true,"or":[{"tags":["b"]},{"resolve":"fuzzy","tags":["c"]}]}]],"tags":["a"]}` ||
+		canon(t, payload["lane_weights"]) != `{"graph":2}` || canon(t, payload["rerank_options"]) != `{"prune":true}` || payload["temporal_window"] == nil || payload["min_scores"] == nil || payload["include_options"] == nil {
+		t.Fatal(payload)
+	}
+	*calls = nil
+	for _, bad := range []string{`{"query":"q","tag_groups":[]}`, `{"query":"q","tag_groups":[[]]}`, `{"query":"q","tag_groups":["a"]}`, `{"query":"q","lane_weights":[1]}`, `{"query":"q","min_scores":0.5}`, `{"query":"q","include":["sources","entities","source_facts","sources"]}`,
+		`{"query":"q","query_time":"yesterday"}`, `{"query":"q","rerank":"no"}`, `{"query":"q","rerank":"Model"}`, `{"query":"q","rerank":1}`, `{"query":"q","graph_depth":4}`, `{"query":"q","graph_depth":1.5}`, `{"query":"q","include":["chunks"]}`, `{"query":"q","include":["sources","sources"]}`, `{"query":"q","min_score":2}`, `{"query":"q","min_score":"0.1"}`, `{"query":"q","tags_match":"all"}`, `{"query":"q","tags":["a"],"tags_match":"most"}`, `{"query":"q","tags":[]}`, `{"query":"q","tags":[1]}`, `{"query":"q","prefer_observations":"yes"}`} {
 		if _, err := callTool("recall", j(t, bad)); err == nil {
 			t.Fatal(bad)
 		}

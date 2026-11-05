@@ -242,6 +242,7 @@ wiki. What a person approves and how is described in
    | `ARKISM_LLM_TRACE_OPERATIONS`, `ARKISM_LLM_TRACE_EXCLUDE_OPERATIONS` | Which model call operations get a trace row (see [Model call traces](#model-call-traces)). Empty records all |
    | `ARKISM_LLM_TRACE_RETENTION_DAYS` | Days model call traces are kept by `memoryd --audit-expiry execute` (default `30`) |
    | `ARKISM_RECALL_GRAPH` | `1` adds the relations-graph recall lane. Off by default |
+   | `ARKISM_RECALL_LANE_WEIGHTS` | Server default fusion weight per recall lane, e.g. `graph=2,temporal=4` (lanes `exact keyword vector relation temporal graph causal semantic`, weights 0.25-8; entries it cannot read are skipped). A space's `recall_lane_weights` and a request's `lane_weights` lay over it. Unset keeps every lane at 1, so recall order does not change |
    | `ARKISM_SPACE_DEFAULT_TEMPLATE` | Path to a space template bundle (`POST /v1/spaces/{workspace}/{project}/export` with `template: true`). Every space inherits the settings it leaves empty from the template's config, the template's defense rules apply to every space, and `POST .../import` with `default_template: true` copies its directives and mental model definitions into a space without settings. An unreadable file stops startup |
    | `ARKISM_SPACE_TEMPLATE_AUTO` | `1` applies the default template's directives and mental model definitions to a space by itself: when a person saves the space's first settings (their settings win), or on a person's first stored memory in a space without settings (the template's settings are stored too). The definitions arrive switched off (directives inactive, mental models on manual refresh) until a person turns them on in that space. Each space gets it once per server run; agent writes never apply it, since the definitions are human-only. Off by default. `GET /v1/spaces/template-schema?workspace_id=…&project_id=…` (`read:space_configs`) returns the JSON schema of a template bundle line |
    | `MEMORY_AUTO_DERIVE` | `on` lets the worker run observation, causal link and model name proposals by itself after approvals. Off by default, so an upgrade does not start spending the daily model calls. Needs the server model; results stay proposals for a person. This is the server default: a space's `auto_derive` setting (`PUT/PATCH /v1/spaces/{workspace}/{project}/config`, or the default template) overrides each field |
@@ -310,7 +311,29 @@ wiki. What a person approves and how is described in
    ISO weeks (`2026-W44`) and a year alone (`2025년`). Numeric dates with dots
    or dashes are read day first: `03-04-2026` is 3 April, never March 4.
    Dates with slashes are not read, since both orders are common there.
-11. **Agent proposal tools.** Agents can now propose directives, mental
+11. **Recall tuning (all optional; defaults keep the old order).**
+    - `lane_weights` on a search, the space setting `recall_lane_weights` and
+      `ARKISM_RECALL_LANE_WEIGHTS` weigh lanes in fusion; `explain.lane_weights`
+      shows the weights used.
+    - `temporal_window {from, to}` ranks memories in that span higher instead of
+      time words from the query. It never filters.
+    - `min_scores {semantic, keyword, reranker, final}` set per-stage floors;
+      `rerank_options {prune, dedup}` let the model rerank drop off-topic or
+      repeated snippets in the same model call (no extra call).
+      `explain.dropped` counts what each stage removed.
+    - The space lane `lanes.semantic` (off by default) adds memories whose
+      stored embedding is a near neighbour of a top hit.
+    - Tag filters: `tag_groups` tests now nest `and`/`or`/`not` (5 levels, 64
+      tests in all), a leaf with `resolve: "fuzzy"` also matches the space's
+      tags spelled alike, and reflect accepts `tags_match` and `tag_groups`.
+    - `include` gains `source_facts` (an observation's source memories, default
+      4096 tokens), and `include_options` sets token budgets: `sources` allows
+      longer excerpts, `entities` adds approved summaries and observations
+      (needs `read:observations`).
+    - Time words for about 380 more CLDR locales (month names with a day or
+      year, yesterday/last week words, "N days ago", last/this weekday) are read
+      after the hand-tuned languages, which still decide first.
+12. **Agent proposal tools.** Agents can now propose directives, mental
     models and invalidations, list and cancel their own jobs, and read
     documents. What an agent creates stays `proposed` until a person saves or
     decides it; open proposals are capped at 20 per scope and kind. Agent file

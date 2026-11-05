@@ -3,6 +3,7 @@ package skills
 import (
 	"errors"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -167,8 +168,14 @@ func reflectGuidanceArgs(args map[string]any, payload map[string]any) error {
 }
 
 func reflectTagsArg(args map[string]any, payload map[string]any) error {
+	if err := tagGroupsArg(args, payload); err != nil {
+		return err
+	}
 	tags, has := args["tags"]
 	if !has || tags == nil {
+		if args["tags_match"] != nil {
+			return errors.New("tags_match needs tags")
+		}
 		return nil
 	}
 	list, ok := tags.([]any)
@@ -181,5 +188,11 @@ func reflectTagsArg(args map[string]any, payload map[string]any) error {
 		}
 	}
 	payload["tags"] = list
+	if v, has := args["tags_match"]; has && v != nil {
+		if !slices.Contains([]any{"any", "all", "any_strict", "all_strict", "exact"}, v) {
+			return errors.New("tags_match must be any, all, any_strict, all_strict or exact")
+		}
+		payload["tags_match"] = v
+	}
 	return nil
 }
