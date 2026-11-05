@@ -2410,7 +2410,7 @@
   },
   {
     "name": "propose_change",
-    "description": "Ask a person for a change you may not make yourself. Opens a question in the memory maintenance queue; nothing changes until a person agrees and makes the change. Actions: knowledge_folder_create (params.path), knowledge_page_create (params.title, text, folder), knowledge_page_edit (target_id, revision; params.title, text or folder), knowledge_node_delete (target_id, revision), document_delete (target_id from browse_memory documents), mental_model_refresh, mental_model_clear, mental_model_delete (target_id), directive_delete (target_id, revision), space_config_change (params: the settings to change, as read_space_config shows them) and memories_clear. The same request twice comes back as duplicate.",
+    "description": "Ask a person for a change you may not make yourself. Opens a question in the memory maintenance queue; nothing changes until a person agrees and makes the change. Actions: knowledge_folder_create (params.path), knowledge_page_create (params.title, text, folder), knowledge_page_edit (target_id, revision; params.title, text or folder), knowledge_node_delete (target_id, revision), document_delete (target_id from browse_memory documents), mental_model_refresh, mental_model_clear, mental_model_delete (target_id), directive_delete (target_id, revision), space_config_change (params: the settings to change, as read_space_config shows them), memories_clear, space_create (params.project_id, optional workspace_id and config: a new space) and space_delete (this whole space). The same request twice comes back as duplicate.",
     "inputSchema": {
       "type": "object",
       "additionalProperties": false,
@@ -2428,7 +2428,9 @@
             "mental_model_delete",
             "directive_delete",
             "space_config_change",
-            "memories_clear"
+            "memories_clear",
+            "space_create",
+            "space_delete"
           ]
         },
         "target_id": {

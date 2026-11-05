@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"strings"
@@ -10,7 +11,7 @@ import (
 // A change proposal is an agent asking a person for a change it may not make
 // itself: a knowledge folder or page, deleting a page, document or directive,
 // refreshing, clearing or deleting a mental model, changing the space settings,
-// or clearing the space's memories. It names its target (checked to exist, at
+// clearing the space's memories, creating a space or deleting this one. It names its target (checked to exist, at
 // the revision the agent saw) and the change's parameters. Deciding it changes
 // nothing: accept records that a person agrees, who then makes the change
 // through the ordinary route; dismiss records that they do not.
@@ -45,6 +46,9 @@ var changeActions = map[string]changeSpec{
 	"directive_delete":        {collection: colDirectives, read: "read:" + colDirectives, revision: true},
 	"space_config_change":     {params: validSpaceConfigParams},
 	"memories_clear":          {},
+	// A new space (its first settings make it) or this whole space removed; a person does either through the space routes.
+	"space_create": {params: validSpaceCreateParams},
+	"space_delete": {},
 }
 
 func isChangeProposal(p MaintenanceProposal) bool { return p.Change != nil }
@@ -101,6 +105,20 @@ func validSpaceConfigParams(raw json.RawMessage) bool {
 	var in SpaceConfigInput
 	c := defaultSpaceConfig()
 	return decodeStrict(raw, &in) == nil && in.ExpectedRevision == 0 && applySpaceConfig(&c, in, false) == nil
+}
+
+// validSpaceCreateParams: {project_id, workspace_id?, config?}, a valid space and settings that apply cleanly.
+func validSpaceCreateParams(raw json.RawMessage) bool {
+	var v struct {
+		WorkspaceID string            `json:"workspace_id"`
+		ProjectID   string            `json:"project_id"`
+		Config      *SpaceConfigInput `json:"config"`
+	}
+	if decodeStrict(raw, &v) != nil || v.ProjectID == "" || !validScope(Scope{WorkspaceID: cmp.Or(v.WorkspaceID, "workspace"), ProjectID: v.ProjectID}) {
+		return false
+	}
+	c := defaultSpaceConfig()
+	return v.Config == nil || v.Config.ExpectedRevision == 0 && applySpaceConfig(&c, *v.Config, false) == nil
 }
 
 // checkChangeText refuses secrets and private spans in what the proposal stores.

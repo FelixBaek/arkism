@@ -54,6 +54,9 @@ func TestChangeProposalChecksShapeTargetAndText(t *testing.T) {
 		{"page without title", ChangeRequest{Action: "knowledge_page_create", Params: json.RawMessage(`{"text":"x"}`)}, ErrInvalid},
 		{"unknown param", ChangeRequest{Action: "knowledge_folder_create", Params: json.RawMessage(`{"path":"a","x":1}`)}, ErrInvalid},
 		{"bad config", ChangeRequest{Action: "space_config_change", Params: json.RawMessage(`{"nope":true}`)}, ErrInvalid},
+		{"space without project", ChangeRequest{Action: "space_create", Params: json.RawMessage(`{"workspace_id":"ws-a"}`)}, ErrInvalid},
+		{"space with bad settings", ChangeRequest{Action: "space_create", Params: json.RawMessage(`{"project_id":"p2","config":{"nope":true}}`)}, ErrInvalid},
+		{"space delete with target", ChangeRequest{Action: "space_delete", Target: "proj-a"}, ErrInvalid},
 		{"stale revision", ChangeRequest{Action: "directive_delete", Target: dir.ID, Revision: dir.Revision + 1}, ErrConflict},
 		{"missing target", ChangeRequest{Action: "mental_model_refresh", Target: "nope"}, ErrNotFound},
 		{"not a document", ChangeRequest{Action: "document_delete", Target: "j1"}, ErrNotFound},
@@ -70,6 +73,8 @@ func TestChangeProposalChecksShapeTargetAndText(t *testing.T) {
 		{Action: "knowledge_page_create", Params: json.RawMessage(`{"title":"제목","text":"본문"}`)},
 		{Action: "space_config_change", Params: json.RawMessage(`{"mcp_tools":["recall"]}`)},
 		{Action: "memories_clear"},
+		{Action: "space_create", Params: json.RawMessage(`{"project_id":"proj-new","config":{"mcp_tools":["recall"]}}`)},
+		{Action: "space_delete"},
 	} {
 		if _, err := f.svc.ProposeMaintenance(testCtx, f.agent, changeInput(ok)); err != nil {
 			t.Errorf("%s: %v", ok.Action, err)
