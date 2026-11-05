@@ -24,7 +24,7 @@ func TestRecallByIDWithholdsUnavailableMemory(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			swapRouter(t)
 			fakeRequest(t, `{"id":"old","text":"retired synthetic instruction",`+tc.fields+`}`)
-			out, err := recall("", []any{"old"}, nil)
+			out, err := recall("", []any{"old"}, nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -38,7 +38,7 @@ func TestRecallByIDWithholdsUnavailableMemory(t *testing.T) {
 func TestRecallByIDAllowsApprovedCurrentMemory(t *testing.T) {
 	swapRouter(t)
 	fakeRequest(t, `{"id":"current","text":"current synthetic rule","status":"active","approved_by":"human","expires_at":"`+time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano)+`"}`)
-	out, err := recall("", []any{"current"}, nil)
+	out, err := recall("", []any{"current"}, nil, nil)
 	if err != nil || len(asList(field(out, "memories"))) != 1 {
 		t.Fatalf("current approved memory lost: %v %v", out, err)
 	}

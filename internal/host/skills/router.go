@@ -718,7 +718,8 @@ func sessionProjectKey() string {
 }
 
 // recall reads current memories by id (from the SessionStart index) or query.
-func recall(query, idsArg, relatedTo any) (host.Obj, error) {
+// opts carries the search-only options explain (bool) and timezone (IANA name).
+func recall(query, idsArg, relatedTo any, opts map[string]any) (host.Obj, error) {
 	all, err := pyIter(idsArg)
 	if err != nil {
 		return nil, err
@@ -738,14 +739,18 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 	} else if len(ids) == 0 && !(isStr && pyStrip(q) != "") {
 		return nil, errors.New("ids, query or related_to is required")
 	}
+	search, err := recallSearchOptions(opts)
+	if err != nil {
+		return nil, err
+	}
 	var found []any
-	var degraded []any
+	var res map[string]any
 	project := sessionProjectKey()
 	if len(ids) > 0 {
 		if found, err = recallByIDs(ids, project); err != nil {
 			return nil, err
 		}
-	} else if found, degraded, err = recallSearch(q, isStr, relatedTo, project); err != nil {
+	} else if found, res, err = recallSearch(q, isStr, relatedTo, project, search); err != nil {
 		return nil, err
 	}
 	memories, err := recallShape(found)
@@ -753,9 +758,7 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 		return nil, err
 	}
 	out := host.Obj{{Key: "memories", Value: memories}, {Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: recallNote}}
-	if len(degraded) > 0 {
-		out = append(out, host.KV{Key: "degraded", Value: degraded})
-	}
+	out = append(out, searchExtras(res)...)
 	if len(memories) == 0 && len(ids) == 0 && relatedTo == nil {
 		out = append(out, host.KV{Key: "result", Value: host.NoRelatedMemory})
 	}
@@ -764,6 +767,18 @@ func recall(query, idsArg, relatedTo any) (host.Obj, error) {
 			host.KV{Key: "relation_note", Value: "저장된 직접 관계의 활성 기억만 최대6개 반환합니다. 전체 관계 목록이 아니며 없는 관계를 추정하지 않습니다."})
 	}
 	return out, nil
+}
+
+// searchExtras is the search's degraded lanes and explain trace, when it returned them.
+func searchExtras(res map[string]any) host.Obj {
+	var out host.Obj
+	if degraded := asList(res["degraded"]); len(degraded) > 0 {
+		out = append(out, host.KV{Key: "degraded", Value: degraded})
+	}
+	if explain := res["explain"]; explain != nil {
+		out = append(out, host.KV{Key: "explain", Value: explain})
+	}
+	return out
 }
 
 // recallByIDs reads each memory by id and keeps the current ones this project may see.
@@ -781,33 +796,60 @@ func recallByIDs(ids []string, project string) ([]any, error) {
 	return found, nil
 }
 
-// recallSearch runs the memory search for a query or a related_to anchor.
-func recallSearch(q string, isStr bool, relatedTo any, project string) ([]any, []any, error) {
+// recallSearchOptions checks the search-only recall options before any request.
+func recallSearchOptions(opts map[string]any) (map[string]any, error) {
+	out := map[string]any{}
+	if v, ok := opts["explain"]; ok && v != nil {
+		b, isBool := v.(bool)
+		if !isBool {
+			return nil, errors.New("explain must be true or false")
+		}
+		if b {
+			out["explain"] = true
+		}
+	}
+	if v, ok := opts["timezone"]; ok && v != nil {
+		tz, isStr := v.(string)
+		if !isStr || len(tz) > 64 {
+			return nil, errors.New("timezone must be an IANA name such as Asia/Seoul")
+		}
+		if tz != "" {
+			out["timezone"] = tz
+		}
+	}
+	return out, nil
+}
+
+// recallSearch runs the memory search for a query or a related_to anchor. A query search
+// leaves modes to the server so its default lanes run, including the time-word lane
+// ("yesterday", "10월 말") and the relations-graph lane when enabled; the server keeps
+// exactly the lanes asked for once modes are explicit. A later causal-link filter would
+// be one more related_to field here, next to collection/id/revision.
+func recallSearch(q string, isStr bool, relatedTo any, project string, opts map[string]any) ([]any, map[string]any, error) {
 	text := "related memory evidence"
 	if isStr && pyStrip(q) != "" {
 		text = runeCut(q, 1000)
 	}
-	modes := []any{"exact", "fts", "vector"}
-	if relatedTo != nil {
-		modes = []any{"relation"}
+	payload := map[string]any{"scope": host.Scope(), "query": text, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000}
+	for k, v := range opts {
+		payload[k] = v
 	}
-	payload := map[string]any{"scope": host.Scope(), "query": text, "modes": modes, "purpose": "answer", "destination": "internal", "limit": 6, "max_chars": 6000}
 	if project != "" {
 		payload["project_key"] = project
 	}
 	if relatedTo != nil {
-		payload["related_to"] = relatedTo
+		payload["related_to"], payload["modes"] = relatedTo, []any{"relation"}
 	}
 	res, err := routerRequest("/v1/search", payload)
 	if err != nil {
 		return nil, nil, err
 	}
 	found := asList(getOr(res, "items", []any{}))
-	degraded := asList(getOr(res, "degraded", []any{}))
 	if relatedTo == nil { // relation hits come from one lane, so the fused-score floor does not fit them
-		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan(modes, res))
+		// No modes means the server's default exact, keyword and vector lanes (plus time and graph).
+		found, _, _ = host.LoadRecallBudget().Apply(found, host.VectorRan([]any{"exact", "fts", "vector"}, res))
 	}
-	return found, degraded, nil
+	return found, res, nil
 }
 
 // recallShape trims recalled memories to the fields an agent needs and flags missing paths.
@@ -821,7 +863,7 @@ func recallShape(found []any) ([]any, error) {
 		}
 		m["conflict_pending"] = truthy(m["conflict_pending"]) || truthy(m["conflict_id"])
 		kept := host.Obj{}
-		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match"} {
+		for _, k := range []string{"id", "revision", "kind", "reach", "status", "text", "updated_at", "effective_at", "sources", "memory_context", "conflict_pending", "supersedes", "superseded_by", "score", "lanes", "vector_match", "explain"} {
 			if v, ok := m[k]; ok && v != nil {
 				kept = append(kept, host.KV{Key: k, Value: v})
 			}
@@ -1071,7 +1113,7 @@ func callTool(name, argsAny any) (host.Obj, error) {
 	case "list_crew":
 		value, err = callCrewList()
 	case "search_knowledge", "recall", "recall_digest", "search_session_archives", "recall_at", "trace_memory_sources",
-		"read_session_message", "record_memory_usage", "read_wiki":
+		"read_session_message", "record_memory_usage", "read_wiki", "reflect", "browse_memory":
 		value, err = callToolMemory(n, args)
 	case "remember":
 		return callToolRemember(args)
@@ -1130,7 +1172,11 @@ func callToolMemory(n string, args map[string]any) (any, error) {
 	case "search_knowledge":
 		return searchKnowledge(args)
 	case "recall":
-		return recall(arg(args, "query", ""), args["ids"], args["related_to"])
+		return recall(arg(args, "query", ""), args["ids"], args["related_to"], args)
+	case "reflect":
+		return reflectAnswer(args)
+	case "browse_memory":
+		return browseMemory(args)
 	case "recall_digest":
 		return recallDigest(arg(args, "query", ""), args["limit"])
 	case "search_session_archives":

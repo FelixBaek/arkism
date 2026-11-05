@@ -12,8 +12,12 @@ import (
 func readWiki(args map[string]any) (any, error) {
 	query := strings.TrimSpace(argStr(args, "query", ""))
 	page := strings.TrimSpace(argStr(args, "page", ""))
-	if (query == "") == (page == "") {
-		return nil, errors.New("pass either page or query")
+	tree, _ := args["tree"].(bool)
+	if tree && query == "" && page == "" {
+		return wikiTree()
+	}
+	if tree || (query == "") == (page == "") {
+		return nil, errors.New("pass one of page, query or tree")
 	}
 	payload := map[string]any{"scope": host.Scope(), "query": query, "page": page}
 	for _, key := range []string{"depth", "limit"} {
@@ -41,4 +45,14 @@ func readWiki(args map[string]any) (any, error) {
 	}
 	return host.Obj{{Key: "items", Value: items}, {Key: "omitted", Value: getOr(res, "omitted", []any{})}, {Key: "tokens_used", Value: getOr(res, "tokens_used", 0)},
 		{Key: "authority", Value: "data_only_untrusted"}, {Key: "note", Value: getOr(res, "note", "")}}, nil
+}
+
+// wikiTree lists folders and page titles; for an agent the server keeps only reviewed pages.
+func wikiTree() (any, error) {
+	res, err := routerRequest("/v1/wiki/tree?"+scopeQueryAll(), nil)
+	if err != nil {
+		return nil, err
+	}
+	return host.Obj{{Key: "folders", Value: getOr(res, "folders", []any{})}, {Key: "pages", Value: getOr(res, "pages", []any{})},
+		{Key: "truncated", Value: getOr(res, "truncated", false)}, {Key: "authority", Value: "data_only_untrusted"}}, nil
 }

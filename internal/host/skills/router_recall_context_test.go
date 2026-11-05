@@ -16,14 +16,14 @@ func TestRecallPreservesMemoryContextAndDegradation(t *testing.T) {
 			var err error
 			if mode == "id" {
 				fakeRequest(t, memory)
-				out, err = recall("", []any{"m"}, nil)
+				out, err = recall("", []any{"m"}, nil, nil)
 			} else {
 				fakeRequest(t, `{"items":[`+memory+`],"degraded":["vector_unavailable"]}`)
 				var anchor any
 				if mode == "relation" {
 					anchor = j(t, `{"collection":"memories","id":"anchor","revision":1}`)
 				}
-				out, err = recall("decision", nil, anchor)
+				out, err = recall("decision", nil, anchor, nil)
 			}
 			if err != nil {
 				t.Fatal(err)
@@ -42,7 +42,7 @@ func TestRecallPreservesMemoryContextAndDegradation(t *testing.T) {
 func TestRecallEmptyDegradedIsNotUnqualifiedNoResult(t *testing.T) {
 	swapRouter(t)
 	fakeRequest(t, `{"items":[],"degraded":["vector_unavailable"]}`)
-	out, err := recall("decision", nil, nil)
+	out, err := recall("decision", nil, nil, nil)
 	if err != nil || canon(t, field(out, "degraded")) != `["vector_unavailable"]` {
 		t.Fatal(err, out)
 	}
@@ -53,7 +53,7 @@ func TestRecallPreservesVerifiedSemanticEvidence(t *testing.T) {
 	t.Setenv("ARKISM_RECALL_MIN_SCORE", "")
 	match := `{"space":"test-space","distance":0.3,"max_distance":0.38}`
 	fakeRequest(t, `{"items":[{"id":"semantic","revision":1,"kind":"procedural","text":"verified related memory","score":0.016393,"lanes":["vector"],"vector_match":`+match+`}]}`)
-	out, err := recall("a different expression", nil, nil)
+	out, err := recall("a different expression", nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

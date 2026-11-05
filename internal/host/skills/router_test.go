@@ -149,14 +149,14 @@ func TestRecallRelationLaneAndInvalidAnchors(t *testing.T) {
 		`{"collection":"memories","id":"old","revision":9223372036854775808}`,
 		`{"collection":"memories","id":"old","revision":3,"scope":{"project_id":"foreign"}}`} {
 		v, _ := host.Loads(bad)
-		if _, err := recall("", nil, v); err == nil {
+		if _, err := recall("", nil, v, nil); err == nil {
 			t.Fatal(bad)
 		}
 	}
-	if _, err := recall("", []any{}, nil); err == nil { // None
+	if _, err := recall("", []any{}, nil, nil); err == nil { // None
 		t.Fatal("none accepted")
 	}
-	if _, err := recall("", []any{"m"}, j(t, ref)); err == nil {
+	if _, err := recall("", []any{"m"}, j(t, ref), nil); err == nil {
 		t.Fatal("ids with related_to accepted")
 	}
 	if len(*calls) != 0 {
@@ -177,13 +177,13 @@ func TestRecallKeepsConflictSourceAndReplacement(t *testing.T) {
 		var err error
 		if byID {
 			calls := fakeRequest(t, memory)
-			out, err = recall("", []any{"m"}, nil)
+			out, err = recall("", []any{"m"}, nil, nil)
 			if len(*calls) != 1 {
 				t.Fatal(*calls)
 			}
 		} else {
 			fakeRequest(t, `{"items":[`+memory+`]}`)
-			out, err = recall("근거", nil, nil)
+			out, err = recall("근거", nil, nil, nil)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -304,7 +304,7 @@ func TestToolContractStatusAndVersionPattern(t *testing.T) {
 			t.Fatalf("work tool %d differs from host.WorkTools", i)
 		}
 	}
-	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,list_workflow_runs,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,start_flow_improvement,get_flow_improvement,list_flow_improvements,advance_flow_improvement,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work,send_session_message,read_session_messages" {
+	if strings.Join(names, ",") != "save_work,resume_work,list_work,search_session_archives,recall_at,trace_memory_sources,read_session_message,record_memory_usage,route_skills,enable_tool,load_skill,read_skill_file,record_skill_usage,refresh_skills,run_workflow,list_workflow_runs,get_workflow,wait_workflow,cancel_workflow,decide_workflow,list_crew,start_flow_improvement,get_flow_improvement,list_flow_improvements,advance_flow_improvement,recall,router_status,remember,search_knowledge,recall_digest,read_wiki,reflect,browse_memory,code_search_symbols,code_callers,code_callees,code_impact,recent_sessions,recall_for_role,expand_knowledge_graph,handoff_work,send_session_message,read_session_messages" {
 		t.Fatal(names)
 	}
 	if _, err := routeSkills("  "); err == nil {
@@ -335,7 +335,7 @@ func TestRecallByIDOrQuery(t *testing.T) {
 	if got := host.MustDumps(field(out, "memories"), host.DumpOpts{Compact: true, NoASCII: true}); !strings.HasSuffix(got, `"conflict_pending":false,"score":0.0327,"lanes":["exact","keyword"]}]`) {
 		t.Fatal(got)
 	}
-	if _, err := recall("  ", []any{}, nil); err == nil {
+	if _, err := recall("  ", []any{}, nil, nil); err == nil {
 		t.Fatal("blank recall")
 	}
 }
