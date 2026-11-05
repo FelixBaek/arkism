@@ -604,6 +604,9 @@ func (s *Service) consolidateObservations(ctx context.Context, token string, in 
 		return out, err
 	}
 	out.Calls, out.Tokens = job.Calls, job.Tokens
+	if !in.DryRun {
+		s.queueEvent(ctx, EventConsolidationCompleted, colObservations, eventSubject(in.Scope, "consolidation_run", "completed"))
+	}
 	return out, nil
 }
 

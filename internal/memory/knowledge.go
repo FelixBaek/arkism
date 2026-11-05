@@ -252,6 +252,9 @@ func (s *Service) IngestKnowledge(ctx context.Context, token string, in Knowledg
 			if failed {
 				action = "knowledge:extraction_failed"
 			}
+			if err = queueMemoryEvent(ctx, tx, EventIngestCompleted, colKnowledgeSources, head); err != nil {
+				return err
+			}
 			return audit(ctx, tx, in.Scope, d.PrincipalID, action, id)
 		})
 	})

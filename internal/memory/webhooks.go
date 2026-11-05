@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -43,10 +44,17 @@ const (
 	EventMemoryRejected   = "memory.rejected"
 	EventMemoryUpdated    = "memory.updated"
 	EventMemoryDeleted    = "memory.deleted"
+	// EventConsolidationCompleted: one observation consolidation run finished (not on dry runs).
+	EventConsolidationCompleted = "consolidation.completed"
+	// EventIngestCompleted: a knowledge document or uploaded text file was stored.
+	EventIngestCompleted = "ingest.completed"
+	// EventDefenseTriggered: a space defense rule blocked or redacted incoming text.
+	EventDefenseTriggered = "defense.triggered"
 	eventWebhookTest      = "webhook.test"
 )
 
-var webhookEvents = []string{EventCandidateCreated, EventMemoryApproved, EventMemoryRejected, EventMemoryUpdated, EventMemoryDeleted}
+var webhookEvents = []string{EventCandidateCreated, EventMemoryApproved, EventMemoryRejected, EventMemoryUpdated, EventMemoryDeleted,
+	EventConsolidationCompleted, EventIngestCompleted, EventDefenseTriggered}
 
 type Webhook struct {
 	URL            string   `json:"url" bson:"url"`
@@ -55,6 +63,20 @@ type Webhook struct {
 	Active         bool     `json:"active" bson:"active"`
 	// SealedKey is the signing secret under Service.WebhookKey; it never leaves the server.
 	SealedKey string `json:"-" bson:"sealed_key"`
+	// Method is POST (empty), PUT or PATCH; TimeoutSeconds 0 means webhookSendTimeout.
+	Method         string `json:"method,omitempty" bson:"method,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty" bson:"timeout_seconds,omitempty"`
+	// SealedHTTP holds the extra headers and query parameters (webhookHTTP) sealed like
+	// the secret: they often carry tokens, so reads show only their names.
+	SealedHTTP  string   `json:"-" bson:"sealed_http,omitempty"`
+	HeaderNames []string `json:"header_names,omitempty" bson:"header_names,omitempty"`
+	QueryNames  []string `json:"query_param_names,omitempty" bson:"query_param_names,omitempty"`
+}
+
+// webhookHTTP is the sealed part of a webhook's request shape.
+type webhookHTTP struct {
+	Headers map[string]string `json:"headers,omitempty"`
+	Query   map[string]string `json:"query,omitempty"`
 }
 
 // WebhookSubject is what an event is about, without its text.
@@ -82,12 +104,16 @@ type WebhookDelivery struct {
 }
 
 type WebhookInput struct {
-	Scope          Scope    `json:"scope"`
-	URL            string   `json:"url"`
-	Events         []string `json:"events"`
-	Secret         string   `json:"secret"`
-	IncludeContent bool     `json:"include_content,omitempty"`
-	Active         *bool    `json:"active,omitempty"`
+	Scope          Scope             `json:"scope"`
+	URL            string            `json:"url"`
+	Events         []string          `json:"events"`
+	Secret         string            `json:"secret"`
+	IncludeContent bool              `json:"include_content,omitempty"`
+	Active         *bool             `json:"active,omitempty"`
+	Method         string            `json:"method,omitempty"`
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	Headers        map[string]string `json:"headers,omitempty"`
+	QueryParams    map[string]string `json:"query_params,omitempty"`
 }
 
 // WebhookUpdate changes only the fields it carries.
@@ -99,20 +125,30 @@ type WebhookUpdate struct {
 	Secret           *string  `json:"secret,omitempty"`
 	IncludeContent   *bool    `json:"include_content,omitempty"`
 	Active           *bool    `json:"active,omitempty"`
+	Method           *string  `json:"method,omitempty"`
+	TimeoutSeconds   *int     `json:"timeout_seconds,omitempty"`
+	// Headers and QueryParams replace the stored set when present; an empty object clears it.
+	Headers     map[string]string `json:"headers,omitempty"`
+	QueryParams map[string]string `json:"query_params,omitempty"`
 }
 
 type WebhookView struct {
-	ID             string    `json:"id"`
-	Revision       int64     `json:"revision"`
-	Scope          Scope     `json:"scope"`
-	URL            string    `json:"url"`
-	Events         []string  `json:"events"`
-	IncludeContent bool      `json:"include_content"`
-	Active         bool      `json:"active"`
-	SecretSet      bool      `json:"secret_set"`
-	CreatedBy      string    `json:"created_by"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID             string   `json:"id"`
+	Revision       int64    `json:"revision"`
+	Scope          Scope    `json:"scope"`
+	URL            string   `json:"url"`
+	Events         []string `json:"events"`
+	IncludeContent bool     `json:"include_content"`
+	Active         bool     `json:"active"`
+	SecretSet      bool     `json:"secret_set"`
+	Method         string   `json:"method"`
+	TimeoutSeconds int      `json:"timeout_seconds"`
+	// HeaderNames and QueryParamNames list what is set; values are never returned.
+	HeaderNames     []string  `json:"header_names"`
+	QueryParamNames []string  `json:"query_param_names"`
+	CreatedBy       string    `json:"created_by"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 type WebhookList struct {
@@ -135,7 +171,119 @@ type WebhookDeliveryPage struct {
 func webhookView(r Record) WebhookView {
 	w := r.Webhook
 	return WebhookView{ID: r.ID, Revision: r.Revision, Scope: r.Scope, URL: w.URL, Events: w.Events, IncludeContent: w.IncludeContent,
-		Active: w.Active, SecretSet: w.SealedKey != "", CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+		Active: w.Active, SecretSet: w.SealedKey != "", Method: w.method(), TimeoutSeconds: int(w.timeout() / time.Second),
+		HeaderNames: nonNil(w.HeaderNames), QueryParamNames: nonNil(w.QueryNames), CreatedBy: r.CreatedBy, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+}
+
+func (w Webhook) method() string {
+	if w.Method == "" {
+		return http.MethodPost
+	}
+	return w.Method
+}
+
+func (w Webhook) timeout() time.Duration {
+	if w.TimeoutSeconds == 0 {
+		return webhookSendTimeout
+	}
+	return time.Duration(w.TimeoutSeconds) * time.Second
+}
+
+const (
+	webhookTimeoutMax   = 30
+	webhookHTTPPairsMax = 16
+	webhookHTTPValueMax = 1024
+)
+
+var webhookHeaderName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,63}$`)
+
+// webhookReservedHeaders are set by the transport or the signature; a hook may not override them.
+var webhookReservedHeaders = []string{"host", "content-length", "content-type", "transfer-encoding", "connection", "upgrade", "te",
+	"trailer", "keep-alive", "expect", "cookie", "traceparent", "tracestate"}
+
+func validWebhookMethod(m string) bool {
+	return m == "" || m == http.MethodPost || m == http.MethodPut || m == http.MethodPatch
+}
+
+func validWebhookTimeout(n int) bool {
+	return n >= 0 && n <= webhookTimeoutMax
+}
+
+// validWebhookPairs bounds a header or query map: few pairs, short printable values.
+func validWebhookPairs(m map[string]string, header bool) bool {
+	if len(m) > webhookHTTPPairsMax {
+		return false
+	}
+	for k, v := range m {
+		if len(v) > webhookHTTPValueMax || strings.ContainsFunc(k+v, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+			return false
+		}
+		lk := strings.ToLower(k)
+		if header && (!webhookHeaderName.MatchString(k) || slices.Contains(webhookReservedHeaders, lk) || strings.HasPrefix(lk, "proxy-") || strings.HasPrefix(lk, "x-arkism-")) ||
+			!header && (k == "" || len(k) > 128) {
+			return false
+		}
+	}
+	return true
+}
+
+func webhookHTTPAAD(scope Scope, id string) []byte {
+	return []byte("arkism/webhook-http/v1\x00" + structuredText(scope) + "\x00" + id)
+}
+
+// sealWebhookHTTP stores headers and query values sealed and only their sorted names in the clear.
+func sealWebhookHTTP(key []byte, w *Webhook, h webhookHTTP, scope Scope, id string) error {
+	w.SealedHTTP, w.HeaderNames, w.QueryNames = "", webhookNames(h.Headers), webhookNames(h.Query)
+	if len(h.Headers) == 0 && len(h.Query) == 0 {
+		return nil
+	}
+	raw, err := json.Marshal(h)
+	if err != nil {
+		return err
+	}
+	w.SealedHTTP, err = sealAEAD(key, raw, webhookHTTPAAD(scope, id))
+	return err
+}
+
+func webhookNames(m map[string]string) []string {
+	if len(m) == 0 {
+		return nil
+	}
+	return catalogSortedKeys(m)
+}
+
+func (s *Service) openWebhookHTTP(w *Webhook, scope Scope, id string) (webhookHTTP, error) {
+	var h webhookHTTP
+	if w.SealedHTTP == "" {
+		return h, nil
+	}
+	raw, err := openAEAD(s.WebhookKey, w.SealedHTTP, webhookHTTPAAD(scope, id), errWebhookSecret)
+	if err != nil {
+		return h, err
+	}
+	return h, json.Unmarshal(raw, &h)
+}
+
+// webhookRequestURL adds the hook's query parameters to its checked URL. The host
+// does not change, so the address checks made on the URL (and at connect) still hold.
+func webhookRequestURL(raw string, query map[string]string) (string, error) {
+	if len(query) == 0 {
+		return raw, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", ErrInvalid
+	}
+	q := u.Query()
+	for k, v := range query {
+		q.Set(k, v)
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+func validWebhookShape(method string, timeout int, headers, query map[string]string) bool {
+	return validWebhookMethod(method) && validWebhookTimeout(timeout) && validWebhookPairs(headers, true) && validWebhookPairs(query, false)
 }
 
 func webhookDeliveryView(r Record) WebhookDeliveryView {
@@ -209,7 +357,8 @@ func (s *Service) webhookStore() (scopedRowStore, error) {
 }
 
 func (s *Service) CreateWebhook(ctx context.Context, token string, in WebhookInput) (WebhookView, error) {
-	if checkWebhookURL(in.URL, s.WebhookAllowPrivate) != nil || !validWebhookEvents(in.Events) || !validWebhookSecret(in.Secret) {
+	if checkWebhookURL(in.URL, s.WebhookAllowPrivate) != nil || !validWebhookEvents(in.Events) || !validWebhookSecret(in.Secret) ||
+		!validWebhookShape(in.Method, in.TimeoutSeconds, in.Headers, in.QueryParams) {
 		return WebhookView{}, ErrInvalid
 	}
 	d, err := s.humanWebhooks(ctx, token, in.Scope, "")
@@ -233,7 +382,11 @@ func (s *Service) CreateWebhook(ctx context.Context, token string, in WebhookInp
 	if err != nil {
 		return WebhookView{}, err
 	}
-	w := Webhook{URL: in.URL, Events: slices.Clone(in.Events), IncludeContent: in.IncludeContent, Active: in.Active == nil || *in.Active, SealedKey: sealed}
+	w := Webhook{URL: in.URL, Events: slices.Clone(in.Events), IncludeContent: in.IncludeContent, Active: in.Active == nil || *in.Active, SealedKey: sealed,
+		Method: in.Method, TimeoutSeconds: in.TimeoutSeconds}
+	if err = sealWebhookHTTP(s.WebhookKey, &w, webhookHTTP{Headers: in.Headers, Query: in.QueryParams}, in.Scope, id); err != nil {
+		return WebhookView{}, err
+	}
 	r := Record{ID: id, Scope: in.Scope, Kind: webhookKind, Status: statusActive, Revision: 1, Webhook: &w,
 		CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role}
 	err = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
@@ -285,7 +438,9 @@ func (s *Service) GetWebhook(ctx context.Context, token string, scope Scope, id 
 
 func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in WebhookUpdate) (WebhookView, error) {
 	if in.ExpectedRevision < 1 || in.URL != nil && checkWebhookURL(*in.URL, s.WebhookAllowPrivate) != nil ||
-		in.Events != nil && !validWebhookEvents(in.Events) || in.Secret != nil && !validWebhookSecret(*in.Secret) {
+		in.Events != nil && !validWebhookEvents(in.Events) || in.Secret != nil && !validWebhookSecret(*in.Secret) ||
+		in.Method != nil && !validWebhookMethod(*in.Method) || in.TimeoutSeconds != nil && !validWebhookTimeout(*in.TimeoutSeconds) ||
+		!validWebhookPairs(in.Headers, true) || !validWebhookPairs(in.QueryParams, false) {
 		return WebhookView{}, ErrInvalid
 	}
 	d, err := s.humanWebhooks(ctx, token, in.Scope, id)
@@ -305,7 +460,7 @@ func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in Webhoo
 			return ErrConflict
 		}
 		w := *r.Webhook
-		if err = applyWebhookUpdate(s.WebhookKey, &w, in, id); err != nil {
+		if err = s.applyWebhookUpdate(&w, in, id); err != nil {
 			return err
 		}
 		prev := r.Revision
@@ -322,7 +477,28 @@ func (s *Service) UpdateWebhook(ctx context.Context, token, id string, in Webhoo
 	return webhookView(out), nil
 }
 
-func applyWebhookUpdate(key []byte, w *Webhook, in WebhookUpdate, id string) error {
+func (s *Service) applyWebhookUpdate(w *Webhook, in WebhookUpdate, id string) error {
+	if in.Method != nil {
+		w.Method = *in.Method
+	}
+	if in.TimeoutSeconds != nil {
+		w.TimeoutSeconds = *in.TimeoutSeconds
+	}
+	if in.Headers != nil || in.QueryParams != nil {
+		h, err := s.openWebhookHTTP(w, in.Scope, id)
+		if err != nil {
+			return err
+		}
+		if in.Headers != nil {
+			h.Headers = in.Headers
+		}
+		if in.QueryParams != nil {
+			h.Query = in.QueryParams
+		}
+		if err = sealWebhookHTTP(s.WebhookKey, w, h, in.Scope, id); err != nil {
+			return err
+		}
+	}
 	if in.URL != nil {
 		w.URL = *in.URL
 	}
@@ -336,7 +512,7 @@ func applyWebhookUpdate(key []byte, w *Webhook, in WebhookUpdate, id string) err
 		w.Active = *in.Active
 	}
 	if in.Secret != nil {
-		sealed, err := sealAEAD(key, []byte(*in.Secret), webhookSecretAAD(in.Scope, id))
+		sealed, err := sealAEAD(s.WebhookKey, []byte(*in.Secret), webhookSecretAAD(in.Scope, id))
 		if err != nil {
 			return err
 		}
@@ -447,6 +623,20 @@ func queueMemoryEvent(ctx context.Context, tx Tx, event, col string, r Record) e
 	return nil
 }
 
+// queueEvent queues event for r in a transaction of its own, for work that commits
+// in several transactions (a consolidation run, a defense check, a file create).
+// Delivery is best effort here: the work already committed, so a failed queue is
+// not reported as a failure of that work.
+func (s *Service) queueEvent(ctx context.Context, event, col string, r Record) {
+	_ = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error { return queueMemoryEvent(ctx, tx, event, col, r) })
+}
+
+// eventSubject is the subject record of an event that has no row of its own.
+func eventSubject(scope Scope, kind, status string) Record {
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	return Record{ID: timeOrderedID(now.UnixMilli()), Scope: scope, Kind: kind, Status: status, Revision: 1, CreatedAt: now, UpdatedAt: now}
+}
+
 // createdEvent names the webhook event of a created record ("" for none).
 func createdEvent(col string) string {
 	if col == "memory_candidates" {
@@ -520,7 +710,9 @@ func (s *Service) deliverWebhook(ctx context.Context, job *Record) (bool, error)
 		return false, err
 	}
 	secret, err := openAEAD(s.WebhookKey, h.Webhook.SealedKey, webhookSecretAAD(h.Scope, h.ID), errWebhookSecret)
-	if err != nil {
+	extra, httpErr := s.openWebhookHTTP(h.Webhook, h.Scope, h.ID)
+	target, urlErr := webhookRequestURL(h.Webhook.URL, extra.Query)
+	if err != nil || httpErr != nil || urlErr != nil {
 		d.Error = "secret_unavailable"
 		return false, s.recordWebhookAttempt(ctx, job, d)
 	}
@@ -535,11 +727,14 @@ func (s *Service) deliverWebhook(ctx context.Context, job *Record) (bool, error)
 		return true, ErrInvalid
 	}
 	header := http.Header{}
+	for k, v := range extra.Headers {
+		header.Set(k, v)
+	}
 	header.Set(WebhookSignatureHeader, SignWebhook(secret, time.Now(), body))
 	header.Set("X-Arkism-Event", d.Event)
 	header.Set("X-Arkism-Delivery", job.ID)
 	start := time.Now()
-	_, status, err := postBody(ctx, httpguard.OutboundClient(s.WebhookAllowPrivate, webhookSendTimeout, nil), h.Webhook.URL, header, body, webhookResponseMax)
+	_, status, err := sendBody(ctx, httpguard.OutboundClient(s.WebhookAllowPrivate, h.Webhook.timeout(), nil), h.Webhook.method(), target, header, body, webhookResponseMax)
 	d.HTTPStatus, d.LatencyMS, d.Error = status, time.Since(start).Milliseconds(), ""
 	ok := err == nil && status >= 200 && status < 300
 	switch {

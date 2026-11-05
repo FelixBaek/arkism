@@ -58,5 +58,6 @@ func (s *Service) IngestFile(ctx context.Context, token string, in FileIngestInp
 	}
 	artifact := file.descriptor()
 	artifact.ID = artifactID(r.Scope, r.ID, artifact.Digest)
+	s.queueEvent(ctx, EventIngestCompleted, "sources", r)
 	return FileIngestResult{Source: r, Artifact: artifact}, nil
 }

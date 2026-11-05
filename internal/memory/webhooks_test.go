@@ -509,3 +509,98 @@ func TestLLMTraceStoresRedactedContentOnlyWithFlag(t *testing.T) {
 		t.Fatalf("stored content not redacted %+v", r)
 	}
 }
+
+func TestWebhookRequestShapeIsSealedAndSent(t *testing.T) {
+	f := webhookFixture(t)
+	var got *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = r.Clone(context.Background()) }))
+	t.Cleanup(srv.Close)
+	in := WebhookInput{Scope: scopeA, URL: srv.URL + "/in?keep=1", Events: []string{EventMemoryDeleted}, Secret: testWebhookSecret,
+		Method: http.MethodPut, TimeoutSeconds: 5, Headers: map[string]string{"Authorization": "Bearer hook-token-value"}, QueryParams: map[string]string{"api_key": "q-token-value"}}
+	for _, bad := range []func(*WebhookInput){
+		func(i *WebhookInput) { i.Method = http.MethodGet },
+		func(i *WebhookInput) { i.TimeoutSeconds = 31 },
+		func(i *WebhookInput) { i.Headers = map[string]string{"Host": "evil"} },
+		func(i *WebhookInput) { i.Headers = map[string]string{"X-Arkism-Signature": "forged"} },
+		func(i *WebhookInput) { i.Headers = map[string]string{"X-Ok": "a\r\nInjected: 1"} },
+	} {
+		b := in
+		bad(&b)
+		if _, err := f.svc.CreateWebhook(testCtx, f.human, b); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("accepted %+v: %v", b, err)
+		}
+	}
+	v, err := f.svc.CreateWebhook(testCtx, f.human, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(v)
+	stored, _ := json.Marshal(f.repo.rows(colWebhooks)[0])
+	for _, secret := range []string{"hook-token-value", "q-token-value"} {
+		if strings.Contains(string(raw), secret) || strings.Contains(string(stored), secret) {
+			t.Fatal("header or query value readable", string(raw))
+		}
+	}
+	if v.Method != http.MethodPut || v.TimeoutSeconds != 5 || len(v.HeaderNames) != 1 || v.QueryParamNames[0] != "api_key" {
+		t.Fatalf("view %+v", v)
+	}
+	if _, err = f.svc.TestWebhook(testCtx, f.human, scopeA, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	_ = f.svc.WorkOnce(testCtx, f.work)
+	if got == nil || got.Method != http.MethodPut || got.Header.Get("Authorization") != "Bearer hook-token-value" ||
+		got.URL.Query().Get("api_key") != "q-token-value" || got.URL.Query().Get("keep") != "1" || got.Header.Get(WebhookSignatureHeader) == "" {
+		t.Fatalf("request %+v", got)
+	}
+	// Changing only the query keeps the headers; an empty map clears.
+	u, err := f.svc.UpdateWebhook(testCtx, f.human, v.ID, WebhookUpdate{Scope: scopeA, ExpectedRevision: v.Revision, QueryParams: map[string]string{}})
+	if err != nil || len(u.QueryParamNames) != 0 || len(u.HeaderNames) != 1 {
+		t.Fatal("update", err, u)
+	}
+	h, err := f.svc.openWebhookHTTP(f.repo.rows(colWebhooks)[0].Webhook, scopeA, v.ID)
+	if err != nil || h.Headers["Authorization"] != "Bearer hook-token-value" || len(h.Query) != 0 {
+		t.Fatal("sealed shape after update", err, h)
+	}
+}
+
+func queuedEvents(f *fixture) []string {
+	out := []string{}
+	for _, j := range f.repo.rows(colJobs) {
+		if j.WebhookDelivery != nil {
+			out = append(out, j.WebhookDelivery.Event)
+		}
+	}
+	return out
+}
+
+func TestWebhookDefenseAndConsolidationEvents(t *testing.T) {
+	f, _ := wikiFixture(t)
+	f.svc.WebhookKey = []byte(strings.Repeat("k", 32))
+	f.hook("https://hooks.example.com/x", false, EventDefenseTriggered, EventConsolidationCompleted)
+	putSettings(t, f, scopeA, SpaceConfigInput{DefenseRules: &[]SpaceDefenseRule{{Pattern: `falcon`, Action: "redact"}, {Pattern: `\bINC-\d+\b`, Action: "block"}}})
+	text := "project falcon ships"
+	if err := f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &text); err != nil || text == "project falcon ships" {
+		t.Fatal("redact", err, text)
+	}
+	plain := "nothing to see"
+	_ = f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &plain)
+	blocked := "see INC-42"
+	if err := f.svc.defendSpace(testCtx, "", defenseGuard{}, scopeA, &blocked); !errors.Is(err, ErrDefenseBlocked) {
+		t.Fatal("block", err)
+	}
+	if ev := queuedEvents(f); len(ev) != 2 || ev[0] != EventDefenseTriggered || ev[1] != EventDefenseTriggered {
+		t.Fatal("defense events", ev)
+	}
+	if _, err := f.consolidate(f.human, true); err != nil {
+		t.Fatal(err)
+	}
+	if ev := queuedEvents(f); len(ev) != 2 {
+		t.Fatal("dry run queued an event", ev)
+	}
+	if _, err := f.consolidate(f.human, false); err != nil {
+		t.Fatal(err)
+	}
+	if ev := queuedEvents(f); len(ev) != 3 || ev[2] != EventConsolidationCompleted {
+		t.Fatal("consolidation event", ev)
+	}
+}

@@ -111,7 +111,8 @@ func (s *Service) ListTags(ctx context.Context, token string, in TagListInput) (
 	}
 	sort.SliceStable(all, func(i, j int) bool { return all[i].Count > all[j].Count })
 	out.Total = len(all)
-	out.Items = append(out.Items, all[min(in.Offset, len(all)):min(in.Offset+in.Limit, len(all))]...)
+	page, _ := offsetPage(all, in.Offset, in.Limit)
+	out.Items = append(out.Items, page...)
 	return out, nil
 }
 

@@ -642,7 +642,17 @@ type defenseGuard struct {
 
 // defendWith is defendSpace with rules the caller already read.
 func (s *Service) defendWith(ctx context.Context, token string, guard defenseGuard, scope Scope, rules []SpaceDefenseRule, texts ...*string) error {
+	before := make([]string, len(texts))
+	for i, t := range texts {
+		before[i] = *t
+	}
 	err := defendAll(rules, texts...)
+	for i, t := range texts {
+		if err == nil && before[i] != *t {
+			s.queueEvent(ctx, EventDefenseTriggered, colSpaceConfigs, eventSubject(scope, "defense_rule", "redacted"))
+			break
+		}
+	}
 	if !errors.Is(err, ErrDefenseBlocked) {
 		return err
 	}
@@ -656,6 +666,7 @@ func (s *Service) defendWith(ctx context.Context, token string, guard defenseGua
 		}
 	}
 	s.auditDeniedInput(ctx, guard.action+":defense_blocked", scope, "")
+	s.queueEvent(ctx, EventDefenseTriggered, colSpaceConfigs, eventSubject(scope, "defense_rule", "blocked"))
 	return err
 }
 

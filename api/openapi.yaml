@@ -74009,7 +74009,11 @@
           "events",
           "include_content",
           "active",
-          "secret_set"
+          "secret_set",
+          "method",
+          "timeout_seconds",
+          "header_names",
+          "query_param_names"
         ],
         "properties": {
           "id": {
@@ -74038,6 +74042,25 @@
           },
           "secret_set": {
             "type": "boolean"
+          },
+          "method": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          },
+          "header_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of the sealed extra headers; values are never returned."
+          },
+          "query_param_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "created_by": {
             "type": "string"
@@ -74087,7 +74110,10 @@
                 "memory.approved",
                 "memory.rejected",
                 "memory.updated",
-                "memory.deleted"
+                "memory.deleted",
+                "consolidation.completed",
+                "ingest.completed",
+                "defense.triggered"
               ]
             }
           },
@@ -74099,6 +74125,41 @@
           },
           "include_content": {
             "type": "boolean"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "POST",
+              "PUT",
+              "PATCH"
+            ],
+            "description": "Request method, POST when unset."
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Send timeout; 0 or unset means 10 seconds."
+          },
+          "headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "writeOnly": true,
+            "description": "Extra request headers, stored sealed; reads return only header_names. Transport, cookie, proxy, trace and X-Arkism-* headers are refused. On update the given object replaces the stored set and {} clears it."
+          },
+          "query_params": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "writeOnly": true,
+            "description": "Query parameters added to the URL at send time, stored sealed; reads return only query_param_names. On update the given object replaces the stored set and {} clears it."
           },
           "active": {
             "type": "boolean"
@@ -74128,7 +74189,10 @@
                 "memory.approved",
                 "memory.rejected",
                 "memory.updated",
-                "memory.deleted"
+                "memory.deleted",
+                "consolidation.completed",
+                "ingest.completed",
+                "defense.triggered"
               ]
             }
           },
@@ -74140,6 +74204,41 @@
           },
           "include_content": {
             "type": "boolean"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "POST",
+              "PUT",
+              "PATCH"
+            ],
+            "description": "Request method, POST when unset."
+          },
+          "timeout_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30,
+            "description": "Send timeout; 0 or unset means 10 seconds."
+          },
+          "headers": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "writeOnly": true,
+            "description": "Extra request headers, stored sealed; reads return only header_names. Transport, cookie, proxy, trace and X-Arkism-* headers are refused. On update the given object replaces the stored set and {} clears it."
+          },
+          "query_params": {
+            "type": "object",
+            "maxProperties": 16,
+            "additionalProperties": {
+              "type": "string",
+              "maxLength": 1024
+            },
+            "writeOnly": true,
+            "description": "Query parameters added to the URL at send time, stored sealed; reads return only query_param_names. On update the given object replaces the stored set and {} clears it."
           },
           "active": {
             "type": "boolean"

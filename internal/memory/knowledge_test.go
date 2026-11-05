@@ -134,3 +134,27 @@ func TestKnowledgeBindingReviewAndSourceFence(t *testing.T) {
 		t.Fatal("deleted knowledge resurrected by duplicate")
 	}
 }
+
+func TestKnowledgeIngestQueuesIngestCompleted(t *testing.T) {
+	f := handoffFixture(t)
+	f.svc.WebhookKey = []byte(strings.Repeat("k", 32))
+	in := knowledgeFixtureInput()
+	if _, err := f.svc.CreateWebhook(testCtx, f.human, WebhookInput{Scope: in.Scope, URL: "https://hooks.example.com/x", Events: []string{EventIngestCompleted}, Secret: testWebhookSecret}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.IngestKnowledge(testCtx, f.human, in); err != nil {
+		t.Fatal(err)
+	}
+	if ev := queuedEvents(f); len(ev) != 1 || ev[0] != EventIngestCompleted {
+		t.Fatal("ingest event", ev)
+	}
+	if _, err := f.svc.CreateWebhook(testCtx, f.human, WebhookInput{Scope: scopeA, URL: "https://hooks.example.com/x", Events: []string{EventIngestCompleted}, Secret: testWebhookSecret}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.IngestFile(testCtx, f.human, FileIngestInput{Source: sourceInput(CreateInput{Scope: scopeA}), Artifact: FileArtifactSpec{Kind: "code", MIME: "text/plain"}}, []byte("uploaded notes")); err != nil {
+		t.Fatal(err)
+	}
+	if ev := queuedEvents(f); len(ev) != 2 || ev[1] != EventIngestCompleted {
+		t.Fatal("file ingest event", ev)
+	}
+}
