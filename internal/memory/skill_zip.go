@@ -1,8 +1,6 @@
 package memory
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"regexp"
 	"strings"
@@ -40,14 +38,10 @@ func (s *Service) ExportSkillZip(ctx context.Context, token string, scope Scope,
 	if !skillZipNameRe.MatchString(name) {
 		name = "skill"
 	}
-	var buf bytes.Buffer
-	zw := zip.NewWriter(&buf)
+	var files []archiveFile
 	put := func(rel, body string) error {
-		w, e := zw.Create(name + "/" + rel)
-		if e == nil {
-			_, e = w.Write([]byte(body))
-		}
-		return e
+		files = append(files, archiveFile{name: name + "/" + rel, body: []byte(body)})
+		return nil
 	}
 	if err = put("SKILL.md", src.Text); err != nil {
 		return nil, "", err
@@ -73,8 +67,6 @@ func (s *Service) ExportSkillZip(ctx context.Context, token string, scope Scope,
 			return nil, "", err
 		}
 	}
-	if err = zw.Close(); err != nil {
-		return nil, "", err
-	}
-	return buf.Bytes(), name + ".zip", nil
+	data, err := zipArchive(files)
+	return data, name + ".zip", err
 }

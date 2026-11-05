@@ -1,8 +1,11 @@
 package memory
 
-// Wiki search: BM25 over reviewed page titles (weight 5) and bodies, then a
-// walk along reviewed [[links]] (wiki_links) up to depth 2 with the score
-// halved per hop. Visits, results and returned tokens are capped. Only pages a
+// Wiki search: BM25 over reviewed page titles (weight 5) and bodies, fused by
+// reciprocal rank with a vector lane when page embeddings exist (pages are
+// embedded through the shared embedding job queue), then a walk along
+// reviewed [[links]] (wiki_links) up to depth 2 with the score halved per hop.
+// Without an embedder, a usable query vector or embedded pages the ranking is
+// BM25 alone, exactly as before. Visits, results and returned tokens are capped. Only pages a
 // person reviewed, whose sources are all still live, are ever returned, and
 // every result is data, not instructions.
 //
@@ -25,6 +28,7 @@ const (
 	wikiDefaultMaxTokens = 2000
 	wikiMaxTokens        = 8000
 	wikiHopDecay         = 0.5
+	wikiVectorTop        = 20
 )
 
 type WikiSearchInput struct {
@@ -140,7 +144,8 @@ func (s *Service) ReadWiki(ctx context.Context, token string, in WikiSearchInput
 
 func (s *Service) wikiSearch(ctx context.Context, token string, in WikiSearchInput) (WikiSearchResult, error) {
 	out := WikiSearchResult{Items: []WikiHit{}, Authority: wikiAuthority, Note: wikiReadNote}
-	if _, err := s.wikiAuthorize(ctx, token, "read:"+colWikiPages, in.Scope, "", ""); err != nil {
+	d, err := s.wikiAuthorize(ctx, token, "read:"+colWikiPages, in.Scope, "", "")
+	if err != nil {
 		return out, err
 	}
 	pages, links, err := s.wikiServableGraph(ctx, in.Scope)
@@ -148,23 +153,9 @@ func (s *Service) wikiSearch(ctx context.Context, token string, in WikiSearchInp
 		return out, err
 	}
 	adjacent := wikiAdjacency(pages, links)
-	scores := map[string]float64{}
+	scores, reason := s.wikiSeedScores(ctx, d, in, pages)
 	hops := map[string]int{}
 	via := map[string]string{}
-	reason := map[string]string{}
-	if in.Page != "" {
-		key := strings.TrimSpace(in.Page)
-		slug := wikiSlug(key)
-		for id, r := range pages {
-			if id == key || r.Wiki.Page.Slug == slug {
-				scores[id], reason[id] = 1, "page"
-			}
-		}
-	} else {
-		for id, score := range wikiBM25(in.Query, pages) {
-			scores[id], reason[id] = score, "text_match"
-		}
-	}
 	// Seeds: the best matches; then breadth-first along links.
 	seeds := sortedWikiIDs(scores)
 	if len(seeds) > in.Limit {
@@ -210,6 +201,84 @@ func (s *Service) wikiSearch(ctx context.Context, token string, in WikiSearchInp
 		out.Items = append(out.Items, hit)
 	}
 	return out, nil
+}
+
+// wikiSeedScores scores the starting pages: the named page, or the query's
+// BM25 matches fused with the vector lane when it has any match.
+func (s *Service) wikiSeedScores(ctx context.Context, d Decision, in WikiSearchInput, pages map[string]*Record) (map[string]float64, map[string]string) {
+	scores, reason := map[string]float64{}, map[string]string{}
+	if in.Page != "" {
+		key := strings.TrimSpace(in.Page)
+		slug := wikiSlug(key)
+		for id, r := range pages {
+			if id == key || r.Wiki.Page.Slug == slug {
+				scores[id], reason[id] = 1, "page"
+			}
+		}
+		return scores, reason
+	}
+	text := wikiBM25(in.Query, pages)
+	for id, score := range text {
+		scores[id], reason[id] = score, "text_match"
+	}
+	vector := s.wikiVectorScores(ctx, d, in.Scope, in.Query, pages)
+	if len(vector) == 0 {
+		return scores, reason
+	}
+	// Reciprocal-rank fusion through the shared search fuser.
+	lanes := [][]Hit{}
+	for _, lane := range []struct {
+		scores map[string]float64
+		reason string
+	}{{text, "text_match"}, {vector, "semantic_match"}} {
+		hits := []Hit{}
+		for _, id := range sortedWikiIDs(lane.scores) {
+			hits = append(hits, Hit{Collection: colWikiPages, ID: id, Reasons: []string{lane.reason}})
+		}
+		lanes = append(lanes, hits)
+	}
+	scores, reason = map[string]float64{}, map[string]string{}
+	for _, h := range FuseScored(lanes, len(pages)) {
+		scores[h.ID], reason[h.ID] = h.Score, strings.Join(h.Reasons, "+")
+	}
+	return scores, reason
+}
+
+// wikiVectorScores ranks embedded pages by cosine similarity to the query and
+// keeps those within vectorRelativeCut of the best. Any missing piece (no
+// embedder, transfer not allowed, embedding failure, no current page vector)
+// returns nothing, so search falls back to BM25.
+func (s *Service) wikiVectorScores(ctx context.Context, d Decision, scope Scope, query string, pages map[string]*Record) map[string]float64 {
+	if s.Embedder == nil {
+		return nil
+	}
+	space := s.Embedder.Space()
+	ids := []string{}
+	for id, r := range pages {
+		if e := r.Embedding; e != nil && e.Space == space && e.ContentHash == ContentHash(recordContent(*r)) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	q, err := s.embedKnowledgeQuery(ctx, d, query)
+	if err != nil || q.Space != space {
+		return nil
+	}
+	sort.Strings(ids)
+	ranks, err := s.Repo.RankVectors(ctx, scope, colWikiPages, ids, q.Vector, space, wikiVectorTop)
+	if err != nil || len(ranks) == 0 {
+		return nil
+	}
+	out := map[string]float64{}
+	best := 1 - ranks[0].Distance
+	for _, rank := range ranks {
+		if sim := 1 - rank.Distance; sim > 0 && sim >= best*vectorRelativeCut {
+			out[rank.ID] = sim
+		}
+	}
+	return out
 }
 
 // wikiAdjacency lists each servable page's linked neighbours, both directions.

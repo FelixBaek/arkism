@@ -55,6 +55,8 @@ type wikiBlock struct {
 	Title   string
 	Slug    string
 	Body    string
+	// Citations: memory ids cited as [mem:ID], set by the memory build only.
+	Citations []string
 }
 
 // wikiRejection explains why a block from the model was not used.

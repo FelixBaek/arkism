@@ -782,7 +782,7 @@ func sourceErasureJob(kind string) bool {
 // embedJob runs one embedding job. The bool reports whether the attempt
 // counts as finished; a successful write also advances job.Revision.
 func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record) (bool, error) {
-	if job.Target == nil || (job.Target.Collection != "memories" && job.Target.Collection != "skill_versions" && job.Target.Collection != colReflections) {
+	if job.Target == nil || !slices.Contains([]string{colMemories, colSkillVersions, colReflections, colWikiPages}, job.Target.Collection) {
 		return true, ErrInvalid
 	}
 	r, e := s.Repo.Get(ctx, job.Target.Collection, job.Scope, job.Target.ID)
@@ -795,7 +795,7 @@ func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record)
 	if !embeddingEligible(job.Target.Collection, r) || r.Revision != job.Target.Revision {
 		return true, nil
 	}
-	if e = checkSources(ctx, s.Repo, r); e != nil {
+	if e = embedSourcesLive(ctx, s.Repo, job.Target.Collection, r); e != nil {
 		return true, e
 	}
 	if job.Target.Collection == colSkillVersions {
@@ -832,7 +832,7 @@ func (s *Service) embedJob(ctx context.Context, workerToken string, job *Record)
 		if !embeddingEligible(job.Target.Collection, current) || current.Revision != job.Target.Revision || recordContent(current) != content {
 			return ErrConflict
 		}
-		if e = checkSources(ctx, tx, current); e != nil {
+		if e = embedSourcesLive(ctx, tx, job.Target.Collection, current); e != nil {
 			return e
 		}
 		// Write the lease as well as the target: merely reading a lease in a
@@ -899,5 +899,18 @@ func embeddingEligible(col string, r Record) bool {
 	if col == colMemories {
 		r.EffectiveAt = nil
 	}
+	if col == colWikiPages {
+		p := wikiPageOf(r)
+		return p != nil && p.Reviewed != nil && live(r)
+	}
 	return live(r)
+}
+
+// embedSourcesLive: a wiki page a person wrote, or one built from memories,
+// may have no source rows; every other embedded record must cite live sources.
+func embedSourcesLive(ctx context.Context, tx Tx, col string, r Record) error {
+	if col == colWikiPages && len(r.Sources) == 0 {
+		return nil
+	}
+	return checkSources(ctx, tx, r)
 }

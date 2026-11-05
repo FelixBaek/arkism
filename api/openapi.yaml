@@ -32005,6 +32005,188 @@
           }
         },
         "x-go-contract": true
+      },
+      "patch": {
+        "operationId": "patch_v1_wiki_pages_id",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Wiki: move or rename a page",
+        "description": "A person moves a page to a folder (\"\" is the root) and/or renames it, with matching expected_revision. A rename that changes the slug gives the page a new id and answers 409 while reviewed pages still link to it or the new id is taken. The body text is not changed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseWikiPageView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestWikiPagePatchInput"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "expected_revision"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
       }
     },
     "/v1/wiki/graph": {
@@ -42071,6 +42253,686 @@
                   "type": "string",
                   "const": "Bearer realm=\"arkism\""
                 }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/wiki/tree": {
+      "get": {
+        "operationId": "get_v1_wiki_tree",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Wiki: tree",
+        "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "agent_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseWikiTree"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true
+      }
+    },
+    "/v1/wiki/folders": {
+      "post": {
+        "operationId": "post_v1_wiki_folders",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Wiki: folders",
+        "description": "A person creates an empty wiki folder (slash-separated names, at most 8 levels and 256 bytes); asking again returns the same folder.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseWikiTreeFolder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestWikiFolderInput"
+                  },
+                  {
+                    "required": [
+                      "scope",
+                      "path"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/wiki/build_from_memories": {
+      "post": {
+        "operationId": "post_v1_wiki_build_from_memories",
+        "tags": [
+          "Management"
+        ],
+        "summary": "Wiki: build_from_memories",
+        "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. Answers model_not_configured (503) when no wiki model is set.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WireResponseWikiMemoryBuildResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request, authorization, concurrency, size, budget or dependency error; see Error.code.",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-go-contract": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/WireRequestWikiMemoryBuildInput"
+                  },
+                  {
+                    "required": [
+                      "scope"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/wiki/export": {
+      "get": {
+        "operationId": "get_v1_wiki_export",
+        "summary": "Wiki: export reviewed pages as markdown files",
+        "description": "Every servable reviewed page as <folder>/<slug>.md with front matter (title, id, type, citations, knowledge_source_ids, updated_at), packed as tar (default) or zip. Drafts are never exported. Answers payload_too_large (413) past 32 MiB of page text.",
+        "parameters": [
+          {
+            "name": "workspace_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "tar",
+                "zip"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive bytes",
+            "content": {
+              "application/x-tar": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "413": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
+              }
+            }
+          },
+          "401": {
+            "description": "Missing bearer credentials.",
+            "headers": {
+              "WWW-Authenticate": {
+                "schema": {
+                  "type": "string",
+                  "const": "Bearer realm=\"arkism\""
+                }
+              },
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestID"
               }
             },
             "content": {
@@ -54637,6 +55499,9 @@
           },
           "job": {
             "$ref": "#/components/schemas/WireResponseWikiJob"
+          },
+          "folder": {
+            "$ref": "#/components/schemas/WireResponseWikiFolder"
           }
         },
         "additionalProperties": false,
@@ -54689,6 +55554,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "folder": {
+            "type": "string"
+          },
+          "memory_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -54730,6 +55604,12 @@
           "at": {
             "type": "string",
             "format": "date-time"
+          },
+          "citations": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -54802,6 +55682,9 @@
           "finished_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "memory": {
+            "$ref": "#/components/schemas/WireResponseWikiMemoryRequest"
           }
         },
         "additionalProperties": false,
@@ -64299,6 +65182,15 @@
           },
           "authority": {
             "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "memory_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false,
@@ -68242,6 +69134,291 @@
             }
           }
         }
+      },
+      "WireRequestWikiFolderInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.WikiFolderInput",
+        "x-go-source": "internal/memory/wiki_tree.go"
+      },
+      "WireRequestWikiMemoryBuildInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "query": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "entity_name": {
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "max_total_tokens": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.WikiMemoryBuildInput",
+        "x-go-source": "internal/memory/wiki_memory.go"
+      },
+      "WireRequestWikiPagePatchInput": {
+        "type": "object",
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/WireRequestScope"
+          },
+          "expected_revision": {
+            "type": "integer"
+          },
+          "folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.WikiPagePatchInput",
+        "x-go-source": "internal/memory/wiki_tree.go",
+        "description": "WikiPagePatchInput moves (folder) and/or renames (title) a page."
+      },
+      "WireResponseWikiDraftPreview": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "citations": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "slug",
+          "type",
+          "title",
+          "text",
+          "mode",
+          "citations"
+        ],
+        "x-go-type": "memory.WikiDraftPreview",
+        "x-go-source": "internal/memory/wiki_memory.go",
+        "description": "WikiDraftPreview is one page a dry run would write as a draft."
+      },
+      "WireResponseWikiFolder": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path"
+        ],
+        "x-go-type": "memory.WikiFolder",
+        "x-go-source": "internal/memory/wiki_tree.go"
+      },
+      "WireResponseWikiMemoryBuildResult": {
+        "type": "object",
+        "properties": {
+          "dry_run": {
+            "type": "boolean"
+          },
+          "job": {
+            "$ref": "#/components/schemas/WireResponseWikiJobView"
+          },
+          "drafts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WireResponseWikiDraftPreview"
+            }
+          },
+          "result": {
+            "$ref": "#/components/schemas/WireResponseWikiJobResult"
+          },
+          "memory_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "dry_run"
+        ],
+        "x-go-type": "memory.WikiMemoryBuildResult",
+        "x-go-source": "internal/memory/wiki_memory.go"
+      },
+      "WireResponseWikiMemoryRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "entity_name": {
+            "type": "string"
+          },
+          "memory_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "x-go-type": "memory.WikiMemoryRequest",
+        "x-go-source": "internal/memory/wiki_memory.go",
+        "description": "WikiMemoryRequest says which memories a build reads; exactly one field is set."
+      },
+      "WireResponseWikiTree": {
+        "type": "object",
+        "properties": {
+          "folders": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseWikiTreeFolder"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pages": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WireResponseWikiTreePage"
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authority": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "folders",
+          "pages",
+          "authority"
+        ],
+        "x-go-type": "memory.WikiTree",
+        "x-go-source": "internal/memory/wiki_tree.go"
+      },
+      "WireResponseWikiTreeFolder": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "pages": {
+            "type": "integer"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "pages"
+        ],
+        "x-go-type": "memory.WikiTreeFolder",
+        "x-go-source": "internal/memory/wiki_tree.go"
+      },
+      "WireResponseWikiTreePage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "folder": {
+            "type": "string"
+          },
+          "review_state": {
+            "type": "string"
+          },
+          "locked": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "revision",
+          "slug",
+          "type",
+          "title",
+          "folder",
+          "review_state",
+          "locked"
+        ],
+        "x-go-type": "memory.WikiTreePage",
+        "x-go-source": "internal/memory/wiki_tree.go"
       }
     },
     "headers": {

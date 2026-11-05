@@ -54,7 +54,9 @@ type WikiJob struct {
 	Result            *WikiJobResult `json:"result,omitempty" bson:"result,omitempty"`
 	Generator         *Generator     `json:"generator,omitempty" bson:"generator,omitempty"`
 	RequestedBy       string         `json:"requested_by" bson:"requested_by"`
-	FinishedAt        *time.Time     `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
+	// Memory is set for a build from approved memories instead of a knowledge source.
+	Memory     *WikiMemoryRequest `json:"memory,omitempty" bson:"memory,omitempty"`
+	FinishedAt *time.Time         `json:"finished_at,omitempty" bson:"finished_at,omitempty"`
 }
 
 type WikiJobResult struct {
@@ -142,11 +144,7 @@ func (s *Service) CreateWikiJob(ctx context.Context, token string, in WikiJobInp
 				out = old
 				return nil
 			}
-			requeueJob(&old, now)
-			old.Wiki.Job.MaxTotalTokens = budget
-			prev := old.Revision
-			old.Revision++
-			if err = tx.Replace(ctx, "jobs", old, prev); err != nil {
+			if err = requeueWikiJob(ctx, tx, &old, budget, now); err != nil {
 				return err
 			}
 			out = old
@@ -178,6 +176,15 @@ func requeueJob(r *Record, now time.Time) {
 		next.Error, next.Result, next.FinishedAt, next.Calls, next.Tokens = "", nil, nil, 0, 0
 		r.Wiki = &WikiRecord{Job: &next}
 	}
+}
+
+// requeueWikiJob requeues a finished wiki build with a fresh token budget and stores it.
+func requeueWikiJob(ctx context.Context, tx Tx, old *Record, budget int64, now time.Time) error {
+	requeueJob(old, now)
+	old.Wiki.Job.MaxTotalTokens = budget
+	prev := old.Revision
+	old.Revision++
+	return tx.Replace(ctx, "jobs", *old, prev)
 }
 
 func (s *Service) ListWikiJobs(ctx context.Context, token string, scope Scope, status string) (WikiJobList, error) {
@@ -543,13 +550,16 @@ type wikiWrite struct {
 func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claimed Record, job *WikiJob) (*wikiWrite, error) {
 	scope := claimed.Scope
 	if s.Wiki == nil {
-		return nil, ErrUnavailable
+		return nil, errWikiModelMissing
 	}
 	gen := s.Wiki.Generator()
 	if !validGenerator(&gen) {
 		return nil, ErrUnavailable
 	}
 	job.Generator = &gen
+	if job.Memory != nil {
+		return s.buildWikiFromMemories(ctx, token, d, scope, job, gen)
+	}
 	if _, err := s.knowledgeAuthorization(ctx, token, "read:"+colKnowledgeSources, scope, job.KnowledgeSourceID); err != nil {
 		return nil, err
 	}
@@ -567,46 +577,57 @@ func (s *Service) buildWiki(ctx context.Context, token string, d Decision, claim
 	if err != nil {
 		return nil, err
 	}
+	w := newWikiWrite(src.Sources, gen)
+	return w, s.wikiPlanAndWrite(ctx, token, d, scope, job, w, job.KnowledgeSourceID, source, "")
+}
+
+func newWikiWrite(refs []SourceRef, gen Generator) *wikiWrite {
+	return &wikiWrite{sourceRefs: refs, generator: gen, result: WikiJobResult{Created: []string{}, Updated: []string{}, Unchanged: []string{}, SkippedLocked: []string{}, Rejected: []wikiRejection{}}}
+}
+
+// wikiPlanAndWrite runs the two model steps over one fenced source text (a
+// knowledge source or a set of memories) and keeps the blocks that pass the
+// boundary checks in w. writeRule is appended to the write step's system prompt.
+func (s *Service) wikiPlanAndWrite(ctx context.Context, token string, d Decision, scope Scope, job *WikiJob, w *wikiWrite, resourceID, source, writeRule string) error {
 	// The source leaves the server for the model: an explicit transfer decision.
-	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, job.KnowledgeSourceID, source, "external:wiki-llm")
+	t, err := s.authorizeAt(ctx, token, "generate:"+colWikiPages, scope, resourceID, source, "external:wiki-llm")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if t.PrincipalID != d.PrincipalID || !t.ExternalTransfer || !t.ContentSafe {
-		return nil, ErrDenied
+		return ErrDenied
 	}
 	existing, err := s.Repo.ListRecords(ctx, scope, colWikiPages, wikiListLimit)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	w := &wikiWrite{sourceRefs: src.Sources, generator: gen, result: WikiJobResult{Created: []string{}, Updated: []string{}, Unchanged: []string{}, SkippedLocked: []string{}, Rejected: []wikiRejection{}}}
 
 	// Step 1: analyse.
 	system, user := wikiAnalysePrompt(existing, source)
 	answer, err := s.wikiCall(ctx, scope, job, "wiki_analyse", system, user)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	plan, ok := parseWikiPlan(answer)
 	if !ok {
-		return nil, ErrUnavailable
+		return ErrUnavailable
 	}
 	w.result.Summary = wikiPlanSummary(plan.Summary)
 	planned, current := wikiPlanPages(w, plan.Pages, wikiPagesBySlug(existing), strings.ToLower(source))
 	if len(planned) == 0 {
-		return w, nil
+		return nil
 	}
 
 	// Step 2: write.
 	system, user = wikiWritePrompt(planned, current, source)
-	answer, err = s.wikiCall(ctx, scope, job, "wiki_write", system, user)
+	answer, err = s.wikiCall(ctx, scope, job, "wiki_write", system+writeRule, user)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	blocks, rejected := parseWikiFiles(answer)
 	w.result.Rejected = append(w.result.Rejected, rejected...)
 	s.acceptWikiBlocks(ctx, token, scope, w, planned, blocks)
-	return w, nil
+	return nil
 }
 
 func (s *Service) wikiSourceText(ctx context.Context, scope Scope, src Record) (string, error) {
@@ -742,23 +763,11 @@ func (s *Service) acceptWikiBlocks(ctx context.Context, token string, scope Scop
 func (s *Service) writeWikiDrafts(ctx context.Context, tx Tx, d Decision, claimed Record, job *WikiJob, w *wikiWrite) error {
 	scope := claimed.Scope
 	res := w.result
-	now := time.Now().UTC()
 	for _, b := range w.blocks {
 		id := wikiPageID(scope, b.Slug)
-		links := wikiLinks(b.Body, b.Slug)
 		r, err := tx.Get(ctx, colWikiPages, scope, id)
 		if errors.Is(err, ErrNotFound) || err == nil && r.Status == "deleted" {
-			fresh := Record{ID: id, Scope: scope, Kind: "wiki_page", Status: "draft", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
-				OriginProduct: "wiki", Sensitivity: "private", Sources: append([]SourceRef{}, w.sourceRefs...), Generator: &w.generator,
-				Wiki: &WikiRecord{Page: &WikiPage{Slug: b.Slug, Type: b.Type, ReviewState: "draft", SourceIDs: []string{job.KnowledgeSourceID},
-					Draft: &WikiBody{Title: b.Title, Text: b.Body, Links: links, By: "model:" + w.generator.Model, At: now}, LastMerge: "create", LastJobID: claimed.ID}}}
-			if err == nil {
-				fresh.CreatedAt, fresh.CreatedBy, fresh.CreatedByType = r.CreatedAt, r.CreatedBy, r.CreatedByType
-				fresh.Revision = r.Revision
-				if err = s.replaceWikiPage(ctx, tx, &fresh); err != nil {
-					return err
-				}
-			} else if err = tx.Insert(ctx, colWikiPages, fresh); err != nil {
+			if err = s.createWikiDraft(ctx, tx, d, claimed, job, w, b, r, err == nil); err != nil {
 				return err
 			}
 			res.Created = append(res.Created, id)
@@ -767,49 +776,78 @@ func (s *Service) writeWikiDrafts(ctx context.Context, tx Tx, d Decision, claime
 		if err != nil {
 			return err
 		}
-		p := *r.Wiki.Page
-		if p.Locked {
-			res.SkippedLocked = append(res.SkippedLocked, id)
-			continue
-		}
-		if p.Type != b.Type {
-			res.Rejected = append(res.Rejected, wikiRejection{Path: wikiClip(b.Path), Reason: "type_mismatch"})
-			continue
-		}
-		base, title := wikiBaseText(p), wikiTitle(p)
-		merged, mode, changed := wikiMerge(base, b.Body, b.Mode, b.Section)
-		newSource := !slices.Contains(p.SourceIDs, job.KnowledgeSourceID)
-		if !changed && !newSource {
-			res.Unchanged = append(res.Unchanged, id)
-			continue
-		}
-		if len(merged) > 4*wikiMaxBodyBytes || containsSecret(merged) {
-			res.Rejected = append(res.Rejected, wikiRejection{Path: wikiClip(b.Path), Reason: "merged_body_refused"})
-			continue
-		}
-		if newSource {
-			p.SourceIDs = append(append([]string{}, p.SourceIDs...), job.KnowledgeSourceID)
-			r.Sources = wikiMergeSourceRefs(r.Sources, w.sourceRefs)
-		}
-		if changed {
-			p.Draft = &WikiBody{Title: title, Text: merged, Links: wikiLinks(merged, p.Slug), By: "model:" + w.generator.Model, At: now}
-			p.ReviewState, p.LastMerge = "draft", mode
-			if r.Status == "rejected" {
-				r.Status = "draft"
-			}
-		}
-		p.LastJobID = claimed.ID
-		r.Wiki = &WikiRecord{Page: &p}
-		if err = s.replaceWikiPage(ctx, tx, &r); err != nil {
+		if err = s.updateWikiDraft(ctx, tx, claimed, job, w, b, r, &res); err != nil {
 			return err
-		}
-		if changed {
-			res.Updated = append(res.Updated, id)
-		} else {
-			res.Unchanged = append(res.Unchanged, id)
 		}
 	}
 	job.Result = &res
+	return nil
+}
+
+// createWikiDraft inserts a new draft page, or revives a deleted one in place.
+func (s *Service) createWikiDraft(ctx context.Context, tx Tx, d Decision, claimed Record, job *WikiJob, w *wikiWrite, b wikiBlock, old Record, revive bool) error {
+	scope := claimed.Scope
+	now := time.Now().UTC()
+	sourceIDs := []string{}
+	if job.KnowledgeSourceID != "" {
+		sourceIDs = []string{job.KnowledgeSourceID}
+	}
+	fresh := Record{ID: wikiPageID(scope, b.Slug), Scope: scope, Kind: "wiki_page", Status: "draft", Revision: 1, CreatedAt: now, UpdatedAt: now, CreatedBy: d.PrincipalID, CreatedByType: d.Role,
+		OriginProduct: "wiki", Sensitivity: "private", Sources: append([]SourceRef{}, w.sourceRefs...), Generator: &w.generator,
+		Wiki: &WikiRecord{Page: &WikiPage{Slug: b.Slug, Type: b.Type, ReviewState: "draft", SourceIDs: sourceIDs, MemoryIDs: b.Citations,
+			Draft: &WikiBody{Title: b.Title, Text: b.Body, Links: wikiLinks(b.Body, b.Slug), By: "model:" + w.generator.Model, At: now, Citations: b.Citations}, LastMerge: "create", LastJobID: claimed.ID}}}
+	if !revive {
+		return tx.Insert(ctx, colWikiPages, fresh)
+	}
+	fresh.CreatedAt, fresh.CreatedBy, fresh.CreatedByType = old.CreatedAt, old.CreatedBy, old.CreatedByType
+	fresh.Revision = old.Revision
+	return s.replaceWikiPage(ctx, tx, &fresh)
+}
+
+// updateWikiDraft merges a block into an existing page's draft and records the outcome in res.
+func (s *Service) updateWikiDraft(ctx context.Context, tx Tx, claimed Record, job *WikiJob, w *wikiWrite, b wikiBlock, r Record, res *WikiJobResult) error {
+	p := *r.Wiki.Page
+	switch {
+	case p.Locked:
+		res.SkippedLocked = append(res.SkippedLocked, r.ID)
+		return nil
+	case p.Type != b.Type:
+		res.Rejected = append(res.Rejected, wikiRejection{Path: wikiClip(b.Path), Reason: "type_mismatch"})
+		return nil
+	}
+	base, title := wikiBaseText(p), wikiTitle(p)
+	merged, mode, changed := wikiMerge(base, b.Body, b.Mode, b.Section)
+	newSource := job.KnowledgeSourceID != "" && !slices.Contains(p.SourceIDs, job.KnowledgeSourceID)
+	if !changed && !newSource {
+		res.Unchanged = append(res.Unchanged, r.ID)
+		return nil
+	}
+	if len(merged) > 4*wikiMaxBodyBytes || containsSecret(merged) {
+		res.Rejected = append(res.Rejected, wikiRejection{Path: wikiClip(b.Path), Reason: "merged_body_refused"})
+		return nil
+	}
+	if newSource {
+		p.SourceIDs = append(append([]string{}, p.SourceIDs...), job.KnowledgeSourceID)
+		r.Sources = wikiUnionBy(r.Sources, w.sourceRefs, func(x SourceRef) string { return x.SourceID })
+	}
+	if changed {
+		p.MemoryIDs = wikiUnion(p.MemoryIDs, b.Citations)
+		p.Draft = &WikiBody{Title: title, Text: merged, Links: wikiLinks(merged, p.Slug), By: "model:" + w.generator.Model, At: time.Now().UTC(), Citations: wikiUnion(wikiBaseCitations(p), b.Citations)}
+		p.ReviewState, p.LastMerge = "draft", mode
+		if r.Status == "rejected" {
+			r.Status = "draft"
+		}
+	}
+	p.LastJobID = claimed.ID
+	r.Wiki = &WikiRecord{Page: &p}
+	if err := s.replaceWikiPage(ctx, tx, &r); err != nil {
+		return err
+	}
+	if changed {
+		res.Updated = append(res.Updated, r.ID)
+	} else {
+		res.Unchanged = append(res.Unchanged, r.ID)
+	}
 	return nil
 }
 
@@ -857,6 +895,31 @@ func (c *ChatWikiLLM) Complete(ctx context.Context, system, user string, maxToke
 	return response.Choices[0].Message.Content, usage, nil
 }
 
+func wikiBaseCitations(p WikiPage) []string {
+	if p.Draft != nil {
+		return p.Draft.Citations
+	} else if p.Reviewed != nil {
+		return p.Reviewed.Citations
+	}
+	return nil
+}
+
+// wikiUnion appends the strings of add missing from have, in order.
+func wikiUnion(have, add []string) []string {
+	return wikiUnionBy(have, add, func(v string) string { return v })
+}
+
+// wikiUnionBy appends the values of add whose key is not yet in have, in order.
+func wikiUnionBy[T any](have, add []T, key func(T) string) []T {
+	out := append([]T{}, have...)
+	for _, v := range add {
+		if !slices.ContainsFunc(out, func(x T) bool { return key(x) == key(v) }) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 func wikiBaseText(p WikiPage) string {
 	if p.Draft != nil {
 		return p.Draft.Text
@@ -864,14 +927,4 @@ func wikiBaseText(p WikiPage) string {
 		return p.Reviewed.Text
 	}
 	return ""
-}
-
-func wikiMergeSourceRefs(have, add []SourceRef) []SourceRef {
-	refs := append([]SourceRef{}, have...)
-	for _, ref := range add {
-		if !slices.ContainsFunc(refs, func(x SourceRef) bool { return x.SourceID == ref.SourceID }) {
-			refs = append(refs, ref)
-		}
-	}
-	return refs
 }

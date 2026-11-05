@@ -815,6 +815,53 @@
     },
     {
       "method": "post",
+      "path": "/v1/wiki/build_from_memories",
+      "request": "WikiMemoryBuildInput",
+      "response": "WikiMemoryBuildResult",
+      "summary": "Wiki: build_from_memories",
+      "query": {},
+      "description": "A person asks for wiki page drafts written from approved memories recalled by exactly one of query, topic or entity_name. Every page must cite recalled memories as [mem:ID]; other citations are rejected. Locked pages are never sent or written. Without dry_run a wiki job is queued (run it with /v1/wiki/jobs/{id}/run or /v1/wiki/work) and its drafts wait for page review; dry_run runs the model now and returns the drafts unsaved. Answers model_not_configured (503) when no wiki model is set.",
+      "required_body": [
+        "scope"
+      ]
+    },
+    {
+      "method": "post",
+      "path": "/v1/wiki/folders",
+      "request": "WikiFolderInput",
+      "response": "WikiTreeFolder",
+      "summary": "Wiki: folders",
+      "query": {},
+      "description": "A person creates an empty wiki folder (slash-separated names, at most 8 levels and 256 bytes); asking again returns the same folder.",
+      "required_body": [
+        "scope",
+        "path"
+      ]
+    },
+    {
+      "method": "patch",
+      "path": "/v1/wiki/pages/{id}",
+      "request": "WikiPagePatchInput",
+      "response": "WikiPageView",
+      "summary": "Wiki: move or rename a page",
+      "query": {},
+      "description": "A person moves a page to a folder (\"\" is the root) and/or renames it, with matching expected_revision. A rename that changes the slug gives the page a new id and answers 409 while reviewed pages still link to it or the new id is taken. The body text is not changed.",
+      "required_body": [
+        "scope",
+        "expected_revision"
+      ]
+    },
+    {
+      "method": "get",
+      "path": "/v1/wiki/tree",
+      "request": null,
+      "response": "WikiTree",
+      "summary": "Wiki: tree",
+      "query": {},
+      "description": "Scoped wiki view. People may see pending drafts; agents see only reviewed pages and reviewed links. Lists are bounded to 1,000 records. Unknown or repeated query parameters are rejected."
+    },
+    {
+      "method": "post",
       "path": "/v1/memories/query",
       "request": "CatalogQueryInput",
       "response": "MemoryCatalogPage",

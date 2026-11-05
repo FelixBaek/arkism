@@ -2,9 +2,7 @@ package memory
 
 import (
 	"encoding/base64"
-	"mime"
 	"net/http"
-	"strconv"
 )
 
 func registerSkillsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {
@@ -40,11 +38,7 @@ func (s *Service) coreHTTPGetV1SkillVersionsIdZip(w http.ResponseWriter, r *http
 		respond(w, SkillZipExport{Filename: name, ContentBase64: base64.StdEncoding.EncodeToString(data)}, err)
 		return
 	}
-	w.Header().Set(headerContentType, "application/zip")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(data)
+	writeAttachment(w, "application/zip", name, data)
 }
 
 func registerSkilltrialsCoreHTTP(mux routeRegistrar, s *Service, stats *requestMetrics) {

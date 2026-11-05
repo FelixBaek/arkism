@@ -36,9 +36,10 @@ func isWikiCollection(col string) bool { return col == colWikiPages || col == co
 
 // WikiRecord is the wiki part of a Record; exactly one member is set.
 type WikiRecord struct {
-	Page *WikiPage `json:"page,omitempty" bson:"page,omitempty"`
-	Link *WikiLink `json:"link,omitempty" bson:"link,omitempty"`
-	Job  *WikiJob  `json:"job,omitempty" bson:"job,omitempty"`
+	Page   *WikiPage   `json:"page,omitempty" bson:"page,omitempty"`
+	Link   *WikiLink   `json:"link,omitempty" bson:"link,omitempty"`
+	Job    *WikiJob    `json:"job,omitempty" bson:"job,omitempty"`
+	Folder *WikiFolder `json:"folder,omitempty" bson:"folder,omitempty"`
 }
 
 type WikiPage struct {
@@ -56,6 +57,11 @@ type WikiPage struct {
 	LastJobID string    `json:"last_job_id,omitempty" bson:"last_job_id,omitempty"`
 	// StaleSources: removed sources whose words may still be in the body.
 	StaleSources []string `json:"stale_sources,omitempty" bson:"stale_sources,omitempty"`
+	// Folder is the page's place in the wiki tree ("" = root), see wiki_tree.go.
+	Folder string `json:"folder,omitempty" bson:"folder,omitempty"`
+	// MemoryIDs are the approved memories cited by the page (wiki_memory.go);
+	// the page is only served while every one of them is still live.
+	MemoryIDs []string `json:"memory_ids,omitempty" bson:"memory_ids,omitempty"`
 }
 
 type WikiBody struct {
@@ -64,6 +70,8 @@ type WikiBody struct {
 	Links []string  `json:"links" bson:"links"`
 	By    string    `json:"by" bson:"by"`
 	At    time.Time `json:"at" bson:"at"`
+	// Citations are the memory ids this body cites as [mem:ID].
+	Citations []string `json:"citations,omitempty" bson:"citations,omitempty"`
 }
 
 type WikiLink struct {
@@ -88,6 +96,8 @@ type WikiPageView struct {
 	LastMerge    string    `json:"last_merge,omitempty"`
 	LastJobID    string    `json:"last_job_id,omitempty"`
 	StaleSources []string  `json:"stale_sources,omitempty"`
+	Folder       string    `json:"folder,omitempty"`
+	MemoryIDs    []string  `json:"memory_ids,omitempty"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Authority    string    `json:"authority"`
 }
@@ -155,7 +165,7 @@ func viewWikiPage(r Record, human bool) WikiPageView {
 	p := r.Wiki.Page
 	v := WikiPageView{ID: r.ID, Revision: r.Revision, Status: r.Status, Slug: p.Slug, Type: p.Type, Locked: p.Locked, ReviewState: p.ReviewState,
 		SourceIDs: append([]string{}, p.SourceIDs...), Reviewed: p.Reviewed, LastMerge: p.LastMerge, LastJobID: p.LastJobID, StaleSources: p.StaleSources,
-		UpdatedAt: r.UpdatedAt, Authority: wikiAuthority}
+		Folder: p.Folder, MemoryIDs: p.MemoryIDs, UpdatedAt: r.UpdatedAt, Authority: wikiAuthority}
 	if human {
 		v.Draft = p.Draft
 	}
@@ -169,8 +179,11 @@ func wikiServable(ctx context.Context, tx Tx, r Record) bool {
 	if p == nil || r.Status != "active" || p.Reviewed == nil || r.PrivacyQuarantined || r.ContentErased {
 		return false
 	}
+	if len(p.MemoryIDs) > 0 && wikiMemoriesLive(ctx, tx, r.Scope, p.MemoryIDs) != nil {
+		return false
+	}
 	if len(r.Sources) == 0 {
-		return p.Locked
+		return p.Locked || len(p.MemoryIDs) > 0
 	}
 	return checkSources(ctx, tx, r) == nil
 }
@@ -281,6 +294,11 @@ func (s *Service) ReviewWikiPage(ctx context.Context, token, id string, in WikiR
 		}
 		if in.Decision == "approve" && len(r.Sources) > 0 {
 			if err = checkSources(ctx, tx, r); err != nil {
+				return err
+			}
+		}
+		if in.Decision == "approve" && len(p.MemoryIDs) > 0 {
+			if err = wikiMemoriesLive(ctx, tx, in.Scope, p.MemoryIDs); err != nil {
 				return err
 			}
 		}
@@ -435,12 +453,24 @@ func (s *Service) replaceWikiPage(ctx context.Context, tx Tx, r *Record) error {
 		return ErrConflict
 	}
 	if sameProvenance(current, *r) {
-		return tx.Replace(ctx, colWikiPages, *r, prev)
+		err = tx.Replace(ctx, colWikiPages, *r, prev)
+	} else if err = tx.Delete(ctx, colWikiPages, r.Scope, r.ID, prev); err == nil {
+		err = tx.Insert(ctx, colWikiPages, *r)
 	}
-	if err = tx.Delete(ctx, colWikiPages, r.Scope, r.ID, prev); err != nil {
+	if err != nil {
 		return err
 	}
-	return tx.Insert(ctx, colWikiPages, *r)
+	return s.queueWikiEmbedding(ctx, tx, *r)
+}
+
+// queueWikiEmbedding puts a served page on the shared embedding job queue
+// (search.go embedJob) when its body has no current vector, so the wiki
+// search vector lane can rank it.
+func (s *Service) queueWikiEmbedding(ctx context.Context, tx Tx, r Record) error {
+	if s.Embedder == nil || !embeddingEligible(colWikiPages, r) || embeddingCurrent(s.Embedder, r, recordContent(r)) {
+		return nil
+	}
+	return enqueue(ctx, tx, colWikiPages, r)
 }
 
 // syncWikiLinks makes the wiki_links rows from page r equal its reviewed links.

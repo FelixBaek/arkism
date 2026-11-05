@@ -114,6 +114,7 @@ func handlerMode(s *Service, timeout time.Duration, recovery bool) http.Handler 
 	collaborationRoutes(mux, s)
 	digestRoutes(mux, s)
 	registerWikiHTTP(mux, s)
+	registerMemwikiCoreHTTP(mux, s, stats)
 	modelBudgetRoutes(mux, s)
 	modelTransferRoutes(mux, s)
 	skillTrialStatusRoutes(mux, s)
@@ -267,7 +268,7 @@ func errorResponse(e error) (string, int) {
 		code, status = "secret_detected", 422
 	case errors.Is(e, errPDFNoText):
 		code, status = "no_extractable_text", 422
-	case errors.Is(e, errModelNotConfigured):
+	case errors.Is(e, errModelNotConfigured), errors.Is(e, errWikiModelMissing):
 		code, status = "model_not_configured", 503
 	case errors.Is(e, ErrSemanticLaneDown):
 		code, status = "semantic_lane_unavailable", 503
