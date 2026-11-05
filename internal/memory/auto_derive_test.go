@@ -188,6 +188,9 @@ func TestAutoDeriveWorkerRunsOnePassAndStopsOnBudget(t *testing.T) {
 	if len(llm.prompts) != 1 || job.Status != JobStatusDone || job.AutoDerive.Outcome != "model_budget_exceeded" {
 		t.Fatalf("budget stop: prompts=%d %+v %+v", len(llm.prompts), job, job.AutoDerive)
 	}
+	if v := viewOperation(job); v.Outcome != "model_budget_exceeded" || v.LastRun == nil {
+		t.Fatalf("the operations view hides the last pass: %+v", v)
+	}
 	// A later approval starts a fresh count on the finished job.
 	f.svc.noteApprovedMemory(testCtx, scopeA)
 	if job = autoDeriveJobs(f)[0]; job.Status != JobStatusPending || job.AutoDerive.Pass != 0 || job.AutoDerive.Approved != 1 {

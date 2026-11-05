@@ -1221,7 +1221,8 @@ window.ArkismOverviewWindows = (ctx, env) => {
     if (view !== "summary") return void ({ audit: opsAudit, models: opsModels, trend: opsTrend, jobs: opsJobs }[view] || opsAudit)(d, M);
     const body = el("div", "ov-wide-body"), left = el("div", "ov-wide-left"), right = el("div", "ov-wide-right ov-wide-detail");
     left.append(el("p", "ov-win-empty", "불러오는 중…")); body.append(left, right); d.append(body);
-    const [st, tg, ops] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`)]);
+    const [st, tg, ops, ad, ds, mm] = await Promise.allSettled([request(`/v1/stats?${query()}`), request(`/v1/tags?${query()}`), request(`/v1/operations?${query({ status: "failed", limit: 20 })}`),
+      request(`/v1/operations?${query({ kind: "auto_derive", limit: 5 })}`), request(`/v1/operations?${query({ kind: "derive_schedule", limit: 5 })}`), request(`/v1/mental-models?${query({ limit: 100 })}`)]);
     if (!d.isConnected) return;
     const redo = () => { if (dlg === d) wideOps(focusTag); };
     const human = state.caps?.actions?.review_decide !== false; // rename and retry are people-only routes: an agent token sees no button
@@ -1241,6 +1242,12 @@ window.ArkismOverviewWindows = (ctx, env) => {
       const failed = ops.value?.items || [];
       if (!failed.length) upkeep.append(row("", "멈춘 작업이 없어요", "색인·위키 같은 뒤에서 하는 일이 잘 돌고 있어요."));
       for (const o of failed.slice(0, 10)) upkeep.append(row("", `멈춘 작업 · ${opKind(o.kind)}`, ago(o.updated_at), "", jobButtons({ ...o, status: "failed" }, human, redo).filter((b) => b.dataset.act === "retry")));
+    }
+    // 기억 정리 and 직접 정한 주제 run in the background: when they last ran, what waits, what failed
+    if (ad.status === "fulfilled" || ds.status === "fulfilled" || mm.status === "fulfilled") {
+      const sync = M.syncStatus([...(ad.value?.items || []), ...(ds.value?.items || [])], mm.value?.items);
+      const line = (x) => [x.last ? `${tr("마지막 실행")} ${ago(x.last)}` : tr("아직 실행 안 했어요"), x.waiting ? tr(`기다림 ${num(x.waiting)}`) : "", x.failed ? tr(`실패 ${num(x.failed)}`) : ""].filter(Boolean).join(" · ");
+      upkeep.append(row(sync.consolidation.failed ? "실패" : "", "기억 정리", line(sync.consolidation)), row(sync.topics.failed ? "실패" : "", "직접 정한 주제", line(sync.topics)));
     }
     upkeep.append(row("", "모든 작업", "기다리는 일, 도는 일, 끝난 일을 모두 봐요.", "", [button("작업 보기", "small", null, () => wideOps("", "jobs"))]));
     // the model test itself lives in 설정 › 에이전트 (models.js testModel); this only takes the person there

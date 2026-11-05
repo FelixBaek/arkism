@@ -138,7 +138,18 @@
     }
     return { buckets: [...buckets].sort((a, b) => String(a[0]).localeCompare(String(b[0]))), keys: [...keys].sort((a, b) => b[1] - a[1]), total: [...keys.values()].reduce((n, c) => n + c, 0) };
   }
-  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles, auditLine, opLabel, callKind, callGroups, modelStats, series };
+  // 기억 관리 › 한눈에 › 정리 상태: background consolidation (GET /v1/operations?kind=auto_derive|derive_schedule items) and
+  // topic summaries (GET /v1/mental-models items) as { waiting, failed, last } each; last is the newest finished pass or null
+  function syncStatus(jobs, models) {
+    const newest = (xs) => xs.filter(Boolean).sort().at(-1) || null;
+    const js = jobs || [], ms = (models || []).filter((m) => m.status !== "proposed");
+    return {
+      consolidation: { waiting: js.filter((j) => ["pending", "retry", "running"].includes(j.status)).length,
+        failed: js.filter((j) => j.status === "failed" || (j.outcome && j.outcome !== "ok")).length, last: newest(js.map((j) => j.last_run)) },
+      topics: { waiting: ms.filter((m) => m.stale).length, failed: ms.filter((m) => /^refresh_failed/.test(m.last_outcome?.code || "")).length, last: newest(ms.map((m) => m.last_refresh_at)) },
+    };
+  }
+  const api = { approval, groups, evidence, deletionStatus, tagRows, tagChange, statTiles, auditLine, opLabel, callKind, callGroups, modelStats, series, syncStatus };
   root.ArkismMemoryManagement = api;
   if (typeof window === "undefined" && typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

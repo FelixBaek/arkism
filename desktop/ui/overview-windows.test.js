@@ -228,6 +228,9 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
     if (path.startsWith("/v1/stats")) return { memories: { total: 5, by_status: { candidate: 5 } }, pending_candidates: 2, sources: { total: 1 } };
     if (path.startsWith("/v1/tags/rename")) return { renamed: 3, more: false, body };
     if (path.startsWith("/v1/tags")) return { items: [{ tag: "work", count: 3 }, { tag: "home", count: 1 }, { tag: "session:s1", count: 4 }] };
+    if (path.startsWith("/v1/operations?") && /kind=auto_derive/.test(path)) return { items: [{ id: "ad", kind: "auto_derive", status: "done", outcome: "model_budget_exceeded", last_run: new Date(Date.now() - 2 * 3600e3).toISOString() }] };
+    if (path.startsWith("/v1/operations?") && /kind=derive_schedule/.test(path)) return { items: [] };
+    if (path.startsWith("/v1/mental-models?")) return { items: [{ id: "mm", stale: true }] };
     if (path.startsWith("/v1/operations?")) return { items: [{ id: "op1", kind: "embedding", operable: true, revision: 4, updated_at: "2026-11-05T00:00:00Z" },
       { id: "op2", kind: "file_memory_extract", operable: true, revision: 2, updated_at: "2026-11-05T00:00:00Z" }] };
     return {};
@@ -237,6 +240,8 @@ test("기억 관리: numbers, a merge that asks first, retry on stopped work; an
   const dlg = last("dialog.ov-wide-win"), text = () => dlg.textContent;
   assert.match(text(), /0개쓰는 기억/, "a present status map without active means zero");
   assert.match(text(), /대화에서 자동으로 붙어 바꿀 수 없어요/);
+  assert.match(text(), /실패기억 정리마지막 실행 [^·]+ · 실패 1/, "the consolidation line shows its last pass and the failure");
+  assert.match(text(), /직접 정한 주제아직 실행 안 했어요 · 기다림 1/);
   const btn = (root, t) => [root, ...root.querySelectorAll("button")].find((b) => b.tagName === "BUTTON" && b.textContent.trim() === t);
   btn(dlg, "이름 바꾸기").click();
   const input = dlg.querySelectorAll("input").find((n) => n.getAttribute("aria-label") === "새 태그 이름"); input.value = "home";

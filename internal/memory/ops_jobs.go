@@ -28,6 +28,10 @@ type OperationView struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
 	Operable      bool       `json:"operable"`
+	// LastRun and Outcome are the last pass of a consolidation job (auto_derive, derive_schedule): ok,
+	// model_budget_exceeded, denied or model_not_configured.
+	LastRun *time.Time `json:"last_run,omitempty"`
+	Outcome string     `json:"outcome,omitempty"`
 }
 
 type OperationPage struct {
@@ -51,6 +55,12 @@ func viewOperation(r Record) OperationView {
 	}
 	if job := wikiJobOf(r); job != nil {
 		v.Error = opsText(job.Error)
+	}
+	if a := r.AutoDerive; a != nil {
+		v.LastRun, v.Outcome = a.LastRun, a.Outcome
+	}
+	if d := r.DeriveSchedule; d != nil {
+		v.LastRun, v.Outcome = d.LastRun, d.Outcome
 	}
 	return v
 }

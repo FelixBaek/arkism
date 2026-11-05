@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -64,15 +65,29 @@ func TestStageAndQueueMetrics(t *testing.T) {
 }
 
 func TestOperationAndReasoningMetrics(t *testing.T) {
+	// The registry is process-wide and other tests finish jobs too, so compare deltas.
+	value := func(body, series string) (n float64) {
+		for _, line := range strings.Split(body, "\n") {
+			if v, ok := strings.CutPrefix(line, series+" "); ok {
+				n, _ = strconv.ParseFloat(v, 64)
+			}
+		}
+		return n
+	}
+	series := []string{`arkism_operations_total{kind="embedding",outcome="error"}`, `arkism_operation_duration_seconds_count{kind="embedding",outcome="ok"}`,
+		`arkism_operation_duration_seconds_bucket{kind="embedding",outcome="ok",le="0.05"}`}
+	before := promText(stageFamilies())
 	observeOperation("embedding", nil, 20*time.Millisecond)
 	observeOperation("embedding", errors.New("down"), time.Millisecond)
 	observeOperation("odd kind\n", nil, time.Millisecond)
 	body := promText(stageFamilies())
-	for _, want := range []string{`arkism_operations_total{kind="embedding",outcome="error"} 1`, `arkism_operation_duration_seconds_count{kind="embedding",outcome="ok"} 1`,
-		`arkism_operation_duration_seconds_bucket{kind="embedding",outcome="ok",le="0.05"} 1`, `arkism_operations_total{kind="other",outcome="ok"}`} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("missing %q in\n%s", want, body)
+	for _, want := range series {
+		if value(body, want)-value(before, want) != 1 {
+			t.Fatalf("%s did not grow by one in\n%s", want, body)
 		}
+	}
+	if !strings.Contains(body, `arkism_operations_total{kind="other",outcome="ok"}`) {
+		t.Fatalf("unknown kinds are not folded into other:\n%s", body)
 	}
 	observeLLMCall("think.test", "p", "m", true, time.Millisecond, ProviderUsage{OutputTokens: 300, ReasoningTokens: 200})
 	if body := promText(llmFamilies()); !strings.Contains(body, `arkism_llm_reasoning_tokens_sum{operation="think.test",provider="p",model="m"} 200`) {

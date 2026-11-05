@@ -4348,6 +4348,15 @@
                           },
                           "operable": {
                             "type": "boolean"
+                          },
+                          "last_run": {
+                            "type": "string",
+                            "format": "date-time",
+                            "description": "Consolidation jobs (auto_derive, derive_schedule): when the last pass ended."
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
                           }
                         }
                       }
@@ -4559,6 +4568,15 @@
                     },
                     "operable": {
                       "type": "boolean"
+                    },
+                    "last_run": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Consolidation jobs (auto_derive, derive_schedule): when the last pass ended."
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
                     }
                   }
                 }
@@ -4765,6 +4783,15 @@
                     },
                     "operable": {
                       "type": "boolean"
+                    },
+                    "last_run": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Consolidation jobs (auto_derive, derive_schedule): when the last pass ended."
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
                     }
                   }
                 }
@@ -4988,6 +5015,15 @@
                     },
                     "operable": {
                       "type": "boolean"
+                    },
+                    "last_run": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Consolidation jobs (auto_derive, derive_schedule): when the last pass ended."
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
                     }
                   }
                 }
@@ -5211,6 +5247,15 @@
                     },
                     "operable": {
                       "type": "boolean"
+                    },
+                    "last_run": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Consolidation jobs (auto_derive, derive_schedule): when the last pass ended."
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "description": "Consolidation jobs: the last pass, ok, model_budget_exceeded, denied or model_not_configured."
                     }
                   }
                 }

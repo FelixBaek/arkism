@@ -113,3 +113,10 @@ test("model calls split by kind and fold per model; stats links come out busiest
   assert.deepEqual(management.statTiles({ links: { supports: 2, causes: 7, empty: 0 } }).links, [["causes", 7], ["supports", 2]]);
   assert.deepEqual(management.statTiles({}).links, []);
 });
+
+test("정리 상태 counts waiting and failed consolidation passes and topic summaries, with the newest finished pass", () => {
+  const st = management.syncStatus([{ status: "pending", outcome: "ok", last_run: "2026-11-05T01:00:00Z" }, { status: "done", outcome: "model_budget_exceeded", last_run: "2026-11-05T03:00:00Z" }, { status: "failed" }],
+    [{ stale: true, last_refresh_at: "2026-11-04T00:00:00Z" }, { last_outcome: { code: "refresh_failed_error" }, last_refresh_at: "2026-11-05T02:00:00Z" }, { status: "proposed", stale: true }]);
+  assert.deepEqual(st, { consolidation: { waiting: 1, failed: 2, last: "2026-11-05T03:00:00Z" }, topics: { waiting: 1, failed: 1, last: "2026-11-05T02:00:00Z" } });
+  assert.deepEqual(management.syncStatus(null, null), { consolidation: { waiting: 0, failed: 0, last: null }, topics: { waiting: 0, failed: 0, last: null } });
+});
