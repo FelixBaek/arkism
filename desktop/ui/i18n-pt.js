@@ -4914,7 +4914,6 @@
  "뒷받침": "Apoia",
  "같은 대화": "Mesma conversa",
  "새로 바뀜": "Substituída por mais nova",
- "평가를 불러오지 못했어요.": "Não foi possível carregar a avaliação.",
  "확인 기록": "Histórico de conferência",
  "지금 기억은 이력으로 가요": "A memória atual vai para o histórico",
  "새로 들어온 내용은 버려요": "O conteúdo novo é descartado",
@@ -6166,7 +6165,8 @@
  "이전 내용": "Anterior",
  "새 내용으로 바뀜": "Substituído por um mais novo",
  "승인 전": "Não aprovado",
- "사람이 고르기 전까지 지금 내용을 계속 써요": "A versão atual continua em uso até que uma pessoa escolha"
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "A versão atual continua em uso até que uma pessoa escolha",
+ "검토 중": "Em revisão"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memórias de origem",
@@ -7409,6 +7409,7 @@
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Adicionei {1} candidatas a ‘{0}’. Mude para esse espaço e aprove-as em 'Confira, por favor'.",
  "· 기억 {0}개": "· {0} memórias",
  "관계 {0}개": "{0} relações",
- "근거 {0}개": "{0} fontes"
+ "근거 {0}개": "{0} fontes",
+ "이전 {0}개": "{0} anteriores"
  }
 };

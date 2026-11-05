@@ -41,7 +41,7 @@ function setup(overrides = {}) {
     inject: { button: () => h.button("주입", "") },
     KINDS: { user: 1, project: 1 }, kindLabel: (k) => ({ user: "사용자", project: "프로젝트" }[k] || "기억"),
     row: (id, tpl, cells, onClick) => { const r = h.el("div", "row"); r.dataset.id = id; r.append(...cells); r.addEventListener("click", onClick); return r; },
-    originOf: () => "Codex", ago: () => "방금", memRepo: (m) => m.repo || "", renderDetail: () => log.push("renderDetail"),
+    originOf: () => "Codex", ago: () => "방금", shortDate: (v) => String(v).slice(0, 10), memRepo: (m) => m.repo || "", renderDetail: () => log.push("renderDetail"),
     virtualList: { mount: ({ container, items, row }) => container.replaceChildren(...items.map(row)) },
     render: (reset) => log.push(`render:${reset}`), markSelected: () => log.push("mark"), openDetail: () => log.push("open"),
     riskLabel: () => "위험 낮음", withAgent: () => "Claude", savedHow: () => "자동", waitReason: (c) => c.warn ? ["이유 — 자세히", true] : ["대기", false],
@@ -70,9 +70,9 @@ test("memTitle names each tab and counts from the catalog or local data", async 
   const env = setup(); const api = await list(env);
   env.state.data.candidates = [{ id: "c" }]; env.state.data.conflicted = [{ id: "x" }, { id: "y" }];
   env.state.data.memories = [{ id: "a", unproven: true, idle: true }];
-  assert.deepEqual(api.memTitle(), ["기억", "AI가 답할 때 참고하는 내용이에요.", "7개"]);
+  assert.deepEqual(api.memTitle(), ["기억", "AI가 답할 때 참고하는 내용이에요.", ""]); // no count by the title: the open kind tab has it
   env.deps.memUse = () => ({ injections: 4, used: 1 }); env.snap("memories").total = 12;
-  assert.match(api.memTitle()[1], /25%/); assert.equal(api.memTitle()[2], "12개");
+  assert.match(api.memTitle()[1], /25%/); assert.equal(api.memTitle()[2], "");
   env.deps.memory.memTab = "candidate";
   assert.equal(api.memTitle()[2], "4개", "the check title counts everything waiting (the sub-tabs count their own), not every memory");
   assert.deepEqual(api.checkTotal(), { sum: 4, text: "4" }); // 1 candidate + 2 conflicted + 1 idle; provenance not counted
@@ -124,20 +124,36 @@ test("the main list draws check card, filters, chips, badges, paging and empty s
   assert.deepEqual(badges, ["재검토 예정일 지남", "항상 적용", "안 쓰임", "답에 보임 2번", "새 기억", "—", "…", "새 기억", "안 불림", "5번 참고"]);
   assert.match(h.$("#table .collection-more").textContent, /불러온 10개 중 10개 표시/);
   const chips = h.$("#chips").querySelectorAll("button");
-  assert.deepEqual(chips.map((c) => c.textContent), ["전체3", "사용자3", "프로젝트"]);
+  assert.deepEqual(chips.filter((c) => /mem-kind/.test(c.className)).map((c) => c.textContent), ["전체3", "사용자", "프로젝트"], "only the open tab shows its count");
   chips[1].click(); assert.equal(deps.memory.kind, "user");
   // card button goes to the first non-empty check list
   dom.buttons(controls, "하나씩 확인하기")[0].click();
   assert.deepEqual(env.gone.at(-1), ["memories", "candidate"]);
-  const [repo, sort] = controls.querySelectorAll("select");
+  // the toolbar holds only the search and 기억 추가; everything else waits under 자세히 and 모아보기 next to the kind tabs
+  const tools = controls.querySelector(".mem-tools");
+  assert.deepEqual(tools.children.map((n) => n.tagName === "BUTTON" ? n.textContent : n.className), ["panel-search", "기억 추가"]);
+  assert.equal(controls.querySelectorAll("select").length, 0);
+  const more = h.$("#chips .mem-more-pop");
+  assert.equal(more.querySelector("summary").textContent, "자세히");
+  assert.ok(more.querySelector(".mem-when-pick"), "시점 is under 자세히");
+  assert.deepEqual(more.querySelectorAll("button").map((b) => b.textContent), ["주입", "지운 기억"]);
+  const [repo, sort] = more.querySelectorAll("select");
   assert.deepEqual(repo.options.map((o) => o.textContent), ["저장소: 모두", "저장소: 공용 2", "저장소: r 4", "저장소: y 0"]);
   dom.input(repo, "o/r"); assert.equal(deps.memory.repo, "o/r");
-  // 모아보기 is a row of chips: one tap opens that view
-  const look = controls.querySelector(".mem-look");
+  // 모아보기 is one menu: one tap opens that view
+  const look = h.$("#chips .mem-look");
+  assert.equal(look.querySelector("summary").textContent, "모아보기");
   assert.deepEqual(look.querySelectorAll("button").map((c) => c.textContent), ["승인 기록", "주제 요약", "작업 관계", "사용자 특성", "반성 교훈", "과거 시점", "대화", "물어보기", "검색 살펴보기", "규칙", "자주 나온 이름"]);
   dom.buttons(look, "사용자 특성")[0].click(); assert.deepEqual(env.gone.at(-1), ["memories", "traits"]);
   assert.equal(dom.buttons(controls, "기억 추가").length, 1); // in the toolbar, not alone above the panel
   dom.input(sort, "used"); assert.equal(deps.memory.sort, "used");
+  // an open 자세히 stays open across the redraw a choice makes
+  more.open = true; dom.fire(more, "toggle"); api.renderMemories();
+  assert.equal(h.$("#chips .mem-more-pop").open, true);
+  // a picked past day stays in the toolbar, so the list never looks like today's
+  deps.memory.validAt = "2026-09-15"; api.renderMemories();
+  assert.ok(h.$("#controls .mem-tools .mem-when-pick")); assert.equal(h.$("#chips .mem-more-pop .mem-when-pick"), null);
+  deps.memory.validAt = ""; api.renderMemories();
   // search box mirrors into #search and the memory query
   const q = controls.querySelector(".panel-search input");
   q.value = "  Hello "; q.selectionStart = 3; dom.fire(q, "input");
@@ -163,7 +179,7 @@ test("an empty main list explains why and kinds show no numbers on an older serv
   assert.doesNotMatch(env.h.$("#table").textContent, /아직 기억이 없어요/, "a failed list is not a fresh start");
   assert.match(env.h.$("#stats").textContent, /불러오지 못했어요/);
   assert.equal(env.h.$("#controls .mem-check"), null);
-  assert.deepEqual(env.h.$("#chips").querySelectorAll("output").map((o) => o.textContent), ["", "", ""]);
+  assert.deepEqual(env.h.$("#chips").querySelectorAll("output").map((o) => o.textContent), []);
   env.deps.memory.query = "zz"; env.snap("memories").error = null; env.snap("memories").loading = true;
   api.renderMemories();
   assert.match(env.h.$("#table").textContent, /검색과 맞는 기억이 없어요/);
@@ -435,5 +451,9 @@ test("a known 0 shows no number on the check sub-tabs and kind chips; other coun
   assert.equal(seen[3][2].text, "2"); assert.equal(env.log.at(-1), "notes", "AI 정리 is drawn by digests.js");
   env.deps.digests.notesCount = () => 0;
   env.deps.memory.memTab = "active"; env.snap("memories").facets = { kinds: { user: 2, project: 0 } }; api.renderMemories();
-  assert.deepEqual(env.h.$("#chips").querySelectorAll(".mem-kind").map((c) => c.textContent), ["전체2", "사용자2", "프로젝트"]);
+  assert.deepEqual(env.h.$("#chips").querySelectorAll(".mem-kind").map((c) => c.textContent), ["전체2", "사용자", "프로젝트"]);
+  env.deps.memory.kind = "user"; api.renderMemories();
+  assert.deepEqual(env.h.$("#chips").querySelectorAll(".mem-kind").map((c) => c.textContent), ["전체", "사용자2", "프로젝트"]);
+  env.deps.memory.kind = "project"; api.renderMemories();
+  assert.deepEqual(env.h.$("#chips").querySelectorAll(".mem-kind").map((c) => c.textContent), ["전체", "사용자", "프로젝트"], "a known 0 stays hidden on the open tab too");
 });

@@ -25,6 +25,11 @@ export function memoryLabels(item, { maintenance = [], provisional = false } = {
   return out;
 }
 
+// A list row carries at most one label, the one that most changes what the row means; the rest wait in the detail.
+const ROW = ["정정 검토 중", "임시 · 승인 전", "이번만 · 7일 뒤 만료", "파일 경로 없음"];
+/** The single label a list row shows (or none): 정정 검토 중 > 임시 · 승인 전 > 이번만 > 파일 경로 없음. */
+export const rowLabels = (labels) => { const top = ROW.map((t) => labels.find((l) => l.text === t)).find(Boolean); return top ? [top] : []; };
+
 /** One line of labels (<span class="mem-labels">), or null when there are none. deps: el. */
 export function labelLine(labels, { el }) {
   if (!labels.length) return null;

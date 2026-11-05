@@ -1,3 +1,148 @@
 {
- "links": []
+ "links": [
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v6",
+    "text": "Alex는 리뷰 코멘트를 파일별로 묶어 받는 걸 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 6,
+    "memory_context": {
+     "valid_from": "2026-09-02T09:00:00Z"
+    },
+    "review": {
+     "by": "management:owner",
+     "action": "approve"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s0"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s1"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s2"
+     }
+    ]
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v5",
+    "text": "Alex는 리뷰 코멘트를 한 번에 몰아 받는 걸 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 5,
+    "memory_context": {
+     "valid_from": "2026-08-20T09:00:00Z"
+    },
+    "review": {
+     "by": "management:owner",
+     "action": "approve"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s0"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s1"
+     }
+    ]
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v4",
+    "text": "Alex는 리뷰 코멘트를 PR 설명에 모아 받는 걸 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 4,
+    "memory_context": {
+     "valid_from": "2026-08-05T09:00:00Z"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s0"
+     }
+    ]
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v3",
+    "text": "Alex는 리뷰 코멘트를 짧게 받는 걸 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 3,
+    "memory_context": {
+     "valid_from": "2026-07-21T09:00:00Z"
+    },
+    "review": {
+     "by": "management:owner",
+     "action": "approve"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s0"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s1"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s2"
+     },
+     {
+      "type": "session",
+      "ref": "codex:s3"
+     }
+    ]
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v2",
+    "text": "Alex는 리뷰를 메신저로 받는 걸 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 2,
+    "memory_context": {
+     "valid_from": "2026-07-02T09:00:00Z"
+    }
+   }
+  },
+  {
+   "relation": "supersedes",
+   "record": {
+    "id": "m5-v1",
+    "text": "Alex는 리뷰 코멘트를 좋아한다.",
+    "kind": "user",
+    "status": "superseded",
+    "revision": 1,
+    "memory_context": {
+     "valid_from": "2026-06-02T09:00:00Z"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s0"
+     }
+    ]
+   }
+  }
+ ]
 }

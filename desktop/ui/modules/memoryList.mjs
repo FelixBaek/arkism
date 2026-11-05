@@ -1,7 +1,7 @@
 // @ts-check
 import { candidateGroup } from "./candidateGroups.mjs";
 import { collectionFooter, serverCount } from "./collectionPaging.mjs";
-import { memoryLabels, labelLine } from "./memoryLabels.mjs";
+import { memoryLabels, labelLine, rowLabels } from "./memoryLabels.mjs";
 import { whenPick as pickDay } from "./memoryTimeline.mjs";
 // Owns memory lists, filters and actions. Dependencies are explicit live ports, never a global scope.
 export function createMemoryList(deps) {
@@ -51,7 +51,8 @@ export function createMemoryList(deps) {
     if (look) return [MEM_LOOK.find(([k]) => k === t)[1], look, ""];
     const w = deps.memUse();
     const rate = w?.injections ? Math.round((w.used / w.injections) * 100) : null;
-    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 기억이 답에 보였어요. 실제 활용 여부는 측정하지 않았어요.`}`, `${deps.catalogQuery.snapshot("memories").total ?? deps.memoryCount()}개`];
+    // no count next to the title: the open kind tab already carries it
+    return ["기억", `AI가 답할 때 참고하는 내용이에요.${rate === null ? "" : ` 전달한 기억 중 ${rate}%에서 기억이 답에 보였어요. 실제 활용 여부는 측정하지 않았어요.`}`, ""];
   }
 
   // A 모아보기 panel draws its tabs (mem-seg) under the head, so the title would only repeat the open tab: app.js hides it.
@@ -90,10 +91,10 @@ export function createMemoryList(deps) {
     return badge(`${u.d30}번 참고`);
   }
 
-  // labels (memoryLabels.mjs) lead the meta line in accent text: 정정 검토 중 · 규칙 · 이번만 · 결정 · 관계 · 파일 경로 없음
+  // one label (memoryLabels.mjs rowLabels) leads the meta line in accent text; 규칙 · 결정 · 관계 are in the detail only
   function memCell(m, meta) {
     const cell = deps.el("div", "cell mem-cell"), line = deps.el("div", "mem-meta");
-    const labels = labelLine(memoryLabels(m, { maintenance: deps.state.data.maintenance }), deps);
+    const labels = labelLine(rowLabels(memoryLabels(m, { maintenance: deps.state.data.maintenance })), deps);
     if (labels) line.append(labels);
     line.append(meta.filter(Boolean).join(" · "));
     cell.append(deps.raw(deps.el("div", "text", m.text)), line);
@@ -109,8 +110,26 @@ export function createMemoryList(deps) {
     return s;
   }
 
+  // 자세히 · 모아보기: a quiet trigger that opens a small menu in the shared .cat-menu look; a click outside or Esc closes it.
+  // An open menu stays open across a redraw (picking a sort redraws the list), so a choice never closes it under the pointer.
+  let openPop = "";
+  function popMenu(label, cls, ...nodes) {
+    const d = deps.el("details", `mem-pop ${cls}`), sum = deps.el("summary", "", label), menu = deps.el("div", "cat-menu mem-pop-menu");
+    menu.append(...nodes); d.append(sum, menu);
+    const away = (e) => { if (!d.isConnected || !d.contains(e.target)) { if (d.isConnected) d.open = false; else document.removeEventListener("pointerdown", away, true); } };
+    d.addEventListener("toggle", () => {
+      if (d.open) openPop = cls; else if (openPop === cls && d.isConnected) openPop = "";
+      document[d.open ? "addEventListener" : "removeEventListener"]("pointerdown", away, true);
+    });
+    d.addEventListener("keydown", (e) => { if (e.key === "Escape" && d.open) { e.preventDefault(); d.open = false; sum.focus(); } });
+    if (openPop === cls) { d.open = true; document.addEventListener("pointerdown", away, true); }
+    return d;
+  }
+  const menuItem = (label, onClick) => { const b = deps.el("button", "cat-menu-item", label); b.type = "button"; b.addEventListener("click", () => { openPop = ""; onClick(); }); return b; };
+
   function renderMemories() {
     memBack();
+    if (deps.memory.memTab !== "active") openPop = ""; // a menu left open on the list does not come back open from a sub-screen
     if (deps.memory.memTab === "digests") { deps.digests.draw(); return; }
     const panel = memPanels()[deps.memory.memTab];
     if (panel) {
@@ -135,34 +154,39 @@ export function createMemoryList(deps) {
       card.append(txt, deps.button("하나씩 확인하기", "primary small", null, () => deps.go("memories", firstCheck())));
       top.push(card);
     }
+    // toolbar: search and 기억 추가 only; a picked past day stays in sight so the list never looks like today's
     const tools = deps.el("div", "mem-tools"), past = !!deps.memory.validAt;
-    tools.append(memSearch(), whenPick());
+    tools.append(memSearch());
+    if (past) tools.append(whenPick());
+    tools.append(deps.button("기억 추가", "primary small", null, deps.openMemoryAdd));
+    deps.$("#controls").replaceChildren(...top, tools);
+    // 자세히: 시점 · 저장소 · 정렬 · 에이전트가 받는 기억 · 지운 기억
+    const more = [];
+    if (!past) more.push(whenPick());
     const facetRepos = deps.catalogQuery.snapshot("memories").facets.repositories || {};
     const repos = [...new Set([...Object.keys(facetRepos).filter(Boolean), ...(deps.memory.repo && deps.memory.repo !== "shared" ? [deps.memory.repo] : [])])].sort((a, b) => a.localeCompare(b));
     // Keep a chosen repository while the next server page is loading.
     if (repos.length && !past) { // a past day is read from the record history, which has no repository or order choice
       const shared = facetRepos[""] || 0;
-      tools.append(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
+      more.push(memSelect("저장소", [["", "저장소: 모두"], ["shared", `저장소: 공용 ${shared}`], ...repos.map((r) => [r, `저장소: ${r.split("/").pop()} ${facetRepos[r] || 0}`])],
         deps.memory.repo || "", (v) => { deps.memory.repo = v; deps.render(false); }));
     }
-    if (!past) tools.append(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
-    tools.append(deps.inject.button());
-    if (deps.state.caps?.actions?.review_decide) tools.append(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
-    tools.append(deps.button("기억 추가", "primary small", null, deps.openMemoryAdd)); // in the toolbar, not alone above the panel
-    // 모아보기: one chip per view, one tap opens it (was a select that hid the choices)
-    const look = deps.el("div", "mem-look");
-    look.append(deps.el("small", "meta", "모아보기"), ...[["provenance", "승인 기록"], ...MEM_LOOK].map(([k, l]) => { const c = deps.el("button", "chip", l); c.type = "button"; c.addEventListener("click", () => deps.go("memories", k)); return c; }));
-    deps.$("#controls").replaceChildren(...top, tools, look);
+    if (!past) more.push(memSelect("정렬", [["recent", "최근 순"], ["used", "많이 불린 순"], ["old", "오래된 순"]], deps.memory.sort, (v) => { deps.memory.sort = v; deps.render(false); }));
+    more.push(deps.inject.button());
+    if (deps.state.caps?.actions?.review_decide) more.push(deps.button("지운 기억", "ghost small", "trash", () => deps.go("memories", "removed")));
+    // 모아보기: one menu with every view; one tap opens it
+    const look = popMenu("모아보기", "mem-look", ...[["provenance", "승인 기록"], ...MEM_LOOK].map(([k, l]) => menuItem(l, () => deps.go("memories", k))));
 
-    // An older server sends no kind facets: 전체 shows the total, the kinds no number rather than 0.
+    // An older server sends no kind facets: 전체 shows the total, the kinds no number rather than 0. Only the open tab shows its count.
     const snap = deps.catalogQuery.snapshot("memories"), counts = snap.facets.kinds;
     const chips = [["all", "전체", counts ? Object.values(counts).reduce((sum, n) => sum + n, 0) : snap.total ?? ""], ...Object.keys(deps.KINDS).map((k) => [k, deps.kindLabel(k), counts ? counts[k] || 0 : ""])];
+    const pops = deps.el("span", "mem-pops"); pops.append(look, popMenu("자세히", "mem-more-pop", ...more)); // the two menus wrap as one
     deps.$("#chips").replaceChildren(...chips.map(([k, label, num]) => {
-      const c = deps.el("button", `chip mem-kind${deps.memory.kind === k ? " active" : ""}`); c.type = "button";
-      c.append(deps.el("span", "", label)); if (num !== 0) c.append(deps.el("output", "", String(num))); // no 0 next to an empty kind
+      const on = deps.memory.kind === k, c = deps.el("button", `chip mem-kind${on ? " active" : ""}`); c.type = "button";
+      c.append(deps.el("span", "", label)); if (on && num !== 0 && num !== "") c.append(deps.el("output", "", String(num))); // no 0 next to an empty kind
       c.addEventListener("click", () => { deps.memory.kind = k; deps.render(false); });
       return c;
-    }));
+    }), pops);
     deps.$("#stats").replaceChildren(catalogNote());
 
     const items = source; // Already filtered and ordered across the server catalog.

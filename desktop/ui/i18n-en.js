@@ -6068,7 +6068,6 @@ Object.assign(window.ArkismI18nEN.strings, {
   "뒷받침": "Supports",
   "같은 대화": "Same conversation",
   "새로 바뀜": "Replaced by newer",
-  "평가를 불러오지 못했어요.": "Couldn't load the evaluation.",
   "확인 기록": "Check record",
   "지금 기억은 이력으로 가요": "The current memory moves to history",
   "새로 들어온 내용은 버려요": "The new content is discarded",
@@ -7400,3 +7399,7 @@ Object.assign(window.ArkismI18nEN.strings, {
 Object.assign(window.ArkismI18nEN.patterns, {
   "관계 {0}개": "{0} relations",
   "근거 {0}개": "{0} sources" });
+Object.assign(window.ArkismI18nEN.strings, {
+  "검토 중": "In review" });
+Object.assign(window.ArkismI18nEN.patterns, {
+  "이전 {0}개": "{0} earlier" });

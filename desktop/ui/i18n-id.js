@@ -4914,7 +4914,6 @@
  "뒷받침": "Mendukung",
  "같은 대화": "Percakapan yang sama",
  "새로 바뀜": "Diganti yang lebih baru",
- "평가를 불러오지 못했어요.": "Penilaian tidak bisa dimuat.",
  "확인 기록": "Riwayat pemeriksaan",
  "지금 기억은 이력으로 가요": "Memori yang sekarang dipindahkan ke riwayat",
  "새로 들어온 내용은 버려요": "Isi yang baru masuk dibuang",
@@ -6167,7 +6166,8 @@
  "이전 내용": "Sebelumnya",
  "새 내용으로 바뀜": "Diganti yang lebih baru",
  "승인 전": "Belum disetujui",
- "사람이 고르기 전까지 지금 내용을 계속 써요": "Versi saat ini tetap dipakai sampai seseorang memilih"
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "Versi saat ini tetap dipakai sampai seseorang memilih",
+ "검토 중": "Sedang ditinjau"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} memori sumber",
@@ -7410,6 +7410,7 @@
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "{1} kandidat sudah dimasukkan ke ‘{0}’. Pindah ke ruang itu lalu setujui di 'Mohon dicek'.",
  "· 기억 {0}개": "· {0} memori",
  "관계 {0}개": "{0} relasi",
- "근거 {0}개": "{0} sumber"
+ "근거 {0}개": "{0} sumber",
+ "이전 {0}개": "{0} sebelumnya"
  }
 };

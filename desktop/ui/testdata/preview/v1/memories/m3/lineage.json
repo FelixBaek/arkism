@@ -3,8 +3,24 @@
   {
    "relation": "supersedes",
    "record": {
-    "text": "설계 문서와 회의 메모를 모두 팀 위키에 쓴다",
-    "updated_at": "2026-09-24T05:12:00Z"
+    "id": "m3-old",
+    "text": "Orbit 설계 문서와 회의 메모는 모두 팀 위키에 둔다.",
+    "kind": "decision",
+    "status": "superseded",
+    "revision": 1,
+    "memory_context": {
+     "valid_from": "2026-07-14T09:00:00Z"
+    },
+    "review": {
+     "by": "management:owner",
+     "action": "approve"
+    },
+    "sources": [
+     {
+      "type": "session",
+      "ref": "codex:s7"
+     }
+    ]
    }
   }
  ]

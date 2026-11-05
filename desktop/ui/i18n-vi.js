@@ -4914,7 +4914,6 @@
  "뒷받침": "Hỗ trợ",
  "같은 대화": "Cùng cuộc trò chuyện",
  "새로 바뀜": "Đã bị bản mới thay",
- "평가를 불러오지 못했어요.": "Không tải được bản đánh giá.",
  "확인 기록": "Lịch sử kiểm tra",
  "지금 기억은 이력으로 가요": "Ký ức hiện tại sẽ chuyển vào lịch sử",
  "새로 들어온 내용은 버려요": "Nội dung mới đến sẽ bị bỏ",
@@ -6166,7 +6165,8 @@
  "이전 내용": "Nội dung trước",
  "새 내용으로 바뀜": "Đã thay bằng nội dung mới",
  "승인 전": "Chưa duyệt",
- "사람이 고르기 전까지 지금 내용을 계속 써요": "Nội dung hiện tại vẫn được dùng cho đến khi có người chọn"
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "Nội dung hiện tại vẫn được dùng cho đến khi có người chọn",
+ "검토 중": "Đang xem xét"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} bộ nhớ làm căn cứ",
@@ -7409,6 +7409,7 @@
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Đã thêm {1} ứng viên vào ‘{0}’. Hãy chuyển sang không gian đó rồi duyệt trong 'Cần bạn xác nhận'.",
  "· 기억 {0}개": "· {0} ký ức",
  "관계 {0}개": "{0} quan hệ",
- "근거 {0}개": "{0} nguồn"
+ "근거 {0}개": "{0} nguồn",
+ "이전 {0}개": "{0} trước đó"
  }
 };

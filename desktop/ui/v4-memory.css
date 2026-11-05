@@ -47,11 +47,18 @@
 .mem-tools > .btn.small { height: 2.3125rem; padding: 0 0.875rem; white-space: nowrap; }
 .mem-tools > .panel-search { flex: 1 1 0; }
 .mem-tools > .btn.small .icon { display: none; }
-/* 모아보기: a quiet row of chips under the toolbar, each opens its view */
-.mem-look { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; }
-.mem-look > small { margin-right: 0.25rem; }
-.mem-look .chip { height: 1.75rem; padding: 0 0.625rem; border: 0.0625rem solid var(--nc-line); border-radius: 62.4375rem; background: none; color: var(--nc-muted); font: 400 calc(0.75rem * var(--fs, 1))/1 var(--sans); cursor: pointer; }
-.mem-look .chip:hover { color: var(--nc-text); border-color: var(--nc-quiet); }
+/* 모아보기 · 자세히: quiet text triggers at the right end of the kind tabs; each opens a small .cat-menu (crew.css) */
+.mem-pop { position: relative; flex: none; }
+.mem-pops { display: flex; gap: .25rem; margin-left: auto; }
+.mem-pop > summary { display: inline-flex; align-items: center; min-height: 2rem; padding: 0 0.5rem; border-radius: 0.375rem; list-style: none; cursor: pointer;
+  color: var(--nc-muted); font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; }
+.mem-pop > summary::-webkit-details-marker { display: none; }
+.mem-pop > summary::after { content: " ⌄"; white-space: pre; }
+.mem-pop > summary:hover, .mem-pop[open] > summary { color: var(--nc-text); }
+.mem-pop > summary:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.125rem; }
+.cat-menu.mem-pop-menu { position: absolute; top: calc(100% + 0.25rem); right: 0; z-index: 6; gap: 0.375rem; }
+.mem-pop-menu > .mem-select, .mem-pop-menu > .btn.small { width: 100%; justify-content: flex-start; }
+.mem-pop-menu > .mem-when-pick { justify-content: space-between; padding: 0 0.5rem; }
 /* an empty note line takes no room between the chips and the list */
 .app .panel-main > .stats:has(> .memory-page-note:empty) { display: none; }
 
@@ -170,10 +177,9 @@
 .memory-mode .detail-body .inject-list { color: var(--nc-text); font-size: calc(0.8125rem * var(--fs, 1)); line-height: 1.5; }
 .memory-mode .detail-body .field select { height: 2.3125rem; padding: 0 0.75rem; border: 0.0625rem solid var(--nc-line); border-radius: var(--nc-radius-control); background: var(--nc-surface); color: var(--nc-text); }
 
-/* 변경 이력 N건 › · 이전으로 되돌리기 (198:630) */
-.d-history-row { position: relative; }
+/* a folded list with a quiet "제목 ›" summary (privacy.js 삭제 처리 내역) */
 .d-history { min-width: 0; }
-.d-history summary { padding-right: 8.75rem; cursor: pointer; list-style: none; font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+.d-history summary { cursor: pointer; list-style: none; font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
 .d-history summary::after { content: " ›"; }
 .d-history summary::-webkit-details-marker { display: none; }
 .d-history[open] summary { margin-bottom: 0.625rem; }
@@ -181,19 +187,37 @@
 .memory-mode .d-history .history li { color: var(--nc-muted); }
 .memory-mode .d-history .history strong { color: var(--nc-text); }
 .memory-mode .d-history .history time { color: var(--nc-quiet); }
-.memory-mode .link-btn.d-revert { position: absolute; top: 0; right: 0; color: var(--nc-accent); font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
-.memory-mode .link-btn.d-revert:disabled { color: var(--nc-quiet); }
 
-/* 변경 이력 as a dated timeline (memoryTimeline.mjs): a neutral rail, one dot per revision; the current one and a waiting correction in accent */
-.mem-timeline { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; padding: 0 0 0 1rem; list-style: none; border-left: 0.0625rem solid var(--nc-line); }
-.mem-tl { position: relative; min-width: 0; }
-.mem-tl::before { content: ""; position: absolute; top: 0.375rem; left: -1.28125rem; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--nc-quiet); }
-.mem-tl.current::before, .mem-tl.pending::before { background: var(--nc-accent); }
-.mem-tl p { margin: 0; overflow-wrap: anywhere; }
-.mem-tl-when, .mem-tl-meta { font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
-.mem-tl-title { font: 500 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
-.mem-tl.pending .mem-tl-title { color: var(--nc-accent); }
-.mem-tl-text { font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-muted); }
+/* 변경 이력 (198:630) as one thin horizontal line (memoryTimeline.mjs): dots sized by evidence, labels alternating above and below,
+   a tick joining each label to its dot; the picked version reads underneath. Picked = accent text and dot, never a bar. */
+.mem-tlh { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.mem-tlh-grid { display: grid; grid-template-rows: auto 0.75rem 1.5rem 0.75rem auto; column-gap: 0; align-items: center; min-width: 0; }
+.mem-tlh-line { position: relative; align-self: center; height: 0.0625rem; background: var(--nc-quiet); }
+.mem-tlh-line::before, .mem-tlh-line::after { content: ""; position: absolute; top: -0.1875rem; width: 0.0625rem; height: 0.4375rem; background: var(--nc-quiet); }
+.mem-tlh-line::before { left: 0; } .mem-tlh-line::after { right: 0; }
+.mem-tlh-tick { justify-self: center; width: 0.0625rem; height: 100%; background: var(--nc-line); }
+.mem-tlh-dot { position: relative; z-index: 1; justify-self: center; display: grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; border-radius: 50%;
+  background: none; cursor: pointer; }
+.mem-tlh-dot::before { content: ""; width: var(--d, 0.5rem); height: var(--d, 0.5rem); border-radius: 50%; background: var(--nc-muted); box-shadow: 0 0 0 0.1875rem var(--nc-canvas); }
+.mem-tlh-dot.current::before, .mem-tlh-dot.on::before { background: var(--nc-accent); }
+.mem-tlh-dot.pending::before { box-sizing: border-box; background: var(--nc-canvas); border: 0.0625rem dashed var(--nc-muted); }
+.mem-tlh-dot.pending.on::before { border-color: var(--nc-accent); }
+.mem-tlh-dot:focus-visible { outline: 0.125rem solid var(--nc-accent); outline-offset: 0.0625rem; }
+.mem-tlh-label { display: flex; flex-direction: column; min-width: 0; margin: 0; padding: 0 0.25rem; text-align: center; cursor: pointer; overflow-wrap: anywhere; }
+.mem-tlh-label.up { align-self: end; } .mem-tlh-label.down { align-self: start; }
+.mem-tlh-label.start { text-align: start; padding-left: 0; } .mem-tlh-label.end { text-align: end; padding-right: 0; }
+.mem-tlh-label > span { font: 400 calc(0.8125rem * var(--fs, 1))/1.35 var(--sans); color: var(--nc-text); }
+.mem-tlh-label > small { font: 400 calc(0.6875rem * var(--fs, 1))/1.4 var(--sans); color: var(--nc-quiet); font-variant-numeric: tabular-nums; }
+.mem-tlh-label.on > span, .mem-tlh-label.on > small { color: var(--nc-accent); }
+.memory-mode .link-btn.mem-tlh-more { justify-self: start; align-self: center; margin-right: 0.5rem; padding: 0; color: var(--nc-muted); font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); white-space: nowrap; cursor: pointer; }
+.memory-mode .link-btn.mem-tlh-more:hover { color: var(--nc-text); }
+.mem-tlh-version { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.mem-tlh-version p { margin: 0; overflow-wrap: anywhere; }
+.mem-tlh-when, .mem-tlh-meta { font: 400 calc(0.75rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); font-variant-numeric: tabular-nums; }
+.mem-tlh-text { font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); color: var(--nc-text); }
+.memory-mode .link-btn.d-revert { align-self: flex-start; padding: 0; color: var(--nc-accent); font: 400 calc(0.8125rem * var(--fs, 1))/1.5 var(--sans); cursor: pointer; }
+.memory-mode .link-btn.d-revert:disabled { color: var(--nc-quiet); }
+@media (prefers-reduced-motion: no-preference) { .mem-tlh-dot::before { transition: background-color 120ms ease-out; } }
 
 /* labels a memory carries (memoryLabels.mjs): accent text, never a pill or a bar */
 .mem-labels { display: inline-flex; flex-wrap: wrap; gap: 0 0.5rem; margin-right: 0.5rem; }

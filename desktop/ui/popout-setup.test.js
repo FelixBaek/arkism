@@ -31,7 +31,8 @@ const MAIN_ONLY = {
   "pages.js": "the shortcut field in 설정 › 일반 records the next key press on the settings page",
   "shell.js": "the connection card next to the logo lives in the main window",
   "popup-drag.js": "drags and tears off popups inside the main window; dress() sets up the popout side",
-  "modules/skillViews.mjs": "the filter menu on the 스킬 page, which never moves into a popout window"
+  "modules/skillViews.mjs": "the filter menu on the 스킬 page, which never moves into a popout window",
+  "modules/memoryList.mjs": "the 자세히 and 모아보기 menus on the Memory list, which never moves into a popout window"
 };
 // Screens that never open in a popout window may copy with the main window's clipboard.
 const MAIN_CLIPBOARD = ["modules/imageViews.mjs", "skill-trial.js"];

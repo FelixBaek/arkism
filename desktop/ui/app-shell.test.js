@@ -100,8 +100,8 @@ test("a 모아보기 page keeps ← 기억 but no title repeating its open tab",
   await app.click(app.$('.nav-item[data-menu="memory"]'), 50);
   await app.click(app.$$("#table .ov-chip").find((c) => /확인해 주세요/.test(app.dom.text(c))), 50);
   await app.click(app.$("#mem-back"), 50); // ← 기억: the main list with its 모아보기 chips
-  const past = app.$$("button.chip").find((c) => app.dom.text(c) === "과거 시점");
-  assert.ok(past, "the 과거 시점 chip");
+  const past = app.$$("#chips .mem-look button.cat-menu-item").find((c) => app.dom.text(c) === "과거 시점");
+  assert.ok(past, "the 과거 시점 item in 모아보기");
   await app.click(past, 50);
   assert.equal(app.dom.text(app.$("#controls .mem-seg .tab.active")), "과거 시점");
   assert.equal(app.$("#title").textContent, "과거 시점", "screen readers keep the heading");

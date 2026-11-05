@@ -4914,7 +4914,6 @@
  "뒷받침": "Respalda",
  "같은 대화": "Misma conversación",
  "새로 바뀜": "Reemplazado por uno más nuevo",
- "평가를 불러오지 못했어요.": "No se pudo cargar la evaluación.",
  "확인 기록": "Registro de revisión",
  "지금 기억은 이력으로 가요": "La memoria actual pasa al historial",
  "새로 들어온 내용은 버려요": "El contenido nuevo se descarta",
@@ -6167,7 +6166,8 @@
  "이전 내용": "Anterior",
  "새 내용으로 바뀜": "Reemplazado por uno nuevo",
  "승인 전": "Sin aprobar",
- "사람이 고르기 전까지 지금 내용을 계속 써요": "La versión actual se sigue usando hasta que una persona elija"
+ "사람이 고르기 전까지 지금 내용을 계속 써요": "La versión actual se sigue usando hasta que una persona elija",
+ "검토 중": "En revisión"
  },
  "patterns": {
  "근거 기억 {0}개": "{0} recuerdos de origen",
@@ -7410,6 +7410,7 @@
  "‘{0}’에 후보 {1}개를 넣었어요. 그 공간으로 바꾼 뒤 '확인해 주세요'에서 승인해 주세요.": "Se agregaron {1} candidatos a ‘{0}’. Cambia a ese espacio y apruébalos en 'Revisa esto'.",
  "· 기억 {0}개": "· {0} recuerdos",
  "관계 {0}개": "{0} relaciones",
- "근거 {0}개": "{0} fuentes"
+ "근거 {0}개": "{0} fuentes",
+ "이전 {0}개": "{0} anteriores"
  }
 };

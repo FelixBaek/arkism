@@ -25,7 +25,7 @@ window.ArkismMemoryEvaluation = (() => {
     const tracking = summary.tracking?.status === "pending" ? "관측 대기" : summary.tracking?.status === "done" ? "관측 기록됨" : "추적 기록 없음";
     return { label, tone, note, tracking, independent, self };
   }
-  function mount({ container, record, scope, request, el, section, facts, button }) {
+  function mount({ container, record, scope, request, el, section, facts }) {
     const panel = section("기억 평가"); panel.classList.add("memory-evaluation");
     panel.setAttribute("aria-live", "polite");
     const content = el("div"); panel.append(content); container.append(panel);
@@ -42,9 +42,9 @@ window.ArkismMemoryEvaluation = (() => {
         content.replaceChildren(el("span", `tag ${result.tone}`, result.label), el("p", "meta", result.note), more);
       } catch (_) {
         if (!turn.live() || !panel.isConnected) return;
-        // one quiet retry first; only a second failure says so, with no guess about why
+        // one quiet retry first; a second failure hides the block: nothing to read, and no guess about why
         if (!again) { await new Promise((r) => setTimeout(r, 1500)); if (turn.live() && panel.isConnected) return load(true); return; }
-        content.replaceChildren(el("p", "meta", "평가를 불러오지 못했어요."), button("다시 시도", "ghost small", null, () => load()));
+        panel.hidden = true;
       }
     }
     void load();

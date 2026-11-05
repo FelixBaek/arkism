@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const moduleTask = import("./modules/memoryDetail.mjs");
 
 function el(tag, className = "", text = "") {
-  return {tag, className, textContent: text, value: "", children: [], listeners: {}, attrs: {},
+  return {tag, className, textContent: text, value: "", children: [], listeners: {}, attrs: {}, style: {},
     append(...children) { this.children.push(...children); },
     prepend(...children) { this.children.unshift(...children); },
     insertBefore(child, ref) { this.children.splice(Math.max(0, this.children.indexOf(ref)), 0, child); },
@@ -88,10 +88,13 @@ test("memory detail lists history, offers revert, and hands sources to the evide
   }});
   await h.ctx.memoryDetail(memory);
   assert.deepEqual(h.sources, [["m1", {items: ["src"]}]]);
-  const summary = all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent));
-  assert.equal(summary.textContent, "변경 이력 4건");
-  assert.match(texts(h.shell), /다른 기억과 부딪힘/);
-  assert.doesNotMatch(texts(h.shell), /ignored/);
+  // 변경 이력: one dot per version, oldest left; a conflict is another memory, so it gets no dot
+  assert.match(texts(h.shell), /변경 이력/);
+  const dots = all(h.shell).filter(node => /mem-tlh-dot/.test(node.className));
+  assert.deepEqual(dots.map(d => d.attrs["aria-label"]), ["이전 내용 · 2026-08-01", "이전 내용 · 2026-08-20", "지금 내용 · 2026-09-01"]);
+  assert.doesNotMatch(texts(h.shell), /ignored|다른 기억과 부딪힘/);
+  assert.equal(all(h.shell).find(node => node.textContent === "이전으로 되돌리기"), undefined, "the current version is picked first");
+  dots[1].listeners.click();
   const back = all(h.shell).find(node => node.textContent === "이전으로 되돌리기");
   back.listeners.click();
   await settle();
@@ -111,7 +114,7 @@ test("memory detail shows approved causes and effects apart from the history", a
   assert.match(t, /원인과 결과 2개/);
   assert.match(t, /이 기억의 원인/);
   assert.match(t, /“배포 롤백”/);
-  assert.equal(all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent)).textContent, "변경 이력 1건");
+  assert.doesNotMatch(t, /변경 이력/, "a memory that never changed shows no timeline");
   const none = await setup({routes: {"/v1/memories/m1/lineage": {links: []}}});
   await none.ctx.memoryDetail(memory);
   assert.doesNotMatch(texts(none.shell), /원인과 결과/);
@@ -122,7 +125,7 @@ test("memory detail stops when the selection changed while reading", async () =>
   h.ctx.state.selected = "other";
   await h.ctx.memoryDetail(memory);
   assert.deepEqual(h.sources, []);
-  assert.equal(all(h.shell).find(node => node.tag === "summary" && /변경 이력/.test(node.textContent)).textContent, "변경 이력 1건");
+  assert.doesNotMatch(texts(h.shell), /변경 이력/, "the lineage answer for another selection is not drawn");
 });
 
 test("an unconfirmed memory can be kept or forgotten", async () => {

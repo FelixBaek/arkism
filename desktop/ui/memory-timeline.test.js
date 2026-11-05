@@ -26,8 +26,18 @@ test("labels: provisional, correction, temporary, rule, decision, relations and 
   assert.deepEqual(texts(labelLine(labels, { el })), labels.map((l) => l.text));
 });
 
+test("a list row shows one label: 정정 검토 중 > 임시 · 승인 전 > 이번만 > 파일 경로 없음; 규칙·결정·관계 never", async () => {
+  const { rowLabels } = await import("./modules/memoryLabels.mjs");
+  const L = (...t) => t.map((text) => ({ text }));
+  assert.deepEqual(rowLabels(L("임시 · 승인 전", "정정 검토 중", "이번만 · 7일 뒤 만료", "파일 경로 없음")).map((l) => l.text), ["정정 검토 중"]);
+  assert.deepEqual(rowLabels(L("임시 · 승인 전", "이번만 · 7일 뒤 만료")).map((l) => l.text), ["임시 · 승인 전"]);
+  assert.deepEqual(rowLabels(L("규칙: 항상", "파일 경로 없음", "이번만 · 7일 뒤 만료")).map((l) => l.text), ["이번만 · 7일 뒤 만료"]);
+  assert.deepEqual(rowLabels(L("규칙: 항상", "결정: 확정", "관계 1개", "파일 경로 없음")).map((l) => l.text), ["파일 경로 없음"]);
+  assert.deepEqual(rowLabels(L("규칙: 항상", "결정: 확정", "관계 1개")), []);
+});
+
 test("timeline: newest first, each revision ends where the next began, a waiting correction on top", async () => {
-  const { timelineEntries, timelineList } = await import("./modules/memoryTimeline.mjs");
+  const { timelineEntries } = await import("./modules/memoryTimeline.mjs");
   const m = { text: "now", memory_context: { valid_from: "2026-10-01T00:00:00Z" }, approved_by: "felix", sources: [{}, {}] };
   const lineage = { links: [
     { relation: "supersedes", record: { text: "old", effective_at: "2026-09-01T00:00:00Z", review: { by: "ann" } } },
@@ -38,10 +48,62 @@ test("timeline: newest first, each revision ends where the next began, a waiting
   assert.equal(rows[1].to, ""); // the current one holds until now
   assert.equal(rows[1].approver, "felix"); assert.equal(rows[1].evidence, 2); assert.equal(rows[2].approver, "ann");
   assert.equal(timelineEntries({ text: "a", valid_to_proposal: { at: "2026-12-01T00:00:00Z" } }, null)[0].to, "2026-12-01T00:00:00Z");
-  const ol = timelineList(rows, { el, raw, shortDate: (v) => v.slice(0, 10) });
-  const when = walk(ol).filter((x) => x.className === "mem-tl-when").map((x) => x.textContent);
-  assert.deepEqual(when, ["승인 전", "2026-10-01 → 지금", "2026-09-01 → 2026-10-01"]);
-  assert.ok(walk(ol).some((x) => x.raw && x.textContent === "felix")); // the approver id is data, not translated
+});
+
+// n versions, newest first like timelineEntries: v0 is the current one, v1… older, one source more each
+const versions = (n, pending = false) => [...(pending ? [{ kind: "pending", title: "검토 중", text: "fix", from: "2026-10-20T00:00:00Z", to: "", approver: "", evidence: 0 }] : []),
+  ...Array.from({ length: n }, (_, i) => ({ kind: i ? "previous" : "current", title: i ? "이전 내용" : "지금 내용", text: `v${i}`,
+    from: new Date(Date.UTC(2026, 9, 13 - i)).toISOString(), to: "", approver: i ? "" : "felix", evidence: i }))];
+
+test("timeline layout: oldest left, labels alternate up and down, same-side labels never share a column, >5 keeps the newest 5", async () => {
+  const { timelineLayout } = await import("./modules/memoryTimeline.mjs");
+  for (const n of [2, 3, 5]) {
+    const { hidden, dots } = timelineLayout(versions(n));
+    assert.equal(hidden, 0);
+    assert.deepEqual(dots.map((d) => d.row.text), Array.from({ length: n }, (_, i) => `v${n - 1 - i}`), "oldest left, newest right");
+    assert.deepEqual(dots.map((d) => d.up), dots.map((_, i) => i % 2 === 0));
+    for (const d of dots) assert.ok(d.from >= 1 && d.to <= 2 * n + 1 && d.from < d.to, `span inside the grid (${n})`);
+    for (let i = 0; i + 2 < n; i++) assert.ok(dots[i].to <= dots[i + 2].from, `labels ${i} and ${i + 2} on one side do not overlap (${n})`);
+    assert.equal(dots.at(-1).size, 18, "the current version is the largest");
+    assert.ok(dots.slice(0, -1).every((d) => d.size >= 8 && d.size < 18));
+  }
+  const many = timelineLayout(versions(7, true));
+  assert.equal(many.hidden, 3);
+  assert.deepEqual(many.dots.map((d) => d.row.kind), ["previous", "previous", "previous", "current", "pending"], "the waiting correction is last");
+  assert.equal(timelineLayout(versions(7, true), { all: true }).dots.length, 8);
+  assert.equal(timelineLayout(versions(9)).dots[0].size, 16, "evidence size is clamped");
+  assert.deepEqual(timelineLayout([...versions(2), { kind: "conflict", text: "x", from: "", evidence: 0 }]).dots.length, 2, "a conflict is another memory, not a version");
+});
+
+test("timeline view: dots are labelled buttons; a click or an arrow key shows that version; 이전 N개 shows them all; revert acts on the pick", async () => {
+  const dom = require("./testdata/fake-dom.cjs");
+  const { document } = dom.install();
+  const h = dom.helpers(document);
+  const { timelineView } = await import("./modules/memoryTimeline.mjs");
+  const reverted = [];
+  const box = timelineView(versions(7, true), { el: h.el, raw: h.raw, shortDate: (v) => v.slice(5, 10) }, { revert: (r) => reverted.push(r.text) });
+  document.body.append(box);
+  const dots = () => box.querySelectorAll(".mem-tlh-dot");
+  const block = () => box.querySelector(".mem-tlh-version").textContent;
+  assert.equal(dots().length, 5);
+  assert.deepEqual(dots().map((d) => d.getAttribute("aria-label")), ["이전 내용 · 10-10", "이전 내용 · 10-11", "이전 내용 · 10-12", "지금 내용 · 10-13", "검토 중 · 10-20"]);
+  assert.match(block(), /“v0”/); assert.match(block(), /승인 felix/); // default: the current version
+  assert.equal(dom.buttons(box, "이전으로 되돌리기").length, 0, "nothing to go back to from the current one");
+  assert.deepEqual(dots().map((d) => d.tabIndex), [-1, -1, -1, 0, -1], "one tab stop: the picked dot");
+  dots()[2].click();
+  assert.match(block(), /“v1”/); assert.match(block(), /근거 1개/);
+  assert.equal(dots()[2].getAttribute("aria-pressed"), "true"); assert.match(box.querySelectorAll(".mem-tlh-label")[2].className, /\bon\b/);
+  dom.buttons(box, "이전으로 되돌리기")[0].click(); assert.deepEqual(reverted, ["v1"]);
+  dom.fire(dots()[2], "keydown", { key: "ArrowLeft" });
+  assert.match(block(), /“v2”/); assert.equal(document.activeElement, dots()[1]);
+  dom.fire(dots()[1], "keydown", { key: "End" });
+  assert.match(block(), /사람이 고르기 전까지/); assert.ok(dots()[4].className.includes("pending"));
+  const more = dom.buttons(box, "이전 3개")[0]; assert.ok(more);
+  more.click();
+  assert.equal(dots().length, 8); assert.equal(dom.buttons(box, "이전 3개").length, 0);
+  // two versions: one label above, one below
+  const two = timelineView(versions(2), { el: h.el, raw: h.raw, shortDate: (v) => v.slice(5, 10) });
+  assert.deepEqual(two.querySelectorAll(".mem-tlh-label").map((l) => l.className.match(/up|down/)[0]), ["up", "down"]);
 });
 
 test("시점: the memory list asks /v1/memories/at for a past day and opens rows at revision 0", async () => {
