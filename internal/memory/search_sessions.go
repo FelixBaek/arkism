@@ -21,7 +21,8 @@ const (
 // attachSessionLane adds the lane to a memory answer search when the space opted in. It needs
 // read:session_archives too; without it the lane is skipped, and any other failure is marked degraded.
 func (s *Service) attachSessionLane(ctx context.Context, token string, in SearchInput, out *ContextBundle) {
-	if in.Purpose != "" && in.Purpose != "answer" || strings.TrimSpace(in.Query) == "" {
+	// Raw messages get no per-message transfer check, so the lane stays out of results bound for an outside destination.
+	if in.Purpose != "" && in.Purpose != "answer" || strings.TrimSpace(in.Query) == "" || strings.HasPrefix(in.Destination, "external:") {
 		return
 	}
 	cfg, err := s.spaceSettings(ctx, in.Scope)

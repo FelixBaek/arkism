@@ -277,6 +277,12 @@ func TestExtractionEpisodesTemporaryAndSessionLaneWalk(t *testing.T) {
 	if len(got.Sessions) != 1 || !strings.Contains(got.Sessions[0].Text, "캐시 설정") || slices.ContainsFunc(got.Items, func(h Hit) bool { return h.ID == "" }) {
 		t.Fatalf("session lane: %+v", got.Sessions)
 	}
+	// Archive messages pass no transfer check, so a search for an outside destination gets no lane.
+	external := query
+	external.Destination = "external:anthropic"
+	if got := f.search(f.human, external); len(got.Sessions) != 0 {
+		t.Fatalf("session lane sent outside: %+v", got.Sessions)
+	}
 	// A token without archive access gets the memories and no lane.
 	f.auth.actors[f.work] = actor("worker-1", "service", true, "search")
 	if got, err := f.svc.Search(testCtx, f.work, query); err != nil || len(got.Sessions) != 0 || slices.Contains(got.Degraded, "sessions") {
