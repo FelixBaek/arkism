@@ -222,6 +222,10 @@ func TestExtractJobUsesProviderBatch(t *testing.T) {
 	if err != nil || view.Status != JobStatusDone || view.Job.Calls != len(llm.submitted) || len(f.repo.rows(colProviderUsage)) != len(llm.submitted) || len(llm.prompts) != 0 {
 		t.Fatalf("done %+v %v ledger %d", view, err, len(f.repo.rows(colProviderUsage)))
 	}
+	// Batch answers are metered like direct calls: one model call trace each.
+	if traces := f.repo.rows(colLLMRequests); len(traces) != len(llm.submitted) || traces[0].LLMRequest.Operation != fileExtractOperation {
+		t.Fatalf("batch traces %d of %d", len(traces), len(llm.submitted))
+	}
 }
 
 func TestChatWikiLLMBatchProtocol(t *testing.T) {

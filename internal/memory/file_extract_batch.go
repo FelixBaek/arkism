@@ -97,7 +97,7 @@ func (s *Service) extractBatchAnswers(ctx context.Context, token string, d Decis
 	for i := job.Next; i < len(job.Chunks); i++ {
 		ch, a := job.Chunks[i], got[extractBatchID(i)]
 		ok := !a.Failed && a.Text != "" && len(a.Text) <= 256<<10 && utf8.ValidString(a.Text)
-		if err = s.settleExtractCall(ctx, scope, job.Batch.Reserved[extractBatchID(i)], a.Usage, ok); err != nil {
+		if err = s.fileBatchAnswer(ctx, scope, job, i, a, ok); err != nil {
 			return nil, err
 		}
 		job.Calls, job.Tokens = job.Calls+1, job.Tokens+max(a.Usage.TotalTokens, a.Usage.InputTokens+a.Usage.OutputTokens)
@@ -109,6 +109,20 @@ func (s *Service) extractBatchAnswers(ctx context.Context, token string, d Decis
 	}
 	job.Batch = nil // filed: a later failure resumes per chunk instead of filing the answers twice
 	return out, nil
+}
+
+// fileBatchAnswer meters one batch answer like a direct call: its span, counters, trace
+// and the ledger row reserved for it at submit.
+func (s *Service) fileBatchAnswer(ctx context.Context, scope Scope, job *FileExtractJob, i int, a BatchAnswer, ok bool) error {
+	system, user := extractPrompt(job.Chunks[i].Text, job)
+	m := modelCallSpec{scope: scope, operation: fileExtractOperation, kind: "complete", provider: wikiProvider, model: s.Wiki.Generator().Model, prompt: system + "\n\n" + user}
+	var callErr error
+	if !ok {
+		callErr = ErrUnavailable
+	}
+	_, sp := startSpan(ctx, "model.batch")
+	_, err := s.fileModelCall(ctx, sp, m, reservedCallRow(scope, job.Batch.Reserved[extractBatchID(i)]), a.Text, a.Usage, job.Batch.SubmittedAt, callErr)
+	return err
 }
 
 // submitExtractBatch checks every chunk may leave the server, reserves a ledger row per
@@ -171,14 +185,19 @@ func (s *Service) releaseExtractCalls(ctx context.Context, scope Scope, reserved
 	}
 }
 
-// settleExtractCall files one batch answer's usage on the row reserved for it.
+// settleExtractCall closes a reserved row whose prompt was never answered as a failed call.
 func (s *Service) settleExtractCall(ctx context.Context, scope Scope, id string, usage ProviderUsage, ok bool) error {
 	model := "unknown"
 	if s.Wiki != nil {
 		model = s.Wiki.Generator().Model
 	}
 	usage.Provider, usage.Model, usage.Requests = cmp.Or(usage.Provider, wikiProvider), cmp.Or(usage.Model, model), max(usage.Requests, 1)
-	return s.finishProviderCall(ctx, Record{ID: id, Scope: scope, Revision: 1, Cost: &ProviderCost{}}, usage, ok)
+	return s.finishProviderCall(ctx, reservedCallRow(scope, id), usage, ok)
+}
+
+// reservedCallRow is the pending ledger row reserved under id, as finishProviderCall checks it.
+func reservedCallRow(scope Scope, id string) Record {
+	return Record{ID: id, Scope: scope, Revision: 1, Cost: &ProviderCost{}}
 }
 
 // Batches reports whether the operator turned batch mode on for a messages-protocol model.
@@ -198,7 +217,7 @@ func (c *ChatWikiLLM) SubmitBatch(ctx context.Context, prompts []BatchPrompt, ma
 	if err != nil || len(encoded) > defaultRequestMax {
 		return "", ErrInvalid
 	}
-	body, status, err := postBody(ctx, providerClient(nil, 120*time.Second), c.Config.Endpoint+"/batches", c.Config.messagesHeader(), encoded, defaultResponseMax)
+	body, status, err := postBody(ctx, providerClient(nil, 120*time.Second), c.Config.Endpoint+"/batches", c.Config.header(), encoded, defaultResponseMax)
 	if err != nil {
 		return "", err
 	}
@@ -221,7 +240,7 @@ func (c *ChatWikiLLM) BatchResults(ctx context.Context, id string) (map[string]B
 		return nil, false, ErrModelNotConfigured
 	}
 	client := providerClient(nil, 120*time.Second)
-	body, status, err := sendBody(ctx, client, http.MethodGet, c.Config.Endpoint+"/batches/"+url.PathEscape(id), c.Config.messagesHeader(), nil, defaultResponseMax)
+	body, status, err := sendBody(ctx, client, http.MethodGet, c.Config.Endpoint+"/batches/"+url.PathEscape(id), c.Config.header(), nil, defaultResponseMax)
 	if err != nil {
 		return nil, false, err
 	}
@@ -243,7 +262,7 @@ func (c *ChatWikiLLM) BatchResults(ctx context.Context, id string) (map[string]B
 	if err != nil || results.Scheme != base.Scheme || results.Host != base.Host {
 		return nil, false, ErrUnavailable
 	}
-	body, status, err = sendBody(ctx, client, http.MethodGet, results.String(), c.Config.messagesHeader(), nil, extractBatchResultMax)
+	body, status, err = sendBody(ctx, client, http.MethodGet, results.String(), c.Config.header(), nil, extractBatchResultMax)
 	if err != nil {
 		return nil, false, err
 	}

@@ -237,11 +237,6 @@ func parseResponsesReply(body []byte) (chatReply, bool) {
 	return chatReply{text: text.String(), usage: usage, complete: response.Status == "completed"}, true
 }
 
-// messagesHeader authenticates a messages-protocol request.
-func (c LLMConfig) messagesHeader() http.Header {
-	return http.Header{"Accept": {"application/json"}, "X-Api-Key": {c.APIKey}, "Anthropic-Version": {llmMessagesVersion}}
-}
-
 // checkUsage refuses a reply whose usage is malformed, unless the request is lenient.
 func (req chatRequest) checkUsage(u ProviderUsage) (ProviderUsage, bool) {
 	if validProviderUsage(u) {

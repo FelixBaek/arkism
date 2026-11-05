@@ -84,19 +84,26 @@ func meteredCall[T any](ctx context.Context, s *Service, m modelCallSpec, call f
 	ctx, sp := startSpan(ctx, "model."+m.kind)
 	start := time.Now()
 	out, usage, callErr = call(ctx)
+	text, _ := any(out).(string)
+	usage, err = s.fileModelCall(ctx, sp, m, reserved, text, usage, start, callErr)
+	if err != nil && callErr == nil {
+		return out, usage, nil, err
+	}
+	return out, usage, callErr, nil
+}
+
+// fileModelCall is the second half of every metered call, direct or answered later in a
+// provider batch: it ends the call's span, counts and traces the call, and settles its
+// reserved ledger row with what it used (even after the caller gave up on the call).
+func (s *Service) fileModelCall(ctx context.Context, sp *span, m modelCallSpec, reserved Record, text string, usage ProviderUsage, start time.Time, callErr error) (ProviderUsage, error) {
 	usage = filledUsage(usage, m.provider, m.model)
 	setGenAI(sp, m, usage)
 	sp.end(callErr)
 	observeLLMCall(m.operation, usage.Provider, usage.Model, callErr == nil, time.Since(start), usage)
-	text, _ := any(out).(string)
 	s.recordLLMRequest(ctx, m, sp, text, usage, start, callErr)
-	// The ledger row is settled even after the caller gave up on the call.
 	fctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if err = s.finishProviderCall(fctx, reserved, usage, callErr == nil); err != nil && callErr == nil {
-		return out, usage, nil, err
-	}
-	return out, usage, callErr, nil
+	return usage, s.finishProviderCall(fctx, reserved, usage, callErr == nil)
 }
 
 func filledUsage(usage ProviderUsage, provider, model string) ProviderUsage {
