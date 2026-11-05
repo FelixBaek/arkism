@@ -229,6 +229,7 @@ type archiveTextObserver struct {
 	prefixTail             []byte
 	candidate              bool
 	candidateOffset        int
+	entropy                entropyScanner // the unnamed half of containsSecret, fed once per block
 }
 
 func newArchiveTextObserver(r io.Reader, query string, offset, limit int, direct bool) *archiveTextObserver {
@@ -247,6 +248,7 @@ func (o *archiveTextObserver) Read(dst []byte) (int, error) {
 		o.failure = err
 	}
 	data := dst[:n]
+	o.entropy.feed(string(data))
 	if !o.candidate {
 		edge := append(append([]byte(nil), o.prefixTail...), data...)
 		o.candidate = archiveSecretStarts.Match(edge)
@@ -363,7 +365,7 @@ func (s *Service) archiveLargeMessage(ctx context.Context, h Record, ref Archive
 }
 
 // MatchReader consumes the entire stream when there is no secret. Keep parity
-// tests against containsSecret: both use the same rule expressions.
+// tests against containsSecret: both use the same rule expressions and entropy scanner.
 
 // Takes ownership of the supplied child-context cancellation. Cancelling before
 // closing joins JSON array producers even when a secret ends the scan early.
@@ -393,8 +395,8 @@ func archiveInspectText(ctx context.Context, cancel context.CancelFunc, open fun
 	if err = ctx.Err(); err != nil {
 		return nil, "", err
 	}
-	secret := false
-	if observe.candidate {
+	secret := observe.entropy.close()
+	if !secret && observe.candidate {
 		if err = text.Close(); err != nil {
 			return nil, "", err
 		}

@@ -521,7 +521,7 @@ func sessionQualityGate() map[string]any {
 // sessionTransferMaxBytes is the server's safeTransfer content limit for authorize-transfer.
 const sessionTransferMaxBytes = 64000
 
-// emailPattern covers the e-mail branch of the server's sensitivePattern. The server reads JSON-escaped content,
+// emailPattern covers the e-mail branch of the server's personalPattern. The server reads JSON-escaped content,
 // so a control character right before "@" also counts ("\n@x.com" reads as "n@x.com"); text before it is kept.
 var emailPattern = regexp.MustCompile(`(?i)(?:[\x00-\x1f][a-z0-9._%+-]*|[a-z0-9._%+-]+)@[a-z0-9.-]+\.[a-z]{2,}`)
 

@@ -515,7 +515,7 @@ func httpFailure(err error) any {
 	return fmt.Sprintf("%d %s: %s", h.Code, cmp.Or(body.Error.Code, body.Error.Type), runeCut(body.Error.Message, 160))
 }
 
-// transferBlocked mirrors the hub's sensitivePattern (internal/memory/structured.go): model-written examples
+// transferBlocked mirrors the hub's transfer check (internal/memory/structured.go safeTransfer): model-written examples
 // such as "test@example.com" or "bearer URL" otherwise fail the whole import with 400 invalid_request.
 var transferBlocked = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|bearer\s+[a-z0-9._~-]+|\b(?:sk|al)-[a-z0-9_-]{12,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{8,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b|\b\d{6}-[1-4]\d{6}\b|\b(?:tool_output|raw_output|raw_conversation)\b)`)
 

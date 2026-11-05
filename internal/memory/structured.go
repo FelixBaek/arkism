@@ -62,7 +62,8 @@ type SkillAnalysis struct {
 
 // Defence in depth; the authorizer remains responsible for full secret/PII
 // inspection. Reject the whole payload rather than silently corrupting facts.
-var sensitivePattern = regexp.MustCompile(`(?i)(-----BEGIN [A-Z ]*PRIVATE KEY|bearer\s+[a-z0-9._~-]+|\b(?:sk|al)-[a-z0-9_-]{12,}|(?:api[_ -]?key|token|password|secret)["']?\s*[=:]\s*["']?[a-z0-9_./+=-]{8,}|[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}|\b01[016789][- ]?\d{3,4}[- ]?\d{4}\b|\b\d{6}-[1-4]\d{6}\b|\b(?:tool_output|raw_output|raw_conversation)\b)`)
+// Secrets and personal data use the shared detectors; this adds raw transcript markers.
+var rawOutputPattern = regexp.MustCompile(`(?i)\b(?:tool_output|raw_output|raw_conversation)\b`)
 
 // The secret patterns are fixed, so a verdict depends only on the text: listing 600 skills
 // re-scanned every unchanged analysis with them (most of a 3 s catalog request).
@@ -84,7 +85,7 @@ func safeTransfer(text string) bool {
 	}
 	// Inspect JSON string content too, not only the outer serialization.
 	plain := strings.ReplaceAll(text, `\"`, `"`)
-	ok = !containsSecret(plain) && !sensitivePattern.MatchString(plain)
+	ok = !containsSecret(plain) && !personalPattern.MatchString(plain) && !rawOutputPattern.MatchString(plain)
 	safeTransferSeen.Lock()
 	if len(safeTransferSeen.verdict) >= 20000 || safeTransferSeen.verdict == nil {
 		safeTransferSeen.verdict = map[[32]byte]bool{}

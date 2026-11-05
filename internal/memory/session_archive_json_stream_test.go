@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strconv"
 	"strings"
@@ -65,9 +66,12 @@ func TestArchiveStreamingJSONMatchesSafeParser(t *testing.T) {
 	}
 }
 func TestArchiveStreamingSecretAndWindowParity(t *testing.T) {
-	for _, text := range []string{"한국어 안전 원문", strings.Repeat("x", 40000) + " password: hidden", "비밀번호 : test", "-----BEGIN PRIVATE KEY-----", "https://user:pass@host", "Bearer abc.def", "앞 " + strings.Repeat("a", 10000) + " 단서 뒤"} {
-		observer := newArchiveTextObserver(strings.NewReader(text), "단서", 0, 4096, false)
+	token := "Zq8XvN3kLw7RtY2mPc5HbJ9dGf4SaE6u"
+	for _, text := range []string{"한국어 안전 원문", strings.Repeat("x", 40000) + " password: hidden", "비밀번호 : test", "-----BEGIN PRIVATE KEY-----", "https://user:pass@host", "Bearer abc.def", "앞 " + strings.Repeat("a", 10000) + " 단서 뒤",
+		strings.Repeat("가", 20000) + " 키 " + token + " 단서", "token: ~/.config/x/token 단서", "커밋 " + ContentHash("a") + " 단서"} {
+		observer := newArchiveTextObserver(archiveSplitReader{strings.NewReader(text), 7}, "단서", 0, 4096, false)
 		got := archiveStreamSecrets.MatchReader(observer)
+		got = observer.entropy.close() || got
 		if observer.failure != nil || got != containsSecret(text) {
 			t.Fatal("secret parity", got, observer.failure)
 		}
@@ -169,7 +173,7 @@ func TestArchiveSecretPrefixBoundaries(t *testing.T) {
 	}
 }
 func FuzzArchiveSecretPrefix(f *testing.F) {
-	for _, value := range []string{"password: value", "한국어", "Bearer abc", "https://a:b@c", "-----BEGIN PRIVATE KEY-----"} {
+	for _, value := range []string{"password: value", "한국어", "Bearer abc", "https://a:b@c", "-----BEGIN PRIVATE KEY-----", "키 Zq8XvN3kLw7RtY2mPc5HbJ9dGf4SaE6u 끝", "token: ~/.config/x"} {
 		f.Add(value)
 	}
 	f.Fuzz(func(t *testing.T, value string) {
@@ -181,7 +185,7 @@ func FuzzArchiveSecretPrefix(f *testing.F) {
 		if _, err := io.Copy(io.Discard, observer); err != nil {
 			t.Fatal(err)
 		}
-		got := observer.candidate && archiveStreamSecrets.MatchString(value[observer.candidateOffset:])
+		got := observer.entropy.close() || observer.candidate && archiveStreamSecrets.MatchString(value[observer.candidateOffset:])
 		if got != expected {
 			t.Fatalf("secret prefix/suffix mismatch: %q offset=%d", value, observer.candidateOffset)
 		}
@@ -239,6 +243,21 @@ func TestArchiveBlocksJoinLikeCapture(t *testing.T) {
 		_ = reader.Close()
 		if err != nil || string(streamed) != want {
 			t.Fatalf("stream %s = %q %v", content, streamed, err)
+		}
+	}
+}
+
+// A large archived message with an unnamed high-entropy key is withheld like a named one.
+func TestArchiveInspectTextWithholdsEntropyToken(t *testing.T) {
+	for text, want := range map[string]string{
+		strings.Repeat("가", 30000) + " 키 Zq8XvN3kLw7RtY2mPc5HbJ9dGf4SaE6u 단서": "secret",
+		strings.Repeat("가", 30000) + " 커밋 " + ContentHash("a") + " 단서":        "found",
+	} {
+		ctx, cancel := context.WithCancel(context.Background())
+		open := func() (io.ReadCloser, error) { return io.NopCloser(strings.NewReader(text)), nil }
+		_, state, err := archiveInspectText(ctx, cancel, open, "단서", 0, false)
+		if err != nil || state != want {
+			t.Fatalf("state %q want %q: %v", state, want, err)
 		}
 	}
 }

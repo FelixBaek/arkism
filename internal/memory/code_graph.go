@@ -231,10 +231,7 @@ func redactCode(s string, n *int) string {
 		return s
 	}
 	*n++
-	for _, rule := range secretRules {
-		s = rule.ReplaceAllString(s, "[REDACTED]")
-	}
-	return s
+	return redactSecrets(s)
 }
 
 // validCodeBatch checks shape, limits and ownership: every symbol and edge
