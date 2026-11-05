@@ -221,6 +221,7 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	if !boundSearchInput(&in) {
 		return out, Decision{}, ErrInvalid
 	}
+	ctx = withLaneClock(ctx, in.Explain)
 	collection, ok := searchCollection(in.Purpose)
 	if !ok {
 		return out, Decision{}, ErrInvalid
@@ -254,7 +255,9 @@ func (s *Service) searchWithActor(ctx context.Context, token string, in SearchIn
 	}
 	relationLane := -1
 	if in.RelatedTo != nil {
+		start := time.Now()
 		hits, err := s.Repo.SearchRelatedMemories(ctx, in, anchor)
+		laneClockOf(ctx).since("relation", start)
 		if err != nil {
 			return ContextBundle{}, Decision{}, err
 		}

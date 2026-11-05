@@ -286,6 +286,11 @@ func (p *Postgres) pgLane(ctx context.Context, collection string, scope Scope, c
 	ctx, sp := startSpan(ctx, "search.lane."+lane)
 	sp.set("arkism.collection", collection)
 	defer func() { sp.end(err) }()
+	clockLane := lane
+	if lane == "fts" {
+		clockLane = "keyword" // the name explain gives this lane
+	}
+	defer laneClockOf(ctx).since(clockLane, time.Now())
 	if lane == "exact" && len(terms) == 0 {
 		return nil, nil
 	}

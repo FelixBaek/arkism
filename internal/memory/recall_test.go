@@ -265,6 +265,9 @@ func TestRecallTemporalLaneWithExplain(t *testing.T) {
 	if out.Explain == nil || out.Explain.TimeWindow == nil || out.Explain.TimeWindow.Phrase != "어제" || !slices.Contains(out.Explain.Lanes, "temporal") {
 		t.Fatalf("%+v", out.Explain)
 	}
+	if ms, ok := out.Explain.LaneMS["temporal"]; !ok || ms < 0 {
+		t.Fatalf("explain must time the temporal lane: %+v", out.Explain.LaneMS)
+	}
 	// The temporal lane never filters: a plain match still comes back beside it.
 	out, err = f.svc.Search(testCtx, f.human, SearchInput{Scope: scopeA, Query: "gamma 어제"})
 	if err != nil || !slices.Contains(ids(out.Items), "yday") || out.Explain != nil || out.Items[0].Explain != nil {
@@ -305,7 +308,7 @@ func TestRecallGraphLaneWalksRelationsAndMentions(t *testing.T) {
 			t.Fatalf("%s %+v %v", h.ID, h.Explain, h.Lanes)
 		}
 	}
-	if !slices.Contains(out.Explain.Lanes, "graph") {
+	if _, timed := out.Explain.LaneMS["graph"]; !slices.Contains(out.Explain.Lanes, "graph") || !timed {
 		t.Fatal(out.Explain)
 	}
 }
@@ -387,5 +390,20 @@ func TestLocalLexicalRerank(t *testing.T) {
 	}
 	if scores := localRerank("absent", []string{"a", "b"}); !slices.Equal(scores, []float64{0, 0}) {
 		t.Fatal(scores)
+	}
+}
+
+func TestLaneClockOnlyWithExplain(t *testing.T) {
+	ctx := withLaneClock(testCtx, false)
+	if laneClockOf(ctx) != nil || laneClockOf(ctx).millis() != nil {
+		t.Fatal("no explain, no clock")
+	}
+	laneClockOf(ctx).since("keyword", time.Now()) // a nil clock is a no-op
+	ctx = withLaneClock(testCtx, true)
+	c := laneClockOf(ctx)
+	c.since("keyword", time.Now().Add(-1500*time.Microsecond))
+	c.since("keyword", time.Now().Add(-1500*time.Microsecond))
+	if got := c.millis(); len(got) != 1 || got["keyword"] < 3 {
+		t.Fatalf("lane times sum per lane in whole ms: %v", got)
 	}
 }

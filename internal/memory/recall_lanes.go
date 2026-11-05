@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -48,6 +49,8 @@ type RecallExplain struct {
 	ModelRerank string `json:"model_rerank,omitempty"`
 	// MinScoreDropped counts hits the request's min_score removed.
 	MinScoreDropped int `json:"min_score_dropped,omitempty"`
+	// LaneMS is each lane's wall time in whole milliseconds (all collections summed), plus rerank when it ran.
+	LaneMS map[string]int64 `json:"lane_ms,omitempty"`
 }
 
 type RecallTimeWindow struct {
@@ -68,6 +71,51 @@ type recallTrace struct {
 	modelRerank string
 	modelRank   map[string]int
 	dropped     int
+	clock       *laneClock
+}
+
+// laneClock sums each lane's wall time for explain output only; without explain the
+// context carries none and every call is a no-op.
+type laneClock struct {
+	mu sync.Mutex
+	d  map[string]time.Duration
+}
+
+type laneClockKey struct{}
+
+func withLaneClock(ctx context.Context, explain bool) context.Context {
+	if !explain {
+		return ctx
+	}
+	return context.WithValue(ctx, laneClockKey{}, &laneClock{d: map[string]time.Duration{}})
+}
+
+func laneClockOf(ctx context.Context) *laneClock {
+	c, _ := ctx.Value(laneClockKey{}).(*laneClock)
+	return c
+}
+
+// since adds the time from start to lane: defer laneClockOf(ctx).since(lane, time.Now()).
+func (c *laneClock) since(lane string, start time.Time) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.d[lane] += time.Since(start)
+	c.mu.Unlock()
+}
+
+func (c *laneClock) millis() map[string]int64 {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make(map[string]int64, len(c.d))
+	for lane, d := range c.d {
+		out[lane] = d.Milliseconds()
+	}
+	return out
 }
 
 func (s *Service) recallNow() time.Time {
@@ -101,7 +149,7 @@ func hitKey(h Hit) string { return h.Origin + ":" + h.Collection + ":" + h.ID }
 // recallLanes appends the temporal and graph lanes to plain memory recall. Lanes
 // chosen explicitly (in.Modes) and history searches keep exactly the lanes asked for.
 func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection string, lists [][]Hit, clean func([]Hit) ([]Hit, error)) ([][]Hit, *recallTrace, error) {
-	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}}
+	trace := &recallTrace{explain: in.Explain, fused: map[string]float64{}, rerank: map[string]float64{}, clock: laneClockOf(ctx)}
 	for i := range lists {
 		trace.lanes = append(trace.lanes, []string{"exact", "keyword", "vector", "relation"}[min(i, 3)])
 	}
@@ -109,10 +157,12 @@ func (s *Service) recallLanes(ctx context.Context, in SearchInput, collection st
 		return lists, trace, nil
 	}
 	if w, ok := parseTimeIntent(in.Query, s.recallClock(in).In(recallLocation(in.Timezone))); ok && spaceLaneOn(in.space, "temporal", true) {
+		start := time.Now()
 		hits, err := s.Repo.SearchMemoriesInWindow(ctx, in, w.From, w.To)
 		if err == nil {
 			hits, err = clean(hits)
 		}
+		trace.clock.since("temporal", start)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -216,6 +266,7 @@ func (s *Service) neighborLanes(ctx context.Context, in SearchInput, top []Score
 
 // neighborStep reads and cleans the unseen memories one src step from frontier.
 func (s *Service) neighborStep(ctx context.Context, in SearchInput, frontier []string, src neighborSource, limit int, seen map[string]bool, clean func([]Hit) ([]Hit, error)) ([]Hit, error) {
+	defer laneClockOf(ctx).since(src.reason, time.Now())
 	// Ask past the ids already seen (back-edges to earlier steps), so they cannot fill the step.
 	ids, err := src.next(ctx, in.Scope, frontier, min(limit+len(seen), graphStepMax))
 	if err != nil {
@@ -253,7 +304,9 @@ func (s *Service) rerankRows(ctx context.Context, in SearchInput, d Decision, ro
 	if len(texts) == 0 {
 		return rows, nil
 	}
+	start := time.Now()
 	scores, err, e := s.meteredRerank(ctx, in.Scope, in.Query, texts)
+	trace.clock.since("rerank", start)
 	if e != nil {
 		return nil, e
 	}
@@ -322,7 +375,7 @@ func (t *recallTrace) annotate(out *ContextBundle, lists [][]Hit) {
 		}
 		out.Items[i].Explain = e
 	}
-	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped}
+	out.Explain = &RecallExplain{Lanes: t.lanes, Reranked: t.reranked, ModelRerank: t.modelRerank, MinScoreDropped: t.dropped, LaneMS: t.clock.millis()}
 	if t.window != nil {
 		out.Explain.TimeWindow = &RecallTimeWindow{Phrase: t.window.Phrase, From: t.window.From, To: t.window.To}
 	}
