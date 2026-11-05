@@ -1,0 +1,45 @@
+{
+ "dry_run": false,
+ "stale_marked": 0,
+ "groups": 2,
+ "proposed": [
+  {
+   "id": "ob9"
+  },
+  {
+   "id": "ob10"
+  }
+ ],
+ "refreshed": [
+  {
+   "id": "ob1"
+  }
+ ],
+ "rejected": [],
+ "mental_models": [
+  {
+   "id": "mm1"
+  }
+ ],
+ "plan": {
+  "stale_observations": [
+   "ob1"
+  ],
+  "groups": [
+   [
+    "m4",
+    "m7"
+   ],
+   [
+    "m5",
+    "m2"
+   ]
+  ],
+  "mental_models": [
+   "mm1"
+  ]
+ },
+ "calls": 4,
+ "tokens": 5120,
+ "authority": "data_only_untrusted"
+}

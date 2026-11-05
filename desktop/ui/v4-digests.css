@@ -57,3 +57,5 @@
 .dg-merge-note { display: none; margin: 0.75rem 0 0; font: 400 calc(12px * var(--fs, 1))/1.5 var(--sans); color: var(--nc-quiet); }
 .panel-main:has(#table > .row[data-id^="merge:"]) > .dg-merge-note { display: block; }
 .panel-main:has(#table > .row[data-id^="merge:"]) > .table-wrap { flex: 0 1 auto; }
+.dg-cron { display: flex; flex-direction: column; gap: 0.125rem; margin: 0.375rem 0 0.75rem; }
+.dg-cron:empty { display: none; }

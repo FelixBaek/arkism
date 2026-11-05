@@ -95,6 +95,54 @@
     "at": "2026-10-02T09:00:00Z"
    },
    "updated_at": "2026-10-14T03:00:00Z"
+  },
+  {
+   "id": "mm3",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "revision": 5,
+   "status": "active",
+   "title": "주간 회의 전에 볼 것",
+   "query": "이번 주 Orbit 작업에서 정해진 것과 남은 일은?",
+   "refresh": {
+    "mode": "on_change",
+    "cron": "0 0 * * 1",
+    "after_consolidation": true,
+    "min_interval": "6h",
+    "budget": "mid"
+   },
+   "active": {
+    "version": 3,
+    "status": "active",
+    "action": "approve",
+    "text": "결제 화면 리뷰는 파일별 목록으로 받는다.\n배포는 금요일을 피한다.\n남은 일: 스테이징 시간대 설정 정리.",
+    "citations": [
+     {
+      "collection": "memories",
+      "id": "m4",
+      "revision": 1
+     },
+     {
+      "collection": "memories",
+      "id": "m5",
+      "revision": 1
+     }
+    ],
+    "by": "preview-owner",
+    "at": "2026-11-02T09:10:00Z"
+   },
+   "last_refresh_at": "2026-11-02T00:00:00Z",
+   "next_refresh_at": "2026-11-09T00:00:00Z",
+   "last_outcome": {
+    "code": "content_written",
+    "trigger": "cron",
+    "at": "2026-11-02T00:00:00Z"
+   },
+   "created_at": "2026-10-05T09:00:00Z",
+   "updated_at": "2026-11-02T09:10:00Z",
+   "authority": "data_only_untrusted"
   }
  ],
  "next_cursor": "",

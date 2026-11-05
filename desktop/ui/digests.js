@@ -5,6 +5,8 @@
 //   /v1/merge_proposals?status=open        새 후보를 기존 기억에 합칠지·따로 저장할지·건너뛸지 AI가 제안한다. 누르기 전엔 아무것도 바뀌지 않는다.
 //   /v1/observations?status=proposed, /v1/mental-models, /v1/causal-links?status=candidate   확인해 주세요 "AI 정리":
 //     AI가 기억에서 뽑은 정리, 주제 요약 초안, 원인과 결과 제안. 사람이 승인해야 쓰인다.
+//   모아보기 also manages what a person set up: 직접 정한 주제 (/v1/mental-models: create, edit, trigger, history, clear, download)
+//     and 기억 정리 (/v1/observations: history, scopes, delete, 지금 정리하기 with /v1/observations/consolidate, strategy preview).
 // Everything the server returns here is data (authority data_only_untrusted): drawn as plain text, never as markup or instructions.
 window.ArkismDigests = (ctx) => {
   "use strict";
@@ -27,7 +29,10 @@ window.ArkismDigests = (ctx) => {
 
   // ------------------------------------------------------------ data
   const empty = () => ({ key: "", at: 0, topic: [], topicCand: [], cap: 0, activeN: 0, user: null, userCand: [], userOld: [], merge: null, notes: null, models: [], other: {} });
-  let data = empty(), loading = null, filter = { chip: "all", status: "active", sort: "heat", q: "" }, picked = false;
+  let data = empty(), loading = null, filter = { view: "topics", chip: "all", status: "active", sort: "heat", q: "", obsStatus: "active", obsScope: "" }, picked = false;
+  // 기억 정리 lists by status, its scopes, revision histories and the 지금 정리하기 run; dropped with the identity or on reload.
+  const freshSide = (key) => ({ key, obs: {}, scopes: undefined, hist: new Map(), run: null, strategies: undefined });
+  let side = freshSide(""), editing = null; // editing: the mental model id whose form is open, "new" for a new one
   const texts = new Map(); // "collection/id" → record (member memories, merge candidates and targets)
   const views = new Map(); // merge proposal id → GET /v1/merge_proposals/{id}
   // A route an older server lacks (404) is "not supported"; any other failure is FAILED, shown as "couldn't load", never as empty (#465).
@@ -56,10 +61,11 @@ window.ArkismDigests = (ctx) => {
       Object.assign(data, { key, at: Date.now(), topic: items(ta), topicCand: items(tc), cap: ta?.cap || tc?.cap || 0, activeN: ta?.active ?? items(ta).length,
         user: items(ua)[0] || null, userCand: items(uc), userOld: items(uo), failed: [ta, tc, ua, uc, uo].includes(FAILED),
         merge: mp === FAILED ? false : mp ? items(mp).filter((r) => r.merge?.proposal) : null, // merge: false failed, null not supported
-        models: items(mm), notes: [ob, mm, cl].includes(FAILED) ? false : !ob && !mm && !cl ? null
+        models: items(mm), modelsRead: mm === FAILED ? false : mm ? true : null, notes: [ob, mm, cl].includes(FAILED) ? false : !ob && !mm && !cl ? null
           : [...items(ob).map((o) => ({ id: `obs:${o.id}`, obs: o })), ...items(pm).filter((m) => m.status === "proposed").map((m) => ({ id: `model:${m.id}`, model: m })), ...items(mm).filter((m) => m.draft || m.stale).map((m) => ({ id: `model:${m.id}`, model: m })),
             ...items(cl).filter((l) => l.cause?.id && l.effect?.id).map((l) => ({ id: `causal:${l.id}`, link: l }))] });
       if (key !== data.other.key) data.other = { key };
+      if (key !== side.key) side = freshSide(key);
       if (before !== JSON.stringify([data.topic, data.topicCand, data.user, data.userCand, data.merge, data.failed, data.notes])) repaint();
     })().finally(() => { loading = null; });
     return loading;
@@ -73,7 +79,7 @@ window.ArkismDigests = (ctx) => {
     render(false);
     if (here) detail();
   }
-  async function reload() { data.at = 0; texts.clear(); views.clear(); await load(); }
+  async function reload() { data.at = 0; texts.clear(); views.clear(); side = freshSide(side.key); await load(); }
   // A record a digest or a proposal points at; read once, kept by id + revision.
   function record(collection, id) {
     const k = `${collection}/${id}`;
@@ -128,6 +134,7 @@ window.ArkismDigests = (ctx) => {
   }
   function draw() {
     ensure();
+    if (filter.view !== "topics") { drawDerived(); return; }
     if (!state.selected && !picked) {
       const first = entries().find((e) => e.cand) || entries()[0];
       if (first) { state.selected = `digest:${first.id}`; picked = true; }
@@ -147,16 +154,19 @@ window.ArkismDigests = (ctx) => {
     }
     top.push(userCard());
     const tools = el("div", "mem-tools");
-    const search = el("label", "panel-search");
-    const q = el("input"); q.type = "search"; q.placeholder = "주제 검색"; q.setAttribute("aria-label", "주제 검색"); q.value = filter.q;
-    q.addEventListener("input", () => { filter.q = q.value.trim().toLowerCase(); paintList(); });
-    search.append(ctx.icon("magnifying-glass"), q);
-    tools.append(search,
+    tools.append(searchBox("주제 검색"),
       ctx.memSelect("상태", STATUS, filter.status, (v) => { filter.status = v; filter.chip = "all"; if (v !== "active") void loadOther(v); paintList(); }),
       ctx.memSelect("정렬", SORT, filter.sort, (v) => { filter.sort = v; paintList(); }));
-    $("#controls").replaceChildren(...top, tools);
+    $("#controls").replaceChildren(viewSeg(), ...top, tools);
     $("#stats").replaceChildren();
     paintList();
+  }
+  function searchBox(label) {
+    const search = el("label", "panel-search");
+    const q = el("input"); q.type = "search"; q.placeholder = label; q.setAttribute("aria-label", label); q.value = filter.q;
+    q.addEventListener("input", () => { filter.q = q.value.trim().toLowerCase(); paintList(); });
+    search.append(ctx.icon("magnifying-glass"), q);
+    return search;
   }
   async function loadOther(status) {
     if (data.other[status] && !data.other[status].failed) return; // a failed read asks again
@@ -170,6 +180,8 @@ window.ArkismDigests = (ctx) => {
     if (state.memTab === "merge") { paintMerge(); return; }
     if (state.memTab === "notes") { paintNotes(); return; }
     if (state.memTab !== "digests") return;
+    if (filter.view === "models") { paintModels(); return; }
+    if (filter.view === "observations") { paintObservations(); return; }
     const all = entries();
     const max = Math.max(0, ...all.map(scoreOf));
     const counts = { all: all.length, hot: 0, candidate: 0, quiet: 0 };
@@ -238,6 +250,8 @@ window.ArkismDigests = (ctx) => {
     if (soft && document.querySelector("#detail [data-sync-dirty]")) return;
     if (state.memTab === "merge") return mergeDetail(soft);
     if (state.memTab === "notes") return notesDetail(soft);
+    if (filter.view === "models") return modelDetail(soft);
+    if (filter.view === "observations") return observationDetail(soft);
     const id = (state.selected || "").replace(/^digest:/, "");
     if (id === "user") return userDetail();
     const e = entries().find((x) => x.id === id);
@@ -614,7 +628,7 @@ window.ArkismDigests = (ctx) => {
     body.append(members(mems, [], "근거 기억"));
     if (refs.length > mems.length) body.append(el("p", "meta", `승인된 다른 AI 정리 ${refs.length - mems.length}개도 근거로 썼어요.`));
     const info = [["얼마나 갈 내용", o && (DURABLE[o.durability] || o.durability)], ["AI 확신", o?.confidence != null ? `${Math.round(o.confidence * 100)}%` : ""],
-      ["다시 만드는 때", m && ({ manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh?.mode ?? m.refresh] || (m.refresh?.mode ?? m.refresh))], ["쓴 모델", ((o?.generator || d?.generator)?.model) || ""]];
+      ["다시 만드는 때", m && modeText(m)], ["쓴 모델", ((o?.generator || d?.generator)?.model) || ""]];
     const more = el("details", "insight-more"); more.append(el("summary", "", "자세히"), ctx.facts(info));
     body.append(more);
   }
@@ -632,10 +646,7 @@ window.ArkismDigests = (ctx) => {
     if (state.caps?.role !== "human") card.append(el("p", "meta", "다시 만들기는 사람만 할 수 있어요."));
     else {
       const btns = el("div", "d-buttons");
-      btns.append(button("다시 만들기", "primary small", null, () => decideOnce(n.id, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}/refresh`,
-        { method: "POST", body: JSON.stringify({ scope: state.scope }) }),
-      { ok: "새 초안을 만들었어요. 읽어 보고 승인해 주세요.", conflict: "그사이 요약이 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 요약을 다시 만들 수 없어요.",
-        codes: { model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." } }, btns)));
+      btns.append(refreshButton(n.id, m, btns, "primary small"));
       card.append(btns);
     }
     body.append(card);
@@ -656,7 +667,7 @@ window.ArkismDigests = (ctx) => {
     { ok: action === "approve" ? "주제를 승인했어요. 다시 만드는 때가 되면 요약을 써요." : "제안을 버렸어요.", conflict: "그사이 제안이 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 주제를 승인할 수 없어요." }, btns);
     body.append(candidateCard({ id: n.id, fresh: true, body: m.query }, "proposal",
       "에이전트가 이 주제로 요약을 만들자고 제안했어요. 승인하기 전에는 요약을 쓰지 않아요.", state.caps?.role === "human" ? send : null));
-    const info = [["다시 만드는 때", { manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" }[m.refresh?.mode ?? m.refresh] || (m.refresh?.mode ?? m.refresh)], ["만든 날", day(m.created_at)]];
+    const info = [["다시 만드는 때", modeText(m)], ["만든 날", day(m.created_at)]];
     const more = el("details", "insight-more"); more.append(el("summary", "", "자세히"), ctx.facts(info));
     body.append(more);
   }
@@ -678,13 +689,374 @@ window.ArkismDigests = (ctx) => {
     body.append(more);
   }
 
-  function reset() { picked = false; filter = { ...filter, chip: "all", q: "" }; expanded.clear(); }
+  // ------------------------------------------------------------ 모아보기 · 직접 정한 주제 (mental models) · 기억 정리 (observations)
+  // A person writes the question and when it is remade; whatever the model writes is a draft a person approves in 확인해 주세요 › AI 정리.
+  const VIEWS = [["topics", "주제 요약"], ["models", "직접 정한 주제"], ["observations", "기억 정리"]];
+  const MODE = { manual: "직접 요청할 때", on_change: "기억이 바뀔 때", daily: "매일" };
+  const modeText = (m) => { const r = window.ArkismDigests.refreshOf(m); return MODE[r.mode] || r.mode; };
+  const OUTCOME = { content_written: "새 초안을 썼어요", content_unchanged: "바뀐 내용이 없었어요", content_preserved_no_new_facts: "새 기억이 없어 그대로 뒀어요",
+    refresh_failed_empty_candidate: "실패 · AI 답이 비었어요", refresh_failed_delta_not_applied: "실패 · 고친 부분을 붙이지 못했어요",
+    refresh_failed_structured_output: "실패 · 정한 형식과 달랐어요", refresh_failed_error: "실패 · 오류가 났어요" };
+  const TRIGGER = { initial: "처음", manual: "직접 요청", daily: "매일", on_change: "기억이 바뀜", after_consolidation: "기억 정리 뒤", cron: "정한 일정", full_refresh_cron: "전체 다시 쓰기 일정" };
+  const REVISION = { propose: "AI 제안", refresh: "AI 초안", approve: "승인", edit_approve: "고쳐서 승인", reject: "버림", stale: "근거 바뀜", superseded: "이전 버전", cleared: "비움", delete: "지움" };
+  const OBS_STATUS = [["active", "상태: 사용 중"], ["proposed", "상태: 확인 대기"], ["stale", "상태: 근거 바뀜"], ["rejected", "상태: 거절됨"]];
+  const BUDGET = [["", "참고할 기억: 기본"], ["low", "참고할 기억: 적게 (10개)"], ["mid", "참고할 기억: 보통 (20개)"], ["high", "참고할 기억: 많이 (40개)"]];
+  const MODEL_CODES = { model_not_configured: "서버에 요약을 쓸 모델이 없어요. 서버 설정에서 모델을 연결해 주세요.", model_budget_exceeded: "오늘 쓸 수 있는 모델 호출을 다 썼어요. 내일 다시 해 주세요." };
+  const human = () => state.caps?.role === "human";
+  const when = (v) => (v ? new Date(v).toLocaleString(globalThis.ArkismI18n?.locale() || "ko-KR", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "");
+  const outcomeText = (o) => (o ? [OUTCOME[o.code] || o.code, TRIGGER[o.trigger] || o.trigger, when(o.at)].filter(Boolean).join(" · ") : "");
+  const here = () => state.view === "memories" && state.memTab === "digests";
+
+  function viewSeg() {
+    const seg = ctx.segment(VIEWS, filter.view, (k) => {
+      if (k === filter.view) return;
+      filter.view = k; filter.q = ""; state.selected = null; picked = k !== "topics"; editing = null;
+      render(false); detail();
+    });
+    seg.classList.add("mem-seg");
+    return seg;
+  }
+  function drawDerived() {
+    const tools = el("div", "mem-tools");
+    if (filter.view === "models") {
+      tools.append(searchBox("주제 검색"));
+      if (human()) tools.append(button("새 주제 만들기", "small", "plus", () => { editing = "new"; pick("mm:new"); }));
+    } else {
+      void loadObservations();
+      const scopes = Array.isArray(side.scopes) ? side.scopes : [];
+      tools.append(searchBox("정리 검색"),
+        ctx.memSelect("상태", OBS_STATUS, filter.obsStatus, (v) => { filter.obsStatus = v; state.selected = null; render(false); detail(); }));
+      if (scopes.length > 1) tools.append(ctx.memSelect("묶음", [["", "묶음: 모두"], ...scopes.map((x) => [x.tags.join("\u0000") || "-", `묶음: ${x.tags.join(", ") || "태그 없음"} ${x.active + x.proposed}`])],
+        filter.obsScope, (v) => { filter.obsScope = v; paintList(); }));
+      if (human()) tools.append(button("지금 정리하기", "small", null, () => pick("ob:run")));
+    }
+    $("#controls").replaceChildren(viewSeg(), tools);
+    $("#chips").replaceChildren(); $("#stats").replaceChildren();
+    paintList();
+  }
+
+  // 직접 정한 주제: the approved ones (proposed and drafted ones also wait in AI 정리)
+  function paintModels() {
+    const items = data.models.filter((m) => !filter.q || `${m.title} ${m.query}`.toLowerCase().includes(filter.q));
+    const table = $("#table");
+    table.replaceChildren(...items.map((m) => {
+      const cell = el("div", "cell mem-cell");
+      const next = m.next_refresh_at ? `다음 ${when(m.next_refresh_at)}` : "";
+      cell.append(raw(el("div", "text", m.title)), el("div", "mem-meta", [modeText(m), next, m.last_outcome && OUTCOME[m.last_outcome.code]].filter(Boolean).join(" · ")));
+      const [label, cls] = m.draft ? ["초안 확인 대기", " warn"] : m.stale ? [STALE[m.stale_reason] || "오래됨", " warn"] : m.active ? ["사용 중", ""] : ["비어 있음", ""];
+      return row(`mm:${m.id}`, "minmax(0,1fr) auto", [cell, el("span", `mem-badge${cls}`, label)], () => detail());
+    }));
+    if (!data.key) table.append(el("div", "empty", "주제를 불러오는 중…"));
+    else if (data.modelsRead === false) table.append(el("div", "empty", "주제를 불러오지 못했어요. 새로고침하면 다시 불러와요."));
+    else if (data.modelsRead === null) table.append(el("div", "empty", "이 서버는 직접 정한 주제를 지원하지 않아요."));
+    else if (!items.length) table.append(el("div", "empty", filter.q ? "검색과 맞는 주제가 없어요." : "아직 직접 정한 주제가 없어요. 「새 주제 만들기」로 궁금한 것을 적으면 AI가 승인된 기억으로 요약 초안을 써요."));
+    markSelected();
+  }
+  function modelDetail() {
+    const id = (state.selected || "").replace(/^mm:/, "");
+    if (editing && (editing === id || (editing === "new" && id === "new"))) return modelForm(id === "new" ? null : data.models.find((x) => x.id === id));
+    const m = data.models.find((x) => x.id === id);
+    const body = detailShell("직접 정한 주제");
+    if (!m) { body.append(el("h2", "", "주제를 고르세요"), el("p", "lead", "궁금한 것을 질문으로 적어 두면, AI가 승인된 기억만 읽고 요약 초안을 써요. 초안은 사람이 승인해야 쓰여요.")); return; }
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", "직접 정한 주제"), raw(el("h2", "", m.title)), raw(el("p", "meta", m.query)));
+    if (m.stale) head.append(el("p", "dg-warn", STALE_LEAD[m.stale_reason] || "이 요약이 오래됐어요."));
+    body.append(head);
+    if (m.draft) {
+      const card = el("div", "d-action dg-cand");
+      card.append(el("p", "", "AI가 새 초안을 썼어요. 확인해 주세요 › AI 정리에서 승인하거나 버려 주세요."));
+      if (ctx.go) { const b = el("div", "d-buttons"); b.append(button("초안 확인하기", "primary small", null, () => { ctx.go("memories", "notes"); state.selected = `note:model:${m.id}`; markSelected(); detail(); openDetail(); })); card.append(b); }
+      body.append(card);
+    }
+    const now = ctx.section("지금 요약", m.active ? `v${m.active.version}` : "");
+    if (m.active) now.append(quote(m.active.withheld ? "" : m.active.text, day(m.active.at)));
+    else now.append(el("p", "meta", "아직 승인된 요약이 없어요. 「다시 만들기」를 누르면 AI가 초안을 써요."));
+    body.append(now);
+    const r = window.ArkismDigests.refreshOf(m);
+    const trig = ctx.section("다시 만드는 때");
+    trig.append(ctx.facts([["방식", modeText(m)], ["일정 (UTC)", r.cron || ""], ["기억 정리 뒤", r.after_consolidation ? "다시 만들어요" : ""], ["최소 간격", r.min_interval || ""],
+      ["고치는 방식", r.strategy === "delta" ? "바뀐 부분만 고쳐요" : ""], ["전체 다시 쓰기 (UTC)", r.full_refresh_cron || ""],
+      ["다음 실행", when(m.next_refresh_at) || (r.mode === "manual" && !r.cron && !r.after_consolidation ? "직접 요청할 때만" : "")], ["지난 결과", outcomeText(m.last_outcome)]]));
+    body.append(trig);
+    if (human()) {
+      const btns = el("div", "d-buttons");
+      btns.append(button("고치기", "small", null, () => { editing = m.id; detail(); }), refreshButton(`mm:${m.id}`, m, btns, "small"),
+        button("내려받기", "small", null, () => void downloadModel(m)));
+      const danger = el("div", "d-buttons");
+      if (m.active || m.draft) danger.append(button("비우기", "ghost small", null, () => confirmRow(danger, "승인된 요약과 초안을 비울까요? 주제와 이력은 남아요.", "비우기",
+        (b) => decideOnce(`mm:${m.id}`, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}/clear`, { method: "POST", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }),
+          { ok: "요약을 비웠어요. 이력에는 남아요.", conflict: "그사이 주제가 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 요약을 비울 수 없어요." }, b))));
+      danger.append(button("지우기", "ghost small", null, () => confirmRow(danger, "이 주제를 지울까요? 승인된 요약도 더는 쓰이지 않아요.", "지우기",
+        (b) => decideOnce(`mm:${m.id}`, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}`, { method: "DELETE", body: JSON.stringify({ scope: state.scope, expected_revision: m.revision }) }),
+          { ok: "주제를 지웠어요.", conflict: "그사이 주제가 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 주제를 지울 수 없어요." }, b))));
+      body.append(btns);
+      body.append(history(`/v1/mental-models/${encodeURIComponent(m.id)}/history`, `mm:${m.id}`), danger);
+    } else body.append(el("p", "meta", "고치기와 다시 만들기는 사람만 할 수 있어요."), history(`/v1/mental-models/${encodeURIComponent(m.id)}/history`, `mm:${m.id}`));
+    if (m.active?.citations?.length) body.append(members(m.active.citations.filter((c) => c.collection === "memories"), [], "근거 기억"));
+  }
+  // 다시 만들기: the model writes a new draft that waits in AI 정리 (POST /v1/mental-models/{id}/refresh).
+  function refreshButton(id, m, btns, cls) {
+    return button("다시 만들기", cls, null, () => decideOnce(id, () => request(`/v1/mental-models/${encodeURIComponent(m.id)}/refresh`, { method: "POST", body: JSON.stringify({ scope: state.scope }) }),
+      { ok: "새 초안을 만들었어요. 읽어 보고 승인해 주세요.", conflict: "그사이 요약이 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 요약을 다시 만들 수 없어요.", codes: MODEL_CODES }, btns));
+  }
+  // A second, explicit step before something is cleared or deleted.
+  function confirmRow(after, question, label, run) {
+    after.parentElement?.querySelector(".dg-confirm")?.remove();
+    const box = el("div", "d-action dg-cand dg-confirm"), btns = el("div", "d-buttons");
+    btns.append(button(label, "primary small", null, () => run(btns)), button("취소", "ghost small", null, () => box.remove()));
+    box.append(el("p", "dg-warn", question), btns);
+    after.after(box);
+  }
+  // 바뀐 이력: every revision with its line diff against the one before (GET …/history), read once per open item.
+  function history(path, key) {
+    const s = ctx.section("바뀐 이력");
+    const h = side.hist.get(key);
+    if (h === undefined) {
+      side.hist.set(key, null);
+      request(`${path}?${query()}`).then((v) => v, () => false).then((v) => { side.hist.set(key, v); if (here() && state.selected === key && !document.querySelector("#detail [data-sync-dirty]")) detail(); });
+    }
+    if (!h) { s.append(el("p", "meta", h === false ? "이력을 불러오지 못했어요." : "이력을 불러오는 중…")); return s; }
+    const revs = [...(h.revisions || [])].sort((a, b) => b.version - a.version || new Date(b.at) - new Date(a.at));
+    if (!revs.length) { s.append(el("p", "meta", "아직 이력이 없어요.")); return s; }
+    for (const [i, v] of revs.slice(0, 20).entries()) {
+      const d = el("details", "insight-more dg-rev");
+      if (!i) d.open = true;
+      d.append(el("summary", "", [`v${v.version}`, REVISION[v.action] || v.action, when(v.at), v.by].filter(Boolean).join(" · ")));
+      d.append(v.diff?.length ? diffBox(v.diff) : el("p", "meta", v.action === "cleared" ? "요약을 비웠어요." : "글은 그대로예요."));
+      s.append(d);
+    }
+    return s;
+  }
+  // The approved summary as a Markdown file, with the text of each cited memory.
+  async function downloadModel(m) {
+    const cites = (m.active?.citations || []).filter((c) => c.collection === "memories").slice(0, 64);
+    const got = await Promise.all(cites.map((c) => (texts.get(`memories/${c.id}`) ? texts.get(`memories/${c.id}`) : request(`/v1/memories/${encodeURIComponent(c.id)}?${query()}`).catch(() => null))));
+    const md = window.ArkismDigests.modelMarkdown(m, got.map((r, i) => r?.text || cites[i].id), ctx.tr || ((x) => x));
+    const url = URL.createObjectURL(new Blob([md], { type: "text/markdown" }));
+    try { const a = el("a"); a.href = url; a.download = `${(m.title || "topic").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80)}.md`; a.click(); } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  }
+  // 새 주제 만들기 / 고치기: title, question and when to remake; schedules and the rest sit under 자세히 (empty = server default).
+  function modelForm(m) {
+    const body = detailShell("직접 정한 주제");
+    const r = m ? window.ArkismDigests.refreshOf(m) : { mode: "manual" };
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", m ? "직접 정한 주제 · 고치기" : "직접 정한 주제 · 새로 만들기"), el("h2", "", m ? m.title : "새 주제 만들기"),
+      el("p", "lead", "질문을 적으면 AI가 승인된 기억만 읽고 요약 초안을 써요. 초안은 사람이 승인해야 쓰여요."));
+    body.append(head);
+    const dirty = (n) => { n.addEventListener("input", () => n.setAttribute("data-sync-dirty", "")); return n; };
+    const input = (value, max, placeholder = "") => { const i = dirty(el("input")); i.value = value || ""; i.maxLength = max; i.placeholder = placeholder; return i; };
+    const field = (label, n) => { const l = el("label", "insight-field"); l.append(el("span", "", label), n); return l; };
+    const title = input(m?.title, 120, "예: 배포 전에 확인할 것");
+    const q = dirty(el("textarea")); q.rows = 3; q.maxLength = 1000; q.value = m?.query || ""; q.placeholder = "예: 배포할 때 늘 확인하는 순서는?";
+    const mode = ctx.memSelect("다시 만드는 때", Object.entries(MODE).map(([k, v]) => [k, `다시 만드는 때: ${v}`]), r.mode || "manual", () => {});
+    const cron = input(r.cron, 100, "예: 0 9 * * 1");
+    const after = el("input"); after.type = "checkbox"; after.checked = !!r.after_consolidation;
+    const gap = input(r.min_interval, 20, "예: 6h");
+    const strategy = ctx.memSelect("고치는 방식", [["", "고치는 방식: 처음부터 다시 쓰기"], ["delta", "고치는 방식: 바뀐 부분만 고치기"]], r.strategy === "delta" ? "delta" : "", () => {});
+    const full = input(r.full_refresh_cron, 100, "예: 0 3 1 * *");
+    const budget = ctx.memSelect("참고할 기억", BUDGET, r.budget || "", () => {});
+    const preview = el("div", "dg-cron");
+    const check = el("label", "insight-check");
+    check.append(after, el("span", "", "기억 정리가 끝나면 다시 만들기"));
+    const more = el("details", "insight-more");
+    more.open = !!(r.cron || r.after_consolidation || r.min_interval || r.strategy || r.full_refresh_cron || r.budget);
+    more.append(el("summary", "", "자세히"), field("일정 (분 시 일 월 요일, UTC)", cron),
+      button("일정 미리보기", "small", null, () => void previewCron(cron.value.trim(), preview)), preview, check, field("최소 간격", gap), strategy, field("전체 다시 쓰기 일정 (UTC)", full), budget);
+    const form = el("div", "insight-edit");
+    form.append(field("제목", title), field("질문", q), mode, more);
+    body.append(form);
+    const btns = el("div", "d-buttons");
+    btns.append(button("저장", "primary small", null, () => void saveModel(m, btns, { title: title.value.trim(), query: q.value.trim(),
+      refresh: window.ArkismDigests.refreshBody(r, { mode: mode.value, cron: cron.value, after_consolidation: after.checked, min_interval: gap.value, strategy: strategy.value, full_refresh_cron: full.value, budget: budget.value }) })),
+    button("취소", "ghost small", null, () => { editing = null; if (!m) state.selected = null; detail(); }));
+    body.append(btns);
+  }
+  async function previewCron(cron, box) {
+    if (!cron) { box.replaceChildren(el("p", "meta", "일정을 적으면 다음 실행 시각을 보여 줘요.")); return; }
+    try {
+      const v = await request("/v1/mental-models/cron-preview", { method: "POST", body: JSON.stringify({ scope: state.scope, cron }) });
+      box.replaceChildren(el("p", "meta", "다음 실행 (이 PC 시각)"), ...(v?.next || []).map((t) => el("p", "dg-note", when(t))));
+    } catch (e) { box.replaceChildren(el("p", "dg-warn", e.message === "invalid" ? "일정 형식이 맞지 않아요. 분 시 일 월 요일, 다섯 칸으로 적어 주세요." : `미리 보지 못했어요 (${e.message}).`)); }
+  }
+  async function saveModel(m, btns, v) {
+    if (!v.title || !v.query) { notice("제목과 질문을 적어 주세요."); return; }
+    btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    try {
+      const saved = await request(m ? `/v1/mental-models/${encodeURIComponent(m.id)}` : "/v1/mental-models",
+        { method: m ? "PATCH" : "POST", body: JSON.stringify({ scope: state.scope, ...(m ? { expected_revision: m.revision } : {}), ...v }) });
+      notice(m ? "주제를 고쳤어요." : "주제를 만들었어요. 「다시 만들기」를 누르거나 정한 때가 되면 AI가 초안을 써요.");
+      editing = null;
+      if (saved?.id) state.selected = `mm:${saved.id}`;
+    } catch (e) {
+      notice(e.message === "invalid" ? "입력한 값을 확인해 주세요. 일정은 다섯 칸, 최소 간격은 6h처럼 적어요." : e.message === "revision_conflict" ? "그사이 주제가 바뀌었어요. 새로 불러왔어요."
+        : e.message === "access_denied" ? "이 계정은 주제를 만들거나 고칠 수 없어요." : `저장하지 못했어요: ${e.message}`);
+      btns.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      if (e.message !== "revision_conflict") return;
+      editing = null;
+    }
+    await reload();
+    render(false); detail();
+  }
+
+  // 기억 정리: observations by status and scope, each with its sources and history
+  async function loadObservations() {
+    const status = filter.obsStatus, key = side.key;
+    const want = [];
+    if (side.obs[status] === undefined) { side.obs[status] = null; want.push(request(`/v1/observations?${query({ status, limit: 100 })}`).then((p) => { if (side.key === key) side.obs[status] = Array.isArray(p?.items) ? p.items : []; }, (e) => { if (side.key === key) side.obs[status] = absent(e) || false; })); }
+    if (side.scopes === undefined) { side.scopes = null; want.push(request(`/v1/observations/scopes?${query()}`).then((p) => { if (side.key === key) side.scopes = Array.isArray(p?.items) ? p.items : []; }, () => { if (side.key === key) side.scopes = []; })); }
+    if (!want.length) return;
+    await Promise.all(want);
+    if (here() && filter.view === "observations" && side.key === key) { render(false); detail(true); }
+  }
+  const scopeOf = (o) => [...new Set((o.tags || []).filter((t) => !t.startsWith("review:")))].sort().join("\u0000") || "-";
+  function paintObservations() {
+    const got = side.obs[filter.obsStatus];
+    const items = (Array.isArray(got) ? got : []).filter((o) => (!filter.obsScope || scopeOf(o) === filter.obsScope) && (!filter.q || (o.content || "").toLowerCase().includes(filter.q)));
+    const table = $("#table");
+    table.replaceChildren(...items.map((o) => {
+      const cell = el("div", "cell mem-cell");
+      cell.append(raw(el("div", "text", o.content)), el("div", "mem-meta", [DURABLE[o.durability] || o.durability, `근거 기억 ${(o.source_memories || o.source_memory_ids || []).length}개`, occurred(o), ago(o.updated_at)].filter(Boolean).join(" · ")));
+      return row(`ob:${o.id}`, "minmax(0,1fr) auto", [cell, el("span", `mem-badge${o.status === "active" ? "" : " warn"}`, (OBS_STATUS.find(([k]) => k === o.status)?.[1] || o.status || "").replace("상태: ", ""))], () => detail());
+    }));
+    if (got === undefined || got === null) table.append(el("div", "empty", "정리를 불러오는 중…"));
+    else if (got === false) table.append(el("div", "empty", "정리를 불러오지 못했어요. 새로고침하면 다시 불러와요."));
+    else if (!items.length) table.append(el("div", "empty", filter.q || filter.obsScope ? "검색과 맞는 정리가 없어요." : "여기에 표시할 정리가 없어요. 「지금 정리하기」로 AI에게 정리를 맡길 수 있어요."));
+    markSelected();
+  }
+  function observationDetail() {
+    const id = (state.selected || "").replace(/^ob:/, "");
+    if (id === "run") return runPanel();
+    const list = side.obs[filter.obsStatus];
+    const o = Array.isArray(list) ? list.find((x) => x.id === id) : null;
+    const body = detailShell("기억 정리");
+    if (!o) { body.append(el("h2", "", "정리를 고르세요"), el("p", "lead", "AI가 승인된 기억 여러 개를 읽고 쓴 정리예요. 승인된 것만 기억과 함께 쓰여요.")); return; }
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", "기억 정리"), raw(el("h2", "", o.content)),
+      el("p", "meta", [(OBS_STATUS.find(([k]) => k === o.status)?.[1] || "").replace("상태: ", ""), DURABLE[o.durability] || o.durability, occurred(o)].filter(Boolean).join(" · ")));
+    const tags = (o.tags || []).filter((t) => !t.startsWith("review:"));
+    if (tags.length) head.append(raw(el("p", "meta", `묶음: ${tags.join(", ")}`)));
+    body.append(head);
+    const refs = o.source_memories || (o.source_memory_ids || []).map((x) => ({ collection: "memories", id: x }));
+    body.append(members(refs.filter((r) => r.collection === "memories"), [], "근거 기억"), history(`/v1/observations/${encodeURIComponent(o.id)}/history`, `ob:${o.id}`));
+    if (human()) {
+      const btns = el("div", "d-buttons");
+      btns.append(button("지우기", "ghost small", null, () => confirmRow(btns, "이 정리를 지울까요? 이력은 남고, 다음 정리 때 다시 제안될 수 있어요.", "지우기",
+        (b) => decideOnce(`ob:${o.id}`, () => request("/v1/observations", { method: "DELETE", body: JSON.stringify({ scope: state.scope, ids: [o.id] }) }),
+          { ok: "정리를 지웠어요.", conflict: "그사이 정리가 바뀌었어요. 새로 불러왔어요.", denied: "이 계정은 정리를 지울 수 없어요." }, b).then(() => { state.selected = null; detail(); }))));
+      body.append(btns);
+    }
+  }
+
+  // 지금 정리하기: first what a run would do (plan_only: no model call, no write), then the run itself after a click.
+  // The run is one request, so the progress is its steps and the time it has taken; its drafts land in AI 정리.
+  function runPanel() {
+    const body = detailShell("기억 정리");
+    const head = el("div", "d-head");
+    head.append(el("p", "d-kind", "기억 정리 · 지금 실행"), el("h2", "", "지금 정리하기"),
+      el("p", "lead", "AI가 승인된 기억을 다시 읽고 새 정리나 고친 정리를 제안해요. 제안은 확인해 주세요 › AI 정리에서 승인해야 쓰여요."));
+    body.append(head);
+    if (!side.run) startPlan();
+    const run = side.run, p = run.plan?.plan;
+    const steps = ctx.section("진행");
+    const planLine = run.phase === "plan" ? "살펴보는 중…" : run.phase === "plan_failed" ? "" : p ? window.ArkismDigests.planText(p) : "";
+    const res = run.result;
+    steps.append(ctx.facts([["1. 살펴보기", planLine], ["2. 정리", run.phase === "running" ? "정리하는 중…" : res ? `${Math.max(1, Math.round(run.took / 1000))}초 걸렸어요` : run.phase === "failed" ? "멈췄어요" : "기다리는 중"],
+      ["3. 결과", res ? window.ArkismDigests.runText(res) : ""]]));
+    if (run.phase === "running") { const t = el("p", "meta", elapsed(run)); steps.append(t); tick(t, run); }
+    if (run.error) steps.append(el("p", "dg-warn", run.error));
+    body.append(steps);
+    const btns = el("div", "d-buttons");
+    if (run.phase === "planned" && human()) {
+      const go = button("정리 시작", "primary small", null, () => void startRun());
+      go.disabled = !!p && window.ArkismDigests.planEmpty(p);
+      btns.append(go);
+    }
+    if (res && ctx.go) btns.append(button("AI 정리에서 확인하기", "primary small", null, () => { ctx.go("memories", "notes"); }));
+    if (["done", "failed", "plan_failed"].includes(run.phase)) btns.append(button("다시 살펴보기", "small", null, () => { side.run = null; detail(); }));
+    body.append(btns, el("p", "meta", "AI를 부르기 때문에 사용량에 잡혀요. 한 번에 정해진 묶음 수까지만 정리해요."));
+    const more = el("details", "insight-more");
+    more.append(el("summary", "", "자세히"), strategyBox(), scopeBox());
+    body.append(more);
+  }
+  const elapsed = (run) => `${Math.round((Date.now() - run.started) / 1000)}초 지났어요`;
+  function tick(node, run) {
+    const t = setInterval(() => {
+      if (!node.isConnected || run.phase !== "running") { clearInterval(t); return; }
+      node.textContent = elapsed(run);
+    }, 1000);
+  }
+  const runError = (e) => MODEL_CODES[e.message] || (e.message === "access_denied" ? "이 계정은 정리를 실행할 수 없어요." : `처리하지 못했어요: ${e.message}`);
+  function startPlan() {
+    const run = side.run = { phase: "plan" };
+    request("/v1/observations/consolidate", { method: "POST", body: JSON.stringify({ scope: state.scope, plan_only: true }) })
+      .then((v) => { run.plan = v; run.phase = "planned"; }, (e) => { run.phase = "plan_failed"; run.error = runError(e); })
+      .then(() => { if (side.run === run && here() && state.selected === "ob:run") detail(); });
+  }
+  async function startRun() {
+    const run = side.run;
+    if (!run || run.phase !== "planned") return;
+    run.phase = "running"; run.started = Date.now(); detail();
+    try { run.result = await request("/v1/observations/consolidate", { method: "POST", body: JSON.stringify({ scope: state.scope }) }); run.phase = "done"; notice("정리를 마쳤어요. AI 정리에서 확인해 주세요."); }
+    catch (e) { run.phase = "failed"; run.error = runError(e); }
+    run.took = Date.now() - run.started;
+    const keep = side.run; await reload(); side.run = keep; // the result stays on screen; the lists and counts are read again
+    render(false); if (here() && state.selected === "ob:run") detail();
+  }
+  // How the space's consolidation strategies split the approved memories (no model, no write).
+  function strategyBox() {
+    const s = ctx.section("묶는 방식 미리보기");
+    const v = side.strategies;
+    if (v === undefined) s.append(button("미리보기", "small", null, () => {
+      side.strategies = null; detail();
+      request("/v1/observations/strategies/preview", { method: "POST", body: JSON.stringify({ scope: state.scope }) })
+        .then((x) => x, (e) => ({ error: e.message })).then((x) => { side.strategies = x; if (here() && state.selected === "ob:run") detail(); });
+    }));
+    else if (v === null) s.append(el("p", "meta", "불러오는 중…"));
+    else if (v.error) s.append(el("p", "dg-warn", `미리 보지 못했어요 (${v.error}).`));
+    else {
+      const rows = (v.strategies || []).map((x) => [x.name, `묶음 ${x.claimed}개${x.rules?.length ? ` · 규칙 ${x.rules.length}개` : ""}`]);
+      rows.push(["기본 방식", `묶음 ${v.unclaimed}개`]);
+      s.append(ctx.facts(rows), el("p", "meta", `기억 묶음 ${v.scopes}개 · 먼저 맞는 방식이 그 묶음을 맡아요.`));
+    }
+    return s;
+  }
+  // The tag scopes observations are kept under, and 모두 지우기 (people only; the history stays).
+  function scopeBox() {
+    const s = ctx.section("묶음");
+    const list = Array.isArray(side.scopes) ? side.scopes : [];
+    if (side.scopes === undefined) void loadObservations();
+    if (list.length) s.append(ctx.facts(list.slice(0, 30).map((x) => [x.tags.join(", ") || "태그 없음", `사용 중 ${x.active} · 확인 대기 ${x.proposed}`])));
+    else s.append(el("p", "meta", side.scopes === null ? "불러오는 중…" : "아직 정리가 없어요."));
+    if (human() && list.length) {
+      const btns = el("div", "d-buttons");
+      btns.append(button("정리 모두 지우기", "ghost small", null, () => confirmRow(btns, "정리를 모두 지울까요? 이력은 남고, 다음 정리 때 다시 제안될 수 있어요.", "모두 지우기", (b) => void clearAll(b))));
+      s.append(btns);
+    }
+    return s;
+  }
+  async function clearAll(btns) {
+    btns.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+    let n = 0;
+    try {
+      for (let i = 0; i < 20; i++) { // the server deletes up to 500 a call and says when more remain
+        const v = await request("/v1/observations", { method: "DELETE", body: JSON.stringify({ scope: state.scope, all: true }) });
+        n += v?.deleted?.length || 0;
+        if (!v?.more) break;
+      }
+      notice(`정리 ${n}개를 지웠어요.`);
+    } catch (e) { notice(e.message === "access_denied" ? "이 계정은 정리를 지울 수 없어요." : `지우지 못했어요: ${e.message}`); }
+    await reload();
+    render(false); detail();
+  }
+
+  function reset() { picked = false; editing = null; filter = { ...filter, view: "topics", chip: "all", q: "" }; expanded.clear(); }
   function close() {
     state.selected = null; markSelected();
     document.querySelectorAll(".dg-user.selected").forEach((n) => n.classList.remove("selected"));
     detail();
   }
-  return { title: () => (data.key ? `주제 ${data.topic.length}개` : ""), draw, drawMerge, drawNotes, detail, close, reset, mergeCount, notesCount, digestCounts, menuRows, refresh: () => { data.at = 0; ensure(); } };
+  const title = () => (!data.key ? "" : filter.view === "models" ? `주제 ${data.models.length}개` : filter.view === "observations" ? (Array.isArray(side.obs[filter.obsStatus]) ? `정리 ${side.obs[filter.obsStatus].length}개` : "") : `주제 ${data.topic.length}개`);
+  return { title, draw, drawMerge, drawNotes, detail, close, reset, mergeCount, notesCount, digestCounts, menuRows, refresh: () => { data.at = 0; ensure(); } };
 };
 // One memory row for 모아보기 and 물어보기 · 자주 나온 이름 (memory-insight.js): its text and an optional meta line.
 // memoryText: m is the record, null when it can't be read, undefined while it loads.
@@ -696,3 +1068,21 @@ window.ArkismDigests.memoryItem = ({ el, raw }, text, meta = "") => {
   item.append(box);
   return item;
 };
+// A mental model's refresh rule as an object (an old server sends the bare mode string).
+window.ArkismDigests.refreshOf = (m) => (typeof m?.refresh === "string" ? { mode: m.refresh } : { mode: "manual", ...(m?.refresh || {}) });
+// The rule to save: base keeps what this form does not show (kinds, tags, schema …); an empty field drops its key so the server default applies.
+window.ArkismDigests.refreshBody = (base, v) => {
+  const out = { ...base, mode: v.mode || base.mode || "manual" };
+  for (const k of ["cron", "min_interval", "strategy", "full_refresh_cron", "budget"]) { const x = String(v[k] ?? "").trim(); if (x) out[k] = x; else delete out[k]; }
+  if (v.after_consolidation) out.after_consolidation = true; else delete out.after_consolidation;
+  return out;
+};
+// 지금 정리하기, step 1: what a plan_only run found.
+window.ArkismDigests.planEmpty = (p) => !(p.stale_observations?.length || p.groups?.length || p.mental_models?.length);
+window.ArkismDigests.planText = (p) => (window.ArkismDigests.planEmpty(p) ? "지금은 정리할 것이 없어요"
+  : `근거 바뀐 정리 ${p.stale_observations?.length || 0}개 · 새로 묶을 기억 ${p.groups?.length || 0}묶음 · 다시 만들 주제 ${p.mental_models?.length || 0}개`);
+// step 3: what the run proposed (all of it waits for a person in AI 정리).
+window.ArkismDigests.runText = (r) => `새 정리 ${r.proposed?.length || 0}개 · 고친 정리 ${r.refreshed?.length || 0}개 · 주제 초안 ${r.mental_models?.length || 0}개 · 못 쓴 답 ${r.rejected?.length || 0}개 · AI 호출 ${r.calls || 0}번`;
+// 내려받기: the approved summary as Markdown; texts are the cited memories' texts in order. tr translates the two headings.
+window.ArkismDigests.modelMarkdown = (m, texts = [], tr = (x) => x) => [`# ${m.title}`, "", `> ${m.query}`, "", m.active?.text || tr("아직 승인된 요약이 없어요."),
+  ...(texts.length ? ["", `## ${tr("근거 기억")}`, "", ...texts.map((t) => `- ${String(t).replace(/\s*\n\s*/g, " ")}`)] : []), ""].join("\n");

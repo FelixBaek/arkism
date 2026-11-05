@@ -2322,7 +2322,7 @@ export function startApp() {
   const traits = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord }, "traits");
   const reflections = window.ArkismIntelligence({ canRefresh: () => !syncVisible.blocked(), state, $, el, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, openRecord: openIntelligenceRecord });
   const digests = window.ArkismDigests({ canRefresh: () => !syncVisible.blocked(), state, $, el, raw, tr, icon, button, request: appApi.request, query: appApi.query, detailShell, openDetail, notice, ago, render, row, markSelected,
-    kindLabel, originOf, memSelect: memoryList.memSelect, section, facts, openRecord: (r) => openIntelligenceRecord(r), reloadMemories: memoryList.reloadMemories });
+    kindLabel, originOf, memSelect: memoryList.memSelect, section, facts, segment, go, openRecord: (r) => openIntelligenceRecord(r), reloadMemories: memoryList.reloadMemories });
   // 물어보기 · 검색 살펴보기 · 규칙 · 자주 나온 이름 (memory-insight.js)
   const insight = Object.fromEntries(["ask", "search", "rules", "entities"].map((tab) => [tab, window.ArkismMemoryInsight({ state, $, el, raw, icon, button, request: appApi.request, query: appApi.query,
     detailShell, openDetail, notice, section, facts, callout, KINDS, kindLabel, openRecord: openIntelligenceRecord }, tab)]));

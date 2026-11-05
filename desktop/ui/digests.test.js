@@ -84,13 +84,16 @@ function setup(opts = {}) {
     for (const [k, l] of options) { const o = h.el("option", "", l); o.value = k; s.append(o); }
     s.addEventListener("change", () => onChange(s.value)); return s;
   };
+  const segment = (tabs, cur, onPick) => { const sg = h.el("div", "segment"); for (const [k, l] of tabs) sg.append(h.button(l, k === cur ? "tab active" : "tab", null, () => onPick(k))); return sg; };
+  const gone = [];
+  const go = (v, tab) => { gone.push([v, tab]); state.memTab = tab; state.selected = null; };
   let view;
-  const ctx = { state, $: h.$, el: h.el, raw: h.raw, tr: (s) => s, icon: h.icon, button: h.button, request, query, detailShell,
+  const ctx = { segment, go, state, $: h.$, el: h.el, raw: h.raw, tr: (s) => s, icon: h.icon, button: h.button, request, query, detailShell,
     openDetail: () => h.$("#app").classList.add("detail-open"), notice: (m) => notices.push(m), ago: () => "방금", render: () => { renders++; if (state.memTab === "merge") view.drawMerge(); else if (state.view === "memories") view.draw(); },
     row, markSelected, kindLabel: (k) => `종류:${k}`, originOf: () => "Codex", memSelect, section, facts, openRecord: (r) => opened.push(r),
     reloadMemories: async () => { if (opts.reloadFails) throw new Error("x"); }, canRefresh: opts.canRefresh };
   view = window.ArkismDigests(ctx);
-  return { view, state, calls, notices, opened, h, document, f, renders: () => renders };
+  return { view, state, calls, notices, opened, gone, h, document, f, renders: () => renders };
 }
 const rows = (t) => t.h.$("#table").querySelectorAll(".row");
 const detailText = (t) => t.h.$("#detail").textContent;
@@ -580,4 +583,138 @@ test("AI 정리: a stale topic summary keeps its approved text and only a person
   t.state.caps = { role: "agent" }; t.view.detail();
   assert.equal(btn(t.h.$("#detail"), "다시 만들기"), undefined);
   assert.match(detailText(t), /다시 만들기는 사람만 할 수 있어요/);
+});
+
+// ---------------------------------------------------------------- 모아보기 · 직접 정한 주제 · 기억 정리
+const sent = (t, path, method) => t.calls.filter(([p, o]) => p.startsWith(path) && (o?.method || "GET") === method).map(([, o]) => (o?.body ? JSON.parse(o.body) : null));
+const seg = (t, label) => btn(t.h.$("#controls"), label);
+
+test("직접 정한 주제: list, trigger with next run and last result, history diff, and only a person edits, remakes, clears or deletes", async () => {
+  const m1 = { id: "x1", revision: 4, title: "배포 순서", query: "배포할 때 확인하는 순서는?", status: "active",
+    refresh: { mode: "on_change", cron: "0 9 * * 1", after_consolidation: true, min_interval: "6h", kinds: ["procedural"] },
+    active: { version: 2, text: "스테이징 확인 뒤 배포한다.", citations: [{ collection: "memories", id: "m1" }], at: "2026-10-10T09:00:00Z" },
+    next_refresh_at: "2026-11-09T09:00:00Z", last_outcome: { code: "content_unchanged", trigger: "cron", at: "2026-11-02T09:00:00Z" } };
+  const m2 = { id: "x2", revision: 1, title: "빈 주제", query: "q", refresh: "manual", status: "active" };
+  const hist = { id: "x1", revisions: [{ version: 1, action: "approve", by: "me", at: "2026-10-01T00:00:00Z", diff: [{ op: "+", text: "옛 요약" }] },
+    { version: 2, action: "approve", by: "me", at: "2026-10-10T00:00:00Z", diff: [{ op: "-", text: "옛 요약" }, { op: "+", text: "스테이징 확인 뒤 배포한다." }] }] };
+  const t = setup({ routes: { "/v1/mental-models?": () => ({ items: [m1, m2] }), "/v1/mental-models/x1/history": () => hist,
+    "/v1/mental-models/x1/clear": () => ({}), "/v1/mental-models/x1": () => ({ id: "x1" }), "/v1/mental-models/cron-preview": () => ({ next: ["2026-11-09T09:00:00Z", "2026-11-16T09:00:00Z"] }),
+    "/v1/observations?": () => ({ items: [] }) } });
+  t.state.caps = { role: "human" };
+  t.view.draw(); await dom.flush();
+  seg(t, "직접 정한 주제").click(); await dom.flush();
+  assert.equal(t.view.title(), "주제 2개");
+  assert.equal(rows(t).length, 2);
+  assert.match(t.h.$("#table").textContent, /기억이 바뀔 때 · 다음 .*바뀐 내용이 없었어요/);
+  assert.match(t.h.$("#table").textContent, /비어 있음/);
+  rows(t)[0].click(); await dom.flush();
+  const d = detailText(t);
+  assert.match(d, /배포할 때 확인하는 순서는\?/); assert.match(d, /일정 \(UTC\)0 9 \* \* 1/); assert.match(d, /기억 정리 뒤다시 만들어요/); assert.match(d, /최소 간격6h/);
+  assert.match(d, /지난 결과바뀐 내용이 없었어요 · 정한 일정/);
+  assert.match(d, /v2 · 승인/); assert.match(d, /v1 · 승인/);
+  assert.ok(t.h.$("#detail").querySelector(".dg-line.del"), "the newest revision opens with its diff");
+  // 고치기 keeps what the form does not show (kinds) and drops a cleared field
+  btn(t.h.$("#detail"), "고치기").click();
+  const inputs = t.h.$("#detail").querySelectorAll("input");
+  dom.input(inputs.find((i) => i.value === "6h"), "");
+  btn(t.h.$("#detail"), "일정 미리보기").click(); await dom.flush();
+  assert.match(detailText(t), /다음 실행 \(이 PC 시각\)/);
+  assert.deepEqual(sent(t, "/v1/mental-models/cron-preview", "POST")[0], { scope: SCOPE, cron: "0 9 * * 1" });
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  const patch = sent(t, "/v1/mental-models/x1", "PATCH")[0];
+  assert.deepEqual(patch, { scope: SCOPE, expected_revision: 4, title: "배포 순서", query: "배포할 때 확인하는 순서는?",
+    refresh: { mode: "on_change", cron: "0 9 * * 1", after_consolidation: true, kinds: ["procedural"] } });
+  assert.match(t.notices.at(-1), /주제를 고쳤어요/);
+  // 비우기 asks once more, then clears with the revision
+  t.state.selected = "mm:x1"; t.view.detail();
+  btn(t.h.$("#detail"), "비우기").click();
+  assert.match(detailText(t), /승인된 요약과 초안을 비울까요/);
+  assert.equal(sent(t, "/v1/mental-models/x1/clear", "POST").length, 0);
+  dom.buttons(t.h.$("#detail .dg-confirm"), "비우기")[0].click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/mental-models/x1/clear", "POST")[0], { scope: SCOPE, expected_revision: 4 });
+  t.state.selected = "mm:x1"; t.view.detail();
+  btn(t.h.$("#detail"), "지우기").click();
+  dom.buttons(t.h.$("#detail .dg-confirm"), "지우기")[0].click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/mental-models/x1", "DELETE")[0], { scope: SCOPE, expected_revision: 4 });
+  // an agent token sees the summary but no buttons
+  t.state.caps = { role: "agent" }; t.state.selected = "mm:x1"; t.view.detail();
+  assert.equal(btn(t.h.$("#detail"), "고치기"), undefined);
+  assert.match(detailText(t), /고치기와 다시 만들기는 사람만 할 수 있어요/);
+});
+
+test("새 주제 만들기 sends only what was filled in; an invalid schedule says how to write it", async () => {
+  let fail = true;
+  const t = setup({ routes: { "/v1/mental-models?": () => ({ items: [] }), "/v1/mental-models": (_, o) => { if (fail) { fail = false; throw new Error("invalid"); } return { id: "n1", ...JSON.parse(o.body) }; } } });
+  t.state.caps = { role: "human" };
+  t.view.draw(); await dom.flush();
+  seg(t, "직접 정한 주제").click(); await dom.flush();
+  assert.match(t.h.$("#table").textContent, /아직 직접 정한 주제가 없어요/);
+  btn(t.h.$("#controls"), "새 주제 만들기").click();
+  assert.equal(t.state.selected, "mm:new");
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.match(t.notices.at(-1), /제목과 질문을 적어 주세요/);
+  const [title] = t.h.$("#detail").querySelectorAll("input");
+  dom.input(title, "리뷰 받는 법"); dom.input(t.h.$("#detail textarea"), "리뷰를 어떻게 받고 싶어 하나요?");
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.match(t.notices.at(-1), /일정은 다섯 칸/);
+  btn(t.h.$("#detail"), "저장").click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/mental-models", "POST").at(-1), { scope: SCOPE, title: "리뷰 받는 법", query: "리뷰를 어떻게 받고 싶어 하나요?", refresh: { mode: "manual" } });
+  assert.equal(t.state.selected, "mm:n1");
+});
+
+test("기억 정리: by status and scope, history and delete; 지금 정리하기 shows the plan, runs on a click and reports what waits in AI 정리", async () => {
+  const ob = (id, tags, o = {}) => ({ id, status: "active", revision: 1, content: `정리 ${id}`, durability: "lasting", tags, source_memories: [{ collection: "memories", id: "m1" }], updated_at: "2026-10-01T00:00:00Z", ...o });
+  let release, deleted = 0;
+  const t = setup({ routes: {
+    "/v1/mental-models?": () => ({ items: [] }),
+    "/v1/observations/scopes": () => ({ items: [{ tags: ["orbit"], active: 1, proposed: 0 }, { tags: [], active: 1, proposed: 2 }] }),
+    "/v1/observations/o1/history": () => ({ id: "o1", revisions: [{ version: 1, action: "propose", by: "service", at: "2026-10-01T00:00:00Z", diff: [{ op: "+", text: "정리 o1" }] }] }),
+    "/v1/observations/strategies/preview": () => ({ scopes: 3, unclaimed: 1, strategies: [{ name: "per_project", claimed: 2, rules: [{}] }] }),
+    "/v1/observations/consolidate": (_, o) => (JSON.parse(o.body).plan_only ? { plan: { stale_observations: ["a"], groups: [["m1", "m2"]], mental_models: [] } }
+      : new Promise((r) => { release = () => r({ proposed: [{}, {}], refreshed: [{}], rejected: [], mental_models: [], calls: 3 }); })),
+    "/v1/observations?": (path) => (new URL(path, "http://x").searchParams.get("status") === "active" ? { items: [ob("o1", ["orbit", "review:x"]), ob("o2", [])] } : { items: [] }),
+    "/v1/observations": (_, o) => { const b = JSON.parse(o.body); if (b.all) { deleted++; return { deleted: ["a"], more: deleted < 2 }; } return { deleted: b.ids }; } } });
+  t.state.caps = { role: "human" };
+  t.view.draw(); await dom.flush();
+  seg(t, "기억 정리").click(); await dom.flush();
+  assert.equal(rows(t).length, 2);
+  assert.equal(t.view.title(), "정리 2개");
+  const scopeSel = t.h.$("#controls").querySelectorAll("select").find((s) => s.getAttribute("aria-label") === "묶음");
+  dom.input(scopeSel, "orbit");
+  assert.deepEqual(rows(t).map((r) => r.dataset.id), ["ob:o1"], "review: tags are not a scope");
+  rows(t)[0].click(); await dom.flush();
+  assert.match(detailText(t), /묶음: orbit/); assert.match(detailText(t), /v1 · AI 제안/);
+  btn(t.h.$("#detail"), "지우기").click();
+  dom.buttons(t.h.$("#detail .dg-confirm"), "지우기")[0].click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/observations", "DELETE")[0], { scope: SCOPE, ids: ["o1"] });
+  // 지금 정리하기
+  btn(t.h.$("#controls"), "지금 정리하기").click(); await dom.flush();
+  assert.deepEqual(sent(t, "/v1/observations/consolidate", "POST")[0], { scope: SCOPE, plan_only: true });
+  assert.match(detailText(t), /근거 바뀐 정리 1개 · 새로 묶을 기억 1묶음 · 다시 만들 주제 0개/);
+  btn(t.h.$("#detail"), "정리 시작").click(); await dom.flush();
+  assert.match(detailText(t), /정리하는 중…/); assert.match(detailText(t), /초 지났어요/);
+  release(); await dom.flush();
+  assert.match(detailText(t), /새 정리 2개 · 고친 정리 1개 · 주제 초안 0개 · 못 쓴 답 0개 · AI 호출 3번/);
+  assert.deepEqual(sent(t, "/v1/observations/consolidate", "POST")[1], { scope: SCOPE });
+  btn(t.h.$("#detail"), "AI 정리에서 확인하기").click();
+  assert.deepEqual(t.gone.at(-1), ["memories", "notes"]);
+  // 자세히: strategy preview and 모두 지우기 (repeats while the server says more)
+  t.state.memTab = "digests"; t.state.selected = "ob:run"; t.view.detail();
+  btn(t.h.$("#detail"), "미리보기").click(); await dom.flush();
+  assert.match(detailText(t), /per_project묶음 2개 · 규칙 1개/); assert.match(detailText(t), /기본 방식묶음 1개/);
+  btn(t.h.$("#detail"), "정리 모두 지우기").click();
+  dom.buttons(t.h.$("#detail .dg-confirm"), "모두 지우기")[0].click(); await dom.flush();
+  assert.equal(deleted, 2);
+  assert.match(t.notices.at(-1), /정리 2개를 지웠어요/);
+});
+
+test("mental model helpers: refreshBody keeps hidden keys, planText/runText, Markdown export", () => {
+  setup();
+  const D = window.ArkismDigests;
+  assert.deepEqual(D.refreshOf({ refresh: "daily" }), { mode: "daily" });
+  assert.deepEqual(D.refreshBody({ mode: "manual", tags: ["a"], cron: "1 1 * * *", budget: "low" }, { mode: "daily", cron: " ", budget: "high", strategy: "delta", after_consolidation: false }),
+    { mode: "daily", tags: ["a"], budget: "high", strategy: "delta" });
+  assert.equal(D.planText({ stale_observations: [], groups: [], mental_models: [] }), "지금은 정리할 것이 없어요");
+  assert.equal(D.modelMarkdown({ title: "T", query: "Q", active: { text: "본문" } }, ["첫\n줄"]), "# T\n\n> Q\n\n본문\n\n## 근거 기억\n\n- 첫 줄\n");
+  assert.match(D.modelMarkdown({ title: "T", query: "Q" }), /아직 승인된 요약이 없어요/);
 });

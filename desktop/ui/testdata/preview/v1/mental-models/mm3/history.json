@@ -1,0 +1,63 @@
+{
+ "id": "mm3",
+ "authority": "data_only_untrusted",
+ "revisions": [
+  {
+   "version": 1,
+   "status": "superseded",
+   "action": "approve",
+   "text": "결제 화면 리뷰는 파일별 목록으로 받는다.",
+   "citations": [],
+   "by": "preview-owner",
+   "at": "2026-10-05T09:30:00Z",
+   "diff": [
+    {
+     "op": "+",
+     "text": "결제 화면 리뷰는 파일별 목록으로 받는다."
+    }
+   ]
+  },
+  {
+   "version": 2,
+   "status": "superseded",
+   "action": "approve",
+   "text": "결제 화면 리뷰는 파일별 목록으로 받는다.\n배포는 금요일을 피한다.",
+   "citations": [],
+   "by": "preview-owner",
+   "at": "2026-10-26T09:00:00Z",
+   "diff": [
+    {
+     "op": " ",
+     "text": "결제 화면 리뷰는 파일별 목록으로 받는다."
+    },
+    {
+     "op": "+",
+     "text": "배포는 금요일을 피한다."
+    }
+   ]
+  },
+  {
+   "version": 3,
+   "status": "active",
+   "action": "approve",
+   "text": "",
+   "citations": [],
+   "by": "preview-owner",
+   "at": "2026-11-02T09:10:00Z",
+   "diff": [
+    {
+     "op": " ",
+     "text": "결제 화면 리뷰는 파일별 목록으로 받는다."
+    },
+    {
+     "op": " ",
+     "text": "배포는 금요일을 피한다."
+    },
+    {
+     "op": "+",
+     "text": "남은 일: 스테이징 시간대 설정 정리."
+    }
+   ]
+  }
+ ]
+}

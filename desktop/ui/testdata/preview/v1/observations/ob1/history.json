@@ -1,0 +1,41 @@
+{
+ "id": "ob1",
+ "status": "active",
+ "authority": "data_only_untrusted",
+ "revisions": [
+  {
+   "version": 1,
+   "status": "proposed",
+   "action": "propose",
+   "text": "Orbit 배포는 스테이징 확인 뒤에 한다.",
+   "citations": [],
+   "by": "service:consolidate",
+   "at": "2026-10-14T03:00:00Z",
+   "diff": [
+    {
+     "op": "+",
+     "text": "Orbit 배포는 스테이징 확인 뒤에 한다."
+    }
+   ]
+  },
+  {
+   "version": 2,
+   "status": "active",
+   "action": "edit_approve",
+   "text": "Orbit 배포는 스테이징 확인 뒤 금요일을 피해 오후에 한다.",
+   "citations": [],
+   "by": "preview-owner",
+   "at": "2026-10-20T03:00:00Z",
+   "diff": [
+    {
+     "op": "-",
+     "text": "Orbit 배포는 스테이징 확인 뒤에 한다."
+    },
+    {
+     "op": "+",
+     "text": "Orbit 배포는 스테이징 확인 뒤 금요일을 피해 오후에 한다."
+    }
+   ]
+  }
+ ]
+}

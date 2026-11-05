@@ -11,7 +11,81 @@
     "m4",
     "m2"
    ],
-   "durability": "lasting"
+   "durability": "lasting",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "tags": [
+    "orbit"
+   ],
+   "source_memories": [
+    {
+     "collection": "memories",
+     "id": "m4",
+     "revision": 1
+    },
+    {
+     "collection": "memories",
+     "id": "m2",
+     "revision": 1
+    }
+   ],
+   "fresh": true,
+   "updated_at": "2026-10-20T03:00:00Z",
+   "created_at": "2026-10-14T03:00:00Z"
+  },
+  {
+   "id": "ob2",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "status": "active",
+   "revision": 1,
+   "content": "Alex는 리뷰 코멘트를 파일별 목록으로 받고 싶어 한다.",
+   "source_memory_ids": [
+    "m5"
+   ],
+   "source_memories": [
+    {
+     "collection": "memories",
+     "id": "m5",
+     "revision": 1
+    }
+   ],
+   "durability": "lasting",
+   "tags": [],
+   "fresh": true,
+   "updated_at": "2026-10-28T03:00:00Z",
+   "created_at": "2026-10-28T03:00:00Z"
+  },
+  {
+   "id": "ob3",
+   "scope": {
+    "workspace_id": "default",
+    "project_id": "default"
+   },
+   "status": "active",
+   "revision": 3,
+   "content": "이번 달은 결제 화면 작업이 대부분이라 테스트 시간대를 UTC로 맞춘다.",
+   "source_memory_ids": [
+    "m7"
+   ],
+   "source_memories": [
+    {
+     "collection": "memories",
+     "id": "m7",
+     "revision": 1
+    }
+   ],
+   "durability": "momentary",
+   "tags": [
+    "orbit"
+   ],
+   "fresh": true,
+   "updated_at": "2026-11-03T03:00:00Z",
+   "created_at": "2026-11-01T03:00:00Z"
   }
  ]
 }
