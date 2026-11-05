@@ -39,17 +39,21 @@ type SourcePage struct {
 	NextCursor string           `json:"next_cursor"`
 	Authority  string           `json:"authority"`
 }
-type sourceCursor struct {
-	CollectedAt time.Time `json:"collected_at"`
-	ID          string    `json:"id"`
-	Binding     string    `json:"binding"`
+
+// keysetCursor is the opaque newest-first page position shared by the source
+// and operator lists: a millisecond time, a row id and a hash of the filters.
+// The JSON name "collected_at" is the wire form source cursors already used.
+type keysetCursor struct {
+	At      time.Time `json:"collected_at"`
+	ID      string    `json:"id"`
+	Binding string    `json:"binding"`
 }
 
 func sourceListBinding(in SourceListInput) string {
 	in.Cursor, in.Limit = "", 0
 	return ContentHash(structuredText(in))
 }
-func normalizeSourceList(in SourceListInput) (SourceListInput, *sourceCursor, error) {
+func normalizeSourceList(in SourceListInput) (SourceListInput, *keysetCursor, error) {
 	if len(in.Query) > 256 || !utf8.ValidString(in.Query) || strings.IndexFunc(in.Query, unicode.IsControl) >= 0 || containsSecret(in.Query) {
 		return in, nil, ErrInvalid
 	}
@@ -69,7 +73,7 @@ func normalizeSourceList(in SourceListInput) (SourceListInput, *sourceCursor, er
 	if in.Cursor == "" {
 		return in, nil, nil
 	}
-	after, e := decodeSourceCursor(in)
+	after, e := decodeKeysetCursor(in.Cursor, sourceListBinding(in))
 	if e != nil {
 		return in, nil, e
 	}
@@ -90,26 +94,29 @@ func normalizeSourceListTimes(in *SourceListInput) error {
 	}
 	return nil
 }
-func decodeSourceCursor(in SourceListInput) (*sourceCursor, error) {
-	if len(in.Cursor) > 2048 || strings.IndexFunc(in.Cursor, unicode.IsSpace) >= 0 {
+func decodeKeysetCursor(raw, binding string) (*keysetCursor, error) {
+	if len(raw) > 2048 || strings.IndexFunc(raw, unicode.IsSpace) >= 0 {
 		return nil, ErrInvalid
 	}
-	data, e := base64.RawURLEncoding.Strict().DecodeString(in.Cursor)
+	data, e := base64.RawURLEncoding.Strict().DecodeString(raw)
 	if e != nil {
 		return nil, ErrInvalid
 	}
-	var after sourceCursor
+	var after keysetCursor
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	var extra any
-	if dec.Decode(&after) != nil || dec.Decode(&extra) != io.EOF || after.Binding != sourceListBinding(in) || after.ID == "" || len(after.ID) > 256 || strings.IndexFunc(after.ID, unicode.IsControl) >= 0 || containsSecret(after.ID) || after.CollectedAt.IsZero() || !after.CollectedAt.Equal(after.CollectedAt.Truncate(time.Millisecond)) {
+	if dec.Decode(&after) != nil || dec.Decode(&extra) != io.EOF || after.Binding != binding || after.ID == "" || len(after.ID) > 256 || strings.IndexFunc(after.ID, unicode.IsControl) >= 0 || containsSecret(after.ID) || after.At.IsZero() || !after.At.Equal(after.At.Truncate(time.Millisecond)) {
 		return nil, ErrInvalid
 	}
 	return &after, nil
 }
-func encodeSourceCursor(in SourceListInput, r Record) (string, error) {
-	data, e := json.Marshal(sourceCursor{r.CollectedAt.UTC(), r.ID, sourceListBinding(in)})
+func encodeKeysetCursor(at time.Time, id, binding string) (string, error) {
+	data, e := json.Marshal(keysetCursor{at.UTC(), id, binding})
 	return base64.RawURLEncoding.EncodeToString(data), e
+}
+func encodeSourceCursor(in SourceListInput, r Record) (string, error) {
+	return encodeKeysetCursor(*r.CollectedAt, r.ID, sourceListBinding(in))
 }
 func sourceListItem(r Record) SourceListItem {
 	text := []rune(r.Text)

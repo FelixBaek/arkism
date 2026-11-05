@@ -253,6 +253,8 @@ type Record struct {
 	LeaseUntil         time.Time            `json:"-" bson:"lease_until"`
 	LeaseToken         string               `json:"-" bson:"lease_token"`
 	Attempts           int                  `json:"-" bson:"attempts"`
+	// ManualRetries counts operator retries of a failed job (ops_jobs.go), bounded by maxManualJobRetries.
+	ManualRetries int `json:"-" bson:"manual_retries,omitempty"`
 
 	// RejectScore is the review classifier's advice when the queue is listed; never stored.
 	RejectScore *float64 `json:"reject_score,omitempty" bson:"-"`

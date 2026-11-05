@@ -213,7 +213,7 @@ func TestHTTPRoutesRejectUnknownJSONFields(t *testing.T) {
 func TestHTTPRoutesRefuseAnonymousCallers(t *testing.T) {
 	f := newFixture(t)
 	h := Handler(f.svc)
-	public := map[string]bool{"/{$}": true, "/healthz": true, "/readyz": true}
+	public := map[string]bool{"/{$}": true, "/healthz": true, "/readyz": true, "/livez": true}
 	for _, r := range sourceRoutes(t) {
 		if public[r.path] {
 			continue

@@ -137,15 +137,13 @@ func (s *Service) CreateWikiJob(ctx context.Context, token string, in WikiJobInp
 			if wikiJobOf(old) == nil {
 				return ErrConflict
 			}
-			if old.Status != JobStatusFailed {
+			if old.Status != JobStatusFailed && old.Status != JobStatusCancelled {
 				old.Duplicate = true
 				out = old
 				return nil
 			}
-			job := *old.Wiki.Job
-			job.Error, job.Result, job.FinishedAt, job.MaxTotalTokens, job.Calls, job.Tokens = "", nil, nil, budget, 0, 0
-			old.Wiki = &WikiRecord{Job: &job}
-			old.Status, old.Attempts, old.UpdatedAt = JobStatusPending, 0, now
+			requeueJob(&old, now)
+			old.Wiki.Job.MaxTotalTokens = budget
 			prev := old.Revision
 			old.Revision++
 			if err = tx.Replace(ctx, "jobs", old, prev); err != nil {
@@ -171,15 +169,26 @@ func (s *Service) CreateWikiJob(ctx context.Context, token string, in WikiJobInp
 	return viewWikiJob(out), nil
 }
 
+// requeueJob puts finished work back in the queue with fresh attempts and,
+// for a wiki build, a cleared outcome. The caller bumps the revision.
+func requeueJob(r *Record, now time.Time) {
+	r.Status, r.Attempts, r.RunAt, r.LeaseToken, r.LeaseUntil, r.UpdatedAt = JobStatusPending, 0, nil, "", time.Time{}, now
+	if job := wikiJobOf(*r); job != nil {
+		next := *job
+		next.Error, next.Result, next.FinishedAt, next.Calls, next.Tokens = "", nil, nil, 0, 0
+		r.Wiki = &WikiRecord{Job: &next}
+	}
+}
+
 func (s *Service) ListWikiJobs(ctx context.Context, token string, scope Scope, status string) (WikiJobList, error) {
 	out := WikiJobList{Items: []WikiJobView{}}
-	if status != "" && !slices.Contains([]string{JobStatusPending, JobStatusRunning, JobStatusDone, JobStatusFailed}, status) {
+	statuses := []string{JobStatusPending, JobStatusRunning, JobStatusDone, JobStatusFailed, JobStatusCancelled}
+	if status != "" && !slices.Contains(statuses, status) {
 		return out, ErrInvalid
 	}
 	if _, err := s.wikiAuthorize(ctx, token, "read:"+colWikiPages, scope, "", "", "human", "service", "pipeline"); err != nil {
 		return out, err
 	}
-	statuses := []string{JobStatusPending, JobStatusRunning, JobStatusDone, JobStatusFailed}
 	if status != "" {
 		statuses = []string{status}
 	}
@@ -410,8 +419,8 @@ func (s *Service) RunWikiJob(ctx context.Context, token string, scope Scope, id 
 		}
 		claimed = r
 		now := time.Now().UTC()
-		if r.Status == JobStatusDone || r.Status == JobStatusFailed {
-			return nil
+		if r.Status == JobStatusDone || r.Status == JobStatusFailed || r.Status == JobStatusCancelled {
+			return nil // finished or cancelled by an operator: never run again here
 		}
 		if r.Status == JobStatusRunning && r.LeaseUntil.After(now) {
 			return ErrConflict

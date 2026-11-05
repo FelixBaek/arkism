@@ -25,7 +25,7 @@ func (f *fakeRepo) ListSources(_ context.Context, in SourceListInput) ([]Record,
 		if !strings.Contains(r.Text, in.Query) || r.Scope != in.Scope || !live(r) || r.CollectedAt == nil || !r.CollectedAt.After(time.Time{}) || in.Kind != "" && r.Kind != in.Kind || in.OriginProduct != "" && r.OriginProduct != in.OriginProduct || in.CollectedFrom != nil && r.CollectedAt.Before(*in.CollectedFrom) || in.CollectedTo != nil && !r.CollectedAt.Before(*in.CollectedTo) {
 			continue
 		}
-		if after != nil && !(r.CollectedAt.Before(after.CollectedAt) || r.CollectedAt.Equal(after.CollectedAt) && r.ID < after.ID) {
+		if after != nil && !(r.CollectedAt.Before(after.At) || r.CollectedAt.Equal(after.At) && r.ID < after.ID) {
 			continue
 		}
 		rows = append(rows, r)

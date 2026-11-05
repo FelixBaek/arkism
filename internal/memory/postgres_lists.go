@@ -75,7 +75,7 @@ func (p *Postgres) ListSources(ctx context.Context, in SourceListInput) ([]Recor
 	}
 	if after != nil {
 		w += fmt.Sprintf(` AND (%s < $%d OR (%s = $%d AND id < $%d))`, `(doc->'collected_at'->>'$date')::timestamptz`, len(args)+6, `(doc->'collected_at'->>'$date')::timestamptz`, len(args)+6, len(args)+7)
-		args = append(args, after.CollectedAt, after.ID)
+		args = append(args, after.At, after.ID)
 	}
 	return p.selectRecords(ctx, "sources", in.Scope, w, args, `(doc->'collected_at'->>'$date')::timestamptz DESC,id DESC`, in.Limit+1)
 }

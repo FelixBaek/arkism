@@ -20,7 +20,7 @@ import (
 
 func TestHTTPRoutePolicyCoverage(t *testing.T) {
 	public := map[string]bool{
-		"GET /{$}": true, "GET /healthz": true, "GET /readyz": true,
+		"GET /{$}": true, "GET /healthz": true, "GET /readyz": true, "GET /livez": true,
 		"GET /recovery-identity": true, // recovery listener only; loopback identity
 		"GET /v1/auth/google":    true, "POST /v1/auth/google": true,
 		"GET /app/": true, // static web UI files only; the API calls they make need a Bearer token

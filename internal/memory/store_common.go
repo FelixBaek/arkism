@@ -31,6 +31,8 @@ const (
 	JobStatusRunning = "running"
 	JobStatusDone    = "done"
 	JobStatusFailed  = "failed"
+	// JobStatusCancelled is set only by an operator (CancelOperation); no claim query selects it.
+	JobStatusCancelled = "cancelled"
 
 	colMemories      = "memories"
 	colSkillVersions = "skill_versions"

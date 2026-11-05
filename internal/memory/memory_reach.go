@@ -66,7 +66,17 @@ func (s *Service) SetMemoryReach(ctx context.Context, token, id string, in Memor
 	default:
 		return Record{}, ErrInvalid
 	}
-	actor, e := s.authorize(ctx, token, "transition:memories", in.Scope, id, "")
+	return s.editLiveMemory(ctx, token, id, in.Scope, in.ExpectedRevision, "set_reach:memories", func(r *Record) error {
+		r.Reach, r.ReachProject, r.ReachOrigin = in.Reach, in.ReachProject, reachOriginHuman
+		return nil
+	})
+}
+
+// editLiveMemory is the one human-only metadata edit of a live memory: it never
+// changes text or approval, bumps the revision and writes one audit event.
+// expected 0 skips the revision check (tag edits); errMemoryUnchanged skips the write.
+func (s *Service) editLiveMemory(ctx context.Context, token, id string, scope Scope, expected int64, auditAction string, mutate func(*Record) error) (Record, error) {
+	actor, e := s.authorize(ctx, token, "transition:memories", scope, id, "")
 	if e != nil {
 		return Record{}, e
 	}
@@ -79,23 +89,29 @@ func (s *Service) SetMemoryReach(ctx context.Context, token, id string, in Memor
 	var out Record
 	e = s.Repo.Transaction(ctx, func(ctx context.Context, tx Tx) error {
 		out = Record{}
-		r, e := tx.Get(ctx, colMemories, in.Scope, id)
+		r, e := tx.Get(ctx, colMemories, scope, id)
 		if e != nil {
 			return e
 		}
 		if r.PrivacyQuarantined || r.ContentErased {
 			return ErrNotFound
 		}
-		if r.ConflictID != "" || r.Revision != in.ExpectedRevision || !live(r) {
+		if r.ConflictID != "" || expected > 0 && r.Revision != expected || !live(r) {
 			return ErrConflict
 		}
-		r.Reach, r.ReachProject, r.ReachOrigin = in.Reach, in.ReachProject, reachOriginHuman
-		r.Revision++
-		r.UpdatedAt = time.Now().UTC()
-		if e = tx.Replace(ctx, colMemories, r, in.ExpectedRevision); e != nil {
+		if e = mutate(&r); errors.Is(e, errMemoryUnchanged) {
+			out = r
+			return nil
+		} else if e != nil {
 			return e
 		}
-		if e = audit(ctx, tx, in.Scope, actor.PrincipalID, "set_reach:memories", id); e != nil {
+		prev := r.Revision
+		r.Revision++
+		r.UpdatedAt = time.Now().UTC()
+		if e = tx.Replace(ctx, colMemories, r, prev); e != nil {
+			return e
+		}
+		if e = audit(ctx, tx, scope, actor.PrincipalID, auditAction, id); e != nil {
 			return e
 		}
 		out = r
@@ -106,6 +122,8 @@ func (s *Service) SetMemoryReach(ctx context.Context, token, id string, in Memor
 	}
 	return out, nil
 }
+
+var errMemoryUnchanged = errors.New("memory_unchanged")
 
 // MigrateMemoryReach writes the default reach onto memories that have none (apply), or removes
 // only what an earlier apply wrote (revert). It keeps each revision, so recall, history and
